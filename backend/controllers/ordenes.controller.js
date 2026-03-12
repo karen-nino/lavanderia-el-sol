@@ -1,6 +1,8 @@
 import pool from '../db/pool.js';
 
-const ESTADOS_VALIDOS = ['RECIBIDO', 'EN_PROCESO', 'LISTO', 'ENTREGADO'];
+const ESTADOS_VALIDOS    = ['RECIBIDO', 'EN_PROCESO', 'LISTO', 'ENTREGADO'];
+const MODALIDADES_VALIDAS = ['POR_ENCARGO', 'AUTOSERVICIO'];
+const ESTADOS_PAGO_VALIDOS = ['CONTADO', 'DEBE', 'N/A'];
 
 // Genera folio LS-YYYYMMDD-XXXX a partir del id y la fecha de creación
 function generarFolio(id, fecha) {
@@ -16,12 +18,12 @@ export const getOrdenes = async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT o.*,
-              c.nombre  AS cliente_nombre,
+              c.nombre   AS cliente_nombre,
               c.telefono AS cliente_telefono,
-              u.nombre  AS usuario_nombre
+              u.nombre   AS usuario_nombre
        FROM ordenes o
-       JOIN clientes  c ON c.id = o.cliente_id
-       JOIN usuarios  u ON u.id = o.usuario_id
+       LEFT JOIN clientes c ON c.id = o.cliente_id
+       JOIN      usuarios u ON u.id = o.usuario_id
        ORDER BY o.created_at DESC`
     );
     res.json(rows);
@@ -40,8 +42,8 @@ export const getOrdenById = async (req, res) => {
               c.telefono AS cliente_telefono,
               u.nombre   AS usuario_nombre
        FROM ordenes o
-       JOIN clientes c ON c.id = o.cliente_id
-       JOIN usuarios u ON u.id = o.usuario_id
+       LEFT JOIN clientes c ON c.id = o.cliente_id
+       JOIN      usuarios u ON u.id = o.usuario_id
        WHERE o.id = $1`,
       [id]
     );
@@ -69,6 +71,9 @@ export const createOrden = async (req, res) => {
   const {
     cliente_id,
     maquina_id,
+    modalidad = 'POR_ENCARGO',
+    estado_pago = 'CONTADO',
+    sucursal = 'lopez_cotilla',
     descripcion,
     peso_kg,
     precio_total,
@@ -77,9 +82,18 @@ export const createOrden = async (req, res) => {
     insumos = [], // [{ insumo_id, cantidad }]
   } = req.body;
 
-  if (!cliente_id) {
-    return res.status(400).json({ message: 'cliente_id es requerido.' });
+  // Validaciones
+  if (modalidad === 'POR_ENCARGO' && !cliente_id) {
+    return res.status(400).json({ message: 'cliente_id es requerido para órdenes Por Encargo.' });
   }
+  if (!MODALIDADES_VALIDAS.includes(modalidad)) {
+    return res.status(400).json({ message: `Modalidad inválida. Valores permitidos: ${MODALIDADES_VALIDAS.join(', ')}.` });
+  }
+  if (!ESTADOS_PAGO_VALIDOS.includes(estado_pago)) {
+    return res.status(400).json({ message: `Estado de pago inválido. Valores permitidos: ${ESTADOS_PAGO_VALIDOS.join(', ')}.` });
+  }
+  // Autoservicio siempre es N/A en estado_pago
+  const estadoPagoFinal = modalidad === 'AUTOSERVICIO' ? 'N/A' : estado_pago;
 
   const client = await pool.connect();
   try {
@@ -88,13 +102,17 @@ export const createOrden = async (req, res) => {
     // Insertar la orden (usuario tomado del token)
     const { rows: ordenRows } = await client.query(
       `INSERT INTO ordenes
-         (cliente_id, usuario_id, maquina_id, descripcion, peso_kg, precio_total, fecha_entrega, notas)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         (cliente_id, usuario_id, maquina_id, modalidad, estado_pago, sucursal,
+          descripcion, peso_kg, precio_total, fecha_entrega, notas)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
        RETURNING *`,
       [
-        cliente_id,
+        cliente_id || null,
         req.user.id,
         maquina_id || null,
+        modalidad,
+        estadoPagoFinal,
+        sucursal,
         descripcion,
         peso_kg,
         precio_total,
@@ -109,38 +127,40 @@ export const createOrden = async (req, res) => {
     await client.query('UPDATE ordenes SET folio = $1 WHERE id = $2', [folio, orden.id]);
     orden.folio = folio;
 
-    // Descontar insumos si se enviaron
-    for (const { insumo_id, cantidad } of insumos) {
-      if (!insumo_id || !cantidad || cantidad <= 0) continue;
+    // Descontar insumos solo en Por Encargo
+    if (modalidad === 'POR_ENCARGO') {
+      for (const { insumo_id, cantidad } of insumos) {
+        if (!insumo_id || !cantidad || cantidad <= 0) continue;
 
-      // Verificar stock suficiente
-      const { rows: stockRows } = await client.query(
-        'SELECT stock_actual FROM insumos WHERE id = $1 FOR UPDATE',
-        [insumo_id]
-      );
-      if (stockRows.length === 0) {
-        await client.query('ROLLBACK');
-        return res.status(404).json({ message: `Insumo ${insumo_id} no encontrado.` });
+        // Verificar stock suficiente
+        const { rows: stockRows } = await client.query(
+          'SELECT stock_actual FROM insumos WHERE id = $1 FOR UPDATE',
+          [insumo_id]
+        );
+        if (stockRows.length === 0) {
+          await client.query('ROLLBACK');
+          return res.status(404).json({ message: `Insumo ${insumo_id} no encontrado.` });
+        }
+        if (Number(stockRows[0].stock_actual) < cantidad) {
+          await client.query('ROLLBACK');
+          return res.status(400).json({
+            message: `Stock insuficiente para insumo ${insumo_id}.`,
+          });
+        }
+
+        // Registrar movimiento de salida
+        await client.query(
+          `INSERT INTO movimientos_insumos (insumo_id, usuario_id, orden_id, tipo, cantidad)
+           VALUES ($1, $2, $3, 'salida', $4)`,
+          [insumo_id, req.user.id, orden.id, cantidad]
+        );
+
+        // Actualizar stock
+        await client.query(
+          'UPDATE insumos SET stock_actual = stock_actual - $1 WHERE id = $2',
+          [cantidad, insumo_id]
+        );
       }
-      if (Number(stockRows[0].stock_actual) < cantidad) {
-        await client.query('ROLLBACK');
-        return res.status(400).json({
-          message: `Stock insuficiente para insumo ${insumo_id}.`,
-        });
-      }
-
-      // Registrar movimiento de salida
-      await client.query(
-        `INSERT INTO movimientos_insumos (insumo_id, usuario_id, orden_id, tipo, cantidad)
-         VALUES ($1, $2, $3, 'salida', $4)`,
-        [insumo_id, req.user.id, orden.id, cantidad]
-      );
-
-      // Actualizar stock
-      await client.query(
-        'UPDATE insumos SET stock_actual = stock_actual - $1 WHERE id = $2',
-        [cantidad, insumo_id]
-      );
     }
 
     await client.query('COMMIT');

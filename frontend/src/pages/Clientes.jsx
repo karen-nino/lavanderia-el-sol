@@ -1,11 +1,20 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 
+const INPUT_CLS =
+  'w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition';
+
+const FORM_INIT = { nombre: '', telefono: '', email: '', direccion: '' };
+
 export default function Clientes() {
   const [clientes, setClientes] = useState([]);
   const [busqueda, setBusqueda] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [modalOpen, setModalOpen] = useState(false);
+  const [form, setForm] = useState(FORM_INIT);
+  const [guardando, setGuardando] = useState(false);
+  const [formError, setFormError] = useState('');
 
   useEffect(() => {
     api.get('/clientes')
@@ -20,11 +29,38 @@ export default function Clientes() {
     (c.email && c.email.toLowerCase().includes(busqueda.toLowerCase()))
   );
 
+  const abrirModal = () => { setForm(FORM_INIT); setFormError(''); setModalOpen(true); };
+  const cerrarModal = () => setModalOpen(false);
+  const handleChange = e => setForm(f => ({ ...f, [e.target.name]: e.target.value }));
+
+  const handleSubmit = async e => {
+    e.preventDefault();
+    setFormError('');
+    setGuardando(true);
+    try {
+      const nuevo = await api.post('/clientes', form);
+      setClientes(prev => [...prev, nuevo].sort((a, b) => a.nombre.localeCompare(b.nombre)));
+      cerrarModal();
+    } catch (err) {
+      setFormError(err.message);
+    } finally {
+      setGuardando(false);
+    }
+  };
+
   return (
     <div className="p-4 md:p-6 space-y-4">
-      <div>
-        <h1 className="text-xl font-bold text-gray-900">Clientes</h1>
-        <p className="text-sm text-gray-500">{filtrados.length} cliente(s)</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-bold text-gray-900">Clientes</h1>
+          <p className="text-sm text-gray-500">{filtrados.length} cliente(s)</p>
+        </div>
+        <button
+          onClick={abrirModal}
+          className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+        >
+          + Nuevo cliente
+        </button>
       </div>
 
       {/* Búsqueda */}
@@ -101,6 +137,83 @@ export default function Clientes() {
               </div>
             </>
           )}
+        </div>
+      )}
+
+      {/* Modal nuevo cliente */}
+      {modalOpen && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+            <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-gray-100">
+              <h2 className="text-base font-semibold text-gray-900">Nuevo cliente</h2>
+              <button onClick={cerrarModal} className="text-gray-400 hover:text-gray-600">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmit} className="p-5 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Nombre <span className="text-red-500">*</span>
+                </label>
+                <input
+                  name="nombre" required value={form.nombre} onChange={handleChange}
+                  placeholder="Nombre completo"
+                  className={INPUT_CLS}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Teléfono</label>
+                <input
+                  name="telefono" value={form.telefono} onChange={handleChange}
+                  placeholder="33 1234 5678"
+                  className={INPUT_CLS}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Email</label>
+                <input
+                  type="email" name="email" value={form.email} onChange={handleChange}
+                  placeholder="correo@ejemplo.com"
+                  className={INPUT_CLS}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Dirección</label>
+                <input
+                  name="direccion" value={form.direccion} onChange={handleChange}
+                  placeholder="Calle, número, colonia..."
+                  className={INPUT_CLS}
+                />
+              </div>
+
+              {formError && (
+                <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">
+                  {formError}
+                </div>
+              )}
+
+              <div className="flex gap-3 pt-1">
+                <button
+                  type="button" onClick={cerrarModal}
+                  className="flex-1 border border-gray-300 text-gray-700 font-medium py-2.5 rounded-lg text-sm hover:bg-gray-50 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit" disabled={guardando}
+                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-medium py-2.5 rounded-lg text-sm transition-colors"
+                >
+                  {guardando ? 'Guardando...' : 'Guardar'}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>
