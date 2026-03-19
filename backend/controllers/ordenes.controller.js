@@ -107,7 +107,8 @@ export const createOrden = async (req, res) => {
     notas,
     tamano,
     ajuste = 0,
-    insumos = [],
+    insumos   = [], // [{ insumo_id, cantidad }]  → movimientos_insumos
+    articulos = [], // [{ articulo_id, cantidad }] → orden_articulos
   } = req.body;
 
   if (!MODALIDADES_VALIDAS.includes(modalidad)) {
@@ -202,8 +203,62 @@ export const createOrden = async (req, res) => {
       }
     }
 
+    // ── Insertar artículos en orden_articulos ────────────────
+    const articulosInsertados = [];
+    for (const { articulo_id, cantidad } of articulos) {
+      if (!articulo_id || !cantidad || Number(cantidad) <= 0) continue;
+
+      const { rows: artRows } = await client.query(
+        'SELECT * FROM articulos WHERE id = $1 FOR UPDATE',
+        [articulo_id]
+      );
+      if (artRows.length === 0) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ message: `Artículo ${articulo_id} no encontrado.` });
+      }
+      const art = artRows[0];
+      const stockDisponible = art.stock_actual - art.stock_reservado;
+      if (stockDisponible < Number(cantidad)) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({
+          message: `Stock insuficiente para "${art.nombre}". Disponible: ${stockDisponible}, solicitado: ${cantidad}.`,
+        });
+      }
+
+      const { rows: oaRows } = await client.query(
+        `INSERT INTO orden_articulos (orden_id, articulo_id, cantidad, precio_unitario)
+         VALUES ($1, $2, $3, $4)
+         RETURNING *`,
+        [orden.id, articulo_id, cantidad, art.precio_unitario ?? 0]
+      );
+      await client.query(
+        'UPDATE articulos SET stock_reservado = stock_reservado + $1 WHERE id = $2',
+        [cantidad, articulo_id]
+      );
+      articulosInsertados.push({
+        ...oaRows[0],
+        nombre:  art.nombre,
+        subtotal: Number(oaRows[0].cantidad) * Number(oaRows[0].precio_unitario),
+      });
+    }
+
+    // Si se insertaron artículos, recalcular precio_total
+    if (articulosInsertados.length > 0) {
+      const { rows: totalRows } = await client.query(
+        `UPDATE ordenes
+           SET precio_total = (
+             SELECT COALESCE(SUM(cantidad * precio_unitario), 0)
+             FROM orden_articulos WHERE orden_id = $1
+           )
+         WHERE id = $1
+         RETURNING precio_total`,
+        [orden.id]
+      );
+      orden.precio_total = totalRows[0].precio_total;
+    }
+
     await client.query('COMMIT');
-    res.status(201).json(orden);
+    res.status(201).json({ ...orden, articulos: articulosInsertados });
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('createOrden error:', err);
