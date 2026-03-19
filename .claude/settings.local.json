@@ -6,7 +6,9 @@
       "Bash(node:*)",
       "Bash(curl:*)",
       "Bash(npm install:*)",
-      "Bash(npm run:*)"
+      "Bash(npm run:*)",
+      "Bash(brew upgrade:*)",
+      "Bash(grep -n \"jwt\\\\|sign\\\\|payload\\\\|rol\" /Users/karen.nino/Desktop/lavanderia-el-sol/backend/controllers/auth.controller.js 2>/dev/null || grep -rn \"jwt.sign\\\\|payload\" /Users/karen.nino/Desktop/lavanderia-el-sol/backend --include=\"*.js\" | head -10)"
     ]
   }
 }
