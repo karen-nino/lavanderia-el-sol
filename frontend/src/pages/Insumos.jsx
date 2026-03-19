@@ -1,25 +1,320 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
+import { useAuth } from '../context/AuthContext';
 
+const INPUT_CLS =
+  'w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition';
+
+const CATEGORIAS = ['Detergente', 'Suavizante', 'Blanqueador', 'Bolsas', 'Otro'];
+const UNIDADES   = ['Litros', 'Kilos', 'Piezas', 'Mililitros'];
+
+const FORM_VACIO = {
+  nombre:          '',
+  categoria:       '',
+  precio_unitario: '',
+  unidad:          '',
+  stock_actual:    '0',
+  stock_minimo:    '0',
+};
+
+// ── Modal crear / editar ────────────────────────────────────────
+function ModalArticulo({ articulo, onClose, onGuardado }) {
+  const [form, setForm]     = useState(articulo
+    ? {
+        nombre:          articulo.nombre,
+        categoria:       articulo.categoria ?? '',
+        precio_unitario: articulo.precio_unitario ?? '',
+        unidad:          articulo.unidad,
+        stock_actual:    articulo.stock_actual,
+        stock_minimo:    articulo.stock_minimo,
+      }
+    : FORM_VACIO
+  );
+  const [error,   setError]   = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const esEdicion = Boolean(articulo);
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setForm(f => ({ ...f, [name]: value }));
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+
+    const body = {
+      nombre:          form.nombre.trim(),
+      categoria:       form.categoria || null,
+      unidad:          form.unidad,
+      stock_actual:    Number(form.stock_actual),
+      stock_minimo:    Number(form.stock_minimo),
+      precio_unitario: form.precio_unitario !== '' ? Number(form.precio_unitario) : null,
+    };
+
+    try {
+      let resultado;
+      if (esEdicion) {
+        resultado = await api.put(`/insumos/${articulo.id}`, body);
+      } else {
+        resultado = await api.post('/insumos', body);
+      }
+      onGuardado(resultado, esEdicion);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+          <h2 className="text-base font-semibold text-gray-900">
+            {esEdicion ? 'Editar artículo' : 'Nuevo artículo'}
+          </h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-5 space-y-4">
+          {/* Nombre */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+              Nombre <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text" name="nombre" required
+              value={form.nombre} onChange={handleChange}
+              placeholder="Ej. Detergente líquido" className={INPUT_CLS}
+            />
+          </div>
+
+          {/* Categoría */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+              Categoría <span className="text-red-500">*</span>
+            </label>
+            <select name="categoria" required value={form.categoria} onChange={handleChange} className={INPUT_CLS}>
+              <option value="">Seleccionar...</option>
+              {CATEGORIAS.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+
+          {/* Precio unitario */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+              Precio unitario ($) <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="number" name="precio_unitario" min="0" step="0.01" required
+              value={form.precio_unitario} onChange={handleChange}
+              placeholder="0.00" className={INPUT_CLS}
+            />
+          </div>
+
+          {/* Unidad */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+              Unidad <span className="text-red-500">*</span>
+            </label>
+            <select name="unidad" required value={form.unidad} onChange={handleChange} className={INPUT_CLS}>
+              <option value="">Seleccionar...</option>
+              {UNIDADES.map(u => <option key={u} value={u}>{u}</option>)}
+            </select>
+          </div>
+
+          {/* Stock actual + Stock mínimo */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                Stock actual <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="number" name="stock_actual" min="0" step="0.01" required
+                value={form.stock_actual} onChange={handleChange}
+                className={INPUT_CLS}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                Stock mínimo <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="number" name="stock_minimo" min="0" step="0.01" required
+                value={form.stock_minimo} onChange={handleChange}
+                className={INPUT_CLS}
+              />
+              <p className="text-xs text-gray-400 mt-1">Alerta si stock cae por debajo</p>
+            </div>
+          </div>
+
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">
+              {error}
+            </div>
+          )}
+
+          <div className="flex gap-3 pt-1">
+            <button
+              type="button" onClick={onClose}
+              className="flex-1 border border-gray-300 text-gray-700 font-medium py-2.5 rounded-lg text-sm hover:bg-gray-50 transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit" disabled={loading}
+              className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-medium py-2.5 rounded-lg text-sm transition-colors"
+            >
+              {loading ? 'Guardando...' : esEdicion ? 'Guardar cambios' : 'Crear artículo'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ── Modal confirmar eliminación ─────────────────────────────────
+function ModalEliminar({ articulo, onClose, onConfirmar }) {
+  const [loading, setLoading] = useState(false);
+  const [error,   setError]   = useState('');
+
+  const handleEliminar = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      await onConfirmar();
+    } catch (err) {
+      setError(err.message);
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="flex-shrink-0 w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
+            <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+          </div>
+          <div>
+            <h3 className="text-base font-semibold text-gray-900">Eliminar artículo</h3>
+            <p className="text-sm text-gray-500 mt-0.5">
+              ¿Eliminar <span className="font-medium text-gray-700">{articulo.nombre}</span>? Esta acción no se puede deshacer.
+            </p>
+          </div>
+        </div>
+
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">
+            {error}
+          </div>
+        )}
+
+        <div className="flex gap-3">
+          <button
+            onClick={onClose}
+            className="flex-1 border border-gray-300 text-gray-700 font-medium py-2.5 rounded-lg text-sm hover:bg-gray-50 transition-colors"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={handleEliminar} disabled={loading}
+            className="flex-1 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white font-medium py-2.5 rounded-lg text-sm transition-colors"
+          >
+            {loading ? 'Eliminando...' : 'Eliminar'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Íconos ─────────────────────────────────────────────────────
+function IconoLapiz() {
+  return (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+        d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+    </svg>
+  );
+}
+
+function IconoBasura() {
+  return (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+    </svg>
+  );
+}
+
+// ── Página principal ────────────────────────────────────────────
 export default function Insumos() {
-  const [insumos, setInsumos] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const { usuario } = useAuth();
+  const esAdmin = usuario?.rol === 'admin';
 
-  useEffect(() => {
+  const [insumos,         setInsumos]         = useState([]);
+  const [loading,         setLoading]         = useState(true);
+  const [error,           setError]           = useState('');
+  const [modalArticulo,   setModalArticulo]   = useState(null);  // null | 'nuevo' | articulo
+  const [artAEliminar,    setArtAEliminar]    = useState(null);
+
+  const cargar = () => {
+    setLoading(true);
     api.get('/insumos')
       .then(setInsumos)
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
-  }, []);
+  };
+
+  useEffect(cargar, []);
 
   const stockBajo = insumos.filter(i => Number(i.stock_actual) <= Number(i.stock_minimo));
 
+  const handleGuardado = (resultado, esEdicion) => {
+    if (esEdicion) {
+      setInsumos(prev => prev.map(i => i.id === resultado.id ? resultado : i));
+    } else {
+      setInsumos(prev => [...prev, resultado].sort((a, b) => a.nombre.localeCompare(b.nombre)));
+    }
+    setModalArticulo(null);
+  };
+
+  const handleEliminar = async () => {
+    await api.delete(`/insumos/${artAEliminar.id}`);
+    setInsumos(prev => prev.filter(i => i.id !== artAEliminar.id));
+    setArtAEliminar(null);
+  };
+
   return (
     <div className="p-4 md:p-6 space-y-4">
-      <div>
-        <h1 className="text-xl font-bold text-gray-900">Insumos</h1>
-        <p className="text-sm text-gray-500">{insumos.length} producto(s) en inventario</p>
+
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-bold text-gray-900">Artículos</h1>
+          <p className="text-sm text-gray-500">{insumos.length} producto(s) en inventario</p>
+        </div>
+        <button
+          onClick={() => setModalArticulo('nuevo')}
+          className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2.5 rounded-lg transition-colors"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          </svg>
+          Agregar artículo
+        </button>
       </div>
 
       {/* Alerta stock bajo */}
@@ -57,7 +352,15 @@ export default function Insumos() {
       {!loading && !error && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
           {insumos.length === 0 ? (
-            <p className="text-center text-gray-400 text-sm py-10">No hay insumos registrados</p>
+            <div className="text-center py-12">
+              <p className="text-gray-400 text-sm mb-3">No hay artículos registrados</p>
+              <button
+                onClick={() => setModalArticulo('nuevo')}
+                className="text-sm text-indigo-600 hover:text-indigo-800 font-medium"
+              >
+                + Agregar el primero
+              </button>
+            </div>
           ) : (
             <>
               {/* Tabla — desktop */}
@@ -65,12 +368,12 @@ export default function Insumos() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-gray-50 border-b border-gray-100">
-                      <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Insumo</th>
-                      <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Unidad</th>
-                      <th className="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Stock actual</th>
-                      <th className="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Stock mínimo</th>
+                      <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Artículo</th>
+                      <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Categoría</th>
                       <th className="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Precio unit.</th>
-                      <th className="text-center px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Estado</th>
+                      <th className="text-center px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Stock actual</th>
+                      <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Unidad</th>
+                      <th className="px-4 py-3" />
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
@@ -80,28 +383,38 @@ export default function Insumos() {
                         <tr key={i.id} className={`hover:bg-gray-50 transition-colors ${bajo ? 'bg-amber-50/40' : ''}`}>
                           <td className="px-4 py-3">
                             <p className="font-medium text-gray-800">{i.nombre}</p>
-                            {i.descripcion && <p className="text-xs text-gray-400">{i.descripcion}</p>}
                           </td>
-                          <td className="px-4 py-3 text-gray-600">{i.unidad}</td>
-                          <td className={`px-4 py-3 text-right font-mono font-semibold ${bajo ? 'text-red-600' : 'text-gray-800'}`}>
-                            {Number(i.stock_actual).toFixed(2)}
-                          </td>
-                          <td className="px-4 py-3 text-right font-mono text-gray-400">
-                            {Number(i.stock_minimo).toFixed(2)}
+                          <td className="px-4 py-3 text-gray-500 text-xs">
+                            {i.categoria ?? '—'}
                           </td>
                           <td className="px-4 py-3 text-right text-gray-600">
-                            {i.precio_unitario ? `$${Number(i.precio_unitario).toFixed(2)}` : '—'}
+                            {i.precio_unitario != null ? `$${Number(i.precio_unitario).toFixed(2)}` : '—'}
                           </td>
                           <td className="px-4 py-3 text-center">
-                            {bajo ? (
-                              <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-amber-100 text-amber-700">
-                                Stock bajo
-                              </span>
-                            ) : (
-                              <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-green-100 text-green-700">
-                                OK
-                              </span>
-                            )}
+                            <span className={`inline-flex items-center gap-1 font-mono font-semibold text-sm ${bajo ? 'text-red-600' : 'text-gray-800'}`}>
+                              {bajo ? '🔴' : '🟢'} {Number(i.stock_actual).toFixed(2)}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-gray-600">{i.unidad}</td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center justify-end gap-1">
+                              <button
+                                onClick={() => setModalArticulo(i)}
+                                className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                                title="Editar"
+                              >
+                                <IconoLapiz />
+                              </button>
+                              {esAdmin && (
+                                <button
+                                  onClick={() => setArtAEliminar(i)}
+                                  className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                  title="Eliminar"
+                                >
+                                  <IconoBasura />
+                                </button>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       );
@@ -116,21 +429,40 @@ export default function Insumos() {
                   const bajo = Number(i.stock_actual) <= Number(i.stock_minimo);
                   return (
                     <div key={i.id} className={`px-4 py-3 ${bajo ? 'bg-amber-50/40' : ''}`}>
-                      <div className="flex items-center justify-between">
-                        <p className="font-medium text-gray-800 text-sm">{i.nombre}</p>
-                        {bajo ? (
-                          <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
-                            Stock bajo
-                          </span>
-                        ) : (
-                          <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-green-100 text-green-700">
-                            OK
-                          </span>
-                        )}
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="font-medium text-gray-800 text-sm">{i.nombre}</p>
+                          {i.categoria && (
+                            <p className="text-xs text-gray-400 mt-0.5">{i.categoria}</p>
+                          )}
+                          <div className="flex items-center gap-3 mt-1">
+                            <span className={`text-sm font-mono font-semibold ${bajo ? 'text-red-600' : 'text-gray-700'}`}>
+                              {bajo ? '🔴' : '🟢'} {Number(i.stock_actual).toFixed(2)} {i.unidad}
+                            </span>
+                            {i.precio_unitario != null && (
+                              <span className="text-xs text-gray-500">
+                                ${Number(i.precio_unitario).toFixed(2)}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          <button
+                            onClick={() => setModalArticulo(i)}
+                            className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                          >
+                            <IconoLapiz />
+                          </button>
+                          {esAdmin && (
+                            <button
+                              onClick={() => setArtAEliminar(i)}
+                              className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            >
+                              <IconoBasura />
+                            </button>
+                          )}
+                        </div>
                       </div>
-                      <p className={`text-sm font-mono mt-1 ${bajo ? 'text-red-600' : 'text-gray-600'}`}>
-                        {Number(i.stock_actual).toFixed(2)} / {Number(i.stock_minimo).toFixed(2)} {i.unidad}
-                      </p>
                     </div>
                   );
                 })}
@@ -138,6 +470,24 @@ export default function Insumos() {
             </>
           )}
         </div>
+      )}
+
+      {/* Modal crear / editar */}
+      {modalArticulo && (
+        <ModalArticulo
+          articulo={modalArticulo === 'nuevo' ? null : modalArticulo}
+          onClose={() => setModalArticulo(null)}
+          onGuardado={handleGuardado}
+        />
+      )}
+
+      {/* Modal confirmar eliminar */}
+      {artAEliminar && (
+        <ModalEliminar
+          articulo={artAEliminar}
+          onClose={() => setArtAEliminar(null)}
+          onConfirmar={handleEliminar}
+        />
       )}
     </div>
   );

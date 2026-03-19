@@ -13,7 +13,7 @@ export const getInsumos = async (req, res) => {
 };
 
 export const createInsumo = async (req, res) => {
-  const { nombre, descripcion, unidad, stock_actual, stock_minimo, precio_unitario } = req.body;
+  const { nombre, categoria, unidad, stock_actual, stock_minimo, precio_unitario } = req.body;
 
   if (!nombre || !unidad) {
     return res.status(400).json({ message: 'Nombre y unidad son requeridos.' });
@@ -21,10 +21,10 @@ export const createInsumo = async (req, res) => {
 
   try {
     const { rows } = await pool.query(
-      `INSERT INTO insumos (nombre, descripcion, unidad, stock_actual, stock_minimo, precio_unitario)
+      `INSERT INTO insumos (nombre, categoria, unidad, stock_actual, stock_minimo, precio_unitario)
        VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING *`,
-      [nombre, descripcion, unidad, stock_actual ?? 0, stock_minimo ?? 0, precio_unitario]
+      [nombre, categoria || null, unidad, stock_actual ?? 0, stock_minimo ?? 0, precio_unitario ?? null]
     );
     res.status(201).json(rows[0]);
   } catch (err) {
@@ -55,6 +55,57 @@ export const updateInsumo = async (req, res) => {
     res.json(rows[0]);
   } catch (err) {
     console.error('updateInsumo error:', err);
+    res.status(500).json({ message: 'Error interno del servidor.' });
+  }
+};
+
+export const putInsumo = async (req, res) => {
+  const { id } = req.params;
+  const { nombre, categoria, unidad, stock_actual, stock_minimo, precio_unitario } = req.body;
+
+  if (!nombre || !unidad) {
+    return res.status(400).json({ message: 'Nombre y unidad son requeridos.' });
+  }
+
+  try {
+    const { rows } = await pool.query(
+      `UPDATE insumos
+       SET nombre          = $1,
+           categoria       = $2,
+           unidad          = $3,
+           stock_actual    = $4,
+           stock_minimo    = $5,
+           precio_unitario = $6
+       WHERE id = $7
+       RETURNING *`,
+      [nombre, categoria || null, unidad, stock_actual ?? 0, stock_minimo ?? 0, precio_unitario ?? null, id]
+    );
+    if (rows.length === 0) {
+      return res.status(404).json({ message: 'Artículo no encontrado.' });
+    }
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('putInsumo error:', err);
+    res.status(500).json({ message: 'Error interno del servidor.' });
+  }
+};
+
+export const eliminarInsumo = async (req, res) => {
+  if (req.user.rol !== 'admin') {
+    return res.status(403).json({ message: 'Solo los administradores pueden eliminar artículos.' });
+  }
+  const { id } = req.params;
+  try {
+    const { rowCount } = await pool.query('DELETE FROM insumos WHERE id = $1', [id]);
+    if (rowCount === 0) {
+      return res.status(404).json({ message: 'Artículo no encontrado.' });
+    }
+    res.status(204).send();
+  } catch (err) {
+    console.error('eliminarInsumo error:', err);
+    if (err.code === '23503') {
+      return res.status(409).json({ message: 'No se puede eliminar: el artículo tiene movimientos registrados.' });
+    }
     res.status(500).json({ message: 'Error interno del servidor.' });
   }
 };

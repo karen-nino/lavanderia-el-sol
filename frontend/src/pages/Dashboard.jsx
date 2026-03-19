@@ -73,7 +73,7 @@ export default function Dashboard() {
         <StatCard
           label="Stock bajo"
           value={stockBajo}
-          sub={stockBajo > 0 ? 'Insumos por reabastecer' : 'Inventario en orden'}
+          sub={stockBajo > 0 ? 'Artículos por reabastecer' : 'Inventario en orden'}
           color={stockBajo > 0 ? 'text-red-600' : 'text-green-600'}
           icon={stockBajo > 0 ? '⚠️' : '✅'}
         />
