@@ -33,10 +33,11 @@ const FORM_INIT = {
 
 export default function NuevaOrden() {
   const navigate = useNavigate();
-  const [clientes,     setClientes]     = useState([]);
-  const [maquinas,     setMaquinas]     = useState([]);
-  const [insumos,      setInsumos]      = useState([]);
-  const [loadingData,  setLoadingData]  = useState(true);
+  const [clientes,          setClientes]          = useState([]);
+  const [maquinas,          setMaquinas]          = useState([]);
+  const [insumos,           setInsumos]           = useState([]);
+  const [articulosCatalogo, setArticulosCatalogo] = useState([]);
+  const [loadingData,       setLoadingData]       = useState(true);
   const [form,         setForm]         = useState(FORM_INIT);
   const [insumosLista,      setInsumosLista]      = useState([]);
   const [articulosAutoLista, setArticulosAutoLista] = useState([]);
@@ -52,8 +53,8 @@ export default function NuevaOrden() {
   // Autoservicio: precio calculado en tiempo real
   const subtotalCargas    = (Number(form.cantidad_cargas) || 1) * PRECIO_POR_CARGA;
   const subtotalArticulos = articulosAutoLista.reduce((sum, a) => {
-    const ins = insumos.find(i => String(i.id) === String(a.insumo_id));
-    return sum + (ins ? (Number(ins.precio_unitario) || 0) * (Number(a.cantidad) || 0) : 0);
+    const art = articulosCatalogo.find(x => String(x.id) === String(a.articulo_id));
+    return sum + (art ? (Number(art.precio_unitario) || 0) * (Number(a.cantidad) || 0) : 0);
   }, 0);
   const precioAutoservicio = subtotalCargas + ajusteNum + subtotalArticulos;
 
@@ -64,11 +65,12 @@ export default function NuevaOrden() {
     precioBaseConfig !== null ? precioBaseConfig + ajusteNum : null;
 
   useEffect(() => {
-    Promise.all([api.get('/clientes'), api.get('/maquinas'), api.get('/insumos')])
-      .then(([c, m, i]) => {
+    Promise.all([api.get('/clientes'), api.get('/maquinas'), api.get('/insumos'), api.get('/articulos')])
+      .then(([c, m, i, art]) => {
         setClientes(c);
         setMaquinas(m.filter(maq => maq.estado === 'disponible'));
         setInsumos(i);
+        setArticulosCatalogo(art);
       })
       .finally(() => setLoadingData(false));
   }, []);
@@ -91,7 +93,7 @@ export default function NuevaOrden() {
   };
 
   const agregarArticuloAuto = () =>
-    setArticulosAutoLista(prev => [...prev, { insumo_id: '', cantidad: '1' }]);
+    setArticulosAutoLista(prev => [...prev, { articulo_id: '', cantidad: '1' }]);
 
   const actualizarArticuloAuto = (i, field, value) =>
     setArticulosAutoLista(prev =>
@@ -139,9 +141,9 @@ export default function NuevaOrden() {
     if (esAutoservicio) {
       payload.precio_total = precioAutoservicio;
       payload.ajuste       = ajusteNum;
-      payload.insumos = articulosAutoLista
-        .filter(a => a.insumo_id && a.cantidad)
-        .map(a => ({ insumo_id: Number(a.insumo_id), cantidad: Number(a.cantidad) }));
+      payload.articulos = articulosAutoLista
+        .filter(a => a.articulo_id && a.cantidad)
+        .map(a => ({ articulo_id: Number(a.articulo_id), cantidad: Number(a.cantidad) }));
     }
 
     if (esEdredon || esPorEncargo) {
@@ -513,21 +515,21 @@ export default function NuevaOrden() {
             )}
 
             {articulosAutoLista.map((item, i) => {
-              const ins = insumos.find(x => String(x.id) === String(item.insumo_id));
-              const subtotal = ins
-                ? (Number(ins.precio_unitario) || 0) * (Number(item.cantidad) || 0)
+              const art = articulosCatalogo.find(x => String(x.id) === String(item.articulo_id));
+              const subtotal = art
+                ? (Number(art.precio_unitario) || 0) * (Number(item.cantidad) || 0)
                 : 0;
               return (
                 <div key={i} className="flex gap-2 items-center">
                   <select
-                    value={item.insumo_id}
-                    onChange={e => actualizarArticuloAuto(i, 'insumo_id', e.target.value)}
+                    value={item.articulo_id}
+                    onChange={e => actualizarArticuloAuto(i, 'articulo_id', e.target.value)}
                     className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   >
                     <option value="">Artículo...</option>
-                    {insumos.map(ins => (
-                      <option key={ins.id} value={ins.id}>
-                        {ins.nombre}{ins.precio_unitario ? ` — $${Number(ins.precio_unitario).toFixed(2)}` : ''} (stock: {ins.stock_actual} {ins.unidad})
+                    {articulosCatalogo.map(art => (
+                      <option key={art.id} value={art.id}>
+                        {art.nombre}{art.precio_unitario ? ` — $${Number(art.precio_unitario).toFixed(2)}` : ''} (stock: {Number(art.stock_disponible ?? art.stock_actual)} {art.unidad})
                       </option>
                     ))}
                   </select>
