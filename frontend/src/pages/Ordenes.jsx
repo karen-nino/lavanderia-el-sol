@@ -1,16 +1,17 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 
-const ESTADOS = ['TODOS', 'RECIBIDO', 'EN_PROCESO', 'LISTO', 'ENTREGADO'];
-const SECUENCIA_ESTADOS = ['RECIBIDO', 'EN_PROCESO', 'LISTO', 'ENTREGADO'];
+const ESTADOS = ['TODOS', 'ACTIVA', 'EN_PROCESO', 'LISTA', 'PAGADA', 'ENTREGADA', 'CANCELADA'];
 
 const BADGE_ESTADO = {
-  RECIBIDO:   { label: 'Recibido',   cls: 'bg-yellow-100 text-yellow-800' },
-  EN_PROCESO: { label: 'En proceso', cls: 'bg-blue-100 text-blue-800' },
-  LISTO:      { label: 'Listo',      cls: 'bg-green-100 text-green-800' },
-  ENTREGADO:  { label: 'Entregado',  cls: 'bg-gray-100 text-gray-500' },
+  ACTIVA:     { label: 'Activa',     cls: 'bg-gray-100 text-gray-700'       },
+  EN_PROCESO: { label: 'En proceso', cls: 'bg-blue-100 text-blue-800'       },
+  LISTA:      { label: 'Lista',      cls: 'bg-yellow-100 text-yellow-800'   },
+  PAGADA:     { label: 'Pagada',     cls: 'bg-emerald-100 text-emerald-800' },
+  ENTREGADA:  { label: 'Entregada',  cls: 'bg-green-800 text-white'         },
+  CANCELADA:  { label: 'Cancelada',  cls: 'bg-red-100 text-red-700'         },
 };
 
 const BADGE_MODALIDAD = {
@@ -24,34 +25,14 @@ const BADGE_PAGO = {
   PAGADO: { label: 'Pagado', cls: 'bg-green-100 text-green-700' },
 };
 
-function siguienteEstado(estado) {
-  const idx = SECUENCIA_ESTADOS.indexOf(estado);
-  return idx < SECUENCIA_ESTADOS.length - 1 ? SECUENCIA_ESTADOS[idx + 1] : null;
-}
-
 function fmtFecha(iso) {
-  return new Date(iso).toLocaleDateString('es-MX', {
-    day: '2-digit', month: 'short', year: 'numeric',
-  });
+  return new Date(iso).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
 function fmtMonto(n) {
   return n != null ? `$${Number(n).toFixed(2)}` : '—';
 }
 
-// ── Ícono ojo ──────────────────────────────────────────────────
-function IconoOjo() {
-  return (
-    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-        d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-    </svg>
-  );
-}
-
-// ── Ícono basura ───────────────────────────────────────────────
 function IconoBasura() {
   return (
     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -61,7 +42,6 @@ function IconoBasura() {
   );
 }
 
-// ── Modal de confirmación de eliminación ───────────────────────
 function ModalConfirmarEliminar({ orden, onCancelar, onConfirmar, loading }) {
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
@@ -102,201 +82,18 @@ function ModalConfirmarEliminar({ orden, onCancelar, onConfirmar, loading }) {
   );
 }
 
-// ── Stepper de estado ──────────────────────────────────────────
-function StepperEstado({ estado }) {
-  const idx = SECUENCIA_ESTADOS.indexOf(estado);
-  return (
-    <div className="flex items-center gap-0">
-      {SECUENCIA_ESTADOS.map((s, i) => {
-        const hecho   = i < idx;
-        const actual  = i === idx;
-        const futuro  = i > idx;
-        return (
-          <div key={s} className="flex items-center">
-            <div className="flex flex-col items-center gap-1">
-              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold border-2 transition-colors ${
-                actual  ? 'border-indigo-600 bg-indigo-600 text-white' :
-                hecho   ? 'border-indigo-300 bg-indigo-100 text-indigo-500' :
-                          'border-gray-200 bg-white text-gray-300'
-              }`}>
-                {hecho ? (
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                  </svg>
-                ) : (
-                  <span>{i + 1}</span>
-                )}
-              </div>
-              <span className={`text-[10px] font-medium leading-tight text-center w-14 ${
-                actual ? 'text-indigo-700' : futuro ? 'text-gray-300' : 'text-indigo-400'
-              }`}>
-                {BADGE_ESTADO[s].label}
-              </span>
-            </div>
-            {i < SECUENCIA_ESTADOS.length - 1 && (
-              <div className={`h-0.5 w-4 mb-4 mx-0.5 ${i < idx ? 'bg-indigo-300' : 'bg-gray-200'}`} />
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-// ── Fila de detalle ────────────────────────────────────────────
-function FilaDetalle({ label, children }) {
-  return (
-    <div className="flex gap-3 py-2.5 border-b border-gray-50 last:border-0">
-      <span className="text-xs text-gray-400 w-24 flex-shrink-0 pt-0.5">{label}</span>
-      <span className="text-sm text-gray-800 flex-1">{children}</span>
-    </div>
-  );
-}
-
-// ── Drawer de detalle ──────────────────────────────────────────
-function DrawerOrden({ orden, onClose, onEstadoChange, onPagoChange, loadingAccion, errorAccion }) {
-  const badgeModalidad = BADGE_MODALIDAD[orden.modalidad] ?? BADGE_MODALIDAD.AUTOSERVICIO;
-  const badgePago      = BADGE_PAGO[orden.estado_pago];
-  const siguiente      = siguienteEstado(orden.estado);
-
-  return (
-    <>
-      {/* Backdrop */}
-      <div
-        className="fixed inset-0 bg-black/40 z-40 transition-opacity"
-        onClick={onClose}
-      />
-
-      {/* Panel */}
-      <div className="fixed right-0 top-0 h-full w-full max-w-sm bg-white z-50 shadow-2xl flex flex-col">
-
-        {/* Cabecera */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 flex-shrink-0">
-          <div>
-            <p className="font-mono text-xs text-gray-400 mb-0.5">
-              {orden.folio ?? `#${orden.id}`}
-              <span className="ml-2 text-gray-300">·</span>
-              <span className="ml-2 text-gray-400">ID {orden.id}</span>
-            </p>
-            <p className="text-sm font-bold text-gray-900">Detalle de orden</p>
-          </div>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-700 p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-
-        {/* Contenido scrollable */}
-        <div className="flex-1 overflow-y-auto p-5 space-y-5">
-
-          {/* Tipo */}
-          <div>
-            <span className={`text-xs font-semibold px-3 py-1.5 rounded-full ${badgeModalidad.cls}`}>
-              {badgeModalidad.label}
-              {orden.tamano && ` · ${orden.tamano}`}
-            </span>
-          </div>
-
-          {/* Historial de estados */}
-          <div>
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
-              Estado de la orden
-            </p>
-            <StepperEstado estado={orden.estado} />
-          </div>
-
-          {/* Datos de la orden */}
-          <div>
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
-              Información
-            </p>
-            <div className="bg-gray-50 rounded-xl px-4">
-              <FilaDetalle label="Cliente">
-                {orden.cliente_nombre
-                  ? <span>{orden.cliente_nombre}{orden.cliente_telefono ? <span className="text-gray-400 ml-1.5">{orden.cliente_telefono}</span> : null}</span>
-                  : <span className="text-gray-400 italic">Anónimo</span>}
-              </FilaDetalle>
-              <FilaDetalle label="Máquina">
-                {orden.maquina_nombre ?? <span className="text-gray-400">—</span>}
-              </FilaDetalle>
-              <FilaDetalle label="Descripción">
-                {orden.descripcion ?? <span className="text-gray-400">—</span>}
-              </FilaDetalle>
-              <FilaDetalle label="Notas">
-                {orden.notas ?? <span className="text-gray-400">—</span>}
-              </FilaDetalle>
-              <FilaDetalle label="Estado de pago">
-                {badgePago
-                  ? <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${badgePago.cls}`}>{badgePago.label}</span>
-                  : <span className="text-gray-400">—</span>}
-              </FilaDetalle>
-              <FilaDetalle label="Precio total">
-                <span className="font-semibold">{fmtMonto(orden.precio_total)}</span>
-              </FilaDetalle>
-              <FilaDetalle label="Creada">
-                {fmtFecha(orden.created_at)}
-              </FilaDetalle>
-            </div>
-          </div>
-
-          {/* Error de acción */}
-          {errorAccion && (
-            <div className="bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg p-3">
-              {errorAccion}
-            </div>
-          )}
-        </div>
-
-        {/* Acciones fijas al fondo */}
-        <div className="border-t border-gray-100 p-4 space-y-2.5 flex-shrink-0">
-          {siguiente && (
-            <button
-              onClick={onEstadoChange}
-              disabled={loadingAccion}
-              className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-medium py-2.5 rounded-lg text-sm transition-colors flex items-center justify-center gap-2"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-              </svg>
-              {loadingAccion ? 'Guardando...' : `Avanzar a ${BADGE_ESTADO[siguiente].label}`}
-            </button>
-          )}
-
-          <button
-            onClick={onPagoChange}
-            disabled={loadingAccion}
-            className={`w-full font-medium py-2.5 rounded-lg text-sm transition-colors border-2 disabled:opacity-60 ${
-              orden.estado_pago === 'DEBE'
-                ? 'border-green-500 text-green-700 hover:bg-green-50'
-                : 'border-red-300 text-red-600 hover:bg-red-50'
-            }`}
-          >
-            {orden.estado_pago === 'DEBE' ? 'Marcar como Pagado' : 'Marcar como Debe'}
-          </button>
-        </div>
-      </div>
-    </>
-  );
-}
-
-// ── Página principal ───────────────────────────────────────────
 export default function Ordenes() {
   const { usuario }                           = useAuth();
+  const navigate                              = useNavigate();
   const esAdmin                               = usuario?.rol === 'admin';
 
   const [ordenes,         setOrdenes]         = useState([]);
   const [filtro,          setFiltro]          = useState('TODOS');
   const [loading,         setLoading]         = useState(true);
   const [error,           setError]           = useState('');
-  const [ordenAbierta,    setOrdenAbierta]    = useState(null);
-  const [loadingAccion,   setLoadingAccion]   = useState(false);
-  const [errorAccion,     setErrorAccion]     = useState('');
   const [ordenAEliminar,  setOrdenAEliminar]  = useState(null);
   const [loadingEliminar, setLoadingEliminar] = useState(false);
+  const [errorEliminar,   setErrorEliminar]   = useState('');
 
   useEffect(() => {
     api.get('/ordenes')
@@ -309,59 +106,19 @@ export default function Ordenes() {
     ? ordenes
     : ordenes.filter(o => o.estado === filtro);
 
-  function abrirOrden(o) {
-    setOrdenAbierta(o);
-    setErrorAccion('');
-  }
-
-  async function avanzarEstado() {
-    if (!ordenAbierta || loadingAccion) return;
-    const siguiente = siguienteEstado(ordenAbierta.estado);
-    if (!siguiente) return;
-    setLoadingAccion(true);
-    setErrorAccion('');
-    try {
-      const res = await api.patch(`/ordenes/${ordenAbierta.id}/estado`, { estado: siguiente });
-      const updated = { ...ordenAbierta, estado: res.estado };
-      setOrdenAbierta(updated);
-      setOrdenes(prev => prev.map(o => o.id === updated.id ? updated : o));
-    } catch (err) {
-      setErrorAccion(err.message);
-    } finally {
-      setLoadingAccion(false);
-    }
-  }
-
   async function confirmarEliminar() {
     if (!ordenAEliminar || loadingEliminar) return;
     setLoadingEliminar(true);
+    setErrorEliminar('');
     try {
       await api.delete(`/ordenes/${ordenAEliminar.id}`);
       setOrdenes(prev => prev.filter(o => o.id !== ordenAEliminar.id));
       setOrdenAEliminar(null);
-      if (ordenAbierta?.id === ordenAEliminar.id) setOrdenAbierta(null);
     } catch (err) {
-      setErrorAccion(err.message);
+      setErrorEliminar(err.message);
       setOrdenAEliminar(null);
     } finally {
       setLoadingEliminar(false);
-    }
-  }
-
-  async function togglePago() {
-    if (!ordenAbierta || loadingAccion) return;
-    const nuevo = ordenAbierta.estado_pago === 'DEBE' ? 'PAGADO' : 'DEBE';
-    setLoadingAccion(true);
-    setErrorAccion('');
-    try {
-      const res = await api.patch(`/ordenes/${ordenAbierta.id}/estado-pago`, { estado_pago: nuevo });
-      const updated = { ...ordenAbierta, estado_pago: res.estado_pago };
-      setOrdenAbierta(updated);
-      setOrdenes(prev => prev.map(o => o.id === updated.id ? updated : o));
-    } catch (err) {
-      setErrorAccion(err.message);
-    } finally {
-      setLoadingAccion(false);
     }
   }
 
@@ -396,6 +153,12 @@ export default function Ordenes() {
           </button>
         ))}
       </div>
+
+      {errorEliminar && (
+        <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">
+          {errorEliminar}
+        </div>
+      )}
 
       {loading && (
         <div className="flex justify-center py-12">
@@ -434,11 +197,15 @@ export default function Ordenes() {
                   </thead>
                   <tbody className="divide-y divide-gray-50">
                     {filtradas.map(o => {
-                      const badgeEstado    = BADGE_ESTADO[o.estado]       ?? BADGE_ESTADO.RECIBIDO;
+                      const badgeEstado    = BADGE_ESTADO[o.estado]       ?? BADGE_ESTADO.ACTIVA;
                       const badgeModalidad = BADGE_MODALIDAD[o.modalidad] ?? BADGE_MODALIDAD.AUTOSERVICIO;
                       const badgePago      = BADGE_PAGO[o.estado_pago];
                       return (
-                        <tr key={o.id} className="hover:bg-gray-50 transition-colors">
+                        <tr
+                          key={o.id}
+                          onClick={() => navigate(`/ordenes/${o.id}`)}
+                          className="hover:bg-indigo-50 transition-colors cursor-pointer"
+                        >
                           <td className="px-4 py-3 font-mono text-xs text-gray-600">
                             {o.folio ?? `#${o.id}`}
                           </td>
@@ -476,25 +243,16 @@ export default function Ordenes() {
                           <td className="px-4 py-3 text-gray-400 text-xs">
                             {fmtFecha(o.created_at)}
                           </td>
-                          <td className="px-4 py-3">
-                            <div className="flex items-center justify-end gap-1">
+                          <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
+                            {esAdmin && (
                               <button
-                                onClick={() => abrirOrden(o)}
-                                className="text-gray-400 hover:text-indigo-600 p-1.5 rounded-lg hover:bg-indigo-50 transition-colors"
-                                title="Ver detalle"
+                                onClick={() => setOrdenAEliminar(o)}
+                                className="text-gray-400 hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50 transition-colors"
+                                title="Eliminar orden"
                               >
-                                <IconoOjo />
+                                <IconoBasura />
                               </button>
-                              {esAdmin && (
-                                <button
-                                  onClick={() => setOrdenAEliminar(o)}
-                                  className="text-gray-400 hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50 transition-colors"
-                                  title="Eliminar orden"
-                                >
-                                  <IconoBasura />
-                                </button>
-                              )}
-                            </div>
+                            )}
                           </td>
                         </tr>
                       );
@@ -506,14 +264,14 @@ export default function Ordenes() {
               {/* Cards — mobile */}
               <div className="md:hidden divide-y divide-gray-50">
                 {filtradas.map(o => {
-                  const badgeEstado    = BADGE_ESTADO[o.estado]       ?? BADGE_ESTADO.RECIBIDO;
+                  const badgeEstado    = BADGE_ESTADO[o.estado]       ?? BADGE_ESTADO.ACTIVA;
                   const badgeModalidad = BADGE_MODALIDAD[o.modalidad] ?? BADGE_MODALIDAD.AUTOSERVICIO;
                   const badgePago      = BADGE_PAGO[o.estado_pago];
                   return (
                     <div
                       key={o.id}
                       className="px-4 py-3 space-y-1.5 active:bg-gray-50 cursor-pointer"
-                      onClick={() => abrirOrden(o)}
+                      onClick={() => navigate(`/ordenes/${o.id}`)}
                     >
                       <div className="flex items-center justify-between gap-2">
                         <p className="font-mono text-xs text-gray-400">{o.folio ?? `#${o.id}`}</p>
@@ -522,7 +280,6 @@ export default function Ordenes() {
                             {badgeModalidad.label}
                             {o.tamano ? ` · ${o.tamano}` : ''}
                           </span>
-                          <IconoOjo />
                           {esAdmin && (
                             <button
                               onClick={e => { e.stopPropagation(); setOrdenAEliminar(o); }}
@@ -560,18 +317,6 @@ export default function Ordenes() {
             </>
           )}
         </div>
-      )}
-
-      {/* Drawer de detalle */}
-      {ordenAbierta && (
-        <DrawerOrden
-          orden={ordenAbierta}
-          onClose={() => setOrdenAbierta(null)}
-          onEstadoChange={avanzarEstado}
-          onPagoChange={togglePago}
-          loadingAccion={loadingAccion}
-          errorAccion={errorAccion}
-        />
       )}
 
       {/* Modal confirmar eliminación */}

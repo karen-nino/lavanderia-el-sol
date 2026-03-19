@@ -7,17 +7,23 @@ import {
   eliminarOrden,
   cambiarEstadoOrden,
   cambiarEstadoPago,
+  getOrdenArticulos,
+  addArticuloToOrden,
+  removeArticuloFromOrden,
 } from '../controllers/ordenes.controller.js';
 
 const router = Router();
 
 router.use(verifyToken);
 
-router.get('/', getOrdenes);
+router.get('/',    getOrdenes);
+router.post('/',   createOrden);
 router.get('/:id', getOrdenById);
-router.post('/', createOrden);
 router.delete('/:id', eliminarOrden);
-router.patch('/:id/estado', cambiarEstadoOrden);
+router.patch('/:id/estado',      cambiarEstadoOrden);
 router.patch('/:id/estado-pago', cambiarEstadoPago);
+router.get('/:id/articulos',    getOrdenArticulos);
+router.post('/:id/articulos',   addArticuloToOrden);
+router.delete('/:id/articulos/:articuloId', removeArticuloFromOrden);
 
 export default router;

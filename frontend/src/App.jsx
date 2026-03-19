@@ -9,6 +9,8 @@ import NuevaOrden from './pages/NuevaOrden';
 import Clientes from './pages/Clientes';
 import Maquinas from './pages/Maquinas';
 import Insumos from './pages/Insumos';
+import DetalleOrden from './pages/DetalleOrden';
+import Salidas from './pages/Salidas';
 
 export default function App() {
   return (
@@ -27,6 +29,8 @@ export default function App() {
             <Route index element={<Dashboard />} />
             <Route path="ordenes" element={<Ordenes />} />
             <Route path="ordenes/nueva" element={<NuevaOrden />} />
+            <Route path="ordenes/:id" element={<DetalleOrden />} />
+            <Route path="ordenes/:id/salidas" element={<Salidas />} />
             <Route path="clientes" element={<Clientes />} />
             <Route path="maquinas" element={<Maquinas />} />
             <Route path="insumos" element={<Insumos />} />
