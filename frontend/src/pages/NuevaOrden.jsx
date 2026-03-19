@@ -139,8 +139,9 @@ export default function NuevaOrden() {
     };
 
     if (esAutoservicio) {
-      payload.precio_total = precioAutoservicio;
-      payload.ajuste       = ajusteNum;
+      payload.cantidad_cargas = Number(form.cantidad_cargas) || 1;
+      payload.precio_base     = PRECIO_POR_CARGA;
+      payload.ajuste          = ajusteNum;
       payload.articulos = articulosAutoLista
         .filter(a => a.articulo_id && a.cantidad)
         .map(a => ({ articulo_id: Number(a.articulo_id), cantidad: Number(a.cantidad) }));

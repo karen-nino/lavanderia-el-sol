@@ -107,6 +107,8 @@ export const createOrden = async (req, res) => {
     notas,
     tamano,
     ajuste = 0,
+    cantidad_cargas = 1,
+    precio_base,       // precio por carga en AUTOSERVICIO
     insumos   = [], // [{ insumo_id, cantidad }]  → movimientos_insumos
     articulos = [], // [{ articulo_id, cantidad }] → orden_articulos
   } = req.body;
@@ -130,14 +132,19 @@ export const createOrden = async (req, res) => {
     }
   }
 
-  const ajusteNum  = Number(ajuste) || 0;
-  const precioBase = null;
-  let precioFinal;
+  const ajusteNum       = Number(ajuste)          || 0;
+  const cantidadCargas  = Number(cantidad_cargas)  || 1;
+  const precioBaseNum   = precio_base != null ? Number(precio_base) : null;
 
+  // Para AUTOSERVICIO: precio_total = (cargas × precio_base) + ajuste
+  // Los artículos se suman después de insertarlos en orden_articulos
+  let precioFinal;
   if (modalidad === 'AUTOSERVICIO') {
-    precioFinal = precio_total ? Number(precio_total) : null;
+    precioFinal = precioBaseNum != null
+      ? cantidadCargas * precioBaseNum + ajusteNum
+      : (precio_total ? Number(precio_total) : null);
   } else {
-    precioFinal = precioBase !== null ? precioBase + ajusteNum : null;
+    precioFinal = precioBaseNum != null ? precioBaseNum + ajusteNum : null;
   }
 
   const client = await pool.connect();
@@ -148,8 +155,8 @@ export const createOrden = async (req, res) => {
       `INSERT INTO ordenes
          (cliente_id, usuario_id, maquina_id, modalidad, estado_pago, sucursal,
           descripcion, peso_kg, precio_total, fecha_entrega, notas,
-          tamano, precio_base, ajuste)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+          tamano, precio_base, ajuste, cantidad_cargas)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
        RETURNING *`,
       [
         cliente_id   || null,
@@ -164,8 +171,9 @@ export const createOrden = async (req, res) => {
         fecha_entrega || null,
         notas        || null,
         tamano ? String(tamano).toLowerCase() : null,
-        precioBase,
+        precioBaseNum,
         ajusteNum,
+        cantidadCargas,
       ]
     );
     const orden = ordenRows[0];
@@ -242,15 +250,20 @@ export const createOrden = async (req, res) => {
       });
     }
 
-    // Si se insertaron artículos, recalcular precio_total
+    // Si se insertaron artículos, recalcular precio_total con fórmula completa
     if (articulosInsertados.length > 0) {
       const { rows: totalRows } = await client.query(
-        `UPDATE ordenes
+        `UPDATE ordenes o
            SET precio_total = (
-             SELECT COALESCE(SUM(cantidad * precio_unitario), 0)
-             FROM orden_articulos WHERE orden_id = $1
+             SELECT (o2.cantidad_cargas * COALESCE(o2.precio_base, 0))
+                  + COALESCE(SUM(oa.cantidad * oa.precio_unitario), 0)
+                  + o2.ajuste
+             FROM ordenes o2
+             LEFT JOIN orden_articulos oa ON oa.orden_id = o2.id
+             WHERE o2.id = $1
+             GROUP BY o2.id, o2.cantidad_cargas, o2.precio_base, o2.ajuste
            )
-         WHERE id = $1
+         WHERE o.id = $1
          RETURNING precio_total`,
         [orden.id]
       );
@@ -473,12 +486,17 @@ export const addArticuloToOrden = async (req, res) => {
     );
 
     await client.query(
-      `UPDATE ordenes
+      `UPDATE ordenes o
          SET precio_total = (
-           SELECT COALESCE(SUM(cantidad * precio_unitario), 0)
-           FROM orden_articulos WHERE orden_id = $1
+           SELECT (o2.cantidad_cargas * COALESCE(o2.precio_base, 0))
+                + COALESCE(SUM(oa.cantidad * oa.precio_unitario), 0)
+                + o2.ajuste
+           FROM ordenes o2
+           LEFT JOIN orden_articulos oa ON oa.orden_id = o2.id
+           WHERE o2.id = $1
+           GROUP BY o2.id, o2.cantidad_cargas, o2.precio_base, o2.ajuste
          )
-       WHERE id = $1`,
+       WHERE o.id = $1`,
       [id]
     );
 
@@ -522,12 +540,17 @@ export const removeArticuloFromOrden = async (req, res) => {
     );
 
     await client.query(
-      `UPDATE ordenes
+      `UPDATE ordenes o
          SET precio_total = (
-           SELECT COALESCE(SUM(cantidad * precio_unitario), 0)
-           FROM orden_articulos WHERE orden_id = $1
+           SELECT (o2.cantidad_cargas * COALESCE(o2.precio_base, 0))
+                + COALESCE(SUM(oa.cantidad * oa.precio_unitario), 0)
+                + o2.ajuste
+           FROM ordenes o2
+           LEFT JOIN orden_articulos oa ON oa.orden_id = o2.id
+           WHERE o2.id = $1
+           GROUP BY o2.id, o2.cantidad_cargas, o2.precio_base, o2.ajuste
          )
-       WHERE id = $1`,
+       WHERE o.id = $1`,
       [id]
     );
 
