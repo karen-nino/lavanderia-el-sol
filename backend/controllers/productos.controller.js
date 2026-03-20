@@ -1,9 +1,21 @@
 import pool from '../db/pool.js';
 
+const ESTADO_STOCK_SQL = `
+  CASE
+    WHEN (stock_actual - stock_reservado) = 0
+      THEN 'agotado'
+    WHEN (stock_actual - stock_reservado) <= (SELECT stock_minimo_global FROM configuracion WHERE id = 1)
+      THEN 'por_agotarse'
+    ELSE 'ok'
+  END AS estado_stock
+`.trim();
+
 export const getProductos = async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT *, (stock_actual - stock_reservado) AS stock_disponible
+      `SELECT *,
+              (stock_actual - stock_reservado) AS stock_disponible,
+              ${ESTADO_STOCK_SQL}
        FROM productos
        ORDER BY nombre ASC`
     );
@@ -15,7 +27,7 @@ export const getProductos = async (req, res) => {
 };
 
 export const createProducto = async (req, res) => {
-  const { nombre, descripcion, unidad = 'pieza', precio_unitario, stock_actual = 0, stock_minimo = 0 } = req.body;
+  const { nombre, descripcion, unidad = 'pieza', precio_unitario, stock_actual = 0 } = req.body;
 
   if (!nombre) {
     return res.status(400).json({ message: 'Nombre es requerido.' });
@@ -23,10 +35,12 @@ export const createProducto = async (req, res) => {
 
   try {
     const { rows } = await pool.query(
-      `INSERT INTO productos (nombre, descripcion, unidad, precio_unitario, stock_actual, stock_minimo)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING *, (stock_actual - stock_reservado) AS stock_disponible`,
-      [nombre, descripcion || null, unidad, precio_unitario ?? null, stock_actual, stock_minimo]
+      `INSERT INTO productos (nombre, descripcion, unidad, precio_unitario, stock_actual)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING *,
+                 (stock_actual - stock_reservado) AS stock_disponible,
+                 ${ESTADO_STOCK_SQL}`,
+      [nombre, descripcion || null, unidad, precio_unitario ?? null, stock_actual]
     );
     res.status(201).json(rows[0]);
   } catch (err) {
@@ -37,7 +51,7 @@ export const createProducto = async (req, res) => {
 
 export const updateProducto = async (req, res) => {
   const { id } = req.params;
-  const { nombre, descripcion, unidad, precio_unitario, stock_actual, stock_minimo } = req.body;
+  const { nombre, descripcion, unidad, precio_unitario, stock_actual } = req.body;
 
   if (!nombre) {
     return res.status(400).json({ message: 'Nombre es requerido.' });
@@ -47,11 +61,13 @@ export const updateProducto = async (req, res) => {
     const { rows } = await pool.query(
       `UPDATE productos
          SET nombre = $1, descripcion = $2, unidad = $3,
-             precio_unitario = $4, stock_actual = $5, stock_minimo = $6,
+             precio_unitario = $4, stock_actual = $5,
              updated_at = NOW()
-       WHERE id = $7
-       RETURNING *, (stock_actual - stock_reservado) AS stock_disponible`,
-      [nombre, descripcion || null, unidad, precio_unitario ?? null, stock_actual, stock_minimo, id]
+       WHERE id = $6
+       RETURNING *,
+                 (stock_actual - stock_reservado) AS stock_disponible,
+                 ${ESTADO_STOCK_SQL}`,
+      [nombre, descripcion || null, unidad, precio_unitario ?? null, stock_actual, id]
     );
     if (rows.length === 0) {
       return res.status(404).json({ message: 'Producto no encontrado.' });

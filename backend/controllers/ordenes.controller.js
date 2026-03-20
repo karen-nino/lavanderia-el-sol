@@ -132,9 +132,17 @@ export const createOrden = async (req, res) => {
     }
   }
 
-  const ajusteNum       = Number(ajuste)          || 0;
-  const cantidadCargas  = Number(cantidad_cargas)  || 1;
-  const precioBaseNum   = precio_base != null ? Number(precio_base) : null;
+  const ajusteNum      = Number(ajuste)         || 0;
+  const cantidadCargas = Number(cantidad_cargas) || 1;
+
+  // Leer precio desde configuracion si no se envió en el body
+  let precioBaseNum = precio_base != null ? Number(precio_base) : null;
+  if (modalidad === 'AUTOSERVICIO' && precioBaseNum === null) {
+    const { rows: cfg } = await pool.query(
+      'SELECT precio_autoservicio FROM configuracion WHERE id = 1'
+    );
+    precioBaseNum = cfg.length > 0 ? Number(cfg[0].precio_autoservicio) : 70;
+  }
 
   // Para AUTOSERVICIO: precio_total = (cargas × precio_base) + ajuste
   // Los productos se suman después de insertarlos en orden_articulos
