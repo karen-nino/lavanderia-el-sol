@@ -18,22 +18,22 @@ const FORM_VACIO = {
 };
 
 // ── Modal crear / editar ────────────────────────────────────────
-function ModalArticulo({ articulo, onClose, onGuardado }) {
-  const [form, setForm]     = useState(articulo
+function ModalProducto({ producto, onClose, onGuardado }) {
+  const [form, setForm]     = useState(producto
     ? {
-        nombre:          articulo.nombre,
-        categoria:       articulo.categoria ?? '',
-        precio_unitario: articulo.precio_unitario ?? '',
-        unidad:          articulo.unidad,
-        stock_actual:    articulo.stock_actual,
-        stock_minimo:    articulo.stock_minimo,
+        nombre:          producto.nombre,
+        categoria:       producto.categoria ?? '',
+        precio_unitario: producto.precio_unitario ?? '',
+        unidad:          producto.unidad,
+        stock_actual:    producto.stock_actual,
+        stock_minimo:    producto.stock_minimo,
       }
     : FORM_VACIO
   );
   const [error,   setError]   = useState('');
   const [loading, setLoading] = useState(false);
 
-  const esEdicion = Boolean(articulo);
+  const esEdicion = Boolean(producto);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -57,9 +57,9 @@ function ModalArticulo({ articulo, onClose, onGuardado }) {
     try {
       let resultado;
       if (esEdicion) {
-        resultado = await api.put(`/insumos/${articulo.id}`, body);
+        resultado = await api.put(`/productos/${producto.id}`, body);
       } else {
-        resultado = await api.post('/insumos', body);
+        resultado = await api.post('/productos', body);
       }
       onGuardado(resultado, esEdicion);
     } catch (err) {
@@ -74,7 +74,7 @@ function ModalArticulo({ articulo, onClose, onGuardado }) {
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
           <h2 className="text-base font-semibold text-gray-900">
-            {esEdicion ? 'Editar artículo' : 'Nuevo artículo'}
+            {esEdicion ? 'Editar producto' : 'Nuevo producto'}
           </h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -172,7 +172,7 @@ function ModalArticulo({ articulo, onClose, onGuardado }) {
               type="submit" disabled={loading}
               className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-medium py-2.5 rounded-lg text-sm transition-colors"
             >
-              {loading ? 'Guardando...' : esEdicion ? 'Guardar cambios' : 'Crear artículo'}
+              {loading ? 'Guardando...' : esEdicion ? 'Guardar cambios' : 'Crear producto'}
             </button>
           </div>
         </form>
@@ -182,7 +182,7 @@ function ModalArticulo({ articulo, onClose, onGuardado }) {
 }
 
 // ── Modal confirmar eliminación ─────────────────────────────────
-function ModalEliminar({ articulo, onClose, onConfirmar }) {
+function ModalEliminar({ producto, onClose, onConfirmar }) {
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState('');
 
@@ -208,9 +208,9 @@ function ModalEliminar({ articulo, onClose, onConfirmar }) {
             </svg>
           </div>
           <div>
-            <h3 className="text-base font-semibold text-gray-900">Eliminar artículo</h3>
+            <h3 className="text-base font-semibold text-gray-900">Eliminar producto</h3>
             <p className="text-sm text-gray-500 mt-0.5">
-              ¿Eliminar <span className="font-medium text-gray-700">{articulo.nombre}</span>? Esta acción no se puede deshacer.
+              ¿Eliminar <span className="font-medium text-gray-700">{producto.nombre}</span>? Esta acción no se puede deshacer.
             </p>
           </div>
         </div>
@@ -260,41 +260,41 @@ function IconoBasura() {
 }
 
 // ── Página principal ────────────────────────────────────────────
-export default function Insumos() {
+export default function Inventario() {
   const { usuario } = useAuth();
   const esAdmin = usuario?.rol === 'admin';
 
-  const [insumos,         setInsumos]         = useState([]);
+  const [productos,       setProductos]       = useState([]);
   const [loading,         setLoading]         = useState(true);
   const [error,           setError]           = useState('');
-  const [modalArticulo,   setModalArticulo]   = useState(null);  // null | 'nuevo' | articulo
-  const [artAEliminar,    setArtAEliminar]    = useState(null);
+  const [modalProducto,   setModalProducto]   = useState(null);  // null | 'nuevo' | producto
+  const [prodAEliminar,   setProdAEliminar]   = useState(null);
 
   const cargar = () => {
     setLoading(true);
-    api.get('/insumos')
-      .then(setInsumos)
+    api.get('/productos')
+      .then(setProductos)
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
   };
 
   useEffect(cargar, []);
 
-  const stockBajo = insumos.filter(i => Number(i.stock_actual) <= Number(i.stock_minimo));
+  const stockBajo = productos.filter(p => Number(p.stock_actual) <= Number(p.stock_minimo));
 
   const handleGuardado = (resultado, esEdicion) => {
     if (esEdicion) {
-      setInsumos(prev => prev.map(i => i.id === resultado.id ? resultado : i));
+      setProductos(prev => prev.map(p => p.id === resultado.id ? resultado : p));
     } else {
-      setInsumos(prev => [...prev, resultado].sort((a, b) => a.nombre.localeCompare(b.nombre)));
+      setProductos(prev => [...prev, resultado].sort((a, b) => a.nombre.localeCompare(b.nombre)));
     }
-    setModalArticulo(null);
+    setModalProducto(null);
   };
 
   const handleEliminar = async () => {
-    await api.delete(`/insumos/${artAEliminar.id}`);
-    setInsumos(prev => prev.filter(i => i.id !== artAEliminar.id));
-    setArtAEliminar(null);
+    await api.delete(`/productos/${prodAEliminar.id}`);
+    setProductos(prev => prev.filter(p => p.id !== prodAEliminar.id));
+    setProdAEliminar(null);
   };
 
   return (
@@ -303,17 +303,17 @@ export default function Insumos() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-gray-900">Artículos</h1>
-          <p className="text-sm text-gray-500">{insumos.length} producto(s) en inventario</p>
+          <h1 className="text-xl font-bold text-gray-900">Inventario</h1>
+          <p className="text-sm text-gray-500">{productos.length} producto(s) en inventario</p>
         </div>
         <button
-          onClick={() => setModalArticulo('nuevo')}
+          onClick={() => setModalProducto('nuevo')}
           className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2.5 rounded-lg transition-colors"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
           </svg>
-          Agregar artículo
+          Agregar producto
         </button>
       </div>
 
@@ -330,9 +330,9 @@ export default function Insumos() {
             </p>
           </div>
           <div className="flex flex-wrap gap-1.5">
-            {stockBajo.map(i => (
-              <span key={i.id} className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium">
-                {i.nombre}
+            {stockBajo.map(p => (
+              <span key={p.id} className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium">
+                {p.nombre}
               </span>
             ))}
           </div>
@@ -351,11 +351,11 @@ export default function Insumos() {
 
       {!loading && !error && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-          {insumos.length === 0 ? (
+          {productos.length === 0 ? (
             <div className="text-center py-12">
-              <p className="text-gray-400 text-sm mb-3">No hay artículos registrados</p>
+              <p className="text-gray-400 text-sm mb-3">Sin productos en inventario</p>
               <button
-                onClick={() => setModalArticulo('nuevo')}
+                onClick={() => setModalProducto('nuevo')}
                 className="text-sm text-indigo-600 hover:text-indigo-800 font-medium"
               >
                 + Agregar el primero
@@ -368,7 +368,7 @@ export default function Insumos() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-gray-50 border-b border-gray-100">
-                      <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Artículo</th>
+                      <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Producto</th>
                       <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Categoría</th>
                       <th className="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Precio unit.</th>
                       <th className="text-center px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Stock actual</th>
@@ -377,29 +377,29 @@ export default function Insumos() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
-                    {insumos.map(i => {
-                      const bajo = Number(i.stock_actual) <= Number(i.stock_minimo);
+                    {productos.map(p => {
+                      const bajo = Number(p.stock_actual) <= Number(p.stock_minimo);
                       return (
-                        <tr key={i.id} className={`hover:bg-gray-50 transition-colors ${bajo ? 'bg-amber-50/40' : ''}`}>
+                        <tr key={p.id} className={`hover:bg-gray-50 transition-colors ${bajo ? 'bg-amber-50/40' : ''}`}>
                           <td className="px-4 py-3">
-                            <p className="font-medium text-gray-800">{i.nombre}</p>
+                            <span className="font-medium text-gray-800">{p.nombre}</span>
                           </td>
                           <td className="px-4 py-3 text-gray-500 text-xs">
-                            {i.categoria ?? '—'}
+                            {p.categoria ?? '—'}
                           </td>
                           <td className="px-4 py-3 text-right text-gray-600">
-                            {i.precio_unitario != null ? `$${Number(i.precio_unitario).toFixed(2)}` : '—'}
+                            {p.precio_unitario != null ? `$${Number(p.precio_unitario).toFixed(2)}` : '—'}
                           </td>
                           <td className="px-4 py-3 text-center">
                             <span className={`inline-flex items-center gap-1 font-mono font-semibold text-sm ${bajo ? 'text-red-600' : 'text-gray-800'}`}>
-                              {bajo ? '🔴' : '🟢'} {Number(i.stock_actual).toFixed(2)}
+                              {bajo ? '🔴' : '🟢'} {Number(p.stock_actual).toFixed(2)}
                             </span>
                           </td>
-                          <td className="px-4 py-3 text-gray-600">{i.unidad}</td>
+                          <td className="px-4 py-3 text-gray-600">{p.unidad}</td>
                           <td className="px-4 py-3">
                             <div className="flex items-center justify-end gap-1">
                               <button
-                                onClick={() => setModalArticulo(i)}
+                                onClick={() => setModalProducto(p)}
                                 className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
                                 title="Editar"
                               >
@@ -407,7 +407,7 @@ export default function Insumos() {
                               </button>
                               {esAdmin && (
                                 <button
-                                  onClick={() => setArtAEliminar(i)}
+                                  onClick={() => setProdAEliminar(p)}
                                   className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                                   title="Eliminar"
                                 >
@@ -425,37 +425,37 @@ export default function Insumos() {
 
               {/* Cards — mobile */}
               <div className="md:hidden divide-y divide-gray-50">
-                {insumos.map(i => {
-                  const bajo = Number(i.stock_actual) <= Number(i.stock_minimo);
+                {productos.map(p => {
+                  const bajo = Number(p.stock_actual) <= Number(p.stock_minimo);
                   return (
-                    <div key={i.id} className={`px-4 py-3 ${bajo ? 'bg-amber-50/40' : ''}`}>
+                    <div key={p.id} className={`px-4 py-3 ${bajo ? 'bg-amber-50/40' : ''}`}>
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
-                          <p className="font-medium text-gray-800 text-sm">{i.nombre}</p>
-                          {i.categoria && (
-                            <p className="text-xs text-gray-400 mt-0.5">{i.categoria}</p>
+                          <p className="font-medium text-gray-800 text-sm">{p.nombre}</p>
+                          {p.categoria && (
+                            <p className="text-xs text-gray-400 mt-0.5">{p.categoria}</p>
                           )}
                           <div className="flex items-center gap-3 mt-1">
                             <span className={`text-sm font-mono font-semibold ${bajo ? 'text-red-600' : 'text-gray-700'}`}>
-                              {bajo ? '🔴' : '🟢'} {Number(i.stock_actual).toFixed(2)} {i.unidad}
+                              {bajo ? '🔴' : '🟢'} {Number(p.stock_actual).toFixed(2)} {p.unidad}
                             </span>
-                            {i.precio_unitario != null && (
+                            {p.precio_unitario != null && (
                               <span className="text-xs text-gray-500">
-                                ${Number(i.precio_unitario).toFixed(2)}
+                                ${Number(p.precio_unitario).toFixed(2)}
                               </span>
                             )}
                           </div>
                         </div>
                         <div className="flex items-center gap-1 flex-shrink-0">
                           <button
-                            onClick={() => setModalArticulo(i)}
+                            onClick={() => setModalProducto(p)}
                             className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
                           >
                             <IconoLapiz />
                           </button>
                           {esAdmin && (
                             <button
-                              onClick={() => setArtAEliminar(i)}
+                              onClick={() => setProdAEliminar(p)}
                               className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                             >
                               <IconoBasura />
@@ -473,19 +473,19 @@ export default function Insumos() {
       )}
 
       {/* Modal crear / editar */}
-      {modalArticulo && (
-        <ModalArticulo
-          articulo={modalArticulo === 'nuevo' ? null : modalArticulo}
-          onClose={() => setModalArticulo(null)}
+      {modalProducto && (
+        <ModalProducto
+          producto={modalProducto === 'nuevo' ? null : modalProducto}
+          onClose={() => setModalProducto(null)}
           onGuardado={handleGuardado}
         />
       )}
 
       {/* Modal confirmar eliminar */}
-      {artAEliminar && (
+      {prodAEliminar && (
         <ModalEliminar
-          articulo={artAEliminar}
-          onClose={() => setArtAEliminar(null)}
+          producto={prodAEliminar}
+          onClose={() => setProdAEliminar(null)}
           onConfirmar={handleEliminar}
         />
       )}

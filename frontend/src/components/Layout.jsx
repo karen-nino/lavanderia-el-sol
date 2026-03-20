@@ -46,8 +46,8 @@ const navItems = [
     ),
   },
   {
-    to: '/insumos',
-    label: 'Artículos',
+    to: '/inventario',
+    label: 'Inventario',
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -57,6 +57,17 @@ const navItems = [
   },
 ];
 
+const ventasItem = {
+  to: '/ventas',
+  label: 'Ventas',
+  icon: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+        d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  ),
+};
+
 function SidebarContent({ onClose }) {
   const { usuario, logout } = useAuth();
   const navigate = useNavigate();
@@ -65,6 +76,8 @@ function SidebarContent({ onClose }) {
     logout();
     navigate('/login');
   };
+
+  const items = usuario?.rol === 'admin' ? [...navItems, ventasItem] : navItems;
 
   return (
     <div className="flex flex-col h-full bg-slate-800 text-white">
@@ -88,7 +101,7 @@ function SidebarContent({ onClose }) {
 
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-0.5">
-        {navItems.map(({ to, label, icon, end }) => (
+        {items.map(({ to, label, icon, end }) => (
           <NavLink
             key={to}
             to={to}

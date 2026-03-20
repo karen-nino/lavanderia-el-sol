@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import PrivateRoute from './components/PrivateRoute';
+import AdminRoute from './components/AdminRoute';
 import Layout from './components/Layout';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
@@ -8,9 +9,10 @@ import Ordenes from './pages/Ordenes';
 import NuevaOrden from './pages/NuevaOrden';
 import Clientes from './pages/Clientes';
 import Maquinas from './pages/Maquinas';
-import Insumos from './pages/Insumos';
+import Inventario from './pages/Inventario';
 import DetalleOrden from './pages/DetalleOrden';
 import Salidas from './pages/Salidas';
+import Ventas from './pages/Ventas';
 
 export default function App() {
   return (
@@ -33,7 +35,15 @@ export default function App() {
             <Route path="ordenes/:id/salidas" element={<Salidas />} />
             <Route path="clientes" element={<Clientes />} />
             <Route path="maquinas" element={<Maquinas />} />
-            <Route path="insumos" element={<Insumos />} />
+            <Route path="inventario" element={<Inventario />} />
+            <Route
+              path="ventas"
+              element={
+                <AdminRoute>
+                  <Ventas />
+                </AdminRoute>
+              }
+            />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
