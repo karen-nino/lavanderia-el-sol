@@ -67,11 +67,11 @@ export const getOrdenById = async (req, res) => {
       return res.status(404).json({ message: 'Orden no encontrada.' });
     }
 
-    const { rows: articulos } = await pool.query(
-      `SELECT oa.id, oa.articulo_id, a.nombre, oa.cantidad, oa.precio_unitario,
+    const { rows: productos } = await pool.query(
+      `SELECT oa.id, oa.producto_id, a.nombre, oa.cantidad, oa.precio_unitario,
               (oa.cantidad * oa.precio_unitario) AS subtotal
        FROM orden_articulos oa
-       JOIN articulos a ON a.id = oa.articulo_id
+       JOIN productos a ON a.id = oa.producto_id
        WHERE oa.orden_id = $1
        ORDER BY oa.created_at ASC`,
       [id]
@@ -85,7 +85,7 @@ export const getOrdenById = async (req, res) => {
       [id]
     );
 
-    res.json({ ...rows[0], articulos, insumos_consumidos: movs });
+    res.json({ ...rows[0], productos, insumos_consumidos: movs });
   } catch (err) {
     console.error('getOrdenById error:', err);
     res.status(500).json({ message: 'Error interno del servidor.' });
@@ -110,7 +110,7 @@ export const createOrden = async (req, res) => {
     cantidad_cargas = 1,
     precio_base,       // precio por carga en AUTOSERVICIO
     insumos   = [], // [{ insumo_id, cantidad }]  → movimientos_insumos
-    articulos = [], // [{ articulo_id, cantidad }] → orden_articulos
+    productos = [], // [{ producto_id, cantidad }] → orden_articulos
   } = req.body;
 
   if (!MODALIDADES_VALIDAS.includes(modalidad)) {
@@ -137,7 +137,7 @@ export const createOrden = async (req, res) => {
   const precioBaseNum   = precio_base != null ? Number(precio_base) : null;
 
   // Para AUTOSERVICIO: precio_total = (cargas × precio_base) + ajuste
-  // Los artículos se suman después de insertarlos en orden_articulos
+  // Los productos se suman después de insertarlos en orden_articulos
   let precioFinal;
   if (modalidad === 'AUTOSERVICIO') {
     precioFinal = precioBaseNum != null
@@ -211,18 +211,18 @@ export const createOrden = async (req, res) => {
       }
     }
 
-    // ── Insertar artículos en orden_articulos ────────────────
-    const articulosInsertados = [];
-    for (const { articulo_id, cantidad } of articulos) {
-      if (!articulo_id || !cantidad || Number(cantidad) <= 0) continue;
+    // ── Insertar productos en orden_articulos ────────────────
+    const productosInsertados = [];
+    for (const { producto_id, cantidad } of productos) {
+      if (!producto_id || !cantidad || Number(cantidad) <= 0) continue;
 
       const { rows: artRows } = await client.query(
-        'SELECT * FROM articulos WHERE id = $1 FOR UPDATE',
-        [articulo_id]
+        'SELECT * FROM productos WHERE id = $1 FOR UPDATE',
+        [producto_id]
       );
       if (artRows.length === 0) {
         await client.query('ROLLBACK');
-        return res.status(404).json({ message: `Artículo ${articulo_id} no encontrado.` });
+        return res.status(404).json({ message: `Producto ${producto_id} no encontrado.` });
       }
       const art = artRows[0];
       const stockDisponible = art.stock_actual - art.stock_reservado;
@@ -234,24 +234,24 @@ export const createOrden = async (req, res) => {
       }
 
       const { rows: oaRows } = await client.query(
-        `INSERT INTO orden_articulos (orden_id, articulo_id, cantidad, precio_unitario)
+        `INSERT INTO orden_articulos (orden_id, producto_id, cantidad, precio_unitario)
          VALUES ($1, $2, $3, $4)
          RETURNING *`,
-        [orden.id, articulo_id, cantidad, art.precio_unitario ?? 0]
+        [orden.id, producto_id, cantidad, art.precio_unitario ?? 0]
       );
       await client.query(
-        'UPDATE articulos SET stock_reservado = stock_reservado + $1 WHERE id = $2',
-        [cantidad, articulo_id]
+        'UPDATE productos SET stock_reservado = stock_reservado + $1 WHERE id = $2',
+        [cantidad, producto_id]
       );
-      articulosInsertados.push({
+      productosInsertados.push({
         ...oaRows[0],
         nombre:  art.nombre,
         subtotal: Number(oaRows[0].cantidad) * Number(oaRows[0].precio_unitario),
       });
     }
 
-    // Si se insertaron artículos, recalcular precio_total con fórmula completa
-    if (articulosInsertados.length > 0) {
+    // Si se insertaron productos, recalcular precio_total con fórmula completa
+    if (productosInsertados.length > 0) {
       const { rows: totalRows } = await client.query(
         `UPDATE ordenes o
            SET precio_total = (
@@ -271,7 +271,7 @@ export const createOrden = async (req, res) => {
     }
 
     await client.query('COMMIT');
-    res.status(201).json({ ...orden, articulos: articulosInsertados });
+    res.status(201).json({ ...orden, productos: productosInsertados });
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('createOrden error:', err);
@@ -296,10 +296,10 @@ export const eliminarOrden = async (req, res) => {
 
     // Liberar stock reservado antes de eliminar
     await client.query(
-      `UPDATE articulos a
+      `UPDATE productos a
          SET stock_reservado = stock_reservado - oa.cantidad
        FROM orden_articulos oa
-       WHERE oa.orden_id = $1 AND oa.articulo_id = a.id`,
+       WHERE oa.orden_id = $1 AND oa.producto_id = a.id`,
       [id]
     );
 
@@ -363,19 +363,19 @@ export const cambiarEstadoOrden = async (req, res) => {
 
     if (estado === 'CANCELADA') {
       await client.query(
-        `UPDATE articulos a
+        `UPDATE productos a
            SET stock_reservado = stock_reservado - oa.cantidad
          FROM orden_articulos oa
-         WHERE oa.orden_id = $1 AND oa.articulo_id = a.id`,
+         WHERE oa.orden_id = $1 AND oa.producto_id = a.id`,
         [id]
       );
     } else if (estado === 'PAGADA') {
       await client.query(
-        `UPDATE articulos a
+        `UPDATE productos a
            SET stock_actual    = stock_actual    - oa.cantidad,
                stock_reservado = stock_reservado - oa.cantidad
          FROM orden_articulos oa
-         WHERE oa.orden_id = $1 AND oa.articulo_id = a.id`,
+         WHERE oa.orden_id = $1 AND oa.producto_id = a.id`,
         [id]
       );
     }
@@ -422,33 +422,33 @@ export const cambiarEstadoPago = async (req, res) => {
   }
 };
 
-// ── GET /ordenes/:id/articulos ────────────────────────────────
-export const getOrdenArticulos = async (req, res) => {
+// ── GET /ordenes/:id/productos ────────────────────────────────
+export const getOrdenProductos = async (req, res) => {
   const { id } = req.params;
   try {
     const { rows } = await pool.query(
-      `SELECT oa.id, oa.articulo_id, a.nombre, oa.cantidad, oa.precio_unitario,
+      `SELECT oa.id, oa.producto_id, a.nombre, oa.cantidad, oa.precio_unitario,
               (oa.cantidad * oa.precio_unitario) AS subtotal
        FROM orden_articulos oa
-       JOIN articulos a ON a.id = oa.articulo_id
+       JOIN productos a ON a.id = oa.producto_id
        WHERE oa.orden_id = $1
        ORDER BY oa.created_at ASC`,
       [id]
     );
     res.json(rows);
   } catch (err) {
-    console.error('getOrdenArticulos error:', err);
+    console.error('getOrdenProductos error:', err);
     res.status(500).json({ message: 'Error interno del servidor.' });
   }
 };
 
-// ── POST /ordenes/:id/articulos ───────────────────────────────
-export const addArticuloToOrden = async (req, res) => {
+// ── POST /ordenes/:id/productos ───────────────────────────────
+export const addProductoToOrden = async (req, res) => {
   const { id } = req.params;
-  const { articulo_id, cantidad } = req.body;
+  const { producto_id, cantidad } = req.body;
 
-  if (!articulo_id || !cantidad || Number(cantidad) <= 0) {
-    return res.status(400).json({ message: 'articulo_id y cantidad (>0) son requeridos.' });
+  if (!producto_id || !cantidad || Number(cantidad) <= 0) {
+    return res.status(400).json({ message: 'producto_id y cantidad (>0) son requeridos.' });
   }
 
   const client = await pool.connect();
@@ -456,12 +456,12 @@ export const addArticuloToOrden = async (req, res) => {
     await client.query('BEGIN');
 
     const { rows: artRows } = await client.query(
-      'SELECT * FROM articulos WHERE id = $1 FOR UPDATE',
-      [articulo_id]
+      'SELECT * FROM productos WHERE id = $1 FOR UPDATE',
+      [producto_id]
     );
     if (artRows.length === 0) {
       await client.query('ROLLBACK');
-      return res.status(404).json({ message: 'Artículo no encontrado.' });
+      return res.status(404).json({ message: 'Producto no encontrado.' });
     }
     const art = artRows[0];
     const stockDisponible = art.stock_actual - art.stock_reservado;
@@ -474,15 +474,15 @@ export const addArticuloToOrden = async (req, res) => {
     }
 
     const { rows: oaRows } = await client.query(
-      `INSERT INTO orden_articulos (orden_id, articulo_id, cantidad, precio_unitario)
+      `INSERT INTO orden_articulos (orden_id, producto_id, cantidad, precio_unitario)
        VALUES ($1, $2, $3, $4)
        RETURNING *`,
-      [id, articulo_id, cantidad, art.precio_unitario ?? 0]
+      [id, producto_id, cantidad, art.precio_unitario ?? 0]
     );
 
     await client.query(
-      'UPDATE articulos SET stock_reservado = stock_reservado + $1 WHERE id = $2',
-      [cantidad, articulo_id]
+      'UPDATE productos SET stock_reservado = stock_reservado + $1 WHERE id = $2',
+      [cantidad, producto_id]
     );
 
     await client.query(
@@ -504,39 +504,39 @@ export const addArticuloToOrden = async (req, res) => {
     res.status(201).json(oaRows[0]);
   } catch (err) {
     await client.query('ROLLBACK');
-    console.error('addArticuloToOrden error:', err);
+    console.error('addProductoToOrden error:', err);
     res.status(500).json({ message: 'Error interno del servidor.' });
   } finally {
     client.release();
   }
 };
 
-// ── DELETE /ordenes/:id/articulos/:articuloId ─────────────────
-export const removeArticuloFromOrden = async (req, res) => {
-  const { id, articuloId } = req.params;
+// ── DELETE /ordenes/:id/productos/:productoId ─────────────────
+export const removeProductoFromOrden = async (req, res) => {
+  const { id, productoId } = req.params;
 
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
 
     const { rows: oaRows } = await client.query(
-      'SELECT * FROM orden_articulos WHERE orden_id = $1 AND articulo_id = $2',
-      [id, articuloId]
+      'SELECT * FROM orden_articulos WHERE orden_id = $1 AND producto_id = $2',
+      [id, productoId]
     );
     if (oaRows.length === 0) {
       await client.query('ROLLBACK');
-      return res.status(404).json({ message: 'Artículo no encontrado en la orden.' });
+      return res.status(404).json({ message: 'Producto no encontrado en la orden.' });
     }
     const oa = oaRows[0];
 
     await client.query(
-      'DELETE FROM orden_articulos WHERE orden_id = $1 AND articulo_id = $2',
-      [id, articuloId]
+      'DELETE FROM orden_articulos WHERE orden_id = $1 AND producto_id = $2',
+      [id, productoId]
     );
 
     await client.query(
-      'UPDATE articulos SET stock_reservado = stock_reservado - $1 WHERE id = $2',
-      [oa.cantidad, articuloId]
+      'UPDATE productos SET stock_reservado = stock_reservado - $1 WHERE id = $2',
+      [oa.cantidad, productoId]
     );
 
     await client.query(
@@ -558,7 +558,7 @@ export const removeArticuloFromOrden = async (req, res) => {
     res.status(204).send();
   } catch (err) {
     await client.query('ROLLBACK');
-    console.error('removeArticuloFromOrden error:', err);
+    console.error('removeProductoFromOrden error:', err);
     res.status(500).json({ message: 'Error interno del servidor.' });
   } finally {
     client.release();

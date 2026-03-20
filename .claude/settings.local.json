@@ -9,7 +9,9 @@
       "Bash(npm run:*)",
       "Bash(brew upgrade:*)",
       "Bash(grep -n \"jwt\\\\|sign\\\\|payload\\\\|rol\" /Users/karen.nino/Desktop/lavanderia-el-sol/backend/controllers/auth.controller.js 2>/dev/null || grep -rn \"jwt.sign\\\\|payload\" /Users/karen.nino/Desktop/lavanderia-el-sol/backend --include=\"*.js\" | head -10)",
-      "Bash(ls backend/ && cat frontend/package.json | python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d.get\\('dependencies',{}\\), indent=2\\)\\)\")"
+      "Bash(ls backend/ && cat frontend/package.json | python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d.get\\('dependencies',{}\\), indent=2\\)\\)\")",
+      "Bash(tree -L 3 -I \"node_modules|dist\" /Users/karen.nino/Desktop/lavanderia-el-sol 2>/dev/null || find /Users/karen.nino/Desktop/lavanderia-el-sol -not -path \"*/node_modules/*\" -not -path \"*/dist/*\" -type d | head -40)",
+      "Bash(tree -L 3 -I 'node_modules|dist|.git|.claude' /Users/karen.nino/Desktop/lavanderia-el-sol --charset ascii 2>/dev/null || find /Users/karen.nino/Desktop/lavanderia-el-sol -not -path '*/node_modules/*' -not -path '*/.git/*' -not -path '*/.claude/*' -not -path '*/dist/*' | sort | head -100)"
     ]
   }
 }

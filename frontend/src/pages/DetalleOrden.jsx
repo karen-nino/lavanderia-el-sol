@@ -137,8 +137,8 @@ export default function DetalleOrden() {
   const badgePago     = BADGE_PAGO[orden.estado_pago];
   const barcodeValue  = orden.folio ?? String(orden.id);
 
-  const totalArticulos = (orden.articulos || []).reduce(
-    (s, a) => s + Number(a.subtotal), 0
+  const totalProductos = (orden.productos || []).reduce(
+    (s, p) => s + Number(p.subtotal), 0
   );
 
   return (
@@ -268,32 +268,32 @@ export default function DetalleOrden() {
         </div>
       </div>
 
-      {/* Artículos */}
+      {/* Productos */}
       <div className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
         <div className="px-4 py-3 border-b border-gray-50 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-gray-700">Artículos</h2>
-          {(orden.articulos || []).length > 0 && (
-            <span className="text-xs text-gray-400">{(orden.articulos || []).length} ítem(s)</span>
+          <h2 className="text-sm font-semibold text-gray-700">Productos</h2>
+          {(orden.productos || []).length > 0 && (
+            <span className="text-xs text-gray-400">{(orden.productos || []).length} ítem(s)</span>
           )}
         </div>
-        {(orden.articulos || []).length === 0 ? (
-          <p className="text-sm text-gray-400 italic px-4 py-4">Sin artículos agregados</p>
+        {(orden.productos || []).length === 0 ? (
+          <p className="text-sm text-gray-400 italic px-4 py-4">Sin productos agregados</p>
         ) : (
           <div className="divide-y divide-gray-50">
-            {(orden.articulos || []).map(a => (
-              <div key={a.id} className="px-4 py-3 flex items-center justify-between gap-3">
+            {(orden.productos || []).map(p => (
+              <div key={p.id} className="px-4 py-3 flex items-center justify-between gap-3">
                 <div>
-                  <p className="text-sm font-medium text-gray-800">{a.nombre}</p>
-                  <p className="text-xs text-gray-400">Cant. {a.cantidad} × {fmtMonto(a.precio_unitario)}</p>
+                  <p className="text-sm font-medium text-gray-800">{p.nombre}</p>
+                  <p className="text-xs text-gray-400">Cant. {p.cantidad} × {fmtMonto(p.precio_unitario)}</p>
                 </div>
                 <span className="text-sm font-semibold text-gray-700 flex-shrink-0">
-                  {fmtMonto(a.subtotal)}
+                  {fmtMonto(p.subtotal)}
                 </span>
               </div>
             ))}
             <div className="px-4 py-3 flex justify-between bg-gray-50">
-              <span className="text-sm font-semibold text-gray-700">Total artículos</span>
-              <span className="text-sm font-bold text-gray-900">{fmtMonto(totalArticulos)}</span>
+              <span className="text-sm font-semibold text-gray-700">Total productos</span>
+              <span className="text-sm font-bold text-gray-900">{fmtMonto(totalProductos)}</span>
             </div>
           </div>
         )}

@@ -7,9 +7,9 @@ import {
   eliminarOrden,
   cambiarEstadoOrden,
   cambiarEstadoPago,
-  getOrdenArticulos,
-  addArticuloToOrden,
-  removeArticuloFromOrden,
+  getOrdenProductos,
+  addProductoToOrden,
+  removeProductoFromOrden,
 } from '../controllers/ordenes.controller.js';
 
 const router = Router();
@@ -22,8 +22,8 @@ router.get('/:id', getOrdenById);
 router.delete('/:id', eliminarOrden);
 router.patch('/:id/estado',      cambiarEstadoOrden);
 router.patch('/:id/estado-pago', cambiarEstadoPago);
-router.get('/:id/articulos',    getOrdenArticulos);
-router.post('/:id/articulos',   addArticuloToOrden);
-router.delete('/:id/articulos/:articuloId', removeArticuloFromOrden);
+router.get('/:id/productos',    getOrdenProductos);
+router.post('/:id/productos',   addProductoToOrden);
+router.delete('/:id/productos/:productoId', removeProductoFromOrden);
 
 export default router;

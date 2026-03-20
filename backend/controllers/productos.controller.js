@@ -1,20 +1,20 @@
 import pool from '../db/pool.js';
 
-export const getArticulos = async (req, res) => {
+export const getProductos = async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT *, (stock_actual - stock_reservado) AS stock_disponible
-       FROM articulos
+       FROM productos
        ORDER BY nombre ASC`
     );
     res.json(rows);
   } catch (err) {
-    console.error('getArticulos error:', err);
+    console.error('getProductos error:', err);
     res.status(500).json({ message: 'Error interno del servidor.' });
   }
 };
 
-export const createArticulo = async (req, res) => {
+export const createProducto = async (req, res) => {
   const { nombre, descripcion, unidad = 'pieza', precio_unitario, stock_actual = 0, stock_minimo = 0 } = req.body;
 
   if (!nombre) {
@@ -23,19 +23,19 @@ export const createArticulo = async (req, res) => {
 
   try {
     const { rows } = await pool.query(
-      `INSERT INTO articulos (nombre, descripcion, unidad, precio_unitario, stock_actual, stock_minimo)
+      `INSERT INTO productos (nombre, descripcion, unidad, precio_unitario, stock_actual, stock_minimo)
        VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING *, (stock_actual - stock_reservado) AS stock_disponible`,
       [nombre, descripcion || null, unidad, precio_unitario ?? null, stock_actual, stock_minimo]
     );
     res.status(201).json(rows[0]);
   } catch (err) {
-    console.error('createArticulo error:', err);
+    console.error('createProducto error:', err);
     res.status(500).json({ message: 'Error interno del servidor.' });
   }
 };
 
-export const updateArticulo = async (req, res) => {
+export const updateProducto = async (req, res) => {
   const { id } = req.params;
   const { nombre, descripcion, unidad, precio_unitario, stock_actual, stock_minimo } = req.body;
 
@@ -45,7 +45,7 @@ export const updateArticulo = async (req, res) => {
 
   try {
     const { rows } = await pool.query(
-      `UPDATE articulos
+      `UPDATE productos
          SET nombre = $1, descripcion = $2, unidad = $3,
              precio_unitario = $4, stock_actual = $5, stock_minimo = $6,
              updated_at = NOW()
@@ -54,11 +54,25 @@ export const updateArticulo = async (req, res) => {
       [nombre, descripcion || null, unidad, precio_unitario ?? null, stock_actual, stock_minimo, id]
     );
     if (rows.length === 0) {
-      return res.status(404).json({ message: 'Artículo no encontrado.' });
+      return res.status(404).json({ message: 'Producto no encontrado.' });
     }
     res.json(rows[0]);
   } catch (err) {
-    console.error('updateArticulo error:', err);
+    console.error('updateProducto error:', err);
+    res.status(500).json({ message: 'Error interno del servidor.' });
+  }
+};
+
+export const deleteProducto = async (req, res) => {
+  const { id } = req.params;
+  try {
+    const { rowCount } = await pool.query('DELETE FROM productos WHERE id = $1', [id]);
+    if (rowCount === 0) {
+      return res.status(404).json({ message: 'Producto no encontrado.' });
+    }
+    res.status(204).send();
+  } catch (err) {
+    console.error('deleteProducto error:', err);
     res.status(500).json({ message: 'Error interno del servidor.' });
   }
 };

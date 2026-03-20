@@ -21,26 +21,26 @@ const FORM_INIT = {
 export default function NuevaOrden() {
   const navigate = useNavigate();
   const [maquinas,          setMaquinas]          = useState([]);
-  const [articulosCatalogo, setArticulosCatalogo] = useState([]);
+  const [productosCatalogo, setProductosCatalogo] = useState([]);
   const [loadingData,       setLoadingData]       = useState(true);
   const [form,              setForm]              = useState(FORM_INIT);
-  const [articulosAutoLista, setArticulosAutoLista] = useState([]);
+  const [productosLista,    setProductosLista]    = useState([]);
   const [error,             setError]             = useState('');
   const [loading,           setLoading]           = useState(false);
 
   const ajusteNum      = Number(form.ajuste) || 0;
   const subtotalCargas = (Number(form.cantidad_cargas) || 1) * PRECIO_POR_CARGA;
-  const subtotalArticulos = articulosAutoLista.reduce((sum, a) => {
-    const art = articulosCatalogo.find(x => String(x.id) === String(a.articulo_id));
-    return sum + (art ? (Number(art.precio_unitario) || 0) * (Number(a.cantidad) || 0) : 0);
+  const subtotalProductos = productosLista.reduce((sum, p) => {
+    const prod = productosCatalogo.find(x => String(x.id) === String(p.producto_id));
+    return sum + (prod ? (Number(prod.precio_unitario) || 0) * (Number(p.cantidad) || 0) : 0);
   }, 0);
-  const precioTotal = subtotalCargas + ajusteNum + subtotalArticulos;
+  const precioTotal = subtotalCargas + ajusteNum + subtotalProductos;
 
   useEffect(() => {
-    Promise.all([api.get('/maquinas'), api.get('/articulos')])
-      .then(([m, art]) => {
+    Promise.all([api.get('/maquinas'), api.get('/productos')])
+      .then(([m, prod]) => {
         setMaquinas(m.filter(maq => maq.estado === 'disponible'));
-        setArticulosCatalogo(art);
+        setProductosCatalogo(prod);
       })
       .finally(() => setLoadingData(false));
   }, []);
@@ -50,16 +50,16 @@ export default function NuevaOrden() {
     setForm(f => ({ ...f, [name]: value }));
   };
 
-  const agregarArticulo = () =>
-    setArticulosAutoLista(prev => [...prev, { articulo_id: '', cantidad: '1' }]);
+  const agregarProducto = () =>
+    setProductosLista(prev => [...prev, { producto_id: '', cantidad: '1' }]);
 
-  const actualizarArticulo = (i, field, value) =>
-    setArticulosAutoLista(prev =>
+  const actualizarProducto = (i, field, value) =>
+    setProductosLista(prev =>
       prev.map((item, idx) => (idx === i ? { ...item, [field]: value } : item))
     );
 
-  const eliminarArticulo = (i) =>
-    setArticulosAutoLista(prev => prev.filter((_, idx) => idx !== i));
+  const eliminarProducto = (i) =>
+    setProductosLista(prev => prev.filter((_, idx) => idx !== i));
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -81,9 +81,9 @@ export default function NuevaOrden() {
       cantidad_cargas: cargas,
       precio_base:     PRECIO_POR_CARGA,
       ajuste:          ajusteNum,
-      articulos:       articulosAutoLista
-        .filter(a => a.articulo_id && a.cantidad)
-        .map(a => ({ articulo_id: Number(a.articulo_id), cantidad: Number(a.cantidad) })),
+      productos:       productosLista
+        .filter(p => p.producto_id && p.cantidad)
+        .map(p => ({ producto_id: Number(p.producto_id), cantidad: Number(p.cantidad) })),
     };
 
     try {
@@ -210,45 +210,45 @@ export default function NuevaOrden() {
           </div>
         </div>
 
-        {/* ── Artículos ────────────────────────────────────── */}
+        {/* ── Productos ────────────────────────────────────── */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 space-y-3">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-gray-700">Artículos</h2>
+            <h2 className="text-sm font-semibold text-gray-700">Productos</h2>
             <button
-              type="button" onClick={agregarArticulo}
+              type="button" onClick={agregarProducto}
               className="text-xs text-indigo-600 hover:text-indigo-800 font-medium"
             >
-              + Agregar artículo
+              + Agregar producto
             </button>
           </div>
 
-          {articulosAutoLista.length === 0 && (
-            <p className="text-xs text-gray-400">Sin artículos adicionales.</p>
+          {productosLista.length === 0 && (
+            <p className="text-xs text-gray-400">Sin productos adicionales.</p>
           )}
 
-          {articulosAutoLista.map((item, i) => {
-            const art = articulosCatalogo.find(x => String(x.id) === String(item.articulo_id));
-            const subtotal = art
-              ? (Number(art.precio_unitario) || 0) * (Number(item.cantidad) || 0)
+          {productosLista.map((item, i) => {
+            const prod = productosCatalogo.find(x => String(x.id) === String(item.producto_id));
+            const subtotal = prod
+              ? (Number(prod.precio_unitario) || 0) * (Number(item.cantidad) || 0)
               : 0;
             return (
               <div key={i} className="flex gap-2 items-center">
                 <select
-                  value={item.articulo_id}
-                  onChange={e => actualizarArticulo(i, 'articulo_id', e.target.value)}
+                  value={item.producto_id}
+                  onChange={e => actualizarProducto(i, 'producto_id', e.target.value)}
                   className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 >
-                  <option value="">Artículo...</option>
-                  {articulosCatalogo.map(a => (
-                    <option key={a.id} value={a.id}>
-                      {a.nombre}{a.precio_unitario ? ` — $${Number(a.precio_unitario).toFixed(2)}` : ''} (stock: {Number(a.stock_disponible ?? a.stock_actual)} {a.unidad})
+                  <option value="">Producto...</option>
+                  {productosCatalogo.map(p => (
+                    <option key={p.id} value={p.id}>
+                      {p.nombre}{p.precio_unitario ? ` — $${Number(p.precio_unitario).toFixed(2)}` : ''} (stock: {Number(p.stock_disponible ?? p.stock_actual)} {p.unidad})
                     </option>
                   ))}
                 </select>
                 <input
                   type="number" min="1" step="1" placeholder="Cant."
                   value={item.cantidad}
-                  onChange={e => actualizarArticulo(i, 'cantidad', e.target.value)}
+                  onChange={e => actualizarProducto(i, 'cantidad', e.target.value)}
                   className="w-20 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
                 {subtotal > 0 && (
@@ -257,7 +257,7 @@ export default function NuevaOrden() {
                   </span>
                 )}
                 <button
-                  type="button" onClick={() => eliminarArticulo(i)}
+                  type="button" onClick={() => eliminarProducto(i)}
                   className="text-gray-400 hover:text-red-500 p-1"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -285,10 +285,10 @@ export default function NuevaOrden() {
                 <span>{ajusteNum > 0 ? '+' : ''}${ajusteNum.toFixed(2)}</span>
               </div>
             )}
-            {subtotalArticulos > 0 && (
+            {subtotalProductos > 0 && (
               <div className="flex justify-between">
-                <span>Artículos</span>
-                <span>${subtotalArticulos.toFixed(2)}</span>
+                <span>Productos</span>
+                <span>${subtotalProductos.toFixed(2)}</span>
               </div>
             )}
           </div>

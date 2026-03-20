@@ -10,14 +10,14 @@ export default function Salidas() {
   const { id }   = useParams();
   const navigate = useNavigate();
 
-  const [orden,           setOrden]           = useState(null);
-  const [articulos,       setArticulos]       = useState([]);
-  const [cantidades,      setCantidades]      = useState({});
-  const [loading,         setLoading]         = useState(true);
-  const [error,           setError]           = useState('');
-  const [loadingMaquina,  setLoadingMaquina]  = useState(false);
-  const [loadingArticulo, setLoadingArticulo] = useState(null); // id del artículo en proceso
-  const [errorAccion,     setErrorAccion]     = useState('');
+  const [orden,            setOrden]            = useState(null);
+  const [productos,        setProductos]        = useState([]);
+  const [cantidades,       setCantidades]       = useState({});
+  const [loading,          setLoading]          = useState(true);
+  const [error,            setError]            = useState('');
+  const [loadingMaquina,   setLoadingMaquina]   = useState(false);
+  const [loadingProducto,  setLoadingProducto]  = useState(null); // id del producto en proceso
+  const [errorAccion,      setErrorAccion]      = useState('');
 
   useEffect(() => { cargarDatos(); }, [id]);
 
@@ -25,12 +25,12 @@ export default function Salidas() {
     setLoading(true);
     setError('');
     try {
-      const [ordenData, articulosData] = await Promise.all([
+      const [ordenData, productosData] = await Promise.all([
         api.get(`/ordenes/${id}`),
-        api.get('/articulos'),
+        api.get('/productos'),
       ]);
       setOrden(ordenData);
-      setArticulos(articulosData);
+      setProductos(productosData);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -53,32 +53,32 @@ export default function Salidas() {
     }
   }
 
-  async function agregarArticulo(articuloId) {
-    const cantidad = Number(cantidades[articuloId]);
+  async function agregarProducto(productoId) {
+    const cantidad = Number(cantidades[productoId]);
     if (!cantidad || cantidad <= 0) return;
-    setLoadingArticulo(articuloId);
+    setLoadingProducto(productoId);
     setErrorAccion('');
     try {
-      await api.post(`/ordenes/${id}/articulos`, { articulo_id: articuloId, cantidad });
-      setCantidades(prev => ({ ...prev, [articuloId]: '' }));
+      await api.post(`/ordenes/${id}/productos`, { producto_id: productoId, cantidad });
+      setCantidades(prev => ({ ...prev, [productoId]: '' }));
       await cargarDatos();
     } catch (err) {
       setErrorAccion(err.message);
     } finally {
-      setLoadingArticulo(null);
+      setLoadingProducto(null);
     }
   }
 
-  async function eliminarArticulo(articuloId) {
-    setLoadingArticulo(articuloId);
+  async function eliminarProducto(productoId) {
+    setLoadingProducto(productoId);
     setErrorAccion('');
     try {
-      await api.delete(`/ordenes/${id}/articulos/${articuloId}`);
+      await api.delete(`/ordenes/${id}/productos/${productoId}`);
       await cargarDatos();
     } catch (err) {
       setErrorAccion(err.message);
     } finally {
-      setLoadingArticulo(null);
+      setLoadingProducto(null);
     }
   }
 
@@ -98,14 +98,14 @@ export default function Salidas() {
     );
   }
 
-  const maquina        = orden?.maquina_nombre;
-  const maquinaEnUso   = orden?.maquina_estado === 'en_uso';
-  const articulosOrden = orden?.articulos || [];
-  const articulosIdsEnOrden = new Set(articulosOrden.map(a => a.articulo_id));
+  const maquina         = orden?.maquina_nombre;
+  const maquinaEnUso    = orden?.maquina_estado === 'en_uso';
+  const productosOrden  = orden?.productos || [];
+  const productosIdsEnOrden = new Set(productosOrden.map(p => p.producto_id));
 
-  // Solo artículos disponibles (stock_disponible > 0) que no estén ya en la orden
-  const articulosDisponibles = articulos.filter(
-    a => Number(a.stock_disponible) > 0 && !articulosIdsEnOrden.has(a.id)
+  // Solo productos disponibles (stock_disponible > 0) que no estén ya en la orden
+  const productosDisponibles = productos.filter(
+    p => Number(p.stock_disponible) > 0 && !productosIdsEnOrden.has(p.id)
   );
 
   return (
@@ -169,10 +169,10 @@ export default function Salidas() {
         </div>
       </div>
 
-      {/* Sección 2 — Artículos en la orden */}
+      {/* Sección 2 — Productos en la orden */}
       <div className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
         <div className="px-4 py-3 border-b border-gray-50 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-gray-700">Artículos en esta orden</h2>
+          <h2 className="text-sm font-semibold text-gray-700">Productos en esta orden</h2>
           <button
             onClick={cargarDatos}
             className="text-xs text-indigo-600 hover:underline"
@@ -180,21 +180,21 @@ export default function Salidas() {
             Actualizar
           </button>
         </div>
-        {articulosOrden.length === 0 ? (
-          <p className="px-4 py-4 text-sm text-gray-400 italic">Sin artículos agregados</p>
+        {productosOrden.length === 0 ? (
+          <p className="px-4 py-4 text-sm text-gray-400 italic">Sin productos agregados</p>
         ) : (
           <div className="divide-y divide-gray-50">
-            {articulosOrden.map(a => (
-              <div key={a.articulo_id} className="px-4 py-3 flex items-center justify-between gap-3">
+            {productosOrden.map(p => (
+              <div key={p.producto_id} className="px-4 py-3 flex items-center justify-between gap-3">
                 <div>
-                  <p className="text-sm font-medium text-gray-800">{a.nombre}</p>
+                  <p className="text-sm font-medium text-gray-800">{p.nombre}</p>
                   <p className="text-xs text-gray-400">
-                    Cant. {a.cantidad} × {fmtMonto(a.precio_unitario)} = {fmtMonto(a.subtotal)}
+                    Cant. {p.cantidad} × {fmtMonto(p.precio_unitario)} = {fmtMonto(p.subtotal)}
                   </p>
                 </div>
                 <button
-                  onClick={() => eliminarArticulo(a.articulo_id)}
-                  disabled={loadingArticulo === a.articulo_id}
+                  onClick={() => eliminarProducto(p.producto_id)}
+                  disabled={loadingProducto === p.producto_id}
                   className="text-red-400 hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50 transition-colors disabled:opacity-40"
                   title="Eliminar"
                 >
@@ -213,43 +213,43 @@ export default function Salidas() {
         )}
       </div>
 
-      {/* Sección 3 — Agregar artículos */}
+      {/* Sección 3 — Agregar productos */}
       <div className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
         <div className="px-4 py-3 border-b border-gray-50">
-          <h2 className="text-sm font-semibold text-gray-700">Agregar artículos</h2>
-          <p className="text-xs text-gray-400 mt-0.5">Solo artículos con stock disponible</p>
+          <h2 className="text-sm font-semibold text-gray-700">Agregar productos</h2>
+          <p className="text-xs text-gray-400 mt-0.5">Solo productos con stock disponible</p>
         </div>
-        {articulosDisponibles.length === 0 ? (
+        {productosDisponibles.length === 0 ? (
           <p className="px-4 py-4 text-sm text-gray-400 italic">
-            {articulos.length === 0
-              ? 'No hay artículos registrados'
+            {productos.length === 0
+              ? 'No hay productos registrados'
               : 'Sin stock disponible o todos ya están en la orden'}
           </p>
         ) : (
           <div className="divide-y divide-gray-50">
-            {articulosDisponibles.map(a => (
-              <div key={a.id} className="px-4 py-3 flex items-center gap-3">
+            {productosDisponibles.map(p => (
+              <div key={p.id} className="px-4 py-3 flex items-center gap-3">
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-800 truncate">{a.nombre}</p>
+                  <p className="text-sm font-medium text-gray-800 truncate">{p.nombre}</p>
                   <p className="text-xs text-gray-400">
-                    Disponible: {a.stock_disponible} {a.unidad} · {fmtMonto(a.precio_unitario)}
+                    Disponible: {p.stock_disponible} {p.unidad} · {fmtMonto(p.precio_unitario)}
                   </p>
                 </div>
                 <input
                   type="number"
                   min="1"
-                  max={a.stock_disponible}
-                  value={cantidades[a.id] ?? ''}
-                  onChange={e => setCantidades(prev => ({ ...prev, [a.id]: e.target.value }))}
+                  max={p.stock_disponible}
+                  value={cantidades[p.id] ?? ''}
+                  onChange={e => setCantidades(prev => ({ ...prev, [p.id]: e.target.value }))}
                   placeholder="Cant."
                   className="w-20 border border-gray-200 rounded-lg px-2 py-1.5 text-sm text-center focus:outline-none focus:ring-2 focus:ring-indigo-400"
                 />
                 <button
-                  onClick={() => agregarArticulo(a.id)}
-                  disabled={!cantidades[a.id] || loadingArticulo === a.id}
+                  onClick={() => agregarProducto(p.id)}
+                  disabled={!cantidades[p.id] || loadingProducto === p.id}
                   className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white text-xs font-medium rounded-lg transition-colors flex-shrink-0"
                 >
-                  {loadingArticulo === a.id ? '...' : 'Agregar'}
+                  {loadingProducto === p.id ? '...' : 'Agregar'}
                 </button>
               </div>
             ))}
