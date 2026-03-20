@@ -8,8 +8,6 @@ const INPUT_CLS =
 const INPUT_DISABLED_CLS =
   'w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm bg-gray-50 text-gray-400 cursor-not-allowed';
 
-const PRECIO_POR_CARGA = 70;
-
 const FORM_INIT = {
   maquina_id:      '',
   cantidad_cargas: '1',
@@ -22,6 +20,7 @@ export default function NuevaOrden() {
   const navigate = useNavigate();
   const [maquinas,          setMaquinas]          = useState([]);
   const [productosCatalogo, setProductosCatalogo] = useState([]);
+  const [precioCarga,       setPrecioCarga]       = useState(70);
   const [loadingData,       setLoadingData]       = useState(true);
   const [form,              setForm]              = useState(FORM_INIT);
   const [productosLista,    setProductosLista]    = useState([]);
@@ -29,7 +28,7 @@ export default function NuevaOrden() {
   const [loading,           setLoading]           = useState(false);
 
   const ajusteNum      = Number(form.ajuste) || 0;
-  const subtotalCargas = (Number(form.cantidad_cargas) || 1) * PRECIO_POR_CARGA;
+  const subtotalCargas = (Number(form.cantidad_cargas) || 1) * precioCarga;
   const subtotalProductos = productosLista.reduce((sum, p) => {
     const prod = productosCatalogo.find(x => String(x.id) === String(p.producto_id));
     return sum + (prod ? (Number(prod.precio_unitario) || 0) * (Number(p.cantidad) || 0) : 0);
@@ -37,10 +36,11 @@ export default function NuevaOrden() {
   const precioTotal = subtotalCargas + ajusteNum + subtotalProductos;
 
   useEffect(() => {
-    Promise.all([api.get('/maquinas'), api.get('/productos')])
-      .then(([m, prod]) => {
+    Promise.all([api.get('/maquinas'), api.get('/productos'), api.get('/configuracion')])
+      .then(([m, prod, cfg]) => {
         setMaquinas(m.filter(maq => maq.estado === 'disponible'));
         setProductosCatalogo(prod);
+        if (cfg?.precio_autoservicio) setPrecioCarga(Number(cfg.precio_autoservicio));
       })
       .finally(() => setLoadingData(false));
   }, []);
@@ -79,7 +79,7 @@ export default function NuevaOrden() {
       notas:           form.notas || undefined,
       maquina_id:      form.maquina_id ? Number(form.maquina_id) : undefined,
       cantidad_cargas: cargas,
-      precio_base:     PRECIO_POR_CARGA,
+      precio_base:     precioCarga,
       ajuste:          ajusteNum,
       productos:       productosLista
         .filter(p => p.producto_id && p.cantidad)
@@ -166,7 +166,7 @@ export default function NuevaOrden() {
             <label className="block text-sm font-medium text-gray-700 mb-1.5">
               Cantidad de cargas <span className="text-red-500">*</span>
             </label>
-            <p className="text-xs text-gray-400 mb-1.5">Precio base por carga: $70.00 MXN</p>
+            <p className="text-xs text-gray-400 mb-1.5">Precio base por carga: ${precioCarga.toFixed(2)} MXN</p>
             <input
               type="number" name="cantidad_cargas" min="1" step="1" required
               value={form.cantidad_cargas} onChange={handleChange}
@@ -276,7 +276,7 @@ export default function NuevaOrden() {
           </p>
           <div className="space-y-1 mb-2 text-sm text-indigo-600">
             <div className="flex justify-between">
-              <span>Cargas ({form.cantidad_cargas || 1} × $70.00)</span>
+              <span>Cargas ({form.cantidad_cargas || 1} × ${precioCarga.toFixed(2)})</span>
               <span>${subtotalCargas.toFixed(2)}</span>
             </div>
             {ajusteNum !== 0 && (

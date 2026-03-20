@@ -14,7 +14,6 @@ const FORM_VACIO = {
   precio_unitario: '',
   unidad:          '',
   stock_actual:    '0',
-  stock_minimo:    '0',
 };
 
 // ── Modal crear / editar ────────────────────────────────────────
@@ -26,7 +25,6 @@ function ModalProducto({ producto, onClose, onGuardado }) {
         precio_unitario: producto.precio_unitario ?? '',
         unidad:          producto.unidad,
         stock_actual:    producto.stock_actual,
-        stock_minimo:    producto.stock_minimo,
       }
     : FORM_VACIO
   );
@@ -50,7 +48,6 @@ function ModalProducto({ producto, onClose, onGuardado }) {
       categoria:       form.categoria || null,
       unidad:          form.unidad,
       stock_actual:    Number(form.stock_actual),
-      stock_minimo:    Number(form.stock_minimo),
       precio_unitario: form.precio_unitario !== '' ? Number(form.precio_unitario) : null,
     };
 
@@ -130,29 +127,16 @@ function ModalProducto({ producto, onClose, onGuardado }) {
             </select>
           </div>
 
-          {/* Stock actual + Stock mínimo */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                Stock actual <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="number" name="stock_actual" min="0" step="0.01" required
-                value={form.stock_actual} onChange={handleChange}
-                className={INPUT_CLS}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                Stock mínimo <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="number" name="stock_minimo" min="0" step="0.01" required
-                value={form.stock_minimo} onChange={handleChange}
-                className={INPUT_CLS}
-              />
-              <p className="text-xs text-gray-400 mt-1">Alerta si stock cae por debajo</p>
-            </div>
+          {/* Stock actual */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+              Stock actual <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="number" name="stock_actual" min="0" step="0.01" required
+              value={form.stock_actual} onChange={handleChange}
+              className={INPUT_CLS}
+            />
           </div>
 
           {error && (
@@ -280,7 +264,7 @@ export default function Inventario() {
 
   useEffect(cargar, []);
 
-  const stockBajo = productos.filter(p => Number(p.stock_actual) <= Number(p.stock_minimo));
+  const stockBajo = productos.filter(p => p.estado_stock !== 'ok');
 
   const handleGuardado = (resultado, esEdicion) => {
     if (esEdicion) {
@@ -378,9 +362,10 @@ export default function Inventario() {
                   </thead>
                   <tbody className="divide-y divide-gray-50">
                     {productos.map(p => {
-                      const bajo = Number(p.stock_actual) <= Number(p.stock_minimo);
+                      const es = p.estado_stock ?? 'ok';
+                      const rowCls = es === 'agotado' ? 'bg-red-50/40' : es === 'por_agotarse' ? 'bg-amber-50/40' : '';
                       return (
-                        <tr key={p.id} className={`hover:bg-gray-50 transition-colors ${bajo ? 'bg-amber-50/40' : ''}`}>
+                        <tr key={p.id} className={`hover:bg-gray-50 transition-colors ${rowCls}`}>
                           <td className="px-4 py-3">
                             <span className="font-medium text-gray-800">{p.nombre}</span>
                           </td>
@@ -391,9 +376,20 @@ export default function Inventario() {
                             {p.precio_unitario != null ? `$${Number(p.precio_unitario).toFixed(2)}` : '—'}
                           </td>
                           <td className="px-4 py-3 text-center">
-                            <span className={`inline-flex items-center gap-1 font-mono font-semibold text-sm ${bajo ? 'text-red-600' : 'text-gray-800'}`}>
-                              {bajo ? '🔴' : '🟢'} {Number(p.stock_actual).toFixed(2)}
-                            </span>
+                            <div className="flex flex-col items-center gap-0.5">
+                              <span className="font-mono font-semibold text-sm text-gray-800">
+                                {Number(p.stock_actual).toFixed(2)}
+                              </span>
+                              {es === 'agotado' && (
+                                <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700">Agotado</span>
+                              )}
+                              {es === 'por_agotarse' && (
+                                <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Por agotarse</span>
+                              )}
+                              {es === 'ok' && (
+                                <span className="w-2 h-2 rounded-full bg-green-500 inline-block" />
+                              )}
+                            </div>
                           </td>
                           <td className="px-4 py-3 text-gray-600">{p.unidad}</td>
                           <td className="px-4 py-3">
@@ -426,19 +422,26 @@ export default function Inventario() {
               {/* Cards — mobile */}
               <div className="md:hidden divide-y divide-gray-50">
                 {productos.map(p => {
-                  const bajo = Number(p.stock_actual) <= Number(p.stock_minimo);
+                  const es = p.estado_stock ?? 'ok';
+                  const rowCls = es === 'agotado' ? 'bg-red-50/40' : es === 'por_agotarse' ? 'bg-amber-50/40' : '';
                   return (
-                    <div key={p.id} className={`px-4 py-3 ${bajo ? 'bg-amber-50/40' : ''}`}>
+                    <div key={p.id} className={`px-4 py-3 ${rowCls}`}>
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
                           <p className="font-medium text-gray-800 text-sm">{p.nombre}</p>
                           {p.categoria && (
                             <p className="text-xs text-gray-400 mt-0.5">{p.categoria}</p>
                           )}
-                          <div className="flex items-center gap-3 mt-1">
-                            <span className={`text-sm font-mono font-semibold ${bajo ? 'text-red-600' : 'text-gray-700'}`}>
-                              {bajo ? '🔴' : '🟢'} {Number(p.stock_actual).toFixed(2)} {p.unidad}
+                          <div className="flex items-center gap-2 mt-1 flex-wrap">
+                            <span className="text-sm font-mono font-semibold text-gray-700">
+                              {Number(p.stock_actual).toFixed(2)} {p.unidad}
                             </span>
+                            {es === 'agotado' && (
+                              <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700">Agotado</span>
+                            )}
+                            {es === 'por_agotarse' && (
+                              <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Por agotarse</span>
+                            )}
                             {p.precio_unitario != null && (
                               <span className="text-xs text-gray-500">
                                 ${Number(p.precio_unitario).toFixed(2)}

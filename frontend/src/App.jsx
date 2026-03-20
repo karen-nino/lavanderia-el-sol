@@ -13,6 +13,7 @@ import Inventario from './pages/Inventario';
 import DetalleOrden from './pages/DetalleOrden';
 import Salidas from './pages/Salidas';
 import Ventas from './pages/Ventas';
+import Configuracion from './pages/Configuracion';
 
 export default function App() {
   return (
@@ -41,6 +42,14 @@ export default function App() {
               element={
                 <AdminRoute>
                   <Ventas />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="configuracion"
+              element={
+                <AdminRoute>
+                  <Configuracion />
                 </AdminRoute>
               }
             />
