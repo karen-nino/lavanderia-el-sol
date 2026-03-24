@@ -28,55 +28,55 @@ export async function getResumen(req, res) {
 
   try {
     const [tarjetasRes, pendientesRes, graficaRes, listaRes, corteRes] = await Promise.all([
-      // Tarjetas: total_cobrado, ordenes_pagadas, productos_consumidos
+      // Tarjetas: total_cobrado, notas_pagadas, productos_consumidos
       pool.query(
         `SELECT
           COALESCE(SUM(o.precio_total), 0)           AS total_cobrado,
-          COUNT(o.id)                                 AS ordenes_pagadas,
-          COALESCE(SUM(oa_t.total_qty), 0)            AS productos_consumidos
-        FROM ordenes o
+          COUNT(o.id)                                 AS notas_pagadas,
+          COALESCE(SUM(np_t.total_qty), 0)            AS productos_consumidos
+        FROM notas o
         LEFT JOIN (
-          SELECT orden_id, SUM(cantidad) AS total_qty
-          FROM orden_articulos
-          GROUP BY orden_id
-        ) oa_t ON oa_t.orden_id = o.id
+          SELECT nota_id, SUM(cantidad) AS total_qty
+          FROM nota_productos
+          GROUP BY nota_id
+        ) np_t ON np_t.nota_id = o.id
         WHERE ${whereBase}`,
         periodParams
       ),
 
       // Pendientes: sin filtro de período
       pool.query(
-        `SELECT COUNT(*) AS ordenes_pendientes
-        FROM ordenes
+        `SELECT COUNT(*) AS notas_pendientes
+        FROM notas
         WHERE estado_pago = 'DEBE' AND estado != 'CANCELADA'`
       ),
 
       // Gráfica: por fecha
       pool.query(
         `SELECT DATE(o.created_at) AS fecha, COALESCE(SUM(o.precio_total), 0) AS total
-        FROM ordenes o
+        FROM notas o
         WHERE ${whereBase}
         GROUP BY DATE(o.created_at)
         ORDER BY fecha ASC`,
         periodParams
       ),
 
-      // Lista de órdenes
+      // Lista de notas
       pool.query(
         `SELECT
           o.folio,
           DATE(o.created_at)                          AS fecha,
           COALESCE(m.nombre, 'N/A')                   AS maquina,
           o.cantidad_cargas                            AS cargas,
-          COALESCE(oa_t.total_productos, 0)            AS total_productos,
+          COALESCE(np_t.total_productos, 0)            AS total_productos,
           o.precio_total                               AS total
-        FROM ordenes o
+        FROM notas o
         LEFT JOIN maquinas m ON m.id = o.maquina_id
         LEFT JOIN (
-          SELECT orden_id, SUM(cantidad * precio_unitario) AS total_productos
-          FROM orden_articulos
-          GROUP BY orden_id
-        ) oa_t ON oa_t.orden_id = o.id
+          SELECT nota_id, SUM(cantidad * precio_unitario) AS total_productos
+          FROM nota_productos
+          GROUP BY nota_id
+        ) np_t ON np_t.nota_id = o.id
         WHERE ${whereBase}
         ORDER BY o.created_at DESC`,
         periodParams
@@ -86,21 +86,21 @@ export async function getResumen(req, res) {
       pool.query(
         `SELECT
           COALESCE(SUM(o.cantidad_cargas * COALESCE(o.precio_base, 0)), 0) AS total_cargas,
-          COALESCE(SUM(oa_t.total_art), 0)                                  AS total_productos,
+          COALESCE(SUM(np_t.total_art), 0)                                  AS total_productos,
           COALESCE(SUM(o.ajuste), 0)                                        AS total_ajustes
-        FROM ordenes o
+        FROM notas o
         LEFT JOIN (
-          SELECT orden_id, SUM(cantidad * precio_unitario) AS total_art
-          FROM orden_articulos
-          GROUP BY orden_id
-        ) oa_t ON oa_t.orden_id = o.id
+          SELECT nota_id, SUM(cantidad * precio_unitario) AS total_art
+          FROM nota_productos
+          GROUP BY nota_id
+        ) np_t ON np_t.nota_id = o.id
         WHERE ${whereBase}`,
         periodParams
       ),
     ]);
 
     const tarjetas = tarjetasRes.rows[0];
-    const pendientes = pendientesRes.rows[0];
+    const pendientesRow = pendientesRes.rows[0];
     const corte = corteRes.rows[0];
 
     const total_cargas    = parseFloat(corte.total_cargas);
@@ -110,15 +110,15 @@ export async function getResumen(req, res) {
     res.json({
       tarjetas: {
         total_cobrado:       parseFloat(tarjetas.total_cobrado),
-        ordenes_pagadas:     parseInt(tarjetas.ordenes_pagadas, 10),
+        notas_pagadas:       parseInt(tarjetas.notas_pagadas, 10),
         productos_consumidos: parseInt(tarjetas.productos_consumidos, 10),
-        ordenes_pendientes:  parseInt(pendientes.ordenes_pendientes, 10),
+        notas_pendientes:    parseInt(pendientesRow.notas_pendientes, 10),
       },
       grafica: graficaRes.rows.map((r) => ({
         fecha: r.fecha,
         total: parseFloat(r.total),
       })),
-      lista_ordenes: listaRes.rows.map((r) => ({
+      lista_notas: listaRes.rows.map((r) => ({
         folio:           r.folio,
         fecha:           r.fecha,
         maquina:         r.maquina,

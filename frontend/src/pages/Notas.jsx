@@ -42,7 +42,7 @@ function IconoBasura() {
   );
 }
 
-function ModalConfirmarEliminar({ orden, onCancelar, onConfirmar, loading }) {
+function ModalConfirmarEliminar({ nota, onCancelar, onConfirmar, loading }) {
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
@@ -51,11 +51,11 @@ function ModalConfirmarEliminar({ orden, onCancelar, onConfirmar, loading }) {
             <IconoBasura />
           </div>
           <div>
-            <h3 className="text-base font-bold text-gray-900">Eliminar orden</h3>
+            <h3 className="text-base font-bold text-gray-900">Eliminar nota</h3>
             <p className="text-sm text-gray-500 mt-1">
-              ¿Eliminar la orden{' '}
+              ¿Eliminar la nota{' '}
               <span className="font-mono font-semibold text-gray-800">
-                {orden.folio ?? `#${orden.id}`}
+                {nota.folio ?? `#${nota.id}`}
               </span>
               ? Esta acción no se puede deshacer.
             </p>
@@ -82,41 +82,41 @@ function ModalConfirmarEliminar({ orden, onCancelar, onConfirmar, loading }) {
   );
 }
 
-export default function Ordenes() {
+export default function Notas() {
   const { usuario }                           = useAuth();
   const navigate                              = useNavigate();
   const esAdmin                               = usuario?.rol === 'admin';
 
-  const [ordenes,         setOrdenes]         = useState([]);
-  const [filtro,          setFiltro]          = useState('TODOS');
-  const [loading,         setLoading]         = useState(true);
-  const [error,           setError]           = useState('');
-  const [ordenAEliminar,  setOrdenAEliminar]  = useState(null);
-  const [loadingEliminar, setLoadingEliminar] = useState(false);
-  const [errorEliminar,   setErrorEliminar]   = useState('');
+  const [notas,             setNotas]             = useState([]);
+  const [filtro,            setFiltro]            = useState('TODOS');
+  const [loading,           setLoading]           = useState(true);
+  const [error,             setError]             = useState('');
+  const [notaAEliminar,     setNotaAEliminar]     = useState(null);
+  const [loadingEliminar,   setLoadingEliminar]   = useState(false);
+  const [errorEliminar,     setErrorEliminar]     = useState('');
 
   useEffect(() => {
-    api.get('/ordenes')
-      .then(setOrdenes)
+    api.get('/notas')
+      .then(setNotas)
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
   }, []);
 
   const filtradas = filtro === 'TODOS'
-    ? ordenes
-    : ordenes.filter(o => o.estado === filtro);
+    ? notas
+    : notas.filter(n => n.estado === filtro);
 
   async function confirmarEliminar() {
-    if (!ordenAEliminar || loadingEliminar) return;
+    if (!notaAEliminar || loadingEliminar) return;
     setLoadingEliminar(true);
     setErrorEliminar('');
     try {
-      await api.delete(`/ordenes/${ordenAEliminar.id}`);
-      setOrdenes(prev => prev.filter(o => o.id !== ordenAEliminar.id));
-      setOrdenAEliminar(null);
+      await api.delete(`/notas/${notaAEliminar.id}`);
+      setNotas(prev => prev.filter(n => n.id !== notaAEliminar.id));
+      setNotaAEliminar(null);
     } catch (err) {
       setErrorEliminar(err.message);
-      setOrdenAEliminar(null);
+      setNotaAEliminar(null);
     } finally {
       setLoadingEliminar(false);
     }
@@ -126,11 +126,11 @@ export default function Ordenes() {
     <div className="p-4 md:p-6 space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-gray-900">Órdenes</h1>
+          <h1 className="text-xl font-bold text-gray-900">Notas</h1>
           <p className="text-sm text-gray-500">{filtradas.length} resultado(s)</p>
         </div>
         <Link
-          to="/ordenes/nueva"
+          to="/notas/nueva"
           className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors flex-shrink-0"
         >
           + Nueva
@@ -176,7 +176,7 @@ export default function Ordenes() {
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
           {filtradas.length === 0 ? (
             <div className="text-center py-12">
-              <p className="text-gray-400 text-sm">No hay órdenes con este filtro</p>
+              <p className="text-gray-400 text-sm">No hay notas con este filtro</p>
             </div>
           ) : (
             <>
@@ -196,33 +196,33 @@ export default function Ordenes() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
-                    {filtradas.map(o => {
-                      const badgeEstado    = BADGE_ESTADO[o.estado]       ?? BADGE_ESTADO.ACTIVA;
-                      const badgeModalidad = BADGE_MODALIDAD[o.modalidad] ?? BADGE_MODALIDAD.AUTOSERVICIO;
-                      const badgePago      = BADGE_PAGO[o.estado_pago];
+                    {filtradas.map(n => {
+                      const badgeEstado    = BADGE_ESTADO[n.estado]       ?? BADGE_ESTADO.ACTIVA;
+                      const badgeModalidad = BADGE_MODALIDAD[n.modalidad] ?? BADGE_MODALIDAD.AUTOSERVICIO;
+                      const badgePago      = BADGE_PAGO[n.estado_pago];
                       return (
                         <tr
-                          key={o.id}
-                          onClick={() => navigate(`/ordenes/${o.id}`)}
+                          key={n.id}
+                          onClick={() => navigate(`/notas/${n.id}`)}
                           className="hover:bg-indigo-50 transition-colors cursor-pointer"
                         >
                           <td className="px-4 py-3 font-mono text-xs text-gray-600">
-                            {o.folio ?? `#${o.id}`}
+                            {n.folio ?? `#${n.id}`}
                           </td>
                           <td className="px-4 py-3">
                             <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${badgeModalidad.cls}`}>
                               {badgeModalidad.label}
                             </span>
-                            {o.tamano && (
-                              <span className="ml-1.5 text-xs text-gray-400 capitalize">{o.tamano}</span>
+                            {n.tamano && (
+                              <span className="ml-1.5 text-xs text-gray-400 capitalize">{n.tamano}</span>
                             )}
                           </td>
                           <td className="px-4 py-3">
                             <p className="font-medium text-gray-800">
-                              {o.cliente_nombre ?? <span className="text-gray-400 italic">Anónimo</span>}
+                              {n.cliente_nombre ?? <span className="text-gray-400 italic">Anónimo</span>}
                             </p>
-                            {o.cliente_telefono && (
-                              <p className="text-xs text-gray-400">{o.cliente_telefono}</p>
+                            {n.cliente_telefono && (
+                              <p className="text-xs text-gray-400">{n.cliente_telefono}</p>
                             )}
                           </td>
                           <td className="px-4 py-3">
@@ -238,17 +238,17 @@ export default function Ordenes() {
                             )}
                           </td>
                           <td className="px-4 py-3 text-right text-gray-600">
-                            {fmtMonto(o.precio_total)}
+                            {fmtMonto(n.precio_total)}
                           </td>
                           <td className="px-4 py-3 text-gray-400 text-xs">
-                            {fmtFecha(o.created_at)}
+                            {fmtFecha(n.created_at)}
                           </td>
                           <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
                             {esAdmin && (
                               <button
-                                onClick={() => setOrdenAEliminar(o)}
+                                onClick={() => setNotaAEliminar(n)}
                                 className="text-gray-400 hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50 transition-colors"
-                                title="Eliminar orden"
+                                title="Eliminar nota"
                               >
                                 <IconoBasura />
                               </button>
@@ -263,28 +263,28 @@ export default function Ordenes() {
 
               {/* Cards — mobile */}
               <div className="md:hidden divide-y divide-gray-50">
-                {filtradas.map(o => {
-                  const badgeEstado    = BADGE_ESTADO[o.estado]       ?? BADGE_ESTADO.ACTIVA;
-                  const badgeModalidad = BADGE_MODALIDAD[o.modalidad] ?? BADGE_MODALIDAD.AUTOSERVICIO;
-                  const badgePago      = BADGE_PAGO[o.estado_pago];
+                {filtradas.map(n => {
+                  const badgeEstado    = BADGE_ESTADO[n.estado]       ?? BADGE_ESTADO.ACTIVA;
+                  const badgeModalidad = BADGE_MODALIDAD[n.modalidad] ?? BADGE_MODALIDAD.AUTOSERVICIO;
+                  const badgePago      = BADGE_PAGO[n.estado_pago];
                   return (
                     <div
-                      key={o.id}
+                      key={n.id}
                       className="px-4 py-3 space-y-1.5 active:bg-gray-50 cursor-pointer"
-                      onClick={() => navigate(`/ordenes/${o.id}`)}
+                      onClick={() => navigate(`/notas/${n.id}`)}
                     >
                       <div className="flex items-center justify-between gap-2">
-                        <p className="font-mono text-xs text-gray-400">{o.folio ?? `#${o.id}`}</p>
+                        <p className="font-mono text-xs text-gray-400">{n.folio ?? `#${n.id}`}</p>
                         <div className="flex items-center gap-1.5">
                           <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${badgeModalidad.cls}`}>
                             {badgeModalidad.label}
-                            {o.tamano ? ` · ${o.tamano}` : ''}
+                            {n.tamano ? ` · ${n.tamano}` : ''}
                           </span>
                           {esAdmin && (
                             <button
-                              onClick={e => { e.stopPropagation(); setOrdenAEliminar(o); }}
+                              onClick={e => { e.stopPropagation(); setNotaAEliminar(n); }}
                               className="text-gray-400 hover:text-red-600 p-1 rounded transition-colors"
-                              title="Eliminar orden"
+                              title="Eliminar nota"
                             >
                               <IconoBasura />
                             </button>
@@ -292,7 +292,7 @@ export default function Ordenes() {
                         </div>
                       </div>
                       <p className="font-medium text-gray-800 text-sm">
-                        {o.cliente_nombre ?? <span className="text-gray-400 italic">Anónimo</span>}
+                        {n.cliente_nombre ?? <span className="text-gray-400 italic">Anónimo</span>}
                       </p>
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-1.5">
@@ -306,8 +306,8 @@ export default function Ordenes() {
                           )}
                         </div>
                         <p className="text-xs text-gray-500">
-                          {fmtFecha(o.created_at)}
-                          {o.precio_total ? ` · ${fmtMonto(o.precio_total)}` : ''}
+                          {fmtFecha(n.created_at)}
+                          {n.precio_total ? ` · ${fmtMonto(n.precio_total)}` : ''}
                         </p>
                       </div>
                     </div>
@@ -320,10 +320,10 @@ export default function Ordenes() {
       )}
 
       {/* Modal confirmar eliminación */}
-      {ordenAEliminar && (
+      {notaAEliminar && (
         <ModalConfirmarEliminar
-          orden={ordenAEliminar}
-          onCancelar={() => setOrdenAEliminar(null)}
+          nota={notaAEliminar}
+          onCancelar={() => setNotaAEliminar(null)}
           onConfirmar={confirmarEliminar}
           loading={loadingEliminar}
         />

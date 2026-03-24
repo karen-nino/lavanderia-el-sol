@@ -16,7 +16,7 @@ const FORM_INIT = {
   notas:           '',
 };
 
-export default function NuevaOrden() {
+export default function NuevaNota() {
   const navigate = useNavigate();
   const [maquinas,          setMaquinas]          = useState([]);
   const [productosCatalogo, setProductosCatalogo] = useState([]);
@@ -87,8 +87,8 @@ export default function NuevaOrden() {
     };
 
     try {
-      await api.post('/ordenes', payload);
-      navigate('/ordenes');
+      await api.post('/notas', payload);
+      navigate('/notas');
     } catch (err) {
       setError(err.message);
     } finally {
@@ -116,20 +116,20 @@ export default function NuevaOrden() {
           </svg>
           Volver
         </button>
-        <h1 className="text-xl font-bold text-gray-900">Nueva orden</h1>
+        <h1 className="text-xl font-bold text-gray-900">Nueva nota</h1>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
 
-        {/* ── Datos de la orden ────────────────────────────── */}
+        {/* ── Datos de la nota ────────────────────────────── */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 space-y-4">
           <h2 className="text-sm font-semibold text-gray-700">Autoservicio</h2>
 
-          {/* Número de orden + ID — orientativo */}
+          {/* Número de nota + ID — orientativo */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                Número de orden
+                Número de nota
               </label>
               <input
                 type="text" value="Se asignará al guardar" disabled
@@ -199,9 +199,9 @@ export default function NuevaOrden() {
             />
           </div>
 
-          {/* Notas */}
+          {/* Observaciones */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">Notas</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Observaciones</label>
             <textarea
               name="notas" value={form.notas} onChange={handleChange} rows={2}
               placeholder="Instrucciones especiales..."
@@ -314,7 +314,7 @@ export default function NuevaOrden() {
             type="submit" disabled={loading}
             className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-medium py-2.5 rounded-lg text-sm transition-colors"
           >
-            {loading ? 'Creando...' : 'Crear orden'}
+            {loading ? 'Creando...' : 'Crear nota'}
           </button>
         </div>
       </form>

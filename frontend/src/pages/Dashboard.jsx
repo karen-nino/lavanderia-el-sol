@@ -23,21 +23,21 @@ function StatCard({ label, value, sub, color, icon }) {
 }
 
 export default function Dashboard() {
-  const [ordenes, setOrdenes] = useState([]);
+  const [notas, setNotas] = useState([]);
   const [maquinas, setMaquinas] = useState([]);
   const [insumos, setInsumos] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all([api.get('/ordenes'), api.get('/maquinas'), api.get('/insumos')])
-      .then(([o, m, i]) => { setOrdenes(o); setMaquinas(m); setInsumos(i); })
+    Promise.all([api.get('/notas'), api.get('/maquinas'), api.get('/insumos')])
+      .then(([n, m, i]) => { setNotas(n); setMaquinas(m); setInsumos(i); })
       .finally(() => setLoading(false));
   }, []);
 
-  const activas   = ordenes.filter(o => ['RECIBIDO', 'EN_PROCESO'].includes(o.estado)).length;
+  const activas   = notas.filter(n => ['RECIBIDO', 'EN_PROCESO'].includes(n.estado)).length;
   const enUso     = maquinas.filter(m => m.estado === 'en_uso').length;
   const stockBajo = insumos.filter(i => Number(i.stock_actual) <= Number(i.stock_minimo)).length;
-  const recientes = ordenes.slice(0, 6);
+  const recientes = notas.slice(0, 6);
 
   if (loading) {
     return (
@@ -57,7 +57,7 @@ export default function Dashboard() {
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <StatCard
-          label="Órdenes activas"
+          label="Notas activas"
           value={activas}
           sub="Recibido + En proceso"
           color="text-indigo-600"
@@ -82,19 +82,19 @@ export default function Dashboard() {
       {/* Recent orders */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100">
         <div className="flex items-center justify-between px-4 py-3.5 border-b border-gray-100">
-          <h2 className="font-semibold text-gray-800 text-sm">Órdenes recientes</h2>
-          <Link to="/ordenes" className="text-xs text-indigo-600 hover:text-indigo-800 font-medium">
+          <h2 className="font-semibold text-gray-800 text-sm">Notas recientes</h2>
+          <Link to="/notas" className="text-xs text-indigo-600 hover:text-indigo-800 font-medium">
             Ver todas →
           </Link>
         </div>
         {recientes.length === 0 ? (
           <div className="text-center py-10">
-            <p className="text-gray-400 text-sm">No hay órdenes registradas</p>
+            <p className="text-gray-400 text-sm">No hay notas registradas</p>
             <Link
-              to="/ordenes/nueva"
+              to="/notas/nueva"
               className="mt-3 inline-block text-sm text-indigo-600 hover:text-indigo-800 font-medium"
             >
-              Crear primera orden
+              Crear primera nota
             </Link>
           </div>
         ) : (

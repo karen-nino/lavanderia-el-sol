@@ -69,26 +69,26 @@ function ModalConfirmar({ titulo, mensaje, onCancelar, onConfirmar, loading, col
   );
 }
 
-export default function DetalleOrden() {
+export default function DetalleNota() {
   const { id }   = useParams();
   const navigate = useNavigate();
   const { usuario } = useAuth();
 
-  const [orden,          setOrden]          = useState(null);
-  const [loading,        setLoading]        = useState(true);
-  const [error,          setError]          = useState('');
-  const [loadingAccion,  setLoadingAccion]  = useState(false);
-  const [errorAccion,    setErrorAccion]    = useState('');
-  const [confirmCancelar, setConfirmCancelar] = useState(false);
+  const [nota,             setNota]             = useState(null);
+  const [loading,          setLoading]          = useState(true);
+  const [error,            setError]            = useState('');
+  const [loadingAccion,    setLoadingAccion]    = useState(false);
+  const [errorAccion,      setErrorAccion]      = useState('');
+  const [confirmCancelar,  setConfirmCancelar]  = useState(false);
 
-  useEffect(() => { cargarOrden(); }, [id]);
+  useEffect(() => { cargarNota(); }, [id]);
 
-  async function cargarOrden() {
+  async function cargarNota() {
     setLoading(true);
     setError('');
     try {
-      const data = await api.get(`/ordenes/${id}`);
-      setOrden(data);
+      const data = await api.get(`/notas/${id}`);
+      setNota(data);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -96,12 +96,12 @@ export default function DetalleOrden() {
     }
   }
 
-  async function cancelarOrden() {
+  async function cancelarNota() {
     setLoadingAccion(true);
     setErrorAccion('');
     try {
-      const updated = await api.patch(`/ordenes/${id}/estado`, { estado: 'CANCELADA' });
-      setOrden(prev => ({ ...prev, estado: updated.estado }));
+      const updated = await api.patch(`/notas/${id}/estado`, { estado: 'CANCELADA' });
+      setNota(prev => ({ ...prev, estado: updated.estado }));
       setConfirmCancelar(false);
     } catch (err) {
       setErrorAccion(err.message);
@@ -127,17 +127,17 @@ export default function DetalleOrden() {
     );
   }
 
-  if (!orden) return null;
+  if (!nota) return null;
 
-  const terminal     = ['ENTREGADA', 'CANCELADA'].includes(orden.estado);
-  const puedeEditar  = !['PAGADA', 'ENTREGADA', 'CANCELADA'].includes(orden.estado);
-  const puedeCancelar = !['CANCELADA'].includes(orden.estado);
-  const badgeEstado   = BADGE_ESTADO[orden.estado]       ?? BADGE_ESTADO.ACTIVA;
-  const badgeModal    = BADGE_MODALIDAD[orden.modalidad] ?? BADGE_MODALIDAD.AUTOSERVICIO;
-  const badgePago     = BADGE_PAGO[orden.estado_pago];
-  const barcodeValue  = orden.folio ?? String(orden.id);
+  const terminal     = ['ENTREGADA', 'CANCELADA'].includes(nota.estado);
+  const puedeEditar  = !['PAGADA', 'ENTREGADA', 'CANCELADA'].includes(nota.estado);
+  const puedeCancelar = !['CANCELADA'].includes(nota.estado);
+  const badgeEstado   = BADGE_ESTADO[nota.estado]       ?? BADGE_ESTADO.ACTIVA;
+  const badgeModal    = BADGE_MODALIDAD[nota.modalidad] ?? BADGE_MODALIDAD.AUTOSERVICIO;
+  const badgePago     = BADGE_PAGO[nota.estado_pago];
+  const barcodeValue  = nota.folio ?? String(nota.id);
 
-  const totalProductos = (orden.productos || []).reduce(
+  const totalProductos = (nota.productos || []).reduce(
     (s, p) => s + Number(p.subtotal), 0
   );
 
@@ -148,15 +148,15 @@ export default function DetalleOrden() {
       <div className="flex items-start justify-between gap-4">
         <div>
           <button
-            onClick={() => navigate('/ordenes')}
+            onClick={() => navigate('/notas')}
             className="text-sm text-indigo-600 hover:underline mb-1 flex items-center gap-1"
           >
-            ← Órdenes
+            ← Notas
           </button>
           <h1 className="text-xl font-bold text-gray-900">
-            {orden.folio ?? `Orden #${orden.id}`}
+            {nota.folio ?? `Nota #${nota.id}`}
           </h1>
-          <p className="text-xs text-gray-400 mt-0.5">ID {orden.id} · {fmtFecha(orden.created_at)}</p>
+          <p className="text-xs text-gray-400 mt-0.5">ID {nota.id} · {fmtFecha(nota.created_at)}</p>
         </div>
         <span className={`text-xs font-semibold px-3 py-1.5 rounded-full flex-shrink-0 ${badgeEstado.cls}`}>
           {badgeEstado.label}
@@ -175,14 +175,14 @@ export default function DetalleOrden() {
         <div className="flex flex-wrap gap-2">
           {puedeEditar && (
             <button
-              onClick={() => navigate(`/ordenes/${id}/editar`)}
+              onClick={() => navigate(`/notas/${id}/editar`)}
               className="flex items-center gap-1.5 px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-colors"
             >
-              Editar orden
+              Editar nota
             </button>
           )}
           <button
-            onClick={() => navigate(`/ordenes/${id}/salidas`)}
+            onClick={() => navigate(`/notas/${id}/salidas`)}
             className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
           >
             Salidas
@@ -193,7 +193,7 @@ export default function DetalleOrden() {
               disabled={loadingAccion}
               className="flex items-center gap-1.5 px-4 py-2 bg-orange-500 hover:bg-orange-600 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
             >
-              Cancelar orden
+              Cancelar nota
             </button>
           )}
           <button
@@ -220,7 +220,7 @@ export default function DetalleOrden() {
         <Barcode value={barcodeValue} height={50} fontSize={12} />
       </div>
 
-      {/* Información de la orden */}
+      {/* Información de la nota */}
       <div className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
         <div className="px-4 py-3 border-b border-gray-50">
           <h2 className="text-sm font-semibold text-gray-700">Información</h2>
@@ -230,7 +230,7 @@ export default function DetalleOrden() {
             <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${badgeModal.cls}`}>
               {badgeModal.label}
             </span>
-            {orden.tamano && <span className="ml-2 text-xs text-gray-500 capitalize">{orden.tamano}</span>}
+            {nota.tamano && <span className="ml-2 text-xs text-gray-500 capitalize">{nota.tamano}</span>}
           </FilaDetalle>
           <FilaDetalle label="Estado">
             <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${badgeEstado.cls}`}>
@@ -243,27 +243,27 @@ export default function DetalleOrden() {
               : <span className="text-gray-400">—</span>}
           </FilaDetalle>
           <FilaDetalle label="Máquina">
-            {orden.maquina_nombre ?? <span className="text-gray-400">—</span>}
+            {nota.maquina_nombre ?? <span className="text-gray-400">—</span>}
           </FilaDetalle>
           <FilaDetalle label="Cliente">
-            {orden.cliente_nombre
-              ? <>{orden.cliente_nombre}{orden.cliente_telefono && <span className="text-gray-400 ml-2">{orden.cliente_telefono}</span>}</>
+            {nota.cliente_nombre
+              ? <>{nota.cliente_nombre}{nota.cliente_telefono && <span className="text-gray-400 ml-2">{nota.cliente_telefono}</span>}</>
               : <span className="text-gray-400 italic">Anónimo</span>}
           </FilaDetalle>
           <FilaDetalle label="Descripción">
-            {orden.descripcion ?? <span className="text-gray-400">—</span>}
+            {nota.descripcion ?? <span className="text-gray-400">—</span>}
           </FilaDetalle>
-          <FilaDetalle label="Notas">
-            {orden.notas ?? <span className="text-gray-400">—</span>}
+          <FilaDetalle label="Observaciones">
+            {nota.notas ?? <span className="text-gray-400">—</span>}
           </FilaDetalle>
           <FilaDetalle label="Ajuste">
-            {orden.ajuste != null ? fmtMonto(orden.ajuste) : '—'}
+            {nota.ajuste != null ? fmtMonto(nota.ajuste) : '—'}
           </FilaDetalle>
           <FilaDetalle label="Precio total">
-            <span className="font-semibold text-gray-900">{fmtMonto(orden.precio_total)}</span>
+            <span className="font-semibold text-gray-900">{fmtMonto(nota.precio_total)}</span>
           </FilaDetalle>
           <FilaDetalle label="Creada">
-            {fmtFecha(orden.created_at)}
+            {fmtFecha(nota.created_at)}
           </FilaDetalle>
         </div>
       </div>
@@ -272,15 +272,15 @@ export default function DetalleOrden() {
       <div className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
         <div className="px-4 py-3 border-b border-gray-50 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-gray-700">Productos</h2>
-          {(orden.productos || []).length > 0 && (
-            <span className="text-xs text-gray-400">{(orden.productos || []).length} ítem(s)</span>
+          {(nota.productos || []).length > 0 && (
+            <span className="text-xs text-gray-400">{(nota.productos || []).length} ítem(s)</span>
           )}
         </div>
-        {(orden.productos || []).length === 0 ? (
+        {(nota.productos || []).length === 0 ? (
           <p className="text-sm text-gray-400 italic px-4 py-4">Sin productos agregados</p>
         ) : (
           <div className="divide-y divide-gray-50">
-            {(orden.productos || []).map(p => (
+            {(nota.productos || []).map(p => (
               <div key={p.id} className="px-4 py-3 flex items-center justify-between gap-3">
                 <div>
                   <p className="text-sm font-medium text-gray-800">{p.nombre}</p>
@@ -302,10 +302,10 @@ export default function DetalleOrden() {
       {/* Modal confirmar cancelación */}
       {confirmCancelar && (
         <ModalConfirmar
-          titulo="Cancelar orden"
-          mensaje={`¿Cancelar la orden ${orden.folio ?? `#${orden.id}`}? Esta acción liberará el stock reservado y no se puede deshacer.`}
+          titulo="Cancelar nota"
+          mensaje={`¿Cancelar la nota ${nota.folio ?? `#${nota.id}`}? Esta acción liberará el stock reservado y no se puede deshacer.`}
           onCancelar={() => setConfirmCancelar(false)}
-          onConfirmar={cancelarOrden}
+          onConfirmar={cancelarNota}
           loading={loadingAccion}
           colorBtn="bg-orange-500 hover:bg-orange-600"
         />

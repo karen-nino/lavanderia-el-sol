@@ -24,56 +24,56 @@ function generarFolio(id, fecha) {
   return `LS-${yyyy}${mm}${dd}-${seq}`;
 }
 
-// ── GET /ordenes ──────────────────────────────────────────────
-export const getOrdenes = async (req, res) => {
+// ── GET /notas ──────────────────────────────────────────────
+export const getNotas = async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT o.*,
+      `SELECT n.*,
               c.nombre   AS cliente_nombre,
               c.telefono AS cliente_telefono,
               u.nombre   AS usuario_nombre,
               m.nombre   AS maquina_nombre
-       FROM ordenes o
-       LEFT JOIN clientes  c ON c.id = o.cliente_id
-       JOIN      usuarios  u ON u.id = o.usuario_id
-       LEFT JOIN maquinas  m ON m.id = o.maquina_id
-       ORDER BY o.created_at DESC`
+       FROM notas n
+       LEFT JOIN clientes  c ON c.id = n.cliente_id
+       JOIN      usuarios  u ON u.id = n.usuario_id
+       LEFT JOIN maquinas  m ON m.id = n.maquina_id
+       ORDER BY n.created_at DESC`
     );
     res.json(rows);
   } catch (err) {
-    console.error('getOrdenes error:', err);
+    console.error('getNotas error:', err);
     res.status(500).json({ message: 'Error interno del servidor.' });
   }
 };
 
-// ── GET /ordenes/:id ──────────────────────────────────────────
-export const getOrdenById = async (req, res) => {
+// ── GET /notas/:id ──────────────────────────────────────────
+export const getNotaById = async (req, res) => {
   const { id } = req.params;
   try {
     const { rows } = await pool.query(
-      `SELECT o.*,
+      `SELECT n.*,
               c.nombre   AS cliente_nombre,
               c.telefono AS cliente_telefono,
               u.nombre   AS usuario_nombre,
               m.nombre   AS maquina_nombre
-       FROM ordenes o
-       LEFT JOIN clientes  c ON c.id = o.cliente_id
-       JOIN      usuarios  u ON u.id = o.usuario_id
-       LEFT JOIN maquinas  m ON m.id = o.maquina_id
-       WHERE o.id = $1`,
+       FROM notas n
+       LEFT JOIN clientes  c ON c.id = n.cliente_id
+       JOIN      usuarios  u ON u.id = n.usuario_id
+       LEFT JOIN maquinas  m ON m.id = n.maquina_id
+       WHERE n.id = $1`,
       [id]
     );
     if (rows.length === 0) {
-      return res.status(404).json({ message: 'Orden no encontrada.' });
+      return res.status(404).json({ message: 'Nota no encontrada.' });
     }
 
     const { rows: productos } = await pool.query(
-      `SELECT oa.id, oa.producto_id, a.nombre, oa.cantidad, oa.precio_unitario,
-              (oa.cantidad * oa.precio_unitario) AS subtotal
-       FROM orden_articulos oa
-       JOIN productos a ON a.id = oa.producto_id
-       WHERE oa.orden_id = $1
-       ORDER BY oa.created_at ASC`,
+      `SELECT np.id, np.producto_id, a.nombre, np.cantidad, np.precio_unitario,
+              (np.cantidad * np.precio_unitario) AS subtotal
+       FROM nota_productos np
+       JOIN productos a ON a.id = np.producto_id
+       WHERE np.nota_id = $1
+       ORDER BY np.created_at ASC`,
       [id]
     );
 
@@ -81,19 +81,19 @@ export const getOrdenById = async (req, res) => {
       `SELECT mi.*, i.nombre AS insumo_nombre, i.unidad
        FROM movimientos_insumos mi
        JOIN insumos i ON i.id = mi.insumo_id
-       WHERE mi.orden_id = $1`,
+       WHERE mi.nota_id = $1`,
       [id]
     );
 
     res.json({ ...rows[0], productos, insumos_consumidos: movs });
   } catch (err) {
-    console.error('getOrdenById error:', err);
+    console.error('getNotaById error:', err);
     res.status(500).json({ message: 'Error interno del servidor.' });
   }
 };
 
-// ── POST /ordenes ─────────────────────────────────────────────
-export const createOrden = async (req, res) => {
+// ── POST /notas ─────────────────────────────────────────────
+export const createNota = async (req, res) => {
   const {
     cliente_id,
     maquina_id,
@@ -110,7 +110,7 @@ export const createOrden = async (req, res) => {
     cantidad_cargas = 1,
     precio_base,       // precio por carga en AUTOSERVICIO
     insumos   = [], // [{ insumo_id, cantidad }]  → movimientos_insumos
-    productos = [], // [{ producto_id, cantidad }] → orden_articulos
+    productos = [], // [{ producto_id, cantidad }] → nota_productos
   } = req.body;
 
   if (!MODALIDADES_VALIDAS.includes(modalidad)) {
@@ -125,7 +125,7 @@ export const createOrden = async (req, res) => {
   }
   if (modalidad === 'POR_ENCARGO') {
     if (!cliente_id) {
-      return res.status(400).json({ message: 'cliente_id es requerido para órdenes Por Encargo.' });
+      return res.status(400).json({ message: 'cliente_id es requerido para notas Por Encargo.' });
     }
     if (!tamano || !TAMANOS_VALIDOS.includes(String(tamano).toLowerCase())) {
       return res.status(400).json({ message: 'tamano es requerido para Por Encargo (chico o grande).' });
@@ -145,7 +145,7 @@ export const createOrden = async (req, res) => {
   }
 
   // Para AUTOSERVICIO: precio_total = (cargas × precio_base) + ajuste
-  // Los productos se suman después de insertarlos en orden_articulos
+  // Los productos se suman después de insertarlos en nota_productos
   let precioFinal;
   if (modalidad === 'AUTOSERVICIO') {
     precioFinal = precioBaseNum != null
@@ -159,8 +159,8 @@ export const createOrden = async (req, res) => {
   try {
     await client.query('BEGIN');
 
-    const { rows: ordenRows } = await client.query(
-      `INSERT INTO ordenes
+    const { rows: notaRows } = await client.query(
+      `INSERT INTO notas
          (cliente_id, usuario_id, maquina_id, modalidad, estado_pago, sucursal,
           descripcion, peso_kg, precio_total, fecha_entrega, notas,
           tamano, precio_base, ajuste, cantidad_cargas)
@@ -184,11 +184,11 @@ export const createOrden = async (req, res) => {
         cantidadCargas,
       ]
     );
-    const orden = ordenRows[0];
+    const nota = notaRows[0];
 
-    const folio = generarFolio(orden.id, orden.created_at);
-    await client.query('UPDATE ordenes SET folio = $1 WHERE id = $2', [folio, orden.id]);
-    orden.folio = folio;
+    const folio = generarFolio(nota.id, nota.created_at);
+    await client.query('UPDATE notas SET folio = $1 WHERE id = $2', [folio, nota.id]);
+    nota.folio = folio;
 
     if (modalidad === 'POR_ENCARGO' || modalidad === 'AUTOSERVICIO') {
       for (const { insumo_id, cantidad } of insumos) {
@@ -208,9 +208,9 @@ export const createOrden = async (req, res) => {
         }
 
         await client.query(
-          `INSERT INTO movimientos_insumos (insumo_id, usuario_id, orden_id, tipo, cantidad)
+          `INSERT INTO movimientos_insumos (insumo_id, usuario_id, nota_id, tipo, cantidad)
            VALUES ($1, $2, $3, 'salida', $4)`,
-          [insumo_id, req.user.id, orden.id, cantidad]
+          [insumo_id, req.user.id, nota.id, cantidad]
         );
         await client.query(
           'UPDATE insumos SET stock_actual = stock_actual - $1 WHERE id = $2',
@@ -219,7 +219,7 @@ export const createOrden = async (req, res) => {
       }
     }
 
-    // ── Insertar productos en orden_articulos ────────────────
+    // ── Insertar productos en nota_productos ────────────────
     const productosInsertados = [];
     for (const { producto_id, cantidad } of productos) {
       if (!producto_id || !cantidad || Number(cantidad) <= 0) continue;
@@ -241,48 +241,49 @@ export const createOrden = async (req, res) => {
         });
       }
 
-      const { rows: oaRows } = await client.query(
-        `INSERT INTO orden_articulos (orden_id, producto_id, cantidad, precio_unitario)
+      const { rows: npRows } = await client.query(
+        `INSERT INTO nota_productos (nota_id, producto_id, cantidad, precio_unitario)
          VALUES ($1, $2, $3, $4)
          RETURNING *`,
-        [orden.id, producto_id, cantidad, art.precio_unitario ?? 0]
+        [nota.id, producto_id, cantidad, art.precio_unitario ?? 0]
       );
       await client.query(
         'UPDATE productos SET stock_reservado = stock_reservado + $1 WHERE id = $2',
         [cantidad, producto_id]
       );
       productosInsertados.push({
-        ...oaRows[0],
+        ...npRows[0],
         nombre:  art.nombre,
-        subtotal: Number(oaRows[0].cantidad) * Number(oaRows[0].precio_unitario),
+        subtotal: Number(npRows[0].cantidad) * Number(npRows[0].precio_unitario),
       });
     }
 
     // Si se insertaron productos, recalcular precio_total con fórmula completa
     if (productosInsertados.length > 0) {
       const { rows: totalRows } = await client.query(
-        `UPDATE ordenes o
+        `UPDATE notas n
            SET precio_total = (
-             SELECT (o2.cantidad_cargas * COALESCE(o2.precio_base, 0))
-                  + COALESCE(SUM(oa.cantidad * oa.precio_unitario), 0)
-                  + o2.ajuste
-             FROM ordenes o2
-             LEFT JOIN orden_articulos oa ON oa.orden_id = o2.id
-             WHERE o2.id = $1
-             GROUP BY o2.id, o2.cantidad_cargas, o2.precio_base, o2.ajuste
+             SELECT (n2.cantidad_cargas * c.precio_autoservicio)
+                  + COALESCE(SUM(np.cantidad * np.precio_unitario), 0)
+                  + n2.ajuste
+             FROM notas n2
+             CROSS JOIN configuracion c
+             LEFT JOIN nota_productos np ON np.nota_id = n2.id
+             WHERE n2.id = $1 AND c.id = 1
+             GROUP BY n2.id, n2.cantidad_cargas, c.precio_autoservicio, n2.ajuste
            )
-         WHERE o.id = $1
+         WHERE n.id = $1
          RETURNING precio_total`,
-        [orden.id]
+        [nota.id]
       );
-      orden.precio_total = totalRows[0].precio_total;
+      nota.precio_total = totalRows[0].precio_total;
     }
 
     await client.query('COMMIT');
-    res.status(201).json({ ...orden, productos: productosInsertados });
+    res.status(201).json({ ...nota, productos: productosInsertados });
   } catch (err) {
     await client.query('ROLLBACK');
-    console.error('createOrden error:', err);
+    console.error('createNota error:', err);
     if (err.code === '23503') {
       return res.status(400).json({ message: 'cliente_id o maquina_id no existe.' });
     }
@@ -292,10 +293,10 @@ export const createOrden = async (req, res) => {
   }
 };
 
-// ── DELETE /ordenes/:id ───────────────────────────────────────
-export const eliminarOrden = async (req, res) => {
+// ── DELETE /notas/:id ───────────────────────────────────────
+export const eliminarNota = async (req, res) => {
   if (req.user.rol !== 'admin') {
-    return res.status(403).json({ message: 'Solo los administradores pueden eliminar órdenes.' });
+    return res.status(403).json({ message: 'Solo los administradores pueden eliminar notas.' });
   }
   const { id } = req.params;
   const client = await pool.connect();
@@ -305,31 +306,31 @@ export const eliminarOrden = async (req, res) => {
     // Liberar stock reservado antes de eliminar
     await client.query(
       `UPDATE productos a
-         SET stock_reservado = stock_reservado - oa.cantidad
-       FROM orden_articulos oa
-       WHERE oa.orden_id = $1 AND oa.producto_id = a.id`,
+         SET stock_reservado = stock_reservado - np.cantidad
+       FROM nota_productos np
+       WHERE np.nota_id = $1 AND np.producto_id = a.id`,
       [id]
     );
 
-    const { rowCount } = await client.query('DELETE FROM ordenes WHERE id = $1', [id]);
+    const { rowCount } = await client.query('DELETE FROM notas WHERE id = $1', [id]);
     if (rowCount === 0) {
       await client.query('ROLLBACK');
-      return res.status(404).json({ message: 'Orden no encontrada.' });
+      return res.status(404).json({ message: 'Nota no encontrada.' });
     }
 
     await client.query('COMMIT');
     res.status(204).send();
   } catch (err) {
     await client.query('ROLLBACK');
-    console.error('eliminarOrden error:', err);
+    console.error('eliminarNota error:', err);
     res.status(500).json({ message: 'Error interno del servidor.' });
   } finally {
     client.release();
   }
 };
 
-// ── PATCH /ordenes/:id/estado ─────────────────────────────────
-export const cambiarEstadoOrden = async (req, res) => {
+// ── PATCH /notas/:id/estado ─────────────────────────────────
+export const cambiarEstadoNota = async (req, res) => {
   const { id } = req.params;
   const { estado } = req.body;
 
@@ -343,21 +344,21 @@ export const cambiarEstadoOrden = async (req, res) => {
   try {
     await client.query('BEGIN');
 
-    const { rows: ordenRows } = await client.query(
-      'SELECT estado FROM ordenes WHERE id = $1 FOR UPDATE',
+    const { rows: notaRows } = await client.query(
+      'SELECT estado FROM notas WHERE id = $1 FOR UPDATE',
       [id]
     );
-    if (ordenRows.length === 0) {
+    if (notaRows.length === 0) {
       await client.query('ROLLBACK');
-      return res.status(404).json({ message: 'Orden no encontrada.' });
+      return res.status(404).json({ message: 'Nota no encontrada.' });
     }
 
-    const estadoActual = ordenRows[0].estado;
+    const estadoActual = notaRows[0].estado;
 
     if (['ENTREGADA', 'CANCELADA'].includes(estadoActual)) {
       await client.query('ROLLBACK');
       return res.status(400).json({
-        message: `No se puede cambiar el estado de una orden ${estadoActual}.`,
+        message: `No se puede cambiar el estado de una nota ${estadoActual}.`,
       });
     }
 
@@ -372,24 +373,24 @@ export const cambiarEstadoOrden = async (req, res) => {
     if (estado === 'CANCELADA') {
       await client.query(
         `UPDATE productos a
-           SET stock_reservado = stock_reservado - oa.cantidad
-         FROM orden_articulos oa
-         WHERE oa.orden_id = $1 AND oa.producto_id = a.id`,
+           SET stock_reservado = stock_reservado - np.cantidad
+         FROM nota_productos np
+         WHERE np.nota_id = $1 AND np.producto_id = a.id`,
         [id]
       );
     } else if (estado === 'PAGADA') {
       await client.query(
         `UPDATE productos a
-           SET stock_actual    = stock_actual    - oa.cantidad,
-               stock_reservado = stock_reservado - oa.cantidad
-         FROM orden_articulos oa
-         WHERE oa.orden_id = $1 AND oa.producto_id = a.id`,
+           SET stock_actual    = stock_actual    - np.cantidad,
+               stock_reservado = stock_reservado - np.cantidad
+         FROM nota_productos np
+         WHERE np.nota_id = $1 AND np.producto_id = a.id`,
         [id]
       );
     }
 
     const { rows } = await client.query(
-      'UPDATE ordenes SET estado = $1 WHERE id = $2 RETURNING *',
+      'UPDATE notas SET estado = $1 WHERE id = $2 RETURNING *',
       [estado, id]
     );
 
@@ -397,14 +398,14 @@ export const cambiarEstadoOrden = async (req, res) => {
     res.json(rows[0]);
   } catch (err) {
     await client.query('ROLLBACK');
-    console.error('cambiarEstadoOrden error:', err);
+    console.error('cambiarEstadoNota error:', err);
     res.status(500).json({ message: 'Error interno del servidor.' });
   } finally {
     client.release();
   }
 };
 
-// ── PATCH /ordenes/:id/estado-pago ────────────────────────────
+// ── PATCH /notas/:id/estado-pago ────────────────────────────
 export const cambiarEstadoPago = async (req, res) => {
   const { id } = req.params;
   const { estado_pago } = req.body;
@@ -417,11 +418,11 @@ export const cambiarEstadoPago = async (req, res) => {
 
   try {
     const { rows } = await pool.query(
-      'UPDATE ordenes SET estado_pago = $1 WHERE id = $2 RETURNING *',
+      'UPDATE notas SET estado_pago = $1 WHERE id = $2 RETURNING *',
       [estado_pago, id]
     );
     if (rows.length === 0) {
-      return res.status(404).json({ message: 'Orden no encontrada.' });
+      return res.status(404).json({ message: 'Nota no encontrada.' });
     }
     res.json(rows[0]);
   } catch (err) {
@@ -430,28 +431,28 @@ export const cambiarEstadoPago = async (req, res) => {
   }
 };
 
-// ── GET /ordenes/:id/productos ────────────────────────────────
-export const getOrdenProductos = async (req, res) => {
+// ── GET /notas/:id/productos ────────────────────────────────
+export const getNotaProductos = async (req, res) => {
   const { id } = req.params;
   try {
     const { rows } = await pool.query(
-      `SELECT oa.id, oa.producto_id, a.nombre, oa.cantidad, oa.precio_unitario,
-              (oa.cantidad * oa.precio_unitario) AS subtotal
-       FROM orden_articulos oa
-       JOIN productos a ON a.id = oa.producto_id
-       WHERE oa.orden_id = $1
-       ORDER BY oa.created_at ASC`,
+      `SELECT np.id, np.producto_id, a.nombre, np.cantidad, np.precio_unitario,
+              (np.cantidad * np.precio_unitario) AS subtotal
+       FROM nota_productos np
+       JOIN productos a ON a.id = np.producto_id
+       WHERE np.nota_id = $1
+       ORDER BY np.created_at ASC`,
       [id]
     );
     res.json(rows);
   } catch (err) {
-    console.error('getOrdenProductos error:', err);
+    console.error('getNotaProductos error:', err);
     res.status(500).json({ message: 'Error interno del servidor.' });
   }
 };
 
-// ── POST /ordenes/:id/productos ───────────────────────────────
-export const addProductoToOrden = async (req, res) => {
+// ── POST /notas/:id/productos ───────────────────────────────
+export const addProductoToNota = async (req, res) => {
   const { id } = req.params;
   const { producto_id, cantidad } = req.body;
 
@@ -481,8 +482,8 @@ export const addProductoToOrden = async (req, res) => {
       });
     }
 
-    const { rows: oaRows } = await client.query(
-      `INSERT INTO orden_articulos (orden_id, producto_id, cantidad, precio_unitario)
+    const { rows: npRows } = await client.query(
+      `INSERT INTO nota_productos (nota_id, producto_id, cantidad, precio_unitario)
        VALUES ($1, $2, $3, $4)
        RETURNING *`,
       [id, producto_id, cantidad, art.precio_unitario ?? 0]
@@ -494,71 +495,73 @@ export const addProductoToOrden = async (req, res) => {
     );
 
     await client.query(
-      `UPDATE ordenes o
+      `UPDATE notas n
          SET precio_total = (
-           SELECT (o2.cantidad_cargas * COALESCE(o2.precio_base, 0))
-                + COALESCE(SUM(oa.cantidad * oa.precio_unitario), 0)
-                + o2.ajuste
-           FROM ordenes o2
-           LEFT JOIN orden_articulos oa ON oa.orden_id = o2.id
-           WHERE o2.id = $1
-           GROUP BY o2.id, o2.cantidad_cargas, o2.precio_base, o2.ajuste
+           SELECT (n2.cantidad_cargas * c.precio_autoservicio)
+                + COALESCE(SUM(np.cantidad * np.precio_unitario), 0)
+                + n2.ajuste
+           FROM notas n2
+           CROSS JOIN configuracion c
+           LEFT JOIN nota_productos np ON np.nota_id = n2.id
+           WHERE n2.id = $1 AND c.id = 1
+           GROUP BY n2.id, n2.cantidad_cargas, c.precio_autoservicio, n2.ajuste
          )
-       WHERE o.id = $1`,
+       WHERE n.id = $1`,
       [id]
     );
 
     await client.query('COMMIT');
-    res.status(201).json(oaRows[0]);
+    res.status(201).json(npRows[0]);
   } catch (err) {
     await client.query('ROLLBACK');
-    console.error('addProductoToOrden error:', err);
+    console.error('addProductoToNota error:', err);
     res.status(500).json({ message: 'Error interno del servidor.' });
   } finally {
     client.release();
   }
 };
 
-// ── DELETE /ordenes/:id/productos/:productoId ─────────────────
-export const removeProductoFromOrden = async (req, res) => {
+// ── DELETE /notas/:id/productos/:productoId ─────────────────
+export const removeProductoFromNota = async (req, res) => {
   const { id, productoId } = req.params;
 
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
 
-    const { rows: oaRows } = await client.query(
-      'SELECT * FROM orden_articulos WHERE orden_id = $1 AND producto_id = $2',
+    const { rows: npRows } = await client.query(
+      'SELECT * FROM nota_productos WHERE nota_id = $1 AND producto_id = $2',
       [id, productoId]
     );
-    if (oaRows.length === 0) {
+    if (npRows.length === 0) {
       await client.query('ROLLBACK');
-      return res.status(404).json({ message: 'Producto no encontrado en la orden.' });
+      return res.status(404).json({ message: 'Producto no encontrado en la nota.' });
     }
-    const oa = oaRows[0];
+    const np = npRows[0];
 
     await client.query(
-      'DELETE FROM orden_articulos WHERE orden_id = $1 AND producto_id = $2',
+      'DELETE FROM nota_productos WHERE nota_id = $1 AND producto_id = $2',
       [id, productoId]
     );
 
     await client.query(
       'UPDATE productos SET stock_reservado = stock_reservado - $1 WHERE id = $2',
-      [oa.cantidad, productoId]
+      [np.cantidad, productoId]
     );
 
     await client.query(
-      `UPDATE ordenes o
+      `UPDATE notas n
          SET precio_total = (
-           SELECT (o2.cantidad_cargas * COALESCE(o2.precio_base, 0))
-                + COALESCE(SUM(oa.cantidad * oa.precio_unitario), 0)
-                + o2.ajuste
-           FROM ordenes o2
-           LEFT JOIN orden_articulos oa ON oa.orden_id = o2.id
-           WHERE o2.id = $1
-           GROUP BY o2.id, o2.cantidad_cargas, o2.precio_base, o2.ajuste
+           SELECT (n2.cantidad_cargas * c.precio_autoservicio)
+                + COALESCE(SUM(np.cantidad * np.precio_unitario), 0)
+                + n2.ajuste
+           FROM notas n2
+           CROSS JOIN configuracion c
+           LEFT JOIN nota_productos np ON np.nota_id = n2.id
+           WHERE n2.id = $1 AND c.id = 1
+           GROUP BY n2.id, n2.cantidad_cargas, c.precio_autoservicio, n2.ajuste
          )
-       WHERE o.id = $1`,
+       WHERE n.id = $1`,
       [id]
     );
 
@@ -566,7 +569,7 @@ export const removeProductoFromOrden = async (req, res) => {
     res.status(204).send();
   } catch (err) {
     await client.query('ROLLBACK');
-    console.error('removeProductoFromOrden error:', err);
+    console.error('removeProductoFromNota error:', err);
     res.status(500).json({ message: 'Error interno del servidor.' });
   } finally {
     client.release();

@@ -50,6 +50,35 @@ export const createCliente = async (req, res) => {
   }
 };
 
+export const deleteCliente = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    // Verificar notas activas
+    const { rows: activas } = await pool.query(
+      `SELECT id FROM notas
+       WHERE cliente_id = $1
+         AND estado NOT IN ('CANCELADA', 'ENTREGADA')`,
+      [id]
+    );
+    if (activas.length > 0) {
+      return res.status(400).json({ message: 'No se puede eliminar un cliente con notas activas.' });
+    }
+
+    const { rows } = await pool.query(
+      'DELETE FROM clientes WHERE id = $1 RETURNING id',
+      [id]
+    );
+    if (rows.length === 0) {
+      return res.status(404).json({ message: 'Cliente no encontrado.' });
+    }
+    res.json({ message: 'Cliente eliminado.' });
+  } catch (err) {
+    console.error('deleteCliente error:', err);
+    res.status(500).json({ message: 'Error interno del servidor.' });
+  }
+};
+
 export const updateCliente = async (req, res) => {
   const { id } = req.params;
   const { nombre, telefono, email, direccion, notas, activo } = req.body;

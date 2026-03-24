@@ -141,8 +141,8 @@ export default function Ventas() {
               color="azul"
             />
             <Tarjeta
-              titulo="Órdenes pagadas"
-              valor={data.tarjetas.ordenes_pagadas}
+              titulo="Notas pagadas"
+              valor={data.tarjetas.notas_pagadas}
               color="verde"
             />
             <Tarjeta
@@ -153,8 +153,8 @@ export default function Ventas() {
             />
             <Tarjeta
               titulo="Saldo pendiente"
-              valor={data.tarjetas.ordenes_pendientes}
-              sub="órdenes con saldo"
+              valor={data.tarjetas.notas_pendientes}
+              sub="notas con saldo"
               color="naranja"
             />
           </div>
@@ -188,14 +188,14 @@ export default function Ventas() {
             )}
           </div>
 
-          {/* Lista de órdenes */}
+          {/* Lista de notas */}
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
             <div className="px-4 py-3 border-b border-gray-200">
-              <h2 className="text-sm font-semibold text-gray-700">Órdenes pagadas</h2>
+              <h2 className="text-sm font-semibold text-gray-700">Notas pagadas</h2>
             </div>
-            {data.lista_ordenes.length === 0 ? (
+            {data.lista_notas.length === 0 ? (
               <p className="text-sm text-gray-400 text-center py-10">
-                Sin órdenes en este período
+                Sin notas en este período
               </p>
             ) : (
               <div className="overflow-x-auto">
@@ -211,14 +211,14 @@ export default function Ventas() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {data.lista_ordenes.map((orden) => (
-                      <tr key={orden.folio} className="hover:bg-gray-50">
-                        <td className="px-4 py-3 font-mono text-xs text-gray-600">{orden.folio}</td>
-                        <td className="px-4 py-3 text-gray-600">{fmtFecha(orden.fecha)}</td>
-                        <td className="px-4 py-3 text-gray-600">{orden.maquina}</td>
-                        <td className="px-4 py-3 text-right text-gray-600">{orden.cargas}</td>
-                        <td className="px-4 py-3 text-right text-gray-600">{fmt(orden.total_productos)}</td>
-                        <td className="px-4 py-3 text-right font-semibold text-gray-800">{fmt(orden.total)}</td>
+                    {data.lista_notas.map((nota) => (
+                      <tr key={nota.folio} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 font-mono text-xs text-gray-600">{nota.folio}</td>
+                        <td className="px-4 py-3 text-gray-600">{fmtFecha(nota.fecha)}</td>
+                        <td className="px-4 py-3 text-gray-600">{nota.maquina}</td>
+                        <td className="px-4 py-3 text-right text-gray-600">{nota.cargas}</td>
+                        <td className="px-4 py-3 text-right text-gray-600">{fmt(nota.total_productos)}</td>
+                        <td className="px-4 py-3 text-right font-semibold text-gray-800">{fmt(nota.total)}</td>
                       </tr>
                     ))}
                   </tbody>

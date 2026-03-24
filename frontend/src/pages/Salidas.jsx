@@ -10,7 +10,7 @@ export default function Salidas() {
   const { id }   = useParams();
   const navigate = useNavigate();
 
-  const [orden,            setOrden]            = useState(null);
+  const [nota,            setNota]            = useState(null);
   const [productos,        setProductos]        = useState([]);
   const [cantidades,       setCantidades]       = useState({});
   const [loading,          setLoading]          = useState(true);
@@ -25,11 +25,11 @@ export default function Salidas() {
     setLoading(true);
     setError('');
     try {
-      const [ordenData, productosData] = await Promise.all([
-        api.get(`/ordenes/${id}`),
+      const [notaData, productosData] = await Promise.all([
+        api.get(`/notas/${id}`),
         api.get('/productos'),
       ]);
-      setOrden(ordenData);
+      setNota(notaData);
       setProductos(productosData);
     } catch (err) {
       setError(err.message);
@@ -39,12 +39,12 @@ export default function Salidas() {
   }
 
   async function activarMaquina() {
-    if (!orden?.maquina_id) return;
+    if (!nota?.maquina_id) return;
     setLoadingMaquina(true);
     setErrorAccion('');
     try {
-      await api.patch(`/maquinas/${orden.maquina_id}/estado`, { estado: 'en_uso' });
-      await api.patch(`/ordenes/${id}/estado`, { estado: 'EN_PROCESO' });
+      await api.patch(`/maquinas/${nota.maquina_id}/estado`, { estado: 'en_uso' });
+      await api.patch(`/notas/${id}/estado`, { estado: 'EN_PROCESO' });
       await cargarDatos();
     } catch (err) {
       setErrorAccion(err.message);
@@ -59,7 +59,7 @@ export default function Salidas() {
     setLoadingProducto(productoId);
     setErrorAccion('');
     try {
-      await api.post(`/ordenes/${id}/productos`, { producto_id: productoId, cantidad });
+      await api.post(`/notas/${id}/productos`, { producto_id: productoId, cantidad });
       setCantidades(prev => ({ ...prev, [productoId]: '' }));
       await cargarDatos();
     } catch (err) {
@@ -73,7 +73,7 @@ export default function Salidas() {
     setLoadingProducto(productoId);
     setErrorAccion('');
     try {
-      await api.delete(`/ordenes/${id}/productos/${productoId}`);
+      await api.delete(`/notas/${id}/productos/${productoId}`);
       await cargarDatos();
     } catch (err) {
       setErrorAccion(err.message);
@@ -98,14 +98,14 @@ export default function Salidas() {
     );
   }
 
-  const maquina         = orden?.maquina_nombre;
-  const maquinaEnUso    = orden?.maquina_estado === 'en_uso';
-  const productosOrden  = orden?.productos || [];
-  const productosIdsEnOrden = new Set(productosOrden.map(p => p.producto_id));
+  const maquina         = nota?.maquina_nombre;
+  const maquinaEnUso    = nota?.maquina_estado === 'en_uso';
+  const productosNota  = nota?.productos || [];
+  const productosIdsEnNota = new Set(productosNota.map(p => p.producto_id));
 
-  // Solo productos disponibles (stock_disponible > 0) que no estén ya en la orden
+  // Solo productos disponibles (stock_disponible > 0) que no estén ya en la nota
   const productosDisponibles = productos.filter(
-    p => Number(p.stock_disponible) > 0 && !productosIdsEnOrden.has(p.id)
+    p => Number(p.stock_disponible) > 0 && !productosIdsEnNota.has(p.id)
   );
 
   return (
@@ -114,14 +114,14 @@ export default function Salidas() {
       {/* Cabecera */}
       <div>
         <button
-          onClick={() => navigate(`/ordenes/${id}`)}
+          onClick={() => navigate(`/notas/${id}`)}
           className="text-sm text-indigo-600 hover:underline mb-1 flex items-center gap-1"
         >
-          ← Detalle de orden
+          ← Detalle de nota
         </button>
         <h1 className="text-xl font-bold text-gray-900">Salidas</h1>
         <p className="text-xs text-gray-400 mt-0.5">
-          {orden?.folio ?? `Orden #${id}`}
+          {nota?.folio ?? `Nota #${id}`}
         </p>
       </div>
 
@@ -141,17 +141,17 @@ export default function Salidas() {
             {maquina
               ? <p className="text-sm font-medium text-gray-800">{maquina}</p>
               : <p className="text-sm text-gray-400 italic">Sin máquina asignada</p>}
-            {orden?.maquina_estado && (
+            {nota?.maquina_estado && (
               <span className={`mt-1 inline-block text-xs font-semibold px-2.5 py-0.5 rounded-full ${
-                orden.maquina_estado === 'en_uso'
+                nota.maquina_estado === 'en_uso'
                   ? 'bg-blue-100 text-blue-800'
                   : 'bg-gray-100 text-gray-600'
               }`}>
-                {orden.maquina_estado === 'en_uso' ? 'En uso' : orden.maquina_estado}
+                {nota.maquina_estado === 'en_uso' ? 'En uso' : nota.maquina_estado}
               </span>
             )}
           </div>
-          {orden?.maquina_id && (
+          {nota?.maquina_id && (
             maquinaEnUso ? (
               <span className="text-xs font-semibold px-3 py-2 bg-blue-100 text-blue-700 rounded-lg">
                 Máquina activa
@@ -169,10 +169,10 @@ export default function Salidas() {
         </div>
       </div>
 
-      {/* Sección 2 — Productos en la orden */}
+      {/* Sección 2 — Productos en la nota */}
       <div className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
         <div className="px-4 py-3 border-b border-gray-50 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-gray-700">Productos en esta orden</h2>
+          <h2 className="text-sm font-semibold text-gray-700">Productos en esta nota</h2>
           <button
             onClick={cargarDatos}
             className="text-xs text-indigo-600 hover:underline"
@@ -180,11 +180,11 @@ export default function Salidas() {
             Actualizar
           </button>
         </div>
-        {productosOrden.length === 0 ? (
+        {productosNota.length === 0 ? (
           <p className="px-4 py-4 text-sm text-gray-400 italic">Sin productos agregados</p>
         ) : (
           <div className="divide-y divide-gray-50">
-            {productosOrden.map(p => (
+            {productosNota.map(p => (
               <div key={p.producto_id} className="px-4 py-3 flex items-center justify-between gap-3">
                 <div>
                   <p className="text-sm font-medium text-gray-800">{p.nombre}</p>
@@ -207,7 +207,7 @@ export default function Salidas() {
             ))}
             <div className="px-4 py-3 bg-gray-50 flex justify-between">
               <span className="text-sm font-semibold text-gray-700">Total</span>
-              <span className="text-sm font-bold text-gray-900">{fmtMonto(orden?.precio_total)}</span>
+              <span className="text-sm font-bold text-gray-900">{fmtMonto(nota?.precio_total)}</span>
             </div>
           </div>
         )}
@@ -223,7 +223,7 @@ export default function Salidas() {
           <p className="px-4 py-4 text-sm text-gray-400 italic">
             {productos.length === 0
               ? 'No hay productos registrados'
-              : 'Sin stock disponible o todos ya están en la orden'}
+              : 'Sin stock disponible o todos ya están en la nota'}
           </p>
         ) : (
           <div className="divide-y divide-gray-50">
