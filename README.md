@@ -21,15 +21,15 @@ lavanderia-el-sol/
 ```bash
 cd backend
 cp .env.example .env   # Configurar variables de entorno
-npm install
-npm run dev
+pnpm install
+pnpm dev
 ```
 
 ### Frontend
 ```bash
 cd frontend
-npm install
-npm run dev
+pnpm install
+pnpm dev
 ```
 
 ## Variables de entorno (backend)
