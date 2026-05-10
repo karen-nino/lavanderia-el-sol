@@ -114,7 +114,13 @@ function useClock() {
 
 function SidebarItem({ to, label, icon, end }) {
   return (
-    <NavLink to={to} end={end} className="group flex flex-col items-center gap-1.5 py-1">
+    <NavLink
+      to={to}
+      end={end}
+      className={({ isActive }) =>
+        `group flex flex-col items-center py-1 ${isActive ? 'gap-1.5' : 'gap-0'}`
+      }
+    >
       {({ isActive }) => (
         <>
           <span
@@ -167,9 +173,9 @@ function DesktopHeader({ usuario, now }) {
   const fecha = now.toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' });
   const hora  = now.toLocaleTimeString('es-MX', { hour: 'numeric', minute: '2-digit', hour12: true });
   return (
-    <header className="hidden md:flex items-center justify-between px-8 pt-6">
-      <div className="flex items-center gap-4">
-        <div className="w-14 h-14 rounded-pill bg-grey/30 flex items-center justify-center text-white font-bold text-lg">
+    <header className="hidden md:flex items-start justify-between px-8 pt-6">
+      <div className="flex items-center gap-2">
+        <div className="w-12 h-12 rounded-pill bg-grey/30 flex items-center justify-center text-white font-bold text-lg">
           {usuario?.nombre?.[0]?.toUpperCase() ?? 'A'}
         </div>
         <div>
@@ -178,12 +184,12 @@ function DesktopHeader({ usuario, now }) {
         </div>
       </div>
 
-      <div className="flex flex-col items-end">
-        <div className="flex items-center gap-2">
+      <div className="flex flex-col items-end gap-1">
+        <div className="flex items-center gap-1">
           <span className="w-2 h-2 rounded-pill bg-green" />
-          <span className="text-kpi-label font-semibold text-green uppercase tracking-wide">Conectado</span>
+          <span className="text-kpi-label font-bold text-green uppercase tracking-wide">Conectado</span>
         </div>
-        <p className="text-kpi-label text-grey mt-1">{fecha}</p>
+        <p className="text-sm font-medium text-grey mt-1">{fecha}</p>
         <p className="text-2xl font-bold text-dark-blue">{hora}</p>
       </div>
     </header>
