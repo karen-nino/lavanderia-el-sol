@@ -14,7 +14,30 @@
       "Bash(ls backend/ && cat frontend/package.json | python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d.get\\('dependencies',{}\\), indent=2\\)\\)\")",
       "Bash(tree -L 3 -I \"node_modules|dist\" /Users/karen.nino/Desktop/lavanderia-el-sol 2>/dev/null || find /Users/karen.nino/Desktop/lavanderia-el-sol -not -path \"*/node_modules/*\" -not -path \"*/dist/*\" -type d | head -40)",
       "Bash(tree -L 3 -I 'node_modules|dist|.git|.claude' /Users/karen.nino/Desktop/lavanderia-el-sol --charset ascii 2>/dev/null || find /Users/karen.nino/Desktop/lavanderia-el-sol -not -path '*/node_modules/*' -not -path '*/.git/*' -not -path '*/.claude/*' -not -path '*/dist/*' | sort | head -100)",
-      "Bash(python3 -c \":*)"
+      "Bash(python3 -c \":*)",
+      "mcp__claude_ai_Figma__get_design_context",
+      "Bash(mkdir -p /tmp/figextract)",
+      "Read(//tmp/**)",
+      "Bash(unzip -l \"/Users/karen.nino/Desktop/lavanderia-el-sol/Tablet:Mobile-Dashboard-admin.fig\")",
+      "Read(//private/tmp/figextract/**)",
+      "Bash(unzip -o \"/Users/karen.nino/Desktop/lavanderia-el-sol/Tablet:Mobile-Dashboard-admin.fig\" thumbnail.png meta.json -d /tmp/figextract/)",
+      "Bash(unzip -o \"/Users/karen.nino/Desktop/lavanderia-el-sol/Tablet:Mobile-Dashboard-admin.fig\" \"images/*\" -d /tmp/figextract/)",
+      "Bash(file /tmp/figextract/images/*)",
+      "Bash(sips -Z 1600 /tmp/figextract/images/a5827b055472eb2e0e8b4d4eea054428b0da10e7 --out /tmp/figextract/full-design.jpg)",
+      "Bash(sips -Z 1200 /tmp/figextract/images/a5827b055472eb2e0e8b4d4eea054428b0da10e7 --out /tmp/figextract/full-design.jpg)",
+      "Bash(sips -Z 1100 /tmp/figextract/images/a5827b055472eb2e0e8b4d4eea054428b0da10e7 --out /tmp/figextract/full-design.jpg)",
+      "Bash(sips -s formatOptions 75 /tmp/figextract/full-design.jpg --out /tmp/figextract/full-design.jpg)",
+      "Bash(sips -Z 900 /tmp/figextract/images/a5827b055472eb2e0e8b4d4eea054428b0da10e7 -s formatOptions 70 --out /tmp/figextract/full-design.jpg)",
+      "Bash(sips -Z 1100 /tmp/figextract/images/b6aa25404e97d0e7bc02b7fa8a53d0a1d46169a1 -s formatOptions 80 --out /tmp/figextract/img1.jpg)",
+      "Bash(sips -Z 800 /tmp/figextract/images/0cbc6b3cdf4b5adc20f58e03af0a4afbb84a72f4 -s formatOptions 80 --out /tmp/figextract/img2.jpg)",
+      "Bash(sips -Z 1100 /tmp/figextract/images/c6e7cd9edab17003232656d1f780a0ce1ae6e356 -s formatOptions 80 --out /tmp/figextract/img3.jpg)",
+      "Bash(sips -Z 600 /tmp/figextract/images/b6aa25404e97d0e7bc02b7fa8a53d0a1d46169a1 -s formatOptions 65 --out /tmp/figextract/img1.jpg)",
+      "Bash(sips -Z 600 /tmp/figextract/images/0cbc6b3cdf4b5adc20f58e03af0a4afbb84a72f4 -s formatOptions 65 --out /tmp/figextract/img2.jpg)",
+      "Bash(sips -Z 400 /tmp/figextract/images/b6aa25404e97d0e7bc02b7fa8a53d0a1d46169a1 -s formatOptions 60 --out /tmp/figextract/img1.jpg)",
+      "Bash(sips -Z 400 /tmp/figextract/images/0cbc6b3cdf4b5adc20f58e03af0a4afbb84a72f4 -s formatOptions 60 --out /tmp/figextract/img2.jpg)",
+      "Bash(sips -Z 600 /tmp/figextract/images/c6e7cd9edab17003232656d1f780a0ce1ae6e356 -s formatOptions 60 --out /tmp/figextract/img3.jpg)",
+      "Bash(sips -Z 1200 /tmp/figextract/thumbnail.png -s formatOptions 95 --out /tmp/figextract/thumb-big.jpg)",
+      "mcp__claude_ai_Figma__whoami"
     ]
   }
 }

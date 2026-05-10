@@ -1,209 +1,333 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
-const navItems = [
-  {
-    to: '/',
-    label: 'Dashboard',
-    end: true,
-    icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-          d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-      </svg>
-    ),
-  },
-  {
-    to: '/notas',
-    label: 'Notas',
-    icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-          d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
-      </svg>
-    ),
-  },
-  {
-    to: '/clientes',
-    label: 'Clientes',
-    icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-          d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-      </svg>
-    ),
-  },
-  {
-    to: '/maquinas',
-    label: 'Máquinas',
-    icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-          d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-      </svg>
-    ),
-  },
-  {
-    to: '/inventario',
-    label: 'Inventario',
-    icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-          d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-      </svg>
-    ),
-  },
-];
+const navIconCls = 'w-6 h-6';
 
-const ventasItem = {
-  to: '/ventas',
-  label: 'Ventas',
-  icon: (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-        d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+const Icon = {
+  brand: (
+    <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24">
+      <path d="M12 4a3 3 0 110 6 3 3 0 010-6zm-1 8h2v3l3 .5v6h-2v-5l-2-.3v5h-2v-5l-2 .3v5H8v-6l3-.5v-3z" />
     </svg>
   ),
-};
-
-const configuracionItem = {
-  to: '/configuracion',
-  label: 'Configuración',
-  icon: (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+  dashboard: (
+    <svg className={navIconCls} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <rect x="3"  y="3"  width="7" height="7" rx="1.5" strokeWidth={2} />
+      <rect x="14" y="3"  width="7" height="7" rx="1.5" strokeWidth={2} />
+      <rect x="3"  y="14" width="7" height="7" rx="1.5" strokeWidth={2} />
+      <rect x="14" y="14" width="7" height="7" rx="1.5" strokeWidth={2} />
+    </svg>
+  ),
+  maquinas: (
+    <svg className={navIconCls} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <rect x="4" y="3" width="16" height="18" rx="2" strokeWidth={2} />
+      <circle cx="12" cy="13" r="4" strokeWidth={2} />
+      <circle cx="8"  cy="6.5" r="0.6" fill="currentColor" />
+      <circle cx="12" cy="6.5" r="0.6" fill="currentColor" />
+    </svg>
+  ),
+  notas: (
+    <svg className={navIconCls} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <rect x="5" y="3" width="14" height="18" rx="2" strokeWidth={2} />
+      <line x1="9"  y1="8"  x2="15" y2="8"  strokeWidth={2} strokeLinecap="round" />
+      <line x1="9"  y1="12" x2="15" y2="12" strokeWidth={2} strokeLinecap="round" />
+      <line x1="9"  y1="16" x2="13" y2="16" strokeWidth={2} strokeLinecap="round" />
+    </svg>
+  ),
+  clientes: (
+    <svg className={navIconCls} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <circle cx="9"  cy="8" r="3" strokeWidth={2} />
+      <circle cx="17" cy="9" r="2.5" strokeWidth={2} />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+        d="M3 20c0-3 2.5-5 6-5s6 2 6 5M15 20c0-2 1.8-4 4-4s2 2 2 4" />
+    </svg>
+  ),
+  inventario: (
+    <svg className={navIconCls} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+        d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+    </svg>
+  ),
+  ventas: (
+    <svg className={navIconCls} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+        d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2 5h12m-7 3a1 1 0 11-2 0 1 1 0 012 0zm8 0a1 1 0 11-2 0 1 1 0 012 0z" />
+    </svg>
+  ),
+  ajustes: (
+    <svg className={navIconCls} fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
         d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
     </svg>
   ),
+  logout: (
+    <svg className={navIconCls} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+        d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+    </svg>
+  ),
+  bell: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+        d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+    </svg>
+  ),
+  menu: (
+    <svg className={navIconCls} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+        d="M4 6h16M4 12h16M4 18h16" />
+    </svg>
+  ),
+  menuSm: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+        d="M4 6h16M4 12h16M4 18h16" />
+    </svg>
+  ),
+  close: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+        d="M6 6l12 12M6 18L18 6" />
+    </svg>
+  ),
 };
 
-function SidebarContent({ onClose }) {
-  const { usuario, logout } = useAuth();
-  const navigate = useNavigate();
+const navItems = [
+  { to: '/',           label: 'Dashboard',  icon: Icon.dashboard,  end: true },
+  { to: '/maquinas',   label: 'Máquinas',   icon: Icon.maquinas },
+  { to: '/notas',      label: 'Notas',      icon: Icon.notas },
+  { to: '/clientes',   label: 'Clientes',   icon: Icon.clientes },
+  { to: '/inventario', label: 'Inventario', icon: Icon.inventario },
+];
 
-  const handleLogout = () => {
-    logout();
-    navigate('/login');
-  };
+const ventasItem = { to: '/ventas', label: 'Ventas', icon: Icon.ventas };
 
-  const items = usuario?.rol === 'admin'
-    ? [...navItems, ventasItem, configuracionItem]
-    : navItems;
+function useClock() {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 30_000);
+    return () => clearInterval(id);
+  }, []);
+  return now;
+}
 
+function SidebarItem({ to, label, icon, end }) {
   return (
-    <div className="flex flex-col h-full bg-slate-800 text-white">
-      {/* Brand */}
-      <div className="flex items-center justify-between h-16 px-4 border-b border-slate-700 flex-shrink-0">
-        <div className="flex items-center gap-2.5">
-          <span className="text-2xl leading-none">🫧</span>
-          <div>
-            <p className="font-bold text-sm leading-tight">Lavandería</p>
-            <p className="text-xs text-slate-400 leading-tight">El Sol</p>
-          </div>
-        </div>
-        {onClose && (
-          <button onClick={onClose} className="text-slate-400 hover:text-white p-1 -mr-1">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        )}
-      </div>
-
-      {/* Nav */}
-      <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-0.5">
-        {items.map(({ to, label, icon, end }) => (
-          <NavLink
-            key={to}
-            to={to}
-            end={end}
-            onClick={onClose}
-            className={({ isActive }) =>
-              `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                isActive
-                  ? 'bg-indigo-600 text-white'
-                  : 'text-slate-300 hover:bg-slate-700 hover:text-white'
-              }`
-            }
+    <NavLink to={to} end={end} className="group flex flex-col items-center gap-1.5 py-1">
+      {({ isActive }) => (
+        <>
+          <span
+            className={`w-12 h-12 rounded-card-sm flex items-center justify-center transition-colors ${
+              isActive
+                ? 'bg-blue text-white'
+                : 'bg-transparent text-dark-blue group-hover:bg-light-blue/60'
+            }`}
           >
             {icon}
+          </span>
+          <span className={`text-[11px] font-medium ${isActive ? 'text-blue' : 'text-dark-blue'}`}>
             {label}
-          </NavLink>
+          </span>
+        </>
+      )}
+    </NavLink>
+  );
+}
+
+function DesktopSidebar({ items, onMenu }) {
+  return (
+    <aside className="hidden md:flex md:flex-col md:flex-shrink-0 w-24 bg-white border-r border-light-blue/60 py-4 px-2">
+      <div className="flex justify-center mb-6">
+        <div className="w-12 h-12 rounded-card-sm bg-dark-blue flex items-center justify-center">
+          {Icon.brand}
+        </div>
+      </div>
+
+      <nav className="flex-1 flex flex-col gap-3">
+        {items.map((item) => (
+          <SidebarItem key={item.to} {...item} />
         ))}
       </nav>
 
-      {/* User + logout */}
-      <div className="border-t border-slate-700 p-3 flex-shrink-0">
-        <div className="flex items-center gap-3 px-2 py-2 mb-1">
-          <div className="w-8 h-8 rounded-full bg-indigo-500 flex items-center justify-center text-sm font-bold flex-shrink-0">
-            {usuario?.nombre?.[0]?.toUpperCase() ?? 'A'}
-          </div>
-          <div className="overflow-hidden">
-            <p className="text-sm font-medium leading-tight truncate">{usuario?.nombre}</p>
-            <p className="text-xs text-slate-400 capitalize">{usuario?.rol}</p>
-          </div>
+      <button
+        onClick={onMenu}
+        className="group flex flex-col items-center gap-1.5 py-1"
+      >
+        <span className="w-12 h-12 rounded-card-sm flex items-center justify-center text-dark-blue group-hover:bg-light-blue/60 transition-colors">
+          {Icon.menu}
+        </span>
+        <span className="text-[11px] font-medium text-dark-blue">Menú</span>
+      </button>
+    </aside>
+  );
+}
+
+function DesktopHeader({ usuario, now }) {
+  const fecha = now.toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' });
+  const hora  = now.toLocaleTimeString('es-MX', { hour: 'numeric', minute: '2-digit', hour12: true });
+  return (
+    <header className="hidden md:flex items-center justify-between px-8 pt-6">
+      <div className="flex items-center gap-4">
+        <div className="w-14 h-14 rounded-pill bg-grey/30 flex items-center justify-center text-white font-bold text-lg">
+          {usuario?.nombre?.[0]?.toUpperCase() ?? 'A'}
         </div>
+        <div>
+          <p className="text-kpi-label text-grey capitalize">{usuario?.rol ?? 'Usuario'}</p>
+          <p className="text-2xl font-bold text-dark-blue">{usuario?.nombre ?? '—'}</p>
+        </div>
+      </div>
+
+      <div className="flex flex-col items-end">
+        <div className="flex items-center gap-2">
+          <span className="w-2 h-2 rounded-pill bg-green" />
+          <span className="text-kpi-label font-semibold text-green uppercase tracking-wide">Conectado</span>
+        </div>
+        <p className="text-kpi-label text-grey mt-1">{fecha}</p>
+        <p className="text-2xl font-bold text-dark-blue">{hora}</p>
+      </div>
+    </header>
+  );
+}
+
+function MobileTopbar({ usuario, now, onMenu }) {
+  const hora = now.toLocaleTimeString('es-MX', { hour: 'numeric', minute: '2-digit' });
+  return (
+    <header className="md:hidden flex items-center justify-between px-4 py-3 bg-white flex-shrink-0">
+      <div className="flex items-center gap-3">
+        <div className="w-10 h-10 rounded-pill bg-blue text-white flex items-center justify-center font-bold">
+          {usuario?.nombre?.[0]?.toUpperCase() ?? 'A'}
+        </div>
+        <div>
+          <p className="text-kpi-label text-grey">Hola</p>
+          <p className="text-card-title text-dark-blue">{usuario?.nombre ?? 'Usuario'}</p>
+        </div>
+      </div>
+      <div className="flex items-center gap-3">
+        <span className="text-kpi-label text-grey">{hora}</span>
         <button
-          onClick={handleLogout}
-          className="flex items-center gap-2 w-full px-3 py-2 text-sm text-slate-300 hover:text-white hover:bg-slate-700 rounded-lg transition-colors"
+          onClick={onMenu}
+          aria-label="Abrir menú"
+          className="w-10 h-10 rounded-pill bg-light-blue text-blue flex items-center justify-center"
         >
-          <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-              d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-          </svg>
-          Cerrar sesión
+          {Icon.menuSm}
         </button>
+      </div>
+    </header>
+  );
+}
+
+function MenuModal({ open, onClose, onSettings, onLogout }) {
+  if (!open) return null;
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-dark-blue/40 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-sm bg-white rounded-card shadow-xl p-5"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-card-title text-dark-blue font-bold">Menú</h2>
+          <button
+            onClick={onClose}
+            aria-label="Cerrar menú"
+            className="w-8 h-8 rounded-pill flex items-center justify-center text-grey hover:bg-light-blue/60"
+          >
+            {Icon.close}
+          </button>
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <button
+            onClick={onSettings}
+            className="flex items-center gap-3 px-3 py-3 rounded-card-sm text-dark-blue hover:bg-light-blue/60 transition-colors"
+          >
+            <span className="w-10 h-10 rounded-card-sm bg-light-blue/60 text-blue flex items-center justify-center">
+              {Icon.ajustes}
+            </span>
+            <span className="text-base font-medium">Ajustes</span>
+          </button>
+          <button
+            onClick={onLogout}
+            className="flex items-center gap-3 px-3 py-3 rounded-card-sm text-red hover:bg-red/10 transition-colors"
+          >
+            <span className="w-10 h-10 rounded-card-sm bg-red/10 text-red flex items-center justify-center">
+              {Icon.logout}
+            </span>
+            <span className="text-base font-medium">Cerrar sesión</span>
+          </button>
+        </div>
       </div>
     </div>
   );
 }
 
+function MobileBottomNav({ items }) {
+  return (
+    <nav className="md:hidden flex items-center justify-around bg-white shadow-bottom-nav py-2 flex-shrink-0">
+      {items.map(({ to, label, icon, end }) => (
+        <NavLink
+          key={to}
+          to={to}
+          end={end}
+          className={({ isActive }) =>
+            `flex flex-col items-center justify-center gap-0.5 px-3 py-1.5 rounded-card-sm min-w-[56px] transition-colors ${
+              isActive ? 'text-blue' : 'text-grey'
+            }`
+          }
+        >
+          {icon}
+          <span className="text-[10px] font-medium">{label}</span>
+        </NavLink>
+      ))}
+    </nav>
+  );
+}
+
 export default function Layout() {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { usuario, logout } = useAuth();
+  const navigate = useNavigate();
+  const now = useClock();
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  const handleLogout = () => {
+    setMenuOpen(false);
+    logout();
+    navigate('/login');
+  };
+
+  const handleSettings = () => {
+    setMenuOpen(false);
+    navigate('/configuracion');
+  };
+
+  const sidebarItems = usuario?.rol === 'admin'
+    ? [...navItems, ventasItem]
+    : navItems;
 
   return (
-    <div className="flex h-full bg-gray-50 overflow-hidden">
-      {/* Sidebar — desktop */}
-      <aside className="hidden md:flex md:flex-shrink-0 w-64">
-        <SidebarContent />
-      </aside>
+    <div className="flex h-full bg-light-blue/30 overflow-hidden">
+      <DesktopSidebar items={sidebarItems} onMenu={() => setMenuOpen(true)} />
 
-      {/* Sidebar — mobile drawer */}
-      {sidebarOpen && (
-        <div className="fixed inset-0 z-40 flex md:hidden">
-          <div
-            className="fixed inset-0 bg-black/50"
-            onClick={() => setSidebarOpen(false)}
-          />
-          <aside className="relative z-50 w-64 flex-shrink-0">
-            <SidebarContent onClose={() => setSidebarOpen(false)} />
-          </aside>
-        </div>
-      )}
-
-      {/* Main area */}
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
-        {/* Topbar (mobile only) */}
-        <header className="md:hidden flex items-center h-14 px-4 bg-white border-b border-gray-200 shadow-sm flex-shrink-0">
-          <button
-            onClick={() => setSidebarOpen(true)}
-            className="text-gray-500 hover:text-gray-700 mr-3 p-1 -ml-1"
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-          </button>
-          <span className="font-semibold text-gray-800 text-sm">Lavandería El Sol</span>
-        </header>
+        <MobileTopbar usuario={usuario} now={now} onMenu={() => setMenuOpen(true)} />
+        <DesktopHeader usuario={usuario} now={now} />
 
-        {/* Page content */}
         <main className="flex-1 overflow-y-auto">
           <Outlet />
         </main>
+
+        <MobileBottomNav items={navItems} />
       </div>
+
+      <MenuModal
+        open={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        onSettings={handleSettings}
+        onLogout={handleLogout}
+      />
     </div>
   );
 }
