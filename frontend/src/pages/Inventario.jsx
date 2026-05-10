@@ -282,7 +282,7 @@ export default function Inventario() {
   };
 
   return (
-    <div className="p-4 md:p-6 space-y-4">
+    <div className="p-4 md:py-14 md:px-8 space-y-4">
 
       {/* Header */}
       <div className="flex items-center justify-between">

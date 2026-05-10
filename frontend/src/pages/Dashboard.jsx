@@ -66,7 +66,7 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="p-4 md:px-8 md:py-6 space-y-section-gap">
+    <div className="p-4 md:py-10 md:px-8 space-y-section-gap">
       <p className="text-card-title text-grey">Hoy</p>
 
       {/* KPIs: 2x2 en mobile, 4 columnas en tablet */}

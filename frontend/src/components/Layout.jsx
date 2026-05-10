@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Outlet, NavLink, useNavigate } from 'react-router-dom';
+import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 const navIconCls = 'w-6 h-6';
@@ -173,7 +173,7 @@ function DesktopHeader({ usuario, now }) {
   const fecha = now.toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' });
   const hora  = now.toLocaleTimeString('es-MX', { hour: 'numeric', minute: '2-digit', hour12: true });
   return (
-    <header className="hidden md:flex items-start justify-between px-8 pt-10">
+    <header className="hidden md:flex items-start justify-between px-8 pt-14">
       <div className="flex items-center gap-2">
         <div className="w-12 h-12 rounded-pill bg-grey/30 flex items-center justify-center text-white font-bold text-lg">
           {usuario?.nombre?.[0]?.toUpperCase() ?? 'A'}
@@ -295,8 +295,10 @@ function MobileBottomNav({ items }) {
 export default function Layout() {
   const { usuario, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const now = useClock();
   const [menuOpen, setMenuOpen] = useState(false);
+  const isDashboard = location.pathname === '/';
 
   const handleLogout = () => {
     setMenuOpen(false);
@@ -319,7 +321,7 @@ export default function Layout() {
 
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
         <MobileTopbar usuario={usuario} now={now} onMenu={() => setMenuOpen(true)} />
-        <DesktopHeader usuario={usuario} now={now} />
+        {isDashboard && <DesktopHeader usuario={usuario} now={now} />}
 
         <main className="flex-1 overflow-y-auto">
           <Outlet />
