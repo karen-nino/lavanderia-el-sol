@@ -143,7 +143,7 @@ function SidebarItem({ to, label, icon, end }) {
 
 function DesktopSidebar({ items, onMenu }) {
   return (
-    <aside className="hidden md:flex md:flex-col md:flex-shrink-0 w-24 bg-white border-r border-light-blue/60 py-4 px-2">
+    <aside className="hidden md:flex md:flex-col md:flex-shrink-0 w-24 bg-white border-r border-light-blue/60 py-8 px-2">
       <div className="flex justify-center mb-6">
         <div className="w-12 h-12 rounded-card-sm bg-dark-blue flex items-center justify-center">
           {Icon.brand}
@@ -173,7 +173,7 @@ function DesktopHeader({ usuario, now }) {
   const fecha = now.toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' });
   const hora  = now.toLocaleTimeString('es-MX', { hour: 'numeric', minute: '2-digit', hour12: true });
   return (
-    <header className="hidden md:flex items-start justify-between px-8 pt-6">
+    <header className="hidden md:flex items-start justify-between px-8 pt-10">
       <div className="flex items-center gap-2">
         <div className="w-12 h-12 rounded-pill bg-grey/30 flex items-center justify-center text-white font-bold text-lg">
           {usuario?.nombre?.[0]?.toUpperCase() ?? 'A'}
