@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom';
 
 export default function CashCutCard({ to = '/ventas' }) {
   return (
-    <div className="rounded-card bg-white p-card-pad shadow-card flex flex-col items-center gap-3">
+    <div className="rounded-card bg-light-blue p-card-pad shadow-card flex flex-col items-center gap-3">
       <div className="w-14 h-14 rounded-pill bg-light-blue flex items-center justify-center">
         <svg className="w-7 h-7 text-blue" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -15,9 +15,9 @@ export default function CashCutCard({ to = '/ventas' }) {
       </div>
       <Link
         to={to}
-        className="w-full text-center bg-blue text-white text-section py-3 rounded-card-sm hover:opacity-90 transition-opacity"
+        className="w-1/2 text-center bg-blue text-white text-section py-3 rounded-3xl hover:opacity-90 transition-opacity"
       >
-        INICIAR
+        Realizar corte
       </Link>
     </div>
   );

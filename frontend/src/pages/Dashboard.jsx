@@ -66,46 +66,66 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="p-4 md:py-10 md:px-8 space-y-section-gap">
-      <p className="text-card-title text-grey">Hoy</p>
+    <div className="p-4 md:py-10 md:px-8 space-y-12">
 
-      {/* KPIs: 2x2 en mobile, 4 columnas en tablet */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <KpiCard
-          label="Máquinas en uso"
-          value={`${enUso}/${totalMaquinas}`}
-          color="blue"
-          icon={KpiIcon.machine}
-        />
-        <KpiCard
-          label="Notas pagadas"
-          value={notasPagadas}
-          color="green"
-          icon={KpiIcon.paid}
-        />
-        <KpiCard
-          label="Notas en espera"
-          value={notasEnEspera}
-          color="red"
-          icon={KpiIcon.waiting}
-        />
-        <KpiCard
-          label="Para entregar"
-          value={paraEntregar}
-          color="bronce"
-          icon={KpiIcon.deliver}
-        />
+      <div className="space-y-4">
+        <p className="text-card-title text-grey">Hoy</p>
+
+        {/* KPIs: 2x2 en mobile, 4 columnas en tablet */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <KpiCard
+            label="Máquinas en uso"
+            value={`${enUso}/${totalMaquinas}`}
+            color="blue"
+            icon={KpiIcon.machine}
+          />
+          <KpiCard
+            label="Notas pagadas"
+            value={notasPagadas}
+            color="green"
+            icon={KpiIcon.paid}
+          />
+          <KpiCard
+            label="Notas en espera"
+            value={notasEnEspera}
+            color="red"
+            icon={KpiIcon.waiting}
+          />
+          <KpiCard
+            label="Para entregar"
+            value={paraEntregar}
+            color="bronce"
+            icon={KpiIcon.deliver}
+          />
+        </div>
       </div>
 
+
       {/* Sección ventas + máquinas */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="space-y-4">
-          <SalesCard total={ventasHoy} label="Ingresado hoy" />
-          <CashCutCard />
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
+
+        <div className="space-y-12">
+          <div className="space-y-6">
+            <p className="text-card-title text-grey">Ventas</p>
+
+            <div className="space-y-4">
+              <SalesCard total={ventasHoy} label="Ingresado hoy" />
+            </div>
+          </div>
+
+          <div className="space-y-6">
+            <p className="text-card-title text-grey">Corte de caja</p>
+
+            <div className="space-y-4">
+              <CashCutCard />
+            </div>
+          </div>
         </div>
 
+
+
         <div className="md:col-span-2">
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center justify-between mb-6">
             <h2 className="text-section text-dark-blue">Máquinas <span className="text-grey">({totalMaquinas})</span></h2>
           </div>
 
@@ -114,7 +134,7 @@ export default function Dashboard() {
               <p className="text-kpi-label text-grey">Sin máquinas registradas</p>
             </div>
           ) : (
-            <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-6">
               {maquinas.map(m => (
                 <MachineCard key={m.id} maquina={m} />
               ))}
