@@ -321,9 +321,9 @@ export default function Layout() {
 
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
         <MobileTopbar usuario={usuario} now={now} onMenu={() => setMenuOpen(true)} />
-        {isDashboard && <DesktopHeader usuario={usuario} now={now} />}
 
         <main className="flex-1 overflow-y-auto">
+          {isDashboard && <DesktopHeader usuario={usuario} now={now} />}
           <Outlet />
         </main>
 

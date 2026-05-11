@@ -142,10 +142,6 @@ export default function Dashboard() {
           )}
         </div>
       </div>
-
-      {insumos.length > 0 && (
-        <p className="text-kpi-label text-grey">{insumos.length} insumo(s) registrado(s)</p>
-      )}
     </div>
   );
 }
