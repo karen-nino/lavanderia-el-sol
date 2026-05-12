@@ -196,21 +196,20 @@ function DesktopHeader({ usuario, now }) {
   );
 }
 
-function MobileTopbar({ usuario, now, onMenu }) {
-  const hora = now.toLocaleTimeString('es-MX', { hour: 'numeric', minute: '2-digit' });
+function MobileTopbar({ usuario, onMenu }) {
   return (
-    <header className="md:hidden flex items-center justify-between px-4 py-3 bg-white flex-shrink-0">
+    <header className="md:hidden flex items-start justify-between px-6 pt-10 pb-4 flex-shrink-0">
       <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-pill bg-blue text-white flex items-center justify-center font-bold">
-          {usuario?.nombre?.[0]?.toUpperCase() ?? 'A'}
-        </div>
         <div>
-          <p className="text-kpi-label text-grey">Hola</p>
-          <p className="text-card-title text-dark-blue">{usuario?.nombre ?? 'Usuario'}</p>
+          <p className="text-kpi-label text-grey">Admin</p>
+          <p className="text-xl font-bold text-dark-blue pb-2">{usuario?.nombre ?? 'Usuario'}</p>
+          <div className="flex items-center gap-1">
+            <span className="w-2 h-2 rounded-pill bg-green" />
+            <span className="text-kpi-label font-bold text-green uppercase tracking-wide">Conectado</span>
+          </div>
         </div>
       </div>
       <div className="flex items-center gap-3">
-        <span className="text-kpi-label text-grey">{hora}</span>
         <button
           onClick={onMenu}
           aria-label="Abrir menú"
@@ -270,7 +269,7 @@ function MenuModal({ open, onClose, onSettings, onLogout }) {
   );
 }
 
-function MobileBottomNav({ items }) {
+function MobileBottomNav({ items, onMenu }) {
   return (
     <nav className="md:hidden flex items-center justify-around bg-white shadow-bottom-nav py-2 flex-shrink-0">
       {items.map(({ to, label, icon, end }) => (
@@ -288,6 +287,13 @@ function MobileBottomNav({ items }) {
           <span className="text-[10px] font-medium">{label}</span>
         </NavLink>
       ))}
+      <button
+        onClick={onMenu}
+        className="flex flex-col items-center justify-center gap-0.5 px-3 py-1.5 rounded-card-sm min-w-[56px] text-grey transition-colors"
+      >
+        {Icon.menu}
+        <span className="text-[10px] font-medium">Menú</span>
+      </button>
     </nav>
   );
 }
@@ -320,14 +326,20 @@ export default function Layout() {
       <DesktopSidebar items={sidebarItems} onMenu={() => setMenuOpen(true)} />
 
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
-        <MobileTopbar usuario={usuario} now={now} onMenu={() => setMenuOpen(true)} />
-
         <main className="flex-1 overflow-y-auto">
-          {isDashboard && <DesktopHeader usuario={usuario} now={now} />}
+          {isDashboard && (
+            <>
+              <MobileTopbar usuario={usuario} now={now} onMenu={() => setMenuOpen(true)} />
+              <DesktopHeader usuario={usuario} now={now} />
+            </>
+          )}
           <Outlet />
         </main>
 
-        <MobileBottomNav items={navItems} />
+        <MobileBottomNav
+          items={navItems.filter((item) => item.to !== '/inventario')}
+          onMenu={() => setMenuOpen(true)}
+        />
       </div>
 
       <MenuModal

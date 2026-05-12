@@ -67,7 +67,7 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="p-4 md:py-10 md:px-8 space-y-12">
+    <div className="pt-4 pb-16 px-6 md:py-10 md:px-8 space-y-12">
 
       <div className="space-y-4">
         <p className="text-card-title text-grey">Hoy</p>
