@@ -112,7 +112,7 @@ export default function Clientes() {
   };
 
   return (
-    <div className="p-4 md:py-14 md:px-8 space-y-4">
+    <div className="pt-10 pb-16 px-6 md:py-14 md:px-8 space-y-4">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Clientes</h1>

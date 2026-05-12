@@ -73,7 +73,7 @@ export default function Ventas() {
   useEffect(() => { fetchData(); }, [fetchData]);
 
   return (
-    <div className="p-4 md:py-14 md:px-8 space-y-6 max-w-7xl mx-auto">
+    <div className="pt-10 pb-16 px-6 md:py-14 md:px-8 space-y-6 max-w-7xl mx-auto">
       <h1 className="text-xl font-bold text-gray-800">Ventas</h1>
 
       {/* Filtro de período */}

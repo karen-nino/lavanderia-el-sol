@@ -115,7 +115,7 @@ export default function Configuracion() {
   if (!config) return null;
 
   return (
-    <div className="p-4 md:p-6 max-w-2xl mx-auto space-y-6">
+    <div className="pt-10 pb-16 px-6 md:p-6 max-w-2xl mx-auto space-y-6">
       <h1 className="text-xl font-bold text-gray-900">Configuración</h1>
 
       {/* Mensaje de éxito / error */}
