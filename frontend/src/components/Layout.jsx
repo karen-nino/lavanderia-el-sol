@@ -222,7 +222,7 @@ function MobileTopbar({ usuario, onMenu }) {
   );
 }
 
-function MenuModal({ open, onClose, onSettings, onLogout }) {
+function MenuModal({ open, onClose, extraItems = [], onSettings, onLogout }) {
   if (!open) return null;
   return (
     <div
@@ -245,6 +245,18 @@ function MenuModal({ open, onClose, onSettings, onLogout }) {
         </div>
 
         <div className="flex flex-col gap-2">
+          {extraItems.map(({ label, icon, onClick }) => (
+            <button
+              key={label}
+              onClick={onClick}
+              className="flex items-center gap-3 px-3 py-3 rounded-card-sm text-dark-blue hover:bg-light-blue/60 transition-colors"
+            >
+              <span className="w-10 h-10 rounded-card-sm bg-light-blue/60 text-blue flex items-center justify-center">
+                {icon}
+              </span>
+              <span className="text-base font-medium">{label}</span>
+            </button>
+          ))}
           <button
             onClick={onSettings}
             className="flex items-center gap-3 px-3 py-3 rounded-card-sm text-dark-blue hover:bg-light-blue/60 transition-colors"
@@ -317,9 +329,23 @@ export default function Layout() {
     navigate('/configuracion');
   };
 
+  const goTo = (to) => {
+    setMenuOpen(false);
+    navigate(to);
+  };
+
   const sidebarItems = usuario?.rol === 'admin'
     ? [...navItems, ventasItem]
     : navItems;
+
+  const mobileBottomItems = navItems.filter((item) => item.to !== '/inventario');
+
+  const menuExtraItems = [
+    { label: 'Inventario', icon: Icon.inventario, onClick: () => goTo('/inventario') },
+    ...(usuario?.rol === 'admin'
+      ? [{ label: 'Ventas', icon: Icon.ventas, onClick: () => goTo('/ventas') }]
+      : []),
+  ];
 
   return (
     <div className="flex h-full bg-light-blue/30 overflow-hidden">
@@ -337,7 +363,7 @@ export default function Layout() {
         </main>
 
         <MobileBottomNav
-          items={navItems.filter((item) => item.to !== '/inventario')}
+          items={mobileBottomItems}
           onMenu={() => setMenuOpen(true)}
         />
       </div>
@@ -345,6 +371,7 @@ export default function Layout() {
       <MenuModal
         open={menuOpen}
         onClose={() => setMenuOpen(false)}
+        extraItems={menuExtraItems}
         onSettings={handleSettings}
         onLogout={handleLogout}
       />
