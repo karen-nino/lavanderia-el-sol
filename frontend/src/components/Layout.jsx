@@ -54,6 +54,15 @@ const Icon = {
         d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2 5h12m-7 3a1 1 0 11-2 0 1 1 0 012 0zm8 0a1 1 0 11-2 0 1 1 0 012 0z" />
     </svg>
   ),
+  empleados: (
+    <svg className={navIconCls} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <circle cx="9" cy="8" r="3" strokeWidth={2} />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+        d="M3 20c0-3 2.5-5 6-5s6 2 6 5" />
+      <rect x="14" y="9" width="7" height="6" rx="1.5" strokeWidth={2} />
+      <path strokeLinecap="round" strokeWidth={2} d="M17 9V7.5h2V9" />
+    </svg>
+  ),
   ajustes: (
     <svg className={navIconCls} fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -341,7 +350,10 @@ export default function Layout() {
   const menuExtraItems = [
     { label: 'Inventario', icon: Icon.inventario, onClick: () => goTo('/inventario') },
     ...(usuario?.rol === 'admin'
-      ? [{ label: 'Ventas', icon: Icon.ventas, onClick: () => goTo('/ventas') }]
+      ? [
+          { label: 'Ventas',    icon: Icon.ventas,    onClick: () => goTo('/ventas') },
+          { label: 'Empleados', icon: Icon.empleados, onClick: () => goTo('/empleados') },
+        ]
       : []),
   ];
 

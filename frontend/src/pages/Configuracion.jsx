@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../lib/api';
+import { useAuth } from '../context/AuthContext';
 
 const INPUT_CLS =
   'w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition';
@@ -8,6 +9,12 @@ const MOBILE_INPUT_CLS =
   'w-full px-4 py-3.5 border border-grey/30 rounded-lg text-base text-dark-blue placeholder-grey/60 focus:outline-none focus:border-blue transition';
 
 const SectionIcon = {
+  perfil: (
+    <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+        d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+    </svg>
+  ),
   negocio: (
     <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -48,9 +55,10 @@ const SectionIcon = {
 };
 
 const MOBILE_SECTIONS = [
-  { id: 'negocio', label: 'Perfil de Negocio',        subtitle: 'Información del negocio',  icon: SectionIcon.negocio },
-  { id: 'precios', label: 'Precios',                  subtitle: 'Precios de servicios',     icon: SectionIcon.precios },
-  { id: 'alertas', label: 'Alertas y Notificaciones', subtitle: 'Configuración de alertas', icon: SectionIcon.alertas },
+  { id: 'perfil',  label: 'Mi Perfil',                 subtitle: 'Información de perfil',    icon: SectionIcon.perfil  },
+  { id: 'negocio', label: 'Perfil de Negocio',         subtitle: 'Información del negocio',  icon: SectionIcon.negocio },
+  { id: 'precios', label: 'Precios',                   subtitle: 'Precios de servicios',     icon: SectionIcon.precios },
+  { id: 'alertas', label: 'Alertas y Notificaciones',  subtitle: 'Configuración de alertas', icon: SectionIcon.alertas },
 ];
 
 function Section({ titulo, children }) {
@@ -98,6 +106,7 @@ function MobileSectionButton({ label, icon, onClick }) {
 }
 
 export default function Configuracion() {
+  const { usuario } = useAuth();
   const [config,        setConfig]        = useState(null);
   const [loading,       setLoading]       = useState(true);
   const [saving,        setSaving]        = useState(false);
@@ -105,6 +114,15 @@ export default function Configuracion() {
   const [logoPreview,   setLogoPreview]   = useState(null);
   const [mensaje,       setMensaje]       = useState(null);
   const [mobileSection, setMobileSection] = useState(null);
+  const [perfilForm,    setPerfilForm]    = useState(() => {
+    const [nombre = '', ...resto] = (usuario?.nombre ?? '').split(' ');
+    return {
+      nombre,
+      apellido: resto.join(' '),
+      email: usuario?.email ?? '',
+      password: '',
+    };
+  });
   const logoInputRef = useRef(null);
 
   useEffect(() => {
@@ -120,6 +138,21 @@ export default function Configuracion() {
   const handleChange = (e) => {
     const { name, value } = e.target;
     setConfig(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handlePerfilChange = (e) => {
+    const { name, value } = e.target;
+    setPerfilForm(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleGuardarPerfil = (e) => {
+    e.preventDefault();
+    setMensaje({ tipo: 'ok', texto: 'Edición de perfil próximamente disponible.' });
+  };
+
+  const handleSubmitMobile = (e) => {
+    if (mobileSection === 'perfil') return handleGuardarPerfil(e);
+    return handleGuardar(e);
   };
 
   const handleGuardar = async (e) => {
@@ -296,6 +329,60 @@ export default function Configuracion() {
   );
 
   // ── Mobile: contenido por sección ──
+  const seccionPerfilMobile = (
+    <div className="space-y-5">
+      <MobileField label="Tipo de Cuenta">
+        <input
+          type="text"
+          readOnly
+          value={usuario?.rol === 'admin' ? 'Admin' : (usuario?.rol ?? '')}
+          className={`${MOBILE_INPUT_CLS} bg-light-blue/20 text-grey`}
+        />
+      </MobileField>
+
+      <MobileField label="Nombre">
+        <input
+          type="text"
+          name="nombre"
+          value={perfilForm.nombre}
+          onChange={handlePerfilChange}
+          className={MOBILE_INPUT_CLS}
+        />
+      </MobileField>
+
+      <MobileField label="Apellido">
+        <input
+          type="text"
+          name="apellido"
+          value={perfilForm.apellido}
+          onChange={handlePerfilChange}
+          className={MOBILE_INPUT_CLS}
+        />
+      </MobileField>
+
+      <MobileField label="Correo">
+        <input
+          type="email"
+          name="email"
+          value={perfilForm.email}
+          onChange={handlePerfilChange}
+          className={MOBILE_INPUT_CLS}
+        />
+      </MobileField>
+
+      <MobileField label="Contraseña">
+        <input
+          type="password"
+          name="password"
+          value={perfilForm.password}
+          onChange={handlePerfilChange}
+          placeholder="••••••••"
+          className={MOBILE_INPUT_CLS}
+        />
+      </MobileField>
+    </div>
+  );
+
   const seccionNegocioMobile = (
     <div className="space-y-5">
       <MobileField label="Nombre del Negocio">
@@ -394,6 +481,7 @@ export default function Configuracion() {
   );
 
   const mobileSectionContent = {
+    perfil:  seccionPerfilMobile,
     negocio: seccionNegocioMobile,
     precios: seccionPreciosMobile,
     alertas: seccionAlertasMobile,
@@ -437,7 +525,7 @@ export default function Configuracion() {
             </div>
           </>
         ) : (
-          <form onSubmit={handleGuardar} className="space-y-6">
+          <form onSubmit={handleSubmitMobile} className="space-y-6">
             <div className="flex items-center gap-2">
               <button
                 type="button"

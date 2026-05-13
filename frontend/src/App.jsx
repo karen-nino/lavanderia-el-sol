@@ -13,6 +13,7 @@ import Inventario from './pages/Inventario';
 import DetalleNota from './pages/DetalleNota';
 import Salidas from './pages/Salidas';
 import Ventas from './pages/Ventas';
+import Empleados from './pages/Empleados';
 import Configuracion from './pages/Configuracion';
 
 export default function App() {
@@ -42,6 +43,14 @@ export default function App() {
               element={
                 <AdminRoute>
                   <Ventas />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="empleados"
+              element={
+                <AdminRoute>
+                  <Empleados />
                 </AdminRoute>
               }
             />
