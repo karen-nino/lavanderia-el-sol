@@ -89,7 +89,7 @@ function MobileSectionButton({ label, icon, onClick }) {
     <button
       type="button"
       onClick={onClick}
-      className="flex items-center gap-4 w-full px-5 py-5 bg-white rounded-card text-left shadow-sm"
+      className="flex items-center gap-3 w-full px-4 py-5 bg-white rounded-card text-left shadow-sm"
     >
       <span className="text-blue flex items-center justify-center flex-shrink-0">{icon}</span>
       <span className="text-base font-medium text-dark-blue">{label}</span>
