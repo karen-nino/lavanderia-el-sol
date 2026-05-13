@@ -68,7 +68,7 @@ const Icon = {
     </svg>
   ),
   bell: (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
         d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
     </svg>
@@ -196,7 +196,7 @@ function DesktopHeader({ usuario, now }) {
   );
 }
 
-function MobileTopbar({ usuario, onMenu }) {
+function MobileTopbar({ usuario, onAlerts }) {
   return (
     <header className="md:hidden flex items-start justify-between px-6 pt-10 pb-4 flex-shrink-0">
       <div className="flex items-center gap-3">
@@ -209,15 +209,13 @@ function MobileTopbar({ usuario, onMenu }) {
           </div>
         </div>
       </div>
-      <div className="flex items-center gap-3">
-        <button
-          onClick={onMenu}
-          aria-label="Abrir menú"
-          className="w-10 h-10 rounded-pill bg-light-blue text-blue flex items-center justify-center"
-        >
-          {Icon.menuSm}
-        </button>
-      </div>
+      <button
+        onClick={onAlerts}
+        aria-label="Ver alertas"
+        className="pt-1 text-dark-blue flex items-center justify-center"
+      >
+        {Icon.bell}
+      </button>
     </header>
   );
 }
@@ -355,7 +353,7 @@ export default function Layout() {
         <main className="flex-1 overflow-y-auto">
           {isDashboard && (
             <>
-              <MobileTopbar usuario={usuario} now={now} onMenu={() => setMenuOpen(true)} />
+              <MobileTopbar usuario={usuario} />
               <DesktopHeader usuario={usuario} now={now} />
             </>
           )}

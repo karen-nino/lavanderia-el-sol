@@ -4,6 +4,55 @@ import { api } from '../lib/api';
 const INPUT_CLS =
   'w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition';
 
+const MOBILE_INPUT_CLS =
+  'w-full px-4 py-3.5 border border-grey/30 rounded-lg text-base text-dark-blue placeholder-grey/60 focus:outline-none focus:border-blue transition';
+
+const SectionIcon = {
+  negocio: (
+    <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+        d="M3 9l1.5-4.5h15L21 9M3 9v10a1 1 0 001 1h16a1 1 0 001-1V9M3 9h18M9 14h6v6H9z" />
+    </svg>
+  ),
+  precios: (
+    <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+        d="M12 8c-2 0-3 1-3 2.5S10 13 12 13s3 1 3 2.5S14 18 12 18m0-10V6m0 12v2m0-12c1.5 0 2.7.7 3 2" />
+    </svg>
+  ),
+  alertas: (
+    <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+        d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+    </svg>
+  ),
+  gear: (
+    <svg className="w-7 h-7 text-grey" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+        d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+    </svg>
+  ),
+  back: (
+    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+        d="M15 19l-7-7 7-7" />
+    </svg>
+  ),
+  imagePlaceholder: (
+    <svg className="w-8 h-8 text-grey/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+        d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+    </svg>
+  ),
+};
+
+const MOBILE_SECTIONS = [
+  { id: 'negocio', label: 'Perfil de Negocio',        subtitle: 'Información del negocio',  icon: SectionIcon.negocio },
+  { id: 'precios', label: 'Precios',                  subtitle: 'Precios de servicios',     icon: SectionIcon.precios },
+  { id: 'alertas', label: 'Alertas y Notificaciones', subtitle: 'Configuración de alertas', icon: SectionIcon.alertas },
+];
+
 function Section({ titulo, children }) {
   return (
     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
@@ -25,13 +74,37 @@ function Field({ label, hint, children }) {
   );
 }
 
+function MobileField({ label, children, hint }) {
+  return (
+    <div className="space-y-2">
+      <label className="block text-base font-bold text-dark-blue">{label}</label>
+      {children}
+      {hint && <p className="text-xs text-grey">{hint}</p>}
+    </div>
+  );
+}
+
+function MobileSectionButton({ label, icon, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex items-center gap-4 w-full px-5 py-5 bg-white rounded-card text-left shadow-sm"
+    >
+      <span className="text-blue flex items-center justify-center flex-shrink-0">{icon}</span>
+      <span className="text-base font-medium text-dark-blue">{label}</span>
+    </button>
+  );
+}
+
 export default function Configuracion() {
   const [config,        setConfig]        = useState(null);
   const [loading,       setLoading]       = useState(true);
   const [saving,        setSaving]        = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [logoPreview,   setLogoPreview]   = useState(null);
-  const [mensaje,       setMensaje]       = useState(null); // { tipo: 'ok'|'error', texto }
+  const [mensaje,       setMensaje]       = useState(null);
+  const [mobileSection, setMobileSection] = useState(null);
   const logoInputRef = useRef(null);
 
   useEffect(() => {
@@ -74,7 +147,6 @@ export default function Configuracion() {
     const file = e.target.files[0];
     if (!file) return;
 
-    // Preview local inmediato
     const reader = new FileReader();
     reader.onload = (ev) => setLogoPreview(ev.target.result);
     reader.readAsDataURL(file);
@@ -99,7 +171,6 @@ export default function Configuracion() {
       setMensaje({ tipo: 'error', texto: err.message });
     } finally {
       setUploadingLogo(false);
-      // Reset input para permitir subir el mismo archivo de nuevo
       if (logoInputRef.current) logoInputRef.current.value = '';
     }
   };
@@ -114,163 +185,339 @@ export default function Configuracion() {
 
   if (!config) return null;
 
-  return (
-    <div className="pt-10 pb-16 px-6 md:p-6 max-w-2xl mx-auto space-y-6">
-      <h1 className="text-xl font-bold text-gray-900">Configuración</h1>
-
-      {/* Mensaje de éxito / error */}
-      {mensaje && (
-        <div className={`rounded-lg px-4 py-3 text-sm ${
-          mensaje.tipo === 'ok'
-            ? 'bg-green-50 border border-green-200 text-green-700'
-            : 'bg-red-50 border border-red-200 text-red-700'
-        }`}>
-          {mensaje.texto}
+  // ── Desktop: secciones tipo card ──
+  const seccionPreciosDesktop = (
+    <Section titulo="Precios base de servicios">
+      <Field label="Precio por carga — Autoservicio">
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-gray-500 flex-shrink-0">$</span>
+          <input
+            type="number"
+            name="precio_autoservicio"
+            min="0"
+            step="0.01"
+            required
+            value={config.precio_autoservicio ?? ''}
+            onChange={handleChange}
+            className={INPUT_CLS}
+          />
+          <span className="text-sm text-gray-500 flex-shrink-0">MXN</span>
         </div>
-      )}
+      </Field>
+    </Section>
+  );
 
-      <form onSubmit={handleGuardar} className="space-y-6">
+  const seccionNegocioDesktop = (
+    <Section titulo="Información de la sucursal">
+      <Field label="Nombre del negocio">
+        <input
+          type="text"
+          name="nombre_negocio"
+          required
+          value={config.nombre_negocio ?? ''}
+          onChange={handleChange}
+          className={INPUT_CLS}
+        />
+      </Field>
 
-        {/* ── Sección 1: Precios base ── */}
-        <Section titulo="Precios base de servicios">
-          <Field label="Precio por carga — Autoservicio">
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-500 flex-shrink-0">$</span>
-              <input
-                type="number"
-                name="precio_autoservicio"
-                min="0"
-                step="0.01"
-                required
-                value={config.precio_autoservicio ?? ''}
-                onChange={handleChange}
-                className={INPUT_CLS}
-              />
-              <span className="text-sm text-gray-500 flex-shrink-0">MXN</span>
-            </div>
-          </Field>
-        </Section>
+      <Field label="Dirección">
+        <input
+          type="text"
+          name="direccion"
+          value={config.direccion ?? ''}
+          onChange={handleChange}
+          placeholder="Calle, número, colonia..."
+          className={INPUT_CLS}
+        />
+      </Field>
 
-        {/* ── Sección 2: Información de la sucursal ── */}
-        <Section titulo="Información de la sucursal">
-          <Field label="Nombre del negocio">
-            <input
-              type="text"
-              name="nombre_negocio"
-              required
-              value={config.nombre_negocio ?? ''}
-              onChange={handleChange}
-              className={INPUT_CLS}
-            />
-          </Field>
+      <Field label="Teléfono">
+        <input
+          type="text"
+          name="telefono"
+          value={config.telefono ?? ''}
+          onChange={handleChange}
+          placeholder="Ej. 33 1234 5678"
+          className={INPUT_CLS}
+        />
+      </Field>
 
-          <Field label="Dirección">
-            <input
-              type="text"
-              name="direccion"
-              value={config.direccion ?? ''}
-              onChange={handleChange}
-              placeholder="Calle, número, colonia..."
-              className={INPUT_CLS}
-            />
-          </Field>
-
-          <Field label="Teléfono">
-            <input
-              type="text"
-              name="telefono"
-              value={config.telefono ?? ''}
-              onChange={handleChange}
-              placeholder="Ej. 33 1234 5678"
-              className={INPUT_CLS}
-            />
-          </Field>
-
-          {/* Logo */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Logo</label>
-            <div className="flex items-center gap-4">
-              {/* Imagen actual o placeholder */}
-              <div className="w-20 h-20 rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 flex items-center justify-center overflow-hidden flex-shrink-0">
-                {logoPreview ? (
-                  <img
-                    src={logoPreview}
-                    alt="Logo"
-                    className="w-full h-full object-contain"
-                  />
-                ) : (
-                  <svg className="w-8 h-8 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-                      d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                )}
-              </div>
-              <div className="space-y-1">
-                <button
-                  type="button"
-                  onClick={() => logoInputRef.current?.click()}
-                  disabled={uploadingLogo}
-                  className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-60 transition-colors"
-                >
-                  {uploadingLogo ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-                      Subiendo...
-                    </>
-                  ) : (
-                    'Cambiar logo'
-                  )}
-                </button>
-                <p className="text-xs text-gray-400">JPG, PNG o WebP · Máx. 2 MB</p>
-              </div>
-            </div>
-            <input
-              ref={logoInputRef}
-              type="file"
-              accept=".jpg,.jpeg,.png,.webp"
-              onChange={handleLogoSelect}
-              className="hidden"
-            />
-          </div>
-        </Section>
-
-        {/* ── Sección 3: Alertas de inventario ── */}
-        <Section titulo="Alertas de inventario">
-          <Field
-            label="Unidades mínimas para alerta de stock bajo"
-            hint="Los productos con stock igual o menor a este número se marcarán como 'Por agotarse'"
-          >
-            <input
-              type="number"
-              name="stock_minimo_global"
-              min="0"
-              step="1"
-              required
-              value={config.stock_minimo_global ?? ''}
-              onChange={handleChange}
-              className={INPUT_CLS}
-            />
-          </Field>
-        </Section>
-
-        {/* Botón guardar */}
-        <div className="flex justify-end">
-          <button
-            type="submit"
-            disabled={saving}
-            className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
-          >
-            {saving ? (
-              <>
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                Guardando...
-              </>
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">Logo</label>
+        <div className="flex items-center gap-4">
+          <div className="w-20 h-20 rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 flex items-center justify-center overflow-hidden flex-shrink-0">
+            {logoPreview ? (
+              <img src={logoPreview} alt="Logo" className="w-full h-full object-contain" />
             ) : (
-              'Guardar cambios'
+              SectionIcon.imagePlaceholder
             )}
-          </button>
+          </div>
+          <div className="space-y-1">
+            <button
+              type="button"
+              onClick={() => logoInputRef.current?.click()}
+              disabled={uploadingLogo}
+              className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-60 transition-colors"
+            >
+              {uploadingLogo ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                  Subiendo...
+                </>
+              ) : (
+                'Cambiar logo'
+              )}
+            </button>
+            <p className="text-xs text-gray-400">JPG, PNG o WebP · Máx. 2 MB</p>
+          </div>
         </div>
-      </form>
+      </div>
+    </Section>
+  );
+
+  const seccionAlertasDesktop = (
+    <Section titulo="Alertas de inventario">
+      <Field
+        label="Unidades mínimas para alerta de stock bajo"
+        hint="Los productos con stock igual o menor a este número se marcarán como 'Por agotarse'"
+      >
+        <input
+          type="number"
+          name="stock_minimo_global"
+          min="0"
+          step="1"
+          required
+          value={config.stock_minimo_global ?? ''}
+          onChange={handleChange}
+          className={INPUT_CLS}
+        />
+      </Field>
+    </Section>
+  );
+
+  // ── Mobile: contenido por sección ──
+  const seccionNegocioMobile = (
+    <div className="space-y-5">
+      <MobileField label="Nombre del Negocio">
+        <input
+          type="text"
+          name="nombre_negocio"
+          required
+          value={config.nombre_negocio ?? ''}
+          onChange={handleChange}
+          className={MOBILE_INPUT_CLS}
+        />
+      </MobileField>
+
+      <MobileField label="Dirección">
+        <input
+          type="text"
+          name="direccion"
+          value={config.direccion ?? ''}
+          onChange={handleChange}
+          placeholder="Calle, número, colonia..."
+          className={MOBILE_INPUT_CLS}
+        />
+      </MobileField>
+
+      <MobileField label="Teléfono">
+        <input
+          type="text"
+          name="telefono"
+          value={config.telefono ?? ''}
+          onChange={handleChange}
+          placeholder="Ej. 33 1234 5678"
+          className={MOBILE_INPUT_CLS}
+        />
+      </MobileField>
+
+      <MobileField label="Logo">
+        <div className="border border-grey/30 rounded-lg p-4 flex items-center gap-4">
+          <div className="w-20 h-20 rounded-lg border-2 border-dashed border-grey/40 bg-light-blue/20 flex items-center justify-center overflow-hidden flex-shrink-0">
+            {logoPreview ? (
+              <img src={logoPreview} alt="Logo" className="w-full h-full object-contain" />
+            ) : (
+              SectionIcon.imagePlaceholder
+            )}
+          </div>
+          <div className="flex-1 space-y-2">
+            <button
+              type="button"
+              onClick={() => logoInputRef.current?.click()}
+              disabled={uploadingLogo}
+              className="px-4 py-2 border border-grey/40 rounded-lg text-sm text-dark-blue bg-white disabled:opacity-60"
+            >
+              {uploadingLogo ? 'Subiendo...' : 'Cambiar logo'}
+            </button>
+            <p className="text-xs text-grey">JPG, PNG o WebP Max. 2 MB</p>
+          </div>
+        </div>
+      </MobileField>
     </div>
+  );
+
+  const seccionPreciosMobile = (
+    <MobileField label="Precio por carga — Autoservicio">
+      <div className="flex items-center gap-2">
+        <span className="text-base text-grey flex-shrink-0">$</span>
+        <input
+          type="number"
+          name="precio_autoservicio"
+          min="0"
+          step="0.01"
+          required
+          value={config.precio_autoservicio ?? ''}
+          onChange={handleChange}
+          className={MOBILE_INPUT_CLS}
+        />
+        <span className="text-base text-grey flex-shrink-0">MXN</span>
+      </div>
+    </MobileField>
+  );
+
+  const seccionAlertasMobile = (
+    <MobileField
+      label="Unidades mínimas para alerta de stock bajo"
+      hint="Los productos con stock igual o menor a este número se marcarán como 'Por agotarse'"
+    >
+      <input
+        type="number"
+        name="stock_minimo_global"
+        min="0"
+        step="1"
+        required
+        value={config.stock_minimo_global ?? ''}
+        onChange={handleChange}
+        className={MOBILE_INPUT_CLS}
+      />
+    </MobileField>
+  );
+
+  const mobileSectionContent = {
+    negocio: seccionNegocioMobile,
+    precios: seccionPreciosMobile,
+    alertas: seccionAlertasMobile,
+  };
+
+  const mensajeBanner = mensaje && (
+    <div className={`rounded-lg px-4 py-3 text-sm ${
+      mensaje.tipo === 'ok'
+        ? 'bg-green-50 border border-green-200 text-green-700'
+        : 'bg-red-50 border border-red-200 text-red-700'
+    }`}>
+      {mensaje.texto}
+    </div>
+  );
+
+  const activeSection = MOBILE_SECTIONS.find((s) => s.id === mobileSection);
+
+  return (
+    <>
+      {/* ── Vista móvil ── */}
+      <div className="md:hidden pt-10 pb-16 px-6 space-y-6">
+        {!activeSection ? (
+          <>
+            <div className="flex flex-col items-start">
+              <div className='flex flex-row items-center gap-1'>
+                {SectionIcon.gear}
+                <h1 className="text-xl font-bold text-dark-blue leading-tight">Configuración</h1>
+              </div>
+                <p className="text-sm text-grey">Pantalla de configuración</p>
+            </div>
+            <div className="border-t border-light-blue/60" />
+            <div className="space-y-3">
+              {MOBILE_SECTIONS.map((s) => (
+                <MobileSectionButton
+                  key={s.id}
+                  label={s.label}
+                  icon={s.icon}
+                  onClick={() => setMobileSection(s.id)}
+                />
+              ))}
+            </div>
+          </>
+        ) : (
+          <form onSubmit={handleGuardar} className="space-y-6">
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setMobileSection(null)}
+                aria-label="Volver"
+                className="w-11 h-11 rounded-pill border border-grey/40 text-dark-blue flex items-center justify-center flex-shrink-0"
+              >
+                {SectionIcon.back}
+              </button>
+              <div>
+                <h1 className="text-xl font-bold text-dark-blue leading-tight">{activeSection.label}</h1>
+                <p className="text-sm text-grey">{activeSection.subtitle}</p>
+              </div>
+            </div>
+            <div className="border-t border-light-blue/60" />
+
+            {mensajeBanner}
+            {mobileSectionContent[activeSection.id]}
+
+            <div className="grid grid-cols-2 gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setMobileSection(null)}
+                className="py-4 rounded-lg bg-light-blue/40 text-grey text-base font-medium"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={saving}
+                className="py-4 rounded-lg bg-blue text-white text-base font-medium disabled:opacity-60 flex items-center justify-center gap-2"
+              >
+                {saving ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Guardando...
+                  </>
+                ) : (
+                  'Guardar'
+                )}
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
+
+      <input
+        ref={logoInputRef}
+        type="file"
+        accept=".jpg,.jpeg,.png,.webp"
+        onChange={handleLogoSelect}
+        className="hidden"
+      />
+
+      {/* ── Vista desktop ── */}
+      <div className="hidden md:block p-6 max-w-2xl mx-auto space-y-6">
+        <h1 className="text-xl font-bold text-gray-900">Configuración</h1>
+        {mensajeBanner}
+        <form onSubmit={handleGuardar} className="space-y-6">
+          {seccionPreciosDesktop}
+          {seccionNegocioDesktop}
+          {seccionAlertasDesktop}
+          <div className="flex justify-end">
+            <button
+              type="submit"
+              disabled={saving}
+              className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
+            >
+              {saving ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  Guardando...
+                </>
+              ) : (
+                'Guardar cambios'
+              )}
+            </button>
+          </div>
+        </form>
+      </div>
+    </>
   );
 }
