@@ -37,7 +37,9 @@
       "Bash(sips -Z 400 /tmp/figextract/images/0cbc6b3cdf4b5adc20f58e03af0a4afbb84a72f4 -s formatOptions 60 --out /tmp/figextract/img2.jpg)",
       "Bash(sips -Z 600 /tmp/figextract/images/c6e7cd9edab17003232656d1f780a0ce1ae6e356 -s formatOptions 60 --out /tmp/figextract/img3.jpg)",
       "Bash(sips -Z 1200 /tmp/figextract/thumbnail.png -s formatOptions 95 --out /tmp/figextract/thumb-big.jpg)",
-      "mcp__claude_ai_Figma__whoami"
+      "mcp__claude_ai_Figma__whoami",
+      "Bash(npx eslint *)",
+      "Bash(npx esbuild *)"
     ]
   }
 }

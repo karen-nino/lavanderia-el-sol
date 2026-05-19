@@ -1,168 +1,378 @@
 import { useState } from 'react';
+import { useAuth } from '../context/AuthContext';
 
-const Icon = {
-  empleados: (
-    <svg className="w-7 h-7 text-grey" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <circle cx="9" cy="8" r="3" strokeWidth={2} />
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-        d="M3 20c0-3 2.5-5 6-5s6 2 6 5" />
-      <rect x="14" y="9" width="7" height="6" rx="1.5" strokeWidth={2} />
-      <path strokeLinecap="round" strokeWidth={2} d="M17 9V7.5h2V9" />
-    </svg>
-  ),
-  search: (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-        d="M21 21l-4-4m-2-6a6 6 0 11-12 0 6 6 0 0112 0z" />
-    </svg>
-  ),
-  filter: (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-        d="M4 6h16M7 12h10M10 18h4" />
-    </svg>
-  ),
-  plus: (
-    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-    </svg>
-  ),
-  edit: (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-        d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-    </svg>
-  ),
-  trash: (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M3 7h18M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3" />
-    </svg>
-  ),
-};
+const INPUT_CLS =
+  'w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition';
+
+const FORM_INIT = { nombre: '', apellido: '', rol: 'Empleado', telefono: '', contrasena: '' };
 
 const MOCK_EMPLEADOS = [
-  { id: 1, nombre: 'Patricia Jiménez',    rol: 'Empleado' },
-  { id: 2, nombre: 'Alejandro Guzman',    rol: 'Empleado' },
-  { id: 3, nombre: 'Pedro Esquivar',      rol: 'Empleado' },
-  { id: 4, nombre: 'Fernando Zuñiga',     rol: 'Empleado' },
-  { id: 5, nombre: 'Alberto Farrera',     rol: 'Empleado' },
-  { id: 6, nombre: 'Humberto de la Rosa', rol: 'Empleado' },
-  { id: 7, nombre: 'Patricia Jiménez',    rol: 'Empleado' },
+  { id: 1, nombre: 'Patricia',  apellido: 'Jiménez',     rol: 'Empleado', telefono: '', contrasena: '' },
+  { id: 2, nombre: 'Alejandro', apellido: 'Guzman',      rol: 'Empleado', telefono: '', contrasena: '' },
+  { id: 3, nombre: 'Pedro',     apellido: 'Esquivar',    rol: 'Empleado', telefono: '', contrasena: '' },
+  { id: 4, nombre: 'Fernando',  apellido: 'Zuñiga',      rol: 'Empleado', telefono: '', contrasena: '' },
+  { id: 5, nombre: 'Alberto',   apellido: 'Farrera',     rol: 'Empleado', telefono: '', contrasena: '' },
+  { id: 6, nombre: 'Humberto',  apellido: 'de la Rosa',  rol: 'Empleado', telefono: '', contrasena: '' },
+  { id: 7, nombre: 'Patricia',  apellido: 'Jiménez',     rol: 'Empleado', telefono: '', contrasena: '' },
 ];
 
 export default function Empleados() {
+  const { usuario } = useAuth();
+  const esAdmin = usuario?.rol === 'admin';
+
   const [empleados, setEmpleados] = useState(MOCK_EMPLEADOS);
   const [busqueda, setBusqueda]   = useState('');
-  const [searchOpen, setSearchOpen] = useState(false);
+
+  // Modal crear
+  const [modalOpen, setModalOpen] = useState(false);
+  const [form, setForm]           = useState(FORM_INIT);
+  const [guardando, setGuardando] = useState(false);
+  const [formError, setFormError] = useState('');
+
+  // Modal editar
+  const [editEmpleado, setEditEmpleado] = useState(null);
+  const [editForm, setEditForm]         = useState(FORM_INIT);
+  const [editando, setEditando]         = useState(false);
+  const [editError, setEditError]       = useState('');
+
+  // Modal eliminar
+  const [deleteEmpleado, setDeleteEmpleado] = useState(null);
+  const [eliminando, setEliminando]         = useState(false);
+  const [deleteError, setDeleteError]       = useState('');
 
   const filtrados = empleados.filter(e =>
-    e.nombre.toLowerCase().includes(busqueda.toLowerCase())
+    e.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
+    (e.apellido && e.apellido.toLowerCase().includes(busqueda.toLowerCase())) ||
+    (e.telefono && e.telefono.includes(busqueda))
   );
 
-  const handleEliminar = (id) => {
-    if (!confirm('¿Eliminar este empleado?')) return;
-    setEmpleados(prev => prev.filter(e => e.id !== id));
+  const nombreCompleto = (e) => `${e.nombre}${e.apellido ? ' ' + e.apellido : ''}`;
+
+  // ── Crear ──────────────────────────────────────────────
+  const abrirModal = () => { setForm(FORM_INIT); setFormError(''); setModalOpen(true); };
+  const cerrarModal = () => setModalOpen(false);
+  const handleChange = e => setForm(f => ({ ...f, [e.target.name]: e.target.value }));
+
+  const handleSubmit = async e => {
+    e.preventDefault();
+    setFormError('');
+    setGuardando(true);
+    try {
+      const nuevo = { ...form, id: Date.now() };
+      setEmpleados(prev => [...prev, nuevo].sort((a, b) => nombreCompleto(a).localeCompare(nombreCompleto(b))));
+      cerrarModal();
+    } catch (err) {
+      setFormError(err.message);
+    } finally {
+      setGuardando(false);
+    }
   };
 
-  const handleEditar = () => {
-    alert('Edición de empleados próximamente disponible.');
+  // ── Editar ─────────────────────────────────────────────
+  const abrirEditar = (emp) => {
+    setEditEmpleado(emp);
+    setEditForm({
+      nombre: emp.nombre,
+      apellido: emp.apellido ?? '',
+      rol: emp.rol ?? 'Empleado',
+      telefono: emp.telefono ?? '',
+      contrasena: emp.contrasena ?? '',
+    });
+    setEditError('');
+  };
+  const cerrarEditar = () => setEditEmpleado(null);
+  const handleEditChange = e => setEditForm(f => ({ ...f, [e.target.name]: e.target.value }));
+
+  const handleEditSubmit = async e => {
+    e.preventDefault();
+    setEditError('');
+    setEditando(true);
+    try {
+      const actualizado = { ...editEmpleado, ...editForm };
+      setEmpleados(prev =>
+        prev.map(emp => emp.id === actualizado.id ? actualizado : emp)
+            .sort((a, b) => nombreCompleto(a).localeCompare(nombreCompleto(b)))
+      );
+      cerrarEditar();
+    } catch (err) {
+      setEditError(err.message);
+    } finally {
+      setEditando(false);
+    }
   };
 
-  const handleAgregar = () => {
-    alert('Alta de empleados próximamente disponible.');
+  // ── Eliminar ───────────────────────────────────────────
+  const abrirEliminar = (emp) => { setDeleteEmpleado(emp); setDeleteError(''); };
+  const cerrarEliminar = () => setDeleteEmpleado(null);
+
+  const handleDelete = async () => {
+    setDeleteError('');
+    setEliminando(true);
+    try {
+      setEmpleados(prev => prev.filter(emp => emp.id !== deleteEmpleado.id));
+      cerrarEliminar();
+    } catch (err) {
+      setDeleteError(err.message);
+    } finally {
+      setEliminando(false);
+    }
   };
 
   return (
-    <div className="pt-10 pb-16 px-6 md:py-10 md:px-8">
-      {/* Header */}
-      <div className="flex items-start justify-between mb-5">
-        <div className="flex flex-col items-start">
-          <div className='flex flex-row items-center gap-1'>
-            {Icon.empleados}
-            <h1 className="text-xl font-bold text-dark-blue leading-tight">Empleados</h1>
-          </div>
-            <p className="text-sm text-grey">Todos los Empleados</p>
+    <div className="pt-10 pb-16 px-6 md:py-14 md:px-8 space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-bold text-gray-900">Empleados</h1>
+          <p className="text-sm text-gray-500">{filtrados.length} empleado(s)</p>
         </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <button
-            onClick={() => setSearchOpen(s => !s)}
-            aria-label="Buscar"
-            className="w-11 h-11 rounded-pill border border-grey/40 text-dark-blue flex items-center justify-center"
-          >
-            {Icon.search}
-          </button>
-          <button
-            aria-label="Filtrar"
-            className="w-11 h-11 rounded-pill border border-grey/40 text-dark-blue flex items-center justify-center"
-          >
-            {Icon.filter}
-          </button>
-          <button
-            onClick={handleAgregar}
-            aria-label="Agregar empleado"
-            className="w-11 h-11 rounded-pill bg-blue text-white flex items-center justify-center"
-          >
-            {Icon.plus}
-          </button>
-        </div>
+        <button
+          onClick={abrirModal}
+          className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+        >
+          + Nuevo empleado
+        </button>
       </div>
 
-      {searchOpen && (
+      {/* Búsqueda */}
+      <div className="relative">
+        <svg
+          className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"
+          fill="none" stroke="currentColor" viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+        </svg>
         <input
           type="text"
+          placeholder="Buscar por nombre, apellido o teléfono..."
           value={busqueda}
-          onChange={(e) => setBusqueda(e.target.value)}
-          placeholder="Buscar empleado..."
-          autoFocus
-          className="w-full px-4 py-3 border border-grey/30 rounded-lg text-base text-dark-blue placeholder-grey/60 focus:outline-none focus:border-blue mb-4"
+          onChange={e => setBusqueda(e.target.value)}
+          className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
         />
-      )}
+      </div>
 
-      {/* Tabla */}
-      <div className="-mx-6 md:-mx-8 overflow-x-auto">
-        <div className="min-w-[560px]">
-          <div className="grid grid-cols-[2fr_1.2fr_120px] bg-dark-blue/90 text-white px-5 py-3 gap-3">
-            <span className="text-sm font-bold">Nombre</span>
-            <span className="text-sm font-bold">Rol</span>
-            <span className="text-sm font-bold">Acción</span>
-          </div>
-
-          {filtrados.length === 0 ? (
-            <div className="bg-white px-5 py-10 text-center text-sm text-grey">
-              Sin resultados.
-            </div>
-          ) : (
-            filtrados.map((e, idx) => (
+      {filtrados.length === 0 ? (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+          <p className="text-center text-gray-400 text-sm py-10">
+            {busqueda ? 'No se encontraron empleados con ese criterio' : 'No hay empleados registrados'}
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {filtrados.map(emp => {
+            const iniciales = `${emp.nombre?.[0] ?? ''}${emp.apellido?.[0] ?? ''}`.toUpperCase();
+            return (
               <div
-                key={e.id}
-                className={`grid grid-cols-[2fr_1.2fr_120px] items-center px-5 py-4 gap-3 ${
-                  idx % 2 === 0 ? 'bg-light-blue/20' : 'bg-white'
-                }`}
+                key={emp.id}
+                className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 flex flex-col gap-3 hover:shadow-md transition-shadow"
               >
-                <span className="text-base text-dark-blue">{e.nombre}</span>
-                <span className="text-base text-grey">{e.rol}</span>
-                <div className="flex items-center gap-2">
+                <div className="flex items-start gap-3">
+                  <div className="flex-shrink-0 w-11 h-11 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-sm font-semibold">
+                    {iniciales || '?'}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold text-gray-900 text-sm truncate">{nombreCompleto(emp)}</p>
+                    <span className="inline-block mt-0.5 text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
+                      {emp.rol || 'Empleado'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5 text-xs text-gray-500">
+                  <div className="flex items-center gap-2">
+                    <svg className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                        d="M3 5a2 2 0 012-2h2.28a2 2 0 011.94 1.515l.7 2.793a2 2 0 01-.45 1.949L8.91 10.91a11 11 0 005.18 5.18l1.653-1.653a2 2 0 011.95-.45l2.792.7A2 2 0 0122 16.72V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                    </svg>
+                    <span className="truncate">{emp.telefono || '—'}</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-1 pt-2 border-t border-gray-100">
                   <button
-                    onClick={() => handleEditar(e.id)}
-                    aria-label="Editar"
-                    className="w-10 h-10 rounded-pill border border-grey/40 text-dark-blue flex items-center justify-center"
+                    onClick={() => abrirEditar(emp)}
+                    className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                    title="Editar"
                   >
-                    {Icon.edit}
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                        d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
                   </button>
-                  <button
-                    onClick={() => handleEliminar(e.id)}
-                    aria-label="Eliminar"
-                    className="w-10 h-10 rounded-pill border border-grey/40 text-red flex items-center justify-center"
-                  >
-                    {Icon.trash}
-                  </button>
+                  {esAdmin && (
+                    <button
+                      onClick={() => abrirEliminar(emp)}
+                      className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                      title="Eliminar"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
+                  )}
                 </div>
               </div>
-            ))
-          )}
+            );
+          })}
         </div>
-      </div>
+      )}
+
+      {/* ── Modal: Nuevo empleado ─────────────────────────── */}
+      {modalOpen && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+            <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-gray-100">
+              <h2 className="text-base font-semibold text-gray-900">Nuevo empleado</h2>
+              <button onClick={cerrarModal} className="text-gray-400 hover:text-gray-600">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <form onSubmit={handleSubmit} className="p-5 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Rol</label>
+                <select name="rol" value={form.rol} onChange={handleChange} className={INPUT_CLS}>
+                  <option value="Empleado">Empleado</option>
+                  <option value="Admin">Admin</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Nombre <span className="text-red-500">*</span>
+                </label>
+                <input name="nombre" required value={form.nombre} onChange={handleChange}
+                  placeholder="Nombre" className={INPUT_CLS} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Apellido</label>
+                <input name="apellido" value={form.apellido} onChange={handleChange}
+                  placeholder="Apellido" className={INPUT_CLS} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Teléfono</label>
+                <input type="tel" name="telefono" value={form.telefono} onChange={handleChange}
+                  inputMode="tel" autoComplete="tel" pattern="[0-9+\-\s()]*"
+                  placeholder="33 1234 5678" className={INPUT_CLS} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Contraseña</label>
+                <input type="password" name="contrasena" value={form.contrasena} onChange={handleChange}
+                  placeholder="••••••••" className={INPUT_CLS} />
+              </div>
+              {formError && (
+                <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">{formError}</div>
+              )}
+              <div className="flex gap-3 pt-1">
+                <button type="button" onClick={cerrarModal}
+                  className="flex-1 border border-gray-300 text-gray-700 font-medium py-2.5 rounded-lg text-sm hover:bg-gray-50 transition-colors">
+                  Cancelar
+                </button>
+                <button type="submit" disabled={guardando}
+                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-medium py-2.5 rounded-lg text-sm transition-colors">
+                  {guardando ? 'Guardando...' : 'Guardar'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal: Editar empleado ────────────────────────── */}
+      {editEmpleado && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+            <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-gray-100">
+              <h2 className="text-base font-semibold text-gray-900">Editar empleado</h2>
+              <button onClick={cerrarEditar} className="text-gray-400 hover:text-gray-600">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <form onSubmit={handleEditSubmit} className="p-5 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Nombre <span className="text-red-500">*</span>
+                </label>
+                <input name="nombre" required value={editForm.nombre} onChange={handleEditChange}
+                  placeholder="Nombre" className={INPUT_CLS} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Apellido</label>
+                <input name="apellido" value={editForm.apellido} onChange={handleEditChange}
+                  placeholder="Apellido" className={INPUT_CLS} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Rol</label>
+                <select name="rol" value={editForm.rol} onChange={handleEditChange} className={INPUT_CLS}>
+                  <option value="Empleado">Empleado</option>
+                  <option value="Admin">Admin</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Teléfono</label>
+                <input type="tel" name="telefono" value={editForm.telefono} onChange={handleEditChange}
+                  inputMode="tel" autoComplete="tel" pattern="[0-9+\-\s()]*"
+                  placeholder="33 1234 5678" className={INPUT_CLS} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Contraseña</label>
+                <input type="password" name="contrasena" value={editForm.contrasena} onChange={handleEditChange}
+                  placeholder="••••••••" className={INPUT_CLS} />
+              </div>
+              {editError && (
+                <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">{editError}</div>
+              )}
+              <div className="flex gap-3 pt-1">
+                <button type="button" onClick={cerrarEditar}
+                  className="flex-1 border border-gray-300 text-gray-700 font-medium py-2.5 rounded-lg text-sm hover:bg-gray-50 transition-colors">
+                  Cancelar
+                </button>
+                <button type="submit" disabled={editando}
+                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-medium py-2.5 rounded-lg text-sm transition-colors">
+                  {editando ? 'Guardando...' : 'Guardar cambios'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal: Confirmar eliminar ─────────────────────── */}
+      {deleteEmpleado && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm">
+            <div className="p-6">
+              <div className="flex items-center justify-center w-12 h-12 rounded-full bg-red-100 mx-auto mb-4">
+                <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              <h3 className="text-base font-semibold text-gray-900 text-center mb-1">Eliminar empleado</h3>
+              <p className="text-sm text-gray-500 text-center mb-4">
+                ¿Eliminar a <span className="font-medium text-gray-700">{nombreCompleto(deleteEmpleado)}</span>?
+                Esta acción no se puede deshacer.
+              </p>
+              {deleteError && (
+                <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3 mb-4">{deleteError}</div>
+              )}
+              <div className="flex gap-3">
+                <button type="button" onClick={cerrarEliminar}
+                  className="flex-1 border border-gray-300 text-gray-700 font-medium py-2.5 rounded-lg text-sm hover:bg-gray-50 transition-colors">
+                  Cancelar
+                </button>
+                <button type="button" onClick={handleDelete} disabled={eliminando}
+                  className="flex-1 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white font-medium py-2.5 rounded-lg text-sm transition-colors">
+                  {eliminando ? 'Eliminando...' : 'Eliminar'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
