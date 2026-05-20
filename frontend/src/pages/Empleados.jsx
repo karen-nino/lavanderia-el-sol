@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../lib/api';
+import { esAdmin as esAdminFn, esAdminMain as esAdminMainFn } from '../lib/roles';
 
 const INPUT_CLS =
   'w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition';
@@ -16,8 +17,8 @@ const splitNombre = (full) => {
 
 export default function Empleados() {
   const { usuario } = useAuth();
-  const esAdmin     = usuario?.rol === 'admin' || usuario?.rol === 'admin_main';
-  const esAdminMain = usuario?.rol === 'admin_main';
+  const esAdmin     = esAdminFn(usuario?.rol);
+  const esAdminMain = esAdminMainFn(usuario?.rol);
 
   const [empleados, setEmpleados] = useState([]);
   const [cargando, setCargando]   = useState(true);

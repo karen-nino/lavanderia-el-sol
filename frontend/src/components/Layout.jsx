@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { esAdmin } from '../lib/roles';
 
 const navIconCls = 'w-6 h-6';
 
@@ -341,7 +342,7 @@ export default function Layout() {
     navigate(to);
   };
 
-  const sidebarItems = usuario?.rol === 'admin'
+  const sidebarItems = esAdmin(usuario?.rol)
     ? [...navItems, ventasItem]
     : navItems;
 
@@ -349,7 +350,7 @@ export default function Layout() {
 
   const menuExtraItems = [
     { label: 'Inventario', icon: Icon.inventario, onClick: () => goTo('/inventario') },
-    ...(usuario?.rol === 'admin'
+    ...(esAdmin(usuario?.rol)
       ? [
           { label: 'Ventas',    icon: Icon.ventas,    onClick: () => goTo('/ventas') },
           { label: 'Empleados', icon: Icon.empleados, onClick: () => goTo('/empleados') },

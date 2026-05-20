@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
+import { esAdmin as esAdminFn } from '../lib/roles';
 
 const ESTADOS = ['TODOS', 'ACTIVA', 'EN_PROCESO', 'LISTA', 'PAGADA', 'ENTREGADA', 'CANCELADA'];
 
@@ -85,7 +86,7 @@ function ModalConfirmarEliminar({ nota, onCancelar, onConfirmar, loading }) {
 export default function Notas() {
   const { usuario }                           = useAuth();
   const navigate                              = useNavigate();
-  const esAdmin                               = usuario?.rol === 'admin';
+  const esAdmin                               = esAdminFn(usuario?.rol);
 
   const [notas,             setNotas]             = useState([]);
   const [filtro,            setFiltro]            = useState('TODOS');
