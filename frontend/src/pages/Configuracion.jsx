@@ -109,23 +109,6 @@ function MobileField({ label, children, hint }) {
   );
 }
 
-function AutoSaveIndicator({ status }) {
-  if (status === 'idle') return null;
-  const styles = {
-    saving: { text: 'Guardando...', cls: 'text-gray-500' },
-    saved:  { text: '✓ Guardado',   cls: 'text-green-600' },
-    error:  { text: '⚠ Error al guardar', cls: 'text-red-600' },
-  }[status];
-  return (
-    <span className={`text-xs font-medium ${styles.cls} flex items-center gap-1.5`}>
-      {status === 'saving' && (
-        <span className="w-3 h-3 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
-      )}
-      {styles.text}
-    </span>
-  );
-}
-
 function MobileSectionButton({ label, icon, onClick }) {
   return (
     <button
@@ -143,7 +126,6 @@ export default function Configuracion() {
   const { usuario, updateUsuario } = useAuth();
   const [config,        setConfig]        = useState(null);
   const [loading,       setLoading]       = useState(true);
-  const [autoSaveStatus, setAutoSaveStatus] = useState('idle'); // 'idle' | 'saving' | 'saved' | 'error'
   const [saving,        setSaving]        = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [logoPreview,   setLogoPreview]   = useState(null);
@@ -159,8 +141,6 @@ export default function Configuracion() {
   });
   const [showPassword, setShowPassword] = useState(false);
   const logoInputRef = useRef(null);
-  const skipInitialAutoSave = useRef(true);
-  const skipInitialPerfilSave = useRef(true);
 
   useEffect(() => {
     api.get('/configuracion')
@@ -171,77 +151,6 @@ export default function Configuracion() {
       .catch(e => setMensaje({ tipo: 'error', texto: e.message }))
       .finally(() => setLoading(false));
   }, []);
-
-  // Auto-guardado con debounce de los campos de configuración
-  useEffect(() => {
-    if (!config) return;
-    if (skipInitialAutoSave.current) {
-      skipInitialAutoSave.current = false;
-      return;
-    }
-    const timer = setTimeout(async () => {
-      setAutoSaveStatus('saving');
-      try {
-        await api.patch('/configuracion', {
-          precio_autoservicio:  Number(config.precio_autoservicio),
-          nombre_negocio:       config.nombre_negocio,
-          direccion:            config.direccion ?? '',
-          telefono:             config.telefono ?? '',
-          stock_minimo_global:  Number(config.stock_minimo_global),
-        });
-        setAutoSaveStatus('saved');
-        setMensaje(null);
-      } catch (err) {
-        setAutoSaveStatus('error');
-        setMensaje({ tipo: 'error', texto: err.message });
-      }
-    }, 700);
-    return () => clearTimeout(timer);
-  }, [
-    config?.precio_autoservicio,
-    config?.nombre_negocio,
-    config?.direccion,
-    config?.telefono,
-    config?.stock_minimo_global,
-  ]);
-
-  // Auto-guardado con debounce del perfil del usuario
-  useEffect(() => {
-    if (skipInitialPerfilSave.current) {
-      skipInitialPerfilSave.current = false;
-      return;
-    }
-    const nombreCompleto = `${perfilForm.nombre} ${perfilForm.apellido}`.trim();
-    const payload = { nombre: nombreCompleto };
-    if (perfilForm.password) payload.password = perfilForm.password;
-
-    if (!nombreCompleto) return;
-    if (perfilForm.password && perfilForm.password.length < 6) return;
-
-    const timer = setTimeout(async () => {
-      setAutoSaveStatus('saving');
-      try {
-        const updated = await api.patch('/auth/me', payload);
-        updateUsuario({
-          nombre: updated.nombre,
-          rol: updated.rol,
-        });
-        setAutoSaveStatus('saved');
-        setMensaje(null);
-      } catch (err) {
-        setAutoSaveStatus('error');
-        setMensaje({ tipo: 'error', texto: err.message });
-      }
-    }, 800);
-    return () => clearTimeout(timer);
-  }, [perfilForm.nombre, perfilForm.apellido, perfilForm.password]);
-
-  // Auto-ocultar el estado "saved" después de 2s
-  useEffect(() => {
-    if (autoSaveStatus !== 'saved') return;
-    const t = setTimeout(() => setAutoSaveStatus('idle'), 2000);
-    return () => clearTimeout(t);
-  }, [autoSaveStatus]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -291,8 +200,45 @@ export default function Configuracion() {
     return handleGuardar(e);
   };
 
+  const handleGuardarTodo = async () => {
+    const nombreCompleto = `${perfilForm.nombre} ${perfilForm.apellido}`.trim();
+    if (!nombreCompleto) {
+      return setMensaje({ tipo: 'error', texto: 'El nombre no puede estar vacío.' });
+    }
+    if (perfilForm.password && perfilForm.password.length < 6) {
+      return setMensaje({ tipo: 'error', texto: 'La contraseña debe tener al menos 6 caracteres.' });
+    }
+
+    setSaving(true);
+    setMensaje(null);
+    try {
+      const perfilPayload = { nombre: nombreCompleto };
+      if (perfilForm.password) perfilPayload.password = perfilForm.password;
+
+      const [updatedPerfil, updatedConfig] = await Promise.all([
+        api.patch('/auth/me', perfilPayload),
+        api.patch('/configuracion', {
+          precio_autoservicio:  Number(config.precio_autoservicio),
+          nombre_negocio:       config.nombre_negocio,
+          direccion:            config.direccion ?? '',
+          telefono:             config.telefono  ?? '',
+          stock_minimo_global:  Number(config.stock_minimo_global),
+        }),
+      ]);
+
+      updateUsuario({ nombre: updatedPerfil.nombre, rol: updatedPerfil.rol });
+      setPerfilForm(f => ({ ...f, password: '' }));
+      setConfig(updatedConfig);
+      setMensaje({ tipo: 'ok', texto: 'Cambios guardados correctamente.' });
+    } catch (err) {
+      setMensaje({ tipo: 'error', texto: err.message });
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleGuardar = async (e) => {
-    e.preventDefault();
+    e?.preventDefault();
     setSaving(true);
     setMensaje(null);
     try {
@@ -778,10 +724,7 @@ export default function Configuracion() {
 
       {/* ── Vista desktop ── */}
       <div className="hidden md:block p-6 max-w-2xl mx-auto space-y-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-xl font-bold text-gray-900">Configuración</h1>
-          <AutoSaveIndicator status={autoSaveStatus} />
-        </div>
+        <h1 className="text-xl font-bold text-gray-900">Configuración</h1>
         {mensajeBanner}
 
         <div className="space-y-6">
@@ -792,6 +735,24 @@ export default function Configuracion() {
           {seccionPreciosDesktop}
           {seccionNegocioDesktop}
           {seccionAlertasDesktop}
+        </div>
+
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={handleGuardarTodo}
+            disabled={saving}
+            className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors"
+          >
+            {saving ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                Guardando...
+              </>
+            ) : (
+              'Guardar cambios'
+            )}
+          </button>
         </div>
       </div>
     </>
