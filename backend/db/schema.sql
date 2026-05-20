@@ -16,6 +16,7 @@ CREATE TABLE usuarios (
   id          SERIAL PRIMARY KEY,
   nombre      VARCHAR(100) NOT NULL,
   email       VARCHAR(150) NOT NULL UNIQUE,
+  telefono    VARCHAR(20)  NOT NULL UNIQUE,
   password    TEXT NOT NULL,
   rol         rol_usuario NOT NULL DEFAULT 'operador',
   activo      BOOLEAN NOT NULL DEFAULT TRUE,

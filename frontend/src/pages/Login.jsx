@@ -2,9 +2,10 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../lib/api';
+import { formatTelefono } from '../lib/telefono';
 
 export default function Login() {
-  const [email, setEmail] = useState('');
+  const [telefono, setTelefono] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -16,7 +17,7 @@ export default function Login() {
     setError('');
     setLoading(true);
     try {
-      const data = await api.post('/auth/login', { email, password });
+      const data = await api.post('/auth/login', { telefono, password });
       login(data.token, data.usuario);
       navigate('/');
     } catch (err) {
@@ -42,15 +43,17 @@ export default function Login() {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                Correo electrónico
+                Teléfono
               </label>
               <input
-                type="email"
+                type="tel"
                 required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                autoComplete="email"
-                placeholder="admin@lavanderia-el-sol.com"
+                value={telefono}
+                onChange={(e) => setTelefono(formatTelefono(e.target.value))}
+                inputMode="numeric"
+                autoComplete="tel"
+                maxLength={12}
+                placeholder="33-1234-5678"
                 className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
               />
             </div>

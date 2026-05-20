@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../lib/api';
+import { formatTelefono } from '../lib/telefono';
 import { useAuth } from '../context/AuthContext';
 
 const INPUT_CLS =
@@ -52,6 +53,20 @@ const SectionIcon = {
         d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
     </svg>
   ),
+  eye: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+        d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+    </svg>
+  ),
+  eyeOff: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+        d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.451 10.451 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.522 10.522 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.243 4.243L9.88 9.88" />
+    </svg>
+  ),
 };
 
 const MOBILE_SECTIONS = [
@@ -92,6 +107,23 @@ function MobileField({ label, children, hint }) {
   );
 }
 
+function AutoSaveIndicator({ status }) {
+  if (status === 'idle') return null;
+  const styles = {
+    saving: { text: 'Guardando...', cls: 'text-gray-500' },
+    saved:  { text: '✓ Guardado',   cls: 'text-green-600' },
+    error:  { text: '⚠ Error al guardar', cls: 'text-red-600' },
+  }[status];
+  return (
+    <span className={`text-xs font-medium ${styles.cls} flex items-center gap-1.5`}>
+      {status === 'saving' && (
+        <span className="w-3 h-3 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+      )}
+      {styles.text}
+    </span>
+  );
+}
+
 function MobileSectionButton({ label, icon, onClick }) {
   return (
     <button
@@ -106,9 +138,10 @@ function MobileSectionButton({ label, icon, onClick }) {
 }
 
 export default function Configuracion() {
-  const { usuario } = useAuth();
+  const { usuario, updateUsuario } = useAuth();
   const [config,        setConfig]        = useState(null);
   const [loading,       setLoading]       = useState(true);
+  const [autoSaveStatus, setAutoSaveStatus] = useState('idle'); // 'idle' | 'saving' | 'saved' | 'error'
   const [saving,        setSaving]        = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [logoPreview,   setLogoPreview]   = useState(null);
@@ -120,34 +153,152 @@ export default function Configuracion() {
       nombre,
       apellido: resto.join(' '),
       email: usuario?.email ?? '',
+      telefono: formatTelefono(usuario?.telefono ?? ''),
       password: '',
     };
   });
+  const [showPassword, setShowPassword] = useState(false);
   const logoInputRef = useRef(null);
+  const skipInitialAutoSave = useRef(true);
+  const skipInitialPerfilSave = useRef(true);
 
   useEffect(() => {
     api.get('/configuracion')
       .then(data => {
-        setConfig(data);
+        setConfig({ ...data, telefono: formatTelefono(data.telefono ?? '') });
         if (data.logo_url) setLogoPreview(data.logo_url);
       })
       .catch(e => setMensaje({ tipo: 'error', texto: e.message }))
       .finally(() => setLoading(false));
   }, []);
 
+  // Auto-guardado con debounce de los campos de configuración
+  useEffect(() => {
+    if (!config) return;
+    if (skipInitialAutoSave.current) {
+      skipInitialAutoSave.current = false;
+      return;
+    }
+    const timer = setTimeout(async () => {
+      setAutoSaveStatus('saving');
+      try {
+        await api.patch('/configuracion', {
+          precio_autoservicio:  Number(config.precio_autoservicio),
+          nombre_negocio:       config.nombre_negocio,
+          direccion:            config.direccion ?? '',
+          telefono:             config.telefono ?? '',
+          stock_minimo_global:  Number(config.stock_minimo_global),
+        });
+        setAutoSaveStatus('saved');
+        setMensaje(null);
+      } catch (err) {
+        setAutoSaveStatus('error');
+        setMensaje({ tipo: 'error', texto: err.message });
+      }
+    }, 700);
+    return () => clearTimeout(timer);
+  }, [
+    config?.precio_autoservicio,
+    config?.nombre_negocio,
+    config?.direccion,
+    config?.telefono,
+    config?.stock_minimo_global,
+  ]);
+
+  // Auto-guardado con debounce del perfil del usuario
+  useEffect(() => {
+    if (skipInitialPerfilSave.current) {
+      skipInitialPerfilSave.current = false;
+      return;
+    }
+    const nombreCompleto = `${perfilForm.nombre} ${perfilForm.apellido}`.trim();
+    const payload = {
+      nombre: nombreCompleto,
+      email: perfilForm.email,
+      telefono: perfilForm.telefono,
+    };
+    if (perfilForm.password) payload.password = perfilForm.password;
+
+    if (!nombreCompleto || !perfilForm.email) return;
+    if (perfilForm.password && perfilForm.password.length < 6) return;
+
+    const timer = setTimeout(async () => {
+      setAutoSaveStatus('saving');
+      try {
+        const updated = await api.patch('/auth/me', payload);
+        updateUsuario({
+          nombre: updated.nombre,
+          email: updated.email,
+          telefono: updated.telefono,
+          rol: updated.rol,
+        });
+        setAutoSaveStatus('saved');
+        setMensaje(null);
+      } catch (err) {
+        setAutoSaveStatus('error');
+        setMensaje({ tipo: 'error', texto: err.message });
+      }
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [perfilForm.nombre, perfilForm.apellido, perfilForm.email, perfilForm.telefono, perfilForm.password]);
+
+  // Auto-ocultar el estado "saved" después de 2s
+  useEffect(() => {
+    if (autoSaveStatus !== 'saved') return;
+    const t = setTimeout(() => setAutoSaveStatus('idle'), 2000);
+    return () => clearTimeout(t);
+  }, [autoSaveStatus]);
+
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setConfig(prev => ({ ...prev, [name]: value }));
+    const next = name === 'telefono' ? formatTelefono(value) : value;
+    setConfig(prev => ({ ...prev, [name]: next }));
   };
 
   const handlePerfilChange = (e) => {
     const { name, value } = e.target;
-    setPerfilForm(prev => ({ ...prev, [name]: value }));
+    if (name === 'password' && perfilForm.password === '' && value.length > 0) {
+      setShowPassword(true);
+    }
+    const next = name === 'telefono' ? formatTelefono(value) : value;
+    setPerfilForm(prev => ({ ...prev, [name]: next }));
   };
 
-  const handleGuardarPerfil = (e) => {
+  const handleGuardarPerfil = async (e) => {
     e.preventDefault();
-    setMensaje({ tipo: 'ok', texto: 'Edición de perfil próximamente disponible.' });
+    const nombreCompleto = `${perfilForm.nombre} ${perfilForm.apellido}`.trim();
+    if (!nombreCompleto) {
+      return setMensaje({ tipo: 'error', texto: 'El nombre no puede estar vacío.' });
+    }
+    if (!perfilForm.email) {
+      return setMensaje({ tipo: 'error', texto: 'El email no puede estar vacío.' });
+    }
+    if (perfilForm.password && perfilForm.password.length < 6) {
+      return setMensaje({ tipo: 'error', texto: 'La contraseña debe tener al menos 6 caracteres.' });
+    }
+    setSaving(true);
+    setMensaje(null);
+    try {
+      const payload = {
+        nombre: nombreCompleto,
+        email: perfilForm.email,
+        telefono: perfilForm.telefono,
+      };
+      if (perfilForm.password) payload.password = perfilForm.password;
+      const updated = await api.patch('/auth/me', payload);
+      updateUsuario({
+        nombre: updated.nombre,
+        email: updated.email,
+        telefono: updated.telefono,
+        rol: updated.rol,
+      });
+      setPerfilForm(f => ({ ...f, password: '' }));
+      setMensaje({ tipo: 'ok', texto: 'Perfil actualizado.' });
+    } catch (err) {
+      setMensaje({ tipo: 'error', texto: err.message });
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleSubmitMobile = (e) => {
@@ -219,6 +370,84 @@ export default function Configuracion() {
   if (!config) return null;
 
   // ── Desktop: secciones tipo card ──
+  const seccionPerfilDesktop = (
+    <Section titulo="Mi Perfil">
+      <Field label="Tipo de Cuenta">
+        <input
+          type="text"
+          readOnly
+          value={usuario?.rol === 'admin' ? 'Admin' : (usuario?.rol ?? '')}
+          className={`${INPUT_CLS} bg-gray-50 text-gray-500`}
+        />
+      </Field>
+
+      <Field label="Nombre">
+        <input
+          type="text"
+          name="nombre"
+          value={perfilForm.nombre}
+          onChange={handlePerfilChange}
+          className={INPUT_CLS}
+        />
+      </Field>
+
+      <Field label="Apellido">
+        <input
+          type="text"
+          name="apellido"
+          value={perfilForm.apellido}
+          onChange={handlePerfilChange}
+          className={INPUT_CLS}
+        />
+      </Field>
+
+      <Field label="Correo">
+        <input
+          type="email"
+          name="email"
+          value={perfilForm.email}
+          onChange={handlePerfilChange}
+          className={INPUT_CLS}
+        />
+      </Field>
+
+      <Field label="Teléfono">
+        <input
+          type="tel"
+          name="telefono"
+          value={perfilForm.telefono}
+          onChange={handlePerfilChange}
+          inputMode="numeric"
+          autoComplete="tel"
+          maxLength={12}
+          placeholder="33-1234-5678"
+          className={INPUT_CLS}
+        />
+      </Field>
+
+      <Field label="Contraseña">
+        <div className="relative">
+          <input
+            type={showPassword ? 'text' : 'password'}
+            name="password"
+            value={perfilForm.password}
+            onChange={handlePerfilChange}
+            placeholder="••••••••"
+            className={`${INPUT_CLS} pr-10`}
+          />
+          <button
+            type="button"
+            onClick={() => setShowPassword(s => !s)}
+            aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+            className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600"
+          >
+            {showPassword ? SectionIcon.eyeOff : SectionIcon.eye}
+          </button>
+        </div>
+      </Field>
+    </Section>
+  );
+
   const seccionPreciosDesktop = (
     <Section titulo="Precios base de servicios">
       <Field label="Precio por carga — Autoservicio">
@@ -266,11 +495,14 @@ export default function Configuracion() {
 
       <Field label="Teléfono">
         <input
-          type="text"
+          type="tel"
           name="telefono"
           value={config.telefono ?? ''}
           onChange={handleChange}
-          placeholder="Ej. 33 1234 5678"
+          inputMode="numeric"
+          autoComplete="tel"
+          maxLength={12}
+          placeholder="33-1234-5678"
           className={INPUT_CLS}
         />
       </Field>
@@ -370,15 +602,39 @@ export default function Configuracion() {
         />
       </MobileField>
 
-      <MobileField label="Contraseña">
+      <MobileField label="Teléfono">
         <input
-          type="password"
-          name="password"
-          value={perfilForm.password}
+          type="tel"
+          name="telefono"
+          value={perfilForm.telefono}
           onChange={handlePerfilChange}
-          placeholder="••••••••"
+          inputMode="numeric"
+          autoComplete="tel"
+          maxLength={12}
+          placeholder="33-1234-5678"
           className={MOBILE_INPUT_CLS}
         />
+      </MobileField>
+
+      <MobileField label="Contraseña">
+        <div className="relative">
+          <input
+            type={showPassword ? 'text' : 'password'}
+            name="password"
+            value={perfilForm.password}
+            onChange={handlePerfilChange}
+            placeholder="••••••••"
+            className={`${MOBILE_INPUT_CLS} pr-12`}
+          />
+          <button
+            type="button"
+            onClick={() => setShowPassword(s => !s)}
+            aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+            className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-grey hover:text-dark-blue"
+          >
+            {showPassword ? SectionIcon.eyeOff : SectionIcon.eye}
+          </button>
+        </div>
       </MobileField>
     </div>
   );
@@ -409,11 +665,14 @@ export default function Configuracion() {
 
       <MobileField label="Teléfono">
         <input
-          type="text"
+          type="tel"
           name="telefono"
           value={config.telefono ?? ''}
           onChange={handleChange}
-          placeholder="Ej. 33 1234 5678"
+          inputMode="numeric"
+          autoComplete="tel"
+          maxLength={12}
+          placeholder="33-1234-5678"
           className={MOBILE_INPUT_CLS}
         />
       </MobileField>
@@ -582,29 +841,21 @@ export default function Configuracion() {
 
       {/* ── Vista desktop ── */}
       <div className="hidden md:block p-6 max-w-2xl mx-auto space-y-6">
-        <h1 className="text-xl font-bold text-gray-900">Configuración</h1>
+        <div className="flex items-center justify-between">
+          <h1 className="text-xl font-bold text-gray-900">Configuración</h1>
+          <AutoSaveIndicator status={autoSaveStatus} />
+        </div>
         {mensajeBanner}
-        <form onSubmit={handleGuardar} className="space-y-6">
+
+        <div className="space-y-6">
+          {seccionPerfilDesktop}
+        </div>
+
+        <div className="space-y-6">
           {seccionPreciosDesktop}
           {seccionNegocioDesktop}
           {seccionAlertasDesktop}
-          <div className="flex justify-end">
-            <button
-              type="submit"
-              disabled={saving}
-              className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
-            >
-              {saving ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  Guardando...
-                </>
-              ) : (
-                'Guardar cambios'
-              )}
-            </button>
-          </div>
-        </form>
+        </div>
       </div>
     </>
   );
