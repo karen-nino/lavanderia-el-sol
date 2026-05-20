@@ -2,23 +2,40 @@ import pool from '../db/pool.js';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 
-export const login = async (req, res) => {
-  const { telefono, password } = req.body;
-  const digitos = (telefono ?? '').replace(/\D/g, '');
+// ── GET /auth/buscar-usuarios?q=... ─────────────────────────
+// Endpoint público usado por la pantalla de login para autocompletar
+// el nombre del empleado. Devuelve solo id + nombre, máximo 8 resultados.
+export const buscarUsuarios = async (req, res) => {
+  const q = (req.query.q ?? '').trim();
+  if (!q) return res.json([]);
 
-  if (!digitos || !password) {
-    return res.status(400).json({ message: 'Teléfono y contraseña son requeridos.' });
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, nombre FROM usuarios
+        WHERE activo = TRUE AND nombre ILIKE $1
+        ORDER BY nombre ASC
+        LIMIT 8`,
+      [`%${q}%`]
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error('buscarUsuarios error:', err);
+    res.status(500).json({ message: 'Error interno del servidor.' });
   }
-  if (digitos.length !== 10) {
-    return res.status(400).json({ message: 'El teléfono debe tener 10 dígitos.' });
+};
+
+export const login = async (req, res) => {
+  const { usuario_id, password } = req.body;
+  const userId = Number(usuario_id);
+
+  if (!userId || !password) {
+    return res.status(400).json({ message: 'Usuario y contraseña son requeridos.' });
   }
 
   try {
     const { rows } = await pool.query(
-      `SELECT * FROM usuarios
-       WHERE regexp_replace(COALESCE(telefono, ''), '\\D', '', 'g') = $1
-         AND activo = TRUE`,
-      [digitos]
+      `SELECT * FROM usuarios WHERE id = $1 AND activo = TRUE`,
+      [userId]
     );
 
     if (rows.length === 0) {
