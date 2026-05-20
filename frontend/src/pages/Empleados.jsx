@@ -326,7 +326,7 @@ export default function Empleados() {
                   value={editForm.rol}
                   onChange={handleEditChange}
                   disabled={editEmpleado.id === usuario?.id || editForm.rol === 'admin_main'}
-                  className={INPUT_CLS}
+                  className={`${INPUT_CLS} disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed`}
                 >
                   <option value="operador">Empleado</option>
                   <option value="admin">Admin</option>
