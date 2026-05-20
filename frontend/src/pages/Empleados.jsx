@@ -263,7 +263,7 @@ export default function Empleados() {
             <form onSubmit={handleSubmit} className="p-5 space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">Rol</label>
-                <select name="rol" value={form.rol} onChange={handleChange} className={INPUT_CLS}>
+                <select name="rol" value={form.rol} onChange={handleChange} className={`${INPUT_CLS} bg-white`}>
                   <option value="operador">Empleado</option>
                   <option value="admin">Admin</option>
                 </select>
@@ -326,7 +326,7 @@ export default function Empleados() {
                   value={editForm.rol}
                   onChange={handleEditChange}
                   disabled={editEmpleado.id === usuario?.id || editForm.rol === 'admin_main'}
-                  className={`${INPUT_CLS} disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed`}
+                  className={`${INPUT_CLS} bg-white disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed`}
                 >
                   <option value="operador">Empleado</option>
                   <option value="admin">Admin</option>
@@ -351,6 +351,7 @@ export default function Empleados() {
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">Nueva contraseña</label>
                 <input type="password" name="password" minLength={6} value={editForm.password} onChange={handleEditChange}
                   placeholder="Dejar vacío para no cambiar" className={INPUT_CLS} />
+                <p className="text-xs text-gray-500 mt-1">Mínimo 6 caracteres.</p>
               </div>
               {editError && (
                 <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">{editError}</div>
