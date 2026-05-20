@@ -10,7 +10,7 @@ import { verifyToken } from '../middleware/auth.js';
 const router = Router();
 
 const requireAdmin = (req, res, next) => {
-  if (req.user?.rol !== 'admin') {
+  if (!['admin', 'admin_main'].includes(req.user?.rol)) {
     return res.status(403).json({ message: 'Solo un administrador puede realizar esta acción.' });
   }
   next();

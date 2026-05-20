@@ -3,7 +3,7 @@
 -- ============================================================
 
 -- Tipos ENUM
-CREATE TYPE rol_usuario AS ENUM ('admin', 'operador');
+CREATE TYPE rol_usuario AS ENUM ('admin_main', 'admin', 'operador');
 CREATE TYPE estado_orden AS ENUM ('RECIBIDO', 'EN_PROCESO', 'LISTO', 'ENTREGADO');
 CREATE TYPE tipo_maquina AS ENUM ('lavadora', 'secadora', 'planchadora');
 CREATE TYPE estado_maquina AS ENUM ('disponible', 'en_uso', 'mantenimiento');
@@ -15,8 +15,6 @@ CREATE TYPE tipo_movimiento AS ENUM ('entrada', 'salida');
 CREATE TABLE usuarios (
   id          SERIAL PRIMARY KEY,
   nombre      VARCHAR(100) NOT NULL,
-  email       VARCHAR(150) UNIQUE,
-  telefono    VARCHAR(20)  UNIQUE,
   password    TEXT NOT NULL,
   rol         rol_usuario NOT NULL DEFAULT 'operador',
   activo      BOOLEAN NOT NULL DEFAULT TRUE,
@@ -150,10 +148,9 @@ CREATE INDEX idx_movimientos_orden  ON movimientos_insumos(orden_id);
 -- ============================================================
 -- Contraseña: cambiar antes de producción
 -- Hash bcrypt de 'admin1234' (cost 12):
-INSERT INTO usuarios (nombre, email, password, rol)
+INSERT INTO usuarios (nombre, password, rol)
 VALUES (
   'Administrador',
-  'admin@lavanderia-el-sol.com',
   '$2b$12$placeholder_reemplazar_con_hash_real',
-  'admin'
+  'admin_main'
 );

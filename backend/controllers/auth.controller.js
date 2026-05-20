@@ -34,7 +34,7 @@ export const login = async (req, res) => {
 
   try {
     const { rows } = await pool.query(
-      `SELECT * FROM usuarios WHERE id = $1 AND activo = TRUE`,
+      `SELECT id, nombre, password, rol FROM usuarios WHERE id = $1 AND activo = TRUE`,
       [userId]
     );
 
@@ -50,7 +50,7 @@ export const login = async (req, res) => {
     }
 
     const token = jwt.sign(
-      { id: usuario.id, email: usuario.email, rol: usuario.rol },
+      { id: usuario.id, rol: usuario.rol },
       process.env.JWT_SECRET,
       { expiresIn: '8h' }
     );
@@ -60,8 +60,6 @@ export const login = async (req, res) => {
       usuario: {
         id: usuario.id,
         nombre: usuario.nombre,
-        email: usuario.email,
-        telefono: usuario.telefono,
         rol: usuario.rol,
       },
     });
@@ -75,7 +73,7 @@ export const login = async (req, res) => {
 export const getMe = async (req, res) => {
   try {
     const { rows } = await pool.query(
-      'SELECT id, nombre, email, telefono, rol FROM usuarios WHERE id = $1 AND activo = TRUE',
+      'SELECT id, nombre, rol FROM usuarios WHERE id = $1 AND activo = TRUE',
       [req.user.id]
     );
     if (rows.length === 0) return res.status(404).json({ message: 'Usuario no encontrado.' });
@@ -88,7 +86,7 @@ export const getMe = async (req, res) => {
 
 // ── PATCH /auth/me ───────────────────────────────────────────
 export const updateMe = async (req, res) => {
-  const { nombre, email, telefono, password } = req.body;
+  const { nombre, password } = req.body;
   const updates = [];
   const values  = [];
   let i = 1;
@@ -96,13 +94,6 @@ export const updateMe = async (req, res) => {
   if (nombre !== undefined) {
     if (!nombre.trim()) return res.status(400).json({ message: 'El nombre no puede estar vacío.' });
     updates.push(`nombre = $${i++}`); values.push(nombre.trim());
-  }
-  if (email !== undefined) {
-    const v = email.trim();
-    updates.push(`email = $${i++}`); values.push(v ? v.toLowerCase() : null);
-  }
-  if (telefono !== undefined) {
-    updates.push(`telefono = $${i++}`); values.push(telefono.trim() || null);
   }
   if (password) {
     if (password.length < 6) {
@@ -120,16 +111,12 @@ export const updateMe = async (req, res) => {
 
   try {
     const { rows } = await pool.query(
-      `UPDATE usuarios SET ${updates.join(', ')} WHERE id = $${i} AND activo = TRUE RETURNING id, nombre, email, telefono, rol`,
+      `UPDATE usuarios SET ${updates.join(', ')} WHERE id = $${i} AND activo = TRUE RETURNING id, nombre, rol`,
       values
     );
     if (rows.length === 0) return res.status(404).json({ message: 'Usuario no encontrado.' });
     res.json(rows[0]);
   } catch (err) {
-    if (err.code === '23505') {
-      const campo = err.constraint === 'usuarios_telefono_key' ? 'teléfono' : 'email';
-      return res.status(409).json({ message: `El ${campo} ya está en uso.` });
-    }
     console.error('updateMe error:', err);
     res.status(500).json({ message: 'Error interno del servidor.' });
   }

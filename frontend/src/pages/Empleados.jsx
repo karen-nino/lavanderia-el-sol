@@ -7,7 +7,7 @@ const INPUT_CLS =
 
 const FORM_INIT = { nombre: '', apellido: '', rol: 'operador', password: '' };
 
-const ROL_LABEL = { admin: 'Admin', operador: 'Empleado' };
+const ROL_LABEL = { admin_main: 'Admin Main', admin: 'Admin', operador: 'Empleado' };
 
 const splitNombre = (full) => {
   const [n, ...resto] = (full ?? '').trim().split(' ');
@@ -16,7 +16,8 @@ const splitNombre = (full) => {
 
 export default function Empleados() {
   const { usuario } = useAuth();
-  const esAdmin = usuario?.rol === 'admin';
+  const esAdmin     = usuario?.rol === 'admin' || usuario?.rol === 'admin_main';
+  const esAdminMain = usuario?.rol === 'admin_main';
 
   const [empleados, setEmpleados] = useState([]);
   const [cargando, setCargando]   = useState(true);
@@ -194,6 +195,9 @@ export default function Empleados() {
             const { nombre, apellido } = partirNombre(emp);
             const iniciales = `${nombre[0] ?? ''}${apellido[0] ?? ''}`.toUpperCase();
             const esMismoUsuario = usuario?.id === emp.id;
+            const empEsMain = emp.rol === 'admin_main';
+            const puedeModificar = esAdmin && (!empEsMain || esAdminMain);
+            const puedeEliminar  = puedeModificar && !esMismoUsuario;
             return (
               <div
                 key={emp.id}
@@ -211,7 +215,7 @@ export default function Empleados() {
                   </div>
                 </div>
 
-                {esAdmin && (
+                {puedeModificar && (
                   <div className="flex items-center justify-end gap-1 pt-2 border-t border-gray-100">
                     <button
                       onClick={() => abrirEditar(emp)}
@@ -223,7 +227,7 @@ export default function Empleados() {
                           d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                       </svg>
                     </button>
-                    {!esMismoUsuario && (
+                    {puedeEliminar && (
                       <button
                         onClick={() => abrirEliminar(emp)}
                         className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
@@ -261,6 +265,7 @@ export default function Empleados() {
                 <select name="rol" value={form.rol} onChange={handleChange} className={INPUT_CLS}>
                   <option value="operador">Empleado</option>
                   <option value="admin">Admin</option>
+                  {esAdminMain && <option value="admin_main">Admin Main</option>}
                 </select>
               </div>
               <div>
@@ -336,6 +341,9 @@ export default function Empleados() {
                 >
                   <option value="operador">Empleado</option>
                   <option value="admin">Admin</option>
+                  {(esAdminMain || editForm.rol === 'admin_main') && (
+                    <option value="admin_main">Admin Main</option>
+                  )}
                 </select>
               </div>
               <div>

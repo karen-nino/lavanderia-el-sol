@@ -9,6 +9,8 @@ const INPUT_CLS =
 const MOBILE_INPUT_CLS =
   'w-full px-4 py-3.5 border border-grey/30 rounded-lg text-base text-dark-blue placeholder-grey/60 focus:outline-none focus:border-blue transition';
 
+const ROL_LABEL = { admin_main: 'Admin Main', admin: 'Admin', operador: 'Empleado' };
+
 const SectionIcon = {
   perfil: (
     <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -152,8 +154,6 @@ export default function Configuracion() {
     return {
       nombre,
       apellido: resto.join(' '),
-      email: usuario?.email ?? '',
-      telefono: formatTelefono(usuario?.telefono ?? ''),
       password: '',
     };
   });
@@ -212,11 +212,7 @@ export default function Configuracion() {
       return;
     }
     const nombreCompleto = `${perfilForm.nombre} ${perfilForm.apellido}`.trim();
-    const payload = {
-      nombre: nombreCompleto,
-      email: perfilForm.email,
-      telefono: perfilForm.telefono,
-    };
+    const payload = { nombre: nombreCompleto };
     if (perfilForm.password) payload.password = perfilForm.password;
 
     if (!nombreCompleto) return;
@@ -228,8 +224,6 @@ export default function Configuracion() {
         const updated = await api.patch('/auth/me', payload);
         updateUsuario({
           nombre: updated.nombre,
-          email: updated.email,
-          telefono: updated.telefono,
           rol: updated.rol,
         });
         setAutoSaveStatus('saved');
@@ -240,7 +234,7 @@ export default function Configuracion() {
       }
     }, 800);
     return () => clearTimeout(timer);
-  }, [perfilForm.nombre, perfilForm.apellido, perfilForm.email, perfilForm.telefono, perfilForm.password]);
+  }, [perfilForm.nombre, perfilForm.apellido, perfilForm.password]);
 
   // Auto-ocultar el estado "saved" después de 2s
   useEffect(() => {
@@ -276,17 +270,11 @@ export default function Configuracion() {
     setSaving(true);
     setMensaje(null);
     try {
-      const payload = {
-        nombre: nombreCompleto,
-        email: perfilForm.email,
-        telefono: perfilForm.telefono,
-      };
+      const payload = { nombre: nombreCompleto };
       if (perfilForm.password) payload.password = perfilForm.password;
       const updated = await api.patch('/auth/me', payload);
       updateUsuario({
         nombre: updated.nombre,
-        email: updated.email,
-        telefono: updated.telefono,
         rol: updated.rol,
       });
       setPerfilForm(f => ({ ...f, password: '' }));
@@ -373,7 +361,7 @@ export default function Configuracion() {
         <input
           type="text"
           readOnly
-          value={usuario?.rol === 'admin' ? 'Admin' : (usuario?.rol ?? '')}
+          value={ROL_LABEL[usuario?.rol] ?? (usuario?.rol ?? '')}
           className={`${INPUT_CLS} bg-gray-50 text-gray-500`}
         />
       </Field>
@@ -394,30 +382,6 @@ export default function Configuracion() {
           name="apellido"
           value={perfilForm.apellido}
           onChange={handlePerfilChange}
-          className={INPUT_CLS}
-        />
-      </Field>
-
-      <Field label="Correo">
-        <input
-          type="email"
-          name="email"
-          value={perfilForm.email}
-          onChange={handlePerfilChange}
-          className={INPUT_CLS}
-        />
-      </Field>
-
-      <Field label="Teléfono">
-        <input
-          type="tel"
-          name="telefono"
-          value={perfilForm.telefono}
-          onChange={handlePerfilChange}
-          inputMode="numeric"
-          autoComplete="tel"
-          maxLength={12}
-          placeholder="33-1234-5678"
           className={INPUT_CLS}
         />
       </Field>
@@ -564,7 +528,7 @@ export default function Configuracion() {
         <input
           type="text"
           readOnly
-          value={usuario?.rol === 'admin' ? 'Admin' : (usuario?.rol ?? '')}
+          value={ROL_LABEL[usuario?.rol] ?? (usuario?.rol ?? '')}
           className={`${MOBILE_INPUT_CLS} bg-light-blue/20 text-grey`}
         />
       </MobileField>
@@ -585,30 +549,6 @@ export default function Configuracion() {
           name="apellido"
           value={perfilForm.apellido}
           onChange={handlePerfilChange}
-          className={MOBILE_INPUT_CLS}
-        />
-      </MobileField>
-
-      <MobileField label="Correo">
-        <input
-          type="email"
-          name="email"
-          value={perfilForm.email}
-          onChange={handlePerfilChange}
-          className={MOBILE_INPUT_CLS}
-        />
-      </MobileField>
-
-      <MobileField label="Teléfono">
-        <input
-          type="tel"
-          name="telefono"
-          value={perfilForm.telefono}
-          onChange={handlePerfilChange}
-          inputMode="numeric"
-          autoComplete="tel"
-          maxLength={12}
-          placeholder="33-1234-5678"
           className={MOBILE_INPUT_CLS}
         />
       </MobileField>
