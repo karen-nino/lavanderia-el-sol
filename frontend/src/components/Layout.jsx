@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { esAdmin } from '../lib/roles';
+import { esAdmin, ROL_LABEL } from '../lib/roles';
 
 const navIconCls = 'w-6 h-6';
 
@@ -189,7 +189,7 @@ function DesktopHeader({ usuario, now }) {
           {usuario?.nombre?.[0]?.toUpperCase() ?? 'A'}
         </div>
         <div>
-          <p className="text-kpi-label text-grey capitalize">{usuario?.rol ?? 'Usuario'}</p>
+          <p className="text-kpi-label text-grey">{ROL_LABEL[usuario?.rol] ?? 'Usuario'}</p>
           <p className="text-2xl font-bold text-dark-blue">{usuario?.nombre ?? '—'}</p>
         </div>
       </div>
@@ -211,7 +211,7 @@ function MobileTopbar({ usuario, onAlerts }) {
     <header className="md:hidden flex items-start justify-between px-6 pt-10 pb-4 flex-shrink-0">
       <div className="flex items-center gap-3">
         <div>
-          <p className="text-kpi-label text-grey">Admin</p>
+          <p className="text-kpi-label text-grey">{ROL_LABEL[usuario?.rol] ?? 'Usuario'}</p>
           <p className="text-xl font-bold text-dark-blue pb-2">{usuario?.nombre ?? 'Usuario'}</p>
           <div className="flex items-center gap-1">
             <span className="w-2 h-2 rounded-pill bg-green" />
