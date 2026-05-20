@@ -266,7 +266,6 @@ export default function Empleados() {
                 <select name="rol" value={form.rol} onChange={handleChange} className={INPUT_CLS}>
                   <option value="operador">Empleado</option>
                   <option value="admin">Admin</option>
-                  {esAdminMain && <option value="admin_main">Admin Main</option>}
                 </select>
               </div>
               <div>
@@ -320,6 +319,22 @@ export default function Empleados() {
             </div>
             <form onSubmit={handleEditSubmit} className="p-5 space-y-4">
               <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Rol</label>
+                <select
+                  name="rol"
+                  value={editForm.rol}
+                  onChange={handleEditChange}
+                  disabled={editEmpleado.id === usuario?.id || editForm.rol === 'admin_main'}
+                  className={INPUT_CLS}
+                >
+                  <option value="operador">Empleado</option>
+                  <option value="admin">Admin</option>
+                  {editForm.rol === 'admin_main' && (
+                    <option value="admin_main">Admin Main</option>
+                  )}
+                </select>
+              </div>
+              <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
                   Nombre <span className="text-red-500">*</span>
                 </label>
@@ -330,22 +345,6 @@ export default function Empleados() {
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">Apellido</label>
                 <input name="apellido" value={editForm.apellido} onChange={handleEditChange}
                   placeholder="Apellido" className={INPUT_CLS} />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Rol</label>
-                <select
-                  name="rol"
-                  value={editForm.rol}
-                  onChange={handleEditChange}
-                  disabled={editEmpleado.id === usuario?.id}
-                  className={INPUT_CLS}
-                >
-                  <option value="operador">Empleado</option>
-                  <option value="admin">Admin</option>
-                  {(esAdminMain || editForm.rol === 'admin_main') && (
-                    <option value="admin_main">Admin Main</option>
-                  )}
-                </select>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">Nueva contraseña</label>
