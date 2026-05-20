@@ -21,14 +21,9 @@ export const getEmpleados = async (req, res) => {
 };
 
 export const createEmpleado = async (req, res) => {
-  const { nombre, email, telefono, password, rol } = req.body;
+  const { nombre, password, rol } = req.body;
 
   if (!nombre?.trim()) return res.status(400).json({ message: 'El nombre es requerido.' });
-  if (!email?.trim())  return res.status(400).json({ message: 'El email es requerido.' });
-  const digitos = normalizarTelefono(telefono);
-  if (digitos.length !== 10) {
-    return res.status(400).json({ message: 'El teléfono debe tener 10 dígitos.' });
-  }
   if (!password || password.length < 6) {
     return res.status(400).json({ message: 'La contraseña debe tener al menos 6 caracteres.' });
   }
@@ -37,17 +32,13 @@ export const createEmpleado = async (req, res) => {
   try {
     const hashed = await bcrypt.hash(password, 10);
     const { rows } = await pool.query(
-      `INSERT INTO usuarios (nombre, email, telefono, password, rol)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO usuarios (nombre, password, rol)
+       VALUES ($1, $2, $3)
        RETURNING id, nombre, email, telefono, rol, activo, created_at`,
-      [nombre.trim(), email.trim().toLowerCase(), digitos, hashed, rolFinal]
+      [nombre.trim(), hashed, rolFinal]
     );
     res.status(201).json(rows[0]);
   } catch (err) {
-    if (err.code === '23505') {
-      const campo = err.constraint === 'usuarios_telefono_key' ? 'teléfono' : 'email';
-      return res.status(409).json({ message: `El ${campo} ya está en uso.` });
-    }
     console.error('createEmpleado error:', err);
     res.status(500).json({ message: 'Error interno del servidor.' });
   }

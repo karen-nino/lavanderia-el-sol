@@ -219,7 +219,7 @@ export default function Configuracion() {
     };
     if (perfilForm.password) payload.password = perfilForm.password;
 
-    if (!nombreCompleto || !perfilForm.email) return;
+    if (!nombreCompleto) return;
     if (perfilForm.password && perfilForm.password.length < 6) return;
 
     const timer = setTimeout(async () => {
@@ -269,9 +269,6 @@ export default function Configuracion() {
     const nombreCompleto = `${perfilForm.nombre} ${perfilForm.apellido}`.trim();
     if (!nombreCompleto) {
       return setMensaje({ tipo: 'error', texto: 'El nombre no puede estar vacío.' });
-    }
-    if (!perfilForm.email) {
-      return setMensaje({ tipo: 'error', texto: 'El email no puede estar vacío.' });
     }
     if (perfilForm.password && perfilForm.password.length < 6) {
       return setMensaje({ tipo: 'error', texto: 'La contraseña debe tener al menos 6 caracteres.' });

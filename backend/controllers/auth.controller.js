@@ -98,8 +98,8 @@ export const updateMe = async (req, res) => {
     updates.push(`nombre = $${i++}`); values.push(nombre.trim());
   }
   if (email !== undefined) {
-    if (!email.trim()) return res.status(400).json({ message: 'El email no puede estar vacío.' });
-    updates.push(`email = $${i++}`); values.push(email.trim().toLowerCase());
+    const v = email.trim();
+    updates.push(`email = $${i++}`); values.push(v ? v.toLowerCase() : null);
   }
   if (telefono !== undefined) {
     updates.push(`telefono = $${i++}`); values.push(telefono.trim() || null);

@@ -1,12 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../lib/api';
-import { formatTelefono } from '../lib/telefono';
 
 const INPUT_CLS =
   'w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition';
 
-const FORM_INIT = { nombre: '', apellido: '', rol: 'operador', telefono: '', email: '', password: '' };
+const FORM_INIT = { nombre: '', apellido: '', rol: 'operador', password: '' };
 
 const ROL_LABEL = { admin: 'Admin', operador: 'Empleado' };
 
@@ -48,14 +47,9 @@ export default function Empleados() {
       .finally(() => setCargando(false));
   }, []);
 
-  const filtrados = empleados.filter(e => {
-    const q = busqueda.toLowerCase();
-    return (
-      e.nombre.toLowerCase().includes(q) ||
-      (e.email && e.email.toLowerCase().includes(q)) ||
-      (e.telefono && e.telefono.includes(busqueda))
-    );
-  });
+  const filtrados = empleados.filter(e =>
+    e.nombre.toLowerCase().includes(busqueda.toLowerCase())
+  );
 
   const partirNombre = (e) => splitNombre(e.nombre);
   const nombreCompleto = (e) => e.nombre;
@@ -65,8 +59,7 @@ export default function Empleados() {
   const cerrarModal = () => setModalOpen(false);
   const handleChange = e => {
     const { name, value } = e.target;
-    const next = name === 'telefono' ? formatTelefono(value) : value;
-    setForm(f => ({ ...f, [name]: next }));
+    setForm(f => ({ ...f, [name]: value }));
   };
 
   const handleSubmit = async e => {
@@ -77,8 +70,6 @@ export default function Empleados() {
       const nombreCompletoStr = `${form.nombre} ${form.apellido}`.trim();
       const nuevo = await api.post('/usuarios', {
         nombre: nombreCompletoStr,
-        email: form.email,
-        telefono: form.telefono,
         password: form.password,
         rol: form.rol,
       });
@@ -99,8 +90,6 @@ export default function Empleados() {
       nombre,
       apellido,
       rol: emp.rol ?? 'operador',
-      telefono: formatTelefono(emp.telefono ?? ''),
-      email: emp.email ?? '',
       password: '',
     });
     setEditError('');
@@ -108,8 +97,7 @@ export default function Empleados() {
   const cerrarEditar = () => setEditEmpleado(null);
   const handleEditChange = e => {
     const { name, value } = e.target;
-    const next = name === 'telefono' ? formatTelefono(value) : value;
-    setEditForm(f => ({ ...f, [name]: next }));
+    setEditForm(f => ({ ...f, [name]: value }));
   };
 
   const handleEditSubmit = async e => {
@@ -119,8 +107,6 @@ export default function Empleados() {
     try {
       const payload = {
         nombre: `${editForm.nombre} ${editForm.apellido}`.trim(),
-        email: editForm.email,
-        telefono: editForm.telefono,
         rol: editForm.rol,
       };
       if (editForm.password) payload.password = editForm.password;
@@ -183,7 +169,7 @@ export default function Empleados() {
         </svg>
         <input
           type="text"
-          placeholder="Buscar por nombre, email o teléfono..."
+          placeholder="Buscar por nombre..."
           value={busqueda}
           onChange={e => setBusqueda(e.target.value)}
           className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
@@ -222,16 +208,6 @@ export default function Empleados() {
                     <span className="inline-block mt-0.5 text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
                       {ROL_LABEL[emp.rol] ?? emp.rol}
                     </span>
-                  </div>
-                </div>
-
-                <div className="space-y-1.5 text-xs text-gray-500">
-                  <div className="flex items-center gap-2">
-                    <svg className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                        d="M3 5a2 2 0 012-2h2.28a2 2 0 011.94 1.515l.7 2.793a2 2 0 01-.45 1.949L8.91 10.91a11 11 0 005.18 5.18l1.653-1.653a2 2 0 011.95-.45l2.792.7A2 2 0 0122 16.72V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                    </svg>
-                    <span className="truncate">{formatTelefono(emp.telefono) || '—'}</span>
                   </div>
                 </div>
 
@@ -301,21 +277,6 @@ export default function Empleados() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                  Email <span className="text-red-500">*</span>
-                </label>
-                <input type="email" name="email" required value={form.email} onChange={handleChange}
-                  placeholder="correo@ejemplo.com" className={INPUT_CLS} />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                  Teléfono <span className="text-red-500">*</span>
-                </label>
-                <input type="tel" name="telefono" required value={form.telefono} onChange={handleChange}
-                  inputMode="numeric" autoComplete="tel" maxLength={12}
-                  placeholder="33-1234-5678" className={INPUT_CLS} />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">
                   Contraseña <span className="text-red-500">*</span>
                 </label>
                 <input type="password" name="password" required minLength={6} value={form.password} onChange={handleChange}
@@ -376,17 +337,6 @@ export default function Empleados() {
                   <option value="operador">Empleado</option>
                   <option value="admin">Admin</option>
                 </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Email</label>
-                <input type="email" name="email" value={editForm.email} onChange={handleEditChange}
-                  placeholder="correo@ejemplo.com" className={INPUT_CLS} />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Teléfono</label>
-                <input type="tel" name="telefono" value={editForm.telefono} onChange={handleEditChange}
-                  inputMode="numeric" autoComplete="tel" maxLength={12}
-                  placeholder="33-1234-5678" className={INPUT_CLS} />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">Nueva contraseña</label>
