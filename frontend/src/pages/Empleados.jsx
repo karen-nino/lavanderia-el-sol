@@ -1,26 +1,27 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { api } from '../lib/api';
+import { formatTelefono } from '../lib/telefono';
 
 const INPUT_CLS =
   'w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition';
 
-const FORM_INIT = { nombre: '', apellido: '', rol: 'Empleado', telefono: '', contrasena: '' };
+const FORM_INIT = { nombre: '', apellido: '', rol: 'operador', telefono: '', email: '', password: '' };
 
-const MOCK_EMPLEADOS = [
-  { id: 1, nombre: 'Patricia',  apellido: 'Jiménez',     rol: 'Empleado', telefono: '', contrasena: '' },
-  { id: 2, nombre: 'Alejandro', apellido: 'Guzman',      rol: 'Empleado', telefono: '', contrasena: '' },
-  { id: 3, nombre: 'Pedro',     apellido: 'Esquivar',    rol: 'Empleado', telefono: '', contrasena: '' },
-  { id: 4, nombre: 'Fernando',  apellido: 'Zuñiga',      rol: 'Empleado', telefono: '', contrasena: '' },
-  { id: 5, nombre: 'Alberto',   apellido: 'Farrera',     rol: 'Empleado', telefono: '', contrasena: '' },
-  { id: 6, nombre: 'Humberto',  apellido: 'de la Rosa',  rol: 'Empleado', telefono: '', contrasena: '' },
-  { id: 7, nombre: 'Patricia',  apellido: 'Jiménez',     rol: 'Empleado', telefono: '', contrasena: '' },
-];
+const ROL_LABEL = { admin: 'Admin', operador: 'Empleado' };
+
+const splitNombre = (full) => {
+  const [n, ...resto] = (full ?? '').trim().split(' ');
+  return { nombre: n ?? '', apellido: resto.join(' ') };
+};
 
 export default function Empleados() {
   const { usuario } = useAuth();
   const esAdmin = usuario?.rol === 'admin';
 
-  const [empleados, setEmpleados] = useState(MOCK_EMPLEADOS);
+  const [empleados, setEmpleados] = useState([]);
+  const [cargando, setCargando]   = useState(true);
+  const [errorCarga, setErrorCarga] = useState('');
   const [busqueda, setBusqueda]   = useState('');
 
   // Modal crear
@@ -40,26 +41,48 @@ export default function Empleados() {
   const [eliminando, setEliminando]         = useState(false);
   const [deleteError, setDeleteError]       = useState('');
 
-  const filtrados = empleados.filter(e =>
-    e.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
-    (e.apellido && e.apellido.toLowerCase().includes(busqueda.toLowerCase())) ||
-    (e.telefono && e.telefono.includes(busqueda))
-  );
+  useEffect(() => {
+    api.get('/usuarios')
+      .then(data => setEmpleados(data ?? []))
+      .catch(err => setErrorCarga(err.message))
+      .finally(() => setCargando(false));
+  }, []);
 
-  const nombreCompleto = (e) => `${e.nombre}${e.apellido ? ' ' + e.apellido : ''}`;
+  const filtrados = empleados.filter(e => {
+    const q = busqueda.toLowerCase();
+    return (
+      e.nombre.toLowerCase().includes(q) ||
+      (e.email && e.email.toLowerCase().includes(q)) ||
+      (e.telefono && e.telefono.includes(busqueda))
+    );
+  });
+
+  const partirNombre = (e) => splitNombre(e.nombre);
+  const nombreCompleto = (e) => e.nombre;
 
   // ── Crear ──────────────────────────────────────────────
   const abrirModal = () => { setForm(FORM_INIT); setFormError(''); setModalOpen(true); };
   const cerrarModal = () => setModalOpen(false);
-  const handleChange = e => setForm(f => ({ ...f, [e.target.name]: e.target.value }));
+  const handleChange = e => {
+    const { name, value } = e.target;
+    const next = name === 'telefono' ? formatTelefono(value) : value;
+    setForm(f => ({ ...f, [name]: next }));
+  };
 
   const handleSubmit = async e => {
     e.preventDefault();
     setFormError('');
     setGuardando(true);
     try {
-      const nuevo = { ...form, id: Date.now() };
-      setEmpleados(prev => [...prev, nuevo].sort((a, b) => nombreCompleto(a).localeCompare(nombreCompleto(b))));
+      const nombreCompletoStr = `${form.nombre} ${form.apellido}`.trim();
+      const nuevo = await api.post('/usuarios', {
+        nombre: nombreCompletoStr,
+        email: form.email,
+        telefono: form.telefono,
+        password: form.password,
+        rol: form.rol,
+      });
+      setEmpleados(prev => [...prev, nuevo].sort((a, b) => a.nombre.localeCompare(b.nombre)));
       cerrarModal();
     } catch (err) {
       setFormError(err.message);
@@ -70,28 +93,41 @@ export default function Empleados() {
 
   // ── Editar ─────────────────────────────────────────────
   const abrirEditar = (emp) => {
+    const { nombre, apellido } = partirNombre(emp);
     setEditEmpleado(emp);
     setEditForm({
-      nombre: emp.nombre,
-      apellido: emp.apellido ?? '',
-      rol: emp.rol ?? 'Empleado',
-      telefono: emp.telefono ?? '',
-      contrasena: emp.contrasena ?? '',
+      nombre,
+      apellido,
+      rol: emp.rol ?? 'operador',
+      telefono: formatTelefono(emp.telefono ?? ''),
+      email: emp.email ?? '',
+      password: '',
     });
     setEditError('');
   };
   const cerrarEditar = () => setEditEmpleado(null);
-  const handleEditChange = e => setEditForm(f => ({ ...f, [e.target.name]: e.target.value }));
+  const handleEditChange = e => {
+    const { name, value } = e.target;
+    const next = name === 'telefono' ? formatTelefono(value) : value;
+    setEditForm(f => ({ ...f, [name]: next }));
+  };
 
   const handleEditSubmit = async e => {
     e.preventDefault();
     setEditError('');
     setEditando(true);
     try {
-      const actualizado = { ...editEmpleado, ...editForm };
+      const payload = {
+        nombre: `${editForm.nombre} ${editForm.apellido}`.trim(),
+        email: editForm.email,
+        telefono: editForm.telefono,
+        rol: editForm.rol,
+      };
+      if (editForm.password) payload.password = editForm.password;
+      const actualizado = await api.patch(`/usuarios/${editEmpleado.id}`, payload);
       setEmpleados(prev =>
         prev.map(emp => emp.id === actualizado.id ? actualizado : emp)
-            .sort((a, b) => nombreCompleto(a).localeCompare(nombreCompleto(b)))
+            .sort((a, b) => a.nombre.localeCompare(b.nombre))
       );
       cerrarEditar();
     } catch (err) {
@@ -109,6 +145,7 @@ export default function Empleados() {
     setDeleteError('');
     setEliminando(true);
     try {
+      await api.delete(`/usuarios/${deleteEmpleado.id}`);
       setEmpleados(prev => prev.filter(emp => emp.id !== deleteEmpleado.id));
       cerrarEliminar();
     } catch (err) {
@@ -125,12 +162,14 @@ export default function Empleados() {
           <h1 className="text-xl font-bold text-gray-900">Empleados</h1>
           <p className="text-sm text-gray-500">{filtrados.length} empleado(s)</p>
         </div>
-        <button
-          onClick={abrirModal}
-          className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
-        >
-          + Nuevo empleado
-        </button>
+        {esAdmin && (
+          <button
+            onClick={abrirModal}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+          >
+            + Nuevo empleado
+          </button>
+        )}
       </div>
 
       {/* Búsqueda */}
@@ -144,14 +183,20 @@ export default function Empleados() {
         </svg>
         <input
           type="text"
-          placeholder="Buscar por nombre, apellido o teléfono..."
+          placeholder="Buscar por nombre, email o teléfono..."
           value={busqueda}
           onChange={e => setBusqueda(e.target.value)}
           className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
         />
       </div>
 
-      {filtrados.length === 0 ? (
+      {errorCarga && (
+        <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">{errorCarga}</div>
+      )}
+
+      {cargando ? (
+        <div className="text-center text-gray-400 text-sm py-10">Cargando...</div>
+      ) : filtrados.length === 0 ? (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
           <p className="text-center text-gray-400 text-sm py-10">
             {busqueda ? 'No se encontraron empleados con ese criterio' : 'No hay empleados registrados'}
@@ -160,7 +205,9 @@ export default function Empleados() {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {filtrados.map(emp => {
-            const iniciales = `${emp.nombre?.[0] ?? ''}${emp.apellido?.[0] ?? ''}`.toUpperCase();
+            const { nombre, apellido } = partirNombre(emp);
+            const iniciales = `${nombre[0] ?? ''}${apellido[0] ?? ''}`.toUpperCase();
+            const esMismoUsuario = usuario?.id === emp.id;
             return (
               <div
                 key={emp.id}
@@ -173,7 +220,7 @@ export default function Empleados() {
                   <div className="min-w-0 flex-1">
                     <p className="font-semibold text-gray-900 text-sm truncate">{nombreCompleto(emp)}</p>
                     <span className="inline-block mt-0.5 text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
-                      {emp.rol || 'Empleado'}
+                      {ROL_LABEL[emp.rol] ?? emp.rol}
                     </span>
                   </div>
                 </div>
@@ -184,34 +231,36 @@ export default function Empleados() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                         d="M3 5a2 2 0 012-2h2.28a2 2 0 011.94 1.515l.7 2.793a2 2 0 01-.45 1.949L8.91 10.91a11 11 0 005.18 5.18l1.653-1.653a2 2 0 011.95-.45l2.792.7A2 2 0 0122 16.72V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
                     </svg>
-                    <span className="truncate">{emp.telefono || '—'}</span>
+                    <span className="truncate">{formatTelefono(emp.telefono) || '—'}</span>
                   </div>
                 </div>
 
-                <div className="flex items-center justify-end gap-1 pt-2 border-t border-gray-100">
-                  <button
-                    onClick={() => abrirEditar(emp)}
-                    className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
-                    title="Editar"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                        d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                    </svg>
-                  </button>
-                  {esAdmin && (
+                {esAdmin && (
+                  <div className="flex items-center justify-end gap-1 pt-2 border-t border-gray-100">
                     <button
-                      onClick={() => abrirEliminar(emp)}
-                      className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                      title="Eliminar"
+                      onClick={() => abrirEditar(emp)}
+                      className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                      title="Editar"
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                       </svg>
                     </button>
-                  )}
-                </div>
+                    {!esMismoUsuario && (
+                      <button
+                        onClick={() => abrirEliminar(emp)}
+                        className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Eliminar"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             );
           })}
@@ -234,8 +283,8 @@ export default function Empleados() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">Rol</label>
                 <select name="rol" value={form.rol} onChange={handleChange} className={INPUT_CLS}>
-                  <option value="Empleado">Empleado</option>
-                  <option value="Admin">Admin</option>
+                  <option value="operador">Empleado</option>
+                  <option value="admin">Admin</option>
                 </select>
               </div>
               <div>
@@ -251,14 +300,25 @@ export default function Empleados() {
                   placeholder="Apellido" className={INPUT_CLS} />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Teléfono</label>
-                <input type="tel" name="telefono" value={form.telefono} onChange={handleChange}
-                  inputMode="tel" autoComplete="tel" pattern="[0-9+\-\s()]*"
-                  placeholder="33 1234 5678" className={INPUT_CLS} />
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Email <span className="text-red-500">*</span>
+                </label>
+                <input type="email" name="email" required value={form.email} onChange={handleChange}
+                  placeholder="correo@ejemplo.com" className={INPUT_CLS} />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Contraseña</label>
-                <input type="password" name="contrasena" value={form.contrasena} onChange={handleChange}
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Teléfono <span className="text-red-500">*</span>
+                </label>
+                <input type="tel" name="telefono" required value={form.telefono} onChange={handleChange}
+                  inputMode="numeric" autoComplete="tel" maxLength={12}
+                  placeholder="33-1234-5678" className={INPUT_CLS} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Contraseña <span className="text-red-500">*</span>
+                </label>
+                <input type="password" name="password" required minLength={6} value={form.password} onChange={handleChange}
                   placeholder="••••••••" className={INPUT_CLS} />
               </div>
               {formError && (
@@ -306,21 +366,32 @@ export default function Empleados() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">Rol</label>
-                <select name="rol" value={editForm.rol} onChange={handleEditChange} className={INPUT_CLS}>
-                  <option value="Empleado">Empleado</option>
-                  <option value="Admin">Admin</option>
+                <select
+                  name="rol"
+                  value={editForm.rol}
+                  onChange={handleEditChange}
+                  disabled={editEmpleado.id === usuario?.id}
+                  className={INPUT_CLS}
+                >
+                  <option value="operador">Empleado</option>
+                  <option value="admin">Admin</option>
                 </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Email</label>
+                <input type="email" name="email" value={editForm.email} onChange={handleEditChange}
+                  placeholder="correo@ejemplo.com" className={INPUT_CLS} />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">Teléfono</label>
                 <input type="tel" name="telefono" value={editForm.telefono} onChange={handleEditChange}
-                  inputMode="tel" autoComplete="tel" pattern="[0-9+\-\s()]*"
-                  placeholder="33 1234 5678" className={INPUT_CLS} />
+                  inputMode="numeric" autoComplete="tel" maxLength={12}
+                  placeholder="33-1234-5678" className={INPUT_CLS} />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Contraseña</label>
-                <input type="password" name="contrasena" value={editForm.contrasena} onChange={handleEditChange}
-                  placeholder="••••••••" className={INPUT_CLS} />
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Nueva contraseña</label>
+                <input type="password" name="password" minLength={6} value={editForm.password} onChange={handleEditChange}
+                  placeholder="Dejar vacío para no cambiar" className={INPUT_CLS} />
               </div>
               {editError && (
                 <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">{editError}</div>

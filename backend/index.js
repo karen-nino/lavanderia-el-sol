@@ -19,6 +19,7 @@ app.use('/uploads', express.static('uploads'));
 
 // Routes
 import authRoutes           from './routes/auth.routes.js';
+import usuariosRoutes       from './routes/usuarios.routes.js';
 import clientesRoutes       from './routes/clientes.routes.js';
 import maquinasRoutes       from './routes/maquinas.routes.js';
 import notasRoutes          from './routes/notas.routes.js';
@@ -28,6 +29,7 @@ import ventasRoutes         from './routes/ventas.routes.js';
 import configuracionRoutes  from './routes/configuracion.routes.js';
 
 app.use('/api/auth',           authRoutes);
+app.use('/api/usuarios',       usuariosRoutes);
 app.use('/api/clientes',       clientesRoutes);
 app.use('/api/maquinas',       maquinasRoutes);
 app.use('/api/notas',          notasRoutes);
