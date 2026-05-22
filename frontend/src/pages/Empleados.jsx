@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../lib/api';
 import { esAdmin as esAdminFn, esAdminMain as esAdminMainFn } from '../lib/roles';
@@ -20,10 +20,24 @@ export default function Empleados() {
   const esAdmin     = esAdminFn(usuario?.rol);
   const esAdminMain = esAdminMainFn(usuario?.rol);
 
-  const [empleados, setEmpleados] = useState([]);
-  const [cargando, setCargando]   = useState(true);
-  const [errorCarga, setErrorCarga] = useState('');
-  const [busqueda, setBusqueda]   = useState('');
+  const [empleados, setEmpleados]       = useState([]);
+  const [cargando, setCargando]         = useState(true);
+  const [errorCarga, setErrorCarga]     = useState('');
+  const [busqueda, setBusqueda]         = useState('');
+  const [filtroRol, setFiltroRol]       = useState('todos');
+  const [mostrarFiltros, setMostrarFiltros] = useState(false);
+  const filtrosRef = useRef(null);
+
+  useEffect(() => {
+    if (!mostrarFiltros) return;
+    const onMouseDown = (e) => {
+      if (filtrosRef.current && !filtrosRef.current.contains(e.target)) {
+        setMostrarFiltros(false);
+      }
+    };
+    document.addEventListener('mousedown', onMouseDown);
+    return () => document.removeEventListener('mousedown', onMouseDown);
+  }, [mostrarFiltros]);
 
   // Modal crear
   const [modalOpen, setModalOpen] = useState(false);
@@ -49,9 +63,10 @@ export default function Empleados() {
       .finally(() => setCargando(false));
   }, []);
 
-  const filtrados = empleados.filter(e =>
-    e.nombre.toLowerCase().includes(busqueda.toLowerCase())
-  );
+  const filtrados = empleados.filter(e => {
+    if (filtroRol !== 'todos' && e.rol !== filtroRol) return false;
+    return e.nombre.toLowerCase().includes(busqueda.toLowerCase());
+  });
 
   const partirNombre = (e) => splitNombre(e.nombre);
   const nombreCompleto = (e) => e.nombre;
@@ -150,14 +165,61 @@ export default function Empleados() {
           <h1 className="text-xl font-bold text-gray-900">Empleados</h1>
           <p className="text-sm text-gray-500">{filtrados.length} empleado(s)</p>
         </div>
-        {esAdmin && (
+        <div ref={filtrosRef} className="relative flex items-center gap-3">
           <button
-            onClick={abrirModal}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+            onClick={() => setMostrarFiltros(v => !v)}
+            aria-label="Filtros"
+            className={`w-11 h-11 rounded-full border flex items-center justify-center transition-colors ${
+              filtroRol !== 'todos'
+                ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
+                : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+            }`}
           >
-            + Nuevo empleado
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5}
+                d="M4 6h16M7 12h10M10 18h4" />
+            </svg>
           </button>
-        )}
+
+          {esAdmin && (
+            <button
+              onClick={abrirModal}
+              aria-label="Nuevo empleado"
+              className="w-11 h-11 rounded-full bg-indigo-600 hover:bg-indigo-700 text-white flex items-center justify-center transition-colors"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5}
+                  d="M12 4v16m8-8H4" />
+              </svg>
+            </button>
+          )}
+
+          {mostrarFiltros && (
+            <div className="absolute right-0 top-12 z-10 bg-white border border-gray-200 rounded-xl shadow-lg p-3 w-56">
+              <p className="text-xs font-semibold text-gray-500 uppercase mb-2 px-1">Filtrar por rol</p>
+              <div className="flex flex-col gap-1">
+                {[
+                  { v: 'todos',      label: 'Todos' },
+                  { v: 'admin_main', label: 'Admin Main' },
+                  { v: 'admin',      label: 'Admin' },
+                  { v: 'operador',   label: 'Empleado' },
+                ].map(opt => (
+                  <button
+                    key={opt.v}
+                    onClick={() => { setFiltroRol(opt.v); setMostrarFiltros(false); }}
+                    className={`text-left text-sm px-3 py-2 rounded-lg transition-colors ${
+                      filtroRol === opt.v
+                        ? 'bg-indigo-50 text-indigo-700 font-medium'
+                        : 'text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Búsqueda */}
