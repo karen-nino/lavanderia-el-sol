@@ -112,17 +112,20 @@ export default function Salidas() {
     <div className="pt-10 pb-16 px-6 md:p-6 max-w-2xl mx-auto space-y-6">
 
       {/* Cabecera */}
-      <div>
+      <div className="flex items-center gap-2">
         <button
           onClick={() => navigate(`/notas/${id}`)}
-          className="text-sm text-indigo-600 hover:underline mb-1 flex items-center gap-1"
+          aria-label="Volver"
+          className="flex-shrink-0 w-12 h-12 rounded-full border border-gray-300 bg-white text-gray-800 hover:bg-gray-50 flex items-center justify-center transition-colors"
         >
-          ← Detalle de nota
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
+          </svg>
         </button>
-        <h1 className="text-xl font-bold text-gray-900">Salidas</h1>
-        <p className="text-xs text-gray-400 mt-0.5">
-          {nota?.folio ?? `Nota #${id}`}
-        </p>
+        <div>
+          <h1 className="text-lg font-bold text-gray-900 leading-tight">Salidas</h1>
+          <p className="text-xs text-gray-500">{nota?.folio ?? `Nota #${id}`}</p>
+        </div>
       </div>
 
       {errorAccion && (
