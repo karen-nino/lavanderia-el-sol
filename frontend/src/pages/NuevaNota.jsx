@@ -106,17 +106,20 @@ export default function NuevaNota() {
 
   return (
     <div className="pt-10 pb-16 px-6 md:p-6 max-w-2xl mx-auto">
-      <div className="mb-5">
+      <div className="flex items-center gap-2 mb-6">
         <button
           onClick={() => navigate(-1)}
-          className="flex items-center gap-1 text-sm text-indigo-600 hover:text-indigo-800 mb-2"
+          aria-label="Volver"
+          className="flex-shrink-0 w-12 h-12 rounded-full border border-gray-300 bg-white text-gray-800 hover:bg-gray-50 flex items-center justify-center transition-colors"
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
           </svg>
-          Volver
         </button>
-        <h1 className="text-xl font-bold text-gray-900">Nueva nota</h1>
+        <div>
+          <h1 className="text-lg font-bold text-gray-900 leading-tight">Nueva Nota</h1>
+          <p className="text-sm text-gray-500">Crea una nueva nota</p>
+        </div>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
