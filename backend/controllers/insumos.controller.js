@@ -1,4 +1,5 @@
 import pool from '../db/pool.js';
+import { esAdmin } from '../middleware/roles.js';
 
 export const getInsumos = async (req, res) => {
   try {
@@ -91,7 +92,7 @@ export const putInsumo = async (req, res) => {
 };
 
 export const eliminarInsumo = async (req, res) => {
-  if (req.user.rol !== 'admin') {
+  if (!esAdmin(req.user.rol)) {
     return res.status(403).json({ message: 'Solo los administradores pueden eliminar artículos.' });
   }
   const { id } = req.params;

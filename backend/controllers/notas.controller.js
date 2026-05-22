@@ -1,4 +1,5 @@
 import pool from '../db/pool.js';
+import { esAdmin } from '../middleware/roles.js';
 
 const ESTADOS_VALIDOS     = ['ACTIVA', 'EN_PROCESO', 'LISTA', 'PAGADA', 'ENTREGADA', 'CANCELADA'];
 const MODALIDADES_VALIDAS = ['AUTOSERVICIO', 'EDREDON', 'POR_ENCARGO'];
@@ -295,7 +296,7 @@ export const createNota = async (req, res) => {
 
 // ── DELETE /notas/:id ───────────────────────────────────────
 export const eliminarNota = async (req, res) => {
-  if (req.user.rol !== 'admin') {
+  if (!esAdmin(req.user.rol)) {
     return res.status(403).json({ message: 'Solo los administradores pueden eliminar notas.' });
   }
   const { id } = req.params;

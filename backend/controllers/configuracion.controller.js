@@ -2,6 +2,7 @@ import pool from '../db/pool.js';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import { esAdmin } from '../middleware/roles.js';
 
 // Crear carpeta uploads/logo/ si no existe
 const uploadsDir = './uploads/logo';
@@ -46,7 +47,7 @@ export const getConfiguracion = async (req, res) => {
 
 // ── PATCH /configuracion ──────────────────────────────────────
 export const updateConfiguracion = async (req, res) => {
-  if (req.user.rol !== 'admin') {
+  if (!esAdmin(req.user.rol)) {
     return res.status(403).json({ message: 'Solo administradores pueden modificar la configuración.' });
   }
 
@@ -81,7 +82,7 @@ export const updateConfiguracion = async (req, res) => {
 
 // ── POST /configuracion/logo ──────────────────────────────────
 export const uploadLogo = async (req, res) => {
-  if (req.user.rol !== 'admin') {
+  if (!esAdmin(req.user.rol)) {
     return res.status(403).json({ message: 'Solo administradores pueden modificar el logo.' });
   }
   if (!req.file) {

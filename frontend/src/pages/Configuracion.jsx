@@ -725,7 +725,6 @@ export default function Configuracion() {
       {/* ── Vista desktop ── */}
       <div className="hidden md:block p-6 max-w-2xl mx-auto space-y-6">
         <h1 className="text-xl font-bold text-gray-900">Configuración</h1>
-        {mensajeBanner}
 
         <div className="space-y-6">
           {seccionPerfilDesktop}
@@ -737,22 +736,25 @@ export default function Configuracion() {
           {seccionAlertasDesktop}
         </div>
 
-        <div className="flex justify-end">
-          <button
-            type="button"
-            onClick={handleGuardarTodo}
-            disabled={saving}
-            className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors"
-          >
-            {saving ? (
-              <>
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                Guardando...
-              </>
-            ) : (
-              'Guardar cambios'
-            )}
-          </button>
+        <div className="space-y-3">
+          {mensajeBanner}
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={handleGuardarTodo}
+              disabled={saving}
+              className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors"
+            >
+              {saving ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  Guardando...
+                </>
+              ) : (
+                'Guardar cambios'
+              )}
+            </button>
+          </div>
         </div>
       </div>
     </>

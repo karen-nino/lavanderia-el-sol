@@ -6,15 +6,9 @@ import {
   deleteEmpleado,
 } from '../controllers/usuarios.controller.js';
 import { verifyToken } from '../middleware/auth.js';
+import { requireAdmin } from '../middleware/roles.js';
 
 const router = Router();
-
-const requireAdmin = (req, res, next) => {
-  if (!['admin', 'admin_main'].includes(req.user?.rol)) {
-    return res.status(403).json({ message: 'Solo un administrador puede realizar esta acción.' });
-  }
-  next();
-};
 
 router.get('/',       verifyToken, getEmpleados);
 router.post('/',      verifyToken, requireAdmin, createEmpleado);
