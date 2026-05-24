@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 
@@ -6,7 +6,13 @@ const INPUT_CLS =
   'w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition';
 
 const INPUT_DISABLED_CLS =
-  'w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm bg-gray-50 text-gray-400 cursor-not-allowed';
+  'w-full px-4 py-3.5 border border-gray-300 rounded-lg text-base bg-gray-50 text-gray-400 cursor-not-allowed placeholder:text-gray-400';
+
+const TIPOS_SERVICIO = [
+  { v: 'POR_ENCARGO',  label: 'Por Encargo'  },
+  { v: 'AUTOSERVICIO', label: 'Autoservicio' },
+];
+const TIPO_LABEL = Object.fromEntries(TIPOS_SERVICIO.map(t => [t.v, t.label]));
 
 const FORM_INIT = {
   maquina_id:      '',
@@ -26,6 +32,20 @@ export default function NuevaNota() {
   const [productosLista,    setProductosLista]    = useState([]);
   const [error,             setError]             = useState('');
   const [loading,           setLoading]           = useState(false);
+  const [tipoServicio,      setTipoServicio]      = useState('');
+  const [tipoOpen,          setTipoOpen]          = useState(false);
+  const tipoRef = useRef(null);
+
+  useEffect(() => {
+    if (!tipoOpen) return;
+    const onMouseDown = (e) => {
+      if (tipoRef.current && !tipoRef.current.contains(e.target)) {
+        setTipoOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onMouseDown);
+    return () => document.removeEventListener('mousedown', onMouseDown);
+  }, [tipoOpen]);
 
   const ajusteNum      = Number(form.ajuste) || 0;
   const subtotalCargas = (Number(form.cantidad_cargas) || 1) * precioCarga;
@@ -122,31 +142,78 @@ export default function NuevaNota() {
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} className="space-y-5">
 
-        {/* ── Datos de la nota ────────────────────────────── */}
+        {/* ── # Nota ──────────────────────────────────────── */}
+        <div>
+          <label className="block text-base font-semibold text-gray-900 mb-2"># Nota</label>
+          <input
+            type="text" disabled placeholder="Se asignará al guardar"
+            className={INPUT_DISABLED_CLS}
+          />
+        </div>
+
+        {/* ── Tipo de Servicio ────────────────────────────── */}
+        <div ref={tipoRef} className="relative">
+          <label className="block text-base font-semibold text-gray-900 mb-2">
+            Tipo de Servicio
+          </label>
+          <button
+            type="button"
+            onClick={() => setTipoOpen(o => !o)}
+            className={`w-full px-4 py-3.5 border rounded-lg bg-white text-left flex items-center justify-between transition-colors ${
+              tipoOpen ? 'border-blue-500 ring-1 ring-blue-500' : 'border-gray-300 hover:border-gray-400'
+            }`}
+          >
+            <span className={tipoServicio ? 'text-gray-900' : 'text-gray-400'}>
+              {tipoServicio ? TIPO_LABEL[tipoServicio] : 'Seleccionar'}
+            </span>
+            <svg
+              className={`w-5 h-5 text-gray-500 transition-transform ${tipoOpen ? 'rotate-180' : ''}`}
+              fill="none" stroke="currentColor" viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+
+          {tipoOpen && (
+            <div className="mt-2 bg-white border border-gray-200 rounded-lg shadow-md overflow-hidden">
+              {TIPOS_SERVICIO.map(opt => {
+                const selected = tipoServicio === opt.v;
+                return (
+                  <button
+                    key={opt.v}
+                    type="button"
+                    onClick={() => { setTipoServicio(opt.v); setTipoOpen(false); }}
+                    className="w-full px-4 py-3.5 flex items-center justify-between text-left hover:bg-gray-50 border-b last:border-0 border-gray-100"
+                  >
+                    <span className="text-base text-gray-900">{opt.label}</span>
+                    <span className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
+                      selected ? 'border-indigo-600 bg-indigo-600' : 'border-gray-300'
+                    }`}>
+                      {selected && (
+                        <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                        </svg>
+                      )}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {tipoServicio === 'POR_ENCARGO' && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 text-center">
+            <p className="text-sm text-gray-500">Formulario de Por Encargo próximamente.</p>
+          </div>
+        )}
+
+        {tipoServicio === 'AUTOSERVICIO' && (
+        <>
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 space-y-4">
           <h2 className="text-sm font-semibold text-gray-700">Autoservicio</h2>
-
-          {/* Número de nota + ID — orientativo */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                Número de nota
-              </label>
-              <input
-                type="text" value="Se asignará al guardar" disabled
-                className={INPUT_DISABLED_CLS}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">ID</label>
-              <input
-                type="text" value="Se asignará al guardar" disabled
-                className={INPUT_DISABLED_CLS}
-              />
-            </div>
-          </div>
 
           {/* Máquina */}
           <div>
@@ -320,6 +387,8 @@ export default function NuevaNota() {
             {loading ? 'Creando...' : 'Crear nota'}
           </button>
         </div>
+        </>
+        )}
       </form>
     </div>
   );

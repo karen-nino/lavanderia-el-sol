@@ -39,7 +39,8 @@
       "Bash(sips -Z 1200 /tmp/figextract/thumbnail.png -s formatOptions 95 --out /tmp/figextract/thumb-big.jpg)",
       "mcp__claude_ai_Figma__whoami",
       "Bash(npx eslint *)",
-      "Bash(npx esbuild *)"
+      "Bash(npx esbuild *)",
+      "Bash(npx *)"
     ]
   }
 }
