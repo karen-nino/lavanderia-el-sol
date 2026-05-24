@@ -14,6 +14,12 @@ const TIPOS_SERVICIO = [
 ];
 const TIPO_LABEL = Object.fromEntries(TIPOS_SERVICIO.map(t => [t.v, t.label]));
 
+const TIPOS_PRENDA = [
+  { v: 'ROPA',    label: 'Ropa'    },
+  { v: 'EDREDON', label: 'Edredón' },
+];
+const PRENDA_LABEL = Object.fromEntries(TIPOS_PRENDA.map(t => [t.v, t.label]));
+
 const FORM_INIT = {
   maquina_id:      '',
   cantidad_cargas: '1',
@@ -34,7 +40,10 @@ export default function NuevaNota() {
   const [loading,           setLoading]           = useState(false);
   const [tipoServicio,      setTipoServicio]      = useState('');
   const [tipoOpen,          setTipoOpen]          = useState(false);
-  const tipoRef = useRef(null);
+  const [tipoPrenda,        setTipoPrenda]        = useState('');
+  const [prendaOpen,        setPrendaOpen]        = useState(false);
+  const tipoRef   = useRef(null);
+  const prendaRef = useRef(null);
 
   useEffect(() => {
     if (!tipoOpen) return;
@@ -46,6 +55,17 @@ export default function NuevaNota() {
     document.addEventListener('mousedown', onMouseDown);
     return () => document.removeEventListener('mousedown', onMouseDown);
   }, [tipoOpen]);
+
+  useEffect(() => {
+    if (!prendaOpen) return;
+    const onMouseDown = (e) => {
+      if (prendaRef.current && !prendaRef.current.contains(e.target)) {
+        setPrendaOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onMouseDown);
+    return () => document.removeEventListener('mousedown', onMouseDown);
+  }, [prendaOpen]);
 
   const ajusteNum      = Number(form.ajuste) || 0;
   const subtotalCargas = (Number(form.cantidad_cargas) || 1) * precioCarga;
@@ -87,9 +107,10 @@ export default function NuevaNota() {
     setLoading(true);
 
     const cargas = Number(form.cantidad_cargas) || 1;
+    const prendaTxt = tipoPrenda ? `Prenda: ${PRENDA_LABEL[tipoPrenda]} — ` : '';
     const descripcionFinal = form.descripcion
-      ? `Cargas: ${cargas} — ${form.descripcion}`
-      : `Cargas: ${cargas}`;
+      ? `${prendaTxt}Cargas: ${cargas} — ${form.descripcion}`
+      : `${prendaTxt}Cargas: ${cargas}`;
 
     const payload = {
       modalidad:       'AUTOSERVICIO',
@@ -146,7 +167,7 @@ export default function NuevaNota() {
 
         {/* ── # Nota ──────────────────────────────────────── */}
         <div>
-          <label className="block text-base font-semibold text-gray-900 mb-2"># Nota</label>
+          <label className="block text-sm font-semibold text-gray-900 mb-2"># Nota</label>
           <input
             type="text" disabled placeholder="Se asignará al guardar"
             className={INPUT_DISABLED_CLS}
@@ -155,25 +176,35 @@ export default function NuevaNota() {
 
         {/* ── Tipo de Servicio ────────────────────────────── */}
         <div ref={tipoRef} className="relative">
-          <label className="block text-base font-semibold text-gray-900 mb-2">
+          <label className="block text-sm font-semibold text-gray-900 mb-2">
             Tipo de Servicio
           </label>
           <button
             type="button"
             onClick={() => setTipoOpen(o => !o)}
             className={`w-full px-4 py-3.5 border rounded-lg bg-white text-left flex items-center justify-between transition-colors ${
-              tipoOpen ? 'border-blue-500 ring-1 ring-blue-500' : 'border-gray-300 hover:border-gray-400'
+              tipoOpen
+                ? 'border-blue-500 ring-1 ring-blue-500'
+                : tipoServicio
+                  ? 'border-green-600'
+                  : 'border-gray-300 hover:border-gray-400'
             }`}
           >
             <span className={tipoServicio ? 'text-gray-900' : 'text-gray-400'}>
               {tipoServicio ? TIPO_LABEL[tipoServicio] : 'Seleccionar'}
             </span>
-            <svg
-              className={`w-5 h-5 text-gray-500 transition-transform ${tipoOpen ? 'rotate-180' : ''}`}
-              fill="none" stroke="currentColor" viewBox="0 0 24 24"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
+            {tipoServicio && !tipoOpen ? (
+              <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+            ) : (
+              <svg
+                className={`w-5 h-5 text-gray-500 transition-transform ${tipoOpen ? 'rotate-180' : ''}`}
+                fill="none" stroke="currentColor" viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            )}
           </button>
 
           {tipoOpen && (
@@ -212,8 +243,68 @@ export default function NuevaNota() {
 
         {tipoServicio === 'AUTOSERVICIO' && (
         <>
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 space-y-4">
-          <h2 className="text-sm font-semibold text-gray-700">Autoservicio</h2>
+        {/* Tipo de Prenda */}
+        <div ref={prendaRef} className="relative">
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">Tipo de Prenda</label>
+          <button
+            type="button"
+            onClick={() => setPrendaOpen(o => !o)}
+            className={`w-full px-4 py-3.5 border rounded-lg bg-white text-left flex items-center justify-between transition-colors ${
+              prendaOpen
+                ? 'border-blue-500 ring-1 ring-blue-500'
+                : tipoPrenda
+                  ? 'border-green-600'
+                  : 'border-gray-300 hover:border-gray-400'
+            }`}
+          >
+            <span className={tipoPrenda ? 'text-gray-900' : 'text-gray-400'}>
+              {tipoPrenda ? PRENDA_LABEL[tipoPrenda] : 'Seleccionar'}
+            </span>
+            {tipoPrenda && !prendaOpen ? (
+              <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+            ) : (
+              <svg
+                className={`w-5 h-5 text-gray-500 transition-transform ${prendaOpen ? 'rotate-180' : ''}`}
+                fill="none" stroke="currentColor" viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            )}
+          </button>
+
+          {prendaOpen && (
+            <div className="mt-2 bg-white border border-gray-200 rounded-lg shadow-md overflow-hidden">
+              {TIPOS_PRENDA.map(opt => {
+                const selected = tipoPrenda === opt.v;
+                return (
+                  <button
+                    key={opt.v}
+                    type="button"
+                    onClick={() => { setTipoPrenda(opt.v); setPrendaOpen(false); }}
+                    className="w-full px-4 py-3.5 flex items-center justify-between text-left hover:bg-gray-50 border-b last:border-0 border-gray-100"
+                  >
+                    <span className="text-base text-gray-900">{opt.label}</span>
+                    <span className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
+                      selected ? 'border-indigo-600 bg-indigo-600' : 'border-gray-300'
+                    }`}>
+                      {selected && (
+                        <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                        </svg>
+                      )}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {tipoPrenda && (
+        <>
+        <div className='space-y-5'>
 
           {/* Máquina */}
           <div>
@@ -387,6 +478,8 @@ export default function NuevaNota() {
             {loading ? 'Creando...' : 'Crear nota'}
           </button>
         </div>
+        </>
+        )}
         </>
         )}
       </form>
