@@ -3,7 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 
 const INPUT_CLS =
-  'w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition';
+  'w-full px-4 py-3.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition';
+
+const LABEL_CLS = 'block text-sm font-semibold text-gray-900 mb-2';
 
 const INPUT_DISABLED_CLS =
   'w-full px-4 py-3.5 border border-gray-300 rounded-lg text-base bg-gray-50 text-gray-400 cursor-not-allowed placeholder:text-gray-400';
@@ -24,7 +26,6 @@ const FORM_INIT = {
   maquina_id:      '',
   cantidad_cargas: '1',
   ajuste:          '0',
-  descripcion:     '',
   notas:           '',
 };
 
@@ -42,8 +43,10 @@ export default function NuevaNota() {
   const [tipoOpen,          setTipoOpen]          = useState(false);
   const [tipoPrenda,        setTipoPrenda]        = useState('');
   const [prendaOpen,        setPrendaOpen]        = useState(false);
-  const tipoRef   = useRef(null);
-  const prendaRef = useRef(null);
+  const [maquinaOpen,       setMaquinaOpen]       = useState(false);
+  const tipoRef    = useRef(null);
+  const prendaRef  = useRef(null);
+  const maquinaRef = useRef(null);
 
   useEffect(() => {
     if (!tipoOpen) return;
@@ -66,6 +69,17 @@ export default function NuevaNota() {
     document.addEventListener('mousedown', onMouseDown);
     return () => document.removeEventListener('mousedown', onMouseDown);
   }, [prendaOpen]);
+
+  useEffect(() => {
+    if (!maquinaOpen) return;
+    const onMouseDown = (e) => {
+      if (maquinaRef.current && !maquinaRef.current.contains(e.target)) {
+        setMaquinaOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onMouseDown);
+    return () => document.removeEventListener('mousedown', onMouseDown);
+  }, [maquinaOpen]);
 
   const ajusteNum      = Number(form.ajuste) || 0;
   const subtotalCargas = (Number(form.cantidad_cargas) || 1) * precioCarga;
@@ -108,15 +122,12 @@ export default function NuevaNota() {
 
     const cargas = Number(form.cantidad_cargas) || 1;
     const prendaTxt = tipoPrenda ? `Prenda: ${PRENDA_LABEL[tipoPrenda]} — ` : '';
-    const descripcionFinal = form.descripcion
-      ? `${prendaTxt}Cargas: ${cargas} — ${form.descripcion}`
-      : `${prendaTxt}Cargas: ${cargas}`;
 
     const payload = {
       modalidad:       'AUTOSERVICIO',
       estado_pago:     'PAGADO',
       sucursal:        'lopez_cotilla',
-      descripcion:     descripcionFinal,
+      descripcion:     `${prendaTxt}Cargas: ${cargas}`,
       notas:           form.notas || undefined,
       maquina_id:      form.maquina_id ? Number(form.maquina_id) : undefined,
       cantidad_cargas: cargas,
@@ -245,7 +256,7 @@ export default function NuevaNota() {
         <>
         {/* Tipo de Prenda */}
         <div ref={prendaRef} className="relative">
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">Tipo de Prenda</label>
+          <label className={LABEL_CLS}>Tipo de Prenda</label>
           <button
             type="button"
             onClick={() => setPrendaOpen(o => !o)}
@@ -304,19 +315,95 @@ export default function NuevaNota() {
 
         {tipoPrenda && (
         <>
+        <div className="border-t border-gray-200" />
+
         <div className='space-y-5'>
 
           {/* Máquina */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">Máquina</label>
-            <select name="maquina_id" value={form.maquina_id} onChange={handleChange} className={INPUT_CLS}>
-              <option value="">Sin asignar</option>
-              {maquinas.map(m => (
-                <option key={m.id} value={m.id}>
-                  {m.nombre} — {m.tipo.replace(/_/g, ' ')}
-                </option>
-              ))}
-            </select>
+          <div ref={maquinaRef} className="relative">
+            <label className={LABEL_CLS}>Máquina</label>
+            {(() => {
+              const maquinaSel = maquinas.find(m => String(m.id) === String(form.maquina_id));
+              const maquinaLabel = maquinaSel
+                ? `${maquinaSel.nombre} — ${maquinaSel.tipo.replace(/_/g, ' ')}`
+                : '';
+              return (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setMaquinaOpen(o => !o)}
+                    className={`w-full px-4 py-3.5 border rounded-lg bg-white text-left flex items-center justify-between transition-colors ${
+                      maquinaOpen
+                        ? 'border-blue-500 ring-1 ring-blue-500'
+                        : form.maquina_id
+                          ? 'border-green-600'
+                          : 'border-gray-300 hover:border-gray-400'
+                    }`}
+                  >
+                    <span className={form.maquina_id ? 'text-gray-900' : 'text-gray-400'}>
+                      {maquinaLabel || 'Sin asignar'}
+                    </span>
+                    {form.maquina_id && !maquinaOpen ? (
+                      <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                    ) : (
+                      <svg
+                        className={`w-5 h-5 text-gray-500 transition-transform ${maquinaOpen ? 'rotate-180' : ''}`}
+                        fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    )}
+                  </button>
+
+                  {maquinaOpen && (
+                    <div className="mt-2 bg-white border border-gray-200 rounded-lg shadow-md overflow-hidden">
+                      <button
+                        type="button"
+                        onClick={() => { setForm(f => ({ ...f, maquina_id: '' })); setMaquinaOpen(false); }}
+                        className="w-full px-4 py-3.5 flex items-center justify-between text-left hover:bg-gray-50 border-b last:border-0 border-gray-100"
+                      >
+                        <span className="text-base text-gray-500 italic">Sin asignar</span>
+                        <span className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
+                          !form.maquina_id ? 'border-indigo-600 bg-indigo-600' : 'border-gray-300'
+                        }`}>
+                          {!form.maquina_id && (
+                            <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                            </svg>
+                          )}
+                        </span>
+                      </button>
+                      {maquinas.map(m => {
+                        const selected = String(form.maquina_id) === String(m.id);
+                        return (
+                          <button
+                            key={m.id}
+                            type="button"
+                            onClick={() => { setForm(f => ({ ...f, maquina_id: String(m.id) })); setMaquinaOpen(false); }}
+                            className="w-full px-4 py-3.5 flex items-center justify-between text-left hover:bg-gray-50 border-b last:border-0 border-gray-100"
+                          >
+                            <span className="text-base text-gray-900">
+                              {m.nombre} — {m.tipo.replace(/_/g, ' ')}
+                            </span>
+                            <span className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
+                              selected ? 'border-indigo-600 bg-indigo-600' : 'border-gray-300'
+                            }`}>
+                              {selected && (
+                                <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                </svg>
+                              )}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </>
+              );
+            })()}
             {maquinas.length === 0 && (
               <p className="text-xs text-red-600 mt-1">No hay máquinas disponibles en este momento.</p>
             )}
@@ -324,7 +411,7 @@ export default function NuevaNota() {
 
           {/* Cantidad de cargas */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+            <label className={LABEL_CLS}>
               Cantidad de cargas <span className="text-red-500">*</span>
             </label>
             <p className="text-xs text-gray-400 mb-1.5">Precio base por carga: ${precioCarga.toFixed(2)} MXN</p>
@@ -340,7 +427,7 @@ export default function NuevaNota() {
 
           {/* Ajuste */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">Ajuste ($)</label>
+            <label className={LABEL_CLS}>Ajuste ($)</label>
             <input
               type="number" name="ajuste" step="0.01"
               value={form.ajuste} onChange={handleChange}
@@ -350,21 +437,14 @@ export default function NuevaNota() {
             <p className="text-xs text-gray-400 mt-1">Descuento (negativo) o cargo extra (positivo)</p>
           </div>
 
-          {/* Descripción */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">Descripción</label>
-            <textarea
-              name="descripcion" value={form.descripcion} onChange={handleChange} rows={2}
-              placeholder="Ej. Ropa de cama, ropa casual..."
-              className={`${INPUT_CLS} resize-none`}
-            />
-          </div>
+          {/* ── Información adicional ───────────────────── */}
+          <div className="border-t border-gray-200" />
 
-          {/* Observaciones */}
+          {/* Instrucciones */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">Observaciones</label>
+            <label className={LABEL_CLS}>Instrucciones</label>
             <textarea
-              name="notas" value={form.notas} onChange={handleChange} rows={2}
+              name="notas" value={form.notas} onChange={handleChange} rows={5}
               placeholder="Instrucciones especiales..."
               className={`${INPUT_CLS} resize-none`}
             />
@@ -372,7 +452,10 @@ export default function NuevaNota() {
         </div>
 
         {/* ── Productos ────────────────────────────────────── */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 space-y-3">
+
+        <div className="border-t border-gray-200" />
+
+        <div>
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold text-gray-700">Productos</h2>
             <button
