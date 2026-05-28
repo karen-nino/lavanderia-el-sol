@@ -209,6 +209,8 @@ export default function NuevaNota() {
 
       <form onSubmit={handleSubmit} className="space-y-5">
 
+        {step === 1 && (
+        <>
         {/* ── # Nota ──────────────────────────────────────── */}
         <div>
           <label className="block text-sm font-semibold text-gray-900 mb-2"># Nota</label>
@@ -217,7 +219,11 @@ export default function NuevaNota() {
             className={INPUT_DISABLED_CLS}
           />
         </div>
+        </>
+        )}
 
+        {step === 1 && (
+        <>
         {/* ── Tipo de Servicio ────────────────────────────── */}
         <div ref={tipoRef} className="relative">
           <label className="block text-sm font-semibold text-gray-900 mb-2">
@@ -278,14 +284,18 @@ export default function NuevaNota() {
             </div>
           )}
         </div>
+        </>
+        )}
 
-        {tipoServicio === 'POR_ENCARGO' && (
+        {tipoServicio === 'POR_ENCARGO' && step === 1 && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 text-center">
             <p className="text-sm text-gray-500">Formulario de Por Encargo próximamente.</p>
           </div>
         )}
 
         {tipoServicio === 'AUTOSERVICIO' && (
+        <>
+        {step === 1 && (
         <>
         {/* Tipo de Prenda */}
         <div ref={prendaRef} className="relative">
@@ -345,6 +355,8 @@ export default function NuevaNota() {
             </div>
           )}
         </div>
+        </>
+        )}
 
         {tipoPrenda && (
         <>
@@ -617,8 +629,7 @@ export default function NuevaNota() {
 
         {step === 2 && (
         <>
-        <div className="py-3"><div className="border-t border-gray-200" /></div>
-
+        
         <div className='space-y-5'>
           {/* Cliente */}
           <div>
