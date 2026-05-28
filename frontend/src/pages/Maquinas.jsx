@@ -16,7 +16,20 @@ const TIPO_CFG = {
 const INPUT_CLS =
   'w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition';
 
-const FORM_INIT = { nombre: '', tipo: 'lavadora_mediana', modelo: '', notas: '' };
+const TIPOS = [
+  { v: 'lavadora', label: 'Lavadora' },
+  { v: 'secadora', label: 'Secadora' },
+];
+
+const TAMANOS = [
+  { v: 'mediana', label: 'Mediana' },
+  { v: 'jumbo',   label: 'Jumbo'   },
+];
+
+const FORM_INIT = { nombre: '', tipo: 'lavadora', tamano: 'mediana', modelo: '', notas: '' };
+
+const tipoCompuesto = (tipo, tamano) =>
+  tipo === 'lavadora' ? `lavadora_${tamano}` : tipo;
 
 export default function Maquinas() {
   const [maquinas, setMaquinas] = useState([]);
@@ -57,7 +70,8 @@ export default function Maquinas() {
     setFormError('');
     setGuardando(true);
     try {
-      const nueva = await api.post('/maquinas', form);
+      const { tipo, tamano, ...rest } = form;
+      const nueva = await api.post('/maquinas', { ...rest, tipo: tipoCompuesto(tipo, tamano) });
       setMaquinas(prev => [...prev, nueva]);
       cerrarModal();
     } catch (err) {
@@ -194,11 +208,24 @@ export default function Maquinas() {
                   Tipo <span className="text-red-500">*</span>
                 </label>
                 <select name="tipo" value={form.tipo} onChange={handleChange} className={INPUT_CLS}>
-                  {Object.entries(TIPO_CFG).map(([val, { label }]) => (
-                    <option key={val} value={val}>{label}</option>
+                  {TIPOS.map(t => (
+                    <option key={t.v} value={t.v}>{t.label}</option>
                   ))}
                 </select>
               </div>
+
+              {form.tipo === 'lavadora' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    Tamaño <span className="text-red-500">*</span>
+                  </label>
+                  <select name="tamano" value={form.tamano} onChange={handleChange} className={INPUT_CLS}>
+                    {TAMANOS.map(t => (
+                      <option key={t.v} value={t.v}>{t.label}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">Modelo</label>

@@ -174,7 +174,7 @@ export default function NuevaNota() {
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-5">
+      <form onSubmit={handleSubmit} className="space-y-8">
 
         {/* ── # Nota ──────────────────────────────────────── */}
         <div>
@@ -317,7 +317,7 @@ export default function NuevaNota() {
         <>
         <div className="py-3"><div className="border-t border-gray-200" /></div>
 
-        <div className='space-y-5'>
+        <div className='space-y-8'>
 
           {/* Máquina */}
           <div ref={maquinaRef} className="relative">
@@ -577,32 +577,53 @@ export default function NuevaNota() {
         </div>
 
         {/* ── Precio Total ─────────────────────────────────── */}
-        <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4">
-          <p className="text-xs font-medium text-indigo-500 uppercase tracking-wide mb-2">
-            Precio total
-          </p>
-          <div className="space-y-1 mb-2 text-sm text-indigo-600">
-            <div className="flex justify-between">
-              <span>Cargas ({form.cantidad_cargas || 1} × ${precioCarga.toFixed(2)})</span>
-              <span>${subtotalCargas.toFixed(2)}</span>
+        {(() => {
+          const maquinaSel = maquinas.find(m => String(m.id) === String(form.maquina_id));
+          return (
+            <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4">
+              <p className="text-xs font-medium text-indigo-500 uppercase tracking-wide mb-2">
+                Resumen
+              </p>
+              <div className="space-y-1 mb-3 text-sm text-indigo-700">
+                <div className="flex justify-between">
+                  <span>Servicio</span>
+                  <span className="font-medium">{TIPO_LABEL[tipoServicio]}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Prenda</span>
+                  <span className="font-medium">{PRENDA_LABEL[tipoPrenda]}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Máquina</span>
+                  <span className="font-medium">
+                    {maquinaSel ? `${maquinaSel.nombre} — ${maquinaSel.tipo.replace(/_/g, ' ')}` : 'Sin asignar'}
+                  </span>
+                </div>
+              </div>
+              <div className="space-y-1 mb-2 text-sm text-indigo-600 border-t border-indigo-200 pt-3">
+                <div className="flex justify-between">
+                  <span>Cargas ({form.cantidad_cargas || 1} × ${precioCarga.toFixed(2)})</span>
+                  <span>${subtotalCargas.toFixed(2)}</span>
+                </div>
+                {ajusteNum !== 0 && (
+                  <div className="flex justify-between">
+                    <span>Ajuste</span>
+                    <span>{ajusteNum > 0 ? '+' : ''}${ajusteNum.toFixed(2)}</span>
+                  </div>
+                )}
+                {subtotalProductos > 0 && (
+                  <div className="flex justify-between">
+                    <span>Productos</span>
+                    <span>${subtotalProductos.toFixed(2)}</span>
+                  </div>
+                )}
+              </div>
+              <p className="text-3xl font-bold text-indigo-700 border-t border-indigo-200 pt-2">
+                ${precioTotal.toFixed(2)}
+              </p>
             </div>
-            {ajusteNum !== 0 && (
-              <div className="flex justify-between">
-                <span>Ajuste</span>
-                <span>{ajusteNum > 0 ? '+' : ''}${ajusteNum.toFixed(2)}</span>
-              </div>
-            )}
-            {subtotalProductos > 0 && (
-              <div className="flex justify-between">
-                <span>Productos</span>
-                <span>${subtotalProductos.toFixed(2)}</span>
-              </div>
-            )}
-          </div>
-          <p className="text-3xl font-bold text-indigo-700 border-t border-indigo-200 pt-2">
-            ${precioTotal.toFixed(2)}
-          </p>
-        </div>
+          );
+        })()}
 
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">
@@ -610,7 +631,7 @@ export default function NuevaNota() {
           </div>
         )}
 
-        <div className="flex gap-3 pt-10 pb-4">
+        <div className="flex gap-3 pb-4">
           <button
             type="button" onClick={() => navigate(-1)}
             className="flex-1 border border-gray-300 text-gray-700 font-medium py-2.5 rounded-lg text-sm hover:bg-gray-50 transition-colors"
