@@ -40,7 +40,16 @@
       "mcp__claude_ai_Figma__whoami",
       "Bash(npx eslint *)",
       "Bash(npx esbuild *)",
-      "Bash(npx *)"
+      "Bash(npx *)",
+      "Bash(awk 'NR>=325 && NR<=600 {print NR\": \"$0}' /Users/karen.nino/Desktop/lavanderia-el-sol/frontend/src/pages/NuevaNota.jsx)",
+      "Bash(awk 'NR>=325 && NR<=600' /Users/karen.nino/Desktop/lavanderia-el-sol/frontend/src/pages/NuevaNota.jsx)",
+      "Bash(awk 'NR>=325 && NR<=467' /Users/karen.nino/Desktop/lavanderia-el-sol/frontend/src/pages/NuevaNota.jsx)",
+      "Bash(lsof -ti:5173)",
+      "Bash(lsof -ti:4000)",
+      "Bash(kill 59491 59542 59477)",
+      "Bash(npm run *)",
+      "Bash(kill %1)",
+      "Bash(xargs -I{} ps -p {} -o command=)"
     ]
   }
 }

@@ -23,10 +23,12 @@ const TIPOS_PRENDA = [
 const PRENDA_LABEL = Object.fromEntries(TIPOS_PRENDA.map(t => [t.v, t.label]));
 
 const FORM_INIT = {
-  maquina_id:      '',
-  cantidad_cargas: '1',
-  ajuste:          '0',
-  notas:           '',
+  maquina_id:       '',
+  cantidad_cargas:  '1',
+  ajuste:           '0',
+  notas:            '',
+  cliente_nombre:   '',
+  cliente_telefono: '',
 };
 
 export default function NuevaNota() {
@@ -44,6 +46,7 @@ export default function NuevaNota() {
   const [tipoPrenda,        setTipoPrenda]        = useState('');
   const [prendaOpen,        setPrendaOpen]        = useState(false);
   const [maquinaOpen,       setMaquinaOpen]       = useState(false);
+  const [step,              setStep]              = useState(1);
   const tipoRef    = useRef(null);
   const prendaRef  = useRef(null);
   const maquinaRef = useRef(null);
@@ -117,6 +120,10 @@ export default function NuevaNota() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (step !== 2) {
+      setStep(2);
+      return;
+    }
     setError('');
     setLoading(true);
 
@@ -173,6 +180,32 @@ export default function NuevaNota() {
           <p className="text-sm text-gray-500">Crea una nueva nota</p>
         </div>
       </div>
+
+      {tipoServicio === 'AUTOSERVICIO' && tipoPrenda && (
+        <div className="flex items-center gap-3 mb-6">
+          <div className="flex items-center gap-2">
+            <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
+              step === 1 ? 'bg-indigo-600 text-white' : 'bg-green-600 text-white'
+            }`}>
+              {step === 1 ? '1' : (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+              )}
+            </span>
+            <span className={`text-sm font-medium ${step === 1 ? 'text-gray-900' : 'text-gray-500'}`}>Servicio</span>
+          </div>
+          <div className="flex-1 h-px bg-gray-200" />
+          <div className="flex items-center gap-2">
+            <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
+              step === 2 ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-500'
+            }`}>
+              2
+            </span>
+            <span className={`text-sm font-medium ${step === 2 ? 'text-gray-900' : 'text-gray-400'}`}>Cliente</span>
+          </div>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-5">
 
@@ -315,7 +348,9 @@ export default function NuevaNota() {
 
         {tipoPrenda && (
         <>
-        <div className="border-t border-gray-200" />
+        {step === 1 && (
+        <>
+        <div className="py-3"><div className="border-t border-gray-200" /></div>
 
         <div className='space-y-5'>
 
@@ -414,12 +449,32 @@ export default function NuevaNota() {
             <label className={LABEL_CLS}>
               Cantidad de cargas <span className="text-red-500">*</span>
             </label>
-            <p className="text-xs text-gray-400 mb-1.5">Precio base por carga: ${precioCarga.toFixed(2)} MXN</p>
-            <input
-              type="number" name="cantidad_cargas" min="1" step="1" required
-              value={form.cantidad_cargas} onChange={handleChange}
-              placeholder="1" className={INPUT_CLS}
-            />
+            {/* <p className="text-xs text-gray-400 mb-1.5">Precio base por carga: ${precioCarga.toFixed(2)} MXN</p> */}
+            <div className="flex items-center gap-2">
+              <input
+                type="number" name="cantidad_cargas" min="1" step="1" required
+                value={form.cantidad_cargas} onChange={handleChange}
+                placeholder="1"
+                className={`${INPUT_CLS} text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`}
+              />
+              <button
+                type="button"
+                onClick={() => setForm(f => ({ ...f, cantidad_cargas: String(Math.max(1, (Number(f.cantidad_cargas) || 1) - 1)) }))}
+                disabled={(Number(form.cantidad_cargas) || 1) <= 1}
+                aria-label="Disminuir cargas"
+                className="flex-shrink-0 w-14 py-3.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-xl font-semibold hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                −
+              </button>
+              <button
+                type="button"
+                onClick={() => setForm(f => ({ ...f, cantidad_cargas: String((Number(f.cantidad_cargas) || 0) + 1) }))}
+                aria-label="Aumentar cargas"
+                className="flex-shrink-0 w-14 py-3.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-xl font-semibold hover:bg-gray-50 transition-colors"
+              >
+                +
+              </button>
+            </div>
             <p className="text-xs text-indigo-600 mt-1 font-medium">
               Subtotal cargas: ${subtotalCargas.toFixed(2)}
             </p>
@@ -437,10 +492,115 @@ export default function NuevaNota() {
             <p className="text-xs text-gray-400 mt-1">Descuento (negativo) o cargo extra (positivo)</p>
           </div>
 
-          {/* ── Información adicional ───────────────────── */}
-          <div className="border-t border-gray-200" />
+        {/* ── Productos ────────────────────────────────────── */}
+
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className={LABEL_CLS + ' mb-0'}>Productos</h2>
+            {productosLista.length > 0 && (
+              <span className="text-xs text-gray-500">
+                {productosLista.length} {productosLista.length === 1 ? 'producto' : 'productos'}
+              </span>
+            )}
+          </div>
+
+          {productosLista.length === 0 ? (
+            <button
+              type="button"
+              onClick={agregarProducto}
+              className="w-full py-8 border-2 border-dashed border-gray-300 rounded-xl text-gray-500 hover:text-indigo-600 hover:border-indigo-400 hover:bg-indigo-50/40 transition-colors flex flex-col items-center justify-center gap-2"
+            >
+              <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v16m8-8H4" />
+              </svg>
+              <span className="text-sm font-medium">Agregar producto</span>
+            </button>
+          ) : (
+            <div className="space-y-3">
+              {productosLista.map((item, i) => {
+                const prod = productosCatalogo.find(x => String(x.id) === String(item.producto_id));
+                const cant = Number(item.cantidad) || 0;
+                const subtotal = prod ? (Number(prod.precio_unitario) || 0) * cant : 0;
+                return (
+                  <div key={i} className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={item.producto_id}
+                        onChange={e => actualizarProducto(i, 'producto_id', e.target.value)}
+                        className={`flex-1 ${INPUT_CLS}`}
+                      >
+                        <option value="">Selecciona un producto…</option>
+                        {productosCatalogo.map(p => (
+                          <option key={p.id} value={p.id}>
+                            {p.nombre}{p.precio_unitario ? ` — $${Number(p.precio_unitario).toFixed(2)}` : ''} ({Number(p.stock_disponible ?? p.stock_actual)} {p.unidad})
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => eliminarProducto(i)}
+                        aria-label="Eliminar producto"
+                        className="flex-shrink-0 px-3 py-3.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+
+                    <div className="flex items-end justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Cantidad</p>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => actualizarProducto(i, 'cantidad', String(Math.max(1, cant - 1)))}
+                            disabled={cant <= 1}
+                            aria-label="Disminuir cantidad"
+                            className="w-10 h-10 flex items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-700 text-lg font-semibold hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                          >
+                            −
+                          </button>
+                          <span className="w-10 text-center text-base font-medium text-gray-900">{cant}</span>
+                          <button
+                            type="button"
+                            onClick={() => actualizarProducto(i, 'cantidad', String(cant + 1))}
+                            aria-label="Aumentar cantidad"
+                            className="w-10 h-10 flex items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-700 text-lg font-semibold hover:bg-gray-50 transition-colors"
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
+                      {subtotal > 0 && (
+                        <div className="text-right">
+                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Subtotal</p>
+                          <p className="text-lg font-bold text-indigo-700">${subtotal.toFixed(2)}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+
+              <button
+                type="button"
+                onClick={agregarProducto}
+                className="w-full py-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-600 hover:text-indigo-600 hover:border-indigo-400 hover:bg-indigo-50/40 transition-colors flex items-center justify-center gap-2 text-sm font-medium"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                Agregar otro producto
+              </button>
+            </div>
+          )}
+        </div>
 
           {/* Instrucciones */}
+
+          <div className="py-3"><div className="border-t border-gray-200" /></div>
+
           <div>
             <label className={LABEL_CLS}>Instrucciones</label>
             <textarea
@@ -451,67 +611,38 @@ export default function NuevaNota() {
           </div>
         </div>
 
-        {/* ── Productos ────────────────────────────────────── */}
 
-        <div className="border-t border-gray-200" />
+        </>
+        )}
 
-        <div>
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-gray-700">Productos</h2>
-            <button
-              type="button" onClick={agregarProducto}
-              className="text-xs text-indigo-600 hover:text-indigo-800 font-medium"
-            >
-              + Agregar producto
-            </button>
+        {step === 2 && (
+        <>
+        <div className="py-3"><div className="border-t border-gray-200" /></div>
+
+        <div className='space-y-5'>
+          {/* Cliente */}
+          <div>
+            <label className={LABEL_CLS}>Nombre del cliente</label>
+            <input
+              type="text" name="cliente_nombre"
+              value={form.cliente_nombre} onChange={handleChange}
+              placeholder="Ej. Juan Pérez"
+              className={INPUT_CLS}
+            />
           </div>
 
-          {productosLista.length === 0 && (
-            <p className="text-xs text-gray-400">Sin productos adicionales.</p>
-          )}
-
-          {productosLista.map((item, i) => {
-            const prod = productosCatalogo.find(x => String(x.id) === String(item.producto_id));
-            const subtotal = prod
-              ? (Number(prod.precio_unitario) || 0) * (Number(item.cantidad) || 0)
-              : 0;
-            return (
-              <div key={i} className="flex gap-2 items-center">
-                <select
-                  value={item.producto_id}
-                  onChange={e => actualizarProducto(i, 'producto_id', e.target.value)}
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                >
-                  <option value="">Producto...</option>
-                  {productosCatalogo.map(p => (
-                    <option key={p.id} value={p.id}>
-                      {p.nombre}{p.precio_unitario ? ` — $${Number(p.precio_unitario).toFixed(2)}` : ''} (stock: {Number(p.stock_disponible ?? p.stock_actual)} {p.unidad})
-                    </option>
-                  ))}
-                </select>
-                <input
-                  type="number" min="1" step="1" placeholder="Cant."
-                  value={item.cantidad}
-                  onChange={e => actualizarProducto(i, 'cantidad', e.target.value)}
-                  className="w-20 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
-                {subtotal > 0 && (
-                  <span className="text-xs text-indigo-600 font-medium w-16 text-right">
-                    ${subtotal.toFixed(2)}
-                  </span>
-                )}
-                <button
-                  type="button" onClick={() => eliminarProducto(i)}
-                  className="text-gray-400 hover:text-red-500 p-1"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-            );
-          })}
+          <div>
+            <label className={LABEL_CLS}>Teléfono</label>
+            <input
+              type="tel" name="cliente_telefono"
+              value={form.cliente_telefono} onChange={handleChange}
+              placeholder="Ej. 333 123 4567"
+              className={INPUT_CLS}
+            />
+          </div>
         </div>
+        </>
+        )}
 
         {/* ── Precio Total ─────────────────────────────────── */}
         <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4">
@@ -548,18 +679,41 @@ export default function NuevaNota() {
         )}
 
         <div className="flex gap-3 pb-4">
-          <button
-            type="button" onClick={() => navigate(-1)}
-            className="flex-1 border border-gray-300 text-gray-700 font-medium py-2.5 rounded-lg text-sm hover:bg-gray-50 transition-colors"
-          >
-            Cancelar
-          </button>
-          <button
-            type="submit" disabled={loading}
-            className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-medium py-2.5 rounded-lg text-sm transition-colors"
-          >
-            {loading ? 'Creando...' : 'Crear nota'}
-          </button>
+          {step === 1 ? (
+            <>
+              <button
+                key="cancelar"
+                type="button" onClick={() => navigate(-1)}
+                className="flex-1 border border-gray-300 text-gray-700 font-medium py-2.5 rounded-lg text-sm hover:bg-gray-50 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                key="siguiente"
+                type="button" onClick={() => setStep(2)}
+                className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2.5 rounded-lg text-sm transition-colors"
+              >
+                Siguiente
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                key="atras"
+                type="button" onClick={() => setStep(1)}
+                className="flex-1 border border-gray-300 text-gray-700 font-medium py-2.5 rounded-lg text-sm hover:bg-gray-50 transition-colors"
+              >
+                Atrás
+              </button>
+              <button
+                key="crear"
+                type="submit" disabled={loading}
+                className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-medium py-2.5 rounded-lg text-sm transition-colors"
+              >
+                {loading ? 'Creando...' : 'Crear nota'}
+              </button>
+            </>
+          )}
         </div>
         </>
         )}
