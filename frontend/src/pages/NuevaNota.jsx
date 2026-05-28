@@ -11,8 +11,8 @@ const INPUT_DISABLED_CLS =
   'w-full px-4 py-3.5 border border-gray-300 rounded-lg text-base bg-gray-50 text-gray-400 cursor-not-allowed placeholder:text-gray-400';
 
 const TIPOS_SERVICIO = [
-  { v: 'POR_ENCARGO',  label: 'Por Encargo'  },
   { v: 'AUTOSERVICIO', label: 'Autoservicio' },
+  { v: 'POR_ENCARGO',  label: 'Por Encargo'  },
 ];
 const TIPO_LABEL = Object.fromEntries(TIPOS_SERVICIO.map(t => [t.v, t.label]));
 
@@ -610,7 +610,7 @@ export default function NuevaNota() {
         </div>
 
           {/* Instrucciones */}
-
+{/* 
           <div className="py-3"><div className="border-t border-gray-200" /></div>
 
           <div>
@@ -620,7 +620,7 @@ export default function NuevaNota() {
               placeholder="Instrucciones especiales..."
               className={`${INPUT_CLS} resize-none`}
             />
-          </div>
+          </div> */}
         </div>
 
 
@@ -629,7 +629,7 @@ export default function NuevaNota() {
 
         {step === 2 && (
         <>
-        
+
         <div className='space-y-5'>
           {/* Cliente */}
           <div>
@@ -656,32 +656,34 @@ export default function NuevaNota() {
         )}
 
         {/* ── Precio Total ─────────────────────────────────── */}
-        <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4">
-          <p className="text-xs font-medium text-indigo-500 uppercase tracking-wide mb-2">
-            Precio total
-          </p>
-          <div className="space-y-1 mb-2 text-sm text-indigo-600">
-            <div className="flex justify-between">
-              <span>Cargas ({form.cantidad_cargas || 1} × ${precioCarga.toFixed(2)})</span>
-              <span>${subtotalCargas.toFixed(2)}</span>
+        {step === 2 && (
+          <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4">
+            <p className="text-xs font-medium text-indigo-500 uppercase tracking-wide mb-2">
+              Precio total
+            </p>
+            <div className="space-y-1 mb-2 text-sm text-indigo-600">
+              <div className="flex justify-between">
+                <span>Cargas ({form.cantidad_cargas || 1} × ${precioCarga.toFixed(2)})</span>
+                <span>${subtotalCargas.toFixed(2)}</span>
+              </div>
+              {ajusteNum !== 0 && (
+                <div className="flex justify-between">
+                  <span>Ajuste</span>
+                  <span>{ajusteNum > 0 ? '+' : ''}${ajusteNum.toFixed(2)}</span>
+                </div>
+              )}
+              {subtotalProductos > 0 && (
+                <div className="flex justify-between">
+                  <span>Productos</span>
+                  <span>${subtotalProductos.toFixed(2)}</span>
+                </div>
+              )}
             </div>
-            {ajusteNum !== 0 && (
-              <div className="flex justify-between">
-                <span>Ajuste</span>
-                <span>{ajusteNum > 0 ? '+' : ''}${ajusteNum.toFixed(2)}</span>
-              </div>
-            )}
-            {subtotalProductos > 0 && (
-              <div className="flex justify-between">
-                <span>Productos</span>
-                <span>${subtotalProductos.toFixed(2)}</span>
-              </div>
-            )}
+            <p className="text-3xl font-bold text-indigo-700 border-t border-indigo-200 pt-2">
+              ${precioTotal.toFixed(2)}
+            </p>
           </div>
-          <p className="text-3xl font-bold text-indigo-700 border-t border-indigo-200 pt-2">
-            ${precioTotal.toFixed(2)}
-          </p>
-        </div>
+        )}
 
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">
@@ -689,7 +691,7 @@ export default function NuevaNota() {
           </div>
         )}
 
-        <div className="flex gap-3 pb-4">
+        <div className="flex gap-3 pt-10 pb-4">
           {step === 1 ? (
             <>
               <button
