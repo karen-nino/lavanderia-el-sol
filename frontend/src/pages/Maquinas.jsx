@@ -31,6 +31,12 @@ const FORM_INIT = { nombre: '', tipo: 'lavadora', tamano: 'mediana', modelo: '',
 const tipoCompuesto = (tipo, tamano) =>
   tipo === 'lavadora' ? `lavadora_${tamano}` : tipo;
 
+const descomponerTipo = (tipoDb) => {
+  if (tipoDb === 'lavadora_mediana') return { tipo: 'lavadora', tamano: 'mediana' };
+  if (tipoDb === 'lavadora_jumbo')   return { tipo: 'lavadora', tamano: 'jumbo'   };
+  return { tipo: 'secadora', tamano: 'mediana' };
+};
+
 export default function Maquinas() {
   const [maquinas, setMaquinas] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -38,8 +44,10 @@ export default function Maquinas() {
   const [cambiando, setCambiando] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState(FORM_INIT);
+  const [editandoId, setEditandoId] = useState(null);
   const [guardando, setGuardando] = useState(false);
   const [formError, setFormError] = useState('');
+  const [eliminando, setEliminando] = useState(null);
 
   useEffect(() => {
     api.get('/maquinas')
@@ -60,7 +68,27 @@ export default function Maquinas() {
     }
   };
 
-  const abrirModal = () => { setForm(FORM_INIT); setFormError(''); setModalOpen(true); };
+  const abrirModal = () => {
+    setForm(FORM_INIT);
+    setEditandoId(null);
+    setFormError('');
+    setModalOpen(true);
+  };
+
+  const editarMaquina = (m) => {
+    const { tipo, tamano } = descomponerTipo(m.tipo);
+    setForm({
+      nombre: m.nombre ?? '',
+      tipo,
+      tamano,
+      modelo: m.modelo ?? '',
+      notas:  m.notas ?? '',
+    });
+    setEditandoId(m.id);
+    setFormError('');
+    setModalOpen(true);
+  };
+
   const cerrarModal = () => setModalOpen(false);
 
   const handleChange = e => setForm(f => ({ ...f, [e.target.name]: e.target.value }));
@@ -71,13 +99,32 @@ export default function Maquinas() {
     setGuardando(true);
     try {
       const { tipo, tamano, ...rest } = form;
-      const nueva = await api.post('/maquinas', { ...rest, tipo: tipoCompuesto(tipo, tamano) });
-      setMaquinas(prev => [...prev, nueva]);
+      const payload = { ...rest, tipo: tipoCompuesto(tipo, tamano) };
+      if (editandoId != null) {
+        const actualizada = await api.put(`/maquinas/${editandoId}`, payload);
+        setMaquinas(prev => prev.map(m => m.id === editandoId ? actualizada : m));
+      } else {
+        const nueva = await api.post('/maquinas', payload);
+        setMaquinas(prev => [...prev, nueva]);
+      }
       cerrarModal();
     } catch (err) {
       setFormError(err.message);
     } finally {
       setGuardando(false);
+    }
+  };
+
+  const eliminarMaquina = async (m) => {
+    if (!confirm(`¿Eliminar la máquina "${m.nombre}"?`)) return;
+    setEliminando(m.id);
+    try {
+      await api.delete(`/maquinas/${m.id}`);
+      setMaquinas(prev => prev.filter(x => x.id !== m.id));
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setEliminando(null);
     }
   };
 
@@ -136,6 +183,7 @@ export default function Maquinas() {
             const cfg = ESTADO_CFG[m.estado] ?? ESTADO_CFG.disponible;
             const tipoCfg = TIPO_CFG[m.tipo] ?? { label: m.tipo, icon: '🔧' };
             const busy = cambiando === m.id;
+            const borrando = eliminando === m.id;
             const otrosEstados = Object.entries(ESTADO_CFG).filter(([e]) => e !== m.estado);
 
             return (
@@ -172,6 +220,32 @@ export default function Maquinas() {
                     </button>
                   ))}
                 </div>
+
+                {/* Editar / Eliminar */}
+                <div className="flex gap-2 pt-3 mt-2 border-t border-gray-50">
+                  <button
+                    type="button"
+                    onClick={() => editarMaquina(m)}
+                    disabled={borrando}
+                    className="flex-1 inline-flex items-center justify-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                    Editar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => eliminarMaquina(m)}
+                    disabled={borrando}
+                    className="flex-1 inline-flex items-center justify-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-50 transition-colors"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3" />
+                    </svg>
+                    {borrando ? 'Eliminando...' : 'Eliminar'}
+                  </button>
+                </div>
               </div>
             );
           })}
@@ -183,7 +257,9 @@ export default function Maquinas() {
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
             <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-gray-100">
-              <h2 className="text-base font-semibold text-gray-900">Agregar máquina</h2>
+              <h2 className="text-base font-semibold text-gray-900">
+                {editandoId != null ? 'Editar máquina' : 'Agregar máquina'}
+              </h2>
               <button onClick={cerrarModal} className="text-gray-400 hover:text-gray-600">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />

@@ -44,6 +44,49 @@ export const createMaquina = async (req, res) => {
   }
 };
 
+export const updateMaquina = async (req, res) => {
+  const { id } = req.params;
+  const { nombre, tipo, modelo, numero_serie, fecha_adquisicion, notas } = req.body;
+
+  if (!nombre || !tipo) {
+    return res.status(400).json({ message: 'Nombre y tipo son requeridos.' });
+  }
+  if (!TIPOS_VALIDOS.includes(tipo)) {
+    return res.status(400).json({ message: `Tipo inválido. Valores permitidos: ${TIPOS_VALIDOS.join(', ')}.` });
+  }
+
+  try {
+    const { rows } = await pool.query(
+      `UPDATE maquinas
+         SET nombre = $1, tipo = $2, modelo = $3, numero_serie = $4, fecha_adquisicion = $5, notas = $6
+       WHERE id = $7
+       RETURNING *`,
+      [nombre, tipo, modelo, numero_serie, fecha_adquisicion, notas, id]
+    );
+    if (rows.length === 0) {
+      return res.status(404).json({ message: 'Máquina no encontrada.' });
+    }
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('updateMaquina error:', err);
+    res.status(500).json({ message: 'Error interno del servidor.' });
+  }
+};
+
+export const deleteMaquina = async (req, res) => {
+  const { id } = req.params;
+  try {
+    const { rowCount } = await pool.query('DELETE FROM maquinas WHERE id = $1', [id]);
+    if (rowCount === 0) {
+      return res.status(404).json({ message: 'Máquina no encontrada.' });
+    }
+    res.status(204).end();
+  } catch (err) {
+    console.error('deleteMaquina error:', err);
+    res.status(500).json({ message: 'Error interno del servidor.' });
+  }
+};
+
 export const cambiarEstadoMaquina = async (req, res) => {
   const { id } = req.params;
   const { estado } = req.body;
