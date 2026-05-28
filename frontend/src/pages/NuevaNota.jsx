@@ -23,12 +23,10 @@ const TIPOS_PRENDA = [
 const PRENDA_LABEL = Object.fromEntries(TIPOS_PRENDA.map(t => [t.v, t.label]));
 
 const FORM_INIT = {
-  maquina_id:       '',
-  cantidad_cargas:  '1',
-  ajuste:           '0',
-  notas:            '',
-  cliente_nombre:   '',
-  cliente_telefono: '',
+  maquina_id:      '',
+  cantidad_cargas: '1',
+  ajuste:          '0',
+  notas:           '',
 };
 
 export default function NuevaNota() {
@@ -46,7 +44,6 @@ export default function NuevaNota() {
   const [tipoPrenda,        setTipoPrenda]        = useState('');
   const [prendaOpen,        setPrendaOpen]        = useState(false);
   const [maquinaOpen,       setMaquinaOpen]       = useState(false);
-  const [step,              setStep]              = useState(1);
   const tipoRef    = useRef(null);
   const prendaRef  = useRef(null);
   const maquinaRef = useRef(null);
@@ -120,10 +117,6 @@ export default function NuevaNota() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (step !== 2) {
-      setStep(2);
-      return;
-    }
     setError('');
     setLoading(true);
 
@@ -181,36 +174,8 @@ export default function NuevaNota() {
         </div>
       </div>
 
-      {tipoServicio === 'AUTOSERVICIO' && tipoPrenda && (
-        <div className="flex items-center gap-3 mb-6">
-          <div className="flex items-center gap-2">
-            <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
-              step === 1 ? 'bg-indigo-600 text-white' : 'bg-green-600 text-white'
-            }`}>
-              {step === 1 ? '1' : (
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                </svg>
-              )}
-            </span>
-            <span className={`text-sm font-medium ${step === 1 ? 'text-gray-900' : 'text-gray-500'}`}>Servicio</span>
-          </div>
-          <div className="flex-1 h-px bg-gray-200" />
-          <div className="flex items-center gap-2">
-            <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
-              step === 2 ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-500'
-            }`}>
-              2
-            </span>
-            <span className={`text-sm font-medium ${step === 2 ? 'text-gray-900' : 'text-gray-400'}`}>Cliente</span>
-          </div>
-        </div>
-      )}
-
       <form onSubmit={handleSubmit} className="space-y-5">
 
-        {step === 1 && (
-        <>
         {/* ── # Nota ──────────────────────────────────────── */}
         <div>
           <label className="block text-sm font-semibold text-gray-900 mb-2"># Nota</label>
@@ -219,11 +184,7 @@ export default function NuevaNota() {
             className={INPUT_DISABLED_CLS}
           />
         </div>
-        </>
-        )}
 
-        {step === 1 && (
-        <>
         {/* ── Tipo de Servicio ────────────────────────────── */}
         <div ref={tipoRef} className="relative">
           <label className="block text-sm font-semibold text-gray-900 mb-2">
@@ -284,18 +245,14 @@ export default function NuevaNota() {
             </div>
           )}
         </div>
-        </>
-        )}
 
-        {tipoServicio === 'POR_ENCARGO' && step === 1 && (
+        {tipoServicio === 'POR_ENCARGO' && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 text-center">
             <p className="text-sm text-gray-500">Formulario de Por Encargo próximamente.</p>
           </div>
         )}
 
         {tipoServicio === 'AUTOSERVICIO' && (
-        <>
-        {step === 1 && (
         <>
         {/* Tipo de Prenda */}
         <div ref={prendaRef} className="relative">
@@ -355,12 +312,8 @@ export default function NuevaNota() {
             </div>
           )}
         </div>
-        </>
-        )}
 
         {tipoPrenda && (
-        <>
-        {step === 1 && (
         <>
         <div className="py-3"><div className="border-t border-gray-200" /></div>
 
@@ -623,67 +576,33 @@ export default function NuevaNota() {
           </div> */}
         </div>
 
-
-        </>
-        )}
-
-        {step === 2 && (
-        <>
-
-        <div className='space-y-5'>
-          {/* Cliente */}
-          <div>
-            <label className={LABEL_CLS}>Nombre del cliente</label>
-            <input
-              type="text" name="cliente_nombre"
-              value={form.cliente_nombre} onChange={handleChange}
-              placeholder="Ej. Juan Pérez"
-              className={INPUT_CLS}
-            />
-          </div>
-
-          <div>
-            <label className={LABEL_CLS}>Teléfono</label>
-            <input
-              type="tel" name="cliente_telefono"
-              value={form.cliente_telefono} onChange={handleChange}
-              placeholder="Ej. 333 123 4567"
-              className={INPUT_CLS}
-            />
-          </div>
-        </div>
-        </>
-        )}
-
         {/* ── Precio Total ─────────────────────────────────── */}
-        {step === 2 && (
-          <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4">
-            <p className="text-xs font-medium text-indigo-500 uppercase tracking-wide mb-2">
-              Precio total
-            </p>
-            <div className="space-y-1 mb-2 text-sm text-indigo-600">
-              <div className="flex justify-between">
-                <span>Cargas ({form.cantidad_cargas || 1} × ${precioCarga.toFixed(2)})</span>
-                <span>${subtotalCargas.toFixed(2)}</span>
-              </div>
-              {ajusteNum !== 0 && (
-                <div className="flex justify-between">
-                  <span>Ajuste</span>
-                  <span>{ajusteNum > 0 ? '+' : ''}${ajusteNum.toFixed(2)}</span>
-                </div>
-              )}
-              {subtotalProductos > 0 && (
-                <div className="flex justify-between">
-                  <span>Productos</span>
-                  <span>${subtotalProductos.toFixed(2)}</span>
-                </div>
-              )}
+        <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4">
+          <p className="text-xs font-medium text-indigo-500 uppercase tracking-wide mb-2">
+            Precio total
+          </p>
+          <div className="space-y-1 mb-2 text-sm text-indigo-600">
+            <div className="flex justify-between">
+              <span>Cargas ({form.cantidad_cargas || 1} × ${precioCarga.toFixed(2)})</span>
+              <span>${subtotalCargas.toFixed(2)}</span>
             </div>
-            <p className="text-3xl font-bold text-indigo-700 border-t border-indigo-200 pt-2">
-              ${precioTotal.toFixed(2)}
-            </p>
+            {ajusteNum !== 0 && (
+              <div className="flex justify-between">
+                <span>Ajuste</span>
+                <span>{ajusteNum > 0 ? '+' : ''}${ajusteNum.toFixed(2)}</span>
+              </div>
+            )}
+            {subtotalProductos > 0 && (
+              <div className="flex justify-between">
+                <span>Productos</span>
+                <span>${subtotalProductos.toFixed(2)}</span>
+              </div>
+            )}
           </div>
-        )}
+          <p className="text-3xl font-bold text-indigo-700 border-t border-indigo-200 pt-2">
+            ${precioTotal.toFixed(2)}
+          </p>
+        </div>
 
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">
@@ -692,41 +611,18 @@ export default function NuevaNota() {
         )}
 
         <div className="flex gap-3 pt-10 pb-4">
-          {step === 1 ? (
-            <>
-              <button
-                key="cancelar"
-                type="button" onClick={() => navigate(-1)}
-                className="flex-1 border border-gray-300 text-gray-700 font-medium py-2.5 rounded-lg text-sm hover:bg-gray-50 transition-colors"
-              >
-                Cancelar
-              </button>
-              <button
-                key="siguiente"
-                type="button" onClick={() => setStep(2)}
-                className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2.5 rounded-lg text-sm transition-colors"
-              >
-                Siguiente
-              </button>
-            </>
-          ) : (
-            <>
-              <button
-                key="atras"
-                type="button" onClick={() => setStep(1)}
-                className="flex-1 border border-gray-300 text-gray-700 font-medium py-2.5 rounded-lg text-sm hover:bg-gray-50 transition-colors"
-              >
-                Atrás
-              </button>
-              <button
-                key="crear"
-                type="submit" disabled={loading}
-                className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-medium py-2.5 rounded-lg text-sm transition-colors"
-              >
-                {loading ? 'Creando...' : 'Crear nota'}
-              </button>
-            </>
-          )}
+          <button
+            type="button" onClick={() => navigate(-1)}
+            className="flex-1 border border-gray-300 text-gray-700 font-medium py-2.5 rounded-lg text-sm hover:bg-gray-50 transition-colors"
+          >
+            Cancelar
+          </button>
+          <button
+            type="submit" disabled={loading}
+            className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-medium py-2.5 rounded-lg text-sm transition-colors"
+          >
+            {loading ? 'Creando...' : 'Crear nota'}
+          </button>
         </div>
         </>
         )}
