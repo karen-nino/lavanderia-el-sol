@@ -29,6 +29,13 @@ const FORM_INIT = {
   notas:           '',
 };
 
+const formatMaquina = (m) => {
+  if (!m) return '';
+  if (m.tipo === 'lavadora_mediana') return `${m.nombre} — mediana`;
+  if (m.tipo === 'lavadora_jumbo')   return `${m.nombre} — jumbo`;
+  return m.nombre;
+};
+
 export default function NuevaNota() {
   const navigate = useNavigate();
   const [maquinas,          setMaquinas]          = useState([]);
@@ -324,9 +331,7 @@ export default function NuevaNota() {
             <label className={LABEL_CLS}>Máquina</label>
             {(() => {
               const maquinaSel = maquinas.find(m => String(m.id) === String(form.maquina_id));
-              const maquinaLabel = maquinaSel
-                ? `${maquinaSel.nombre} — ${maquinaSel.tipo.replace(/_/g, ' ')}`
-                : '';
+              const maquinaLabel = formatMaquina(maquinaSel);
               return (
                 <>
                   <button
@@ -385,7 +390,7 @@ export default function NuevaNota() {
                             className="w-full px-4 py-3.5 flex items-center justify-between text-left hover:bg-gray-50 border-b last:border-0 border-gray-100"
                           >
                             <span className="text-base text-gray-900">
-                              {m.nombre} — {m.tipo.replace(/_/g, ' ')}
+                              {formatMaquina(m)}
                             </span>
                             <span className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
                               selected ? 'border-indigo-600 bg-indigo-600' : 'border-gray-300'
@@ -596,7 +601,7 @@ export default function NuevaNota() {
                 <div className="flex justify-between">
                   <span>Máquina</span>
                   <span className="font-medium">
-                    {maquinaSel ? `${maquinaSel.nombre} — ${maquinaSel.tipo.replace(/_/g, ' ')}` : 'Sin asignar'}
+                    {maquinaSel ? formatMaquina(maquinaSel) : 'Sin asignar'}
                   </span>
                 </div>
               </div>
