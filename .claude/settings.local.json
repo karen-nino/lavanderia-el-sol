@@ -60,7 +60,8 @@
       "Read(//usr/local/lib/node_modules/corepack/**)",
       "Bash(rm /Users/karen.nino/.nvm/versions/node/v22.22.1/bin/pnpm)",
       "Bash(npm install *)",
-      "Bash(pkill -f 'pnpm approve-builds')"
+      "Bash(pkill -f 'pnpm approve-builds')",
+      "Bash(ipconfig getifaddr *)"
     ]
   }
 }
