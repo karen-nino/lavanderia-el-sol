@@ -49,7 +49,18 @@
       "Bash(kill 59491 59542 59477)",
       "Bash(npm run *)",
       "Bash(kill %1)",
-      "Bash(xargs -I{} ps -p {} -o command=)"
+      "Bash(xargs -I{} ps -p {} -o command=)",
+      "Bash(npm -v)",
+      "Bash(brew list *)",
+      "Bash(/Users/karen.nino/.nvm/versions/node/v22.22.1/bin/pnpm -v)",
+      "Bash(corepack enable *)",
+      "Bash(echo \"---exit $?---\")",
+      "Bash(corepack prepare *)",
+      "Bash(corepack --version)",
+      "Read(//usr/local/lib/node_modules/corepack/**)",
+      "Bash(rm /Users/karen.nino/.nvm/versions/node/v22.22.1/bin/pnpm)",
+      "Bash(npm install *)",
+      "Bash(pkill -f 'pnpm approve-builds')"
     ]
   }
 }
