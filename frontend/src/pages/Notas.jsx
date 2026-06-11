@@ -168,12 +168,12 @@ export default function Notas() {
       </div>
 
       {/* Filtros de estado */}
-      <div className="flex gap-2 overflow-x-auto pb-6 scrollbar-none">
+      <div className="flex gap-2 overflow-x-auto pb-4 scrollbar-none">
         {ESTADOS.map(e => (
           <button
             key={e}
             onClick={() => setFiltro(e)}
-            className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+            className={`flex-shrink-0 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
               filtro === e
                 ? 'bg-indigo-600 text-white'
                 : 'bg-white text-gray-600 border border-gray-200 hover:border-indigo-300'
