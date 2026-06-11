@@ -7,7 +7,7 @@ import { useAuth } from '../context/AuthContext';
 const BADGE_ESTADO = {
   ACTIVA:     { label: 'Activa',      cls: 'bg-gray-100 text-gray-700'        },
   EN_PROCESO: { label: 'En proceso',  cls: 'bg-blue-100 text-blue-800'        },
-  LISTA:      { label: 'Lista',       cls: 'bg-yellow-100 text-yellow-800'    },
+  LISTA:      { label: 'Por Entregar', cls: 'bg-yellow-100 text-yellow-800'   },
   PAGADA:     { label: 'Pagada',      cls: 'bg-emerald-100 text-emerald-800'  },
   ENTREGADA:  { label: 'Entregada',   cls: 'bg-green-800 text-white'          },
   CANCELADA:  { label: 'Cancelada',   cls: 'bg-red-100 text-red-700'          },

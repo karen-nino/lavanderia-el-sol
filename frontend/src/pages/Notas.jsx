@@ -4,12 +4,17 @@ import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { esAdmin as esAdminFn } from '../lib/roles';
 
-const ESTADOS = ['TODOS', 'ACTIVA', 'EN_PROCESO', 'LISTA', 'PAGADA', 'ENTREGADA', 'CANCELADA'];
+const ESTADOS = ['TODOS', 'DEBE', 'EN_PROCESO', 'LISTA', 'ENTREGADA', 'CANCELADA'];
+
+const FILTRO_LABEL = {
+  TODOS: 'Todos',
+  DEBE:  'Pagos Pendientes',
+};
 
 const BADGE_ESTADO = {
   ACTIVA:     { label: 'Activa',     cls: 'bg-gray-100 text-gray-700'       },
   EN_PROCESO: { label: 'En proceso', cls: 'bg-blue-100 text-blue-800'       },
-  LISTA:      { label: 'Lista',      cls: 'bg-yellow-100 text-yellow-800'   },
+  LISTA:      { label: 'Por Entregar', cls: 'bg-yellow-100 text-yellow-800' },
   PAGADA:     { label: 'Pagada',     cls: 'bg-emerald-100 text-emerald-800' },
   ENTREGADA:  { label: 'Entregada',  cls: 'bg-green-800 text-white'         },
   CANCELADA:  { label: 'Cancelada',  cls: 'bg-red-100 text-red-700'         },
@@ -106,7 +111,11 @@ export default function Notas() {
 
   const q = busqueda.trim().toLowerCase();
   const filtradas = notas.filter(n => {
-    if (filtro !== 'TODOS' && n.estado !== filtro) return false;
+    if (filtro === 'DEBE') {
+      if (n.estado_pago !== 'DEBE') return false;
+    } else if (filtro !== 'TODOS' && n.estado !== filtro) {
+      return false;
+    }
     if (!q) return true;
     const folio    = (n.folio ?? `#${n.id}`).toLowerCase();
     const cliente  = (n.cliente_nombre   ?? '').toLowerCase();
@@ -179,7 +188,7 @@ export default function Notas() {
                 : 'bg-white text-gray-600 border border-gray-200 hover:border-indigo-300'
             }`}
           >
-            {e === 'TODOS' ? 'Todos' : BADGE_ESTADO[e]?.label}
+            {FILTRO_LABEL[e] ?? BADGE_ESTADO[e]?.label}
           </button>
         ))}
       </div>
