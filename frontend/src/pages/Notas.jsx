@@ -90,6 +90,7 @@ export default function Notas() {
 
   const [notas,             setNotas]             = useState([]);
   const [filtro,            setFiltro]            = useState('TODOS');
+  const [busqueda,          setBusqueda]          = useState('');
   const [loading,           setLoading]           = useState(true);
   const [error,             setError]             = useState('');
   const [notaAEliminar,     setNotaAEliminar]     = useState(null);
@@ -103,9 +104,15 @@ export default function Notas() {
       .finally(() => setLoading(false));
   }, []);
 
-  const filtradas = filtro === 'TODOS'
-    ? notas
-    : notas.filter(n => n.estado === filtro);
+  const q = busqueda.trim().toLowerCase();
+  const filtradas = notas.filter(n => {
+    if (filtro !== 'TODOS' && n.estado !== filtro) return false;
+    if (!q) return true;
+    const folio    = (n.folio ?? `#${n.id}`).toLowerCase();
+    const cliente  = (n.cliente_nombre   ?? '').toLowerCase();
+    const telefono = (n.cliente_telefono ?? '').toLowerCase();
+    return folio.includes(q) || cliente.includes(q) || telefono.includes(q);
+  });
 
   async function confirmarEliminar() {
     if (!notaAEliminar || loadingEliminar) return;
@@ -142,8 +149,26 @@ export default function Notas() {
         </Link>
       </div>
 
+      {/* Búsqueda */}
+      <div className="relative">
+        <svg
+          className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400"
+          fill="none" stroke="currentColor" viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+        </svg>
+        <input
+          type="text"
+          placeholder="Buscar por folio, cliente o teléfono..."
+          value={busqueda}
+          onChange={e => setBusqueda(e.target.value)}
+          className="w-full pl-11 pr-4 py-3.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white transition"
+        />
+      </div>
+
       {/* Filtros de estado */}
-      <div className="flex gap-2 overflow-x-auto pt-4 pb-1 scrollbar-none">
+      <div className="flex gap-2 overflow-x-auto pb-6 scrollbar-none">
         {ESTADOS.map(e => (
           <button
             key={e}
@@ -181,7 +206,9 @@ export default function Notas() {
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
           {filtradas.length === 0 ? (
             <div className="text-center py-12">
-              <p className="text-gray-400 text-sm">No hay notas con este filtro</p>
+              <p className="text-gray-400 text-sm">
+                {busqueda ? 'No se encontraron notas con ese criterio' : 'No hay notas con este filtro'}
+              </p>
             </div>
           ) : (
             <>
