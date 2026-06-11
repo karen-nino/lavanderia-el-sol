@@ -8,8 +8,8 @@ const ESTADO_CFG = {
 };
 
 const TIPO_CFG = {
-  lavadora_mediana: { label: 'Lavadora mediana', icon: '🫧' },
-  lavadora_jumbo:   { label: 'Lavadora jumbo',   icon: '🫧' },
+  lavadora_mediana: { label: 'Lavadora Mediana', icon: '🫧' },
+  lavadora_jumbo:   { label: 'Lavadora Jumbo',   icon: '🫧' },
   secadora:         { label: 'Secadora',          icon: '🌀' },
 };
 
@@ -30,6 +30,11 @@ const FORM_INIT = { nombre: '', tipo: 'lavadora', tamano: 'mediana', modelo: '',
 
 const tipoCompuesto = (tipo, tamano) =>
   tipo === 'lavadora' ? `lavadora_${tamano}` : tipo;
+
+const capitalizar = (s) => {
+  const t = (s ?? '').trim();
+  return t ? t.charAt(0).toUpperCase() + t.slice(1) : t;
+};
 
 const descomponerTipo = (tipoDb) => {
   if (tipoDb === 'lavadora_mediana') return { tipo: 'lavadora', tamano: 'mediana' };
@@ -99,7 +104,11 @@ export default function Maquinas() {
     setGuardando(true);
     try {
       const { tipo, tamano, ...rest } = form;
-      const payload = { ...rest, tipo: tipoCompuesto(tipo, tamano) };
+      const payload = {
+        ...rest,
+        nombre: capitalizar(rest.nombre),
+        tipo: tipoCompuesto(tipo, tamano),
+      };
       if (editandoId != null) {
         const actualizada = await api.put(`/maquinas/${editandoId}`, payload);
         setMaquinas(prev => prev.map(m => m.id === editandoId ? actualizada : m));

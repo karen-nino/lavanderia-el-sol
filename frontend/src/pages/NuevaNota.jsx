@@ -31,8 +31,8 @@ const FORM_INIT = {
 
 const formatMaquina = (m) => {
   if (!m) return '';
-  if (m.tipo === 'lavadora_mediana') return `${m.nombre} — mediana`;
-  if (m.tipo === 'lavadora_jumbo')   return `${m.nombre} — jumbo`;
+  if (m.tipo === 'lavadora_mediana') return `${m.nombre} — Mediana`;
+  if (m.tipo === 'lavadora_jumbo')   return `${m.nombre} — Jumbo`;
   return m.nombre;
 };
 
