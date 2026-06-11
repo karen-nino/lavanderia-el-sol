@@ -143,7 +143,7 @@ export default function Notas() {
       </div>
 
       {/* Filtros de estado */}
-      <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
+      <div className="flex gap-2 overflow-x-auto pt-4 pb-1 scrollbar-none">
         {ESTADOS.map(e => (
           <button
             key={e}
