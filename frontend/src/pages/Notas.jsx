@@ -248,7 +248,7 @@ export default function Notas() {
                           className="hover:bg-indigo-50 transition-colors cursor-pointer"
                         >
                           <td className="px-4 py-3 font-mono text-xs text-gray-600">
-                            {n.folio ?? `#${n.id}`}
+                            #{n.folio?.split('-')[0] ?? n.id}
                           </td>
                           <td className="px-4 py-3">
                             <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${badgeModalidad.cls}`}>
@@ -312,7 +312,7 @@ export default function Notas() {
                       onClick={() => navigate(`/notas/${n.id}`)}
                     >
                       <div className="flex items-center justify-between gap-2">
-                        <p className="font-mono text-xs text-gray-400">{n.folio ?? `#${n.id}`}</p>
+                        <p className="font-mono text-xs text-gray-400">#{n.folio?.split('-')[0] ?? n.id}</p>
                         <div className="flex items-center gap-1.5">
                           <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${badgeModalidad.cls}`}>
                             {badgeModalidad.label}

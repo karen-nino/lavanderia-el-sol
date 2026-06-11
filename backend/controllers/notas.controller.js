@@ -22,7 +22,7 @@ function generarFolio(id, fecha) {
   const mm   = String(d.getMonth() + 1).padStart(2, '0');
   const dd   = String(d.getDate()).padStart(2, '0');
   const seq  = String(id).padStart(4, '0');
-  return `LS-${yyyy}${mm}${dd}-${seq}`;
+  return `${seq}-${dd}${mm}${yyyy}`;
 }
 
 // ── GET /notas ──────────────────────────────────────────────
