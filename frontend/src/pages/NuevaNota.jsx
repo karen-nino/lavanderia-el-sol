@@ -29,6 +29,24 @@ const FORM_INIT = {
   notas:           '',
 };
 
+const TAMANOS = [
+  { v: 'chico',  label: 'Chico'  },
+  { v: 'grande', label: 'Grande' },
+];
+const TAMANO_LABEL = Object.fromEntries(TAMANOS.map(t => [t.v, t.label]));
+
+const ENCARGO_INIT = {
+  cliente_id:      '',
+  tamano:          '',
+  precio_base:     '',
+  ajuste:          '0',
+  pago_anticipado: '',
+  fecha_entrega:   '',
+  notas:           '',
+};
+
+const ENCARGO_STEPS = 6;
+
 const formatMaquina = (m) => {
   if (!m) return '';
   if (m.tipo === 'lavadora_mediana') return `${m.nombre} — Mediana`;
@@ -51,6 +69,15 @@ export default function NuevaNota() {
   const [tipoPrenda,        setTipoPrenda]        = useState('');
   const [prendaOpen,        setPrendaOpen]        = useState(false);
   const [maquinaOpen,       setMaquinaOpen]       = useState(false);
+  const [encargoStep,       setEncargoStep]       = useState(1);
+  const [encargoForm,       setEncargoForm]       = useState(ENCARGO_INIT);
+  const [encargoProductos,  setEncargoProductos]  = useState([]);
+  const [encargoLoading,    setEncargoLoading]    = useState(false);
+  const [clientes,          setClientes]          = useState([]);
+  const [clienteSearch,     setClienteSearch]     = useState('');
+  const [nuevoClienteOpen,  setNuevoClienteOpen]  = useState(false);
+  const [nuevoCliente,      setNuevoCliente]      = useState({ nombre: '', telefono: '' });
+  const [creandoCliente,    setCreandoCliente]    = useState(false);
   const tipoRef    = useRef(null);
   const prendaRef  = useRef(null);
   const maquinaRef = useRef(null);
@@ -97,11 +124,17 @@ export default function NuevaNota() {
   const precioTotal = subtotalCargas + ajusteNum + subtotalProductos;
 
   useEffect(() => {
-    Promise.all([api.get('/maquinas'), api.get('/productos'), api.get('/configuracion')])
-      .then(([m, prod, cfg]) => {
+    Promise.all([
+      api.get('/maquinas'),
+      api.get('/productos'),
+      api.get('/configuracion'),
+      api.get('/clientes'),
+    ])
+      .then(([m, prod, cfg, cli]) => {
         setMaquinas(m.filter(maq => maq.estado === 'disponible'));
         setProductosCatalogo(prod);
         if (cfg?.precio_autoservicio) setPrecioCarga(Number(cfg.precio_autoservicio));
+        setClientes(cli);
       })
       .finally(() => setLoadingData(false));
   }, []);
@@ -122,8 +155,101 @@ export default function NuevaNota() {
   const eliminarProducto = (i) =>
     setProductosLista(prev => prev.filter((_, idx) => idx !== i));
 
+  const handleEncargoChange = (e) => {
+    const { name, value } = e.target;
+    setEncargoForm(f => ({ ...f, [name]: value }));
+  };
+
+  const agregarEncargoProducto = () =>
+    setEncargoProductos(prev => [...prev, { producto_id: '', cantidad: '1' }]);
+
+  const actualizarEncargoProducto = (i, field, value) =>
+    setEncargoProductos(prev =>
+      prev.map((item, idx) => (idx === i ? { ...item, [field]: value } : item))
+    );
+
+  const eliminarEncargoProducto = (i) =>
+    setEncargoProductos(prev => prev.filter((_, idx) => idx !== i));
+
+  const crearCliente = async () => {
+    const nombre = nuevoCliente.nombre.trim();
+    if (!nombre) return;
+    setCreandoCliente(true);
+    setError('');
+    try {
+      const c = await api.post('/clientes', {
+        nombre,
+        telefono: nuevoCliente.telefono.trim() || undefined,
+      });
+      setClientes(prev => [...prev, c].sort((a, b) => a.nombre.localeCompare(b.nombre)));
+      setEncargoForm(f => ({ ...f, cliente_id: String(c.id) }));
+      setNuevoCliente({ nombre: '', telefono: '' });
+      setNuevoClienteOpen(false);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setCreandoCliente(false);
+    }
+  };
+
+  const encargoPrecioBase     = Number(encargoForm.precio_base) || 0;
+  const encargoAjuste         = Number(encargoForm.ajuste)      || 0;
+  const encargoSubtotalProductos = encargoProductos.reduce((sum, p) => {
+    const prod = productosCatalogo.find(x => String(x.id) === String(p.producto_id));
+    return sum + (prod ? (Number(prod.precio_unitario) || 0) * (Number(p.cantidad) || 0) : 0);
+  }, 0);
+  const encargoPrecioTotal    = encargoPrecioBase + encargoAjuste + encargoSubtotalProductos;
+  const clienteSeleccionado   = clientes.find(c => String(c.id) === String(encargoForm.cliente_id));
+  const clienteSearchQ        = clienteSearch.trim().toLowerCase();
+  const clientesFiltrados     = clienteSearchQ
+    ? clientes.filter(c =>
+        c.nombre.toLowerCase().includes(clienteSearchQ) ||
+        (c.telefono ?? '').toLowerCase().includes(clienteSearchQ)
+      )
+    : clientes;
+
+  const encargoPuedeAvanzar = (() => {
+    if (encargoStep === 1) return !!encargoForm.cliente_id;
+    if (encargoStep === 2) return !!encargoForm.tamano;
+    if (encargoStep === 3) {
+      return encargoForm.precio_base !== '' &&
+        !Number.isNaN(Number(encargoForm.precio_base)) &&
+        Number(encargoForm.precio_base) >= 0;
+    }
+    if (encargoStep === 4) return !!encargoForm.pago_anticipado;
+    return true;
+  })();
+
+  const handleEncargoSubmit = async () => {
+    setError('');
+    setEncargoLoading(true);
+    try {
+      const payload = {
+        modalidad:     'POR_ENCARGO',
+        cliente_id:    Number(encargoForm.cliente_id),
+        tamano:        encargoForm.tamano,
+        precio_base:   encargoPrecioBase,
+        ajuste:        encargoAjuste,
+        estado_pago:   encargoForm.pago_anticipado === 'SI' ? 'PAGADO' : 'DEBE',
+        fecha_entrega: encargoForm.fecha_entrega || undefined,
+        notas:         encargoForm.notas || undefined,
+        sucursal:      'lopez_cotilla',
+        productos:     encargoProductos
+          .filter(p => p.producto_id && p.cantidad)
+          .map(p => ({ producto_id: Number(p.producto_id), cantidad: Number(p.cantidad) })),
+      };
+      await api.post('/notas', payload);
+      navigate('/notas');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setEncargoLoading(false);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (tipoServicio !== 'AUTOSERVICIO') return;
     setError('');
     setLoading(true);
 
@@ -254,8 +380,402 @@ export default function NuevaNota() {
         </div>
 
         {tipoServicio === 'POR_ENCARGO' && (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 text-center">
-            <p className="text-sm text-gray-500">Formulario de Por Encargo próximamente.</p>
+          <div className="space-y-6">
+            {/* Indicador de paso */}
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold text-gray-900">
+                Paso {encargoStep} de {ENCARGO_STEPS}
+              </p>
+              <div className="flex gap-1">
+                {Array.from({ length: ENCARGO_STEPS }).map((_, i) => (
+                  <span
+                    key={i}
+                    className={`h-1.5 w-8 rounded-full ${
+                      i + 1 <= encargoStep ? 'bg-indigo-600' : 'bg-gray-200'
+                    }`}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {/* Paso 1 — Cliente */}
+            {encargoStep === 1 && (
+              <div className="space-y-4">
+                <h2 className="text-base font-semibold text-gray-900">Cliente</h2>
+                <div className="relative">
+                  <svg
+                    className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400"
+                    fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                  <input
+                    type="text"
+                    placeholder="Buscar por nombre o teléfono..."
+                    value={clienteSearch}
+                    onChange={e => setClienteSearch(e.target.value)}
+                    className="w-full pl-11 pr-4 py-3.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
+                  />
+                </div>
+
+                <div className="border border-gray-200 rounded-lg bg-white max-h-72 overflow-y-auto divide-y divide-gray-100">
+                  {clientesFiltrados.length === 0 ? (
+                    <div className="px-4 py-8 text-center text-sm text-gray-400">
+                      {clienteSearchQ ? 'No se encontraron clientes' : 'No hay clientes registrados'}
+                    </div>
+                  ) : (
+                    clientesFiltrados.map(c => {
+                      const selected = String(encargoForm.cliente_id) === String(c.id);
+                      return (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => setEncargoForm(f => ({ ...f, cliente_id: String(c.id) }))}
+                          className={`w-full px-4 py-3 flex items-center justify-between text-left transition-colors ${
+                            selected ? 'bg-indigo-50' : 'hover:bg-gray-50'
+                          }`}
+                        >
+                          <div>
+                            <p className="font-medium text-gray-900">{c.nombre}</p>
+                            {c.telefono && (
+                              <p className="text-sm text-gray-500">{c.telefono}</p>
+                            )}
+                          </div>
+                          <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
+                            selected ? 'border-indigo-600 bg-indigo-600' : 'border-gray-300'
+                          }`}>
+                            {selected && (
+                              <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                              </svg>
+                            )}
+                          </span>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setNuevoClienteOpen(true)}
+                  className="w-full py-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-600 hover:text-indigo-600 hover:border-indigo-400 hover:bg-indigo-50/40 transition-colors flex items-center justify-center gap-2 text-sm font-medium"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  Crear nuevo cliente
+                </button>
+              </div>
+            )}
+
+            {/* Paso 2 — Tamaño */}
+            {encargoStep === 2 && (
+              <div className="space-y-4">
+                <h2 className="text-base font-semibold text-gray-900">Tamaño del encargo</h2>
+                <div className="grid grid-cols-2 gap-3">
+                  {TAMANOS.map(t => {
+                    const selected = encargoForm.tamano === t.v;
+                    return (
+                      <button
+                        key={t.v}
+                        type="button"
+                        onClick={() => setEncargoForm(f => ({ ...f, tamano: t.v }))}
+                        className={`py-8 border-2 rounded-xl font-semibold text-lg transition-colors ${
+                          selected
+                            ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
+                            : 'border-gray-300 bg-white text-gray-700 hover:border-indigo-300'
+                        }`}
+                      >
+                        {t.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Paso 3 — Precio base + Ajuste */}
+            {encargoStep === 3 && (
+              <div className="space-y-5">
+                <h2 className="text-base font-semibold text-gray-900">Precio</h2>
+                <div>
+                  <label className={LABEL_CLS}>
+                    Precio base <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="number" name="precio_base" min="0" step="0.01"
+                    value={encargoForm.precio_base} onChange={handleEncargoChange}
+                    placeholder="0.00"
+                    className={INPUT_CLS}
+                  />
+                  <p className="text-xs text-gray-400 mt-1">Precio del servicio en pesos.</p>
+                </div>
+                <div>
+                  <label className={LABEL_CLS}>Ajuste ($)</label>
+                  <input
+                    type="number" name="ajuste" step="0.01"
+                    value={encargoForm.ajuste} onChange={handleEncargoChange}
+                    placeholder="Ej. -10 para descuento, 20 para cargo extra"
+                    className={INPUT_CLS}
+                  />
+                  <p className="text-xs text-gray-400 mt-1">Descuento (negativo) o cargo extra (positivo).</p>
+                </div>
+              </div>
+            )}
+
+            {/* Paso 4 — Pago Anticipado */}
+            {encargoStep === 4 && (
+              <div className="space-y-4">
+                <h2 className="text-base font-semibold text-gray-900">Pago Anticipado</h2>
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    { v: 'SI', label: 'Sí' },
+                    { v: 'NO', label: 'No' },
+                  ].map(opt => {
+                    const selected = encargoForm.pago_anticipado === opt.v;
+                    return (
+                      <button
+                        key={opt.v}
+                        type="button"
+                        onClick={() => setEncargoForm(f => ({ ...f, pago_anticipado: opt.v }))}
+                        className={`py-8 border-2 rounded-xl font-semibold text-lg transition-colors ${
+                          selected
+                            ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
+                            : 'border-gray-300 bg-white text-gray-700 hover:border-indigo-300'
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Paso 5 — Fecha de entrega + Instrucciones */}
+            {encargoStep === 5 && (
+              <div className="space-y-5">
+                <h2 className="text-base font-semibold text-gray-900">Entrega</h2>
+                <div>
+                  <label className={LABEL_CLS}>Fecha de entrega</label>
+                  <input
+                    type="date" name="fecha_entrega"
+                    value={encargoForm.fecha_entrega} onChange={handleEncargoChange}
+                    className={INPUT_CLS}
+                  />
+                </div>
+                <div>
+                  <label className={LABEL_CLS}>Instrucciones</label>
+                  <textarea
+                    name="notas" rows={5}
+                    value={encargoForm.notas} onChange={handleEncargoChange}
+                    placeholder="Instrucciones especiales..."
+                    className={`${INPUT_CLS} resize-none`}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Paso 6 — Productos + Resumen */}
+            {encargoStep === 6 && (
+              <div className="space-y-6">
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <h2 className="text-base font-semibold text-gray-900">Productos</h2>
+                    {encargoProductos.length > 0 && (
+                      <span className="text-xs text-gray-500">
+                        {encargoProductos.length} {encargoProductos.length === 1 ? 'producto' : 'productos'}
+                      </span>
+                    )}
+                  </div>
+
+                  {encargoProductos.length === 0 ? (
+                    <button
+                      type="button"
+                      onClick={agregarEncargoProducto}
+                      className="w-full py-8 border-2 border-dashed border-gray-300 rounded-xl text-gray-500 hover:text-indigo-600 hover:border-indigo-400 hover:bg-indigo-50/40 transition-colors flex flex-col items-center justify-center gap-2"
+                    >
+                      <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v16m8-8H4" />
+                      </svg>
+                      <span className="text-sm font-medium">Agregar producto</span>
+                    </button>
+                  ) : (
+                    <div className="space-y-3">
+                      {encargoProductos.map((item, i) => {
+                        const prod = productosCatalogo.find(x => String(x.id) === String(item.producto_id));
+                        const cant = Number(item.cantidad) || 0;
+                        const subtotal = prod ? (Number(prod.precio_unitario) || 0) * cant : 0;
+                        return (
+                          <div key={i} className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
+                            <div className="flex items-center gap-2">
+                              <select
+                                value={item.producto_id}
+                                onChange={e => actualizarEncargoProducto(i, 'producto_id', e.target.value)}
+                                className={`flex-1 ${INPUT_CLS}`}
+                              >
+                                <option value="">Selecciona un producto…</option>
+                                {productosCatalogo.map(p => (
+                                  <option key={p.id} value={p.id}>
+                                    {p.nombre}{p.precio_unitario ? ` — $${Number(p.precio_unitario).toFixed(2)}` : ''} ({Number(p.stock_disponible ?? p.stock_actual)} {p.unidad})
+                                  </option>
+                                ))}
+                              </select>
+                              <button
+                                type="button"
+                                onClick={() => eliminarEncargoProducto(i)}
+                                aria-label="Eliminar producto"
+                                className="flex-shrink-0 px-3 py-3.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                              >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                              </button>
+                            </div>
+
+                            <div className="flex items-end justify-between gap-3">
+                              <div>
+                                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Cantidad</p>
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => actualizarEncargoProducto(i, 'cantidad', String(Math.max(1, cant - 1)))}
+                                    disabled={cant <= 1}
+                                    aria-label="Disminuir cantidad"
+                                    className="w-10 h-10 flex items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-700 text-lg font-semibold hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                                  >
+                                    −
+                                  </button>
+                                  <span className="w-10 text-center text-base font-medium text-gray-900">{cant}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => actualizarEncargoProducto(i, 'cantidad', String(cant + 1))}
+                                    aria-label="Aumentar cantidad"
+                                    className="w-10 h-10 flex items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-700 text-lg font-semibold hover:bg-gray-50 transition-colors"
+                                  >
+                                    +
+                                  </button>
+                                </div>
+                              </div>
+                              {subtotal > 0 && (
+                                <div className="text-right">
+                                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Subtotal</p>
+                                  <p className="text-lg font-bold text-indigo-700">${subtotal.toFixed(2)}</p>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+
+                      <button
+                        type="button"
+                        onClick={agregarEncargoProducto}
+                        className="w-full py-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-600 hover:text-indigo-600 hover:border-indigo-400 hover:bg-indigo-50/40 transition-colors flex items-center justify-center gap-2 text-sm font-medium"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                        </svg>
+                        Agregar otro producto
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Resumen */}
+                <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4">
+                  <p className="text-xs font-medium text-indigo-500 uppercase tracking-wide mb-2">
+                    Resumen
+                  </p>
+                  <div className="space-y-1 mb-3 text-sm text-indigo-700">
+                    <div className="flex justify-between">
+                      <span>Cliente</span>
+                      <span className="font-medium">{clienteSeleccionado?.nombre ?? '—'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Tamaño</span>
+                      <span className="font-medium">{TAMANO_LABEL[encargoForm.tamano] ?? '—'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Pago Anticipado</span>
+                      <span className="font-medium">
+                        {encargoForm.pago_anticipado === 'SI' ? 'Sí'
+                          : encargoForm.pago_anticipado === 'NO' ? 'No' : '—'}
+                      </span>
+                    </div>
+                    {encargoForm.fecha_entrega && (
+                      <div className="flex justify-between">
+                        <span>Entrega</span>
+                        <span className="font-medium">{encargoForm.fecha_entrega}</span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="space-y-1 mb-2 text-sm text-indigo-600 border-t border-indigo-200 pt-3">
+                    <div className="flex justify-between">
+                      <span>Precio base</span>
+                      <span>${encargoPrecioBase.toFixed(2)}</span>
+                    </div>
+                    {encargoAjuste !== 0 && (
+                      <div className="flex justify-between">
+                        <span>Ajuste</span>
+                        <span>{encargoAjuste > 0 ? '+' : ''}${encargoAjuste.toFixed(2)}</span>
+                      </div>
+                    )}
+                    {encargoSubtotalProductos > 0 && (
+                      <div className="flex justify-between">
+                        <span>Productos</span>
+                        <span>${encargoSubtotalProductos.toFixed(2)}</span>
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-3xl font-bold text-indigo-700 border-t border-indigo-200 pt-2">
+                    ${encargoPrecioTotal.toFixed(2)}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">
+                {error}
+              </div>
+            )}
+
+            {/* Navegación del wizard */}
+            <div className="flex gap-3 pb-4">
+              <button
+                type="button"
+                onClick={() => {
+                  if (encargoStep > 1) setEncargoStep(s => s - 1);
+                  else navigate(-1);
+                }}
+                disabled={encargoLoading}
+                className="flex-1 border border-gray-300 text-gray-700 font-medium py-2.5 rounded-lg text-sm hover:bg-gray-50 disabled:opacity-60 transition-colors"
+              >
+                {encargoStep === 1 ? 'Cancelar' : 'Atrás'}
+              </button>
+              {encargoStep < ENCARGO_STEPS ? (
+                <button
+                  type="button"
+                  onClick={() => setEncargoStep(s => s + 1)}
+                  disabled={!encargoPuedeAvanzar}
+                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-medium py-2.5 rounded-lg text-sm transition-colors"
+                >
+                  Siguiente
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleEncargoSubmit}
+                  disabled={encargoLoading}
+                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-medium py-2.5 rounded-lg text-sm transition-colors"
+                >
+                  {encargoLoading ? 'Creando...' : 'Crear nota'}
+                </button>
+              )}
+            </div>
           </div>
         )}
 
@@ -655,6 +1175,68 @@ export default function NuevaNota() {
         </>
         )}
       </form>
+
+      {/* Modal — crear nuevo cliente */}
+      {nuevoClienteOpen && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+            <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-gray-100">
+              <h2 className="text-base font-semibold text-gray-900">Nuevo cliente</h2>
+              <button
+                onClick={() => setNuevoClienteOpen(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div>
+                <label className={LABEL_CLS}>
+                  Nombre <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={nuevoCliente.nombre}
+                  onChange={e => setNuevoCliente(c => ({ ...c, nombre: e.target.value }))}
+                  placeholder="Nombre del cliente"
+                  className={INPUT_CLS}
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className={LABEL_CLS}>Teléfono</label>
+                <input
+                  type="tel"
+                  value={nuevoCliente.telefono}
+                  onChange={e => setNuevoCliente(c => ({ ...c, telefono: e.target.value }))}
+                  placeholder="Ej. 33 1234 5678"
+                  className={INPUT_CLS}
+                />
+              </div>
+              <div className="flex gap-3 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setNuevoClienteOpen(false)}
+                  disabled={creandoCliente}
+                  className="flex-1 border border-gray-300 text-gray-700 font-medium py-2.5 rounded-lg text-sm hover:bg-gray-50 disabled:opacity-60 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={crearCliente}
+                  disabled={creandoCliente || !nuevoCliente.nombre.trim()}
+                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-medium py-2.5 rounded-lg text-sm transition-colors"
+                >
+                  {creandoCliente ? 'Creando...' : 'Crear cliente'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
