@@ -132,9 +132,13 @@ export default function Notas() {
         </div>
         <Link
           to="/notas/nueva"
-          className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors flex-shrink-0"
+          aria-label="Nueva nota"
+          className="w-11 h-11 rounded-full bg-indigo-600 hover:bg-indigo-700 text-white flex items-center justify-center transition-colors flex-shrink-0"
         >
-          + Nueva
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5}
+              d="M12 4v16m8-8H4" />
+          </svg>
         </Link>
       </div>
 
