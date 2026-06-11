@@ -63,7 +63,8 @@
       "Bash(pkill -f 'pnpm approve-builds')",
       "Bash(ipconfig getifaddr *)",
       "Bash(wait)",
-      "Bash(./node_modules/.bin/eslint src/pages/NuevaNota.jsx)"
+      "Bash(./node_modules/.bin/eslint src/pages/NuevaNota.jsx)",
+      "Bash(./node_modules/.bin/eslint src/pages/Clientes.jsx)"
     ]
   }
 }

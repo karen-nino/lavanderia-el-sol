@@ -29,8 +29,6 @@ CREATE TABLE clientes (
   id          SERIAL PRIMARY KEY,
   nombre      VARCHAR(100) NOT NULL,
   telefono    VARCHAR(20),
-  email       VARCHAR(150),
-  direccion   TEXT,
   notas       TEXT,
   activo      BOOLEAN NOT NULL DEFAULT TRUE,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),

@@ -6,7 +6,7 @@ import { esAdmin as esAdminFn } from '../lib/roles';
 const INPUT_CLS =
   'w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition';
 
-const FORM_INIT = { nombre: '', telefono: '', email: '', direccion: '' };
+const FORM_INIT = { nombre: '', telefono: '' };
 
 export default function Clientes() {
   const { usuario } = useAuth();
@@ -43,8 +43,7 @@ export default function Clientes() {
 
   const filtrados = clientes.filter(c =>
     c.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
-    (c.telefono && c.telefono.includes(busqueda)) ||
-    (c.email && c.email.toLowerCase().includes(busqueda.toLowerCase()))
+    (c.telefono && c.telefono.includes(busqueda))
   );
 
   // ── Crear ──────────────────────────────────────────────
@@ -70,7 +69,7 @@ export default function Clientes() {
   // ── Editar ─────────────────────────────────────────────
   const abrirEditar = (c) => {
     setEditCliente(c);
-    setEditForm({ nombre: c.nombre, telefono: c.telefono ?? '', email: c.email ?? '', direccion: c.direccion ?? '' });
+    setEditForm({ nombre: c.nombre, telefono: c.telefono ?? '' });
     setEditError('');
   };
   const cerrarEditar = () => setEditCliente(null);
@@ -138,7 +137,7 @@ export default function Clientes() {
         </svg>
         <input
           type="text"
-          placeholder="Buscar por nombre, teléfono o email..."
+          placeholder="Buscar por nombre o teléfono..."
           value={busqueda}
           onChange={e => setBusqueda(e.target.value)}
           className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
@@ -170,8 +169,6 @@ export default function Clientes() {
                     <tr className="bg-gray-50 border-b border-gray-100">
                       <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Nombre</th>
                       <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Teléfono</th>
-                      <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Email</th>
-                      <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Dirección</th>
                       <th className="px-4 py-3" />
                     </tr>
                   </thead>
@@ -180,8 +177,6 @@ export default function Clientes() {
                       <tr key={c.id} className="hover:bg-gray-50 transition-colors">
                         <td className="px-4 py-3 font-medium text-gray-800">{c.nombre}</td>
                         <td className="px-4 py-3 text-gray-600">{c.telefono ?? '—'}</td>
-                        <td className="px-4 py-3 text-gray-600">{c.email ?? '—'}</td>
-                        <td className="px-4 py-3 text-gray-400 text-xs truncate max-w-xs">{c.direccion ?? '—'}</td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-1 justify-end">
                             <button
@@ -222,7 +217,6 @@ export default function Clientes() {
                       <p className="font-medium text-gray-800 text-sm">{c.nombre}</p>
                       <div className="flex flex-wrap gap-3 mt-1 text-xs text-gray-500">
                         {c.telefono && <span>📞 {c.telefono}</span>}
-                        {c.email && <span>✉️ {c.email}</span>}
                       </div>
                     </div>
                     <div className="flex items-center gap-1 flex-shrink-0">
@@ -280,16 +274,6 @@ export default function Clientes() {
                 <input name="telefono" value={form.telefono} onChange={handleChange}
                   placeholder="33 1234 5678" className={INPUT_CLS} />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Email</label>
-                <input type="email" name="email" value={form.email} onChange={handleChange}
-                  placeholder="correo@ejemplo.com" className={INPUT_CLS} />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Dirección</label>
-                <input name="direccion" value={form.direccion} onChange={handleChange}
-                  placeholder="Calle, número, colonia..." className={INPUT_CLS} />
-              </div>
               {formError && (
                 <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">{formError}</div>
               )}
@@ -332,16 +316,6 @@ export default function Clientes() {
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">Teléfono</label>
                 <input name="telefono" value={editForm.telefono} onChange={handleEditChange}
                   placeholder="33 1234 5678" className={INPUT_CLS} />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Email</label>
-                <input type="email" name="email" value={editForm.email} onChange={handleEditChange}
-                  placeholder="correo@ejemplo.com" className={INPUT_CLS} />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Dirección</label>
-                <input name="direccion" value={editForm.direccion} onChange={handleEditChange}
-                  placeholder="Calle, número, colonia..." className={INPUT_CLS} />
               </div>
               {editError && (
                 <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">{editError}</div>

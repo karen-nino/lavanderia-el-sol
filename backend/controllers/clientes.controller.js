@@ -30,7 +30,7 @@ export const getClienteById = async (req, res) => {
 };
 
 export const createCliente = async (req, res) => {
-  const { nombre, telefono, email, direccion, notas } = req.body;
+  const { nombre, telefono, notas } = req.body;
 
   if (!nombre) {
     return res.status(400).json({ message: 'El nombre es requerido.' });
@@ -38,10 +38,10 @@ export const createCliente = async (req, res) => {
 
   try {
     const { rows } = await pool.query(
-      `INSERT INTO clientes (nombre, telefono, email, direccion, notas)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO clientes (nombre, telefono, notas)
+       VALUES ($1, $2, $3)
        RETURNING *`,
-      [nombre, telefono, email, direccion, notas]
+      [nombre, telefono, notas]
     );
     res.status(201).json(rows[0]);
   } catch (err) {
@@ -81,20 +81,18 @@ export const deleteCliente = async (req, res) => {
 
 export const updateCliente = async (req, res) => {
   const { id } = req.params;
-  const { nombre, telefono, email, direccion, notas, activo } = req.body;
+  const { nombre, telefono, notas, activo } = req.body;
 
   try {
     const { rows } = await pool.query(
       `UPDATE clientes
-       SET nombre    = COALESCE($1, nombre),
-           telefono  = COALESCE($2, telefono),
-           email     = COALESCE($3, email),
-           direccion = COALESCE($4, direccion),
-           notas     = COALESCE($5, notas),
-           activo    = COALESCE($6, activo)
-       WHERE id = $7
+       SET nombre   = COALESCE($1, nombre),
+           telefono = COALESCE($2, telefono),
+           notas    = COALESCE($3, notas),
+           activo   = COALESCE($4, activo)
+       WHERE id = $5
        RETURNING *`,
-      [nombre, telefono, email, direccion, notas, activo, id]
+      [nombre, telefono, notas, activo, id]
     );
     if (rows.length === 0) {
       return res.status(404).json({ message: 'Cliente no encontrado.' });
