@@ -245,9 +245,6 @@ export default function Notas() {
                             <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${badgeModalidad.cls}`}>
                               {badgeModalidad.label}
                             </span>
-                            {n.tamano && (
-                              <span className="ml-1.5 text-xs text-gray-400 capitalize">{n.tamano}</span>
-                            )}
                           </td>
                           <td className="px-4 py-3">
                             <p className="font-medium text-gray-800">
@@ -310,7 +307,6 @@ export default function Notas() {
                         <div className="flex items-center gap-1.5">
                           <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${badgeModalidad.cls}`}>
                             {badgeModalidad.label}
-                            {n.tamano ? ` · ${n.tamano}` : ''}
                           </span>
                           {esAdmin && (
                             <button
