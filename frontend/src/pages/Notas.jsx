@@ -218,19 +218,20 @@ export default function Notas() {
         </div>
       )}
 
-      {!loading && !error && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-          {filtradas.length === 0 ? (
-            <div className="text-center py-12">
-              <p className="text-gray-400 text-sm">
-                {busqueda ? 'No se encontraron notas con ese criterio' : 'No hay notas con este filtro'}
-              </p>
-            </div>
-          ) : (
-            <>
-              {/* Tabla — desktop */}
-              <div className="hidden md:block overflow-x-auto">
-                <table className="w-full text-sm">
+      {!loading && !error && filtradas.length === 0 && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 text-center py-12">
+          <p className="text-gray-400 text-sm">
+            {busqueda ? 'No se encontraron notas con ese criterio' : 'No hay notas con este filtro'}
+          </p>
+        </div>
+      )}
+
+      {!loading && !error && filtradas.length > 0 && (
+        <>
+          {/* Tabla — desktop */}
+          <div className="hidden md:block bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-gray-50 border-b border-gray-100">
                       <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Folio</th>
@@ -303,64 +304,63 @@ export default function Notas() {
                       );
                     })}
                   </tbody>
-                </table>
-              </div>
+              </table>
+            </div>
+          </div>
 
-              {/* Cards — mobile */}
-              <div className="md:hidden divide-y divide-gray-50">
-                {filtradas.map(n => {
-                  const badgeEstado    = BADGE_ESTADO[n.estado]       ?? BADGE_ESTADO.ACTIVA;
-                  const badgeModalidad = BADGE_MODALIDAD[n.modalidad] ?? BADGE_MODALIDAD.AUTOSERVICIO;
-                  const badgePago      = BADGE_PAGO[n.estado_pago];
-                  return (
-                    <div
-                      key={n.id}
-                      className="px-4 py-3 space-y-1.5 active:bg-gray-50 cursor-pointer"
-                      onClick={() => navigate(`/notas/${n.id}`)}
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="font-mono text-xs text-gray-400">#{n.folio?.split('-')[0] ?? n.id}</p>
-                        <div className="flex items-center gap-1.5">
-                          <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${badgeModalidad.cls}`}>
-                            {badgeModalidad.label}
-                          </span>
-                          {esAdmin && (
-                            <button
-                              onClick={e => { e.stopPropagation(); setNotaAEliminar(n); }}
-                              className="text-gray-400 hover:text-red-600 p-1 rounded transition-colors"
-                              title="Eliminar nota"
-                            >
-                              <IconoBasura />
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                      <p className="font-medium text-gray-800 text-sm">
-                        {fmtCliente(n) ?? <span className="text-gray-400 italic">Anónimo</span>}
-                      </p>
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-1.5">
-                          <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${badgeEstado.cls}`}>
-                            {badgeEstado.label}
-                          </span>
-                          {badgePago && (
-                            <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${badgePago.cls}`}>
-                              {badgePago.label}
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-xs text-gray-500">
-                          {fmtFecha(n.created_at)}
-                          {n.precio_total ? ` · ${fmtMonto(n.precio_total)}` : ''}
-                        </p>
-                      </div>
+          {/* Cards — mobile */}
+          <div className="md:hidden space-y-3">
+            {filtradas.map(n => {
+              const badgeEstado    = BADGE_ESTADO[n.estado]       ?? BADGE_ESTADO.ACTIVA;
+              const badgeModalidad = BADGE_MODALIDAD[n.modalidad] ?? BADGE_MODALIDAD.AUTOSERVICIO;
+              const badgePago      = BADGE_PAGO[n.estado_pago];
+              return (
+                <div
+                  key={n.id}
+                  className="bg-white rounded-xl shadow-sm border border-gray-100 px-4 py-3 space-y-1.5 active:bg-gray-50 cursor-pointer"
+                  onClick={() => navigate(`/notas/${n.id}`)}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="font-mono text-xs text-gray-400">#{n.folio?.split('-')[0] ?? n.id}</p>
+                    <div className="flex items-center gap-1.5">
+                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${badgeModalidad.cls}`}>
+                        {badgeModalidad.label}
+                      </span>
+                      {esAdmin && (
+                        <button
+                          onClick={e => { e.stopPropagation(); setNotaAEliminar(n); }}
+                          className="text-gray-400 hover:text-red-600 p-1 rounded transition-colors"
+                          title="Eliminar nota"
+                        >
+                          <IconoBasura />
+                        </button>
+                      )}
                     </div>
-                  );
-                })}
-              </div>
-            </>
-          )}
-        </div>
+                  </div>
+                  <p className="font-medium text-gray-800 text-sm">
+                    {fmtCliente(n) ?? <span className="text-gray-400 italic">Anónimo</span>}
+                  </p>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5">
+                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${badgeEstado.cls}`}>
+                        {badgeEstado.label}
+                      </span>
+                      {badgePago && (
+                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${badgePago.cls}`}>
+                          {badgePago.label}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-500">
+                      {fmtFecha(n.created_at)}
+                      {n.precio_total ? ` · ${fmtMonto(n.precio_total)}` : ''}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </>
       )}
 
       {/* Modal confirmar eliminación */}
