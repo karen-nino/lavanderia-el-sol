@@ -252,7 +252,14 @@ export default function DetalleNota() {
           </FilaDetalle>
           <FilaDetalle label="Cliente">
             {nota.cliente_nombre
-              ? <>{nota.cliente_nombre}{nota.cliente_telefono && <span className="text-gray-400 ml-2">{nota.cliente_telefono}</span>}</>
+              ? (
+                  <div>
+                    <p>{`${nota.cliente_nombre}${nota.cliente_apellido ? ' ' + nota.cliente_apellido : ''}`}</p>
+                    {nota.cliente_telefono && (
+                      <p className="text-gray-400 text-sm">{nota.cliente_telefono}</p>
+                    )}
+                  </div>
+                )
               : <span className="text-gray-400 italic">Anónimo</span>}
           </FilaDetalle>
           <FilaDetalle label="Descripción">
