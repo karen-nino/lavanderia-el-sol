@@ -7,12 +7,12 @@ const navIconCls = 'w-6 h-6';
 
 const Icon = {
   brand: (
-    <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24">
+    <svg width="24" height="24" className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24">
       <path d="M12 4a3 3 0 110 6 3 3 0 010-6zm-1 8h2v3l3 .5v6h-2v-5l-2-.3v5h-2v-5l-2 .3v5H8v-6l3-.5v-3z" />
     </svg>
   ),
   dashboard: (
-    <svg className={navIconCls} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <svg width="24" height="24" className={navIconCls} fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <rect x="3"  y="3"  width="7" height="7" rx="1.5" strokeWidth={2} />
       <rect x="14" y="3"  width="7" height="7" rx="1.5" strokeWidth={2} />
       <rect x="3"  y="14" width="7" height="7" rx="1.5" strokeWidth={2} />
@@ -20,7 +20,7 @@ const Icon = {
     </svg>
   ),
   maquinas: (
-    <svg className={navIconCls} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <svg width="24" height="24" className={navIconCls} fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <rect x="4" y="3" width="16" height="18" rx="2" strokeWidth={2} />
       <circle cx="12" cy="13" r="4" strokeWidth={2} />
       <circle cx="8"  cy="6.5" r="0.6" fill="currentColor" />
@@ -28,7 +28,7 @@ const Icon = {
     </svg>
   ),
   notas: (
-    <svg className={navIconCls} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <svg width="24" height="24" className={navIconCls} fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <rect x="5" y="3" width="14" height="18" rx="2" strokeWidth={2} />
       <line x1="9"  y1="8"  x2="15" y2="8"  strokeWidth={2} strokeLinecap="round" />
       <line x1="9"  y1="12" x2="15" y2="12" strokeWidth={2} strokeLinecap="round" />
@@ -36,7 +36,7 @@ const Icon = {
     </svg>
   ),
   clientes: (
-    <svg className={navIconCls} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <svg width="24" height="24" className={navIconCls} fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <circle cx="9"  cy="8" r="3" strokeWidth={2} />
       <circle cx="17" cy="9" r="2.5" strokeWidth={2} />
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -44,19 +44,19 @@ const Icon = {
     </svg>
   ),
   inventario: (
-    <svg className={navIconCls} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <svg width="24" height="24" className={navIconCls} fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
         d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
     </svg>
   ),
   ventas: (
-    <svg className={navIconCls} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <svg width="24" height="24" className={navIconCls} fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
         d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2 5h12m-7 3a1 1 0 11-2 0 1 1 0 012 0zm8 0a1 1 0 11-2 0 1 1 0 012 0z" />
     </svg>
   ),
   empleados: (
-    <svg className={navIconCls} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <svg width="24" height="24" className={navIconCls} fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <circle cx="9" cy="8" r="3" strokeWidth={2} />
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
         d="M3 20c0-3 2.5-5 6-5s6 2 6 5" />
@@ -65,38 +65,38 @@ const Icon = {
     </svg>
   ),
   ajustes: (
-    <svg className={navIconCls} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <svg width="24" height="24" className={navIconCls} fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
         d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
     </svg>
   ),
   logout: (
-    <svg className={navIconCls} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <svg width="24" height="24" className={navIconCls} fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
         d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
     </svg>
   ),
   bell: (
-    <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <svg width="40" height="40" className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
         d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
     </svg>
   ),
   menu: (
-    <svg className={navIconCls} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <svg width="24" height="24" className={navIconCls} fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
         d="M4 6h16M4 12h16M4 18h16" />
     </svg>
   ),
   menuSm: (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <svg width="20" height="20" className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
         d="M4 6h16M4 12h16M4 18h16" />
     </svg>
   ),
   close: (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <svg width="20" height="20" className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
         d="M6 6l12 12M6 18L18 6" />
     </svg>
