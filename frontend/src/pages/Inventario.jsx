@@ -293,12 +293,13 @@ export default function Inventario() {
         </div>
         <button
           onClick={() => setModalProducto('nuevo')}
-          className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2.5 rounded-lg transition-colors"
+          aria-label="Agregar producto"
+          className="w-11 h-11 rounded-full bg-indigo-600 hover:bg-indigo-700 text-white flex items-center justify-center transition-colors flex-shrink-0"
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5}
+              d="M12 4v16m8-8H4" />
           </svg>
-          Agregar producto
         </button>
       </div>
 
@@ -334,108 +335,53 @@ export default function Inventario() {
         <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">{error}</div>
       )}
 
-      {!loading && !error && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-          {productos.length === 0 ? (
-            <div className="text-center py-12">
-              <p className="text-gray-400 text-sm mb-3">Sin productos en inventario</p>
-              <button
-                onClick={() => setModalProducto('nuevo')}
-                className="text-sm text-indigo-600 hover:text-indigo-800 font-medium"
-              >
-                + Agregar el primero
-              </button>
-            </div>
-          ) : (
-            <>
-              {/* Tabla — desktop */}
-              <div className="hidden md:block overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="bg-gray-50 border-b border-gray-100">
-                      <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Producto</th>
-                      <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Categoría</th>
-                      <th className="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Precio unit.</th>
-                      <th className="text-center px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Stock actual</th>
-                      <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Unidad</th>
-                      <th className="px-4 py-3" />
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-50">
-                    {productos.map(p => {
-                      const es = p.estado_stock ?? 'ok';
-                      const rowCls = es === 'agotado' ? 'bg-red-50/40' : es === 'por_agotarse' ? 'bg-amber-50/40' : '';
-                      return (
-                        <tr key={p.id} className={`hover:bg-gray-50 transition-colors ${rowCls}`}>
-                          <td className="px-4 py-3">
-                            <span className="font-medium text-gray-800">{p.nombre}</span>
-                          </td>
-                          <td className="px-4 py-3 text-gray-500 text-xs">
-                            {p.categoria ?? '—'}
-                          </td>
-                          <td className="px-4 py-3 text-right text-gray-600">
-                            {p.precio_unitario != null ? `$${Number(p.precio_unitario).toFixed(2)}` : '—'}
-                          </td>
-                          <td className="px-4 py-3 text-center">
-                            <div className="flex flex-col items-center gap-0.5">
-                              <span className="font-mono font-semibold text-sm text-gray-800">
-                                {Number(p.stock_actual).toFixed(2)}
-                              </span>
-                              {es === 'agotado' && (
-                                <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700">Agotado</span>
-                              )}
-                              {es === 'por_agotarse' && (
-                                <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Por agotarse</span>
-                              )}
-                              {es === 'ok' && (
-                                <span className="w-2 h-2 rounded-full bg-green-500 inline-block" />
-                              )}
-                            </div>
-                          </td>
-                          <td className="px-4 py-3 text-gray-600">{p.unidad}</td>
-                          <td className="px-4 py-3">
-                            <div className="flex items-center justify-end gap-1">
-                              <button
-                                onClick={() => setModalProducto(p)}
-                                className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
-                                title="Editar"
-                              >
-                                <IconoLapiz />
-                              </button>
-                              {esAdmin && (
-                                <button
-                                  onClick={() => setProdAEliminar(p)}
-                                  className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                  title="Eliminar"
-                                >
-                                  <IconoBasura />
-                                </button>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+      {!loading && !error && productos.length === 0 && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 text-center py-12">
+          <p className="text-gray-400 text-sm mb-3">Sin productos en inventario</p>
+          <button
+            onClick={() => setModalProducto('nuevo')}
+            className="text-sm text-indigo-600 hover:text-indigo-800 font-medium"
+          >
+            + Agregar el primero
+          </button>
+        </div>
+      )}
 
-              {/* Cards — mobile */}
-              <div className="md:hidden divide-y divide-gray-50">
-                {productos.map(p => {
-                  const es = p.estado_stock ?? 'ok';
-                  const rowCls = es === 'agotado' ? 'bg-red-50/40' : es === 'por_agotarse' ? 'bg-amber-50/40' : '';
-                  return (
-                    <div key={p.id} className={`px-4 py-3 ${rowCls}`}>
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <p className="font-medium text-gray-800 text-sm">{p.nombre}</p>
-                          {p.categoria && (
-                            <p className="text-xs text-gray-400 mt-0.5">{p.categoria}</p>
-                          )}
-                          <div className="flex items-center gap-2 mt-1 flex-wrap">
-                            <span className="text-sm font-mono font-semibold text-gray-700">
-                              {Number(p.stock_actual).toFixed(2)} {p.unidad}
+      {!loading && !error && productos.length > 0 && (
+        <>
+          {/* Tabla — desktop */}
+          <div className="hidden md:block bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-gray-50 border-b border-gray-100">
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Producto</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Categoría</th>
+                    <th className="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Precio unit.</th>
+                    <th className="text-center px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Stock actual</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Unidad</th>
+                    <th className="px-4 py-3" />
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {productos.map(p => {
+                    const es = p.estado_stock ?? 'ok';
+                    const rowCls = es === 'agotado' ? 'bg-red-50/40' : es === 'por_agotarse' ? 'bg-amber-50/40' : '';
+                    return (
+                      <tr key={p.id} className={`hover:bg-gray-50 transition-colors ${rowCls}`}>
+                        <td className="px-4 py-3">
+                          <span className="font-medium text-gray-800">{p.nombre}</span>
+                        </td>
+                        <td className="px-4 py-3 text-gray-500 text-xs">
+                          {p.categoria ?? '—'}
+                        </td>
+                        <td className="px-4 py-3 text-right text-gray-600">
+                          {p.precio_unitario != null ? `$${Number(p.precio_unitario).toFixed(2)}` : '—'}
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <div className="flex flex-col items-center gap-0.5">
+                            <span className="font-mono font-semibold text-sm text-gray-800">
+                              {Number(p.stock_actual).toFixed(2)}
                             </span>
                             {es === 'agotado' && (
                               <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700">Agotado</span>
@@ -443,37 +389,95 @@ export default function Inventario() {
                             {es === 'por_agotarse' && (
                               <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Por agotarse</span>
                             )}
-                            {p.precio_unitario != null && (
-                              <span className="text-xs text-gray-500">
-                                ${Number(p.precio_unitario).toFixed(2)}
-                              </span>
+                            {es === 'ok' && (
+                              <span className="w-2 h-2 rounded-full bg-green-500 inline-block" />
                             )}
                           </div>
-                        </div>
-                        <div className="flex items-center gap-1 flex-shrink-0">
-                          <button
-                            onClick={() => setModalProducto(p)}
-                            className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
-                          >
-                            <IconoLapiz />
-                          </button>
-                          {esAdmin && (
+                        </td>
+                        <td className="px-4 py-3 text-gray-600">{p.unidad}</td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center justify-end gap-1">
                             <button
-                              onClick={() => setProdAEliminar(p)}
-                              className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              onClick={() => setModalProducto(p)}
+                              className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                              title="Editar"
                             >
-                              <IconoBasura />
+                              <IconoLapiz />
                             </button>
-                          )}
-                        </div>
+                            {esAdmin && (
+                              <button
+                                onClick={() => setProdAEliminar(p)}
+                                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                title="Eliminar"
+                              >
+                                <IconoBasura />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Cards — mobile */}
+          <div className="md:hidden space-y-3">
+            {productos.map(p => {
+              const es = p.estado_stock ?? 'ok';
+              const rowCls = es === 'agotado' ? 'bg-red-50/40' : es === 'por_agotarse' ? 'bg-amber-50/40' : 'bg-white';
+              return (
+                <div
+                  key={p.id}
+                  className={`rounded-xl shadow-sm border border-gray-100 px-4 py-3 ${rowCls}`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="font-medium text-gray-800 text-sm">{p.nombre}</p>
+                      {p.categoria && (
+                        <p className="text-xs text-gray-400 mt-0.5">{p.categoria}</p>
+                      )}
+                      <div className="flex items-center gap-2 mt-1 flex-wrap">
+                        <span className="text-sm font-mono font-semibold text-gray-700">
+                          {Number(p.stock_actual).toFixed(2)} {p.unidad}
+                        </span>
+                        {es === 'agotado' && (
+                          <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700">Agotado</span>
+                        )}
+                        {es === 'por_agotarse' && (
+                          <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Por agotarse</span>
+                        )}
+                        {p.precio_unitario != null && (
+                          <span className="text-xs text-gray-500">
+                            ${Number(p.precio_unitario).toFixed(2)}
+                          </span>
+                        )}
                       </div>
                     </div>
-                  );
-                })}
-              </div>
-            </>
-          )}
-        </div>
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      <button
+                        onClick={() => setModalProducto(p)}
+                        className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                      >
+                        <IconoLapiz />
+                      </button>
+                      {esAdmin && (
+                        <button
+                          onClick={() => setProdAEliminar(p)}
+                          className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        >
+                          <IconoBasura />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </>
       )}
 
       {/* Modal crear / editar */}
