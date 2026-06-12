@@ -45,7 +45,7 @@ function FilaDetalle({ label, children }) {
 function ModalConfirmar({ titulo, mensaje, onCancelar, onConfirmar, loading, colorBtn = 'bg-red-600 hover:bg-red-700' }) {
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4 max-h-[90vh] overflow-y-auto">
         <h3 className="text-base font-bold text-gray-900">{titulo}</h3>
         <p className="text-sm text-gray-500">{mensaje}</p>
         <div className="flex gap-3">

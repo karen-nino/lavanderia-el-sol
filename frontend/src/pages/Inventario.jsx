@@ -69,8 +69,8 @@ function ModalProducto({ producto, onClose, onGuardado }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 flex-shrink-0">
           <h2 className="text-base font-semibold text-gray-900">
             {esEdicion ? 'Editar producto' : 'Nuevo producto'}
           </h2>
@@ -81,7 +81,7 @@ function ModalProducto({ producto, onClose, onGuardado }) {
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-5 space-y-4">
+        <form onSubmit={handleSubmit} className="p-5 space-y-4 overflow-y-auto">
           {/* Nombre */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">
@@ -184,7 +184,7 @@ function ModalEliminar({ producto, onClose, onConfirmar }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-4 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center gap-3">
           <div className="flex-shrink-0 w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
             <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -313,8 +313,8 @@ export default function Empleados() {
       {/* ── Modal: Nuevo empleado ─────────────────────────── */}
       {modalOpen && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
-            <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-gray-100">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-gray-100 flex-shrink-0">
               <h2 className="text-base font-semibold text-gray-900">Nuevo empleado</h2>
               <button onClick={cerrarModal} className="text-gray-400 hover:text-gray-600">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -322,7 +322,7 @@ export default function Empleados() {
                 </svg>
               </button>
             </div>
-            <form onSubmit={handleSubmit} className="p-5 space-y-4">
+            <form onSubmit={handleSubmit} className="p-5 space-y-4 overflow-y-auto">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">Rol</label>
                 <select name="rol" value={form.rol} onChange={handleChange} className={`${INPUT_CLS} bg-white`}>
@@ -371,8 +371,8 @@ export default function Empleados() {
       {/* ── Modal: Editar empleado ────────────────────────── */}
       {editEmpleado && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
-            <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-gray-100">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-gray-100 flex-shrink-0">
               <h2 className="text-base font-semibold text-gray-900">Editar empleado</h2>
               <button onClick={cerrarEditar} className="text-gray-400 hover:text-gray-600">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -380,7 +380,7 @@ export default function Empleados() {
                 </svg>
               </button>
             </div>
-            <form onSubmit={handleEditSubmit} className="p-5 space-y-4">
+            <form onSubmit={handleEditSubmit} className="p-5 space-y-4 overflow-y-auto">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">Rol</label>
                 <select
@@ -436,7 +436,7 @@ export default function Empleados() {
       {/* ── Modal: Confirmar eliminar ─────────────────────── */}
       {deleteEmpleado && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm max-h-[90vh] overflow-y-auto">
             <div className="p-6">
               <div className="flex items-center justify-center w-12 h-12 rounded-full bg-red-100 mx-auto mb-4">
                 <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
