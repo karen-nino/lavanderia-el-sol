@@ -2,9 +2,9 @@ import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 
 const ESTADO_CFG = {
-  disponible:    { label: 'Disponible',    cls: 'bg-green-100 text-green-700', dot: 'bg-green-500' },
-  en_uso:        { label: 'En uso',        cls: 'bg-blue-100 text-blue-700',   dot: 'bg-blue-500' },
-  mantenimiento: { label: 'Mantenimiento', cls: 'bg-red-100 text-red-700',     dot: 'bg-red-500' },
+  disponible:    { label: 'Disponible',    cls: 'bg-green-100 text-green-700', clsActive: 'bg-green-600 text-white', dot: 'bg-green-500' },
+  en_uso:        { label: 'En uso',        cls: 'bg-blue-100 text-blue-700',   clsActive: 'bg-blue-600 text-white',  dot: 'bg-blue-500'  },
+  mantenimiento: { label: 'Mantenimiento', cls: 'bg-red-100 text-red-700',     clsActive: 'bg-red-600 text-white',   dot: 'bg-red-500'   },
 };
 
 const TIPO_CFG = {
@@ -53,6 +53,7 @@ export default function Maquinas() {
   const [guardando, setGuardando] = useState(false);
   const [formError, setFormError] = useState('');
   const [eliminando, setEliminando] = useState(null);
+  const [filtro, setFiltro] = useState('todos');
 
   useEffect(() => {
     api.get('/maquinas')
@@ -137,11 +138,16 @@ export default function Maquinas() {
     }
   };
 
-  const resumen = Object.keys(ESTADO_CFG).map(e => ({
-    estado: e,
-    count: maquinas.filter(m => m.estado === e).length,
-    cfg: ESTADO_CFG[e],
-  }));
+  const conteos = {
+    todos: maquinas.length,
+    ...Object.fromEntries(
+      Object.keys(ESTADO_CFG).map(e => [e, maquinas.filter(m => m.estado === e).length])
+    ),
+  };
+
+  const filtradas = filtro === 'todos'
+    ? maquinas
+    : maquinas.filter(m => m.estado === filtro);
 
   if (loading) {
     return (
@@ -170,15 +176,34 @@ export default function Maquinas() {
         </button>
       </div>
 
-      {/* Resumen estados */}
+      {/* Filtros por estado */}
       {maquinas.length > 0 && (
-        <div className="flex gap-3 flex-wrap">
-          {resumen.map(({ estado, count, cfg }) => (
-            <div key={estado} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium ${cfg.cls}`}>
-              <span className={`w-2 h-2 rounded-full ${cfg.dot}`} />
-              {cfg.label}: {count}
-            </div>
-          ))}
+        <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-none">
+          <button
+            onClick={() => setFiltro('todos')}
+            className={`flex-shrink-0 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+              filtro === 'todos'
+                ? 'bg-indigo-600 text-white'
+                : 'bg-white text-gray-600 border border-gray-200 hover:border-indigo-300'
+            }`}
+          >
+            Todos: {conteos.todos}
+          </button>
+          {Object.entries(ESTADO_CFG).map(([estado, cfg]) => {
+            const isActive = filtro === estado;
+            return (
+              <button
+                key={estado}
+                onClick={() => setFiltro(estado)}
+                className={`flex-shrink-0 flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                  isActive ? cfg.clsActive : cfg.cls
+                }`}
+              >
+                <span className={`w-2 h-2 rounded-full ${isActive ? 'bg-white' : cfg.dot}`} />
+                {cfg.label}: {conteos[estado]}
+              </button>
+            );
+          })}
         </div>
       )}
 
@@ -186,13 +211,21 @@ export default function Maquinas() {
         <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">{error}</div>
       )}
 
-      {maquinas.length === 0 && !error ? (
+      {maquinas.length === 0 && !error && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-12 text-center">
           <p className="text-gray-400 text-sm">No hay máquinas registradas</p>
         </div>
-      ) : (
+      )}
+
+      {maquinas.length > 0 && filtradas.length === 0 && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-12 text-center">
+          <p className="text-gray-400 text-sm">No hay máquinas con este filtro</p>
+        </div>
+      )}
+
+      {filtradas.length > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {maquinas.map(m => {
+          {filtradas.map(m => {
             const cfg = ESTADO_CFG[m.estado] ?? ESTADO_CFG.disponible;
             const tipoCfg = TIPO_CFG[m.tipo] ?? { label: m.tipo, icon: '🔧' };
             const busy = cambiando === m.id;
