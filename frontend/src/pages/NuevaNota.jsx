@@ -88,6 +88,7 @@ export default function NuevaNota() {
   const [nuevoClienteOpen,  setNuevoClienteOpen]  = useState(false);
   const [nuevoCliente,      setNuevoCliente]      = useState({ nombre: '', apellido: '', telefono: '' });
   const [creandoCliente,    setCreandoCliente]    = useState(false);
+  const [folio,             setFolio]             = useState('');
   const tipoRef    = useRef(null);
   const prendaRef  = useRef(null);
   const maquinaRef = useRef(null);
@@ -140,11 +141,13 @@ export default function NuevaNota() {
       api.get('/configuracion'),
       api.get('/clientes'),
     ];
-    if (esEdicion) promesas.push(api.get(`/notas/${id}`));
+    promesas.push(esEdicion ? api.get(`/notas/${id}`) : api.get('/notas/next-folio'));
 
     Promise.all(promesas)
       .then((resultados) => {
-        const [m, prod, cfg, cli, nota] = resultados;
+        const [m, prod, cfg, cli, extra] = resultados;
+        const nota = esEdicion ? extra : null;
+        setFolio(esEdicion ? (nota?.folio ?? '') : (extra?.folio ?? ''));
         // En edición, incluir la máquina actual aunque no esté "disponible"
         const maquinasFiltradas = esEdicion && nota?.maquina_id
           ? m.filter(maq => maq.estado === 'disponible' || maq.id === nota.maquina_id)
@@ -383,7 +386,8 @@ export default function NuevaNota() {
         <div>
           <label className="block text-sm font-semibold text-gray-900 mb-2"># Nota</label>
           <input
-            type="text" disabled placeholder="Se asignará al guardar"
+            type="text" disabled readOnly value={folio}
+            placeholder="—"
             className={INPUT_DISABLED_CLS}
           />
         </div>

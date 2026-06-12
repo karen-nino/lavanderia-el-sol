@@ -3,6 +3,7 @@ import { verifyToken } from '../middleware/auth.js';
 import {
   getNotas,
   getNotaById,
+  getNextFolio,
   createNota,
   updateNota,
   eliminarNota,
@@ -17,9 +18,10 @@ const router = Router();
 
 router.use(verifyToken);
 
-router.get('/',    getNotas);
-router.post('/',   createNota);
-router.get('/:id', getNotaById);
+router.get('/',           getNotas);
+router.get('/next-folio', getNextFolio);
+router.post('/',          createNota);
+router.get('/:id',        getNotaById);
 router.patch('/:id', updateNota);
 router.delete('/:id', eliminarNota);
 router.patch('/:id/estado',      cambiarEstadoNota);

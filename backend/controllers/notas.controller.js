@@ -26,6 +26,20 @@ function generarFolio(id, fecha) {
   return `${seq}-${dd}${mm}${yyyy}`;
 }
 
+// ── GET /notas/next-folio ───────────────────────────────────
+export const getNextFolio = async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      'SELECT COALESCE(MAX(id), 0) + 1 AS next_id FROM notas'
+    );
+    const folio = generarFolio(rows[0].next_id, new Date());
+    res.json({ folio });
+  } catch (err) {
+    console.error('getNextFolio error:', err);
+    res.status(500).json({ message: 'Error interno del servidor.' });
+  }
+};
+
 // ── GET /notas ──────────────────────────────────────────────
 export const getNotas = async (req, res) => {
   try {
