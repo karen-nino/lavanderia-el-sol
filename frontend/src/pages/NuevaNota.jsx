@@ -42,8 +42,16 @@ const ENCARGO_INIT = {
   ajuste:          '0',
   pago_anticipado: '',
   fecha_entrega:   '',
+  tiempo_entrega:  '',
   notas:           '',
 };
+
+const TIEMPOS_ENTREGA = [
+  { v: 'MANANA', label: 'Mañana' },
+  { v: 'TARDE',  label: 'Tarde'  },
+  { v: 'NOCHE',  label: 'Noche'  },
+];
+const TIEMPO_ENTREGA_LABEL = Object.fromEntries(TIEMPOS_ENTREGA.map(t => [t.v, t.label]));
 
 const ENCARGO_STEPS = 6;
 
@@ -233,8 +241,9 @@ export default function NuevaNota() {
         precio_base:   encargoPrecioBase,
         ajuste:        encargoAjuste,
         estado_pago:   encargoForm.pago_anticipado === 'SI' ? 'PAGADO' : 'DEBE',
-        fecha_entrega: encargoForm.fecha_entrega || undefined,
-        notas:         encargoForm.notas || undefined,
+        fecha_entrega:  encargoForm.fecha_entrega  || undefined,
+        tiempo_entrega: encargoForm.tiempo_entrega || undefined,
+        notas:          encargoForm.notas          || undefined,
         sucursal:      'lopez_cotilla',
         productos:     encargoProductos
           .filter(p => p.producto_id && p.cantidad)
@@ -571,6 +580,31 @@ export default function NuevaNota() {
                   />
                 </div>
                 <div>
+                  <label className={LABEL_CLS}>Tiempo de entrega</label>
+                  <div className="grid grid-cols-3 gap-3">
+                    {TIEMPOS_ENTREGA.map(t => {
+                      const selected = encargoForm.tiempo_entrega === t.v;
+                      return (
+                        <button
+                          key={t.v}
+                          type="button"
+                          onClick={() => setEncargoForm(f => ({
+                            ...f,
+                            tiempo_entrega: f.tiempo_entrega === t.v ? '' : t.v,
+                          }))}
+                          className={`py-4 border-2 rounded-xl font-semibold text-base transition-colors ${
+                            selected
+                              ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
+                              : 'border-gray-300 bg-white text-gray-700 hover:border-indigo-300'
+                          }`}
+                        >
+                          {t.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div>
                   <label className={LABEL_CLS}>Instrucciones</label>
                   <textarea
                     name="notas" rows={5}
@@ -717,6 +751,12 @@ export default function NuevaNota() {
                       <div className="flex justify-between">
                         <span>Entrega</span>
                         <span className="font-medium">{encargoForm.fecha_entrega}</span>
+                      </div>
+                    )}
+                    {encargoForm.tiempo_entrega && (
+                      <div className="flex justify-between">
+                        <span>Tiempo</span>
+                        <span className="font-medium">{TIEMPO_ENTREGA_LABEL[encargoForm.tiempo_entrega]}</span>
                       </div>
                     )}
                   </div>

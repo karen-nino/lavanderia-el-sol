@@ -5,6 +5,7 @@ const ESTADOS_VALIDOS     = ['ACTIVA', 'EN_PROCESO', 'LISTA', 'PAGADA', 'ENTREGA
 const MODALIDADES_VALIDAS = ['AUTOSERVICIO', 'EDREDON', 'POR_ENCARGO'];
 const ESTADOS_PAGO_VALIDOS = ['DEBE', 'PAGADO'];
 const TAMANOS_VALIDOS     = ['chico', 'grande'];
+const TIEMPOS_ENTREGA_VALIDOS = ['MANANA', 'TARDE', 'NOCHE'];
 
 // Transiciones permitidas por estado actual
 const TRANSICIONES_VALIDAS = {
@@ -105,6 +106,7 @@ export const createNota = async (req, res) => {
     peso_kg,
     precio_total,
     fecha_entrega,
+    tiempo_entrega,
     notas,
     tamano,
     ajuste = 0,
@@ -131,6 +133,11 @@ export const createNota = async (req, res) => {
     if (!tamano || !TAMANOS_VALIDOS.includes(String(tamano).toLowerCase())) {
       return res.status(400).json({ message: 'tamano es requerido para Por Encargo (chico o grande).' });
     }
+  }
+  if (tiempo_entrega && !TIEMPOS_ENTREGA_VALIDOS.includes(String(tiempo_entrega).toUpperCase())) {
+    return res.status(400).json({
+      message: `tiempo_entrega inválido. Valores permitidos: ${TIEMPOS_ENTREGA_VALIDOS.join(', ')}.`,
+    });
   }
 
   const ajusteNum      = Number(ajuste)         || 0;
@@ -163,9 +170,9 @@ export const createNota = async (req, res) => {
     const { rows: notaRows } = await client.query(
       `INSERT INTO notas
          (cliente_id, usuario_id, maquina_id, modalidad, estado_pago, sucursal,
-          descripcion, peso_kg, precio_total, fecha_entrega, notas,
+          descripcion, peso_kg, precio_total, fecha_entrega, tiempo_entrega, notas,
           tamano, precio_base, ajuste, cantidad_cargas)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
        RETURNING *`,
       [
         cliente_id   || null,
@@ -178,6 +185,7 @@ export const createNota = async (req, res) => {
         peso_kg      || null,
         precioFinal,
         fecha_entrega || null,
+        tiempo_entrega ? String(tiempo_entrega).toUpperCase() : null,
         notas        || null,
         tamano ? String(tamano).toLowerCase() : null,
         precioBaseNum,

@@ -65,6 +65,7 @@ CREATE TABLE ordenes (
   peso_kg         NUMERIC(6, 2),
   precio_total    NUMERIC(10, 2),
   fecha_entrega   TIMESTAMPTZ,
+  tiempo_entrega  VARCHAR(10),
   notas           TEXT,
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
