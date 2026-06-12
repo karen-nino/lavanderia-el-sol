@@ -6,7 +6,7 @@ import { esAdmin as esAdminFn } from '../lib/roles';
 const INPUT_CLS =
   'w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition';
 
-const FORM_INIT = { nombre: '', telefono: '' };
+const FORM_INIT = { nombre: '', apellido: '', telefono: '' };
 
 export default function Clientes() {
   const { usuario } = useAuth();
@@ -43,6 +43,7 @@ export default function Clientes() {
 
   const filtrados = clientes.filter(c =>
     c.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
+    (c.apellido && c.apellido.toLowerCase().includes(busqueda.toLowerCase())) ||
     (c.telefono && c.telefono.includes(busqueda))
   );
 
@@ -69,7 +70,7 @@ export default function Clientes() {
   // ── Editar ─────────────────────────────────────────────
   const abrirEditar = (c) => {
     setEditCliente(c);
-    setEditForm({ nombre: c.nombre, telefono: c.telefono ?? '' });
+    setEditForm({ nombre: c.nombre, apellido: c.apellido ?? '', telefono: c.telefono ?? '' });
     setEditError('');
   };
   const cerrarEditar = () => setEditCliente(null);
@@ -179,7 +180,9 @@ export default function Clientes() {
                   <tbody className="divide-y divide-gray-50">
                     {filtrados.map(c => (
                       <tr key={c.id} className="hover:bg-gray-50 transition-colors">
-                        <td className="px-4 py-3 font-medium text-gray-800">{c.nombre}</td>
+                        <td className="px-4 py-3 font-medium text-gray-800">
+                          {`${c.nombre}${c.apellido ? ' ' + c.apellido : ''}`}
+                        </td>
                         <td className="px-4 py-3 text-gray-600">{c.telefono ?? '—'}</td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-1 justify-end">
@@ -218,7 +221,9 @@ export default function Clientes() {
                 {filtrados.map(c => (
                   <div key={c.id} className="px-4 py-3 flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="font-medium text-gray-800 text-sm">{c.nombre}</p>
+                      <p className="font-medium text-gray-800 text-sm">
+                        {`${c.nombre}${c.apellido ? ' ' + c.apellido : ''}`}
+                      </p>
                       <div className="flex flex-wrap gap-3 mt-1 text-xs text-gray-500">
                         {c.telefono && <span>📞 {c.telefono}</span>}
                       </div>
@@ -271,7 +276,12 @@ export default function Clientes() {
                   Nombre <span className="text-red-500">*</span>
                 </label>
                 <input name="nombre" required value={form.nombre} onChange={handleChange}
-                  placeholder="Nombre completo" className={INPUT_CLS} />
+                  placeholder="Nombre" className={INPUT_CLS} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Apellido</label>
+                <input name="apellido" value={form.apellido} onChange={handleChange}
+                  placeholder="Apellido" className={INPUT_CLS} />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">Teléfono</label>
@@ -314,7 +324,12 @@ export default function Clientes() {
                   Nombre <span className="text-red-500">*</span>
                 </label>
                 <input name="nombre" required value={editForm.nombre} onChange={handleEditChange}
-                  placeholder="Nombre completo" className={INPUT_CLS} />
+                  placeholder="Nombre" className={INPUT_CLS} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Apellido</label>
+                <input name="apellido" value={editForm.apellido} onChange={handleEditChange}
+                  placeholder="Apellido" className={INPUT_CLS} />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">Teléfono</label>

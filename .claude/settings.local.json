@@ -64,7 +64,8 @@
       "Bash(ipconfig getifaddr *)",
       "Bash(wait)",
       "Bash(./node_modules/.bin/eslint src/pages/NuevaNota.jsx)",
-      "Bash(./node_modules/.bin/eslint src/pages/Clientes.jsx)"
+      "Bash(./node_modules/.bin/eslint src/pages/Clientes.jsx)",
+      "Bash(./node_modules/.bin/eslint src/pages/Clientes.jsx src/pages/NuevaNota.jsx)"
     ]
   }
 }

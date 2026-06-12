@@ -76,7 +76,7 @@ export default function NuevaNota() {
   const [clientes,          setClientes]          = useState([]);
   const [clienteSearch,     setClienteSearch]     = useState('');
   const [nuevoClienteOpen,  setNuevoClienteOpen]  = useState(false);
-  const [nuevoCliente,      setNuevoCliente]      = useState({ nombre: '', telefono: '' });
+  const [nuevoCliente,      setNuevoCliente]      = useState({ nombre: '', apellido: '', telefono: '' });
   const [creandoCliente,    setCreandoCliente]    = useState(false);
   const tipoRef    = useRef(null);
   const prendaRef  = useRef(null);
@@ -179,11 +179,12 @@ export default function NuevaNota() {
     try {
       const c = await api.post('/clientes', {
         nombre,
+        apellido: nuevoCliente.apellido.trim() || undefined,
         telefono: nuevoCliente.telefono.trim() || undefined,
       });
       setClientes(prev => [...prev, c].sort((a, b) => a.nombre.localeCompare(b.nombre)));
       setEncargoForm(f => ({ ...f, cliente_id: String(c.id) }));
-      setNuevoCliente({ nombre: '', telefono: '' });
+      setNuevoCliente({ nombre: '', apellido: '', telefono: '' });
       setNuevoClienteOpen(false);
     } catch (err) {
       setError(err.message);
@@ -204,6 +205,7 @@ export default function NuevaNota() {
   const clientesFiltrados     = clienteSearchQ
     ? clientes.filter(c =>
         c.nombre.toLowerCase().includes(clienteSearchQ) ||
+        (c.apellido ?? '').toLowerCase().includes(clienteSearchQ) ||
         (c.telefono ?? '').toLowerCase().includes(clienteSearchQ)
       )
     : clientes;
@@ -437,7 +439,9 @@ export default function NuevaNota() {
                           }`}
                         >
                           <div>
-                            <p className="font-medium text-gray-900">{c.nombre}</p>
+                            <p className="font-medium text-gray-900">
+                              {`${c.nombre}${c.apellido ? ' ' + c.apellido : ''}`}
+                            </p>
                             {c.telefono && (
                               <p className="text-sm text-gray-500">{c.telefono}</p>
                             )}
@@ -692,7 +696,11 @@ export default function NuevaNota() {
                   <div className="space-y-1 mb-3 text-sm text-indigo-700">
                     <div className="flex justify-between">
                       <span>Cliente</span>
-                      <span className="font-medium">{clienteSeleccionado?.nombre ?? '—'}</span>
+                      <span className="font-medium">
+                        {clienteSeleccionado
+                          ? `${clienteSeleccionado.nombre}${clienteSeleccionado.apellido ? ' ' + clienteSeleccionado.apellido : ''}`
+                          : '—'}
+                      </span>
                     </div>
                     <div className="flex justify-between">
                       <span>Tamaño</span>
@@ -1200,9 +1208,19 @@ export default function NuevaNota() {
                   type="text"
                   value={nuevoCliente.nombre}
                   onChange={e => setNuevoCliente(c => ({ ...c, nombre: e.target.value }))}
-                  placeholder="Nombre del cliente"
+                  placeholder="Nombre"
                   className={INPUT_CLS}
                   autoFocus
+                />
+              </div>
+              <div>
+                <label className={LABEL_CLS}>Apellido</label>
+                <input
+                  type="text"
+                  value={nuevoCliente.apellido}
+                  onChange={e => setNuevoCliente(c => ({ ...c, apellido: e.target.value }))}
+                  placeholder="Apellido"
+                  className={INPUT_CLS}
                 />
               </div>
               <div>

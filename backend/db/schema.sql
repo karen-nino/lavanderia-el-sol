@@ -28,6 +28,7 @@ CREATE TABLE usuarios (
 CREATE TABLE clientes (
   id          SERIAL PRIMARY KEY,
   nombre      VARCHAR(100) NOT NULL,
+  apellido    VARCHAR(100),
   telefono    VARCHAR(20),
   notas       TEXT,
   activo      BOOLEAN NOT NULL DEFAULT TRUE,
