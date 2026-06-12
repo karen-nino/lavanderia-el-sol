@@ -39,6 +39,12 @@ function fmtMonto(n) {
   return n != null ? `$${Number(n).toFixed(2)}` : '—';
 }
 
+function fmtCliente(n) {
+  if (!n.cliente_nombre) return null;
+  const ap = (n.cliente_apellido ?? '').trim();
+  return ap ? `${n.cliente_nombre} ${ap.charAt(0).toUpperCase()}.` : n.cliente_nombre;
+}
+
 function IconoBasura() {
   return (
     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -119,8 +125,9 @@ export default function Notas() {
     if (!q) return true;
     const folio    = (n.folio ?? `#${n.id}`).toLowerCase();
     const cliente  = (n.cliente_nombre   ?? '').toLowerCase();
+    const apellido = (n.cliente_apellido ?? '').toLowerCase();
     const telefono = (n.cliente_telefono ?? '').toLowerCase();
-    return folio.includes(q) || cliente.includes(q) || telefono.includes(q);
+    return folio.includes(q) || cliente.includes(q) || apellido.includes(q) || telefono.includes(q);
   });
 
   async function confirmarEliminar() {
@@ -257,7 +264,7 @@ export default function Notas() {
                           </td>
                           <td className="px-4 py-3">
                             <p className="font-medium text-gray-800">
-                              {n.cliente_nombre ?? <span className="text-gray-400 italic">Anónimo</span>}
+                              {fmtCliente(n) ?? <span className="text-gray-400 italic">Anónimo</span>}
                             </p>
                             {n.cliente_telefono && (
                               <p className="text-xs text-gray-400">{n.cliente_telefono}</p>
@@ -329,7 +336,7 @@ export default function Notas() {
                         </div>
                       </div>
                       <p className="font-medium text-gray-800 text-sm">
-                        {n.cliente_nombre ?? <span className="text-gray-400 italic">Anónimo</span>}
+                        {fmtCliente(n) ?? <span className="text-gray-400 italic">Anónimo</span>}
                       </p>
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-1.5">

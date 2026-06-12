@@ -209,12 +209,13 @@ export default function NuevaNota() {
   }, 0);
   const encargoPrecioTotal    = encargoPrecioBase + encargoAjuste + encargoSubtotalProductos;
   const clienteSeleccionado   = clientes.find(c => String(c.id) === String(encargoForm.cliente_id));
-  const clienteSearchQ        = clienteSearch.trim().toLowerCase();
-  const clientesFiltrados     = clienteSearchQ
+  const sinAcentos = (s) => (s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const clienteSearchQ    = sinAcentos(clienteSearch.trim());
+  const clientesFiltrados = clienteSearchQ
     ? clientes.filter(c =>
-        c.nombre.toLowerCase().includes(clienteSearchQ) ||
-        (c.apellido ?? '').toLowerCase().includes(clienteSearchQ) ||
-        (c.telefono ?? '').toLowerCase().includes(clienteSearchQ)
+        sinAcentos(c.nombre).includes(clienteSearchQ) ||
+        sinAcentos(c.apellido).includes(clienteSearchQ) ||
+        sinAcentos(c.telefono).includes(clienteSearchQ)
       )
     : clientes;
 

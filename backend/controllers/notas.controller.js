@@ -32,6 +32,7 @@ export const getNotas = async (req, res) => {
     const { rows } = await pool.query(
       `SELECT n.*,
               c.nombre   AS cliente_nombre,
+              c.apellido AS cliente_apellido,
               c.telefono AS cliente_telefono,
               u.nombre   AS usuario_nombre,
               m.nombre   AS maquina_nombre
@@ -55,6 +56,7 @@ export const getNotaById = async (req, res) => {
     const { rows } = await pool.query(
       `SELECT n.*,
               c.nombre   AS cliente_nombre,
+              c.apellido AS cliente_apellido,
               c.telefono AS cliente_telefono,
               u.nombre   AS usuario_nombre,
               m.nombre   AS maquina_nombre
