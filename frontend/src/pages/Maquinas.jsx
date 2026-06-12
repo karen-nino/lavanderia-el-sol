@@ -14,7 +14,7 @@ const TIPO_CFG = {
 };
 
 const INPUT_CLS =
-  'w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition';
+  'w-full px-4 py-3.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition';
 
 const TIPOS = [
   { v: 'lavadora', label: 'Lavadora' },
@@ -328,7 +328,7 @@ export default function Maquinas() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">Notas</label>
                 <textarea
-                  name="notas" value={form.notas} onChange={handleChange} rows={2}
+                  name="notas" value={form.notas} onChange={handleChange} rows={4}
                   placeholder="Observaciones adicionales..."
                   className={`${INPUT_CLS} resize-none`}
                 />
