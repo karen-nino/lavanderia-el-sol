@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { api } from '../lib/api';
 
 const INPUT_CLS =
@@ -64,6 +64,8 @@ const formatMaquina = (m) => {
 
 export default function NuevaNota() {
   const navigate = useNavigate();
+  const { id } = useParams();
+  const esEdicion = Boolean(id);
   const [maquinas,          setMaquinas]          = useState([]);
   const [productosCatalogo, setProductosCatalogo] = useState([]);
   const [precioCarga,       setPrecioCarga]       = useState(70);
@@ -132,20 +134,62 @@ export default function NuevaNota() {
   const precioTotal = subtotalCargas + ajusteNum + subtotalProductos;
 
   useEffect(() => {
-    Promise.all([
+    const promesas = [
       api.get('/maquinas'),
       api.get('/productos'),
       api.get('/configuracion'),
       api.get('/clientes'),
-    ])
-      .then(([m, prod, cfg, cli]) => {
-        setMaquinas(m.filter(maq => maq.estado === 'disponible'));
+    ];
+    if (esEdicion) promesas.push(api.get(`/notas/${id}`));
+
+    Promise.all(promesas)
+      .then((resultados) => {
+        const [m, prod, cfg, cli, nota] = resultados;
+        // En edición, incluir la máquina actual aunque no esté "disponible"
+        const maquinasFiltradas = esEdicion && nota?.maquina_id
+          ? m.filter(maq => maq.estado === 'disponible' || maq.id === nota.maquina_id)
+          : m.filter(maq => maq.estado === 'disponible');
+        setMaquinas(maquinasFiltradas);
         setProductosCatalogo(prod);
         if (cfg?.precio_autoservicio) setPrecioCarga(Number(cfg.precio_autoservicio));
         setClientes(cli);
+
+        if (esEdicion && nota) {
+          setTipoServicio(nota.modalidad);
+          const prods = (nota.productos || []).map(p => ({
+            producto_id: String(p.producto_id),
+            cantidad:    String(p.cantidad),
+          }));
+
+          if (nota.modalidad === 'POR_ENCARGO') {
+            setEncargoForm({
+              cliente_id:      nota.cliente_id     ? String(nota.cliente_id) : '',
+              tamano:          nota.tamano         ?? '',
+              precio_base:     nota.precio_base    != null ? String(nota.precio_base) : '',
+              ajuste:          nota.ajuste         != null ? String(nota.ajuste)      : '0',
+              pago_anticipado: nota.estado_pago === 'PAGADO' ? 'SI' : 'NO',
+              fecha_entrega:   nota.fecha_entrega  ? String(nota.fecha_entrega).slice(0, 10) : '',
+              tiempo_entrega:  nota.tiempo_entrega ?? '',
+              notas:           nota.notas          ?? '',
+            });
+            setEncargoProductos(prods);
+          } else if (nota.modalidad === 'AUTOSERVICIO') {
+            setForm({
+              maquina_id:      nota.maquina_id     ? String(nota.maquina_id) : '',
+              cantidad_cargas: nota.cantidad_cargas != null ? String(nota.cantidad_cargas) : '1',
+              ajuste:          nota.ajuste         != null ? String(nota.ajuste)           : '0',
+              notas:           nota.notas          ?? '',
+            });
+            setProductosLista(prods);
+            // Extraer tipo de prenda de la descripción si existe
+            const desc = nota.descripcion ?? '';
+            if (/^Prenda:\s*Ropa/i.test(desc))         setTipoPrenda('ROPA');
+            else if (/^Prenda:\s*Edred/i.test(desc))   setTipoPrenda('EDREDON');
+          }
+        }
       })
       .finally(() => setLoadingData(false));
-  }, []);
+  }, [id, esEdicion]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -250,8 +294,13 @@ export default function NuevaNota() {
           .filter(p => p.producto_id && p.cantidad)
           .map(p => ({ producto_id: Number(p.producto_id), cantidad: Number(p.cantidad) })),
       };
-      await api.post('/notas', payload);
-      navigate('/notas');
+      if (esEdicion) {
+        await api.patch(`/notas/${id}`, payload);
+        navigate(`/notas/${id}`);
+      } else {
+        await api.post('/notas', payload);
+        navigate('/notas');
+      }
     } catch (err) {
       setError(err.message);
     } finally {
@@ -284,8 +333,13 @@ export default function NuevaNota() {
     };
 
     try {
-      await api.post('/notas', payload);
-      navigate('/notas');
+      if (esEdicion) {
+        await api.patch(`/notas/${id}`, payload);
+        navigate(`/notas/${id}`);
+      } else {
+        await api.post('/notas', payload);
+        navigate('/notas');
+      }
     } catch (err) {
       setError(err.message);
     } finally {
@@ -314,8 +368,12 @@ export default function NuevaNota() {
           </svg>
         </button>
         <div>
-          <h1 className="text-lg font-bold text-gray-900 leading-tight">Nueva Nota</h1>
-          <p className="text-sm text-gray-500">Crea una nueva nota</p>
+          <h1 className="text-lg font-bold text-gray-900 leading-tight">
+            {esEdicion ? 'Editar Nota' : 'Nueva Nota'}
+          </h1>
+          <p className="text-sm text-gray-500">
+            {esEdicion ? 'Modifica los datos y guarda' : 'Crea una nueva nota'}
+          </p>
         </div>
       </div>
 
@@ -821,7 +879,9 @@ export default function NuevaNota() {
                   disabled={encargoLoading}
                   className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-medium py-2.5 rounded-lg text-sm transition-colors"
                 >
-                  {encargoLoading ? 'Creando...' : 'Crear nota'}
+                  {encargoLoading
+                    ? (esEdicion ? 'Guardando...' : 'Creando...')
+                    : (esEdicion ? 'Guardar cambios' : 'Crear nota')}
                 </button>
               )}
             </div>
@@ -1216,7 +1276,9 @@ export default function NuevaNota() {
             type="submit" disabled={loading}
             className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-medium py-2.5 rounded-lg text-sm transition-colors"
           >
-            {loading ? 'Creando...' : 'Crear nota'}
+            {loading
+              ? (esEdicion ? 'Guardando...' : 'Creando...')
+              : (esEdicion ? 'Guardar cambios' : 'Crear nota')}
           </button>
         </div>
         </>

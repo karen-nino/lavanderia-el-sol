@@ -4,6 +4,7 @@ import {
   getNotas,
   getNotaById,
   createNota,
+  updateNota,
   eliminarNota,
   cambiarEstadoNota,
   cambiarEstadoPago,
@@ -19,6 +20,7 @@ router.use(verifyToken);
 router.get('/',    getNotas);
 router.post('/',   createNota);
 router.get('/:id', getNotaById);
+router.patch('/:id', updateNota);
 router.delete('/:id', eliminarNota);
 router.patch('/:id/estado',      cambiarEstadoNota);
 router.patch('/:id/estado-pago', cambiarEstadoPago);

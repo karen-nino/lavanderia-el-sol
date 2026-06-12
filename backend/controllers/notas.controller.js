@@ -304,6 +304,173 @@ export const createNota = async (req, res) => {
   }
 };
 
+// ── PATCH /notas/:id ────────────────────────────────────────
+export const updateNota = async (req, res) => {
+  const { id } = req.params;
+  const {
+    cliente_id,
+    maquina_id,
+    estado_pago,
+    descripcion,
+    fecha_entrega,
+    tiempo_entrega,
+    notas,
+    tamano,
+    ajuste,
+    cantidad_cargas,
+    precio_base,
+    productos = [],
+  } = req.body;
+
+  if (estado_pago && !ESTADOS_PAGO_VALIDOS.includes(estado_pago)) {
+    return res.status(400).json({
+      message: `Estado de pago inválido. Valores permitidos: ${ESTADOS_PAGO_VALIDOS.join(', ')}.`,
+    });
+  }
+  if (tamano && !TAMANOS_VALIDOS.includes(String(tamano).toLowerCase())) {
+    return res.status(400).json({
+      message: `tamano inválido. Valores permitidos: ${TAMANOS_VALIDOS.join(', ')}.`,
+    });
+  }
+  if (tiempo_entrega && !TIEMPOS_ENTREGA_VALIDOS.includes(String(tiempo_entrega).toUpperCase())) {
+    return res.status(400).json({
+      message: `tiempo_entrega inválido. Valores permitidos: ${TIEMPOS_ENTREGA_VALIDOS.join(', ')}.`,
+    });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const { rows: currentRows } = await client.query(
+      'SELECT * FROM notas WHERE id = $1 FOR UPDATE',
+      [id]
+    );
+    if (currentRows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: 'Nota no encontrada.' });
+    }
+    const actual = currentRows[0];
+
+    if (['PAGADA', 'ENTREGADA', 'CANCELADA'].includes(actual.estado)) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        message: `No se puede editar una nota en estado ${actual.estado}.`,
+      });
+    }
+
+    const ajusteNum = Number(ajuste) || 0;
+    const cantidadCargasNum = Number(cantidad_cargas) || 1;
+    const precioBaseNum = precio_base != null && precio_base !== ''
+      ? Number(precio_base)
+      : actual.precio_base != null ? Number(actual.precio_base) : null;
+
+    // Liberar stock reservado de productos actuales y eliminarlos
+    await client.query(
+      `UPDATE productos a
+         SET stock_reservado = stock_reservado - np.cantidad
+       FROM nota_productos np
+       WHERE np.nota_id = $1 AND np.producto_id = a.id`,
+      [id]
+    );
+    await client.query('DELETE FROM nota_productos WHERE nota_id = $1', [id]);
+
+    // Insertar los nuevos productos
+    const productosInsertados = [];
+    for (const { producto_id, cantidad } of productos) {
+      if (!producto_id || !cantidad || Number(cantidad) <= 0) continue;
+
+      const { rows: artRows } = await client.query(
+        'SELECT * FROM productos WHERE id = $1 FOR UPDATE',
+        [producto_id]
+      );
+      if (artRows.length === 0) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ message: `Producto ${producto_id} no encontrado.` });
+      }
+      const art = artRows[0];
+      const stockDisponible = Number(art.stock_actual) - Number(art.stock_reservado);
+      if (stockDisponible < Number(cantidad)) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({
+          message: `Stock insuficiente para "${art.nombre}". Disponible: ${stockDisponible}, solicitado: ${cantidad}.`,
+        });
+      }
+
+      const { rows: npRows } = await client.query(
+        `INSERT INTO nota_productos (nota_id, producto_id, cantidad, precio_unitario)
+         VALUES ($1, $2, $3, $4)
+         RETURNING *`,
+        [id, producto_id, cantidad, art.precio_unitario ?? 0]
+      );
+      await client.query(
+        'UPDATE productos SET stock_reservado = stock_reservado + $1 WHERE id = $2',
+        [cantidad, producto_id]
+      );
+      productosInsertados.push({
+        ...npRows[0],
+        nombre: art.nombre,
+        subtotal: Number(npRows[0].cantidad) * Number(npRows[0].precio_unitario),
+      });
+    }
+
+    const subtotalProductos = productosInsertados.reduce((s, p) => s + Number(p.subtotal), 0);
+    let precioFinal;
+    if (actual.modalidad === 'AUTOSERVICIO') {
+      precioFinal = precioBaseNum != null
+        ? cantidadCargasNum * precioBaseNum + ajusteNum + subtotalProductos
+        : null;
+    } else {
+      precioFinal = (precioBaseNum != null ? precioBaseNum : 0) + ajusteNum + subtotalProductos;
+    }
+
+    const { rows } = await client.query(
+      `UPDATE notas SET
+         cliente_id      = $2,
+         maquina_id      = $3,
+         estado_pago     = COALESCE($4, estado_pago),
+         descripcion     = $5,
+         fecha_entrega   = $6,
+         tiempo_entrega  = $7,
+         notas           = $8,
+         tamano          = COALESCE($9, tamano),
+         precio_base     = $10,
+         ajuste          = $11,
+         cantidad_cargas = $12,
+         precio_total    = $13
+       WHERE id = $1
+       RETURNING *`,
+      [
+        id,
+        cliente_id || null,
+        maquina_id || null,
+        estado_pago || null,
+        descripcion || null,
+        fecha_entrega || null,
+        tiempo_entrega ? String(tiempo_entrega).toUpperCase() : null,
+        notas || null,
+        tamano ? String(tamano).toLowerCase() : null,
+        precioBaseNum,
+        ajusteNum,
+        cantidadCargasNum,
+        precioFinal,
+      ]
+    );
+
+    await client.query('COMMIT');
+    res.json({ ...rows[0], productos: productosInsertados });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('updateNota error:', err);
+    if (err.code === '23503') {
+      return res.status(400).json({ message: 'cliente_id o maquina_id no existe.' });
+    }
+    res.status(500).json({ message: 'Error interno del servidor.' });
+  } finally {
+    client.release();
+  }
+};
+
 // ── DELETE /notas/:id ───────────────────────────────────────
 export const eliminarNota = async (req, res) => {
   if (!esAdmin(req.user.rol)) {
