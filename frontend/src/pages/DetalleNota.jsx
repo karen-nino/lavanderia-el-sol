@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Barcode from 'react-barcode';
 import { api } from '../lib/api';
-import { useAuth } from '../context/AuthContext';
 
 const BADGE_ESTADO = {
   ACTIVA:     { label: 'Activa',      cls: 'bg-gray-100 text-gray-700'        },
@@ -84,7 +83,6 @@ function ModalConfirmar({ titulo, mensaje, onCancelar, onConfirmar, loading, col
 export default function DetalleNota() {
   const { id }   = useParams();
   const navigate = useNavigate();
-  const { usuario } = useAuth();
 
   const [nota,             setNota]             = useState(null);
   const [loading,          setLoading]          = useState(true);
@@ -93,20 +91,14 @@ export default function DetalleNota() {
   const [errorAccion,      setErrorAccion]      = useState('');
   const [confirmCancelar,  setConfirmCancelar]  = useState(false);
 
-  useEffect(() => { cargarNota(); }, [id]);
-
-  async function cargarNota() {
-    setLoading(true);
-    setError('');
-    try {
-      const data = await api.get(`/notas/${id}`);
-      setNota(data);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  }
+  useEffect(() => {
+    let activo = true;
+    api.get(`/notas/${id}`)
+      .then(data => { if (activo) setNota(data); })
+      .catch(err => { if (activo) setError(err.message); })
+      .finally(() => { if (activo) setLoading(false); });
+    return () => { activo = false; };
+  }, [id]);
 
   async function cancelarNota() {
     setLoadingAccion(true);
