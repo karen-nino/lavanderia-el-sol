@@ -24,6 +24,18 @@ const BADGE_PAGO = {
   PAGADO: { label: 'Pagado', cls: 'bg-green-100 text-green-700'  },
 };
 
+const BADGE_MAQUINA_ESTADO = {
+  disponible:    { label: 'Disponible',    cls: 'bg-green-100 text-green-700', dot: 'bg-green-500' },
+  en_uso:        { label: 'En uso',        cls: 'bg-blue-100 text-blue-700',   dot: 'bg-blue-500'  },
+  mantenimiento: { label: 'Mantenimiento', cls: 'bg-red-100 text-red-700',     dot: 'bg-red-500'   },
+};
+
+const MAQUINA_TIPO_LABEL = {
+  lavadora_mediana: 'Mediana',
+  lavadora_jumbo:   'Jumbo',
+  secadora:         'Secadora',
+};
+
 function fmtMonto(n) {
   return n != null ? `$${Number(n).toFixed(2)}` : '—';
 }
@@ -248,7 +260,26 @@ export default function DetalleNota() {
               : <span className="text-gray-400">—</span>}
           </FilaDetalle>
           <FilaDetalle label="Máquina">
-            {nota.maquina_nombre ?? <span className="text-gray-400">—</span>}
+            {nota.maquina_nombre ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-medium text-gray-800">{nota.maquina_nombre}</span>
+                {MAQUINA_TIPO_LABEL[nota.maquina_tipo] && (
+                  <span className="text-xs text-gray-500">— {MAQUINA_TIPO_LABEL[nota.maquina_tipo]}</span>
+                )}
+                {(() => {
+                  const cfg = BADGE_MAQUINA_ESTADO[nota.maquina_estado];
+                  if (!cfg) return null;
+                  return (
+                    <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${cfg.cls}`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot} ${nota.maquina_estado === 'en_uso' ? 'animate-pulse' : ''}`} />
+                      {cfg.label}
+                    </span>
+                  );
+                })()}
+              </div>
+            ) : (
+              <span className="text-gray-400">—</span>
+            )}
           </FilaDetalle>
           <FilaDetalle label="Cliente">
             {nota.cliente_nombre

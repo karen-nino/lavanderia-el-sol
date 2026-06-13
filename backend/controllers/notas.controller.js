@@ -73,7 +73,9 @@ export const getNotaById = async (req, res) => {
               c.apellido AS cliente_apellido,
               c.telefono AS cliente_telefono,
               u.nombre   AS usuario_nombre,
-              m.nombre   AS maquina_nombre
+              m.nombre   AS maquina_nombre,
+              m.tipo     AS maquina_tipo,
+              m.estado   AS maquina_estado
        FROM notas n
        LEFT JOIN clientes  c ON c.id = n.cliente_id
        JOIN      usuarios  u ON u.id = n.usuario_id
