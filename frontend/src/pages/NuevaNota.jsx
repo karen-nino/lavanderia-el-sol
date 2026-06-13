@@ -36,14 +36,16 @@ const TAMANOS = [
 const TAMANO_LABEL = Object.fromEntries(TAMANOS.map(t => [t.v, t.label]));
 
 const ENCARGO_INIT = {
-  cliente_id:      '',
-  tamano:          '',
-  precio_base:     '',
-  ajuste:          '0',
-  pago_anticipado: '',
-  fecha_entrega:   '',
-  tiempo_entrega:  '',
-  notas:           '',
+  cliente_id:             '',
+  tamano:                 '',
+  precio_base:            '',
+  ajuste:                 '0',
+  pago_anticipado:        '',
+  fecha_entrega:          '',
+  tiempo_entrega:         '',
+  notas:                  '',
+  maquina_id:             '',
+  activar_inmediatamente: '',
 };
 
 const TIEMPOS_ENTREGA = [
@@ -53,7 +55,7 @@ const TIEMPOS_ENTREGA = [
 ];
 const TIEMPO_ENTREGA_LABEL = Object.fromEntries(TIEMPOS_ENTREGA.map(t => [t.v, t.label]));
 
-const ENCARGO_STEPS = 6;
+const ENCARGO_STEPS = 7;
 
 const formatMaquina = (m) => {
   if (!m) return '';
@@ -79,6 +81,7 @@ export default function NuevaNota() {
   const [tipoPrenda,        setTipoPrenda]        = useState('');
   const [prendaOpen,        setPrendaOpen]        = useState(false);
   const [maquinaOpen,       setMaquinaOpen]       = useState(false);
+  const [maquinaEncargoOpen, setMaquinaEncargoOpen] = useState(false);
   const [encargoStep,       setEncargoStep]       = useState(1);
   const [encargoForm,       setEncargoForm]       = useState(ENCARGO_INIT);
   const [encargoProductos,  setEncargoProductos]  = useState([]);
@@ -89,9 +92,10 @@ export default function NuevaNota() {
   const [nuevoCliente,      setNuevoCliente]      = useState({ nombre: '', apellido: '', telefono: '' });
   const [creandoCliente,    setCreandoCliente]    = useState(false);
   const [folio,             setFolio]             = useState('');
-  const tipoRef    = useRef(null);
-  const prendaRef  = useRef(null);
-  const maquinaRef = useRef(null);
+  const tipoRef           = useRef(null);
+  const prendaRef         = useRef(null);
+  const maquinaRef        = useRef(null);
+  const maquinaEncargoRef = useRef(null);
 
   useEffect(() => {
     if (!tipoOpen) return;
@@ -125,6 +129,17 @@ export default function NuevaNota() {
     document.addEventListener('mousedown', onMouseDown);
     return () => document.removeEventListener('mousedown', onMouseDown);
   }, [maquinaOpen]);
+
+  useEffect(() => {
+    if (!maquinaEncargoOpen) return;
+    const onMouseDown = (e) => {
+      if (maquinaEncargoRef.current && !maquinaEncargoRef.current.contains(e.target)) {
+        setMaquinaEncargoOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onMouseDown);
+    return () => document.removeEventListener('mousedown', onMouseDown);
+  }, [maquinaEncargoOpen]);
 
   const ajusteNum      = Number(form.ajuste) || 0;
   const subtotalCargas = (Number(form.cantidad_cargas) || 1) * precioCarga;
@@ -166,14 +181,16 @@ export default function NuevaNota() {
 
           if (nota.modalidad === 'POR_ENCARGO') {
             setEncargoForm({
-              cliente_id:      nota.cliente_id     ? String(nota.cliente_id) : '',
-              tamano:          nota.tamano         ?? '',
-              precio_base:     nota.precio_base    != null ? String(nota.precio_base) : '',
-              ajuste:          nota.ajuste         != null ? String(nota.ajuste)      : '0',
-              pago_anticipado: nota.estado_pago === 'PAGADO' ? 'SI' : 'NO',
-              fecha_entrega:   nota.fecha_entrega  ? String(nota.fecha_entrega).slice(0, 10) : '',
-              tiempo_entrega:  nota.tiempo_entrega ?? '',
-              notas:           nota.notas          ?? '',
+              cliente_id:             nota.cliente_id     ? String(nota.cliente_id) : '',
+              tamano:                 nota.tamano         ?? '',
+              precio_base:            nota.precio_base    != null ? String(nota.precio_base) : '',
+              ajuste:                 nota.ajuste         != null ? String(nota.ajuste)      : '0',
+              pago_anticipado:        nota.estado_pago === 'PAGADO' ? 'SI' : 'NO',
+              fecha_entrega:          nota.fecha_entrega  ? String(nota.fecha_entrega).slice(0, 10) : '',
+              tiempo_entrega:         nota.tiempo_entrega ?? '',
+              notas:                  nota.notas          ?? '',
+              maquina_id:             nota.maquina_id     ? String(nota.maquina_id) : '',
+              activar_inmediatamente: '',
             });
             setEncargoProductos(prods);
           } else if (nota.modalidad === 'AUTOSERVICIO') {
@@ -275,6 +292,11 @@ export default function NuevaNota() {
         Number(encargoForm.precio_base) >= 0;
     }
     if (encargoStep === 4) return !!encargoForm.pago_anticipado;
+    if (encargoStep === 6) {
+      if (esEdicion) return true;
+      if (!encargoForm.maquina_id) return true;
+      return !!encargoForm.activar_inmediatamente;
+    }
     return true;
   })();
 
@@ -292,6 +314,7 @@ export default function NuevaNota() {
         fecha_entrega:  encargoForm.fecha_entrega  || undefined,
         tiempo_entrega: encargoForm.tiempo_entrega || undefined,
         notas:          encargoForm.notas          || undefined,
+        maquina_id:     encargoForm.maquina_id ? Number(encargoForm.maquina_id) : undefined,
         sucursal:      'lopez_cotilla',
         productos:     encargoProductos
           .filter(p => p.producto_id && p.cantidad)
@@ -302,6 +325,9 @@ export default function NuevaNota() {
         navigate(`/notas/${id}`);
       } else {
         await api.post('/notas', payload);
+        if (encargoForm.maquina_id && encargoForm.activar_inmediatamente === 'SI') {
+          await api.patch(`/maquinas/${encargoForm.maquina_id}/estado`, { estado: 'en_uso' });
+        }
         navigate('/notas');
       }
     } catch (err) {
@@ -679,8 +705,136 @@ export default function NuevaNota() {
               </div>
             )}
 
-            {/* Paso 6 — Productos + Resumen */}
+            {/* Paso 6 — Máquina */}
             {encargoStep === 6 && (
+              <div className="space-y-5">
+                <h2 className="text-base font-semibold text-gray-900">Máquina</h2>
+
+                <div ref={maquinaEncargoRef} className="relative">
+                  <label className={LABEL_CLS}>Máquina</label>
+                  {(() => {
+                    const maquinaSel = maquinas.find(m => String(m.id) === String(encargoForm.maquina_id));
+                    const maquinaLabel = formatMaquina(maquinaSel);
+                    return (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setMaquinaEncargoOpen(o => !o)}
+                          className={`w-full px-4 py-3.5 border rounded-lg bg-white text-left flex items-center justify-between transition-colors ${
+                            maquinaEncargoOpen
+                              ? 'border-blue-500 ring-1 ring-blue-500'
+                              : encargoForm.maquina_id
+                                ? 'border-green-600'
+                                : 'border-gray-300 hover:border-gray-400'
+                          }`}
+                        >
+                          <span className={encargoForm.maquina_id ? 'text-gray-900' : 'text-gray-400'}>
+                            {maquinaLabel || 'Sin asignar'}
+                          </span>
+                          {encargoForm.maquina_id && !maquinaEncargoOpen ? (
+                            <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                            </svg>
+                          ) : (
+                            <svg
+                              className={`w-5 h-5 text-gray-500 transition-transform ${maquinaEncargoOpen ? 'rotate-180' : ''}`}
+                              fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                            >
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                            </svg>
+                          )}
+                        </button>
+
+                        {maquinaEncargoOpen && (
+                          <div className="mt-2 bg-white border border-gray-200 rounded-lg shadow-md overflow-hidden">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEncargoForm(f => ({ ...f, maquina_id: '', activar_inmediatamente: '' }));
+                                setMaquinaEncargoOpen(false);
+                              }}
+                              className="w-full px-4 py-3.5 flex items-center justify-between text-left hover:bg-gray-50 border-b last:border-0 border-gray-100"
+                            >
+                              <span className="text-base text-gray-500 italic">Sin asignar</span>
+                              <span className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
+                                !encargoForm.maquina_id ? 'border-indigo-600 bg-indigo-600' : 'border-gray-300'
+                              }`}>
+                                {!encargoForm.maquina_id && (
+                                  <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                  </svg>
+                                )}
+                              </span>
+                            </button>
+                            {maquinas.map(m => {
+                              const selected = String(encargoForm.maquina_id) === String(m.id);
+                              return (
+                                <button
+                                  key={m.id}
+                                  type="button"
+                                  onClick={() => {
+                                    setEncargoForm(f => ({ ...f, maquina_id: String(m.id) }));
+                                    setMaquinaEncargoOpen(false);
+                                  }}
+                                  className="w-full px-4 py-3.5 flex items-center justify-between text-left hover:bg-gray-50 border-b last:border-0 border-gray-100"
+                                >
+                                  <span className="text-base text-gray-900">
+                                    {formatMaquina(m)}
+                                  </span>
+                                  <span className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
+                                    selected ? 'border-indigo-600 bg-indigo-600' : 'border-gray-300'
+                                  }`}>
+                                    {selected && (
+                                      <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                      </svg>
+                                    )}
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
+                  {maquinas.length === 0 && (
+                    <p className="text-xs text-red-600 mt-1">No hay máquinas disponibles en este momento.</p>
+                  )}
+                </div>
+
+                {encargoForm.maquina_id && !esEdicion && (
+                  <div>
+                    <label className={LABEL_CLS}>Activar inmediatamente</label>
+                    <div className="grid grid-cols-2 gap-3">
+                      {[
+                        { v: 'SI', label: 'Sí' },
+                        { v: 'NO', label: 'No' },
+                      ].map(opt => {
+                        const selected = encargoForm.activar_inmediatamente === opt.v;
+                        return (
+                          <button
+                            key={opt.v}
+                            type="button"
+                            onClick={() => setEncargoForm(f => ({ ...f, activar_inmediatamente: opt.v }))}
+                            className={`py-8 border-2 rounded-xl font-semibold text-lg transition-colors ${
+                              selected
+                                ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
+                                : 'border-gray-300 bg-white text-gray-700 hover:border-indigo-300'
+                            }`}
+                          >
+                            {opt.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Paso 7 — Productos + Resumen */}
+            {encargoStep === 7 && (
               <div className="space-y-6">
                 <div>
                   <div className="flex items-center justify-between mb-3">
@@ -820,6 +974,23 @@ export default function NuevaNota() {
                       <div className="flex justify-between">
                         <span>Tiempo</span>
                         <span className="font-medium">{TIEMPO_ENTREGA_LABEL[encargoForm.tiempo_entrega]}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between">
+                      <span>Máquina</span>
+                      <span className="font-medium">
+                        {(() => {
+                          const maquinaSel = maquinas.find(m => String(m.id) === String(encargoForm.maquina_id));
+                          return maquinaSel ? formatMaquina(maquinaSel) : 'Sin asignar';
+                        })()}
+                      </span>
+                    </div>
+                    {encargoForm.maquina_id && !esEdicion && encargoForm.activar_inmediatamente && (
+                      <div className="flex justify-between">
+                        <span>Activar al crear</span>
+                        <span className="font-medium">
+                          {encargoForm.activar_inmediatamente === 'SI' ? 'Sí' : 'No'}
+                        </span>
                       </div>
                     )}
                   </div>
