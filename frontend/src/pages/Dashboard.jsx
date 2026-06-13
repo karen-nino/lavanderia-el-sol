@@ -36,7 +36,6 @@ const KpiIcon = {
 export default function Dashboard() {
   const [notas, setNotas]       = useState([]);
   const [maquinas, setMaquinas] = useState([]);
-  const [insumos, setInsumos]   = useState([]);
   const [ventas, setVentas]     = useState(null);
   const [loading, setLoading]   = useState(true);
 
@@ -44,10 +43,9 @@ export default function Dashboard() {
     Promise.all([
       api.get('/notas'),
       api.get('/maquinas'),
-      api.get('/insumos'),
       api.get('/ventas/resumen?periodo=hoy').catch(() => null),
     ])
-      .then(([n, m, i, v]) => { setNotas(n); setMaquinas(m); setInsumos(i); setVentas(v); })
+      .then(([n, m, v]) => { setNotas(n); setMaquinas(m); setVentas(v); })
       .finally(() => setLoading(false));
   }, []);
 
