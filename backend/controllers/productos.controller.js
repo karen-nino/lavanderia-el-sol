@@ -4,7 +4,7 @@ const ESTADO_STOCK_SQL = `
   CASE
     WHEN (stock_actual - stock_reservado) = 0
       THEN 'agotado'
-    WHEN (stock_actual - stock_reservado) <= (SELECT stock_minimo_global FROM configuracion WHERE id = 1)
+    WHEN (stock_actual - stock_reservado) <= (SELECT stock_minimo_global FROM ajustes WHERE id = 1)
       THEN 'por_agotarse'
     ELSE 'ok'
   END AS estado_stock

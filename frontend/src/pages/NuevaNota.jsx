@@ -138,7 +138,7 @@ export default function NuevaNota() {
     const promesas = [
       api.get('/maquinas'),
       api.get('/productos'),
-      api.get('/configuracion'),
+      api.get('/ajustes'),
       api.get('/clientes'),
     ];
     promesas.push(esEdicion ? api.get(`/notas/${id}`) : api.get('/notas/next-folio'));

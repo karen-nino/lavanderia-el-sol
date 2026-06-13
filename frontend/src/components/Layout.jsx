@@ -334,7 +334,7 @@ export default function Layout() {
 
   const handleSettings = () => {
     setMenuOpen(false);
-    navigate('/configuracion');
+    navigate('/ajustes');
   };
 
   const goTo = (to) => {

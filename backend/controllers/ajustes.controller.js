@@ -34,21 +34,21 @@ export const upload = multer({
   limits: { fileSize: 2 * 1024 * 1024 }, // 2MB
 });
 
-// ── GET /configuracion ────────────────────────────────────────
-export const getConfiguracion = async (req, res) => {
+// ── GET /ajustes ──────────────────────────────────────────────
+export const getAjustes = async (req, res) => {
   try {
-    const { rows } = await pool.query('SELECT * FROM configuracion WHERE id = 1');
+    const { rows } = await pool.query('SELECT * FROM ajustes WHERE id = 1');
     res.json(rows[0]);
   } catch (err) {
-    console.error('getConfiguracion error:', err);
+    console.error('getAjustes error:', err);
     res.status(500).json({ message: 'Error interno del servidor.' });
   }
 };
 
-// ── PATCH /configuracion ──────────────────────────────────────
-export const updateConfiguracion = async (req, res) => {
+// ── PATCH /ajustes ────────────────────────────────────────────
+export const updateAjustes = async (req, res) => {
   if (!esAdmin(req.user.rol)) {
-    return res.status(403).json({ message: 'Solo administradores pueden modificar la configuración.' });
+    return res.status(403).json({ message: 'Solo administradores pueden modificar los ajustes.' });
   }
 
   const { precio_autoservicio, nombre_negocio, direccion, telefono, stock_minimo_global } = req.body;
@@ -70,17 +70,17 @@ export const updateConfiguracion = async (req, res) => {
 
   try {
     const { rows } = await pool.query(
-      `UPDATE configuracion SET ${updates.join(', ')} WHERE id = 1 RETURNING *`,
+      `UPDATE ajustes SET ${updates.join(', ')} WHERE id = 1 RETURNING *`,
       values
     );
     res.json(rows[0]);
   } catch (err) {
-    console.error('updateConfiguracion error:', err);
+    console.error('updateAjustes error:', err);
     res.status(500).json({ message: 'Error interno del servidor.' });
   }
 };
 
-// ── POST /configuracion/logo ──────────────────────────────────
+// ── POST /ajustes/logo ────────────────────────────────────────
 export const uploadLogo = async (req, res) => {
   if (!esAdmin(req.user.rol)) {
     return res.status(403).json({ message: 'Solo administradores pueden modificar el logo.' });
@@ -93,7 +93,7 @@ export const uploadLogo = async (req, res) => {
 
   try {
     await pool.query(
-      'UPDATE configuracion SET logo_url = $1, updated_at = NOW() WHERE id = 1',
+      'UPDATE ajustes SET logo_url = $1, updated_at = NOW() WHERE id = 1',
       [logo_url]
     );
     res.json({ logo_url });

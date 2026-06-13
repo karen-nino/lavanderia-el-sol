@@ -159,11 +159,11 @@ export const createNota = async (req, res) => {
   const ajusteNum      = Number(ajuste)         || 0;
   const cantidadCargas = Number(cantidad_cargas) || 1;
 
-  // Leer precio desde configuracion si no se envió en el body
+  // Leer precio desde ajustes si no se envió en el body
   let precioBaseNum = precio_base != null ? Number(precio_base) : null;
   if (modalidad === 'AUTOSERVICIO' && precioBaseNum === null) {
     const { rows: cfg } = await pool.query(
-      'SELECT precio_autoservicio FROM configuracion WHERE id = 1'
+      'SELECT precio_autoservicio FROM ajustes WHERE id = 1'
     );
     precioBaseNum = cfg.length > 0 ? Number(cfg[0].precio_autoservicio) : 70;
   }
@@ -292,7 +292,7 @@ export const createNota = async (req, res) => {
                   + COALESCE(SUM(np.cantidad * np.precio_unitario), 0)
                   + n2.ajuste
              FROM notas n2
-             CROSS JOIN configuracion c
+             CROSS JOIN ajustes c
              LEFT JOIN nota_productos np ON np.nota_id = n2.id
              WHERE n2.id = $1 AND c.id = 1
              GROUP BY n2.id, n2.cantidad_cargas, c.precio_autoservicio, n2.ajuste
@@ -693,7 +693,7 @@ export const addProductoToNota = async (req, res) => {
                 + COALESCE(SUM(np.cantidad * np.precio_unitario), 0)
                 + n2.ajuste
            FROM notas n2
-           CROSS JOIN configuracion c
+           CROSS JOIN ajustes c
            LEFT JOIN nota_productos np ON np.nota_id = n2.id
            WHERE n2.id = $1 AND c.id = 1
            GROUP BY n2.id, n2.cantidad_cargas, c.precio_autoservicio, n2.ajuste
@@ -748,7 +748,7 @@ export const removeProductoFromNota = async (req, res) => {
                 + COALESCE(SUM(np.cantidad * np.precio_unitario), 0)
                 + n2.ajuste
            FROM notas n2
-           CROSS JOIN configuracion c
+           CROSS JOIN ajustes c
            LEFT JOIN nota_productos np ON np.nota_id = n2.id
            WHERE n2.id = $1 AND c.id = 1
            GROUP BY n2.id, n2.cantidad_cargas, c.precio_autoservicio, n2.ajuste

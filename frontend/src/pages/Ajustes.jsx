@@ -75,7 +75,7 @@ const MOBILE_SECTIONS = [
   { id: 'perfil',  label: 'Mi Perfil',                 subtitle: 'Información de perfil',    icon: SectionIcon.perfil  },
   { id: 'negocio', label: 'Perfil de Negocio',         subtitle: 'Información del negocio',  icon: SectionIcon.negocio },
   { id: 'precios', label: 'Precios',                   subtitle: 'Precios de servicios',     icon: SectionIcon.precios },
-  { id: 'alertas', label: 'Alertas y Notificaciones',  subtitle: 'Configuración de alertas', icon: SectionIcon.alertas },
+  { id: 'alertas', label: 'Alertas y Notificaciones',  subtitle: 'Ajustes de alertas', icon: SectionIcon.alertas },
 ];
 
 function Section({ titulo, children }) {
@@ -122,7 +122,7 @@ function MobileSectionButton({ label, icon, onClick }) {
   );
 }
 
-export default function Configuracion() {
+export default function Ajustes() {
   const { usuario, updateUsuario } = useAuth();
   const [config,        setConfig]        = useState(null);
   const [loading,       setLoading]       = useState(true);
@@ -143,7 +143,7 @@ export default function Configuracion() {
   const logoInputRef = useRef(null);
 
   useEffect(() => {
-    api.get('/configuracion')
+    api.get('/ajustes')
       .then(data => {
         setConfig({ ...data, telefono: formatTelefono(data.telefono ?? '') });
         if (data.logo_url) setLogoPreview(data.logo_url);
@@ -217,7 +217,7 @@ export default function Configuracion() {
 
       const [updatedPerfil, updatedConfig] = await Promise.all([
         api.patch('/auth/me', perfilPayload),
-        api.patch('/configuracion', {
+        api.patch('/ajustes', {
           precio_autoservicio:  Number(config.precio_autoservicio),
           nombre_negocio:       config.nombre_negocio,
           direccion:            config.direccion ?? '',
@@ -242,7 +242,7 @@ export default function Configuracion() {
     setSaving(true);
     setMensaje(null);
     try {
-      const updated = await api.patch('/configuracion', {
+      const updated = await api.patch('/ajustes', {
         precio_autoservicio:  Number(config.precio_autoservicio),
         nombre_negocio:       config.nombre_negocio,
         direccion:            config.direccion ?? '',
@@ -250,7 +250,7 @@ export default function Configuracion() {
         stock_minimo_global:  Number(config.stock_minimo_global),
       });
       setConfig(updated);
-      setMensaje({ tipo: 'ok', texto: 'Configuración guardada correctamente.' });
+      setMensaje({ tipo: 'ok', texto: 'Ajustes guardados correctamente.' });
     } catch (err) {
       setMensaje({ tipo: 'error', texto: err.message });
     } finally {
@@ -272,7 +272,7 @@ export default function Configuracion() {
       const formData = new FormData();
       formData.append('logo', file);
       const token = localStorage.getItem('token');
-      const res = await fetch('/api/configuracion/logo', {
+      const res = await fetch('/api/ajustes/logo', {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
         body: formData,
@@ -650,9 +650,9 @@ export default function Configuracion() {
             <div className="flex flex-col items-start">
               <div className='flex flex-row items-center gap-1'>
                 {SectionIcon.gear}
-                <h1 className="text-xl font-bold text-dark-blue leading-tight">Configuración</h1>
+                <h1 className="text-xl font-bold text-dark-blue leading-tight">Ajustes</h1>
               </div>
-                <p className="text-sm text-grey">Pantalla de configuración</p>
+                <p className="text-sm text-grey">Pantalla de ajustes</p>
             </div>
             <div className="border-t border-light-blue/60" />
             <div className="space-y-3">
@@ -724,7 +724,7 @@ export default function Configuracion() {
 
       {/* ── Vista desktop ── */}
       <div className="hidden md:block p-6 max-w-2xl mx-auto space-y-6">
-        <h1 className="text-xl font-bold text-gray-900">Configuración</h1>
+        <h1 className="text-xl font-bold text-gray-900">Ajustes</h1>
 
         <div className="space-y-6">
           {seccionPerfilDesktop}

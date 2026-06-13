@@ -14,7 +14,7 @@ import DetalleNota from './pages/DetalleNota';
 import Salidas from './pages/Salidas';
 import Ventas from './pages/Ventas';
 import Empleados from './pages/Empleados';
-import Configuracion from './pages/Configuracion';
+import Ajustes from './pages/Ajustes';
 
 export default function App() {
   return (
@@ -56,10 +56,10 @@ export default function App() {
               }
             />
             <Route
-              path="configuracion"
+              path="ajustes"
               element={
                 <AdminRoute>
-                  <Configuracion />
+                  <Ajustes />
                 </AdminRoute>
               }
             />

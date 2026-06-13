@@ -69,7 +69,9 @@
       "Bash(./node_modules/.bin/eslint src/pages/Notas.jsx)",
       "Bash(lsof -i :5173)",
       "Bash(lsof -i :4000)",
-      "Bash(echo \"Exit: $?\")"
+      "Bash(echo \"Exit: $?\")",
+      "Bash(PGCONNECT_TIMEOUT=2 psql -h localhost -U \"karen.nino\" -d \"lavanderia_el_sol\" -c \"SELECT to_regclass\\('public.ajustes'\\) AS ajustes, to_regclass\\('public.configuracion'\\) AS configuracion;\")",
+      "Bash(PGCONNECT_TIMEOUT=2 psql *)"
     ]
   }
 }
