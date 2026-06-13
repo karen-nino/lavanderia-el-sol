@@ -127,20 +127,26 @@ export default function Dashboard() {
 
         <div className="md:col-span-2">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-section text-dark-blue">Máquinas <span className="text-grey">({totalMaquinas})</span></h2>
+            <h2 className="text-section text-dark-blue">Máquinas en uso <span className="text-grey">({enUso})</span></h2>
           </div>
 
-          {maquinas.length === 0 ? (
-            <div className="rounded-card bg-white p-card-pad shadow-card text-center">
-              <p className="text-kpi-label text-grey">Sin máquinas registradas</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 lg:grid-cols-3 gap-6">
-              {maquinas.map(m => (
-                <MachineCard key={m.id} maquina={m} />
-              ))}
-            </div>
-          )}
+          {(() => {
+            const maquinasEnUso = maquinas.filter(m => m.estado === 'en_uso');
+            if (maquinasEnUso.length === 0) {
+              return (
+                <div className="rounded-card bg-white p-card-pad shadow-card text-center">
+                  <p className="text-kpi-label text-grey">Sin máquinas en uso</p>
+                </div>
+              );
+            }
+            return (
+              <div className="grid grid-cols-2 lg:grid-cols-3 gap-6">
+                {maquinasEnUso.map(m => (
+                  <MachineCard key={m.id} maquina={m} />
+                ))}
+              </div>
+            );
+          })()}
         </div>
       </div>
 
