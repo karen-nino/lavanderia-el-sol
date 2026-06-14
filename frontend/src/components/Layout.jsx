@@ -401,6 +401,7 @@ export default function Layout() {
   const now = useClock();
   const [menuOpen, setMenuOpen] = useState(false);
   const [alertsOpen, setAlertsOpen] = useState(false);
+  const [confirmLogout, setConfirmLogout] = useState(false);
   const [productos, setProductos] = useState([]);
   const isDashboard = location.pathname === '/';
 
@@ -433,6 +434,11 @@ export default function Layout() {
 
   const handleLogout = () => {
     setMenuOpen(false);
+    setConfirmLogout(true);
+  };
+
+  const confirmarLogout = () => {
+    setConfirmLogout(false);
     logout();
     navigate('/login');
   };
@@ -498,6 +504,29 @@ export default function Layout() {
         alertas={alertas}
         onSelect={handleSelectAlerta}
       />
+
+      {confirmLogout && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+            <h3 className="text-base font-bold text-gray-900">Cerrar sesión</h3>
+            <p className="text-sm text-gray-500">¿Seguro que quieres cerrar sesión?</p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setConfirmLogout(false)}
+                className="flex-1 border border-gray-300 text-gray-700 font-medium py-2.5 rounded-lg text-sm hover:bg-gray-50 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={confirmarLogout}
+                className="flex-1 bg-red-600 hover:bg-red-700 text-white font-medium py-2.5 rounded-lg text-sm transition-colors"
+              >
+                Cerrar sesión
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
