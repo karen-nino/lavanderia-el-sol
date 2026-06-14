@@ -15,11 +15,12 @@ export const buscarUsuarios = async (req, res) => {
   const sql = mostrarAdminMain
     ? `SELECT id, nombre FROM usuarios
         WHERE activo = TRUE AND rol = 'admin_main'
-          AND ($1 = '' OR nombre ILIKE $2)
+          AND ($1 = '' OR unaccent(nombre) ILIKE unaccent($2))
         ORDER BY nombre ASC
         LIMIT 8`
     : `SELECT id, nombre FROM usuarios
-        WHERE activo = TRUE AND rol <> 'admin_main' AND nombre ILIKE $1
+        WHERE activo = TRUE AND rol <> 'admin_main'
+          AND unaccent(nombre) ILIKE unaccent($1)
         ORDER BY nombre ASC
         LIMIT 8`;
   const params = mostrarAdminMain ? [q, `%${q}%`] : [`%${q}%`];

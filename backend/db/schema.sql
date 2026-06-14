@@ -2,6 +2,9 @@
 -- Lavanderia El Sol - Schema inicial
 -- ============================================================
 
+-- Extensiones
+CREATE EXTENSION IF NOT EXISTS unaccent;
+
 -- Tipos ENUM
 CREATE TYPE rol_usuario AS ENUM ('admin_main', 'admin', 'operador');
 CREATE TYPE estado_orden AS ENUM ('RECIBIDO', 'EN_PROCESO', 'LISTO', 'ENTREGADO');
