@@ -1336,12 +1336,33 @@ export default function NuevaNota() {
           {/* Ajuste */}
           <div>
             <label className={LABEL_CLS}>Ajuste ($)</label>
-            <input
-              type="number" name="ajuste" step="0.01"
-              value={form.ajuste} onChange={handleChange}
-              placeholder="Ej. -10 para descuento, 20 para cargo extra"
-              className={INPUT_CLS}
-            />
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 text-base">$</span>
+                <input
+                  type="number" name="ajuste" step="10"
+                  value={form.ajuste} onChange={handleChange}
+                  placeholder="Ej. -10 para descuento, 20 para cargo extra"
+                  className={`${INPUT_CLS} pl-8 text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`}
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => setForm(f => ({ ...f, ajuste: String((Number(f.ajuste) || 0) - 10) }))}
+                aria-label="Disminuir ajuste"
+                className="flex-shrink-0 w-14 py-3.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-xl font-semibold hover:bg-gray-50 transition-colors"
+              >
+                −
+              </button>
+              <button
+                type="button"
+                onClick={() => setForm(f => ({ ...f, ajuste: String((Number(f.ajuste) || 0) + 10) }))}
+                aria-label="Aumentar ajuste"
+                className="flex-shrink-0 w-14 py-3.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-xl font-semibold hover:bg-gray-50 transition-colors"
+              >
+                +
+              </button>
+            </div>
             <p className="text-xs text-gray-400 mt-1">Descuento (negativo) o cargo extra (positivo)</p>
           </div>
 
