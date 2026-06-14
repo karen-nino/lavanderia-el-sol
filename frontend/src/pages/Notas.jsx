@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 
@@ -84,6 +84,10 @@ export default function Notas() {
   const [busqueda,          setBusqueda]          = useState('');
   const [loading,           setLoading]           = useState(true);
   const [error,             setError]             = useState('');
+  const [mostrarEstado,     setMostrarEstado]     = useState(false);
+  const [mostrarFecha,      setMostrarFecha]      = useState(false);
+  const estadoRef = useRef(null);
+  const fechaRef  = useRef(null);
 
   useEffect(() => {
     api.get('/notas')
@@ -91,6 +95,20 @@ export default function Notas() {
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    if (!mostrarEstado && !mostrarFecha) return;
+    const onMouseDown = (e) => {
+      if (mostrarEstado && estadoRef.current && !estadoRef.current.contains(e.target)) {
+        setMostrarEstado(false);
+      }
+      if (mostrarFecha && fechaRef.current && !fechaRef.current.contains(e.target)) {
+        setMostrarFecha(false);
+      }
+    };
+    document.addEventListener('mousedown', onMouseDown);
+    return () => document.removeEventListener('mousedown', onMouseDown);
+  }, [mostrarEstado, mostrarFecha]);
 
   const q = busqueda.trim().toLowerCase();
   const rango = useMemo(() => calcularRangoFecha(rangoFecha), [rangoFecha]);
@@ -119,16 +137,95 @@ export default function Notas() {
           <h1 className="text-xl font-bold text-gray-900">Notas</h1>
           <p className="text-sm text-gray-500">{filtradas.length} resultado(s)</p>
         </div>
-        <Link
-          to="/notas/nueva"
-          aria-label="Nueva nota"
-          className="w-11 h-11 rounded-full bg-indigo-600 hover:bg-indigo-700 text-white flex items-center justify-center transition-colors flex-shrink-0"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5}
-              d="M12 4v16m8-8H4" />
-          </svg>
-        </Link>
+        <div className="flex items-center gap-3">
+          <div ref={estadoRef} className="relative">
+            <button
+              onClick={() => { setMostrarEstado(v => !v); setMostrarFecha(false); }}
+              aria-label="Filtrar por estado"
+              className={`w-11 h-11 rounded-full border flex items-center justify-center transition-colors ${
+                filtro !== 'TODOS'
+                  ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
+                  : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5}
+                  d="M4 6h16M7 12h10M10 18h4" />
+              </svg>
+            </button>
+
+            {mostrarEstado && (
+              <div className="absolute right-0 top-12 z-10 bg-white border border-gray-200 rounded-xl shadow-lg p-3 w-56">
+                <p className="text-xs font-semibold text-gray-500 uppercase mb-2 px-1">Estado</p>
+                <div className="flex flex-col gap-1">
+                  {ESTADOS.map(e => (
+                    <button
+                      key={e}
+                      onClick={() => { setFiltro(e); setMostrarEstado(false); }}
+                      className={`text-left text-sm px-3 py-2 rounded-lg transition-colors ${
+                        filtro === e
+                          ? 'bg-indigo-50 text-indigo-700 font-medium'
+                          : 'text-gray-700 hover:bg-gray-50'
+                      }`}
+                    >
+                      {FILTRO_LABEL[e] ?? BADGE_ESTADO[e]?.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div ref={fechaRef} className="relative">
+            <button
+              onClick={() => { setMostrarFecha(v => !v); setMostrarEstado(false); }}
+              aria-label="Filtrar por fecha"
+              className={`w-11 h-11 rounded-full border flex items-center justify-center transition-colors ${
+                rangoFecha !== 'TODAS'
+                  ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
+                  : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <rect x="3" y="5" width="18" height="16" rx="2" strokeWidth={2} />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M3 10h18M8 3v4M16 3v4" />
+              </svg>
+            </button>
+
+            {mostrarFecha && (
+              <div className="absolute right-0 top-12 z-10 bg-white border border-gray-200 rounded-xl shadow-lg p-3 w-56">
+                <p className="text-xs font-semibold text-gray-500 uppercase mb-2 px-1">Fecha</p>
+                <div className="flex flex-col gap-1">
+                  {RANGOS_FECHA.map(r => (
+                    <button
+                      key={r.value}
+                      onClick={() => { setRangoFecha(r.value); setMostrarFecha(false); }}
+                      className={`text-left text-sm px-3 py-2 rounded-lg transition-colors ${
+                        rangoFecha === r.value
+                          ? 'bg-indigo-50 text-indigo-700 font-medium'
+                          : 'text-gray-700 hover:bg-gray-50'
+                      }`}
+                    >
+                      {r.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <Link
+            to="/notas/nueva"
+            aria-label="Nueva nota"
+            className="w-11 h-11 rounded-full bg-indigo-600 hover:bg-indigo-700 text-white flex items-center justify-center transition-colors flex-shrink-0"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5}
+                d="M12 4v16m8-8H4" />
+            </svg>
+          </Link>
+        </div>
       </div>
 
       {/* Búsqueda */}
@@ -147,36 +244,6 @@ export default function Notas() {
           onChange={e => setBusqueda(e.target.value)}
           className="w-full pl-11 pr-4 py-3.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white transition"
         />
-      </div>
-
-      {/* Filtros de estado */}
-      <div className="flex gap-2 overflow-x-auto pb-4 scrollbar-none">
-        {ESTADOS.map(e => (
-          <button
-            key={e}
-            onClick={() => setFiltro(e)}
-            className={`flex-shrink-0 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-              filtro === e
-                ? 'bg-indigo-600 text-white'
-                : 'bg-white text-gray-600 border border-gray-200 hover:border-indigo-300'
-            }`}
-          >
-            {FILTRO_LABEL[e] ?? BADGE_ESTADO[e]?.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Filtro de fecha */}
-      <div className="flex justify-end">
-        <select
-          value={rangoFecha}
-          onChange={e => setRangoFecha(e.target.value)}
-          className="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
-        >
-          {RANGOS_FECHA.map(r => (
-            <option key={r.value} value={r.value}>{r.label}</option>
-          ))}
-        </select>
       </div>
 
       {loading && (
