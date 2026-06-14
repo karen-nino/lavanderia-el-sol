@@ -58,7 +58,7 @@ export const deleteCliente = async (req, res) => {
     const { rows: activas } = await pool.query(
       `SELECT id FROM notas
        WHERE cliente_id = $1
-         AND estado NOT IN ('CANCELADA', 'ENTREGADA')`,
+         AND estado NOT IN ('CANCELADA', 'FINALIZADA')`,
       [id]
     );
     if (activas.length > 0) {

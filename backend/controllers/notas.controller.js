@@ -1,7 +1,7 @@
 import pool from '../db/pool.js';
 import { esAdmin } from '../middleware/roles.js';
 
-const ESTADOS_VALIDOS     = ['EN_PROCESO', 'LISTA', 'PAGADA', 'ENTREGADA', 'CANCELADA'];
+const ESTADOS_VALIDOS     = ['EN_PROCESO', 'LISTA', 'PAGADA', 'FINALIZADA', 'CANCELADA'];
 const MODALIDADES_VALIDAS = ['AUTOSERVICIO', 'EDREDON', 'POR_ENCARGO'];
 const ESTADOS_PAGO_VALIDOS = ['DEBE', 'PAGADO'];
 const TAMANOS_VALIDOS     = ['chico', 'grande'];
@@ -10,9 +10,9 @@ const TIEMPOS_ENTREGA_VALIDOS = ['MANANA', 'TARDE', 'NOCHE'];
 // Transiciones permitidas por estado actual
 const TRANSICIONES_VALIDAS = {
   EN_PROCESO: ['LISTA',                'CANCELADA'],
-  LISTA:      ['PAGADA',  'ENTREGADA', 'CANCELADA'],
-  PAGADA:     ['ENTREGADA',            'CANCELADA'],
-  ENTREGADA:  [],
+  LISTA:      ['PAGADA',  'FINALIZADA', 'CANCELADA'],
+  PAGADA:     ['FINALIZADA',            'CANCELADA'],
+  FINALIZADA: [],
   CANCELADA:  [],
 };
 
@@ -375,7 +375,7 @@ export const updateNota = async (req, res) => {
     }
     const actual = currentRows[0];
 
-    if (['PAGADA', 'ENTREGADA', 'CANCELADA'].includes(actual.estado)) {
+    if (['PAGADA', 'FINALIZADA', 'CANCELADA'].includes(actual.estado)) {
       await client.query('ROLLBACK');
       return res.status(400).json({
         message: `No se puede editar una nota en estado ${actual.estado}.`,
@@ -571,7 +571,7 @@ export const cambiarEstadoNota = async (req, res) => {
 
     const estadoActual = notaRows[0].estado;
 
-    if (['ENTREGADA', 'CANCELADA'].includes(estadoActual)) {
+    if (['FINALIZADA', 'CANCELADA'].includes(estadoActual)) {
       await client.query('ROLLBACK');
       return res.status(400).json({
         message: `No se puede cambiar el estado de una nota ${estadoActual}.`,

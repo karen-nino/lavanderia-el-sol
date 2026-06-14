@@ -7,7 +7,7 @@ const BADGE_ESTADO = {
   EN_PROCESO: { label: 'En Proceso',  cls: 'bg-blue-100 text-blue-800'        },
   LISTA:      { label: 'Por Entregar', cls: 'bg-yellow-100 text-yellow-800'   },
   PAGADA:     { label: 'Pagada',      cls: 'bg-emerald-100 text-emerald-800'  },
-  ENTREGADA:  { label: 'Entregada',   cls: 'bg-green-800 text-white'          },
+  FINALIZADA: { label: 'Finalizada', cls: 'bg-green-800 text-white'          },
   CANCELADA:  { label: 'Cancelada',   cls: 'bg-red-100 text-red-700'          },
 };
 
@@ -22,7 +22,7 @@ const BADGE_PAGO = {
   PAGADO: { label: 'Pagado', cls: 'bg-green-100 text-green-700'  },
 };
 
-const ESTADO_ORDEN = ['EN_PROCESO', 'LISTA', 'PAGADA', 'ENTREGADA'];
+const ESTADO_ORDEN = ['EN_PROCESO', 'LISTA', 'PAGADA', 'FINALIZADA'];
 
 function estadosPasados(estadoActual) {
   const idx = ESTADO_ORDEN.indexOf(estadoActual);
@@ -97,7 +97,7 @@ export default function DetalleNota() {
   const [loadingAccion,    setLoadingAccion]    = useState(false);
   const [errorAccion,      setErrorAccion]      = useState('');
   const [confirmCancelar,  setConfirmCancelar]  = useState(false);
-  const [confirmEntregar,  setConfirmEntregar]  = useState(false);
+  const [confirmFinalizar,  setConfirmFinalizar]  = useState(false);
 
   useEffect(() => {
     let activo = true;
@@ -153,16 +153,16 @@ export default function DetalleNota() {
     window.open(`https://wa.me/${phone}?text=${texto}`, '_blank', 'noopener,noreferrer');
   }
 
-  async function entregarNota() {
+  async function finalizarNota() {
     setLoadingAccion(true);
     setErrorAccion('');
     try {
-      const updated = await api.patch(`/notas/${id}/estado`, { estado: 'ENTREGADA' });
+      const updated = await api.patch(`/notas/${id}/estado`, { estado: 'FINALIZADA' });
       setNota(prev => ({ ...prev, estado: updated.estado }));
-      setConfirmEntregar(false);
+      setConfirmFinalizar(false);
     } catch (err) {
       setErrorAccion(err.message);
-      setConfirmEntregar(false);
+      setConfirmFinalizar(false);
     } finally {
       setLoadingAccion(false);
     }
@@ -186,8 +186,8 @@ export default function DetalleNota() {
 
   if (!nota) return null;
 
-  const terminal     = ['ENTREGADA', 'CANCELADA'].includes(nota.estado);
-  const puedeEditar  = !['PAGADA', 'ENTREGADA', 'CANCELADA'].includes(nota.estado);
+  const terminal     = ['FINALIZADA', 'CANCELADA'].includes(nota.estado);
+  const puedeEditar  = !['PAGADA', 'FINALIZADA', 'CANCELADA'].includes(nota.estado);
   const puedeCancelar = !['CANCELADA'].includes(nota.estado);
   const badgeEstado   = BADGE_ESTADO[nota.estado]       ?? BADGE_ESTADO.EN_PROCESO;
   const badgeModal    = BADGE_MODALIDAD[nota.modalidad] ?? BADGE_MODALIDAD.AUTOSERVICIO;
@@ -259,11 +259,11 @@ export default function DetalleNota() {
           </button>
           {nota.estado === 'LISTA' && (
             <button
-              onClick={() => setConfirmEntregar(true)}
+              onClick={() => setConfirmFinalizar(true)}
               disabled={loadingAccion}
               className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
             >
-              Entregar
+              Finalizar
             </button>
           )}
           {puedeCancelar && (
@@ -438,12 +438,12 @@ export default function DetalleNota() {
       )}
 
       {/* Modal confirmar entrega */}
-      {confirmEntregar && (
+      {confirmFinalizar && (
         <ModalConfirmar
-          titulo="Entregar nota"
-          mensaje={`¿Marcar la nota ${nota.folio ?? `#${nota.id}`} como entregada? Esta acción no se puede deshacer.`}
-          onCancelar={() => setConfirmEntregar(false)}
-          onConfirmar={entregarNota}
+          titulo="Finalizar nota"
+          mensaje={`¿Marcar la nota ${nota.folio ?? `#${nota.id}`} como finalizada? Esta acción no se puede deshacer.`}
+          onCancelar={() => setConfirmFinalizar(false)}
+          onConfirmar={finalizarNota}
           loading={loadingAccion}
           colorBtn="bg-emerald-600 hover:bg-emerald-700"
         />

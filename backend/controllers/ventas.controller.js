@@ -24,7 +24,7 @@ export async function getResumen(req, res) {
   const p2 = isCustom ? '$2' : null;
 
   // Para custom, el period ya usa $1 y $2
-  const whereBase = `o.estado IN ('PAGADA', 'ENTREGADA') AND ${periodSQL}`;
+  const whereBase = `o.estado IN ('PAGADA', 'FINALIZADA') AND ${periodSQL}`;
 
   try {
     const [tarjetasRes, pendientesRes, graficaRes, listaRes, corteRes] = await Promise.all([

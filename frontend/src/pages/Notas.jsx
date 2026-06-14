@@ -4,7 +4,7 @@ import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { esAdmin as esAdminFn } from '../lib/roles';
 
-const ESTADOS = ['TODOS', 'EN_PROCESO', 'LISTA', 'ENTREGADA', 'DEBE', 'CANCELADA'];
+const ESTADOS = ['TODOS', 'EN_PROCESO', 'LISTA', 'FINALIZADA', 'DEBE', 'CANCELADA'];
 
 const FILTRO_LABEL = {
   TODOS: 'Todos',
@@ -15,7 +15,7 @@ const BADGE_ESTADO = {
   EN_PROCESO: { label: 'En Proceso', cls: 'bg-blue-100 text-blue-800'       },
   LISTA:      { label: 'Por Entregar', cls: 'bg-yellow-100 text-yellow-800' },
   PAGADA:     { label: 'Pagada',     cls: 'bg-emerald-100 text-emerald-800' },
-  ENTREGADA:  { label: 'Entregada',  cls: 'bg-green-800 text-white'         },
+  FINALIZADA: { label: 'Finalizada', cls: 'bg-green-800 text-white'         },
   CANCELADA:  { label: 'Cancelada',  cls: 'bg-red-100 text-red-700'         },
 };
 
