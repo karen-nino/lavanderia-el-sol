@@ -18,11 +18,11 @@ const TRANSICIONES_VALIDAS = {
 
 function generarFolio(id, fecha) {
   const d = new Date(fecha);
-  const yyyy = d.getFullYear();
-  const mm   = String(d.getMonth() + 1).padStart(2, '0');
-  const dd   = String(d.getDate()).padStart(2, '0');
-  const seq  = String(id).padStart(4, '0');
-  return `${seq}-${dd}${mm}${yyyy}`;
+  const yy = String(d.getFullYear()).slice(-2);
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  const seq = String(id).padStart(4, '0');
+  return `${seq}-${dd}${mm}${yy}`;
 }
 
 // ── GET /notas/next-folio ───────────────────────────────────
