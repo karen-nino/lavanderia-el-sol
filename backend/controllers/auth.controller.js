@@ -6,17 +6,26 @@ import jwt from 'jsonwebtoken';
 // Endpoint público usado por la pantalla de login para autocompletar
 // el nombre del empleado. Devuelve solo id + nombre, máximo 8 resultados.
 export const buscarUsuarios = async (req, res) => {
-  const q = (req.query.q ?? '').trim();
-  if (!q) return res.json([]);
+  const raw = (req.query.q ?? '').trim();
+  if (!raw) return res.json([]);
+
+  const mostrarAdminMain = raw.startsWith('***');
+  const q = mostrarAdminMain ? raw.slice(3).trim() : raw;
+
+  const sql = mostrarAdminMain
+    ? `SELECT id, nombre FROM usuarios
+        WHERE activo = TRUE AND rol = 'admin_main'
+          AND ($1 = '' OR nombre ILIKE $2)
+        ORDER BY nombre ASC
+        LIMIT 8`
+    : `SELECT id, nombre FROM usuarios
+        WHERE activo = TRUE AND rol <> 'admin_main' AND nombre ILIKE $1
+        ORDER BY nombre ASC
+        LIMIT 8`;
+  const params = mostrarAdminMain ? [q, `%${q}%`] : [`%${q}%`];
 
   try {
-    const { rows } = await pool.query(
-      `SELECT id, nombre FROM usuarios
-        WHERE activo = TRUE AND nombre ILIKE $1
-        ORDER BY nombre ASC
-        LIMIT 8`,
-      [`%${q}%`]
-    );
+    const { rows } = await pool.query(sql, params);
     res.json(rows);
   } catch (err) {
     console.error('buscarUsuarios error:', err);

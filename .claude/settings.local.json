@@ -72,7 +72,19 @@
       "Bash(echo \"Exit: $?\")",
       "Bash(PGCONNECT_TIMEOUT=2 psql -h localhost -U \"karen.nino\" -d \"lavanderia_el_sol\" -c \"SELECT to_regclass\\('public.ajustes'\\) AS ajustes, to_regclass\\('public.configuracion'\\) AS configuracion;\")",
       "Bash(PGCONNECT_TIMEOUT=2 psql *)",
-      "Bash(grep -n \"nuevoClienteOpen\\\\|^    </div>\\\\s*$\\\\|^  \\);\\\\s*$\" /Users/karen.nino/Desktop/lavanderia-el-sol/frontend/src/pages/NuevaNota.jsx)"
+      "Bash(grep -n \"nuevoClienteOpen\\\\|^    </div>\\\\s*$\\\\|^  \\);\\\\s*$\" /Users/karen.nino/Desktop/lavanderia-el-sol/frontend/src/pages/NuevaNota.jsx)",
+      "Bash(ps *)",
+      "Bash(PORT=4100 node index.js)",
+      "Bash(echo \"started pid=$!\")",
+      "Bash(python3 -m json.tool)",
+      "Bash(kill 16532)",
+      "Bash(echo \"restarted pid=$!\")",
+      "Bash(kill 16814)",
+      "Bash(lsof -ti:4100)",
+      "Bash(PORT=4000 node index.js)",
+      "Bash(disown)",
+      "Bash(echo \"started pid=$\\(lsof -ti:4000\\)\")",
+      "Bash(PGPASSWORD= psql *)"
     ]
   }
 }
