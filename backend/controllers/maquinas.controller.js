@@ -98,8 +98,16 @@ export const cambiarEstadoMaquina = async (req, res) => {
   }
 
   try {
+    // en_uso_desde se setea al activar y se limpia al salir de en_uso.
     const { rows } = await pool.query(
-      'UPDATE maquinas SET estado = $1 WHERE id = $2 RETURNING *',
+      `UPDATE maquinas
+         SET estado       = $1,
+             en_uso_desde = CASE
+               WHEN $1 = 'en_uso' THEN NOW()
+               ELSE NULL
+             END
+       WHERE id = $2
+       RETURNING *`,
       [estado, id]
     );
     if (rows.length === 0) {

@@ -532,7 +532,9 @@ export const eliminarNota = async (req, res) => {
     // Liberar la máquina si estaba en uso por esta nota
     if (maquinaId) {
       await client.query(
-        `UPDATE maquinas SET estado = 'disponible'
+        `UPDATE maquinas
+           SET estado = 'disponible',
+               en_uso_desde = NULL
          WHERE id = $1 AND estado = 'en_uso'`,
         [maquinaId]
       );
