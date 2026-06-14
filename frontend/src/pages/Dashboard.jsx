@@ -226,11 +226,11 @@ export default function Dashboard() {
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
             <h3 className="text-base font-bold text-gray-900">Procesar carga</h3>
             <p className="text-sm text-gray-500">
-              ¿Confirmar que la carga de <span className="font-semibold text-gray-800">{confirmProcesar.nombre}</span> ya fue procesada? La máquina pasará a disponible.
+              ¿Confirmar que la carga de <span className="font-semibold text-gray-800">{confirmProcesar.nombre}</span> ya terminó? La máquina pasará a disponible.
             </p>
             {notaParaProcesar && (
               <p className="text-sm text-gray-500">
-                La nota <span className="font-semibold text-gray-800">{notaParaProcesar.folio ?? `#${notaParaProcesar.id}`}</span> pasará a estado <span className="font-semibold text-gray-800">"Procesado"</span>.
+                La nota <span className="font-semibold text-gray-800">{notaParaProcesar.folio ?? `#${notaParaProcesar.id}`}</span> pasará a estado <span className="font-semibold text-gray-800">"Por Entregar"</span>.
               </p>
             )}
             {errorProcesar && (
