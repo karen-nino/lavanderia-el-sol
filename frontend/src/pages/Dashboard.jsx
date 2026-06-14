@@ -47,6 +47,9 @@ export default function Dashboard() {
   const [ventas, setVentas]     = useState(null);
   const [loading, setLoading]   = useState(true);
   const [now, setNow]           = useState(() => Date.now());
+  const [confirmProcesar, setConfirmProcesar] = useState(null);
+  const [procesando, setProcesando] = useState(false);
+  const [errorProcesar, setErrorProcesar] = useState('');
 
   useEffect(() => {
     Promise.all([
@@ -73,6 +76,32 @@ export default function Dashboard() {
     const tick = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(tick);
   }, []);
+
+  const notaParaProcesar = confirmProcesar
+    ? notas
+        .filter(n => String(n.maquina_id) === String(confirmProcesar.id)
+                  && ['ACTIVA', 'EN_PROCESO'].includes(n.estado))
+        .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0]
+    : null;
+
+  const confirmarProcesar = async () => {
+    if (!confirmProcesar) return;
+    setProcesando(true);
+    setErrorProcesar('');
+    try {
+      if (notaParaProcesar) {
+        const notaActualizada = await api.patch(`/notas/${notaParaProcesar.id}/estado`, { estado: 'LISTA' });
+        setNotas(prev => prev.map(n => n.id === notaActualizada.id ? { ...n, ...notaActualizada } : n));
+      }
+      const actualizada = await api.patch(`/maquinas/${confirmProcesar.id}/estado`, { estado: 'disponible' });
+      setMaquinas(prev => prev.map(m => m.id === actualizada.id ? actualizada : m));
+      setConfirmProcesar(null);
+    } catch (err) {
+      setErrorProcesar(err.message);
+    } finally {
+      setProcesando(false);
+    }
+  };
 
   const totalMaquinas    = maquinas.length;
   const enUso            = maquinas.filter(m => m.estado === 'en_uso').length;
@@ -178,13 +207,58 @@ export default function Dashboard() {
                     tiempo_restante: inicio ? formatMMSS(restanteSeg) : '—:—',
                     necesita_procesar: expirado,
                   };
-                  return <MachineCard key={m.id} maquina={maquinaAumentada} />;
+                  return (
+                    <MachineCard
+                      key={m.id}
+                      maquina={maquinaAumentada}
+                      onProcesar={() => setConfirmProcesar(maquinaAumentada)}
+                    />
+                  );
                 })}
               </div>
             );
           })()}
         </div>
       </div>
+
+      {confirmProcesar && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+            <h3 className="text-base font-bold text-gray-900">Procesar carga</h3>
+            <p className="text-sm text-gray-500">
+              ¿Confirmar que la carga de <span className="font-semibold text-gray-800">{confirmProcesar.nombre}</span> ya fue procesada? La máquina pasará a disponible.
+            </p>
+            {notaParaProcesar && (
+              <p className="text-sm text-gray-500">
+                La nota <span className="font-semibold text-gray-800">{notaParaProcesar.folio ?? `#${notaParaProcesar.id}`}</span> pasará a estado <span className="font-semibold text-gray-800">"Procesado"</span>.
+              </p>
+            )}
+            {errorProcesar && (
+              <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">
+                {errorProcesar}
+              </div>
+            )}
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => { setConfirmProcesar(null); setErrorProcesar(''); }}
+                disabled={procesando}
+                className="flex-1 border border-gray-300 text-gray-700 font-medium py-2.5 rounded-lg text-sm hover:bg-gray-50 disabled:opacity-60 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={confirmarProcesar}
+                disabled={procesando}
+                className="flex-1 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white font-medium py-2.5 rounded-lg text-sm transition-colors"
+              >
+                {procesando ? 'Procesando...' : 'Confirmar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <Link
         to="/notas/nueva"

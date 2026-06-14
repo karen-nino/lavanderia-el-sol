@@ -9,7 +9,7 @@ const TIEMPOS_ENTREGA_VALIDOS = ['MANANA', 'TARDE', 'NOCHE'];
 
 // Transiciones permitidas por estado actual
 const TRANSICIONES_VALIDAS = {
-  ACTIVA:     ['EN_PROCESO', 'CANCELADA'],
+  ACTIVA:     ['EN_PROCESO', 'LISTA', 'CANCELADA'],
   EN_PROCESO: ['LISTA',      'CANCELADA'],
   LISTA:      ['PAGADA',     'CANCELADA'],
   PAGADA:     ['ENTREGADA',  'CANCELADA'],
