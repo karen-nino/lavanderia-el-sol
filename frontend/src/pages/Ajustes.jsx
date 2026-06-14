@@ -798,7 +798,6 @@ export default function Ajustes() {
             </div>
             <div className="border-t border-light-blue/60" />
 
-            {mensajeBanner}
             {mobileSectionContent[activeSection.id]}
 
             <div className="grid grid-cols-2 gap-3 pt-2">
@@ -824,6 +823,7 @@ export default function Ajustes() {
                 )}
               </button>
             </div>
+            {mensajeBanner}
           </form>
         )}
       </div>
