@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 
@@ -32,11 +32,7 @@ export default function Salidas() {
   const [errorAccion,      setErrorAccion]      = useState('');
   const [confirmDetener,   setConfirmDetener]   = useState(false);
 
-  useEffect(() => { cargarDatos(); }, [id]);
-
-  async function cargarDatos() {
-    setLoading(true);
-    setError('');
+  const cargarDatos = useCallback(async () => {
     try {
       const [notaData, productosData] = await Promise.all([
         api.get(`/notas/${id}`),
@@ -44,12 +40,20 @@ export default function Salidas() {
       ]);
       setNota(notaData);
       setProductos(productosData);
+      setError('');
     } catch (err) {
       setError(err.message);
-    } finally {
-      setLoading(false);
     }
-  }
+  }, [id]);
+
+  useEffect(() => {
+    let activo = true;
+    // El rule detecta que cargarDatos termina llamando setState; aquí es el
+    // patrón normal "cargar al montar / al cambiar id" — no es un loop.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    cargarDatos().finally(() => { if (activo) setLoading(false); });
+    return () => { activo = false; };
+  }, [cargarDatos]);
 
   async function activarMaquina() {
     if (!nota?.maquina_id) return;
