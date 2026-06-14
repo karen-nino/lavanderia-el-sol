@@ -34,6 +34,9 @@ export default function Clientes() {
   const [eliminando, setEliminando]       = useState(false);
   const [deleteError, setDeleteError]     = useState('');
 
+  // Modal info (mobile)
+  const [infoCliente, setInfoCliente]     = useState(null);
+
   useEffect(() => {
     api.get('/clientes')
       .then(setClientes)
@@ -242,55 +245,91 @@ export default function Clientes() {
           {/* Cards — mobile */}
           <div className="md:hidden space-y-3">
             {filtrados.map(c => (
-              <div
+              <button
                 key={c.id}
-                className="bg-white rounded-xl shadow-sm border border-gray-100 px-4 py-3 flex items-start justify-between gap-2"
+                type="button"
+                onClick={() => setInfoCliente(c)}
+                className="w-full text-left bg-white rounded-xl shadow-sm border border-gray-100 px-4 py-3 hover:bg-gray-50 active:bg-gray-100 transition-colors"
               >
-                <div className="min-w-0">
-                  <p className="font-medium text-gray-800 text-sm">
-                    {`${c.nombre}${c.apellido ? ' ' + c.apellido : ''}`}
-                  </p>
-                  <div className="flex flex-wrap gap-3 mt-1 text-xs text-gray-500">
-                    {c.telefono && <span>📞 {c.telefono}</span>}
-                  </div>
-                </div>
-                <div className="flex items-center gap-1 flex-shrink-0">
-                  {c.telefono && (
-                    <button
-                      onClick={() => abrirWhatsapp(c)}
-                      aria-label="Enviar WhatsApp"
-                      className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-                    >
-                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M.057 24l1.687-6.163a11.867 11.867 0 01-1.587-5.945C.16 5.335 5.495 0 12.05 0a11.817 11.817 0 018.413 3.488 11.824 11.824 0 013.48 8.413c-.003 6.557-5.338 11.892-11.893 11.892a11.9 11.9 0 01-5.688-1.448L.057 24zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413z" />
-                      </svg>
-                    </button>
-                  )}
-                  <button
-                    onClick={() => abrirEditar(c)}
-                    className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                        d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                    </svg>
-                  </button>
-                  {esAdmin && (
-                    <button
-                      onClick={() => abrirEliminar(c)}
-                      className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
-                    </button>
-                  )}
-                </div>
-              </div>
+                <p className="font-medium text-gray-800 text-sm">
+                  {`${c.nombre}${c.apellido ? ' ' + c.apellido : ''}`}
+                </p>
+                {c.telefono && (
+                  <p className="mt-1 text-xs text-gray-500">📞 {c.telefono}</p>
+                )}
+              </button>
             ))}
           </div>
         </>
+      )}
+
+      {/* ── Modal: Info cliente (mobile) ──────────────────── */}
+      {infoCliente && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4 md:hidden">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-gray-100 flex-shrink-0">
+              <h2 className="text-base font-semibold text-gray-900">Cliente</h2>
+              <button onClick={() => setInfoCliente(null)} className="text-gray-400 hover:text-gray-600">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="p-5 space-y-5 overflow-y-auto">
+              <div>
+                <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Nombre</p>
+                <p className="text-base font-medium text-gray-900">
+                  {`${infoCliente.nombre}${infoCliente.apellido ? ' ' + infoCliente.apellido : ''}`}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Teléfono</p>
+                <p className="text-base text-gray-700">
+                  {infoCliente.telefono ?? <span className="text-gray-400 italic">Sin teléfono</span>}
+                </p>
+              </div>
+
+              <div className="space-y-2 pt-1">
+                {infoCliente.telefono && (
+                  <button
+                    type="button"
+                    onClick={() => { const c = infoCliente; setInfoCliente(null); abrirWhatsapp(c); }}
+                    className="w-full flex items-center justify-center gap-2 py-3 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg text-sm transition-colors"
+                  >
+                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M.057 24l1.687-6.163a11.867 11.867 0 01-1.587-5.945C.16 5.335 5.495 0 12.05 0a11.817 11.817 0 018.413 3.488 11.824 11.824 0 013.48 8.413c-.003 6.557-5.338 11.892-11.893 11.892a11.9 11.9 0 01-5.688-1.448L.057 24zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413z" />
+                    </svg>
+                    Enviar WhatsApp
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => { const c = infoCliente; setInfoCliente(null); abrirEditar(c); }}
+                  className="w-full flex items-center justify-center gap-2 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg text-sm transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                      d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                  Editar
+                </button>
+                {esAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => { const c = infoCliente; setInfoCliente(null); abrirEliminar(c); }}
+                    className="w-full flex items-center justify-center gap-2 py-3 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg text-sm transition-colors"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                    Eliminar
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ── Modal: Nuevo cliente ──────────────────────────── */}
