@@ -216,6 +216,7 @@ export default function Dashboard() {
                     <MachineCard
                       key={m.id}
                       maquina={maquinaAumentada}
+                      nota={notaRel}
                       onProcesar={() => setConfirmProcesar(maquinaAumentada)}
                       onClick={notaRel ? () => navigate(`/notas/${notaRel.id}`) : undefined}
                     />

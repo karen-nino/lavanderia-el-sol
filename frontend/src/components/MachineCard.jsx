@@ -6,7 +6,20 @@ const HEADER_BY_ESTADO = {
   mantenimiento: { cls: 'bg-red text-white',   label: 'MANT' },
 };
 
-export default function MachineCard({ maquina, onProcesar, onClick }) {
+export default function MachineCard({ maquina, nota, onProcesar, onClick }) {
+  const folioTxt    = nota?.folio ?? (nota?.id != null ? `#${nota.id}` : null);
+  const clienteTxt  = nota?.cliente_nombre ?? null;
+  const infoNota = (folioTxt || clienteTxt) ? (
+    <div className="w-full text-center">
+      {folioTxt && (
+        <p className="text-kpi-label font-semibold text-dark-blue truncate">{folioTxt}</p>
+      )}
+      {clienteTxt && (
+        <p className="text-kpi-label text-grey truncate">{clienteTxt}</p>
+      )}
+    </div>
+  ) : null;
+
   const header = HEADER_BY_ESTADO[maquina.estado] ?? HEADER_BY_ESTADO.disponible;
   const interactivoCls = onClick
     ? 'cursor-pointer hover:shadow-lg transition-shadow'
@@ -61,6 +74,7 @@ export default function MachineCard({ maquina, onProcesar, onClick }) {
         </div>
         <div className="p-card-pad flex flex-col items-center gap-3">
           <p className="text-card-title text-green text-center">Lavado terminado</p>
+          {infoNota}
           <button
             onClick={(e) => { e.stopPropagation(); onProcesar?.(maquina); }}
             className="w-full bg-green text-white text-section py-3 rounded-card-sm hover:opacity-90 transition-opacity"
@@ -80,6 +94,7 @@ export default function MachineCard({ maquina, onProcesar, onClick }) {
       <div className="p-card-pad flex flex-col items-center gap-3">
         <CircularTimer progress={maquina.progreso ?? 1} label={maquina.tiempo_restante ?? '—:—'} />
         <p className="text-kpi-label text-grey uppercase tracking-wide">En uso</p>
+        {infoNota}
       </div>
     </div>
   );
