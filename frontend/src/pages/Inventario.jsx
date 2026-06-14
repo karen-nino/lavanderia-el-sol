@@ -254,6 +254,7 @@ export default function Inventario() {
   const [error,           setError]           = useState('');
   const [modalProducto,   setModalProducto]   = useState(null);  // null | 'nuevo' | producto
   const [prodAEliminar,   setProdAEliminar]   = useState(null);
+  const [infoProducto,    setInfoProducto]    = useState(null);  // info modal (mobile)
 
   const cargar = () => {
     setLoading(true);
@@ -429,56 +430,109 @@ export default function Inventario() {
               const es = p.estado_stock ?? 'ok';
               const rowCls = es === 'agotado' ? 'bg-red-50/40' : es === 'por_agotarse' ? 'bg-amber-50/40' : 'bg-white';
               return (
-                <div
+                <button
                   key={p.id}
-                  className={`rounded-xl shadow-sm border border-gray-100 px-4 py-3 ${rowCls}`}
+                  type="button"
+                  onClick={() => setInfoProducto(p)}
+                  className={`w-full text-left rounded-xl shadow-sm border border-gray-100 px-4 py-3 hover:shadow-md active:opacity-80 transition ${rowCls}`}
                 >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="font-medium text-gray-800 text-sm">{p.nombre}</p>
-                      {p.categoria && (
-                        <p className="text-xs text-gray-400 mt-0.5">{p.categoria}</p>
-                      )}
-                      <div className="flex items-center gap-2 mt-1 flex-wrap">
-                        <span className="text-sm font-mono font-semibold text-gray-700">
-                          {Number(p.stock_actual).toFixed(2)} {p.unidad}
-                        </span>
-                        {es === 'agotado' && (
-                          <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700">Agotado</span>
-                        )}
-                        {es === 'por_agotarse' && (
-                          <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Por agotarse</span>
-                        )}
-                        {p.precio_unitario != null && (
-                          <span className="text-xs text-gray-500">
-                            ${Number(p.precio_unitario).toFixed(2)}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1 flex-shrink-0">
-                      <button
-                        onClick={() => setModalProducto(p)}
-                        className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
-                      >
-                        <IconoLapiz />
-                      </button>
-                      {esAdmin && (
-                        <button
-                          onClick={() => setProdAEliminar(p)}
-                          className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                        >
-                          <IconoBasura />
-                        </button>
-                      )}
-                    </div>
+                  <p className="font-medium text-gray-800 text-sm">{p.nombre}</p>
+                  {p.categoria && (
+                    <p className="text-xs text-gray-400 mt-0.5">{p.categoria}</p>
+                  )}
+                  <div className="flex items-center gap-2 mt-1 flex-wrap">
+                    <span className="text-sm font-mono font-semibold text-gray-700">
+                      {Number(p.stock_actual).toFixed(2)} {p.unidad}
+                    </span>
+                    {es === 'agotado' && (
+                      <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700">Agotado</span>
+                    )}
+                    {es === 'por_agotarse' && (
+                      <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Por agotarse</span>
+                    )}
+                    {p.precio_unitario != null && (
+                      <span className="text-xs text-gray-500">
+                        ${Number(p.precio_unitario).toFixed(2)}
+                      </span>
+                    )}
                   </div>
-                </div>
+                </button>
               );
             })}
           </div>
         </>
       )}
+
+      {/* Modal info producto (mobile) */}
+      {infoProducto && (() => {
+        const p = infoProducto;
+        const es = p.estado_stock ?? 'ok';
+        return (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4 md:hidden">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] flex flex-col">
+              <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-gray-100 flex-shrink-0">
+                <h2 className="text-base font-semibold text-gray-900">Producto</h2>
+                <button onClick={() => setInfoProducto(null)} className="text-gray-400 hover:text-gray-600">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <div className="p-5 space-y-5 overflow-y-auto">
+                <div>
+                  <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Nombre</p>
+                  <p className="text-base font-medium text-gray-900">{p.nombre}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Categoría</p>
+                  <p className="text-base text-gray-700">{p.categoria ?? <span className="text-gray-400 italic">Sin categoría</span>}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Precio unitario</p>
+                  <p className="text-base text-gray-700">
+                    {p.precio_unitario != null ? `$${Number(p.precio_unitario).toFixed(2)}` : '—'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Stock actual</p>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-base font-mono font-semibold text-gray-800">
+                      {Number(p.stock_actual).toFixed(2)} {p.unidad}
+                    </span>
+                    {es === 'agotado' && (
+                      <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700">Agotado</span>
+                    )}
+                    {es === 'por_agotarse' && (
+                      <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Por agotarse</span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => { setInfoProducto(null); setModalProducto(p); }}
+                    className="w-full flex items-center justify-center gap-2 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg text-sm transition-colors"
+                  >
+                    <IconoLapiz />
+                    Editar
+                  </button>
+                  {esAdmin && (
+                    <button
+                      type="button"
+                      onClick={() => { setInfoProducto(null); setProdAEliminar(p); }}
+                      className="w-full flex items-center justify-center gap-2 py-3 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg text-sm transition-colors"
+                    >
+                      <IconoBasura />
+                      Eliminar
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Modal crear / editar */}
       {modalProducto && (

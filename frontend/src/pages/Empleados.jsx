@@ -56,6 +56,9 @@ export default function Empleados() {
   const [eliminando, setEliminando]         = useState(false);
   const [deleteError, setDeleteError]       = useState('');
 
+  // Modal info (mobile)
+  const [infoEmpleado, setInfoEmpleado]     = useState(null);
+
   useEffect(() => {
     api.get('/usuarios')
       .then(data => setEmpleados(data ?? []))
@@ -261,54 +264,135 @@ export default function Empleados() {
             const empEsMain = emp.rol === 'admin_main';
             const puedeModificar = esAdmin && (!empEsMain || esAdminMain);
             const puedeEliminar  = puedeModificar && !esMismoUsuario;
-            return (
-              <div
-                key={emp.id}
-                className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 flex flex-col gap-3 hover:shadow-md transition-shadow"
-              >
-                <div className="flex items-start gap-3">
-                  <div className="flex-shrink-0 w-11 h-11 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-sm font-semibold">
-                    {iniciales || '?'}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="font-semibold text-gray-900 text-sm truncate">{nombreCompleto(emp)}</p>
-                    <span className="inline-block mt-0.5 text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
-                      {ROL_LABEL[emp.rol] ?? emp.rol}
-                    </span>
-                  </div>
-                </div>
 
-                {puedeModificar && (
-                  <div className="flex items-center justify-end gap-1 pt-2 border-t border-gray-100">
-                    <button
-                      onClick={() => abrirEditar(emp)}
-                      className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
-                      title="Editar"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                          d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                      </svg>
-                    </button>
-                    {puedeEliminar && (
+            const cabecera = (
+              <div className="flex items-start gap-3">
+                <div className="flex-shrink-0 w-11 h-11 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-sm font-semibold">
+                  {iniciales || '?'}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold text-gray-900 text-sm truncate">{nombreCompleto(emp)}</p>
+                  <span className="inline-block mt-0.5 text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
+                    {ROL_LABEL[emp.rol] ?? emp.rol}
+                  </span>
+                </div>
+              </div>
+            );
+
+            return (
+              <div key={emp.id}>
+                {/* Mobile: card como botón que abre modal info */}
+                <button
+                  type="button"
+                  onClick={() => setInfoEmpleado(emp)}
+                  className="sm:hidden w-full text-left bg-white rounded-xl shadow-sm border border-gray-100 p-4 hover:bg-gray-50 active:bg-gray-100 transition-colors"
+                >
+                  {cabecera}
+                </button>
+
+                {/* Desktop: card con acciones inline */}
+                <div className="hidden sm:flex flex-col gap-3 bg-white rounded-xl shadow-sm border border-gray-100 p-4 hover:shadow-md transition-shadow">
+                  {cabecera}
+                  {puedeModificar && (
+                    <div className="flex items-center justify-end gap-1 pt-2 border-t border-gray-100">
                       <button
-                        onClick={() => abrirEliminar(emp)}
-                        className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                        title="Eliminar"
+                        onClick={() => abrirEditar(emp)}
+                        className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                        title="Editar"
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                         </svg>
                       </button>
-                    )}
-                  </div>
-                )}
+                      {puedeEliminar && (
+                        <button
+                          onClick={() => abrirEliminar(emp)}
+                          className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          title="Eliminar"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
             );
           })}
         </div>
       )}
+
+      {/* ── Modal: Info empleado (mobile) ─────────────────── */}
+      {infoEmpleado && (() => {
+        const { nombre, apellido } = partirNombre(infoEmpleado);
+        const iniciales = `${nombre[0] ?? ''}${apellido[0] ?? ''}`.toUpperCase();
+        const esMismoUsuario = usuario?.id === infoEmpleado.id;
+        const empEsMain = infoEmpleado.rol === 'admin_main';
+        const puedeModificar = esAdmin && (!empEsMain || esAdminMain);
+        const puedeEliminar  = puedeModificar && !esMismoUsuario;
+        return (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4 sm:hidden">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] flex flex-col">
+              <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-gray-100 flex-shrink-0">
+                <h2 className="text-base font-semibold text-gray-900">Empleado</h2>
+                <button onClick={() => setInfoEmpleado(null)} className="text-gray-400 hover:text-gray-600">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <div className="p-5 space-y-5 overflow-y-auto">
+                <div className="flex items-center gap-3">
+                  <div className="flex-shrink-0 w-14 h-14 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-lg font-semibold">
+                    {iniciales || '?'}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold text-gray-900 text-base">{nombreCompleto(infoEmpleado)}</p>
+                    <span className="inline-block mt-0.5 text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
+                      {ROL_LABEL[infoEmpleado.rol] ?? infoEmpleado.rol}
+                    </span>
+                  </div>
+                </div>
+
+                {puedeModificar ? (
+                  <div className="space-y-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => { const e = infoEmpleado; setInfoEmpleado(null); abrirEditar(e); }}
+                      className="w-full flex items-center justify-center gap-2 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg text-sm transition-colors"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                          d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                      Editar
+                    </button>
+                    {puedeEliminar && (
+                      <button
+                        type="button"
+                        onClick={() => { const e = infoEmpleado; setInfoEmpleado(null); abrirEliminar(e); }}
+                        className="w-full flex items-center justify-center gap-2 py-3 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg text-sm transition-colors"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                        Eliminar
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-xs text-gray-400 text-center pt-1">No tienes permiso para modificar este empleado.</p>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── Modal: Nuevo empleado ─────────────────────────── */}
       {modalOpen && (
