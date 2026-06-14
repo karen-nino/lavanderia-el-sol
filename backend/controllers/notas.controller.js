@@ -508,6 +508,16 @@ export const eliminarNota = async (req, res) => {
   try {
     await client.query('BEGIN');
 
+    const { rows: notaRows } = await client.query(
+      'SELECT maquina_id FROM notas WHERE id = $1 FOR UPDATE',
+      [id]
+    );
+    if (notaRows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: 'Nota no encontrada.' });
+    }
+    const maquinaId = notaRows[0].maquina_id;
+
     // Liberar stock reservado antes de eliminar
     await client.query(
       `UPDATE productos a
@@ -517,10 +527,15 @@ export const eliminarNota = async (req, res) => {
       [id]
     );
 
-    const { rowCount } = await client.query('DELETE FROM notas WHERE id = $1', [id]);
-    if (rowCount === 0) {
-      await client.query('ROLLBACK');
-      return res.status(404).json({ message: 'Nota no encontrada.' });
+    await client.query('DELETE FROM notas WHERE id = $1', [id]);
+
+    // Liberar la máquina si estaba en uso por esta nota
+    if (maquinaId) {
+      await client.query(
+        `UPDATE maquinas SET estado = 'disponible'
+         WHERE id = $1 AND estado = 'en_uso'`,
+        [maquinaId]
+      );
     }
 
     await client.query('COMMIT');
