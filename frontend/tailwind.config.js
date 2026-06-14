@@ -42,6 +42,32 @@ export default {
         'card-pad':    '1.25rem',
         'section-gap': '1.5rem',
       },
+      keyframes: {
+        'pop-in': {
+          '0%':   { transform: 'scale(0)',   opacity: '0' },
+          '60%':  { transform: 'scale(1.1)', opacity: '1' },
+          '100%': { transform: 'scale(1)',   opacity: '1' },
+        },
+        'draw-check': {
+          '0%':   { strokeDashoffset: '48' },
+          '100%': { strokeDashoffset: '0'  },
+        },
+        'draw-x': {
+          '0%':   { strokeDashoffset: '40' },
+          '100%': { strokeDashoffset: '0'  },
+        },
+        'shake': {
+          '0%, 100%':     { transform: 'translateX(0)'    },
+          '20%, 60%':     { transform: 'translateX(-6px)' },
+          '40%, 80%':     { transform: 'translateX(6px)'  },
+        },
+      },
+      animation: {
+        'pop-in':     'pop-in 0.4s ease-out forwards',
+        'draw-check': 'draw-check 0.4s 0.2s ease-out forwards',
+        'draw-x':     'draw-x 0.4s 0.2s ease-out forwards',
+        'shake':      'shake 0.5s ease-in-out',
+      },
     },
   },
   plugins: [],

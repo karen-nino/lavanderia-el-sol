@@ -92,6 +92,7 @@ export default function NuevaNota() {
   const [nuevoCliente,      setNuevoCliente]      = useState({ nombre: '', apellido: '', telefono: '' });
   const [creandoCliente,    setCreandoCliente]    = useState(false);
   const [folio,             setFolio]             = useState('');
+  const [notaCreada,        setNotaCreada]        = useState(null);
   const tipoRef           = useRef(null);
   const prendaRef         = useRef(null);
   const maquinaRef        = useRef(null);
@@ -332,11 +333,11 @@ export default function NuevaNota() {
         await api.patch(`/notas/${id}`, payload);
         navigate(`/notas/${id}`);
       } else {
-        await api.post('/notas', payload);
+        const creada = await api.post('/notas', payload);
         if (encargoForm.maquina_id && encargoForm.activar_inmediatamente === 'SI') {
           await api.patch(`/maquinas/${encargoForm.maquina_id}/estado`, { estado: 'en_uso' });
         }
-        navigate('/notas');
+        setNotaCreada(creada);
       }
     } catch (err) {
       setError(err.message);
@@ -372,8 +373,8 @@ export default function NuevaNota() {
         await api.patch(`/notas/${id}`, payload);
         navigate(`/notas/${id}`);
       } else {
-        await api.post('/notas', payload);
-        navigate('/notas');
+        const creada = await api.post('/notas', payload);
+        setNotaCreada(creada);
       }
     } catch (err) {
       setError(err.message);
@@ -1098,11 +1099,6 @@ export default function NuevaNota() {
               </div>
             )}
 
-            {error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">
-                {error}
-              </div>
-            )}
 
             {/* Navegación del wizard */}
             <div className="flex gap-3 pb-4">
@@ -1618,6 +1614,72 @@ export default function NuevaNota() {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal — error al crear nota */}
+      {error && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-8 text-center space-y-5 animate-shake">
+            <div className="w-20 h-20 mx-auto rounded-full bg-red-100 flex items-center justify-center animate-pop-in">
+              <svg className="w-12 h-12 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={3}
+                  d="M6 6L18 18M18 6L6 18"
+                  style={{ strokeDasharray: 40, strokeDashoffset: 40 }}
+                  className="animate-draw-x"
+                />
+              </svg>
+            </div>
+            <div className="space-y-1">
+              <h3 className="text-lg font-bold text-gray-900">Ocurrió un error</h3>
+              <p className="text-sm text-gray-500">{error}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setError('')}
+              className="w-full bg-red-600 hover:bg-red-700 text-white font-medium py-2.5 rounded-lg text-sm transition-colors"
+            >
+              Cerrar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Modal — éxito al crear nota */}
+      {notaCreada && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-8 text-center space-y-5 animate-pop-in">
+            <div className="w-20 h-20 mx-auto rounded-full bg-green-100 flex items-center justify-center animate-pop-in">
+              <svg className="w-12 h-12 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={3}
+                  d="M5 13l4 4L19 7"
+                  style={{ strokeDasharray: 48, strokeDashoffset: 48 }}
+                  className="animate-draw-check"
+                />
+              </svg>
+            </div>
+            <div className="space-y-1">
+              <h3 className="text-lg font-bold text-gray-900">¡Nota creada!</h3>
+              {notaCreada.folio && (
+                <p className="text-sm text-gray-500">
+                  Folio <span className="font-semibold text-gray-800">{notaCreada.folio}</span>
+                </p>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => { setNotaCreada(null); navigate('/notas'); }}
+              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2.5 rounded-lg text-sm transition-colors"
+            >
+              Aceptar
+            </button>
           </div>
         </div>
       )}
