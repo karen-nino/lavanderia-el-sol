@@ -67,6 +67,7 @@ export default function Empleados() {
   }, []);
 
   const filtrados = empleados.filter(e => {
+    if (e.rol === 'admin_main') return false;
     if (filtroRol !== 'todos' && e.rol !== filtroRol) return false;
     return e.nombre.toLowerCase().includes(busqueda.toLowerCase());
   });
@@ -202,10 +203,9 @@ export default function Empleados() {
               <p className="text-xs font-semibold text-gray-500 uppercase mb-2 px-1">Filtrar por rol</p>
               <div className="flex flex-col gap-1">
                 {[
-                  { v: 'todos',      label: 'Todos' },
-                  { v: 'admin_main', label: 'Admin Main' },
-                  { v: 'admin',      label: 'Admin' },
-                  { v: 'operador',   label: 'Empleado' },
+                  { v: 'todos',    label: 'Todos' },
+                  { v: 'admin',    label: 'Admin' },
+                  { v: 'operador', label: 'Empleado' },
                 ].map(opt => (
                   <button
                     key={opt.v}
