@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 
@@ -10,6 +10,37 @@ const FILTRO_LABEL = {
   FINALIZADA: 'Finalizadas',
   CANCELADA:  'Canceladas',
 };
+
+const RANGOS_FECHA = [
+  { value: 'TODAS',     label: 'Todas las fechas' },
+  { value: 'HOY',       label: 'Hoy' },
+  { value: 'AYER',      label: 'Ayer' },
+  { value: 'ULTIMOS_7', label: 'Últimos 7 días' },
+  { value: 'ESTE_MES',  label: 'Este mes' },
+];
+
+function calcularRangoFecha(rango) {
+  if (rango === 'TODAS') return null;
+  const ahora = new Date();
+  const hoyInicio = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
+  const manana = new Date(hoyInicio); manana.setDate(manana.getDate() + 1);
+  switch (rango) {
+    case 'HOY':
+      return { desde: hoyInicio, hasta: manana };
+    case 'AYER': {
+      const ayer = new Date(hoyInicio); ayer.setDate(ayer.getDate() - 1);
+      return { desde: ayer, hasta: hoyInicio };
+    }
+    case 'ULTIMOS_7': {
+      const desde = new Date(hoyInicio); desde.setDate(desde.getDate() - 6);
+      return { desde, hasta: manana };
+    }
+    case 'ESTE_MES':
+      return { desde: new Date(ahora.getFullYear(), ahora.getMonth(), 1), hasta: manana };
+    default:
+      return null;
+  }
+}
 
 const BADGE_ESTADO = {
   EN_PROCESO: { label: 'En Proceso', cls: 'bg-blue-100 text-blue-800'       },
@@ -49,6 +80,7 @@ export default function Notas() {
 
   const [notas,             setNotas]             = useState([]);
   const [filtro,            setFiltro]            = useState('TODOS');
+  const [rangoFecha,        setRangoFecha]        = useState('TODAS');
   const [busqueda,          setBusqueda]          = useState('');
   const [loading,           setLoading]           = useState(true);
   const [error,             setError]             = useState('');
@@ -61,11 +93,16 @@ export default function Notas() {
   }, []);
 
   const q = busqueda.trim().toLowerCase();
+  const rango = useMemo(() => calcularRangoFecha(rangoFecha), [rangoFecha]);
   const filtradas = notas.filter(n => {
     if (filtro === 'DEBE') {
       if (n.estado_pago !== 'DEBE') return false;
     } else if (filtro !== 'TODOS' && n.estado !== filtro) {
       return false;
+    }
+    if (rango) {
+      const fecha = new Date(n.created_at);
+      if (fecha < rango.desde || fecha >= rango.hasta) return false;
     }
     if (!q) return true;
     const folio    = (n.folio ?? `#${n.id}`).toLowerCase();
@@ -127,6 +164,19 @@ export default function Notas() {
             {FILTRO_LABEL[e] ?? BADGE_ESTADO[e]?.label}
           </button>
         ))}
+      </div>
+
+      {/* Filtro de fecha */}
+      <div className="flex justify-end">
+        <select
+          value={rangoFecha}
+          onChange={e => setRangoFecha(e.target.value)}
+          className="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
+        >
+          {RANGOS_FECHA.map(r => (
+            <option key={r.value} value={r.value}>{r.label}</option>
+          ))}
+        </select>
       </div>
 
       {loading && (
