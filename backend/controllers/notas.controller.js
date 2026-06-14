@@ -161,19 +161,31 @@ export const createNota = async (req, res) => {
   const ajusteNum      = Number(ajuste)         || 0;
   const cantidadCargas = Number(cantidad_cargas) || 1;
 
-  // Leer precio desde ajustes si no se envió en el body
+  // Leer precio desde ajustes si no se envió en el body.
+  // El precio depende del tipo de máquina: jumbo o mediana (default).
   let precioBaseNum = precio_base != null ? Number(precio_base) : null;
-  if (modalidad === 'AUTOSERVICIO' && precioBaseNum === null) {
+  if ((modalidad === 'AUTOSERVICIO' || modalidad === 'POR_ENCARGO') && precioBaseNum === null) {
+    let tipoMaquina = null;
+    if (maquina_id) {
+      const { rows: maq } = await pool.query('SELECT tipo FROM maquinas WHERE id = $1', [maquina_id]);
+      tipoMaquina = maq[0]?.tipo ?? null;
+    }
     const { rows: cfg } = await pool.query(
-      'SELECT precio_autoservicio FROM ajustes WHERE id = 1'
+      'SELECT precio_carga_mediana, precio_carga_jumbo FROM ajustes WHERE id = 1'
     );
-    precioBaseNum = cfg.length > 0 ? Number(cfg[0].precio_autoservicio) : 70;
+    if (cfg.length > 0) {
+      precioBaseNum = tipoMaquina === 'lavadora_jumbo'
+        ? Number(cfg[0].precio_carga_jumbo)
+        : Number(cfg[0].precio_carga_mediana);
+    } else {
+      precioBaseNum = 70;
+    }
   }
 
-  // Para AUTOSERVICIO: precio_total = (cargas × precio_base) + ajuste
+  // AUTOSERVICIO y POR_ENCARGO: precio_total = (cargas × precio_base) + ajuste
   // Los productos se suman después de insertarlos en nota_productos
   let precioFinal;
-  if (modalidad === 'AUTOSERVICIO') {
+  if (modalidad === 'AUTOSERVICIO' || modalidad === 'POR_ENCARGO') {
     precioFinal = precioBaseNum != null
       ? cantidadCargas * precioBaseNum + ajusteNum
       : (precio_total ? Number(precio_total) : null);
@@ -290,14 +302,13 @@ export const createNota = async (req, res) => {
       const { rows: totalRows } = await client.query(
         `UPDATE notas n
            SET precio_total = (
-             SELECT (n2.cantidad_cargas * c.precio_autoservicio)
+             SELECT (n2.cantidad_cargas * COALESCE(n2.precio_base, 0))
                   + COALESCE(SUM(np.cantidad * np.precio_unitario), 0)
                   + n2.ajuste
              FROM notas n2
-             CROSS JOIN ajustes c
              LEFT JOIN nota_productos np ON np.nota_id = n2.id
-             WHERE n2.id = $1 AND c.id = 1
-             GROUP BY n2.id, n2.cantidad_cargas, c.precio_autoservicio, n2.ajuste
+             WHERE n2.id = $1
+             GROUP BY n2.id, n2.cantidad_cargas, n2.precio_base, n2.ajuste
            )
          WHERE n.id = $1
          RETURNING precio_total`,
@@ -432,7 +443,7 @@ export const updateNota = async (req, res) => {
 
     const subtotalProductos = productosInsertados.reduce((s, p) => s + Number(p.subtotal), 0);
     let precioFinal;
-    if (actual.modalidad === 'AUTOSERVICIO') {
+    if (actual.modalidad === 'AUTOSERVICIO' || actual.modalidad === 'POR_ENCARGO') {
       precioFinal = precioBaseNum != null
         ? cantidadCargasNum * precioBaseNum + ajusteNum + subtotalProductos
         : null;
@@ -691,14 +702,13 @@ export const addProductoToNota = async (req, res) => {
     await client.query(
       `UPDATE notas n
          SET precio_total = (
-           SELECT (n2.cantidad_cargas * c.precio_autoservicio)
+           SELECT (n2.cantidad_cargas * COALESCE(n2.precio_base, 0))
                 + COALESCE(SUM(np.cantidad * np.precio_unitario), 0)
                 + n2.ajuste
            FROM notas n2
-           CROSS JOIN ajustes c
            LEFT JOIN nota_productos np ON np.nota_id = n2.id
-           WHERE n2.id = $1 AND c.id = 1
-           GROUP BY n2.id, n2.cantidad_cargas, c.precio_autoservicio, n2.ajuste
+           WHERE n2.id = $1
+           GROUP BY n2.id, n2.cantidad_cargas, n2.precio_base, n2.ajuste
          )
        WHERE n.id = $1`,
       [id]
@@ -746,14 +756,13 @@ export const removeProductoFromNota = async (req, res) => {
     await client.query(
       `UPDATE notas n
          SET precio_total = (
-           SELECT (n2.cantidad_cargas * c.precio_autoservicio)
+           SELECT (n2.cantidad_cargas * COALESCE(n2.precio_base, 0))
                 + COALESCE(SUM(np.cantidad * np.precio_unitario), 0)
                 + n2.ajuste
            FROM notas n2
-           CROSS JOIN ajustes c
            LEFT JOIN nota_productos np ON np.nota_id = n2.id
-           WHERE n2.id = $1 AND c.id = 1
-           GROUP BY n2.id, n2.cantidad_cargas, c.precio_autoservicio, n2.ajuste
+           WHERE n2.id = $1
+           GROUP BY n2.id, n2.cantidad_cargas, n2.precio_base, n2.ajuste
          )
        WHERE n.id = $1`,
       [id]

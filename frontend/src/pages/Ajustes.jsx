@@ -218,7 +218,8 @@ export default function Ajustes() {
       const [updatedPerfil, updatedConfig] = await Promise.all([
         api.patch('/auth/me', perfilPayload),
         api.patch('/ajustes', {
-          precio_autoservicio:  Number(config.precio_autoservicio),
+          precio_carga_mediana: Number(config.precio_carga_mediana),
+          precio_carga_jumbo:   Number(config.precio_carga_jumbo),
           nombre_negocio:       config.nombre_negocio,
           direccion:            config.direccion ?? '',
           telefono:             config.telefono  ?? '',
@@ -243,7 +244,8 @@ export default function Ajustes() {
     setMensaje(null);
     try {
       const updated = await api.patch('/ajustes', {
-        precio_autoservicio:  Number(config.precio_autoservicio),
+        precio_carga_mediana: Number(config.precio_carga_mediana),
+        precio_carga_jumbo:   Number(config.precio_carga_jumbo),
         nombre_negocio:       config.nombre_negocio,
         direccion:            config.direccion ?? '',
         telefono:             config.telefono  ?? '',
@@ -356,17 +358,33 @@ export default function Ajustes() {
   );
 
   const seccionPreciosDesktop = (
-    <Section titulo="Precios base de servicios">
-      <Field label="Precio por carga — Autoservicio">
+    <Section titulo="Precios por carga">
+      <Field label="Mediana" hint="Aplica a lavadoras medianas en autoservicio y por encargo.">
         <div className="flex items-center gap-2">
           <span className="text-sm text-gray-500 flex-shrink-0">$</span>
           <input
             type="number"
-            name="precio_autoservicio"
+            name="precio_carga_mediana"
             min="0"
             step="0.01"
             required
-            value={config.precio_autoservicio ?? ''}
+            value={config.precio_carga_mediana ?? ''}
+            onChange={handleChange}
+            className={INPUT_CLS}
+          />
+          <span className="text-sm text-gray-500 flex-shrink-0">MXN</span>
+        </div>
+      </Field>
+      <Field label="Jumbo" hint="Aplica a lavadoras jumbo en autoservicio y por encargo.">
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-gray-500 flex-shrink-0">$</span>
+          <input
+            type="number"
+            name="precio_carga_jumbo"
+            min="0"
+            step="0.01"
+            required
+            value={config.precio_carga_jumbo ?? ''}
             onChange={handleChange}
             className={INPUT_CLS}
           />
@@ -586,22 +604,40 @@ export default function Ajustes() {
   );
 
   const seccionPreciosMobile = (
-    <MobileField label="Precio por carga — Autoservicio">
-      <div className="flex items-center gap-2">
-        <span className="text-base text-grey flex-shrink-0">$</span>
-        <input
-          type="number"
-          name="precio_autoservicio"
-          min="0"
-          step="0.01"
-          required
-          value={config.precio_autoservicio ?? ''}
-          onChange={handleChange}
-          className={MOBILE_INPUT_CLS}
-        />
-        <span className="text-base text-grey flex-shrink-0">MXN</span>
-      </div>
-    </MobileField>
+    <div className="space-y-5">
+      <MobileField label="Precio por carga — Mediana" hint="Aplica a lavadoras medianas (autoservicio y por encargo).">
+        <div className="flex items-center gap-2">
+          <span className="text-base text-grey flex-shrink-0">$</span>
+          <input
+            type="number"
+            name="precio_carga_mediana"
+            min="0"
+            step="0.01"
+            required
+            value={config.precio_carga_mediana ?? ''}
+            onChange={handleChange}
+            className={MOBILE_INPUT_CLS}
+          />
+          <span className="text-base text-grey flex-shrink-0">MXN</span>
+        </div>
+      </MobileField>
+      <MobileField label="Precio por carga — Jumbo" hint="Aplica a lavadoras jumbo (autoservicio y por encargo).">
+        <div className="flex items-center gap-2">
+          <span className="text-base text-grey flex-shrink-0">$</span>
+          <input
+            type="number"
+            name="precio_carga_jumbo"
+            min="0"
+            step="0.01"
+            required
+            value={config.precio_carga_jumbo ?? ''}
+            onChange={handleChange}
+            className={MOBILE_INPUT_CLS}
+          />
+          <span className="text-base text-grey flex-shrink-0">MXN</span>
+        </div>
+      </MobileField>
+    </div>
   );
 
   const seccionAlertasMobile = (

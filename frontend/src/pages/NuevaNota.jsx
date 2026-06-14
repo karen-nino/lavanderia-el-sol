@@ -38,7 +38,7 @@ const TAMANO_LABEL = Object.fromEntries(TAMANOS.map(t => [t.v, t.label]));
 const ENCARGO_INIT = {
   cliente_id:             '',
   tamano:                 '',
-  precio_base:            '',
+  cantidad_cargas:        '1',
   ajuste:                 '0',
   pago_anticipado:        '',
   fecha_entrega:          '',
@@ -70,7 +70,7 @@ export default function NuevaNota() {
   const esEdicion = Boolean(id);
   const [maquinas,          setMaquinas]          = useState([]);
   const [productosCatalogo, setProductosCatalogo] = useState([]);
-  const [precioCarga,       setPrecioCarga]       = useState(70);
+  const [precios,           setPrecios]           = useState({ mediana: 70, jumbo: 70 });
   const [loadingData,       setLoadingData]       = useState(true);
   const [form,              setForm]              = useState(FORM_INIT);
   const [productosLista,    setProductosLista]    = useState([]);
@@ -141,8 +141,12 @@ export default function NuevaNota() {
     return () => document.removeEventListener('mousedown', onMouseDown);
   }, [maquinaEncargoOpen]);
 
+  const precioPorTipo = (tipo) => tipo === 'lavadora_jumbo' ? precios.jumbo : precios.mediana;
+  const maquinaAutoservicio = maquinas.find(m => String(m.id) === String(form.maquina_id));
+  const precioCargaAutoservicio = precioPorTipo(maquinaAutoservicio?.tipo);
+
   const ajusteNum      = Number(form.ajuste) || 0;
-  const subtotalCargas = (Number(form.cantidad_cargas) || 1) * precioCarga;
+  const subtotalCargas = (Number(form.cantidad_cargas) || 1) * precioCargaAutoservicio;
   const subtotalProductos = productosLista.reduce((sum, p) => {
     const prod = productosCatalogo.find(x => String(x.id) === String(p.producto_id));
     return sum + (prod ? (Number(prod.precio_unitario) || 0) * (Number(p.cantidad) || 0) : 0);
@@ -169,7 +173,12 @@ export default function NuevaNota() {
           : m.filter(maq => maq.estado === 'disponible');
         setMaquinas(maquinasFiltradas);
         setProductosCatalogo(prod);
-        if (cfg?.precio_autoservicio) setPrecioCarga(Number(cfg.precio_autoservicio));
+        if (cfg) {
+          setPrecios({
+            mediana: cfg.precio_carga_mediana != null ? Number(cfg.precio_carga_mediana) : 70,
+            jumbo:   cfg.precio_carga_jumbo   != null ? Number(cfg.precio_carga_jumbo)   : 70,
+          });
+        }
         setClientes(cli);
 
         if (esEdicion && nota) {
@@ -183,7 +192,7 @@ export default function NuevaNota() {
             setEncargoForm({
               cliente_id:             nota.cliente_id     ? String(nota.cliente_id) : '',
               tamano:                 nota.tamano         ?? '',
-              precio_base:            nota.precio_base    != null ? String(nota.precio_base) : '',
+              cantidad_cargas:        nota.cantidad_cargas != null ? String(nota.cantidad_cargas) : '1',
               ajuste:                 nota.ajuste         != null ? String(nota.ajuste)      : '0',
               pago_anticipado:        nota.estado_pago === 'PAGADO' ? 'SI' : 'NO',
               fecha_entrega:          nota.fecha_entrega  ? String(nota.fecha_entrega).slice(0, 10) : '',
@@ -265,13 +274,16 @@ export default function NuevaNota() {
     }
   };
 
-  const encargoPrecioBase     = Number(encargoForm.precio_base) || 0;
+  const maquinaEncargo        = maquinas.find(m => String(m.id) === String(encargoForm.maquina_id));
+  const precioCargaEncargo    = precioPorTipo(maquinaEncargo?.tipo);
+  const encargoCargas         = Number(encargoForm.cantidad_cargas) || 1;
+  const encargoSubtotalCargas = encargoCargas * precioCargaEncargo;
   const encargoAjuste         = Number(encargoForm.ajuste)      || 0;
   const encargoSubtotalProductos = encargoProductos.reduce((sum, p) => {
     const prod = productosCatalogo.find(x => String(x.id) === String(p.producto_id));
     return sum + (prod ? (Number(prod.precio_unitario) || 0) * (Number(p.cantidad) || 0) : 0);
   }, 0);
-  const encargoPrecioTotal    = encargoPrecioBase + encargoAjuste + encargoSubtotalProductos;
+  const encargoPrecioTotal    = encargoSubtotalCargas + encargoAjuste + encargoSubtotalProductos;
   const clienteSeleccionado   = clientes.find(c => String(c.id) === String(encargoForm.cliente_id));
   const sinAcentos = (s) => (s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   const clienteSearchQ    = sinAcentos(clienteSearch.trim());
@@ -287,16 +299,15 @@ export default function NuevaNota() {
     if (encargoStep === 1) return !!encargoForm.cliente_id;
     if (encargoStep === 2) return !!encargoForm.tamano;
     if (encargoStep === 3) {
-      return encargoForm.precio_base !== '' &&
-        !Number.isNaN(Number(encargoForm.precio_base)) &&
-        Number(encargoForm.precio_base) >= 0;
-    }
-    if (encargoStep === 4) return !!encargoForm.pago_anticipado;
-    if (encargoStep === 6) {
       if (esEdicion) return true;
       if (!encargoForm.maquina_id) return true;
       return !!encargoForm.activar_inmediatamente;
     }
+    if (encargoStep === 4) {
+      const c = Number(encargoForm.cantidad_cargas);
+      return !Number.isNaN(c) && c >= 1;
+    }
+    if (encargoStep === 5) return !!encargoForm.pago_anticipado;
     return true;
   })();
 
@@ -305,18 +316,19 @@ export default function NuevaNota() {
     setEncargoLoading(true);
     try {
       const payload = {
-        modalidad:     'POR_ENCARGO',
-        cliente_id:    Number(encargoForm.cliente_id),
-        tamano:        encargoForm.tamano,
-        precio_base:   encargoPrecioBase,
-        ajuste:        encargoAjuste,
-        estado_pago:   encargoForm.pago_anticipado === 'SI' ? 'PAGADO' : 'DEBE',
-        fecha_entrega:  encargoForm.fecha_entrega  || undefined,
-        tiempo_entrega: encargoForm.tiempo_entrega || undefined,
-        notas:          encargoForm.notas          || undefined,
-        maquina_id:     encargoForm.maquina_id ? Number(encargoForm.maquina_id) : undefined,
-        sucursal:      'lopez_cotilla',
-        productos:     encargoProductos
+        modalidad:       'POR_ENCARGO',
+        cliente_id:      Number(encargoForm.cliente_id),
+        tamano:          encargoForm.tamano,
+        cantidad_cargas: encargoCargas,
+        precio_base:     precioCargaEncargo,
+        ajuste:          encargoAjuste,
+        estado_pago:     encargoForm.pago_anticipado === 'SI' ? 'PAGADO' : 'DEBE',
+        fecha_entrega:   encargoForm.fecha_entrega  || undefined,
+        tiempo_entrega:  encargoForm.tiempo_entrega || undefined,
+        notas:           encargoForm.notas          || undefined,
+        maquina_id:      encargoForm.maquina_id ? Number(encargoForm.maquina_id) : undefined,
+        sucursal:        'lopez_cotilla',
+        productos:       encargoProductos
           .filter(p => p.producto_id && p.cantidad)
           .map(p => ({ producto_id: Number(p.producto_id), cantidad: Number(p.cantidad) })),
       };
@@ -354,7 +366,7 @@ export default function NuevaNota() {
       notas:           form.notas || undefined,
       maquina_id:      form.maquina_id ? Number(form.maquina_id) : undefined,
       cantidad_cargas: cargas,
-      precio_base:     precioCarga,
+      precio_base:     precioCargaAutoservicio,
       ajuste:          ajusteNum,
       productos:       productosLista
         .filter(p => p.producto_id && p.cantidad)
@@ -598,21 +610,46 @@ export default function NuevaNota() {
               </div>
             )}
 
-            {/* Paso 3 — Precio base + Ajuste */}
-            {encargoStep === 3 && (
+            {/* Paso 4 — Cantidad de cargas + Ajuste */}
+            {encargoStep === 4 && (
               <div className="space-y-5">
-                <h2 className="text-base font-semibold text-gray-900">Precio</h2>
+                <h2 className="text-base font-semibold text-gray-900">Cargas</h2>
                 <div>
                   <label className={LABEL_CLS}>
-                    Precio base <span className="text-red-500">*</span>
+                    Cantidad de cargas <span className="text-red-500">*</span>
                   </label>
-                  <input
-                    type="number" name="precio_base" min="0" step="0.01"
-                    value={encargoForm.precio_base} onChange={handleEncargoChange}
-                    placeholder="0.00"
-                    className={INPUT_CLS}
-                  />
-                  <p className="text-xs text-gray-400 mt-1">Precio del servicio en pesos.</p>
+                  <p className="text-xs text-gray-400 mb-1.5">
+                    Precio base por carga: ${precioCargaEncargo.toFixed(2)} MXN
+                    {maquinaEncargo && ` (${maquinaEncargo.tipo === 'lavadora_jumbo' ? 'Jumbo' : 'Mediana'})`}
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number" name="cantidad_cargas" min="1" step="1" required
+                      value={encargoForm.cantidad_cargas} onChange={handleEncargoChange}
+                      placeholder="1"
+                      className={`${INPUT_CLS} text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setEncargoForm(f => ({ ...f, cantidad_cargas: String(Math.max(1, (Number(f.cantidad_cargas) || 1) - 1)) }))}
+                      disabled={(Number(encargoForm.cantidad_cargas) || 1) <= 1}
+                      aria-label="Disminuir cargas"
+                      className="flex-shrink-0 w-14 py-3.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-xl font-semibold hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    >
+                      −
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEncargoForm(f => ({ ...f, cantidad_cargas: String((Number(f.cantidad_cargas) || 0) + 1) }))}
+                      aria-label="Aumentar cargas"
+                      className="flex-shrink-0 w-14 py-3.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-xl font-semibold hover:bg-gray-50 transition-colors"
+                    >
+                      +
+                    </button>
+                  </div>
+                  <p className="text-xs text-indigo-600 mt-1 font-medium">
+                    Subtotal cargas: ${encargoSubtotalCargas.toFixed(2)}
+                  </p>
                 </div>
                 <div>
                   <label className={LABEL_CLS}>Ajuste ($)</label>
@@ -627,8 +664,8 @@ export default function NuevaNota() {
               </div>
             )}
 
-            {/* Paso 4 — Pago Anticipado */}
-            {encargoStep === 4 && (
+            {/* Paso 5 — Pago Anticipado */}
+            {encargoStep === 5 && (
               <div className="space-y-4">
                 <h2 className="text-base font-semibold text-gray-900">Pago Anticipado</h2>
                 <div className="grid grid-cols-2 gap-3">
@@ -656,8 +693,8 @@ export default function NuevaNota() {
               </div>
             )}
 
-            {/* Paso 5 — Fecha de entrega + Instrucciones */}
-            {encargoStep === 5 && (
+            {/* Paso 6 — Fecha de entrega + Instrucciones */}
+            {encargoStep === 6 && (
               <div className="space-y-5">
                 <h2 className="text-base font-semibold text-gray-900">Entrega</h2>
                 <div>
@@ -705,8 +742,8 @@ export default function NuevaNota() {
               </div>
             )}
 
-            {/* Paso 6 — Máquina */}
-            {encargoStep === 6 && (
+            {/* Paso 3 — Máquina */}
+            {encargoStep === 3 && (
               <div className="space-y-5">
                 <h2 className="text-base font-semibold text-gray-900">Máquina</h2>
 
@@ -996,8 +1033,8 @@ export default function NuevaNota() {
                   </div>
                   <div className="space-y-1 mb-2 text-sm text-indigo-600 border-t border-indigo-200 pt-3">
                     <div className="flex justify-between">
-                      <span>Precio base</span>
-                      <span>${encargoPrecioBase.toFixed(2)}</span>
+                      <span>Cargas ({encargoCargas} × ${precioCargaEncargo.toFixed(2)})</span>
+                      <span>${encargoSubtotalCargas.toFixed(2)}</span>
                     </div>
                     {encargoAjuste !== 0 && (
                       <div className="flex justify-between">
@@ -1223,7 +1260,7 @@ export default function NuevaNota() {
             <label className={LABEL_CLS}>
               Cantidad de cargas <span className="text-red-500">*</span>
             </label>
-            {/* <p className="text-xs text-gray-400 mb-1.5">Precio base por carga: ${precioCarga.toFixed(2)} MXN</p> */}
+            {/* <p className="text-xs text-gray-400 mb-1.5">Precio base por carga: ${precioCargaAutoservicio.toFixed(2)} MXN</p> */}
             <div className="flex items-center gap-2">
               <input
                 type="number" name="cantidad_cargas" min="1" step="1" required
@@ -1411,7 +1448,7 @@ export default function NuevaNota() {
               </div>
               <div className="space-y-1 mb-2 text-sm text-indigo-600 border-t border-indigo-200 pt-3">
                 <div className="flex justify-between">
-                  <span>Cargas ({form.cantidad_cargas || 1} × ${precioCarga.toFixed(2)})</span>
+                  <span>Cargas ({form.cantidad_cargas || 1} × ${precioCargaAutoservicio.toFixed(2)})</span>
                   <span>${subtotalCargas.toFixed(2)}</span>
                 </div>
                 {ajusteNum !== 0 && (

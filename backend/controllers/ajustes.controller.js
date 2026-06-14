@@ -51,13 +51,21 @@ export const updateAjustes = async (req, res) => {
     return res.status(403).json({ message: 'Solo administradores pueden modificar los ajustes.' });
   }
 
-  const { precio_autoservicio, nombre_negocio, direccion, telefono, stock_minimo_global } = req.body;
+  const {
+    precio_carga_mediana,
+    precio_carga_jumbo,
+    nombre_negocio,
+    direccion,
+    telefono,
+    stock_minimo_global,
+  } = req.body;
 
   const updates = [];
   const values  = [];
   let i = 1;
 
-  if (precio_autoservicio  !== undefined) { updates.push(`precio_autoservicio = $${i++}`);  values.push(precio_autoservicio); }
+  if (precio_carga_mediana !== undefined) { updates.push(`precio_carga_mediana = $${i++}`); values.push(precio_carga_mediana); }
+  if (precio_carga_jumbo   !== undefined) { updates.push(`precio_carga_jumbo = $${i++}`);   values.push(precio_carga_jumbo); }
   if (nombre_negocio       !== undefined) { updates.push(`nombre_negocio = $${i++}`);       values.push(nombre_negocio); }
   if (direccion            !== undefined) { updates.push(`direccion = $${i++}`);             values.push(direccion); }
   if (telefono             !== undefined) { updates.push(`telefono = $${i++}`);              values.push(telefono); }
