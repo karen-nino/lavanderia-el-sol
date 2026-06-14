@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import KpiCard from '../components/KpiCard';
 import MachineCard from '../components/MachineCard';
@@ -41,6 +41,7 @@ function formatMMSS(totalSegundos) {
 }
 
 export default function Dashboard() {
+  const navigate = useNavigate();
   const [notas, setNotas]       = useState([]);
   const [maquinas, setMaquinas] = useState([]);
   const [tiempos, setTiempos]   = useState({ mediana: 30, jumbo: 45 });
@@ -207,11 +208,16 @@ export default function Dashboard() {
                     tiempo_restante: inicio ? formatMMSS(restanteSeg) : '—:—',
                     necesita_procesar: expirado,
                   };
+                  const notaRel = notas
+                    .filter(n => String(n.maquina_id) === String(m.id)
+                              && n.estado === 'EN_PROCESO')
+                    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
                   return (
                     <MachineCard
                       key={m.id}
                       maquina={maquinaAumentada}
                       onProcesar={() => setConfirmProcesar(maquinaAumentada)}
+                      onClick={notaRel ? () => navigate(`/notas/${notaRel.id}`) : undefined}
                     />
                   );
                 })}
