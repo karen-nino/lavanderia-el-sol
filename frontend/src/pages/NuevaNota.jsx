@@ -531,45 +531,72 @@ export default function NuevaNota() {
                   />
                 </div>
 
-                <div className="border border-gray-200 rounded-lg bg-white max-h-72 overflow-y-auto divide-y divide-gray-100">
-                  {clientesFiltrados.length === 0 ? (
-                    <div className="px-4 py-8 text-center text-sm text-gray-400">
-                      {clienteSearchQ ? 'No se encontraron clientes' : 'No hay clientes registrados'}
+                {clienteSeleccionado && !clienteSearchQ && (
+                  <div className="flex items-center justify-between gap-3 bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-3">
+                    <div>
+                      <p className="text-xs font-medium text-indigo-500 uppercase tracking-wide">Cliente seleccionado</p>
+                      <p className="font-medium text-gray-900">
+                        {`${clienteSeleccionado.nombre}${clienteSeleccionado.apellido ? ' ' + clienteSeleccionado.apellido : ''}`}
+                      </p>
+                      {clienteSeleccionado.telefono && (
+                        <p className="text-sm text-gray-500">{clienteSeleccionado.telefono}</p>
+                      )}
                     </div>
-                  ) : (
-                    clientesFiltrados.map(c => {
-                      const selected = String(encargoForm.cliente_id) === String(c.id);
-                      return (
-                        <button
-                          key={c.id}
-                          type="button"
-                          onClick={() => setEncargoForm(f => ({ ...f, cliente_id: String(c.id) }))}
-                          className={`w-full px-4 py-3 flex items-center justify-between text-left transition-colors ${
-                            selected ? 'bg-indigo-50' : 'hover:bg-gray-50'
-                          }`}
-                        >
-                          <div>
-                            <p className="font-medium text-gray-900">
-                              {`${c.nombre}${c.apellido ? ' ' + c.apellido : ''}`}
-                            </p>
-                            {c.telefono && (
-                              <p className="text-sm text-gray-500">{c.telefono}</p>
-                            )}
-                          </div>
-                          <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
-                            selected ? 'border-indigo-600 bg-indigo-600' : 'border-gray-300'
-                          }`}>
-                            {selected && (
-                              <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                              </svg>
-                            )}
-                          </span>
-                        </button>
-                      );
-                    })
-                  )}
-                </div>
+                    <button
+                      type="button"
+                      onClick={() => setEncargoForm(f => ({ ...f, cliente_id: '' }))}
+                      aria-label="Quitar cliente"
+                      className="flex-shrink-0 px-3 py-1.5 text-sm text-indigo-700 hover:bg-indigo-100 rounded-md transition-colors"
+                    >
+                      Cambiar
+                    </button>
+                  </div>
+                )}
+
+                {clienteSearchQ && (
+                  <div className="border border-gray-200 rounded-lg bg-white max-h-72 overflow-y-auto divide-y divide-gray-100">
+                    {clientesFiltrados.length === 0 ? (
+                      <div className="px-4 py-8 text-center text-sm text-gray-400">
+                        No se encontraron clientes
+                      </div>
+                    ) : (
+                      clientesFiltrados.map(c => {
+                        const selected = String(encargoForm.cliente_id) === String(c.id);
+                        return (
+                          <button
+                            key={c.id}
+                            type="button"
+                            onClick={() => {
+                              setEncargoForm(f => ({ ...f, cliente_id: String(c.id) }));
+                              setClienteSearch('');
+                            }}
+                            className={`w-full px-4 py-3 flex items-center justify-between text-left transition-colors ${
+                              selected ? 'bg-indigo-50' : 'hover:bg-gray-50'
+                            }`}
+                          >
+                            <div>
+                              <p className="font-medium text-gray-900">
+                                {`${c.nombre}${c.apellido ? ' ' + c.apellido : ''}`}
+                              </p>
+                              {c.telefono && (
+                                <p className="text-sm text-gray-500">{c.telefono}</p>
+                              )}
+                            </div>
+                            <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
+                              selected ? 'border-indigo-600 bg-indigo-600' : 'border-gray-300'
+                            }`}>
+                              {selected && (
+                                <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                </svg>
+                              )}
+                            </span>
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+                )}
 
                 <button
                   type="button"
