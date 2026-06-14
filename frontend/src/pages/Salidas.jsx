@@ -6,6 +6,18 @@ function fmtMonto(n) {
   return n != null ? `$${Number(n).toFixed(2)}` : '—';
 }
 
+const BADGE_MAQUINA_ESTADO = {
+  disponible:    { label: 'Disponible',    cls: 'bg-green-100 text-green-700', dot: 'bg-green-500' },
+  en_uso:        { label: 'En uso',        cls: 'bg-blue-100 text-blue-700',   dot: 'bg-blue-500'  },
+  mantenimiento: { label: 'Mantenimiento', cls: 'bg-red-100 text-red-700',     dot: 'bg-red-500'   },
+};
+
+const MAQUINA_TIPO_LABEL = {
+  lavadora_mediana: 'Mediana',
+  lavadora_jumbo:   'Jumbo',
+  secadora:         'Secadora',
+};
+
 export default function Salidas() {
   const { id }   = useParams();
   const navigate = useNavigate();
@@ -18,6 +30,7 @@ export default function Salidas() {
   const [loadingMaquina,   setLoadingMaquina]   = useState(false);
   const [loadingProducto,  setLoadingProducto]  = useState(null); // id del producto en proceso
   const [errorAccion,      setErrorAccion]      = useState('');
+  const [confirmDetener,   setConfirmDetener]   = useState(false);
 
   useEffect(() => { cargarDatos(); }, [id]);
 
@@ -47,6 +60,22 @@ export default function Salidas() {
       await cargarDatos();
     } catch (err) {
       setErrorAccion(err.message);
+    } finally {
+      setLoadingMaquina(false);
+    }
+  }
+
+  async function detenerCiclo() {
+    if (!nota?.maquina_id) return;
+    setLoadingMaquina(true);
+    setErrorAccion('');
+    try {
+      await api.patch(`/maquinas/${nota.maquina_id}/estado`, { estado: 'disponible' });
+      setConfirmDetener(false);
+      await cargarDatos();
+    } catch (err) {
+      setErrorAccion(err.message);
+      setConfirmDetener(false);
     } finally {
       setLoadingMaquina(false);
     }
@@ -139,30 +168,42 @@ export default function Salidas() {
           <h2 className="text-sm font-semibold text-gray-700">Máquina asignada</h2>
         </div>
         <div className="px-4 py-4 flex items-center justify-between gap-4">
-          <div>
-            {maquina
-              ? <p className="text-sm font-medium text-gray-800">{maquina}</p>
-              : <p className="text-sm text-gray-400 italic">Sin máquina asignada</p>}
-            {nota?.maquina_estado && (
-              <span className={`mt-1 inline-block text-xs font-semibold px-2.5 py-0.5 rounded-full ${
-                nota.maquina_estado === 'en_uso'
-                  ? 'bg-blue-100 text-blue-800'
-                  : 'bg-gray-100 text-gray-600'
-              }`}>
-                {nota.maquina_estado === 'en_uso' ? 'En uso' : nota.maquina_estado}
-              </span>
+          <div className="min-w-0">
+            {maquina ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-sm font-medium text-gray-800">{maquina}</span>
+                {MAQUINA_TIPO_LABEL[nota.maquina_tipo] && (
+                  <span className="text-xs text-gray-500">— {MAQUINA_TIPO_LABEL[nota.maquina_tipo]}</span>
+                )}
+                {(() => {
+                  const cfg = BADGE_MAQUINA_ESTADO[nota.maquina_estado];
+                  if (!cfg) return null;
+                  return (
+                    <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${cfg.cls}`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot} ${nota.maquina_estado === 'en_uso' ? 'animate-pulse' : ''}`} />
+                      {cfg.label}
+                    </span>
+                  );
+                })()}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-400 italic">Sin máquina asignada</p>
             )}
           </div>
           {nota?.maquina_id && (
             maquinaEnUso ? (
-              <span className="text-xs font-semibold px-3 py-2 bg-blue-100 text-blue-700 rounded-lg">
-                Máquina activa
-              </span>
+              <button
+                onClick={() => setConfirmDetener(true)}
+                disabled={loadingMaquina}
+                className="flex-shrink-0 px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
+              >
+                Detener Ciclo
+              </button>
             ) : (
               <button
                 onClick={activarMaquina}
                 disabled={loadingMaquina}
-                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
+                className="flex-shrink-0 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
               >
                 {loadingMaquina ? 'Activando...' : 'Activar máquina'}
               </button>
@@ -258,6 +299,36 @@ export default function Salidas() {
           </div>
         )}
       </div>
+
+      {/* Modal confirmar detener ciclo */}
+      {confirmDetener && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+            <h3 className="text-base font-bold text-gray-900">Detener ciclo</h3>
+            <p className="text-sm text-gray-500">
+              ¿Detener el ciclo de <span className="font-semibold text-gray-800">{nota.maquina_nombre}</span>? La máquina pasará a disponible y se reiniciará su temporizador.
+            </p>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setConfirmDetener(false)}
+                disabled={loadingMaquina}
+                className="flex-1 border border-gray-300 text-gray-700 font-medium py-2.5 rounded-lg text-sm hover:bg-gray-50 disabled:opacity-60 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={detenerCiclo}
+                disabled={loadingMaquina}
+                className="flex-1 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white font-medium py-2.5 rounded-lg text-sm transition-colors"
+              >
+                {loadingMaquina ? 'Deteniendo...' : 'Confirmar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
