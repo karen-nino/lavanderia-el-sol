@@ -470,7 +470,7 @@ export default function Layout() {
   ];
 
   return (
-    <div className="flex h-full bg-light-blue/30 overflow-hidden">
+    <div className="flex h-full overflow-hidden">
       <DesktopSidebar items={sidebarItems} onMenu={() => setMenuOpen(true)} />
 
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
