@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '../lib/api';
 
 const ESTADO_CFG = {
@@ -54,6 +54,9 @@ export default function Maquinas() {
   const [formError, setFormError] = useState('');
   const [eliminando, setEliminando] = useState(null);
   const [filtro, setFiltro] = useState('todos');
+  const [estadoMenuId, setEstadoMenuId] = useState(null);
+  const [confirmCambio, setConfirmCambio] = useState(null);
+  const estadoMenuRef = useRef(null);
 
   useEffect(() => {
     api.get('/maquinas')
@@ -61,6 +64,17 @@ export default function Maquinas() {
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    if (estadoMenuId == null) return;
+    const onMouseDown = (e) => {
+      if (estadoMenuRef.current && !estadoMenuRef.current.contains(e.target)) {
+        setEstadoMenuId(null);
+      }
+    };
+    document.addEventListener('mousedown', onMouseDown);
+    return () => document.removeEventListener('mousedown', onMouseDown);
+  }, [estadoMenuId]);
 
   const cambiarEstado = async (id, estado) => {
     setCambiando(id);
@@ -243,29 +257,50 @@ export default function Maquinas() {
                       <p className="text-xs text-gray-400">{tipoCfg.label}</p>
                     </div>
                   </div>
-                  <span className={`flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-full flex-shrink-0 ${cfg.cls}`}>
-                    <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot} ${m.estado === 'en_uso' ? 'animate-pulse' : ''}`} />
-                    {cfg.label}
-                  </span>
+                  <div className="relative flex-shrink-0" ref={estadoMenuId === m.id ? estadoMenuRef : null}>
+                    <button
+                      type="button"
+                      onClick={() => setEstadoMenuId(prev => prev === m.id ? null : m.id)}
+                      disabled={busy}
+                      aria-haspopup="true"
+                      aria-expanded={estadoMenuId === m.id}
+                      className={`flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-full transition-opacity disabled:opacity-60 ${cfg.cls}`}
+                    >
+                      <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot} ${m.estado === 'en_uso' ? 'animate-pulse' : ''}`} />
+                      {busy ? '...' : cfg.label}
+                      <svg
+                        className={`w-3 h-3 transition-transform ${estadoMenuId === m.id ? 'rotate-180' : ''}`}
+                        fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+
+                    {estadoMenuId === m.id && (
+                      <div className="absolute right-0 mt-1 z-10 w-44 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
+                        {otrosEstados.map(([estado, c]) => (
+                          <button
+                            key={estado}
+                            type="button"
+                            disabled={busy}
+                            onClick={() => {
+                              setEstadoMenuId(null);
+                              setConfirmCambio({ maquina: m, estado });
+                            }}
+                            className="w-full flex items-center gap-2 px-3 py-2 text-left text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+                          >
+                            <span className={`w-1.5 h-1.5 rounded-full ${c.dot}`} />
+                            {c.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {m.modelo && (
                   <p className="text-xs text-gray-400 mb-3">Modelo: {m.modelo}</p>
                 )}
-
-                {/* Cambiar estado */}
-                <div className="flex gap-1.5 flex-wrap pt-2 border-t border-gray-50">
-                  {otrosEstados.map(([estado, c]) => (
-                    <button
-                      key={estado}
-                      disabled={busy}
-                      onClick={() => cambiarEstado(m.id, estado)}
-                      className={`text-xs px-2.5 py-1 rounded-lg font-medium border transition-opacity disabled:opacity-50 ${c.cls} border-current/30`}
-                    >
-                      {busy ? '...' : `→ ${c.label}`}
-                    </button>
-                  ))}
-                </div>
 
                 {/* Editar / Eliminar */}
                 <div className="flex gap-2 pt-3 mt-2 border-t border-gray-50">
@@ -391,6 +426,48 @@ export default function Maquinas() {
           </div>
         </div>
       )}
+
+      {/* Modal confirmar cambio de estado */}
+      {confirmCambio && (() => {
+        const { maquina, estado } = confirmCambio;
+        const cfgDestino = ESTADO_CFG[estado] ?? ESTADO_CFG.disponible;
+        const busy = cambiando === maquina.id;
+        return (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+              <h3 className="text-base font-bold text-gray-900">Cambiar estado</h3>
+              <p className="text-sm text-gray-500">
+                ¿Cambiar el estado de <span className="font-semibold text-gray-800">{maquina.nombre}</span> a{' '}
+                <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2 py-0.5 rounded-full ${cfgDestino.cls}`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${cfgDestino.dot}`} />
+                  {cfgDestino.label}
+                </span>?
+              </p>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setConfirmCambio(null)}
+                  disabled={busy}
+                  className="flex-1 border border-gray-300 text-gray-700 font-medium py-2.5 rounded-lg text-sm hover:bg-gray-50 disabled:opacity-60 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await cambiarEstado(maquina.id, estado);
+                    setConfirmCambio(null);
+                  }}
+                  disabled={busy}
+                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-medium py-2.5 rounded-lg text-sm transition-colors"
+                >
+                  {busy ? 'Cambiando...' : 'Confirmar'}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
