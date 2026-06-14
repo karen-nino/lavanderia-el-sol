@@ -317,7 +317,7 @@ export default function Salidas() {
                 type="button"
                 onClick={() => setConfirmDetener(false)}
                 disabled={loadingMaquina}
-                className="flex-1 border border-gray-300 text-gray-700 font-medium py-2.5 rounded-lg text-sm hover:bg-gray-50 disabled:opacity-60 transition-colors"
+                className="flex-1 border border-gray-300 text-gray-700 font-medium py-3.5 rounded-lg text-base hover:bg-gray-50 disabled:opacity-60 transition-colors"
               >
                 Cancelar
               </button>
@@ -325,7 +325,7 @@ export default function Salidas() {
                 type="button"
                 onClick={detenerCiclo}
                 disabled={loadingMaquina}
-                className="flex-1 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white font-medium py-2.5 rounded-lg text-sm transition-colors"
+                className="flex-1 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
               >
                 {loadingMaquina ? 'Deteniendo...' : 'Confirmar'}
               </button>

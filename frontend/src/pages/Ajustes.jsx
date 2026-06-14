@@ -857,7 +857,7 @@ export default function Ajustes() {
               type="button"
               onClick={handleGuardarTodo}
               disabled={saving}
-              className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors"
+              className="flex items-center gap-2 px-6 py-3.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed text-white text-base font-medium rounded-lg transition-colors"
             >
               {saving ? (
                 <>

@@ -72,14 +72,14 @@ function ModalConfirmar({ titulo, mensaje, onCancelar, onConfirmar, loading, col
           <button
             onClick={onCancelar}
             disabled={loading}
-            className="flex-1 border border-gray-300 text-gray-700 font-medium py-2.5 rounded-lg text-sm hover:bg-gray-50 transition-colors disabled:opacity-60"
+            className="flex-1 border border-gray-300 text-gray-700 font-medium py-3.5 rounded-lg text-base hover:bg-gray-50 transition-colors disabled:opacity-60"
           >
             Cancelar
           </button>
           <button
             onClick={onConfirmar}
             disabled={loading}
-            className={`flex-1 ${colorBtn} text-white font-medium py-2.5 rounded-lg text-sm transition-colors disabled:opacity-60`}
+            className={`flex-1 ${colorBtn} text-white font-medium py-3.5 rounded-lg text-base transition-colors disabled:opacity-60`}
           >
             {loading ? 'Procesando...' : 'Confirmar'}
           </button>

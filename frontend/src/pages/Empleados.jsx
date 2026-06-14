@@ -439,11 +439,11 @@ export default function Empleados() {
               )}
               <div className="flex gap-3 pt-1">
                 <button type="button" onClick={cerrarModal}
-                  className="flex-1 border border-gray-300 text-gray-700 font-medium py-2.5 rounded-lg text-sm hover:bg-gray-50 transition-colors">
+                  className="flex-1 border border-gray-300 text-gray-700 font-medium py-3.5 rounded-lg text-base hover:bg-gray-50 transition-colors">
                   Cancelar
                 </button>
                 <button type="submit" disabled={guardando}
-                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-medium py-2.5 rounded-lg text-sm transition-colors">
+                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors">
                   {guardando ? 'Guardando...' : 'Guardar'}
                 </button>
               </div>
@@ -504,11 +504,11 @@ export default function Empleados() {
               )}
               <div className="flex gap-3 pt-1">
                 <button type="button" onClick={cerrarEditar}
-                  className="flex-1 border border-gray-300 text-gray-700 font-medium py-2.5 rounded-lg text-sm hover:bg-gray-50 transition-colors">
+                  className="flex-1 border border-gray-300 text-gray-700 font-medium py-3.5 rounded-lg text-base hover:bg-gray-50 transition-colors">
                   Cancelar
                 </button>
                 <button type="submit" disabled={editando}
-                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-medium py-2.5 rounded-lg text-sm transition-colors">
+                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors">
                   {editando ? 'Guardando...' : 'Guardar cambios'}
                 </button>
               </div>
@@ -538,11 +538,11 @@ export default function Empleados() {
               )}
               <div className="flex gap-3">
                 <button type="button" onClick={cerrarEliminar}
-                  className="flex-1 border border-gray-300 text-gray-700 font-medium py-2.5 rounded-lg text-sm hover:bg-gray-50 transition-colors">
+                  className="flex-1 border border-gray-300 text-gray-700 font-medium py-3.5 rounded-lg text-base hover:bg-gray-50 transition-colors">
                   Cancelar
                 </button>
                 <button type="button" onClick={handleDelete} disabled={eliminando}
-                  className="flex-1 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white font-medium py-2.5 rounded-lg text-sm transition-colors">
+                  className="flex-1 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors">
                   {eliminando ? 'Eliminando...' : 'Eliminar'}
                 </button>
               </div>

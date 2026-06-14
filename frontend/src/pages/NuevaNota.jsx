@@ -1109,7 +1109,7 @@ export default function NuevaNota() {
                   else navigate(-1);
                 }}
                 disabled={encargoLoading}
-                className="flex-1 border border-gray-300 text-gray-700 font-medium py-2.5 rounded-lg text-sm hover:bg-gray-50 disabled:opacity-60 transition-colors"
+                className="flex-1 border border-gray-300 text-gray-700 font-medium py-3.5 rounded-lg text-base hover:bg-gray-50 disabled:opacity-60 transition-colors"
               >
                 {encargoStep === 1 ? 'Cancelar' : 'Atrás'}
               </button>
@@ -1118,7 +1118,7 @@ export default function NuevaNota() {
                   type="button"
                   onClick={() => setEncargoStep(s => s + 1)}
                   disabled={!encargoPuedeAvanzar}
-                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-medium py-2.5 rounded-lg text-sm transition-colors"
+                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-medium py-3.5 rounded-lg text-base transition-colors"
                 >
                   Siguiente
                 </button>
@@ -1127,7 +1127,7 @@ export default function NuevaNota() {
                   type="button"
                   onClick={handleEncargoSubmit}
                   disabled={encargoLoading}
-                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-medium py-2.5 rounded-lg text-sm transition-colors"
+                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
                 >
                   {encargoLoading
                     ? (esEdicion ? 'Guardando...' : 'Creando...')
@@ -1527,13 +1527,13 @@ export default function NuevaNota() {
         <div className="flex gap-3 pb-4">
           <button
             type="button" onClick={() => navigate(-1)}
-            className="flex-1 border border-gray-300 text-gray-700 font-medium py-2.5 rounded-lg text-sm hover:bg-gray-50 transition-colors"
+            className="flex-1 border border-gray-300 text-gray-700 font-medium py-3.5 rounded-lg text-base hover:bg-gray-50 transition-colors"
           >
             Cancelar
           </button>
           <button
             type="submit" disabled={loading}
-            className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-medium py-2.5 rounded-lg text-sm transition-colors"
+            className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
           >
             {loading
               ? (esEdicion ? 'Guardando...' : 'Creando...')
@@ -1600,7 +1600,7 @@ export default function NuevaNota() {
                   type="button"
                   onClick={() => setNuevoClienteOpen(false)}
                   disabled={creandoCliente}
-                  className="flex-1 border border-gray-300 text-gray-700 font-medium py-2.5 rounded-lg text-sm hover:bg-gray-50 disabled:opacity-60 transition-colors"
+                  className="flex-1 border border-gray-300 text-gray-700 font-medium py-3.5 rounded-lg text-base hover:bg-gray-50 disabled:opacity-60 transition-colors"
                 >
                   Cancelar
                 </button>
@@ -1608,7 +1608,7 @@ export default function NuevaNota() {
                   type="button"
                   onClick={crearCliente}
                   disabled={creandoCliente || !nuevoCliente.nombre.trim()}
-                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-medium py-2.5 rounded-lg text-sm transition-colors"
+                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
                 >
                   {creandoCliente ? 'Creando...' : 'Crear cliente'}
                 </button>
@@ -1641,7 +1641,7 @@ export default function NuevaNota() {
             <button
               type="button"
               onClick={() => setError('')}
-              className="w-full bg-red-600 hover:bg-red-700 text-white font-medium py-2.5 rounded-lg text-sm transition-colors"
+              className="w-full bg-red-600 hover:bg-red-700 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
             >
               Cerrar
             </button>
@@ -1676,7 +1676,7 @@ export default function NuevaNota() {
             <button
               type="button"
               onClick={() => { setNotaCreada(null); navigate('/notas'); }}
-              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2.5 rounded-lg text-sm transition-colors"
+              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
             >
               Aceptar
             </button>

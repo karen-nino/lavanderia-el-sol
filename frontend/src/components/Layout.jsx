@@ -513,13 +513,13 @@ export default function Layout() {
             <div className="flex gap-3">
               <button
                 onClick={() => setConfirmLogout(false)}
-                className="flex-1 border border-gray-300 text-gray-700 font-medium py-2.5 rounded-lg text-sm hover:bg-gray-50 transition-colors"
+                className="flex-1 border border-gray-300 text-gray-700 font-medium py-3.5 rounded-lg text-base hover:bg-gray-50 transition-colors"
               >
                 Cancelar
               </button>
               <button
                 onClick={confirmarLogout}
-                className="flex-1 bg-red-600 hover:bg-red-700 text-white font-medium py-2.5 rounded-lg text-sm transition-colors"
+                className="flex-1 bg-red-600 hover:bg-red-700 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
               >
                 Cerrar sesión
               </button>
