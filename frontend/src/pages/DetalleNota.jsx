@@ -123,6 +123,36 @@ export default function DetalleNota() {
     }
   }
 
+  function enviarPorWhatsapp() {
+    if (!nota?.cliente_telefono) return;
+    const digits = String(nota.cliente_telefono).replace(/\D/g, '');
+    if (digits.length === 0) return;
+    const phone = digits.startsWith('52') ? digits : `52${digits}`;
+
+    const lineas = [
+      '*Lavandería El Sol*',
+      `Nota: ${nota.folio ?? `#${nota.id}`}`,
+    ];
+    if (nota.cliente_nombre) {
+      const apellido = nota.cliente_apellido ? ` ${nota.cliente_apellido}` : '';
+      lineas.push(`Cliente: ${nota.cliente_nombre}${apellido}`);
+    }
+    if (nota.precio_total != null) {
+      lineas.push(`Total: ${fmtMonto(nota.precio_total)}`);
+    }
+    lineas.push(`Estado: ${BADGE_ESTADO[nota.estado]?.label ?? nota.estado}`);
+    if (nota.estado_pago && BADGE_PAGO[nota.estado_pago]) {
+      lineas.push(`Pago: ${BADGE_PAGO[nota.estado_pago].label}`);
+    }
+    if (nota.fecha_entrega) {
+      lineas.push(`Entrega: ${fmtFecha(nota.fecha_entrega)}`);
+    }
+    lineas.push('', '¡Gracias por su preferencia!');
+
+    const texto = encodeURIComponent(lineas.join('\n'));
+    window.open(`https://wa.me/${phone}?text=${texto}`, '_blank', 'noopener,noreferrer');
+  }
+
   async function entregarNota() {
     setLoadingAccion(true);
     setErrorAccion('');
@@ -219,6 +249,14 @@ export default function DetalleNota() {
           >
             Salidas
           </button>
+          <button
+            onClick={enviarPorWhatsapp}
+            disabled={!nota.cliente_telefono}
+            title={nota.cliente_telefono ? 'Abrir WhatsApp con el ticket' : 'El cliente no tiene teléfono registrado'}
+            className="flex items-center gap-1.5 px-4 py-2 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors"
+          >
+            Enviar
+          </button>
           {nota.estado === 'LISTA' && (
             <button
               onClick={() => setConfirmEntregar(true)}
@@ -247,13 +285,23 @@ export default function DetalleNota() {
         </div>
       )}
       {terminal && (
-        <button
-          disabled
-          title="Disponible en Fase 6"
-          className="flex items-center gap-1.5 px-4 py-2 bg-red-100 text-red-400 text-sm font-medium rounded-lg cursor-not-allowed"
-        >
-          Imprimir
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={enviarPorWhatsapp}
+            disabled={!nota.cliente_telefono}
+            title={nota.cliente_telefono ? 'Abrir WhatsApp con el ticket' : 'El cliente no tiene teléfono registrado'}
+            className="flex items-center gap-1.5 px-4 py-2 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors"
+          >
+            Enviar
+          </button>
+          <button
+            disabled
+            title="Disponible en Fase 6"
+            className="flex items-center gap-1.5 px-4 py-2 bg-red-100 text-red-400 text-sm font-medium rounded-lg cursor-not-allowed"
+          >
+            Imprimir
+          </button>
+        </div>
       )}
 
       {/* Código de barras */}
