@@ -6,9 +6,18 @@ const HEADER_BY_ESTADO = {
   mantenimiento: { cls: 'bg-red text-white',   label: 'MANT' },
 };
 
+function formatearCliente(nombre, apellido) {
+  const n = nombre?.trim();
+  const a = apellido?.trim();
+  if (!n && !a) return null;
+  if (!n) return a;
+  if (!a) return n;
+  return `${n} ${a[0].toUpperCase()}.`;
+}
+
 export default function MachineCard({ maquina, nota, onProcesar, onClick }) {
   const folioTxt    = nota?.folio ?? (nota?.id != null ? `#${nota.id}` : null);
-  const clienteTxt  = nota?.cliente_nombre ?? null;
+  const clienteTxt  = formatearCliente(nota?.cliente_nombre, nota?.cliente_apellido);
   const infoNota = (folioTxt || clienteTxt) ? (
     <div className="w-full text-center">
       {folioTxt && (
