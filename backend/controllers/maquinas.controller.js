@@ -99,11 +99,13 @@ export const cambiarEstadoMaquina = async (req, res) => {
 
   try {
     // en_uso_desde se setea al activar y se limpia al salir de en_uso.
+    // Se castea $1 al enum estado_maquina porque al usarlo en la rama CASE
+    // Postgres ya no puede inferir el tipo desde la asignación a la columna.
     const { rows } = await pool.query(
       `UPDATE maquinas
-         SET estado       = $1,
+         SET estado       = $1::estado_maquina,
              en_uso_desde = CASE
-               WHEN $1 = 'en_uso' THEN NOW()
+               WHEN $1::estado_maquina = 'en_uso'::estado_maquina THEN NOW()
                ELSE NULL
              END
        WHERE id = $2

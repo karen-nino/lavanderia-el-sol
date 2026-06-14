@@ -4,8 +4,7 @@ import Barcode from 'react-barcode';
 import { api } from '../lib/api';
 
 const BADGE_ESTADO = {
-  ACTIVA:     { label: 'Activa',      cls: 'bg-gray-100 text-gray-700'        },
-  EN_PROCESO: { label: 'En proceso',  cls: 'bg-blue-100 text-blue-800'        },
+  EN_PROCESO: { label: 'En Proceso',  cls: 'bg-blue-100 text-blue-800'        },
   LISTA:      { label: 'Por Entregar', cls: 'bg-yellow-100 text-yellow-800'   },
   PAGADA:     { label: 'Pagada',      cls: 'bg-emerald-100 text-emerald-800'  },
   ENTREGADA:  { label: 'Entregada',   cls: 'bg-green-800 text-white'          },
@@ -136,7 +135,7 @@ export default function DetalleNota() {
   const terminal     = ['ENTREGADA', 'CANCELADA'].includes(nota.estado);
   const puedeEditar  = !['PAGADA', 'ENTREGADA', 'CANCELADA'].includes(nota.estado);
   const puedeCancelar = !['CANCELADA'].includes(nota.estado);
-  const badgeEstado   = BADGE_ESTADO[nota.estado]       ?? BADGE_ESTADO.ACTIVA;
+  const badgeEstado   = BADGE_ESTADO[nota.estado]       ?? BADGE_ESTADO.EN_PROCESO;
   const badgeModal    = BADGE_MODALIDAD[nota.modalidad] ?? BADGE_MODALIDAD.AUTOSERVICIO;
   const badgePago     = BADGE_PAGO[nota.estado_pago];
   const barcodeValue  = nota.folio ?? String(nota.id);

@@ -44,7 +44,6 @@ export default function Salidas() {
     setErrorAccion('');
     try {
       await api.patch(`/maquinas/${nota.maquina_id}/estado`, { estado: 'en_uso' });
-      await api.patch(`/notas/${id}/estado`, { estado: 'EN_PROCESO' });
       await cargarDatos();
     } catch (err) {
       setErrorAccion(err.message);

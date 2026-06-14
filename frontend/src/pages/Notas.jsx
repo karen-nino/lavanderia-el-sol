@@ -12,8 +12,7 @@ const FILTRO_LABEL = {
 };
 
 const BADGE_ESTADO = {
-  ACTIVA:     { label: 'Activa',     cls: 'bg-gray-100 text-gray-700'       },
-  EN_PROCESO: { label: 'En proceso', cls: 'bg-blue-100 text-blue-800'       },
+  EN_PROCESO: { label: 'En Proceso', cls: 'bg-blue-100 text-blue-800'       },
   LISTA:      { label: 'Por Entregar', cls: 'bg-yellow-100 text-yellow-800' },
   PAGADA:     { label: 'Pagada',     cls: 'bg-emerald-100 text-emerald-800' },
   ENTREGADA:  { label: 'Entregada',  cls: 'bg-green-800 text-white'         },
@@ -246,7 +245,7 @@ export default function Notas() {
                   </thead>
                   <tbody className="divide-y divide-gray-50">
                     {filtradas.map(n => {
-                      const badgeEstado    = BADGE_ESTADO[n.estado]       ?? BADGE_ESTADO.ACTIVA;
+                      const badgeEstado    = BADGE_ESTADO[n.estado]       ?? BADGE_ESTADO.EN_PROCESO;
                       const badgeModalidad = BADGE_MODALIDAD[n.modalidad] ?? BADGE_MODALIDAD.AUTOSERVICIO;
                       const badgePago      = BADGE_PAGO[n.estado_pago];
                       return (
@@ -311,7 +310,7 @@ export default function Notas() {
           {/* Cards — mobile */}
           <div className="md:hidden space-y-3">
             {filtradas.map(n => {
-              const badgeEstado    = BADGE_ESTADO[n.estado]       ?? BADGE_ESTADO.ACTIVA;
+              const badgeEstado    = BADGE_ESTADO[n.estado]       ?? BADGE_ESTADO.EN_PROCESO;
               const badgeModalidad = BADGE_MODALIDAD[n.modalidad] ?? BADGE_MODALIDAD.AUTOSERVICIO;
               const badgePago      = BADGE_PAGO[n.estado_pago];
               return (

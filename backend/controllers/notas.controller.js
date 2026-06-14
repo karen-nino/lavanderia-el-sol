@@ -1,7 +1,7 @@
 import pool from '../db/pool.js';
 import { esAdmin } from '../middleware/roles.js';
 
-const ESTADOS_VALIDOS     = ['ACTIVA', 'EN_PROCESO', 'LISTA', 'PAGADA', 'ENTREGADA', 'CANCELADA'];
+const ESTADOS_VALIDOS     = ['EN_PROCESO', 'LISTA', 'PAGADA', 'ENTREGADA', 'CANCELADA'];
 const MODALIDADES_VALIDAS = ['AUTOSERVICIO', 'EDREDON', 'POR_ENCARGO'];
 const ESTADOS_PAGO_VALIDOS = ['DEBE', 'PAGADO'];
 const TAMANOS_VALIDOS     = ['chico', 'grande'];
@@ -9,10 +9,9 @@ const TIEMPOS_ENTREGA_VALIDOS = ['MANANA', 'TARDE', 'NOCHE'];
 
 // Transiciones permitidas por estado actual
 const TRANSICIONES_VALIDAS = {
-  ACTIVA:     ['EN_PROCESO', 'LISTA', 'CANCELADA'],
-  EN_PROCESO: ['LISTA',      'CANCELADA'],
-  LISTA:      ['PAGADA',     'CANCELADA'],
-  PAGADA:     ['ENTREGADA',  'CANCELADA'],
+  EN_PROCESO: ['LISTA',     'CANCELADA'],
+  LISTA:      ['PAGADA',    'CANCELADA'],
+  PAGADA:     ['ENTREGADA', 'CANCELADA'],
   ENTREGADA:  [],
   CANCELADA:  [],
 };

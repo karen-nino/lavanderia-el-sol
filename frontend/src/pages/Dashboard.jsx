@@ -80,7 +80,7 @@ export default function Dashboard() {
   const notaParaProcesar = confirmProcesar
     ? notas
         .filter(n => String(n.maquina_id) === String(confirmProcesar.id)
-                  && ['ACTIVA', 'EN_PROCESO'].includes(n.estado))
+                  && n.estado === 'EN_PROCESO')
         .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0]
     : null;
 
@@ -106,7 +106,7 @@ export default function Dashboard() {
   const totalMaquinas    = maquinas.length;
   const enUso            = maquinas.filter(m => m.estado === 'en_uso').length;
   const notasPagadas     = notas.filter(n => n.estado_pago === 'PAGADO').length;
-  const notasEnEspera    = notas.filter(n => ['ACTIVA', 'EN_PROCESO'].includes(n.estado)).length;
+  const notasEnEspera    = notas.filter(n => n.estado === 'EN_PROCESO').length;
   const paraEntregar     = notas.filter(n => ['LISTA', 'PAGADA'].includes(n.estado)).length;
   const ventasHoy        = ventas?.tarjetas?.total_cobrado ?? 0;
 
