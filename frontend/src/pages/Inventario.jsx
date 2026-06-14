@@ -10,6 +10,15 @@ const INPUT_CLS =
 const CATEGORIAS = ['Detergente', 'Suavizante', 'Blanqueador', 'Bolsas', 'Otro'];
 const UNIDADES   = ['Litros', 'Kilos', 'Piezas', 'Mililitros'];
 
+function pluralizarUnidad(cantidad, unidad) {
+  const n = Math.round(Number(cantidad));
+  const u = unidad ?? '';
+  if (n === 1 && u.toLowerCase().endsWith('s')) {
+    return u.slice(0, -1);
+  }
+  return u;
+}
+
 const FORM_VACIO = {
   nombre:          '',
   categoria:       '',
@@ -111,11 +120,34 @@ function ModalProducto({ producto, onClose, onGuardado }) {
             <label className="block text-sm font-medium text-gray-700 mb-1.5">
               Precio unitario ($) <span className="text-red-500">*</span>
             </label>
-            <input
-              type="number" name="precio_unitario" min="0" step="0.01" required
-              value={form.precio_unitario} onChange={handleChange}
-              placeholder="0.00" className={INPUT_CLS}
-            />
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 text-base">$</span>
+                <input
+                  type="number" name="precio_unitario" min="0" step="10" required
+                  value={form.precio_unitario} onChange={handleChange}
+                  placeholder="0.00"
+                  className={`${INPUT_CLS} pl-8 text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`}
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => setForm(f => ({ ...f, precio_unitario: String(Math.max(0, (Number(f.precio_unitario) || 0) - 10)) }))}
+                disabled={(Number(form.precio_unitario) || 0) <= 0}
+                aria-label="Disminuir precio"
+                className="flex-shrink-0 w-14 py-3.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-xl font-semibold hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                −
+              </button>
+              <button
+                type="button"
+                onClick={() => setForm(f => ({ ...f, precio_unitario: String((Number(f.precio_unitario) || 0) + 10) }))}
+                aria-label="Aumentar precio"
+                className="flex-shrink-0 w-14 py-3.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-xl font-semibold hover:bg-gray-50 transition-colors"
+              >
+                +
+              </button>
+            </div>
           </div>
 
           {/* Unidad */}
@@ -134,11 +166,30 @@ function ModalProducto({ producto, onClose, onGuardado }) {
             <label className="block text-sm font-medium text-gray-700 mb-1.5">
               Stock actual <span className="text-red-500">*</span>
             </label>
-            <input
-              type="number" name="stock_actual" min="0" step="0.01" required
-              value={form.stock_actual} onChange={handleChange}
-              className={INPUT_CLS}
-            />
+            <div className="flex items-center gap-2">
+              <input
+                type="number" name="stock_actual" min="0" step="1" required
+                value={form.stock_actual} onChange={handleChange}
+                className={`${INPUT_CLS} text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`}
+              />
+              <button
+                type="button"
+                onClick={() => setForm(f => ({ ...f, stock_actual: String(Math.max(0, (Number(f.stock_actual) || 0) - 1)) }))}
+                disabled={(Number(form.stock_actual) || 0) <= 0}
+                aria-label="Disminuir stock"
+                className="flex-shrink-0 w-14 py-3.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-xl font-semibold hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                −
+              </button>
+              <button
+                type="button"
+                onClick={() => setForm(f => ({ ...f, stock_actual: String((Number(f.stock_actual) || 0) + 1) }))}
+                aria-label="Aumentar stock"
+                className="flex-shrink-0 w-14 py-3.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-xl font-semibold hover:bg-gray-50 transition-colors"
+              >
+                +
+              </button>
+            </div>
           </div>
 
           {error && (
@@ -415,7 +466,7 @@ export default function Inventario() {
                         <td className="px-4 py-3 text-center">
                           <div className="flex flex-col items-center gap-0.5">
                             <span className="font-mono font-semibold text-sm text-gray-800">
-                              {Number(p.stock_actual).toFixed(2)}
+                              {Math.round(Number(p.stock_actual))}
                             </span>
                             {es === 'agotado' && (
                               <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700">Agotado</span>
@@ -428,7 +479,7 @@ export default function Inventario() {
                             )}
                           </div>
                         </td>
-                        <td className="px-4 py-3 text-gray-600">{p.unidad}</td>
+                        <td className="px-4 py-3 text-gray-600">{pluralizarUnidad(p.stock_actual, p.unidad)}</td>
                         <td className="px-4 py-3">
                           <div className="flex items-center justify-end gap-1">
                             <button
@@ -479,7 +530,7 @@ export default function Inventario() {
                   )}
                   <div className="flex items-center gap-2 mt-1 flex-wrap">
                     <span className="text-sm font-mono font-semibold text-gray-700">
-                      {Number(p.stock_actual).toFixed(2)} {p.unidad}
+                      {Math.round(Number(p.stock_actual))} {Math.round(Number(p.stock_actual)) === 1 ? 'Pieza' : 'Piezas'}
                     </span>
                     {es === 'agotado' && (
                       <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700">Agotado</span>
@@ -493,6 +544,9 @@ export default function Inventario() {
                       </span>
                     )}
                   </div>
+                  {p.unidad && (
+                    <p className="text-xs text-gray-500 mt-0.5">Unidad: {p.unidad}</p>
+                  )}
                 </button>
               );
             })}
@@ -534,7 +588,7 @@ export default function Inventario() {
                   <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Stock actual</p>
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-base font-mono font-semibold text-gray-800">
-                      {Number(p.stock_actual).toFixed(2)} {p.unidad}
+                      {Math.round(Number(p.stock_actual))} {Math.round(Number(p.stock_actual)) === 1 ? 'Pieza' : 'Piezas'}
                     </span>
                     {es === 'agotado' && (
                       <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700">Agotado</span>
@@ -543,6 +597,12 @@ export default function Inventario() {
                       <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Por agotarse</span>
                     )}
                   </div>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Unidad</p>
+                  <p className="text-base text-gray-700">
+                    {p.unidad ?? <span className="text-gray-400 italic">—</span>}
+                  </p>
                 </div>
 
                 <div className="space-y-2 pt-1">
