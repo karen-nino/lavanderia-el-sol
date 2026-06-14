@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { esAdmin, ROL_LABEL } from '../lib/roles';
+import { api } from '../lib/api';
 
 const navIconCls = 'w-6 h-6';
 
@@ -206,7 +207,13 @@ function DesktopHeader({ usuario, now }) {
   );
 }
 
-function MobileTopbar({ usuario, onAlerts }) {
+function MobileTopbar({ usuario, alertas, onAlerts }) {
+  const count = alertas.length;
+  const tieneAlertas = count > 0;
+  const hayCritica = alertas.some(a => a.severity === 'agotado');
+  const colorCls = tieneAlertas
+    ? (hayCritica ? 'bg-light-red text-red' : 'bg-light-bronce text-bronce')
+    : 'text-dark-blue';
   return (
     <header className="md:hidden flex items-start justify-between px-6 pt-10 pb-4 flex-shrink-0">
       <div className="flex items-center gap-3">
@@ -221,12 +228,81 @@ function MobileTopbar({ usuario, onAlerts }) {
       </div>
       <button
         onClick={onAlerts}
-        aria-label="Ver alertas"
-        className="pt-1 text-dark-blue flex items-center justify-center"
+        aria-label={tieneAlertas ? `Ver ${count} alerta(s)` : 'Ver alertas'}
+        className="relative pt-1 flex items-center justify-center"
       >
-        {Icon.bell}
+        <span className={`w-12 h-12 flex items-center justify-center rounded-pill transition-colors ${colorCls}`}>
+          {Icon.bell}
+        </span>
+        {count > 0 && (
+          <span className="absolute top-0.5 right-0.5 min-w-[20px] h-5 px-1 bg-red text-white text-[11px] font-bold rounded-pill flex items-center justify-center ring-2 ring-white">
+            {count > 9 ? '9+' : count}
+          </span>
+        )}
       </button>
     </header>
+  );
+}
+
+function AlertsModal({ open, onClose, alertas, onSelect }) {
+  if (!open) return null;
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-dark-blue/40 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-sm bg-white rounded-card shadow-xl p-5 max-h-[90vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-card-title text-dark-blue font-bold">
+            Alertas{alertas.length > 0 ? ` (${alertas.length})` : ''}
+          </h2>
+          <button
+            onClick={onClose}
+            aria-label="Cerrar alertas"
+            className="w-8 h-8 rounded-pill flex items-center justify-center text-grey hover:bg-light-blue/60"
+          >
+            {Icon.close}
+          </button>
+        </div>
+
+        {alertas.length === 0 ? (
+          <p className="text-sm text-grey text-center py-8">No hay alertas activas.</p>
+        ) : (
+          <div className="space-y-2 overflow-y-auto">
+            {alertas.map(a => {
+              const cls = a.severity === 'agotado'
+                ? 'bg-light-red text-red'
+                : 'bg-light-bronce text-bronce';
+              return (
+                <button
+                  key={a.key}
+                  type="button"
+                  onClick={() => onSelect(a)}
+                  className="w-full flex items-center gap-3 p-3 rounded-card-sm border border-gray-100 hover:bg-light-blue/40 transition-colors text-left"
+                >
+                  <span className={`flex-shrink-0 w-9 h-9 rounded-pill flex items-center justify-center ${cls}`}>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                        d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-dark-blue truncate">{a.title}</p>
+                    <p className="text-xs text-grey truncate">{a.description}</p>
+                  </div>
+                  <span className={`flex-shrink-0 text-[11px] font-semibold px-2 py-0.5 rounded-pill ${cls}`}>
+                    {a.severity === 'agotado' ? 'Agotado' : 'Por agotarse'}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -324,7 +400,36 @@ export default function Layout() {
   const location = useLocation();
   const now = useClock();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [alertsOpen, setAlertsOpen] = useState(false);
+  const [productos, setProductos] = useState([]);
   const isDashboard = location.pathname === '/';
+
+  useEffect(() => {
+    let activo = true;
+    api.get('/productos')
+      .then(data => { if (activo) setProductos(data ?? []); })
+      .catch(() => {});
+    return () => { activo = false; };
+  }, [location.pathname]);
+
+  const alertas = useMemo(() => {
+    const orden = { agotado: 0, por_agotarse: 1 };
+    return productos
+      .filter(p => p.estado_stock && p.estado_stock !== 'ok')
+      .sort((a, b) => (orden[a.estado_stock] ?? 99) - (orden[b.estado_stock] ?? 99))
+      .map(p => ({
+        key:         `producto-${p.id}`,
+        title:       p.nombre,
+        description: `Stock: ${Number(p.stock_actual).toFixed(2)} ${p.unidad}`,
+        severity:    p.estado_stock,
+        to:          `/inventario?highlight=${p.id}`,
+      }));
+  }, [productos]);
+
+  const handleSelectAlerta = (a) => {
+    setAlertsOpen(false);
+    navigate(a.to);
+  };
 
   const handleLogout = () => {
     setMenuOpen(false);
@@ -366,7 +471,7 @@ export default function Layout() {
         <main className="flex-1 overflow-y-auto">
           {isDashboard && (
             <>
-              <MobileTopbar usuario={usuario} />
+              <MobileTopbar usuario={usuario} alertas={alertas} onAlerts={() => setAlertsOpen(true)} />
               <DesktopHeader usuario={usuario} now={now} />
             </>
           )}
@@ -385,6 +490,13 @@ export default function Layout() {
         extraItems={menuExtraItems}
         onSettings={handleSettings}
         onLogout={handleLogout}
+      />
+
+      <AlertsModal
+        open={alertsOpen}
+        onClose={() => setAlertsOpen(false)}
+        alertas={alertas}
+        onSelect={handleSelectAlerta}
       />
     </div>
   );

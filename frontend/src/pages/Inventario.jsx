@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { esAdmin as esAdminFn } from '../lib/roles';
@@ -244,6 +245,15 @@ function IconoBasura() {
   );
 }
 
+function IconoAdvertencia({ severity }) {
+  const cls = severity === 'agotado' ? 'text-red-600' : 'text-amber-500';
+  return (
+    <svg className={`w-4 h-4 flex-shrink-0 ${cls}`} fill="currentColor" viewBox="0 0 24 24" aria-label={severity === 'agotado' ? 'Agotado' : 'Stock bajo'}>
+      <path d="M12 2L1 21h22L12 2zm0 6l7.53 13H4.47L12 8zm-1 3v5h2v-5h-2zm0 6v2h2v-2h-2z" />
+    </svg>
+  );
+}
+
 // ── Página principal ────────────────────────────────────────────
 export default function Inventario() {
   const { usuario } = useAuth();
@@ -255,6 +265,8 @@ export default function Inventario() {
   const [modalProducto,   setModalProducto]   = useState(null);  // null | 'nuevo' | producto
   const [prodAEliminar,   setProdAEliminar]   = useState(null);
   const [infoProducto,    setInfoProducto]    = useState(null);  // info modal (mobile)
+  const [searchParams, setSearchParams] = useSearchParams();
+  const highlightAplicadoRef = useRef(null);
 
   const cargar = () => {
     setLoading(true);
@@ -265,6 +277,24 @@ export default function Inventario() {
   };
 
   useEffect(cargar, []);
+
+  // Highlight desde ?highlight=<id> (alerta del nav)
+  useEffect(() => {
+    const id = searchParams.get('highlight');
+    if (!id || loading || productos.length === 0) return;
+    if (highlightAplicadoRef.current === id) return;
+
+    const els = document.querySelectorAll(`[data-producto-id="${id}"]`);
+    if (els.length === 0) return;
+
+    highlightAplicadoRef.current = id;
+    const visible = Array.from(els).find(e => e.offsetParent !== null) ?? els[0];
+    visible.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+    const next = new URLSearchParams(searchParams);
+    next.delete('highlight');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, productos, loading, setSearchParams]);
 
   const stockBajo = productos.filter(p => p.estado_stock !== 'ok');
 
@@ -369,9 +399,12 @@ export default function Inventario() {
                     const es = p.estado_stock ?? 'ok';
                     const rowCls = es === 'agotado' ? 'bg-red-50/40' : es === 'por_agotarse' ? 'bg-amber-50/40' : '';
                     return (
-                      <tr key={p.id} className={`hover:bg-gray-50 transition-colors ${rowCls}`}>
+                      <tr key={p.id} data-producto-id={p.id} className={`hover:bg-gray-50 transition-colors ${rowCls}`}>
                         <td className="px-4 py-3">
-                          <span className="font-medium text-gray-800">{p.nombre}</span>
+                          <div className="flex items-center gap-2">
+                            {es !== 'ok' && <IconoAdvertencia severity={es} />}
+                            <span className="font-medium text-gray-800">{p.nombre}</span>
+                          </div>
                         </td>
                         <td className="px-4 py-3 text-gray-500 text-xs">
                           {p.categoria ?? '—'}
@@ -432,11 +465,15 @@ export default function Inventario() {
               return (
                 <button
                   key={p.id}
+                  data-producto-id={p.id}
                   type="button"
                   onClick={() => setInfoProducto(p)}
                   className={`w-full text-left rounded-xl shadow-sm border border-gray-100 px-4 py-3 hover:shadow-md active:opacity-80 transition ${rowCls}`}
                 >
-                  <p className="font-medium text-gray-800 text-sm">{p.nombre}</p>
+                  <div className="flex items-center gap-2">
+                    {es !== 'ok' && <IconoAdvertencia severity={es} />}
+                    <p className="font-medium text-gray-800 text-sm">{p.nombre}</p>
+                  </div>
                   {p.categoria && (
                     <p className="text-xs text-gray-400 mt-0.5">{p.categoria}</p>
                   )}
