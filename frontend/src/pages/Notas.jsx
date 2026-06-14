@@ -7,8 +7,10 @@ import { esAdmin as esAdminFn } from '../lib/roles';
 const ESTADOS = ['TODOS', 'EN_PROCESO', 'LISTA', 'FINALIZADA', 'DEBE', 'CANCELADA'];
 
 const FILTRO_LABEL = {
-  TODOS: 'Todos',
-  DEBE:  'Pagos Pendientes',
+  TODOS:      'Todos',
+  DEBE:       'Pagos Pendientes',
+  FINALIZADA: 'Finalizadas',
+  CANCELADA:  'Canceladas',
 };
 
 const BADGE_ESTADO = {
