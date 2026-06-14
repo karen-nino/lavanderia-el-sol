@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Barcode from 'react-barcode';
 import { api } from '../lib/api';
+import { useAuth } from '../context/AuthContext';
+import { esAdmin as esAdminFn } from '../lib/roles';
 
 const BADGE_ESTADO = {
   EN_PROCESO: { label: 'En Proceso',  cls: 'bg-blue-100 text-blue-800'        },
@@ -90,6 +92,8 @@ function ModalConfirmar({ titulo, mensaje, onCancelar, onConfirmar, loading, col
 export default function DetalleNota() {
   const { id }   = useParams();
   const navigate = useNavigate();
+  const { usuario } = useAuth();
+  const esAdmin = esAdminFn(usuario?.rol);
 
   const [nota,             setNota]             = useState(null);
   const [loading,          setLoading]          = useState(true);
@@ -98,6 +102,7 @@ export default function DetalleNota() {
   const [errorAccion,      setErrorAccion]      = useState('');
   const [confirmCancelar,  setConfirmCancelar]  = useState(false);
   const [confirmFinalizar,  setConfirmFinalizar]  = useState(false);
+  const [confirmEliminar,  setConfirmEliminar]  = useState(false);
 
   useEffect(() => {
     let activo = true;
@@ -151,6 +156,20 @@ export default function DetalleNota() {
 
     const texto = encodeURIComponent(lineas.join('\n'));
     window.open(`https://wa.me/${phone}?text=${texto}`, '_blank', 'noopener,noreferrer');
+  }
+
+  async function eliminarNota() {
+    setLoadingAccion(true);
+    setErrorAccion('');
+    try {
+      await api.delete(`/notas/${id}`);
+      navigate('/notas');
+    } catch (err) {
+      setErrorAccion(err.message);
+      setConfirmEliminar(false);
+    } finally {
+      setLoadingAccion(false);
+    }
   }
 
   async function finalizarNota() {
@@ -282,6 +301,15 @@ export default function DetalleNota() {
           >
             Imprimir
           </button>
+          {esAdmin && (
+            <button
+              onClick={() => setConfirmEliminar(true)}
+              disabled={loadingAccion}
+              className="flex items-center gap-1.5 px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
+            >
+              Eliminar
+            </button>
+          )}
         </div>
       )}
       {terminal && (
@@ -301,6 +329,15 @@ export default function DetalleNota() {
           >
             Imprimir
           </button>
+          {esAdmin && (
+            <button
+              onClick={() => setConfirmEliminar(true)}
+              disabled={loadingAccion}
+              className="flex items-center gap-1.5 px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
+            >
+              Eliminar
+            </button>
+          )}
         </div>
       )}
 
@@ -446,6 +483,17 @@ export default function DetalleNota() {
           onConfirmar={finalizarNota}
           loading={loadingAccion}
           colorBtn="bg-emerald-600 hover:bg-emerald-700"
+        />
+      )}
+
+      {/* Modal confirmar eliminación */}
+      {confirmEliminar && (
+        <ModalConfirmar
+          titulo="Eliminar nota"
+          mensaje={`¿Eliminar la nota ${nota.folio ?? `#${nota.id}`}? Esta acción liberará el stock reservado y no se puede deshacer.`}
+          onCancelar={() => setConfirmEliminar(false)}
+          onConfirmar={eliminarNota}
+          loading={loadingAccion}
         />
       )}
     </div>

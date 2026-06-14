@@ -1,8 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
-import { useAuth } from '../context/AuthContext';
-import { esAdmin as esAdminFn } from '../lib/roles';
 
 const ESTADOS = ['TODOS', 'EN_PROCESO', 'LISTA', 'FINALIZADA', 'DEBE', 'CANCELADA'];
 
@@ -46,68 +44,14 @@ function fmtCliente(n) {
   return ap ? `${n.cliente_nombre} ${ap.charAt(0).toUpperCase()}.` : n.cliente_nombre;
 }
 
-function IconoBasura() {
-  return (
-    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-    </svg>
-  );
-}
-
-function ModalConfirmarEliminar({ nota, onCancelar, onConfirmar, loading }) {
-  return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4 max-h-[90vh] overflow-y-auto">
-        <div className="flex items-start gap-3">
-          <div className="flex-shrink-0 w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
-            <IconoBasura />
-          </div>
-          <div>
-            <h3 className="text-base font-bold text-gray-900">Eliminar nota</h3>
-            <p className="text-sm text-gray-500 mt-1">
-              ¿Eliminar la nota{' '}
-              <span className="font-mono font-semibold text-gray-800">
-                {nota.folio ?? `#${nota.id}`}
-              </span>
-              ? Esta acción no se puede deshacer.
-            </p>
-          </div>
-        </div>
-        <div className="flex gap-3 pt-1">
-          <button
-            onClick={onCancelar}
-            disabled={loading}
-            className="flex-1 border border-gray-300 text-gray-700 font-medium py-2.5 rounded-lg text-sm hover:bg-gray-50 transition-colors disabled:opacity-60"
-          >
-            Cancelar
-          </button>
-          <button
-            onClick={onConfirmar}
-            disabled={loading}
-            className="flex-1 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white font-medium py-2.5 rounded-lg text-sm transition-colors"
-          >
-            {loading ? 'Eliminando...' : 'Eliminar'}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export default function Notas() {
-  const { usuario }                           = useAuth();
   const navigate                              = useNavigate();
-  const esAdmin                               = esAdminFn(usuario?.rol);
 
   const [notas,             setNotas]             = useState([]);
   const [filtro,            setFiltro]            = useState('TODOS');
   const [busqueda,          setBusqueda]          = useState('');
   const [loading,           setLoading]           = useState(true);
   const [error,             setError]             = useState('');
-  const [notaAEliminar,     setNotaAEliminar]     = useState(null);
-  const [loadingEliminar,   setLoadingEliminar]   = useState(false);
-  const [errorEliminar,     setErrorEliminar]     = useState('');
 
   useEffect(() => {
     api.get('/notas')
@@ -130,22 +74,6 @@ export default function Notas() {
     const telefono = (n.cliente_telefono ?? '').toLowerCase();
     return folio.includes(q) || cliente.includes(q) || apellido.includes(q) || telefono.includes(q);
   });
-
-  async function confirmarEliminar() {
-    if (!notaAEliminar || loadingEliminar) return;
-    setLoadingEliminar(true);
-    setErrorEliminar('');
-    try {
-      await api.delete(`/notas/${notaAEliminar.id}`);
-      setNotas(prev => prev.filter(n => n.id !== notaAEliminar.id));
-      setNotaAEliminar(null);
-    } catch (err) {
-      setErrorEliminar(err.message);
-      setNotaAEliminar(null);
-    } finally {
-      setLoadingEliminar(false);
-    }
-  }
 
   return (
     <div className="pt-10 pb-16 px-6 md:py-14 md:px-8 space-y-4">
@@ -201,12 +129,6 @@ export default function Notas() {
         ))}
       </div>
 
-      {errorEliminar && (
-        <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">
-          {errorEliminar}
-        </div>
-      )}
-
       {loading && (
         <div className="flex justify-center py-12">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" />
@@ -242,7 +164,6 @@ export default function Notas() {
                       <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Pago</th>
                       <th className="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Total</th>
                       <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Fecha</th>
-                      <th className="px-4 py-3" />
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
@@ -290,17 +211,6 @@ export default function Notas() {
                           <td className="px-4 py-3 text-gray-400 text-xs">
                             {fmtFecha(n.created_at)}
                           </td>
-                          <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
-                            {esAdmin && (
-                              <button
-                                onClick={() => setNotaAEliminar(n)}
-                                className="text-gray-400 hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50 transition-colors"
-                                title="Eliminar nota"
-                              >
-                                <IconoBasura />
-                              </button>
-                            )}
-                          </td>
                         </tr>
                       );
                     })}
@@ -323,20 +233,9 @@ export default function Notas() {
                 >
                   <div className="flex items-center justify-between gap-2">
                     <p className="font-mono text-xs text-gray-400">#{n.folio?.split('-')[0] ?? n.id}</p>
-                    <div className="flex items-center gap-1.5">
-                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${badgeModalidad.cls}`}>
-                        {badgeModalidad.label}
-                      </span>
-                      {esAdmin && (
-                        <button
-                          onClick={e => { e.stopPropagation(); setNotaAEliminar(n); }}
-                          className="text-gray-400 hover:text-red-600 p-1 rounded transition-colors"
-                          title="Eliminar nota"
-                        >
-                          <IconoBasura />
-                        </button>
-                      )}
-                    </div>
+                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${badgeModalidad.cls}`}>
+                      {badgeModalidad.label}
+                    </span>
                   </div>
                   <p className="font-medium text-gray-800 text-sm">
                     {fmtCliente(n) ?? <span className="text-gray-400 italic">Anónimo</span>}
@@ -364,15 +263,6 @@ export default function Notas() {
         </>
       )}
 
-      {/* Modal confirmar eliminación */}
-      {notaAEliminar && (
-        <ModalConfirmarEliminar
-          nota={notaAEliminar}
-          onCancelar={() => setNotaAEliminar(null)}
-          onConfirmar={confirmarEliminar}
-          loading={loadingEliminar}
-        />
-      )}
     </div>
   );
 }
