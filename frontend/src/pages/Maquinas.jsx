@@ -302,6 +302,12 @@ export default function Maquinas() {
                   <p className="text-xs text-gray-400 mb-3">Modelo: {m.modelo}</p>
                 )}
 
+                {m.notas && (
+                  <p className="text-xs text-gray-500 mb-3 whitespace-pre-wrap">
+                    <span className="text-gray-400">Notas: </span>{m.notas}
+                  </p>
+                )}
+
                 {/* Editar / Eliminar */}
                 <div className="flex gap-2 pt-3 mt-2 border-t border-gray-50">
                   <button
