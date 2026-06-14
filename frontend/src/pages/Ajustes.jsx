@@ -74,7 +74,7 @@ const SectionIcon = {
 const MOBILE_SECTIONS = [
   { id: 'perfil',  label: 'Mi Perfil',                 subtitle: 'Información de perfil',    icon: SectionIcon.perfil  },
   { id: 'negocio', label: 'Perfil de Negocio',         subtitle: 'Información del negocio',  icon: SectionIcon.negocio },
-  { id: 'precios', label: 'Precios',                   subtitle: 'Precios de servicios',     icon: SectionIcon.precios },
+  { id: 'maquinas', label: 'Máquinas',                  subtitle: 'Detalles de máquinas',      icon: SectionIcon.precios },
   { id: 'alertas', label: 'Alertas y Notificaciones',  subtitle: 'Ajustes de alertas', icon: SectionIcon.alertas },
 ];
 
@@ -358,7 +358,7 @@ export default function Ajustes() {
   );
 
   const seccionPreciosDesktop = (
-    <Section titulo="Precios por carga">
+    <Section titulo="Máquinas">
       <Field label="Mediana" hint="Aplica a lavadoras medianas en autoservicio y por encargo.">
         <div className="flex items-center gap-2">
           <span className="text-sm text-gray-500 flex-shrink-0">$</span>
@@ -661,7 +661,7 @@ export default function Ajustes() {
   const mobileSectionContent = {
     perfil:  seccionPerfilMobile,
     negocio: seccionNegocioMobile,
-    precios: seccionPreciosMobile,
+    maquinas: seccionPreciosMobile,
     alertas: seccionAlertasMobile,
   };
 
