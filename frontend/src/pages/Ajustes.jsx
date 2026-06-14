@@ -220,6 +220,8 @@ export default function Ajustes() {
         api.patch('/ajustes', {
           precio_carga_mediana: Number(config.precio_carga_mediana),
           precio_carga_jumbo:   Number(config.precio_carga_jumbo),
+          tiempo_carga_mediana: Number(config.tiempo_carga_mediana),
+          tiempo_carga_jumbo:   Number(config.tiempo_carga_jumbo),
           nombre_negocio:       config.nombre_negocio,
           direccion:            config.direccion ?? '',
           telefono:             config.telefono  ?? '',
@@ -246,6 +248,8 @@ export default function Ajustes() {
       const updated = await api.patch('/ajustes', {
         precio_carga_mediana: Number(config.precio_carga_mediana),
         precio_carga_jumbo:   Number(config.precio_carga_jumbo),
+        tiempo_carga_mediana: Number(config.tiempo_carga_mediana),
+        tiempo_carga_jumbo:   Number(config.tiempo_carga_jumbo),
         nombre_negocio:       config.nombre_negocio,
         direccion:            config.direccion ?? '',
         telefono:             config.telefono  ?? '',
@@ -359,7 +363,8 @@ export default function Ajustes() {
 
   const seccionPreciosDesktop = (
     <Section titulo="Máquinas">
-      <Field label="Mediana" hint="Aplica a lavadoras medianas en autoservicio y por encargo.">
+      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Mediana</p>
+      <Field label="Precio por carga" hint="Aplica a lavadoras medianas en autoservicio y por encargo.">
         <div className="flex items-center gap-2">
           <span className="text-sm text-gray-500 flex-shrink-0">$</span>
           <input
@@ -375,7 +380,26 @@ export default function Ajustes() {
           <span className="text-sm text-gray-500 flex-shrink-0">MXN</span>
         </div>
       </Field>
-      <Field label="Jumbo" hint="Aplica a lavadoras jumbo en autoservicio y por encargo.">
+      <Field label="Tiempo de carga" hint="Duración de un ciclo de lavado en una máquina mediana.">
+        <div className="flex items-center gap-2">
+          <input
+            type="number"
+            name="tiempo_carga_mediana"
+            min="1"
+            step="1"
+            required
+            value={config.tiempo_carga_mediana ?? ''}
+            onChange={handleChange}
+            className={INPUT_CLS}
+          />
+          <span className="text-sm text-gray-500 flex-shrink-0">min</span>
+        </div>
+      </Field>
+
+      <div className="border-t border-gray-100" />
+
+      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Jumbo</p>
+      <Field label="Precio por carga" hint="Aplica a lavadoras jumbo en autoservicio y por encargo.">
         <div className="flex items-center gap-2">
           <span className="text-sm text-gray-500 flex-shrink-0">$</span>
           <input
@@ -389,6 +413,21 @@ export default function Ajustes() {
             className={INPUT_CLS}
           />
           <span className="text-sm text-gray-500 flex-shrink-0">MXN</span>
+        </div>
+      </Field>
+      <Field label="Tiempo de carga" hint="Duración de un ciclo de lavado en una máquina jumbo.">
+        <div className="flex items-center gap-2">
+          <input
+            type="number"
+            name="tiempo_carga_jumbo"
+            min="1"
+            step="1"
+            required
+            value={config.tiempo_carga_jumbo ?? ''}
+            onChange={handleChange}
+            className={INPUT_CLS}
+          />
+          <span className="text-sm text-gray-500 flex-shrink-0">min</span>
         </div>
       </Field>
     </Section>
@@ -604,39 +643,78 @@ export default function Ajustes() {
   );
 
   const seccionPreciosMobile = (
-    <div className="space-y-5">
-      <MobileField label="Precio por carga — Mediana" hint="Aplica a lavadoras medianas (autoservicio y por encargo).">
-        <div className="flex items-center gap-2">
-          <span className="text-base text-grey flex-shrink-0">$</span>
-          <input
-            type="number"
-            name="precio_carga_mediana"
-            min="0"
-            step="0.01"
-            required
-            value={config.precio_carga_mediana ?? ''}
-            onChange={handleChange}
-            className={MOBILE_INPUT_CLS}
-          />
-          <span className="text-base text-grey flex-shrink-0">MXN</span>
-        </div>
-      </MobileField>
-      <MobileField label="Precio por carga — Jumbo" hint="Aplica a lavadoras jumbo (autoservicio y por encargo).">
-        <div className="flex items-center gap-2">
-          <span className="text-base text-grey flex-shrink-0">$</span>
-          <input
-            type="number"
-            name="precio_carga_jumbo"
-            min="0"
-            step="0.01"
-            required
-            value={config.precio_carga_jumbo ?? ''}
-            onChange={handleChange}
-            className={MOBILE_INPUT_CLS}
-          />
-          <span className="text-base text-grey flex-shrink-0">MXN</span>
-        </div>
-      </MobileField>
+    <div className="space-y-6">
+      <div className="space-y-5">
+        <p className="text-xs font-semibold text-grey uppercase tracking-wide">Mediana</p>
+        <MobileField label="Precio por carga" hint="Aplica a lavadoras medianas (autoservicio y por encargo).">
+          <div className="flex items-center gap-2">
+            <span className="text-base text-grey flex-shrink-0">$</span>
+            <input
+              type="number"
+              name="precio_carga_mediana"
+              min="0"
+              step="0.01"
+              required
+              value={config.precio_carga_mediana ?? ''}
+              onChange={handleChange}
+              className={MOBILE_INPUT_CLS}
+            />
+            <span className="text-base text-grey flex-shrink-0">MXN</span>
+          </div>
+        </MobileField>
+        <MobileField label="Tiempo de carga" hint="Duración del ciclo de lavado en una máquina mediana.">
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              name="tiempo_carga_mediana"
+              min="1"
+              step="1"
+              required
+              value={config.tiempo_carga_mediana ?? ''}
+              onChange={handleChange}
+              className={MOBILE_INPUT_CLS}
+            />
+            <span className="text-base text-grey flex-shrink-0">min</span>
+          </div>
+        </MobileField>
+      </div>
+
+      <div className="border-t border-light-blue/60" />
+
+      <div className="space-y-5">
+        <p className="text-xs font-semibold text-grey uppercase tracking-wide">Jumbo</p>
+        <MobileField label="Precio por carga" hint="Aplica a lavadoras jumbo (autoservicio y por encargo).">
+          <div className="flex items-center gap-2">
+            <span className="text-base text-grey flex-shrink-0">$</span>
+            <input
+              type="number"
+              name="precio_carga_jumbo"
+              min="0"
+              step="0.01"
+              required
+              value={config.precio_carga_jumbo ?? ''}
+              onChange={handleChange}
+              className={MOBILE_INPUT_CLS}
+            />
+            <span className="text-base text-grey flex-shrink-0">MXN</span>
+          </div>
+        </MobileField>
+        <MobileField label="Tiempo de carga" hint="Duración del ciclo de lavado en una máquina jumbo.">
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              name="tiempo_carga_jumbo"
+              min="1"
+              step="1"
+              required
+              value={config.tiempo_carga_jumbo ?? ''}
+              onChange={handleChange}
+              className={MOBILE_INPUT_CLS}
+            />
+            <span className="text-base text-grey flex-shrink-0">min</span>
+          </div>
+        </MobileField>
+      </div>
     </div>
   );
 

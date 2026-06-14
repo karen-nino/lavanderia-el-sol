@@ -54,6 +54,8 @@ export const updateAjustes = async (req, res) => {
   const {
     precio_carga_mediana,
     precio_carga_jumbo,
+    tiempo_carga_mediana,
+    tiempo_carga_jumbo,
     nombre_negocio,
     direccion,
     telefono,
@@ -66,6 +68,8 @@ export const updateAjustes = async (req, res) => {
 
   if (precio_carga_mediana !== undefined) { updates.push(`precio_carga_mediana = $${i++}`); values.push(precio_carga_mediana); }
   if (precio_carga_jumbo   !== undefined) { updates.push(`precio_carga_jumbo = $${i++}`);   values.push(precio_carga_jumbo); }
+  if (tiempo_carga_mediana !== undefined) { updates.push(`tiempo_carga_mediana = $${i++}`); values.push(tiempo_carga_mediana); }
+  if (tiempo_carga_jumbo   !== undefined) { updates.push(`tiempo_carga_jumbo = $${i++}`);   values.push(tiempo_carga_jumbo); }
   if (nombre_negocio       !== undefined) { updates.push(`nombre_negocio = $${i++}`);       values.push(nombre_negocio); }
   if (direccion            !== undefined) { updates.push(`direccion = $${i++}`);             values.push(direccion); }
   if (telefono             !== undefined) { updates.push(`telefono = $${i++}`);              values.push(telefono); }
