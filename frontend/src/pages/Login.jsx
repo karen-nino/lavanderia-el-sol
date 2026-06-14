@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { api } from '../lib/api';
 
 const INPUT_CLS =
-  'w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition';
+  'w-full px-4 py-3.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition';
 
 export default function Login() {
   const [query, setQuery]               = useState('');
@@ -132,7 +132,7 @@ export default function Login() {
                 <button
                   type="button"
                   onClick={cambiarUsuario}
-                  className="absolute right-2 top-9 text-xs text-indigo-600 hover:text-indigo-700 font-medium px-2 py-1"
+                  className="absolute right-2 top-11 text-xs text-indigo-600 hover:text-indigo-700 font-medium px-2 py-1"
                 >
                   Cambiar
                 </button>
