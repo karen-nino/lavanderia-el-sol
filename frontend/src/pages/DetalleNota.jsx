@@ -22,6 +22,14 @@ const BADGE_PAGO = {
   PAGADO: { label: 'Pagado', cls: 'bg-green-100 text-green-700'  },
 };
 
+const ESTADO_ORDEN = ['EN_PROCESO', 'LISTA', 'PAGADA', 'ENTREGADA'];
+
+function estadosPasados(estadoActual) {
+  const idx = ESTADO_ORDEN.indexOf(estadoActual);
+  if (idx <= 0) return [];
+  return ESTADO_ORDEN.slice(0, idx);
+}
+
 const BADGE_MAQUINA_ESTADO = {
   disponible:    { label: 'Disponible',    cls: 'bg-green-100 text-green-700', dot: 'bg-green-500' },
   en_uso:        { label: 'En uso',        cls: 'bg-blue-100 text-blue-700',   dot: 'bg-blue-500'  },
@@ -241,9 +249,23 @@ export default function DetalleNota() {
             {nota.tamano && <span className="ml-2 text-xs text-gray-500 capitalize">{nota.tamano}</span>}
           </FilaDetalle>
           <FilaDetalle label="Estado">
-            <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${badgeEstado.cls}`}>
-              {badgeEstado.label}
-            </span>
+            <div className="flex items-center flex-wrap gap-1.5">
+              {estadosPasados(nota.estado).map(e => {
+                const cfg = BADGE_ESTADO[e];
+                if (!cfg) return null;
+                return (
+                  <span
+                    key={e}
+                    className="text-xs font-semibold px-2.5 py-1 rounded-full bg-gray-100 text-gray-400 line-through"
+                  >
+                    {cfg.label}
+                  </span>
+                );
+              })}
+              <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${badgeEstado.cls}`}>
+                {badgeEstado.label}
+              </span>
+            </div>
           </FilaDetalle>
           <FilaDetalle label="Estado de pago">
             {badgePago
