@@ -26,7 +26,7 @@ const FORM_INIT = {
   maquina_id:      '',
   cantidad_cargas: '1',
   ajuste:          '0',
-  notas:           '',
+  instrucciones:   '',
 };
 
 const TAMANOS = [
@@ -43,7 +43,7 @@ const ENCARGO_INIT = {
   pago_anticipado:        '',
   fecha_entrega:          '',
   tiempo_entrega:         '',
-  notas:                  '',
+  instrucciones:          '',
   maquina_id:             '',
   activar_inmediatamente: '',
 };
@@ -197,7 +197,7 @@ export default function NuevaNota() {
               pago_anticipado:        nota.estado_pago === 'PAGADO' ? 'SI' : 'NO',
               fecha_entrega:          nota.fecha_entrega  ? String(nota.fecha_entrega).slice(0, 10) : '',
               tiempo_entrega:         nota.tiempo_entrega ?? '',
-              notas:                  nota.notas          ?? '',
+              instrucciones:          nota.instrucciones  ?? '',
               maquina_id:             nota.maquina_id     ? String(nota.maquina_id) : '',
               activar_inmediatamente: '',
             });
@@ -207,13 +207,9 @@ export default function NuevaNota() {
               maquina_id:      nota.maquina_id     ? String(nota.maquina_id) : '',
               cantidad_cargas: nota.cantidad_cargas != null ? String(nota.cantidad_cargas) : '1',
               ajuste:          nota.ajuste         != null ? String(nota.ajuste)           : '0',
-              notas:           nota.notas          ?? '',
+              instrucciones:   nota.instrucciones  ?? '',
             });
             setProductosLista(prods);
-            // Extraer tipo de prenda de la descripción si existe
-            const desc = nota.descripcion ?? '';
-            if (/^Prenda:\s*Ropa/i.test(desc))         setTipoPrenda('ROPA');
-            else if (/^Prenda:\s*Edred/i.test(desc))   setTipoPrenda('EDREDON');
           }
         }
       })
@@ -325,7 +321,7 @@ export default function NuevaNota() {
         estado_pago:     encargoForm.pago_anticipado === 'SI' ? 'PAGADO' : 'DEBE',
         fecha_entrega:   encargoForm.fecha_entrega  || undefined,
         tiempo_entrega:  encargoForm.tiempo_entrega || undefined,
-        notas:           encargoForm.notas          || undefined,
+        instrucciones:   encargoForm.instrucciones  || undefined,
         maquina_id:      encargoForm.maquina_id ? Number(encargoForm.maquina_id) : undefined,
         sucursal:        'lopez_cotilla',
         productos:       encargoProductos
@@ -356,14 +352,12 @@ export default function NuevaNota() {
     setLoading(true);
 
     const cargas = Number(form.cantidad_cargas) || 1;
-    const prendaTxt = tipoPrenda ? `Prenda: ${PRENDA_LABEL[tipoPrenda]} — ` : '';
 
     const payload = {
       modalidad:       'AUTOSERVICIO',
       estado_pago:     'PAGADO',
       sucursal:        'lopez_cotilla',
-      descripcion:     `${prendaTxt}Cargas: ${cargas}`,
-      notas:           form.notas || undefined,
+      instrucciones:   form.instrucciones || undefined,
       maquina_id:      form.maquina_id ? Number(form.maquina_id) : undefined,
       cantidad_cargas: cargas,
       precio_base:     precioCargaAutoservicio,
@@ -680,12 +674,33 @@ export default function NuevaNota() {
                 </div>
                 <div>
                   <label className={LABEL_CLS}>Ajuste ($)</label>
-                  <input
-                    type="number" name="ajuste" step="0.01"
-                    value={encargoForm.ajuste} onChange={handleEncargoChange}
-                    placeholder="Ej. -10 para descuento, 20 para cargo extra"
-                    className={INPUT_CLS}
-                  />
+                  <div className="flex items-center gap-2">
+                    <div className="relative flex-1">
+                      <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 text-base">$</span>
+                      <input
+                        type="number" name="ajuste" step="10"
+                        value={encargoForm.ajuste} onChange={handleEncargoChange}
+                        placeholder="Ej. -10 para descuento, 20 para cargo extra"
+                        className={`${INPUT_CLS} pl-8 text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`}
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setEncargoForm(f => ({ ...f, ajuste: String((Number(f.ajuste) || 0) - 10) }))}
+                      aria-label="Disminuir ajuste"
+                      className="flex-shrink-0 w-14 py-3.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-xl font-semibold hover:bg-gray-50 transition-colors"
+                    >
+                      −
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEncargoForm(f => ({ ...f, ajuste: String((Number(f.ajuste) || 0) + 10) }))}
+                      aria-label="Aumentar ajuste"
+                      className="flex-shrink-0 w-14 py-3.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-xl font-semibold hover:bg-gray-50 transition-colors"
+                    >
+                      +
+                    </button>
+                  </div>
                   <p className="text-xs text-gray-400 mt-1">Descuento (negativo) o cargo extra (positivo).</p>
                 </div>
               </div>
@@ -760,8 +775,8 @@ export default function NuevaNota() {
                 <div>
                   <label className={LABEL_CLS}>Instrucciones</label>
                   <textarea
-                    name="notas" rows={5}
-                    value={encargoForm.notas} onChange={handleEncargoChange}
+                    name="instrucciones" rows={5}
+                    value={encargoForm.instrucciones} onChange={handleEncargoChange}
                     placeholder="Instrucciones especiales..."
                     className={`${INPUT_CLS} resize-none`}
                   />
@@ -1435,18 +1450,6 @@ export default function NuevaNota() {
           )}
         </div>
 
-          {/* Instrucciones */}
-{/* 
-          <div className="py-3"><div className="border-t border-gray-200" /></div>
-
-          <div>
-            <label className={LABEL_CLS}>Instrucciones</label>
-            <textarea
-              name="notas" value={form.notas} onChange={handleChange} rows={5}
-              placeholder="Instrucciones especiales..."
-              className={`${INPUT_CLS} resize-none`}
-            />
-          </div> */}
         </div>
 
         {/* ── Precio Total ─────────────────────────────────── */}

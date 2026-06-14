@@ -379,11 +379,8 @@ export default function DetalleNota() {
                 )
               : <span className="text-gray-400 italic">Anónimo</span>}
           </FilaDetalle>
-          <FilaDetalle label="Descripción">
-            {nota.descripcion ?? <span className="text-gray-400">—</span>}
-          </FilaDetalle>
-          <FilaDetalle label="Observaciones">
-            {nota.notas ?? <span className="text-gray-400">—</span>}
+          <FilaDetalle label="Instrucciones">
+            {nota.instrucciones ?? <span className="text-gray-400">—</span>}
           </FilaDetalle>
           <FilaDetalle label="Ajuste">
             {nota.ajuste != null ? fmtMonto(nota.ajuste) : '—'}
