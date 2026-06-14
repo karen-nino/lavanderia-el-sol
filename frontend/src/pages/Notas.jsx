@@ -4,7 +4,7 @@ import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { esAdmin as esAdminFn } from '../lib/roles';
 
-const ESTADOS = ['TODOS', 'DEBE', 'EN_PROCESO', 'LISTA', 'ENTREGADA', 'CANCELADA'];
+const ESTADOS = ['TODOS', 'EN_PROCESO', 'LISTA', 'ENTREGADA', 'DEBE', 'CANCELADA'];
 
 const FILTRO_LABEL = {
   TODOS: 'Todos',
