@@ -3,9 +3,9 @@ export default function CircularTimer({
   label,
   size = 120,
   color = 'blue',
-  ticks = 36,
+  ticks = 24,
   tickLen = 11,
-  tickWidth = 3,
+  tickWidth = 4,
 }) {
   const isGreen     = color === 'green';
   const filledColor = isGreen ? '#2F9F58' : '#0272C0';
