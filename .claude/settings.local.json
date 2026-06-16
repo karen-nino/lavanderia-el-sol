@@ -84,7 +84,8 @@
       "Bash(PORT=4000 node index.js)",
       "Bash(disown)",
       "Bash(echo \"started pid=$\\(lsof -ti:4000\\)\")",
-      "Bash(PGPASSWORD= psql *)"
+      "Bash(PGPASSWORD= psql *)",
+      "Bash(echo \"exit: $?\")"
     ]
   }
 }

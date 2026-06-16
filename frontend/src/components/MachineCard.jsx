@@ -16,12 +16,14 @@ function formatearCliente(nombre, apellido) {
 }
 
 export default function MachineCard({ maquina, nota, onProcesar, onClick }) {
-  const folioTxt    = nota?.folio ?? (nota?.id != null ? `#${nota.id}` : null);
+  const folioTxt    = nota?.folio
+    ? `#${String(nota.folio).split('-')[0]}`
+    : (nota?.id != null ? `#${nota.id}` : null);
   const clienteTxt  = formatearCliente(nota?.cliente_nombre, nota?.cliente_apellido);
   const infoNota = (folioTxt || clienteTxt) ? (
     <div className="w-full text-center">
       {folioTxt && (
-        <p className="text-kpi-label font-semibold text-dark-blue truncate">{folioTxt}</p>
+        <p className="text-card-title text-dark-blue truncate">{folioTxt}</p>
       )}
       {clienteTxt && (
         <p className="text-kpi-label text-grey truncate">{clienteTxt}</p>
@@ -31,7 +33,7 @@ export default function MachineCard({ maquina, nota, onProcesar, onClick }) {
 
   const header = HEADER_BY_ESTADO[maquina.estado] ?? HEADER_BY_ESTADO.disponible;
   const interactivoCls = onClick
-    ? 'cursor-pointer hover:shadow-lg transition-shadow'
+    ? 'cursor-pointer hover:shadow-card-hover transition-shadow'
     : '';
   const handleKeyDown = onClick
     ? (e) => {
@@ -45,13 +47,16 @@ export default function MachineCard({ maquina, nota, onProcesar, onClick }) {
     ? { role: 'button', tabIndex: 0, onClick, onKeyDown: handleKeyDown }
     : {};
 
+  const headerCls = 'flex items-center justify-center px-3 py-2.5 rounded-t-card';
+  const nombreCls = 'text-section uppercase tracking-wide';
+
   if (maquina.estado === 'disponible') {
     return (
       <div {...containerProps} className={`rounded-card bg-white shadow-card overflow-hidden ${interactivoCls}`}>
-        <div className={`flex items-center justify-center px-3 py-2 ${header.cls}`}>
-          <span className="text-kpi-label uppercase tracking-wide">{maquina.nombre}</span>
+        <div className={`${headerCls} ${header.cls}`}>
+          <span className={nombreCls}>{maquina.nombre}</span>
         </div>
-        <div className="p-card-pad flex flex-col items-center gap-3">
+        <div className="px-card-pad pt-5 pb-6 flex flex-col items-center gap-4">
           <CircularTimer progress={0} label="00:00" />
           <p className="text-kpi-label text-grey uppercase tracking-wide">Disponible</p>
         </div>
@@ -62,11 +67,11 @@ export default function MachineCard({ maquina, nota, onProcesar, onClick }) {
   if (maquina.estado === 'mantenimiento') {
     return (
       <div {...containerProps} className={`rounded-card bg-white shadow-card overflow-hidden ${interactivoCls}`}>
-        <div className={`flex items-center justify-center px-3 py-2 ${header.cls}`}>
-          <span className="text-kpi-label uppercase tracking-wide">{maquina.nombre}</span>
+        <div className={`${headerCls} ${header.cls}`}>
+          <span className={nombreCls}>{maquina.nombre}</span>
         </div>
-        <div className="p-card-pad flex flex-col items-center gap-3">
-          <div className="w-24 h-24 rounded-pill bg-light-red flex items-center justify-center">
+        <div className="px-card-pad pt-5 pb-6 flex flex-col items-center gap-4">
+          <div className="w-28 h-28 rounded-pill bg-light-red flex items-center justify-center">
             <span className="text-card-title text-red">⚠</span>
           </div>
           <p className="text-kpi-label text-red uppercase tracking-wide">Mantenimiento</p>
@@ -77,16 +82,21 @@ export default function MachineCard({ maquina, nota, onProcesar, onClick }) {
 
   if (maquina.necesita_procesar) {
     return (
-      <div {...containerProps} className={`rounded-card bg-light-green shadow-card overflow-hidden ${interactivoCls}`}>
-        <div className="flex items-center justify-center px-3 py-2 bg-green text-white">
-          <span className="text-kpi-label uppercase tracking-wide">{maquina.nombre}</span>
+      <div
+        {...containerProps}
+        className={`rounded-card bg-light-green shadow-card overflow-hidden border-2 border-green ${interactivoCls}`}
+      >
+        <div className={`${headerCls} bg-green text-white`}>
+          <span className={nombreCls}>{maquina.nombre}</span>
         </div>
-        <div className="p-card-pad flex flex-col items-center gap-3">
-          <p className="text-card-title text-green text-center">Lavado terminado</p>
+        <div className="px-card-pad pt-5 pb-6 flex flex-col items-center gap-3">
+          <p className="text-card-title text-green text-center uppercase tracking-wide">
+            ¡Ciclo<br />terminado!
+          </p>
           {infoNota}
           <button
             onClick={(e) => { e.stopPropagation(); onProcesar?.(maquina); }}
-            className="w-full bg-green text-white text-section py-3 rounded-card-sm hover:opacity-90 transition-opacity"
+            className="w-full bg-green text-white text-section py-4 rounded-card-sm shadow-card hover:opacity-90 transition-opacity mt-1"
           >
             PROCESAR
           </button>
@@ -97,12 +107,11 @@ export default function MachineCard({ maquina, nota, onProcesar, onClick }) {
 
   return (
     <div {...containerProps} className={`rounded-card bg-white shadow-card overflow-hidden ${interactivoCls}`}>
-      <div className={`flex items-center justify-center px-3 py-2 ${header.cls}`}>
-        <span className="text-kpi-label uppercase tracking-wide">{maquina.nombre}</span>
+      <div className={`${headerCls} ${header.cls}`}>
+        <span className={nombreCls}>{maquina.nombre}</span>
       </div>
-      <div className="p-card-pad flex flex-col items-center gap-3">
+      <div className="px-card-pad pt-5 pb-6 flex flex-col items-center gap-4">
         <CircularTimer progress={maquina.progreso ?? 1} label={maquina.tiempo_restante ?? '—:—'} />
-        <p className="text-kpi-label text-grey uppercase tracking-wide">En uso</p>
         {infoNota}
       </div>
     </div>
