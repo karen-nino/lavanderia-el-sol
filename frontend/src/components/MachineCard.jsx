@@ -96,7 +96,7 @@ export default function MachineCard({ maquina, nota, onProcesar, onClick }) {
           {infoNota}
           <button
             onClick={(e) => { e.stopPropagation(); onProcesar?.(maquina); }}
-            className="w-full bg-green text-white text-section py-4 rounded-card-sm shadow-card hover:opacity-90 transition-opacity mt-1"
+            className="w-full bg-green text-white text-section py-8 rounded-card-sm shadow-card hover:opacity-90 transition-opacity mt-1"
           >
             PROCESAR
           </button>
