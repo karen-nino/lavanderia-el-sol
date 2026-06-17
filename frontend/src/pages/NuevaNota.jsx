@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { api } from '../lib/api';
+import { capitalizarNombre } from '../lib/texto';
 
 const INPUT_CLS =
   'w-full px-4 py-3.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition';
@@ -250,14 +251,14 @@ export default function NuevaNota() {
     setEncargoProductos(prev => prev.filter((_, idx) => idx !== i));
 
   const crearCliente = async () => {
-    const nombre = nuevoCliente.nombre.trim();
+    const nombre = capitalizarNombre(nuevoCliente.nombre);
     if (!nombre) return;
     setCreandoCliente(true);
     setError('');
     try {
       const c = await api.post('/clientes', {
         nombre,
-        apellido: nuevoCliente.apellido.trim() || undefined,
+        apellido: capitalizarNombre(nuevoCliente.apellido) || undefined,
         telefono: nuevoCliente.telefono.trim() || undefined,
       });
       setClientes(prev => [...prev, c].sort((a, b) => a.nombre.localeCompare(b.nombre)));

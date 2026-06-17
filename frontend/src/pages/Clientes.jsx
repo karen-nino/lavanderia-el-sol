@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { esAdmin as esAdminFn } from '../lib/roles';
+import { capitalizarNombre } from '../lib/texto';
 
 const INPUT_CLS =
   'w-full px-4 py-3.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition';
@@ -60,7 +61,12 @@ export default function Clientes() {
     setFormError('');
     setGuardando(true);
     try {
-      const nuevo = await api.post('/clientes', form);
+      const payload = {
+        ...form,
+        nombre:   capitalizarNombre(form.nombre),
+        apellido: capitalizarNombre(form.apellido),
+      };
+      const nuevo = await api.post('/clientes', payload);
       setClientes(prev => [...prev, nuevo].sort((a, b) => a.nombre.localeCompare(b.nombre)));
       cerrarModal();
     } catch (err) {
@@ -84,7 +90,12 @@ export default function Clientes() {
     setEditError('');
     setEditando(true);
     try {
-      const actualizado = await api.patch(`/clientes/${editCliente.id}`, editForm);
+      const payload = {
+        ...editForm,
+        nombre:   capitalizarNombre(editForm.nombre),
+        apellido: capitalizarNombre(editForm.apellido),
+      };
+      const actualizado = await api.patch(`/clientes/${editCliente.id}`, payload);
       setClientes(prev =>
         prev.map(c => c.id === actualizado.id ? actualizado : c)
             .sort((a, b) => a.nombre.localeCompare(b.nombre))
