@@ -12,6 +12,7 @@ export default {
         bronce:         '#CB7D16',
         'dark-blue':    '#1B3A5C',
         grey:           '#8B8B8B',
+        'dark-grey':    '#555555',
         'light-blue':   '#DCF1FF',
         'light-green':  '#E4FFEE',
         'light-red':    '#FFECEA',

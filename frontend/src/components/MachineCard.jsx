@@ -23,10 +23,10 @@ export default function MachineCard({ maquina, nota, onProcesar, onClick }) {
   const infoNota = (folioTxt || clienteTxt) ? (
     <div className="w-full text-center">
       {folioTxt && (
-        <p className="text-card-title text-dark-blue truncate">{folioTxt}</p>
+        <p className="text-card-title text-dark-grey text-xl font-bold truncate">{folioTxt}</p>
       )}
       {clienteTxt && (
-        <p className="text-kpi-label text-grey truncate">{clienteTxt}</p>
+        <p className="text-kpi-label text-grey text-sm font-medium truncate">{clienteTxt}</p>
       )}
     </div>
   ) : null;
@@ -84,7 +84,7 @@ export default function MachineCard({ maquina, nota, onProcesar, onClick }) {
     return (
       <div
         {...containerProps}
-        className={`rounded-card bg-light-green shadow-card overflow-hidden border-2 border-green ${interactivoCls}`}
+        className={`rounded-card bg-light-green shadow-card overflow-hidden ring-2 ring-inset ring-green ${interactivoCls}`}
       >
         <div className={`${headerCls} bg-green text-white`}>
           <span className={nombreCls}>{maquina.nombre}</span>
