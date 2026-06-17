@@ -24,7 +24,7 @@ function Tarjeta({ titulo, valor, sub, color }) {
   const colores = {
     azul:    'bg-blue-50 border-blue-200 text-blue-700',
     verde:   'bg-green-50 border-green-200 text-green-700',
-    morado:  'bg-purple-50 border-purple-200 text-purple-700',
+    morado:  'bg-light-blue border-blue-200 text-blue-700',
     naranja: 'bg-orange-50 border-orange-200 text-orange-700',
   };
   return (
@@ -41,7 +41,7 @@ function CustomTooltip({ active, payload, label }) {
   return (
     <div className="bg-white border border-gray-200 rounded-lg shadow px-3 py-2 text-sm">
       <p className="font-medium text-gray-700">{fmtFecha(label)}</p>
-      <p className="text-indigo-600 font-semibold">{fmt(payload[0].value)}</p>
+      <p className="text-blue font-semibold">{fmt(payload[0].value)}</p>
     </div>
   );
 }
@@ -85,7 +85,7 @@ export default function Ventas() {
               onClick={() => setPeriodo(p.id)}
               className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
                 periodo === p.id
-                  ? 'bg-indigo-600 text-white'
+                  ? 'bg-blue text-white'
                   : 'bg-white text-gray-600 border border-gray-300 hover:bg-gray-50'
               }`}
             >
@@ -120,7 +120,7 @@ export default function Ventas() {
       {/* Loading */}
       {loading && (
         <div className="flex justify-center py-12">
-          <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+          <div className="w-8 h-8 border-4 border-blue border-t-transparent rounded-full animate-spin" />
         </div>
       )}
 

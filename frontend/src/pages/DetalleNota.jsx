@@ -14,7 +14,7 @@ const BADGE_ESTADO = {
 };
 
 const BADGE_MODALIDAD = {
-  AUTOSERVICIO: { label: 'Autoservicio', cls: 'bg-purple-100 text-purple-700' },
+  AUTOSERVICIO: { label: 'Autoservicio', cls: 'bg-light-blue text-blue-700' },
   EDREDON:      { label: 'Edredón',      cls: 'bg-sky-100 text-sky-700'       },
   POR_ENCARGO:  { label: 'Por encargo',  cls: 'bg-amber-100 text-amber-700'   },
 };
@@ -190,7 +190,7 @@ export default function DetalleNota() {
   if (loading) {
     return (
       <div className="flex justify-center items-center py-24">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" />
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue" />
       </div>
     );
   }

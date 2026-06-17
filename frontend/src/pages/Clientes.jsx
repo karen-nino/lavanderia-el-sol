@@ -5,7 +5,7 @@ import { esAdmin as esAdminFn } from '../lib/roles';
 import { capitalizarNombre } from '../lib/texto';
 
 const INPUT_CLS =
-  'w-full px-4 py-3.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition';
+  'w-full px-4 py-3.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent transition';
 
 const FORM_INIT = { nombre: '', apellido: '', telefono: '' };
 
@@ -144,7 +144,7 @@ export default function Clientes() {
         <button
           onClick={abrirModal}
           aria-label="Nuevo cliente"
-          className="w-11 h-11 rounded-full bg-indigo-600 hover:bg-indigo-700 text-white flex items-center justify-center transition-colors flex-shrink-0"
+          className="w-11 h-11 rounded-full bg-blue hover:opacity-90 text-white flex items-center justify-center transition-colors flex-shrink-0"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5}
@@ -167,13 +167,13 @@ export default function Clientes() {
           placeholder="Buscar por nombre o teléfono..."
           value={busqueda}
           onChange={e => setBusqueda(e.target.value)}
-          className="w-full pl-11 pr-4 py-3.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white transition"
+          className="w-full pl-11 pr-4 py-3.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent bg-white transition"
         />
       </div>
 
       {loading && (
         <div className="flex justify-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" />
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue" />
         </div>
       )}
 
@@ -224,7 +224,7 @@ export default function Clientes() {
                           )}
                           <button
                             onClick={() => abrirEditar(c)}
-                            className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                            className="p-1.5 text-gray-400 hover:text-blue hover:bg-light-blue rounded-lg transition-colors"
                             title="Editar"
                           >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -316,7 +316,7 @@ export default function Clientes() {
                 <button
                   type="button"
                   onClick={() => { const c = infoCliente; setInfoCliente(null); abrirEditar(c); }}
-                  className="w-full flex items-center justify-center gap-2 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg text-sm transition-colors"
+                  className="w-full flex items-center justify-center gap-2 py-3 bg-blue hover:opacity-90 text-white font-medium rounded-lg text-sm transition-colors"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -382,7 +382,7 @@ export default function Clientes() {
                   Cancelar
                 </button>
                 <button type="submit" disabled={guardando}
-                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors">
+                  className="flex-1 bg-blue hover:opacity-90 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors">
                   {guardando ? 'Guardando...' : 'Guardar'}
                 </button>
               </div>
@@ -430,7 +430,7 @@ export default function Clientes() {
                   Cancelar
                 </button>
                 <button type="submit" disabled={editando}
-                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors">
+                  className="flex-1 bg-blue hover:opacity-90 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors">
                   {editando ? 'Guardando...' : 'Guardar cambios'}
                 </button>
               </div>

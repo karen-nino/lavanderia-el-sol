@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { esAdmin as esAdminFn } from '../lib/roles';
 
 const INPUT_CLS =
-  'w-full px-4 py-3.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition';
+  'w-full px-4 py-3.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent transition';
 
 const CATEGORIAS = ['Detergente', 'Suavizante', 'Blanqueador', 'Bolsas', 'Otro'];
 const UNIDADES   = ['Litros', 'Kilos', 'Piezas', 'Mililitros'];
@@ -207,7 +207,7 @@ function ModalProducto({ producto, onClose, onGuardado }) {
             </button>
             <button
               type="submit" disabled={loading}
-              className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
+              className="flex-1 bg-blue hover:opacity-90 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
             >
               {loading ? 'Guardando...' : esEdicion ? 'Guardar cambios' : 'Crear producto'}
             </button>
@@ -376,7 +376,7 @@ export default function Inventario() {
         <button
           onClick={() => setModalProducto('nuevo')}
           aria-label="Agregar producto"
-          className="w-11 h-11 rounded-full bg-indigo-600 hover:bg-indigo-700 text-white flex items-center justify-center transition-colors flex-shrink-0"
+          className="w-11 h-11 rounded-full bg-blue hover:opacity-90 text-white flex items-center justify-center transition-colors flex-shrink-0"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5}
@@ -409,7 +409,7 @@ export default function Inventario() {
 
       {loading && (
         <div className="flex justify-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" />
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue" />
         </div>
       )}
 
@@ -422,7 +422,7 @@ export default function Inventario() {
           <p className="text-gray-400 text-sm mb-3">Sin productos en inventario</p>
           <button
             onClick={() => setModalProducto('nuevo')}
-            className="text-sm text-indigo-600 hover:text-indigo-800 font-medium"
+            className="text-sm text-blue hover:text-blue-800 font-medium"
           >
             + Agregar el primero
           </button>
@@ -484,7 +484,7 @@ export default function Inventario() {
                           <div className="flex items-center justify-end gap-1">
                             <button
                               onClick={() => setModalProducto(p)}
-                              className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                              className="p-1.5 text-gray-400 hover:text-blue hover:bg-light-blue rounded-lg transition-colors"
                               title="Editar"
                             >
                               <IconoLapiz />
@@ -609,7 +609,7 @@ export default function Inventario() {
                   <button
                     type="button"
                     onClick={() => { setInfoProducto(null); setModalProducto(p); }}
-                    className="w-full flex items-center justify-center gap-2 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg text-sm transition-colors"
+                    className="w-full flex items-center justify-center gap-2 py-3 bg-blue hover:opacity-90 text-white font-medium rounded-lg text-sm transition-colors"
                   >
                     <IconoLapiz />
                     Editar

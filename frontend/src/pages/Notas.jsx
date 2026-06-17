@@ -51,7 +51,7 @@ const BADGE_ESTADO = {
 };
 
 const BADGE_MODALIDAD = {
-  AUTOSERVICIO: { label: 'Autoservicio', cls: 'bg-purple-100 text-purple-700' },
+  AUTOSERVICIO: { label: 'Autoservicio', cls: 'bg-light-blue text-blue-700' },
   EDREDON:      { label: 'Edredón',      cls: 'bg-sky-100 text-sky-700'       },
   POR_ENCARGO:  { label: 'Por encargo',  cls: 'bg-amber-100 text-amber-700'   },
 };
@@ -144,7 +144,7 @@ export default function Notas() {
               aria-label="Filtrar por estado"
               className={`w-11 h-11 rounded-full border flex items-center justify-center transition-colors ${
                 filtro !== 'TODOS'
-                  ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
+                  ? 'border-blue bg-light-blue text-blue-700'
                   : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
               }`}
             >
@@ -164,7 +164,7 @@ export default function Notas() {
                       onClick={() => { setFiltro(e); setMostrarEstado(false); }}
                       className={`text-left text-sm px-3 py-2 rounded-lg transition-colors ${
                         filtro === e
-                          ? 'bg-indigo-50 text-indigo-700 font-medium'
+                          ? 'bg-light-blue text-blue-700 font-medium'
                           : 'text-gray-700 hover:bg-gray-50'
                       }`}
                     >
@@ -182,7 +182,7 @@ export default function Notas() {
               aria-label="Filtrar por fecha"
               className={`w-11 h-11 rounded-full border flex items-center justify-center transition-colors ${
                 rangoFecha !== 'TODAS'
-                  ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
+                  ? 'border-blue bg-light-blue text-blue-700'
                   : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
               }`}
             >
@@ -203,7 +203,7 @@ export default function Notas() {
                       onClick={() => { setRangoFecha(r.value); setMostrarFecha(false); }}
                       className={`text-left text-sm px-3 py-2 rounded-lg transition-colors ${
                         rangoFecha === r.value
-                          ? 'bg-indigo-50 text-indigo-700 font-medium'
+                          ? 'bg-light-blue text-blue-700 font-medium'
                           : 'text-gray-700 hover:bg-gray-50'
                       }`}
                     >
@@ -218,7 +218,7 @@ export default function Notas() {
           <Link
             to="/notas/nueva"
             aria-label="Nueva nota"
-            className="w-11 h-11 rounded-full bg-indigo-600 hover:bg-indigo-700 text-white flex items-center justify-center transition-colors flex-shrink-0"
+            className="w-11 h-11 rounded-full bg-blue hover:opacity-90 text-white flex items-center justify-center transition-colors flex-shrink-0"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5}
@@ -242,13 +242,13 @@ export default function Notas() {
           placeholder="Buscar por folio, cliente o teléfono..."
           value={busqueda}
           onChange={e => setBusqueda(e.target.value)}
-          className="w-full pl-11 pr-4 py-3.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white transition"
+          className="w-full pl-11 pr-4 py-3.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent bg-white transition"
         />
       </div>
 
       {loading && (
         <div className="flex justify-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" />
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue" />
         </div>
       )}
 
@@ -292,7 +292,7 @@ export default function Notas() {
                         <tr
                           key={n.id}
                           onClick={() => navigate(`/notas/${n.id}`)}
-                          className="hover:bg-indigo-50 transition-colors cursor-pointer"
+                          className="hover:bg-light-blue transition-colors cursor-pointer"
                         >
                           <td className="px-4 py-3 font-mono text-xs text-gray-600">
                             #{n.folio?.split('-')[0] ?? n.id}

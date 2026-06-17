@@ -4,7 +4,7 @@ import { api } from '../lib/api';
 import { capitalizarNombre } from '../lib/texto';
 
 const INPUT_CLS =
-  'w-full px-4 py-3.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition';
+  'w-full px-4 py-3.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent transition';
 
 const LABEL_CLS = 'block text-sm font-semibold text-gray-900 mb-2';
 
@@ -411,7 +411,7 @@ export default function NuevaNota() {
   if (loadingData) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" />
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue" />
       </div>
     );
   }
@@ -496,7 +496,7 @@ export default function NuevaNota() {
                   >
                     <span className="text-base text-gray-900">{opt.label}</span>
                     <span className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
-                      selected ? 'border-indigo-600 bg-indigo-600' : 'border-gray-300'
+                      selected ? 'border-blue bg-blue' : 'border-gray-300'
                     }`}>
                       {selected && (
                         <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24">
@@ -523,7 +523,7 @@ export default function NuevaNota() {
                   <span
                     key={i}
                     className={`h-1.5 w-8 rounded-full ${
-                      i + 1 <= encargoStep ? 'bg-indigo-600' : 'bg-gray-200'
+                      i + 1 <= encargoStep ? 'bg-blue' : 'bg-gray-200'
                     }`}
                   />
                 ))}
@@ -547,14 +547,14 @@ export default function NuevaNota() {
                     placeholder="Buscar por nombre o teléfono..."
                     value={clienteSearch}
                     onChange={e => setClienteSearch(e.target.value)}
-                    className="w-full pl-11 pr-4 py-3.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
+                    className="w-full pl-11 pr-4 py-3.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent transition"
                   />
                 </div>
 
                 {clienteSeleccionado && !clienteSearchQ && (
-                  <div className="flex items-center justify-between gap-3 bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-3">
+                  <div className="flex items-center justify-between gap-3 bg-light-blue border border-blue-200 rounded-lg px-4 py-3">
                     <div>
-                      <p className="text-xs font-medium text-indigo-500 uppercase tracking-wide">Cliente seleccionado</p>
+                      <p className="text-xs font-medium text-blue uppercase tracking-wide">Cliente seleccionado</p>
                       <p className="font-medium text-gray-900">
                         {`${clienteSeleccionado.nombre}${clienteSeleccionado.apellido ? ' ' + clienteSeleccionado.apellido : ''}`}
                       </p>
@@ -566,7 +566,7 @@ export default function NuevaNota() {
                       type="button"
                       onClick={() => setEncargoForm(f => ({ ...f, cliente_id: '' }))}
                       aria-label="Quitar cliente"
-                      className="flex-shrink-0 px-3 py-1.5 text-sm text-indigo-700 hover:bg-indigo-100 rounded-md transition-colors"
+                      className="flex-shrink-0 px-3 py-1.5 text-sm text-blue-700 hover:bg-light-blue rounded-md transition-colors"
                     >
                       Cambiar
                     </button>
@@ -591,7 +591,7 @@ export default function NuevaNota() {
                               setClienteSearch('');
                             }}
                             className={`w-full px-4 py-3 flex items-center justify-between text-left transition-colors ${
-                              selected ? 'bg-indigo-50' : 'hover:bg-gray-50'
+                              selected ? 'bg-light-blue' : 'hover:bg-gray-50'
                             }`}
                           >
                             <div>
@@ -603,7 +603,7 @@ export default function NuevaNota() {
                               )}
                             </div>
                             <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
-                              selected ? 'border-indigo-600 bg-indigo-600' : 'border-gray-300'
+                              selected ? 'border-blue bg-blue' : 'border-gray-300'
                             }`}>
                               {selected && (
                                 <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24">
@@ -621,7 +621,7 @@ export default function NuevaNota() {
                 <button
                   type="button"
                   onClick={() => setNuevoClienteOpen(true)}
-                  className="w-full py-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-600 hover:text-indigo-600 hover:border-indigo-400 hover:bg-indigo-50/40 transition-colors flex items-center justify-center gap-2 text-sm font-medium"
+                  className="w-full py-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-600 hover:text-blue hover:border-blue-400 hover:bg-light-blue/40 transition-colors flex items-center justify-center gap-2 text-sm font-medium"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -656,8 +656,8 @@ export default function NuevaNota() {
                           })}
                           className={`py-8 border-2 rounded-xl font-semibold text-lg transition-colors ${
                             selected
-                              ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
-                              : 'border-gray-300 bg-white text-gray-700 hover:border-indigo-300'
+                              ? 'border-blue bg-light-blue text-blue-700'
+                              : 'border-gray-300 bg-white text-gray-700 hover:border-blue-300'
                           }`}
                         >
                           {opt.label}
@@ -679,8 +679,8 @@ export default function NuevaNota() {
                           onClick={() => setEncargoForm(f => ({ ...f, tamano: t.v }))}
                           className={`py-8 border-2 rounded-xl font-semibold text-lg transition-colors ${
                             selected
-                              ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
-                              : 'border-gray-300 bg-white text-gray-700 hover:border-indigo-300'
+                              ? 'border-blue bg-light-blue text-blue-700'
+                              : 'border-gray-300 bg-white text-gray-700 hover:border-blue-300'
                           }`}
                         >
                           {t.label}
@@ -729,7 +729,7 @@ export default function NuevaNota() {
                       +
                     </button>
                   </div>
-                  <p className="text-xs text-indigo-600 mt-1 font-medium">
+                  <p className="text-xs text-blue mt-1 font-medium">
                     Subtotal cargas: ${encargoSubtotalCargas.toFixed(2)}
                   </p>
                 </div>
@@ -784,8 +784,8 @@ export default function NuevaNota() {
                         onClick={() => setEncargoForm(f => ({ ...f, pago_anticipado: opt.v }))}
                         className={`py-8 border-2 rounded-xl font-semibold text-lg transition-colors ${
                           selected
-                            ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
-                            : 'border-gray-300 bg-white text-gray-700 hover:border-indigo-300'
+                            ? 'border-blue bg-light-blue text-blue-700'
+                            : 'border-gray-300 bg-white text-gray-700 hover:border-blue-300'
                         }`}
                       >
                         {opt.label}
@@ -823,8 +823,8 @@ export default function NuevaNota() {
                           }))}
                           className={`py-4 border-2 rounded-xl font-semibold text-base transition-colors ${
                             selected
-                              ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
-                              : 'border-gray-300 bg-white text-gray-700 hover:border-indigo-300'
+                              ? 'border-blue bg-light-blue text-blue-700'
+                              : 'border-gray-300 bg-white text-gray-700 hover:border-blue-300'
                           }`}
                         >
                           {t.label}
@@ -901,7 +901,7 @@ export default function NuevaNota() {
                             >
                               <span className="text-base text-gray-500 italic">Sin asignar</span>
                               <span className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
-                                !encargoForm.maquina_id ? 'border-indigo-600 bg-indigo-600' : 'border-gray-300'
+                                !encargoForm.maquina_id ? 'border-blue bg-blue' : 'border-gray-300'
                               }`}>
                                 {!encargoForm.maquina_id && (
                                   <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24">
@@ -926,7 +926,7 @@ export default function NuevaNota() {
                                     {formatMaquina(m)}
                                   </span>
                                   <span className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
-                                    selected ? 'border-indigo-600 bg-indigo-600' : 'border-gray-300'
+                                    selected ? 'border-blue bg-blue' : 'border-gray-300'
                                   }`}>
                                     {selected && (
                                       <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24">
@@ -967,8 +967,8 @@ export default function NuevaNota() {
                             onClick={() => setEncargoForm(f => ({ ...f, activar_inmediatamente: opt.v }))}
                             className={`py-8 border-2 rounded-xl font-semibold text-lg transition-colors ${
                               selected
-                                ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
-                                : 'border-gray-300 bg-white text-gray-700 hover:border-indigo-300'
+                                ? 'border-blue bg-light-blue text-blue-700'
+                                : 'border-gray-300 bg-white text-gray-700 hover:border-blue-300'
                             }`}
                           >
                             {opt.label}
@@ -999,7 +999,7 @@ export default function NuevaNota() {
                     <button
                       type="button"
                       onClick={agregarEncargoProducto}
-                      className="w-full py-8 border-2 border-dashed border-gray-300 rounded-xl text-gray-500 hover:text-indigo-600 hover:border-indigo-400 hover:bg-indigo-50/40 transition-colors flex flex-col items-center justify-center gap-2"
+                      className="w-full py-8 border-2 border-dashed border-gray-300 rounded-xl text-gray-500 hover:text-blue hover:border-blue-400 hover:bg-light-blue/40 transition-colors flex flex-col items-center justify-center gap-2"
                     >
                       <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v16m8-8H4" />
@@ -1066,7 +1066,7 @@ export default function NuevaNota() {
                               {subtotal > 0 && (
                                 <div className="text-right">
                                   <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Subtotal</p>
-                                  <p className="text-lg font-bold text-indigo-700">${subtotal.toFixed(2)}</p>
+                                  <p className="text-lg font-bold text-blue-700">${subtotal.toFixed(2)}</p>
                                 </div>
                               )}
                             </div>
@@ -1077,7 +1077,7 @@ export default function NuevaNota() {
                       <button
                         type="button"
                         onClick={agregarEncargoProducto}
-                        className="w-full py-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-600 hover:text-indigo-600 hover:border-indigo-400 hover:bg-indigo-50/40 transition-colors flex items-center justify-center gap-2 text-sm font-medium"
+                        className="w-full py-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-600 hover:text-blue hover:border-blue-400 hover:bg-light-blue/40 transition-colors flex items-center justify-center gap-2 text-sm font-medium"
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -1089,11 +1089,11 @@ export default function NuevaNota() {
                 </div>
 
                 {/* Resumen */}
-                <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4">
-                  <p className="text-xs font-medium text-indigo-500 uppercase tracking-wide mb-2">
+                <div className="bg-light-blue border border-blue-200 rounded-xl p-4">
+                  <p className="text-xs font-medium text-blue uppercase tracking-wide mb-2">
                     Resumen
                   </p>
-                  <div className="space-y-1 mb-3 text-sm text-indigo-700">
+                  <div className="space-y-1 mb-3 text-sm text-blue-700">
                     <div className="flex justify-between">
                       <span>Cliente</span>
                       <span className="font-medium">
@@ -1147,7 +1147,7 @@ export default function NuevaNota() {
                       </div>
                     )}
                   </div>
-                  <div className="space-y-1 mb-2 text-sm text-indigo-600 border-t border-indigo-200 pt-3">
+                  <div className="space-y-1 mb-2 text-sm text-blue border-t border-blue-200 pt-3">
                     <div className="flex justify-between">
                       <span>Cargas ({encargoCargas} × ${precioCargaEncargo.toFixed(2)})</span>
                       <span>${encargoSubtotalCargas.toFixed(2)}</span>
@@ -1165,7 +1165,7 @@ export default function NuevaNota() {
                       </div>
                     )}
                   </div>
-                  <p className="text-3xl font-bold text-indigo-700 border-t border-indigo-200 pt-2">
+                  <p className="text-3xl font-bold text-blue-700 border-t border-blue-200 pt-2">
                     ${encargoPrecioTotal.toFixed(2)}
                   </p>
                 </div>
@@ -1191,7 +1191,7 @@ export default function NuevaNota() {
                   type="button"
                   onClick={() => setEncargoStep(s => s + 1)}
                   disabled={!encargoPuedeAvanzar}
-                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-medium py-3.5 rounded-lg text-base transition-colors"
+                  className="flex-1 bg-blue hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed text-white font-medium py-3.5 rounded-lg text-base transition-colors"
                 >
                   Siguiente
                 </button>
@@ -1200,7 +1200,7 @@ export default function NuevaNota() {
                   type="button"
                   onClick={handleEncargoSubmit}
                   disabled={encargoLoading}
-                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
+                  className="flex-1 bg-blue hover:opacity-90 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
                 >
                   {encargoLoading
                     ? (esEdicion ? 'Guardando...' : 'Creando...')
@@ -1257,7 +1257,7 @@ export default function NuevaNota() {
                   >
                     <span className="text-base text-gray-900">{opt.label}</span>
                     <span className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
-                      selected ? 'border-indigo-600 bg-indigo-600' : 'border-gray-300'
+                      selected ? 'border-blue bg-blue' : 'border-gray-300'
                     }`}>
                       {selected && (
                         <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24">
@@ -1323,7 +1323,7 @@ export default function NuevaNota() {
                       >
                         <span className="text-base text-gray-500 italic">Sin asignar</span>
                         <span className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
-                          !form.maquina_id ? 'border-indigo-600 bg-indigo-600' : 'border-gray-300'
+                          !form.maquina_id ? 'border-blue bg-blue' : 'border-gray-300'
                         }`}>
                           {!form.maquina_id && (
                             <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24">
@@ -1345,7 +1345,7 @@ export default function NuevaNota() {
                               {formatMaquina(m)}
                             </span>
                             <span className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
-                              selected ? 'border-indigo-600 bg-indigo-600' : 'border-gray-300'
+                              selected ? 'border-blue bg-blue' : 'border-gray-300'
                             }`}>
                               {selected && (
                                 <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24">
@@ -1397,7 +1397,7 @@ export default function NuevaNota() {
                 +
               </button>
             </div>
-            <p className="text-xs text-indigo-600 mt-1 font-medium">
+            <p className="text-xs text-blue mt-1 font-medium">
               Subtotal cargas: ${subtotalCargas.toFixed(2)}
             </p>
           </div>
@@ -1451,7 +1451,7 @@ export default function NuevaNota() {
             <button
               type="button"
               onClick={agregarProducto}
-              className="w-full py-8 border-2 border-dashed border-gray-300 rounded-xl text-gray-500 hover:text-indigo-600 hover:border-indigo-400 hover:bg-indigo-50/40 transition-colors flex flex-col items-center justify-center gap-2"
+              className="w-full py-8 border-2 border-dashed border-gray-300 rounded-xl text-gray-500 hover:text-blue hover:border-blue-400 hover:bg-light-blue/40 transition-colors flex flex-col items-center justify-center gap-2"
             >
               <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v16m8-8H4" />
@@ -1518,7 +1518,7 @@ export default function NuevaNota() {
                       {subtotal > 0 && (
                         <div className="text-right">
                           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Subtotal</p>
-                          <p className="text-lg font-bold text-indigo-700">${subtotal.toFixed(2)}</p>
+                          <p className="text-lg font-bold text-blue-700">${subtotal.toFixed(2)}</p>
                         </div>
                       )}
                     </div>
@@ -1529,7 +1529,7 @@ export default function NuevaNota() {
               <button
                 type="button"
                 onClick={agregarProducto}
-                className="w-full py-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-600 hover:text-indigo-600 hover:border-indigo-400 hover:bg-indigo-50/40 transition-colors flex items-center justify-center gap-2 text-sm font-medium"
+                className="w-full py-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-600 hover:text-blue hover:border-blue-400 hover:bg-light-blue/40 transition-colors flex items-center justify-center gap-2 text-sm font-medium"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -1546,11 +1546,11 @@ export default function NuevaNota() {
         {(() => {
           const maquinaSel = maquinas.find(m => String(m.id) === String(form.maquina_id));
           return (
-            <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4">
-              <p className="text-xs font-medium text-indigo-500 uppercase tracking-wide mb-2">
+            <div className="bg-light-blue border border-blue-200 rounded-xl p-4">
+              <p className="text-xs font-medium text-blue uppercase tracking-wide mb-2">
                 Resumen
               </p>
-              <div className="space-y-1 mb-3 text-sm text-indigo-700">
+              <div className="space-y-1 mb-3 text-sm text-blue-700">
                 <div className="flex justify-between">
                   <span>Servicio</span>
                   <span className="font-medium">{TIPO_LABEL[tipoServicio]}</span>
@@ -1566,7 +1566,7 @@ export default function NuevaNota() {
                   </span>
                 </div>
               </div>
-              <div className="space-y-1 mb-2 text-sm text-indigo-600 border-t border-indigo-200 pt-3">
+              <div className="space-y-1 mb-2 text-sm text-blue border-t border-blue-200 pt-3">
                 <div className="flex justify-between">
                   <span>Cargas ({form.cantidad_cargas || 1} × ${precioCargaAutoservicio.toFixed(2)})</span>
                   <span>${subtotalCargas.toFixed(2)}</span>
@@ -1584,7 +1584,7 @@ export default function NuevaNota() {
                   </div>
                 )}
               </div>
-              <p className="text-3xl font-bold text-indigo-700 border-t border-indigo-200 pt-2">
+              <p className="text-3xl font-bold text-blue-700 border-t border-blue-200 pt-2">
                 ${precioTotal.toFixed(2)}
               </p>
             </div>
@@ -1606,7 +1606,7 @@ export default function NuevaNota() {
           </button>
           <button
             type="submit" disabled={loading}
-            className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
+            className="flex-1 bg-blue hover:opacity-90 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
           >
             {loading
               ? (esEdicion ? 'Guardando...' : 'Creando...')
@@ -1681,7 +1681,7 @@ export default function NuevaNota() {
                   type="button"
                   onClick={crearCliente}
                   disabled={creandoCliente || !nuevoCliente.nombre.trim()}
-                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
+                  className="flex-1 bg-blue hover:opacity-90 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
                 >
                   {creandoCliente ? 'Creando...' : 'Crear cliente'}
                 </button>
@@ -1749,7 +1749,7 @@ export default function NuevaNota() {
             <button
               type="button"
               onClick={() => { setNotaCreada(null); navigate('/notas'); }}
-              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
+              className="w-full bg-blue hover:opacity-90 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
             >
               Aceptar
             </button>

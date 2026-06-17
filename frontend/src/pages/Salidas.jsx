@@ -117,7 +117,7 @@ export default function Salidas() {
   if (loading) {
     return (
       <div className="flex justify-center items-center py-24">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" />
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue" />
       </div>
     );
   }
@@ -207,7 +207,7 @@ export default function Salidas() {
               <button
                 onClick={activarMaquina}
                 disabled={loadingMaquina}
-                className="flex-shrink-0 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
+                className="flex-shrink-0 px-4 py-2 bg-blue hover:opacity-90 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
               >
                 {loadingMaquina ? 'Activando...' : 'Activar máquina'}
               </button>
@@ -222,7 +222,7 @@ export default function Salidas() {
           <h2 className="text-sm font-semibold text-gray-700">Productos en esta nota</h2>
           <button
             onClick={cargarDatos}
-            className="text-xs text-indigo-600 hover:underline"
+            className="text-xs text-blue hover:underline"
           >
             Actualizar
           </button>
@@ -289,12 +289,12 @@ export default function Salidas() {
                   value={cantidades[p.id] ?? ''}
                   onChange={e => setCantidades(prev => ({ ...prev, [p.id]: e.target.value }))}
                   placeholder="Cant."
-                  className="w-20 border border-gray-200 rounded-lg px-2 py-1.5 text-sm text-center focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                  className="w-20 border border-gray-200 rounded-lg px-2 py-1.5 text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue"
                 />
                 <button
                   onClick={() => agregarProducto(p.id)}
                   disabled={!cantidades[p.id] || loadingProducto === p.id}
-                  className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white text-xs font-medium rounded-lg transition-colors flex-shrink-0"
+                  className="px-3 py-1.5 bg-blue hover:opacity-90 disabled:opacity-40 text-white text-xs font-medium rounded-lg transition-colors flex-shrink-0"
                 >
                   {loadingProducto === p.id ? '...' : 'Agregar'}
                 </button>

@@ -4,7 +4,7 @@ import { formatTelefono } from '../lib/telefono';
 import { useAuth } from '../context/AuthContext';
 
 const INPUT_CLS =
-  'w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition';
+  'w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent transition';
 
 const MOBILE_INPUT_CLS =
   'w-full px-4 py-3.5 border border-grey/30 rounded-lg text-base text-dark-blue placeholder-grey/60 focus:outline-none focus:border-blue transition';
@@ -305,7 +305,7 @@ export default function Ajustes() {
   if (loading) {
     return (
       <div className="flex justify-center items-center py-24">
-        <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+        <div className="w-8 h-8 border-4 border-blue border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
@@ -551,7 +551,7 @@ export default function Ajustes() {
             >
               {uploadingLogo ? (
                 <>
-                  <div className="w-4 h-4 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                  <div className="w-4 h-4 border-2 border-blue border-t-transparent rounded-full animate-spin" />
                   Subiendo...
                 </>
               ) : (
@@ -977,7 +977,7 @@ export default function Ajustes() {
               type="button"
               onClick={handleGuardarTodo}
               disabled={saving}
-              className="flex items-center gap-2 px-6 py-3.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed text-white text-base font-medium rounded-lg transition-colors"
+              className="flex items-center gap-2 px-6 py-3.5 bg-blue hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed text-white text-base font-medium rounded-lg transition-colors"
             >
               {saving ? (
                 <>

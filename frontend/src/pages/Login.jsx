@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { api } from '../lib/api';
 
 const INPUT_CLS =
-  'w-full px-4 py-3.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition';
+  'w-full px-4 py-3.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent transition';
 
 export default function Login() {
   const [query, setQuery]               = useState('');
@@ -100,7 +100,7 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-800 to-indigo-900 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-slate-800 to-dark-blue flex items-center justify-center p-4">
       <div className="w-full max-w-sm">
         {/* Brand */}
         <div className="text-center mb-8">
@@ -132,7 +132,7 @@ export default function Login() {
                 <button
                   type="button"
                   onClick={cambiarUsuario}
-                  className="absolute right-2 top-11 text-xs text-indigo-600 hover:text-indigo-700 font-medium px-2 py-1"
+                  className="absolute right-2 top-11 text-xs text-blue hover:text-blue-700 font-medium px-2 py-1"
                 >
                   Cambiar
                 </button>
@@ -150,7 +150,7 @@ export default function Login() {
                         type="button"
                         key={u.id}
                         onClick={() => elegirUsuario(u)}
-                        className="w-full text-left px-3 py-2.5 text-sm text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 transition-colors"
+                        className="w-full text-left px-3 py-2.5 text-sm text-gray-700 hover:bg-light-blue hover:text-blue-700 transition-colors"
                       >
                         {u.nombre}
                       </button>
@@ -186,7 +186,7 @@ export default function Login() {
             <button
               type="submit"
               disabled={loading || !seleccionado}
-              className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-medium py-3.5 rounded-lg text-base transition-colors mt-2"
+              className="w-full bg-blue hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed text-white font-medium py-3.5 rounded-lg text-base transition-colors mt-2"
             >
               {loading ? 'Iniciando sesión...' : 'Iniciar sesión'}
             </button>

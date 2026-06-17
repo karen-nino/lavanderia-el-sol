@@ -4,7 +4,7 @@ import { api } from '../lib/api';
 import { esAdmin as esAdminFn, esAdminMain as esAdminMainFn } from '../lib/roles';
 
 const INPUT_CLS =
-  'w-full px-4 py-3.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition';
+  'w-full px-4 py-3.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent transition';
 
 const FORM_INIT = { nombre: '', apellido: '', rol: 'operador', password: '' };
 
@@ -175,7 +175,7 @@ export default function Empleados() {
             aria-label="Filtros"
             className={`w-11 h-11 rounded-full border flex items-center justify-center transition-colors ${
               filtroRol !== 'todos'
-                ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
+                ? 'border-blue bg-light-blue text-blue-700'
                 : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
             }`}
           >
@@ -189,7 +189,7 @@ export default function Empleados() {
             <button
               onClick={abrirModal}
               aria-label="Nuevo empleado"
-              className="w-11 h-11 rounded-full bg-indigo-600 hover:bg-indigo-700 text-white flex items-center justify-center transition-colors"
+              className="w-11 h-11 rounded-full bg-blue hover:opacity-90 text-white flex items-center justify-center transition-colors"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5}
@@ -212,7 +212,7 @@ export default function Empleados() {
                     onClick={() => { setFiltroRol(opt.v); setMostrarFiltros(false); }}
                     className={`text-left text-sm px-3 py-2 rounded-lg transition-colors ${
                       filtroRol === opt.v
-                        ? 'bg-indigo-50 text-indigo-700 font-medium'
+                        ? 'bg-light-blue text-blue-700 font-medium'
                         : 'text-gray-700 hover:bg-gray-50'
                     }`}
                   >
@@ -239,7 +239,7 @@ export default function Empleados() {
           placeholder="Buscar por nombre..."
           value={busqueda}
           onChange={e => setBusqueda(e.target.value)}
-          className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+          className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue bg-white"
         />
       </div>
 
@@ -267,7 +267,7 @@ export default function Empleados() {
 
             const cabecera = (
               <div className="flex items-start gap-3">
-                <div className="flex-shrink-0 w-11 h-11 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-sm font-semibold">
+                <div className="flex-shrink-0 w-11 h-11 rounded-full bg-light-blue text-blue flex items-center justify-center text-sm font-semibold">
                   {iniciales || '?'}
                 </div>
                 <div className="min-w-0 flex-1">
@@ -297,7 +297,7 @@ export default function Empleados() {
                     <div className="flex items-center justify-end gap-1 pt-2 border-t border-gray-100">
                       <button
                         onClick={() => abrirEditar(emp)}
-                        className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                        className="p-1.5 text-gray-400 hover:text-blue hover:bg-light-blue rounded-lg transition-colors"
                         title="Editar"
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -347,7 +347,7 @@ export default function Empleados() {
               </div>
               <div className="p-5 space-y-5 overflow-y-auto">
                 <div className="flex items-center gap-3">
-                  <div className="flex-shrink-0 w-14 h-14 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-lg font-semibold">
+                  <div className="flex-shrink-0 w-14 h-14 rounded-full bg-light-blue text-blue flex items-center justify-center text-lg font-semibold">
                     {iniciales || '?'}
                   </div>
                   <div className="min-w-0 flex-1">
@@ -363,7 +363,7 @@ export default function Empleados() {
                     <button
                       type="button"
                       onClick={() => { const e = infoEmpleado; setInfoEmpleado(null); abrirEditar(e); }}
-                      className="w-full flex items-center justify-center gap-2 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg text-sm transition-colors"
+                      className="w-full flex items-center justify-center gap-2 py-3 bg-blue hover:opacity-90 text-white font-medium rounded-lg text-sm transition-colors"
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -443,7 +443,7 @@ export default function Empleados() {
                   Cancelar
                 </button>
                 <button type="submit" disabled={guardando}
-                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors">
+                  className="flex-1 bg-blue hover:opacity-90 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors">
                   {guardando ? 'Guardando...' : 'Guardar'}
                 </button>
               </div>
@@ -508,7 +508,7 @@ export default function Empleados() {
                   Cancelar
                 </button>
                 <button type="submit" disabled={editando}
-                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors">
+                  className="flex-1 bg-blue hover:opacity-90 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors">
                   {editando ? 'Guardando...' : 'Guardar cambios'}
                 </button>
               </div>
