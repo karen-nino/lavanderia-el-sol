@@ -805,11 +805,18 @@ export default function NuevaNota() {
                 <h2 className="text-base font-semibold text-gray-900">Entrega</h2>
                 <div>
                   <label className={LABEL_CLS}>Fecha de entrega</label>
-                  <input
-                    type="date" name="fecha_entrega"
-                    value={encargoForm.fecha_entrega} onChange={handleEncargoChange}
-                    className={INPUT_CLS}
-                  />
+                  <div className="relative">
+                    <input
+                      type="date" name="fecha_entrega"
+                      value={encargoForm.fecha_entrega} onChange={handleEncargoChange}
+                      className={`${INPUT_CLS} appearance-none min-w-0 block bg-white h-[54px]`}
+                    />
+                    {!encargoForm.fecha_entrega && (
+                      <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-base">
+                        Seleccionar fecha
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <div>
                   <label className={LABEL_CLS}>Tiempo de entrega</label>
