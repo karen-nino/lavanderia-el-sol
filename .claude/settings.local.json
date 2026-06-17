@@ -89,7 +89,12 @@
       "Bash(command -v playwright)",
       "Bash(command -v npx)",
       "Read(//Users/karen.nino/.cache/**)",
-      "Bash(lsof -ti:3000 -ti:3001 -ti:8080 -ti:4000)"
+      "Bash(lsof -ti:3000 -ti:3001 -ti:8080 -ti:4000)",
+      "Bash(lsof -iTCP:4000 -sTCP:LISTEN)",
+      "Bash(kill 18846)",
+      "Bash(node index.js)",
+      "Bash(lsof -iTCP:4000 -sTCP:LISTEN -t)",
+      "Bash(echo \"PID: $\\(lsof -iTCP:4000 -sTCP:LISTEN -t\\)\")"
     ]
   }
 }
