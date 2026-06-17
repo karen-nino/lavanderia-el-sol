@@ -21,7 +21,7 @@ export default function CircularTimer({
 
   const tickEls = [];
   for (let i = 0; i < ticks; i++) {
-    const angle = (i / ticks) * 2 * Math.PI - Math.PI / 2;
+    const angle = -(i / ticks) * 2 * Math.PI - Math.PI / 2;
     const x1 = c + innerR * Math.cos(angle);
     const y1 = c + innerR * Math.sin(angle);
     const x2 = c + outerR * Math.cos(angle);
