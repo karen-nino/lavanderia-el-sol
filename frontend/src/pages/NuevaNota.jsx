@@ -399,6 +399,9 @@ export default function NuevaNota() {
         navigate(`/notas/${id}`);
       } else {
         const creada = await api.post('/notas', payload);
+        if (form.maquina_id) {
+          await api.patch(`/maquinas/${form.maquina_id}/estado`, { estado: 'en_uso' });
+        }
         setNotaCreada(creada);
       }
     } catch (err) {
