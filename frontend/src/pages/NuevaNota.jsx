@@ -38,6 +38,7 @@ const TAMANO_LABEL = Object.fromEntries(TAMANOS.map(t => [t.v, t.label]));
 
 const ENCARGO_INIT = {
   cliente_id:             '',
+  tipo_prenda:            '',
   tamano:                 '',
   cantidad_cargas:        '1',
   ajuste:                 '0',
@@ -71,7 +72,7 @@ export default function NuevaNota() {
   const esEdicion = Boolean(id);
   const [maquinas,          setMaquinas]          = useState([]);
   const [productosCatalogo, setProductosCatalogo] = useState([]);
-  const [precios,           setPrecios]           = useState({ mediana: 70, jumbo: 70 });
+  const [precios,           setPrecios]           = useState({ mediana: 70, jumbo: 70, secadora: 45, edredonJumbo: 80 });
   const [loadingData,       setLoadingData]       = useState(true);
   const [form,              setForm]              = useState(FORM_INIT);
   const [productosLista,    setProductosLista]    = useState([]);
@@ -143,9 +144,14 @@ export default function NuevaNota() {
     return () => document.removeEventListener('mousedown', onMouseDown);
   }, [maquinaEncargoOpen]);
 
-  const precioPorTipo = (tipo) => tipo === 'lavadora_jumbo' ? precios.jumbo : precios.mediana;
+  const precioPorTipo = (tipoMaquina, tipoPrendaArg) => {
+    if (tipoMaquina === 'secadora') return precios.secadora;
+    if (tipoMaquina === 'lavadora_jumbo' && tipoPrendaArg === 'EDREDON') return precios.edredonJumbo;
+    if (tipoMaquina === 'lavadora_jumbo') return precios.jumbo;
+    return precios.mediana;
+  };
   const maquinaAutoservicio = maquinas.find(m => String(m.id) === String(form.maquina_id));
-  const precioCargaAutoservicio = precioPorTipo(maquinaAutoservicio?.tipo);
+  const precioCargaAutoservicio = precioPorTipo(maquinaAutoservicio?.tipo, tipoPrenda);
 
   const ajusteNum      = Number(form.ajuste) || 0;
   const subtotalCargas = (Number(form.cantidad_cargas) || 1) * precioCargaAutoservicio;
@@ -177,22 +183,37 @@ export default function NuevaNota() {
         setProductosCatalogo(prod);
         if (cfg) {
           setPrecios({
-            mediana: cfg.precio_carga_mediana != null ? Number(cfg.precio_carga_mediana) : 70,
-            jumbo:   cfg.precio_carga_jumbo   != null ? Number(cfg.precio_carga_jumbo)   : 70,
+            mediana:      cfg.precio_carga_mediana  != null ? Number(cfg.precio_carga_mediana)  : 70,
+            jumbo:        cfg.precio_carga_jumbo    != null ? Number(cfg.precio_carga_jumbo)    : 70,
+            secadora:     cfg.precio_carga_secadora != null ? Number(cfg.precio_carga_secadora) : 45,
+            edredonJumbo: cfg.precio_edredon_jumbo  != null ? Number(cfg.precio_edredon_jumbo)  : 80,
           });
         }
         setClientes(cli);
 
         if (esEdicion && nota) {
-          setTipoServicio(nota.modalidad);
+          // Compat con notas viejas: modalidad=EDREDON significa autoservicio+edredón
+          // si no tiene cliente_id, o por_encargo+edredón si lo tiene.
+          const esEncargoLegacy = nota.modalidad === 'EDREDON' && nota.cliente_id;
+          const esEncargo  = nota.modalidad === 'POR_ENCARGO' || esEncargoLegacy;
+          const prendaNota = nota.tipo_prenda
+            ?? (nota.modalidad === 'EDREDON' ? 'EDREDON' : 'ROPA');
+
+          if (esEncargo) {
+            setTipoServicio('POR_ENCARGO');
+          } else {
+            setTipoServicio('AUTOSERVICIO');
+            setTipoPrenda(prendaNota);
+          }
           const prods = (nota.productos || []).map(p => ({
             producto_id: String(p.producto_id),
             cantidad:    String(p.cantidad),
           }));
 
-          if (nota.modalidad === 'POR_ENCARGO') {
+          if (esEncargo) {
             setEncargoForm({
               cliente_id:             nota.cliente_id     ? String(nota.cliente_id) : '',
+              tipo_prenda:            prendaNota,
               tamano:                 nota.tamano         ?? '',
               cantidad_cargas:        nota.cantidad_cargas != null ? String(nota.cantidad_cargas) : '1',
               ajuste:                 nota.ajuste         != null ? String(nota.ajuste)      : '0',
@@ -204,7 +225,8 @@ export default function NuevaNota() {
               activar_inmediatamente: '',
             });
             setEncargoProductos(prods);
-          } else if (nota.modalidad === 'AUTOSERVICIO') {
+          } else {
+            // AUTOSERVICIO o EDREDON usan el mismo formulario
             setForm({
               maquina_id:      nota.maquina_id     ? String(nota.maquina_id) : '',
               cantidad_cargas: nota.cantidad_cargas != null ? String(nota.cantidad_cargas) : '1',
@@ -273,7 +295,7 @@ export default function NuevaNota() {
   };
 
   const maquinaEncargo        = maquinas.find(m => String(m.id) === String(encargoForm.maquina_id));
-  const precioCargaEncargo    = precioPorTipo(maquinaEncargo?.tipo);
+  const precioCargaEncargo    = precioPorTipo(maquinaEncargo?.tipo, encargoForm.tipo_prenda);
   const encargoCargas         = Number(encargoForm.cantidad_cargas) || 1;
   const encargoSubtotalCargas = encargoCargas * precioCargaEncargo;
   const encargoAjuste         = Number(encargoForm.ajuste)      || 0;
@@ -295,7 +317,7 @@ export default function NuevaNota() {
 
   const encargoPuedeAvanzar = (() => {
     if (encargoStep === 1) return !!encargoForm.cliente_id;
-    if (encargoStep === 2) return !!encargoForm.tamano;
+    if (encargoStep === 2) return !!encargoForm.tipo_prenda && !!encargoForm.tamano;
     if (encargoStep === 3) {
       if (esEdicion) return true;
       if (!encargoForm.maquina_id) return true;
@@ -315,6 +337,7 @@ export default function NuevaNota() {
     try {
       const payload = {
         modalidad:       'POR_ENCARGO',
+        tipo_prenda:     encargoForm.tipo_prenda || 'ROPA',
         cliente_id:      Number(encargoForm.cliente_id),
         tamano:          encargoForm.tamano,
         cantidad_cargas: encargoCargas,
@@ -357,6 +380,7 @@ export default function NuevaNota() {
 
     const payload = {
       modalidad:       'AUTOSERVICIO',
+      tipo_prenda:     tipoPrenda || 'ROPA',
       estado_pago:     'PAGADO',
       sucursal:        'lopez_cotilla',
       instrucciones:   form.instrucciones || undefined,
@@ -607,28 +631,63 @@ export default function NuevaNota() {
               </div>
             )}
 
-            {/* Paso 2 — Tamaño */}
+            {/* Paso 2 — Tipo de prenda + Tamaño */}
             {encargoStep === 2 && (
-              <div className="space-y-4">
-                <h2 className="text-base font-semibold text-gray-900">Tamaño del encargo</h2>
-                <div className="grid grid-cols-2 gap-3">
-                  {TAMANOS.map(t => {
-                    const selected = encargoForm.tamano === t.v;
-                    return (
-                      <button
-                        key={t.v}
-                        type="button"
-                        onClick={() => setEncargoForm(f => ({ ...f, tamano: t.v }))}
-                        className={`py-8 border-2 rounded-xl font-semibold text-lg transition-colors ${
-                          selected
-                            ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
-                            : 'border-gray-300 bg-white text-gray-700 hover:border-indigo-300'
-                        }`}
-                      >
-                        {t.label}
-                      </button>
-                    );
-                  })}
+              <div className="space-y-6">
+                <div className="space-y-4">
+                  <h2 className="text-base font-semibold text-gray-900">Tipo de prenda</h2>
+                  <div className="grid grid-cols-2 gap-3">
+                    {TIPOS_PRENDA.map(opt => {
+                      const selected = encargoForm.tipo_prenda === opt.v;
+                      return (
+                        <button
+                          key={opt.v}
+                          type="button"
+                          onClick={() => setEncargoForm(f => {
+                            const next = { ...f, tipo_prenda: opt.v };
+                            if (opt.v === 'EDREDON' && f.maquina_id) {
+                              const m = maquinas.find(x => String(x.id) === String(f.maquina_id));
+                              if (m && m.tipo !== 'lavadora_jumbo') {
+                                next.maquina_id = '';
+                                next.activar_inmediatamente = '';
+                              }
+                            }
+                            return next;
+                          })}
+                          className={`py-8 border-2 rounded-xl font-semibold text-lg transition-colors ${
+                            selected
+                              ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
+                              : 'border-gray-300 bg-white text-gray-700 hover:border-indigo-300'
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <h2 className="text-base font-semibold text-gray-900">Tamaño del encargo</h2>
+                  <div className="grid grid-cols-2 gap-3">
+                    {TAMANOS.map(t => {
+                      const selected = encargoForm.tamano === t.v;
+                      return (
+                        <button
+                          key={t.v}
+                          type="button"
+                          onClick={() => setEncargoForm(f => ({ ...f, tamano: t.v }))}
+                          className={`py-8 border-2 rounded-xl font-semibold text-lg transition-colors ${
+                            selected
+                              ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
+                              : 'border-gray-300 bg-white text-gray-700 hover:border-indigo-300'
+                          }`}
+                        >
+                          {t.label}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
             )}
@@ -787,7 +846,11 @@ export default function NuevaNota() {
             )}
 
             {/* Paso 3 — Máquina */}
-            {encargoStep === 3 && (
+            {encargoStep === 3 && (() => {
+              const maquinasDisponibles = encargoForm.tipo_prenda === 'EDREDON'
+                ? maquinas.filter(m => m.tipo === 'lavadora_jumbo')
+                : maquinas;
+              return (
               <div className="space-y-5">
                 <h2 className="text-base font-semibold text-gray-900">Máquina</h2>
 
@@ -847,7 +910,7 @@ export default function NuevaNota() {
                                 )}
                               </span>
                             </button>
-                            {maquinas.map(m => {
+                            {maquinasDisponibles.map(m => {
                               const selected = String(encargoForm.maquina_id) === String(m.id);
                               return (
                                 <button
@@ -879,8 +942,12 @@ export default function NuevaNota() {
                       </>
                     );
                   })()}
-                  {maquinas.length === 0 && (
-                    <p className="text-xs text-red-600 mt-1">No hay máquinas disponibles en este momento.</p>
+                  {maquinasDisponibles.length === 0 && (
+                    <p className="text-xs text-red-600 mt-1">
+                      {encargoForm.tipo_prenda === 'EDREDON'
+                        ? 'No hay máquinas jumbo disponibles en este momento.'
+                        : 'No hay máquinas disponibles en este momento.'}
+                    </p>
                   )}
                 </div>
 
@@ -912,7 +979,8 @@ export default function NuevaNota() {
                   </div>
                 )}
               </div>
-            )}
+              );
+            })()}
 
             {/* Paso 7 — Productos + Resumen */}
             {encargoStep === 7 && (
@@ -1033,6 +1101,10 @@ export default function NuevaNota() {
                           ? `${clienteSeleccionado.nombre}${clienteSeleccionado.apellido ? ' ' + clienteSeleccionado.apellido : ''}`
                           : '—'}
                       </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Prenda</span>
+                      <span className="font-medium">{PRENDA_LABEL[encargoForm.tipo_prenda] ?? '—'}</span>
                     </div>
                     <div className="flex justify-between">
                       <span>Tamaño</span>

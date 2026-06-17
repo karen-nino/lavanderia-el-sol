@@ -54,8 +54,11 @@ export const updateAjustes = async (req, res) => {
   const {
     precio_carga_mediana,
     precio_carga_jumbo,
+    precio_carga_secadora,
+    precio_edredon_jumbo,
     tiempo_carga_mediana,
     tiempo_carga_jumbo,
+    tiempo_carga_secadora,
     nombre_negocio,
     direccion,
     telefono,
@@ -66,14 +69,17 @@ export const updateAjustes = async (req, res) => {
   const values  = [];
   let i = 1;
 
-  if (precio_carga_mediana !== undefined) { updates.push(`precio_carga_mediana = $${i++}`); values.push(precio_carga_mediana); }
-  if (precio_carga_jumbo   !== undefined) { updates.push(`precio_carga_jumbo = $${i++}`);   values.push(precio_carga_jumbo); }
-  if (tiempo_carga_mediana !== undefined) { updates.push(`tiempo_carga_mediana = $${i++}`); values.push(tiempo_carga_mediana); }
-  if (tiempo_carga_jumbo   !== undefined) { updates.push(`tiempo_carga_jumbo = $${i++}`);   values.push(tiempo_carga_jumbo); }
-  if (nombre_negocio       !== undefined) { updates.push(`nombre_negocio = $${i++}`);       values.push(nombre_negocio); }
-  if (direccion            !== undefined) { updates.push(`direccion = $${i++}`);             values.push(direccion); }
-  if (telefono             !== undefined) { updates.push(`telefono = $${i++}`);              values.push(telefono); }
-  if (stock_minimo_global  !== undefined) { updates.push(`stock_minimo_global = $${i++}`);  values.push(stock_minimo_global); }
+  if (precio_carga_mediana  !== undefined) { updates.push(`precio_carga_mediana = $${i++}`);  values.push(precio_carga_mediana); }
+  if (precio_carga_jumbo    !== undefined) { updates.push(`precio_carga_jumbo = $${i++}`);    values.push(precio_carga_jumbo); }
+  if (precio_carga_secadora !== undefined) { updates.push(`precio_carga_secadora = $${i++}`); values.push(precio_carga_secadora); }
+  if (precio_edredon_jumbo  !== undefined) { updates.push(`precio_edredon_jumbo = $${i++}`);  values.push(precio_edredon_jumbo); }
+  if (tiempo_carga_mediana  !== undefined) { updates.push(`tiempo_carga_mediana = $${i++}`);  values.push(tiempo_carga_mediana); }
+  if (tiempo_carga_jumbo    !== undefined) { updates.push(`tiempo_carga_jumbo = $${i++}`);    values.push(tiempo_carga_jumbo); }
+  if (tiempo_carga_secadora !== undefined) { updates.push(`tiempo_carga_secadora = $${i++}`); values.push(tiempo_carga_secadora); }
+  if (nombre_negocio        !== undefined) { updates.push(`nombre_negocio = $${i++}`);        values.push(nombre_negocio); }
+  if (direccion             !== undefined) { updates.push(`direccion = $${i++}`);              values.push(direccion); }
+  if (telefono              !== undefined) { updates.push(`telefono = $${i++}`);               values.push(telefono); }
+  if (stock_minimo_global   !== undefined) { updates.push(`stock_minimo_global = $${i++}`);   values.push(stock_minimo_global); }
 
   if (updates.length === 0) {
     return res.status(400).json({ message: 'No hay campos para actualizar.' });

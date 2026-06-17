@@ -44,7 +44,7 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const [notas, setNotas]       = useState([]);
   const [maquinas, setMaquinas] = useState([]);
-  const [tiempos, setTiempos]   = useState({ mediana: 30, jumbo: 45 });
+  const [tiempos, setTiempos]   = useState({ mediana: 30, jumbo: 45, secadora: 30 });
   const [ventas, setVentas]     = useState(null);
   const [loading, setLoading]   = useState(true);
   const [now, setNow]           = useState(() => Date.now());
@@ -65,8 +65,9 @@ export default function Dashboard() {
         setVentas(v);
         if (a) {
           setTiempos({
-            mediana: a.tiempo_carga_mediana != null ? Number(a.tiempo_carga_mediana) : 30,
-            jumbo:   a.tiempo_carga_jumbo   != null ? Number(a.tiempo_carga_jumbo)   : 45,
+            mediana:  a.tiempo_carga_mediana  != null ? Number(a.tiempo_carga_mediana)  : 30,
+            jumbo:    a.tiempo_carga_jumbo    != null ? Number(a.tiempo_carga_jumbo)    : 45,
+            secadora: a.tiempo_carga_secadora != null ? Number(a.tiempo_carga_secadora) : 30,
           });
         }
       })
@@ -195,7 +196,9 @@ export default function Dashboard() {
             return (
               <div className="grid grid-cols-2 lg:grid-cols-3 gap-6">
                 {maquinasEnUso.map(m => {
-                  const minutos = m.tipo === 'lavadora_jumbo' ? tiempos.jumbo : tiempos.mediana;
+                  const minutos = m.tipo === 'secadora'       ? tiempos.secadora
+                                : m.tipo === 'lavadora_jumbo' ? tiempos.jumbo
+                                : tiempos.mediana;
                   const duracionSeg = Math.max(0, Number(minutos) || 0) * 60;
                   const inicio = m.en_uso_desde ? new Date(m.en_uso_desde).getTime() : null;
                   const transcurridoSeg = inicio ? Math.max(0, Math.floor((now - inicio) / 1000)) : 0;

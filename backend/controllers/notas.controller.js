@@ -5,6 +5,7 @@ const ESTADOS_VALIDOS     = ['EN_PROCESO', 'LISTA', 'PAGADA', 'FINALIZADA', 'CAN
 const MODALIDADES_VALIDAS = ['AUTOSERVICIO', 'EDREDON', 'POR_ENCARGO'];
 const ESTADOS_PAGO_VALIDOS = ['DEBE', 'PAGADO'];
 const TAMANOS_VALIDOS     = ['chico', 'grande'];
+const TIPOS_PRENDA_VALIDOS = ['ROPA', 'EDREDON'];
 const TIEMPOS_ENTREGA_VALIDOS = ['MANANA', 'TARDE', 'NOCHE'];
 
 // Transiciones permitidas por estado actual
@@ -117,6 +118,7 @@ export const createNota = async (req, res) => {
     cliente_id,
     maquina_id,
     modalidad = 'POR_ENCARGO',
+    tipo_prenda = 'ROPA',
     estado_pago,
     sucursal = 'lopez_cotilla',
     peso_kg,
@@ -135,6 +137,11 @@ export const createNota = async (req, res) => {
   if (!MODALIDADES_VALIDAS.includes(modalidad)) {
     return res.status(400).json({
       message: `Modalidad inválida. Valores permitidos: ${MODALIDADES_VALIDAS.join(', ')}.`,
+    });
+  }
+  if (!TIPOS_PRENDA_VALIDOS.includes(String(tipo_prenda).toUpperCase())) {
+    return res.status(400).json({
+      message: `tipo_prenda inválido. Valores permitidos: ${TIPOS_PRENDA_VALIDOS.join(', ')}.`,
     });
   }
   if (!estado_pago || !ESTADOS_PAGO_VALIDOS.includes(estado_pago)) {
@@ -160,36 +167,42 @@ export const createNota = async (req, res) => {
   const cantidadCargas = Number(cantidad_cargas) || 1;
 
   // Leer precio desde ajustes si no se envió en el body.
-  // El precio depende del tipo de máquina: jumbo o mediana (default).
+  // Depende del tipo de máquina (mediana / jumbo / secadora) y la modalidad
+  // (EDREDON en jumbo tiene su propia tarifa).
   let precioBaseNum = precio_base != null ? Number(precio_base) : null;
-  if ((modalidad === 'AUTOSERVICIO' || modalidad === 'POR_ENCARGO') && precioBaseNum === null) {
+  if (precioBaseNum === null) {
     let tipoMaquina = null;
     if (maquina_id) {
       const { rows: maq } = await pool.query('SELECT tipo FROM maquinas WHERE id = $1', [maquina_id]);
       tipoMaquina = maq[0]?.tipo ?? null;
     }
     const { rows: cfg } = await pool.query(
-      'SELECT precio_carga_mediana, precio_carga_jumbo FROM ajustes WHERE id = 1'
+      `SELECT precio_carga_mediana, precio_carga_jumbo,
+              precio_carga_secadora, precio_edredon_jumbo
+       FROM ajustes WHERE id = 1`
     );
     if (cfg.length > 0) {
-      precioBaseNum = tipoMaquina === 'lavadora_jumbo'
-        ? Number(cfg[0].precio_carga_jumbo)
-        : Number(cfg[0].precio_carga_mediana);
+      const c = cfg[0];
+      const esEdredon = String(tipo_prenda).toUpperCase() === 'EDREDON';
+      if (tipoMaquina === 'secadora') {
+        precioBaseNum = Number(c.precio_carga_secadora);
+      } else if (tipoMaquina === 'lavadora_jumbo' && esEdredon) {
+        precioBaseNum = Number(c.precio_edredon_jumbo);
+      } else if (tipoMaquina === 'lavadora_jumbo') {
+        precioBaseNum = Number(c.precio_carga_jumbo);
+      } else {
+        precioBaseNum = Number(c.precio_carga_mediana);
+      }
     } else {
       precioBaseNum = 70;
     }
   }
 
-  // AUTOSERVICIO y POR_ENCARGO: precio_total = (cargas × precio_base) + ajuste
-  // Los productos se suman después de insertarlos en nota_productos
-  let precioFinal;
-  if (modalidad === 'AUTOSERVICIO' || modalidad === 'POR_ENCARGO') {
-    precioFinal = precioBaseNum != null
-      ? cantidadCargas * precioBaseNum + ajusteNum
-      : (precio_total ? Number(precio_total) : null);
-  } else {
-    precioFinal = precioBaseNum != null ? precioBaseNum + ajusteNum : null;
-  }
+  // precio_total = (cargas × precio_base) + ajuste
+  // Los productos se suman después de insertarlos en nota_productos.
+  const precioFinal = precioBaseNum != null
+    ? cantidadCargas * precioBaseNum + ajusteNum
+    : (precio_total ? Number(precio_total) : null);
 
   const client = await pool.connect();
   try {
@@ -197,16 +210,17 @@ export const createNota = async (req, res) => {
 
     const { rows: notaRows } = await client.query(
       `INSERT INTO notas
-         (cliente_id, usuario_id, maquina_id, modalidad, estado_pago, sucursal,
+         (cliente_id, usuario_id, maquina_id, modalidad, tipo_prenda, estado_pago, sucursal,
           peso_kg, precio_total, fecha_entrega, tiempo_entrega, instrucciones,
           tamano, precio_base, ajuste, cantidad_cargas)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
        RETURNING *`,
       [
         cliente_id   || null,
         req.user.id,
         maquina_id   || null,
         modalidad,
+        String(tipo_prenda).toUpperCase(),
         estado_pago,
         sucursal,
         peso_kg      || null,
@@ -339,6 +353,7 @@ export const updateNota = async (req, res) => {
     tiempo_entrega,
     instrucciones,
     tamano,
+    tipo_prenda,
     ajuste,
     cantidad_cargas,
     precio_base,
@@ -353,6 +368,11 @@ export const updateNota = async (req, res) => {
   if (tamano && !TAMANOS_VALIDOS.includes(String(tamano).toLowerCase())) {
     return res.status(400).json({
       message: `tamano inválido. Valores permitidos: ${TAMANOS_VALIDOS.join(', ')}.`,
+    });
+  }
+  if (tipo_prenda && !TIPOS_PRENDA_VALIDOS.includes(String(tipo_prenda).toUpperCase())) {
+    return res.status(400).json({
+      message: `tipo_prenda inválido. Valores permitidos: ${TIPOS_PRENDA_VALIDOS.join(', ')}.`,
     });
   }
   if (tiempo_entrega && !TIEMPOS_ENTREGA_VALIDOS.includes(String(tiempo_entrega).toUpperCase())) {
@@ -438,14 +458,9 @@ export const updateNota = async (req, res) => {
     }
 
     const subtotalProductos = productosInsertados.reduce((s, p) => s + Number(p.subtotal), 0);
-    let precioFinal;
-    if (actual.modalidad === 'AUTOSERVICIO' || actual.modalidad === 'POR_ENCARGO') {
-      precioFinal = precioBaseNum != null
-        ? cantidadCargasNum * precioBaseNum + ajusteNum + subtotalProductos
-        : null;
-    } else {
-      precioFinal = (precioBaseNum != null ? precioBaseNum : 0) + ajusteNum + subtotalProductos;
-    }
+    const precioFinal = precioBaseNum != null
+      ? cantidadCargasNum * precioBaseNum + ajusteNum + subtotalProductos
+      : null;
 
     const { rows } = await client.query(
       `UPDATE notas SET
@@ -456,10 +471,11 @@ export const updateNota = async (req, res) => {
          tiempo_entrega  = $6,
          instrucciones   = $7,
          tamano          = COALESCE($8, tamano),
-         precio_base     = $9,
-         ajuste          = $10,
-         cantidad_cargas = $11,
-         precio_total    = $12
+         tipo_prenda     = COALESCE($9, tipo_prenda),
+         precio_base     = $10,
+         ajuste          = $11,
+         cantidad_cargas = $12,
+         precio_total    = $13
        WHERE id = $1
        RETURNING *`,
       [
@@ -471,6 +487,7 @@ export const updateNota = async (req, res) => {
         tiempo_entrega ? String(tiempo_entrega).toUpperCase() : null,
         instrucciones || null,
         tamano ? String(tamano).toLowerCase() : null,
+        tipo_prenda ? String(tipo_prenda).toUpperCase() : null,
         precioBaseNum,
         ajusteNum,
         cantidadCargasNum,

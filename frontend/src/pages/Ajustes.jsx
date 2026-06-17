@@ -218,14 +218,17 @@ export default function Ajustes() {
       const [updatedPerfil, updatedConfig] = await Promise.all([
         api.patch('/auth/me', perfilPayload),
         api.patch('/ajustes', {
-          precio_carga_mediana: Number(config.precio_carga_mediana),
-          precio_carga_jumbo:   Number(config.precio_carga_jumbo),
-          tiempo_carga_mediana: Number(config.tiempo_carga_mediana),
-          tiempo_carga_jumbo:   Number(config.tiempo_carga_jumbo),
-          nombre_negocio:       config.nombre_negocio,
-          direccion:            config.direccion ?? '',
-          telefono:             config.telefono  ?? '',
-          stock_minimo_global:  Number(config.stock_minimo_global),
+          precio_carga_mediana:  Number(config.precio_carga_mediana),
+          precio_carga_jumbo:    Number(config.precio_carga_jumbo),
+          precio_carga_secadora: Number(config.precio_carga_secadora),
+          precio_edredon_jumbo:  Number(config.precio_edredon_jumbo),
+          tiempo_carga_mediana:  Number(config.tiempo_carga_mediana),
+          tiempo_carga_jumbo:    Number(config.tiempo_carga_jumbo),
+          tiempo_carga_secadora: Number(config.tiempo_carga_secadora),
+          nombre_negocio:        config.nombre_negocio,
+          direccion:             config.direccion ?? '',
+          telefono:              config.telefono  ?? '',
+          stock_minimo_global:   Number(config.stock_minimo_global),
         }),
       ]);
 
@@ -246,14 +249,17 @@ export default function Ajustes() {
     setMensaje(null);
     try {
       const updated = await api.patch('/ajustes', {
-        precio_carga_mediana: Number(config.precio_carga_mediana),
-        precio_carga_jumbo:   Number(config.precio_carga_jumbo),
-        tiempo_carga_mediana: Number(config.tiempo_carga_mediana),
-        tiempo_carga_jumbo:   Number(config.tiempo_carga_jumbo),
-        nombre_negocio:       config.nombre_negocio,
-        direccion:            config.direccion ?? '',
-        telefono:             config.telefono  ?? '',
-        stock_minimo_global:  Number(config.stock_minimo_global),
+        precio_carga_mediana:  Number(config.precio_carga_mediana),
+        precio_carga_jumbo:    Number(config.precio_carga_jumbo),
+        precio_carga_secadora: Number(config.precio_carga_secadora),
+        precio_edredon_jumbo:  Number(config.precio_edredon_jumbo),
+        tiempo_carga_mediana:  Number(config.tiempo_carga_mediana),
+        tiempo_carga_jumbo:    Number(config.tiempo_carga_jumbo),
+        tiempo_carga_secadora: Number(config.tiempo_carga_secadora),
+        nombre_negocio:        config.nombre_negocio,
+        direccion:             config.direccion ?? '',
+        telefono:              config.telefono  ?? '',
+        stock_minimo_global:   Number(config.stock_minimo_global),
       });
       setConfig(updated);
       setMensaje({ tipo: 'ok', texto: 'Ajustes guardados correctamente.' });
@@ -428,6 +434,61 @@ export default function Ajustes() {
             className={INPUT_CLS}
           />
           <span className="text-sm text-gray-500 flex-shrink-0">min</span>
+        </div>
+      </Field>
+
+      <div className="border-t border-gray-100" />
+
+      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Secadora</p>
+      <Field label="Precio por carga" hint="Aplica al servicio de secado.">
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-gray-500 flex-shrink-0">$</span>
+          <input
+            type="number"
+            name="precio_carga_secadora"
+            min="0"
+            step="0.01"
+            required
+            value={config.precio_carga_secadora ?? ''}
+            onChange={handleChange}
+            className={INPUT_CLS}
+          />
+          <span className="text-sm text-gray-500 flex-shrink-0">MXN</span>
+        </div>
+      </Field>
+      <Field label="Tiempo de carga" hint="Duración de un ciclo de secado.">
+        <div className="flex items-center gap-2">
+          <input
+            type="number"
+            name="tiempo_carga_secadora"
+            min="1"
+            step="1"
+            required
+            value={config.tiempo_carga_secadora ?? ''}
+            onChange={handleChange}
+            className={INPUT_CLS}
+          />
+          <span className="text-sm text-gray-500 flex-shrink-0">min</span>
+        </div>
+      </Field>
+
+      <div className="border-t border-gray-100" />
+
+      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Edredón (Jumbo)</p>
+      <Field label="Precio por carga" hint="Tarifa fija por edredón lavado en máquina jumbo.">
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-gray-500 flex-shrink-0">$</span>
+          <input
+            type="number"
+            name="precio_edredon_jumbo"
+            min="0"
+            step="0.01"
+            required
+            value={config.precio_edredon_jumbo ?? ''}
+            onChange={handleChange}
+            className={INPUT_CLS}
+          />
+          <span className="text-sm text-gray-500 flex-shrink-0">MXN</span>
         </div>
       </Field>
     </Section>
@@ -712,6 +773,65 @@ export default function Ajustes() {
               className={MOBILE_INPUT_CLS}
             />
             <span className="text-base text-grey flex-shrink-0">min</span>
+          </div>
+        </MobileField>
+      </div>
+
+      <div className="border-t border-light-blue/60" />
+
+      <div className="space-y-5">
+        <p className="text-xs font-semibold text-grey uppercase tracking-wide">Secadora</p>
+        <MobileField label="Precio por carga" hint="Aplica al servicio de secado.">
+          <div className="flex items-center gap-2">
+            <span className="text-base text-grey flex-shrink-0">$</span>
+            <input
+              type="number"
+              name="precio_carga_secadora"
+              min="0"
+              step="0.01"
+              required
+              value={config.precio_carga_secadora ?? ''}
+              onChange={handleChange}
+              className={MOBILE_INPUT_CLS}
+            />
+            <span className="text-base text-grey flex-shrink-0">MXN</span>
+          </div>
+        </MobileField>
+        <MobileField label="Tiempo de carga" hint="Duración del ciclo de secado.">
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              name="tiempo_carga_secadora"
+              min="1"
+              step="1"
+              required
+              value={config.tiempo_carga_secadora ?? ''}
+              onChange={handleChange}
+              className={MOBILE_INPUT_CLS}
+            />
+            <span className="text-base text-grey flex-shrink-0">min</span>
+          </div>
+        </MobileField>
+      </div>
+
+      <div className="border-t border-light-blue/60" />
+
+      <div className="space-y-5">
+        <p className="text-xs font-semibold text-grey uppercase tracking-wide">Edredón (Jumbo)</p>
+        <MobileField label="Precio por carga" hint="Tarifa fija por edredón lavado en máquina jumbo.">
+          <div className="flex items-center gap-2">
+            <span className="text-base text-grey flex-shrink-0">$</span>
+            <input
+              type="number"
+              name="precio_edredon_jumbo"
+              min="0"
+              step="0.01"
+              required
+              value={config.precio_edredon_jumbo ?? ''}
+              onChange={handleChange}
+              className={MOBILE_INPUT_CLS}
+            />
+            <span className="text-base text-grey flex-shrink-0">MXN</span>
           </div>
         </MobileField>
       </div>
