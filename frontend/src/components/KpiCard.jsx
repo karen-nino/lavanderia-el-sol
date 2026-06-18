@@ -1,43 +1,26 @@
 const VARIANT = {
-  blue: {
-    container: 'bg-light-blue',
-    badge:     'bg-blue text-white',
-    value:     'text-dark-blue',
-    label:     'text-blue',
-  },
-  green: {
-    container: 'bg-light-green',
-    badge:     'bg-green text-white',
-    value:     'text-dark-blue',
-    label:     'text-green',
-  },
-  red: {
-    container: 'bg-light-red',
-    badge:     'bg-red text-white',
-    value:     'text-dark-blue',
-    label:     'text-red',
-  },
-  bronce: {
-    container: 'bg-light-bronce',
-    badge:     'bg-bronce text-white',
-    value:     'text-dark-blue',
-    label:     'text-bronce',
-  },
+  blue:   { container: 'bg-light-blue',   value: 'text-blue'   },
+  green:  { container: 'bg-light-green',  value: 'text-green'  },
+  red:    { container: 'bg-light-red',    value: 'text-red'    },
+  bronce: { container: 'bg-light-bronce', value: 'text-bronce' },
 };
 
-export default function KpiCard({ label, value, color = 'blue', icon }) {
+export default function KpiCard({ label, sublabel, value, color = 'blue', icon }) {
   const v = VARIANT[color] ?? VARIANT.blue;
   return (
-    <div className={`rounded-card p-card-pad shadow-card ${v.container}`}>
-      <div className="flex items-start justify-between mb-3">
-        <p className={`text-kpi-value ${v.value}`}>{value}</p>
-        {icon && (
-          <span className={`w-10 h-10 rounded-card-sm flex items-center justify-center ${v.badge}`}>
-            {icon}
-          </span>
-        )}
-      </div>
-      <p className={`text-kpi-label uppercase tracking-wide ${v.label}`}>{label}</p>
+    <div className={`relative rounded-card p-5 md:p-6 shadow-card overflow-hidden ${v.container}`}>
+      {icon && (
+        <span className={`absolute top-5 right-5 md:top-6 md:right-6 w-11 h-11 md:w-12 md:h-12 opacity-50 ${v.value}`}>
+          {icon}
+        </span>
+      )}
+
+      <p className={`font-extrabold leading-none text-[2.75rem] md:text-[3.25rem] mb-3 ${v.value}`}>
+        {value}
+      </p>
+
+      <p className="text-sm md:text-base leading-tight text-dark-grey">{label}</p>
+      <p className="text-base md:text-lg font-bold leading-tight text-dark-blue">{sublabel}</p>
     </div>
   );
 }

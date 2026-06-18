@@ -8,27 +8,37 @@ import CashCutCard from '../components/CashCutCard';
 
 const KpiIcon = {
   machine: (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <rect x="4" y="3" width="16" height="18" rx="2" strokeWidth={2} />
-      <circle cx="12" cy="13" r="4" strokeWidth={2} />
+    <svg className="w-full h-full" fill="none" stroke="currentColor"
+      strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+      <rect x="4" y="2.5" width="16" height="19" rx="2.5" strokeWidth={1.8} />
+      <circle cx="12" cy="14" r="4.5" strokeWidth={1.8} />
+      <circle cx="7.5" cy="6" r="0.55" fill="currentColor" stroke="none" />
+      <circle cx="10" cy="6" r="0.55" fill="currentColor" stroke="none" />
     </svg>
   ),
   paid: (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-        d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+    <svg className="w-full h-full" fill="none" stroke="currentColor"
+      strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+      <rect x="5" y="3" width="14" height="18" rx="2.5" strokeWidth={1.8} />
+      <path strokeWidth={1.8} d="M9 8h6M9 12h6M9 16h4" />
     </svg>
   ),
   waiting: (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-        d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+    <svg className="w-full h-full" fill="none" stroke="currentColor"
+      strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+      <rect x="5" y="3" width="14" height="18" rx="2.5" strokeWidth={1.8} />
+      <path strokeWidth={1.8} d="M9 8h6M9 12h6M9 16h4" />
     </svg>
   ),
   deliver: (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-        d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+    <svg className="w-full h-full" fill="none" stroke="currentColor"
+      strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+      <rect x="8.5" y="3.5" width="8" height="6" rx="1" strokeWidth={1.8} />
+      <path strokeWidth={1.8} d="M12.5 3.5v6" />
+      <path strokeWidth={1.4}
+        d="M12.5 3.5c-.7-1.4-2.8-1-2.1.5.4.8 1.5.6 2.1.5M12.5 3.5c.7-1.4 2.8-1 2.1.5-.4.8-1.5.6-2.1.5" />
+      <path strokeWidth={1.8} d="M2.5 12.5l2 .8v6.2l-2-1z" />
+      <path strokeWidth={1.8} d="M4.5 13.3l3.4 2.4c.4.3.9.4 1.4.4H15c1.1 0 1.1 2 0 2h-4" />
     </svg>
   ),
 };
@@ -105,7 +115,6 @@ export default function Dashboard() {
     }
   };
 
-  const totalMaquinas    = maquinas.length;
   const enUso            = maquinas.filter(m => m.estado === 'en_uso').length;
   const notasPagadas     = notas.filter(n => n.estado_pago === 'PAGADO').length;
   const notasEnEspera    = notas.filter(n => n.estado === 'EN_PROCESO').length;
@@ -129,25 +138,29 @@ export default function Dashboard() {
         {/* KPIs: 2x2 en mobile, 4 columnas en tablet */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <KpiCard
-            label="Máquinas en uso"
-            value={`${enUso}/${totalMaquinas}`}
+            label="Máquinas"
+            sublabel="en Servicio"
+            value={enUso}
             color="blue"
             icon={KpiIcon.machine}
           />
           <KpiCard
-            label="Notas pagadas"
+            label="Notas"
+            sublabel="Pagadas"
             value={notasPagadas}
             color="green"
             icon={KpiIcon.paid}
           />
           <KpiCard
-            label="Notas en espera"
+            label="Notas"
+            sublabel="En Espera"
             value={notasEnEspera}
             color="red"
             icon={KpiIcon.waiting}
           />
           <KpiCard
-            label="Para entregar"
+            label="Notas"
+            sublabel="Para Entregar"
             value={paraEntregar}
             color="bronce"
             icon={KpiIcon.deliver}
