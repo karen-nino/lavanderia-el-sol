@@ -133,7 +133,9 @@ export default function Dashboard() {
     <div className="pt-4 pb-16 px-6 md:py-10 md:px-8 space-y-12">
 
       <div className="space-y-4">
-        <p className="text-card-title text-grey">Hoy</p>
+        <p className="text-xl font-bold text-dark-blue">Hoy</p>
+
+        <SalesCard total={ventasHoy} label="Ingresado hoy" />
 
         {/* KPIs: 2x2 en mobile, 4 columnas en tablet */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -173,14 +175,6 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
 
         <div className="space-y-12">
-          <div className="space-y-6">
-            <p className="text-card-title text-grey">Ventas</p>
-
-            <div className="space-y-4">
-              <SalesCard total={ventasHoy} label="Ingresado hoy" />
-            </div>
-          </div>
-
           <div className="space-y-6">
             <p className="text-card-title text-grey">Corte de caja</p>
 
