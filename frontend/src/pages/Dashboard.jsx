@@ -46,6 +46,24 @@ const KpiIcon = {
 // Cada cuánto se re-consultan notas, máquinas y ventas en segundo plano.
 const REFRESCO_MS = 15000;
 
+// Acción que el operador intentó pero no se completó porque la sesión expiró
+// (la app redirige a /login). Se persiste para reabrir la confirmación al
+// volver a entrar. Ver confirmarProcesar y la reanudación en la carga inicial.
+const ACCION_PENDIENTE_KEY = 'accionPendiente';
+
+function guardarAccionPendiente(accion) {
+  try { localStorage.setItem(ACCION_PENDIENTE_KEY, JSON.stringify(accion)); } catch { /* ignore */ }
+}
+function leerAccionPendiente() {
+  try {
+    const raw = localStorage.getItem(ACCION_PENDIENTE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+function limpiarAccionPendiente() {
+  try { localStorage.removeItem(ACCION_PENDIENTE_KEY); } catch { /* ignore */ }
+}
+
 function formatMMSS(totalSegundos) {
   const s = Math.max(0, Math.floor(totalSegundos));
   const mm = String(Math.floor(s / 60)).padStart(2, '0');
@@ -117,6 +135,18 @@ export default function Dashboard() {
             secadora: a.tiempo_carga_secadora != null ? Number(a.tiempo_carga_secadora) : 30,
           });
         }
+
+        // Reanudar una acción pendiente (p. ej. "Procesar carga" que quedó a medias
+        // porque expiró la sesión): reabrimos la confirmación sobre esa máquina,
+        // solo si sigue existiendo y en uso. El operador la confirma de nuevo.
+        const accion = leerAccionPendiente();
+        if (accion?.tipo === 'procesar' && Array.isArray(m)) {
+          limpiarAccionPendiente();
+          const maquina = m.find(mq => String(mq.id) === String(accion.maquinaId));
+          if (maquina && maquina.estado === 'en_uso') {
+            setConfirmProcesar(maquina);
+          }
+        }
       })
       .catch(() => {})
       .finally(() => { if (!cancelado) setLoading(false); });
@@ -156,15 +186,23 @@ export default function Dashboard() {
     if (!confirmProcesar) return;
     setProcesando(true);
     setErrorProcesar('');
+    // Si la sesión expira a mitad de esto, la app redirige a /login y se pierde
+    // el contexto; guardamos la intención para reabrir esta confirmación al
+    // volver a entrar (api.patch devuelve undefined en ese caso 401).
+    guardarAccionPendiente({ tipo: 'procesar', maquinaId: confirmProcesar.id });
     try {
       if (notaParaProcesar) {
         const notaActualizada = await api.patch(`/notas/${notaParaProcesar.id}/estado`, { estado: 'LISTA' });
+        if (notaActualizada === undefined) return; // sesión expiró: se conserva la acción pendiente
         setNotas(prev => prev.map(n => n.id === notaActualizada.id ? { ...n, ...notaActualizada } : n));
       }
       const actualizada = await api.patch(`/maquinas/${confirmProcesar.id}/estado`, { estado: 'disponible' });
+      if (actualizada === undefined) return; // sesión expiró: se conserva la acción pendiente
+      limpiarAccionPendiente();
       setMaquinas(prev => prev.map(m => m.id === actualizada.id ? actualizada : m));
       setConfirmProcesar(null);
     } catch (err) {
+      limpiarAccionPendiente();
       setErrorProcesar(err.message);
     } finally {
       setProcesando(false);
