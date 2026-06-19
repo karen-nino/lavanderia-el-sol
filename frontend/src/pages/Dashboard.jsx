@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import KpiCard from '../components/KpiCard';
@@ -43,6 +43,9 @@ const KpiIcon = {
   ),
 };
 
+// Cada cuánto se re-consultan notas, máquinas y ventas en segundo plano.
+const REFRESCO_MS = 15000;
+
 function formatMMSS(totalSegundos) {
   const s = Math.max(0, Math.floor(totalSegundos));
   const mm = String(Math.floor(s / 60)).padStart(2, '0');
@@ -61,8 +64,41 @@ export default function Dashboard() {
   const [confirmProcesar, setConfirmProcesar] = useState(null);
   const [procesando, setProcesando] = useState(false);
   const [errorProcesar, setErrorProcesar] = useState('');
+  const [refrescando, setRefrescando] = useState(false);
 
+  // Refresco silencioso de los datos que cambian en tiempo real.
+  // No toca `loading` ni muestra errores: los fallos transitorios se ignoran
+  // y se reintenta en el siguiente ciclo. Solo escribe si llegó un arreglo,
+  // para no romper render si la sesión expiró (api redirige y devuelve undefined).
+  const refrescarDatos = useCallback(async () => {
+    try {
+      const [n, m, v] = await Promise.all([
+        api.get('/notas'),
+        api.get('/maquinas'),
+        api.get('/ventas/resumen?periodo=hoy').catch(() => null),
+      ]);
+      if (Array.isArray(n)) setNotas(n);
+      if (Array.isArray(m)) setMaquinas(m);
+      if (v !== undefined)  setVentas(v);
+    } catch {
+      // ignorar: se reintenta en el siguiente ciclo de refresco
+    }
+  }, []);
+
+  // Recarga manual (botón): muestra el giro mientras consulta.
+  const refrescarManual = async () => {
+    setRefrescando(true);
+    try {
+      await refrescarDatos();
+    } finally {
+      setRefrescando(false);
+    }
+  };
+
+  // Carga inicial (con spinner). Los ajustes solo se piden aquí: no cambian
+  // en tiempo real, así que el refresco periódico no los vuelve a consultar.
   useEffect(() => {
+    let cancelado = false;
     Promise.all([
       api.get('/notas'),
       api.get('/maquinas'),
@@ -70,9 +106,10 @@ export default function Dashboard() {
       api.get('/ajustes').catch(() => null),
     ])
       .then(([n, m, v, a]) => {
-        setNotas(n);
-        setMaquinas(m);
-        setVentas(v);
+        if (cancelado) return;
+        if (Array.isArray(n)) setNotas(n);
+        if (Array.isArray(m)) setMaquinas(m);
+        if (v !== undefined)  setVentas(v);
         if (a) {
           setTiempos({
             mediana:  a.tiempo_carga_mediana  != null ? Number(a.tiempo_carga_mediana)  : 30,
@@ -81,8 +118,27 @@ export default function Dashboard() {
           });
         }
       })
-      .finally(() => setLoading(false));
+      .catch(() => {})
+      .finally(() => { if (!cancelado) setLoading(false); });
+    return () => { cancelado = true; };
   }, []);
+
+  // Auto-refresco periódico + al volver a la pestaña (solo si está visible).
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (document.visibilityState === 'visible') refrescarDatos();
+    }, REFRESCO_MS);
+
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') refrescarDatos();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+
+    return () => {
+      clearInterval(id);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [refrescarDatos]);
 
   useEffect(() => {
     const tick = setInterval(() => setNow(Date.now()), 1000);
@@ -191,6 +247,23 @@ export default function Dashboard() {
         <div className="md:col-span-2">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-section text-dark-blue">Máquinas en uso <span className="text-grey">({enUso})</span></h2>
+            <button
+              type="button"
+              onClick={refrescarManual}
+              disabled={refrescando}
+              aria-label="Recargar máquinas"
+              title="Recargar"
+              className="w-10 h-10 rounded-full border border-gray-300 flex items-center justify-center text-dark-blue hover:bg-gray-50 disabled:opacity-60 transition-colors"
+            >
+              <svg
+                className={`w-5 h-5 ${refrescando ? 'animate-spin' : ''}`}
+                fill="none" stroke="currentColor" strokeWidth={2}
+                strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"
+              >
+                <path d="M20 11A8.1 8.1 0 004.5 9M4 5v4h4" />
+                <path d="M4 13a8.1 8.1 0 0015.5 2M20 19v-4h-4" />
+              </svg>
+            </button>
           </div>
 
           {(() => {
