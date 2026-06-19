@@ -8,19 +8,20 @@ const VARIANT = {
 export default function KpiCard({ label, sublabel, value, color = 'blue', icon }) {
   const v = VARIANT[color] ?? VARIANT.blue;
   return (
-    <div className={`relative rounded-card p-5 md:p-6 shadow-card overflow-hidden ${v.container}`}>
+    <div className={`relative aspect-square rounded-xl p-4 md:p-5 pb-5 md:pb-6 shadow-card overflow-hidden flex flex-col justify-end ${v.container}`}>
       {icon && (
-        <span className={`absolute top-5 right-5 md:top-6 md:right-6 w-11 h-11 md:w-12 md:h-12 opacity-50 ${v.value}`}>
+        <span className={`absolute top-3.5 right-3.5 md:top-4 md:right-4 w-16 h-16 md:w-20 md:h-20 opacity-50 ${v.value}`}>
           {icon}
         </span>
       )}
 
-      <p className={`font-extrabold leading-none text-[2.75rem] md:text-[3.25rem] mb-3 ${v.value}`}>
-        {value}
-      </p>
-
-      <p className="text-sm md:text-base leading-tight text-dark-grey">{label}</p>
-      <p className="text-base md:text-lg font-bold leading-tight text-dark-blue">{sublabel}</p>
+      <div className="flex flex-col">
+        <p className={`font-extrabold leading-none text-5xl md:text-6xl mb-2 ${v.value}`}>
+          {value}
+        </p>
+        <p className="text-sm md:text-base leading-tight text-dark-grey">{label}</p>
+        <p className="text-xl md:text-2xl font-bold leading-tight text-dark-blue">{sublabel}</p>
+      </div>
     </div>
   );
 }
