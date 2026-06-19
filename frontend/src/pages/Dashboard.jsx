@@ -130,10 +130,12 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="pt-4 pb-16 px-6 md:py-10 md:px-8 space-y-12">
+    <div className="pt-4 pb-16 px-6 md:py-10 md:px-8 space-y-16">
+
+      {/* Sección resumen */}
 
       <div className="space-y-4">
-        <p className="text-xl font-bold text-dark-blue">Hoy</p>
+        <p className="text-section text-grey">Hoy</p>
 
         <SalesCard total={ventasHoy} label="Ingresado hoy" />
 
@@ -170,13 +172,11 @@ export default function Dashboard() {
         </div>
       </div>
 
-
-      {/* Sección ventas + máquinas */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
+      {/* Sección ventas */}
 
         <div className="space-y-12">
           <div className="space-y-6">
-            <p className="text-card-title text-grey">Corte de caja</p>
+            <p className="text-section text-grey">Corte de caja</p>
 
             <div className="space-y-4">
               <CashCutCard />
@@ -184,7 +184,9 @@ export default function Dashboard() {
           </div>
         </div>
 
+      {/* Sección máquinas */}
 
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
 
         <div className="md:col-span-2">
           <div className="flex items-center justify-between mb-6">
