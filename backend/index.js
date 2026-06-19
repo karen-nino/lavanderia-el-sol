@@ -42,6 +42,10 @@ app.get('/', (req, res) => {
   res.json({ message: 'Lavanderia El Sol API running' });
 });
 
+// Barrido de cierre del día: libera máquinas que quedaron en uso.
+import { iniciarCierreDelDia } from './jobs/cierreDelDia.js';
+
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
+  iniciarCierreDelDia();
 });
