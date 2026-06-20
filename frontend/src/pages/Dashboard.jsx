@@ -64,6 +64,18 @@ function limpiarAccionPendiente() {
   try { localStorage.removeItem(ACCION_PENDIENTE_KEY); } catch { /* ignore */ }
 }
 
+// ¿La fecha cae en el mismo día calendario (hora local) que la referencia?
+// Se usa para que los KPIs de la sección "Hoy" cuenten solo notas del día y se
+// reinicien al cambiar la fecha, igual que "Ingresado hoy" (filtrado en backend).
+function esDeHoy(fecha, refMs) {
+  if (!fecha) return false;
+  const d = new Date(fecha);
+  const r = new Date(refMs);
+  return d.getFullYear() === r.getFullYear()
+      && d.getMonth()    === r.getMonth()
+      && d.getDate()     === r.getDate();
+}
+
 function formatMMSS(totalSegundos) {
   const s = Math.max(0, Math.floor(totalSegundos));
   const mm = String(Math.floor(s / 60)).padStart(2, '0');
@@ -209,10 +221,12 @@ export default function Dashboard() {
     }
   };
 
+  // KPIs de la sección "Hoy": solo notas creadas hoy (se reinician a medianoche).
+  const notasDeHoy       = notas.filter(n => esDeHoy(n.created_at, now));
   const enUso            = maquinas.filter(m => m.estado === 'en_uso').length;
-  const notasPagadas     = notas.filter(n => n.estado_pago === 'PAGADO').length;
-  const notasEnEspera    = notas.filter(n => n.estado === 'EN_PROCESO').length;
-  const paraEntregar     = notas.filter(n => ['LISTA', 'PAGADA'].includes(n.estado)).length;
+  const notasPagadas     = notasDeHoy.filter(n => n.estado_pago === 'PAGADO').length;
+  const notasEnEspera    = notasDeHoy.filter(n => n.estado === 'EN_PROCESO').length;
+  const paraEntregar     = notasDeHoy.filter(n => ['LISTA', 'PAGADA'].includes(n.estado)).length;
   const ventasHoy        = ventas?.tarjetas?.total_cobrado ?? 0;
 
   if (loading) {
