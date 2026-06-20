@@ -271,7 +271,6 @@ export default function Dashboard() {
         <div className="space-y-12">
           <div className="space-y-6">
             <p className="text-section text-grey">Corte de caja</p>
-
             <div className="space-y-4">
               <CashCutCard />
             </div>
@@ -308,8 +307,8 @@ export default function Dashboard() {
             const maquinasEnUso = maquinas.filter(m => m.estado === 'en_uso');
             if (maquinasEnUso.length === 0) {
               return (
-                <div className="rounded-card bg-white p-card-pad shadow-card text-center">
-                  <p className="text-kpi-label text-grey">Sin máquinas en uso</p>
+                <div className="rounded-card bg-white py-20 shadow-card text-center">
+                  <p className="text-md text-grey">Sin máquinas en uso</p>
                 </div>
               );
             }
