@@ -809,7 +809,9 @@ export default function NuevaNota() {
                     <input
                       type="date" name="fecha_entrega"
                       value={encargoForm.fecha_entrega} onChange={handleEncargoChange}
-                      className={`${INPUT_CLS} appearance-none min-w-0 block bg-white h-[54px]`}
+                      className={`${INPUT_CLS} appearance-none min-w-0 block bg-white h-[54px] ${
+                        encargoForm.fecha_entrega ? '' : 'text-transparent'
+                      }`}
                     />
                     {!encargoForm.fecha_entrega && (
                       <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-base">
