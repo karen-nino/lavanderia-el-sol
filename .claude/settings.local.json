@@ -99,7 +99,8 @@
       "Bash(ls backend/.env*)",
       "Bash(grep -niE \"password|contrase|bcrypt|hash|'[0-9]{4,}'\" backend/db/seed.js)",
       "Bash(pkill -f \"node index.js\")",
-      "Bash(rm -f /tmp/verify-accion.mjs /tmp/tokens.txt /tmp/lavanderia-backend.log)"
+      "Bash(rm -f /tmp/verify-accion.mjs /tmp/tokens.txt /tmp/lavanderia-backend.log)",
+      "Bash(xargs cat)"
     ]
   }
 }

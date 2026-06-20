@@ -42,6 +42,19 @@ const descomponerTipo = (tipoDb) => {
   return { tipo: 'secadora', tamano: 'mediana' };
 };
 
+// Ícono de lavadora (info/washing-machine.svg). El color se hereda con currentColor.
+function WashingMachineIcon({ className = '' }) {
+  return (
+    <svg className={className} viewBox="0 0 134 132" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <path d="M106.046 10.9388H29.4745C26.4539 10.9388 24.0051 13.3875 24.0051 16.4081V114.857C24.0051 117.878 26.4539 120.326 29.4745 120.326H106.046C109.067 120.326 111.515 117.878 111.515 114.857V16.4081C111.515 13.3875 109.067 10.9388 106.046 10.9388Z" stroke="currentColor" strokeWidth="8.51282"/>
+      <path d="M24.0051 42.3878H111.515" stroke="currentColor" strokeWidth="8.51282" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M78.6993 22.942C81.1322 22.9422 83.1046 24.9144 83.1046 27.3473C83.1044 29.78 81.1321 31.7524 78.6993 31.7526C76.2665 31.7526 74.2943 29.7801 74.2941 27.3473C74.2941 24.9143 76.2664 22.942 78.6993 22.942Z" fill="white" stroke="currentColor" strokeWidth="2.1282"/>
+      <path d="M95.1075 22.942C97.5403 22.9422 99.5128 24.9144 99.5128 27.3473C99.5126 29.78 97.5402 31.7524 95.1075 31.7526C92.6747 31.7526 90.7024 29.7801 90.7022 27.3473C90.7022 24.9143 92.6745 22.942 95.1075 22.942Z" fill="white" stroke="currentColor" strokeWidth="2.1282"/>
+      <path d="M67.7603 101.184C78.3326 101.184 86.9031 92.6131 86.9031 82.0408C86.9031 71.4685 78.3326 62.8979 67.7603 62.8979C57.188 62.8979 48.6174 71.4685 48.6174 82.0408C48.6174 92.6131 57.188 101.184 67.7603 101.184Z" stroke="currentColor" strokeWidth="8.51282"/>
+    </svg>
+  );
+}
+
 export default function Maquinas() {
   const [maquinas, setMaquinas] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -55,8 +68,10 @@ export default function Maquinas() {
   const [eliminando, setEliminando] = useState(null);
   const [filtro, setFiltro] = useState('todos');
   const [estadoMenuId, setEstadoMenuId] = useState(null);
+  const [accionesMenuId, setAccionesMenuId] = useState(null);
   const [confirmCambio, setConfirmCambio] = useState(null);
   const estadoMenuRef = useRef(null);
+  const accionesMenuRef = useRef(null);
 
   useEffect(() => {
     api.get('/maquinas')
@@ -66,15 +81,14 @@ export default function Maquinas() {
   }, []);
 
   useEffect(() => {
-    if (estadoMenuId == null) return;
+    if (estadoMenuId == null && accionesMenuId == null) return;
     const onMouseDown = (e) => {
-      if (estadoMenuRef.current && !estadoMenuRef.current.contains(e.target)) {
-        setEstadoMenuId(null);
-      }
+      if (estadoMenuRef.current && !estadoMenuRef.current.contains(e.target)) setEstadoMenuId(null);
+      if (accionesMenuRef.current && !accionesMenuRef.current.contains(e.target)) setAccionesMenuId(null);
     };
     document.addEventListener('mousedown', onMouseDown);
     return () => document.removeEventListener('mousedown', onMouseDown);
-  }, [estadoMenuId]);
+  }, [estadoMenuId, accionesMenuId]);
 
   const cambiarEstado = async (id, estado) => {
     setCambiando(id);
@@ -238,8 +252,17 @@ export default function Maquinas() {
       )}
 
       {filtradas.length > 0 && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filtradas.map(m => {
+        <div className="space-y-8">
+          {[
+            { titulo: 'Lavadoras', items: filtradas.filter(m => m.tipo !== 'secadora') },
+            { titulo: 'Secadoras', items: filtradas.filter(m => m.tipo === 'secadora') },
+          ].map(grupo => grupo.items.length > 0 && (
+            <section key={grupo.titulo} className="space-y-3">
+              <h2 className="text-base font-bold text-gray-900">
+                {grupo.titulo} <span className="text-gray-400 font-medium">({grupo.items.length})</span>
+              </h2>
+              <div className="grid grid-cols-2 gap-4">
+                {grupo.items.map(m => {
             const cfg = ESTADO_CFG[m.estado] ?? ESTADO_CFG.disponible;
             const tipoCfg = TIPO_CFG[m.tipo] ?? { label: m.tipo, icon: '🔧' };
             const busy = cambiando === m.id;
@@ -247,95 +270,107 @@ export default function Maquinas() {
             const otrosEstados = Object.entries(ESTADO_CFG).filter(([e]) => e !== m.estado);
 
             return (
-              <div key={m.id} className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-                {/* Encabezado */}
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex items-center gap-2.5">
-                    <span className="text-2xl leading-none">{tipoCfg.icon}</span>
-                    <div>
-                      <p className="font-semibold text-gray-800 text-sm leading-tight">{m.nombre}</p>
-                      <p className="text-xs text-gray-400">{tipoCfg.label}</p>
-                    </div>
-                  </div>
-                  <div className="relative flex-shrink-0" ref={estadoMenuId === m.id ? estadoMenuRef : null}>
-                    <button
-                      type="button"
-                      onClick={() => setEstadoMenuId(prev => prev === m.id ? null : m.id)}
-                      disabled={busy}
-                      aria-haspopup="true"
-                      aria-expanded={estadoMenuId === m.id}
-                      className={`flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-full transition-opacity disabled:opacity-60 ${cfg.cls}`}
-                    >
-                      <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot} ${m.estado === 'en_uso' ? 'animate-pulse' : ''}`} />
-                      {busy ? '...' : cfg.label}
-                      <svg
-                        className={`w-3 h-3 transition-transform ${estadoMenuId === m.id ? 'rotate-180' : ''}`}
-                        fill="none" stroke="currentColor" viewBox="0 0 24 24"
-                      >
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
-                      </svg>
-                    </button>
+              <div key={m.id} className="relative bg-white rounded-2xl shadow-sm border border-gray-100 p-5 flex flex-col">
+                {/* Menú de acciones (kebab) */}
+                <div className="absolute top-3 right-3" ref={accionesMenuId === m.id ? accionesMenuRef : null}>
+                  <button
+                    type="button"
+                    onClick={() => { setEstadoMenuId(null); setAccionesMenuId(prev => prev === m.id ? null : m.id); }}
+                    aria-haspopup="true"
+                    aria-expanded={accionesMenuId === m.id}
+                    aria-label="Acciones"
+                    className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+                  >
+                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                      <circle cx="5" cy="12" r="1.8" />
+                      <circle cx="12" cy="12" r="1.8" />
+                      <circle cx="19" cy="12" r="1.8" />
+                    </svg>
+                  </button>
 
-                    {estadoMenuId === m.id && (
-                      <div className="absolute right-0 mt-1 z-10 w-44 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
-                        {otrosEstados.map(([estado, c]) => (
-                          <button
-                            key={estado}
-                            type="button"
-                            disabled={busy}
-                            onClick={() => {
-                              setEstadoMenuId(null);
-                              setConfirmCambio({ maquina: m, estado });
-                            }}
-                            className="w-full flex items-center gap-2 px-3 py-2 text-left text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-60"
-                          >
-                            <span className={`w-1.5 h-1.5 rounded-full ${c.dot}`} />
-                            {c.label}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                  {accionesMenuId === m.id && (
+                    <div className="absolute right-0 mt-1 z-10 w-40 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
+                      <button
+                        type="button"
+                        onClick={() => { setAccionesMenuId(null); editarMaquina(m); }}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm font-medium text-gray-700 hover:bg-gray-50"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                        Editar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setAccionesMenuId(null); eliminarMaquina(m); }}
+                        disabled={borrando}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3" />
+                        </svg>
+                        {borrando ? 'Eliminando...' : 'Eliminar'}
+                      </button>
+                    </div>
+                  )}
                 </div>
 
-                {m.modelo && (
-                  <p className="text-xs text-gray-400 mb-3">Modelo: {m.modelo}</p>
-                )}
+                {/* Ícono */}
+                <div className="flex justify-center pt-3 pb-5">
+                  <WashingMachineIcon className="w-24 h-24 text-gray-300" />
+                </div>
 
-                {m.notas && (
-                  <p className="text-xs text-gray-500 mb-3 whitespace-pre-wrap">
-                    <span className="text-gray-400">Notas: </span>{m.notas}
-                  </p>
-                )}
+                {/* Info */}
+                <p className="font-bold text-gray-900 text-lg leading-tight">{m.nombre}</p>
+                <p className="text-sm text-gray-500 mt-1">{tipoCfg.label}</p>
+                {m.modelo && <p className="text-sm text-gray-500">{m.modelo}</p>}
 
-                {/* Editar / Eliminar */}
-                <div className="flex gap-2 pt-3 mt-2 border-t border-gray-50">
+                {/* Estado (clic para cambiarlo) */}
+                <div className="relative self-start mt-4" ref={estadoMenuId === m.id ? estadoMenuRef : null}>
                   <button
                     type="button"
-                    onClick={() => editarMaquina(m)}
-                    disabled={borrando}
-                    className="flex-1 inline-flex items-center justify-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                    onClick={() => { setAccionesMenuId(null); setEstadoMenuId(prev => prev === m.id ? null : m.id); }}
+                    disabled={busy}
+                    aria-haspopup="true"
+                    aria-expanded={estadoMenuId === m.id}
+                    className={`inline-flex items-center gap-1.5 text-sm font-semibold px-3.5 py-1.5 rounded-full transition-opacity disabled:opacity-60 ${cfg.clsActive}`}
                   >
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    <span className={`w-1.5 h-1.5 rounded-full bg-white ${m.estado === 'en_uso' ? 'animate-pulse' : ''}`} />
+                    {busy ? '...' : cfg.label}
+                    <svg
+                      className={`w-3 h-3 transition-transform ${estadoMenuId === m.id ? 'rotate-180' : ''}`}
+                      fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
                     </svg>
-                    Editar
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => eliminarMaquina(m)}
-                    disabled={borrando}
-                    className="flex-1 inline-flex items-center justify-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-50 transition-colors"
-                  >
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3" />
-                    </svg>
-                    {borrando ? 'Eliminando...' : 'Eliminar'}
-                  </button>
+
+                  {estadoMenuId === m.id && (
+                    <div className="absolute left-0 bottom-full mb-1 z-10 w-44 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
+                      {otrosEstados.map(([estado, c]) => (
+                        <button
+                          key={estado}
+                          type="button"
+                          disabled={busy}
+                          onClick={() => {
+                            setEstadoMenuId(null);
+                            setConfirmCambio({ maquina: m, estado });
+                          }}
+                          className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+                        >
+                          <span className={`w-1.5 h-1.5 rounded-full ${c.dot}`} />
+                          {c.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             );
-          })}
+                })}
+              </div>
+            </section>
+          ))}
         </div>
       )}
 
