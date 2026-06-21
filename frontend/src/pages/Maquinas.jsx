@@ -431,14 +431,16 @@ export default function Maquinas() {
                 </div>
               )}
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Notas</label>
-                <textarea
-                  name="notas" value={form.notas} onChange={handleChange} rows={4}
-                  placeholder="Observaciones adicionales..."
-                  className={`${INPUT_CLS} resize-none`}
-                />
-              </div>
+              {editandoId != null && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Notas</label>
+                  <textarea
+                    name="notas" value={form.notas} onChange={handleChange} rows={4}
+                    placeholder="Observaciones adicionales..."
+                    className={`${INPUT_CLS} resize-none`}
+                  />
+                </div>
+              )}
 
               {formError && (
                 <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">
