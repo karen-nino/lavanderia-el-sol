@@ -305,14 +305,11 @@ export default function Clientes() {
                     key={c.id}
                     type="button"
                     onClick={() => setInfoCliente(c)}
-                    className="w-full text-left bg-white rounded-xl shadow-sm border border-gray-100 px-4 py-3 hover:bg-gray-50 active:bg-gray-100 transition-colors"
+                    className="w-full text-left bg-white rounded-xl shadow-sm border border-gray-100 px-4 py-3.5 hover:bg-gray-50 active:bg-gray-100 transition-colors"
                   >
-                    <p className="font-medium text-gray-800 text-sm">
+                    <p className="font-medium text-gray-800 text-base">
                       {`${c.nombre}${c.apellido ? ' ' + c.apellido : ''}`}
                     </p>
-                    {c.telefono && (
-                      <p className="mt-1 text-xs text-gray-500">📞 {c.telefono}</p>
-                    )}
                   </button>
                 ))}
               </div>
