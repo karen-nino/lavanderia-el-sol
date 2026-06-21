@@ -169,26 +169,28 @@ export default function Clientes() {
   };
 
   return (
-    <div className="pt-10 pb-16 px-6 md:py-14 md:px-8 space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-gray-900">Clientes</h1>
-          <p className="text-sm text-gray-500">{filtrados.length} cliente(s)</p>
+    <div className="pb-16 px-6 md:pb-14 md:px-8 space-y-4">
+      {/* Encabezado + búsqueda fijos al hacer scroll */}
+      <div className="sticky top-0 z-20 -mx-6 px-6 pt-10 pb-3 bg-gray-50 md:-mx-8 md:px-8 md:pt-14 space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-xl font-bold text-gray-900">Clientes</h1>
+            <p className="text-sm text-gray-500">{filtrados.length} cliente(s)</p>
+          </div>
+          <button
+            onClick={abrirModal}
+            aria-label="Nuevo cliente"
+            className="w-11 h-11 rounded-full bg-blue hover:opacity-90 text-white flex items-center justify-center transition-colors flex-shrink-0"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5}
+                d="M12 4v16m8-8H4" />
+            </svg>
+          </button>
         </div>
-        <button
-          onClick={abrirModal}
-          aria-label="Nuevo cliente"
-          className="w-11 h-11 rounded-full bg-blue hover:opacity-90 text-white flex items-center justify-center transition-colors flex-shrink-0"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5}
-              d="M12 4v16m8-8H4" />
-          </svg>
-        </button>
-      </div>
 
-      {/* Búsqueda */}
-      <div className="relative">
+        {/* Búsqueda */}
+        <div className="relative">
         <svg
           className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400"
           fill="none" stroke="currentColor" viewBox="0 0 24 24"
@@ -203,6 +205,7 @@ export default function Clientes() {
           onChange={e => setBusqueda(e.target.value)}
           className="w-full pl-11 pr-4 py-3.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent bg-white transition"
         />
+        </div>
       </div>
 
       {loading && (
