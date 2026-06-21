@@ -291,7 +291,7 @@ export default function Clientes() {
           </div>
 
           {/* Cards — mobile (agrupadas por letra) */}
-          <div className="md:hidden space-y-5 pr-5">
+          <div className="md:hidden space-y-16 pr-5">
             {grupos.map(g => (
               <div key={g.letra} className="space-y-3">
                 <h2
