@@ -58,7 +58,6 @@ export default function Maquinas() {
   const [maquinas, setMaquinas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [cambiando, setCambiando] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState(FORM_INIT);
   const [editandoId, setEditandoId] = useState(null);
@@ -66,10 +65,7 @@ export default function Maquinas() {
   const [formError, setFormError] = useState('');
   const [eliminando, setEliminando] = useState(null);
   const [filtro, setFiltro] = useState('todos');
-  const [estadoMenuId, setEstadoMenuId] = useState(null);
   const [accionesMenuId, setAccionesMenuId] = useState(null);
-  const [confirmCambio, setConfirmCambio] = useState(null);
-  const estadoMenuRef = useRef(null);
   const accionesMenuRef = useRef(null);
 
   useEffect(() => {
@@ -80,26 +76,13 @@ export default function Maquinas() {
   }, []);
 
   useEffect(() => {
-    if (estadoMenuId == null && accionesMenuId == null) return;
+    if (accionesMenuId == null) return;
     const onMouseDown = (e) => {
-      if (estadoMenuRef.current && !estadoMenuRef.current.contains(e.target)) setEstadoMenuId(null);
       if (accionesMenuRef.current && !accionesMenuRef.current.contains(e.target)) setAccionesMenuId(null);
     };
     document.addEventListener('mousedown', onMouseDown);
     return () => document.removeEventListener('mousedown', onMouseDown);
-  }, [estadoMenuId, accionesMenuId]);
-
-  const cambiarEstado = async (id, estado) => {
-    setCambiando(id);
-    try {
-      const updated = await api.patch(`/maquinas/${id}/estado`, { estado });
-      setMaquinas(prev => prev.map(m => m.id === id ? updated : m));
-    } catch (err) {
-      alert(err.message);
-    } finally {
-      setCambiando(null);
-    }
-  };
+  }, [accionesMenuId]);
 
   const abrirModal = () => {
     setForm(FORM_INIT);
@@ -261,7 +244,7 @@ export default function Maquinas() {
       )}
 
       {filtradas.length > 0 && (
-        <div className="space-y-8">
+        <div className="space-y-16">
           {[
             { titulo: 'Lavadoras', items: filtradas.filter(m => m.tipo !== 'secadora') },
             { titulo: 'Secadoras', items: filtradas.filter(m => m.tipo === 'secadora') },
@@ -278,9 +261,7 @@ export default function Maquinas() {
             const tamanoLabel = tipo === 'lavadora'
               ? (tamano === 'jumbo' ? 'Jumbo' : 'Mediana')
               : null;
-            const busy = cambiando === m.id;
             const borrando = eliminando === m.id;
-            const otrosEstados = Object.entries(ESTADO_CFG).filter(([e]) => e !== m.estado);
 
             return (
               <div key={m.id} className="relative bg-white rounded-2xl shadow-sm border border-gray-100 p-5 flex flex-col">
@@ -288,7 +269,7 @@ export default function Maquinas() {
                 <div className="absolute top-3 right-3" ref={accionesMenuId === m.id ? accionesMenuRef : null}>
                   <button
                     type="button"
-                    onClick={() => { setEstadoMenuId(null); setAccionesMenuId(prev => prev === m.id ? null : m.id); }}
+                    onClick={() => setAccionesMenuId(prev => prev === m.id ? null : m.id)}
                     aria-haspopup="true"
                     aria-expanded={accionesMenuId === m.id}
                     aria-label="Acciones"
@@ -329,7 +310,7 @@ export default function Maquinas() {
                 </div>
 
                 {/* Ícono */}
-                <div className="flex justify-center pt-3 pb-5">
+                <div className="flex justify-center pt-8 pb-5">
                   <WashingMachineIcon className="w-24 h-24 text-gray-300" />
                 </div>
 
@@ -340,45 +321,14 @@ export default function Maquinas() {
                 {m.capacidad && <p className="text-sm text-gray-500">{m.capacidad}</p>}
                 {m.modelo && <p className="text-sm text-gray-500">{m.modelo}</p>}
 
-                {/* Estado (clic para cambiarlo) */}
-                <div className="relative self-start mt-4" ref={estadoMenuId === m.id ? estadoMenuRef : null}>
-                  <button
-                    type="button"
-                    onClick={() => { setAccionesMenuId(null); setEstadoMenuId(prev => prev === m.id ? null : m.id); }}
-                    disabled={busy}
-                    aria-haspopup="true"
-                    aria-expanded={estadoMenuId === m.id}
-                    className={`inline-flex items-center gap-1.5 text-sm font-semibold px-3.5 py-1.5 rounded-full transition-opacity disabled:opacity-60 ${cfg.clsActive}`}
+                {/* Estado (informativo) */}
+                <div className="self-start mt-4">
+                  <span
+                    className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3.5 py-1.5 rounded-full ${cfg.clsActive}`}
                   >
                     <span className={`w-1.5 h-1.5 rounded-full bg-white ${m.estado === 'en_uso' ? 'animate-pulse' : ''}`} />
-                    {busy ? '...' : cfg.label}
-                    <svg
-                      className={`w-3 h-3 transition-transform ${estadoMenuId === m.id ? 'rotate-180' : ''}`}
-                      fill="none" stroke="currentColor" viewBox="0 0 24 24"
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </button>
-
-                  {estadoMenuId === m.id && (
-                    <div className="absolute left-0 bottom-full mb-1 z-10 w-44 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
-                      {otrosEstados.map(([estado, c]) => (
-                        <button
-                          key={estado}
-                          type="button"
-                          disabled={busy}
-                          onClick={() => {
-                            setEstadoMenuId(null);
-                            setConfirmCambio({ maquina: m, estado });
-                          }}
-                          className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-60"
-                        >
-                          <span className={`w-1.5 h-1.5 rounded-full ${c.dot}`} />
-                          {c.label}
-                        </button>
-                      ))}
-                    </div>
-                  )}
+                    {cfg.label}
+                  </span>
                 </div>
               </div>
             );
@@ -514,48 +464,6 @@ export default function Maquinas() {
           </div>
         </div>
       )}
-
-      {/* Modal confirmar cambio de estado */}
-      {confirmCambio && (() => {
-        const { maquina, estado } = confirmCambio;
-        const cfgDestino = ESTADO_CFG[estado] ?? ESTADO_CFG.disponible;
-        const busy = cambiando === maquina.id;
-        return (
-          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
-              <h3 className="text-base font-bold text-gray-900">Cambiar estado</h3>
-              <p className="text-sm text-gray-500">
-                ¿Cambiar el estado de <span className="font-semibold text-gray-800">{maquina.nombre}</span> a{' '}
-                <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2 py-0.5 rounded-full ${cfgDestino.cls}`}>
-                  <span className={`w-1.5 h-1.5 rounded-full ${cfgDestino.dot}`} />
-                  {cfgDestino.label}
-                </span>?
-              </p>
-              <div className="flex gap-3">
-                <button
-                  type="button"
-                  onClick={() => setConfirmCambio(null)}
-                  disabled={busy}
-                  className="flex-1 border border-gray-300 text-gray-700 font-medium py-3.5 rounded-lg text-base hover:bg-gray-50 disabled:opacity-60 transition-colors"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    await cambiarEstado(maquina.id, estado);
-                    setConfirmCambio(null);
-                  }}
-                  disabled={busy}
-                  className="flex-1 bg-blue hover:opacity-90 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
-                >
-                  {busy ? 'Cambiando...' : 'Confirmar'}
-                </button>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
     </div>
   );
 }
