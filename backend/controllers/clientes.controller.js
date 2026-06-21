@@ -1,5 +1,14 @@
 import pool from '../db/pool.js';
 
+// Valida un teléfono: debe existir y contener solo dígitos.
+// Devuelve un mensaje de error o null si es válido.
+const validarTelefono = (telefono) => {
+  const t = String(telefono ?? '').trim();
+  if (!t) return 'El teléfono es requerido.';
+  if (!/^\d+$/.test(t)) return 'El teléfono solo puede contener números.';
+  return null;
+};
+
 export const getClientes = async (req, res) => {
   try {
     const { rows } = await pool.query(
@@ -34,6 +43,11 @@ export const createCliente = async (req, res) => {
 
   if (!nombre) {
     return res.status(400).json({ message: 'El nombre es requerido.' });
+  }
+
+  const errorTelefono = validarTelefono(telefono);
+  if (errorTelefono) {
+    return res.status(400).json({ message: errorTelefono });
   }
 
   try {
@@ -82,6 +96,14 @@ export const deleteCliente = async (req, res) => {
 export const updateCliente = async (req, res) => {
   const { id } = req.params;
   const { nombre, apellido, telefono, notas, activo } = req.body;
+
+  // Si se envía teléfono, debe ser válido (no vacío y solo dígitos).
+  if (telefono !== undefined && telefono !== null) {
+    const errorTelefono = validarTelefono(telefono);
+    if (errorTelefono) {
+      return res.status(400).json({ message: errorTelefono });
+    }
+  }
 
   try {
     const { rows } = await pool.query(

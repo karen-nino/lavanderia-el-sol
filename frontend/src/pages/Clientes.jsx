@@ -82,7 +82,10 @@ export default function Clientes() {
   // ── Crear ──────────────────────────────────────────────
   const abrirModal = () => { setForm(FORM_INIT); setFormError(''); setModalOpen(true); };
   const cerrarModal = () => setModalOpen(false);
-  const handleChange = e => setForm(f => ({ ...f, [e.target.name]: e.target.value }));
+  const handleChange = e => {
+    const { name, value } = e.target;
+    setForm(f => ({ ...f, [name]: name === 'telefono' ? value.replace(/\D/g, '') : value }));
+  };
 
   const handleSubmit = async e => {
     e.preventDefault();
@@ -111,7 +114,10 @@ export default function Clientes() {
     setEditError('');
   };
   const cerrarEditar = () => setEditCliente(null);
-  const handleEditChange = e => setEditForm(f => ({ ...f, [e.target.name]: e.target.value }));
+  const handleEditChange = e => {
+    const { name, value } = e.target;
+    setEditForm(f => ({ ...f, [name]: name === 'telefono' ? value.replace(/\D/g, '') : value }));
+  };
 
   const handleEditSubmit = async e => {
     e.preventDefault();
@@ -428,8 +434,11 @@ export default function Clientes() {
                   placeholder="Apellido" className={INPUT_CLS} />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Teléfono</label>
-                <input name="telefono" value={form.telefono} onChange={handleChange}
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Teléfono <span className="text-red-500">*</span>
+                </label>
+                <input name="telefono" required value={form.telefono} onChange={handleChange}
+                  type="tel" inputMode="numeric" pattern="[0-9]*"
                   placeholder="33 1234 5678" className={INPUT_CLS} />
               </div>
               {formError && (
@@ -476,8 +485,11 @@ export default function Clientes() {
                   placeholder="Apellido" className={INPUT_CLS} />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Teléfono</label>
-                <input name="telefono" value={editForm.telefono} onChange={handleEditChange}
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Teléfono <span className="text-red-500">*</span>
+                </label>
+                <input name="telefono" required value={editForm.telefono} onChange={handleEditChange}
+                  type="tel" inputMode="numeric" pattern="[0-9]*"
                   placeholder="33 1234 5678" className={INPUT_CLS} />
               </div>
               {editError && (
