@@ -9,6 +9,8 @@ const INPUT_CLS =
 
 const FORM_INIT = { nombre: '', apellido: '', telefono: '' };
 
+const ALFABETO = [...'ABCDEFGHIJKLMNÑOPQRSTUVWXYZ', '#'];
+
 export default function Clientes() {
   const { usuario } = useAuth();
   const esAdmin = esAdminFn(usuario?.rol);
@@ -50,6 +52,32 @@ export default function Clientes() {
     (c.apellido && c.apellido.toLowerCase().includes(busqueda.toLowerCase())) ||
     (c.telefono && c.telefono.includes(busqueda))
   );
+
+  // ── Agrupación por letra inicial (lista mobile) ────────
+  const inicial = (c) => {
+    const ch = (c.nombre ?? '').trim().charAt(0).toUpperCase();
+    if (ch === 'Ñ') return 'Ñ';
+    const norm = ch.normalize('NFD').replace(/[̀-ͯ]/g, '');
+    return /[A-Z]/.test(norm) ? norm : '#';
+  };
+
+  const ordenados = [...filtrados].sort((a, b) =>
+    `${a.nombre} ${a.apellido ?? ''}`.localeCompare(`${b.nombre} ${b.apellido ?? ''}`, 'es')
+  );
+
+  const grupos = [];
+  const grupoPorLetra = {};
+  ordenados.forEach(c => {
+    const letra = inicial(c);
+    let g = grupoPorLetra[letra];
+    if (!g) { g = { letra, items: [] }; grupoPorLetra[letra] = g; grupos.push(g); }
+    g.items.push(c);
+  });
+
+  const scrollToLetra = (letra) => {
+    document.getElementById(`cli-letra-${letra}`)
+      ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
 
   // ── Crear ──────────────────────────────────────────────
   const abrirModal = () => { setForm(FORM_INIT); setFormError(''); setModalOpen(true); };
@@ -253,23 +281,54 @@ export default function Clientes() {
             </div>
           </div>
 
-          {/* Cards — mobile */}
-          <div className="md:hidden space-y-3">
-            {filtrados.map(c => (
-              <button
-                key={c.id}
-                type="button"
-                onClick={() => setInfoCliente(c)}
-                className="w-full text-left bg-white rounded-xl shadow-sm border border-gray-100 px-4 py-3 hover:bg-gray-50 active:bg-gray-100 transition-colors"
-              >
-                <p className="font-medium text-gray-800 text-sm">
-                  {`${c.nombre}${c.apellido ? ' ' + c.apellido : ''}`}
-                </p>
-                {c.telefono && (
-                  <p className="mt-1 text-xs text-gray-500">📞 {c.telefono}</p>
-                )}
-              </button>
+          {/* Cards — mobile (agrupadas por letra) */}
+          <div className="md:hidden space-y-5 pr-5">
+            {grupos.map(g => (
+              <div key={g.letra} className="space-y-3">
+                <h2
+                  id={`cli-letra-${g.letra}`}
+                  className="scroll-mt-4 px-1 text-sm font-bold text-gray-400"
+                >
+                  {g.letra}
+                </h2>
+                {g.items.map(c => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => setInfoCliente(c)}
+                    className="w-full text-left bg-white rounded-xl shadow-sm border border-gray-100 px-4 py-3 hover:bg-gray-50 active:bg-gray-100 transition-colors"
+                  >
+                    <p className="font-medium text-gray-800 text-sm">
+                      {`${c.nombre}${c.apellido ? ' ' + c.apellido : ''}`}
+                    </p>
+                    {c.telefono && (
+                      <p className="mt-1 text-xs text-gray-500">📞 {c.telefono}</p>
+                    )}
+                  </button>
+                ))}
+              </div>
             ))}
+          </div>
+
+          {/* Índice alfabético — mobile */}
+          <div className="md:hidden fixed right-0.5 top-1/2 -translate-y-1/2 z-30 flex flex-col items-center select-none">
+            {ALFABETO.map(letra => {
+              const activa = !!grupoPorLetra[letra];
+              return (
+                <button
+                  key={letra}
+                  type="button"
+                  disabled={!activa}
+                  onClick={() => scrollToLetra(letra)}
+                  aria-label={`Ir a ${letra}`}
+                  className={`w-5 h-5 flex items-center justify-center text-[11px] leading-none font-semibold ${
+                    activa ? 'text-blue/70 hover:text-blue active:text-blue' : 'text-gray-300'
+                  }`}
+                >
+                  {letra}
+                </button>
+              );
+            })}
           </div>
         </>
       )}
