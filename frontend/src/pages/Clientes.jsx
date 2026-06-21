@@ -47,9 +47,15 @@ export default function Clientes() {
       .finally(() => setLoading(false));
   }, []);
 
+  // Minúsculas y sin acentos, para que la búsqueda los ignore.
+  const normalizar = (s) =>
+    (s ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  const q = normalizar(busqueda.trim());
+  // Coincide si alguna palabra del nombre o apellido empieza con la búsqueda.
+  const empiezaAlguna = (texto) =>
+    normalizar(texto).split(/\s+/).some(w => w.startsWith(q));
   const filtrados = clientes.filter(c =>
-    c.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
-    (c.apellido && c.apellido.toLowerCase().includes(busqueda.toLowerCase())) ||
+    empiezaAlguna(`${c.nombre} ${c.apellido ?? ''}`) ||
     (c.telefono && c.telefono.includes(busqueda))
   );
 
