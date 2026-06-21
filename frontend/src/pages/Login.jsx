@@ -141,16 +141,16 @@ export default function Login() {
               {mostrarLista && !seleccionado && query.trim() && (
                 <div className="absolute z-10 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-56 overflow-y-auto">
                   {buscando ? (
-                    <div className="px-3 py-2.5 text-sm text-gray-400">Buscando...</div>
+                    <div className="px-4 py-3.5 text-base text-gray-400">Buscando...</div>
                   ) : sugerencias.length === 0 ? (
-                    <div className="px-3 py-2.5 text-sm text-gray-400">Sin coincidencias</div>
+                    <div className="px-4 py-3.5 text-base text-gray-400">Sin coincidencias</div>
                   ) : (
                     sugerencias.map(u => (
                       <button
                         type="button"
                         key={u.id}
                         onClick={() => elegirUsuario(u)}
-                        className="w-full text-left px-3 py-2.5 text-sm text-gray-700 hover:bg-light-blue hover:text-blue-700 transition-colors"
+                        className="w-full text-left px-4 py-3.5 text-base text-gray-700 hover:bg-light-blue hover:text-blue-700 transition-colors"
                       >
                         {u.nombre}
                       </button>
