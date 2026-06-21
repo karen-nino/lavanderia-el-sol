@@ -20,7 +20,7 @@ export default function KpiCard({ label, sublabel, value, color = 'blue', icon }
           {value}
         </p>
         <p className="text-sm md:text-base leading-tight text-dark-grey">{label}</p>
-        <p className="text-xl md:text-2xl font-bold leading-tight text-dark-blue">{sublabel}</p>
+        <p className="text-lg md:text-2xl font-bold leading-tight text-dark-blue">{sublabel}</p>
       </div>
     </div>
   );
