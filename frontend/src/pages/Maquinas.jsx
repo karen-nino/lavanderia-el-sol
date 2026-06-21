@@ -7,12 +7,6 @@ const ESTADO_CFG = {
   mantenimiento: { label: 'Mantenimiento', cls: 'bg-red-100 text-red-700',     clsActive: 'bg-red-600 text-white',   dot: 'bg-red-500'   },
 };
 
-const TIPO_CFG = {
-  lavadora_mediana: { label: 'Lavadora Mediana', icon: '🫧' },
-  lavadora_jumbo:   { label: 'Lavadora Jumbo',   icon: '🫧' },
-  secadora:         { label: 'Secadora',          icon: '🌀' },
-};
-
 const INPUT_CLS =
   'w-full px-4 py-3.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent transition';
 
@@ -264,7 +258,11 @@ export default function Maquinas() {
               <div className="grid grid-cols-2 gap-4">
                 {grupo.items.map(m => {
             const cfg = ESTADO_CFG[m.estado] ?? ESTADO_CFG.disponible;
-            const tipoCfg = TIPO_CFG[m.tipo] ?? { label: m.tipo, icon: '🔧' };
+            const { tipo, tamano } = descomponerTipo(m.tipo);
+            const tipoLabel = tipo === 'lavadora' ? 'Lavadora' : 'Secadora';
+            const tamanoLabel = tipo === 'lavadora'
+              ? (tamano === 'jumbo' ? 'Jumbo' : 'Mediana')
+              : null;
             const busy = cambiando === m.id;
             const borrando = eliminando === m.id;
             const otrosEstados = Object.entries(ESTADO_CFG).filter(([e]) => e !== m.estado);
@@ -322,7 +320,8 @@ export default function Maquinas() {
 
                 {/* Info */}
                 <p className="font-bold text-gray-900 text-lg leading-tight">{m.nombre}</p>
-                <p className="text-sm text-gray-500 mt-1">{tipoCfg.label}</p>
+                <p className="text-sm text-gray-500 mt-1">{tipoLabel}</p>
+                {tamanoLabel && <p className="text-sm text-gray-500">{tamanoLabel}</p>}
                 {m.modelo && <p className="text-sm text-gray-500">{m.modelo}</p>}
 
                 {/* Estado (clic para cambiarlo) */}
