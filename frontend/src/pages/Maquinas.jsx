@@ -20,7 +20,12 @@ const TAMANOS = [
   { v: 'jumbo',   label: 'Jumbo'   },
 ];
 
-const FORM_INIT = { nombre: '', tipo: 'lavadora', tamano: 'mediana', modelo: '', notas: '' };
+const CAPACIDADES = [
+  { v: '20kg', label: '20kg' },
+  { v: '35kg', label: '35kg' },
+];
+
+const FORM_INIT = { nombre: '', tipo: 'lavadora', tamano: 'mediana', capacidad: '20kg', modelo: '', notas: '' };
 
 const tipoCompuesto = (tipo, tamano) =>
   tipo === 'lavadora' ? `lavadora_${tamano}` : tipo;
@@ -109,6 +114,7 @@ export default function Maquinas() {
       nombre: m.nombre ?? '',
       tipo,
       tamano,
+      capacidad: m.capacidad ?? '20kg',
       modelo: m.modelo ?? '',
       notas:  m.notas ?? '',
     });
@@ -423,6 +429,17 @@ export default function Maquinas() {
                   </select>
                 </div>
               )}
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Capacidad <span className="text-red-500">*</span>
+                </label>
+                <select name="capacidad" value={form.capacidad} onChange={handleChange} className={INPUT_CLS}>
+                  {CAPACIDADES.map(c => (
+                    <option key={c.v} value={c.v}>{c.label}</option>
+                  ))}
+                </select>
+              </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">Modelo</label>

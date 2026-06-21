@@ -2,6 +2,7 @@ import pool from '../db/pool.js';
 
 const ESTADOS_VALIDOS = ['disponible', 'en_uso', 'mantenimiento'];
 const TIPOS_VALIDOS   = ['lavadora_mediana', 'lavadora_jumbo', 'secadora'];
+const CAPACIDADES_VALIDAS = ['20kg', '35kg'];
 
 export const getMaquinas = async (req, res) => {
   try {
@@ -18,7 +19,7 @@ export const getMaquinas = async (req, res) => {
 };
 
 export const createMaquina = async (req, res) => {
-  const { nombre, tipo, modelo, numero_serie, fecha_adquisicion, sucursal = 'lopez_cotilla', notas } = req.body;
+  const { nombre, tipo, modelo, capacidad, numero_serie, fecha_adquisicion, sucursal = 'lopez_cotilla', notas } = req.body;
 
   if (!nombre || !tipo) {
     return res.status(400).json({ message: 'Nombre y tipo son requeridos.' });
@@ -26,13 +27,16 @@ export const createMaquina = async (req, res) => {
   if (!TIPOS_VALIDOS.includes(tipo)) {
     return res.status(400).json({ message: `Tipo inválido. Valores permitidos: ${TIPOS_VALIDOS.join(', ')}.` });
   }
+  if (capacidad != null && !CAPACIDADES_VALIDAS.includes(capacidad)) {
+    return res.status(400).json({ message: `Capacidad inválida. Valores permitidos: ${CAPACIDADES_VALIDAS.join(', ')}.` });
+  }
 
   try {
     const { rows } = await pool.query(
-      `INSERT INTO maquinas (nombre, tipo, modelo, numero_serie, fecha_adquisicion, sucursal, notas)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `INSERT INTO maquinas (nombre, tipo, modelo, capacidad, numero_serie, fecha_adquisicion, sucursal, notas)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING *`,
-      [nombre, tipo, modelo, numero_serie, fecha_adquisicion, sucursal, notas]
+      [nombre, tipo, modelo, capacidad, numero_serie, fecha_adquisicion, sucursal, notas]
     );
     res.status(201).json(rows[0]);
   } catch (err) {
@@ -46,7 +50,7 @@ export const createMaquina = async (req, res) => {
 
 export const updateMaquina = async (req, res) => {
   const { id } = req.params;
-  const { nombre, tipo, modelo, numero_serie, fecha_adquisicion, notas } = req.body;
+  const { nombre, tipo, modelo, capacidad, numero_serie, fecha_adquisicion, notas } = req.body;
 
   if (!nombre || !tipo) {
     return res.status(400).json({ message: 'Nombre y tipo son requeridos.' });
@@ -54,14 +58,17 @@ export const updateMaquina = async (req, res) => {
   if (!TIPOS_VALIDOS.includes(tipo)) {
     return res.status(400).json({ message: `Tipo inválido. Valores permitidos: ${TIPOS_VALIDOS.join(', ')}.` });
   }
+  if (capacidad != null && !CAPACIDADES_VALIDAS.includes(capacidad)) {
+    return res.status(400).json({ message: `Capacidad inválida. Valores permitidos: ${CAPACIDADES_VALIDAS.join(', ')}.` });
+  }
 
   try {
     const { rows } = await pool.query(
       `UPDATE maquinas
-         SET nombre = $1, tipo = $2, modelo = $3, numero_serie = $4, fecha_adquisicion = $5, notas = $6
-       WHERE id = $7
+         SET nombre = $1, tipo = $2, modelo = $3, capacidad = $4, numero_serie = $5, fecha_adquisicion = $6, notas = $7
+       WHERE id = $8
        RETURNING *`,
-      [nombre, tipo, modelo, numero_serie, fecha_adquisicion, notas, id]
+      [nombre, tipo, modelo, capacidad, numero_serie, fecha_adquisicion, notas, id]
     );
     if (rows.length === 0) {
       return res.status(404).json({ message: 'Máquina no encontrada.' });

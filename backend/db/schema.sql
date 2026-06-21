@@ -48,6 +48,7 @@ CREATE TABLE maquinas (
   tipo             tipo_maquina NOT NULL,
   estado           estado_maquina NOT NULL DEFAULT 'disponible',
   modelo           VARCHAR(100),
+  capacidad        VARCHAR(10) CHECK (capacidad IS NULL OR capacidad IN ('20kg', '35kg')),
   numero_serie     VARCHAR(100),
   fecha_adquisicion DATE,
   notas            TEXT,
