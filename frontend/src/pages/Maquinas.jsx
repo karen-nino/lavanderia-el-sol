@@ -244,7 +244,7 @@ export default function Maquinas() {
       )}
 
       {filtradas.length > 0 && (
-        <div className="space-y-16">
+        <div className="space-y-16 pt-6">
           {[
             { titulo: 'Lavadoras', items: filtradas.filter(m => m.tipo !== 'secadora') },
             { titulo: 'Secadoras', items: filtradas.filter(m => m.tipo === 'secadora') },
