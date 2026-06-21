@@ -50,7 +50,7 @@ export const createMaquina = async (req, res) => {
 
 export const updateMaquina = async (req, res) => {
   const { id } = req.params;
-  const { nombre, tipo, modelo, capacidad, numero_serie, fecha_adquisicion, notas } = req.body;
+  const { nombre, tipo, modelo, capacidad, numero_serie, fecha_adquisicion, notas, estado } = req.body;
 
   if (!nombre || !tipo) {
     return res.status(400).json({ message: 'Nombre y tipo son requeridos.' });
@@ -61,14 +61,25 @@ export const updateMaquina = async (req, res) => {
   if (capacidad != null && !CAPACIDADES_VALIDAS.includes(capacidad)) {
     return res.status(400).json({ message: `Capacidad inválida. Valores permitidos: ${CAPACIDADES_VALIDAS.join(', ')}.` });
   }
+  if (estado != null && !ESTADOS_VALIDOS.includes(estado)) {
+    return res.status(400).json({ message: `Estado inválido. Valores permitidos: ${ESTADOS_VALIDOS.join(', ')}.` });
+  }
 
   try {
+    // estado es opcional: si llega null se conserva el actual. Al cambiarlo se
+    // mantiene en_uso_desde coherente, igual que en cambiarEstadoMaquina.
     const { rows } = await pool.query(
       `UPDATE maquinas
-         SET nombre = $1, tipo = $2, modelo = $3, capacidad = $4, numero_serie = $5, fecha_adquisicion = $6, notas = $7
-       WHERE id = $8
+         SET nombre = $1, tipo = $2, modelo = $3, capacidad = $4, numero_serie = $5, fecha_adquisicion = $6, notas = $7,
+             estado = COALESCE($8::estado_maquina, estado),
+             en_uso_desde = CASE
+               WHEN $8::estado_maquina IS NULL THEN en_uso_desde
+               WHEN $8::estado_maquina = 'en_uso'::estado_maquina THEN NOW()
+               ELSE NULL
+             END
+       WHERE id = $9
        RETURNING *`,
-      [nombre, tipo, modelo, capacidad, numero_serie, fecha_adquisicion, notas, id]
+      [nombre, tipo, modelo, capacidad, numero_serie, fecha_adquisicion, notas, estado ?? null, id]
     );
     if (rows.length === 0) {
       return res.status(404).json({ message: 'Máquina no encontrada.' });

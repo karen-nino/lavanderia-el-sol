@@ -25,7 +25,7 @@ const CAPACIDADES = [
   { v: '35kg', label: '35kg' },
 ];
 
-const FORM_INIT = { nombre: '', tipo: 'lavadora', tamano: 'mediana', capacidad: '20kg', modelo: '', notas: '' };
+const FORM_INIT = { nombre: '', tipo: 'lavadora', tamano: 'mediana', capacidad: '20kg', modelo: '', mantenimiento: false, notas: '' };
 
 const tipoCompuesto = (tipo, tamano) =>
   tipo === 'lavadora' ? `lavadora_${tamano}` : tipo;
@@ -116,6 +116,7 @@ export default function Maquinas() {
       tamano,
       capacidad: m.capacidad ?? '20kg',
       modelo: m.modelo ?? '',
+      mantenimiento: m.estado === 'mantenimiento',
       notas:  m.notas ?? '',
     });
     setEditandoId(m.id);
@@ -132,13 +133,21 @@ export default function Maquinas() {
     setFormError('');
     setGuardando(true);
     try {
-      const { tipo, tamano, ...rest } = form;
+      const { tipo, tamano, mantenimiento, ...rest } = form;
       const payload = {
         ...rest,
         nombre: capitalizar(rest.nombre),
         tipo: tipoCompuesto(tipo, tamano),
       };
       if (editandoId != null) {
+        // Solo tocamos el estado cuando el toggle de mantenimiento implica un
+        // cambio; así no interrumpimos una máquina que esté en uso.
+        const original = maquinas.find(m => m.id === editandoId);
+        if (mantenimiento) {
+          payload.estado = 'mantenimiento';
+        } else if (original?.estado === 'mantenimiento') {
+          payload.estado = 'disponible';
+        }
         const actualizada = await api.put(`/maquinas/${editandoId}`, payload);
         setMaquinas(prev => prev.map(m => m.id === editandoId ? actualizada : m));
       } else {
@@ -328,6 +337,7 @@ export default function Maquinas() {
                 <p className="font-bold text-gray-900 text-lg leading-tight">{m.nombre}</p>
                 <p className="text-sm text-gray-500 mt-1">{tipoLabel}</p>
                 {tamanoLabel && <p className="text-sm text-gray-500">{tamanoLabel}</p>}
+                {m.capacidad && <p className="text-sm text-gray-500">{m.capacidad}</p>}
                 {m.modelo && <p className="text-sm text-gray-500">{m.modelo}</p>}
 
                 {/* Estado (clic para cambiarlo) */}
@@ -449,6 +459,27 @@ export default function Maquinas() {
                   className={INPUT_CLS}
                 />
               </div>
+
+              {editandoId != null && (
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-gray-700">Mantenimiento</span>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={form.mantenimiento}
+                    onClick={() => setForm(f => ({ ...f, mantenimiento: !f.mantenimiento }))}
+                    className={`relative inline-flex h-[39px] w-[67px] items-center rounded-full transition-colors ${
+                      form.mantenimiento ? 'bg-red-500' : 'bg-gray-300'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-[34px] w-[34px] transform rounded-full bg-white shadow transition-transform ${
+                        form.mantenimiento ? 'translate-x-[30px]' : 'translate-x-[3px]'
+                      }`}
+                    />
+                  </button>
+                </div>
+              )}
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">Notas</label>
