@@ -171,7 +171,7 @@ export default function Clientes() {
   return (
     <div className="pb-16 px-6 md:pb-14 md:px-8 space-y-4">
       {/* Encabezado + búsqueda fijos al hacer scroll */}
-      <div className="sticky top-0 z-20 -mx-6 px-6 pt-10 pb-3 bg-gray-50 md:-mx-8 md:px-8 md:pt-14 space-y-4">
+      <div className="sticky top-0 z-20 -mx-6 px-6 pt-10 pb-6 mb-2 bg-gray-50 md:-mx-8 md:px-8 md:pt-14 space-y-4">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-xl font-bold text-gray-900">Clientes</h1>
@@ -330,7 +330,7 @@ export default function Clientes() {
                   disabled={!activa}
                   onClick={() => scrollToLetra(letra)}
                   aria-label={`Ir a ${letra}`}
-                  className={`w-5 h-5 flex items-center justify-center text-[11px] leading-none font-semibold ${
+                  className={`w-4 h-3.5 flex items-center justify-center text-[10px] leading-none font-semibold ${
                     activa ? 'text-blue/70 hover:text-blue active:text-blue' : 'text-gray-300'
                   }`}
                 >
