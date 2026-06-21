@@ -31,6 +31,9 @@ Thumbs.db
 .vscode/
 .idea/
 
+# Claude Code (configuración local)
+.claude/settings.local.json
+
 # Coverage
 coverage/
 
