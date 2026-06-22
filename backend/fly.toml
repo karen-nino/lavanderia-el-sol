@@ -1,0 +1,30 @@
+app = "lavanderia-el-sol-api"
+primary_region = "dfw"
+
+[build]
+
+# Corre las migraciones antes de publicar cada despliegue.
+[deploy]
+  release_command = "node db/migrate.js"
+
+[env]
+  PORT = "4000"
+  CIERRE_HORA = "3"
+  TZ_NEGOCIO = "America/Mexico_City"
+
+[http_service]
+  internal_port = 4000
+  force_https = true
+  # Siempre encendida: el job de cierre del día (3am) corre dentro del proceso.
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
+
+# Volumen para conservar el logo subido entre despliegues.
+[[mounts]]
+  source = "uploads"
+  destination = "/app/uploads"

@@ -74,8 +74,8 @@ async function main() {
     const result = await client.query(
       `UPDATE usuarios
        SET password = $1, updated_at = NOW()
-       WHERE email = 'admin@lavanderia-el-sol.com'
-       RETURNING id, nombre, email, rol`,
+       WHERE rol = 'admin_main'
+       RETURNING id, nombre, rol`,
       [hash]
     );
 
@@ -89,7 +89,6 @@ async function main() {
     console.log('\nUsuario actualizado correctamente:');
     console.log(`  ID:    ${u.id}`);
     console.log(`  Nombre: ${u.nombre}`);
-    console.log(`  Email:  ${u.email}`);
     console.log(`  Rol:    ${u.rol}`);
     console.log('\nListo. Ya puedes iniciar sesión.\n');
   } finally {

@@ -3,6 +3,19 @@
   command = "pnpm build"
   publish = "dist"
 
+# Proxy al backend en Fly.io. Debe ir ANTES del catch-all de abajo.
+[[redirects]]
+  from = "/api/*"
+  to = "https://lavanderia-el-sol-api.fly.dev/api/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/uploads/*"
+  to = "https://lavanderia-el-sol-api.fly.dev/uploads/:splat"
+  status = 200
+  force = true
+
 # React Router (BrowserRouter): todas las rutas deben servir index.html
 [[redirects]]
   from = "/*"
