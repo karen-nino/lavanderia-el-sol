@@ -111,7 +111,10 @@ export default function Notas() {
     return () => document.removeEventListener('mousedown', onMouseDown);
   }, [mostrarEstado, mostrarFecha]);
 
-  const q = busqueda.trim().toLowerCase();
+  // Minúsculas y sin acentos, para que la búsqueda los ignore (igual que en Clientes).
+  const normalizar = (s) =>
+    (s ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  const q = normalizar(busqueda.trim());
   const rango = useMemo(() => calcularRangoFecha(rangoFecha), [rangoFecha]);
   const filtradas = notas.filter(n => {
     if (filtro === 'DEBE') {
@@ -124,10 +127,10 @@ export default function Notas() {
       if (fecha < rango.desde || fecha >= rango.hasta) return false;
     }
     if (!q) return true;
-    const folio    = (n.folio ?? `#${n.id}`).toLowerCase();
-    const cliente  = (n.cliente_nombre   ?? '').toLowerCase();
-    const apellido = (n.cliente_apellido ?? '').toLowerCase();
-    const telefono = (n.cliente_telefono ?? '').toLowerCase();
+    const folio    = normalizar(n.folio ?? `#${n.id}`);
+    const cliente  = normalizar(n.cliente_nombre);
+    const apellido = normalizar(n.cliente_apellido);
+    const telefono = normalizar(n.cliente_telefono);
     return folio.includes(q) || cliente.includes(q) || apellido.includes(q) || telefono.includes(q);
   });
 
