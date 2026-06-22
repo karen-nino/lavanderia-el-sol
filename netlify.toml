@@ -1,0 +1,10 @@
+[build]
+  base = "frontend"
+  command = "pnpm build"
+  publish = "dist"
+
+# React Router (BrowserRouter): todas las rutas deben servir index.html
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
