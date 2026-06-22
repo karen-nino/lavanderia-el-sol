@@ -32,6 +32,17 @@ export default function Salidas() {
   const [errorAccion,      setErrorAccion]      = useState('');
   const [confirmDetener,   setConfirmDetener]   = useState(false);
 
+  // Activar nota En Espera
+  const [activarOpen,      setActivarOpen]      = useState(false);
+  const [maquinasDisp,     setMaquinasDisp]     = useState([]);
+  const [maquinaSel,       setMaquinaSel]       = useState('');
+  const [loadingMaquinas,  setLoadingMaquinas]  = useState(false);
+
+  // Procesar carga (ciclo terminado)
+  const [tiempos,          setTiempos]          = useState({ mediana: 30, jumbo: 45, secadora: 30 });
+  const [now,              setNow]              = useState(() => Date.now());
+  const [confirmProcesar,  setConfirmProcesar]  = useState(false);
+
   const cargarDatos = useCallback(async () => {
     try {
       const [notaData, productosData] = await Promise.all([
@@ -54,6 +65,26 @@ export default function Salidas() {
     cargarDatos().finally(() => { if (activo) setLoading(false); });
     return () => { activo = false; };
   }, [cargarDatos]);
+
+  // Tiempos de carga (no cambian en tiempo real, se piden una vez).
+  useEffect(() => {
+    let activo = true;
+    api.get('/ajustes').then(a => {
+      if (!activo || !a) return;
+      setTiempos({
+        mediana:  a.tiempo_carga_mediana  != null ? Number(a.tiempo_carga_mediana)  : 30,
+        jumbo:    a.tiempo_carga_jumbo    != null ? Number(a.tiempo_carga_jumbo)    : 45,
+        secadora: a.tiempo_carga_secadora != null ? Number(a.tiempo_carga_secadora) : 30,
+      });
+    }).catch(() => {});
+    return () => { activo = false; };
+  }, []);
+
+  // Reloj para detectar cuándo el ciclo de la máquina ya terminó.
+  useEffect(() => {
+    const tick = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(tick);
+  }, []);
 
   async function activarMaquina() {
     if (!nota?.maquina_id) return;
@@ -80,6 +111,63 @@ export default function Salidas() {
     } catch (err) {
       setErrorAccion(err.message);
       setConfirmDetener(false);
+    } finally {
+      setLoadingMaquina(false);
+    }
+  }
+
+  // Activa la nota En Espera: si ya tiene máquina la usa directo; si no, abre
+  // el selector para elegir una.
+  async function iniciarActivar() {
+    if (nota?.maquina_id) {
+      await activarNota(nota.maquina_id);
+      return;
+    }
+    setErrorAccion('');
+    setMaquinaSel('');
+    setActivarOpen(true);
+    setLoadingMaquinas(true);
+    try {
+      const data = await api.get('/maquinas');
+      setMaquinasDisp((data ?? []).filter(m => m.estado === 'disponible'));
+    } catch (err) {
+      setErrorAccion(err.message);
+    } finally {
+      setLoadingMaquinas(false);
+    }
+  }
+
+  async function activarNota(maquinaId) {
+    if (!maquinaId) return;
+    setLoadingMaquina(true);
+    setErrorAccion('');
+    try {
+      await api.patch(`/notas/${id}/activar`, { maquina_id: Number(maquinaId) });
+      setActivarOpen(false);
+      await cargarDatos();
+    } catch (err) {
+      setErrorAccion(err.message);
+    } finally {
+      setLoadingMaquina(false);
+    }
+  }
+
+  // Procesar carga terminada: la nota pasa a "Por Entregar" (LISTA) y la
+  // máquina a disponible. Igual que la acción "Procesar" del dashboard.
+  async function procesarNota() {
+    if (!nota?.maquina_id) return;
+    setLoadingMaquina(true);
+    setErrorAccion('');
+    try {
+      if (nota.estado === 'EN_PROCESO') {
+        await api.patch(`/notas/${id}/estado`, { estado: 'LISTA' });
+      }
+      await api.patch(`/maquinas/${nota.maquina_id}/estado`, { estado: 'disponible' });
+      setConfirmProcesar(false);
+      await cargarDatos();
+    } catch (err) {
+      setErrorAccion(err.message);
+      setConfirmProcesar(false);
     } finally {
       setLoadingMaquina(false);
     }
@@ -132,6 +220,16 @@ export default function Salidas() {
 
   const maquina         = nota?.maquina_nombre;
   const maquinaEnUso    = nota?.maquina_estado === 'en_uso';
+
+  // ¿El ciclo de la máquina ya terminó? (mismo cálculo que el dashboard)
+  const minutosCiclo  = nota?.maquina_tipo === 'secadora'       ? tiempos.secadora
+                      : nota?.maquina_tipo === 'lavadora_jumbo' ? tiempos.jumbo
+                      : tiempos.mediana;
+  const duracionSeg   = Math.max(0, Number(minutosCiclo) || 0) * 60;
+  const inicioCiclo   = nota?.maquina_en_uso_desde ? new Date(nota.maquina_en_uso_desde).getTime() : null;
+  const cicloTerminado = maquinaEnUso && inicioCiclo != null
+    && Math.floor((now - inicioCiclo) / 1000) >= duracionSeg;
+
   const productosNota  = nota?.productos || [];
   const productosIdsEnNota = new Set(productosNota.map(p => p.producto_id));
 
@@ -194,15 +292,33 @@ export default function Salidas() {
               <p className="text-sm text-gray-400 italic">Sin máquina asignada</p>
             )}
           </div>
-          {nota?.maquina_id && (
+          {nota?.estado === 'EN_ESPERA' ? (
+            <button
+              onClick={iniciarActivar}
+              disabled={loadingMaquina}
+              className="flex-shrink-0 px-4 py-2 bg-blue hover:opacity-90 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
+            >
+              {loadingMaquina ? 'Activando...' : 'Activar'}
+            </button>
+          ) : nota?.maquina_id ? (
             maquinaEnUso ? (
-              <button
-                onClick={() => setConfirmDetener(true)}
-                disabled={loadingMaquina}
-                className="flex-shrink-0 px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
-              >
-                Detener Ciclo
-              </button>
+              cicloTerminado ? (
+                <button
+                  onClick={() => setConfirmProcesar(true)}
+                  disabled={loadingMaquina}
+                  className="flex-shrink-0 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
+                >
+                  Procesar
+                </button>
+              ) : (
+                <button
+                  onClick={() => setConfirmDetener(true)}
+                  disabled={loadingMaquina}
+                  className="flex-shrink-0 px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
+                >
+                  Detener Ciclo
+                </button>
+              )
             ) : (
               <button
                 onClick={activarMaquina}
@@ -212,7 +328,7 @@ export default function Salidas() {
                 {loadingMaquina ? 'Activando...' : 'Activar máquina'}
               </button>
             )
-          )}
+          ) : null}
         </div>
       </div>
 
@@ -328,6 +444,98 @@ export default function Salidas() {
                 className="flex-1 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
               >
                 {loadingMaquina ? 'Deteniendo...' : 'Confirmar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal confirmar procesar carga */}
+      {confirmProcesar && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+            <h3 className="text-base font-bold text-gray-900">Procesar carga</h3>
+            <p className="text-sm text-gray-500">
+              ¿Confirmar que la carga de <span className="font-semibold text-gray-800">{nota.maquina_nombre}</span> ya terminó? La máquina pasará a disponible y la nota a <span className="font-semibold text-gray-800">"Por Entregar"</span>.
+            </p>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setConfirmProcesar(false)}
+                disabled={loadingMaquina}
+                className="flex-1 border border-gray-300 text-gray-700 font-medium py-3.5 rounded-lg text-base hover:bg-gray-50 disabled:opacity-60 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={procesarNota}
+                disabled={loadingMaquina}
+                className="flex-1 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
+              >
+                {loadingMaquina ? 'Procesando...' : 'Confirmar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal activar nota — selección de máquina */}
+      {activarOpen && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div>
+              <h3 className="text-base font-bold text-gray-900">Activar nota</h3>
+              <p className="text-sm text-gray-500 mt-1">
+                Selecciona la máquina. La nota pasará a <span className="font-medium text-gray-700">En Proceso</span> y la máquina quedará en uso.
+              </p>
+            </div>
+
+            {loadingMaquinas ? (
+              <div className="flex justify-center py-6">
+                <div className="animate-spin rounded-full h-7 w-7 border-b-2 border-blue" />
+              </div>
+            ) : maquinasDisp.length === 0 ? (
+              <p className="text-sm text-gray-400 text-center py-6">No hay máquinas disponibles.</p>
+            ) : (
+              <div className="space-y-2">
+                {maquinasDisp.map(m => {
+                  const selected = String(maquinaSel) === String(m.id);
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => setMaquinaSel(String(m.id))}
+                      className={`w-full flex items-center justify-between gap-2 px-4 py-3 border-2 rounded-xl text-left transition-colors ${
+                        selected ? 'border-blue bg-light-blue' : 'border-gray-200 bg-white hover:border-blue-300'
+                      }`}
+                    >
+                      <span className="font-medium text-gray-800">{m.nombre}</span>
+                      {MAQUINA_TIPO_LABEL[m.tipo] && (
+                        <span className="text-xs text-gray-500">{MAQUINA_TIPO_LABEL[m.tipo]}</span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setActivarOpen(false)}
+                disabled={loadingMaquina}
+                className="flex-1 border border-gray-300 text-gray-700 font-medium py-3.5 rounded-lg text-base hover:bg-gray-50 disabled:opacity-60 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => activarNota(maquinaSel)}
+                disabled={loadingMaquina || !maquinaSel}
+                className="flex-1 bg-blue hover:opacity-90 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
+              >
+                {loadingMaquina ? 'Activando...' : 'Activar'}
               </button>
             </div>
           </div>

@@ -78,7 +78,8 @@ export const getNotaById = async (req, res) => {
               u.nombre   AS usuario_nombre,
               m.nombre   AS maquina_nombre,
               m.tipo     AS maquina_tipo,
-              m.estado   AS maquina_estado
+              m.estado   AS maquina_estado,
+              m.en_uso_desde AS maquina_en_uso_desde
        FROM notas n
        LEFT JOIN clientes  c ON c.id = n.cliente_id
        JOIN      usuarios  u ON u.id = n.usuario_id
@@ -712,7 +713,8 @@ export const activarNota = async (req, res) => {
               u.nombre   AS usuario_nombre,
               m.nombre   AS maquina_nombre,
               m.tipo     AS maquina_tipo,
-              m.estado   AS maquina_estado
+              m.estado   AS maquina_estado,
+              m.en_uso_desde AS maquina_en_uso_desde
        FROM notas n
        LEFT JOIN clientes  c ON c.id = n.cliente_id
        JOIN      usuarios  u ON u.id = n.usuario_id

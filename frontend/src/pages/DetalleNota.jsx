@@ -105,12 +105,6 @@ export default function DetalleNota() {
   const [confirmFinalizar,  setConfirmFinalizar]  = useState(false);
   const [confirmEliminar,  setConfirmEliminar]  = useState(false);
 
-  // Activar nota En Espera
-  const [activarOpen,      setActivarOpen]      = useState(false);
-  const [maquinas,         setMaquinas]         = useState([]);
-  const [maquinaSel,       setMaquinaSel]       = useState('');
-  const [loadingMaquinas,  setLoadingMaquinas]  = useState(false);
-
   useEffect(() => {
     let activo = true;
     api.get(`/notas/${id}`)
@@ -174,39 +168,6 @@ export default function DetalleNota() {
     } catch (err) {
       setErrorAccion(err.message);
       setConfirmEliminar(false);
-    } finally {
-      setLoadingAccion(false);
-    }
-  }
-
-  async function abrirActivar() {
-    setErrorAccion('');
-    setMaquinaSel(nota?.maquina_id ? String(nota.maquina_id) : '');
-    setActivarOpen(true);
-    setLoadingMaquinas(true);
-    try {
-      const data = await api.get('/maquinas');
-      // Disponibles + la que ya tuviera asignada la nota (aunque no esté disponible).
-      setMaquinas(
-        (data ?? []).filter(m => m.estado === 'disponible' || m.id === nota?.maquina_id)
-      );
-    } catch (err) {
-      setErrorAccion(err.message);
-    } finally {
-      setLoadingMaquinas(false);
-    }
-  }
-
-  async function activarNota() {
-    if (!maquinaSel) return;
-    setLoadingAccion(true);
-    setErrorAccion('');
-    try {
-      const updated = await api.patch(`/notas/${id}/activar`, { maquina_id: Number(maquinaSel) });
-      setNota(updated);
-      setActivarOpen(false);
-    } catch (err) {
-      setErrorAccion(err.message);
     } finally {
       setLoadingAccion(false);
     }
@@ -294,15 +255,6 @@ export default function DetalleNota() {
       {/* Botones de acción */}
       {!terminal && (
         <div className="flex flex-wrap gap-2">
-          {nota.estado === 'EN_ESPERA' && (
-            <button
-              onClick={abrirActivar}
-              disabled={loadingAccion}
-              className="flex items-center gap-1.5 px-4 py-2 bg-blue hover:opacity-90 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
-            >
-              Activar
-            </button>
-          )}
           {puedeEditar && (
             <button
               onClick={() => navigate(`/notas/${id}/editar`)}
@@ -546,65 +498,6 @@ export default function DetalleNota() {
         />
       )}
 
-      {/* Modal activar nota */}
-      {activarOpen && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4 max-h-[90vh] overflow-y-auto">
-            <div>
-              <h3 className="text-base font-bold text-gray-900">Activar nota</h3>
-              <p className="text-sm text-gray-500 mt-1">
-                Selecciona la máquina. La nota pasará a <span className="font-medium text-gray-700">En Proceso</span> y la máquina quedará en uso.
-              </p>
-            </div>
-
-            {loadingMaquinas ? (
-              <div className="flex justify-center py-6">
-                <div className="animate-spin rounded-full h-7 w-7 border-b-2 border-blue" />
-              </div>
-            ) : maquinas.length === 0 ? (
-              <p className="text-sm text-gray-400 text-center py-6">No hay máquinas disponibles.</p>
-            ) : (
-              <div className="space-y-2">
-                {maquinas.map(m => {
-                  const selected = String(maquinaSel) === String(m.id);
-                  return (
-                    <button
-                      key={m.id}
-                      type="button"
-                      onClick={() => setMaquinaSel(String(m.id))}
-                      className={`w-full flex items-center justify-between gap-2 px-4 py-3 border-2 rounded-xl text-left transition-colors ${
-                        selected ? 'border-blue bg-light-blue' : 'border-gray-200 bg-white hover:border-blue-300'
-                      }`}
-                    >
-                      <span className="font-medium text-gray-800">{m.nombre}</span>
-                      {MAQUINA_TIPO_LABEL[m.tipo] && (
-                        <span className="text-xs text-gray-500">{MAQUINA_TIPO_LABEL[m.tipo]}</span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-
-            <div className="flex gap-3">
-              <button
-                onClick={() => setActivarOpen(false)}
-                disabled={loadingAccion}
-                className="flex-1 border border-gray-300 text-gray-700 font-medium py-3.5 rounded-lg text-base hover:bg-gray-50 transition-colors disabled:opacity-60"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={activarNota}
-                disabled={loadingAccion || !maquinaSel}
-                className="flex-1 bg-blue hover:opacity-90 text-white font-medium py-3.5 rounded-lg text-base transition-colors disabled:opacity-60"
-              >
-                {loadingAccion ? 'Activando...' : 'Activar'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

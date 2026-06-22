@@ -313,7 +313,7 @@ export default function Clientes() {
                     onClick={() => setInfoCliente(c)}
                     className="w-full flex items-center gap-3 text-left bg-white rounded-xl shadow-sm border border-gray-100 px-4 py-3.5 hover:bg-gray-50 active:bg-gray-100 transition-colors"
                   >
-                    <span className="flex-shrink-0 w-10 h-10 rounded-full bg-gray-200 text-gray-600 font-semibold text-sm flex items-center justify-center uppercase">
+                    <span className="flex-shrink-0 w-10 h-10 rounded-full bg-light-blue text-blue font-semibold text-sm flex items-center justify-center uppercase">
                       {`${c.nombre?.[0] ?? ''}${c.apellido?.[0] ?? ''}`}
                     </span>
                     <p className="font-medium text-gray-800 text-base">
