@@ -8,6 +8,7 @@ import {
   updateNota,
   eliminarNota,
   cambiarEstadoNota,
+  activarNota,
   cambiarEstadoPago,
   getNotaProductos,
   addProductoToNota,
@@ -25,6 +26,7 @@ router.get('/:id',        getNotaById);
 router.patch('/:id', updateNota);
 router.delete('/:id', eliminarNota);
 router.patch('/:id/estado',      cambiarEstadoNota);
+router.patch('/:id/activar',     activarNota);
 router.patch('/:id/estado-pago', cambiarEstadoPago);
 router.get('/:id/productos',    getNotaProductos);
 router.post('/:id/productos',   addProductoToNota);

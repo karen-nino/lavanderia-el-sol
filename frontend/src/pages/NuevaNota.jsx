@@ -335,9 +335,15 @@ export default function NuevaNota() {
     setError('');
     setEncargoLoading(true);
     try {
+      // En Proceso solo si hay máquina y se activó inmediatamente; si no, En Espera.
+      const estadoInicial =
+        encargoForm.maquina_id && encargoForm.activar_inmediatamente === 'SI'
+          ? 'EN_PROCESO'
+          : 'EN_ESPERA';
       const payload = {
         modalidad:       'POR_ENCARGO',
         tipo_prenda:     encargoForm.tipo_prenda || 'ROPA',
+        estado:          estadoInicial,
         cliente_id:      Number(encargoForm.cliente_id),
         tamano:          encargoForm.tamano,
         cantidad_cargas: encargoCargas,

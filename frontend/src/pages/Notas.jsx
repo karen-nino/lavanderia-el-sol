@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 
-const ESTADOS = ['TODOS', 'EN_PROCESO', 'LISTA', 'FINALIZADA', 'DEBE', 'CANCELADA'];
+const ESTADOS = ['TODOS', 'EN_ESPERA', 'EN_PROCESO', 'LISTA', 'FINALIZADA', 'DEBE', 'CANCELADA'];
 
 const FILTRO_LABEL = {
   TODOS:      'Todos',
@@ -43,6 +43,7 @@ function calcularRangoFecha(rango) {
 }
 
 const BADGE_ESTADO = {
+  EN_ESPERA:  { label: 'En Espera',  cls: 'bg-gray-100 text-gray-600'       },
   EN_PROCESO: { label: 'En Proceso', cls: 'bg-blue-100 text-blue-800'       },
   LISTA:      { label: 'Por Entregar', cls: 'bg-yellow-100 text-yellow-800' },
   PAGADA:     { label: 'Pagada',     cls: 'bg-emerald-100 text-emerald-800' },

@@ -1,7 +1,9 @@
 import pool from '../db/pool.js';
 import { esAdmin } from '../middleware/roles.js';
 
-const ESTADOS_VALIDOS     = ['EN_PROCESO', 'LISTA', 'PAGADA', 'FINALIZADA', 'CANCELADA'];
+const ESTADOS_VALIDOS     = ['EN_ESPERA', 'EN_PROCESO', 'LISTA', 'PAGADA', 'FINALIZADA', 'CANCELADA'];
+// Estados con los que puede nacer una nota.
+const ESTADOS_INICIALES   = ['EN_ESPERA', 'EN_PROCESO'];
 const MODALIDADES_VALIDAS = ['AUTOSERVICIO', 'EDREDON', 'POR_ENCARGO'];
 const ESTADOS_PAGO_VALIDOS = ['DEBE', 'PAGADO'];
 const TAMANOS_VALIDOS     = ['chico', 'grande'];
@@ -10,6 +12,7 @@ const TIEMPOS_ENTREGA_VALIDOS = ['MANANA', 'TARDE', 'NOCHE'];
 
 // Transiciones permitidas por estado actual
 const TRANSICIONES_VALIDAS = {
+  EN_ESPERA:  ['EN_PROCESO', 'LISTA',  'CANCELADA'],
   EN_PROCESO: ['LISTA',                'CANCELADA'],
   LISTA:      ['PAGADA',  'FINALIZADA', 'CANCELADA'],
   PAGADA:     ['FINALIZADA',            'CANCELADA'],
@@ -119,6 +122,7 @@ export const createNota = async (req, res) => {
     maquina_id,
     modalidad = 'POR_ENCARGO',
     tipo_prenda = 'ROPA',
+    estado,
     estado_pago,
     sucursal = 'lopez_cotilla',
     peso_kg,
@@ -162,6 +166,13 @@ export const createNota = async (req, res) => {
       message: `tiempo_entrega inválido. Valores permitidos: ${TIEMPOS_ENTREGA_VALIDOS.join(', ')}.`,
     });
   }
+  if (estado && !ESTADOS_INICIALES.includes(estado)) {
+    return res.status(400).json({
+      message: `Estado inicial inválido. Valores permitidos: ${ESTADOS_INICIALES.join(', ')}.`,
+    });
+  }
+  // Estado inicial: EN_PROCESO por defecto; EN_ESPERA si así se indica.
+  const estadoInicial = estado || 'EN_PROCESO';
 
   const ajusteNum      = Number(ajuste)         || 0;
   const cantidadCargas = Number(cantidad_cargas) || 1;
@@ -210,10 +221,10 @@ export const createNota = async (req, res) => {
 
     const { rows: notaRows } = await client.query(
       `INSERT INTO notas
-         (cliente_id, usuario_id, maquina_id, modalidad, tipo_prenda, estado_pago, sucursal,
+         (cliente_id, usuario_id, maquina_id, modalidad, tipo_prenda, estado, estado_pago, sucursal,
           peso_kg, precio_total, fecha_entrega, tiempo_entrega, instrucciones,
           tamano, precio_base, ajuste, cantidad_cargas)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
        RETURNING *`,
       [
         cliente_id   || null,
@@ -221,6 +232,7 @@ export const createNota = async (req, res) => {
         maquina_id   || null,
         modalidad,
         String(tipo_prenda).toUpperCase(),
+        estadoInicial,
         estado_pago,
         sucursal,
         peso_kg      || null,
@@ -632,6 +644,86 @@ export const cambiarEstadoNota = async (req, res) => {
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('cambiarEstadoNota error:', err);
+    res.status(500).json({ message: 'Error interno del servidor.' });
+  } finally {
+    client.release();
+  }
+};
+
+// ── PATCH /notas/:id/activar ────────────────────────────────
+// Activa una nota En Espera: le asigna máquina (si se indica),
+// la pasa a En Proceso y marca la máquina como en uso.
+export const activarNota = async (req, res) => {
+  const { id } = req.params;
+  const { maquina_id } = req.body;
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const { rows: notaRows } = await client.query(
+      'SELECT estado, maquina_id FROM notas WHERE id = $1 FOR UPDATE',
+      [id]
+    );
+    if (notaRows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: 'Nota no encontrada.' });
+    }
+    if (notaRows[0].estado !== 'EN_ESPERA') {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'Solo se puede activar una nota En Espera.' });
+    }
+
+    const maquinaFinal = maquina_id || notaRows[0].maquina_id;
+    if (!maquinaFinal) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'Se requiere una máquina para activar la nota.' });
+    }
+
+    const { rows: maqRows } = await client.query(
+      'SELECT estado FROM maquinas WHERE id = $1 FOR UPDATE',
+      [maquinaFinal]
+    );
+    if (maqRows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'La máquina seleccionada no existe.' });
+    }
+    if (maqRows[0].estado !== 'disponible') {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'La máquina seleccionada no está disponible.' });
+    }
+
+    await client.query(
+      `UPDATE maquinas SET estado = 'en_uso', en_uso_desde = NOW() WHERE id = $1`,
+      [maquinaFinal]
+    );
+    await client.query(
+      `UPDATE notas SET maquina_id = $1, estado = 'EN_PROCESO' WHERE id = $2`,
+      [maquinaFinal, id]
+    );
+
+    await client.query('COMMIT');
+
+    const { rows } = await pool.query(
+      `SELECT n.*,
+              c.nombre   AS cliente_nombre,
+              c.apellido AS cliente_apellido,
+              c.telefono AS cliente_telefono,
+              u.nombre   AS usuario_nombre,
+              m.nombre   AS maquina_nombre,
+              m.tipo     AS maquina_tipo,
+              m.estado   AS maquina_estado
+       FROM notas n
+       LEFT JOIN clientes  c ON c.id = n.cliente_id
+       JOIN      usuarios  u ON u.id = n.usuario_id
+       LEFT JOIN maquinas  m ON m.id = n.maquina_id
+       WHERE n.id = $1`,
+      [id]
+    );
+    res.json(rows[0]);
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('activarNota error:', err);
     res.status(500).json({ message: 'Error interno del servidor.' });
   } finally {
     client.release();
