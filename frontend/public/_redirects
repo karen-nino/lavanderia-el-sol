@@ -1,1 +1,6 @@
-/*    /index.html   200
+# Proxy al backend en Fly.io (debe ir ANTES del catch-all de abajo).
+/api/*       https://lavanderia-el-sol-api.fly.dev/api/:splat       200
+/uploads/*   https://lavanderia-el-sol-api.fly.dev/uploads/:splat   200
+
+# React Router (BrowserRouter): el resto sirve index.html.
+/*           /index.html   200
