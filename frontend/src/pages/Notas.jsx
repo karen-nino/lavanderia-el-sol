@@ -73,7 +73,7 @@ function fmtMonto(n) {
 function fmtCliente(n) {
   if (!n.cliente_nombre) return null;
   const ap = (n.cliente_apellido ?? '').trim();
-  return ap ? `${n.cliente_nombre} ${ap.charAt(0).toUpperCase()}.` : n.cliente_nombre;
+  return ap ? `${n.cliente_nombre} ${ap}` : n.cliente_nombre;
 }
 
 export default function Notas() {
