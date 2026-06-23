@@ -36,6 +36,8 @@ Thumbs.db
 
 # Skills instaladas (corren con permisos completos, no versionar)
 .agents/
+.claude/skills/
+skills-lock.json
 
 # Coverage
 coverage/
