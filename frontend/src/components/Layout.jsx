@@ -341,15 +341,17 @@ function MenuModal({ open, onClose, extraItems = [], onSettings, onLogout }) {
               <span className="text-base font-medium">{label}</span>
             </button>
           ))}
-          <button
-            onClick={onSettings}
-            className="flex items-center gap-3 px-3 py-3 rounded-card-sm text-dark-blue hover:bg-light-blue/60 transition-colors"
-          >
-            <span className="w-10 h-10 rounded-card-sm bg-light-blue/60 text-blue flex items-center justify-center">
-              {Icon.ajustes}
-            </span>
-            <span className="text-base font-medium">Ajustes</span>
-          </button>
+          {onSettings && (
+            <button
+              onClick={onSettings}
+              className="flex items-center gap-3 px-3 py-3 rounded-card-sm text-dark-blue hover:bg-light-blue/60 transition-colors"
+            >
+              <span className="w-10 h-10 rounded-card-sm bg-light-blue/60 text-blue flex items-center justify-center">
+                {Icon.ajustes}
+              </span>
+              <span className="text-base font-medium">Ajustes</span>
+            </button>
+          )}
           <button
             onClick={onLogout}
             className="flex items-center gap-3 px-3 py-3 rounded-card-sm text-red hover:bg-red/10 transition-colors"
@@ -494,7 +496,7 @@ export default function Layout() {
         open={menuOpen}
         onClose={() => setMenuOpen(false)}
         extraItems={menuExtraItems}
-        onSettings={handleSettings}
+        onSettings={esAdmin(usuario?.rol) ? handleSettings : undefined}
         onLogout={handleLogout}
       />
 
