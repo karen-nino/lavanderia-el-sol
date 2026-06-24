@@ -10,6 +10,7 @@ import NuevaNota from './pages/NuevaNota';
 import Clientes from './pages/Clientes';
 import Maquinas from './pages/Maquinas';
 import Inventario from './pages/Inventario';
+import Caja from './pages/Caja';
 import DetalleNota from './pages/DetalleNota';
 import Salidas from './pages/Salidas';
 import Ventas from './pages/Ventas';
@@ -39,6 +40,7 @@ export default function App() {
             <Route path="clientes" element={<Clientes />} />
             <Route path="maquinas" element={<Maquinas />} />
             <Route path="inventario" element={<Inventario />} />
+            <Route path="caja" element={<Caja />} />
             <Route
               path="ventas"
               element={

@@ -56,6 +56,13 @@ const Icon = {
         d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2 5h12m-7 3a1 1 0 11-2 0 1 1 0 012 0zm8 0a1 1 0 11-2 0 1 1 0 012 0z" />
     </svg>
   ),
+  caja: (
+    <svg width="24" height="24" className={navIconCls} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <rect x="3" y="8" width="18" height="12" rx="2" strokeWidth={2} />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12h18M7 8V5h6l2 3" />
+      <circle cx="17" cy="14" r="1" fill="currentColor" />
+    </svg>
+  ),
   empleados: (
     <svg width="24" height="24" className={navIconCls} fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <circle cx="9" cy="8" r="3" strokeWidth={2} />
@@ -462,6 +469,7 @@ export default function Layout() {
   const mobileBottomItems = navItems.filter((item) => item.to !== '/inventario');
 
   const menuExtraItems = [
+    { label: 'Caja',       icon: Icon.caja,       onClick: () => goTo('/caja') },
     { label: 'Inventario', icon: Icon.inventario, onClick: () => goTo('/inventario') },
     ...(esAdmin(usuario?.rol)
       ? [
