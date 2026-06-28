@@ -176,7 +176,7 @@ export default function Dashboard() {
   const notaParaProcesar = confirmProcesar
     ? notas
         .filter(n => String(n.maquina_id) === String(confirmProcesar.id)
-                  && n.estado === 'EN_PROCESO')
+                  && ['EN_PROCESO', 'POR_PROCESAR'].includes(n.estado))
         .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0]
     : null;
 
@@ -211,7 +211,7 @@ export default function Dashboard() {
   const notasDeHoy       = notas.filter(n => esDeHoy(n.created_at, now));
   const enUso            = maquinas.filter(m => m.estado === 'en_uso').length;
   const notasPagadas     = notasDeHoy.filter(n => n.estado_pago === 'PAGADO').length;
-  const notasEnEspera    = notasDeHoy.filter(n => n.estado === 'EN_PROCESO').length;
+  const notasEnEspera    = notasDeHoy.filter(n => ['EN_PROCESO', 'POR_PROCESAR'].includes(n.estado)).length;
   const paraEntregar     = notasDeHoy.filter(n => ['LISTA', 'PAGADA'].includes(n.estado)).length;
   const ventasHoy        = ventas?.tarjetas?.total_cobrado ?? 0;
 
@@ -322,18 +322,20 @@ export default function Dashboard() {
                   const inicio = m.en_uso_desde ? new Date(m.en_uso_desde).getTime() : null;
                   const transcurridoSeg = inicio ? Math.max(0, Math.floor((now - inicio) / 1000)) : 0;
                   const restanteSeg = Math.max(0, duracionSeg - transcurridoSeg);
-                  const expirado = inicio != null && transcurridoSeg >= duracionSeg;
                   const progreso = duracionSeg > 0 ? restanteSeg / duracionSeg : 0;
+                  // La nota relacionada y su estado son la fuente de verdad: el
+                  // servidor promueve a POR_PROCESAR al cumplirse el tiempo. El
+                  // contador de abajo es solo referencia visual del ciclo.
+                  const notaRel = notas
+                    .filter(n => String(n.maquina_id) === String(m.id)
+                              && ['EN_PROCESO', 'POR_PROCESAR'].includes(n.estado))
+                    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
                   const maquinaAumentada = {
                     ...m,
                     progreso,
                     tiempo_restante: inicio ? formatMMSS(restanteSeg) : '—:—',
-                    necesita_procesar: expirado,
+                    necesita_procesar: notaRel?.estado === 'POR_PROCESAR',
                   };
-                  const notaRel = notas
-                    .filter(n => String(n.maquina_id) === String(m.id)
-                              && n.estado === 'EN_PROCESO')
-                    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
                   return (
                     <MachineCard
                       key={m.id}

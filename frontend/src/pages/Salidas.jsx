@@ -39,8 +39,6 @@ export default function Salidas() {
   const [loadingMaquinas,  setLoadingMaquinas]  = useState(false);
 
   // Procesar carga (ciclo terminado)
-  const [tiempos,          setTiempos]          = useState({ mediana: 30, jumbo: 45, secadora: 30 });
-  const [now,              setNow]              = useState(() => Date.now());
   const [confirmProcesar,  setConfirmProcesar]  = useState(false);
 
   const cargarDatos = useCallback(async () => {
@@ -65,26 +63,6 @@ export default function Salidas() {
     cargarDatos().finally(() => { if (activo) setLoading(false); });
     return () => { activo = false; };
   }, [cargarDatos]);
-
-  // Tiempos de carga (no cambian en tiempo real, se piden una vez).
-  useEffect(() => {
-    let activo = true;
-    api.get('/ajustes').then(a => {
-      if (!activo || !a) return;
-      setTiempos({
-        mediana:  a.tiempo_carga_mediana  != null ? Number(a.tiempo_carga_mediana)  : 30,
-        jumbo:    a.tiempo_carga_jumbo    != null ? Number(a.tiempo_carga_jumbo)    : 45,
-        secadora: a.tiempo_carga_secadora != null ? Number(a.tiempo_carga_secadora) : 30,
-      });
-    }).catch(() => {});
-    return () => { activo = false; };
-  }, []);
-
-  // Reloj para detectar cuándo el ciclo de la máquina ya terminó.
-  useEffect(() => {
-    const tick = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(tick);
-  }, []);
 
   async function activarMaquina() {
     if (!nota?.maquina_id) return;
@@ -159,7 +137,7 @@ export default function Salidas() {
     setLoadingMaquina(true);
     setErrorAccion('');
     try {
-      if (nota.estado === 'EN_PROCESO') {
+      if (['EN_PROCESO', 'POR_PROCESAR'].includes(nota.estado)) {
         await api.patch(`/notas/${id}/estado`, { estado: 'LISTA' });
       }
       await api.patch(`/maquinas/${nota.maquina_id}/estado`, { estado: 'disponible' });
@@ -222,13 +200,9 @@ export default function Salidas() {
   const maquinaEnUso    = nota?.maquina_estado === 'en_uso';
 
   // ¿El ciclo de la máquina ya terminó? (mismo cálculo que el dashboard)
-  const minutosCiclo  = nota?.maquina_tipo === 'secadora'       ? tiempos.secadora
-                      : nota?.maquina_tipo === 'lavadora_jumbo' ? tiempos.jumbo
-                      : tiempos.mediana;
-  const duracionSeg   = Math.max(0, Number(minutosCiclo) || 0) * 60;
-  const inicioCiclo   = nota?.maquina_en_uso_desde ? new Date(nota.maquina_en_uso_desde).getTime() : null;
-  const cicloTerminado = maquinaEnUso && inicioCiclo != null
-    && Math.floor((now - inicioCiclo) / 1000) >= duracionSeg;
+  // El servidor promueve la nota a POR_PROCESAR al cumplirse el tiempo de
+  // lavado; aquí solo lo reflejamos para mostrar el botón "Procesar".
+  const cicloTerminado = maquinaEnUso && nota?.estado === 'POR_PROCESAR';
 
   const productosNota  = nota?.productos || [];
   const productosIdsEnNota = new Set(productosNota.map(p => p.producto_id));

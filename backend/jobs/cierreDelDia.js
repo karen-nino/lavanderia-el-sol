@@ -23,7 +23,7 @@ export async function liberarMaquinasCierreDelDia() {
     // Primero las notas (mientras las máquinas siguen en_uso), luego se liberan.
     const notas = await client.query(
       `UPDATE notas SET estado = 'LISTA'
-         WHERE estado = 'EN_PROCESO'
+         WHERE estado IN ('EN_PROCESO', 'POR_PROCESAR')
            AND maquina_id IN (SELECT id FROM maquinas WHERE estado = 'en_uso')`
     );
     const maquinas = await client.query(

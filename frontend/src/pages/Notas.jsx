@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 
-const ESTADOS = ['TODOS', 'EN_ESPERA', 'EN_PROCESO', 'LISTA', 'FINALIZADA', 'DEBE', 'CANCELADA'];
+const ESTADOS = ['TODOS', 'EN_ESPERA', 'EN_PROCESO', 'POR_PROCESAR', 'LISTA', 'FINALIZADA', 'DEBE', 'CANCELADA'];
 
 const FILTRO_LABEL = {
   TODOS:      'Todos',
@@ -44,26 +44,38 @@ function calcularRangoFecha(rango) {
 
 const BADGE_ESTADO = {
   EN_ESPERA:  { label: 'En Espera',  cls: 'bg-gray-100 text-gray-600'       },
-  EN_PROCESO: { label: 'En Proceso', cls: 'bg-blue-100 text-blue-800'       },
+  EN_PROCESO: { label: 'En Proceso', cls: 'bg-light-blue text-blue-700'     },
+  POR_PROCESAR: { label: 'Por Procesar', cls: 'bg-light-bronce text-bronce' },
   LISTA:      { label: 'Por Entregar', cls: 'bg-yellow-100 text-yellow-800' },
-  PAGADA:     { label: 'Pagada',     cls: 'bg-emerald-100 text-emerald-800' },
-  FINALIZADA: { label: 'Finalizada', cls: 'bg-green-800 text-white'         },
+  PAGADA:     { label: 'Pagada',     cls: 'bg-light-green text-green-700'   },
+  FINALIZADA: { label: 'Finalizada', cls: 'bg-light-green text-green-700'   },
   CANCELADA:  { label: 'Cancelada',  cls: 'bg-red-100 text-red-700'         },
 };
 
 const BADGE_MODALIDAD = {
   AUTOSERVICIO: { label: 'Autoservicio', cls: 'bg-light-blue text-blue-700' },
   EDREDON:      { label: 'Edredón',      cls: 'bg-sky-100 text-sky-700'       },
-  POR_ENCARGO:  { label: 'Por encargo',  cls: 'bg-amber-100 text-amber-700'   },
+  POR_ENCARGO:  { label: 'Por Encargo',  cls: 'bg-amber-100 text-amber-700'   },
 };
 
 const BADGE_PAGO = {
-  DEBE:   { label: 'Debe',   cls: 'bg-red-100 text-red-700'     },
-  PAGADO: { label: 'Pagado', cls: 'bg-green-100 text-green-700' },
+  DEBE:   { label: 'PENDIENTE', cls: 'bg-red-100 text-red-700'  },
+  PAGADO: { label: 'PAGADO', cls: 'bg-green-100 text-green-700' },
 };
 
 function fmtFecha(iso) {
   return new Date(iso).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+const MESES_ABR = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+
+function fmtFechaHora(iso) {
+  const d = new Date(iso);
+  const dia  = String(d.getDate()).padStart(2, '0');
+  const mes  = MESES_ABR[d.getMonth()];
+  const anio = String(d.getFullYear()).slice(-2);
+  const hora = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+  return `${dia} ${mes} ${anio}, ${hora}`;
 }
 
 function fmtMonto(n) {
@@ -341,41 +353,53 @@ export default function Notas() {
           </div>
 
           {/* Cards — mobile */}
-          <div className="md:hidden space-y-3">
+          <div className="md:hidden space-y-4">
             {filtradas.map(n => {
               const badgeEstado    = BADGE_ESTADO[n.estado]       ?? BADGE_ESTADO.EN_PROCESO;
               const badgeModalidad = BADGE_MODALIDAD[n.modalidad] ?? BADGE_MODALIDAD.AUTOSERVICIO;
               const badgePago      = BADGE_PAGO[n.estado_pago];
+              const cliente        = fmtCliente(n) ?? badgeModalidad.label;
               return (
                 <div
                   key={n.id}
-                  className="bg-white rounded-xl shadow-sm border border-gray-100 px-4 py-3 space-y-1.5 active:bg-gray-50 cursor-pointer"
+                  className="bg-white rounded-card shadow-card border border-gray-100 px-5 py-4 active:bg-gray-50 cursor-pointer"
                   onClick={() => navigate(`/notas/${n.id}`)}
                 >
+                  {/* Folio + estado */}
                   <div className="flex items-center justify-between gap-2">
-                    <p className="font-mono text-xs text-gray-400">#{n.folio?.split('-')[0] ?? n.id}</p>
-                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${badgeModalidad.cls}`}>
-                      {badgeModalidad.label}
+                    <p className="text-xl font-bold text-dark-blue">#{n.folio?.split('-')[0] ?? n.id}</p>
+                    <span className={`text-xs font-semibold px-3 py-1 rounded-pill ${badgeEstado.cls}`}>
+                      {badgeEstado.label}
                     </span>
                   </div>
-                  <p className="font-medium text-gray-800 text-sm">
-                    {fmtCliente(n) ?? <span className="text-gray-400 italic">Anónimo</span>}
-                  </p>
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-1.5">
-                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${badgeEstado.cls}`}>
-                        {badgeEstado.label}
-                      </span>
-                      {badgePago && (
-                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${badgePago.cls}`}>
+
+                  {/* Cliente + total */}
+                  <div className="flex items-center justify-between gap-2 mt-2">
+                    <p className="text-md font-semibold text-blue">{cliente}</p>
+                    <p className="text-xl font-bold text-dark-grey">{fmtMonto(n.precio_total)}</p>
+                  </div>
+
+                  {/* Separador */}
+                  <div className="border-t border-dashed border-gray-300 my-4" />
+
+                  {/* Detalles */}
+                  <div className="space-y-2.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm text-dark-grey">Fecha y Hora</span>
+                      <span className="text-sm font-semibold text-dark-blue">{fmtFechaHora(n.created_at)}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm text-dark-grey">Servicio</span>
+                      <span className="text-sm font-semibold text-dark-blue">{badgeModalidad.label}</span>
+                    </div>
+                    {badgePago && (
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-sm text-dark-grey">Pago</span>
+                        <span className={`text-sm font-bold tracking-wider ${n.estado_pago === 'DEBE' ? 'text-red' : 'text-green'}`}>
                           {badgePago.label}
                         </span>
-                      )}
-                    </div>
-                    <p className="text-xs text-gray-500">
-                      {fmtFecha(n.created_at)}
-                      {n.precio_total ? ` · ${fmtMonto(n.precio_total)}` : ''}
-                    </p>
+                      </div>
+                    )}
                   </div>
                 </div>
               );

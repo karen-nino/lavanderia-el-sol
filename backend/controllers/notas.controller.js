@@ -1,7 +1,7 @@
 import pool from '../db/pool.js';
 import { esAdmin } from '../middleware/roles.js';
 
-const ESTADOS_VALIDOS     = ['EN_ESPERA', 'EN_PROCESO', 'LISTA', 'PAGADA', 'FINALIZADA', 'CANCELADA'];
+const ESTADOS_VALIDOS     = ['EN_ESPERA', 'EN_PROCESO', 'POR_PROCESAR', 'LISTA', 'PAGADA', 'FINALIZADA', 'CANCELADA'];
 // Estados con los que puede nacer una nota.
 const ESTADOS_INICIALES   = ['EN_ESPERA', 'EN_PROCESO'];
 const MODALIDADES_VALIDAS = ['AUTOSERVICIO', 'EDREDON', 'POR_ENCARGO'];
@@ -12,13 +12,37 @@ const TIEMPOS_ENTREGA_VALIDOS = ['MANANA', 'TARDE', 'NOCHE'];
 
 // Transiciones permitidas por estado actual
 const TRANSICIONES_VALIDAS = {
-  EN_ESPERA:  ['EN_PROCESO', 'LISTA',  'CANCELADA'],
-  EN_PROCESO: ['LISTA',                'CANCELADA'],
-  LISTA:      ['PAGADA',  'FINALIZADA', 'CANCELADA'],
-  PAGADA:     ['FINALIZADA',            'CANCELADA'],
-  FINALIZADA: [],
-  CANCELADA:  [],
+  EN_ESPERA:    ['EN_PROCESO', 'LISTA',  'CANCELADA'],
+  EN_PROCESO:   ['POR_PROCESAR', 'LISTA', 'CANCELADA'],
+  POR_PROCESAR: ['LISTA',                'CANCELADA'],
+  LISTA:        ['PAGADA',  'FINALIZADA', 'CANCELADA'],
+  PAGADA:       ['FINALIZADA',            'CANCELADA'],
+  FINALIZADA:   [],
+  CANCELADA:    [],
 };
+
+// Promueve a POR_PROCESAR las notas EN_PROCESO cuya máquina ya cumplió su
+// tiempo de lavado (en_uso_desde + minutos configurados en ajustes). El
+// servidor es la fuente de verdad: se llama al leer notas para que el estado
+// quede persistido en la base sin depender de ningún proceso en segundo plano.
+async function promoverNotasPorProcesar() {
+  await pool.query(
+    `UPDATE notas n
+        SET estado = 'POR_PROCESAR'
+       FROM maquinas m, ajustes a
+      WHERE a.id = 1
+        AND n.maquina_id = m.id
+        AND n.estado = 'EN_PROCESO'
+        AND m.estado = 'en_uso'
+        AND m.en_uso_desde IS NOT NULL
+        AND NOW() >= m.en_uso_desde + ((
+              CASE m.tipo
+                WHEN 'secadora'       THEN COALESCE(a.tiempo_carga_secadora, 30)
+                WHEN 'lavadora_jumbo' THEN COALESCE(a.tiempo_carga_jumbo, 45)
+                ELSE COALESCE(a.tiempo_carga_mediana, 30)
+              END) * interval '1 minute')`
+  );
+}
 
 function generarFolio(id, fecha) {
   const d = new Date(fecha);
@@ -46,6 +70,7 @@ export const getNextFolio = async (req, res) => {
 // ── GET /notas ──────────────────────────────────────────────
 export const getNotas = async (req, res) => {
   try {
+    await promoverNotasPorProcesar();
     const { rows } = await pool.query(
       `SELECT n.*,
               c.nombre   AS cliente_nombre,
@@ -70,6 +95,7 @@ export const getNotas = async (req, res) => {
 export const getNotaById = async (req, res) => {
   const { id } = req.params;
   try {
+    await promoverNotasPorProcesar();
     const { rows } = await pool.query(
       `SELECT n.*,
               c.nombre   AS cliente_nombre,
