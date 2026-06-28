@@ -366,16 +366,17 @@ export default function Notas() {
                   onClick={() => navigate(`/notas/${n.id}`)}
                 >
                   {/* Folio + estado */}
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-xl font-bold text-dark-blue">#{n.folio?.split('-')[0] ?? n.id}</p>
-                    <span className={`text-xs font-semibold px-3 py-1 rounded-pill ${badgeEstado.cls}`}>
+                  <div className="flex items-center justify-between gap-2 pb-2">
+                    <p className="text-2xl font-bold text-dark-blue">#{n.folio?.split('-')[0] ?? n.id}</p>
+                    <span className={`text-xs font-bold tracking-wide px-3 py-1 rounded-pill ${badgeEstado.cls}`}>
                       {badgeEstado.label}
                     </span>
                   </div>
 
-                  {/* Cliente + total */}
-                  <div className="flex items-center justify-between gap-2 mt-2">
-                    <p className="text-md font-semibold text-blue">{cliente}</p>
+                  {/* Información: cliente + total */}
+                  <p className="text-sm text-dark-grey mt-2">Información:</p>
+                  <div className="flex items-center justify-between gap-2 mt-0.5">
+                    <p className="text-md font-semibold">{cliente}</p>
                     <p className="text-xl font-bold text-dark-grey">{fmtMonto(n.precio_total)}</p>
                   </div>
 
