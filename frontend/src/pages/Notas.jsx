@@ -45,7 +45,7 @@ function calcularRangoFecha(rango) {
 const BADGE_ESTADO = {
   EN_ESPERA:  { label: 'En Espera',  cls: 'bg-gray-100 text-gray-600'       },
   EN_PROCESO: { label: 'En Proceso', cls: 'bg-light-blue text-blue-700'     },
-  POR_PROCESAR: { label: 'Por Procesar', cls: 'bg-light-bronce text-bronce' },
+  POR_PROCESAR: { label: 'Por Procesar', cls: 'bg-purple-100 text-purple-700' },
   LISTA:      { label: 'Por Entregar', cls: 'bg-yellow-100 text-yellow-800' },
   PAGADA:     { label: 'Pagada',     cls: 'bg-light-green text-green-700'   },
   FINALIZADA: { label: 'Finalizada', cls: 'bg-light-green text-green-700'   },
