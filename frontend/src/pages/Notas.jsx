@@ -367,7 +367,7 @@ export default function Notas() {
                 >
                   {/* Folio + estado */}
                   <div className="flex items-center justify-between gap-2 pb-2">
-                    <p className="text-2xl font-bold text-dark-blue">#{n.folio?.split('-')[0] ?? n.id}</p>
+                    <p className="text-xl font-bold text-dark-blue">#{n.folio?.split('-')[0] ?? n.id}</p>
                     <span className={`text-xs font-bold tracking-wide px-3 py-1 rounded-pill ${badgeEstado.cls}`}>
                       {badgeEstado.label}
                     </span>
@@ -395,8 +395,8 @@ export default function Notas() {
                     </div>
                     {badgePago && (
                       <div className="flex items-center justify-between gap-2">
-                        <span className="text-sm text-dark-grey">Pago</span>
-                        <span className={`text-sm font-bold tracking-wider ${n.estado_pago === 'DEBE' ? 'text-red' : 'text-green'}`}>
+                        <span className="text-sm text-dark-grey">Estado de pago</span>
+                        <span className={`text-sm font-bold ${n.estado_pago === 'DEBE' ? 'text-red' : 'text-green'}`}>
                           {badgePago.label}
                         </span>
                       </div>
