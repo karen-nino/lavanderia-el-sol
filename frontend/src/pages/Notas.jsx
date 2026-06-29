@@ -390,8 +390,8 @@ export default function Notas() {
                       <span className="text-sm font-semibold text-dark-blue">{fmtFechaHora(n.created_at)}</span>
                     </div>
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-sm text-dark-grey">Servicio</span>
-                      <span className="text-sm font-semibold text-dark-blue">{badgeModalidad.label}</span>
+                      <span className="text-sm text-dark-grey">Máquina</span>
+                      <span className="text-sm font-semibold text-dark-blue">{n.maquina_nombre ?? 'Sin asignar'}</span>
                     </div>
                     {badgePago && (
                       <div className="flex items-center justify-between gap-2">
