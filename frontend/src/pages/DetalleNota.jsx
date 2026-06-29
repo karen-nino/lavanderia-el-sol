@@ -8,7 +8,7 @@ import { esAdmin as esAdminFn } from '../lib/roles';
 const BADGE_ESTADO = {
   EN_ESPERA:  { label: 'En Espera',   cls: 'bg-gray-100 text-gray-600'        },
   EN_PROCESO: { label: 'En Proceso',  cls: 'bg-blue-100 text-blue-800'        },
-  POR_PROCESAR: { label: 'Por Procesar', cls: 'bg-light-bronce text-bronce'   },
+  POR_PROCESAR: { label: 'Por Procesar', cls: 'bg-purple-100 text-purple-700' },
   LISTA:      { label: 'Por Entregar', cls: 'bg-yellow-100 text-yellow-800'   },
   PAGADA:     { label: 'Pagada',      cls: 'bg-emerald-100 text-emerald-800'  },
   FINALIZADA: { label: 'Finalizada', cls: 'bg-green-800 text-white'          },
