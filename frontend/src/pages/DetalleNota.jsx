@@ -230,10 +230,11 @@ export default function DetalleNota() {
   );
 
   return (
-    <div className="pt-10 pb-16 px-6 md:p-6 max-w-2xl mx-auto space-y-6">
+    <div className="min-h-full bg-slate-100">
 
-      {/* Cabecera */}
-      <div className="flex items-center justify-between gap-4">
+      {/* Cabecera (barra superior) */}
+      <div className="bg-white border-b-2 border-gray-200">
+        <div className="max-w-2xl mx-auto px-6 md:px-6 pt-10 md:pt-6 pb-4 flex items-center justify-between gap-4">
         <div className="flex items-center gap-2 min-w-0">
           <button
             onClick={() => navigate('/notas')}
@@ -274,7 +275,11 @@ export default function DetalleNota() {
             </svg>
           </button>
         </div>
+        </div>
       </div>
+
+      {/* Contenido */}
+      <div className="max-w-2xl mx-auto px-6 md:p-6 py-6 space-y-6">
 
       {/* Error de acción */}
       {errorAccion && (
@@ -512,6 +517,7 @@ export default function DetalleNota() {
             </div>
           </div>
         )}
+      </div>
       </div>
 
       {/* Modal confirmar cancelación */}
