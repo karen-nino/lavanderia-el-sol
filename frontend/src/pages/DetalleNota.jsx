@@ -26,12 +26,13 @@ const BADGE_PAGO = {
   PAGADO: { label: 'Pagado', cls: 'bg-green-100 text-green-700'  },
 };
 
-const ESTADO_ORDEN = ['EN_ESPERA', 'EN_PROCESO', 'POR_PROCESAR', 'LISTA', 'PAGADA', 'FINALIZADA'];
+const ESTADO_ORDEN = ['EN_ESPERA', 'EN_PROCESO', 'POR_PROCESAR', 'LISTA', 'FINALIZADA'];
 
-function estadosPasados(estadoActual) {
-  const idx = ESTADO_ORDEN.indexOf(estadoActual);
-  if (idx <= 0) return [];
-  return ESTADO_ORDEN.slice(0, idx);
+function subtituloEstado(estado, { done, current }, fechaEstado) {
+  if (fechaEstado) return fmtFechaHora(fechaEstado);
+  if (done) return 'Completado';
+  if (current) return 'Estado actual';
+  return 'Pendiente';
 }
 
 const BADGE_MAQUINA_ESTADO = {
@@ -53,6 +54,12 @@ function fmtMonto(n) {
 function fmtFecha(iso) {
   if (!iso) return '—';
   return new Date(iso).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+function fmtFechaHora(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return `${d.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}, ${d.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}`;
 }
 
 function FilaDetalle({ label, children }) {
@@ -210,10 +217,13 @@ export default function DetalleNota() {
   const terminal     = ['FINALIZADA', 'CANCELADA'].includes(nota.estado);
   const puedeEditar  = !['PAGADA', 'FINALIZADA', 'CANCELADA'].includes(nota.estado);
   const puedeCancelar = !['CANCELADA'].includes(nota.estado);
-  const badgeEstado   = BADGE_ESTADO[nota.estado]       ?? BADGE_ESTADO.EN_PROCESO;
   const badgeModal    = BADGE_MODALIDAD[nota.modalidad] ?? BADGE_MODALIDAD.AUTOSERVICIO;
   const badgePago     = BADGE_PAGO[nota.estado_pago];
   const barcodeValue  = nota.folio ?? String(nota.id);
+  const estadoIdx     = ESTADO_ORDEN.indexOf(nota.estado);
+  const fechaPorEstado = Object.fromEntries(
+    (nota.historial_estados || []).map(h => [h.estado, h.created_at])
+  );
 
   const totalProductos = (nota.productos || []).reduce(
     (s, p) => s + Number(p.subtotal), 0
@@ -359,25 +369,6 @@ export default function DetalleNota() {
             </span>
             {nota.tamano && <span className="ml-2 text-xs text-gray-500 capitalize">{nota.tamano}</span>}
           </FilaDetalle>
-          <FilaDetalle label="Estado">
-            <div className="flex items-center flex-wrap gap-1.5">
-              {estadosPasados(nota.estado).map(e => {
-                const cfg = BADGE_ESTADO[e];
-                if (!cfg) return null;
-                return (
-                  <span
-                    key={e}
-                    className="text-xs font-semibold px-2.5 py-1 rounded-full bg-gray-100 text-gray-400 line-through"
-                  >
-                    {cfg.label}
-                  </span>
-                );
-              })}
-              <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${badgeEstado.cls}`}>
-                {badgeEstado.label}
-              </span>
-            </div>
-          </FilaDetalle>
           <FilaDetalle label="Estado de pago">
             {badgePago
               ? <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${badgePago.cls}`}>{badgePago.label}</span>
@@ -426,6 +417,69 @@ export default function DetalleNota() {
           <FilaDetalle label="Precio total">
             <span className="font-semibold text-gray-900">{fmtMonto(nota.precio_total)}</span>
           </FilaDetalle>
+        </div>
+      </div>
+
+      {/* Estado */}
+      <div className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
+        <div className="px-4 py-3 border-b border-gray-50">
+          <h2 className="text-sm font-semibold text-gray-700">Estado</h2>
+        </div>
+        <div className="px-4 py-4">
+          {nota.estado === 'CANCELADA' ? (
+            <div className="flex gap-3 items-center">
+              <span className="flex-shrink-0 w-6 h-6 rounded-full bg-red-600 text-white flex items-center justify-center">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </span>
+              <div>
+                <p className="text-sm font-semibold text-gray-900">Cancelada</p>
+                <p className="text-xs text-gray-400">Esta nota fue cancelada</p>
+              </div>
+            </div>
+          ) : (
+            <ol className="relative">
+              {ESTADO_ORDEN.map((e, i) => {
+                const cfg     = BADGE_ESTADO[e];
+                if (!cfg) return null;
+                const done    = i < estadoIdx;
+                const current = i === estadoIdx;
+                const isLast  = i === ESTADO_ORDEN.length - 1;
+                const activo  = done || current;
+                return (
+                  <li key={e} className="relative flex gap-3 pb-6 last:pb-0">
+                    {!isLast && (
+                      <span
+                        className={`absolute left-[11px] top-6 -bottom-0 w-px border-l-2 border-dashed ${
+                          done ? 'border-blue-600' : 'border-gray-200'
+                        }`}
+                      />
+                    )}
+                    <span
+                      className={`relative z-10 flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center ${
+                        activo ? 'bg-blue-600 text-white' : 'bg-white border-2 border-gray-300'
+                      }`}
+                    >
+                      {done ? (
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                        </svg>
+                      ) : current ? (
+                        <span className="w-2 h-2 rounded-full bg-white" />
+                      ) : null}
+                    </span>
+                    <div className="-mt-0.5 pb-0.5">
+                      <p className={`text-sm font-semibold ${activo ? 'text-gray-900' : 'text-gray-400'}`}>
+                        {cfg.label}
+                      </p>
+                      <p className="text-xs text-gray-400">{subtituloEstado(e, { done, current }, fechaPorEstado[e])}</p>
+                    </div>
+                  </li>
+                );
+              })}
+            </ol>
+          )}
         </div>
       </div>
 

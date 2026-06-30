@@ -135,7 +135,16 @@ export const getNotaById = async (req, res) => {
       [id]
     );
 
-    res.json({ ...rows[0], productos, insumos_consumidos: movs });
+    const { rows: historial } = await pool.query(
+      `SELECT estado, MIN(created_at) AS created_at
+       FROM nota_estado_historial
+       WHERE nota_id = $1
+       GROUP BY estado
+       ORDER BY created_at ASC`,
+      [id]
+    );
+
+    res.json({ ...rows[0], productos, insumos_consumidos: movs, historial_estados: historial });
   } catch (err) {
     console.error('getNotaById error:', err);
     res.status(500).json({ message: 'Error interno del servidor.' });
