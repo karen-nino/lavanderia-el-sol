@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -51,30 +51,32 @@ export default function Ventas() {
   const [desde, setDesde] = useState('');
   const [hasta, setHasta] = useState('');
   const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const fetchData = useCallback(async () => {
+  useEffect(() => {
     if (periodo === 'custom' && (!desde || !hasta)) return;
-    setLoading(true);
-    setError(null);
-    try {
-      let url = `/ventas/resumen?periodo=${periodo}`;
-      if (periodo === 'custom') url += `&desde=${desde}&hasta=${hasta}`;
-      const result = await api.get(url);
-      setData(result);
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setLoading(false);
-    }
+    let activo = true;
+    let url = `/ventas/resumen?periodo=${periodo}`;
+    if (periodo === 'custom') url += `&desde=${desde}&hasta=${hasta}`;
+    api.get(url)
+      .then(result => { if (activo) { setData(result); setError(null); } })
+      .catch(e => { if (activo) setError(e.message); })
+      .finally(() => { if (activo) setLoading(false); });
+    return () => { activo = false; };
   }, [periodo, desde, hasta]);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
-
   return (
-    <div className="pt-10 pb-16 px-6 md:py-14 md:px-8 space-y-6 max-w-7xl mx-auto">
-      <h1 className="text-xl font-bold text-gray-800">Ventas</h1>
+    <div className="min-h-full bg-slate-100">
+      {/* Cabecera (barra superior) */}
+      <div className="bg-white border-b-2 border-gray-200">
+        <div className="max-w-7xl mx-auto px-6 md:px-8 pt-10 md:pt-14 pb-4">
+          <h1 className="text-xl font-bold text-gray-800">Ventas</h1>
+        </div>
+      </div>
+
+      {/* Contenido */}
+      <div className="max-w-7xl mx-auto px-6 md:px-8 py-6 space-y-6">
 
       {/* Filtro de período */}
       <div className="space-y-3">
@@ -253,6 +255,7 @@ export default function Ventas() {
           </div>
         </>
       )}
+      </div>
     </div>
   );
 }

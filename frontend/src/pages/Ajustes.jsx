@@ -878,18 +878,19 @@ export default function Ajustes() {
   return (
     <>
       {/* ── Vista móvil ── */}
-      <div className="md:hidden pt-10 pb-16 px-6 space-y-6">
+      <div className="md:hidden min-h-full bg-slate-100">
         {!activeSection ? (
           <>
-            <div className="flex flex-col items-start">
-              <div className='flex flex-row items-center gap-1'>
-                {SectionIcon.gear}
-                <h1 className="text-xl font-bold text-dark-blue leading-tight">Ajustes</h1>
-              </div>
+            <div className="bg-white border-b-2 border-gray-200">
+              <div className="px-6 pt-10 pb-4 flex flex-col items-start">
+                <div className='flex flex-row items-center gap-1'>
+                  {SectionIcon.gear}
+                  <h1 className="text-xl font-bold text-dark-blue leading-tight">Ajustes</h1>
+                </div>
                 <p className="text-sm text-grey">Pantalla de ajustes</p>
+              </div>
             </div>
-            <div className="border-t border-light-blue/60" />
-            <div className="space-y-3">
+            <div className="px-6 py-6 space-y-3">
               {MOBILE_SECTIONS.map((s) => (
                 <MobileSectionButton
                   key={s.id}
@@ -901,23 +902,25 @@ export default function Ajustes() {
             </div>
           </>
         ) : (
-          <form onSubmit={handleSubmitMobile} className="space-y-6">
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setMobileSection(null)}
-                aria-label="Volver"
-                className="w-11 h-11 rounded-pill border border-grey/40 text-dark-blue flex items-center justify-center flex-shrink-0"
-              >
-                {SectionIcon.back}
-              </button>
-              <div>
-                <h1 className="text-xl font-bold text-dark-blue leading-tight">{activeSection.label}</h1>
-                <p className="text-sm text-grey">{activeSection.subtitle}</p>
+          <form onSubmit={handleSubmitMobile}>
+            <div className="bg-white border-b-2 border-gray-200">
+              <div className="px-6 pt-10 pb-4 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setMobileSection(null)}
+                  aria-label="Volver"
+                  className="w-11 h-11 rounded-pill border border-grey/40 text-dark-blue flex items-center justify-center flex-shrink-0"
+                >
+                  {SectionIcon.back}
+                </button>
+                <div>
+                  <h1 className="text-xl font-bold text-dark-blue leading-tight">{activeSection.label}</h1>
+                  <p className="text-sm text-grey">{activeSection.subtitle}</p>
+                </div>
               </div>
             </div>
-            <div className="border-t border-light-blue/60" />
 
+            <div className="px-6 py-6 space-y-6">
             {mobileSectionContent[activeSection.id]}
 
             <div className="grid grid-cols-2 gap-3 pt-2">
@@ -944,6 +947,7 @@ export default function Ajustes() {
               </button>
             </div>
             {mensajeBanner}
+            </div>
           </form>
         )}
       </div>
@@ -957,8 +961,16 @@ export default function Ajustes() {
       />
 
       {/* ── Vista desktop ── */}
-      <div className="hidden md:block p-6 max-w-2xl mx-auto space-y-6">
-        <h1 className="text-xl font-bold text-gray-900">Ajustes</h1>
+      <div className="hidden md:block min-h-full bg-slate-100">
+        {/* Cabecera (barra superior) */}
+        <div className="bg-white border-b-2 border-gray-200">
+          <div className="max-w-2xl mx-auto px-6 pt-14 pb-4">
+            <h1 className="text-xl font-bold text-gray-900">Ajustes</h1>
+          </div>
+        </div>
+
+        {/* Contenido */}
+        <div className="max-w-2xl mx-auto p-6 space-y-6">
 
         <div className="space-y-6">
           {seccionPerfilDesktop}
@@ -989,6 +1001,7 @@ export default function Ajustes() {
               )}
             </button>
           </div>
+        </div>
         </div>
       </div>
     </>

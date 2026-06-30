@@ -392,15 +392,30 @@ export default function Caja() {
     }
   }, []);
 
-  useEffect(() => { fetchActual(); }, [fetchActual]);
+  useEffect(() => {
+    let activo = true;
+    api.get('/caja/actual')
+      .then(result => { if (activo) { setData(result); setError(null); } })
+      .catch(e => { if (activo) setError(e.message); })
+      .finally(() => { if (activo) setLoading(false); });
+    return () => { activo = false; };
+  }, []);
 
   // Tras abrir/cerrar caja conviene mostrar el estado más relevante.
   const handleAbrir = () => { fetchActual(); setTab('movimientos'); };
   const handleCerrar = () => { fetchActual(); setTab('historial'); };
 
   return (
-    <div className="pt-10 pb-16 px-6 md:py-14 md:px-8 space-y-6 max-w-3xl mx-auto">
-      <h1 className="text-xl font-bold text-gray-800">Caja</h1>
+    <div className="min-h-full bg-slate-100">
+      {/* Cabecera (barra superior) */}
+      <div className="bg-white border-b-2 border-gray-200">
+        <div className="max-w-3xl mx-auto px-6 md:px-8 pt-10 md:pt-14 pb-4">
+          <h1 className="text-xl font-bold text-gray-800">Caja</h1>
+        </div>
+      </div>
+
+      {/* Contenido */}
+      <div className="max-w-3xl mx-auto px-6 md:px-8 py-6 space-y-6">
 
       <div className="flex flex-wrap gap-2">
         {TABS.map((t) => (
@@ -429,6 +444,7 @@ export default function Caja() {
         </>
       )}
       {tab === 'historial' && <Historial />}
+      </div>
     </div>
   );
 }
