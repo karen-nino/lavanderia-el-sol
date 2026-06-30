@@ -319,15 +319,14 @@ export default function Inventario() {
   const [searchParams, setSearchParams] = useSearchParams();
   const highlightAplicadoRef = useRef(null);
 
-  const cargar = () => {
-    setLoading(true);
+  useEffect(() => {
+    let activo = true;
     api.get('/productos')
-      .then(setProductos)
-      .catch(e => setError(e.message))
-      .finally(() => setLoading(false));
-  };
-
-  useEffect(cargar, []);
+      .then(data => { if (activo) setProductos(data); })
+      .catch(e => { if (activo) setError(e.message); })
+      .finally(() => { if (activo) setLoading(false); });
+    return () => { activo = false; };
+  }, []);
 
   // Highlight desde ?highlight=<id> (alerta del nav)
   useEffect(() => {
@@ -365,10 +364,11 @@ export default function Inventario() {
   };
 
   return (
-    <div className="pt-10 pb-16 px-6 md:py-14 md:px-8 space-y-4">
+    <div className="min-h-full bg-slate-100">
 
-      {/* Header */}
-      <div className="flex items-center justify-between">
+      {/* Cabecera (barra superior) */}
+      <div className="bg-white border-b-2 border-gray-200">
+        <div className="px-6 md:px-8 pt-10 md:pt-14 pb-4 flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Inventario</h1>
           <p className="text-sm text-gray-500">{productos.length} producto(s) en inventario</p>
@@ -383,7 +383,11 @@ export default function Inventario() {
               d="M12 4v16m8-8H4" />
           </svg>
         </button>
+        </div>
       </div>
+
+      {/* Contenido */}
+      <div className="px-6 md:px-8 py-4 space-y-4">
 
       {/* Alerta stock bajo */}
       {stockBajo.length > 0 && (
@@ -553,6 +557,8 @@ export default function Inventario() {
           </div>
         </>
       )}
+
+      </div>
 
       {/* Modal info producto (mobile) */}
       {infoProducto && (() => {

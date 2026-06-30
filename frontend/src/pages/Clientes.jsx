@@ -175,44 +175,51 @@ export default function Clientes() {
   };
 
   return (
-    <div className="pb-16 px-6 md:pb-14 md:px-8 space-y-4">
-      {/* Encabezado + búsqueda fijos al hacer scroll */}
-      <div className="sticky top-0 z-20 -mx-6 px-6 pt-10 pb-6 mb-2 bg-gray-50 md:-mx-8 md:px-8 md:pt-14 space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-bold text-gray-900">Clientes</h1>
-            <p className="text-sm text-gray-500">{filtrados.length} cliente(s)</p>
+    <div className="min-h-full bg-slate-100">
+      {/* Cabecera + búsqueda (sticky) */}
+      <div className="sticky top-0 z-20">
+        <div className="bg-white border-b-2 border-gray-200">
+          <div className="px-6 md:px-8 pt-10 md:pt-14 pb-4 flex items-center justify-between">
+            <div>
+              <h1 className="text-xl font-bold text-gray-900">Clientes</h1>
+              <p className="text-sm text-gray-500">{filtrados.length} cliente(s)</p>
+            </div>
+            <button
+              onClick={abrirModal}
+              aria-label="Nuevo cliente"
+              className="w-11 h-11 rounded-full bg-blue hover:opacity-90 text-white flex items-center justify-center transition-colors flex-shrink-0"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5}
+                  d="M12 4v16m8-8H4" />
+              </svg>
+            </button>
           </div>
-          <button
-            onClick={abrirModal}
-            aria-label="Nuevo cliente"
-            className="w-11 h-11 rounded-full bg-blue hover:opacity-90 text-white flex items-center justify-center transition-colors flex-shrink-0"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5}
-                d="M12 4v16m8-8H4" />
-            </svg>
-          </button>
         </div>
 
         {/* Búsqueda */}
-        <div className="relative">
-        <svg
-          className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400"
-          fill="none" stroke="currentColor" viewBox="0 0 24 24"
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-        </svg>
-        <input
-          type="text"
-          placeholder="Buscar por nombre o teléfono..."
-          value={busqueda}
-          onChange={e => setBusqueda(e.target.value)}
-          className="w-full pl-11 pr-4 py-3.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent bg-white transition"
-        />
+        <div className="bg-slate-100 px-6 md:px-8 pt-4 pb-2">
+          <div className="relative">
+            <svg
+              className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400"
+              fill="none" stroke="currentColor" viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <input
+              type="text"
+              placeholder="Buscar por nombre o teléfono..."
+              value={busqueda}
+              onChange={e => setBusqueda(e.target.value)}
+              className="w-full pl-11 pr-4 py-3.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent bg-white transition"
+            />
+          </div>
         </div>
       </div>
+
+      {/* Contenido */}
+      <div className="px-6 md:px-8 pb-4 pt-2 space-y-4">
 
       {loading && (
         <div className="flex justify-center py-12">
@@ -347,6 +354,8 @@ export default function Clientes() {
           </div>
         </>
       )}
+
+      </div>
 
       {/* ── Modal: Info cliente (mobile) ──────────────────── */}
       {infoCliente && (

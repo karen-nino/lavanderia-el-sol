@@ -147,8 +147,10 @@ export default function Notas() {
   });
 
   return (
-    <div className="pt-10 pb-16 px-6 md:py-14 md:px-8 space-y-4">
-      <div className="flex items-center justify-between">
+    <div className="min-h-full bg-slate-100">
+      {/* Cabecera (barra superior) */}
+      <div className="bg-white border-b-2 border-gray-200">
+        <div className="px-6 md:px-8 pt-10 md:pt-14 pb-4 flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Notas</h1>
           <p className="text-sm text-gray-500">{filtradas.length} resultado(s)</p>
@@ -242,7 +244,11 @@ export default function Notas() {
             </svg>
           </Link>
         </div>
+        </div>
       </div>
+
+      {/* Contenido */}
+      <div className="px-6 md:px-8 py-4 space-y-4">
 
       {/* Búsqueda */}
       <div className="relative">
@@ -409,6 +415,7 @@ export default function Notas() {
         </>
       )}
 
+      </div>
     </div>
   );
 }
