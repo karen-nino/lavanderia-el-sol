@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import MachineCard from './MachineCard';
@@ -34,7 +34,11 @@ function formatMMSS(totalSegundos) {
 // Monitor de máquinas en uso: tarjetas con temporizador y la confirmación
 // "Procesar carga". Es autónomo (consulta sus propios datos y se auto-refresca)
 // para poder usarse tanto en la página Máquinas como en el Dashboard.
-export default function MaquinasEnUso() {
+//
+// `showHeaderButton`: muestra el botón de recargar en su propio encabezado
+// (Dashboard). La página Máquinas lo oculta y dispara el refresco desde el
+// nav usando el método `refrescar` expuesto por ref.
+const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeaderButton = true }, ref) {
   const navigate = useNavigate();
   const [notas, setNotas]       = useState([]);
   const [maquinas, setMaquinas] = useState([]);
@@ -72,6 +76,10 @@ export default function MaquinasEnUso() {
       setRefrescando(false);
     }
   };
+
+  // Permite que un contenedor (p. ej. el nav de la página Máquinas) dispare el
+  // refresco. Devuelve la promesa para que pueda manejar su propio spinner.
+  useImperativeHandle(ref, () => ({ refrescar: refrescarDatos }), [refrescarDatos]);
 
   // Carga inicial. Los ajustes (tiempos de carga) solo se piden aquí: no
   // cambian en tiempo real, así que el refresco periódico no los reconsulta.
@@ -176,23 +184,25 @@ export default function MaquinasEnUso() {
         <h2 className="text-section text-dark-blue">
           Máquinas en uso <span className="text-grey">({maquinasEnUso.length})</span>
         </h2>
-        <button
-          type="button"
-          onClick={refrescarManual}
-          disabled={refrescando}
-          aria-label="Recargar máquinas"
-          title="Recargar"
-          className="w-10 h-10 rounded-full border border-gray-300 flex items-center justify-center text-dark-blue hover:bg-gray-50 disabled:opacity-60 transition-colors"
-        >
-          <svg
-            className={`w-5 h-5 ${refrescando ? 'animate-spin' : ''}`}
-            fill="none" stroke="currentColor" strokeWidth={2}
-            strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"
+        {showHeaderButton && (
+          <button
+            type="button"
+            onClick={refrescarManual}
+            disabled={refrescando}
+            aria-label="Recargar máquinas"
+            title="Recargar"
+            className="w-10 h-10 rounded-full border border-gray-300 flex items-center justify-center text-dark-blue hover:bg-gray-50 disabled:opacity-60 transition-colors"
           >
-            <path d="M20 11A8.1 8.1 0 004.5 9M4 5v4h4" />
-            <path d="M4 13a8.1 8.1 0 0015.5 2M20 19v-4h-4" />
-          </svg>
-        </button>
+            <svg
+              className={`w-5 h-5 ${refrescando ? 'animate-spin' : ''}`}
+              fill="none" stroke="currentColor" strokeWidth={2}
+              strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"
+            >
+              <path d="M20 11A8.1 8.1 0 004.5 9M4 5v4h4" />
+              <path d="M4 13a8.1 8.1 0 0015.5 2M20 19v-4h-4" />
+            </svg>
+          </button>
+        )}
       </div>
 
       {loading ? (
@@ -280,4 +290,6 @@ export default function MaquinasEnUso() {
       )}
     </div>
   );
-}
+});
+
+export default MaquinasEnUso;

@@ -139,16 +139,13 @@ export default function Dashboard() {
 
         {/* KPIs: 2x2 en mobile, 4 columnas en tablet */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {/* El conteo de máquinas solo se muestra en desktop: en móvil vive en la página Máquinas */}
-          <div className="hidden md:block">
-            <KpiCard
-              label="Máquinas"
-              sublabel="en Servicio"
-              value={enUso}
-              color="blue"
-              icon={KpiIcon.machine}
-            />
-          </div>
+          <KpiCard
+            label="Máquinas"
+            sublabel="en Servicio"
+            value={enUso}
+            color="blue"
+            icon={KpiIcon.machine}
+          />
           <KpiCard
             label="Notas"
             sublabel="Pagadas"
