@@ -2,11 +2,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 
-const ESTADOS = ['TODOS', 'EN_ESPERA', 'EN_PROCESO', 'POR_PROCESAR', 'LISTA', 'FINALIZADA', 'DEBE', 'CANCELADA'];
+const ESTADOS = ['TODOS', 'EN_ESPERA', 'EN_PROCESO', 'POR_PROCESAR', 'LISTA', 'FINALIZADA', 'PENDIENTE', 'CANCELADA'];
 
 const FILTRO_LABEL = {
   TODOS:      'Todos',
-  DEBE:       'Pagos Pendientes',
+  PENDIENTE:  'Pagos Pendientes',
   FINALIZADA: 'Finalizadas',
   CANCELADA:  'Canceladas',
 };
@@ -59,7 +59,7 @@ const BADGE_MODALIDAD = {
 };
 
 const BADGE_PAGO = {
-  DEBE:   { label: 'PENDIENTE', cls: 'bg-red-100 text-red-700'  },
+  PENDIENTE: { label: 'Pendiente', cls: 'bg-red-100 text-red-700'  },
   PAGADO: { label: 'PAGADO', cls: 'bg-green-100 text-green-700' },
 };
 
@@ -129,8 +129,8 @@ export default function Notas() {
   const q = normalizar(busqueda.trim());
   const rango = useMemo(() => calcularRangoFecha(rangoFecha), [rangoFecha]);
   const filtradas = notas.filter(n => {
-    if (filtro === 'DEBE') {
-      if (n.estado_pago !== 'DEBE') return false;
+    if (filtro === 'PENDIENTE') {
+      if (n.estado_pago !== 'PENDIENTE') return false;
     } else if (filtro !== 'TODOS' && n.estado !== filtro) {
       return false;
     }
@@ -396,7 +396,7 @@ export default function Notas() {
                     {badgePago && (
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-sm text-dark-grey">Estado de pago</span>
-                        <span className={`text-sm font-bold ${n.estado_pago === 'DEBE' ? 'text-red' : 'text-green'}`}>
+                        <span className={`text-sm font-bold ${n.estado_pago === 'PENDIENTE' ? 'text-red' : 'text-green'}`}>
                           {badgePago.label}
                         </span>
                       </div>

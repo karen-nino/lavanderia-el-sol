@@ -349,7 +349,7 @@ export default function NuevaNota() {
         cantidad_cargas: encargoCargas,
         precio_base:     precioCargaEncargo,
         ajuste:          encargoAjuste,
-        estado_pago:     encargoForm.pago_anticipado === 'SI' ? 'PAGADO' : 'DEBE',
+        estado_pago:     encargoForm.pago_anticipado === 'SI' ? 'PAGADO' : 'PENDIENTE',
         fecha_entrega:   encargoForm.fecha_entrega  || undefined,
         tiempo_entrega:  encargoForm.tiempo_entrega || undefined,
         instrucciones:   encargoForm.instrucciones  || undefined,

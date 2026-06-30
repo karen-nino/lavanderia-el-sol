@@ -22,7 +22,7 @@ const BADGE_MODALIDAD = {
 };
 
 const BADGE_PAGO = {
-  DEBE:   { label: 'Debe',   cls: 'bg-red-100 text-red-700'      },
+  PENDIENTE: { label: 'Pendiente', cls: 'bg-red-100 text-red-700'   },
   PAGADO: { label: 'Pagado', cls: 'bg-green-100 text-green-700'  },
 };
 

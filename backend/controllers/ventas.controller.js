@@ -48,7 +48,7 @@ export async function getResumen(req, res) {
       pool.query(
         `SELECT COUNT(*) AS notas_pendientes
         FROM notas
-        WHERE estado_pago = 'DEBE' AND estado != 'CANCELADA'`
+        WHERE estado_pago = 'PENDIENTE' AND estado != 'CANCELADA'`
       ),
 
       // Gráfica: por fecha
