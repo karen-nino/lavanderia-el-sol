@@ -469,8 +469,9 @@ export default function Layout() {
   const mobileBottomItems = navItems.filter((item) => item.to !== '/inventario');
 
   const menuExtraItems = [
-    { label: 'Caja',       icon: Icon.caja,       onClick: () => goTo('/caja') },
-    { label: 'Inventario', icon: Icon.inventario, onClick: () => goTo('/inventario') },
+    { label: 'Caja',                icon: Icon.caja,       onClick: () => goTo('/caja') },
+    { label: 'Inventario',          icon: Icon.inventario, onClick: () => goTo('/inventario') },
+    { label: 'Gestión de máquinas', icon: Icon.maquinas,   onClick: () => goTo('/gestion-maquinas') },
     ...(esAdmin(usuario?.rol)
       ? [
           { label: 'Ventas',    icon: Icon.ventas,    onClick: () => goTo('/ventas') },
