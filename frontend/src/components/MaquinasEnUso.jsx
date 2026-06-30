@@ -35,10 +35,11 @@ function formatMMSS(totalSegundos) {
 // "Procesar carga". Es autónomo (consulta sus propios datos y se auto-refresca)
 // para poder usarse tanto en la página Máquinas como en el Dashboard.
 //
-// `showHeaderButton`: muestra el botón de recargar en su propio encabezado
-// (Dashboard). La página Máquinas lo oculta y dispara el refresco desde el
-// nav usando el método `refrescar` expuesto por ref.
-const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeaderButton = true }, ref) {
+// `showHeader`: muestra el encabezado propio ("Máquinas en uso (n)" + botón de
+// recargar), usado en el Dashboard. La página Máquinas lo oculta y lleva el
+// título/conteo al nav (vía `onCountChange`) y el refresco a su botón (vía el
+// método `refrescar` expuesto por ref).
+const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onCountChange }, ref) {
   const navigate = useNavigate();
   const [notas, setNotas]       = useState([]);
   const [maquinas, setMaquinas] = useState([]);
@@ -142,6 +143,12 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeaderButton = tru
     return () => clearInterval(tick);
   }, []);
 
+  // Reporta el número de máquinas en uso al contenedor (p. ej. el nav de la
+  // página Máquinas lo muestra como subtítulo).
+  useEffect(() => {
+    onCountChange?.(maquinas.filter(m => m.estado === 'en_uso').length);
+  }, [maquinas, onCountChange]);
+
   const notaParaProcesar = confirmProcesar
     ? notas
         .filter(n => String(n.maquina_id) === String(confirmProcesar.id)
@@ -180,11 +187,11 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeaderButton = tru
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-section text-dark-blue">
-          Máquinas en uso <span className="text-grey">({maquinasEnUso.length})</span>
-        </h2>
-        {showHeaderButton && (
+      {showHeader && (
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-section text-dark-blue">
+            Máquinas en uso <span className="text-grey">({maquinasEnUso.length})</span>
+          </h2>
           <button
             type="button"
             onClick={refrescarManual}
@@ -202,8 +209,8 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeaderButton = tru
               <path d="M4 13a8.1 8.1 0 0015.5 2M20 19v-4h-4" />
             </svg>
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
       {loading ? (
         <div className="rounded-card bg-white py-20 shadow-card flex justify-center">

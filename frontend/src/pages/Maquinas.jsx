@@ -4,6 +4,7 @@ import MaquinasEnUso from '../components/MaquinasEnUso';
 export default function Maquinas() {
   const monitorRef = useRef(null);
   const [refrescando, setRefrescando] = useState(false);
+  const [enUso, setEnUso] = useState(0);
 
   const refrescar = async () => {
     setRefrescando(true);
@@ -19,7 +20,10 @@ export default function Maquinas() {
       {/* Cabecera (barra superior) */}
       <div className="bg-white border-b-2 border-gray-200">
         <div className="px-6 md:px-8 pt-10 md:pt-14 pb-4 flex items-center justify-between">
-          <h1 className="text-xl font-bold text-gray-900">Máquinas</h1>
+          <div>
+            <h1 className="text-xl font-bold text-gray-900">Máquinas</h1>
+            <p className="text-sm text-gray-500">Máquinas en uso ({enUso})</p>
+          </div>
           <button
             type="button"
             onClick={refrescar}
@@ -42,7 +46,7 @@ export default function Maquinas() {
 
       {/* Contenido */}
       <div className="px-6 md:px-8 py-6">
-        <MaquinasEnUso ref={monitorRef} showHeaderButton={false} />
+        <MaquinasEnUso ref={monitorRef} showHeader={false} onCountChange={setEnUso} />
       </div>
     </div>
   );
