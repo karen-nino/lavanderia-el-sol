@@ -240,12 +240,14 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
           <p className="text-md text-grey">Sin {titulo.toLowerCase()} en uso</p>
         </div>
       ) : (
-        <div className="flex gap-6 overflow-x-auto pb-3 snap-x">
-          {enUso.map(m => (
-            <div key={m.id} className="w-44 flex-shrink-0 snap-start">
-              {renderCard(m)}
-            </div>
-          ))}
+        <div className="rounded-card bg-white p-6 shadow-card">
+          <div className="flex gap-6 overflow-x-auto pb-3 snap-x">
+            {enUso.map(m => (
+              <div key={m.id} className="w-44 flex-shrink-0 snap-start">
+                {renderCard(m)}
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>
