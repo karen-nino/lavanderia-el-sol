@@ -36,10 +36,14 @@ function formatMMSS(totalSegundos) {
 // para poder usarse tanto en la página Máquinas como en el Dashboard.
 //
 // `showHeader`: muestra el encabezado propio ("Máquinas en uso (n)" + botón de
-// recargar), usado en el Dashboard. La página Máquinas lo oculta y lleva el
-// título/conteo al nav (vía `onCountChange`) y el refresco a su botón (vía el
-// método `refrescar` expuesto por ref).
-const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onCountChange }, ref) {
+// recargar). La página Máquinas lo oculta y lleva el título/conteo al nav (vía
+// `onCountChange`) y el refresco a su botón (vía el método `refrescar` expuesto
+// por ref).
+//
+// `layout`: 'grid' (por defecto, página Máquinas) muestra todas las máquinas en
+// uso en una sola rejilla. 'carousel' (Dashboard) las agrupa en dos carruseles
+// horizontales — Lavadoras y Secadoras — cada uno con su conteo "en uso/total".
+const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onCountChange, layout = 'grid' }, ref) {
   const navigate = useNavigate();
   const [notas, setNotas]       = useState([]);
   const [maquinas, setMaquinas] = useState([]);
@@ -183,78 +187,124 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
     }
   };
 
+  const esLavadora = (m) => m.tipo !== 'secadora';
+
   const maquinasEnUso = maquinas.filter(m => m.estado === 'en_uso');
+  const lavadorasEnUso = maquinasEnUso.filter(esLavadora);
+  const secadorasEnUso = maquinasEnUso.filter(m => !esLavadora(m));
+  const totalLavadoras = maquinas.filter(esLavadora).length;
+  const totalSecadoras = maquinas.length - totalLavadoras;
+
+  // Construye la tarjeta de una máquina en uso: calcula el tiempo restante del
+  // ciclo y resuelve su nota relacionada. La nota y su estado son la fuente de
+  // verdad (el servidor promueve a POR_PROCESAR al cumplirse el tiempo); el
+  // contador es solo referencia visual del ciclo.
+  const renderCard = (m) => {
+    const minutos = m.tipo === 'secadora'       ? tiempos.secadora
+                  : m.tipo === 'lavadora_jumbo' ? tiempos.jumbo
+                  : tiempos.mediana;
+    const duracionSeg = Math.max(0, Number(minutos) || 0) * 60;
+    const inicio = m.en_uso_desde ? new Date(m.en_uso_desde).getTime() : null;
+    const transcurridoSeg = inicio ? Math.max(0, Math.floor((now - inicio) / 1000)) : 0;
+    const restanteSeg = Math.max(0, duracionSeg - transcurridoSeg);
+    const progreso = duracionSeg > 0 ? restanteSeg / duracionSeg : 0;
+    const notaRel = notas
+      .filter(n => String(n.maquina_id) === String(m.id)
+                && ['EN_PROCESO', 'POR_PROCESAR'].includes(n.estado))
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
+    const maquinaAumentada = {
+      ...m,
+      progreso,
+      tiempo_restante: inicio ? formatMMSS(restanteSeg) : '—:—',
+      necesita_procesar: notaRel?.estado === 'POR_PROCESAR',
+    };
+    return (
+      <MachineCard
+        key={m.id}
+        maquina={maquinaAumentada}
+        nota={notaRel}
+        onProcesar={() => setConfirmProcesar(maquinaAumentada)}
+        onClick={notaRel ? () => navigate(`/notas/${notaRel.id}`) : undefined}
+      />
+    );
+  };
+
+  // Un carrusel horizontal por tipo, con conteo "en uso/total" en el título.
+  const renderCarrusel = (titulo, enUso, total) => (
+    <div className="space-y-4">
+      <p className="text-section text-grey">
+        {titulo} <span className="text-dark-grey">{enUso.length}/{total}</span>
+      </p>
+      {enUso.length === 0 ? (
+        <div className="rounded-card bg-white py-12 shadow-card text-center">
+          <p className="text-md text-grey">Sin {titulo.toLowerCase()} en uso</p>
+        </div>
+      ) : (
+        <div className="flex gap-6 overflow-x-auto pb-3 snap-x">
+          {enUso.map(m => (
+            <div key={m.id} className="w-44 flex-shrink-0 snap-start">
+              {renderCard(m)}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 
   return (
     <div>
-      {showHeader && (
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-section text-dark-blue">
-            Máquinas en uso <span className="text-grey">({maquinasEnUso.length})</span>
-          </h2>
-          <button
-            type="button"
-            onClick={refrescarManual}
-            disabled={refrescando}
-            aria-label="Recargar máquinas"
-            title="Recargar"
-            className="w-10 h-10 rounded-full border border-gray-300 flex items-center justify-center text-dark-blue hover:bg-gray-50 disabled:opacity-60 transition-colors"
-          >
-            <svg
-              className={`w-5 h-5 ${refrescando ? 'animate-spin' : ''}`}
-              fill="none" stroke="currentColor" strokeWidth={2}
-              strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"
-            >
-              <path d="M20 11A8.1 8.1 0 004.5 9M4 5v4h4" />
-              <path d="M4 13a8.1 8.1 0 0015.5 2M20 19v-4h-4" />
-            </svg>
-          </button>
-        </div>
-      )}
-
-      {loading ? (
-        <div className="rounded-card bg-white py-20 shadow-card flex justify-center">
-          <div className="animate-spin rounded-pill h-8 w-8 border-b-2 border-blue" />
-        </div>
-      ) : maquinasEnUso.length === 0 ? (
-        <div className="rounded-card bg-white py-20 shadow-card text-center">
-          <p className="text-md text-grey">Sin máquinas en uso</p>
-        </div>
+      {layout === 'carousel' ? (
+        loading ? (
+          <div className="rounded-card bg-white py-20 shadow-card flex justify-center">
+            <div className="animate-spin rounded-pill h-8 w-8 border-b-2 border-blue" />
+          </div>
+        ) : (
+          <div className="space-y-10">
+            {renderCarrusel('Lavadoras', lavadorasEnUso, totalLavadoras)}
+            {renderCarrusel('Secadoras', secadorasEnUso, totalSecadoras)}
+          </div>
+        )
       ) : (
-        <div className="grid grid-cols-2 lg:grid-cols-3 gap-6">
-          {maquinasEnUso.map(m => {
-            const minutos = m.tipo === 'secadora'       ? tiempos.secadora
-                          : m.tipo === 'lavadora_jumbo' ? tiempos.jumbo
-                          : tiempos.mediana;
-            const duracionSeg = Math.max(0, Number(minutos) || 0) * 60;
-            const inicio = m.en_uso_desde ? new Date(m.en_uso_desde).getTime() : null;
-            const transcurridoSeg = inicio ? Math.max(0, Math.floor((now - inicio) / 1000)) : 0;
-            const restanteSeg = Math.max(0, duracionSeg - transcurridoSeg);
-            const progreso = duracionSeg > 0 ? restanteSeg / duracionSeg : 0;
-            // La nota relacionada y su estado son la fuente de verdad: el
-            // servidor promueve a POR_PROCESAR al cumplirse el tiempo. El
-            // contador de abajo es solo referencia visual del ciclo.
-            const notaRel = notas
-              .filter(n => String(n.maquina_id) === String(m.id)
-                        && ['EN_PROCESO', 'POR_PROCESAR'].includes(n.estado))
-              .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
-            const maquinaAumentada = {
-              ...m,
-              progreso,
-              tiempo_restante: inicio ? formatMMSS(restanteSeg) : '—:—',
-              necesita_procesar: notaRel?.estado === 'POR_PROCESAR',
-            };
-            return (
-              <MachineCard
-                key={m.id}
-                maquina={maquinaAumentada}
-                nota={notaRel}
-                onProcesar={() => setConfirmProcesar(maquinaAumentada)}
-                onClick={notaRel ? () => navigate(`/notas/${notaRel.id}`) : undefined}
-              />
-            );
-          })}
-        </div>
+        <>
+          {showHeader && (
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-section text-dark-blue">
+                Máquinas en uso <span className="text-grey">({maquinasEnUso.length})</span>
+              </h2>
+              <button
+                type="button"
+                onClick={refrescarManual}
+                disabled={refrescando}
+                aria-label="Recargar máquinas"
+                title="Recargar"
+                className="w-10 h-10 rounded-full border border-gray-300 flex items-center justify-center text-dark-blue hover:bg-gray-50 disabled:opacity-60 transition-colors"
+              >
+                <svg
+                  className={`w-5 h-5 ${refrescando ? 'animate-spin' : ''}`}
+                  fill="none" stroke="currentColor" strokeWidth={2}
+                  strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"
+                >
+                  <path d="M20 11A8.1 8.1 0 004.5 9M4 5v4h4" />
+                  <path d="M4 13a8.1 8.1 0 0015.5 2M20 19v-4h-4" />
+                </svg>
+              </button>
+            </div>
+          )}
+
+          {loading ? (
+            <div className="rounded-card bg-white py-20 shadow-card flex justify-center">
+              <div className="animate-spin rounded-pill h-8 w-8 border-b-2 border-blue" />
+            </div>
+          ) : maquinasEnUso.length === 0 ? (
+            <div className="rounded-card bg-white py-20 shadow-card text-center">
+              <p className="text-md text-grey">Sin máquinas en uso</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-6">
+              {maquinasEnUso.map(renderCard)}
+            </div>
+          )}
+        </>
       )}
 
       {confirmProcesar && (

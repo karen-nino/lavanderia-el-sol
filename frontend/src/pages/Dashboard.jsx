@@ -130,12 +130,16 @@ export default function Dashboard() {
   return (
     <div className="pt-4 pb-16 px-6 md:py-10 md:px-8 space-y-16">
 
-      {/* Sección resumen */}
+      {/* Sección resumen: KPIs de "Hoy" */}
 
       <div className="space-y-4">
         <p className="text-section text-grey">Hoy</p>
 
-        <SalesCard total={ventasHoy} label="Ingresado hoy" />
+        {/* En móvil "Ingresado hoy" va aquí arriba; en desktop vive en la
+            columna izquierda bajo el título "Ventas" (ver más abajo). */}
+        <div className="md:hidden">
+          <SalesCard total={ventasHoy} label="Ingresado hoy" />
+        </div>
 
         {/* KPIs: 2x2 en mobile, 4 columnas en tablet */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -170,9 +174,19 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Sección ventas */}
+      {/* Cuerpo: en desktop, dos columnas (izquierda Ventas + Corte de caja,
+          derecha el monitor de máquinas). En móvil se apila en una sola. */}
+      <div className="space-y-16 md:space-y-0 md:grid md:grid-cols-[minmax(0,22rem)_1fr] md:gap-8 md:items-start">
 
-        <div className="space-y-12">
+        {/* Columna izquierda */}
+        <div className="space-y-16">
+          {/* Ventas — solo desktop; en móvil ya se muestra arriba en "Hoy" */}
+          <div className="hidden md:block space-y-4">
+            <p className="text-section text-grey">Ventas</p>
+            <SalesCard total={ventasHoy} label="Ingresado hoy" />
+          </div>
+
+          {/* Corte de caja */}
           <div className="space-y-6">
             <p className="text-section text-grey">Corte de caja</p>
             <div className="space-y-4">
@@ -181,9 +195,11 @@ export default function Dashboard() {
           </div>
         </div>
 
-      {/* Sección máquinas — solo desktop; en móvil vive en la página Máquinas */}
-      <div className="hidden md:block">
-        <MaquinasEnUso />
+        {/* Columna derecha: carruseles de máquinas por tipo — solo desktop; en
+            móvil el monitor vive en la página Máquinas */}
+        <div className="hidden md:block">
+          <MaquinasEnUso layout="carousel" />
+        </div>
       </div>
 
       <Link
