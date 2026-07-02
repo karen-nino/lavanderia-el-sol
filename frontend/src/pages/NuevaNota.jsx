@@ -387,6 +387,9 @@ export default function NuevaNota() {
     const payload = {
       modalidad:       'AUTOSERVICIO',
       tipo_prenda:     tipoPrenda || 'ROPA',
+      // Sin máquina asignada la nota queda En Espera (se activa después
+      // desde Salidas); con máquina nace directamente En Proceso.
+      estado:          form.maquina_id ? 'EN_PROCESO' : 'EN_ESPERA',
       estado_pago:     'PAGADO',
       sucursal:        'lopez_cotilla',
       instrucciones:   form.instrucciones || undefined,
