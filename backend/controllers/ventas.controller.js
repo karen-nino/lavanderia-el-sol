@@ -1,11 +1,14 @@
 import pool from '../db/pool.js';
 
+// El período se mide por pagado_en (día real del cobro), no por la fecha de
+// creación de la nota. whereBase filtra estado_pago = 'PAGADO', así que
+// pagado_en nunca es NULL en las filas que llegan a estas consultas.
 function buildPeriodSQL(periodo, alias = 'o') {
   switch (periodo) {
-    case 'semana': return { sql: `${alias}.created_at >= NOW() - INTERVAL '7 days'`, params: [] };
-    case 'mes':    return { sql: `${alias}.created_at >= DATE_TRUNC('month', NOW())`, params: [] };
-    case 'custom': return { sql: `DATE(${alias}.created_at) BETWEEN $1::date AND $2::date`, params: null }; // params set by caller
-    default:       return { sql: `DATE(${alias}.created_at) = CURRENT_DATE`, params: [] };
+    case 'semana': return { sql: `${alias}.pagado_en >= NOW() - INTERVAL '7 days'`, params: [] };
+    case 'mes':    return { sql: `${alias}.pagado_en >= DATE_TRUNC('month', NOW())`, params: [] };
+    case 'custom': return { sql: `DATE(${alias}.pagado_en) BETWEEN $1::date AND $2::date`, params: null }; // params set by caller
+    default:       return { sql: `DATE(${alias}.pagado_en) = CURRENT_DATE`, params: [] };
   }
 }
 
@@ -24,7 +27,10 @@ export async function getResumen(req, res) {
   const p2 = isCustom ? '$2' : null;
 
   // Para custom, el period ya usa $1 y $2
-  const whereBase = `o.estado IN ('PAGADA', 'FINALIZADA') AND ${periodSQL}`;
+  // "Ingresado" = dinero efectivamente cobrado: notas con pago registrado
+  // (estado_pago = 'PAGADO') y no canceladas. El período se mide por
+  // pagado_en (día real del cobro).
+  const whereBase = `o.estado_pago = 'PAGADO' AND o.estado != 'CANCELADA' AND ${periodSQL}`;
 
   try {
     const [tarjetasRes, pendientesRes, graficaRes, listaRes, corteRes] = await Promise.all([
@@ -53,10 +59,10 @@ export async function getResumen(req, res) {
 
       // Gráfica: por fecha
       pool.query(
-        `SELECT DATE(o.created_at) AS fecha, COALESCE(SUM(o.precio_total), 0) AS total
+        `SELECT DATE(o.pagado_en) AS fecha, COALESCE(SUM(o.precio_total), 0) AS total
         FROM notas o
         WHERE ${whereBase}
-        GROUP BY DATE(o.created_at)
+        GROUP BY DATE(o.pagado_en)
         ORDER BY fecha ASC`,
         periodParams
       ),
@@ -65,7 +71,7 @@ export async function getResumen(req, res) {
       pool.query(
         `SELECT
           o.folio,
-          DATE(o.created_at)                          AS fecha,
+          DATE(o.pagado_en)                           AS fecha,
           COALESCE(m.nombre, 'N/A')                   AS maquina,
           o.cantidad_cargas                            AS cargas,
           COALESCE(np_t.total_productos, 0)            AS total_productos,
@@ -78,7 +84,7 @@ export async function getResumen(req, res) {
           GROUP BY nota_id
         ) np_t ON np_t.nota_id = o.id
         WHERE ${whereBase}
-        ORDER BY o.created_at DESC`,
+        ORDER BY o.pagado_en DESC`,
         periodParams
       ),
 
