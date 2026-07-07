@@ -12,17 +12,32 @@ export function AuthProvider({ children }) {
       return null;
     }
   });
+  // Sucursal que se está administrando. Para un empleado siempre es la suya;
+  // un admin puede cambiarla con el selector. Se persiste para que api.js la
+  // envíe en el header X-Sucursal en cada petición.
+  const [sucursalActiva, setSucursalActivaState] = useState(
+    () => localStorage.getItem('sucursalActiva') || null
+  );
+
+  const persistSucursal = (slug) => {
+    if (slug) localStorage.setItem('sucursalActiva', slug);
+    else localStorage.removeItem('sucursalActiva');
+    setSucursalActivaState(slug || null);
+  };
 
   const login = (newToken, newUsuario) => {
     localStorage.setItem('token', newToken);
     localStorage.setItem('usuario', JSON.stringify(newUsuario));
     setToken(newToken);
     setUsuario(newUsuario);
+    // Al iniciar sesión se arranca en la sucursal propia del usuario.
+    persistSucursal(newUsuario?.sucursal || null);
   };
 
   const logout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('usuario');
+    persistSucursal(null);
     setToken(null);
     setUsuario(null);
   };
@@ -35,8 +50,18 @@ export function AuthProvider({ children }) {
     });
   };
 
+  // Cambia la sucursal activa (admin). Recarga para que todas las vistas y
+  // sus refrescos periódicos vuelvan a pedir datos de la nueva sucursal.
+  const setSucursalActiva = (slug) => {
+    if (!slug || slug === sucursalActiva) return;
+    persistSucursal(slug);
+    window.location.reload();
+  };
+
   return (
-    <AuthContext.Provider value={{ token, usuario, login, logout, updateUsuario }}>
+    <AuthContext.Provider
+      value={{ token, usuario, sucursalActiva, login, logout, updateUsuario, setSucursalActiva }}
+    >
       {children}
     </AuthContext.Provider>
   );

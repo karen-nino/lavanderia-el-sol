@@ -3,6 +3,7 @@ import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { esAdmin, ROL_LABEL } from '../lib/roles';
 import { api } from '../lib/api';
+import SucursalSelector from './SucursalSelector';
 
 const navIconCls = 'w-6 h-6';
 
@@ -203,7 +204,8 @@ function DesktopHeader({ usuario, now }) {
       </div>
 
       <div className="flex flex-col items-end gap-1">
-        <div className="flex items-center gap-1">
+        <SucursalSelector />
+        <div className="flex items-center gap-1 mt-2">
           <span className="w-2 h-2 rounded-pill bg-green" />
           <span className="text-kpi-label font-bold text-green uppercase tracking-wide">Conectado</span>
         </div>
@@ -336,6 +338,7 @@ function MenuModal({ open, onClose, extraItems = [], onSettings, onLogout }) {
         </div>
 
         <div className="flex flex-col gap-2">
+          <SucursalSelector variant="menu" />
           {extraItems.map(({ label, icon, onClick }) => (
             <button
               key={label}

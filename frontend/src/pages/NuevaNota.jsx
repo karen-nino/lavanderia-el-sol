@@ -354,7 +354,6 @@ export default function NuevaNota() {
         tiempo_entrega:  encargoForm.tiempo_entrega || undefined,
         instrucciones:   encargoForm.instrucciones  || undefined,
         maquina_id:      encargoForm.maquina_id ? Number(encargoForm.maquina_id) : undefined,
-        sucursal:        'lopez_cotilla',
         productos:       encargoProductos
           .filter(p => p.producto_id && p.cantidad)
           .map(p => ({ producto_id: Number(p.producto_id), cantidad: Number(p.cantidad) })),
@@ -391,7 +390,6 @@ export default function NuevaNota() {
       // desde Salidas); con máquina nace directamente En Proceso.
       estado:          form.maquina_id ? 'EN_PROCESO' : 'EN_ESPERA',
       estado_pago:     'PAGADO',
-      sucursal:        'lopez_cotilla',
       instrucciones:   form.instrucciones || undefined,
       maquina_id:      form.maquina_id ? Number(form.maquina_id) : undefined,
       cantidad_cargas: cargas,

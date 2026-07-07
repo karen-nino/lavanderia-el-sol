@@ -4,13 +4,22 @@ function getToken() {
   return localStorage.getItem('token');
 }
 
+// Sucursal activa: para un admin determina qué sucursal está administrando.
+// El backend la respeta vía el header X-Sucursal (a los empleados los fuerza
+// a la suya, ignorando este header).
+function getSucursal() {
+  return localStorage.getItem('sucursalActiva');
+}
+
 async function request(path, options = {}) {
   const token = getToken();
+  const sucursal = getSucursal();
   const res = await fetch(`${BASE}${path}`, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(sucursal ? { 'X-Sucursal': sucursal } : {}),
       ...options.headers,
     },
   });

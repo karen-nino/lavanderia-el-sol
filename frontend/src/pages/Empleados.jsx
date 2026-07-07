@@ -6,7 +6,7 @@ import { esAdmin as esAdminFn, esAdminMain as esAdminMainFn } from '../lib/roles
 const INPUT_CLS =
   'w-full px-4 py-3.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent transition';
 
-const FORM_INIT = { nombre: '', apellido: '', rol: 'operador', password: '' };
+const FORM_INIT = { nombre: '', apellido: '', rol: 'operador', password: '', sucursal: '' };
 
 const ROL_LABEL = { admin_main: 'Admin Main', admin: 'Admin', operador: 'Empleado' };
 
@@ -16,9 +16,12 @@ const splitNombre = (full) => {
 };
 
 export default function Empleados() {
-  const { usuario } = useAuth();
+  const { usuario, sucursalActiva } = useAuth();
   const esAdmin     = esAdminFn(usuario?.rol);
   const esAdminMain = esAdminMainFn(usuario?.rol);
+
+  const [sucursales, setSucursales]     = useState([]);
+  const nombreSucursal = (slug) => sucursales.find(s => s.slug === slug)?.nombre ?? slug;
 
   const [empleados, setEmpleados]       = useState([]);
   const [cargando, setCargando]         = useState(true);
@@ -66,6 +69,12 @@ export default function Empleados() {
       .finally(() => setCargando(false));
   }, []);
 
+  useEffect(() => {
+    api.get('/sucursales')
+      .then(data => setSucursales(data ?? []))
+      .catch(() => {});
+  }, []);
+
   const filtrados = empleados.filter(e => {
     if (e.rol === 'admin_main') return false;
     if (filtroRol !== 'todos' && e.rol !== filtroRol) return false;
@@ -76,7 +85,11 @@ export default function Empleados() {
   const nombreCompleto = (e) => e.nombre;
 
   // ── Crear ──────────────────────────────────────────────
-  const abrirModal = () => { setForm(FORM_INIT); setFormError(''); setModalOpen(true); };
+  const abrirModal = () => {
+    setForm({ ...FORM_INIT, sucursal: sucursalActiva || usuario?.sucursal || '' });
+    setFormError('');
+    setModalOpen(true);
+  };
   const cerrarModal = () => setModalOpen(false);
   const handleChange = e => {
     const { name, value } = e.target;
@@ -93,6 +106,7 @@ export default function Empleados() {
         nombre: nombreCompletoStr,
         password: form.password,
         rol: form.rol,
+        sucursal: form.sucursal,
       });
       setEmpleados(prev => [...prev, nuevo].sort((a, b) => a.nombre.localeCompare(b.nombre)));
       cerrarModal();
@@ -112,6 +126,7 @@ export default function Empleados() {
       apellido,
       rol: emp.rol ?? 'operador',
       password: '',
+      sucursal: emp.sucursal ?? '',
     });
     setEditError('');
   };
@@ -129,6 +144,7 @@ export default function Empleados() {
       const payload = {
         nombre: `${editForm.nombre} ${editForm.apellido}`.trim(),
         rol: editForm.rol,
+        sucursal: editForm.sucursal,
       };
       if (editForm.password) payload.password = editForm.password;
       const actualizado = await api.patch(`/usuarios/${editEmpleado.id}`, payload);
@@ -278,9 +294,16 @@ export default function Empleados() {
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="font-semibold text-gray-900 text-sm truncate">{nombreCompleto(emp)}</p>
-                  <span className="inline-block mt-0.5 text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
-                    {ROL_LABEL[emp.rol] ?? emp.rol}
-                  </span>
+                  <div className="flex flex-wrap items-center gap-1 mt-0.5">
+                    <span className="inline-block text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
+                      {ROL_LABEL[emp.rol] ?? emp.rol}
+                    </span>
+                    {emp.sucursal && (
+                      <span className="inline-block text-xs px-2 py-0.5 rounded-full bg-light-blue text-blue">
+                        {nombreSucursal(emp.sucursal)}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
             );
@@ -360,9 +383,16 @@ export default function Empleados() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="font-semibold text-gray-900 text-base">{nombreCompleto(infoEmpleado)}</p>
-                    <span className="inline-block mt-0.5 text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
-                      {ROL_LABEL[infoEmpleado.rol] ?? infoEmpleado.rol}
-                    </span>
+                    <div className="flex flex-wrap items-center gap-1 mt-0.5">
+                      <span className="inline-block text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
+                        {ROL_LABEL[infoEmpleado.rol] ?? infoEmpleado.rol}
+                      </span>
+                      {infoEmpleado.sucursal && (
+                        <span className="inline-block text-xs px-2 py-0.5 rounded-full bg-light-blue text-blue">
+                          {nombreSucursal(infoEmpleado.sucursal)}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -420,6 +450,17 @@ export default function Empleados() {
                 <select name="rol" value={form.rol} onChange={handleChange} className={`${INPUT_CLS} bg-white`}>
                   <option value="operador">Empleado</option>
                   <option value="admin">Admin</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Sucursal <span className="text-red-500">*</span>
+                </label>
+                <select name="sucursal" required value={form.sucursal} onChange={handleChange} className={`${INPUT_CLS} bg-white`}>
+                  <option value="" disabled>Selecciona una sucursal</option>
+                  {sucursales.map(s => (
+                    <option key={s.slug} value={s.slug}>{s.nombre}</option>
+                  ))}
                 </select>
               </div>
               <div>
@@ -487,6 +528,17 @@ export default function Empleados() {
                   {editForm.rol === 'admin_main' && (
                     <option value="admin_main">Admin Main</option>
                   )}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Sucursal <span className="text-red-500">*</span>
+                </label>
+                <select name="sucursal" required value={editForm.sucursal} onChange={handleEditChange} className={`${INPUT_CLS} bg-white`}>
+                  <option value="" disabled>Selecciona una sucursal</option>
+                  {sucursales.map(s => (
+                    <option key={s.slug} value={s.slug}>{s.nombre}</option>
+                  ))}
                 </select>
               </div>
               <div>
