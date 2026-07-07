@@ -12,7 +12,8 @@ const validarTelefono = (telefono) => {
 export const getClientes = async (req, res) => {
   try {
     const { rows } = await pool.query(
-      'SELECT * FROM clientes WHERE activo = TRUE ORDER BY nombre ASC'
+      'SELECT * FROM clientes WHERE activo = TRUE AND sucursal = $1 ORDER BY nombre ASC',
+      [req.sucursal]
     );
     res.json(rows);
   } catch (err) {
@@ -52,10 +53,10 @@ export const createCliente = async (req, res) => {
 
   try {
     const { rows } = await pool.query(
-      `INSERT INTO clientes (nombre, apellido, telefono, notas)
-       VALUES ($1, $2, $3, $4)
+      `INSERT INTO clientes (nombre, apellido, telefono, notas, sucursal)
+       VALUES ($1, $2, $3, $4, $5)
        RETURNING *`,
-      [nombre, apellido, telefono, notas]
+      [nombre, apellido, telefono, notas, req.sucursal]
     );
     res.status(201).json(rows[0]);
   } catch (err) {

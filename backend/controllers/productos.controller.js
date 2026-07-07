@@ -17,7 +17,9 @@ export const getProductos = async (req, res) => {
               (stock_actual - stock_reservado) AS stock_disponible,
               ${ESTADO_STOCK_SQL}
        FROM productos
-       ORDER BY nombre ASC`
+       WHERE sucursal = $1
+       ORDER BY nombre ASC`,
+      [req.sucursal]
     );
     res.json(rows);
   } catch (err) {
@@ -35,12 +37,12 @@ export const createProducto = async (req, res) => {
 
   try {
     const { rows } = await pool.query(
-      `INSERT INTO productos (nombre, descripcion, unidad, precio_unitario, stock_actual)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO productos (nombre, descripcion, unidad, precio_unitario, stock_actual, sucursal)
+       VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING *,
                  (stock_actual - stock_reservado) AS stock_disponible,
                  ${ESTADO_STOCK_SQL}`,
-      [nombre, descripcion || null, unidad, precio_unitario ?? null, stock_actual]
+      [nombre, descripcion || null, unidad, precio_unitario ?? null, stock_actual, req.sucursal]
     );
     res.status(201).json(rows[0]);
   } catch (err) {

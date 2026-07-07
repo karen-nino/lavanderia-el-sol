@@ -82,7 +82,9 @@ export const getNotas = async (req, res) => {
        LEFT JOIN clientes  c ON c.id = n.cliente_id
        JOIN      usuarios  u ON u.id = n.usuario_id
        LEFT JOIN maquinas  m ON m.id = n.maquina_id
-       ORDER BY n.created_at DESC`
+       WHERE n.sucursal = $1
+       ORDER BY n.created_at DESC`,
+      [req.sucursal]
     );
     res.json(rows);
   } catch (err) {
@@ -160,7 +162,6 @@ export const createNota = async (req, res) => {
     tipo_prenda = 'ROPA',
     estado,
     estado_pago,
-    sucursal = 'lopez_cotilla',
     peso_kg,
     precio_total,
     fecha_entrega,
@@ -270,7 +271,7 @@ export const createNota = async (req, res) => {
         String(tipo_prenda).toUpperCase(),
         estadoInicial,
         estado_pago,
-        sucursal,
+        req.sucursal,
         peso_kg      || null,
         precioFinal,
         fecha_entrega || null,

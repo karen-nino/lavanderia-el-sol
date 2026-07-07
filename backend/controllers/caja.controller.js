@@ -3,14 +3,15 @@ import pool from '../db/pool.js';
 // Suma de ventas cobradas durante la ventana de la sesión de caja.
 // Limitación: las notas no guardan método de pago ni timestamp de cobro,
 // así que se usa created_at como proxy del momento de la venta.
-async function ventasDeSesion(client, abiertaAt, cerradaAt) {
+async function ventasDeSesion(client, abiertaAt, cerradaAt, sucursal) {
   const { rows } = await client.query(
     `SELECT COALESCE(SUM(precio_total), 0) AS ventas
        FROM notas
       WHERE estado_pago = 'PAGADO'
+        AND sucursal = $3
         AND created_at >= $1
         AND created_at <= COALESCE($2, NOW())`,
-    [abiertaAt, cerradaAt]
+    [abiertaAt, cerradaAt, sucursal]
   );
   return parseFloat(rows[0].ventas);
 }
@@ -38,8 +39,9 @@ export async function getCajaActual(req, res) {
       `SELECT c.*, u.nombre AS usuario_apertura
          FROM cajas c
          JOIN usuarios u ON u.id = c.usuario_apertura_id
-        WHERE c.estado = 'abierta'
-        LIMIT 1`
+        WHERE c.estado = 'abierta' AND c.sucursal = $1
+        LIMIT 1`,
+      [req.sucursal]
     );
 
     if (cajaRes.rowCount === 0) {
@@ -57,7 +59,7 @@ export async function getCajaActual(req, res) {
       [caja.id]
     );
 
-    const ventas = await ventasDeSesion(client, caja.abierta_at, null);
+    const ventas = await ventasDeSesion(client, caja.abierta_at, null, req.sucursal);
     const { entradas, salidas } = await totalesMovimientos(client, caja.id);
     const monto_inicial = parseFloat(caja.monto_inicial);
     const esperado = monto_inicial + ventas + entradas - salidas;
@@ -99,10 +101,10 @@ export async function abrirCaja(req, res) {
 
   try {
     const { rows } = await pool.query(
-      `INSERT INTO cajas (usuario_apertura_id, monto_inicial, notas_apertura)
-       VALUES ($1, $2, $3)
+      `INSERT INTO cajas (usuario_apertura_id, monto_inicial, notas_apertura, sucursal)
+       VALUES ($1, $2, $3, $4)
        RETURNING id`,
-      [req.user.id, monto, notas?.trim() || null]
+      [req.user.id, monto, notas?.trim() || null, req.sucursal]
     );
     res.status(201).json({ id: rows[0].id });
   } catch (err) {
@@ -130,7 +132,10 @@ export async function registrarMovimiento(req, res) {
   }
 
   try {
-    const cajaRes = await pool.query(`SELECT id FROM cajas WHERE estado = 'abierta' LIMIT 1`);
+    const cajaRes = await pool.query(
+      `SELECT id FROM cajas WHERE estado = 'abierta' AND sucursal = $1 LIMIT 1`,
+      [req.sucursal]
+    );
     if (cajaRes.rowCount === 0) {
       return res.status(409).json({ message: 'No hay una caja abierta.' });
     }
@@ -159,13 +164,16 @@ export async function cerrarCaja(req, res) {
 
   const client = await pool.connect();
   try {
-    const cajaRes = await client.query(`SELECT * FROM cajas WHERE estado = 'abierta' LIMIT 1`);
+    const cajaRes = await client.query(
+      `SELECT * FROM cajas WHERE estado = 'abierta' AND sucursal = $1 LIMIT 1`,
+      [req.sucursal]
+    );
     if (cajaRes.rowCount === 0) {
       return res.status(409).json({ message: 'No hay una caja abierta.' });
     }
     const caja = cajaRes.rows[0];
 
-    const ventas = await ventasDeSesion(client, caja.abierta_at, null);
+    const ventas = await ventasDeSesion(client, caja.abierta_at, null, req.sucursal);
     const { entradas, salidas } = await totalesMovimientos(client, caja.id);
     const monto_inicial = parseFloat(caja.monto_inicial);
     const esperado = monto_inicial + ventas + entradas - salidas;
@@ -217,6 +225,7 @@ export async function getHistorial(req, res) {
           COALESCE((
             SELECT SUM(precio_total) FROM notas
              WHERE estado_pago = 'PAGADO'
+               AND sucursal = c.sucursal
                AND created_at >= c.abierta_at
                AND created_at <= c.cerrada_at
           ), 0) AS ventas,
@@ -231,8 +240,9 @@ export async function getHistorial(req, res) {
         FROM cajas c
         JOIN usuarios ua ON ua.id = c.usuario_apertura_id
         LEFT JOIN usuarios uc ON uc.id = c.usuario_cierre_id
-       WHERE c.estado = 'cerrada'
-       ORDER BY c.cerrada_at DESC`
+       WHERE c.estado = 'cerrada' AND c.sucursal = $1
+       ORDER BY c.cerrada_at DESC`,
+      [req.sucursal]
     );
 
     res.json(

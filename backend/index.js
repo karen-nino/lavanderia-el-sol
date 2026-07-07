@@ -28,6 +28,7 @@ import productosRoutes      from './routes/productos.routes.js';
 import ventasRoutes         from './routes/ventas.routes.js';
 import cajaRoutes           from './routes/caja.routes.js';
 import ajustesRoutes        from './routes/ajustes.routes.js';
+import sucursalesRoutes     from './routes/sucursales.routes.js';
 
 app.use('/api/auth',           authRoutes);
 app.use('/api/usuarios',       usuariosRoutes);
@@ -39,6 +40,7 @@ app.use('/api/productos',      productosRoutes);
 app.use('/api/ventas',         ventasRoutes);
 app.use('/api/caja',           cajaRoutes);
 app.use('/api/ajustes',        ajustesRoutes);
+app.use('/api/sucursales',     sucursalesRoutes);
 
 app.get('/', (req, res) => {
   res.json({ message: 'Lavanderia El Sol API running' });

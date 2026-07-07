@@ -44,7 +44,7 @@ export const login = async (req, res) => {
 
   try {
     const { rows } = await pool.query(
-      `SELECT id, nombre, password, rol FROM usuarios WHERE id = $1 AND activo = TRUE`,
+      `SELECT id, nombre, password, rol, sucursal FROM usuarios WHERE id = $1 AND activo = TRUE`,
       [userId]
     );
 
@@ -60,7 +60,7 @@ export const login = async (req, res) => {
     }
 
     const token = jwt.sign(
-      { id: usuario.id, rol: usuario.rol },
+      { id: usuario.id, rol: usuario.rol, sucursal: usuario.sucursal },
       process.env.JWT_SECRET,
       { expiresIn: '8h' }
     );
@@ -71,6 +71,7 @@ export const login = async (req, res) => {
         id: usuario.id,
         nombre: usuario.nombre,
         rol: usuario.rol,
+        sucursal: usuario.sucursal,
       },
     });
   } catch (err) {
@@ -83,7 +84,7 @@ export const login = async (req, res) => {
 export const getMe = async (req, res) => {
   try {
     const { rows } = await pool.query(
-      'SELECT id, nombre, rol FROM usuarios WHERE id = $1 AND activo = TRUE',
+      'SELECT id, nombre, rol, sucursal FROM usuarios WHERE id = $1 AND activo = TRUE',
       [req.user.id]
     );
     if (rows.length === 0) return res.status(404).json({ message: 'Usuario no encontrado.' });

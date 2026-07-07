@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { verifyToken } from '../middleware/auth.js';
+import { sucursalActiva } from '../middleware/sucursalActiva.js';
 import {
   getClientes,
   getClienteById,
@@ -10,7 +11,7 @@ import {
 
 const router = Router();
 
-router.use(verifyToken);
+router.use(verifyToken, sucursalActiva);
 
 router.get('/', getClientes);
 router.get('/:id', getClienteById);

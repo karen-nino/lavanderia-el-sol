@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { verifyToken } from '../middleware/auth.js';
+import { sucursalActiva } from '../middleware/sucursalActiva.js';
 import {
   getNotas,
   getNotaById,
@@ -17,7 +18,7 @@ import {
 
 const router = Router();
 
-router.use(verifyToken);
+router.use(verifyToken, sucursalActiva);
 
 router.get('/',           getNotas);
 router.get('/next-folio', getNextFolio);

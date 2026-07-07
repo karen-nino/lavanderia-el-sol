@@ -6,13 +6,16 @@ import {
   deleteEmpleado,
 } from '../controllers/usuarios.controller.js';
 import { verifyToken } from '../middleware/auth.js';
+import { sucursalActiva } from '../middleware/sucursalActiva.js';
 import { requireAdmin } from '../middleware/roles.js';
 
 const router = Router();
 
-router.get('/',       verifyToken, getEmpleados);
-router.post('/',      verifyToken, requireAdmin, createEmpleado);
-router.patch('/:id',  verifyToken, requireAdmin, updateEmpleado);
-router.delete('/:id', verifyToken, requireAdmin, deleteEmpleado);
+router.use(verifyToken, sucursalActiva);
+
+router.get('/',       getEmpleados);
+router.post('/',      requireAdmin, createEmpleado);
+router.patch('/:id',  requireAdmin, updateEmpleado);
+router.delete('/:id', requireAdmin, deleteEmpleado);
 
 export default router;

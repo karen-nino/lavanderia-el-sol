@@ -23,14 +23,14 @@ export async function getResumen(req, res) {
   }
 
   const periodParams = isCustom ? [desde, hasta] : [];
-  const p1 = isCustom ? '$1' : null;
-  const p2 = isCustom ? '$2' : null;
 
-  // Para custom, el period ya usa $1 y $2
   // "Ingresado" = dinero efectivamente cobrado: notas con pago registrado
-  // (estado_pago = 'PAGADO') y no canceladas. El período se mide por
-  // pagado_en (día real del cobro).
-  const whereBase = `o.estado_pago = 'PAGADO' AND o.estado != 'CANCELADA' AND ${periodSQL}`;
+  // (estado_pago = 'PAGADO') y no canceladas, de la sucursal activa. El
+  // período se mide por pagado_en (día real del cobro). La sucursal va como
+  // último parámetro, después de los del período (custom usa $1 y $2).
+  const sucIdx = periodParams.length + 1;
+  const params = [...periodParams, req.sucursal];
+  const whereBase = `o.estado_pago = 'PAGADO' AND o.estado != 'CANCELADA' AND o.sucursal = $${sucIdx} AND ${periodSQL}`;
 
   try {
     const [tarjetasRes, pendientesRes, graficaRes, listaRes, corteRes] = await Promise.all([
@@ -47,14 +47,15 @@ export async function getResumen(req, res) {
           GROUP BY nota_id
         ) np_t ON np_t.nota_id = o.id
         WHERE ${whereBase}`,
-        periodParams
+        params
       ),
 
-      // Pendientes: sin filtro de período
+      // Pendientes: sin filtro de período, solo de la sucursal activa
       pool.query(
         `SELECT COUNT(*) AS notas_pendientes
         FROM notas
-        WHERE estado_pago = 'PENDIENTE' AND estado != 'CANCELADA'`
+        WHERE estado_pago = 'PENDIENTE' AND estado != 'CANCELADA' AND sucursal = $1`,
+        [req.sucursal]
       ),
 
       // Gráfica: por fecha
@@ -64,7 +65,7 @@ export async function getResumen(req, res) {
         WHERE ${whereBase}
         GROUP BY DATE(o.pagado_en)
         ORDER BY fecha ASC`,
-        periodParams
+        params
       ),
 
       // Lista de notas
@@ -85,7 +86,7 @@ export async function getResumen(req, res) {
         ) np_t ON np_t.nota_id = o.id
         WHERE ${whereBase}
         ORDER BY o.pagado_en DESC`,
-        periodParams
+        params
       ),
 
       // Corte de caja
@@ -101,7 +102,7 @@ export async function getResumen(req, res) {
           GROUP BY nota_id
         ) np_t ON np_t.nota_id = o.id
         WHERE ${whereBase}`,
-        periodParams
+        params
       ),
     ]);
 

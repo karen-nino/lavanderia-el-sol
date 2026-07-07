@@ -6,11 +6,10 @@ const CAPACIDADES_VALIDAS = ['20kg', '35kg'];
 
 export const getMaquinas = async (req, res) => {
   try {
-    const { sucursal } = req.query;
-    const query = sucursal
-      ? 'SELECT * FROM maquinas WHERE sucursal = $1 ORDER BY tipo ASC, nombre ASC'
-      : 'SELECT * FROM maquinas ORDER BY tipo ASC, nombre ASC';
-    const { rows } = await pool.query(query, sucursal ? [sucursal] : []);
+    const { rows } = await pool.query(
+      'SELECT * FROM maquinas WHERE sucursal = $1 ORDER BY tipo ASC, nombre ASC',
+      [req.sucursal]
+    );
     res.json(rows);
   } catch (err) {
     console.error('getMaquinas error:', err);
@@ -19,7 +18,7 @@ export const getMaquinas = async (req, res) => {
 };
 
 export const createMaquina = async (req, res) => {
-  const { nombre, tipo, modelo, capacidad, numero_serie, fecha_adquisicion, sucursal = 'lopez_cotilla', notas } = req.body;
+  const { nombre, tipo, modelo, capacidad, numero_serie, fecha_adquisicion, notas } = req.body;
 
   if (!nombre || !tipo) {
     return res.status(400).json({ message: 'Nombre y tipo son requeridos.' });
@@ -36,7 +35,7 @@ export const createMaquina = async (req, res) => {
       `INSERT INTO maquinas (nombre, tipo, modelo, capacidad, numero_serie, fecha_adquisicion, sucursal, notas)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING *`,
-      [nombre, tipo, modelo, capacidad, numero_serie, fecha_adquisicion, sucursal, notas]
+      [nombre, tipo, modelo, capacidad, numero_serie, fecha_adquisicion, req.sucursal, notas]
     );
     res.status(201).json(rows[0]);
   } catch (err) {

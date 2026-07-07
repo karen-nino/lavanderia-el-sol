@@ -4,7 +4,8 @@ import { esAdmin } from '../middleware/roles.js';
 export const getInsumos = async (req, res) => {
   try {
     const { rows } = await pool.query(
-      'SELECT * FROM insumos ORDER BY nombre ASC'
+      'SELECT * FROM insumos WHERE sucursal = $1 ORDER BY nombre ASC',
+      [req.sucursal]
     );
     res.json(rows);
   } catch (err) {
@@ -22,10 +23,10 @@ export const createInsumo = async (req, res) => {
 
   try {
     const { rows } = await pool.query(
-      `INSERT INTO insumos (nombre, categoria, unidad, stock_actual, stock_minimo, precio_unitario)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO insumos (nombre, categoria, unidad, stock_actual, stock_minimo, precio_unitario, sucursal)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING *`,
-      [nombre, categoria || null, unidad, stock_actual ?? 0, stock_minimo ?? 0, precio_unitario ?? null]
+      [nombre, categoria || null, unidad, stock_actual ?? 0, stock_minimo ?? 0, precio_unitario ?? null, req.sucursal]
     );
     res.status(201).json(rows[0]);
   } catch (err) {
