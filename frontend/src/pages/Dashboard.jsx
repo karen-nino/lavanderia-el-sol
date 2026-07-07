@@ -115,7 +115,7 @@ export default function Dashboard() {
   const notasDeHoy       = notas.filter(n => esDeHoy(n.created_at, now));
   const enUso            = maquinas.filter(m => m.estado === 'en_uso').length;
   const notasPagadas     = notasDeHoy.filter(n => n.estado_pago === 'PAGADO').length;
-  const notasEnEspera    = notasDeHoy.filter(n => ['EN_PROCESO', 'POR_PROCESAR'].includes(n.estado)).length;
+  const notasEnEspera    = notasDeHoy.filter(n => n.estado === 'EN_ESPERA').length;
   const paraEntregar     = notasDeHoy.filter(n => ['LISTA', 'PAGADA'].includes(n.estado)).length;
   const ventasHoy        = ventas?.tarjetas?.total_cobrado ?? 0;
 
