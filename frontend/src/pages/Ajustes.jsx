@@ -147,6 +147,10 @@ export default function Ajustes() {
   const [sucursales,     setSucursales]     = useState([]);
   const [sucursalSel,    setSucursalSel]    = useState('');
   const [savingSucursal, setSavingSucursal] = useState(null); // slug guardándose
+  const [cambiandoActiva, setCambiandoActiva] = useState(null); // slug activándose/desactivándose
+  const [agregando,      setAgregando]      = useState(false);
+  const [creando,        setCreando]        = useState(false);
+  const [nuevaSucursal,  setNuevaSucursal]  = useState({ nombre: '', direccion: '', telefono: '' });
 
   useEffect(() => {
     api.get('/ajustes')
@@ -159,7 +163,8 @@ export default function Ajustes() {
   }, []);
 
   useEffect(() => {
-    api.get('/sucursales')
+    // ?todas=1 incluye inactivas para poder gestionarlas (reactivarlas).
+    api.get('/sucursales?todas=1')
       .then(data => {
         const lista = (data ?? []).map(s => ({ ...s, telefono: formatTelefono(s.telefono ?? '') }));
         setSucursales(lista);
@@ -196,6 +201,55 @@ export default function Ajustes() {
       setMensaje({ tipo: 'error', texto: err.message });
     } finally {
       setSavingSucursal(null);
+    }
+  };
+
+  const handleNuevaChange = (field, value) => {
+    const next = field === 'telefono' ? formatTelefono(value) : value;
+    setNuevaSucursal(prev => ({ ...prev, [field]: next }));
+  };
+
+  const agregarSucursal = async () => {
+    if (!nuevaSucursal.nombre.trim()) {
+      return setMensaje({ tipo: 'error', texto: 'El nombre de la sucursal es requerido.' });
+    }
+    setCreando(true);
+    setMensaje(null);
+    try {
+      const creada = await api.post('/sucursales', {
+        nombre:    nuevaSucursal.nombre.trim(),
+        direccion: nuevaSucursal.direccion || '',
+        telefono:  nuevaSucursal.telefono  || '',
+      });
+      const conFormato = { ...creada, telefono: formatTelefono(creada.telefono ?? '') };
+      setSucursales(prev => [...prev, conFormato]);
+      setSucursalSel(creada.slug);       // pasa a editar la recién creada
+      setNuevaSucursal({ nombre: '', direccion: '', telefono: '' });
+      setAgregando(false);
+      setMensaje({ tipo: 'ok', texto: `Sucursal "${creada.nombre}" creada.` });
+    } catch (err) {
+      setMensaje({ tipo: 'error', texto: err.message });
+    } finally {
+      setCreando(false);
+    }
+  };
+
+  const toggleActivaSucursal = async (slug, activa) => {
+    setCambiandoActiva(slug);
+    setMensaje(null);
+    try {
+      const updated = await api.patch(`/sucursales/${slug}/activa`, { activa });
+      setSucursales(prev => prev.map(x =>
+        x.slug === slug ? { ...x, ...updated, telefono: formatTelefono(updated.telefono ?? '') } : x
+      ));
+      setMensaje({
+        tipo: 'ok',
+        texto: `Sucursal "${updated.nombre}" ${activa ? 'reactivada' : 'desactivada'}.`,
+      });
+    } catch (err) {
+      setMensaje({ tipo: 'error', texto: err.message });
+    } finally {
+      setCambiandoActiva(null);
     }
   };
 
@@ -586,8 +640,64 @@ export default function Ajustes() {
         </div>
       </div>
 
-      {/* Selector de sucursal a editar */}
+      {/* Gestión de sucursales */}
       <div className="border-t border-gray-100 pt-4 space-y-4">
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Sucursales</p>
+          <button
+            type="button"
+            onClick={() => { setAgregando(a => !a); setMensaje(null); }}
+            className="text-sm font-medium text-blue hover:opacity-80"
+          >
+            {agregando ? 'Cancelar' : '+ Agregar sucursal'}
+          </button>
+        </div>
+
+        {agregando && (
+          <div className="rounded-lg border border-blue/30 bg-light-blue/20 p-4 space-y-3">
+            <Field label="Nombre de la nueva sucursal">
+              <input
+                type="text"
+                value={nuevaSucursal.nombre}
+                onChange={(e) => handleNuevaChange('nombre', e.target.value)}
+                placeholder="Ej. Sucursal Centro"
+                className={INPUT_CLS}
+              />
+            </Field>
+            <Field label="Dirección">
+              <input
+                type="text"
+                value={nuevaSucursal.direccion}
+                onChange={(e) => handleNuevaChange('direccion', e.target.value)}
+                placeholder="Calle, número, colonia..."
+                className={INPUT_CLS}
+              />
+            </Field>
+            <Field label="Teléfono">
+              <input
+                type="tel"
+                value={nuevaSucursal.telefono}
+                onChange={(e) => handleNuevaChange('telefono', e.target.value)}
+                inputMode="numeric"
+                autoComplete="tel"
+                maxLength={12}
+                placeholder="33-1234-5678"
+                className={INPUT_CLS}
+              />
+            </Field>
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={agregarSucursal}
+                disabled={creando}
+                className="flex items-center gap-2 px-4 py-2.5 bg-blue hover:opacity-90 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
+              >
+                {creando ? 'Creando...' : 'Crear sucursal'}
+              </button>
+            </div>
+          </div>
+        )}
+
         <Field label="Sucursal a editar">
           <select
             value={sucursalSel}
@@ -595,7 +705,7 @@ export default function Ajustes() {
             className={`${INPUT_CLS} bg-white`}
           >
             {sucursales.map((s) => (
-              <option key={s.slug} value={s.slug}>{s.nombre}</option>
+              <option key={s.slug} value={s.slug}>{s.nombre}{s.activa ? '' : ' (inactiva)'}</option>
             ))}
           </select>
         </Field>
@@ -631,7 +741,19 @@ export default function Ajustes() {
                 className={INPUT_CLS}
               />
             </Field>
-            <div className="flex justify-end">
+            <div className="flex items-center justify-between pt-1">
+              <button
+                type="button"
+                onClick={() => toggleActivaSucursal(sucursalActual.slug, !sucursalActual.activa)}
+                disabled={cambiandoActiva === sucursalActual.slug}
+                className={`text-sm font-medium disabled:opacity-60 ${
+                  sucursalActual.activa ? 'text-red hover:opacity-80' : 'text-green hover:opacity-80'
+                }`}
+              >
+                {cambiandoActiva === sucursalActual.slug
+                  ? 'Aplicando...'
+                  : sucursalActual.activa ? 'Desactivar sucursal' : 'Reactivar sucursal'}
+              </button>
               <button
                 type="button"
                 onClick={() => guardarSucursal(sucursalActual.slug)}
@@ -769,8 +891,62 @@ export default function Ajustes() {
         </MobileField>
       </div>
 
-      {/* Selector de sucursal a editar */}
+      {/* Gestión de sucursales */}
       <div className="space-y-5 border-t border-light-blue/60 pt-5">
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-semibold text-grey uppercase tracking-wide">Sucursales</p>
+          <button
+            type="button"
+            onClick={() => { setAgregando(a => !a); setMensaje(null); }}
+            className="text-sm font-medium text-blue"
+          >
+            {agregando ? 'Cancelar' : '+ Agregar'}
+          </button>
+        </div>
+
+        {agregando && (
+          <div className="rounded-lg border border-blue/30 bg-light-blue/20 p-4 space-y-4">
+            <MobileField label="Nombre de la nueva sucursal">
+              <input
+                type="text"
+                value={nuevaSucursal.nombre}
+                onChange={(e) => handleNuevaChange('nombre', e.target.value)}
+                placeholder="Ej. Sucursal Centro"
+                className={MOBILE_INPUT_CLS}
+              />
+            </MobileField>
+            <MobileField label="Dirección">
+              <input
+                type="text"
+                value={nuevaSucursal.direccion}
+                onChange={(e) => handleNuevaChange('direccion', e.target.value)}
+                placeholder="Calle, número, colonia..."
+                className={MOBILE_INPUT_CLS}
+              />
+            </MobileField>
+            <MobileField label="Teléfono">
+              <input
+                type="tel"
+                value={nuevaSucursal.telefono}
+                onChange={(e) => handleNuevaChange('telefono', e.target.value)}
+                inputMode="numeric"
+                autoComplete="tel"
+                maxLength={12}
+                placeholder="33-1234-5678"
+                className={MOBILE_INPUT_CLS}
+              />
+            </MobileField>
+            <button
+              type="button"
+              onClick={agregarSucursal}
+              disabled={creando}
+              className="w-full py-3.5 rounded-lg bg-blue text-white text-base font-medium disabled:opacity-60"
+            >
+              {creando ? 'Creando...' : 'Crear sucursal'}
+            </button>
+          </div>
+        )}
+
         <MobileField label="Sucursal a editar">
           <select
             value={sucursalSel}
@@ -778,7 +954,7 @@ export default function Ajustes() {
             className={`${MOBILE_INPUT_CLS} bg-white`}
           >
             {sucursales.map((s) => (
-              <option key={s.slug} value={s.slug}>{s.nombre}</option>
+              <option key={s.slug} value={s.slug}>{s.nombre}{s.activa ? '' : ' (inactiva)'}</option>
             ))}
           </select>
         </MobileField>
@@ -821,6 +997,20 @@ export default function Ajustes() {
               className="w-full py-3.5 rounded-lg bg-blue text-white text-base font-medium disabled:opacity-60"
             >
               {savingSucursal === sucursalActual.slug ? 'Guardando...' : 'Guardar sucursal'}
+            </button>
+            <button
+              type="button"
+              onClick={() => toggleActivaSucursal(sucursalActual.slug, !sucursalActual.activa)}
+              disabled={cambiandoActiva === sucursalActual.slug}
+              className={`w-full py-3.5 rounded-lg text-base font-medium border disabled:opacity-60 ${
+                sucursalActual.activa
+                  ? 'border-red/40 text-red'
+                  : 'border-green/40 text-green'
+              }`}
+            >
+              {cambiandoActiva === sucursalActual.slug
+                ? 'Aplicando...'
+                : sucursalActual.activa ? 'Desactivar sucursal' : 'Reactivar sucursal'}
             </button>
           </>
         )}

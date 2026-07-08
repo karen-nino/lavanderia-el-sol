@@ -1,7 +1,8 @@
 import pool from '../db/pool.js';
 import { esAdmin } from './roles.js';
 
-// Catálogo de slugs válidos, cacheado (las sucursales cambian rara vez).
+// Catálogo de slugs válidos (solo sucursales activas), cacheado.
+// Se invalida con refrescarSlugsSucursales() al crear/activar/desactivar.
 let slugsCache = null;
 async function slugsValidos() {
   if (!slugsCache) {
@@ -9,6 +10,12 @@ async function slugsValidos() {
     slugsCache = new Set(rows.map((r) => r.slug));
   }
   return slugsCache;
+}
+
+// Fuerza recargar el cache en la próxima petición. Llamar tras mutar el
+// catálogo de sucursales (crear/activar/desactivar).
+export function refrescarSlugsSucursales() {
+  slugsCache = null;
 }
 
 // Resuelve la sucursal activa de la petición en req.sucursal.

@@ -1,16 +1,68 @@
 import pool from '../db/pool.js';
+import { refrescarSlugsSucursales } from '../middleware/sucursalActiva.js';
+
+// Convierte un nombre en un slug seguro: sin acentos, minúsculas y
+// separando con guión bajo. Ej: "Sucursal Centro Histórico" → "centro_historico".
+function slugify(str) {
+  return String(str)
+    .normalize('NFD').replace(/[̀-ͯ]/g, '') // quita acentos
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+}
 
 // ── GET /sucursales ─────────────────────────────────────────
-// Catálogo de sucursales activas, usado por el selector del admin,
-// el formulario de empleados y la sección "Información de sucursales".
+// Por defecto solo activas (para el selector del header y el form de
+// empleados). Con ?todas=1 incluye las inactivas (gestión en Ajustes).
 export const getSucursales = async (req, res) => {
+  const todas = req.query.todas === '1' || req.query.todas === 'true';
   try {
     const { rows } = await pool.query(
-      'SELECT slug, nombre, direccion, telefono FROM sucursales WHERE activa = TRUE ORDER BY nombre ASC'
+      `SELECT slug, nombre, direccion, telefono, activa
+         FROM sucursales
+        ${todas ? '' : 'WHERE activa = TRUE'}
+        ORDER BY activa DESC, nombre ASC`
     );
     res.json(rows);
   } catch (err) {
     console.error('getSucursales error:', err);
+    res.status(500).json({ message: 'Error interno del servidor.' });
+  }
+};
+
+// ── POST /sucursales ────────────────────────────────────────
+// Crea una sucursal (admin). El slug se genera desde el nombre y se
+// hace único agregando un sufijo si ya existe.
+export const createSucursal = async (req, res) => {
+  const { nombre, direccion, telefono } = req.body;
+
+  if (!nombre || !String(nombre).trim()) {
+    return res.status(400).json({ message: 'El nombre de la sucursal es requerido.' });
+  }
+
+  const base = slugify(nombre) || 'sucursal';
+  try {
+    // Buscar un slug libre: base, base_2, base_3, ...
+    const { rows: existentes } = await pool.query(
+      "SELECT slug FROM sucursales WHERE slug = $1 OR slug LIKE $2",
+      [base, `${base}_%`]
+    );
+    const usados = new Set(existentes.map((r) => r.slug));
+    let slug = base;
+    let n = 2;
+    while (usados.has(slug)) slug = `${base}_${n++}`;
+
+    const { rows } = await pool.query(
+      `INSERT INTO sucursales (slug, nombre, direccion, telefono, activa)
+       VALUES ($1, $2, $3, $4, TRUE)
+       RETURNING slug, nombre, direccion, telefono, activa`,
+      [slug, String(nombre).trim(), direccion || null, telefono || null]
+    );
+    refrescarSlugsSucursales();
+    res.status(201).json(rows[0]);
+  } catch (err) {
+    console.error('createSucursal error:', err);
     res.status(500).json({ message: 'Error interno del servidor.' });
   }
 };
@@ -42,7 +94,7 @@ export const updateSucursal = async (req, res) => {
     const { rows } = await pool.query(
       `UPDATE sucursales SET ${updates.join(', ')}
          WHERE slug = $${i}
-         RETURNING slug, nombre, direccion, telefono`,
+         RETURNING slug, nombre, direccion, telefono, activa`,
       values
     );
     if (rows.length === 0) {
@@ -51,6 +103,44 @@ export const updateSucursal = async (req, res) => {
     res.json(rows[0]);
   } catch (err) {
     console.error('updateSucursal error:', err);
+    res.status(500).json({ message: 'Error interno del servidor.' });
+  }
+};
+
+// ── PATCH /sucursales/:slug/activa ──────────────────────────
+// Activa o desactiva una sucursal (admin). "Eliminar" = desactivar: la
+// sucursal desaparece de la operación pero su historial se conserva.
+// No se permite desactivar la última sucursal activa.
+export const setActivaSucursal = async (req, res) => {
+  const { slug } = req.params;
+  const { activa } = req.body;
+
+  if (typeof activa !== 'boolean') {
+    return res.status(400).json({ message: 'El campo "activa" (true/false) es requerido.' });
+  }
+
+  try {
+    const { rows: existe } = await pool.query('SELECT activa FROM sucursales WHERE slug = $1', [slug]);
+    if (existe.length === 0) {
+      return res.status(404).json({ message: 'Sucursal no encontrada.' });
+    }
+
+    if (activa === false) {
+      const { rows: act } = await pool.query('SELECT COUNT(*)::int AS n FROM sucursales WHERE activa = TRUE');
+      if (act[0].n <= 1) {
+        return res.status(400).json({ message: 'No puedes desactivar la última sucursal activa.' });
+      }
+    }
+
+    const { rows } = await pool.query(
+      `UPDATE sucursales SET activa = $1 WHERE slug = $2
+         RETURNING slug, nombre, direccion, telefono, activa`,
+      [activa, slug]
+    );
+    refrescarSlugsSucursales();
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('setActivaSucursal error:', err);
     res.status(500).json({ message: 'Error interno del servidor.' });
   }
 };
