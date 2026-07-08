@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 
 const ESTADO_CFG = {
@@ -55,6 +56,7 @@ function WashingMachineIcon({ className = '' }) {
 }
 
 export default function GestionMaquinas() {
+  const navigate = useNavigate();
   const [maquinas, setMaquinas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -270,9 +272,17 @@ export default function GestionMaquinas() {
             const borrando = eliminando === m.id;
 
             return (
-              <div key={m.id} className="relative bg-white rounded-2xl shadow-sm border border-gray-100 p-5 flex flex-col">
-                {/* Menú de acciones (kebab) */}
-                <div className="absolute top-3 right-3" ref={accionesMenuId === m.id ? accionesMenuRef : null}>
+              <div
+                key={m.id}
+                onClick={() => navigate(`/gestion-maquinas/${m.id}/uso`)}
+                className="relative bg-white rounded-2xl shadow-sm border border-gray-100 p-5 flex flex-col cursor-pointer hover:shadow-md transition-shadow"
+              >
+                {/* Menú de acciones (kebab) — no debe navegar */}
+                <div
+                  className="absolute top-3 right-3"
+                  onClick={(e) => e.stopPropagation()}
+                  ref={accionesMenuId === m.id ? accionesMenuRef : null}
+                >
                   <button
                     type="button"
                     onClick={() => setAccionesMenuId(prev => prev === m.id ? null : m.id)}

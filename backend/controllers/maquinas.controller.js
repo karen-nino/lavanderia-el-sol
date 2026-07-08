@@ -17,6 +17,63 @@ export const getMaquinas = async (req, res) => {
   }
 };
 
+// ── GET /maquinas/:id/uso ───────────────────────────────────
+// Uso diario de la máquina, derivado de las notas que la usaron.
+// "Generado" = dinero cobrado (notas PAGADAS), atribuido al día en que se
+// usó la máquina. Métricas por día: usos, cargas, generado, empleados que
+// la operaron y clientes atendidos. Excluye notas canceladas.
+export const getUsoMaquina = async (req, res) => {
+  const id = Number(req.params.id);
+  if (!id) return res.status(400).json({ message: 'Máquina inválida.' });
+
+  try {
+    const { rows: maq } = await pool.query(
+      'SELECT id, nombre, tipo, estado, capacidad, sucursal FROM maquinas WHERE id = $1',
+      [id]
+    );
+    if (maq.length === 0) return res.status(404).json({ message: 'Máquina no encontrada.' });
+
+    const { rows: dias } = await pool.query(
+      `SELECT
+          DATE(n.created_at)                                              AS fecha,
+          COUNT(*)::int                                                   AS usos,
+          COALESCE(SUM(n.cantidad_cargas), 0)::int                        AS cargas,
+          COALESCE(SUM(n.precio_total) FILTER (WHERE n.estado_pago = 'PAGADO'), 0) AS generado,
+          COUNT(DISTINCT n.usuario_id)::int                               AS empleados,
+          COUNT(DISTINCT n.cliente_id) FILTER (WHERE n.cliente_id IS NOT NULL)::int AS clientes
+        FROM notas n
+        WHERE n.maquina_id = $1 AND n.estado <> 'CANCELADA'
+        GROUP BY DATE(n.created_at)
+        ORDER BY fecha DESC`,
+      [id]
+    );
+
+    const diasFmt = dias.map((d) => ({
+      fecha:     d.fecha,
+      usos:      d.usos,
+      cargas:    d.cargas,
+      generado:  parseFloat(d.generado),
+      empleados: d.empleados,
+      clientes:  d.clientes,
+    }));
+
+    const resumen = diasFmt.reduce(
+      (acc, d) => ({
+        dias_usada: acc.dias_usada + 1,
+        usos:       acc.usos + d.usos,
+        cargas:     acc.cargas + d.cargas,
+        generado:   acc.generado + d.generado,
+      }),
+      { dias_usada: 0, usos: 0, cargas: 0, generado: 0 }
+    );
+
+    res.json({ maquina: maq[0], resumen, dias: diasFmt });
+  } catch (err) {
+    console.error('getUsoMaquina error:', err);
+    res.status(500).json({ message: 'Error interno del servidor.' });
+  }
+};
+
 export const createMaquina = async (req, res) => {
   const { nombre, tipo, modelo, capacidad, numero_serie, fecha_adquisicion, notas } = req.body;
 

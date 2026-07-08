@@ -10,6 +10,7 @@ import NuevaNota from './pages/NuevaNota';
 import Clientes from './pages/Clientes';
 import Maquinas from './pages/Maquinas';
 import GestionMaquinas from './pages/GestionMaquinas';
+import MaquinaUso from './pages/MaquinaUso';
 import Inventario from './pages/Inventario';
 import Caja from './pages/Caja';
 import DetalleNota from './pages/DetalleNota';
@@ -42,6 +43,7 @@ export default function App() {
             <Route path="clientes" element={<Clientes />} />
             <Route path="maquinas" element={<Maquinas />} />
             <Route path="gestion-maquinas" element={<GestionMaquinas />} />
+            <Route path="gestion-maquinas/:id/uso" element={<MaquinaUso />} />
             <Route path="inventario" element={<Inventario />} />
             <Route path="caja" element={<Caja />} />
             <Route
