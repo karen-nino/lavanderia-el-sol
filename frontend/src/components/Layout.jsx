@@ -253,7 +253,7 @@ function MobileTopbar({ usuario, alertas, onAlerts }) {
   );
 }
 
-function AlertsModal({ open, onClose, alertas, onSelect }) {
+function AlertsModal({ open, onClose, alertas, onSelect, onDismiss }) {
   if (!open) return null;
   return (
     <div
@@ -293,26 +293,42 @@ function AlertsModal({ open, onClose, alertas, onSelect }) {
                   ? 'Ciclo detenido'
                   : 'Por agotarse';
               return (
-                <button
+                <div
                   key={a.key}
-                  type="button"
-                  onClick={() => onSelect(a)}
-                  className="w-full flex items-center gap-3 p-3 rounded-card-sm border border-gray-100 hover:bg-light-blue/40 transition-colors text-left"
+                  className="flex items-center gap-2 p-3 rounded-card-sm border border-gray-100 hover:bg-light-blue/40 transition-colors"
                 >
-                  <span className={`flex-shrink-0 w-9 h-9 rounded-pill flex items-center justify-center ${cls}`}>
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                        d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                    </svg>
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-dark-blue truncate">{a.title}</p>
-                    <p className="text-xs text-grey truncate">{a.description}</p>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onSelect(a)}
+                    className="flex-1 min-w-0 flex items-center gap-3 text-left"
+                  >
+                    <span className={`flex-shrink-0 w-9 h-9 rounded-pill flex items-center justify-center ${cls}`}>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                          d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-dark-blue truncate">{a.title}</p>
+                      <p className="text-xs text-grey truncate">{a.description}</p>
+                    </div>
+                  </button>
                   <span className={`flex-shrink-0 text-[11px] font-semibold px-2 py-0.5 rounded-pill ${cls}`}>
                     {badge}
                   </span>
-                </button>
+                  {a.dismissable && onDismiss && (
+                    <button
+                      type="button"
+                      onClick={() => onDismiss(a)}
+                      aria-label="Descartar alerta"
+                      className="flex-shrink-0 w-7 h-7 rounded-pill flex items-center justify-center text-grey hover:bg-gray-100 hover:text-dark-blue transition-colors"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 6l12 12M6 18L18 6" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
               );
             })}
           </div>
@@ -455,13 +471,20 @@ export default function Layout() {
       }));
     const notifs = notificaciones.map(n => ({
       key:         `notif-${n.id}`,
+      id:          n.id,
       title:       'Ciclo detenido',
       description: n.mensaje,
       severity:    'ciclo',
       to:          '/maquinas',
+      dismissable: true,
     }));
     return [...stock, ...notifs];
   }, [productos, notificaciones]);
+
+  const handleDismissAlerta = async (a) => {
+    setNotificaciones(prev => prev.filter(n => n.id !== a.id));
+    try { await api.delete(`/notificaciones/${a.id}`); } catch { /* la lista ya se actualizó localmente */ }
+  };
 
   const handleSelectAlerta = (a) => {
     setAlertsOpen(false);
@@ -541,6 +564,7 @@ export default function Layout() {
         onClose={() => setAlertsOpen(false)}
         alertas={alertas}
         onSelect={handleSelectAlerta}
+        onDismiss={handleDismissAlerta}
       />
 
       {confirmLogout && (

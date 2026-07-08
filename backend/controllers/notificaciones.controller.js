@@ -23,3 +23,21 @@ export const getNotificaciones = async (req, res) => {
     res.status(500).json({ message: 'Error interno del servidor.' });
   }
 };
+
+// ── DELETE /notificaciones/:id ──────────────────────────────
+// Descarta manualmente una notificación de la sucursal activa.
+export const deleteNotificacion = async (req, res) => {
+  const id = Number(req.params.id);
+  if (!id) return res.status(400).json({ message: 'Notificación inválida.' });
+  try {
+    const { rowCount } = await pool.query(
+      'DELETE FROM notificaciones WHERE id = $1 AND sucursal = $2',
+      [id, req.sucursal]
+    );
+    if (rowCount === 0) return res.status(404).json({ message: 'Notificación no encontrada.' });
+    res.status(204).send();
+  } catch (err) {
+    console.error('deleteNotificacion error:', err);
+    res.status(500).json({ message: 'Error interno del servidor.' });
+  }
+};
