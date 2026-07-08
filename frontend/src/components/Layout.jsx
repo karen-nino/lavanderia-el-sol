@@ -253,85 +253,154 @@ function MobileTopbar({ usuario, alertas, onAlerts }) {
   );
 }
 
+const sevCls = (sev) => sev === 'agotado'
+  ? 'bg-light-red text-red'
+  : sev === 'ciclo' ? 'bg-light-blue text-blue' : 'bg-light-bronce text-bronce';
+const sevBadge = (sev) => sev === 'agotado'
+  ? 'Agotado' : sev === 'ciclo' ? 'Ciclo detenido' : 'Por agotarse';
+const AlertTriangle = (
+  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+      d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+  </svg>
+);
+
 function AlertsModal({ open, onClose, alertas, onSelect, onDismiss }) {
+  const [detalle, setDetalle] = useState(null);
+
   if (!open) return null;
+
+  const cerrar = () => { setDetalle(null); onClose(); };
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-dark-blue/40 p-4"
-      onClick={onClose}
+      onClick={cerrar}
     >
       <div
         className="w-full max-w-sm bg-white rounded-card shadow-xl p-5 max-h-[90vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-card-title text-dark-blue font-bold">
-            Alertas{alertas.length > 0 ? ` (${alertas.length})` : ''}
-          </h2>
-          <button
-            onClick={onClose}
-            aria-label="Cerrar alertas"
-            className="w-8 h-8 rounded-pill flex items-center justify-center text-grey hover:bg-light-blue/60"
-          >
-            {Icon.close}
-          </button>
-        </div>
-
-        {alertas.length === 0 ? (
-          <p className="text-sm text-grey text-center py-8">No hay alertas activas.</p>
-        ) : (
-          <div className="space-y-2 overflow-y-auto">
-            {alertas.map(a => {
-              const cls = a.severity === 'agotado'
-                ? 'bg-light-red text-red'
-                : a.severity === 'ciclo'
-                  ? 'bg-light-blue text-blue'
-                  : 'bg-light-bronce text-bronce';
-              const badge = a.severity === 'agotado'
-                ? 'Agotado'
-                : a.severity === 'ciclo'
-                  ? 'Ciclo detenido'
-                  : 'Por agotarse';
-              return (
-                <div
-                  key={a.key}
-                  className="flex items-center gap-2 p-3 rounded-card-sm border border-gray-100 hover:bg-light-blue/40 transition-colors"
+        {detalle ? (
+          <>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2 min-w-0">
+                <button
+                  onClick={() => setDetalle(null)}
+                  aria-label="Volver"
+                  className="w-8 h-8 rounded-pill flex items-center justify-center text-grey hover:bg-light-blue/60 flex-shrink-0"
                 >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
+                <h2 className="text-card-title text-dark-blue font-bold truncate">{detalle.title}</h2>
+              </div>
+              <button
+                onClick={cerrar}
+                aria-label="Cerrar alertas"
+                className="w-8 h-8 rounded-pill flex items-center justify-center text-grey hover:bg-light-blue/60 flex-shrink-0"
+              >
+                {Icon.close}
+              </button>
+            </div>
+
+            <div className="overflow-y-auto space-y-4">
+              <div className="flex items-center gap-3">
+                <span className={`flex-shrink-0 w-10 h-10 rounded-pill flex items-center justify-center ${sevCls(detalle.severity)}`}>
+                  {AlertTriangle}
+                </span>
+                <span className={`text-xs font-semibold px-2.5 py-1 rounded-pill ${sevCls(detalle.severity)}`}>
+                  {sevBadge(detalle.severity)}
+                </span>
+              </div>
+
+              <div className="divide-y divide-gray-100 border border-gray-100 rounded-card-sm">
+                {(detalle.detalles ?? []).map((d) => (
+                  <div key={d.label} className="flex items-start justify-between gap-3 px-3 py-2.5">
+                    <span className="text-xs text-grey flex-shrink-0">{d.label}</span>
+                    <span className="text-sm font-medium text-dark-blue text-right">{d.value}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex gap-2 pt-1">
+                {detalle.dismissable && onDismiss && (
                   <button
                     type="button"
-                    onClick={() => onSelect(a)}
-                    className="flex-1 min-w-0 flex items-center gap-3 text-left"
+                    onClick={() => { onDismiss(detalle); setDetalle(null); }}
+                    className="flex-1 border border-gray-300 text-gray-700 font-medium py-2.5 rounded-lg text-sm hover:bg-gray-50 transition-colors"
                   >
-                    <span className={`flex-shrink-0 w-9 h-9 rounded-pill flex items-center justify-center ${cls}`}>
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                          d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                      </svg>
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-dark-blue truncate">{a.title}</p>
-                      <p className="text-xs text-grey truncate">{a.description}</p>
-                    </div>
+                    Descartar
                   </button>
-                  <span className={`flex-shrink-0 text-[11px] font-semibold px-2 py-0.5 rounded-pill ${cls}`}>
-                    {badge}
-                  </span>
-                  {a.dismissable && onDismiss && (
+                )}
+                <button
+                  type="button"
+                  onClick={() => { onSelect(detalle); setDetalle(null); }}
+                  className="flex-1 bg-blue hover:opacity-90 text-white font-medium py-2.5 rounded-lg text-sm transition-colors"
+                >
+                  {detalle.accionLabel ?? 'Ver'}
+                </button>
+              </div>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-card-title text-dark-blue font-bold">
+                Alertas{alertas.length > 0 ? ` (${alertas.length})` : ''}
+              </h2>
+              <button
+                onClick={cerrar}
+                aria-label="Cerrar alertas"
+                className="w-8 h-8 rounded-pill flex items-center justify-center text-grey hover:bg-light-blue/60"
+              >
+                {Icon.close}
+              </button>
+            </div>
+
+            {alertas.length === 0 ? (
+              <p className="text-sm text-grey text-center py-8">No hay alertas activas.</p>
+            ) : (
+              <div className="space-y-2 overflow-y-auto">
+                {alertas.map(a => (
+                  <div
+                    key={a.key}
+                    className="flex items-center gap-2 p-3 rounded-card-sm border border-gray-100 hover:bg-light-blue/40 transition-colors"
+                  >
                     <button
                       type="button"
-                      onClick={() => onDismiss(a)}
-                      aria-label="Descartar alerta"
-                      className="flex-shrink-0 w-7 h-7 rounded-pill flex items-center justify-center text-grey hover:bg-gray-100 hover:text-dark-blue transition-colors"
+                      onClick={() => setDetalle(a)}
+                      className="flex-1 min-w-0 flex items-center gap-3 text-left"
                     >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 6l12 12M6 18L18 6" />
-                      </svg>
+                      <span className={`flex-shrink-0 w-9 h-9 rounded-pill flex items-center justify-center ${sevCls(a.severity)}`}>
+                        {AlertTriangle}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-dark-blue truncate">{a.title}</p>
+                        <p className="text-xs text-grey truncate">{a.description}</p>
+                      </div>
                     </button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+                    <span className={`flex-shrink-0 text-[11px] font-semibold px-2 py-0.5 rounded-pill ${sevCls(a.severity)}`}>
+                      {sevBadge(a.severity)}
+                    </span>
+                    {a.dismissable && onDismiss && (
+                      <button
+                        type="button"
+                        onClick={() => onDismiss(a)}
+                        aria-label="Descartar alerta"
+                        className="flex-shrink-0 w-7 h-7 rounded-pill flex items-center justify-center text-grey hover:bg-gray-100 hover:text-dark-blue transition-colors"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 6l12 12M6 18L18 6" />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
@@ -462,13 +531,24 @@ export default function Layout() {
     const stock = productos
       .filter(p => p.estado_stock && p.estado_stock !== 'ok')
       .sort((a, b) => (orden[a.estado_stock] ?? 99) - (orden[b.estado_stock] ?? 99))
-      .map(p => ({
-        key:         `producto-${p.id}`,
-        title:       p.nombre,
-        description: `Stock: ${Number(p.stock_actual).toFixed(2)} ${p.unidad}`,
-        severity:    p.estado_stock,
-        to:          `/inventario?highlight=${p.id}`,
-      }));
+      .map(p => {
+        const disponible = Number(p.stock_actual) - Number(p.stock_reservado ?? 0);
+        return {
+          key:         `producto-${p.id}`,
+          title:       p.nombre,
+          description: `Stock: ${Number(p.stock_actual).toFixed(2)} ${p.unidad}`,
+          severity:    p.estado_stock,
+          to:          `/inventario?highlight=${p.id}`,
+          accionLabel: 'Ver en inventario',
+          detalles: [
+            { label: 'Producto',     value: p.nombre },
+            { label: 'Estado',       value: p.estado_stock === 'agotado' ? 'Agotado' : 'Por agotarse' },
+            { label: 'Stock actual', value: `${Number(p.stock_actual).toFixed(2)} ${p.unidad}` },
+            { label: 'Disponible',   value: `${disponible.toFixed(2)} ${p.unidad}` },
+            ...(p.categoria ? [{ label: 'Categoría', value: p.categoria }] : []),
+          ],
+        };
+      });
     const notifs = notificaciones.map(n => ({
       key:         `notif-${n.id}`,
       id:          n.id,
@@ -477,6 +557,12 @@ export default function Layout() {
       severity:    'ciclo',
       to:          '/maquinas',
       dismissable: true,
+      accionLabel: 'Ver máquinas',
+      detalles: [
+        { label: 'Máquina',      value: n.maquina_nombre ?? '—' },
+        { label: 'Detenida por', value: n.usuario_nombre ?? '—' },
+        { label: 'Fecha y hora', value: new Date(n.created_at).toLocaleString('es-MX', { day: '2-digit', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true }) },
+      ],
     }));
     return [...stock, ...notifs];
   }, [productos, notificaciones]);
