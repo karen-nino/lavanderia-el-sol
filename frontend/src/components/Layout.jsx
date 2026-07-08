@@ -569,7 +569,7 @@ export default function Layout() {
 
   const handleDismissAlerta = async (a) => {
     setNotificaciones(prev => prev.filter(n => n.id !== a.id));
-    try { await api.delete(`/notificaciones/${a.id}`); } catch { /* la lista ya se actualizó localmente */ }
+    try { await api.post(`/notificaciones/${a.id}/descartar`); } catch { /* la lista ya se actualizó localmente */ }
   };
 
   const handleSelectAlerta = (a) => {

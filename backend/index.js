@@ -50,8 +50,10 @@ app.get('/', (req, res) => {
 
 // Barrido de cierre del día: libera máquinas que quedaron en uso.
 import { iniciarCierreDelDia } from './jobs/cierreDelDia.js';
+import { iniciarLimpiezaNotificaciones } from './jobs/limpiezaNotificaciones.js';
 
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
   iniciarCierreDelDia();
+  iniciarLimpiezaNotificaciones();
 });

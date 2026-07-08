@@ -14,8 +14,12 @@ export const getNotificaciones = async (req, res) => {
          LEFT JOIN usuarios u ON u.id = n.usuario_id
         WHERE n.sucursal = $1
           AND n.created_at >= NOW() - INTERVAL '24 hours'
+          AND NOT EXISTS (
+            SELECT 1 FROM notificacion_descartes d
+             WHERE d.notificacion_id = n.id AND d.usuario_id = $2
+          )
         ORDER BY n.created_at DESC`,
-      [req.sucursal]
+      [req.sucursal, req.user.id]
     );
     res.json(rows);
   } catch (err) {
@@ -24,20 +28,27 @@ export const getNotificaciones = async (req, res) => {
   }
 };
 
-// ── DELETE /notificaciones/:id ──────────────────────────────
-// Descarta manualmente una notificación de la sucursal activa.
-export const deleteNotificacion = async (req, res) => {
+// ── POST /notificaciones/:id/descartar ──────────────────────
+// Descarta la notificación solo para el usuario actual (los demás la
+// siguen viendo). La notificación no se borra; se registra el descarte.
+export const descartarNotificacion = async (req, res) => {
   const id = Number(req.params.id);
   if (!id) return res.status(400).json({ message: 'Notificación inválida.' });
   try {
     const { rowCount } = await pool.query(
-      'DELETE FROM notificaciones WHERE id = $1 AND sucursal = $2',
+      'SELECT 1 FROM notificaciones WHERE id = $1 AND sucursal = $2',
       [id, req.sucursal]
     );
     if (rowCount === 0) return res.status(404).json({ message: 'Notificación no encontrada.' });
+
+    await pool.query(
+      `INSERT INTO notificacion_descartes (notificacion_id, usuario_id)
+       VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+      [id, req.user.id]
+    );
     res.status(204).send();
   } catch (err) {
-    console.error('deleteNotificacion error:', err);
+    console.error('descartarNotificacion error:', err);
     res.status(500).json({ message: 'Error interno del servidor.' });
   }
 };
