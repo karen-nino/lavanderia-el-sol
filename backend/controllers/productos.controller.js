@@ -1,4 +1,5 @@
 import pool from '../db/pool.js';
+import { esAdmin } from '../middleware/roles.js';
 
 const ESTADO_STOCK_SQL = `
   CASE
@@ -54,6 +55,32 @@ export const createProducto = async (req, res) => {
 export const updateProducto = async (req, res) => {
   const { id } = req.params;
   const { nombre, descripcion, unidad, precio_unitario, stock_actual } = req.body;
+
+  // Un empleado (no admin) solo puede ajustar el stock; los demás campos
+  // (nombre, precio, unidad...) se conservan intactos.
+  if (!esAdmin(req.user.rol)) {
+    if (stock_actual === undefined || stock_actual === null || Number.isNaN(Number(stock_actual))) {
+      return res.status(400).json({ message: 'Stock actual inválido.' });
+    }
+    try {
+      const { rows } = await pool.query(
+        `UPDATE productos
+           SET stock_actual = $1, updated_at = NOW()
+         WHERE id = $2
+         RETURNING *,
+                   (stock_actual - stock_reservado) AS stock_disponible,
+                   ${ESTADO_STOCK_SQL}`,
+        [Number(stock_actual), id]
+      );
+      if (rows.length === 0) {
+        return res.status(404).json({ message: 'Producto no encontrado.' });
+      }
+      return res.json(rows[0]);
+    } catch (err) {
+      console.error('updateProducto (stock) error:', err);
+      return res.status(500).json({ message: 'Error interno del servidor.' });
+    }
+  }
 
   if (!nombre) {
     return res.status(400).json({ message: 'Nombre es requerido.' });

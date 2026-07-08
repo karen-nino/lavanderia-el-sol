@@ -28,7 +28,7 @@ const FORM_VACIO = {
 };
 
 // ── Modal crear / editar ────────────────────────────────────────
-function ModalProducto({ producto, onClose, onGuardado }) {
+function ModalProducto({ producto, esAdmin, onClose, onGuardado }) {
   const [form, setForm]     = useState(producto
     ? {
         nombre:          producto.nombre,
@@ -43,6 +43,8 @@ function ModalProducto({ producto, onClose, onGuardado }) {
   const [loading, setLoading] = useState(false);
 
   const esEdicion = Boolean(producto);
+  // Un empleado (no admin) editando solo puede ver y ajustar el stock.
+  const soloStock = esEdicion && !esAdmin;
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -92,6 +94,8 @@ function ModalProducto({ producto, onClose, onGuardado }) {
         </div>
 
         <form onSubmit={handleSubmit} className="p-5 space-y-4 overflow-y-auto">
+          {!soloStock && (
+          <>
           {/* Nombre */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">
@@ -160,6 +164,8 @@ function ModalProducto({ producto, onClose, onGuardado }) {
               {UNIDADES.map(u => <option key={u} value={u}>{u}</option>)}
             </select>
           </div>
+          </>
+          )}
 
           {/* Stock actual */}
           <div>
@@ -641,6 +647,7 @@ export default function Inventario() {
       {modalProducto && (
         <ModalProducto
           producto={modalProducto === 'nuevo' ? null : modalProducto}
+          esAdmin={esAdmin}
           onClose={() => setModalProducto(null)}
           onGuardado={handleGuardado}
         />
