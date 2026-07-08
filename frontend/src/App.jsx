@@ -43,7 +43,14 @@ export default function App() {
             <Route path="clientes" element={<Clientes />} />
             <Route path="maquinas" element={<Maquinas />} />
             <Route path="gestion-maquinas" element={<GestionMaquinas />} />
-            <Route path="gestion-maquinas/:id/uso" element={<MaquinaUso />} />
+            <Route
+              path="gestion-maquinas/:id/uso"
+              element={
+                <AdminRoute>
+                  <MaquinaUso />
+                </AdminRoute>
+              }
+            />
             <Route path="inventario" element={<Inventario />} />
             <Route path="caja" element={<Caja />} />
             <Route

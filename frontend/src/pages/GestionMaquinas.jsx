@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
+import { useAuth } from '../context/AuthContext';
+import { esAdmin as esAdminFn } from '../lib/roles';
 
 const ESTADO_CFG = {
   disponible:    { label: 'Disponible',    cls: 'bg-green-100 text-green-700', clsActive: 'bg-green-600 text-white', dot: 'bg-green-500' },
@@ -57,6 +59,8 @@ function WashingMachineIcon({ className = '' }) {
 
 export default function GestionMaquinas() {
   const navigate = useNavigate();
+  const { usuario } = useAuth();
+  const esAdmin = esAdminFn(usuario?.rol);
   const [maquinas, setMaquinas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -274,10 +278,13 @@ export default function GestionMaquinas() {
             return (
               <div
                 key={m.id}
-                onClick={() => navigate(`/gestion-maquinas/${m.id}/uso`)}
-                className="relative bg-white rounded-2xl shadow-sm border border-gray-100 p-5 flex flex-col cursor-pointer hover:shadow-md transition-shadow"
+                onClick={esAdmin ? () => navigate(`/gestion-maquinas/${m.id}/uso`) : undefined}
+                className={`relative bg-white rounded-2xl shadow-sm border border-gray-100 p-5 flex flex-col ${
+                  esAdmin ? 'cursor-pointer hover:shadow-md transition-shadow' : ''
+                }`}
               >
-                {/* Menú de acciones (kebab) — no debe navegar */}
+                {/* Menú de acciones (kebab) — solo Admin; no debe navegar */}
+                {esAdmin && (
                 <div
                   className="absolute top-3 right-3"
                   onClick={(e) => e.stopPropagation()}
@@ -324,6 +331,7 @@ export default function GestionMaquinas() {
                     </div>
                   )}
                 </div>
+                )}
 
                 {/* Ícono */}
                 <div className="flex justify-center pt-8 pb-5">
