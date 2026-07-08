@@ -63,6 +63,7 @@ export const updateAjustes = async (req, res) => {
     direccion,
     telefono,
     stock_minimo_global,
+    alerta_ciclo_detenido,
   } = req.body;
 
   const updates = [];
@@ -80,6 +81,7 @@ export const updateAjustes = async (req, res) => {
   if (direccion             !== undefined) { updates.push(`direccion = $${i++}`);              values.push(direccion); }
   if (telefono              !== undefined) { updates.push(`telefono = $${i++}`);               values.push(telefono); }
   if (stock_minimo_global   !== undefined) { updates.push(`stock_minimo_global = $${i++}`);   values.push(stock_minimo_global); }
+  if (alerta_ciclo_detenido !== undefined) { updates.push(`alerta_ciclo_detenido = $${i++}`); values.push(Boolean(alerta_ciclo_detenido)); }
 
   if (updates.length === 0) {
     return res.status(400).json({ message: 'No hay campos para actualizar.' });

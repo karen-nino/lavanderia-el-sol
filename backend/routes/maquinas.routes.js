@@ -8,6 +8,7 @@ import {
   updateMaquina,
   deleteMaquina,
   cambiarEstadoMaquina,
+  detenerCiclo,
 } from '../controllers/maquinas.controller.js';
 
 const router = Router();
@@ -20,5 +21,6 @@ router.post('/', createMaquina);
 router.put('/:id', updateMaquina);
 router.delete('/:id', deleteMaquina);
 router.patch('/:id/estado', cambiarEstadoMaquina);
+router.patch('/:id/detener-ciclo', detenerCiclo);
 
 export default router;

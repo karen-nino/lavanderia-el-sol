@@ -284,7 +284,14 @@ function AlertsModal({ open, onClose, alertas, onSelect }) {
             {alertas.map(a => {
               const cls = a.severity === 'agotado'
                 ? 'bg-light-red text-red'
-                : 'bg-light-bronce text-bronce';
+                : a.severity === 'ciclo'
+                  ? 'bg-light-blue text-blue'
+                  : 'bg-light-bronce text-bronce';
+              const badge = a.severity === 'agotado'
+                ? 'Agotado'
+                : a.severity === 'ciclo'
+                  ? 'Ciclo detenido'
+                  : 'Por agotarse';
               return (
                 <button
                   key={a.key}
@@ -303,7 +310,7 @@ function AlertsModal({ open, onClose, alertas, onSelect }) {
                     <p className="text-xs text-grey truncate">{a.description}</p>
                   </div>
                   <span className={`flex-shrink-0 text-[11px] font-semibold px-2 py-0.5 rounded-pill ${cls}`}>
-                    {a.severity === 'agotado' ? 'Agotado' : 'Por agotarse'}
+                    {badge}
                   </span>
                 </button>
               );
@@ -415,19 +422,28 @@ export default function Layout() {
   const [alertsOpen, setAlertsOpen] = useState(false);
   const [confirmLogout, setConfirmLogout] = useState(false);
   const [productos, setProductos] = useState([]);
+  const [notificaciones, setNotificaciones] = useState([]);
   const isDashboard = location.pathname === '/';
 
   useEffect(() => {
     let activo = true;
-    api.get('/productos')
-      .then(data => { if (activo) setProductos(data ?? []); })
-      .catch(() => {});
-    return () => { activo = false; };
+    const cargar = () => {
+      api.get('/productos')
+        .then(data => { if (activo) setProductos(data ?? []); })
+        .catch(() => {});
+      api.get('/notificaciones')
+        .then(data => { if (activo) setNotificaciones(data ?? []); })
+        .catch(() => {});
+    };
+    cargar();
+    // Refresco periódico para que las notificaciones aparezcan sin navegar.
+    const id = setInterval(cargar, 60_000);
+    return () => { activo = false; clearInterval(id); };
   }, [location.pathname]);
 
   const alertas = useMemo(() => {
     const orden = { agotado: 0, por_agotarse: 1 };
-    return productos
+    const stock = productos
       .filter(p => p.estado_stock && p.estado_stock !== 'ok')
       .sort((a, b) => (orden[a.estado_stock] ?? 99) - (orden[b.estado_stock] ?? 99))
       .map(p => ({
@@ -437,7 +453,15 @@ export default function Layout() {
         severity:    p.estado_stock,
         to:          `/inventario?highlight=${p.id}`,
       }));
-  }, [productos]);
+    const notifs = notificaciones.map(n => ({
+      key:         `notif-${n.id}`,
+      title:       'Ciclo detenido',
+      description: n.mensaje,
+      severity:    'ciclo',
+      to:          '/maquinas',
+    }));
+    return [...stock, ...notifs];
+  }, [productos, notificaciones]);
 
   const handleSelectAlerta = (a) => {
     setAlertsOpen(false);

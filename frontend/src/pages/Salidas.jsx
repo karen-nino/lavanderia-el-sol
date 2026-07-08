@@ -83,7 +83,7 @@ export default function Salidas() {
     setLoadingMaquina(true);
     setErrorAccion('');
     try {
-      await api.patch(`/maquinas/${nota.maquina_id}/estado`, { estado: 'disponible' });
+      await api.patch(`/maquinas/${nota.maquina_id}/detener-ciclo`);
       setConfirmDetener(false);
       await cargarDatos();
     } catch (err) {

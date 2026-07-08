@@ -161,6 +161,57 @@ export const deleteMaquina = async (req, res) => {
   }
 };
 
+// ── PATCH /maquinas/:id/detener-ciclo ───────────────────────
+// Detiene manualmente el ciclo: la máquina pasa a 'disponible' y se
+// reinicia su temporizador. Si el ajuste alerta_ciclo_detenido está
+// activo y la máquina estaba en uso, registra una notificación que
+// aparecerá en la campana del Dashboard.
+export const detenerCiclo = async (req, res) => {
+  const { id } = req.params;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const { rows: maqRows } = await client.query(
+      'SELECT id, nombre, estado FROM maquinas WHERE id = $1 FOR UPDATE',
+      [id]
+    );
+    if (maqRows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: 'Máquina no encontrada.' });
+    }
+    const maq = maqRows[0];
+    const estabaEnUso = maq.estado === 'en_uso';
+
+    const { rows: upd } = await client.query(
+      `UPDATE maquinas SET estado = 'disponible', en_uso_desde = NULL WHERE id = $1 RETURNING *`,
+      [id]
+    );
+
+    if (estabaEnUso) {
+      const { rows: cfg } = await client.query('SELECT alerta_ciclo_detenido FROM ajustes WHERE id = 1');
+      if (cfg[0]?.alerta_ciclo_detenido) {
+        const { rows: u } = await client.query('SELECT nombre FROM usuarios WHERE id = $1', [req.user.id]);
+        const quien = u[0]?.nombre ?? 'un empleado';
+        await client.query(
+          `INSERT INTO notificaciones (tipo, mensaje, maquina_id, usuario_id, sucursal)
+           VALUES ('ciclo_detenido', $1, $2, $3, $4)`,
+          [`${maq.nombre} detenida por ${quien}`, id, req.user.id, req.sucursal]
+        );
+      }
+    }
+
+    await client.query('COMMIT');
+    res.json(upd[0]);
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('detenerCiclo error:', err);
+    res.status(500).json({ message: 'Error interno del servidor.' });
+  } finally {
+    client.release();
+  }
+};
+
 export const cambiarEstadoMaquina = async (req, res) => {
   const { id } = req.params;
   const { estado } = req.body;

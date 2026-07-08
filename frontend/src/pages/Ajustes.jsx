@@ -110,6 +110,39 @@ function MobileField({ label, children, hint }) {
   );
 }
 
+function Toggle({ checked, onChange }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      onClick={() => onChange(!checked)}
+      className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${
+        checked ? 'bg-blue' : 'bg-gray-300'
+      }`}
+    >
+      <span
+        className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
+          checked ? 'translate-x-[22px]' : 'translate-x-0.5'
+        }`}
+      />
+    </button>
+  );
+}
+
+// Fila con etiqueta + descripción a la izquierda y el toggle a la derecha.
+function ToggleRow({ label, hint, checked, onChange }) {
+  return (
+    <div className="flex items-start justify-between gap-4">
+      <div>
+        <p className="text-sm font-medium text-gray-700">{label}</p>
+        {hint && <p className="text-xs text-gray-400 mt-0.5">{hint}</p>}
+      </div>
+      <Toggle checked={checked} onChange={onChange} />
+    </div>
+  );
+}
+
 function MobileSectionButton({ label, icon, onClick }) {
   return (
     <button
@@ -339,6 +372,7 @@ export default function Ajustes() {
           tiempo_carga_secadora: Number(config.tiempo_carga_secadora),
           nombre_negocio:        config.nombre_negocio,
           stock_minimo_global:   Number(config.stock_minimo_global),
+          alerta_ciclo_detenido: !!config.alerta_ciclo_detenido,
         }),
       ]);
 
@@ -368,6 +402,7 @@ export default function Ajustes() {
         tiempo_carga_secadora: Number(config.tiempo_carga_secadora),
         nombre_negocio:        config.nombre_negocio,
         stock_minimo_global:   Number(config.stock_minimo_global),
+        alerta_ciclo_detenido: !!config.alerta_ciclo_detenido,
       });
       setConfig(updated);
       setMensaje({ tipo: 'ok', texto: 'Ajustes guardados correctamente.' });
@@ -792,7 +827,7 @@ export default function Ajustes() {
   );
 
   const seccionAlertasDesktop = (
-    <Section titulo="Alertas de inventario">
+    <Section titulo="Alertas y Notificaciones">
       <Field
         label="Unidades mínimas para alerta de stock bajo"
         hint="Los productos con stock igual o menor a este número se marcarán como 'Por agotarse'"
@@ -808,6 +843,15 @@ export default function Ajustes() {
           className={INPUT_CLS}
         />
       </Field>
+
+      <div className="border-t border-gray-100 pt-4">
+        <ToggleRow
+          label="Avisar cuando se detenga un ciclo"
+          hint="Cuando alguien detenga una máquina con 'Detener ciclo', aparecerá una alerta en el Dashboard."
+          checked={!!config.alerta_ciclo_detenido}
+          onChange={(v) => setConfig(prev => ({ ...prev, alerta_ciclo_detenido: v }))}
+        />
+      </div>
     </Section>
   );
 
@@ -1173,21 +1217,32 @@ export default function Ajustes() {
   );
 
   const seccionAlertasMobile = (
-    <MobileField
-      label="Unidades mínimas para alerta de stock bajo"
-      hint="Los productos con stock igual o menor a este número se marcarán como 'Por agotarse'"
-    >
-      <input
-        type="number"
-        name="stock_minimo_global"
-        min="0"
-        step="1"
-        required
-        value={config.stock_minimo_global ?? ''}
-        onChange={handleChange}
-        className={MOBILE_INPUT_CLS}
-      />
-    </MobileField>
+    <div className="space-y-6">
+      <MobileField
+        label="Unidades mínimas para alerta de stock bajo"
+        hint="Los productos con stock igual o menor a este número se marcarán como 'Por agotarse'"
+      >
+        <input
+          type="number"
+          name="stock_minimo_global"
+          min="0"
+          step="1"
+          required
+          value={config.stock_minimo_global ?? ''}
+          onChange={handleChange}
+          className={MOBILE_INPUT_CLS}
+        />
+      </MobileField>
+
+      <div className="border-t border-light-blue/60 pt-5">
+        <ToggleRow
+          label="Avisar cuando se detenga un ciclo"
+          hint="Cuando alguien detenga una máquina con 'Detener ciclo', aparecerá una alerta en el Dashboard."
+          checked={!!config.alerta_ciclo_detenido}
+          onChange={(v) => setConfig(prev => ({ ...prev, alerta_ciclo_detenido: v }))}
+        />
+      </div>
+    </div>
   );
 
   const mobileSectionContent = {
