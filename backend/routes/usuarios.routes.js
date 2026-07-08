@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import {
   getEmpleados,
+  getDesempeno,
   createEmpleado,
   updateEmpleado,
   deleteEmpleado,
@@ -14,6 +15,7 @@ const router = Router();
 router.use(verifyToken, sucursalActiva);
 
 router.get('/',       getEmpleados);
+router.get('/:id/desempeno', requireAdmin, getDesempeno);
 router.post('/',      requireAdmin, createEmpleado);
 router.patch('/:id',  requireAdmin, updateEmpleado);
 router.delete('/:id', requireAdmin, deleteEmpleado);

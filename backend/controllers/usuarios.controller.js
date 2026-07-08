@@ -19,6 +19,73 @@ export const getEmpleados = async (req, res) => {
   }
 };
 
+// ── GET /usuarios/:id/desempeno ─────────────────────────────
+// Desempeño diario del empleado, derivado de las notas que creó.
+// "Vendido" = valor (precio_total) de todas sus notas no canceladas,
+// atribuido al día en que se crearon. Métricas por día: notas, vendido,
+// máquinas distintas, cargas, productos despachados y clientes distintos.
+export const getDesempeno = async (req, res) => {
+  const id = Number(req.params.id);
+  if (!id) return res.status(400).json({ message: 'Empleado inválido.' });
+
+  try {
+    const { rows: emp } = await pool.query(
+      'SELECT id, nombre, rol, sucursal FROM usuarios WHERE id = $1',
+      [id]
+    );
+    if (emp.length === 0) return res.status(404).json({ message: 'Empleado no encontrado.' });
+
+    // Se pre-agregan los productos por nota para no multiplicar los demás
+    // totales al unir con nota_productos.
+    const { rows: dias } = await pool.query(
+      `SELECT
+          DATE(n.created_at)                                              AS fecha,
+          COUNT(*)::int                                                   AS notas,
+          COALESCE(SUM(n.precio_total), 0)                                AS vendido,
+          COUNT(DISTINCT n.maquina_id) FILTER (WHERE n.maquina_id IS NOT NULL)::int AS maquinas,
+          COALESCE(SUM(n.cantidad_cargas), 0)::int                        AS cargas,
+          COALESCE(SUM(np.qty), 0)::int                                   AS productos,
+          COUNT(DISTINCT n.cliente_id) FILTER (WHERE n.cliente_id IS NOT NULL)::int AS clientes
+        FROM notas n
+        LEFT JOIN (
+          SELECT nota_id, SUM(cantidad) AS qty
+          FROM nota_productos
+          GROUP BY nota_id
+        ) np ON np.nota_id = n.id
+        WHERE n.usuario_id = $1 AND n.estado <> 'CANCELADA'
+        GROUP BY DATE(n.created_at)
+        ORDER BY fecha DESC`,
+      [id]
+    );
+
+    const diasFmt = dias.map((d) => ({
+      fecha:     d.fecha,
+      notas:     d.notas,
+      vendido:   parseFloat(d.vendido),
+      maquinas:  d.maquinas,
+      cargas:    d.cargas,
+      productos: d.productos,
+      clientes:  d.clientes,
+    }));
+
+    const resumen = diasFmt.reduce(
+      (acc, d) => ({
+        dias_activos: acc.dias_activos + 1,
+        notas:        acc.notas + d.notas,
+        vendido:      acc.vendido + d.vendido,
+        cargas:       acc.cargas + d.cargas,
+        productos:    acc.productos + d.productos,
+      }),
+      { dias_activos: 0, notas: 0, vendido: 0, cargas: 0, productos: 0 }
+    );
+
+    res.json({ empleado: emp[0], resumen, dias: diasFmt });
+  } catch (err) {
+    console.error('getDesempeno error:', err);
+    res.status(500).json({ message: 'Error interno del servidor.' });
+  }
+};
+
 export const createEmpleado = async (req, res) => {
   const { nombre, password, rol, sucursal } = req.body;
 
