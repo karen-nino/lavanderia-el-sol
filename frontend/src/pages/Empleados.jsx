@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../lib/api';
 import { esAdmin as esAdminFn, esAdminMain as esAdminMainFn } from '../lib/roles';
@@ -15,22 +16,8 @@ const splitNombre = (full) => {
   return { nombre: n ?? '', apellido: resto.join(' ') };
 };
 
-const fmtMoneda = (n) =>
-  '$' + Number(n ?? 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-const fmtFecha = (iso) =>
-  new Date(iso).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
-
-function ResumenCard({ label, value }) {
-  return (
-    <div className="bg-light-blue/40 rounded-lg px-3 py-2.5 text-center">
-      <p className="text-lg font-bold text-dark-blue leading-tight">{value}</p>
-      <p className="text-xs text-gray-500 mt-0.5">{label}</p>
-    </div>
-  );
-}
-
 export default function Empleados() {
+  const navigate = useNavigate();
   const { usuario, sucursalActiva } = useAuth();
   const esAdmin     = esAdminFn(usuario?.rol);
   const esAdminMain = esAdminMainFn(usuario?.rol);
@@ -77,27 +64,8 @@ export default function Empleados() {
   // Modal info (mobile)
   const [infoEmpleado, setInfoEmpleado]     = useState(null);
 
-  // Modal desempeño
-  const [desempenoEmp,     setDesempenoEmp]     = useState(null);
-  const [desempeno,        setDesempeno]        = useState(null);
-  const [desempenoLoading, setDesempenoLoading] = useState(false);
-  const [desempenoError,   setDesempenoError]   = useState('');
-
-  const abrirDesempeno = async (emp) => {
-    setDesempenoEmp(emp);
-    setDesempeno(null);
-    setDesempenoError('');
-    setDesempenoLoading(true);
-    try {
-      const data = await api.get(`/usuarios/${emp.id}/desempeno`);
-      setDesempeno(data);
-    } catch (err) {
-      setDesempenoError(err.message);
-    } finally {
-      setDesempenoLoading(false);
-    }
-  };
-  const cerrarDesempeno = () => { setDesempenoEmp(null); setDesempeno(null); };
+  // Abre la página de desempeño del empleado.
+  const abrirDesempeno = (emp) => navigate(`/empleados/${emp.id}/desempeno`);
 
   useEffect(() => {
     api.get('/usuarios')
@@ -669,72 +637,6 @@ export default function Empleados() {
         </div>
       )}
 
-      {/* ── Modal: Información / desempeño ─────────────────── */}
-      {desempenoEmp && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
-            <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-gray-100 flex-shrink-0">
-              <div>
-                <h2 className="text-base font-semibold text-gray-900">Información de desempeño</h2>
-                <p className="text-sm text-gray-500">{desempenoEmp.nombre}</p>
-              </div>
-              <button onClick={cerrarDesempeno} className="text-gray-400 hover:text-gray-600">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            <div className="p-5 overflow-y-auto">
-              {desempenoLoading ? (
-                <div className="text-center text-gray-400 text-sm py-10">Cargando...</div>
-              ) : desempenoError ? (
-                <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">{desempenoError}</div>
-              ) : desempeno && desempeno.dias.length === 0 ? (
-                <p className="text-center text-gray-400 text-sm py-10">Este empleado aún no tiene actividad registrada.</p>
-              ) : desempeno ? (
-                <div className="space-y-5">
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    <ResumenCard label="Días activos" value={desempeno.resumen.dias_activos} />
-                    <ResumenCard label="Notas" value={desempeno.resumen.notas} />
-                    <ResumenCard label="Vendido" value={fmtMoneda(desempeno.resumen.vendido)} />
-                    <ResumenCard label="Cargas" value={desempeno.resumen.cargas} />
-                  </div>
-
-                  <div className="overflow-x-auto border border-gray-100 rounded-lg">
-                    <table className="min-w-full text-sm">
-                      <thead className="bg-gray-50 text-gray-500 text-xs uppercase">
-                        <tr>
-                          <th className="text-left px-3 py-2 font-medium">Fecha</th>
-                          <th className="text-right px-3 py-2 font-medium">Notas</th>
-                          <th className="text-right px-3 py-2 font-medium">Vendido</th>
-                          <th className="text-right px-3 py-2 font-medium">Máquinas</th>
-                          <th className="text-right px-3 py-2 font-medium">Cargas</th>
-                          <th className="text-right px-3 py-2 font-medium">Productos</th>
-                          <th className="text-right px-3 py-2 font-medium">Clientes</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-100">
-                        {desempeno.dias.map((d) => (
-                          <tr key={d.fecha} className="hover:bg-gray-50">
-                            <td className="px-3 py-2 text-gray-700 whitespace-nowrap">{fmtFecha(d.fecha)}</td>
-                            <td className="px-3 py-2 text-right">{d.notas}</td>
-                            <td className="px-3 py-2 text-right font-medium text-dark-blue">{fmtMoneda(d.vendido)}</td>
-                            <td className="px-3 py-2 text-right">{d.maquinas}</td>
-                            <td className="px-3 py-2 text-right">{d.cargas}</td>
-                            <td className="px-3 py-2 text-right">{d.productos}</td>
-                            <td className="px-3 py-2 text-right">{d.clientes}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              ) : null}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

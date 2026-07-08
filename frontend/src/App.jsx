@@ -16,6 +16,7 @@ import DetalleNota from './pages/DetalleNota';
 import Salidas from './pages/Salidas';
 import Ventas from './pages/Ventas';
 import Empleados from './pages/Empleados';
+import EmpleadoDesempeno from './pages/EmpleadoDesempeno';
 import Ajustes from './pages/Ajustes';
 
 export default function App() {
@@ -56,6 +57,14 @@ export default function App() {
               element={
                 <AdminRoute>
                   <Empleados />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="empleados/:id/desempeno"
+              element={
+                <AdminRoute>
+                  <EmpleadoDesempeno />
                 </AdminRoute>
               }
             />
