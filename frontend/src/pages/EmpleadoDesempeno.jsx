@@ -49,8 +49,8 @@ export default function EmpleadoDesempeno() {
             </svg>
           </button>
           <div>
-            <h1 className="text-xl font-bold text-gray-900">Información de desempeño</h1>
-            <p className="text-sm text-gray-500">{data?.empleado?.nombre ?? '—'}</p>
+            <h1 className="text-xl font-bold text-gray-900">{data?.empleado?.nombre ?? '—'}</h1>
+            <p className="text-sm text-gray-500">Información de desempeño</p>
           </div>
         </div>
       </div>
