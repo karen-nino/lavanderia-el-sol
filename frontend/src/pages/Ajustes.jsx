@@ -73,7 +73,7 @@ const SectionIcon = {
 
 const MOBILE_SECTIONS = [
   { id: 'perfil',  label: 'Mi Perfil',                 subtitle: 'Información de perfil',    icon: SectionIcon.perfil  },
-  { id: 'negocio', label: 'Perfil de Negocio',         subtitle: 'Información del negocio',  icon: SectionIcon.negocio },
+  { id: 'negocio', label: 'Sucursales',                subtitle: 'Información de sucursales', icon: SectionIcon.negocio },
   { id: 'maquinas', label: 'Máquinas',                  subtitle: 'Detalles de máquinas',      icon: SectionIcon.precios },
   { id: 'alertas', label: 'Alertas y Notificaciones',  subtitle: 'Ajustes de alertas', icon: SectionIcon.alertas },
 ];
@@ -123,7 +123,7 @@ function MobileSectionButton({ label, icon, onClick }) {
 }
 
 export default function Ajustes() {
-  const { usuario, updateUsuario } = useAuth();
+  const { usuario, updateUsuario, sucursalActiva } = useAuth();
   const [config,        setConfig]        = useState(null);
   const [loading,       setLoading]       = useState(true);
   const [saving,        setSaving]        = useState(false);
@@ -142,6 +142,12 @@ export default function Ajustes() {
   const [showPassword, setShowPassword] = useState(false);
   const logoInputRef = useRef(null);
 
+  // Sucursales: cada una con su nombre, dirección y teléfono editables.
+  // sucursalSel = slug de la sucursal que se está editando en el selector.
+  const [sucursales,     setSucursales]     = useState([]);
+  const [sucursalSel,    setSucursalSel]    = useState('');
+  const [savingSucursal, setSavingSucursal] = useState(null); // slug guardándose
+
   useEffect(() => {
     api.get('/ajustes')
       .then(data => {
@@ -151,6 +157,47 @@ export default function Ajustes() {
       .catch(e => setMensaje({ tipo: 'error', texto: e.message }))
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    api.get('/sucursales')
+      .then(data => {
+        const lista = (data ?? []).map(s => ({ ...s, telefono: formatTelefono(s.telefono ?? '') }));
+        setSucursales(lista);
+        // Arranca en la sucursal activa del admin, o en la primera.
+        setSucursalSel(prev => prev || sucursalActiva || lista[0]?.slug || '');
+      })
+      .catch(() => {});
+  }, [sucursalActiva]);
+
+  const handleSucursalChange = (slug, field, value) => {
+    const next = field === 'telefono' ? formatTelefono(value) : value;
+    setSucursales(prev => prev.map(s => s.slug === slug ? { ...s, [field]: next } : s));
+  };
+
+  const guardarSucursal = async (slug) => {
+    const s = sucursales.find(x => x.slug === slug);
+    if (!s) return;
+    if (!String(s.nombre ?? '').trim()) {
+      return setMensaje({ tipo: 'error', texto: 'El nombre de la sucursal no puede estar vacío.' });
+    }
+    setSavingSucursal(slug);
+    setMensaje(null);
+    try {
+      const updated = await api.patch(`/sucursales/${slug}`, {
+        nombre:    s.nombre,
+        direccion: s.direccion ?? '',
+        telefono:  s.telefono  ?? '',
+      });
+      setSucursales(prev => prev.map(x =>
+        x.slug === slug ? { ...updated, telefono: formatTelefono(updated.telefono ?? '') } : x
+      ));
+      setMensaje({ tipo: 'ok', texto: `Sucursal "${updated.nombre}" actualizada.` });
+    } catch (err) {
+      setMensaje({ tipo: 'error', texto: err.message });
+    } finally {
+      setSavingSucursal(null);
+    }
+  };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -226,8 +273,6 @@ export default function Ajustes() {
           tiempo_carga_jumbo:    Number(config.tiempo_carga_jumbo),
           tiempo_carga_secadora: Number(config.tiempo_carga_secadora),
           nombre_negocio:        config.nombre_negocio,
-          direccion:             config.direccion ?? '',
-          telefono:              config.telefono  ?? '',
           stock_minimo_global:   Number(config.stock_minimo_global),
         }),
       ]);
@@ -257,8 +302,6 @@ export default function Ajustes() {
         tiempo_carga_jumbo:    Number(config.tiempo_carga_jumbo),
         tiempo_carga_secadora: Number(config.tiempo_carga_secadora),
         nombre_negocio:        config.nombre_negocio,
-        direccion:             config.direccion ?? '',
-        telefono:              config.telefono  ?? '',
         stock_minimo_global:   Number(config.stock_minimo_global),
       });
       setConfig(updated);
@@ -311,6 +354,9 @@ export default function Ajustes() {
   }
 
   if (!config) return null;
+
+  // Sucursal actualmente seleccionada para editar en el selector.
+  const sucursalActual = sucursales.find(s => s.slug === sucursalSel) || null;
 
   // ── Desktop: secciones tipo card ──
   const seccionPerfilDesktop = (
@@ -494,8 +540,10 @@ export default function Ajustes() {
     </Section>
   );
 
-  const seccionNegocioDesktop = (
-    <Section titulo="Información de la sucursal">
+  const seccionSucursalesDesktop = (
+    <Section titulo="Información de sucursales">
+      {/* Datos globales del negocio (marca compartida) */}
+      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Negocio (global)</p>
       <Field label="Nombre del negocio">
         <input
           type="text"
@@ -503,31 +551,6 @@ export default function Ajustes() {
           required
           value={config.nombre_negocio ?? ''}
           onChange={handleChange}
-          className={INPUT_CLS}
-        />
-      </Field>
-
-      <Field label="Dirección">
-        <input
-          type="text"
-          name="direccion"
-          value={config.direccion ?? ''}
-          onChange={handleChange}
-          placeholder="Calle, número, colonia..."
-          className={INPUT_CLS}
-        />
-      </Field>
-
-      <Field label="Teléfono">
-        <input
-          type="tel"
-          name="telefono"
-          value={config.telefono ?? ''}
-          onChange={handleChange}
-          inputMode="numeric"
-          autoComplete="tel"
-          maxLength={12}
-          placeholder="33-1234-5678"
           className={INPUT_CLS}
         />
       </Field>
@@ -561,6 +584,72 @@ export default function Ajustes() {
             <p className="text-xs text-gray-400">JPG, PNG o WebP · Máx. 2 MB</p>
           </div>
         </div>
+      </div>
+
+      {/* Selector de sucursal a editar */}
+      <div className="border-t border-gray-100 pt-4 space-y-4">
+        <Field label="Sucursal a editar">
+          <select
+            value={sucursalSel}
+            onChange={(e) => setSucursalSel(e.target.value)}
+            className={`${INPUT_CLS} bg-white`}
+          >
+            {sucursales.map((s) => (
+              <option key={s.slug} value={s.slug}>{s.nombre}</option>
+            ))}
+          </select>
+        </Field>
+
+        {sucursalActual && (
+          <>
+            <Field label="Nombre de la sucursal">
+              <input
+                type="text"
+                value={sucursalActual.nombre ?? ''}
+                onChange={(e) => handleSucursalChange(sucursalActual.slug, 'nombre', e.target.value)}
+                className={INPUT_CLS}
+              />
+            </Field>
+            <Field label="Dirección">
+              <input
+                type="text"
+                value={sucursalActual.direccion ?? ''}
+                onChange={(e) => handleSucursalChange(sucursalActual.slug, 'direccion', e.target.value)}
+                placeholder="Calle, número, colonia..."
+                className={INPUT_CLS}
+              />
+            </Field>
+            <Field label="Teléfono">
+              <input
+                type="tel"
+                value={sucursalActual.telefono ?? ''}
+                onChange={(e) => handleSucursalChange(sucursalActual.slug, 'telefono', e.target.value)}
+                inputMode="numeric"
+                autoComplete="tel"
+                maxLength={12}
+                placeholder="33-1234-5678"
+                className={INPUT_CLS}
+              />
+            </Field>
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => guardarSucursal(sucursalActual.slug)}
+                disabled={savingSucursal === sucursalActual.slug}
+                className="flex items-center gap-2 px-4 py-2.5 bg-blue hover:opacity-90 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
+              >
+                {savingSucursal === sucursalActual.slug ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Guardando...
+                  </>
+                ) : (
+                  'Guardar sucursal'
+                )}
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </Section>
   );
@@ -640,66 +729,102 @@ export default function Ajustes() {
     </div>
   );
 
-  const seccionNegocioMobile = (
-    <div className="space-y-5">
-      <MobileField label="Nombre del Negocio">
-        <input
-          type="text"
-          name="nombre_negocio"
-          required
-          value={config.nombre_negocio ?? ''}
-          onChange={handleChange}
-          className={MOBILE_INPUT_CLS}
-        />
-      </MobileField>
+  const seccionSucursalesMobile = (
+    <div className="space-y-6">
+      {/* Datos globales del negocio (marca compartida) */}
+      <div className="space-y-5">
+        <p className="text-xs font-semibold text-grey uppercase tracking-wide">Negocio (global)</p>
+        <MobileField label="Nombre del Negocio">
+          <input
+            type="text"
+            name="nombre_negocio"
+            required
+            value={config.nombre_negocio ?? ''}
+            onChange={handleChange}
+            className={MOBILE_INPUT_CLS}
+          />
+        </MobileField>
 
-      <MobileField label="Dirección">
-        <input
-          type="text"
-          name="direccion"
-          value={config.direccion ?? ''}
-          onChange={handleChange}
-          placeholder="Calle, número, colonia..."
-          className={MOBILE_INPUT_CLS}
-        />
-      </MobileField>
-
-      <MobileField label="Teléfono">
-        <input
-          type="tel"
-          name="telefono"
-          value={config.telefono ?? ''}
-          onChange={handleChange}
-          inputMode="numeric"
-          autoComplete="tel"
-          maxLength={12}
-          placeholder="33-1234-5678"
-          className={MOBILE_INPUT_CLS}
-        />
-      </MobileField>
-
-      <MobileField label="Logo">
-        <div className="border border-grey/30 rounded-lg p-4 flex items-center gap-4">
-          <div className="w-20 h-20 rounded-lg border-2 border-dashed border-grey/40 bg-light-blue/20 flex items-center justify-center overflow-hidden flex-shrink-0">
-            {logoPreview ? (
-              <img src={logoPreview} alt="Logo" className="w-full h-full object-contain" />
-            ) : (
-              SectionIcon.imagePlaceholder
-            )}
+        <MobileField label="Logo">
+          <div className="border border-grey/30 rounded-lg p-4 flex items-center gap-4">
+            <div className="w-20 h-20 rounded-lg border-2 border-dashed border-grey/40 bg-light-blue/20 flex items-center justify-center overflow-hidden flex-shrink-0">
+              {logoPreview ? (
+                <img src={logoPreview} alt="Logo" className="w-full h-full object-contain" />
+              ) : (
+                SectionIcon.imagePlaceholder
+              )}
+            </div>
+            <div className="flex-1 space-y-2">
+              <button
+                type="button"
+                onClick={() => logoInputRef.current?.click()}
+                disabled={uploadingLogo}
+                className="px-4 py-2 border border-grey/40 rounded-lg text-sm text-dark-blue bg-white disabled:opacity-60"
+              >
+                {uploadingLogo ? 'Subiendo...' : 'Cambiar logo'}
+              </button>
+              <p className="text-xs text-grey">JPG, PNG o WebP Max. 2 MB</p>
+            </div>
           </div>
-          <div className="flex-1 space-y-2">
+        </MobileField>
+      </div>
+
+      {/* Selector de sucursal a editar */}
+      <div className="space-y-5 border-t border-light-blue/60 pt-5">
+        <MobileField label="Sucursal a editar">
+          <select
+            value={sucursalSel}
+            onChange={(e) => setSucursalSel(e.target.value)}
+            className={`${MOBILE_INPUT_CLS} bg-white`}
+          >
+            {sucursales.map((s) => (
+              <option key={s.slug} value={s.slug}>{s.nombre}</option>
+            ))}
+          </select>
+        </MobileField>
+
+        {sucursalActual && (
+          <>
+            <MobileField label="Nombre de la sucursal">
+              <input
+                type="text"
+                value={sucursalActual.nombre ?? ''}
+                onChange={(e) => handleSucursalChange(sucursalActual.slug, 'nombre', e.target.value)}
+                className={MOBILE_INPUT_CLS}
+              />
+            </MobileField>
+            <MobileField label="Dirección">
+              <input
+                type="text"
+                value={sucursalActual.direccion ?? ''}
+                onChange={(e) => handleSucursalChange(sucursalActual.slug, 'direccion', e.target.value)}
+                placeholder="Calle, número, colonia..."
+                className={MOBILE_INPUT_CLS}
+              />
+            </MobileField>
+            <MobileField label="Teléfono">
+              <input
+                type="tel"
+                value={sucursalActual.telefono ?? ''}
+                onChange={(e) => handleSucursalChange(sucursalActual.slug, 'telefono', e.target.value)}
+                inputMode="numeric"
+                autoComplete="tel"
+                maxLength={12}
+                placeholder="33-1234-5678"
+                className={MOBILE_INPUT_CLS}
+              />
+            </MobileField>
             <button
               type="button"
-              onClick={() => logoInputRef.current?.click()}
-              disabled={uploadingLogo}
-              className="px-4 py-2 border border-grey/40 rounded-lg text-sm text-dark-blue bg-white disabled:opacity-60"
+              onClick={() => guardarSucursal(sucursalActual.slug)}
+              disabled={savingSucursal === sucursalActual.slug}
+              className="w-full py-3.5 rounded-lg bg-blue text-white text-base font-medium disabled:opacity-60"
             >
-              {uploadingLogo ? 'Subiendo...' : 'Cambiar logo'}
+              {savingSucursal === sucursalActual.slug ? 'Guardando...' : 'Guardar sucursal'}
             </button>
-            <p className="text-xs text-grey">JPG, PNG o WebP Max. 2 MB</p>
-          </div>
-        </div>
-      </MobileField>
+          </>
+        )}
+      </div>
     </div>
   );
 
@@ -858,7 +983,7 @@ export default function Ajustes() {
 
   const mobileSectionContent = {
     perfil:  seccionPerfilMobile,
-    negocio: seccionNegocioMobile,
+    negocio: seccionSucursalesMobile,
     maquinas: seccionPreciosMobile,
     alertas: seccionAlertasMobile,
   };
@@ -978,7 +1103,7 @@ export default function Ajustes() {
 
         <div className="space-y-6">
           {seccionPreciosDesktop}
-          {seccionNegocioDesktop}
+          {seccionSucursalesDesktop}
           {seccionAlertasDesktop}
         </div>
 
