@@ -447,8 +447,10 @@ export default function Clientes() {
                   placeholder="Nombre" className={INPUT_CLS} />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Apellido</label>
-                <input name="apellido" value={form.apellido} onChange={handleChange}
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Apellido <span className="text-red-500">*</span>
+                </label>
+                <input name="apellido" required value={form.apellido} onChange={handleChange}
                   placeholder="Apellido" className={INPUT_CLS} />
               </div>
               <div>

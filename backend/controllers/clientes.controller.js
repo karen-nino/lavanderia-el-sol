@@ -46,6 +46,10 @@ export const createCliente = async (req, res) => {
     return res.status(400).json({ message: 'El nombre es requerido.' });
   }
 
+  if (!apellido || !String(apellido).trim()) {
+    return res.status(400).json({ message: 'El apellido es requerido.' });
+  }
+
   const errorTelefono = validarTelefono(telefono);
   if (errorTelefono) {
     return res.status(400).json({ message: errorTelefono });
