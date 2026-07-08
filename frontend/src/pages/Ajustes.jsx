@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { api } from '../lib/api';
 import { formatTelefono } from '../lib/telefono';
 import { useAuth } from '../context/AuthContext';
+import { esAdminMain as esAdminMainFn } from '../lib/roles';
 
 const INPUT_CLS =
   'w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent transition';
@@ -151,6 +152,10 @@ export default function Ajustes() {
   const [agregando,      setAgregando]      = useState(false);
   const [creando,        setCreando]        = useState(false);
   const [nuevaSucursal,  setNuevaSucursal]  = useState({ nombre: '', direccion: '', telefono: '' });
+  const [confirmarDesactivar, setConfirmarDesactivar] = useState(null); // sucursal a desactivar
+
+  // Solo el Admin Main puede desactivar/reactivar sucursales.
+  const esMain = esAdminMainFn(usuario?.rol);
 
   useEffect(() => {
     api.get('/ajustes')
@@ -251,6 +256,12 @@ export default function Ajustes() {
     } finally {
       setCambiandoActiva(null);
     }
+  };
+
+  const confirmarDesactivarSucursal = async () => {
+    if (!confirmarDesactivar) return;
+    await toggleActivaSucursal(confirmarDesactivar.slug, false);
+    setConfirmarDesactivar(null);
   };
 
   const handleChange = (e) => {
@@ -742,18 +753,22 @@ export default function Ajustes() {
               />
             </Field>
             <div className="flex items-center justify-between pt-1">
-              <button
-                type="button"
-                onClick={() => toggleActivaSucursal(sucursalActual.slug, !sucursalActual.activa)}
-                disabled={cambiandoActiva === sucursalActual.slug}
-                className={`text-sm font-medium disabled:opacity-60 ${
-                  sucursalActual.activa ? 'text-red hover:opacity-80' : 'text-green hover:opacity-80'
-                }`}
-              >
-                {cambiandoActiva === sucursalActual.slug
-                  ? 'Aplicando...'
-                  : sucursalActual.activa ? 'Desactivar sucursal' : 'Reactivar sucursal'}
-              </button>
+              {esMain ? (
+                <button
+                  type="button"
+                  onClick={() => sucursalActual.activa
+                    ? setConfirmarDesactivar(sucursalActual)
+                    : toggleActivaSucursal(sucursalActual.slug, true)}
+                  disabled={cambiandoActiva === sucursalActual.slug}
+                  className={`text-sm font-medium disabled:opacity-60 ${
+                    sucursalActual.activa ? 'text-red hover:opacity-80' : 'text-green hover:opacity-80'
+                  }`}
+                >
+                  {cambiandoActiva === sucursalActual.slug
+                    ? 'Aplicando...'
+                    : sucursalActual.activa ? 'Desactivar sucursal' : 'Reactivar sucursal'}
+                </button>
+              ) : <span />}
               <button
                 type="button"
                 onClick={() => guardarSucursal(sucursalActual.slug)}
@@ -998,20 +1013,24 @@ export default function Ajustes() {
             >
               {savingSucursal === sucursalActual.slug ? 'Guardando...' : 'Guardar sucursal'}
             </button>
-            <button
-              type="button"
-              onClick={() => toggleActivaSucursal(sucursalActual.slug, !sucursalActual.activa)}
-              disabled={cambiandoActiva === sucursalActual.slug}
-              className={`w-full py-3.5 rounded-lg text-base font-medium border disabled:opacity-60 ${
-                sucursalActual.activa
-                  ? 'border-red/40 text-red'
-                  : 'border-green/40 text-green'
-              }`}
-            >
-              {cambiandoActiva === sucursalActual.slug
-                ? 'Aplicando...'
-                : sucursalActual.activa ? 'Desactivar sucursal' : 'Reactivar sucursal'}
-            </button>
+            {esMain && (
+              <button
+                type="button"
+                onClick={() => sucursalActual.activa
+                  ? setConfirmarDesactivar(sucursalActual)
+                  : toggleActivaSucursal(sucursalActual.slug, true)}
+                disabled={cambiandoActiva === sucursalActual.slug}
+                className={`w-full py-3.5 rounded-lg text-base font-medium border disabled:opacity-60 ${
+                  sucursalActual.activa
+                    ? 'border-red/40 text-red'
+                    : 'border-green/40 text-green'
+                }`}
+              >
+                {cambiandoActiva === sucursalActual.slug
+                  ? 'Aplicando...'
+                  : sucursalActual.activa ? 'Desactivar sucursal' : 'Reactivar sucursal'}
+              </button>
+            )}
           </>
         )}
       </div>
@@ -1319,6 +1338,46 @@ export default function Ajustes() {
         </div>
         </div>
       </div>
+
+      {/* Confirmación para desactivar una sucursal (solo Admin Main) */}
+      {confirmarDesactivar && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm">
+            <div className="p-6">
+              <div className="flex items-center justify-center w-12 h-12 rounded-full bg-red-100 mx-auto mb-4">
+                <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              <h3 className="text-base font-semibold text-gray-900 text-center mb-1">Desactivar sucursal</h3>
+              <p className="text-sm text-gray-500 text-center mb-4">
+                ¿Seguro que quieres desactivar{' '}
+                <span className="font-medium text-gray-700">{confirmarDesactivar.nombre}</span>?
+                Dejará de aparecer en la operación, pero su historial (notas, caja y ventas) se conserva
+                y podrás reactivarla después.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setConfirmarDesactivar(null)}
+                  className="flex-1 border border-gray-300 text-gray-700 font-medium py-3.5 rounded-lg text-base hover:bg-gray-50 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmarDesactivarSucursal}
+                  disabled={cambiandoActiva === confirmarDesactivar.slug}
+                  className="flex-1 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
+                >
+                  {cambiandoActiva === confirmarDesactivar.slug ? 'Desactivando...' : 'Desactivar'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

@@ -10,3 +10,10 @@ export const requireAdmin = (req, res, next) => {
   }
   next();
 };
+
+export const requireAdminMain = (req, res, next) => {
+  if (!esAdminMain(req.user?.rol)) {
+    return res.status(403).json({ message: 'Solo el Admin Main puede realizar esta acción.' });
+  }
+  next();
+};
