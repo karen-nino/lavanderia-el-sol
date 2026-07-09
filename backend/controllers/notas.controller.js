@@ -168,6 +168,8 @@ export const createNota = async (req, res) => {
     tiempo_entrega,
     instrucciones,
     tamano,
+    tipo_tela,
+    tamano_edredon,
     ajuste = 0,
     cantidad_cargas = 1,
     precio_base,       // precio por carga en AUTOSERVICIO
@@ -194,8 +196,12 @@ export const createNota = async (req, res) => {
     if (!cliente_id) {
       return res.status(400).json({ message: 'cliente_id es requerido para notas Por Encargo.' });
     }
-    if (!tamano || !TAMANOS_VALIDOS.includes(String(tamano).toLowerCase())) {
-      return res.status(400).json({ message: 'tamano es requerido para Por Encargo (chico o grande).' });
+    // El "tamaño del encargo" (chico/grande) aplica a Ropa; los edredones usan
+    // su propio catálogo de tamaños (tamano_edredon) y no requieren este campo.
+    if (String(tipo_prenda).toUpperCase() !== 'EDREDON') {
+      if (!tamano || !TAMANOS_VALIDOS.includes(String(tamano).toLowerCase())) {
+        return res.status(400).json({ message: 'tamano es requerido para Por Encargo (chico o grande).' });
+      }
     }
   }
   if (tiempo_entrega && !TIEMPOS_ENTREGA_VALIDOS.includes(String(tiempo_entrega).toUpperCase())) {
@@ -260,8 +266,8 @@ export const createNota = async (req, res) => {
       `INSERT INTO notas
          (cliente_id, usuario_id, maquina_id, modalidad, tipo_prenda, estado, estado_pago, sucursal,
           peso_kg, precio_total, fecha_entrega, tiempo_entrega, instrucciones,
-          tamano, precio_base, ajuste, cantidad_cargas)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+          tamano, tipo_tela, tamano_edredon, precio_base, ajuste, cantidad_cargas)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
        RETURNING *`,
       [
         cliente_id   || null,
@@ -278,6 +284,8 @@ export const createNota = async (req, res) => {
         tiempo_entrega ? String(tiempo_entrega).toUpperCase() : null,
         instrucciones || null,
         tamano ? String(tamano).toLowerCase() : null,
+        tipo_tela ? String(tipo_tela).trim() : null,
+        tamano_edredon ? String(tamano_edredon).trim() : null,
         precioBaseNum,
         ajusteNum,
         cantidadCargas,
@@ -403,6 +411,8 @@ export const updateNota = async (req, res) => {
     instrucciones,
     tamano,
     tipo_prenda,
+    tipo_tela,
+    tamano_edredon,
     ajuste,
     cantidad_cargas,
     precio_base,
@@ -521,10 +531,12 @@ export const updateNota = async (req, res) => {
          instrucciones   = $7,
          tamano          = COALESCE($8, tamano),
          tipo_prenda     = COALESCE($9, tipo_prenda),
-         precio_base     = $10,
-         ajuste          = $11,
-         cantidad_cargas = $12,
-         precio_total    = $13
+         tipo_tela       = $10,
+         tamano_edredon  = $11,
+         precio_base     = $12,
+         ajuste          = $13,
+         cantidad_cargas = $14,
+         precio_total    = $15
        WHERE id = $1
        RETURNING *`,
       [
@@ -537,6 +549,8 @@ export const updateNota = async (req, res) => {
         instrucciones || null,
         tamano ? String(tamano).toLowerCase() : null,
         tipo_prenda ? String(tipo_prenda).toUpperCase() : null,
+        tipo_tela ? String(tipo_tela).trim() : null,
+        tamano_edredon ? String(tamano_edredon).trim() : null,
         precioBaseNum,
         ajusteNum,
         cantidadCargasNum,

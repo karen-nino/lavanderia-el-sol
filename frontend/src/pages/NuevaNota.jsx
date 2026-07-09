@@ -23,18 +23,9 @@ const TIPOS_PRENDA = [
 ];
 const PRENDA_LABEL = Object.fromEntries(TIPOS_PRENDA.map(t => [t.v, t.label]));
 
-const TIPOS_TELA = [
-  { v: 'MEZCLILLA', label: 'Mezclilla' },
-  { v: 'ALGODON',   label: 'Algodón'   },
-];
-const TELA_LABEL = Object.fromEntries(TIPOS_TELA.map(t => [t.v, t.label]));
-
-const TAMANOS_EDREDON = [
-  { v: 'INDIVIDUAL', label: 'Individual' },
-  { v: 'QUEEN',      label: 'Queen'      },
-  { v: 'KING',       label: 'King'       },
-];
-const TAMANO_EDREDON_LABEL = Object.fromEntries(TAMANOS_EDREDON.map(t => [t.v, t.label]));
+// Los tipos de tela y tamaños de edredón son catálogos editables por el admin
+// (Ajustes → Etiquetas de encargo). Se cargan desde el API; la nota guarda el
+// nombre de la etiqueta elegida como texto.
 
 const FORM_INIT = {
   maquina_id:      '',
@@ -87,6 +78,8 @@ export default function NuevaNota() {
   const esEdicion = Boolean(id);
   const [maquinas,          setMaquinas]          = useState([]);
   const [productosCatalogo, setProductosCatalogo] = useState([]);
+  const [telas,             setTelas]             = useState([]);
+  const [tamanosEdredon,    setTamanosEdredon]    = useState([]);
   const [precios,           setPrecios]           = useState({ mediana: 70, jumbo: 70, secadora: 45, edredonJumbo: 80 });
   const [loadingData,       setLoadingData]       = useState(true);
   const [form,              setForm]              = useState(FORM_INIT);
@@ -183,12 +176,16 @@ export default function NuevaNota() {
       api.get('/productos'),
       api.get('/ajustes'),
       api.get('/clientes'),
+      api.get('/etiquetas/tipos-tela'),
+      api.get('/etiquetas/tamanos-edredon'),
     ];
     promesas.push(esEdicion ? api.get(`/notas/${id}`) : api.get('/notas/next-folio'));
 
     Promise.all(promesas)
       .then((resultados) => {
-        const [m, prod, cfg, cli, extra] = resultados;
+        const [m, prod, cfg, cli, telasCat, tamanosCat, extra] = resultados;
+        setTelas(telasCat || []);
+        setTamanosEdredon(tamanosCat || []);
         const nota = esEdicion ? extra : null;
         setFolio(esEdicion ? (nota?.folio ?? '') : (extra?.folio ?? ''));
         // En edición, incluir la máquina actual aunque no esté "disponible"
@@ -230,6 +227,8 @@ export default function NuevaNota() {
             setEncargoForm({
               cliente_id:             nota.cliente_id     ? String(nota.cliente_id) : '',
               tipo_prenda:            prendaNota,
+              tipo_tela:              nota.tipo_tela      ?? '',
+              tamano_edredon:         nota.tamano_edredon ?? '',
               tamano:                 nota.tamano         ?? '',
               cantidad_cargas:        nota.cantidad_cargas != null ? String(nota.cantidad_cargas) : '1',
               ajuste:                 nota.ajuste         != null ? String(nota.ajuste)      : '0',
@@ -364,7 +363,9 @@ export default function NuevaNota() {
         tipo_prenda:     encargoForm.tipo_prenda || 'ROPA',
         estado:          estadoInicial,
         cliente_id:      Number(encargoForm.cliente_id),
-        tamano:          encargoForm.tamano,
+        tamano:          encargoForm.tamano || undefined,
+        tipo_tela:       encargoForm.tipo_prenda === 'ROPA'    ? (encargoForm.tipo_tela      || undefined) : undefined,
+        tamano_edredon:  encargoForm.tipo_prenda === 'EDREDON' ? (encargoForm.tamano_edredon || undefined) : undefined,
         cantidad_cargas: encargoCargas,
         precio_base:     precioCargaEncargo,
         ajuste:          encargoAjuste,
@@ -717,7 +718,7 @@ export default function NuevaNota() {
                         }`}
                       >
                         <span className={encargoForm.tipo_tela ? 'text-gray-900' : 'text-gray-400'}>
-                          {encargoForm.tipo_tela ? TELA_LABEL[encargoForm.tipo_tela] : 'Seleccionar'}
+                          {encargoForm.tipo_tela || 'Seleccionar'}
                         </span>
                         {encargoForm.tipo_tela && !telaOpen ? (
                           <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
@@ -735,28 +736,33 @@ export default function NuevaNota() {
 
                       {telaOpen && (
                         <div className="mt-2 bg-white border border-gray-200 rounded-lg shadow-md overflow-hidden">
-                          {TIPOS_TELA.map(opt => {
-                            const selected = encargoForm.tipo_tela === opt.v;
-                            return (
-                              <button
-                                key={opt.v}
-                                type="button"
-                                onClick={() => { setEncargoForm(f => ({ ...f, tipo_tela: opt.v })); setTelaOpen(false); }}
-                                className="w-full px-4 py-3.5 flex items-center justify-between text-left hover:bg-gray-50 border-b last:border-0 border-gray-100"
-                              >
-                                <span className="text-base text-gray-900">{opt.label}</span>
-                                <span className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
-                                  selected ? 'border-blue bg-blue' : 'border-gray-300'
-                                }`}>
-                                  {selected && (
-                                    <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                                    </svg>
-                                  )}
-                                </span>
-                              </button>
-                            );
-                          })}
+                          {telas.filter(t => t.activo || t.nombre === encargoForm.tipo_tela).length === 0 && (
+                            <p className="px-4 py-3.5 text-sm text-gray-400">No hay tipos de tela configurados.</p>
+                          )}
+                          {telas
+                            .filter(t => t.activo || t.nombre === encargoForm.tipo_tela)
+                            .map(opt => {
+                              const selected = encargoForm.tipo_tela === opt.nombre;
+                              return (
+                                <button
+                                  key={opt.id}
+                                  type="button"
+                                  onClick={() => { setEncargoForm(f => ({ ...f, tipo_tela: opt.nombre })); setTelaOpen(false); }}
+                                  className="w-full px-4 py-3.5 flex items-center justify-between text-left hover:bg-gray-50 border-b last:border-0 border-gray-100"
+                                >
+                                  <span className="text-base text-gray-900">{opt.nombre}</span>
+                                  <span className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
+                                    selected ? 'border-blue bg-blue' : 'border-gray-300'
+                                  }`}>
+                                    {selected && (
+                                      <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                      </svg>
+                                    )}
+                                  </span>
+                                </button>
+                              );
+                            })}
                         </div>
                       )}
                     </div>
@@ -765,26 +771,34 @@ export default function NuevaNota() {
 
                 {encargoForm.tipo_prenda === 'EDREDON' && (
                   <div className="space-y-4">
-                    <h2 className="text-base font-semibold text-gray-900">Tamaño del edredón</h2>
-                    <div className="grid grid-cols-3 gap-3">
-                      {TAMANOS_EDREDON.map(opt => {
-                        const selected = encargoForm.tamano_edredon === opt.v;
-                        return (
-                          <button
-                            key={opt.v}
-                            type="button"
-                            onClick={() => setEncargoForm(f => ({ ...f, tamano_edredon: opt.v }))}
-                            className={`py-8 border-2 rounded-xl font-semibold text-lg transition-colors ${
-                              selected
-                                ? 'border-blue bg-light-blue text-blue-700'
-                                : 'border-gray-300 bg-white text-gray-700 hover:border-blue-300'
-                            }`}
-                          >
-                            {opt.label}
-                          </button>
-                        );
-                      })}
-                    </div>
+                    <h2 className="text-base font-semibold text-gray-900">
+                      Tamaño del edredón <span className="font-normal text-gray-400">(opcional)</span>
+                    </h2>
+                    {tamanosEdredon.filter(t => t.activo || t.nombre === encargoForm.tamano_edredon).length === 0 ? (
+                      <p className="text-sm text-gray-400">No hay tamaños de edredón configurados.</p>
+                    ) : (
+                      <div className="grid grid-cols-3 gap-3">
+                        {tamanosEdredon
+                          .filter(t => t.activo || t.nombre === encargoForm.tamano_edredon)
+                          .map(opt => {
+                            const selected = encargoForm.tamano_edredon === opt.nombre;
+                            return (
+                              <button
+                                key={opt.id}
+                                type="button"
+                                onClick={() => setEncargoForm(f => ({ ...f, tamano_edredon: opt.nombre }))}
+                                className={`py-8 border-2 rounded-xl font-semibold text-lg transition-colors ${
+                                  selected
+                                    ? 'border-blue bg-light-blue text-blue-700'
+                                    : 'border-gray-300 bg-white text-gray-700 hover:border-blue-300'
+                                }`}
+                              >
+                                {opt.nombre}
+                              </button>
+                            );
+                          })}
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -1241,13 +1255,13 @@ export default function NuevaNota() {
                     {encargoForm.tipo_prenda === 'ROPA' && encargoForm.tipo_tela && (
                       <div className="flex justify-between">
                         <span>Tela</span>
-                        <span className="font-medium">{TELA_LABEL[encargoForm.tipo_tela]}</span>
+                        <span className="font-medium">{encargoForm.tipo_tela}</span>
                       </div>
                     )}
                     {encargoForm.tipo_prenda === 'EDREDON' ? (
                       <div className="flex justify-between">
                         <span>Tamaño</span>
-                        <span className="font-medium">{TAMANO_EDREDON_LABEL[encargoForm.tamano_edredon] ?? '—'}</span>
+                        <span className="font-medium">{encargoForm.tamano_edredon || '—'}</span>
                       </div>
                     ) : (
                       <div className="flex justify-between">

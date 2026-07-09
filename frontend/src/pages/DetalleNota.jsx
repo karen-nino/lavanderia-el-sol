@@ -364,6 +364,16 @@ export default function DetalleNota() {
             </span>
             {nota.tamano && <span className="ml-2 text-xs text-gray-500 capitalize">{nota.tamano}</span>}
           </FilaDetalle>
+          {nota.tipo_tela && (
+            <FilaDetalle label="Tela">
+              <span className="text-sm font-medium text-gray-800">{nota.tipo_tela}</span>
+            </FilaDetalle>
+          )}
+          {nota.tamano_edredon && (
+            <FilaDetalle label="Tamaño del edredón">
+              <span className="text-sm font-medium text-gray-800">{nota.tamano_edredon}</span>
+            </FilaDetalle>
+          )}
           <FilaDetalle label="Estado de pago">
             {badgePago
               ? <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${badgePago.cls}`}>{badgePago.label}</span>

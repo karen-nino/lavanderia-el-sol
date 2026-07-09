@@ -37,6 +37,12 @@ const SectionIcon = {
         d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
     </svg>
   ),
+  etiquetas: (
+    <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+        d="M7 7h.01M7 3h5a1.99 1.99 0 011.414.586l7 7a2 2 0 010 2.828l-5 5a2 2 0 01-2.828 0l-7-7A1.99 1.99 0 013 8V3a2 2 0 012-2z" />
+    </svg>
+  ),
   gear: (
     <svg className="w-7 h-7 text-grey" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -77,6 +83,7 @@ const MOBILE_SECTIONS = [
   { id: 'negocio', label: 'Sucursales',                subtitle: 'Información de sucursales', icon: SectionIcon.negocio },
   { id: 'maquinas', label: 'Máquinas',                  subtitle: 'Detalles de máquinas',      icon: SectionIcon.precios },
   { id: 'alertas', label: 'Alertas y Notificaciones',  subtitle: 'Ajustes de alertas', icon: SectionIcon.alertas },
+  { id: 'etiquetas', label: 'Etiquetas de encargo',    subtitle: 'Tipos de tela y tamaños de edredón', icon: SectionIcon.etiquetas },
 ];
 
 function Section({ titulo, children }) {
@@ -153,6 +160,133 @@ function MobileSectionButton({ label, icon, onClick }) {
       <span className="text-blue flex items-center justify-center flex-shrink-0">{icon}</span>
       <span className="text-base font-medium text-dark-blue">{label}</span>
     </button>
+  );
+}
+
+// Catálogo editable de etiquetas internas (tipos de tela, tamaños de edredón).
+// Cada cambio se guarda de inmediato contra su endpoint; no depende del botón
+// "Guardar" general de Ajustes. Las etiquetas se desactivan (no se borran) para
+// que las notas viejas conserven su valor.
+function CatalogoEtiquetas({ endpoint, singular, inputCls, onMensaje }) {
+  const [items,      setItems]      = useState([]);
+  const [nuevo,      setNuevo]      = useState('');
+  const [saving,     setSaving]     = useState(false);
+  const [editId,     setEditId]     = useState(null);
+  const [editNombre, setEditNombre] = useState('');
+
+  const ordenar = (a, b) =>
+    (b.activo === a.activo ? 0 : b.activo ? 1 : -1) || a.nombre.localeCompare(b.nombre);
+
+  useEffect(() => {
+    api.get(endpoint).then(data => setItems((data ?? []).slice().sort(ordenar))).catch(() => {});
+  }, [endpoint]);
+
+  const agregar = async () => {
+    const nombre = nuevo.trim();
+    if (!nombre) return;
+    setSaving(true);
+    try {
+      const creado = await api.post(endpoint, { nombre });
+      setItems(prev => [...prev, creado].sort(ordenar));
+      setNuevo('');
+      onMensaje?.({ tipo: 'ok', texto: `${singular} "${creado.nombre}" agregada.` });
+    } catch (err) {
+      onMensaje?.({ tipo: 'error', texto: err.message });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const guardarNombre = async (id) => {
+    const nombre = editNombre.trim();
+    if (!nombre) return;
+    try {
+      const upd = await api.put(`${endpoint}/${id}`, { nombre });
+      setItems(prev => prev.map(x => (x.id === id ? upd : x)).sort(ordenar));
+      setEditId(null);
+      onMensaje?.({ tipo: 'ok', texto: 'Etiqueta actualizada.' });
+    } catch (err) {
+      onMensaje?.({ tipo: 'error', texto: err.message });
+    }
+  };
+
+  const toggleActivo = async (item) => {
+    try {
+      const upd = await api.put(`${endpoint}/${item.id}`, { activo: !item.activo });
+      setItems(prev => prev.map(x => (x.id === item.id ? upd : x)).sort(ordenar));
+    } catch (err) {
+      onMensaje?.({ tipo: 'error', texto: err.message });
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex gap-2">
+        <input
+          type="text"
+          value={nuevo}
+          onChange={(e) => setNuevo(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); agregar(); } }}
+          placeholder={`Agregar ${singular.toLowerCase()}`}
+          className={inputCls}
+        />
+        <button
+          type="button"
+          onClick={agregar}
+          disabled={saving || !nuevo.trim()}
+          className="px-4 py-2.5 rounded-lg bg-blue text-white text-sm font-medium disabled:opacity-50 flex-shrink-0"
+        >
+          Agregar
+        </button>
+      </div>
+
+      {items.length === 0 ? (
+        <p className="text-sm text-gray-400">Aún no hay etiquetas.</p>
+      ) : (
+        <ul className="divide-y divide-gray-100 border border-gray-100 rounded-lg overflow-hidden">
+          {items.map(item => (
+            <li key={item.id} className="flex items-center gap-2 px-3 py-2.5 bg-white">
+              {editId === item.id ? (
+                <>
+                  <input
+                    type="text"
+                    value={editNombre}
+                    onChange={(e) => setEditNombre(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); guardarNombre(item.id); } }}
+                    className={`${inputCls} flex-1`}
+                    autoFocus
+                  />
+                  <button type="button" onClick={() => guardarNombre(item.id)}
+                    className="text-sm font-medium text-blue px-2">Guardar</button>
+                  <button type="button" onClick={() => setEditId(null)}
+                    className="text-sm text-gray-400 px-2">Cancelar</button>
+                </>
+              ) : (
+                <>
+                  <span className={`flex-1 text-sm ${item.activo ? 'text-gray-800' : 'text-gray-400 line-through'}`}>
+                    {item.nombre}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => { setEditId(item.id); setEditNombre(item.nombre); }}
+                    className="text-sm text-gray-500 hover:text-blue px-2"
+                  >
+                    Editar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => toggleActivo(item)}
+                    className={`text-sm px-2 ${item.activo ? 'text-gray-500 hover:text-red-600' : 'text-blue'}`}
+                  >
+                    {item.activo ? 'Desactivar' : 'Activar'}
+                  </button>
+                </>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 
@@ -855,6 +989,19 @@ export default function Ajustes() {
     </Section>
   );
 
+  const seccionEtiquetasDesktop = (
+    <Section titulo="Etiquetas de encargo">
+      <Field label="Tipos de tela" hint="Se ofrecen al crear un encargo de Ropa. Solo son etiquetas internas; no cambian el precio.">
+        <CatalogoEtiquetas endpoint="/etiquetas/tipos-tela" singular="Tela" inputCls={INPUT_CLS} onMensaje={setMensaje} />
+      </Field>
+      <div className="border-t border-gray-100 pt-4">
+        <Field label="Tamaños de edredón" hint="Se ofrecen al crear un encargo de Edredón. Solo son etiquetas internas.">
+          <CatalogoEtiquetas endpoint="/etiquetas/tamanos-edredon" singular="Tamaño" inputCls={INPUT_CLS} onMensaje={setMensaje} />
+        </Field>
+      </div>
+    </Section>
+  );
+
   // ── Mobile: contenido por sección ──
   const seccionPerfilMobile = (
     <div className="space-y-5">
@@ -1245,11 +1392,32 @@ export default function Ajustes() {
     </div>
   );
 
+  const seccionEtiquetasMobile = (
+    <div className="space-y-6">
+      <MobileField
+        label="Tipos de tela"
+        hint="Se ofrecen al crear un encargo de Ropa. Solo son etiquetas internas; no cambian el precio."
+      >
+        <CatalogoEtiquetas endpoint="/etiquetas/tipos-tela" singular="Tela" inputCls={MOBILE_INPUT_CLS} onMensaje={setMensaje} />
+      </MobileField>
+
+      <div className="border-t border-light-blue/60 pt-5">
+        <MobileField
+          label="Tamaños de edredón"
+          hint="Se ofrecen al crear un encargo de Edredón. Solo son etiquetas internas."
+        >
+          <CatalogoEtiquetas endpoint="/etiquetas/tamanos-edredon" singular="Tamaño" inputCls={MOBILE_INPUT_CLS} onMensaje={setMensaje} />
+        </MobileField>
+      </div>
+    </div>
+  );
+
   const mobileSectionContent = {
     perfil:  seccionPerfilMobile,
     negocio: seccionSucursalesMobile,
     maquinas: seccionPreciosMobile,
     alertas: seccionAlertasMobile,
+    etiquetas: seccionEtiquetasMobile,
   };
 
   const mensajeBanner = mensaje && (
@@ -1312,6 +1480,7 @@ export default function Ajustes() {
             <div className="px-6 py-6 space-y-6">
             {mobileSectionContent[activeSection.id]}
 
+            {activeSection.id !== 'etiquetas' && (
             <div className="grid grid-cols-2 gap-3 pt-2">
               <button
                 type="button"
@@ -1335,6 +1504,7 @@ export default function Ajustes() {
                 )}
               </button>
             </div>
+            )}
             {mensajeBanner}
             </div>
           </form>
@@ -1369,6 +1539,7 @@ export default function Ajustes() {
           {seccionPreciosDesktop}
           {seccionSucursalesDesktop}
           {seccionAlertasDesktop}
+          {seccionEtiquetasDesktop}
         </div>
 
         <div className="space-y-3">
