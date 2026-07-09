@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../lib/api';
+import { useAuth } from '../context/AuthContext';
+import { esAdmin } from '../lib/roles';
 import KpiCard from '../components/KpiCard';
 import SalesCard from '../components/SalesCard';
 import CashCutCard from '../components/CashCutCard';
@@ -45,6 +47,10 @@ function esDeHoy(fecha, refMs) {
 }
 
 export default function Dashboard() {
+  const { usuario } = useAuth();
+  // La página Ventas es solo para admins; para empleados la tarjeta "Ingresado
+  // hoy" se muestra sin enlace.
+  const ventasLink = esAdmin(usuario?.rol) ? '/ventas' : undefined;
   const [notas, setNotas]       = useState([]);
   const [maquinas, setMaquinas] = useState([]);
   const [ventas, setVentas]     = useState(null);
@@ -138,7 +144,7 @@ export default function Dashboard() {
         {/* En móvil "Ingresado hoy" va aquí arriba; en desktop vive en la
             columna izquierda bajo el título "Ventas" (ver más abajo). */}
         <div className="md:hidden">
-          <SalesCard total={ventasHoy} label="Ingresado hoy" />
+          <SalesCard total={ventasHoy} label="Ingresado hoy" to={ventasLink} />
         </div>
 
         {/* KPIs: 2x2 en mobile, 4 columnas en tablet */}
@@ -187,7 +193,7 @@ export default function Dashboard() {
           {/* Ventas — solo desktop; en móvil ya se muestra arriba en "Hoy" */}
           <div className="hidden md:block space-y-4">
             <p className="text-section text-grey">Ventas</p>
-            <SalesCard total={ventasHoy} label="Ingresado hoy" />
+            <SalesCard total={ventasHoy} label="Ingresado hoy" to={ventasLink} />
           </div>
 
           {/* Corte de caja */}
