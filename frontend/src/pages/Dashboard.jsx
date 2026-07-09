@@ -157,6 +157,7 @@ export default function Dashboard() {
             value={notasPagadas}
             color="green"
             icon={KpiIcon.paid}
+            to="/notas"
           />
           <KpiCard
             label="Notas"
@@ -164,6 +165,7 @@ export default function Dashboard() {
             value={notasEnEspera}
             color="red"
             icon={KpiIcon.waiting}
+            to="/notas?estado=EN_ESPERA"
           />
           <KpiCard
             label="Notas"
@@ -171,6 +173,7 @@ export default function Dashboard() {
             value={paraEntregar}
             color="bronce"
             icon={KpiIcon.deliver}
+            to="/notas?estado=POR_ENTREGAR"
           />
         </div>
       </div>

@@ -1,14 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../lib/api';
 
-const ESTADOS = ['TODOS', 'EN_ESPERA', 'EN_PROCESO', 'POR_PROCESAR', 'LISTA', 'FINALIZADA', 'PENDIENTE', 'CANCELADA'];
+const ESTADOS = ['TODOS', 'EN_ESPERA', 'EN_PROCESO', 'POR_PROCESAR', 'POR_ENTREGAR', 'FINALIZADA', 'PENDIENTE', 'CANCELADA'];
+
+// Estados que se consideran "Por Entregar": listas sin entregar y pagadas sin
+// entregar. Coincide con el conteo del KPI del Dashboard.
+const ESTADOS_POR_ENTREGAR = ['LISTA', 'PAGADA'];
 
 const FILTRO_LABEL = {
-  TODOS:      'Todos',
-  PENDIENTE:  'Pagos Pendientes',
-  FINALIZADA: 'Finalizadas',
-  CANCELADA:  'Canceladas',
+  TODOS:        'Todos',
+  POR_ENTREGAR: 'Por Entregar',
+  PENDIENTE:    'Pagos Pendientes',
+  FINALIZADA:   'Finalizadas',
+  CANCELADA:    'Canceladas',
 };
 
 const RANGOS_FECHA = [
@@ -90,9 +95,16 @@ function fmtCliente(n) {
 
 export default function Notas() {
   const navigate                              = useNavigate();
+  const [searchParams]                        = useSearchParams();
+
+  // Filtro inicial desde la URL (?estado=EN_ESPERA), p. ej. al entrar desde un
+  // KPI del Dashboard. Solo se acepta si es un estado válido.
+  const estadoParam = (searchParams.get('estado') || '').toUpperCase();
 
   const [notas,             setNotas]             = useState([]);
-  const [filtro,            setFiltro]            = useState('TODOS');
+  const [filtro,            setFiltro]            = useState(
+    ESTADOS.includes(estadoParam) ? estadoParam : 'TODOS'
+  );
   const [rangoFecha,        setRangoFecha]        = useState('TODAS');
   const [busqueda,          setBusqueda]          = useState('');
   const [loading,           setLoading]           = useState(true);
@@ -131,6 +143,8 @@ export default function Notas() {
   const filtradas = notas.filter(n => {
     if (filtro === 'PENDIENTE') {
       if (n.estado_pago !== 'PENDIENTE') return false;
+    } else if (filtro === 'POR_ENTREGAR') {
+      if (!ESTADOS_POR_ENTREGAR.includes(n.estado)) return false;
     } else if (filtro !== 'TODOS' && n.estado !== filtro) {
       return false;
     }
