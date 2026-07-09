@@ -23,6 +23,12 @@ const TIPOS_PRENDA = [
 ];
 const PRENDA_LABEL = Object.fromEntries(TIPOS_PRENDA.map(t => [t.v, t.label]));
 
+const TIPOS_TELA = [
+  { v: 'MEZCLILLA', label: 'Mezclilla' },
+  { v: 'ALGODON',   label: 'Algodón'   },
+];
+const TELA_LABEL = Object.fromEntries(TIPOS_TELA.map(t => [t.v, t.label]));
+
 const FORM_INIT = {
   maquina_id:      '',
   cantidad_cargas: '1',
@@ -39,6 +45,7 @@ const TAMANO_LABEL = Object.fromEntries(TAMANOS.map(t => [t.v, t.label]));
 const ENCARGO_INIT = {
   cliente_id:             '',
   tipo_prenda:            '',
+  tipo_tela:              '',
   tamano:                 '',
   cantidad_cargas:        '1',
   ajuste:                 '0',
@@ -82,6 +89,7 @@ export default function NuevaNota() {
   const [tipoOpen,          setTipoOpen]          = useState(false);
   const [tipoPrenda,        setTipoPrenda]        = useState('');
   const [prendaOpen,        setPrendaOpen]        = useState(false);
+  const [telaOpen,          setTelaOpen]          = useState(false);
   const [maquinaOpen,       setMaquinaOpen]       = useState(false);
   const [maquinaEncargoOpen, setMaquinaEncargoOpen] = useState(false);
   const [encargoStep,       setEncargoStep]       = useState(1);
@@ -655,6 +663,7 @@ export default function NuevaNota() {
                           type="button"
                           onClick={() => setEncargoForm(f => {
                             const next = { ...f, tipo_prenda: opt.v };
+                            if (opt.v !== 'ROPA') { next.tipo_tela = ''; setTelaOpen(false); }
                             if (opt.v === 'EDREDON' && f.maquina_id) {
                               const m = maquinas.find(x => String(x.id) === String(f.maquina_id));
                               if (m && m.tipo !== 'lavadora_jumbo') {
@@ -676,6 +685,68 @@ export default function NuevaNota() {
                     })}
                   </div>
                 </div>
+
+                {encargoForm.tipo_prenda === 'ROPA' && (
+                  <div className="space-y-4">
+                    <h2 className="text-base font-semibold text-gray-900">Tipo de tela</h2>
+                    <div>
+                      <button
+                        type="button"
+                        onClick={() => setTelaOpen(o => !o)}
+                        className={`w-full px-4 py-3.5 border rounded-lg bg-white text-left flex items-center justify-between transition-colors ${
+                          telaOpen
+                            ? 'border-blue-500 ring-1 ring-blue-500'
+                            : encargoForm.tipo_tela
+                              ? 'border-green-600'
+                              : 'border-gray-300 hover:border-gray-400'
+                        }`}
+                      >
+                        <span className={encargoForm.tipo_tela ? 'text-gray-900' : 'text-gray-400'}>
+                          {encargoForm.tipo_tela ? TELA_LABEL[encargoForm.tipo_tela] : 'Seleccionar'}
+                        </span>
+                        {encargoForm.tipo_tela && !telaOpen ? (
+                          <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                          </svg>
+                        ) : (
+                          <svg
+                            className={`w-5 h-5 text-gray-500 transition-transform ${telaOpen ? 'rotate-180' : ''}`}
+                            fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                        )}
+                      </button>
+
+                      {telaOpen && (
+                        <div className="mt-2 bg-white border border-gray-200 rounded-lg shadow-md overflow-hidden">
+                          {TIPOS_TELA.map(opt => {
+                            const selected = encargoForm.tipo_tela === opt.v;
+                            return (
+                              <button
+                                key={opt.v}
+                                type="button"
+                                onClick={() => { setEncargoForm(f => ({ ...f, tipo_tela: opt.v })); setTelaOpen(false); }}
+                                className="w-full px-4 py-3.5 flex items-center justify-between text-left hover:bg-gray-50 border-b last:border-0 border-gray-100"
+                              >
+                                <span className="text-base text-gray-900">{opt.label}</span>
+                                <span className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
+                                  selected ? 'border-blue bg-blue' : 'border-gray-300'
+                                }`}>
+                                  {selected && (
+                                    <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                    </svg>
+                                  )}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 <div className="space-y-4">
                   <h2 className="text-base font-semibold text-gray-900">Tamaño del encargo</h2>
