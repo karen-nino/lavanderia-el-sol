@@ -149,6 +149,7 @@ export default function Dashboard() {
             value={enUso}
             color="blue"
             icon={KpiIcon.machine}
+            to="/maquinas"
           />
           <KpiCard
             label="Notas"
