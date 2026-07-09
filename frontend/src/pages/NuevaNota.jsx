@@ -701,7 +701,9 @@ export default function NuevaNota() {
 
                 {encargoForm.tipo_prenda === 'ROPA' && (
                   <div className="space-y-4">
-                    <h2 className="text-base font-semibold text-gray-900">Tipo de tela</h2>
+                    <h2 className="text-base font-semibold text-gray-900">
+                      Tipo de tela <span className="font-normal text-gray-400">(opcional)</span>
+                    </h2>
                     <div>
                       <button
                         type="button"
