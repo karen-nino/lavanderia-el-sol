@@ -1238,10 +1238,23 @@ export default function NuevaNota() {
                       <span>Prenda</span>
                       <span className="font-medium">{PRENDA_LABEL[encargoForm.tipo_prenda] ?? '—'}</span>
                     </div>
-                    <div className="flex justify-between">
-                      <span>Tamaño</span>
-                      <span className="font-medium">{TAMANO_LABEL[encargoForm.tamano] ?? '—'}</span>
-                    </div>
+                    {encargoForm.tipo_prenda === 'ROPA' && encargoForm.tipo_tela && (
+                      <div className="flex justify-between">
+                        <span>Tela</span>
+                        <span className="font-medium">{TELA_LABEL[encargoForm.tipo_tela]}</span>
+                      </div>
+                    )}
+                    {encargoForm.tipo_prenda === 'EDREDON' ? (
+                      <div className="flex justify-between">
+                        <span>Tamaño</span>
+                        <span className="font-medium">{TAMANO_EDREDON_LABEL[encargoForm.tamano_edredon] ?? '—'}</span>
+                      </div>
+                    ) : (
+                      <div className="flex justify-between">
+                        <span>Tamaño</span>
+                        <span className="font-medium">{TAMANO_LABEL[encargoForm.tamano] ?? '—'}</span>
+                      </div>
+                    )}
                     <div className="flex justify-between">
                       <span>Pago Anticipado</span>
                       <span className="font-medium">
