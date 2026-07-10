@@ -47,9 +47,9 @@ export const updateInsumo = async (req, res) => {
            unidad          = COALESCE($3, unidad),
            stock_minimo    = COALESCE($4, stock_minimo),
            precio_unitario = COALESCE($5, precio_unitario)
-       WHERE id = $6
+       WHERE id = $6 AND sucursal = $7
        RETURNING *`,
-      [nombre, descripcion, unidad, stock_minimo, precio_unitario, id]
+      [nombre, descripcion, unidad, stock_minimo, precio_unitario, id, req.sucursal]
     );
     if (rows.length === 0) {
       return res.status(404).json({ message: 'Insumo no encontrado.' });
@@ -78,9 +78,9 @@ export const putInsumo = async (req, res) => {
            stock_actual    = $4,
            stock_minimo    = $5,
            precio_unitario = $6
-       WHERE id = $7
+       WHERE id = $7 AND sucursal = $8
        RETURNING *`,
-      [nombre, categoria || null, unidad, stock_actual ?? 0, stock_minimo ?? 0, precio_unitario ?? null, id]
+      [nombre, categoria || null, unidad, stock_actual ?? 0, stock_minimo ?? 0, precio_unitario ?? null, id, req.sucursal]
     );
     if (rows.length === 0) {
       return res.status(404).json({ message: 'Artículo no encontrado.' });
@@ -98,7 +98,10 @@ export const eliminarInsumo = async (req, res) => {
   }
   const { id } = req.params;
   try {
-    const { rowCount } = await pool.query('DELETE FROM insumos WHERE id = $1', [id]);
+    const { rowCount } = await pool.query(
+      'DELETE FROM insumos WHERE id = $1 AND sucursal = $2',
+      [id, req.sucursal]
+    );
     if (rowCount === 0) {
       return res.status(404).json({ message: 'Artículo no encontrado.' });
     }
@@ -129,8 +132,8 @@ export const registrarMovimiento = async (req, res) => {
 
     // Bloquear fila para lectura consistente
     const { rows: insumoRows } = await client.query(
-      'SELECT stock_actual FROM insumos WHERE id = $1 FOR UPDATE',
-      [id]
+      'SELECT stock_actual FROM insumos WHERE id = $1 AND sucursal = $2 FOR UPDATE',
+      [id, req.sucursal]
     );
     if (insumoRows.length === 0) {
       await client.query('ROLLBACK');

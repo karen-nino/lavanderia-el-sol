@@ -26,8 +26,8 @@ export const getClienteById = async (req, res) => {
   const { id } = req.params;
   try {
     const { rows } = await pool.query(
-      'SELECT * FROM clientes WHERE id = $1 AND activo = TRUE',
-      [id]
+      'SELECT * FROM clientes WHERE id = $1 AND activo = TRUE AND sucursal = $2',
+      [id, req.sucursal]
     );
     if (rows.length === 0) {
       return res.status(404).json({ message: 'Cliente no encontrado.' });
@@ -73,6 +73,16 @@ export const deleteCliente = async (req, res) => {
   const { id } = req.params;
 
   try {
+    // Validar pertenencia antes de revisar notas, para no revelar
+    // la existencia de clientes de otras sucursales.
+    const { rows: cli } = await pool.query(
+      'SELECT id FROM clientes WHERE id = $1 AND sucursal = $2',
+      [id, req.sucursal]
+    );
+    if (cli.length === 0) {
+      return res.status(404).json({ message: 'Cliente no encontrado.' });
+    }
+
     // Verificar notas activas
     const { rows: activas } = await pool.query(
       `SELECT id FROM notas
@@ -85,8 +95,8 @@ export const deleteCliente = async (req, res) => {
     }
 
     const { rows } = await pool.query(
-      'DELETE FROM clientes WHERE id = $1 RETURNING id',
-      [id]
+      'DELETE FROM clientes WHERE id = $1 AND sucursal = $2 RETURNING id',
+      [id, req.sucursal]
     );
     if (rows.length === 0) {
       return res.status(404).json({ message: 'Cliente no encontrado.' });
@@ -118,9 +128,9 @@ export const updateCliente = async (req, res) => {
            telefono = COALESCE($3, telefono),
            notas    = COALESCE($4, notas),
            activo   = COALESCE($5, activo)
-       WHERE id = $6
+       WHERE id = $6 AND sucursal = $7
        RETURNING *`,
-      [nombre, apellido, telefono, notas, activo, id]
+      [nombre, apellido, telefono, notas, activo, id, req.sucursal]
     );
     if (rows.length === 0) {
       return res.status(404).json({ message: 'Cliente no encontrado.' });

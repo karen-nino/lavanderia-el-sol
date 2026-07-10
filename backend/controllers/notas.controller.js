@@ -44,6 +44,16 @@ async function promoverNotasPorProcesar() {
   );
 }
 
+// Verifica que un registro exista y pertenezca a la sucursal indicada.
+// Solo se llama con nombres de tabla constantes (clientes / maquinas).
+async function perteneceASucursal(tabla, id, sucursal) {
+  const { rows } = await pool.query(
+    `SELECT 1 FROM ${tabla} WHERE id = $1 AND sucursal = $2`,
+    [id, sucursal]
+  );
+  return rows.length > 0;
+}
+
 function generarFolio(id, fecha) {
   const d = new Date(fecha);
   const yy = String(d.getFullYear()).slice(-2);
@@ -112,8 +122,8 @@ export const getNotaById = async (req, res) => {
        LEFT JOIN clientes  c ON c.id = n.cliente_id
        JOIN      usuarios  u ON u.id = n.usuario_id
        LEFT JOIN maquinas  m ON m.id = n.maquina_id
-       WHERE n.id = $1`,
-      [id]
+       WHERE n.id = $1 AND n.sucursal = $2`,
+      [id, req.sucursal]
     );
     if (rows.length === 0) {
       return res.status(404).json({ message: 'Nota no encontrada.' });
@@ -217,6 +227,14 @@ export const createNota = async (req, res) => {
   // Estado inicial: EN_PROCESO por defecto; EN_ESPERA si así se indica.
   const estadoInicial = estado || 'EN_PROCESO';
 
+  // Los IDs referenciados deben pertenecer a la sucursal activa.
+  if (cliente_id && !(await perteneceASucursal('clientes', cliente_id, req.sucursal))) {
+    return res.status(400).json({ message: 'cliente_id no existe.' });
+  }
+  if (maquina_id && !(await perteneceASucursal('maquinas', maquina_id, req.sucursal))) {
+    return res.status(400).json({ message: 'maquina_id no existe.' });
+  }
+
   const ajusteNum      = Number(ajuste)         || 0;
   const cantidadCargas = Number(cantidad_cargas) || 1;
 
@@ -302,8 +320,8 @@ export const createNota = async (req, res) => {
         if (!insumo_id || !cantidad || cantidad <= 0) continue;
 
         const { rows: stockRows } = await client.query(
-          'SELECT stock_actual FROM insumos WHERE id = $1 FOR UPDATE',
-          [insumo_id]
+          'SELECT stock_actual FROM insumos WHERE id = $1 AND sucursal = $2 FOR UPDATE',
+          [insumo_id, req.sucursal]
         );
         if (stockRows.length === 0) {
           await client.query('ROLLBACK');
@@ -332,8 +350,8 @@ export const createNota = async (req, res) => {
       if (!producto_id || !cantidad || Number(cantidad) <= 0) continue;
 
       const { rows: artRows } = await client.query(
-        'SELECT * FROM productos WHERE id = $1 FOR UPDATE',
-        [producto_id]
+        'SELECT * FROM productos WHERE id = $1 AND sucursal = $2 FOR UPDATE',
+        [producto_id, req.sucursal]
       );
       if (artRows.length === 0) {
         await client.query('ROLLBACK');
@@ -440,13 +458,21 @@ export const updateNota = async (req, res) => {
     });
   }
 
+  // Los IDs referenciados deben pertenecer a la sucursal activa.
+  if (cliente_id && !(await perteneceASucursal('clientes', cliente_id, req.sucursal))) {
+    return res.status(400).json({ message: 'cliente_id no existe.' });
+  }
+  if (maquina_id && !(await perteneceASucursal('maquinas', maquina_id, req.sucursal))) {
+    return res.status(400).json({ message: 'maquina_id no existe.' });
+  }
+
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
 
     const { rows: currentRows } = await client.query(
-      'SELECT * FROM notas WHERE id = $1 FOR UPDATE',
-      [id]
+      'SELECT * FROM notas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
+      [id, req.sucursal]
     );
     if (currentRows.length === 0) {
       await client.query('ROLLBACK');
@@ -483,8 +509,8 @@ export const updateNota = async (req, res) => {
       if (!producto_id || !cantidad || Number(cantidad) <= 0) continue;
 
       const { rows: artRows } = await client.query(
-        'SELECT * FROM productos WHERE id = $1 FOR UPDATE',
-        [producto_id]
+        'SELECT * FROM productos WHERE id = $1 AND sucursal = $2 FOR UPDATE',
+        [producto_id, req.sucursal]
       );
       if (artRows.length === 0) {
         await client.query('ROLLBACK');
@@ -583,8 +609,8 @@ export const eliminarNota = async (req, res) => {
     await client.query('BEGIN');
 
     const { rows: notaRows } = await client.query(
-      'SELECT maquina_id FROM notas WHERE id = $1 FOR UPDATE',
-      [id]
+      'SELECT maquina_id FROM notas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
+      [id, req.sucursal]
     );
     if (notaRows.length === 0) {
       await client.query('ROLLBACK');
@@ -641,8 +667,8 @@ export const cambiarEstadoNota = async (req, res) => {
     await client.query('BEGIN');
 
     const { rows: notaRows } = await client.query(
-      'SELECT estado FROM notas WHERE id = $1 FOR UPDATE',
-      [id]
+      'SELECT estado FROM notas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
+      [id, req.sucursal]
     );
     if (notaRows.length === 0) {
       await client.query('ROLLBACK');
@@ -713,8 +739,8 @@ export const activarNota = async (req, res) => {
     await client.query('BEGIN');
 
     const { rows: notaRows } = await client.query(
-      'SELECT estado, maquina_id FROM notas WHERE id = $1 FOR UPDATE',
-      [id]
+      'SELECT estado, maquina_id FROM notas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
+      [id, req.sucursal]
     );
     if (notaRows.length === 0) {
       await client.query('ROLLBACK');
@@ -732,8 +758,8 @@ export const activarNota = async (req, res) => {
     }
 
     const { rows: maqRows } = await client.query(
-      'SELECT estado FROM maquinas WHERE id = $1 FOR UPDATE',
-      [maquinaFinal]
+      'SELECT estado FROM maquinas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
+      [maquinaFinal, req.sucursal]
     );
     if (maqRows.length === 0) {
       await client.query('ROLLBACK');
@@ -795,8 +821,8 @@ export const cambiarEstadoPago = async (req, res) => {
 
   try {
     const { rows } = await pool.query(
-      'UPDATE notas SET estado_pago = $1 WHERE id = $2 RETURNING *',
-      [estado_pago, id]
+      'UPDATE notas SET estado_pago = $1 WHERE id = $2 AND sucursal = $3 RETURNING *',
+      [estado_pago, id, req.sucursal]
     );
     if (rows.length === 0) {
       return res.status(404).json({ message: 'Nota no encontrada.' });
@@ -817,9 +843,10 @@ export const getNotaProductos = async (req, res) => {
               (np.cantidad * np.precio_unitario) AS subtotal
        FROM nota_productos np
        JOIN productos a ON a.id = np.producto_id
+       JOIN notas n ON n.id = np.nota_id AND n.sucursal = $2
        WHERE np.nota_id = $1
        ORDER BY np.created_at ASC`,
-      [id]
+      [id, req.sucursal]
     );
     res.json(rows);
   } catch (err) {
@@ -841,9 +868,18 @@ export const addProductoToNota = async (req, res) => {
   try {
     await client.query('BEGIN');
 
+    const { rows: notaRows } = await client.query(
+      'SELECT id FROM notas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
+      [id, req.sucursal]
+    );
+    if (notaRows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: 'Nota no encontrada.' });
+    }
+
     const { rows: artRows } = await client.query(
-      'SELECT * FROM productos WHERE id = $1 FOR UPDATE',
-      [producto_id]
+      'SELECT * FROM productos WHERE id = $1 AND sucursal = $2 FOR UPDATE',
+      [producto_id, req.sucursal]
     );
     if (artRows.length === 0) {
       await client.query('ROLLBACK');
@@ -906,8 +942,10 @@ export const removeProductoFromNota = async (req, res) => {
     await client.query('BEGIN');
 
     const { rows: npRows } = await client.query(
-      'SELECT * FROM nota_productos WHERE nota_id = $1 AND producto_id = $2',
-      [id, productoId]
+      `SELECT np.* FROM nota_productos np
+       JOIN notas n ON n.id = np.nota_id AND n.sucursal = $3
+       WHERE np.nota_id = $1 AND np.producto_id = $2`,
+      [id, productoId, req.sucursal]
     );
     if (npRows.length === 0) {
       await client.query('ROLLBACK');

@@ -66,11 +66,11 @@ export const updateProducto = async (req, res) => {
       const { rows } = await pool.query(
         `UPDATE productos
            SET stock_actual = $1, updated_at = NOW()
-         WHERE id = $2
+         WHERE id = $2 AND sucursal = $3
          RETURNING *,
                    (stock_actual - stock_reservado) AS stock_disponible,
                    ${ESTADO_STOCK_SQL}`,
-        [Number(stock_actual), id]
+        [Number(stock_actual), id, req.sucursal]
       );
       if (rows.length === 0) {
         return res.status(404).json({ message: 'Producto no encontrado.' });
@@ -92,11 +92,11 @@ export const updateProducto = async (req, res) => {
          SET nombre = $1, descripcion = $2, unidad = $3,
              precio_unitario = $4, stock_actual = $5,
              updated_at = NOW()
-       WHERE id = $6
+       WHERE id = $6 AND sucursal = $7
        RETURNING *,
                  (stock_actual - stock_reservado) AS stock_disponible,
                  ${ESTADO_STOCK_SQL}`,
-      [nombre, descripcion || null, unidad, precio_unitario ?? null, stock_actual, id]
+      [nombre, descripcion || null, unidad, precio_unitario ?? null, stock_actual, id, req.sucursal]
     );
     if (rows.length === 0) {
       return res.status(404).json({ message: 'Producto no encontrado.' });
@@ -111,7 +111,10 @@ export const updateProducto = async (req, res) => {
 export const deleteProducto = async (req, res) => {
   const { id } = req.params;
   try {
-    const { rowCount } = await pool.query('DELETE FROM productos WHERE id = $1', [id]);
+    const { rowCount } = await pool.query(
+      'DELETE FROM productos WHERE id = $1 AND sucursal = $2',
+      [id, req.sucursal]
+    );
     if (rowCount === 0) {
       return res.status(404).json({ message: 'Producto no encontrado.' });
     }

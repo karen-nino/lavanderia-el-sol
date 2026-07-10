@@ -28,8 +28,8 @@ export const getUsoMaquina = async (req, res) => {
 
   try {
     const { rows: maq } = await pool.query(
-      'SELECT id, nombre, tipo, estado, capacidad, sucursal FROM maquinas WHERE id = $1',
-      [id]
+      'SELECT id, nombre, tipo, estado, capacidad, sucursal FROM maquinas WHERE id = $1 AND sucursal = $2',
+      [id, req.sucursal]
     );
     if (maq.length === 0) return res.status(404).json({ message: 'Máquina no encontrada.' });
 
@@ -133,9 +133,9 @@ export const updateMaquina = async (req, res) => {
                WHEN $8::estado_maquina = 'en_uso'::estado_maquina THEN NOW()
                ELSE NULL
              END
-       WHERE id = $9
+       WHERE id = $9 AND sucursal = $10
        RETURNING *`,
-      [nombre, tipo, modelo, capacidad, numero_serie, fecha_adquisicion, notas, estado ?? null, id]
+      [nombre, tipo, modelo, capacidad, numero_serie, fecha_adquisicion, notas, estado ?? null, id, req.sucursal]
     );
     if (rows.length === 0) {
       return res.status(404).json({ message: 'Máquina no encontrada.' });
@@ -150,7 +150,10 @@ export const updateMaquina = async (req, res) => {
 export const deleteMaquina = async (req, res) => {
   const { id } = req.params;
   try {
-    const { rowCount } = await pool.query('DELETE FROM maquinas WHERE id = $1', [id]);
+    const { rowCount } = await pool.query(
+      'DELETE FROM maquinas WHERE id = $1 AND sucursal = $2',
+      [id, req.sucursal]
+    );
     if (rowCount === 0) {
       return res.status(404).json({ message: 'Máquina no encontrada.' });
     }
@@ -173,8 +176,8 @@ export const detenerCiclo = async (req, res) => {
     await client.query('BEGIN');
 
     const { rows: maqRows } = await client.query(
-      'SELECT id, nombre, estado FROM maquinas WHERE id = $1 FOR UPDATE',
-      [id]
+      'SELECT id, nombre, estado FROM maquinas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
+      [id, req.sucursal]
     );
     if (maqRows.length === 0) {
       await client.query('ROLLBACK');
@@ -233,9 +236,9 @@ export const cambiarEstadoMaquina = async (req, res) => {
                WHEN $1::estado_maquina = 'en_uso'::estado_maquina THEN NOW()
                ELSE NULL
              END
-       WHERE id = $2
+       WHERE id = $2 AND sucursal = $3
        RETURNING *`,
-      [estado, id]
+      [estado, id, req.sucursal]
     );
     if (rows.length === 0) {
       return res.status(404).json({ message: 'Máquina no encontrada.' });
