@@ -609,23 +609,38 @@ export const eliminarNota = async (req, res) => {
     await client.query('BEGIN');
 
     const { rows: notaRows } = await client.query(
-      'SELECT maquina_id FROM notas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
+      'SELECT maquina_id, estado FROM notas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
       [id, req.sucursal]
     );
     if (notaRows.length === 0) {
       await client.query('ROLLBACK');
       return res.status(404).json({ message: 'Nota no encontrada.' });
     }
-    const maquinaId = notaRows[0].maquina_id;
+    const { maquina_id: maquinaId, estado: estadoNota } = notaRows[0];
 
-    // Liberar stock reservado antes de eliminar
-    await client.query(
-      `UPDATE productos a
-         SET stock_reservado = stock_reservado - np.cantidad
-       FROM nota_productos np
-       WHERE np.nota_id = $1 AND np.producto_id = a.id`,
-      [id]
-    );
+    // El efecto en stock depende del estado de la nota:
+    //   - PAGADA: el pago ya consumió stock_actual y liberó la reserva;
+    //     eliminar anula la venta y el producto vuelve al estante.
+    //   - FINALIZADA / CANCELADA: el stock ya se consumió o la reserva ya
+    //     se liberó; no hay nada que revertir.
+    //   - Estados activos: solo liberar la reserva.
+    if (estadoNota === 'PAGADA') {
+      await client.query(
+        `UPDATE productos a
+           SET stock_actual = stock_actual + np.cantidad
+         FROM nota_productos np
+         WHERE np.nota_id = $1 AND np.producto_id = a.id`,
+        [id]
+      );
+    } else if (!['FINALIZADA', 'CANCELADA'].includes(estadoNota)) {
+      await client.query(
+        `UPDATE productos a
+           SET stock_reservado = stock_reservado - np.cantidad
+         FROM nota_productos np
+         WHERE np.nota_id = $1 AND np.producto_id = a.id`,
+        [id]
+      );
+    }
 
     await client.query('DELETE FROM notas WHERE id = $1', [id]);
 
@@ -693,14 +708,28 @@ export const cambiarEstadoNota = async (req, res) => {
     }
 
     if (estado === 'CANCELADA') {
-      await client.query(
-        `UPDATE productos a
-           SET stock_reservado = stock_reservado - np.cantidad
-         FROM nota_productos np
-         WHERE np.nota_id = $1 AND np.producto_id = a.id`,
-        [id]
-      );
-    } else if (estado === 'PAGADA') {
+      if (estadoActual === 'PAGADA') {
+        // El pago ya consumió stock_actual y liberó la reserva; al anular
+        // la venta el producto vuelve al estante.
+        await client.query(
+          `UPDATE productos a
+             SET stock_actual = stock_actual + np.cantidad
+           FROM nota_productos np
+           WHERE np.nota_id = $1 AND np.producto_id = a.id`,
+          [id]
+        );
+      } else {
+        await client.query(
+          `UPDATE productos a
+             SET stock_reservado = stock_reservado - np.cantidad
+           FROM nota_productos np
+           WHERE np.nota_id = $1 AND np.producto_id = a.id`,
+          [id]
+        );
+      }
+    } else if (estado === 'PAGADA' || (estado === 'FINALIZADA' && estadoActual !== 'PAGADA')) {
+      // Consumir stock al cobrar o al entregar, lo que ocurra primero.
+      // (PAGADA → FINALIZADA no vuelve a consumir.)
       await client.query(
         `UPDATE productos a
            SET stock_actual    = stock_actual    - np.cantidad,
@@ -869,12 +898,18 @@ export const addProductoToNota = async (req, res) => {
     await client.query('BEGIN');
 
     const { rows: notaRows } = await client.query(
-      'SELECT id FROM notas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
+      'SELECT estado FROM notas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
       [id, req.sucursal]
     );
     if (notaRows.length === 0) {
       await client.query('ROLLBACK');
       return res.status(404).json({ message: 'Nota no encontrada.' });
+    }
+    if (['PAGADA', 'FINALIZADA', 'CANCELADA'].includes(notaRows[0].estado)) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        message: `No se pueden agregar productos a una nota ${notaRows[0].estado}.`,
+      });
     }
 
     const { rows: artRows } = await client.query(
@@ -942,7 +977,7 @@ export const removeProductoFromNota = async (req, res) => {
     await client.query('BEGIN');
 
     const { rows: npRows } = await client.query(
-      `SELECT np.* FROM nota_productos np
+      `SELECT np.*, n.estado AS nota_estado FROM nota_productos np
        JOIN notas n ON n.id = np.nota_id AND n.sucursal = $3
        WHERE np.nota_id = $1 AND np.producto_id = $2`,
       [id, productoId, req.sucursal]
@@ -952,6 +987,12 @@ export const removeProductoFromNota = async (req, res) => {
       return res.status(404).json({ message: 'Producto no encontrado en la nota.' });
     }
     const np = npRows[0];
+    if (['PAGADA', 'FINALIZADA', 'CANCELADA'].includes(np.nota_estado)) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        message: `No se pueden quitar productos de una nota ${np.nota_estado}.`,
+      });
+    }
 
     await client.query(
       'DELETE FROM nota_productos WHERE nota_id = $1 AND producto_id = $2',
