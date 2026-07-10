@@ -13,6 +13,11 @@ if (!fs.existsSync('./uploads/logo')) {
 const app = express();
 const PORT = process.env.PORT || 4000;
 
+// En Fly la app corre detrás de exactamente un proxy, que agrega la IP
+// real del cliente a X-Forwarded-For; con esto req.ip la refleja y el
+// rate limiting por IP funciona. En local no hay proxy y no afecta.
+app.set('trust proxy', 1);
+
 app.use(cors());
 app.use(express.json());
 app.use('/uploads', express.static('uploads'));

@@ -54,6 +54,19 @@ async function perteneceASucursal(tabla, id, sucursal) {
   return rows.length > 0;
 }
 
+// Deja rastro en la campana del Dashboard cuando se revierte un pago
+// (PAGADO → PENDIENTE): es el vector directo para desaparecer una venta,
+// así que siempre queda registrado quién lo hizo y en qué nota.
+async function registrarReversionPago(client, nota, usuarioId, sucursal) {
+  const { rows } = await client.query('SELECT nombre FROM usuarios WHERE id = $1', [usuarioId]);
+  const quien = rows[0]?.nombre ?? 'un administrador';
+  await client.query(
+    `INSERT INTO notificaciones (tipo, mensaje, usuario_id, sucursal)
+     VALUES ('pago_revertido', $1, $2, $3)`,
+    [`Pago revertido en la nota ${nota.folio ?? `#${nota.id}`} por ${quien}`, usuarioId, sucursal]
+  );
+}
+
 function generarFolio(id, fecha) {
   const d = new Date(fecha);
   const yy = String(d.getFullYear()).slice(-2);
@@ -487,6 +500,14 @@ export const updateNota = async (req, res) => {
       });
     }
 
+    // Revertir un pago desde el formulario de edición tiene el mismo
+    // control que el endpoint de estado-pago: solo admin, y con rastro.
+    const esReversionPago = estado_pago === 'PENDIENTE' && actual.estado_pago === 'PAGADO';
+    if (esReversionPago && !esAdmin(req.user.rol)) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ message: 'Solo un administrador puede revertir un pago.' });
+    }
+
     const ajusteNum = Number(ajuste) || 0;
     const cantidadCargasNum = Number(cantidad_cargas) || 1;
     const precioBaseNum = precio_base != null && precio_base !== ''
@@ -583,6 +604,10 @@ export const updateNota = async (req, res) => {
         precioFinal,
       ]
     );
+
+    if (esReversionPago) {
+      await registrarReversionPago(client, actual, req.user.id, req.sucursal);
+    }
 
     await client.query('COMMIT');
     res.json({ ...rows[0], productos: productosInsertados });
@@ -848,18 +873,47 @@ export const cambiarEstadoPago = async (req, res) => {
     });
   }
 
+  const client = await pool.connect();
   try {
-    const { rows } = await pool.query(
-      'UPDATE notas SET estado_pago = $1 WHERE id = $2 AND sucursal = $3 RETURNING *',
-      [estado_pago, id, req.sucursal]
+    await client.query('BEGIN');
+
+    const { rows: notaRows } = await client.query(
+      'SELECT id, folio, estado, estado_pago FROM notas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
+      [id, req.sucursal]
     );
-    if (rows.length === 0) {
+    if (notaRows.length === 0) {
+      await client.query('ROLLBACK');
       return res.status(404).json({ message: 'Nota no encontrada.' });
     }
+    const actual = notaRows[0];
+
+    if (actual.estado === 'CANCELADA') {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'No se puede cambiar el pago de una nota cancelada.' });
+    }
+
+    const esReversion = actual.estado_pago === 'PAGADO' && estado_pago === 'PENDIENTE';
+    if (esReversion && !esAdmin(req.user.rol)) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ message: 'Solo un administrador puede revertir un pago.' });
+    }
+
+    const { rows } = await client.query(
+      'UPDATE notas SET estado_pago = $1 WHERE id = $2 RETURNING *',
+      [estado_pago, id]
+    );
+    if (esReversion) {
+      await registrarReversionPago(client, actual, req.user.id, req.sucursal);
+    }
+
+    await client.query('COMMIT');
     res.json(rows[0]);
   } catch (err) {
+    await client.query('ROLLBACK');
     console.error('cambiarEstadoPago error:', err);
     res.status(500).json({ message: 'Error interno del servidor.' });
+  } finally {
+    client.release();
   }
 };
 

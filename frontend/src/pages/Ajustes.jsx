@@ -452,8 +452,8 @@ export default function Ajustes() {
     if (!nombreCompleto) {
       return setMensaje({ tipo: 'error', texto: 'El nombre no puede estar vacío.' });
     }
-    if (perfilForm.password && perfilForm.password.length < 6) {
-      return setMensaje({ tipo: 'error', texto: 'La contraseña debe tener al menos 6 caracteres.' });
+    if (perfilForm.password && perfilForm.password.length < 8) {
+      return setMensaje({ tipo: 'error', texto: 'La contraseña debe tener al menos 8 caracteres.' });
     }
     setSaving(true);
     setMensaje(null);
@@ -484,8 +484,8 @@ export default function Ajustes() {
     if (!nombreCompleto) {
       return setMensaje({ tipo: 'error', texto: 'El nombre no puede estar vacío.' });
     }
-    if (perfilForm.password && perfilForm.password.length < 6) {
-      return setMensaje({ tipo: 'error', texto: 'La contraseña debe tener al menos 6 caracteres.' });
+    if (perfilForm.password && perfilForm.password.length < 8) {
+      return setMensaje({ tipo: 'error', texto: 'La contraseña debe tener al menos 8 caracteres.' });
     }
 
     setSaving(true);

@@ -12,10 +12,14 @@ export const buscarUsuarios = async (req, res) => {
   const mostrarAdminMain = raw.startsWith('***');
   const q = mostrarAdminMain ? raw.slice(3).trim() : raw;
 
+  // Mínimo 2 caracteres (también tras el prefijo ***) para dificultar la
+  // enumeración de empleados; con menos, no se listan resultados.
+  if (q.length < 2) return res.json([]);
+
   const sql = mostrarAdminMain
     ? `SELECT id, nombre FROM usuarios
         WHERE activo = TRUE AND rol = 'admin_main'
-          AND ($1 = '' OR unaccent(nombre) ILIKE unaccent($2))
+          AND unaccent(nombre) ILIKE unaccent($1)
         ORDER BY nombre ASC
         LIMIT 8`
     : `SELECT id, nombre FROM usuarios
@@ -23,7 +27,7 @@ export const buscarUsuarios = async (req, res) => {
           AND unaccent(nombre) ILIKE unaccent($1)
         ORDER BY nombre ASC
         LIMIT 8`;
-  const params = mostrarAdminMain ? [q, `%${q}%`] : [`%${q}%`];
+  const params = [`%${q}%`];
 
   try {
     const { rows } = await pool.query(sql, params);
@@ -107,8 +111,8 @@ export const updateMe = async (req, res) => {
     updates.push(`nombre = $${i++}`); values.push(nombre.trim());
   }
   if (password) {
-    if (password.length < 6) {
-      return res.status(400).json({ message: 'La contraseña debe tener al menos 6 caracteres.' });
+    if (password.length < 8) {
+      return res.status(400).json({ message: 'La contraseña debe tener al menos 8 caracteres.' });
     }
     const hashed = await bcrypt.hash(password, 10);
     updates.push(`password = $${i++}`); values.push(hashed);

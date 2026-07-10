@@ -507,7 +507,7 @@ export default function Empleados() {
                 </label>
                 <input type="password" name="password" required minLength={6} value={form.password} onChange={handleChange}
                   placeholder="••••••••" className={INPUT_CLS} />
-                <p className="text-xs text-gray-500 mt-1">Mínimo 6 caracteres.</p>
+                <p className="text-xs text-gray-500 mt-1">Mínimo 8 caracteres.</p>
               </div>
               {formError && (
                 <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">{formError}</div>
@@ -583,7 +583,7 @@ export default function Empleados() {
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">Nueva contraseña</label>
                 <input type="password" name="password" minLength={6} value={editForm.password} onChange={handleEditChange}
                   placeholder="Dejar vacío para no cambiar" className={INPUT_CLS} />
-                <p className="text-xs text-gray-500 mt-1">Mínimo 6 caracteres.</p>
+                <p className="text-xs text-gray-500 mt-1">Mínimo 8 caracteres.</p>
               </div>
               {editError && (
                 <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">{editError}</div>
