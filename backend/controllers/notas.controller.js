@@ -240,6 +240,25 @@ export const createNota = async (req, res) => {
   // Estado inicial: EN_PROCESO por defecto; EN_ESPERA si así se indica.
   const estadoInicial = estado || 'EN_PROCESO';
 
+  // Montos: numéricos y sin negativos. El ajuste sí puede ser negativo
+  // (es el descuento del formulario), pero el total final de la nota no;
+  // eso se verifica antes del COMMIT, ya con los productos sumados.
+  if (ajuste != null && ajuste !== '' && !Number.isFinite(Number(ajuste))) {
+    return res.status(400).json({ message: 'ajuste debe ser numérico.' });
+  }
+  if (cantidad_cargas != null && cantidad_cargas !== '' &&
+      (!Number.isInteger(Number(cantidad_cargas)) || Number(cantidad_cargas) < 1)) {
+    return res.status(400).json({ message: 'cantidad_cargas debe ser un entero mayor o igual a 1.' });
+  }
+  if (precio_base != null && precio_base !== '' &&
+      (!Number.isFinite(Number(precio_base)) || Number(precio_base) < 0)) {
+    return res.status(400).json({ message: 'precio_base debe ser un número mayor o igual a 0.' });
+  }
+  if (precio_total != null && precio_total !== '' &&
+      (!Number.isFinite(Number(precio_total)) || Number(precio_total) < 0)) {
+    return res.status(400).json({ message: 'precio_total debe ser un número mayor o igual a 0.' });
+  }
+
   // Los IDs referenciados deben pertenecer a la sucursal activa.
   if (cliente_id && !(await perteneceASucursal('clientes', cliente_id, req.sucursal))) {
     return res.status(400).json({ message: 'cliente_id no existe.' });
@@ -416,6 +435,11 @@ export const createNota = async (req, res) => {
       nota.precio_total = totalRows[0].precio_total;
     }
 
+    if (nota.precio_total != null && Number(nota.precio_total) < 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'El total de la nota no puede ser negativo. Revisa el ajuste.' });
+    }
+
     await client.query('COMMIT');
     res.status(201).json({ ...nota, productos: productosInsertados });
   } catch (err) {
@@ -452,6 +476,17 @@ export const updateNota = async (req, res) => {
 
   if (productos !== undefined && !Array.isArray(productos)) {
     return res.status(400).json({ message: 'productos debe ser una lista.' });
+  }
+  if (ajuste != null && ajuste !== '' && !Number.isFinite(Number(ajuste))) {
+    return res.status(400).json({ message: 'ajuste debe ser numérico.' });
+  }
+  if (cantidad_cargas != null && cantidad_cargas !== '' &&
+      (!Number.isInteger(Number(cantidad_cargas)) || Number(cantidad_cargas) < 1)) {
+    return res.status(400).json({ message: 'cantidad_cargas debe ser un entero mayor o igual a 1.' });
+  }
+  if (precio_base != null && precio_base !== '' &&
+      (!Number.isFinite(Number(precio_base)) || Number(precio_base) < 0)) {
+    return res.status(400).json({ message: 'precio_base debe ser un número mayor o igual a 0.' });
   }
   if (estado_pago && !ESTADOS_PAGO_VALIDOS.includes(estado_pago)) {
     return res.status(400).json({
@@ -633,6 +668,11 @@ export const updateNota = async (req, res) => {
         precioFinal,
       ]
     );
+
+    if (rows[0].precio_total != null && Number(rows[0].precio_total) < 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'El total de la nota no puede ser negativo. Revisa el ajuste.' });
+    }
 
     if (esReversionPago) {
       await registrarReversionPago(client, actual, req.user.id, req.sucursal);

@@ -66,6 +66,27 @@ export const updateAjustes = async (req, res) => {
     alerta_ciclo_detenido,
   } = req.body;
 
+  // Validación numérica: sin esto, un precio negativo o texto llega a la
+  // base (texto produce un 500 y un negativo descuadra todas las notas).
+  const esNumero = (v) => (typeof v === 'number' || (typeof v === 'string' && v.trim() !== '')) && Number.isFinite(Number(v));
+
+  const precios = { precio_carga_mediana, precio_carga_jumbo, precio_carga_secadora, precio_edredon_jumbo };
+  for (const [campo, valor] of Object.entries(precios)) {
+    if (valor !== undefined && (!esNumero(valor) || Number(valor) < 0)) {
+      return res.status(400).json({ message: `${campo} debe ser un número mayor o igual a 0.` });
+    }
+  }
+  const tiempos = { tiempo_carga_mediana, tiempo_carga_jumbo, tiempo_carga_secadora };
+  for (const [campo, valor] of Object.entries(tiempos)) {
+    if (valor !== undefined && (!esNumero(valor) || !Number.isInteger(Number(valor)) || Number(valor) < 1)) {
+      return res.status(400).json({ message: `${campo} debe ser un entero mayor o igual a 1 (minutos).` });
+    }
+  }
+  if (stock_minimo_global !== undefined &&
+      (!esNumero(stock_minimo_global) || !Number.isInteger(Number(stock_minimo_global)) || Number(stock_minimo_global) < 0)) {
+    return res.status(400).json({ message: 'stock_minimo_global debe ser un entero mayor o igual a 0.' });
+  }
+
   const updates = [];
   const values  = [];
   let i = 1;

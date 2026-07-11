@@ -164,11 +164,16 @@ export async function cerrarCaja(req, res) {
 
   const client = await pool.connect();
   try {
+    // Transacción con bloqueo de fila: dos cierres simultáneos ya no se
+    // pisan — el segundo espera, encuentra la caja cerrada y recibe 409.
+    await client.query('BEGIN');
+
     const cajaRes = await client.query(
-      `SELECT * FROM cajas WHERE estado = 'abierta' AND sucursal = $1 LIMIT 1`,
+      `SELECT * FROM cajas WHERE estado = 'abierta' AND sucursal = $1 LIMIT 1 FOR UPDATE`,
       [req.sucursal]
     );
     if (cajaRes.rowCount === 0) {
+      await client.query('ROLLBACK');
       return res.status(409).json({ message: 'No hay una caja abierta.' });
     }
     const caja = cajaRes.rows[0];
@@ -179,16 +184,22 @@ export async function cerrarCaja(req, res) {
     const esperado = monto_inicial + ventas + entradas - salidas;
     const diferencia = contado - esperado;
 
-    await client.query(
+    const upd = await client.query(
       `UPDATE cajas
           SET estado = 'cerrada',
               usuario_cierre_id = $1,
               monto_contado = $2,
               notas_cierre = $3,
               cerrada_at = NOW()
-        WHERE id = $4`,
+        WHERE id = $4 AND estado = 'abierta'`,
       [req.user.id, contado, notas_cierre?.trim() || null, caja.id]
     );
+    if (upd.rowCount === 0) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ message: 'La caja ya fue cerrada por alguien más.' });
+    }
+
+    await client.query('COMMIT');
 
     res.json({
       id: caja.id,
@@ -203,6 +214,7 @@ export async function cerrarCaja(req, res) {
       },
     });
   } catch (err) {
+    await client.query('ROLLBACK');
     console.error('Error en caja/cerrar:', err);
     res.status(500).json({ message: 'Error al cerrar la caja.' });
   } finally {
