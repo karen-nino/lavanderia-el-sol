@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { verifyToken } from '../middleware/auth.js';
 import { sucursalActiva } from '../middleware/sucursalActiva.js';
+import { requireAdmin } from '../middleware/roles.js';
 import {
   getMaquinas,
   getUsoMaquina,
@@ -16,10 +17,10 @@ const router = Router();
 router.use(verifyToken, sucursalActiva);
 
 router.get('/', getMaquinas);
-router.get('/:id/uso', getUsoMaquina);
+router.get('/:id/uso', requireAdmin, getUsoMaquina);
 router.post('/', createMaquina);
 router.put('/:id', updateMaquina);
-router.delete('/:id', deleteMaquina);
+router.delete('/:id', requireAdmin, deleteMaquina);
 router.patch('/:id/estado', cambiarEstadoMaquina);
 router.patch('/:id/detener-ciclo', detenerCiclo);
 

@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api } from '../lib/api';
+import { useAuth } from '../context/AuthContext';
+import { esAdmin as esAdminFn } from '../lib/roles';
 
 const fmt = (n) =>
   new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(n ?? 0);
@@ -374,6 +376,12 @@ function Historial() {
 }
 
 export default function Caja() {
+  const { usuario } = useAuth();
+  const esAdmin = esAdminFn(usuario?.rol);
+  // El historial de cortes (con diferencias de caja) es solo para admins;
+  // el endpoint también lo exige.
+  const tabs = esAdmin ? TABS : TABS.filter((t) => t.id !== 'historial');
+
   const [tab, setTab] = useState('apertura');
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -403,7 +411,7 @@ export default function Caja() {
 
   // Tras abrir/cerrar caja conviene mostrar el estado más relevante.
   const handleAbrir = () => { fetchActual(); setTab('movimientos'); };
-  const handleCerrar = () => { fetchActual(); setTab('historial'); };
+  const handleCerrar = () => { fetchActual(); setTab(esAdmin ? 'historial' : 'apertura'); };
 
   return (
     <div className="min-h-full bg-slate-100">
@@ -418,7 +426,7 @@ export default function Caja() {
       <div className="max-w-3xl mx-auto px-6 md:px-8 py-6 space-y-6">
 
       <div className="flex flex-wrap gap-2">
-        {TABS.map((t) => (
+        {tabs.map((t) => (
           <button
             key={t.id}
             onClick={() => setTab(t.id)}

@@ -363,17 +363,19 @@ export default function NuevaNota() {
         tipo_prenda:     encargoForm.tipo_prenda || 'ROPA',
         estado:          estadoInicial,
         cliente_id:      Number(encargoForm.cliente_id),
-        tamano:          encargoForm.tamano || undefined,
-        tipo_tela:       encargoForm.tipo_prenda === 'ROPA'    ? (encargoForm.tipo_tela      || undefined) : undefined,
-        tamano_edredon:  encargoForm.tipo_prenda === 'EDREDON' ? (encargoForm.tamano_edredon || undefined) : undefined,
+        // null (no undefined): JSON.stringify omite undefined y el PATCH
+        // del backend conserva los campos ausentes; null los limpia.
+        tamano:          encargoForm.tamano || null,
+        tipo_tela:       encargoForm.tipo_prenda === 'ROPA'    ? (encargoForm.tipo_tela      || null) : null,
+        tamano_edredon:  encargoForm.tipo_prenda === 'EDREDON' ? (encargoForm.tamano_edredon || null) : null,
         cantidad_cargas: encargoCargas,
         precio_base:     precioCargaEncargo,
         ajuste:          encargoAjuste,
         estado_pago:     encargoForm.pago_anticipado === 'SI' ? 'PAGADO' : 'PENDIENTE',
-        fecha_entrega:   encargoForm.fecha_entrega  || undefined,
-        tiempo_entrega:  encargoForm.tiempo_entrega || undefined,
-        instrucciones:   encargoForm.instrucciones  || undefined,
-        maquina_id:      encargoForm.maquina_id ? Number(encargoForm.maquina_id) : undefined,
+        fecha_entrega:   encargoForm.fecha_entrega  || null,
+        tiempo_entrega:  encargoForm.tiempo_entrega || null,
+        instrucciones:   encargoForm.instrucciones  || null,
+        maquina_id:      encargoForm.maquina_id ? Number(encargoForm.maquina_id) : null,
         productos:       encargoProductos
           .filter(p => p.producto_id && p.cantidad)
           .map(p => ({ producto_id: Number(p.producto_id), cantidad: Number(p.cantidad) })),
@@ -410,8 +412,9 @@ export default function NuevaNota() {
       // desde Salidas); con máquina nace directamente En Proceso.
       estado:          form.maquina_id ? 'EN_PROCESO' : 'EN_ESPERA',
       estado_pago:     'PAGADO',
-      instrucciones:   form.instrucciones || undefined,
-      maquina_id:      form.maquina_id ? Number(form.maquina_id) : undefined,
+      // null (no undefined) para que al editar, limpiar un campo lo borre.
+      instrucciones:   form.instrucciones || null,
+      maquina_id:      form.maquina_id ? Number(form.maquina_id) : null,
       cantidad_cargas: cargas,
       precio_base:     precioCargaAutoservicio,
       ajuste:          ajusteNum,

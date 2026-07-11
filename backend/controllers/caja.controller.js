@@ -1,16 +1,16 @@
 import pool from '../db/pool.js';
 
-// Suma de ventas cobradas durante la ventana de la sesión de caja.
-// Limitación: las notas no guardan método de pago ni timestamp de cobro,
-// así que se usa created_at como proxy del momento de la venta.
+// Suma de ventas cobradas durante la ventana de la sesión de caja,
+// atribuidas al momento del cobro (pagado_en, migración 037): una nota
+// creada ayer y cobrada hoy cuenta en el corte de hoy.
 async function ventasDeSesion(client, abiertaAt, cerradaAt, sucursal) {
   const { rows } = await client.query(
     `SELECT COALESCE(SUM(precio_total), 0) AS ventas
        FROM notas
       WHERE estado_pago = 'PAGADO'
         AND sucursal = $3
-        AND created_at >= $1
-        AND created_at <= COALESCE($2, NOW())`,
+        AND pagado_en >= $1
+        AND pagado_en <= COALESCE($2, NOW())`,
     [abiertaAt, cerradaAt, sucursal]
   );
   return parseFloat(rows[0].ventas);
@@ -226,8 +226,8 @@ export async function getHistorial(req, res) {
             SELECT SUM(precio_total) FROM notas
              WHERE estado_pago = 'PAGADO'
                AND sucursal = c.sucursal
-               AND created_at >= c.abierta_at
-               AND created_at <= c.cerrada_at
+               AND pagado_en >= c.abierta_at
+               AND pagado_en <= c.cerrada_at
           ), 0) AS ventas,
           COALESCE((
             SELECT SUM(monto) FROM movimientos_caja

@@ -447,9 +447,12 @@ export const updateNota = async (req, res) => {
     ajuste,
     cantidad_cargas,
     precio_base,
-    productos = [],
+    productos,
   } = req.body;
 
+  if (productos !== undefined && !Array.isArray(productos)) {
+    return res.status(400).json({ message: 'productos debe ser una lista.' });
+  }
   if (estado_pago && !ESTADOS_PAGO_VALIDOS.includes(estado_pago)) {
     return res.status(400).json({
       message: `Estado de pago inválido. Valores permitidos: ${ESTADOS_PAGO_VALIDOS.join(', ')}.`,
@@ -508,62 +511,88 @@ export const updateNota = async (req, res) => {
       return res.status(403).json({ message: 'Solo un administrador puede revertir un pago.' });
     }
 
-    const ajusteNum = Number(ajuste) || 0;
-    const cantidadCargasNum = Number(cantidad_cargas) || 1;
+    // PATCH real (auditoría A4): solo los campos presentes en el body se
+    // modifican; los ausentes conservan su valor. JSON no puede mandar
+    // undefined, así que "presente" = la clave viene en el body.
+    const tiene = (campo) => req.body[campo] !== undefined;
+
+    const ajusteNum = tiene('ajuste')
+      ? Number(ajuste) || 0
+      : Number(actual.ajuste) || 0;
+    const cantidadCargasNum = tiene('cantidad_cargas')
+      ? Number(cantidad_cargas) || 1
+      : Number(actual.cantidad_cargas) || 1;
     const precioBaseNum = precio_base != null && precio_base !== ''
       ? Number(precio_base)
       : actual.precio_base != null ? Number(actual.precio_base) : null;
 
-    // Liberar stock reservado de productos actuales y eliminarlos
-    await client.query(
-      `UPDATE productos a
-         SET stock_reservado = stock_reservado - np.cantidad
-       FROM nota_productos np
-       WHERE np.nota_id = $1 AND np.producto_id = a.id`,
-      [id]
-    );
-    await client.query('DELETE FROM nota_productos WHERE nota_id = $1', [id]);
-
-    // Insertar los nuevos productos
-    const productosInsertados = [];
-    for (const { producto_id, cantidad } of productos) {
-      if (!producto_id || !cantidad || Number(cantidad) <= 0) continue;
-
-      const { rows: artRows } = await client.query(
-        'SELECT * FROM productos WHERE id = $1 AND sucursal = $2 FOR UPDATE',
-        [producto_id, req.sucursal]
+    // Los productos solo se tocan si vienen en el body: la lista enviada
+    // (aun vacía) reemplaza los de la nota; ausente, se conservan.
+    let productosNota;
+    if (productos !== undefined) {
+      // Liberar stock reservado de productos actuales y eliminarlos
+      await client.query(
+        `UPDATE productos a
+           SET stock_reservado = stock_reservado - np.cantidad
+         FROM nota_productos np
+         WHERE np.nota_id = $1 AND np.producto_id = a.id`,
+        [id]
       );
-      if (artRows.length === 0) {
-        await client.query('ROLLBACK');
-        return res.status(404).json({ message: `Producto ${producto_id} no encontrado.` });
-      }
-      const art = artRows[0];
-      const stockDisponible = Number(art.stock_actual) - Number(art.stock_reservado);
-      if (stockDisponible < Number(cantidad)) {
-        await client.query('ROLLBACK');
-        return res.status(400).json({
-          message: `Stock insuficiente para "${art.nombre}". Disponible: ${stockDisponible}, solicitado: ${cantidad}.`,
+      await client.query('DELETE FROM nota_productos WHERE nota_id = $1', [id]);
+
+      // Insertar los nuevos productos
+      const productosInsertados = [];
+      for (const { producto_id, cantidad } of productos) {
+        if (!producto_id || !cantidad || Number(cantidad) <= 0) continue;
+
+        const { rows: artRows } = await client.query(
+          'SELECT * FROM productos WHERE id = $1 AND sucursal = $2 FOR UPDATE',
+          [producto_id, req.sucursal]
+        );
+        if (artRows.length === 0) {
+          await client.query('ROLLBACK');
+          return res.status(404).json({ message: `Producto ${producto_id} no encontrado.` });
+        }
+        const art = artRows[0];
+        const stockDisponible = Number(art.stock_actual) - Number(art.stock_reservado);
+        if (stockDisponible < Number(cantidad)) {
+          await client.query('ROLLBACK');
+          return res.status(400).json({
+            message: `Stock insuficiente para "${art.nombre}". Disponible: ${stockDisponible}, solicitado: ${cantidad}.`,
+          });
+        }
+
+        const { rows: npRows } = await client.query(
+          `INSERT INTO nota_productos (nota_id, producto_id, cantidad, precio_unitario)
+           VALUES ($1, $2, $3, $4)
+           RETURNING *`,
+          [id, producto_id, cantidad, art.precio_unitario ?? 0]
+        );
+        await client.query(
+          'UPDATE productos SET stock_reservado = stock_reservado + $1 WHERE id = $2',
+          [cantidad, producto_id]
+        );
+        productosInsertados.push({
+          ...npRows[0],
+          nombre: art.nombre,
+          subtotal: Number(npRows[0].cantidad) * Number(npRows[0].precio_unitario),
         });
       }
-
-      const { rows: npRows } = await client.query(
-        `INSERT INTO nota_productos (nota_id, producto_id, cantidad, precio_unitario)
-         VALUES ($1, $2, $3, $4)
-         RETURNING *`,
-        [id, producto_id, cantidad, art.precio_unitario ?? 0]
+      productosNota = productosInsertados;
+    } else {
+      const { rows: existentes } = await client.query(
+        `SELECT np.id, np.producto_id, a.nombre, np.cantidad, np.precio_unitario,
+                (np.cantidad * np.precio_unitario) AS subtotal
+         FROM nota_productos np
+         JOIN productos a ON a.id = np.producto_id
+         WHERE np.nota_id = $1
+         ORDER BY np.created_at ASC`,
+        [id]
       );
-      await client.query(
-        'UPDATE productos SET stock_reservado = stock_reservado + $1 WHERE id = $2',
-        [cantidad, producto_id]
-      );
-      productosInsertados.push({
-        ...npRows[0],
-        nombre: art.nombre,
-        subtotal: Number(npRows[0].cantidad) * Number(npRows[0].precio_unitario),
-      });
+      productosNota = existentes;
     }
 
-    const subtotalProductos = productosInsertados.reduce((s, p) => s + Number(p.subtotal), 0);
+    const subtotalProductos = productosNota.reduce((s, p) => s + Number(p.subtotal), 0);
     const precioFinal = precioBaseNum != null
       ? cantidadCargasNum * precioBaseNum + ajusteNum + subtotalProductos
       : null;
@@ -572,12 +601,12 @@ export const updateNota = async (req, res) => {
       `UPDATE notas SET
          cliente_id      = $2,
          maquina_id      = $3,
-         estado_pago     = COALESCE($4, estado_pago),
+         estado_pago     = $4,
          fecha_entrega   = $5,
          tiempo_entrega  = $6,
          instrucciones   = $7,
-         tamano          = COALESCE($8, tamano),
-         tipo_prenda     = COALESCE($9, tipo_prenda),
+         tamano          = $8,
+         tipo_prenda     = $9,
          tipo_tela       = $10,
          tamano_edredon  = $11,
          precio_base     = $12,
@@ -588,16 +617,16 @@ export const updateNota = async (req, res) => {
        RETURNING *`,
       [
         id,
-        cliente_id || null,
-        maquina_id || null,
-        estado_pago || null,
-        fecha_entrega || null,
-        tiempo_entrega ? String(tiempo_entrega).toUpperCase() : null,
-        instrucciones || null,
-        tamano ? String(tamano).toLowerCase() : null,
-        tipo_prenda ? String(tipo_prenda).toUpperCase() : null,
-        tipo_tela ? String(tipo_tela).trim() : null,
-        tamano_edredon ? String(tamano_edredon).trim() : null,
+        tiene('cliente_id')     ? (cliente_id || null) : actual.cliente_id,
+        tiene('maquina_id')     ? (maquina_id || null) : actual.maquina_id,
+        estado_pago || actual.estado_pago,
+        tiene('fecha_entrega')  ? (fecha_entrega || null) : actual.fecha_entrega,
+        tiene('tiempo_entrega') ? (tiempo_entrega ? String(tiempo_entrega).toUpperCase() : null) : actual.tiempo_entrega,
+        tiene('instrucciones')  ? (instrucciones || null) : actual.instrucciones,
+        tamano ? String(tamano).toLowerCase() : actual.tamano,
+        tipo_prenda ? String(tipo_prenda).toUpperCase() : actual.tipo_prenda,
+        tiene('tipo_tela')      ? (tipo_tela ? String(tipo_tela).trim() : null) : actual.tipo_tela,
+        tiene('tamano_edredon') ? (tamano_edredon ? String(tamano_edredon).trim() : null) : actual.tamano_edredon,
         precioBaseNum,
         ajusteNum,
         cantidadCargasNum,
@@ -610,7 +639,7 @@ export const updateNota = async (req, res) => {
     }
 
     await client.query('COMMIT');
-    res.json({ ...rows[0], productos: productosInsertados });
+    res.json({ ...rows[0], productos: productosNota });
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('updateNota error:', err);
