@@ -1,0 +1,11 @@
+# Headers de seguridad para todo el sitio (auditoría M7).
+# El CSP permite solo recursos propios + Google Fonts (index.html);
+# 'unsafe-inline' en style-src es necesario para los style={} de React.
+# El token vive en localStorage: el CSP es la red de seguridad ante XSS.
+/*
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=()
+  Strict-Transport-Security: max-age=31536000; includeSubDomains

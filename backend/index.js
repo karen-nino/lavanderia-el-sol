@@ -1,5 +1,5 @@
 import express from 'express';
-import cors from 'cors';
+import helmet from 'helmet';
 import dotenv from 'dotenv';
 import fs from 'fs';
 
@@ -18,7 +18,11 @@ const PORT = process.env.PORT || 4000;
 // rate limiting por IP funciona. En local no hay proxy y no afecta.
 app.set('trust proxy', 1);
 
-app.use(cors());
+// Sin CORS a propósito: todo el tráfico legítimo llega same-origin
+// (Netlify proxyea /api y /uploads; en dev lo hace Vite). Sin el header
+// Access-Control-Allow-Origin, el navegador bloquea llamadas de otros
+// orígenes directas a la API.
+app.use(helmet());
 app.use(express.json());
 app.use('/uploads', express.static('uploads'));
 
