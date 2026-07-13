@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { api } from '../lib/api';
+import { api, mensajeDeError } from '../lib/api';
 import { formatTelefono } from '../lib/telefono';
 import { useAuth } from '../context/AuthContext';
 import { esAdminMain as esAdminMainFn } from '../lib/roles';
@@ -566,8 +566,13 @@ export default function Ajustes() {
         headers: { Authorization: `Bearer ${token}` },
         body: formData,
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Error al subir el logo');
+      let data = null;
+      try {
+        data = await res.json();
+      } catch {
+        // Respuesta sin JSON (p. ej. el proxy rechaza el archivo por tamaño).
+      }
+      if (!res.ok) throw new Error(mensajeDeError(res.status, data));
       setConfig(prev => ({ ...prev, logo_url: data.logo_url }));
       setLogoPreview(data.logo_url);
       setMensaje({ tipo: 'ok', texto: 'Logo actualizado.' });

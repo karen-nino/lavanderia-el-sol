@@ -11,18 +11,45 @@ function getSucursal() {
   return localStorage.getItem('sucursalActiva');
 }
 
+// Explicación breve por código de estado, para cuando el backend no manda
+// un mensaje propio (o la respuesta ni siquiera es JSON, como los errores
+// del proxy de Netlify o del rate limiter).
+const DESCRIPCION_ERROR = {
+  400: 'los datos enviados son inválidos o están incompletos',
+  403: 'no tienes permiso para realizar esta acción',
+  404: 'no se encontró la información solicitada',
+  409: 'la operación no es válida con el estado actual de los datos',
+  413: 'el archivo o los datos enviados son demasiado grandes',
+  429: 'demasiados intentos seguidos, espera un momento y vuelve a intentar',
+  500: 'ocurrió un problema interno en el servidor',
+  502: 'el servidor no está respondiendo',
+  503: 'el servidor no está disponible por el momento',
+  504: 'el servidor tardó demasiado en responder',
+};
+
+export function mensajeDeError(status, data) {
+  if (data?.message) return data.message;
+  const detalle = DESCRIPCION_ERROR[status] || 'ocurrió un error en la solicitud';
+  return `Error ${status}: ${detalle}.`;
+}
+
 async function request(path, options = {}) {
   const token = getToken();
   const sucursal = getSucursal();
-  const res = await fetch(`${BASE}${path}`, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(sucursal ? { 'X-Sucursal': sucursal } : {}),
-      ...options.headers,
-    },
-  });
+  let res;
+  try {
+    res = await fetch(`${BASE}${path}`, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(sucursal ? { 'X-Sucursal': sucursal } : {}),
+        ...options.headers,
+      },
+    });
+  } catch {
+    throw new Error('No hay conexión con el servidor. Revisa tu internet e intenta de nuevo.');
+  }
 
   if (res.status === 401) {
     localStorage.removeItem('token');
@@ -32,8 +59,14 @@ async function request(path, options = {}) {
   }
 
   if (res.status === 204) return null;
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.message || 'Error en la solicitud');
+
+  let data = null;
+  try {
+    data = await res.json();
+  } catch {
+    // Respuesta sin JSON (p. ej. página de error HTML del proxy).
+  }
+  if (!res.ok) throw new Error(mensajeDeError(res.status, data));
   return data;
 }
 
