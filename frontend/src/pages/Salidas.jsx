@@ -36,6 +36,7 @@ export default function Salidas() {
   const [activarOpen,      setActivarOpen]      = useState(false);
   const [maquinasDisp,     setMaquinasDisp]     = useState([]);
   const [maquinaSel,       setMaquinaSel]       = useState('');
+  const [secadoraSel,      setSecadoraSel]      = useState('');
   const [loadingMaquinas,  setLoadingMaquinas]  = useState(false);
 
   // Procesar carga (ciclo terminado)
@@ -64,12 +65,17 @@ export default function Salidas() {
     return () => { activo = false; };
   }, [cargarDatos]);
 
+  // Máquinas asignadas a la nota (lavadora y/o secadora).
+  const maquinasNota = [nota?.maquina_id, nota?.secadora_id].filter(Boolean);
+
   async function activarMaquina() {
-    if (!nota?.maquina_id) return;
+    if (maquinasNota.length === 0) return;
     setLoadingMaquina(true);
     setErrorAccion('');
     try {
-      await api.patch(`/maquinas/${nota.maquina_id}/estado`, { estado: 'en_uso' });
+      await Promise.all(
+        maquinasNota.map(mid => api.patch(`/maquinas/${mid}/estado`, { estado: 'en_uso' }))
+      );
       await cargarDatos();
     } catch (err) {
       setErrorAccion(err.message);
@@ -79,11 +85,13 @@ export default function Salidas() {
   }
 
   async function detenerCiclo() {
-    if (!nota?.maquina_id) return;
+    if (maquinasNota.length === 0) return;
     setLoadingMaquina(true);
     setErrorAccion('');
     try {
-      await api.patch(`/maquinas/${nota.maquina_id}/detener-ciclo`);
+      await Promise.all(
+        maquinasNota.map(mid => api.patch(`/maquinas/${mid}/detener-ciclo`))
+      );
       setConfirmDetener(false);
       await cargarDatos();
     } catch (err) {
@@ -94,15 +102,16 @@ export default function Salidas() {
     }
   }
 
-  // Activa la nota En Espera: si ya tiene máquina la usa directo; si no, abre
-  // el selector para elegir una.
+  // Activa la nota En Espera: si ya tiene máquina(s) las usa directo; si no,
+  // abre el selector para elegir lavadora y/o secadora.
   async function iniciarActivar() {
-    if (nota?.maquina_id) {
-      await activarNota(nota.maquina_id);
+    if (maquinasNota.length > 0) {
+      await activarNota(nota.maquina_id, nota.secadora_id);
       return;
     }
     setErrorAccion('');
     setMaquinaSel('');
+    setSecadoraSel('');
     setActivarOpen(true);
     setLoadingMaquinas(true);
     try {
@@ -115,12 +124,15 @@ export default function Salidas() {
     }
   }
 
-  async function activarNota(maquinaId) {
-    if (!maquinaId) return;
+  async function activarNota(maquinaId, secadoraId) {
+    if (!maquinaId && !secadoraId) return;
     setLoadingMaquina(true);
     setErrorAccion('');
     try {
-      await api.patch(`/notas/${id}/activar`, { maquina_id: Number(maquinaId) });
+      await api.patch(`/notas/${id}/activar`, {
+        maquina_id:  maquinaId  ? Number(maquinaId)  : null,
+        secadora_id: secadoraId ? Number(secadoraId) : null,
+      });
       setActivarOpen(false);
       await cargarDatos();
     } catch (err) {
@@ -130,17 +142,19 @@ export default function Salidas() {
     }
   }
 
-  // Procesar carga terminada: la nota pasa a "Por Entregar" (LISTA) y la
-  // máquina a disponible. Igual que la acción "Procesar" del dashboard.
+  // Procesar carga terminada: la nota pasa a "Por Entregar" (LISTA) y las
+  // máquinas a disponible. Igual que la acción "Procesar" del dashboard.
   async function procesarNota() {
-    if (!nota?.maquina_id) return;
+    if (maquinasNota.length === 0) return;
     setLoadingMaquina(true);
     setErrorAccion('');
     try {
       if (['EN_PROCESO', 'POR_PROCESAR'].includes(nota.estado)) {
         await api.patch(`/notas/${id}/estado`, { estado: 'LISTA' });
       }
-      await api.patch(`/maquinas/${nota.maquina_id}/estado`, { estado: 'disponible' });
+      await Promise.all(
+        maquinasNota.map(mid => api.patch(`/maquinas/${mid}/estado`, { estado: 'disponible' }))
+      );
       setConfirmProcesar(false);
       await cargarDatos();
     } catch (err) {
@@ -196,13 +210,21 @@ export default function Salidas() {
     );
   }
 
-  const maquina         = nota?.maquina_nombre;
-  const maquinaEnUso    = nota?.maquina_estado === 'en_uso';
+  const tieneMaquina    = maquinasNota.length > 0;
+  const maquinaEnUso    = nota?.maquina_estado === 'en_uso' || nota?.secadora_estado === 'en_uso';
 
-  // ¿El ciclo de la máquina ya terminó? (mismo cálculo que el dashboard)
+  // Lista de máquinas asignadas para mostrarlas con su badge de estado.
+  const maquinasAsignadas = [
+    nota?.maquina_id  && { nombre: nota.maquina_nombre,  tipo: nota.maquina_tipo,  estado: nota.maquina_estado  },
+    nota?.secadora_id && { nombre: nota.secadora_nombre, tipo: nota.secadora_tipo, estado: nota.secadora_estado },
+  ].filter(Boolean);
+
+  // ¿El ciclo ya terminó? (mismo cálculo que el dashboard)
   // El servidor promueve la nota a POR_PROCESAR al cumplirse el tiempo de
   // lavado; aquí solo lo reflejamos para mostrar el botón "Procesar".
   const cicloTerminado = maquinaEnUso && nota?.estado === 'POR_PROCESAR';
+
+  const nombresMaquinas = maquinasAsignadas.map(m => m.nombre).join(' y ');
 
   const productosNota  = nota?.productos || [];
   const productosIdsEnNota = new Set(productosNota.map(p => p.producto_id));
@@ -238,29 +260,34 @@ export default function Salidas() {
         </div>
       )}
 
-      {/* Sección 1 — Máquina */}
+      {/* Sección 1 — Máquinas */}
       <div className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
         <div className="px-4 py-3 border-b border-gray-50">
-          <h2 className="text-sm font-semibold text-gray-700">Máquina asignada</h2>
+          <h2 className="text-sm font-semibold text-gray-700">
+            {maquinasAsignadas.length > 1 ? 'Máquinas asignadas' : 'Máquina asignada'}
+          </h2>
         </div>
         <div className="px-4 py-4 flex items-center justify-between gap-4">
           <div className="min-w-0">
-            {maquina ? (
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-sm font-medium text-gray-800">{maquina}</span>
-                {MAQUINA_TIPO_LABEL[nota.maquina_tipo] && (
-                  <span className="text-xs text-gray-500">— {MAQUINA_TIPO_LABEL[nota.maquina_tipo]}</span>
-                )}
-                {(() => {
-                  const cfg = BADGE_MAQUINA_ESTADO[nota.maquina_estado];
-                  if (!cfg) return null;
+            {maquinasAsignadas.length > 0 ? (
+              <div className="space-y-2">
+                {maquinasAsignadas.map((m, i) => {
+                  const cfg = BADGE_MAQUINA_ESTADO[m.estado];
                   return (
-                    <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${cfg.cls}`}>
-                      <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot} ${nota.maquina_estado === 'en_uso' ? 'animate-pulse' : ''}`} />
-                      {cfg.label}
-                    </span>
+                    <div key={i} className="flex flex-wrap items-center gap-2">
+                      <span className="text-sm font-medium text-gray-800">{m.nombre}</span>
+                      {MAQUINA_TIPO_LABEL[m.tipo] && (
+                        <span className="text-xs text-gray-500">— {MAQUINA_TIPO_LABEL[m.tipo]}</span>
+                      )}
+                      {cfg && (
+                        <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${cfg.cls}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot} ${m.estado === 'en_uso' ? 'animate-pulse' : ''}`} />
+                          {cfg.label}
+                        </span>
+                      )}
+                    </div>
                   );
-                })()}
+                })}
               </div>
             ) : (
               <p className="text-sm text-gray-400 italic">Sin máquina asignada</p>
@@ -274,7 +301,7 @@ export default function Salidas() {
             >
               {loadingMaquina ? 'Activando...' : 'Activar'}
             </button>
-          ) : nota?.maquina_id ? (
+          ) : tieneMaquina ? (
             maquinaEnUso ? (
               cicloTerminado ? (
                 <button
@@ -400,7 +427,7 @@ export default function Salidas() {
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
             <h3 className="text-base font-bold text-gray-900">Detener ciclo</h3>
             <p className="text-sm text-gray-500">
-              ¿Detener el ciclo de <span className="font-semibold text-gray-800">{nota.maquina_nombre}</span>? La máquina pasará a disponible y se reiniciará su temporizador.
+              ¿Detener el ciclo de <span className="font-semibold text-gray-800">{nombresMaquinas}</span>? {maquinasAsignadas.length > 1 ? 'Las máquinas pasarán' : 'La máquina pasará'} a disponible y se reiniciará su temporizador.
             </p>
             <div className="flex gap-3">
               <button
@@ -430,7 +457,7 @@ export default function Salidas() {
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
             <h3 className="text-base font-bold text-gray-900">Procesar carga</h3>
             <p className="text-sm text-gray-500">
-              ¿Confirmar que la carga de <span className="font-semibold text-gray-800">{nota.maquina_nombre}</span> ya terminó? La máquina pasará a disponible y la nota a <span className="font-semibold text-gray-800">"Por Entregar"</span>.
+              ¿Confirmar que la carga de <span className="font-semibold text-gray-800">{nombresMaquinas}</span> ya terminó? {maquinasAsignadas.length > 1 ? 'Las máquinas pasarán' : 'La máquina pasará'} a disponible y la nota a <span className="font-semibold text-gray-800">"Por Entregar"</span>.
             </p>
             <div className="flex gap-3">
               <button
@@ -461,7 +488,7 @@ export default function Salidas() {
             <div>
               <h3 className="text-base font-bold text-gray-900">Activar nota</h3>
               <p className="text-sm text-gray-500 mt-1">
-                Selecciona la máquina. La nota pasará a <span className="font-medium text-gray-700">En Proceso</span> y la máquina quedará en uso.
+                Selecciona lavadora y/o secadora. La nota pasará a <span className="font-medium text-gray-700">En Proceso</span> y las máquinas quedarán en uso.
               </p>
             </div>
 
@@ -472,25 +499,60 @@ export default function Salidas() {
             ) : maquinasDisp.length === 0 ? (
               <p className="text-sm text-gray-400 text-center py-6">No hay máquinas disponibles.</p>
             ) : (
-              <div className="space-y-2">
-                {maquinasDisp.map(m => {
-                  const selected = String(maquinaSel) === String(m.id);
-                  return (
-                    <button
-                      key={m.id}
-                      type="button"
-                      onClick={() => setMaquinaSel(String(m.id))}
-                      className={`w-full flex items-center justify-between gap-2 px-4 py-3 border-2 rounded-xl text-left transition-colors ${
-                        selected ? 'border-blue bg-light-blue' : 'border-gray-200 bg-white hover:border-blue-300'
-                      }`}
-                    >
-                      <span className="font-medium text-gray-800">{m.nombre}</span>
-                      {MAQUINA_TIPO_LABEL[m.tipo] && (
-                        <span className="text-xs text-gray-500">{MAQUINA_TIPO_LABEL[m.tipo]}</span>
-                      )}
-                    </button>
-                  );
-                })}
+              <div className="space-y-4">
+                {/* Lavadora */}
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Lavadora</p>
+                  {maquinasDisp.filter(m => m.tipo !== 'secadora').length === 0 ? (
+                    <p className="text-sm text-gray-400">No hay lavadoras disponibles.</p>
+                  ) : (
+                    maquinasDisp.filter(m => m.tipo !== 'secadora').map(m => {
+                      const selected = String(maquinaSel) === String(m.id);
+                      return (
+                        <button
+                          key={m.id}
+                          type="button"
+                          onClick={() => setMaquinaSel(selected ? '' : String(m.id))}
+                          className={`w-full flex items-center justify-between gap-2 px-4 py-3 border-2 rounded-xl text-left transition-colors ${
+                            selected ? 'border-blue bg-light-blue' : 'border-gray-200 bg-white hover:border-blue-300'
+                          }`}
+                        >
+                          <span className="font-medium text-gray-800">{m.nombre}</span>
+                          {MAQUINA_TIPO_LABEL[m.tipo] && (
+                            <span className="text-xs text-gray-500">{MAQUINA_TIPO_LABEL[m.tipo]}</span>
+                          )}
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+
+                {/* Secadora */}
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Secadora <span className="font-normal normal-case">(opcional)</span></p>
+                  {maquinasDisp.filter(m => m.tipo === 'secadora').length === 0 ? (
+                    <p className="text-sm text-gray-400">No hay secadoras disponibles.</p>
+                  ) : (
+                    maquinasDisp.filter(m => m.tipo === 'secadora').map(m => {
+                      const selected = String(secadoraSel) === String(m.id);
+                      return (
+                        <button
+                          key={m.id}
+                          type="button"
+                          onClick={() => setSecadoraSel(selected ? '' : String(m.id))}
+                          className={`w-full flex items-center justify-between gap-2 px-4 py-3 border-2 rounded-xl text-left transition-colors ${
+                            selected ? 'border-blue bg-light-blue' : 'border-gray-200 bg-white hover:border-blue-300'
+                          }`}
+                        >
+                          <span className="font-medium text-gray-800">{m.nombre}</span>
+                          {MAQUINA_TIPO_LABEL[m.tipo] && (
+                            <span className="text-xs text-gray-500">{MAQUINA_TIPO_LABEL[m.tipo]}</span>
+                          )}
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
               </div>
             )}
 
@@ -505,8 +567,8 @@ export default function Salidas() {
               </button>
               <button
                 type="button"
-                onClick={() => activarNota(maquinaSel)}
-                disabled={loadingMaquina || !maquinaSel}
+                onClick={() => activarNota(maquinaSel, secadoraSel)}
+                disabled={loadingMaquina || (!maquinaSel && !secadoraSel)}
                 className="flex-1 bg-blue hover:opacity-90 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
               >
                 {loadingMaquina ? 'Activando...' : 'Activar'}

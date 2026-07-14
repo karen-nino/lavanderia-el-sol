@@ -29,6 +29,7 @@ const PRENDA_LABEL = Object.fromEntries(TIPOS_PRENDA.map(t => [t.v, t.label]));
 
 const FORM_INIT = {
   maquina_id:      '',
+  secadora_id:     '',
   tipo_tela:       '',
   tamano_edredon:  '',
   cantidad_cargas: '1',
@@ -94,6 +95,7 @@ export default function NuevaNota() {
   const [prendaOpen,        setPrendaOpen]        = useState(false);
   const [telaOpen,          setTelaOpen]          = useState(false);
   const [maquinaOpen,       setMaquinaOpen]       = useState(false);
+  const [secadoraOpen,      setSecadoraOpen]      = useState(false);
   const [maquinaEncargoOpen, setMaquinaEncargoOpen] = useState(false);
   const [encargoStep,       setEncargoStep]       = useState(1);
   const [encargoForm,       setEncargoForm]       = useState(ENCARGO_INIT);
@@ -109,6 +111,7 @@ export default function NuevaNota() {
   const tipoRef           = useRef(null);
   const prendaRef         = useRef(null);
   const maquinaRef        = useRef(null);
+  const secadoraRef       = useRef(null);
   const maquinaEncargoRef = useRef(null);
 
   useEffect(() => {
@@ -145,6 +148,17 @@ export default function NuevaNota() {
   }, [maquinaOpen]);
 
   useEffect(() => {
+    if (!secadoraOpen) return;
+    const onMouseDown = (e) => {
+      if (secadoraRef.current && !secadoraRef.current.contains(e.target)) {
+        setSecadoraOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onMouseDown);
+    return () => document.removeEventListener('mousedown', onMouseDown);
+  }, [secadoraOpen]);
+
+  useEffect(() => {
     if (!maquinaEncargoOpen) return;
     const onMouseDown = (e) => {
       if (maquinaEncargoRef.current && !maquinaEncargoRef.current.contains(e.target)) {
@@ -162,10 +176,15 @@ export default function NuevaNota() {
     return precios.mediana;
   };
   const maquinaAutoservicio = maquinas.find(m => String(m.id) === String(form.maquina_id));
-  const precioCargaAutoservicio = precioPorTipo(maquinaAutoservicio?.tipo, tipoPrenda);
+  // Precio por carga = tarifa de la lavadora + tarifa de la secadora
+  // (cualquiera de las dos puede estar sin asignar).
+  const precioCargaLavadora  = form.maquina_id  ? precioPorTipo(maquinaAutoservicio?.tipo, tipoPrenda) : 0;
+  const precioCargaSecadora  = form.secadora_id ? precios.secadora : 0;
+  const precioCargaAutoservicio = precioCargaLavadora + precioCargaSecadora;
 
   const ajusteNum      = Number(form.ajuste) || 0;
-  const subtotalCargas = (Number(form.cantidad_cargas) || 1) * precioCargaAutoservicio;
+  const cargasAutoservicio = Number(form.cantidad_cargas) || 1;
+  const subtotalCargas = cargasAutoservicio * precioCargaAutoservicio;
   const subtotalProductos = productosLista.reduce((sum, p) => {
     const prod = productosCatalogo.find(x => String(x.id) === String(p.producto_id));
     return sum + (prod ? (Number(prod.precio_unitario) || 0) * (Number(p.cantidad) || 0) : 0);
@@ -190,10 +209,11 @@ export default function NuevaNota() {
         setTamanosEdredon(tamanosCat || []);
         const nota = esEdicion ? extra : null;
         setFolio(esEdicion ? (nota?.folio ?? '') : (extra?.folio ?? ''));
-        // En edición, incluir la máquina actual aunque no esté "disponible"
-        const maquinasFiltradas = esEdicion && nota?.maquina_id
-          ? m.filter(maq => maq.estado === 'disponible' || maq.id === nota.maquina_id)
-          : m.filter(maq => maq.estado === 'disponible');
+        // En edición, incluir la lavadora/secadora actuales aunque no estén "disponibles"
+        const idsActuales = esEdicion ? [nota?.maquina_id, nota?.secadora_id].filter(Boolean) : [];
+        const maquinasFiltradas = m.filter(
+          maq => maq.estado === 'disponible' || idsActuales.includes(maq.id)
+        );
         setMaquinas(maquinasFiltradas);
         setProductosCatalogo(prod);
         if (cfg) {
@@ -246,6 +266,7 @@ export default function NuevaNota() {
             // AUTOSERVICIO o EDREDON usan el mismo formulario
             setForm({
               maquina_id:      nota.maquina_id     ? String(nota.maquina_id) : '',
+              secadora_id:     nota.secadora_id    ? String(nota.secadora_id) : '',
               tipo_tela:       nota.tipo_tela      ?? '',
               tamano_edredon:  nota.tamano_edredon ?? '',
               cantidad_cargas: nota.cantidad_cargas != null ? String(nota.cantidad_cargas) : '1',
@@ -413,14 +434,15 @@ export default function NuevaNota() {
       modalidad:       'AUTOSERVICIO',
       tipo_prenda:     tipoPrenda || 'ROPA',
       // Sin máquina asignada la nota queda En Espera (se activa después
-      // desde Salidas); con máquina nace directamente En Proceso.
-      estado:          form.maquina_id ? 'EN_PROCESO' : 'EN_ESPERA',
+      // desde Salidas); con lavadora o secadora nace directamente En Proceso.
+      estado:          (form.maquina_id || form.secadora_id) ? 'EN_PROCESO' : 'EN_ESPERA',
       estado_pago:     'PAGADO',
       // null (no undefined) para que al editar, limpiar un campo lo borre.
       instrucciones:   form.instrucciones || null,
       tipo_tela:       (tipoPrenda || 'ROPA') === 'ROPA' ? (form.tipo_tela || null) : null,
       tamano_edredon:  tipoPrenda === 'EDREDON' ? (form.tamano_edredon || null) : null,
       maquina_id:      form.maquina_id ? Number(form.maquina_id) : null,
+      secadora_id:     form.secadora_id ? Number(form.secadora_id) : null,
       cantidad_cargas: cargas,
       precio_base:     precioCargaAutoservicio,
       ajuste:          ajusteNum,
@@ -435,9 +457,12 @@ export default function NuevaNota() {
         navigate(`/notas/${id}`);
       } else {
         const creada = await api.post('/notas', payload);
-        if (form.maquina_id) {
-          await api.patch(`/maquinas/${form.maquina_id}/estado`, { estado: 'en_uso' });
-        }
+        // Marcar en uso la lavadora y/o la secadora asignadas.
+        await Promise.all(
+          [form.maquina_id, form.secadora_id]
+            .filter(Boolean)
+            .map(mid => api.patch(`/maquinas/${mid}/estado`, { estado: 'en_uso' }))
+        );
         setNotaCreada(creada);
       }
     } catch (err) {
@@ -1557,11 +1582,12 @@ export default function NuevaNota() {
         <div className='space-y-8'>
 
 
-          {/* Máquina */}
+          {/* Lavadora */}
           <div ref={maquinaRef} className="relative">
-            <label className={LABEL_CLS}>Máquina</label>
+            <label className={LABEL_CLS}>Lavadora</label>
             {(() => {
-              const maquinaSel = maquinas.find(m => String(m.id) === String(form.maquina_id));
+              const lavadoras = maquinas.filter(m => m.tipo !== 'secadora');
+              const maquinaSel = lavadoras.find(m => String(m.id) === String(form.maquina_id));
               const maquinaLabel = formatMaquina(maquinaSel);
               return (
                 <>
@@ -1611,7 +1637,10 @@ export default function NuevaNota() {
                           )}
                         </span>
                       </button>
-                      {maquinas.map(m => {
+                      {lavadoras.length === 0 && (
+                        <p className="px-4 py-3.5 text-sm text-gray-400">No hay lavadoras disponibles.</p>
+                      )}
+                      {lavadoras.map(m => {
                         const selected = String(form.maquina_id) === String(m.id);
                         return (
                           <button
@@ -1640,9 +1669,97 @@ export default function NuevaNota() {
                 </>
               );
             })()}
-            {maquinas.length === 0 && (
-              <p className="text-xs text-red-600 mt-1">No hay máquinas disponibles en este momento.</p>
-            )}
+          </div>
+
+          {/* Secadora */}
+          <div ref={secadoraRef} className="relative">
+            <label className={LABEL_CLS}>
+              Secadora <span className="font-normal text-gray-400">(opcional)</span>
+            </label>
+            {(() => {
+              const secadoras = maquinas.filter(m => m.tipo === 'secadora');
+              const secadoraSel = secadoras.find(m => String(m.id) === String(form.secadora_id));
+              const secadoraLabel = formatMaquina(secadoraSel);
+              return (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setSecadoraOpen(o => !o)}
+                    className={`w-full px-4 py-3.5 border rounded-lg bg-white text-left flex items-center justify-between transition-colors ${
+                      secadoraOpen
+                        ? 'border-blue-500 ring-1 ring-blue-500'
+                        : form.secadora_id
+                          ? 'border-green-600'
+                          : 'border-gray-300 hover:border-gray-400'
+                    }`}
+                  >
+                    <span className={form.secadora_id ? 'text-gray-900' : 'text-gray-400'}>
+                      {secadoraLabel || 'Sin asignar'}
+                    </span>
+                    {form.secadora_id && !secadoraOpen ? (
+                      <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                    ) : (
+                      <svg
+                        className={`w-5 h-5 text-gray-500 transition-transform ${secadoraOpen ? 'rotate-180' : ''}`}
+                        fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    )}
+                  </button>
+
+                  {secadoraOpen && (
+                    <div className="mt-2 bg-white border border-gray-200 rounded-lg shadow-md overflow-hidden">
+                      <button
+                        type="button"
+                        onClick={() => { setForm(f => ({ ...f, secadora_id: '' })); setSecadoraOpen(false); }}
+                        className="w-full px-4 py-3.5 flex items-center justify-between text-left hover:bg-gray-50 border-b last:border-0 border-gray-100"
+                      >
+                        <span className="text-base text-gray-500 italic">Sin asignar</span>
+                        <span className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
+                          !form.secadora_id ? 'border-blue bg-blue' : 'border-gray-300'
+                        }`}>
+                          {!form.secadora_id && (
+                            <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                            </svg>
+                          )}
+                        </span>
+                      </button>
+                      {secadoras.length === 0 && (
+                        <p className="px-4 py-3.5 text-sm text-gray-400">No hay secadoras disponibles.</p>
+                      )}
+                      {secadoras.map(m => {
+                        const selected = String(form.secadora_id) === String(m.id);
+                        return (
+                          <button
+                            key={m.id}
+                            type="button"
+                            onClick={() => { setForm(f => ({ ...f, secadora_id: String(m.id) })); setSecadoraOpen(false); }}
+                            className="w-full px-4 py-3.5 flex items-center justify-between text-left hover:bg-gray-50 border-b last:border-0 border-gray-100"
+                          >
+                            <span className="text-base text-gray-900">
+                              {formatMaquina(m)}
+                            </span>
+                            <span className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
+                              selected ? 'border-blue bg-blue' : 'border-gray-300'
+                            }`}>
+                              {selected && (
+                                <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                </svg>
+                              )}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </>
+              );
+            })()}
           </div>
 
           {/* Cantidad de cargas */}
@@ -1824,6 +1941,7 @@ export default function NuevaNota() {
         {/* ── Precio Total ─────────────────────────────────── */}
         {(() => {
           const maquinaSel = maquinas.find(m => String(m.id) === String(form.maquina_id));
+          const secadoraSel = maquinas.find(m => String(m.id) === String(form.secadora_id));
           return (
             <div className="bg-light-blue border border-blue-200 rounded-xl p-4">
               <p className="text-xs font-medium text-blue uppercase tracking-wide mb-2">
@@ -1851,17 +1969,37 @@ export default function NuevaNota() {
                   </div>
                 )}
                 <div className="flex justify-between">
-                  <span>Máquina</span>
+                  <span>Lavadora</span>
                   <span className="font-medium">
                     {maquinaSel ? formatMaquina(maquinaSel) : 'Sin asignar'}
                   </span>
                 </div>
+                <div className="flex justify-between">
+                  <span>Secadora</span>
+                  <span className="font-medium">
+                    {secadoraSel ? formatMaquina(secadoraSel) : 'Sin asignar'}
+                  </span>
+                </div>
               </div>
               <div className="space-y-1 mb-2 text-sm text-blue border-t border-blue-200 pt-3">
-                <div className="flex justify-between">
-                  <span>Cargas ({form.cantidad_cargas || 1} × ${precioCargaAutoservicio.toFixed(2)})</span>
-                  <span>${subtotalCargas.toFixed(2)}</span>
-                </div>
+                {form.maquina_id && (
+                  <div className="flex justify-between">
+                    <span>Cargas lavadora ({cargasAutoservicio} × ${precioCargaLavadora.toFixed(2)})</span>
+                    <span>${(cargasAutoservicio * precioCargaLavadora).toFixed(2)}</span>
+                  </div>
+                )}
+                {form.secadora_id && (
+                  <div className="flex justify-between">
+                    <span>Cargas secadora ({cargasAutoservicio} × ${precioCargaSecadora.toFixed(2)})</span>
+                    <span>${(cargasAutoservicio * precioCargaSecadora).toFixed(2)}</span>
+                  </div>
+                )}
+                {!form.maquina_id && !form.secadora_id && (
+                  <div className="flex justify-between">
+                    <span>Cargas ({cargasAutoservicio} × $0.00)</span>
+                    <span>$0.00</span>
+                  </div>
+                )}
                 {ajusteNum !== 0 && (
                   <div className="flex justify-between">
                     <span>Ajuste</span>

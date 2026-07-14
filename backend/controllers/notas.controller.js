@@ -100,11 +100,13 @@ export const getNotas = async (req, res) => {
               c.apellido AS cliente_apellido,
               c.telefono AS cliente_telefono,
               u.nombre   AS usuario_nombre,
-              m.nombre   AS maquina_nombre
+              m.nombre   AS maquina_nombre,
+              s.nombre   AS secadora_nombre
        FROM notas n
        LEFT JOIN clientes  c ON c.id = n.cliente_id
        JOIN      usuarios  u ON u.id = n.usuario_id
        LEFT JOIN maquinas  m ON m.id = n.maquina_id
+       LEFT JOIN maquinas  s ON s.id = n.secadora_id
        WHERE n.sucursal = $1
        ORDER BY n.created_at DESC`,
       [req.sucursal]
@@ -130,11 +132,16 @@ export const getNotaById = async (req, res) => {
               m.nombre   AS maquina_nombre,
               m.tipo     AS maquina_tipo,
               m.estado   AS maquina_estado,
-              m.en_uso_desde AS maquina_en_uso_desde
+              m.en_uso_desde AS maquina_en_uso_desde,
+              s.nombre   AS secadora_nombre,
+              s.tipo     AS secadora_tipo,
+              s.estado   AS secadora_estado,
+              s.en_uso_desde AS secadora_en_uso_desde
        FROM notas n
        LEFT JOIN clientes  c ON c.id = n.cliente_id
        JOIN      usuarios  u ON u.id = n.usuario_id
        LEFT JOIN maquinas  m ON m.id = n.maquina_id
+       LEFT JOIN maquinas  s ON s.id = n.secadora_id
        WHERE n.id = $1 AND n.sucursal = $2`,
       [id, req.sucursal]
     );
@@ -181,6 +188,7 @@ export const createNota = async (req, res) => {
   const {
     cliente_id,
     maquina_id,
+    secadora_id,
     modalidad = 'POR_ENCARGO',
     tipo_prenda = 'ROPA',
     estado,
@@ -266,6 +274,9 @@ export const createNota = async (req, res) => {
   if (maquina_id && !(await perteneceASucursal('maquinas', maquina_id, req.sucursal))) {
     return res.status(400).json({ message: 'maquina_id no existe.' });
   }
+  if (secadora_id && !(await perteneceASucursal('maquinas', secadora_id, req.sucursal))) {
+    return res.status(400).json({ message: 'secadora_id no existe.' });
+  }
 
   const ajusteNum      = Number(ajuste)         || 0;
   const cantidadCargas = Number(cantidad_cargas) || 1;
@@ -297,6 +308,11 @@ export const createNota = async (req, res) => {
       } else {
         precioBaseNum = Number(c.precio_carga_mediana);
       }
+      // Autoservicio permite además una secadora: su tarifa se suma al
+      // precio por carga de la lavadora.
+      if (secadora_id && tipoMaquina !== 'secadora') {
+        precioBaseNum += Number(c.precio_carga_secadora);
+      }
     } else {
       precioBaseNum = 70;
     }
@@ -314,15 +330,16 @@ export const createNota = async (req, res) => {
 
     const { rows: notaRows } = await client.query(
       `INSERT INTO notas
-         (cliente_id, usuario_id, maquina_id, modalidad, tipo_prenda, estado, estado_pago, sucursal,
+         (cliente_id, usuario_id, maquina_id, secadora_id, modalidad, tipo_prenda, estado, estado_pago, sucursal,
           peso_kg, precio_total, fecha_entrega, tiempo_entrega, instrucciones,
           tamano, tipo_tela, tamano_edredon, precio_base, ajuste, cantidad_cargas)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
        RETURNING *`,
       [
         cliente_id   || null,
         req.user.id,
         maquina_id   || null,
+        secadora_id  || null,
         modalidad,
         String(tipo_prenda).toUpperCase(),
         estadoInicial,
@@ -460,6 +477,7 @@ export const updateNota = async (req, res) => {
   const {
     cliente_id,
     maquina_id,
+    secadora_id,
     estado_pago,
     fecha_entrega,
     tiempo_entrega,
@@ -515,6 +533,9 @@ export const updateNota = async (req, res) => {
   }
   if (maquina_id && !(await perteneceASucursal('maquinas', maquina_id, req.sucursal))) {
     return res.status(400).json({ message: 'maquina_id no existe.' });
+  }
+  if (secadora_id && !(await perteneceASucursal('maquinas', secadora_id, req.sucursal))) {
+    return res.status(400).json({ message: 'secadora_id no existe.' });
   }
 
   const client = await pool.connect();
@@ -647,7 +668,8 @@ export const updateNota = async (req, res) => {
          precio_base     = $12,
          ajuste          = $13,
          cantidad_cargas = $14,
-         precio_total    = $15
+         precio_total    = $15,
+         secadora_id     = $16
        WHERE id = $1
        RETURNING *`,
       [
@@ -666,6 +688,7 @@ export const updateNota = async (req, res) => {
         ajusteNum,
         cantidadCargasNum,
         precioFinal,
+        tiene('secadora_id')    ? (secadora_id || null) : actual.secadora_id,
       ]
     );
 
@@ -703,14 +726,14 @@ export const eliminarNota = async (req, res) => {
     await client.query('BEGIN');
 
     const { rows: notaRows } = await client.query(
-      'SELECT maquina_id, estado FROM notas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
+      'SELECT maquina_id, secadora_id, estado FROM notas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
       [id, req.sucursal]
     );
     if (notaRows.length === 0) {
       await client.query('ROLLBACK');
       return res.status(404).json({ message: 'Nota no encontrada.' });
     }
-    const { maquina_id: maquinaId, estado: estadoNota } = notaRows[0];
+    const { maquina_id: maquinaId, secadora_id: secadoraId, estado: estadoNota } = notaRows[0];
 
     // El efecto en stock depende del estado de la nota:
     //   - PAGADA: el pago ya consumió stock_actual y liberó la reserva;
@@ -738,14 +761,15 @@ export const eliminarNota = async (req, res) => {
 
     await client.query('DELETE FROM notas WHERE id = $1', [id]);
 
-    // Liberar la máquina si estaba en uso por esta nota
-    if (maquinaId) {
+    // Liberar la(s) máquina(s) si estaban en uso por esta nota
+    const maquinasALiberar = [maquinaId, secadoraId].filter(Boolean);
+    if (maquinasALiberar.length > 0) {
       await client.query(
         `UPDATE maquinas
            SET estado = 'disponible',
                en_uso_desde = NULL
-         WHERE id = $1 AND estado = 'en_uso'`,
-        [maquinaId]
+         WHERE id = ANY($1) AND estado = 'en_uso'`,
+        [maquinasALiberar]
       );
     }
 
@@ -851,18 +875,18 @@ export const cambiarEstadoNota = async (req, res) => {
 };
 
 // ── PATCH /notas/:id/activar ────────────────────────────────
-// Activa una nota En Espera: le asigna máquina (si se indica),
-// la pasa a En Proceso y marca la máquina como en uso.
+// Activa una nota En Espera: le asigna lavadora y/o secadora (si se
+// indican), la pasa a En Proceso y marca esas máquinas como en uso.
 export const activarNota = async (req, res) => {
   const { id } = req.params;
-  const { maquina_id } = req.body;
+  const { maquina_id, secadora_id } = req.body;
 
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
 
     const { rows: notaRows } = await client.query(
-      'SELECT estado, maquina_id FROM notas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
+      'SELECT estado, maquina_id, secadora_id FROM notas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
       [id, req.sucursal]
     );
     if (notaRows.length === 0) {
@@ -874,32 +898,37 @@ export const activarNota = async (req, res) => {
       return res.status(400).json({ message: 'Solo se puede activar una nota En Espera.' });
     }
 
-    const maquinaFinal = maquina_id || notaRows[0].maquina_id;
-    if (!maquinaFinal) {
+    const lavadoraFinal = maquina_id  || notaRows[0].maquina_id;
+    const secadoraFinal = secadora_id || notaRows[0].secadora_id;
+    const maquinas = [lavadoraFinal, secadoraFinal].filter(Boolean);
+    if (maquinas.length === 0) {
       await client.query('ROLLBACK');
-      return res.status(400).json({ message: 'Se requiere una máquina para activar la nota.' });
+      return res.status(400).json({ message: 'Se requiere al menos una máquina para activar la nota.' });
     }
 
-    const { rows: maqRows } = await client.query(
-      'SELECT estado FROM maquinas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
-      [maquinaFinal, req.sucursal]
-    );
-    if (maqRows.length === 0) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ message: 'La máquina seleccionada no existe.' });
-    }
-    if (maqRows[0].estado !== 'disponible') {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ message: 'La máquina seleccionada no está disponible.' });
+    // Validar disponibilidad de cada máquina antes de tomar ninguna.
+    for (const mid of maquinas) {
+      const { rows: maqRows } = await client.query(
+        'SELECT estado FROM maquinas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
+        [mid, req.sucursal]
+      );
+      if (maqRows.length === 0) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ message: 'La máquina seleccionada no existe.' });
+      }
+      if (maqRows[0].estado !== 'disponible') {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ message: 'La máquina seleccionada no está disponible.' });
+      }
     }
 
     await client.query(
-      `UPDATE maquinas SET estado = 'en_uso', en_uso_desde = NOW() WHERE id = $1`,
-      [maquinaFinal]
+      `UPDATE maquinas SET estado = 'en_uso', en_uso_desde = NOW() WHERE id = ANY($1)`,
+      [maquinas]
     );
     await client.query(
-      `UPDATE notas SET maquina_id = $1, estado = 'EN_PROCESO' WHERE id = $2`,
-      [maquinaFinal, id]
+      `UPDATE notas SET maquina_id = $1, secadora_id = $2, estado = 'EN_PROCESO' WHERE id = $3`,
+      [lavadoraFinal || null, secadoraFinal || null, id]
     );
 
     await client.query('COMMIT');
@@ -913,11 +942,16 @@ export const activarNota = async (req, res) => {
               m.nombre   AS maquina_nombre,
               m.tipo     AS maquina_tipo,
               m.estado   AS maquina_estado,
-              m.en_uso_desde AS maquina_en_uso_desde
+              m.en_uso_desde AS maquina_en_uso_desde,
+              s.nombre   AS secadora_nombre,
+              s.tipo     AS secadora_tipo,
+              s.estado   AS secadora_estado,
+              s.en_uso_desde AS secadora_en_uso_desde
        FROM notas n
        LEFT JOIN clientes  c ON c.id = n.cliente_id
        JOIN      usuarios  u ON u.id = n.usuario_id
        LEFT JOIN maquinas  m ON m.id = n.maquina_id
+       LEFT JOIN maquinas  s ON s.id = n.secadora_id
        WHERE n.id = $1`,
       [id]
     );
