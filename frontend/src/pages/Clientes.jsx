@@ -44,6 +44,11 @@ export default function Clientes() {
   // así que se mide para compensarla al hacer scroll.
   const stickyRef = useRef(null);
 
+  // Letra bajo el dedo al deslizar sobre el índice (estilo WhatsApp).
+  // El ref evita saltos repetidos entre renders durante el arrastre.
+  const [letraActiva, setLetraActiva] = useState(null);
+  const letraActivaRef = useRef(null);
+
   useEffect(() => {
     api.get('/clientes')
       .then(setClientes)
@@ -84,12 +89,37 @@ export default function Clientes() {
     g.items.push(c);
   });
 
-  const scrollToLetra = (letra) => {
+  const scrollToLetra = (letra, suave = true) => {
     const el = document.getElementById(`cli-letra-${letra}`);
     if (!el) return;
     const offset = (stickyRef.current?.offsetHeight ?? 0) + 8;
     el.style.scrollMarginTop = `${offset}px`;
-    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    // Durante el arrastre el salto es instantáneo; con smooth los saltos
+    // encadenados se encolan y la lista se queda atrás del dedo.
+    el.scrollIntoView({ behavior: suave ? 'smooth' : 'auto', block: 'start' });
+  };
+
+  // ── Arrastre sobre el índice (seleccionar letra por letra) ──
+  const letraBajoElDedo = (touch) => {
+    const el = document.elementFromPoint(touch.clientX, touch.clientY);
+    return el?.closest('[data-letra]')?.dataset.letra ?? null;
+  };
+
+  const handleIndiceTouch = (e) => {
+    const touch = e.touches[0];
+    if (!touch) return;
+    const letra = letraBajoElDedo(touch);
+    if (!letra || !grupoPorLetra[letra]) return;
+    if (letra !== letraActivaRef.current) {
+      letraActivaRef.current = letra;
+      setLetraActiva(letra);
+      scrollToLetra(letra, false);
+    }
+  };
+
+  const handleIndiceTouchEnd = () => {
+    letraActivaRef.current = null;
+    setLetraActiva(null);
   };
 
   // ── Crear ──────────────────────────────────────────────
@@ -340,18 +370,28 @@ export default function Clientes() {
           </div>
 
           {/* Índice alfabético — mobile */}
-          <div className="md:hidden fixed right-0.5 top-1/2 -translate-y-1/2 z-30 flex flex-col items-center select-none">
+          <div
+            className="md:hidden fixed right-0.5 top-1/2 -translate-y-1/2 z-30 flex flex-col items-center select-none touch-none"
+            onTouchStart={handleIndiceTouch}
+            onTouchMove={handleIndiceTouch}
+            onTouchEnd={handleIndiceTouchEnd}
+            onTouchCancel={handleIndiceTouchEnd}
+          >
             {ALFABETO.map(letra => {
               const activa = !!grupoPorLetra[letra];
+              const bajoElDedo = letra === letraActiva;
               return (
                 <button
                   key={letra}
                   type="button"
                   disabled={!activa}
+                  data-letra={letra}
                   onClick={() => scrollToLetra(letra)}
                   aria-label={`Ir a ${letra}`}
-                  className={`w-4 h-3.5 flex items-center justify-center text-[10px] leading-none font-semibold ${
-                    activa ? 'text-blue/70 hover:text-blue active:text-blue' : 'text-gray-300'
+                  className={`w-4 h-3.5 flex items-center justify-center text-[10px] leading-none font-semibold transition-transform ${
+                    bajoElDedo
+                      ? 'text-blue scale-150'
+                      : activa ? 'text-blue/70 hover:text-blue active:text-blue' : 'text-gray-300'
                   }`}
                 >
                   {letra}
@@ -359,6 +399,15 @@ export default function Clientes() {
               );
             })}
           </div>
+
+          {/* Burbuja con la letra actual durante el arrastre */}
+          {letraActiva && (
+            <div className="md:hidden fixed inset-0 z-40 pointer-events-none flex items-center justify-center">
+              <div className="w-20 h-20 rounded-2xl bg-dark-blue/80 text-white text-4xl font-bold flex items-center justify-center shadow-xl">
+                {letraActiva}
+              </div>
+            </div>
+          )}
         </>
       )}
 
