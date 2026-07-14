@@ -215,7 +215,7 @@ export default function Dashboard() {
       <Link
         to="/notas/nueva"
         aria-label="Nueva nota"
-        className="fixed bottom-24 right-4 md:bottom-8 md:right-8 w-16 h-16 rounded-pill bg-blue text-white shadow-card flex items-center justify-center hover:opacity-90 transition-opacity z-40"
+        className="fixed bottom-24 right-4 md:bottom-8 md:right-8 w-16 h-16 rounded-pill bg-blue text-white shadow-card flex items-center justify-center hover:opacity-90 transition duration-200 ease-out active:scale-[1.3] active:shadow-lg z-40"
       >
         <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
