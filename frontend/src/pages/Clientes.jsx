@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { esAdmin as esAdminFn } from '../lib/roles';
@@ -39,6 +39,10 @@ export default function Clientes() {
 
   // Modal info (mobile)
   const [infoCliente, setInfoCliente]     = useState(null);
+
+  // Cabecera sticky: su altura tapa el destino del índice alfabético,
+  // así que se mide para compensarla al hacer scroll.
+  const stickyRef = useRef(null);
 
   useEffect(() => {
     api.get('/clientes')
@@ -81,8 +85,11 @@ export default function Clientes() {
   });
 
   const scrollToLetra = (letra) => {
-    document.getElementById(`cli-letra-${letra}`)
-      ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const el = document.getElementById(`cli-letra-${letra}`);
+    if (!el) return;
+    const offset = (stickyRef.current?.offsetHeight ?? 0) + 8;
+    el.style.scrollMarginTop = `${offset}px`;
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
   // ── Crear ──────────────────────────────────────────────
@@ -177,7 +184,7 @@ export default function Clientes() {
   return (
     <div className="min-h-full bg-slate-100">
       {/* Cabecera + búsqueda (sticky) */}
-      <div className="sticky top-0 z-20">
+      <div ref={stickyRef} className="sticky top-0 z-20">
         <div className="bg-white border-b-2 border-gray-200">
           <div className="px-6 md:px-8 pt-10 md:pt-14 pb-4 flex items-center justify-between">
             <div>
@@ -309,7 +316,7 @@ export default function Clientes() {
               <div key={g.letra} className="space-y-3">
                 <h2
                   id={`cli-letra-${g.letra}`}
-                  className="scroll-mt-4 px-1 text-sm font-bold text-gray-400"
+                  className="px-1 text-sm font-bold text-gray-400"
                 >
                   {g.letra}
                 </h2>
