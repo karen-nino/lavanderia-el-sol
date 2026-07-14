@@ -21,6 +21,11 @@ const BADGE_MODALIDAD = {
   POR_ENCARGO:  { label: 'Por encargo',  cls: 'bg-amber-100 text-amber-700'   },
 };
 
+const PRENDA_LABEL = {
+  ROPA:    'Ropa',
+  EDREDON: 'Edredón',
+};
+
 const BADGE_PAGO = {
   PENDIENTE: { label: 'Pendiente', cls: 'bg-red-100 text-red-700'   },
   PAGADO: { label: 'Pagado', cls: 'bg-green-100 text-green-700'  },
@@ -364,6 +369,11 @@ export default function DetalleNota() {
             </span>
             {nota.tamano && <span className="ml-2 text-xs text-gray-500 capitalize">{nota.tamano}</span>}
           </FilaDetalle>
+          {nota.tipo_prenda && PRENDA_LABEL[nota.tipo_prenda] && (
+            <FilaDetalle label="Prenda">
+              <span className="text-sm font-medium text-gray-800">{PRENDA_LABEL[nota.tipo_prenda]}</span>
+            </FilaDetalle>
+          )}
           {nota.tipo_tela && (
             <FilaDetalle label="Tela">
               <span className="text-sm font-medium text-gray-800">{nota.tipo_tela}</span>
