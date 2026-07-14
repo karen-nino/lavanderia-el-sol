@@ -1581,6 +1581,41 @@ export default function NuevaNota() {
 
         <div className='space-y-8'>
 
+          {/* Cantidad de cargas */}
+          <div>
+            <label className={LABEL_CLS}>
+              Cantidad de cargas <span className="text-red-500">*</span>
+            </label>
+            {/* <p className="text-xs text-gray-400 mb-1.5">Precio base por carga: ${precioCargaAutoservicio.toFixed(2)} MXN</p> */}
+            <div className="flex items-center gap-2">
+              <input
+                type="number" name="cantidad_cargas" min="1" step="1" required
+                value={form.cantidad_cargas} onChange={handleChange}
+                placeholder="1"
+                className={`${INPUT_CLS} text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`}
+              />
+              <button
+                type="button"
+                onClick={() => setForm(f => ({ ...f, cantidad_cargas: String(Math.max(1, (Number(f.cantidad_cargas) || 1) - 1)) }))}
+                disabled={(Number(form.cantidad_cargas) || 1) <= 1}
+                aria-label="Disminuir cargas"
+                className="flex-shrink-0 w-14 py-3.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-xl font-semibold hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                −
+              </button>
+              <button
+                type="button"
+                onClick={() => setForm(f => ({ ...f, cantidad_cargas: String((Number(f.cantidad_cargas) || 0) + 1) }))}
+                aria-label="Aumentar cargas"
+                className="flex-shrink-0 w-14 py-3.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-xl font-semibold hover:bg-gray-50 transition-colors"
+              >
+                +
+              </button>
+            </div>
+            <p className="text-xs text-blue mt-1 font-medium">
+              Subtotal cargas: ${subtotalCargas.toFixed(2)}
+            </p>
+          </div>
 
           {/* Lavadora */}
           <div ref={maquinaRef} className="relative">
@@ -1760,42 +1795,6 @@ export default function NuevaNota() {
                 </>
               );
             })()}
-          </div>
-
-          {/* Cantidad de cargas */}
-          <div>
-            <label className={LABEL_CLS}>
-              Cantidad de cargas <span className="text-red-500">*</span>
-            </label>
-            {/* <p className="text-xs text-gray-400 mb-1.5">Precio base por carga: ${precioCargaAutoservicio.toFixed(2)} MXN</p> */}
-            <div className="flex items-center gap-2">
-              <input
-                type="number" name="cantidad_cargas" min="1" step="1" required
-                value={form.cantidad_cargas} onChange={handleChange}
-                placeholder="1"
-                className={`${INPUT_CLS} text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`}
-              />
-              <button
-                type="button"
-                onClick={() => setForm(f => ({ ...f, cantidad_cargas: String(Math.max(1, (Number(f.cantidad_cargas) || 1) - 1)) }))}
-                disabled={(Number(form.cantidad_cargas) || 1) <= 1}
-                aria-label="Disminuir cargas"
-                className="flex-shrink-0 w-14 py-3.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-xl font-semibold hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-              >
-                −
-              </button>
-              <button
-                type="button"
-                onClick={() => setForm(f => ({ ...f, cantidad_cargas: String((Number(f.cantidad_cargas) || 0) + 1) }))}
-                aria-label="Aumentar cargas"
-                className="flex-shrink-0 w-14 py-3.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-xl font-semibold hover:bg-gray-50 transition-colors"
-              >
-                +
-              </button>
-            </div>
-            <p className="text-xs text-blue mt-1 font-medium">
-              Subtotal cargas: ${subtotalCargas.toFixed(2)}
-            </p>
           </div>
 
           {/* Ajuste */}
