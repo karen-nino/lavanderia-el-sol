@@ -30,6 +30,7 @@ const PRENDA_LABEL = Object.fromEntries(TIPOS_PRENDA.map(t => [t.v, t.label]));
 const FORM_INIT = {
   maquina_id:      '',
   tipo_tela:       '',
+  tamano_edredon:  '',
   cantidad_cargas: '1',
   ajuste:          '0',
   instrucciones:   '',
@@ -246,6 +247,7 @@ export default function NuevaNota() {
             setForm({
               maquina_id:      nota.maquina_id     ? String(nota.maquina_id) : '',
               tipo_tela:       nota.tipo_tela      ?? '',
+              tamano_edredon:  nota.tamano_edredon ?? '',
               cantidad_cargas: nota.cantidad_cargas != null ? String(nota.cantidad_cargas) : '1',
               ajuste:          nota.ajuste         != null ? String(nota.ajuste)           : '0',
               instrucciones:   nota.instrucciones  ?? '',
@@ -417,6 +419,7 @@ export default function NuevaNota() {
       // null (no undefined) para que al editar, limpiar un campo lo borre.
       instrucciones:   form.instrucciones || null,
       tipo_tela:       (tipoPrenda || 'ROPA') === 'ROPA' ? (form.tipo_tela || null) : null,
+      tamano_edredon:  tipoPrenda === 'EDREDON' ? (form.tamano_edredon || null) : null,
       maquina_id:      form.maquina_id ? Number(form.maquina_id) : null,
       cantidad_cargas: cargas,
       precio_base:     precioCargaAutoservicio,
@@ -1420,7 +1423,12 @@ export default function NuevaNota() {
                     onClick={() => {
                       setTipoPrenda(opt.v);
                       setPrendaOpen(false);
-                      if (opt.v !== 'ROPA') { setForm(f => ({ ...f, tipo_tela: '' })); setTelaOpen(false); }
+                      setForm(f => ({
+                        ...f,
+                        tipo_tela:      opt.v === 'ROPA'    ? f.tipo_tela      : '',
+                        tamano_edredon: opt.v === 'EDREDON' ? f.tamano_edredon : '',
+                      }));
+                      if (opt.v !== 'ROPA') setTelaOpen(false);
                     }}
                     className="w-full px-4 py-3.5 flex items-center justify-between text-left hover:bg-gray-50 border-b last:border-0 border-gray-100"
                   >
@@ -1503,6 +1511,40 @@ export default function NuevaNota() {
                               </svg>
                             )}
                           </span>
+                        </button>
+                      );
+                    })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Tamaño del edredón (solo para edredón) */}
+          {tipoPrenda === 'EDREDON' && (
+            <div className="space-y-4">
+              <label className={LABEL_CLS + ' mb-0'}>
+                Tamaño del edredón <span className="font-normal text-gray-400">(opcional)</span>
+              </label>
+              {tamanosEdredon.filter(t => t.activo || t.nombre === form.tamano_edredon).length === 0 ? (
+                <p className="text-sm text-gray-400">No hay tamaños de edredón configurados.</p>
+              ) : (
+                <div className="grid grid-cols-3 gap-3">
+                  {tamanosEdredon
+                    .filter(t => t.activo || t.nombre === form.tamano_edredon)
+                    .map(opt => {
+                      const selected = form.tamano_edredon === opt.nombre;
+                      return (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          onClick={() => setForm(f => ({ ...f, tamano_edredon: opt.nombre }))}
+                          className={`py-8 border-2 rounded-xl font-semibold text-lg transition-colors ${
+                            selected
+                              ? 'border-blue bg-light-blue text-blue-700'
+                              : 'border-gray-300 bg-white text-gray-700 hover:border-blue-300'
+                          }`}
+                        >
+                          {opt.nombre}
                         </button>
                       );
                     })}
@@ -1800,6 +1842,12 @@ export default function NuevaNota() {
                   <div className="flex justify-between">
                     <span>Tipo de tela</span>
                     <span className="font-medium">{form.tipo_tela}</span>
+                  </div>
+                )}
+                {tipoPrenda === 'EDREDON' && form.tamano_edredon && (
+                  <div className="flex justify-between">
+                    <span>Tamaño del edredón</span>
+                    <span className="font-medium">{form.tamano_edredon}</span>
                   </div>
                 )}
                 <div className="flex justify-between">
