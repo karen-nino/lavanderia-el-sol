@@ -29,6 +29,7 @@ const PRENDA_LABEL = Object.fromEntries(TIPOS_PRENDA.map(t => [t.v, t.label]));
 
 const FORM_INIT = {
   maquina_id:      '',
+  tipo_tela:       '',
   cantidad_cargas: '1',
   ajuste:          '0',
   instrucciones:   '',
@@ -244,6 +245,7 @@ export default function NuevaNota() {
             // AUTOSERVICIO o EDREDON usan el mismo formulario
             setForm({
               maquina_id:      nota.maquina_id     ? String(nota.maquina_id) : '',
+              tipo_tela:       nota.tipo_tela      ?? '',
               cantidad_cargas: nota.cantidad_cargas != null ? String(nota.cantidad_cargas) : '1',
               ajuste:          nota.ajuste         != null ? String(nota.ajuste)           : '0',
               instrucciones:   nota.instrucciones  ?? '',
@@ -414,6 +416,7 @@ export default function NuevaNota() {
       estado_pago:     'PAGADO',
       // null (no undefined) para que al editar, limpiar un campo lo borre.
       instrucciones:   form.instrucciones || null,
+      tipo_tela:       (tipoPrenda || 'ROPA') === 'ROPA' ? (form.tipo_tela || null) : null,
       maquina_id:      form.maquina_id ? Number(form.maquina_id) : null,
       cantidad_cargas: cargas,
       precio_base:     precioCargaAutoservicio,
@@ -1414,7 +1417,11 @@ export default function NuevaNota() {
                   <button
                     key={opt.v}
                     type="button"
-                    onClick={() => { setTipoPrenda(opt.v); setPrendaOpen(false); }}
+                    onClick={() => {
+                      setTipoPrenda(opt.v);
+                      setPrendaOpen(false);
+                      if (opt.v !== 'ROPA') { setForm(f => ({ ...f, tipo_tela: '' })); setTelaOpen(false); }
+                    }}
                     className="w-full px-4 py-3.5 flex items-center justify-between text-left hover:bg-gray-50 border-b last:border-0 border-gray-100"
                   >
                     <span className="text-base text-gray-900">{opt.label}</span>
@@ -1436,9 +1443,77 @@ export default function NuevaNota() {
 
         {tipoPrenda && (
         <>
+          {/* Tipo de tela (solo para ropa) */}
+          {tipoPrenda === 'ROPA' && (
+            <div className="relative">
+              <label className={LABEL_CLS}>
+                Tipo de tela <span className="font-normal text-gray-400">(opcional)</span>
+              </label>
+              <button
+                type="button"
+                onClick={() => setTelaOpen(o => !o)}
+                className={`w-full px-4 py-3.5 border rounded-lg bg-white text-left flex items-center justify-between transition-colors ${
+                  telaOpen
+                    ? 'border-blue-500 ring-1 ring-blue-500'
+                    : form.tipo_tela
+                      ? 'border-green-600'
+                      : 'border-gray-300 hover:border-gray-400'
+                }`}
+              >
+                <span className={form.tipo_tela ? 'text-gray-900' : 'text-gray-400'}>
+                  {form.tipo_tela || 'Seleccionar'}
+                </span>
+                {form.tipo_tela && !telaOpen ? (
+                  <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                ) : (
+                  <svg
+                    className={`w-5 h-5 text-gray-500 transition-transform ${telaOpen ? 'rotate-180' : ''}`}
+                    fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                )}
+              </button>
+
+              {telaOpen && (
+                <div className="mt-2 bg-white border border-gray-200 rounded-lg shadow-md overflow-hidden">
+                  {telas.filter(t => t.activo || t.nombre === form.tipo_tela).length === 0 && (
+                    <p className="px-4 py-3.5 text-sm text-gray-400">No hay tipos de tela configurados.</p>
+                  )}
+                  {telas
+                    .filter(t => t.activo || t.nombre === form.tipo_tela)
+                    .map(opt => {
+                      const selected = form.tipo_tela === opt.nombre;
+                      return (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          onClick={() => { setForm(f => ({ ...f, tipo_tela: opt.nombre })); setTelaOpen(false); }}
+                          className="w-full px-4 py-3.5 flex items-center justify-between text-left hover:bg-gray-50 border-b last:border-0 border-gray-100"
+                        >
+                          <span className="text-base text-gray-900">{opt.nombre}</span>
+                          <span className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
+                            selected ? 'border-blue bg-blue' : 'border-gray-300'
+                          }`}>
+                            {selected && (
+                              <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                              </svg>
+                            )}
+                          </span>
+                        </button>
+                      );
+                    })}
+                </div>
+              )}
+            </div>
+          )}
         <div className="py-3"><div className="border-t border-gray-200" /></div>
 
         <div className='space-y-8'>
+
 
           {/* Máquina */}
           <div ref={maquinaRef} className="relative">
@@ -1721,6 +1796,12 @@ export default function NuevaNota() {
                   <span>Prenda</span>
                   <span className="font-medium">{PRENDA_LABEL[tipoPrenda]}</span>
                 </div>
+                {tipoPrenda === 'ROPA' && form.tipo_tela && (
+                  <div className="flex justify-between">
+                    <span>Tipo de tela</span>
+                    <span className="font-medium">{form.tipo_tela}</span>
+                  </div>
+                )}
                 <div className="flex justify-between">
                   <span>Máquina</span>
                   <span className="font-medium">
