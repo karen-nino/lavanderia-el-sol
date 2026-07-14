@@ -947,7 +947,7 @@ export default function Ajustes() {
                 type="button"
                 onClick={() => guardarSucursal(sucursalActual.slug)}
                 disabled={savingSucursal === sucursalActual.slug}
-                className="flex items-center gap-2 px-4 py-2.5 bg-blue hover:opacity-90 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
+                className="flex items-center gap-2 px-6 bg-blue hover:opacity-90 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
               >
                 {savingSucursal === sucursalActual.slug ? (
                   <>
@@ -1205,7 +1205,7 @@ export default function Ajustes() {
               type="button"
               onClick={() => guardarSucursal(sucursalActual.slug)}
               disabled={savingSucursal === sucursalActual.slug}
-              className="w-full py-3.5 rounded-lg bg-blue text-white text-base font-medium disabled:opacity-60"
+              className="w-full bg-blue hover:opacity-90 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
             >
               {savingSucursal === sucursalActual.slug ? 'Guardando...' : 'Guardar sucursal'}
             </button>
@@ -1490,14 +1490,14 @@ export default function Ajustes() {
               <button
                 type="button"
                 onClick={() => setMobileSection(null)}
-                className="py-4 rounded-lg bg-light-blue/40 text-grey text-base font-medium"
+                className="border border-gray-300 text-gray-700 font-medium py-3.5 rounded-lg text-base hover:bg-gray-50 transition-colors"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
                 disabled={saving}
-                className="py-4 rounded-lg bg-blue text-white text-base font-medium disabled:opacity-60 flex items-center justify-center gap-2"
+                className="bg-blue hover:opacity-90 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors flex items-center justify-center gap-2"
               >
                 {saving ? (
                   <>
