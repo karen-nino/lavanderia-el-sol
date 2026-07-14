@@ -1471,7 +1471,7 @@ export default function Ajustes() {
                   type="button"
                   onClick={() => setMobileSection(null)}
                   aria-label="Volver"
-                  className="w-11 h-11 rounded-pill border border-grey/40 text-dark-blue flex items-center justify-center flex-shrink-0"
+                  className="w-11 h-11 rounded-pill border border-grey/40 text-dark-blue flex items-center justify-center flex-shrink-0 transition duration-200 ease-out active:scale-[1.3] active:bg-white active:shadow-md"
                 >
                   {SectionIcon.back}
                 </button>
