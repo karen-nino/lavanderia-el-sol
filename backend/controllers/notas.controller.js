@@ -965,6 +965,123 @@ export const activarNota = async (req, res) => {
   }
 };
 
+// ── PATCH /notas/:id/asignar-secadora ───────────────────────
+// Asigna una secadora a una nota que ya está en proceso (con la lavadora
+// en uso). Marca la secadora como en uso y suma su tarifa al precio.
+export const asignarSecadora = async (req, res) => {
+  const { id } = req.params;
+  const { secadora_id } = req.body;
+
+  if (!secadora_id) {
+    return res.status(400).json({ message: 'secadora_id es requerido.' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const { rows: notaRows } = await client.query(
+      'SELECT estado, secadora_id, cantidad_cargas, precio_base FROM notas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
+      [id, req.sucursal]
+    );
+    if (notaRows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: 'Nota no encontrada.' });
+    }
+    const nota = notaRows[0];
+    if (!['EN_PROCESO', 'POR_PROCESAR'].includes(nota.estado)) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'Solo se puede asignar una secadora a una nota en proceso.' });
+    }
+    if (nota.secadora_id) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'La nota ya tiene una secadora asignada.' });
+    }
+
+    const { rows: maqRows } = await client.query(
+      'SELECT tipo, estado FROM maquinas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
+      [secadora_id, req.sucursal]
+    );
+    if (maqRows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'La secadora seleccionada no existe.' });
+    }
+    if (maqRows[0].tipo !== 'secadora') {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'La máquina seleccionada no es una secadora.' });
+    }
+    if (maqRows[0].estado !== 'disponible') {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'La secadora seleccionada no está disponible.' });
+    }
+
+    // Tarifa de la secadora desde ajustes; se suma al precio por carga.
+    const { rows: cfg } = await client.query(
+      'SELECT precio_carga_secadora FROM ajustes WHERE id = 1'
+    );
+    const tarifaSecadora = cfg.length > 0 ? Number(cfg[0].precio_carga_secadora) : 45;
+
+    await client.query(
+      `UPDATE maquinas SET estado = 'en_uso', en_uso_desde = NOW() WHERE id = $1`,
+      [secadora_id]
+    );
+    await client.query(
+      `UPDATE notas
+         SET secadora_id = $1,
+             precio_base = COALESCE(precio_base, 0) + $2
+       WHERE id = $3`,
+      [secadora_id, tarifaSecadora, id]
+    );
+    // Recalcular el total con la fórmula completa (cargas × precio_base + productos + ajuste).
+    await client.query(
+      `UPDATE notas n
+         SET precio_total = (
+           SELECT (n2.cantidad_cargas * COALESCE(n2.precio_base, 0))
+                + COALESCE(SUM(np.cantidad * np.precio_unitario), 0)
+                + n2.ajuste
+           FROM notas n2
+           LEFT JOIN nota_productos np ON np.nota_id = n2.id
+           WHERE n2.id = $1
+           GROUP BY n2.id, n2.cantidad_cargas, n2.precio_base, n2.ajuste
+         )
+       WHERE n.id = $1`,
+      [id]
+    );
+
+    await client.query('COMMIT');
+
+    const { rows } = await pool.query(
+      `SELECT n.*,
+              c.nombre   AS cliente_nombre,
+              c.apellido AS cliente_apellido,
+              c.telefono AS cliente_telefono,
+              u.nombre   AS usuario_nombre,
+              m.nombre   AS maquina_nombre,
+              m.tipo     AS maquina_tipo,
+              m.estado   AS maquina_estado,
+              m.en_uso_desde AS maquina_en_uso_desde,
+              s.nombre   AS secadora_nombre,
+              s.tipo     AS secadora_tipo,
+              s.estado   AS secadora_estado,
+              s.en_uso_desde AS secadora_en_uso_desde
+       FROM notas n
+       LEFT JOIN clientes  c ON c.id = n.cliente_id
+       JOIN      usuarios  u ON u.id = n.usuario_id
+       LEFT JOIN maquinas  m ON m.id = n.maquina_id
+       LEFT JOIN maquinas  s ON s.id = n.secadora_id
+       WHERE n.id = $1`,
+      [id]
+    );
+    res.json(rows[0]);
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('asignarSecadora error:', err);
+    res.status(500).json({ message: 'Error interno del servidor.' });
+  } finally {
+    client.release();
+  }
+};
+
 // ── PATCH /notas/:id/estado-pago ────────────────────────────
 export const cambiarEstadoPago = async (req, res) => {
   const { id } = req.params;

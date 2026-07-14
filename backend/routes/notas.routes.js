@@ -10,6 +10,7 @@ import {
   eliminarNota,
   cambiarEstadoNota,
   activarNota,
+  asignarSecadora,
   cambiarEstadoPago,
   getNotaProductos,
   addProductoToNota,
@@ -28,6 +29,7 @@ router.patch('/:id', updateNota);
 router.delete('/:id', eliminarNota);
 router.patch('/:id/estado',      cambiarEstadoNota);
 router.patch('/:id/activar',     activarNota);
+router.patch('/:id/asignar-secadora', asignarSecadora);
 router.patch('/:id/estado-pago', cambiarEstadoPago);
 router.get('/:id/productos',    getNotaProductos);
 router.post('/:id/productos',   addProductoToNota);
