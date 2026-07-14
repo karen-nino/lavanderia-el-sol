@@ -153,9 +153,17 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
     onCountChange?.(maquinas.filter(m => m.estado === 'en_uso').length);
   }, [maquinas, onCountChange]);
 
+  // Una nota está vinculada a la máquina si esta aparece en cualquiera de
+  // sus cargas (maquinas_ids, calculado por el servidor) o en su columna
+  // legada maquina_id.
+  const notaUsaMaquina = (n, maquinaId) =>
+    Array.isArray(n.maquinas_ids)
+      ? n.maquinas_ids.some(mid => String(mid) === String(maquinaId))
+      : String(n.maquina_id) === String(maquinaId);
+
   const notaParaProcesar = confirmProcesar
     ? notas
-        .filter(n => String(n.maquina_id) === String(confirmProcesar.id)
+        .filter(n => notaUsaMaquina(n, confirmProcesar.id)
                   && ['EN_PROCESO', 'POR_PROCESAR'].includes(n.estado))
         .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0]
     : null;
@@ -179,6 +187,9 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
       limpiarAccionPendiente();
       setMaquinas(prev => prev.map(m => m.id === actualizada.id ? actualizada : m));
       setConfirmProcesar(null);
+      // La nota pudo liberar más máquinas (todas las de sus cargas):
+      // se refresca para no mostrarlas en uso hasta el siguiente ciclo.
+      refrescarDatos();
     } catch (err) {
       limpiarAccionPendiente();
       setErrorProcesar(err.message);
@@ -209,7 +220,7 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
     const restanteSeg = Math.max(0, duracionSeg - transcurridoSeg);
     const progreso = duracionSeg > 0 ? restanteSeg / duracionSeg : 0;
     const notaRel = notas
-      .filter(n => String(n.maquina_id) === String(m.id)
+      .filter(n => notaUsaMaquina(n, m.id)
                 && ['EN_PROCESO', 'POR_PROCESAR'].includes(n.estado))
       .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
     const maquinaAumentada = {

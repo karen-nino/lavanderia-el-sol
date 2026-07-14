@@ -33,16 +33,26 @@ export const getUsoMaquina = async (req, res) => {
     );
     if (maq.length === 0) return res.status(404).json({ message: 'Máquina no encontrada.' });
 
+    // Una nota "usó" la máquina si la tiene en alguna de sus cargas
+    // (autoservicio, tabla nota_cargas) o en sus columnas legadas
+    // maquina_id / secadora_id (Por Encargo y notas viejas). Las cargas se
+    // cuentan por máquina cuando hay detalle; si no, cantidad_cargas.
     const { rows: dias } = await pool.query(
       `SELECT
           DATE(n.created_at)                                              AS fecha,
           COUNT(*)::int                                                   AS usos,
-          COALESCE(SUM(n.cantidad_cargas), 0)::int                        AS cargas,
+          COALESCE(SUM(CASE WHEN cm.cnt > 0 THEN cm.cnt ELSE n.cantidad_cargas END), 0)::int AS cargas,
           COALESCE(SUM(n.precio_total) FILTER (WHERE n.estado_pago = 'PAGADO'), 0) AS generado,
           COUNT(DISTINCT n.usuario_id)::int                               AS empleados,
           COUNT(DISTINCT n.cliente_id) FILTER (WHERE n.cliente_id IS NOT NULL)::int AS clientes
         FROM notas n
-        WHERE n.maquina_id = $1 AND n.estado <> 'CANCELADA'
+        LEFT JOIN LATERAL (
+          SELECT COUNT(*)::int AS cnt
+            FROM nota_cargas nc
+           WHERE nc.nota_id = n.id AND (nc.lavadora_id = $1 OR nc.secadora_id = $1)
+        ) cm ON true
+        WHERE (n.maquina_id = $1 OR n.secadora_id = $1 OR cm.cnt > 0)
+          AND n.estado <> 'CANCELADA'
         GROUP BY DATE(n.created_at)
         ORDER BY fecha DESC`,
       [id]

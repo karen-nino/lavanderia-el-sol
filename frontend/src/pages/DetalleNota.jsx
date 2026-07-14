@@ -389,47 +389,90 @@ export default function DetalleNota() {
               ? <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${badgePago.cls}`}>{badgePago.label}</span>
               : <span className="text-gray-400">—</span>}
           </FilaDetalle>
-          <FilaDetalle label={nota.secadora_nombre ? 'Lavadora' : 'Máquina'}>
-            {nota.maquina_nombre ? (
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="font-medium text-gray-800">{nota.maquina_nombre}</span>
-                {MAQUINA_TIPO_LABEL[nota.maquina_tipo] && (
-                  <span className="text-xs text-gray-500">— {MAQUINA_TIPO_LABEL[nota.maquina_tipo]}</span>
-                )}
-                {(() => {
-                  const cfg = BADGE_MAQUINA_ESTADO[nota.maquina_estado];
-                  if (!cfg) return null;
+          {(nota.cargas ?? []).length > 0 ? (
+            <FilaDetalle label="Cargas">
+              <div className="space-y-2">
+                {nota.cargas.map(cg => {
+                  const maquinasCarga = [
+                    cg.lavadora_id && { nombre: cg.lavadora_nombre, tipo: cg.lavadora_tipo, estado: cg.lavadora_estado },
+                    cg.secadora_id && { nombre: cg.secadora_nombre, tipo: cg.secadora_tipo, estado: cg.secadora_estado },
+                  ].filter(Boolean);
                   return (
-                    <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${cfg.cls}`}>
-                      <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot} ${nota.maquina_estado === 'en_uso' ? 'animate-pulse' : ''}`} />
-                      {cfg.label}
-                    </span>
+                    <div key={cg.id} className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                      <span className="text-xs font-semibold text-gray-500">Carga {cg.orden}</span>
+                      {maquinasCarga.length === 0 && (
+                        <span className="text-sm text-gray-400 italic">Sin máquinas</span>
+                      )}
+                      {maquinasCarga.map((m, i) => {
+                        const cfg = BADGE_MAQUINA_ESTADO[m.estado];
+                        return (
+                          <span key={i} className="inline-flex items-center gap-1.5">
+                            <span className="text-sm font-medium text-gray-800">{m.nombre}</span>
+                            {MAQUINA_TIPO_LABEL[m.tipo] && (
+                              <span className="text-xs text-gray-500">— {MAQUINA_TIPO_LABEL[m.tipo]}</span>
+                            )}
+                            {cfg && (
+                              <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${cfg.cls}`}>
+                                <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot} ${m.estado === 'en_uso' ? 'animate-pulse' : ''}`} />
+                                {cfg.label}
+                              </span>
+                            )}
+                          </span>
+                        );
+                      })}
+                      <span className="ml-auto text-sm font-medium text-gray-700">
+                        {fmtMonto(Number(cg.precio_lavadora) + Number(cg.precio_secadora))}
+                      </span>
+                    </div>
                   );
-                })()}
-              </div>
-            ) : (
-              <span className="text-gray-400">—</span>
-            )}
-          </FilaDetalle>
-          {nota.secadora_nombre && (
-            <FilaDetalle label="Secadora">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="font-medium text-gray-800">{nota.secadora_nombre}</span>
-                {MAQUINA_TIPO_LABEL[nota.secadora_tipo] && (
-                  <span className="text-xs text-gray-500">— {MAQUINA_TIPO_LABEL[nota.secadora_tipo]}</span>
-                )}
-                {(() => {
-                  const cfg = BADGE_MAQUINA_ESTADO[nota.secadora_estado];
-                  if (!cfg) return null;
-                  return (
-                    <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${cfg.cls}`}>
-                      <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot} ${nota.secadora_estado === 'en_uso' ? 'animate-pulse' : ''}`} />
-                      {cfg.label}
-                    </span>
-                  );
-                })()}
+                })}
               </div>
             </FilaDetalle>
+          ) : (
+            <>
+              <FilaDetalle label={nota.secadora_nombre ? 'Lavadora' : 'Máquina'}>
+                {nota.maquina_nombre ? (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-medium text-gray-800">{nota.maquina_nombre}</span>
+                    {MAQUINA_TIPO_LABEL[nota.maquina_tipo] && (
+                      <span className="text-xs text-gray-500">— {MAQUINA_TIPO_LABEL[nota.maquina_tipo]}</span>
+                    )}
+                    {(() => {
+                      const cfg = BADGE_MAQUINA_ESTADO[nota.maquina_estado];
+                      if (!cfg) return null;
+                      return (
+                        <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${cfg.cls}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot} ${nota.maquina_estado === 'en_uso' ? 'animate-pulse' : ''}`} />
+                          {cfg.label}
+                        </span>
+                      );
+                    })()}
+                  </div>
+                ) : (
+                  <span className="text-gray-400">—</span>
+                )}
+              </FilaDetalle>
+              {nota.secadora_nombre && (
+                <FilaDetalle label="Secadora">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-medium text-gray-800">{nota.secadora_nombre}</span>
+                    {MAQUINA_TIPO_LABEL[nota.secadora_tipo] && (
+                      <span className="text-xs text-gray-500">— {MAQUINA_TIPO_LABEL[nota.secadora_tipo]}</span>
+                    )}
+                    {(() => {
+                      const cfg = BADGE_MAQUINA_ESTADO[nota.secadora_estado];
+                      if (!cfg) return null;
+                      return (
+                        <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${cfg.cls}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot} ${nota.secadora_estado === 'en_uso' ? 'animate-pulse' : ''}`} />
+                          {cfg.label}
+                        </span>
+                      );
+                    })()}
+                  </div>
+                </FilaDetalle>
+              )}
+            </>
           )}
           <FilaDetalle label="Cliente">
             {nota.cliente_nombre

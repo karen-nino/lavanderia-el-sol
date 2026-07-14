@@ -37,12 +37,14 @@ export default function Salidas() {
   const [maquinasDisp,     setMaquinasDisp]     = useState([]);
   const [maquinaSel,       setMaquinaSel]       = useState('');
   const [secadoraSel,      setSecadoraSel]      = useState('');
+  const [cargasSel,        setCargasSel]        = useState([]);
   const [loadingMaquinas,  setLoadingMaquinas]  = useState(false);
 
   // Agregar secadora a una nota ya en proceso
   const [agregarSecOpen,   setAgregarSecOpen]   = useState(false);
   const [secadorasDisp,    setSecadorasDisp]    = useState([]);
   const [secAgregarSel,    setSecAgregarSel]    = useState('');
+  const [secAgregarCargas, setSecAgregarCargas] = useState('1');
   const [loadingSecadoras, setLoadingSecadoras] = useState(false);
 
   // Procesar carga (ciclo terminado)
@@ -71,8 +73,14 @@ export default function Salidas() {
     return () => { activo = false; };
   }, [cargarDatos]);
 
-  // Máquinas asignadas a la nota (lavadora y/o secadora).
-  const maquinasNota = [nota?.maquina_id, nota?.secadora_id].filter(Boolean);
+  // Máquinas asignadas a la nota, sin repetir: las de sus cargas
+  // (autoservicio) o las columnas legadas maquina_id / secadora_id.
+  const cargasNota = nota?.cargas ?? [];
+  const maquinasNota = [...new Set(
+    cargasNota.length > 0
+      ? cargasNota.flatMap(c => [c.lavadora_id, c.secadora_id]).filter(Boolean)
+      : [nota?.maquina_id, nota?.secadora_id].filter(Boolean)
+  )];
 
   async function activarMaquina() {
     if (maquinasNota.length === 0) return;
@@ -108,16 +116,21 @@ export default function Salidas() {
     }
   }
 
-  // Activa la nota En Espera: si ya tiene máquina(s) las usa directo; si no,
-  // abre el selector para elegir lavadora y/o secadora.
+  // Activa la nota En Espera. Autoservicio: abre el selector por carga
+  // (una lavadora y/o secadora para cada una). Encargo / legado: si ya
+  // tiene máquina la usa directo; si no, abre el selector simple.
   async function iniciarActivar() {
-    if (maquinasNota.length > 0) {
+    if (cargasNota.length === 0 && maquinasNota.length > 0) {
       await activarNota(nota.maquina_id, nota.secadora_id);
       return;
     }
     setErrorAccion('');
     setMaquinaSel('');
     setSecadoraSel('');
+    setCargasSel(cargasNota.map(c => ({
+      lavadora_id: c.lavadora_id ? String(c.lavadora_id) : '',
+      secadora_id: c.secadora_id ? String(c.secadora_id) : '',
+    })));
     setActivarOpen(true);
     setLoadingMaquinas(true);
     try {
@@ -148,19 +161,34 @@ export default function Salidas() {
     }
   }
 
-  // Procesar carga terminada: la nota pasa a "Por Entregar" (LISTA) y las
-  // máquinas a disponible. Igual que la acción "Procesar" del dashboard.
-  async function procesarNota() {
-    if (maquinasNota.length === 0) return;
+  // Activación de autoservicio: envía las máquinas elegidas por carga.
+  async function activarNotaCargas() {
+    if (!cargasSel.some(c => c.lavadora_id || c.secadora_id)) return;
     setLoadingMaquina(true);
     setErrorAccion('');
     try {
-      if (['EN_PROCESO', 'POR_PROCESAR'].includes(nota.estado)) {
-        await api.patch(`/notas/${id}/estado`, { estado: 'LISTA' });
-      }
-      await Promise.all(
-        maquinasNota.map(mid => api.patch(`/maquinas/${mid}/estado`, { estado: 'disponible' }))
-      );
+      await api.patch(`/notas/${id}/activar`, {
+        cargas: cargasSel.map(c => ({
+          lavadora_id: c.lavadora_id ? Number(c.lavadora_id) : null,
+          secadora_id: c.secadora_id ? Number(c.secadora_id) : null,
+        })),
+      });
+      setActivarOpen(false);
+      await cargarDatos();
+    } catch (err) {
+      setErrorAccion(err.message);
+    } finally {
+      setLoadingMaquina(false);
+    }
+  }
+
+  // Procesar carga terminada: la nota pasa a "Por Entregar" (LISTA). El
+  // backend libera todas sus máquinas al hacer la transición.
+  async function procesarNota() {
+    setLoadingMaquina(true);
+    setErrorAccion('');
+    try {
+      await api.patch(`/notas/${id}/estado`, { estado: 'LISTA' });
       setConfirmProcesar(false);
       await cargarDatos();
     } catch (err) {
@@ -176,6 +204,7 @@ export default function Salidas() {
   async function iniciarAgregarSecadora() {
     setErrorAccion('');
     setSecAgregarSel('');
+    setSecAgregarCargas('1');
     setAgregarSecOpen(true);
     setLoadingSecadoras(true);
     try {
@@ -193,7 +222,10 @@ export default function Salidas() {
     setLoadingMaquina(true);
     setErrorAccion('');
     try {
-      await api.patch(`/notas/${id}/asignar-secadora`, { secadora_id: Number(secAgregarSel) });
+      await api.patch(`/notas/${id}/asignar-secadora`, {
+        secadora_id: Number(secAgregarSel),
+        cantidad_cargas_secadora: Number(secAgregarCargas) || 1,
+      });
       setAgregarSecOpen(false);
       await cargarDatos();
     } catch (err) {
@@ -248,14 +280,26 @@ export default function Salidas() {
     );
   }
 
-  const tieneMaquina    = maquinasNota.length > 0;
-  const maquinaEnUso    = nota?.maquina_estado === 'en_uso' || nota?.secadora_estado === 'en_uso';
+  const tieneMaquina = maquinasNota.length > 0;
 
-  // Lista de máquinas asignadas para mostrarlas con su badge de estado.
-  const maquinasAsignadas = [
-    nota?.maquina_id  && { nombre: nota.maquina_nombre,  tipo: nota.maquina_tipo,  estado: nota.maquina_estado  },
-    nota?.secadora_id && { nombre: nota.secadora_nombre, tipo: nota.secadora_tipo, estado: nota.secadora_estado },
-  ].filter(Boolean);
+  // Lista de máquinas asignadas (sin repetir) para mostrarlas con su badge:
+  // de las cargas si las hay, o de las columnas legadas.
+  const maquinasAsignadas = (() => {
+    if (cargasNota.length === 0) {
+      return [
+        nota?.maquina_id  && { nombre: nota.maquina_nombre,  tipo: nota.maquina_tipo,  estado: nota.maquina_estado  },
+        nota?.secadora_id && { nombre: nota.secadora_nombre, tipo: nota.secadora_tipo, estado: nota.secadora_estado },
+      ].filter(Boolean);
+    }
+    const porId = new Map();
+    for (const c of cargasNota) {
+      if (c.lavadora_id) porId.set(c.lavadora_id, { nombre: c.lavadora_nombre, tipo: c.lavadora_tipo, estado: c.lavadora_estado });
+      if (c.secadora_id) porId.set(c.secadora_id, { nombre: c.secadora_nombre, tipo: c.secadora_tipo, estado: c.secadora_estado });
+    }
+    return [...porId.values()];
+  })();
+
+  const maquinaEnUso = maquinasAsignadas.some(m => m.estado === 'en_uso');
 
   // ¿El ciclo ya terminó? (mismo cálculo que el dashboard)
   // El servidor promueve la nota a POR_PROCESAR al cumplirse el tiempo de
@@ -369,7 +413,7 @@ export default function Salidas() {
             )
           ) : null}
         </div>
-        {['EN_PROCESO', 'POR_PROCESAR'].includes(nota?.estado) && nota?.maquina_id && !nota?.secadora_id && (
+        {['EN_PROCESO', 'POR_PROCESAR'].includes(nota?.estado) && cargasNota.some(c => !c.secadora_id) && (
           <div className="px-4 pb-4">
             <button
               onClick={iniciarAgregarSecadora}
@@ -540,7 +584,10 @@ export default function Salidas() {
             <div>
               <h3 className="text-base font-bold text-gray-900">Activar nota</h3>
               <p className="text-sm text-gray-500 mt-1">
-                Selecciona lavadora y/o secadora. La nota pasará a <span className="font-medium text-gray-700">En Proceso</span> y las máquinas quedarán en uso.
+                {cargasSel.length > 0
+                  ? 'Asigna las máquinas de cada carga. La nota pasará a '
+                  : 'Selecciona lavadora y/o secadora. La nota pasará a '}
+                <span className="font-medium text-gray-700">En Proceso</span> y las máquinas quedarán en uso.
               </p>
             </div>
 
@@ -550,6 +597,45 @@ export default function Salidas() {
               </div>
             ) : maquinasDisp.length === 0 ? (
               <p className="text-sm text-gray-400 text-center py-6">No hay máquinas disponibles.</p>
+            ) : cargasSel.length > 0 ? (
+              /* Autoservicio: una lavadora y/o secadora por carga */
+              <div className="space-y-3">
+                {cargasSel.map((c, i) => (
+                  <div key={i} className="border border-gray-200 rounded-xl p-3 space-y-2">
+                    <p className="text-sm font-semibold text-gray-900">Carga {i + 1}</p>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1">Lavadora</label>
+                      <select
+                        value={c.lavadora_id}
+                        onChange={e => setCargasSel(prev => prev.map((x, idx) =>
+                          idx === i ? { ...x, lavadora_id: e.target.value } : x))}
+                        className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue"
+                      >
+                        <option value="">Sin asignar</option>
+                        {maquinasDisp.filter(m => m.tipo !== 'secadora').map(m => (
+                          <option key={m.id} value={m.id}>
+                            {m.nombre}{MAQUINA_TIPO_LABEL[m.tipo] ? ` — ${MAQUINA_TIPO_LABEL[m.tipo]}` : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1">Secadora</label>
+                      <select
+                        value={c.secadora_id}
+                        onChange={e => setCargasSel(prev => prev.map((x, idx) =>
+                          idx === i ? { ...x, secadora_id: e.target.value } : x))}
+                        className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue"
+                      >
+                        <option value="">Sin asignar</option>
+                        {maquinasDisp.filter(m => m.tipo === 'secadora').map(m => (
+                          <option key={m.id} value={m.id}>{m.nombre}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                ))}
+              </div>
             ) : (
               <div className="space-y-4">
                 {/* Lavadora */}
@@ -619,8 +705,10 @@ export default function Salidas() {
               </button>
               <button
                 type="button"
-                onClick={() => activarNota(maquinaSel, secadoraSel)}
-                disabled={loadingMaquina || (!maquinaSel && !secadoraSel)}
+                onClick={() => cargasSel.length > 0 ? activarNotaCargas() : activarNota(maquinaSel, secadoraSel)}
+                disabled={loadingMaquina || (cargasSel.length > 0
+                  ? !cargasSel.some(c => c.lavadora_id || c.secadora_id)
+                  : (!maquinaSel && !secadoraSel))}
                 className="flex-1 bg-blue hover:opacity-90 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
               >
                 {loadingMaquina ? 'Activando...' : 'Activar'}
@@ -667,6 +755,40 @@ export default function Salidas() {
                     </button>
                   );
                 })}
+              </div>
+            )}
+
+            {secAgregarSel && (
+              <div>
+                <label className="block text-sm font-semibold text-gray-900 mb-2">
+                  Cantidad de cargas <span className="text-red-500">*</span>
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number" min="1" step="1"
+                    value={secAgregarCargas}
+                    onChange={e => setSecAgregarCargas(e.target.value)}
+                    placeholder="1"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg text-base text-center focus:outline-none focus:ring-2 focus:ring-blue [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setSecAgregarCargas(c => String(Math.max(1, (Number(c) || 1) - 1)))}
+                    disabled={(Number(secAgregarCargas) || 1) <= 1}
+                    aria-label="Disminuir cargas"
+                    className="flex-shrink-0 w-12 py-3 rounded-lg border border-gray-300 bg-white text-gray-700 text-xl font-semibold hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    −
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSecAgregarCargas(c => String((Number(c) || 0) + 1))}
+                    aria-label="Aumentar cargas"
+                    className="flex-shrink-0 w-12 py-3 rounded-lg border border-gray-300 bg-white text-gray-700 text-xl font-semibold hover:bg-gray-50 transition-colors"
+                  >
+                    +
+                  </button>
+                </div>
               </div>
             )}
 
