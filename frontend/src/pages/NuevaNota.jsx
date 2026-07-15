@@ -842,20 +842,31 @@ export default function NuevaNota() {
 
                   {/* Tamaño del edredón */}
                   {c.tipo_prenda === 'EDREDON' && (
-                    <div>
-                      <label className={LABEL_CLS}>
+                    <div className="space-y-3">
+                      <h3 className="text-sm font-semibold text-gray-900">
                         Tamaño del edredón <span className="font-normal text-gray-400">(opcional)</span>
-                      </label>
-                      <select
-                        value={c.tamano_edredon}
-                        onChange={e => set({ tamano_edredon: e.target.value })}
-                        className={INPUT_CLS}
-                      >
-                        <option value="">Sin asignar</option>
-                        {tamanosEdredon.filter(t => t.activo || t.nombre === c.tamano_edredon).map(t => (
-                          <option key={t.id} value={t.nombre}>{t.nombre}</option>
-                        ))}
-                      </select>
+                      </h3>
+                      {tamanosEdredon.filter(t => t.activo || t.nombre === c.tamano_edredon).length === 0 ? (
+                        <p className="text-sm text-gray-400">No hay tamaños de edredón configurados.</p>
+                      ) : (
+                        <div className="grid grid-cols-3 gap-3">
+                          {tamanosEdredon.filter(t => t.activo || t.nombre === c.tamano_edredon).map(opt => {
+                            const selected = c.tamano_edredon === opt.nombre;
+                            return (
+                              <button
+                                key={opt.id}
+                                type="button"
+                                onClick={() => set({ tamano_edredon: selected ? '' : opt.nombre })}
+                                className={`py-6 border-2 rounded-xl font-semibold text-lg transition-colors ${
+                                  selected ? 'border-blue bg-light-blue text-blue-700' : 'border-gray-300 bg-white text-gray-700 hover:border-blue-300'
+                                }`}
+                              >
+                                {opt.nombre}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   )}
 
