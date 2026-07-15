@@ -82,14 +82,13 @@ export default function Salidas() {
       : [nota?.maquina_id, nota?.secadora_id].filter(Boolean)
   )];
 
-  async function activarMaquina() {
-    if (maquinasNota.length === 0) return;
+  // Activa las máquinas asignadas que siguen libres (cargas en espera). Sirve
+  // tanto para una nota En Espera como para una En Proceso con cargas pendientes.
+  async function activarPendientes() {
     setLoadingMaquina(true);
     setErrorAccion('');
     try {
-      await Promise.all(
-        maquinasNota.map(mid => api.patch(`/maquinas/${mid}/estado`, { estado: 'en_uso' }))
-      );
+      await api.patch(`/notas/${id}/activar-pendientes`);
       await cargarDatos();
     } catch (err) {
       setErrorAccion(err.message);
@@ -280,26 +279,26 @@ export default function Salidas() {
     );
   }
 
-  const tieneMaquina = maquinasNota.length > 0;
-
   // Lista de máquinas asignadas (sin repetir) para mostrarlas con su badge:
   // de las cargas si las hay, o de las columnas legadas.
   const maquinasAsignadas = (() => {
     if (cargasNota.length === 0) {
       return [
-        nota?.maquina_id  && { nombre: nota.maquina_nombre,  tipo: nota.maquina_tipo,  estado: nota.maquina_estado  },
-        nota?.secadora_id && { nombre: nota.secadora_nombre, tipo: nota.secadora_tipo, estado: nota.secadora_estado },
+        nota?.maquina_id  && { id: nota.maquina_id,  nombre: nota.maquina_nombre,  tipo: nota.maquina_tipo,  estado: nota.maquina_estado  },
+        nota?.secadora_id && { id: nota.secadora_id, nombre: nota.secadora_nombre, tipo: nota.secadora_tipo, estado: nota.secadora_estado },
       ].filter(Boolean);
     }
     const porId = new Map();
     for (const c of cargasNota) {
-      if (c.lavadora_id) porId.set(c.lavadora_id, { nombre: c.lavadora_nombre, tipo: c.lavadora_tipo, estado: c.lavadora_estado });
-      if (c.secadora_id) porId.set(c.secadora_id, { nombre: c.secadora_nombre, tipo: c.secadora_tipo, estado: c.secadora_estado });
+      if (c.lavadora_id) porId.set(c.lavadora_id, { id: c.lavadora_id, nombre: c.lavadora_nombre, tipo: c.lavadora_tipo, estado: c.lavadora_estado });
+      if (c.secadora_id) porId.set(c.secadora_id, { id: c.secadora_id, nombre: c.secadora_nombre, tipo: c.secadora_tipo, estado: c.secadora_estado });
     }
     return [...porId.values()];
   })();
 
   const maquinaEnUso = maquinasAsignadas.some(m => m.estado === 'en_uso');
+  // Máquinas ya asignadas a la nota que siguen libres (cargas en espera).
+  const maquinasPendientes = maquinasAsignadas.filter(m => m.estado === 'disponible');
 
   // ¿El ciclo ya terminó? (mismo cálculo que el dashboard)
   // El servidor promueve la nota a POR_PROCESAR al cumplirse el tiempo de
@@ -375,21 +374,34 @@ export default function Salidas() {
               <p className="text-sm text-gray-400 italic">Sin máquina asignada</p>
             )}
           </div>
-          {nota?.estado === 'EN_ESPERA' ? (
-            <button
-              onClick={iniciarActivar}
-              disabled={loadingMaquina}
-              className="flex-shrink-0 px-4 py-2 bg-blue hover:opacity-90 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
-            >
-              {loadingMaquina ? 'Activando...' : 'Activar'}
-            </button>
-          ) : tieneMaquina ? (
-            maquinaEnUso ? (
+          <div className="flex flex-col gap-2 flex-shrink-0">
+            {/* Activar las cargas que siguen en espera (máquinas asignadas y libres) */}
+            {maquinasPendientes.length > 0 && (
+              <button
+                onClick={activarPendientes}
+                disabled={loadingMaquina}
+                className="px-4 py-2 bg-blue hover:opacity-90 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
+              >
+                {loadingMaquina ? 'Activando...' : 'Activar'}
+              </button>
+            )}
+            {/* En Espera sin máquinas asignadas: abrir selector para elegirlas */}
+            {maquinasPendientes.length === 0 && nota?.estado === 'EN_ESPERA' && (
+              <button
+                onClick={iniciarActivar}
+                disabled={loadingMaquina}
+                className="px-4 py-2 bg-blue hover:opacity-90 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
+              >
+                {loadingMaquina ? 'Activando...' : 'Activar'}
+              </button>
+            )}
+            {/* Máquinas en uso: procesar (ciclo terminado) o detener */}
+            {maquinaEnUso && (
               cicloTerminado ? (
                 <button
                   onClick={() => setConfirmProcesar(true)}
                   disabled={loadingMaquina}
-                  className="flex-shrink-0 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
+                  className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
                 >
                   Procesar
                 </button>
@@ -397,21 +409,13 @@ export default function Salidas() {
                 <button
                   onClick={() => setConfirmDetener(true)}
                   disabled={loadingMaquina}
-                  className="flex-shrink-0 px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
+                  className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
                 >
                   Detener Ciclo
                 </button>
               )
-            ) : (
-              <button
-                onClick={activarMaquina}
-                disabled={loadingMaquina}
-                className="flex-shrink-0 px-4 py-2 bg-blue hover:opacity-90 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
-              >
-                {loadingMaquina ? 'Activando...' : 'Activar máquina'}
-              </button>
-            )
-          ) : null}
+            )}
+          </div>
         </div>
         {['EN_PROCESO', 'POR_PROCESAR'].includes(nota?.estado) && cargasNota.some(c => !c.secadora_id) && (
           <div className="px-4 pb-4">

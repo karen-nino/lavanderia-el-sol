@@ -1474,6 +1474,73 @@ export const activarNota = async (req, res) => {
   }
 };
 
+// ── PATCH /notas/:id/activar-pendientes ─────────────────────
+// Activa (marca en uso) todas las máquinas ya asignadas a la nota que sigan
+// disponibles. Sirve para poner en marcha las cargas que quedaron en espera,
+// tanto en una nota En Espera como en una nota ya En Proceso (caso mixto).
+export const activarMaquinasPendientes = async (req, res) => {
+  const { id } = req.params;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const { rows: notaRows } = await client.query(
+      'SELECT estado FROM notas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
+      [id, req.sucursal]
+    );
+    if (notaRows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: 'Nota no encontrada.' });
+    }
+    if (['LISTA', 'PAGADA', 'FINALIZADA', 'CANCELADA'].includes(notaRows[0].estado)) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: `No se pueden activar máquinas de una nota ${notaRows[0].estado}.` });
+    }
+
+    const ids = await maquinasDeNota(client, id);
+    if (ids.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'La nota no tiene máquinas asignadas.' });
+    }
+    const { rows: maqs } = await client.query(
+      'SELECT id, estado FROM maquinas WHERE id = ANY($1) AND sucursal = $2 FOR UPDATE',
+      [ids, req.sucursal]
+    );
+    const libres = maqs.filter(m => m.estado === 'disponible').map(m => m.id);
+    if (libres.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'No hay máquinas pendientes por activar.' });
+    }
+
+    await client.query(
+      `UPDATE maquinas SET estado = 'en_uso', en_uso_desde = NOW() WHERE id = ANY($1)`,
+      [libres]
+    );
+    if (notaRows[0].estado === 'EN_ESPERA') {
+      await client.query(`UPDATE notas SET estado = 'EN_PROCESO' WHERE id = $1`, [id]);
+    }
+
+    await client.query('COMMIT');
+
+    const { rows } = await pool.query(
+      `SELECT n.*, m.nombre AS maquina_nombre, m.tipo AS maquina_tipo, m.estado AS maquina_estado,
+              s.nombre AS secadora_nombre, s.tipo AS secadora_tipo, s.estado AS secadora_estado
+         FROM notas n
+         LEFT JOIN maquinas m ON m.id = n.maquina_id
+         LEFT JOIN maquinas s ON s.id = n.secadora_id
+        WHERE n.id = $1`,
+      [id]
+    );
+    res.json({ ...rows[0], cargas: await cargasDeNota(pool, id) });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('activarMaquinasPendientes error:', err);
+    res.status(500).json({ message: 'Error interno del servidor.' });
+  } finally {
+    client.release();
+  }
+};
+
 // ── PATCH /notas/:id/asignar-secadora ───────────────────────
 // Asigna una secadora a una nota en proceso: la agrega a las primeras N
 // cargas que aún no tienen secadora, marca la máquina en uso y suma su
