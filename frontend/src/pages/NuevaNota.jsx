@@ -861,6 +861,8 @@ export default function NuevaNota() {
 
                   {/* Máquinas — aparecen tras elegir prenda y tamaño de carga */}
                   {c.tamano && c.tipo_prenda && (
+                  <>
+                  <div className="py-1"><div className="border-t border-gray-200" /></div>
                   <div className="space-y-3">
                     <h3 className="text-sm font-semibold text-gray-900">Máquinas</h3>
                     <div>
@@ -916,10 +918,12 @@ export default function NuevaNota() {
                       </select>
                     </div>
                   </div>
+                  </>
                   )}
 
                   {c.tamano && c.tipo_prenda && (
                   <>
+                  <div className="py-1"><div className="border-t border-gray-200" /></div>
                   {/* Productos de la carga */}
                   <div>
                     <div className="flex items-center justify-between mb-3">
