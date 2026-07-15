@@ -46,20 +46,28 @@ const TAMANOS = [
 ];
 const TAMANO_LABEL = Object.fromEntries(TAMANOS.map(t => [t.v, t.label]));
 
+// Datos a nivel nota. Prenda, tamaño, máquinas, ajuste y productos ahora
+// viven en cada carga (encargoCargas).
 const ENCARGO_INIT = {
-  cliente_id:             '',
+  cliente_id:      '',
+  pago_anticipado: '',
+  fecha_entrega:   '',
+  tiempo_entrega:  '',
+  instrucciones:   '',
+};
+
+// Una carga de Por Encargo: su prenda, tela/tamaño edredón, tamaño de carga,
+// máquinas (+activar), ajuste y sus productos.
+const CARGA_ENCARGO_INIT = {
   tipo_prenda:            '',
   tipo_tela:              '',
   tamano_edredon:         '',
   tamano:                 '',
-  cantidad_cargas:        '1',
-  ajuste:                 '0',
-  pago_anticipado:        '',
-  fecha_entrega:          '',
-  tiempo_entrega:         '',
-  instrucciones:          '',
   maquina_id:             '',
   activar_inmediatamente: '',
+  secadora_id:            '',
+  ajuste:                 '0',
+  productos:              [],
 };
 
 const TIEMPOS_ENTREGA = [
@@ -69,7 +77,9 @@ const TIEMPOS_ENTREGA = [
 ];
 const TIEMPO_ENTREGA_LABEL = Object.fromEntries(TIEMPOS_ENTREGA.map(t => [t.v, t.label]));
 
-const ENCARGO_STEPS = 7;
+// Pasos fijos del wizard, además de una pantalla por carga:
+// Cliente, Cantidad de cargas, [Carga ×N], Pago, Entrega, Instrucciones, Resumen.
+const ENCARGO_STEPS_FIJOS = 6;
 
 const formatMaquina = (m) => {
   if (!m) return '';
@@ -98,10 +108,9 @@ export default function NuevaNota() {
   const [prendaOpen,        setPrendaOpen]        = useState(false);
   const [telaOpen,          setTelaOpen]          = useState(false);
   const [cargasAuto,        setCargasAuto]        = useState([{ ...CARGA_INIT }]);
-  const [maquinaEncargoOpen, setMaquinaEncargoOpen] = useState(false);
   const [encargoStep,       setEncargoStep]       = useState(1);
   const [encargoForm,       setEncargoForm]       = useState(ENCARGO_INIT);
-  const [encargoProductos,  setEncargoProductos]  = useState([]);
+  const [encargoCargas,     setEncargoCargas]     = useState([{ ...CARGA_ENCARGO_INIT }]);
   const [encargoLoading,    setEncargoLoading]    = useState(false);
   const [clientes,          setClientes]          = useState([]);
   const [clienteSearch,     setClienteSearch]     = useState('');
@@ -112,7 +121,6 @@ export default function NuevaNota() {
   const [notaCreada,        setNotaCreada]        = useState(null);
   const tipoRef           = useRef(null);
   const prendaRef         = useRef(null);
-  const maquinaEncargoRef = useRef(null);
 
   useEffect(() => {
     if (!tipoOpen) return;
@@ -135,17 +143,6 @@ export default function NuevaNota() {
     document.addEventListener('mousedown', onMouseDown);
     return () => document.removeEventListener('mousedown', onMouseDown);
   }, [prendaOpen]);
-
-  useEffect(() => {
-    if (!maquinaEncargoOpen) return;
-    const onMouseDown = (e) => {
-      if (maquinaEncargoRef.current && !maquinaEncargoRef.current.contains(e.target)) {
-        setMaquinaEncargoOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', onMouseDown);
-    return () => document.removeEventListener('mousedown', onMouseDown);
-  }, [maquinaEncargoOpen]);
 
   const precioPorTipo = (tipoMaquina, tipoPrendaArg) => {
     if (tipoMaquina === 'secadora') return precios.secadora;
@@ -229,21 +226,37 @@ export default function NuevaNota() {
 
           if (esEncargo) {
             setEncargoForm({
-              cliente_id:             nota.cliente_id     ? String(nota.cliente_id) : '',
-              tipo_prenda:            prendaNota,
-              tipo_tela:              nota.tipo_tela      ?? '',
-              tamano_edredon:         nota.tamano_edredon ?? '',
-              tamano:                 nota.tamano         ?? '',
-              cantidad_cargas:        nota.cantidad_cargas != null ? String(nota.cantidad_cargas) : '1',
-              ajuste:                 nota.ajuste         != null ? String(nota.ajuste)      : '0',
-              pago_anticipado:        nota.estado_pago === 'PAGADO' ? 'SI' : 'NO',
-              fecha_entrega:          nota.fecha_entrega  ? String(nota.fecha_entrega).slice(0, 10) : '',
-              tiempo_entrega:         nota.tiempo_entrega ?? '',
-              instrucciones:          nota.instrucciones  ?? '',
-              maquina_id:             nota.maquina_id     ? String(nota.maquina_id) : '',
-              activar_inmediatamente: '',
+              cliente_id:      nota.cliente_id ? String(nota.cliente_id) : '',
+              pago_anticipado: nota.estado_pago === 'PAGADO' ? 'SI' : 'NO',
+              fecha_entrega:   nota.fecha_entrega  ? String(nota.fecha_entrega).slice(0, 10) : '',
+              tiempo_entrega:  nota.tiempo_entrega ?? '',
+              instrucciones:   nota.instrucciones  ?? '',
             });
-            setEncargoProductos(prods);
+            // Cargas de la nota; si es una nota vieja sin cargas, se arma una
+            // carga a partir de los campos legados a nivel nota.
+            const cargasNota = (nota.cargas ?? []).map(c => ({
+              tipo_prenda:            c.tipo_prenda ?? prendaNota,
+              tipo_tela:              c.tipo_tela      ?? '',
+              tamano_edredon:         c.tamano_edredon ?? '',
+              tamano:                 c.tamano         ?? '',
+              maquina_id:             c.lavadora_id ? String(c.lavadora_id) : '',
+              secadora_id:            c.secadora_id ? String(c.secadora_id) : '',
+              activar_inmediatamente: '',
+              ajuste:                 c.ajuste != null ? String(c.ajuste) : '0',
+              productos:              (c.productos ?? []).map(p => ({
+                producto_id: String(p.producto_id), cantidad: String(p.cantidad),
+              })),
+            }));
+            setEncargoCargas(cargasNota.length > 0 ? cargasNota : [{
+              ...CARGA_ENCARGO_INIT,
+              tipo_prenda:    prendaNota,
+              tipo_tela:      nota.tipo_tela      ?? '',
+              tamano_edredon: nota.tamano_edredon ?? '',
+              tamano:         nota.tamano         ?? '',
+              maquina_id:     nota.maquina_id ? String(nota.maquina_id) : '',
+              ajuste:         nota.ajuste != null ? String(nota.ajuste) : '0',
+              productos:      prods,
+            }]);
           } else {
             // AUTOSERVICIO o EDREDON usan el mismo formulario
             setForm({
@@ -298,16 +311,34 @@ export default function NuevaNota() {
     setEncargoForm(f => ({ ...f, [name]: value }));
   };
 
-  const agregarEncargoProducto = () =>
-    setEncargoProductos(prev => [...prev, { producto_id: '', cantidad: '1' }]);
+  // ── Cargas de Por Encargo ───────────────────────────────
+  const setEncargoCantidadCargas = (n) => {
+    const objetivo = Math.max(1, Math.min(MAX_CARGAS, n));
+    setEncargoCargas(prev => {
+      if (objetivo === prev.length) return prev;
+      if (objetivo < prev.length)  return prev.slice(0, objetivo);
+      return [...prev, ...Array.from({ length: objetivo - prev.length }, () => ({ ...CARGA_ENCARGO_INIT, productos: [] }))];
+    });
+  };
 
-  const actualizarEncargoProducto = (i, field, value) =>
-    setEncargoProductos(prev =>
-      prev.map((item, idx) => (idx === i ? { ...item, [field]: value } : item))
-    );
+  const actualizarCargaEncargo = (i, cambios) =>
+    setEncargoCargas(prev => prev.map((c, idx) => (idx === i ? { ...c, ...cambios } : c)));
 
-  const eliminarEncargoProducto = (i) =>
-    setEncargoProductos(prev => prev.filter((_, idx) => idx !== i));
+  // Productos por carga
+  const agregarProductoCarga = (i) =>
+    actualizarCargaEncargo(i, { productos: [...(encargoCargas[i].productos ?? []), { producto_id: '', cantidad: '1' }] });
+
+  const actualizarProductoCarga = (i, j, field, value) =>
+    setEncargoCargas(prev => prev.map((c, idx) =>
+      idx === i
+        ? { ...c, productos: c.productos.map((p, k) => (k === j ? { ...p, [field]: value } : p)) }
+        : c
+    ));
+
+  const eliminarProductoCarga = (i, j) =>
+    setEncargoCargas(prev => prev.map((c, idx) =>
+      idx === i ? { ...c, productos: c.productos.filter((_, k) => k !== j) } : c
+    ));
 
   const crearCliente = async () => {
     const nombre = capitalizarNombre(nuevoCliente.nombre);
@@ -331,17 +362,32 @@ export default function NuevaNota() {
     }
   };
 
-  const maquinaEncargo        = maquinas.find(m => String(m.id) === String(encargoForm.maquina_id));
-  const precioCargaEncargo    = precioPorTipo(maquinaEncargo?.tipo, encargoForm.tipo_prenda);
-  const encargoCargas         = Number(encargoForm.cantidad_cargas) || 1;
-  const encargoSubtotalCargas = encargoCargas * precioCargaEncargo;
-  const encargoAjuste         = Number(encargoForm.ajuste)      || 0;
-  const encargoSubtotalProductos = encargoProductos.reduce((sum, p) => {
+  // Pasos dinámicos: Cliente, Cantidad, [una pantalla por carga], Pago,
+  // Entrega, Instrucciones, Resumen.
+  const nCargas          = encargoCargas.length;
+  const ENCARGO_STEPS    = nCargas + ENCARGO_STEPS_FIJOS;
+  const esPasoCarga      = encargoStep >= 3 && encargoStep <= 2 + nCargas;
+  const cargaActivaIdx   = esPasoCarga ? encargoStep - 3 : -1;
+  const pasoPago         = 3 + nCargas;
+  const pasoEntrega      = 4 + nCargas;
+  const pasoInstrucciones = 5 + nCargas;
+  const pasoResumen      = 6 + nCargas;
+
+  const subtotalProductosLista = (lista) => (lista ?? []).reduce((sum, p) => {
     const prod = productosCatalogo.find(x => String(x.id) === String(p.producto_id));
     return sum + (prod ? (Number(prod.precio_unitario) || 0) * (Number(p.cantidad) || 0) : 0);
   }, 0);
-  const encargoPrecioTotal    = encargoSubtotalCargas + encargoAjuste + encargoSubtotalProductos;
-  const clienteSeleccionado   = clientes.find(c => String(c.id) === String(encargoForm.cliente_id));
+
+  // Precio de una carga de encargo = tarifa lavadora (según la prenda de la
+  // carga) + secadora + sus productos + su ajuste.
+  const subtotalCargaEncargo = (c) => {
+    const lav = maquinas.find(m => String(m.id) === String(c.maquina_id));
+    const maq = (lav ? precioPorTipo(lav.tipo, c.tipo_prenda) : 0)
+              + (c.secadora_id ? precios.secadora : 0);
+    return maq + subtotalProductosLista(c.productos) + (Number(c.ajuste) || 0);
+  };
+  const encargoPrecioTotal  = encargoCargas.reduce((s, c) => s + subtotalCargaEncargo(c), 0);
+  const clienteSeleccionado = clientes.find(c => String(c.id) === String(encargoForm.cliente_id));
   const sinAcentos = (s) => (s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   const clienteSearchQ    = sinAcentos(clienteSearch.trim());
   const clientesFiltrados = clienteSearchQ
@@ -354,20 +400,15 @@ export default function NuevaNota() {
 
   const encargoPuedeAvanzar = (() => {
     if (encargoStep === 1) return !!encargoForm.cliente_id;
-    if (encargoStep === 2) {
-      if (!encargoForm.tipo_prenda) return false;
-      return encargoForm.tipo_prenda === 'EDREDON' ? true : !!encargoForm.tamano;
+    if (encargoStep === 2) return nCargas >= 1;
+    if (esPasoCarga) {
+      const c = encargoCargas[cargaActivaIdx];
+      if (!c || !c.tipo_prenda || !c.tamano) return false;
+      // Si eligió lavadora, debe decidir si la activa (salvo en edición).
+      if (!esEdicion && c.maquina_id && !c.activar_inmediatamente) return false;
+      return true;
     }
-    if (encargoStep === 3) {
-      if (esEdicion) return true;
-      if (!encargoForm.maquina_id) return true;
-      return !!encargoForm.activar_inmediatamente;
-    }
-    if (encargoStep === 4) {
-      const c = Number(encargoForm.cantidad_cargas);
-      return !Number.isNaN(c) && c >= 1;
-    }
-    if (encargoStep === 5) return !!encargoForm.pago_anticipado;
+    if (encargoStep === pasoPago) return !!encargoForm.pago_anticipado;
     return true;
   })();
 
@@ -375,41 +416,37 @@ export default function NuevaNota() {
     setError('');
     setEncargoLoading(true);
     try {
-      // En Proceso solo si hay máquina y se activó inmediatamente; si no, En Espera.
-      const estadoInicial =
-        encargoForm.maquina_id && encargoForm.activar_inmediatamente === 'SI'
-          ? 'EN_PROCESO'
-          : 'EN_ESPERA';
-      const payload = {
-        modalidad:       'POR_ENCARGO',
-        tipo_prenda:     encargoForm.tipo_prenda || 'ROPA',
-        estado:          estadoInicial,
-        cliente_id:      Number(encargoForm.cliente_id),
-        // null (no undefined): JSON.stringify omite undefined y el PATCH
-        // del backend conserva los campos ausentes; null los limpia.
-        tamano:          encargoForm.tamano || null,
-        tipo_tela:       encargoForm.tipo_prenda === 'ROPA'    ? (encargoForm.tipo_tela      || null) : null,
-        tamano_edredon:  encargoForm.tipo_prenda === 'EDREDON' ? (encargoForm.tamano_edredon || null) : null,
-        cantidad_cargas: encargoCargas,
-        precio_base:     precioCargaEncargo,
-        ajuste:          encargoAjuste,
-        estado_pago:     encargoForm.pago_anticipado === 'SI' ? 'PAGADO' : 'PENDIENTE',
-        fecha_entrega:   encargoForm.fecha_entrega  || null,
-        tiempo_entrega:  encargoForm.tiempo_entrega || null,
-        instrucciones:   encargoForm.instrucciones  || null,
-        maquina_id:      encargoForm.maquina_id ? Number(encargoForm.maquina_id) : null,
-        productos:       encargoProductos
+      const cargasPayload = encargoCargas.map(c => ({
+        tipo_prenda:    c.tipo_prenda || 'ROPA',
+        tipo_tela:      c.tipo_prenda === 'ROPA'    ? (c.tipo_tela || null) : null,
+        tamano_edredon: c.tipo_prenda === 'EDREDON' ? (c.tamano_edredon || null) : null,
+        tamano:         c.tamano || null,
+        lavadora_id:    c.maquina_id  ? Number(c.maquina_id)  : null,
+        secadora_id:    c.secadora_id ? Number(c.secadora_id) : null,
+        // Solo se activa la carga si tiene lavadora y se marcó "Sí".
+        activar:        !esEdicion && !!c.maquina_id && c.activar_inmediatamente === 'SI',
+        ajuste:         Number(c.ajuste) || 0,
+        productos:      (c.productos ?? [])
           .filter(p => p.producto_id && p.cantidad)
           .map(p => ({ producto_id: Number(p.producto_id), cantidad: Number(p.cantidad) })),
+      }));
+      const payload = {
+        modalidad:      'POR_ENCARGO',
+        // Prenda a nivel nota (para lista/badge): la de la primera carga.
+        tipo_prenda:    encargoCargas[0]?.tipo_prenda || 'ROPA',
+        cliente_id:     Number(encargoForm.cliente_id),
+        cargas:         cargasPayload,
+        ajuste:         0, // el ajuste va por carga
+        estado_pago:    encargoForm.pago_anticipado === 'SI' ? 'PAGADO' : 'PENDIENTE',
+        fecha_entrega:  encargoForm.fecha_entrega  || null,
+        tiempo_entrega: encargoForm.tiempo_entrega || null,
+        instrucciones:  encargoForm.instrucciones  || null,
       };
       if (esEdicion) {
         await api.patch(`/notas/${id}`, payload);
         navigate(`/notas/${id}`);
       } else {
         const creada = await api.post('/notas', payload);
-        if (encargoForm.maquina_id && encargoForm.activar_inmediatamente === 'SI') {
-          await api.patch(`/maquinas/${encargoForm.maquina_id}/estado`, { estado: 'en_uso' });
-        }
         setNotaCreada(creada);
       }
     } catch (err) {
@@ -578,7 +615,7 @@ export default function NuevaNota() {
                 {Array.from({ length: ENCARGO_STEPS }).map((_, i) => (
                   <span
                     key={i}
-                    className={`h-1.5 w-8 rounded-full ${
+                    className={`h-1.5 w-6 rounded-full ${
                       i + 1 <= encargoStep ? 'bg-blue' : 'bg-gray-200'
                     }`}
                   />
@@ -687,25 +724,133 @@ export default function NuevaNota() {
               </div>
             )}
 
-            {/* Paso 2 — Tipo de prenda + Tamaño */}
+            {/* Paso 2 — Cantidad de cargas */}
             {encargoStep === 2 && (
-              <div className="space-y-6">
+              <div className="space-y-4">
+                <h2 className="text-base font-semibold text-gray-900">Cantidad de cargas</h2>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number" min="1" max={MAX_CARGAS} step="1"
+                    value={nCargas}
+                    onChange={e => setEncargoCantidadCargas(Number(e.target.value) || 1)}
+                    className={`${INPUT_CLS} text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setEncargoCantidadCargas(nCargas - 1)}
+                    disabled={nCargas <= 1}
+                    aria-label="Disminuir cargas"
+                    className="flex-shrink-0 w-14 py-3.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-xl font-semibold hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    −
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEncargoCantidadCargas(nCargas + 1)}
+                    disabled={nCargas >= MAX_CARGAS}
+                    aria-label="Aumentar cargas"
+                    className="flex-shrink-0 w-14 py-3.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-xl font-semibold hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    +
+                  </button>
+                </div>
+                <p className="text-xs text-gray-400">Configurarás cada carga en las siguientes pantallas.</p>
+              </div>
+            )}
 
-                {encargoForm.tipo_prenda !== 'EDREDON' && (
-                  <div className="space-y-4">
-                    <h2 className="text-base font-semibold text-gray-900">Tamaño de carga</h2>
+            {/* Una pantalla por carga */}
+            {esPasoCarga && (() => {
+              const idx = cargaActivaIdx;
+              const c = encargoCargas[idx];
+              const set = (cambios) => actualizarCargaEncargo(idx, cambios);
+              const lavadorasOpc = maquinas.filter(m => m.tipo !== 'secadora' && (c.tipo_prenda !== 'EDREDON' || m.tipo === 'lavadora_jumbo'));
+              const secadorasOpc = maquinas.filter(m => m.tipo === 'secadora');
+              return (
+                <div className="space-y-6">
+                  <h2 className="text-base font-semibold text-gray-900">Carga {idx + 1} de {nCargas}</h2>
+
+                  {/* Tipo de prenda */}
+                  <div className="space-y-3">
+                    <h3 className="text-sm font-semibold text-gray-900">Tipo de prenda</h3>
+                    <div className="grid grid-cols-2 gap-3">
+                      {TIPOS_PRENDA.map(opt => {
+                        const selected = c.tipo_prenda === opt.v;
+                        return (
+                          <button
+                            key={opt.v}
+                            type="button"
+                            onClick={() => {
+                              const cambios = { tipo_prenda: opt.v };
+                              if (opt.v !== 'ROPA') cambios.tipo_tela = '';
+                              if (opt.v !== 'EDREDON') cambios.tamano_edredon = '';
+                              if (opt.v === 'EDREDON') {
+                                const lav = maquinas.find(m => String(m.id) === String(c.maquina_id));
+                                if (lav && lav.tipo !== 'lavadora_jumbo') { cambios.maquina_id = ''; cambios.activar_inmediatamente = ''; }
+                              }
+                              set(cambios);
+                            }}
+                            className={`py-6 border-2 rounded-xl font-semibold text-lg transition-colors ${
+                              selected ? 'border-blue bg-light-blue text-blue-700' : 'border-gray-300 bg-white text-gray-700 hover:border-blue-300'
+                            }`}
+                          >
+                            {opt.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Tipo de tela (ropa) */}
+                  {c.tipo_prenda === 'ROPA' && (
+                    <div>
+                      <label className={LABEL_CLS}>
+                        Tipo de tela <span className="font-normal text-gray-400">(opcional)</span>
+                      </label>
+                      <select
+                        value={c.tipo_tela}
+                        onChange={e => set({ tipo_tela: e.target.value })}
+                        className={INPUT_CLS}
+                      >
+                        <option value="">Sin asignar</option>
+                        {telas.filter(t => t.activo || t.nombre === c.tipo_tela).map(t => (
+                          <option key={t.id} value={t.nombre}>{t.nombre}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  {/* Tamaño del edredón */}
+                  {c.tipo_prenda === 'EDREDON' && (
+                    <div>
+                      <label className={LABEL_CLS}>
+                        Tamaño del edredón <span className="font-normal text-gray-400">(opcional)</span>
+                      </label>
+                      <select
+                        value={c.tamano_edredon}
+                        onChange={e => set({ tamano_edredon: e.target.value })}
+                        className={INPUT_CLS}
+                      >
+                        <option value="">Sin asignar</option>
+                        {tamanosEdredon.filter(t => t.activo || t.nombre === c.tamano_edredon).map(t => (
+                          <option key={t.id} value={t.nombre}>{t.nombre}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  {/* Tamaño de carga */}
+                  <div className="space-y-3">
+                    <h3 className="text-sm font-semibold text-gray-900">Tamaño de carga <span className="text-red-500">*</span></h3>
                     <div className="grid grid-cols-3 gap-3">
                       {TAMANOS.map(t => {
-                        const selected = encargoForm.tamano === t.v;
+                        const selected = c.tamano === t.v;
                         return (
                           <button
                             key={t.v}
                             type="button"
-                            onClick={() => setEncargoForm(f => ({ ...f, tamano: t.v }))}
-                            className={`py-8 border-2 rounded-xl font-semibold text-lg transition-colors ${
-                              selected
-                                ? 'border-blue bg-light-blue text-blue-700'
-                                : 'border-gray-300 bg-white text-gray-700 hover:border-blue-300'
+                            onClick={() => set({ tamano: t.v })}
+                            className={`py-6 border-2 rounded-xl font-semibold text-lg transition-colors ${
+                              selected ? 'border-blue bg-light-blue text-blue-700' : 'border-gray-300 bg-white text-gray-700 hover:border-blue-300'
                             }`}
                           >
                             {t.label}
@@ -714,232 +859,209 @@ export default function NuevaNota() {
                       })}
                     </div>
                   </div>
-                )}
 
-                <div className="space-y-4">
-                  <h2 className="text-base font-semibold text-gray-900">Tipo de prenda</h2>
-                  <div className="grid grid-cols-2 gap-3">
-                    {TIPOS_PRENDA.map(opt => {
-                      const selected = encargoForm.tipo_prenda === opt.v;
-                      return (
-                        <button
-                          key={opt.v}
-                          type="button"
-                          onClick={() => setEncargoForm(f => {
-                            const next = { ...f, tipo_prenda: opt.v };
-                            if (opt.v !== 'ROPA') { next.tipo_tela = ''; setTelaOpen(false); }
-                            if (opt.v !== 'EDREDON') next.tamano_edredon = '';
-                            else next.tamano = '';
-                            if (opt.v === 'EDREDON' && f.maquina_id) {
-                              const m = maquinas.find(x => String(x.id) === String(f.maquina_id));
-                              if (m && m.tipo !== 'lavadora_jumbo') {
-                                next.maquina_id = '';
-                                next.activar_inmediatamente = '';
-                              }
-                            }
-                            return next;
-                          })}
-                          className={`py-8 border-2 rounded-xl font-semibold text-lg transition-colors ${
-                            selected
-                              ? 'border-blue bg-light-blue text-blue-700'
-                              : 'border-gray-300 bg-white text-gray-700 hover:border-blue-300'
-                          }`}
-                        >
-                          {opt.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {encargoForm.tipo_prenda === 'ROPA' && (
-                  <div className="space-y-4">
-                    <h2 className="text-base font-semibold text-gray-900">
-                      Tipo de tela <span className="font-normal text-gray-400">(opcional)</span>
-                    </h2>
+                  {/* Máquinas */}
+                  <div className="space-y-3">
+                    <h3 className="text-sm font-semibold text-gray-900">Máquinas</h3>
                     <div>
-                      <button
-                        type="button"
-                        onClick={() => setTelaOpen(o => !o)}
-                        className={`w-full px-4 py-3.5 border rounded-lg bg-white text-left flex items-center justify-between transition-colors ${
-                          telaOpen
-                            ? 'border-blue-500 ring-1 ring-blue-500'
-                            : encargoForm.tipo_tela
-                              ? 'border-green-600'
-                              : 'border-gray-300 hover:border-gray-400'
-                        }`}
+                      <label className="block text-xs font-medium text-gray-500 mb-1">Lavadora</label>
+                      <select
+                        value={c.maquina_id}
+                        onChange={e => set({ maquina_id: e.target.value, ...(e.target.value ? {} : { activar_inmediatamente: '' }) })}
+                        className={INPUT_CLS}
                       >
-                        <span className={encargoForm.tipo_tela ? 'text-gray-900' : 'text-gray-400'}>
-                          {encargoForm.tipo_tela || 'Seleccionar'}
-                        </span>
-                        {encargoForm.tipo_tela && !telaOpen ? (
-                          <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                          </svg>
-                        ) : (
-                          <svg
-                            className={`w-5 h-5 text-gray-500 transition-transform ${telaOpen ? 'rotate-180' : ''}`}
-                            fill="none" stroke="currentColor" viewBox="0 0 24 24"
-                          >
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                          </svg>
-                        )}
-                      </button>
-
-                      {telaOpen && (
-                        <div className="mt-2 bg-white border border-gray-200 rounded-lg shadow-md overflow-hidden">
-                          {telas.filter(t => t.activo || t.nombre === encargoForm.tipo_tela).length === 0 && (
-                            <p className="px-4 py-3.5 text-sm text-gray-400">No hay tipos de tela configurados.</p>
-                          )}
-                          {telas
-                            .filter(t => t.activo || t.nombre === encargoForm.tipo_tela)
-                            .map(opt => {
-                              const selected = encargoForm.tipo_tela === opt.nombre;
-                              return (
-                                <button
-                                  key={opt.id}
-                                  type="button"
-                                  onClick={() => { setEncargoForm(f => ({ ...f, tipo_tela: opt.nombre })); setTelaOpen(false); }}
-                                  className="w-full px-4 py-3.5 flex items-center justify-between text-left hover:bg-gray-50 border-b last:border-0 border-gray-100"
-                                >
-                                  <span className="text-base text-gray-900">{opt.nombre}</span>
-                                  <span className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
-                                    selected ? 'border-blue bg-blue' : 'border-gray-300'
-                                  }`}>
-                                    {selected && (
-                                      <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                                      </svg>
-                                    )}
-                                  </span>
-                                </button>
-                              );
-                            })}
-                        </div>
-                      )}
+                        <option value="">Sin asignar</option>
+                        {lavadorasOpc.map(m => (
+                          <option key={m.id} value={m.id}>
+                            {formatMaquina(m)} — ${precioPorTipo(m.tipo, c.tipo_prenda).toFixed(2)}
+                          </option>
+                        ))}
+                      </select>
                     </div>
-                  </div>
-                )}
 
-                {encargoForm.tipo_prenda === 'EDREDON' && (
-                  <div className="space-y-4">
-                    <h2 className="text-base font-semibold text-gray-900">
-                      Tamaño del edredón <span className="font-normal text-gray-400">(opcional)</span>
-                    </h2>
-                    {tamanosEdredon.filter(t => t.activo || t.nombre === encargoForm.tamano_edredon).length === 0 ? (
-                      <p className="text-sm text-gray-400">No hay tamaños de edredón configurados.</p>
-                    ) : (
-                      <div className="grid grid-cols-3 gap-3">
-                        {tamanosEdredon
-                          .filter(t => t.activo || t.nombre === encargoForm.tamano_edredon)
-                          .map(opt => {
-                            const selected = encargoForm.tamano_edredon === opt.nombre;
+                    {c.maquina_id && !esEdicion && (
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 mb-1">Activar inmediatamente <span className="text-red-500">*</span></label>
+                        <div className="grid grid-cols-2 gap-3">
+                          {[{ v: 'SI', label: 'Sí' }, { v: 'NO', label: 'No' }].map(opt => {
+                            const selected = c.activar_inmediatamente === opt.v;
                             return (
                               <button
-                                key={opt.id}
+                                key={opt.v}
                                 type="button"
-                                onClick={() => setEncargoForm(f => ({ ...f, tamano_edredon: opt.nombre }))}
-                                className={`py-8 border-2 rounded-xl font-semibold text-lg transition-colors ${
-                                  selected
-                                    ? 'border-blue bg-light-blue text-blue-700'
-                                    : 'border-gray-300 bg-white text-gray-700 hover:border-blue-300'
+                                onClick={() => set({ activar_inmediatamente: opt.v })}
+                                className={`py-4 border-2 rounded-xl font-semibold text-base transition-colors ${
+                                  selected ? 'border-blue bg-light-blue text-blue-700' : 'border-gray-300 bg-white text-gray-700 hover:border-blue-300'
                                 }`}
                               >
-                                {opt.nombre}
+                                {opt.label}
                               </button>
                             );
                           })}
+                        </div>
+                      </div>
+                    )}
+
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1">Secadora</label>
+                      <select
+                        value={c.secadora_id}
+                        onChange={e => set({ secadora_id: e.target.value })}
+                        className={INPUT_CLS}
+                      >
+                        <option value="">Sin asignar</option>
+                        {secadorasOpc.map(m => (
+                          <option key={m.id} value={m.id}>{m.nombre} — ${precios.secadora.toFixed(2)}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Productos de la carga */}
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-sm font-semibold text-gray-900">Productos</h3>
+                      {(c.productos ?? []).length > 0 && (
+                        <span className="text-xs text-gray-500">{c.productos.length} {c.productos.length === 1 ? 'producto' : 'productos'}</span>
+                      )}
+                    </div>
+                    {(c.productos ?? []).length === 0 ? (
+                      <button
+                        type="button"
+                        onClick={() => agregarProductoCarga(idx)}
+                        className="w-full py-6 border-2 border-dashed border-gray-300 rounded-xl text-gray-500 hover:text-blue hover:border-blue-400 hover:bg-light-blue/40 transition-colors flex flex-col items-center justify-center gap-2"
+                      >
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v16m8-8H4" />
+                        </svg>
+                        <span className="text-sm font-medium">Agregar producto</span>
+                      </button>
+                    ) : (
+                      <div className="space-y-3">
+                        {c.productos.map((item, j) => {
+                          const prod = productosCatalogo.find(x => String(x.id) === String(item.producto_id));
+                          const cant = Number(item.cantidad) || 0;
+                          const subtotal = prod ? (Number(prod.precio_unitario) || 0) * cant : 0;
+                          return (
+                            <div key={j} className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
+                              <div className="flex items-center gap-2">
+                                <select
+                                  value={item.producto_id}
+                                  onChange={e => actualizarProductoCarga(idx, j, 'producto_id', e.target.value)}
+                                  className={`flex-1 ${INPUT_CLS}`}
+                                >
+                                  <option value="">Selecciona un producto…</option>
+                                  {productosCatalogo.map(p => (
+                                    <option key={p.id} value={p.id}>
+                                      {p.nombre}{p.precio_unitario ? ` — $${Number(p.precio_unitario).toFixed(2)}` : ''} ({Number(p.stock_disponible ?? p.stock_actual)} {p.unidad})
+                                    </option>
+                                  ))}
+                                </select>
+                                <button
+                                  type="button"
+                                  onClick={() => eliminarProductoCarga(idx, j)}
+                                  aria-label="Eliminar producto"
+                                  className="flex-shrink-0 px-3 py-3.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                                >
+                                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                  </svg>
+                                </button>
+                              </div>
+                              <div className="flex items-end justify-between gap-3">
+                                <div>
+                                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Cantidad</p>
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => actualizarProductoCarga(idx, j, 'cantidad', String(Math.max(1, cant - 1)))}
+                                      disabled={cant <= 1}
+                                      aria-label="Disminuir cantidad"
+                                      className="w-10 h-10 flex items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-700 text-lg font-semibold hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                                    >
+                                      −
+                                    </button>
+                                    <span className="w-10 text-center text-base font-medium text-gray-900">{cant}</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => actualizarProductoCarga(idx, j, 'cantidad', String(cant + 1))}
+                                      aria-label="Aumentar cantidad"
+                                      className="w-10 h-10 flex items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-700 text-lg font-semibold hover:bg-gray-50 transition-colors"
+                                    >
+                                      +
+                                    </button>
+                                  </div>
+                                </div>
+                                {subtotal > 0 && (
+                                  <div className="text-right">
+                                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Subtotal</p>
+                                    <p className="text-lg font-bold text-blue-700">${subtotal.toFixed(2)}</p>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                        <button
+                          type="button"
+                          onClick={() => agregarProductoCarga(idx)}
+                          className="w-full py-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-600 hover:text-blue hover:border-blue-400 hover:bg-light-blue/40 transition-colors flex items-center justify-center gap-2 text-sm font-medium"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                          </svg>
+                          Agregar otro producto
+                        </button>
                       </div>
                     )}
                   </div>
-                )}
-              </div>
-            )}
 
-            {/* Paso 4 — Cantidad de cargas + Ajuste */}
-            {encargoStep === 4 && (
-              <div className="space-y-5">
-                <h2 className="text-base font-semibold text-gray-900">Cargas</h2>
-                <div>
-                  <label className={LABEL_CLS}>
-                    Cantidad de cargas <span className="text-red-500">*</span>
-                  </label>
-                  <p className="text-xs text-gray-400 mb-1.5">
-                    Precio base por carga: ${precioCargaEncargo.toFixed(2)} MXN
-                    {maquinaEncargo && ` (${maquinaEncargo.tipo === 'lavadora_jumbo' ? 'Jumbo' : 'Mediana'})`}
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="number" name="cantidad_cargas" min="1" step="1" required
-                      value={encargoForm.cantidad_cargas} onChange={handleEncargoChange}
-                      placeholder="1"
-                      className={`${INPUT_CLS} text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setEncargoForm(f => ({ ...f, cantidad_cargas: String(Math.max(1, (Number(f.cantidad_cargas) || 1) - 1)) }))}
-                      disabled={(Number(encargoForm.cantidad_cargas) || 1) <= 1}
-                      aria-label="Disminuir cargas"
-                      className="flex-shrink-0 w-14 py-3.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-xl font-semibold hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                    >
-                      −
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setEncargoForm(f => ({ ...f, cantidad_cargas: String((Number(f.cantidad_cargas) || 0) + 1) }))}
-                      aria-label="Aumentar cargas"
-                      className="flex-shrink-0 w-14 py-3.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-xl font-semibold hover:bg-gray-50 transition-colors"
-                    >
-                      +
-                    </button>
-                  </div>
-                  <p className="text-xs text-blue mt-1 font-medium">
-                    Subtotal cargas: ${encargoSubtotalCargas.toFixed(2)}
-                  </p>
-                </div>
-                <div>
-                  <label className={LABEL_CLS}>Ajuste ($)</label>
-                  <div className="flex items-center gap-2">
-                    <div className="relative flex-1">
-                      <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 text-base">$</span>
-                      <input
-                        type="number" name="ajuste" step="10"
-                        value={encargoForm.ajuste} onChange={handleEncargoChange}
-                        placeholder="Ej. -10 para descuento, 20 para cargo extra"
-                        className={`${INPUT_CLS} pl-8 text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`}
-                      />
+                  {/* Ajuste de la carga */}
+                  <div>
+                    <label className={LABEL_CLS}>Ajuste ($)</label>
+                    <div className="flex items-center gap-2">
+                      <div className="relative flex-1">
+                        <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 text-base">$</span>
+                        <input
+                          type="number" step="10"
+                          value={c.ajuste}
+                          onChange={e => set({ ajuste: e.target.value })}
+                          placeholder="Ej. -10 para descuento, 20 para cargo extra"
+                          className={`${INPUT_CLS} pl-8 text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`}
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => set({ ajuste: String((Number(c.ajuste) || 0) - 10) })}
+                        aria-label="Disminuir ajuste"
+                        className="flex-shrink-0 w-14 py-3.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-xl font-semibold hover:bg-gray-50 transition-colors"
+                      >
+                        −
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => set({ ajuste: String((Number(c.ajuste) || 0) + 10) })}
+                        aria-label="Aumentar ajuste"
+                        className="flex-shrink-0 w-14 py-3.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-xl font-semibold hover:bg-gray-50 transition-colors"
+                      >
+                        +
+                      </button>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => setEncargoForm(f => ({ ...f, ajuste: String((Number(f.ajuste) || 0) - 10) }))}
-                      aria-label="Disminuir ajuste"
-                      className="flex-shrink-0 w-14 py-3.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-xl font-semibold hover:bg-gray-50 transition-colors"
-                    >
-                      −
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setEncargoForm(f => ({ ...f, ajuste: String((Number(f.ajuste) || 0) + 10) }))}
-                      aria-label="Aumentar ajuste"
-                      className="flex-shrink-0 w-14 py-3.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-xl font-semibold hover:bg-gray-50 transition-colors"
-                    >
-                      +
-                    </button>
                   </div>
-                  <p className="text-xs text-gray-400 mt-1">Descuento (negativo) o cargo extra (positivo).</p>
-                </div>
-              </div>
-            )}
 
-            {/* Paso 5 — Pago Anticipado */}
-            {encargoStep === 5 && (
+                  <p className="text-sm font-medium text-blue text-right">
+                    Subtotal carga: ${subtotalCargaEncargo(c).toFixed(2)}
+                  </p>
+                </div>
+              );
+            })()}
+
+            {/* Pago Anticipado */}
+            {encargoStep === pasoPago && (
               <div className="space-y-4">
                 <h2 className="text-base font-semibold text-gray-900">Pago Anticipado</h2>
                 <div className="grid grid-cols-2 gap-3">
-                  {[
-                    { v: 'SI', label: 'Sí' },
-                    { v: 'NO', label: 'No' },
-                  ].map(opt => {
+                  {[{ v: 'SI', label: 'Sí' }, { v: 'NO', label: 'No' }].map(opt => {
                     const selected = encargoForm.pago_anticipado === opt.v;
                     return (
                       <button
@@ -947,9 +1069,7 @@ export default function NuevaNota() {
                         type="button"
                         onClick={() => setEncargoForm(f => ({ ...f, pago_anticipado: opt.v }))}
                         className={`py-8 border-2 rounded-xl font-semibold text-lg transition-colors ${
-                          selected
-                            ? 'border-blue bg-light-blue text-blue-700'
-                            : 'border-gray-300 bg-white text-gray-700 hover:border-blue-300'
+                          selected ? 'border-blue bg-light-blue text-blue-700' : 'border-gray-300 bg-white text-gray-700 hover:border-blue-300'
                         }`}
                       >
                         {opt.label}
@@ -960,8 +1080,8 @@ export default function NuevaNota() {
               </div>
             )}
 
-            {/* Paso 6 — Fecha de entrega + Instrucciones */}
-            {encargoStep === 6 && (
+            {/* Entrega: fecha + tiempo */}
+            {encargoStep === pasoEntrega && (
               <div className="space-y-5">
                 <h2 className="text-base font-semibold text-gray-900">Entrega</h2>
                 <div>
@@ -990,14 +1110,9 @@ export default function NuevaNota() {
                         <button
                           key={t.v}
                           type="button"
-                          onClick={() => setEncargoForm(f => ({
-                            ...f,
-                            tiempo_entrega: f.tiempo_entrega === t.v ? '' : t.v,
-                          }))}
+                          onClick={() => setEncargoForm(f => ({ ...f, tiempo_entrega: f.tiempo_entrega === t.v ? '' : t.v }))}
                           className={`py-4 border-2 rounded-xl font-semibold text-base transition-colors ${
-                            selected
-                              ? 'border-blue bg-light-blue text-blue-700'
-                              : 'border-gray-300 bg-white text-gray-700 hover:border-blue-300'
+                            selected ? 'border-blue bg-light-blue text-blue-700' : 'border-gray-300 bg-white text-gray-700 hover:border-blue-300'
                           }`}
                         >
                           {t.label}
@@ -1006,358 +1121,67 @@ export default function NuevaNota() {
                     })}
                   </div>
                 </div>
-                <div>
-                  <label className={LABEL_CLS}>Instrucciones</label>
-                  <textarea
-                    name="instrucciones" rows={5}
-                    value={encargoForm.instrucciones} onChange={handleEncargoChange}
-                    placeholder="Instrucciones especiales..."
-                    className={`${INPUT_CLS} resize-none`}
-                  />
-                </div>
               </div>
             )}
 
-            {/* Paso 3 — Máquina */}
-            {encargoStep === 3 && (() => {
-              const maquinasDisponibles = encargoForm.tipo_prenda === 'EDREDON'
-                ? maquinas.filter(m => m.tipo === 'lavadora_jumbo')
-                : maquinas;
-              return (
-              <div className="space-y-5">
-                <h2 className="text-base font-semibold text-gray-900">Máquina</h2>
+            {/* Instrucciones */}
+            {encargoStep === pasoInstrucciones && (
+              <div className="space-y-4">
+                <h2 className="text-base font-semibold text-gray-900">Instrucciones</h2>
+                <textarea
+                  name="instrucciones" rows={6}
+                  value={encargoForm.instrucciones} onChange={handleEncargoChange}
+                  placeholder="Instrucciones especiales..."
+                  className={`${INPUT_CLS} resize-none`}
+                />
+              </div>
+            )}
 
-                <div ref={maquinaEncargoRef} className="relative">
-                  <label className={LABEL_CLS}>Máquina</label>
-                  {(() => {
-                    const maquinaSel = maquinas.find(m => String(m.id) === String(encargoForm.maquina_id));
-                    const maquinaLabel = formatMaquina(maquinaSel);
+            {/* Resumen */}
+            {encargoStep === pasoResumen && (
+              <div className="bg-light-blue border border-blue-200 rounded-xl p-4">
+                <p className="text-xs font-medium text-blue uppercase tracking-wide mb-2">Resumen</p>
+                <div className="space-y-1 mb-3 text-sm text-blue-700">
+                  <div className="flex justify-between">
+                    <span>Cliente</span>
+                    <span className="font-medium">
+                      {clienteSeleccionado
+                        ? `${clienteSeleccionado.nombre}${clienteSeleccionado.apellido ? ' ' + clienteSeleccionado.apellido : ''}`
+                        : '—'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Pago Anticipado</span>
+                    <span className="font-medium">
+                      {encargoForm.pago_anticipado === 'SI' ? 'Sí' : encargoForm.pago_anticipado === 'NO' ? 'No' : '—'}
+                    </span>
+                  </div>
+                  {encargoForm.fecha_entrega && (
+                    <div className="flex justify-between"><span>Entrega</span><span className="font-medium">{encargoForm.fecha_entrega}</span></div>
+                  )}
+                  {encargoForm.tiempo_entrega && (
+                    <div className="flex justify-between"><span>Tiempo</span><span className="font-medium">{TIEMPO_ENTREGA_LABEL[encargoForm.tiempo_entrega]}</span></div>
+                  )}
+                </div>
+                <div className="space-y-1 mb-2 text-sm text-blue border-t border-blue-200 pt-3">
+                  {encargoCargas.map((c, i) => {
+                    const lav = maquinas.find(m => String(m.id) === String(c.maquina_id));
+                    const sec = maquinas.find(m => String(m.id) === String(c.secadora_id));
+                    const partes = [lav?.nombre, sec?.nombre].filter(Boolean);
+                    const detalle = [PRENDA_LABEL[c.tipo_prenda], c.tamano ? TAMANO_LABEL[c.tamano] : null].filter(Boolean).join(', ');
                     return (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => setMaquinaEncargoOpen(o => !o)}
-                          className={`w-full px-4 py-3.5 border rounded-lg bg-white text-left flex items-center justify-between transition-colors ${
-                            maquinaEncargoOpen
-                              ? 'border-blue-500 ring-1 ring-blue-500'
-                              : encargoForm.maquina_id
-                                ? 'border-green-600'
-                                : 'border-gray-300 hover:border-gray-400'
-                          }`}
-                        >
-                          <span className={encargoForm.maquina_id ? 'text-gray-900' : 'text-gray-400'}>
-                            {maquinaLabel || 'Sin asignar'}
-                          </span>
-                          {encargoForm.maquina_id && !maquinaEncargoOpen ? (
-                            <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                            </svg>
-                          ) : (
-                            <svg
-                              className={`w-5 h-5 text-gray-500 transition-transform ${maquinaEncargoOpen ? 'rotate-180' : ''}`}
-                              fill="none" stroke="currentColor" viewBox="0 0 24 24"
-                            >
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                            </svg>
-                          )}
-                        </button>
-
-                        {maquinaEncargoOpen && (
-                          <div className="mt-2 bg-white border border-gray-200 rounded-lg shadow-md overflow-hidden">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setEncargoForm(f => ({ ...f, maquina_id: '', activar_inmediatamente: '' }));
-                                setMaquinaEncargoOpen(false);
-                              }}
-                              className="w-full px-4 py-3.5 flex items-center justify-between text-left hover:bg-gray-50 border-b last:border-0 border-gray-100"
-                            >
-                              <span className="text-base text-gray-500 italic">Sin asignar</span>
-                              <span className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
-                                !encargoForm.maquina_id ? 'border-blue bg-blue' : 'border-gray-300'
-                              }`}>
-                                {!encargoForm.maquina_id && (
-                                  <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                                  </svg>
-                                )}
-                              </span>
-                            </button>
-                            {maquinasDisponibles.map(m => {
-                              const selected = String(encargoForm.maquina_id) === String(m.id);
-                              return (
-                                <button
-                                  key={m.id}
-                                  type="button"
-                                  onClick={() => {
-                                    setEncargoForm(f => ({ ...f, maquina_id: String(m.id) }));
-                                    setMaquinaEncargoOpen(false);
-                                  }}
-                                  className="w-full px-4 py-3.5 flex items-center justify-between text-left hover:bg-gray-50 border-b last:border-0 border-gray-100"
-                                >
-                                  <span className="text-base text-gray-900">
-                                    {formatMaquina(m)}
-                                  </span>
-                                  <span className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
-                                    selected ? 'border-blue bg-blue' : 'border-gray-300'
-                                  }`}>
-                                    {selected && (
-                                      <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                                      </svg>
-                                    )}
-                                  </span>
-                                </button>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </>
+                      <div key={i} className="flex justify-between gap-2">
+                        <span>Carga {i + 1}{detalle ? ` — ${detalle}` : ''}{partes.length > 0 ? ` (${partes.join(' + ')})` : ''}</span>
+                        <span>${subtotalCargaEncargo(c).toFixed(2)}</span>
+                      </div>
                     );
-                  })()}
-                  {maquinasDisponibles.length === 0 && (
-                    <p className="text-xs text-red-600 mt-1">
-                      {encargoForm.tipo_prenda === 'EDREDON'
-                        ? 'No hay máquinas jumbo disponibles en este momento.'
-                        : 'No hay máquinas disponibles en este momento.'}
-                    </p>
-                  )}
+                  })}
                 </div>
-
-                {encargoForm.maquina_id && !esEdicion && (
-                  <div>
-                    <label className={LABEL_CLS}>Activar inmediatamente</label>
-                    <div className="grid grid-cols-2 gap-3">
-                      {[
-                        { v: 'SI', label: 'Sí' },
-                        { v: 'NO', label: 'No' },
-                      ].map(opt => {
-                        const selected = encargoForm.activar_inmediatamente === opt.v;
-                        return (
-                          <button
-                            key={opt.v}
-                            type="button"
-                            onClick={() => setEncargoForm(f => ({ ...f, activar_inmediatamente: opt.v }))}
-                            className={`py-8 border-2 rounded-xl font-semibold text-lg transition-colors ${
-                              selected
-                                ? 'border-blue bg-light-blue text-blue-700'
-                                : 'border-gray-300 bg-white text-gray-700 hover:border-blue-300'
-                            }`}
-                          >
-                            {opt.label}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-              </div>
-              );
-            })()}
-
-            {/* Paso 7 — Productos + Resumen */}
-            {encargoStep === 7 && (
-              <div className="space-y-6">
-                <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <h2 className="text-base font-semibold text-gray-900">Productos</h2>
-                    {encargoProductos.length > 0 && (
-                      <span className="text-xs text-gray-500">
-                        {encargoProductos.length} {encargoProductos.length === 1 ? 'producto' : 'productos'}
-                      </span>
-                    )}
-                  </div>
-
-                  {encargoProductos.length === 0 ? (
-                    <button
-                      type="button"
-                      onClick={agregarEncargoProducto}
-                      className="w-full py-8 border-2 border-dashed border-gray-300 rounded-xl text-gray-500 hover:text-blue hover:border-blue-400 hover:bg-light-blue/40 transition-colors flex flex-col items-center justify-center gap-2"
-                    >
-                      <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v16m8-8H4" />
-                      </svg>
-                      <span className="text-sm font-medium">Agregar producto</span>
-                    </button>
-                  ) : (
-                    <div className="space-y-3">
-                      {encargoProductos.map((item, i) => {
-                        const prod = productosCatalogo.find(x => String(x.id) === String(item.producto_id));
-                        const cant = Number(item.cantidad) || 0;
-                        const subtotal = prod ? (Number(prod.precio_unitario) || 0) * cant : 0;
-                        return (
-                          <div key={i} className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
-                            <div className="flex items-center gap-2">
-                              <select
-                                value={item.producto_id}
-                                onChange={e => actualizarEncargoProducto(i, 'producto_id', e.target.value)}
-                                className={`flex-1 ${INPUT_CLS}`}
-                              >
-                                <option value="">Selecciona un producto…</option>
-                                {productosCatalogo.map(p => (
-                                  <option key={p.id} value={p.id}>
-                                    {p.nombre}{p.precio_unitario ? ` — $${Number(p.precio_unitario).toFixed(2)}` : ''} ({Number(p.stock_disponible ?? p.stock_actual)} {p.unidad})
-                                  </option>
-                                ))}
-                              </select>
-                              <button
-                                type="button"
-                                onClick={() => eliminarEncargoProducto(i)}
-                                aria-label="Eliminar producto"
-                                className="flex-shrink-0 px-3 py-3.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                              >
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                </svg>
-                              </button>
-                            </div>
-
-                            <div className="flex items-end justify-between gap-3">
-                              <div>
-                                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Cantidad</p>
-                                <div className="flex items-center gap-2">
-                                  <button
-                                    type="button"
-                                    onClick={() => actualizarEncargoProducto(i, 'cantidad', String(Math.max(1, cant - 1)))}
-                                    disabled={cant <= 1}
-                                    aria-label="Disminuir cantidad"
-                                    className="w-10 h-10 flex items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-700 text-lg font-semibold hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                                  >
-                                    −
-                                  </button>
-                                  <span className="w-10 text-center text-base font-medium text-gray-900">{cant}</span>
-                                  <button
-                                    type="button"
-                                    onClick={() => actualizarEncargoProducto(i, 'cantidad', String(cant + 1))}
-                                    aria-label="Aumentar cantidad"
-                                    className="w-10 h-10 flex items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-700 text-lg font-semibold hover:bg-gray-50 transition-colors"
-                                  >
-                                    +
-                                  </button>
-                                </div>
-                              </div>
-                              {subtotal > 0 && (
-                                <div className="text-right">
-                                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Subtotal</p>
-                                  <p className="text-lg font-bold text-blue-700">${subtotal.toFixed(2)}</p>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-
-                      <button
-                        type="button"
-                        onClick={agregarEncargoProducto}
-                        className="w-full py-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-600 hover:text-blue hover:border-blue-400 hover:bg-light-blue/40 transition-colors flex items-center justify-center gap-2 text-sm font-medium"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                        </svg>
-                        Agregar otro producto
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                {/* Resumen */}
-                <div className="bg-light-blue border border-blue-200 rounded-xl p-4">
-                  <p className="text-xs font-medium text-blue uppercase tracking-wide mb-2">
-                    Resumen
-                  </p>
-                  <div className="space-y-1 mb-3 text-sm text-blue-700">
-                    <div className="flex justify-between">
-                      <span>Cliente</span>
-                      <span className="font-medium">
-                        {clienteSeleccionado
-                          ? `${clienteSeleccionado.nombre}${clienteSeleccionado.apellido ? ' ' + clienteSeleccionado.apellido : ''}`
-                          : '—'}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Prenda</span>
-                      <span className="font-medium">{PRENDA_LABEL[encargoForm.tipo_prenda] ?? '—'}</span>
-                    </div>
-                    {encargoForm.tipo_prenda === 'ROPA' && encargoForm.tipo_tela && (
-                      <div className="flex justify-between">
-                        <span>Tela</span>
-                        <span className="font-medium">{encargoForm.tipo_tela}</span>
-                      </div>
-                    )}
-                    {encargoForm.tipo_prenda === 'EDREDON' ? (
-                      <div className="flex justify-between">
-                        <span>Tamaño</span>
-                        <span className="font-medium">{encargoForm.tamano_edredon || '—'}</span>
-                      </div>
-                    ) : (
-                      <div className="flex justify-between">
-                        <span>Tamaño</span>
-                        <span className="font-medium">{TAMANO_LABEL[encargoForm.tamano] ?? '—'}</span>
-                      </div>
-                    )}
-                    <div className="flex justify-between">
-                      <span>Pago Anticipado</span>
-                      <span className="font-medium">
-                        {encargoForm.pago_anticipado === 'SI' ? 'Sí'
-                          : encargoForm.pago_anticipado === 'NO' ? 'No' : '—'}
-                      </span>
-                    </div>
-                    {encargoForm.fecha_entrega && (
-                      <div className="flex justify-between">
-                        <span>Entrega</span>
-                        <span className="font-medium">{encargoForm.fecha_entrega}</span>
-                      </div>
-                    )}
-                    {encargoForm.tiempo_entrega && (
-                      <div className="flex justify-between">
-                        <span>Tiempo</span>
-                        <span className="font-medium">{TIEMPO_ENTREGA_LABEL[encargoForm.tiempo_entrega]}</span>
-                      </div>
-                    )}
-                    <div className="flex justify-between">
-                      <span>Máquina</span>
-                      <span className="font-medium">
-                        {(() => {
-                          const maquinaSel = maquinas.find(m => String(m.id) === String(encargoForm.maquina_id));
-                          return maquinaSel ? formatMaquina(maquinaSel) : 'Sin asignar';
-                        })()}
-                      </span>
-                    </div>
-                    {encargoForm.maquina_id && !esEdicion && encargoForm.activar_inmediatamente && (
-                      <div className="flex justify-between">
-                        <span>Activar al crear</span>
-                        <span className="font-medium">
-                          {encargoForm.activar_inmediatamente === 'SI' ? 'Sí' : 'No'}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                  <div className="space-y-1 mb-2 text-sm text-blue border-t border-blue-200 pt-3">
-                    <div className="flex justify-between">
-                      <span>Cargas ({encargoCargas} × ${precioCargaEncargo.toFixed(2)})</span>
-                      <span>${encargoSubtotalCargas.toFixed(2)}</span>
-                    </div>
-                    {encargoAjuste !== 0 && (
-                      <div className="flex justify-between">
-                        <span>Ajuste</span>
-                        <span>{encargoAjuste > 0 ? '+' : ''}${encargoAjuste.toFixed(2)}</span>
-                      </div>
-                    )}
-                    {encargoSubtotalProductos > 0 && (
-                      <div className="flex justify-between">
-                        <span>Productos</span>
-                        <span>${encargoSubtotalProductos.toFixed(2)}</span>
-                      </div>
-                    )}
-                  </div>
-                  <p className="text-3xl font-bold text-blue-700 border-t border-blue-200 pt-2">
-                    ${encargoPrecioTotal.toFixed(2)}
-                  </p>
-                </div>
+                <p className="text-3xl font-bold text-blue-700 border-t border-blue-200 pt-2">
+                  ${encargoPrecioTotal.toFixed(2)}
+                </p>
               </div>
             )}
-
 
             {/* Navegación del wizard */}
             <div className="flex gap-3 pb-4">

@@ -369,7 +369,7 @@ export default function DetalleNota() {
             </span>
             {nota.tamano && <span className="ml-2 text-xs text-gray-500 capitalize">{nota.tamano}</span>}
           </FilaDetalle>
-          {nota.tipo_prenda && PRENDA_LABEL[nota.tipo_prenda] && (
+          {(nota.cargas ?? []).length === 0 && nota.tipo_prenda && PRENDA_LABEL[nota.tipo_prenda] && (
             <FilaDetalle label="Prenda">
               <span className="text-sm font-medium text-gray-800">{PRENDA_LABEL[nota.tipo_prenda]}</span>
             </FilaDetalle>
@@ -391,38 +391,61 @@ export default function DetalleNota() {
           </FilaDetalle>
           {(nota.cargas ?? []).length > 0 ? (
             <FilaDetalle label="Cargas">
-              <div className="space-y-2">
+              <div className="space-y-3">
                 {nota.cargas.map(cg => {
                   const maquinasCarga = [
                     cg.lavadora_id && { nombre: cg.lavadora_nombre, tipo: cg.lavadora_tipo, estado: cg.lavadora_estado },
                     cg.secadora_id && { nombre: cg.secadora_nombre, tipo: cg.secadora_tipo, estado: cg.secadora_estado },
                   ].filter(Boolean);
+                  const prods = cg.productos ?? [];
+                  const totalProds = prods.reduce((s, p) => s + Number(p.subtotal ?? 0), 0);
+                  const totalCarga = Number(cg.precio_lavadora) + Number(cg.precio_secadora)
+                    + Number(cg.ajuste ?? 0) + totalProds;
+                  const atributos = [
+                    PRENDA_LABEL[cg.tipo_prenda],
+                    cg.tipo_tela,
+                    cg.tamano_edredon,
+                    cg.tamano ? cg.tamano.charAt(0).toUpperCase() + cg.tamano.slice(1) : null,
+                  ].filter(Boolean);
                   return (
-                    <div key={cg.id} className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                      <span className="text-xs font-semibold text-gray-500">Carga {cg.orden}</span>
-                      {maquinasCarga.length === 0 && (
-                        <span className="text-sm text-gray-400 italic">Sin máquinas</span>
+                    <div key={cg.id} className="border border-gray-100 rounded-lg p-3 space-y-1.5">
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                        <span className="text-xs font-semibold text-gray-500">Carga {cg.orden}</span>
+                        {maquinasCarga.length === 0 && (
+                          <span className="text-sm text-gray-400 italic">Sin máquinas</span>
+                        )}
+                        {maquinasCarga.map((m, i) => {
+                          const cfg = BADGE_MAQUINA_ESTADO[m.estado];
+                          return (
+                            <span key={i} className="inline-flex items-center gap-1.5">
+                              <span className="text-sm font-medium text-gray-800">{m.nombre}</span>
+                              {MAQUINA_TIPO_LABEL[m.tipo] && (
+                                <span className="text-xs text-gray-500">— {MAQUINA_TIPO_LABEL[m.tipo]}</span>
+                              )}
+                              {cfg && (
+                                <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${cfg.cls}`}>
+                                  <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot} ${m.estado === 'en_uso' ? 'animate-pulse' : ''}`} />
+                                  {cfg.label}
+                                </span>
+                              )}
+                            </span>
+                          );
+                        })}
+                        <span className="ml-auto text-sm font-medium text-gray-700">{fmtMonto(totalCarga)}</span>
+                      </div>
+                      {atributos.length > 0 && (
+                        <p className="text-xs text-gray-500">{atributos.join(' · ')}</p>
                       )}
-                      {maquinasCarga.map((m, i) => {
-                        const cfg = BADGE_MAQUINA_ESTADO[m.estado];
-                        return (
-                          <span key={i} className="inline-flex items-center gap-1.5">
-                            <span className="text-sm font-medium text-gray-800">{m.nombre}</span>
-                            {MAQUINA_TIPO_LABEL[m.tipo] && (
-                              <span className="text-xs text-gray-500">— {MAQUINA_TIPO_LABEL[m.tipo]}</span>
-                            )}
-                            {cfg && (
-                              <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${cfg.cls}`}>
-                                <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot} ${m.estado === 'en_uso' ? 'animate-pulse' : ''}`} />
-                                {cfg.label}
-                              </span>
-                            )}
-                          </span>
-                        );
-                      })}
-                      <span className="ml-auto text-sm font-medium text-gray-700">
-                        {fmtMonto(Number(cg.precio_lavadora) + Number(cg.precio_secadora))}
-                      </span>
+                      {prods.map(p => (
+                        <p key={p.id} className="text-xs text-gray-500">
+                          {p.nombre} · {p.cantidad} × {fmtMonto(p.precio_unitario)} = {fmtMonto(p.subtotal)}
+                        </p>
+                      ))}
+                      {Number(cg.ajuste) !== 0 && (
+                        <p className="text-xs text-gray-500">
+                          Ajuste: {Number(cg.ajuste) > 0 ? '+' : ''}{fmtMonto(cg.ajuste)}
+                        </p>
+                      )}
                     </div>
                   );
                 })}

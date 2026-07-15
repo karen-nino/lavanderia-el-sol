@@ -88,11 +88,14 @@ async function liberarMaquinasDeNota(client, notaId) {
 //   cargas (suma de nota_cargas si existen; si no, la fórmula legada
 //   cantidad_cargas × precio_base) + productos + ajuste.
 async function recalcularPrecioTotal(client, notaId) {
+  // El ajuste por carga (nota_cargas.ajuste) es para Por Encargo; el ajuste a
+  // nivel nota (notas.ajuste) es para Autoservicio. Solo uno está en uso a la
+  // vez (el otro es 0), así que sumar ambos es correcto en los dos casos.
   const { rows } = await client.query(
     `UPDATE notas n
         SET precio_total =
           COALESCE(
-            (SELECT SUM(nc.precio_lavadora + nc.precio_secadora)
+            (SELECT SUM(nc.precio_lavadora + nc.precio_secadora + nc.ajuste)
                FROM nota_cargas nc WHERE nc.nota_id = n.id),
             n.cantidad_cargas * COALESCE(n.precio_base, 0)
               + COALESCE(n.cantidad_cargas_secadora, 0) * COALESCE(n.precio_base_secadora, 0)
@@ -130,10 +133,52 @@ function tarifaLavadora(tipoMaquina, tipoPrenda, t) {
   return t.mediana;
 }
 
-// Valida y tarifica las cargas recibidas en el body ({ lavadora_id, secadora_id }
-// por carga, ambas opcionales). Devuelve las filas listas para insertar o
-// lanza un Error con el mensaje para el cliente.
-async function prepararCargas(client, cargas, tipoPrenda, sucursal) {
+// Reserva un producto para una nota (o una carga): valida stock disponible,
+// inserta la fila en nota_productos y aumenta stock_reservado. Lanza Error con
+// el mensaje para el cliente si el producto no existe o no hay stock.
+async function reservarProducto(client, notaId, cargaId, productoId, cantidad, sucursal) {
+  const { rows: artRows } = await client.query(
+    'SELECT * FROM productos WHERE id = $1 AND sucursal = $2 FOR UPDATE',
+    [productoId, sucursal]
+  );
+  if (artRows.length === 0) {
+    throw new Error(`Producto ${productoId} no encontrado.`);
+  }
+  const art = artRows[0];
+  const disponible = Number(art.stock_actual) - Number(art.stock_reservado);
+  if (disponible < Number(cantidad)) {
+    throw new Error(`Stock insuficiente para "${art.nombre}". Disponible: ${disponible}, solicitado: ${cantidad}.`);
+  }
+  const { rows: npRows } = await client.query(
+    `INSERT INTO nota_productos (nota_id, carga_id, producto_id, cantidad, precio_unitario)
+     VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+    [notaId, cargaId, productoId, cantidad, art.precio_unitario ?? 0]
+  );
+  await client.query(
+    'UPDATE productos SET stock_reservado = stock_reservado + $1 WHERE id = $2',
+    [cantidad, productoId]
+  );
+  return { ...npRows[0], nombre: art.nombre, subtotal: Number(npRows[0].cantidad) * Number(npRows[0].precio_unitario) };
+}
+
+// Libera el stock reservado de los productos de una nota y los elimina.
+async function liberarProductosDeNota(client, notaId) {
+  await client.query(
+    `UPDATE productos a
+        SET stock_reservado = stock_reservado - np.cantidad
+      FROM nota_productos np
+      WHERE np.nota_id = $1 AND np.producto_id = a.id`,
+    [notaId]
+  );
+  await client.query('DELETE FROM nota_productos WHERE nota_id = $1', [notaId]);
+}
+
+// Valida y tarifica las cargas recibidas en el body. Cada carga puede traer:
+//   { lavadora_id, secadora_id, tipo_prenda, tipo_tela, tamano_edredon,
+//     tamano, ajuste, productos: [{ producto_id, cantidad }] }
+// (todo opcional salvo que la modalidad lo exija). Devuelve las filas listas
+// para insertar o lanza un Error con el mensaje para el cliente.
+async function prepararCargas(client, cargas, tipoPrendaNota, sucursal) {
   if (!Array.isArray(cargas) || cargas.length === 0) {
     throw new Error('cargas debe ser una lista con al menos una carga.');
   }
@@ -157,41 +202,79 @@ async function prepararCargas(client, cargas, tipoPrenda, sucursal) {
   return cargas.map((c, i) => {
     const lavadoraId = c.lavadora_id ? Number(c.lavadora_id) : null;
     const secadoraId = c.secadora_id ? Number(c.secadora_id) : null;
+    const prendaCarga = (c.tipo_prenda ? String(c.tipo_prenda).toUpperCase() : tipoPrendaNota) || 'ROPA';
+    if (c.tipo_prenda && !TIPOS_PRENDA_VALIDOS.includes(prendaCarga)) {
+      throw new Error(`tipo_prenda inválido en la carga ${i + 1}.`);
+    }
+    if (c.tamano && !TAMANOS_VALIDOS.includes(String(c.tamano).toLowerCase())) {
+      throw new Error(`tamano inválido en la carga ${i + 1}.`);
+    }
     if (lavadoraId && tipoPorId.get(lavadoraId) === 'secadora') {
       throw new Error(`La máquina de lavado de la carga ${i + 1} es una secadora.`);
     }
     if (secadoraId && tipoPorId.get(secadoraId) !== 'secadora') {
       throw new Error(`La máquina de secado de la carga ${i + 1} no es una secadora.`);
     }
+    if (prendaCarga === 'EDREDON' && lavadoraId && tipoPorId.get(lavadoraId) !== 'lavadora_jumbo') {
+      throw new Error(`Los edredones solo van en lavadora jumbo (carga ${i + 1}).`);
+    }
+    const ajusteCarga = c.ajuste != null && c.ajuste !== '' ? Number(c.ajuste) : 0;
+    if (!Number.isFinite(ajusteCarga)) {
+      throw new Error(`ajuste inválido en la carga ${i + 1}.`);
+    }
+    const productos = Array.isArray(c.productos)
+      ? c.productos
+          .filter(p => p.producto_id && p.cantidad && Number(p.cantidad) > 0)
+          .map(p => ({ producto_id: Number(p.producto_id), cantidad: Number(p.cantidad) }))
+      : [];
     return {
       orden:           i + 1,
       lavadora_id:     lavadoraId,
       secadora_id:     secadoraId,
-      precio_lavadora: lavadoraId ? tarifaLavadora(tipoPorId.get(lavadoraId), tipoPrenda, t) : 0,
+      precio_lavadora: lavadoraId ? tarifaLavadora(tipoPorId.get(lavadoraId), prendaCarga, t) : 0,
       precio_secadora: secadoraId ? t.secadora : 0,
+      tipo_prenda:     c.tipo_prenda ? prendaCarga : null,
+      tipo_tela:       prendaCarga === 'ROPA' && c.tipo_tela ? String(c.tipo_tela).trim() : null,
+      tamano_edredon:  prendaCarga === 'EDREDON' && c.tamano_edredon ? String(c.tamano_edredon).trim() : null,
+      tamano:          c.tamano ? String(c.tamano).toLowerCase() : null,
+      ajuste:          ajusteCarga,
+      // Tomar la(s) máquina(s) de la carga al crear. Por defecto sí (Autoservicio
+      // arranca de inmediato); en Por Encargo cada carga decide con `activar`.
+      activar:         c.activar !== false,
+      productos,
     };
   });
 }
 
-// Inserta las filas de nota_cargas ya preparadas.
-async function insertarCargas(client, notaId, filas) {
+// Inserta las filas de nota_cargas ya preparadas (con sus productos, que
+// reservan stock). Devuelve las cargas con sus productos.
+async function insertarCargas(client, notaId, filas, sucursal) {
   const insertadas = [];
   for (const f of filas) {
     const { rows } = await client.query(
-      `INSERT INTO nota_cargas (nota_id, orden, lavadora_id, secadora_id, precio_lavadora, precio_secadora)
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-      [notaId, f.orden, f.lavadora_id, f.secadora_id, f.precio_lavadora, f.precio_secadora]
+      `INSERT INTO nota_cargas
+         (nota_id, orden, lavadora_id, secadora_id, precio_lavadora, precio_secadora,
+          tipo_prenda, tipo_tela, tamano_edredon, tamano, ajuste)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
+      [notaId, f.orden, f.lavadora_id, f.secadora_id, f.precio_lavadora, f.precio_secadora,
+       f.tipo_prenda, f.tipo_tela, f.tamano_edredon, f.tamano, f.ajuste]
     );
-    insertadas.push(rows[0]);
+    const carga = rows[0];
+    const productos = [];
+    for (const p of (f.productos ?? [])) {
+      productos.push(await reservarProducto(client, notaId, carga.id, p.producto_id, p.cantidad, sucursal));
+    }
+    insertadas.push({ ...carga, productos });
   }
   return insertadas;
 }
 
-// Cargas de una nota con los datos de sus máquinas (para el detalle).
+// Cargas de una nota con los datos de sus máquinas y sus productos (detalle).
 async function cargasDeNota(client, notaId) {
   const { rows } = await client.query(
     `SELECT nc.id, nc.orden, nc.lavadora_id, nc.secadora_id,
             nc.precio_lavadora, nc.precio_secadora,
+            nc.tipo_prenda, nc.tipo_tela, nc.tamano_edredon, nc.tamano, nc.ajuste,
             ml.nombre AS lavadora_nombre, ml.tipo AS lavadora_tipo, ml.estado AS lavadora_estado,
             ms.nombre AS secadora_nombre, ms.tipo AS secadora_tipo, ms.estado AS secadora_estado
        FROM nota_cargas nc
@@ -201,7 +284,16 @@ async function cargasDeNota(client, notaId) {
       ORDER BY nc.orden ASC`,
     [notaId]
   );
-  return rows;
+  const { rows: prods } = await client.query(
+    `SELECT np.id, np.carga_id, np.producto_id, a.nombre, np.cantidad, np.precio_unitario,
+            (np.cantidad * np.precio_unitario) AS subtotal
+       FROM nota_productos np
+       JOIN productos a ON a.id = np.producto_id
+      WHERE np.nota_id = $1 AND np.carga_id IS NOT NULL
+      ORDER BY np.created_at ASC`,
+    [notaId]
+  );
+  return rows.map(c => ({ ...c, productos: prods.filter(p => p.carga_id === c.id) }));
 }
 
 // Verifica que un registro exista y pertenezca a la sucursal indicada.
@@ -317,7 +409,7 @@ export const getNotaById = async (req, res) => {
               (np.cantidad * np.precio_unitario) AS subtotal
        FROM nota_productos np
        JOIN productos a ON a.id = np.producto_id
-       WHERE np.nota_id = $1
+       WHERE np.nota_id = $1 AND np.carga_id IS NULL
        ORDER BY np.created_at ASC`,
       [id]
     );
@@ -376,9 +468,10 @@ export const createNota = async (req, res) => {
     productos = [], // [{ producto_id, cantidad }] → nota_productos
   } = req.body;
 
-  // Autoservicio nuevo: la nota trae sus cargas, cada una con su lavadora
-  // y/o secadora. El precio se tarifica en el servidor por carga.
-  const esNotaConCargas = modalidad === 'AUTOSERVICIO' && cargas !== undefined;
+  // Modelo por cargas (Autoservicio y Por Encargo nuevos): la nota trae sus
+  // cargas, cada una con sus máquinas y —en encargo— su prenda, tela/tamaño,
+  // ajuste y productos. El servidor tarifica por carga.
+  const esNotaConCargas = cargas !== undefined;
   if (esNotaConCargas && (!Array.isArray(cargas) || cargas.length === 0)) {
     return res.status(400).json({ message: 'cargas debe ser una lista con al menos una carga.' });
   }
@@ -402,9 +495,9 @@ export const createNota = async (req, res) => {
     if (!cliente_id) {
       return res.status(400).json({ message: 'cliente_id es requerido para notas Por Encargo.' });
     }
-    // El "tamaño del encargo" (chico/grande) aplica a Ropa; los edredones usan
-    // su propio catálogo de tamaños (tamano_edredon) y no requieren este campo.
-    if (String(tipo_prenda).toUpperCase() !== 'EDREDON') {
+    // Con el modelo por cargas, el tamaño va en cada carga. El requisito de
+    // tamano a nivel nota solo aplica al flujo legado (sin cargas).
+    if (!esNotaConCargas && String(tipo_prenda).toUpperCase() !== 'EDREDON') {
       if (!tamano || !TAMANOS_VALIDOS.includes(String(tamano).toLowerCase())) {
         return res.status(400).json({ message: 'tamano es requerido para Por Encargo (chico o grande).' });
       }
@@ -530,6 +623,16 @@ export const createNota = async (req, res) => {
       ? (filasCargas.find(f => f.secadora_id)?.secadora_id ?? null)
       : (secadora_id || null);
 
+    // Máquinas a tomar al crear: solo las de las cargas que se activan. Si
+    // ninguna se activa, la nota nace En Espera (las máquinas quedan asignadas
+    // pero libres, para activarse luego desde Salidas).
+    const idsActivar = filasCargas
+      ? [...new Set(filasCargas.filter(f => f.activar).flatMap(f => [f.lavadora_id, f.secadora_id]).filter(Boolean))]
+      : [];
+    const estadoNota = filasCargas
+      ? (idsActivar.length > 0 ? 'EN_PROCESO' : 'EN_ESPERA')
+      : estadoInicial;
+
     const { rows: notaRows } = await client.query(
       `INSERT INTO notas
          (cliente_id, usuario_id, maquina_id, secadora_id, modalidad, tipo_prenda, estado, estado_pago, sucursal,
@@ -545,7 +648,7 @@ export const createNota = async (req, res) => {
         secadoraIdNota,
         modalidad,
         String(tipo_prenda).toUpperCase(),
-        estadoInicial,
+        estadoNota,
         estado_pago,
         req.sucursal,
         peso_kg      || null,
@@ -569,17 +672,14 @@ export const createNota = async (req, res) => {
     await client.query('UPDATE notas SET folio = $1 WHERE id = $2', [folio, nota.id]);
     nota.folio = folio;
 
-    // Insertar las cargas y, si la nota nace En Proceso, tomar sus máquinas.
+    // Insertar las cargas y tomar las máquinas de las cargas activadas.
     let cargasInsertadas = [];
     if (filasCargas) {
-      cargasInsertadas = await insertarCargas(client, nota.id, filasCargas);
-      const idsMaquinas = [...new Set(
-        filasCargas.flatMap(f => [f.lavadora_id, f.secadora_id]).filter(Boolean)
-      )];
-      if (estadoInicial === 'EN_PROCESO' && idsMaquinas.length > 0) {
+      cargasInsertadas = await insertarCargas(client, nota.id, filasCargas, req.sucursal);
+      if (idsActivar.length > 0) {
         const { rows: maqs } = await client.query(
           'SELECT id, nombre, estado FROM maquinas WHERE id = ANY($1) FOR UPDATE',
-          [idsMaquinas]
+          [idsActivar]
         );
         const ocupada = maqs.find(m => m.estado !== 'disponible');
         if (ocupada) {
@@ -588,7 +688,7 @@ export const createNota = async (req, res) => {
         }
         await client.query(
           `UPDATE maquinas SET estado = 'en_uso', en_uso_desde = NOW() WHERE id = ANY($1)`,
-          [idsMaquinas]
+          [idsActivar]
         );
       }
     }
@@ -801,8 +901,18 @@ export const updateNota = async (req, res) => {
         await client.query('ROLLBACK');
         return res.status(400).json({ message: e.message });
       }
+      // Liberar el stock reservado de los productos de las cargas viejas antes
+      // de borrarlas (el ON DELETE CASCADE elimina las filas pero no revierte
+      // stock_reservado). Los nuevos productos se reservan en insertarCargas.
+      await client.query(
+        `UPDATE productos a
+            SET stock_reservado = stock_reservado - np.cantidad
+          FROM nota_productos np
+          WHERE np.nota_id = $1 AND np.carga_id IS NOT NULL AND np.producto_id = a.id`,
+        [id]
+      );
       await client.query('DELETE FROM nota_cargas WHERE nota_id = $1', [id]);
-      cargasNota = await insertarCargas(client, id, filasCargas);
+      cargasNota = await insertarCargas(client, id, filasCargas, req.sucursal);
 
       if (['EN_PROCESO', 'POR_PROCESAR'].includes(actual.estado)) {
         const despues = new Set(
@@ -853,15 +963,16 @@ export const updateNota = async (req, res) => {
     // (aun vacía) reemplaza los de la nota; ausente, se conservan.
     let productosNota;
     if (productos !== undefined) {
-      // Liberar stock reservado de productos actuales y eliminarlos
+      // Solo los productos a nivel nota (carga_id IS NULL, autoservicio); los
+      // de cargas se manejan junto con sus cargas.
       await client.query(
         `UPDATE productos a
            SET stock_reservado = stock_reservado - np.cantidad
          FROM nota_productos np
-         WHERE np.nota_id = $1 AND np.producto_id = a.id`,
+         WHERE np.nota_id = $1 AND np.carga_id IS NULL AND np.producto_id = a.id`,
         [id]
       );
-      await client.query('DELETE FROM nota_productos WHERE nota_id = $1', [id]);
+      await client.query('DELETE FROM nota_productos WHERE nota_id = $1 AND carga_id IS NULL', [id]);
 
       // Insertar los nuevos productos
       const productosInsertados = [];
@@ -908,7 +1019,7 @@ export const updateNota = async (req, res) => {
                 (np.cantidad * np.precio_unitario) AS subtotal
          FROM nota_productos np
          JOIN productos a ON a.id = np.producto_id
-         WHERE np.nota_id = $1
+         WHERE np.nota_id = $1 AND np.carga_id IS NULL
          ORDER BY np.created_at ASC`,
         [id]
       );
@@ -1209,51 +1320,86 @@ export const activarNota = async (req, res) => {
     }
 
     if (cargas !== undefined) {
-      // Autoservicio: reemplazar las cargas con las máquinas elegidas.
-      let filasCargas;
-      try {
-        filasCargas = await prepararCargas(client, cargas, notaRows[0].tipo_prenda, req.sucursal);
-      } catch (e) {
+      // Se ACTUALIZAN las máquinas de las cargas existentes por posición (sin
+      // borrarlas), para conservar sus atributos y productos —clave en encargo—.
+      const { rows: existentes } = await client.query(
+        'SELECT * FROM nota_cargas WHERE nota_id = $1 ORDER BY orden ASC FOR UPDATE',
+        [id]
+      );
+      if (existentes.length === 0) {
         await client.query('ROLLBACK');
-        return res.status(400).json({ message: e.message });
+        return res.status(400).json({ message: 'La nota no tiene cargas.' });
       }
-      const idsMaquinas = [...new Set(
-        filasCargas.flatMap(f => [f.lavadora_id, f.secadora_id]).filter(Boolean)
-      )];
-      if (idsMaquinas.length === 0) {
+      const nuevas = existentes.map((carga, i) => {
+        const src = cargas[i] || {};
+        return {
+          id:          carga.id,
+          tipo_prenda: carga.tipo_prenda,
+          lavadora_id: src.lavadora_id ? Number(src.lavadora_id) : (carga.lavadora_id ?? null),
+          secadora_id: src.secadora_id ? Number(src.secadora_id) : (carga.secadora_id ?? null),
+        };
+      });
+      const ids = [...new Set(nuevas.flatMap(n => [n.lavadora_id, n.secadora_id]).filter(Boolean))];
+      if (ids.length === 0) {
         await client.query('ROLLBACK');
         return res.status(400).json({ message: 'Se requiere al menos una máquina para activar la nota.' });
       }
       const { rows: maqs } = await client.query(
-        'SELECT id, nombre, estado FROM maquinas WHERE id = ANY($1) FOR UPDATE',
-        [idsMaquinas]
+        'SELECT id, nombre, tipo, estado FROM maquinas WHERE id = ANY($1) AND sucursal = $2 FOR UPDATE',
+        [ids, req.sucursal]
       );
-      const ocupada = maqs.find(m => m.estado !== 'disponible');
-      if (ocupada) {
+      const maqById = new Map(maqs.map(m => [Number(m.id), m]));
+      if (ids.some(x => !maqById.has(x))) {
         await client.query('ROLLBACK');
-        return res.status(400).json({ message: `La máquina ${ocupada.nombre} no está disponible.` });
+        return res.status(400).json({ message: 'Una máquina seleccionada no existe.' });
+      }
+      // Validar tipos por carga (según su propia prenda) y disponibilidad.
+      for (const n of nuevas) {
+        if (n.lavadora_id && maqById.get(n.lavadora_id).tipo === 'secadora') {
+          await client.query('ROLLBACK');
+          return res.status(400).json({ message: 'La máquina de lavado no es una lavadora.' });
+        }
+        if (n.secadora_id && maqById.get(n.secadora_id).tipo !== 'secadora') {
+          await client.query('ROLLBACK');
+          return res.status(400).json({ message: 'La máquina de secado no es una secadora.' });
+        }
+        if (n.tipo_prenda === 'EDREDON' && n.lavadora_id && maqById.get(n.lavadora_id).tipo !== 'lavadora_jumbo') {
+          await client.query('ROLLBACK');
+          return res.status(400).json({ message: 'Los edredones solo van en lavadora jumbo.' });
+        }
+      }
+      const ocupadaId = ids.find(x => maqById.get(x).estado !== 'disponible');
+      if (ocupadaId) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ message: `La máquina ${maqById.get(ocupadaId).nombre} no está disponible.` });
       }
 
-      await client.query('DELETE FROM nota_cargas WHERE nota_id = $1', [id]);
-      await insertarCargas(client, id, filasCargas);
+      const t = await tarifasCarga(client);
+      for (const n of nuevas) {
+        await client.query(
+          `UPDATE nota_cargas SET lavadora_id = $1, secadora_id = $2, precio_lavadora = $3, precio_secadora = $4 WHERE id = $5`,
+          [
+            n.lavadora_id,
+            n.secadora_id,
+            n.lavadora_id ? tarifaLavadora(maqById.get(n.lavadora_id).tipo, n.tipo_prenda, t) : 0,
+            n.secadora_id ? t.secadora : 0,
+            n.id,
+          ]
+        );
+      }
       await client.query(
         `UPDATE maquinas SET estado = 'en_uso', en_uso_desde = NOW() WHERE id = ANY($1)`,
-        [idsMaquinas]
+        [ids]
       );
       await client.query(
         `UPDATE notas
             SET maquina_id  = $1,
                 secadora_id = $2,
-                cantidad_cargas = $3,
-                precio_base = NULL,
-                cantidad_cargas_secadora = NULL,
-                precio_base_secadora     = NULL,
                 estado = 'EN_PROCESO'
-          WHERE id = $4`,
+          WHERE id = $3`,
         [
-          filasCargas.find(f => f.lavadora_id)?.lavadora_id ?? null,
-          filasCargas.find(f => f.secadora_id)?.secadora_id ?? null,
-          filasCargas.length,
+          nuevas.find(n => n.lavadora_id)?.lavadora_id ?? null,
+          nuevas.find(n => n.secadora_id)?.secadora_id ?? null,
           id,
         ]
       );
