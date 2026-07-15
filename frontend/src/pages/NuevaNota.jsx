@@ -769,6 +769,28 @@ export default function NuevaNota() {
                 <div className="space-y-6">
                   <h2 className="text-base font-semibold text-gray-900">Carga {idx + 1} de {nCargas}</h2>
 
+                  {/* Tamaño de carga */}
+                  <div className="space-y-3">
+                    <h3 className="text-sm font-semibold text-gray-900">Tamaño de carga <span className="text-red-500">*</span></h3>
+                    <div className="grid grid-cols-3 gap-3">
+                      {TAMANOS.map(t => {
+                        const selected = c.tamano === t.v;
+                        return (
+                          <button
+                            key={t.v}
+                            type="button"
+                            onClick={() => set({ tamano: t.v })}
+                            className={`py-6 border-2 rounded-xl font-semibold text-lg transition-colors ${
+                              selected ? 'border-blue bg-light-blue text-blue-700' : 'border-gray-300 bg-white text-gray-700 hover:border-blue-300'
+                            }`}
+                          >
+                            {t.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>                  
+
                   {/* Tipo de prenda */}
                   <div className="space-y-3">
                     <h3 className="text-sm font-semibold text-gray-900">Tipo de prenda</h3>
@@ -837,28 +859,6 @@ export default function NuevaNota() {
                       </select>
                     </div>
                   )}
-
-                  {/* Tamaño de carga */}
-                  <div className="space-y-3">
-                    <h3 className="text-sm font-semibold text-gray-900">Tamaño de carga <span className="text-red-500">*</span></h3>
-                    <div className="grid grid-cols-3 gap-3">
-                      {TAMANOS.map(t => {
-                        const selected = c.tamano === t.v;
-                        return (
-                          <button
-                            key={t.v}
-                            type="button"
-                            onClick={() => set({ tamano: t.v })}
-                            className={`py-6 border-2 rounded-xl font-semibold text-lg transition-colors ${
-                              selected ? 'border-blue bg-light-blue text-blue-700' : 'border-gray-300 bg-white text-gray-700 hover:border-blue-300'
-                            }`}
-                          >
-                            {t.label}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
 
                   {/* Máquinas */}
                   <div className="space-y-3">
