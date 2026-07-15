@@ -79,7 +79,7 @@ const TIEMPO_ENTREGA_LABEL = Object.fromEntries(TIEMPOS_ENTREGA.map(t => [t.v, t
 
 // Pasos fijos del wizard, además de una pantalla por carga:
 // Cliente, Cantidad de cargas, [Carga ×N], Pago, Entrega, Instrucciones, Resumen.
-const ENCARGO_STEPS_FIJOS = 6;
+const ENCARGO_STEPS_FIJOS = 5;
 
 const formatMaquina = (m) => {
   if (!m) return '';
@@ -363,15 +363,14 @@ export default function NuevaNota() {
   };
 
   // Pasos dinámicos: Cliente, Cantidad, [una pantalla por carga], Pago,
-  // Entrega, Instrucciones, Resumen.
+  // Entrega (fecha + tiempo + instrucciones), Resumen.
   const nCargas          = encargoCargas.length;
   const ENCARGO_STEPS    = nCargas + ENCARGO_STEPS_FIJOS;
   const esPasoCarga      = encargoStep >= 3 && encargoStep <= 2 + nCargas;
   const cargaActivaIdx   = esPasoCarga ? encargoStep - 3 : -1;
   const pasoPago         = 3 + nCargas;
-  const pasoEntrega      = 4 + nCargas;
-  const pasoInstrucciones = 5 + nCargas;
-  const pasoResumen      = 6 + nCargas;
+  const pasoEntrega      = 4 + nCargas; // fecha + tiempo + instrucciones
+  const pasoResumen      = 5 + nCargas;
 
   const subtotalProductosLista = (lista) => (lista ?? []).reduce((sum, p) => {
     const prod = productosCatalogo.find(x => String(x.id) === String(p.producto_id));
@@ -1088,7 +1087,7 @@ export default function NuevaNota() {
               </div>
             )}
 
-            {/* Entrega: fecha + tiempo */}
+            {/* Entrega: fecha + tiempo + instrucciones */}
             {encargoStep === pasoEntrega && (
               <div className="space-y-5">
                 <h2 className="text-base font-semibold text-gray-900">Entrega</h2>
@@ -1129,19 +1128,15 @@ export default function NuevaNota() {
                     })}
                   </div>
                 </div>
-              </div>
-            )}
-
-            {/* Instrucciones */}
-            {encargoStep === pasoInstrucciones && (
-              <div className="space-y-4">
-                <h2 className="text-base font-semibold text-gray-900">Instrucciones</h2>
-                <textarea
-                  name="instrucciones" rows={6}
-                  value={encargoForm.instrucciones} onChange={handleEncargoChange}
-                  placeholder="Instrucciones especiales..."
-                  className={`${INPUT_CLS} resize-none`}
-                />
+                <div>
+                  <label className={LABEL_CLS}>Instrucciones</label>
+                  <textarea
+                    name="instrucciones" rows={5}
+                    value={encargoForm.instrucciones} onChange={handleEncargoChange}
+                    placeholder="Instrucciones especiales..."
+                    className={`${INPUT_CLS} resize-none`}
+                  />
+                </div>
               </div>
             )}
 
