@@ -831,7 +831,7 @@ export default function NuevaNota() {
                       <select
                         value={c.tipo_tela}
                         onChange={e => set({ tipo_tela: e.target.value })}
-                        className={INPUT_CLS}
+                        className={`${INPUT_CLS} bg-white`}
                       >
                         <option value="">Sin asignar</option>
                         {telas.filter(t => t.activo || t.nombre === c.tipo_tela).map(t => (
@@ -860,7 +860,8 @@ export default function NuevaNota() {
                     </div>
                   )}
 
-                  {/* Máquinas */}
+                  {/* Máquinas — aparecen tras elegir prenda y tamaño de carga */}
+                  {c.tamano && c.tipo_prenda && (
                   <div className="space-y-3">
                     <h3 className="text-sm font-semibold text-gray-900">Máquinas</h3>
                     <div>
@@ -868,7 +869,7 @@ export default function NuevaNota() {
                       <select
                         value={c.maquina_id}
                         onChange={e => set({ maquina_id: e.target.value, ...(e.target.value ? {} : { activar_inmediatamente: '' }) })}
-                        className={INPUT_CLS}
+                        className={`${INPUT_CLS} bg-white`}
                       >
                         <option value="">Sin asignar</option>
                         {lavadorasOpc.map(m => (
@@ -907,7 +908,7 @@ export default function NuevaNota() {
                       <select
                         value={c.secadora_id}
                         onChange={e => set({ secadora_id: e.target.value })}
-                        className={INPUT_CLS}
+                        className={`${INPUT_CLS} bg-white`}
                       >
                         <option value="">Sin asignar</option>
                         {secadorasOpc.map(m => (
@@ -916,7 +917,10 @@ export default function NuevaNota() {
                       </select>
                     </div>
                   </div>
+                  )}
 
+                  {c.tamano && c.tipo_prenda && (
+                  <>
                   {/* Productos de la carga */}
                   <div>
                     <div className="flex items-center justify-between mb-3">
@@ -1048,10 +1052,14 @@ export default function NuevaNota() {
                       </button>
                     </div>
                   </div>
+                  </>
+                  )}
 
-                  <p className="text-sm font-medium text-blue text-right">
-                    Subtotal carga: ${subtotalCargaEncargo(c).toFixed(2)}
-                  </p>
+                  {c.tamano && c.tipo_prenda && (
+                    <p className="text-sm font-medium text-blue text-right">
+                      Subtotal carga: ${subtotalCargaEncargo(c).toFixed(2)}
+                    </p>
+                  )}
                 </div>
               );
             })()}
