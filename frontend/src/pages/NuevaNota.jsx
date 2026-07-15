@@ -42,6 +42,7 @@ const MAX_CARGAS  = 20;
 const TAMANOS = [
   { v: 'chico',  label: 'Chico'  },
   { v: 'grande', label: 'Grande' },
+  { v: 'jumbo',  label: 'Jumbo'  },
 ];
 const TAMANO_LABEL = Object.fromEntries(TAMANOS.map(t => [t.v, t.label]));
 
@@ -689,6 +690,32 @@ export default function NuevaNota() {
             {/* Paso 2 — Tipo de prenda + Tamaño */}
             {encargoStep === 2 && (
               <div className="space-y-6">
+
+                {encargoForm.tipo_prenda !== 'EDREDON' && (
+                  <div className="space-y-4">
+                    <h2 className="text-base font-semibold text-gray-900">Tamaño de carga</h2>
+                    <div className="grid grid-cols-3 gap-3">
+                      {TAMANOS.map(t => {
+                        const selected = encargoForm.tamano === t.v;
+                        return (
+                          <button
+                            key={t.v}
+                            type="button"
+                            onClick={() => setEncargoForm(f => ({ ...f, tamano: t.v }))}
+                            className={`py-8 border-2 rounded-xl font-semibold text-lg transition-colors ${
+                              selected
+                                ? 'border-blue bg-light-blue text-blue-700'
+                                : 'border-gray-300 bg-white text-gray-700 hover:border-blue-300'
+                            }`}
+                          >
+                            {t.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
                 <div className="space-y-4">
                   <h2 className="text-base font-semibold text-gray-900">Tipo de prenda</h2>
                   <div className="grid grid-cols-2 gap-3">
@@ -824,31 +851,6 @@ export default function NuevaNota() {
                           })}
                       </div>
                     )}
-                  </div>
-                )}
-
-                {encargoForm.tipo_prenda !== 'EDREDON' && (
-                  <div className="space-y-4">
-                    <h2 className="text-base font-semibold text-gray-900">Tamaño del encargo</h2>
-                    <div className="grid grid-cols-2 gap-3">
-                      {TAMANOS.map(t => {
-                        const selected = encargoForm.tamano === t.v;
-                        return (
-                          <button
-                            key={t.v}
-                            type="button"
-                            onClick={() => setEncargoForm(f => ({ ...f, tamano: t.v }))}
-                            className={`py-8 border-2 rounded-xl font-semibold text-lg transition-colors ${
-                              selected
-                                ? 'border-blue bg-light-blue text-blue-700'
-                                : 'border-gray-300 bg-white text-gray-700 hover:border-blue-300'
-                            }`}
-                          >
-                            {t.label}
-                          </button>
-                        );
-                      })}
-                    </div>
                   </div>
                 )}
               </div>
