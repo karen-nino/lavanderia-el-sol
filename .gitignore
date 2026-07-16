@@ -44,3 +44,6 @@ coverage/
 
 # Info del proyecto
 info
+
+# Contexto del proyecto (solo local)
+CONTEXTO_PROYECTO.md
