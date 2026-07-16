@@ -47,8 +47,8 @@ export default function Salidas() {
   const [secAgregarCargas, setSecAgregarCargas] = useState('1');
   const [loadingSecadoras, setLoadingSecadoras] = useState(false);
 
-  // Procesar carga (ciclo terminado)
-  const [confirmProcesar,  setConfirmProcesar]  = useState(false);
+  // Terminar ciclo (carga terminada)
+  const [confirmTerminar,  setConfirmTerminar]  = useState(false);
 
   const cargarDatos = useCallback(async () => {
     try {
@@ -181,18 +181,18 @@ export default function Salidas() {
     }
   }
 
-  // Procesar carga terminada: la nota pasa a "Por Entregar" (LISTA). El
+  // Terminar ciclo: la nota pasa a "Por Entregar" (LISTA). El
   // backend libera todas sus máquinas al hacer la transición.
-  async function procesarNota() {
+  async function terminarCiclo() {
     setLoadingMaquina(true);
     setErrorAccion('');
     try {
       await api.patch(`/notas/${id}/estado`, { estado: 'LISTA' });
-      setConfirmProcesar(false);
+      setConfirmTerminar(false);
       await cargarDatos();
     } catch (err) {
       setErrorAccion(err.message);
-      setConfirmProcesar(false);
+      setConfirmTerminar(false);
     } finally {
       setLoadingMaquina(false);
     }
@@ -302,7 +302,7 @@ export default function Salidas() {
 
   // ¿El ciclo ya terminó? (mismo cálculo que el dashboard)
   // El servidor promueve la nota a POR_PROCESAR al cumplirse el tiempo de
-  // lavado; aquí solo lo reflejamos para mostrar el botón "Procesar".
+  // lavado; aquí solo lo reflejamos para mostrar el botón "Terminar Ciclo".
   const cicloTerminado = maquinaEnUso && nota?.estado === 'POR_PROCESAR';
 
   const nombresMaquinas = maquinasAsignadas.map(m => m.nombre).join(' y ');
@@ -395,15 +395,15 @@ export default function Salidas() {
                 {loadingMaquina ? 'Activando...' : 'Activar'}
               </button>
             )}
-            {/* Máquinas en uso: procesar (ciclo terminado) o detener */}
+            {/* Máquinas en uso: terminar ciclo o detener */}
             {maquinaEnUso && (
               cicloTerminado ? (
                 <button
-                  onClick={() => setConfirmProcesar(true)}
+                  onClick={() => setConfirmTerminar(true)}
                   disabled={loadingMaquina}
                   className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
                 >
-                  Procesar
+                  Terminar Ciclo
                 </button>
               ) : (
                 <button
@@ -551,18 +551,18 @@ export default function Salidas() {
         </div>
       )}
 
-      {/* Modal confirmar procesar carga */}
-      {confirmProcesar && (
+      {/* Modal confirmar terminar ciclo */}
+      {confirmTerminar && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
-            <h3 className="text-base font-bold text-gray-900">Procesar carga</h3>
+            <h3 className="text-base font-bold text-gray-900">Terminar ciclo</h3>
             <p className="text-sm text-gray-500">
               ¿Confirmar que la carga de <span className="font-semibold text-gray-800">{nombresMaquinas}</span> ya terminó? {maquinasAsignadas.length > 1 ? 'Las máquinas pasarán' : 'La máquina pasará'} a disponible y la nota a <span className="font-semibold text-gray-800">"Por Entregar"</span>.
             </p>
             <div className="flex gap-3">
               <button
                 type="button"
-                onClick={() => setConfirmProcesar(false)}
+                onClick={() => setConfirmTerminar(false)}
                 disabled={loadingMaquina}
                 className="flex-1 border border-gray-300 text-gray-700 font-medium py-3.5 rounded-lg text-base hover:bg-gray-50 disabled:opacity-60 transition-colors"
               >
@@ -570,11 +570,11 @@ export default function Salidas() {
               </button>
               <button
                 type="button"
-                onClick={procesarNota}
+                onClick={terminarCiclo}
                 disabled={loadingMaquina}
                 className="flex-1 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
               >
-                {loadingMaquina ? 'Procesando...' : 'Confirmar'}
+                {loadingMaquina ? 'Terminando...' : 'Confirmar'}
               </button>
             </div>
           </div>

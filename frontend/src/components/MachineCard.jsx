@@ -15,7 +15,7 @@ function formatearCliente(nombre, apellido) {
   return `${n} ${a[0].toUpperCase()}.`;
 }
 
-export default function MachineCard({ maquina, nota, onProcesar, onClick }) {
+export default function MachineCard({ maquina, nota, onTerminarCiclo, onClick }) {
   const folioTxt    = nota?.folio
     ? `#${String(nota.folio).split('-')[0]}`
     : (nota?.id != null ? `#${nota.id}` : null);
@@ -82,7 +82,7 @@ export default function MachineCard({ maquina, nota, onProcesar, onClick }) {
     );
   }
 
-  if (maquina.necesita_procesar) {
+  if (maquina.necesita_terminar_ciclo) {
     return (
       <div
         {...containerProps}
@@ -97,7 +97,7 @@ export default function MachineCard({ maquina, nota, onProcesar, onClick }) {
           </p>
           {infoNota}
           <button
-            onClick={(e) => { e.stopPropagation(); onProcesar?.(maquina); }}
+            onClick={(e) => { e.stopPropagation(); onTerminarCiclo?.(maquina); }}
             className="w-full bg-green text-white text-section py-8 rounded-card-sm shadow-card hover:opacity-90 transition-opacity mt-1"
           >
             TERMINAR CICLO

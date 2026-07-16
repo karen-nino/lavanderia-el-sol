@@ -8,7 +8,7 @@ const REFRESCO_MS = 15000;
 
 // Acción que el operador intentó pero no se completó porque la sesión expiró
 // (la app redirige a /login). Se persiste para reabrir la confirmación al
-// volver a entrar. Ver confirmarProcesar y la reanudación en la carga inicial.
+// volver a entrar. Ver confirmarTerminarCiclo y la reanudación en la carga inicial.
 const ACCION_PENDIENTE_KEY = 'accionPendiente';
 
 function guardarAccionPendiente(accion) {
@@ -32,7 +32,7 @@ function formatMMSS(totalSegundos) {
 }
 
 // Monitor de máquinas en uso: tarjetas con temporizador y la confirmación
-// "Procesar carga". Es autónomo (consulta sus propios datos y se auto-refresca)
+// "Terminar ciclo". Es autónomo (consulta sus propios datos y se auto-refresca)
 // para poder usarse tanto en la página Máquinas como en el Dashboard.
 //
 // `showHeader`: muestra el encabezado propio ("Máquinas en uso (n)" + botón de
@@ -50,9 +50,9 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
   const [tiempos, setTiempos]   = useState({ mediana: 30, jumbo: 45, secadora: 30 });
   const [loading, setLoading]   = useState(true);
   const [now, setNow]           = useState(() => Date.now());
-  const [confirmProcesar, setConfirmProcesar] = useState(null);
-  const [procesando, setProcesando] = useState(false);
-  const [errorProcesar, setErrorProcesar] = useState('');
+  const [confirmTerminar, setConfirmTerminar] = useState(null);
+  const [terminando, setTerminando] = useState(false);
+  const [errorTerminar, setErrorTerminar] = useState('');
   const [refrescando, setRefrescando] = useState(false);
 
   // Refresco silencioso de los datos que cambian en tiempo real. No toca
@@ -107,16 +107,16 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
           });
         }
 
-        // Reanudar una acción pendiente (p. ej. "Procesar carga" que quedó a
+        // Reanudar una acción pendiente (p. ej. "Terminar ciclo" que quedó a
         // medias porque expiró la sesión): reabrimos la confirmación sobre esa
         // máquina, solo si sigue existiendo y en uso. El operador la confirma
         // de nuevo.
         const accion = leerAccionPendiente();
-        if (accion?.tipo === 'procesar' && Array.isArray(m)) {
+        if (accion?.tipo === 'terminar_ciclo' && Array.isArray(m)) {
           limpiarAccionPendiente();
           const maquina = m.find(mq => String(mq.id) === String(accion.maquinaId));
           if (maquina && maquina.estado === 'en_uso') {
-            setConfirmProcesar(maquina);
+            setConfirmTerminar(maquina);
           }
         }
       })
@@ -161,40 +161,40 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
       ? n.maquinas_ids.some(mid => String(mid) === String(maquinaId))
       : String(n.maquina_id) === String(maquinaId);
 
-  const notaParaProcesar = confirmProcesar
+  const notaParaTerminar = confirmTerminar
     ? notas
-        .filter(n => notaUsaMaquina(n, confirmProcesar.id)
+        .filter(n => notaUsaMaquina(n, confirmTerminar.id)
                   && ['EN_PROCESO', 'POR_PROCESAR'].includes(n.estado))
         .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0]
     : null;
 
-  const confirmarProcesar = async () => {
-    if (!confirmProcesar) return;
-    setProcesando(true);
-    setErrorProcesar('');
+  const confirmarTerminarCiclo = async () => {
+    if (!confirmTerminar) return;
+    setTerminando(true);
+    setErrorTerminar('');
     // Si la sesión expira a mitad de esto, la app redirige a /login y se pierde
     // el contexto; guardamos la intención para reabrir esta confirmación al
     // volver a entrar (api.patch devuelve undefined en ese caso 401).
-    guardarAccionPendiente({ tipo: 'procesar', maquinaId: confirmProcesar.id });
+    guardarAccionPendiente({ tipo: 'terminar_ciclo', maquinaId: confirmTerminar.id });
     try {
-      if (notaParaProcesar) {
-        const notaActualizada = await api.patch(`/notas/${notaParaProcesar.id}/estado`, { estado: 'LISTA' });
+      if (notaParaTerminar) {
+        const notaActualizada = await api.patch(`/notas/${notaParaTerminar.id}/estado`, { estado: 'LISTA' });
         if (notaActualizada === undefined) return; // sesión expiró: se conserva la acción pendiente
         setNotas(prev => prev.map(n => n.id === notaActualizada.id ? { ...n, ...notaActualizada } : n));
       }
-      const actualizada = await api.patch(`/maquinas/${confirmProcesar.id}/estado`, { estado: 'disponible' });
+      const actualizada = await api.patch(`/maquinas/${confirmTerminar.id}/estado`, { estado: 'disponible' });
       if (actualizada === undefined) return; // sesión expiró: se conserva la acción pendiente
       limpiarAccionPendiente();
       setMaquinas(prev => prev.map(m => m.id === actualizada.id ? actualizada : m));
-      setConfirmProcesar(null);
+      setConfirmTerminar(null);
       // La nota pudo liberar más máquinas (todas las de sus cargas):
       // se refresca para no mostrarlas en uso hasta el siguiente ciclo.
       refrescarDatos();
     } catch (err) {
       limpiarAccionPendiente();
-      setErrorProcesar(err.message);
+      setErrorTerminar(err.message);
     } finally {
-      setProcesando(false);
+      setTerminando(false);
     }
   };
 
@@ -227,14 +227,14 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
       ...m,
       progreso,
       tiempo_restante: inicio ? formatMMSS(restanteSeg) : '—:—',
-      necesita_procesar: notaRel?.estado === 'POR_PROCESAR',
+      necesita_terminar_ciclo: notaRel?.estado === 'POR_PROCESAR',
     };
     return (
       <MachineCard
         key={m.id}
         maquina={maquinaAumentada}
         nota={notaRel}
-        onProcesar={() => setConfirmProcesar(maquinaAumentada)}
+        onTerminarCiclo={() => setConfirmTerminar(maquinaAumentada)}
         onClick={notaRel ? () => navigate(`/notas/${notaRel.id}`) : undefined}
       />
     );
@@ -320,39 +320,39 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
         </>
       )}
 
-      {confirmProcesar && (
+      {confirmTerminar && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
-            <h3 className="text-base font-bold text-gray-900">Procesar carga</h3>
+            <h3 className="text-base font-bold text-gray-900">Terminar ciclo</h3>
             <p className="text-sm text-gray-500">
-              ¿Confirmar que la carga de <span className="font-semibold text-gray-800">{confirmProcesar.nombre}</span> ya terminó? La máquina pasará a disponible.
+              ¿Confirmar que la carga de <span className="font-semibold text-gray-800">{confirmTerminar.nombre}</span> ya terminó? La máquina pasará a disponible.
             </p>
-            {notaParaProcesar && (
+            {notaParaTerminar && (
               <p className="text-sm text-gray-500">
-                La nota <span className="font-semibold text-gray-800">{notaParaProcesar.folio ?? `#${notaParaProcesar.id}`}</span> pasará a estado <span className="font-semibold text-gray-800">"Por Entregar"</span>.
+                La nota <span className="font-semibold text-gray-800">{notaParaTerminar.folio ?? `#${notaParaTerminar.id}`}</span> pasará a estado <span className="font-semibold text-gray-800">"Por Entregar"</span>.
               </p>
             )}
-            {errorProcesar && (
+            {errorTerminar && (
               <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">
-                {errorProcesar}
+                {errorTerminar}
               </div>
             )}
             <div className="flex gap-3">
               <button
                 type="button"
-                onClick={() => { setConfirmProcesar(null); setErrorProcesar(''); }}
-                disabled={procesando}
+                onClick={() => { setConfirmTerminar(null); setErrorTerminar(''); }}
+                disabled={terminando}
                 className="flex-1 border border-gray-300 text-gray-700 font-medium py-3.5 rounded-lg text-base hover:bg-gray-50 disabled:opacity-60 transition-colors"
               >
                 Cancelar
               </button>
               <button
                 type="button"
-                onClick={confirmarProcesar}
-                disabled={procesando}
+                onClick={confirmarTerminarCiclo}
+                disabled={terminando}
                 className="flex-1 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
               >
-                {procesando ? 'Procesando...' : 'Confirmar'}
+                {terminando ? 'Terminando...' : 'Confirmar'}
               </button>
             </div>
           </div>
