@@ -93,14 +93,14 @@ export default function MachineCard({ maquina, nota, onProcesar, onClick }) {
         </div>
         <div className="px-card-pad pt-5 pb-6 flex flex-col items-center gap-3">
           <p className="text-card-title text-green text-center uppercase tracking-wide">
-            ¡Ciclo<br />terminado!
+            Finalizó<br />la lavadora
           </p>
           {infoNota}
           <button
             onClick={(e) => { e.stopPropagation(); onProcesar?.(maquina); }}
             className="w-full bg-green text-white text-section py-8 rounded-card-sm shadow-card hover:opacity-90 transition-opacity mt-1"
           >
-            PROCESAR
+            TERMINAR CICLO
           </button>
         </div>
       </div>
