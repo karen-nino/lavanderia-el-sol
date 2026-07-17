@@ -51,6 +51,7 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
   const [loading, setLoading]   = useState(true);
   const [now, setNow]           = useState(() => Date.now());
   const [confirmTerminar, setConfirmTerminar] = useState(null);
+  const [secadoraSel, setSecadoraSel] = useState('');
   const [terminando, setTerminando] = useState(false);
   const [errorTerminar, setErrorTerminar] = useState('');
   const [refrescando, setRefrescando] = useState(false);
@@ -168,8 +169,16 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
         .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0]
     : null;
 
+  // ¿La máquina por terminar es una lavadora con nota? Entonces el ciclo que
+  // termina es el lavado: se exige elegir una secadora disponible para pasar
+  // la nota a secado. Si es una secadora (o no hay nota), el flujo original:
+  // la nota pasa a "Por Entregar" y la máquina queda disponible.
+  const terminaLavado = Boolean(confirmTerminar && confirmTerminar.tipo !== 'secadora' && notaParaTerminar);
+  const secadorasDisponibles = maquinas.filter(m => m.tipo === 'secadora' && m.estado === 'disponible');
+
   const confirmarTerminarCiclo = async () => {
     if (!confirmTerminar) return;
+    if (terminaLavado && !secadoraSel) return;
     setTerminando(true);
     setErrorTerminar('');
     // Si la sesión expira a mitad de esto, la app redirige a /login y se pierde
@@ -177,18 +186,29 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
     // volver a entrar (api.patch devuelve undefined en ese caso 401).
     guardarAccionPendiente({ tipo: 'terminar_ciclo', maquinaId: confirmTerminar.id });
     try {
-      if (notaParaTerminar) {
-        const notaActualizada = await api.patch(`/notas/${notaParaTerminar.id}/estado`, { estado: 'LISTA' });
+      if (terminaLavado) {
+        // Termina el lavado: el servidor libera las lavadoras, arranca la
+        // secadora elegida y la nota sigue En Proceso (secando).
+        const notaActualizada = await api.patch(`/notas/${notaParaTerminar.id}/terminar-lavado`, {
+          secadora_id: Number(secadoraSel),
+        });
         if (notaActualizada === undefined) return; // sesión expiró: se conserva la acción pendiente
         setNotas(prev => prev.map(n => n.id === notaActualizada.id ? { ...n, ...notaActualizada } : n));
+      } else {
+        if (notaParaTerminar) {
+          const notaActualizada = await api.patch(`/notas/${notaParaTerminar.id}/estado`, { estado: 'LISTA' });
+          if (notaActualizada === undefined) return; // sesión expiró: se conserva la acción pendiente
+          setNotas(prev => prev.map(n => n.id === notaActualizada.id ? { ...n, ...notaActualizada } : n));
+        }
+        const actualizada = await api.patch(`/maquinas/${confirmTerminar.id}/estado`, { estado: 'disponible' });
+        if (actualizada === undefined) return; // sesión expiró: se conserva la acción pendiente
+        setMaquinas(prev => prev.map(m => m.id === actualizada.id ? actualizada : m));
       }
-      const actualizada = await api.patch(`/maquinas/${confirmTerminar.id}/estado`, { estado: 'disponible' });
-      if (actualizada === undefined) return; // sesión expiró: se conserva la acción pendiente
       limpiarAccionPendiente();
-      setMaquinas(prev => prev.map(m => m.id === actualizada.id ? actualizada : m));
       setConfirmTerminar(null);
-      // La nota pudo liberar más máquinas (todas las de sus cargas):
-      // se refresca para no mostrarlas en uso hasta el siguiente ciclo.
+      setSecadoraSel('');
+      // La nota pudo liberar o tomar más máquinas (todas las de sus cargas):
+      // se refresca para reflejar el estado real.
       refrescarDatos();
     } catch (err) {
       limpiarAccionPendiente();
@@ -234,7 +254,7 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
         key={m.id}
         maquina={maquinaAumentada}
         nota={notaRel}
-        onTerminarCiclo={() => setConfirmTerminar(maquinaAumentada)}
+        onTerminarCiclo={() => { setSecadoraSel(''); setConfirmTerminar(maquinaAumentada); }}
         onClick={notaRel ? () => navigate(`/notas/${notaRel.id}`) : undefined}
       />
     );
@@ -327,7 +347,37 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
             <p className="text-sm text-gray-500">
               ¿Confirmar que la carga de <span className="font-semibold text-gray-800">{confirmTerminar.nombre}</span> ya terminó? La máquina pasará a disponible.
             </p>
-            {notaParaTerminar && (
+            {terminaLavado ? (
+              <>
+                <p className="text-sm text-gray-500">
+                  Elige la secadora donde continúa la nota <span className="font-semibold text-gray-800">{notaParaTerminar.folio ?? `#${notaParaTerminar.id}`}</span>.
+                </p>
+                {secadorasDisponibles.length === 0 ? (
+                  <p className="text-sm text-red-600">
+                    No hay secadoras disponibles. Libera una secadora para poder terminar el lavado.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {secadorasDisponibles.map(m => {
+                      const selected = String(secadoraSel) === String(m.id);
+                      return (
+                        <button
+                          key={m.id}
+                          type="button"
+                          onClick={() => setSecadoraSel(selected ? '' : String(m.id))}
+                          className={`w-full flex items-center justify-between gap-2 px-4 py-3 border-2 rounded-xl text-left transition-colors ${
+                            selected ? 'border-blue bg-light-blue' : 'border-gray-200 bg-white hover:border-blue-300'
+                          }`}
+                        >
+                          <span className="font-medium text-gray-800">{m.nombre}</span>
+                          <span className="text-xs text-gray-500">Secadora</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </>
+            ) : notaParaTerminar && (
               <p className="text-sm text-gray-500">
                 La nota <span className="font-semibold text-gray-800">{notaParaTerminar.folio ?? `#${notaParaTerminar.id}`}</span> pasará a estado <span className="font-semibold text-gray-800">"Por Entregar"</span>.
               </p>
@@ -340,7 +390,7 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
             <div className="flex gap-3">
               <button
                 type="button"
-                onClick={() => { setConfirmTerminar(null); setErrorTerminar(''); }}
+                onClick={() => { setConfirmTerminar(null); setSecadoraSel(''); setErrorTerminar(''); }}
                 disabled={terminando}
                 className="flex-1 border border-gray-300 text-gray-700 font-medium py-3.5 rounded-lg text-base hover:bg-gray-50 disabled:opacity-60 transition-colors"
               >
@@ -349,7 +399,7 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
               <button
                 type="button"
                 onClick={confirmarTerminarCiclo}
-                disabled={terminando}
+                disabled={terminando || (terminaLavado && !secadoraSel)}
                 className="flex-1 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
               >
                 {terminando ? 'Terminando...' : 'Confirmar'}

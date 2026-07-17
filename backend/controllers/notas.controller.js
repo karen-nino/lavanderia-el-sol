@@ -1660,6 +1660,112 @@ export const asignarSecadora = async (req, res) => {
   }
 };
 
+// ── PATCH /notas/:id/terminar-lavado ────────────────────────
+// Termina la fase de lavado y arranca el secado: libera las lavadoras de la
+// nota, marca en uso la secadora elegida (obligatoria) y regresa la nota a
+// EN_PROCESO para que corra el ciclo de secado. No cambia el precio: la
+// tarifa cobrada ya incluye el secado. Al cumplirse el tiempo de la secadora
+// la nota vuelve a POR_PROCESAR y "Terminar ciclo" la pasa a LISTA.
+export const terminarLavado = async (req, res) => {
+  const { id } = req.params;
+  const { secadora_id } = req.body;
+
+  if (!secadora_id) {
+    return res.status(400).json({ message: 'secadora_id es requerido.' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const { rows: notaRows } = await client.query(
+      'SELECT estado FROM notas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
+      [id, req.sucursal]
+    );
+    if (notaRows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: 'Nota no encontrada.' });
+    }
+    if (!['EN_PROCESO', 'POR_PROCESAR'].includes(notaRows[0].estado)) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'Solo se puede terminar el lavado de una nota en proceso.' });
+    }
+
+    const { rows: maqRows } = await client.query(
+      'SELECT tipo, estado FROM maquinas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
+      [secadora_id, req.sucursal]
+    );
+    if (maqRows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'La secadora seleccionada no existe.' });
+    }
+    if (maqRows[0].tipo !== 'secadora') {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'La máquina seleccionada no es una secadora.' });
+    }
+    if (maqRows[0].estado !== 'disponible') {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'La secadora seleccionada no está disponible.' });
+    }
+
+    // Liberar las lavadoras de la nota que sigan en uso...
+    const ids = await maquinasDeNota(client, id);
+    if (ids.length > 0) {
+      await client.query(
+        `UPDATE maquinas SET estado = 'disponible', en_uso_desde = NULL
+          WHERE id = ANY($1) AND estado = 'en_uso' AND tipo <> 'secadora'`,
+        [ids]
+      );
+    }
+    // ...y desvincularlas de la nota: quedan libres para el siguiente cliente
+    // y no deben re-liberarse (ni frenar el secado) si otra nota las toma.
+    // El cobro del lavado ya quedó guardado en precio_lavadora.
+    await client.query('UPDATE nota_cargas SET lavadora_id = NULL WHERE nota_id = $1', [id]);
+
+    // La secadora entra en uso y su ciclo arranca ahora. Sin costo extra:
+    // el precio_secadora de las cargas no se toca.
+    await client.query(
+      `UPDATE maquinas SET estado = 'en_uso', en_uso_desde = NOW() WHERE id = $1`,
+      [secadora_id]
+    );
+    await client.query(
+      `UPDATE nota_cargas SET secadora_id = $1 WHERE nota_id = $2 AND secadora_id IS NULL`,
+      [secadora_id, id]
+    );
+    await client.query(
+      `UPDATE notas SET maquina_id = NULL, secadora_id = $1, estado = 'EN_PROCESO' WHERE id = $2`,
+      [secadora_id, id]
+    );
+
+    await client.query('COMMIT');
+
+    const { rows } = await pool.query(
+      `SELECT n.*,
+              c.nombre   AS cliente_nombre,
+              c.apellido AS cliente_apellido,
+              c.telefono AS cliente_telefono,
+              u.nombre   AS usuario_nombre,
+              s.nombre   AS secadora_nombre,
+              s.tipo     AS secadora_tipo,
+              s.estado   AS secadora_estado,
+              s.en_uso_desde AS secadora_en_uso_desde
+       FROM notas n
+       LEFT JOIN clientes  c ON c.id = n.cliente_id
+       JOIN      usuarios  u ON u.id = n.usuario_id
+       LEFT JOIN maquinas  s ON s.id = n.secadora_id
+       WHERE n.id = $1`,
+      [id]
+    );
+    res.json({ ...rows[0], cargas: await cargasDeNota(pool, id) });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('terminarLavado error:', err);
+    res.status(500).json({ message: 'Error interno del servidor.' });
+  } finally {
+    client.release();
+  }
+};
+
 // ── PATCH /notas/:id/estado-pago ────────────────────────────
 export const cambiarEstadoPago = async (req, res) => {
   const { id } = req.params;

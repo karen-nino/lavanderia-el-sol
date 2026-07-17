@@ -40,14 +40,13 @@ export default function Salidas() {
   const [cargasSel,        setCargasSel]        = useState([]);
   const [loadingMaquinas,  setLoadingMaquinas]  = useState(false);
 
-  // Agregar secadora a una nota ya en proceso
-  const [agregarSecOpen,   setAgregarSecOpen]   = useState(false);
+  // Terminar lavado: elegir la secadora donde continúa la nota
+  const [terminarLavadoOpen, setTerminarLavadoOpen] = useState(false);
   const [secadorasDisp,    setSecadorasDisp]    = useState([]);
-  const [secAgregarSel,    setSecAgregarSel]    = useState('');
-  const [secAgregarCargas, setSecAgregarCargas] = useState('1');
+  const [secTerminarSel,   setSecTerminarSel]   = useState('');
   const [loadingSecadoras, setLoadingSecadoras] = useState(false);
 
-  // Terminar ciclo (carga terminada)
+  // Terminar ciclo de secado (la nota pasa a Por Entregar)
   const [confirmTerminar,  setConfirmTerminar]  = useState(false);
 
   const cargarDatos = useCallback(async () => {
@@ -181,7 +180,7 @@ export default function Salidas() {
     }
   }
 
-  // Terminar ciclo: la nota pasa a "Por Entregar" (LISTA). El
+  // Terminar ciclo de secado: la nota pasa a "Por Entregar" (LISTA). El
   // backend libera todas sus máquinas al hacer la transición.
   async function terminarCiclo() {
     setLoadingMaquina(true);
@@ -198,13 +197,12 @@ export default function Salidas() {
     }
   }
 
-  // Abre el selector de secadoras disponibles para agregarla a una nota
-  // que ya está en proceso (lavadora en uso).
-  async function iniciarAgregarSecadora() {
+  // Abre el selector de secadoras disponibles para terminar el lavado:
+  // la lavadora se libera y la nota continúa su ciclo en la secadora.
+  async function iniciarTerminarLavado() {
     setErrorAccion('');
-    setSecAgregarSel('');
-    setSecAgregarCargas('1');
-    setAgregarSecOpen(true);
+    setSecTerminarSel('');
+    setTerminarLavadoOpen(true);
     setLoadingSecadoras(true);
     try {
       const data = await api.get('/maquinas');
@@ -216,16 +214,13 @@ export default function Salidas() {
     }
   }
 
-  async function confirmarAgregarSecadora() {
-    if (!secAgregarSel) return;
+  async function confirmarTerminarLavado() {
+    if (!secTerminarSel) return;
     setLoadingMaquina(true);
     setErrorAccion('');
     try {
-      await api.patch(`/notas/${id}/asignar-secadora`, {
-        secadora_id: Number(secAgregarSel),
-        cantidad_cargas_secadora: Number(secAgregarCargas) || 1,
-      });
-      setAgregarSecOpen(false);
+      await api.patch(`/notas/${id}/terminar-lavado`, { secadora_id: Number(secTerminarSel) });
+      setTerminarLavadoOpen(false);
       await cargarDatos();
     } catch (err) {
       setErrorAccion(err.message);
@@ -304,6 +299,9 @@ export default function Salidas() {
   // El servidor promueve la nota a POR_PROCESAR al cumplirse el tiempo de
   // lavado; aquí solo lo reflejamos para mostrar el botón "Terminar Ciclo".
   const cicloTerminado = maquinaEnUso && nota?.estado === 'POR_PROCESAR';
+  // Fase de lavado: hay una lavadora en uso. Terminar su ciclo exige elegir
+  // secadora; cuando solo queda la secadora, terminar pasa a Por Entregar.
+  const faseLavado = maquinasAsignadas.some(m => m.tipo !== 'secadora' && m.estado === 'en_uso');
 
   const nombresMaquinas = maquinasAsignadas.map(m => m.nombre).join(' y ');
 
@@ -399,7 +397,7 @@ export default function Salidas() {
             {maquinaEnUso && (
               cicloTerminado ? (
                 <button
-                  onClick={() => setConfirmTerminar(true)}
+                  onClick={() => (faseLavado ? iniciarTerminarLavado() : setConfirmTerminar(true))}
                   disabled={loadingMaquina}
                   className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
                 >
@@ -417,20 +415,6 @@ export default function Salidas() {
             )}
           </div>
         </div>
-        {['EN_PROCESO', 'POR_PROCESAR'].includes(nota?.estado) && cargasNota.some(c => !c.secadora_id) && (
-          <div className="px-4 pb-4">
-            <button
-              onClick={iniciarAgregarSecadora}
-              disabled={loadingMaquina}
-              className="w-full flex items-center justify-center gap-1.5 py-2.5 border border-dashed border-gray-300 rounded-lg text-sm font-medium text-blue hover:border-blue-400 hover:bg-light-blue/40 disabled:opacity-60 transition-colors"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-              Agregar secadora
-            </button>
-          </div>
-        )}
       </div>
 
       {/* Sección 2 — Productos en la nota */}
@@ -722,14 +706,15 @@ export default function Salidas() {
         </div>
       )}
 
-      {/* Modal agregar secadora — nota ya en proceso */}
-      {agregarSecOpen && (
+      {/* Modal terminar lavado — elegir la secadora que continúa el ciclo */}
+      {terminarLavadoOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4 max-h-[90vh] overflow-y-auto">
             <div>
-              <h3 className="text-base font-bold text-gray-900">Agregar secadora</h3>
+              <h3 className="text-base font-bold text-gray-900">Terminar ciclo</h3>
               <p className="text-sm text-gray-500 mt-1">
-                Selecciona una secadora. Quedará en uso y su tarifa se sumará al total de la nota.
+                El lavado terminó. Elige la secadora donde continúa la nota: la lavadora
+                quedará disponible y la nota seguirá <span className="font-medium text-gray-700">En Proceso</span> (secando).
               </p>
             </div>
 
@@ -738,16 +723,18 @@ export default function Salidas() {
                 <div className="animate-spin rounded-full h-7 w-7 border-b-2 border-blue" />
               </div>
             ) : secadorasDisp.length === 0 ? (
-              <p className="text-sm text-gray-400 text-center py-6">No hay secadoras disponibles.</p>
+              <p className="text-sm text-red-600 text-center py-6">
+                No hay secadoras disponibles. Libera una secadora para poder terminar el lavado.
+              </p>
             ) : (
               <div className="space-y-2">
                 {secadorasDisp.map(m => {
-                  const selected = String(secAgregarSel) === String(m.id);
+                  const selected = String(secTerminarSel) === String(m.id);
                   return (
                     <button
                       key={m.id}
                       type="button"
-                      onClick={() => setSecAgregarSel(selected ? '' : String(m.id))}
+                      onClick={() => setSecTerminarSel(selected ? '' : String(m.id))}
                       className={`w-full flex items-center justify-between gap-2 px-4 py-3 border-2 rounded-xl text-left transition-colors ${
                         selected ? 'border-blue bg-light-blue' : 'border-gray-200 bg-white hover:border-blue-300'
                       }`}
@@ -762,44 +749,10 @@ export default function Salidas() {
               </div>
             )}
 
-            {secAgregarSel && (
-              <div>
-                <label className="block text-sm font-semibold text-gray-900 mb-2">
-                  Cantidad de cargas <span className="text-red-500">*</span>
-                </label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="number" min="1" step="1"
-                    value={secAgregarCargas}
-                    onChange={e => setSecAgregarCargas(e.target.value)}
-                    placeholder="1"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg text-base text-center focus:outline-none focus:ring-2 focus:ring-blue [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setSecAgregarCargas(c => String(Math.max(1, (Number(c) || 1) - 1)))}
-                    disabled={(Number(secAgregarCargas) || 1) <= 1}
-                    aria-label="Disminuir cargas"
-                    className="flex-shrink-0 w-12 py-3 rounded-lg border border-gray-300 bg-white text-gray-700 text-xl font-semibold hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                  >
-                    −
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSecAgregarCargas(c => String((Number(c) || 0) + 1))}
-                    aria-label="Aumentar cargas"
-                    className="flex-shrink-0 w-12 py-3 rounded-lg border border-gray-300 bg-white text-gray-700 text-xl font-semibold hover:bg-gray-50 transition-colors"
-                  >
-                    +
-                  </button>
-                </div>
-              </div>
-            )}
-
             <div className="flex gap-3">
               <button
                 type="button"
-                onClick={() => setAgregarSecOpen(false)}
+                onClick={() => setTerminarLavadoOpen(false)}
                 disabled={loadingMaquina}
                 className="flex-1 border border-gray-300 text-gray-700 font-medium py-3.5 rounded-lg text-base hover:bg-gray-50 disabled:opacity-60 transition-colors"
               >
@@ -807,11 +760,11 @@ export default function Salidas() {
               </button>
               <button
                 type="button"
-                onClick={confirmarAgregarSecadora}
-                disabled={loadingMaquina || !secAgregarSel}
-                className="flex-1 bg-blue hover:opacity-90 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
+                onClick={confirmarTerminarLavado}
+                disabled={loadingMaquina || !secTerminarSel}
+                className="flex-1 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
               >
-                {loadingMaquina ? 'Agregando...' : 'Agregar'}
+                {loadingMaquina ? 'Terminando...' : 'Confirmar'}
               </button>
             </div>
           </div>

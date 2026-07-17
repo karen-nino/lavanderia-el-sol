@@ -12,6 +12,7 @@ import {
   activarNota,
   activarMaquinasPendientes,
   asignarSecadora,
+  terminarLavado,
   cambiarEstadoPago,
   getNotaProductos,
   addProductoToNota,
@@ -32,6 +33,7 @@ router.patch('/:id/estado',      cambiarEstadoNota);
 router.patch('/:id/activar',     activarNota);
 router.patch('/:id/activar-pendientes', activarMaquinasPendientes);
 router.patch('/:id/asignar-secadora', asignarSecadora);
+router.patch('/:id/terminar-lavado', terminarLavado);
 router.patch('/:id/estado-pago', cambiarEstadoPago);
 router.get('/:id/productos',    getNotaProductos);
 router.post('/:id/productos',   addProductoToNota);
