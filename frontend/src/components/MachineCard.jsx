@@ -93,7 +93,7 @@ export default function MachineCard({ maquina, nota, onTerminarCiclo, onClick })
         </div>
         <div className="px-card-pad pt-5 pb-6 flex flex-col items-center gap-3">
           <p className="text-card-title text-green text-center uppercase tracking-wide">
-            Finalizó<br />la lavadora
+            Finalizó<br />lavadora
           </p>
           {infoNota}
           <button
