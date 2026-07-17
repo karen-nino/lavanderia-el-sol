@@ -1455,7 +1455,7 @@ export default function NuevaNota() {
                 +
               </button>
             </div>
-            <p className="text-xs text-gray-400 mt-1">Cada carga elige su lavadora y su secadora (opcionales)</p>
+            <p className="text-xs text-gray-400 mt-1">Cada carga elige su lavadora (opcional)</p>
           </div>
 
           {/* Máquinas por carga */}
@@ -1463,44 +1463,26 @@ export default function NuevaNota() {
             {cargasAuto.map((c, i) => {
               const lavadorasOpc = maquinas.filter(m =>
                 m.tipo !== 'secadora' && (tipoPrenda !== 'EDREDON' || m.tipo === 'lavadora_jumbo'));
-              const secadorasOpc = maquinas.filter(m => m.tipo === 'secadora');
               return (
                 <div key={i} className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
                   <div className="flex items-center justify-between">
                     <p className="text-sm font-semibold text-gray-900">Carga {i + 1}</p>
                     <span className="text-sm font-medium text-blue">${subtotalDeCarga(c).toFixed(2)}</span>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-medium text-gray-500 mb-1">Lavadora</label>
-                      <select
-                        value={c.lavadora_id}
-                        onChange={e => actualizarCarga(i, 'lavadora_id', e.target.value)}
-                        className={INPUT_CLS}
-                      >
-                        <option value="">Sin asignar</option>
-                        {lavadorasOpc.map(m => (
-                          <option key={m.id} value={m.id}>
-                            {formatMaquina(m)} — ${precioPorTipo(m.tipo, tipoPrenda).toFixed(2)}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-500 mb-1">Secadora</label>
-                      <select
-                        value={c.secadora_id}
-                        onChange={e => actualizarCarga(i, 'secadora_id', e.target.value)}
-                        className={INPUT_CLS}
-                      >
-                        <option value="">Sin asignar</option>
-                        {secadorasOpc.map(m => (
-                          <option key={m.id} value={m.id}>
-                            {m.nombre} — ${precios.secadora.toFixed(2)}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1">Lavadora</label>
+                    <select
+                      value={c.lavadora_id}
+                      onChange={e => actualizarCarga(i, 'lavadora_id', e.target.value)}
+                      className={INPUT_CLS}
+                    >
+                      <option value="">Sin asignar</option>
+                      {lavadorasOpc.map(m => (
+                        <option key={m.id} value={m.id}>
+                          {formatMaquina(m)} — ${precioPorTipo(m.tipo, tipoPrenda).toFixed(2)}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 </div>
               );
