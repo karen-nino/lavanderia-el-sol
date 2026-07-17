@@ -763,7 +763,6 @@ export default function NuevaNota() {
               const c = encargoCargas[idx];
               const set = (cambios) => actualizarCargaEncargo(idx, cambios);
               const lavadorasOpc = maquinas.filter(m => m.tipo !== 'secadora' && (c.tipo_prenda !== 'EDREDON' || m.tipo === 'lavadora_jumbo'));
-              const secadorasOpc = maquinas.filter(m => m.tipo === 'secadora');
               return (
                 <div className="space-y-6">
                   <h2 className="text-base font-semibold text-gray-900">Carga {idx + 1} de {nCargas}</h2>
@@ -903,7 +902,7 @@ export default function NuevaNota() {
                                 key={opt.v}
                                 type="button"
                                 onClick={() => set({ activar_inmediatamente: opt.v })}
-                                className={`py-4 border-2 rounded-xl font-semibold text-base transition-colors ${
+                                className={`py-8 border-2 rounded-xl font-semibold text-lg transition-colors ${
                                   selected ? 'border-blue bg-light-blue text-blue-700' : 'border-gray-300 bg-white text-gray-700 hover:border-blue-300'
                                 }`}
                               >
@@ -914,20 +913,6 @@ export default function NuevaNota() {
                         </div>
                       </div>
                     )}
-
-                    <div>
-                      <label className="block text-xs font-medium text-gray-500 mb-1">Secadora</label>
-                      <select
-                        value={c.secadora_id}
-                        onChange={e => set({ secadora_id: e.target.value })}
-                        className={`${INPUT_CLS} bg-white`}
-                      >
-                        <option value="">Sin asignar</option>
-                        {secadorasOpc.map(m => (
-                          <option key={m.id} value={m.id}>{m.nombre} — ${precios.secadora.toFixed(2)}</option>
-                        ))}
-                      </select>
-                    </div>
                   </div>
                   </>
                   )}
