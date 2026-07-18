@@ -117,11 +117,23 @@ export default function DetalleNota() {
   const [confirmCancelar,  setConfirmCancelar]  = useState(false);
   const [confirmFinalizar,  setConfirmFinalizar]  = useState(false);
   const [confirmEliminar,  setConfirmEliminar]  = useState(false);
+  // Tarifa de secadora (Ajustes) para desglosar, solo en pantalla, el costo
+  // de cada carga en lavadora + secadora sin cambiar el total cobrado.
+  const [tarifaSecadora,   setTarifaSecadora]   = useState(45);
 
   useEffect(() => {
     let activo = true;
-    api.get(`/notas/${id}`)
-      .then(data => { if (activo) setNota(data); })
+    Promise.all([
+      api.get(`/notas/${id}`),
+      api.get('/ajustes').catch(() => null),
+    ])
+      .then(([data, ajustes]) => {
+        if (!activo) return;
+        setNota(data);
+        if (ajustes?.precio_carga_secadora != null) {
+          setTarifaSecadora(Number(ajustes.precio_carga_secadora));
+        }
+      })
       .catch(err => { if (activo) setError(err.message); })
       .finally(() => { if (activo) setLoading(false); });
     return () => { activo = false; };
@@ -397,14 +409,28 @@ export default function DetalleNota() {
                   // el ciclo ya haya terminado y la máquina se liberara). El badge
                   // de estado en vivo solo aparece si la máquina sigue asignada a
                   // esta carga (lavadora_id / secadora_id presentes).
+                  // Desglose SOLO visual del costo de la carga: el total de las
+                  // máquinas (lavadora + secadora) no cambia. Si la carga tiene
+                  // secadora pero su precio quedó en 0 (secado "ya cobrado"), se
+                  // le muestra su tarifa y a la lavadora el resto; si ya trae un
+                  // precio propio (notas viejas) se respeta.
+                  const totalMaquinas = Number(cg.precio_lavadora) + Number(cg.precio_secadora);
+                  const secDisplay = cg.secadora_usada_id
+                    ? (Number(cg.precio_secadora) > 0
+                        ? Number(cg.precio_secadora)
+                        : Math.min(tarifaSecadora, totalMaquinas))
+                    : 0;
+                  const lavDisplay = totalMaquinas - secDisplay;
                   const maquinasCarga = [
                     cg.lavadora_usada_id && {
                       nombre: cg.lavadora_usada_nombre, tipo: cg.lavadora_usada_tipo,
                       estado: cg.lavadora_id ? cg.lavadora_estado : null,
+                      precio: lavDisplay,
                     },
                     cg.secadora_usada_id && {
                       nombre: cg.secadora_usada_nombre, tipo: cg.secadora_usada_tipo,
                       estado: cg.secadora_id ? cg.secadora_estado : null,
+                      precio: secDisplay,
                     },
                   ].filter(Boolean);
                   const prods = cg.productos ?? [];
@@ -419,15 +445,19 @@ export default function DetalleNota() {
                   ].filter(Boolean);
                   return (
                     <div key={cg.id} className="border border-gray-100 rounded-lg p-3 space-y-1.5">
-                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                      {/* Carga N en su propia línea; debajo, una línea por
+                          máquina (lavadora y secadora) con su costo. */}
+                      <div className="flex items-center justify-between">
                         <span className="text-xs font-semibold text-gray-500">Carga {cg.orden}</span>
-                        {maquinasCarga.length === 0 && (
-                          <span className="text-sm text-gray-400 italic">Sin máquinas</span>
-                        )}
-                        {maquinasCarga.map((m, i) => {
+                        <span className="text-sm font-medium text-gray-700">{fmtMonto(totalCarga)}</span>
+                      </div>
+                      {maquinasCarga.length === 0 ? (
+                        <span className="text-sm text-gray-400 italic">Sin máquinas</span>
+                      ) : (
+                        maquinasCarga.map((m, i) => {
                           const cfg = BADGE_MAQUINA_ESTADO[m.estado];
                           return (
-                            <span key={i} className="inline-flex items-center gap-1.5">
+                            <div key={i} className="flex items-center gap-2">
                               <span className="text-sm font-medium text-gray-800">{m.nombre}</span>
                               {MAQUINA_TIPO_LABEL[m.tipo] && (
                                 <span className="text-xs text-gray-500">— {MAQUINA_TIPO_LABEL[m.tipo]}</span>
@@ -438,11 +468,11 @@ export default function DetalleNota() {
                                   {cfg.label}
                                 </span>
                               )}
-                            </span>
+                              <span className="ml-auto text-sm text-gray-600">{fmtMonto(m.precio)}</span>
+                            </div>
                           );
-                        })}
-                        <span className="ml-auto text-sm font-medium text-gray-700">{fmtMonto(totalCarga)}</span>
-                      </div>
+                        })
+                      )}
                       {atributos.length > 0 && (
                         <p className="text-xs text-gray-500">{atributos.join(' · ')}</p>
                       )}
