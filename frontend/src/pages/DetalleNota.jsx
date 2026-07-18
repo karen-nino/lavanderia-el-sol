@@ -499,18 +499,20 @@ export default function DetalleNota() {
                         maquinasCarga.map((m, i) => {
                           const cfg = BADGE_MAQUINA_ESTADO[m.estado];
                           return (
-                            <div key={i} className="flex items-center gap-2">
-                              <span className="text-sm font-medium text-gray-800">{m.nombre}</span>
-                              {MAQUINA_TIPO_LABEL[m.tipo] && (
-                                <span className="text-xs text-gray-500">— {MAQUINA_TIPO_LABEL[m.tipo]}</span>
-                              )}
-                              {cfg && (
-                                <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${cfg.cls}`}>
-                                  <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot} ${m.estado === 'en_uso' ? 'animate-pulse' : ''}`} />
-                                  {cfg.label}
-                                </span>
-                              )}
-                              <span className="ml-auto text-sm text-gray-600">{fmtMonto(m.precio)}</span>
+                            <div key={i} className="flex items-start justify-between gap-2">
+                              <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 min-w-0">
+                                <span className="text-sm font-medium text-gray-800">{m.nombre}</span>
+                                {MAQUINA_TIPO_LABEL[m.tipo] && (
+                                  <span className="text-xs text-gray-500">— {MAQUINA_TIPO_LABEL[m.tipo]}</span>
+                                )}
+                                {cfg && (
+                                  <span className={`inline-flex items-center gap-1.5 whitespace-nowrap text-xs font-semibold px-2.5 py-1 rounded-full ${cfg.cls}`}>
+                                    <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot} ${m.estado === 'en_uso' ? 'animate-pulse' : ''}`} />
+                                    {cfg.label}
+                                  </span>
+                                )}
+                              </div>
+                              <span className="flex-shrink-0 text-sm text-gray-600">{fmtMonto(m.precio)}</span>
                             </div>
                           );
                         })
