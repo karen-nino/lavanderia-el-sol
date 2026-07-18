@@ -34,9 +34,9 @@ const FORM_INIT = {
   instrucciones:  '',
 };
 
-// Autoservicio: cada carga elige su propia lavadora y secadora (ambas
-// opcionales, y una misma máquina puede repetirse entre cargas).
-const CARGA_INIT  = { lavadora_id: '', secadora_id: '' };
+// Autoservicio: cada carga elige su propia lavadora, tipo de prenda y tipo de
+// tela (la secadora se asigna después, en Salidas).
+const CARGA_INIT  = { lavadora_id: '', secadora_id: '', tipo_prenda: 'ROPA', tipo_tela: '', tamano_edredon: '' };
 const MAX_CARGAS  = 20;
 
 const TAMANOS = [
@@ -104,9 +104,6 @@ export default function NuevaNota() {
   const [loading,           setLoading]           = useState(false);
   const [tipoServicio,      setTipoServicio]      = useState('');
   const [tipoOpen,          setTipoOpen]          = useState(false);
-  const [tipoPrenda,        setTipoPrenda]        = useState('');
-  const [prendaOpen,        setPrendaOpen]        = useState(false);
-  const [telaOpen,          setTelaOpen]          = useState(false);
   const [cargasAuto,        setCargasAuto]        = useState([{ ...CARGA_INIT }]);
   const [encargoStep,       setEncargoStep]       = useState(1);
   const [encargoForm,       setEncargoForm]       = useState(ENCARGO_INIT);
@@ -120,7 +117,6 @@ export default function NuevaNota() {
   const [folio,             setFolio]             = useState('');
   const [notaCreada,        setNotaCreada]        = useState(null);
   const tipoRef           = useRef(null);
-  const prendaRef         = useRef(null);
 
   useEffect(() => {
     if (!tipoOpen) return;
@@ -133,17 +129,6 @@ export default function NuevaNota() {
     return () => document.removeEventListener('mousedown', onMouseDown);
   }, [tipoOpen]);
 
-  useEffect(() => {
-    if (!prendaOpen) return;
-    const onMouseDown = (e) => {
-      if (prendaRef.current && !prendaRef.current.contains(e.target)) {
-        setPrendaOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', onMouseDown);
-    return () => document.removeEventListener('mousedown', onMouseDown);
-  }, [prendaOpen]);
-
   const precioPorTipo = (tipoMaquina, tipoPrendaArg) => {
     if (tipoMaquina === 'secadora') return precios.secadora;
     if (tipoMaquina === 'lavadora_jumbo' && tipoPrendaArg === 'EDREDON') return precios.edredonJumbo;
@@ -153,7 +138,7 @@ export default function NuevaNota() {
   // Cada carga se cobra con la tarifa de su lavadora más la de su secadora.
   const subtotalDeCarga = (c) => {
     const lav = maquinas.find(m => String(m.id) === String(c.lavadora_id));
-    return (lav ? precioPorTipo(lav.tipo, tipoPrenda) : 0)
+    return (lav ? precioPorTipo(lav.tipo, c.tipo_prenda) : 0)
          + (c.secadora_id ? precios.secadora : 0);
   };
   const ajusteNum      = Number(form.ajuste) || 0;
@@ -217,7 +202,6 @@ export default function NuevaNota() {
             setTipoServicio('POR_ENCARGO');
           } else {
             setTipoServicio('AUTOSERVICIO');
-            setTipoPrenda(prendaNota);
           }
           const prods = (nota.productos || []).map(p => ({
             producto_id: String(p.producto_id),
@@ -266,8 +250,11 @@ export default function NuevaNota() {
               instrucciones:   nota.instrucciones  ?? '',
             });
             const cargasNota = (nota.cargas ?? []).map(c => ({
-              lavadora_id: c.lavadora_id ? String(c.lavadora_id) : '',
-              secadora_id: c.secadora_id ? String(c.secadora_id) : '',
+              lavadora_id:    c.lavadora_id ? String(c.lavadora_id) : '',
+              secadora_id:    c.secadora_id ? String(c.secadora_id) : '',
+              tipo_prenda:    (c.tipo_prenda ?? prendaNota) || 'ROPA',
+              tipo_tela:      c.tipo_tela      ?? '',
+              tamano_edredon: c.tamano_edredon ?? '',
             }));
             setCargasAuto(cargasNota.length > 0 ? cargasNota : [{ ...CARGA_INIT }]);
             setProductosLista(prods);
@@ -465,19 +452,24 @@ export default function NuevaNota() {
 
     const payload = {
       modalidad:       'AUTOSERVICIO',
-      tipo_prenda:     tipoPrenda || 'ROPA',
+      // La prenda/tela ahora viven en cada carga; a nivel nota se guarda la de
+      // la primera carga solo para la lista/badge.
+      tipo_prenda:     cargasAuto[0]?.tipo_prenda || 'ROPA',
       // Sin máquinas la nota queda En Espera (se activa después desde
       // Salidas); con alguna máquina nace directamente En Proceso.
       estado:          algunaMaquina ? 'EN_PROCESO' : 'EN_ESPERA',
       estado_pago:     'PAGADO',
       // null (no undefined) para que al editar, limpiar un campo lo borre.
       instrucciones:   form.instrucciones || null,
-      tipo_tela:       (tipoPrenda || 'ROPA') === 'ROPA' ? (form.tipo_tela || null) : null,
-      tamano_edredon:  tipoPrenda === 'EDREDON' ? (form.tamano_edredon || null) : null,
+      tipo_tela:       null,
+      tamano_edredon:  null,
       // El servidor tarifica cada carga y marca las máquinas en uso.
       cargas:          cargasAuto.map(c => ({
-        lavadora_id: c.lavadora_id ? Number(c.lavadora_id) : null,
-        secadora_id: c.secadora_id ? Number(c.secadora_id) : null,
+        lavadora_id:    c.lavadora_id ? Number(c.lavadora_id) : null,
+        secadora_id:    c.secadora_id ? Number(c.secadora_id) : null,
+        tipo_prenda:    c.tipo_prenda || 'ROPA',
+        tipo_tela:      (c.tipo_prenda || 'ROPA') === 'ROPA' ? (c.tipo_tela || null) : null,
+        tamano_edredon: c.tipo_prenda === 'EDREDON' ? (c.tamano_edredon || null) : null,
       })),
       ajuste:          ajusteNum,
       productos:       productosLista
@@ -1234,187 +1226,6 @@ export default function NuevaNota() {
 
         {tipoServicio === 'AUTOSERVICIO' && (
         <>
-        {/* Tipo de Prenda */}
-        <div ref={prendaRef} className="relative">
-          <label className={LABEL_CLS}>Tipo de Prenda</label>
-          <button
-            type="button"
-            onClick={() => setPrendaOpen(o => !o)}
-            className={`w-full px-4 py-3.5 border rounded-lg bg-white text-left flex items-center justify-between transition-colors ${
-              prendaOpen
-                ? 'border-blue-500 ring-1 ring-blue-500'
-                : tipoPrenda
-                  ? 'border-green-600'
-                  : 'border-gray-300 hover:border-gray-400'
-            }`}
-          >
-            <span className={tipoPrenda ? 'text-gray-900' : 'text-gray-400'}>
-              {tipoPrenda ? PRENDA_LABEL[tipoPrenda] : 'Seleccionar'}
-            </span>
-            {tipoPrenda && !prendaOpen ? (
-              <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-              </svg>
-            ) : (
-              <svg
-                className={`w-5 h-5 text-gray-500 transition-transform ${prendaOpen ? 'rotate-180' : ''}`}
-                fill="none" stroke="currentColor" viewBox="0 0 24 24"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            )}
-          </button>
-
-          {prendaOpen && (
-            <div className="mt-2 bg-white border border-gray-200 rounded-lg shadow-md overflow-hidden">
-              {TIPOS_PRENDA.map(opt => {
-                const selected = tipoPrenda === opt.v;
-                return (
-                  <button
-                    key={opt.v}
-                    type="button"
-                    onClick={() => {
-                      setTipoPrenda(opt.v);
-                      setPrendaOpen(false);
-                      setForm(f => ({
-                        ...f,
-                        tipo_tela:      opt.v === 'ROPA'    ? f.tipo_tela      : '',
-                        tamano_edredon: opt.v === 'EDREDON' ? f.tamano_edredon : '',
-                      }));
-                      if (opt.v !== 'ROPA') setTelaOpen(false);
-                      // Los edredones solo van en lavadoras jumbo: se quitan
-                      // de las cargas las lavadoras que no lo sean.
-                      if (opt.v === 'EDREDON') {
-                        setCargasAuto(prev => prev.map(c => {
-                          const lav = maquinas.find(m => String(m.id) === String(c.lavadora_id));
-                          return lav && lav.tipo !== 'lavadora_jumbo' ? { ...c, lavadora_id: '' } : c;
-                        }));
-                      }
-                    }}
-                    className="w-full px-4 py-3.5 flex items-center justify-between text-left hover:bg-gray-50 border-b last:border-0 border-gray-100"
-                  >
-                    <span className="text-base text-gray-900">{opt.label}</span>
-                    <span className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
-                      selected ? 'border-blue bg-blue' : 'border-gray-300'
-                    }`}>
-                      {selected && (
-                        <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                        </svg>
-                      )}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        {tipoPrenda && (
-        <>
-          {/* Tipo de tela (solo para ropa) */}
-          {tipoPrenda === 'ROPA' && (
-            <div className="relative">
-              <label className={LABEL_CLS}>
-                Tipo de tela <span className="font-normal text-gray-400">(opcional)</span>
-              </label>
-              <button
-                type="button"
-                onClick={() => setTelaOpen(o => !o)}
-                className={`w-full px-4 py-3.5 border rounded-lg bg-white text-left flex items-center justify-between transition-colors ${
-                  telaOpen
-                    ? 'border-blue-500 ring-1 ring-blue-500'
-                    : form.tipo_tela
-                      ? 'border-green-600'
-                      : 'border-gray-300 hover:border-gray-400'
-                }`}
-              >
-                <span className={form.tipo_tela ? 'text-gray-900' : 'text-gray-400'}>
-                  {form.tipo_tela || 'Seleccionar'}
-                </span>
-                {form.tipo_tela && !telaOpen ? (
-                  <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                  </svg>
-                ) : (
-                  <svg
-                    className={`w-5 h-5 text-gray-500 transition-transform ${telaOpen ? 'rotate-180' : ''}`}
-                    fill="none" stroke="currentColor" viewBox="0 0 24 24"
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                )}
-              </button>
-
-              {telaOpen && (
-                <div className="mt-2 bg-white border border-gray-200 rounded-lg shadow-md overflow-hidden">
-                  {telas.filter(t => t.activo || t.nombre === form.tipo_tela).length === 0 && (
-                    <p className="px-4 py-3.5 text-sm text-gray-400">No hay tipos de tela configurados.</p>
-                  )}
-                  {telas
-                    .filter(t => t.activo || t.nombre === form.tipo_tela)
-                    .map(opt => {
-                      const selected = form.tipo_tela === opt.nombre;
-                      return (
-                        <button
-                          key={opt.id}
-                          type="button"
-                          onClick={() => { setForm(f => ({ ...f, tipo_tela: opt.nombre })); setTelaOpen(false); }}
-                          className="w-full px-4 py-3.5 flex items-center justify-between text-left hover:bg-gray-50 border-b last:border-0 border-gray-100"
-                        >
-                          <span className="text-base text-gray-900">{opt.nombre}</span>
-                          <span className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
-                            selected ? 'border-blue bg-blue' : 'border-gray-300'
-                          }`}>
-                            {selected && (
-                              <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                              </svg>
-                            )}
-                          </span>
-                        </button>
-                      );
-                    })}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Tamaño del edredón (solo para edredón) */}
-          {tipoPrenda === 'EDREDON' && (
-            <div className="space-y-4">
-              <label className={LABEL_CLS + ' mb-0'}>
-                Tamaño del edredón <span className="font-normal text-gray-400">(opcional)</span>
-              </label>
-              {tamanosEdredon.filter(t => t.activo || t.nombre === form.tamano_edredon).length === 0 ? (
-                <p className="text-sm text-gray-400">No hay tamaños de edredón configurados.</p>
-              ) : (
-                <div className="grid grid-cols-3 gap-3">
-                  {tamanosEdredon
-                    .filter(t => t.activo || t.nombre === form.tamano_edredon)
-                    .map(opt => {
-                      const selected = form.tamano_edredon === opt.nombre;
-                      return (
-                        <button
-                          key={opt.id}
-                          type="button"
-                          onClick={() => setForm(f => ({ ...f, tamano_edredon: opt.nombre }))}
-                          className={`py-8 border-2 rounded-xl font-semibold text-lg transition-colors ${
-                            selected
-                              ? 'border-blue bg-light-blue text-blue-700'
-                              : 'border-gray-300 bg-white text-gray-700 hover:border-blue-300'
-                          }`}
-                        >
-                          {opt.nombre}
-                        </button>
-                      );
-                    })}
-                </div>
-              )}
-            </div>
-          )}
-        <div className="py-3"><div className="border-t border-gray-200" /></div>
-
         <div className='space-y-8'>
 
           {/* Cantidad de cargas */}
@@ -1461,14 +1272,80 @@ export default function NuevaNota() {
               );
               const lavadorasOpc = maquinas.filter(m =>
                 m.tipo !== 'secadora'
-                && (tipoPrenda !== 'EDREDON' || m.tipo === 'lavadora_jumbo')
+                && (c.tipo_prenda !== 'EDREDON' || m.tipo === 'lavadora_jumbo')
                 && !usadasEnOtras.has(String(m.id)));
+              // Al cambiar la prenda de una carga se limpian tela/edredón según
+              // corresponda y, si pasa a Edredón, se quita la lavadora si no es jumbo.
+              const cambiarPrenda = (v) => setCargasAuto(prev => prev.map((x, idx) => {
+                if (idx !== i) return x;
+                const next = { ...x, tipo_prenda: v };
+                if (v !== 'ROPA')    next.tipo_tela = '';
+                if (v !== 'EDREDON') next.tamano_edredon = '';
+                if (v === 'EDREDON') {
+                  const lav = maquinas.find(m => String(m.id) === String(x.lavadora_id));
+                  if (lav && lav.tipo !== 'lavadora_jumbo') next.lavadora_id = '';
+                }
+                return next;
+              }));
               return (
                 <div key={i} className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
                   <div className="flex items-center justify-between">
                     <p className="text-sm font-semibold text-gray-900">Carga {i + 1}</p>
                     <span className="text-sm font-medium text-blue">${subtotalDeCarga(c).toFixed(2)}</span>
                   </div>
+                  {/* Tipo de prenda por carga */}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1">Tipo de prenda</label>
+                    <select
+                      value={c.tipo_prenda}
+                      onChange={e => cambiarPrenda(e.target.value)}
+                      className={INPUT_CLS}
+                    >
+                      {TIPOS_PRENDA.map(opt => (
+                        <option key={opt.v} value={opt.v}>{opt.label}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Tipo de tela (solo ropa) */}
+                  {c.tipo_prenda === 'ROPA' && (
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1">
+                        Tipo de tela <span className="font-normal text-gray-400">(opcional)</span>
+                      </label>
+                      <select
+                        value={c.tipo_tela}
+                        onChange={e => actualizarCarga(i, 'tipo_tela', e.target.value)}
+                        className={INPUT_CLS}
+                      >
+                        <option value="">Sin asignar</option>
+                        {telas.filter(t => t.activo || t.nombre === c.tipo_tela).map(t => (
+                          <option key={t.id} value={t.nombre}>{t.nombre}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  {/* Tamaño del edredón (solo edredón) */}
+                  {c.tipo_prenda === 'EDREDON' && (
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1">
+                        Tamaño del edredón <span className="font-normal text-gray-400">(opcional)</span>
+                      </label>
+                      <select
+                        value={c.tamano_edredon}
+                        onChange={e => actualizarCarga(i, 'tamano_edredon', e.target.value)}
+                        className={INPUT_CLS}
+                      >
+                        <option value="">Sin asignar</option>
+                        {tamanosEdredon.filter(t => t.activo || t.nombre === c.tamano_edredon).map(t => (
+                          <option key={t.id} value={t.nombre}>{t.nombre}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  {/* Lavadora al final: sus opciones dependen de la prenda */}
                   <div>
                     <label className="block text-xs font-medium text-gray-500 mb-1">Lavadora</label>
                     <select
@@ -1479,7 +1356,7 @@ export default function NuevaNota() {
                       <option value="">Sin asignar</option>
                       {lavadorasOpc.map(m => (
                         <option key={m.id} value={m.id}>
-                          {formatMaquina(m)} — ${precioPorTipo(m.tipo, tipoPrenda).toFixed(2)}
+                          {formatMaquina(m)} — ${precioPorTipo(m.tipo, c.tipo_prenda).toFixed(2)}
                         </option>
                       ))}
                     </select>
@@ -1647,32 +1524,20 @@ export default function NuevaNota() {
                   <span>Servicio</span>
                   <span className="font-medium">{TIPO_LABEL[tipoServicio]}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span>Prenda</span>
-                  <span className="font-medium">{PRENDA_LABEL[tipoPrenda]}</span>
-                </div>
-                {tipoPrenda === 'ROPA' && form.tipo_tela && (
-                  <div className="flex justify-between">
-                    <span>Tipo de tela</span>
-                    <span className="font-medium">{form.tipo_tela}</span>
-                  </div>
-                )}
-                {tipoPrenda === 'EDREDON' && form.tamano_edredon && (
-                  <div className="flex justify-between">
-                    <span>Tamaño del edredón</span>
-                    <span className="font-medium">{form.tamano_edredon}</span>
-                  </div>
-                )}
               </div>
               <div className="space-y-1 mb-2 text-sm text-blue border-t border-blue-200 pt-3">
                 {cargasAuto.map((c, i) => {
                   const lav = maquinas.find(m => String(m.id) === String(c.lavadora_id));
                   const sec = maquinas.find(m => String(m.id) === String(c.secadora_id));
                   const partes = [lav?.nombre, sec?.nombre].filter(Boolean);
+                  const detalle = [
+                    PRENDA_LABEL[c.tipo_prenda],
+                    c.tipo_prenda === 'ROPA' ? c.tipo_tela : c.tamano_edredon,
+                  ].filter(Boolean).join(', ');
                   return (
                     <div key={i} className="flex justify-between">
                       <span>
-                        Carga {i + 1}{partes.length > 0 ? ` — ${partes.join(' + ')}` : ' — sin máquinas'}
+                        Carga {i + 1}{detalle ? ` — ${detalle}` : ''}{partes.length > 0 ? ` (${partes.join(' + ')})` : ' · sin máquinas'}
                       </span>
                       <span>${subtotalDeCarga(c).toFixed(2)}</span>
                     </div>
@@ -1720,8 +1585,6 @@ export default function NuevaNota() {
               : (esEdicion ? 'Guardar cambios' : 'Crear nota')}
           </button>
         </div>
-        </>
-        )}
         </>
         )}
       </form>
