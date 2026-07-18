@@ -339,13 +339,29 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
             <div className="rounded-card bg-white py-20 shadow-card flex justify-center">
               <div className="animate-spin rounded-pill h-8 w-8 border-b-2 border-blue" />
             </div>
-          ) : maquinasEnUso.length === 0 ? (
-            <div className="rounded-card bg-white py-20 shadow-card text-center">
-              <p className="text-md text-grey">Sin máquinas en uso</p>
-            </div>
           ) : (
-            <div className="grid grid-cols-2 lg:grid-cols-3 gap-6">
-              {maquinasEnUso.map(renderCard)}
+            // Separadas en Lavadoras y Secadoras (como Gestión de Máquinas),
+            // cada sección con su conteo "en uso/total".
+            <div className="space-y-16">
+              {[
+                { titulo: 'Lavadoras', items: lavadorasEnUso, total: totalLavadoras },
+                { titulo: 'Secadoras', items: secadorasEnUso, total: totalSecadoras },
+              ].map(grupo => grupo.total > 0 && (
+                <section key={grupo.titulo} className="space-y-4">
+                  <h2 className="text-section text-dark-blue">
+                    {grupo.titulo} <span className="text-grey">{grupo.items.length}/{grupo.total}</span>
+                  </h2>
+                  {grupo.items.length === 0 ? (
+                    <div className="rounded-card bg-white py-12 shadow-card text-center">
+                      <p className="text-md text-grey">Sin {grupo.titulo.toLowerCase()} en uso</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 lg:grid-cols-3 gap-6">
+                      {grupo.items.map(renderCard)}
+                    </div>
+                  )}
+                </section>
+              ))}
             </div>
           )}
         </>
