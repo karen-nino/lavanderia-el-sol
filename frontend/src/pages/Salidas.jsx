@@ -40,10 +40,10 @@ export default function Salidas() {
   const [cargasSel,        setCargasSel]        = useState([]);
   const [loadingMaquinas,  setLoadingMaquinas]  = useState(false);
 
-  // Terminar lavado: elegir la secadora donde continúa la nota
+  // Terminar lavado: elegir una secadora por cada lavadora en uso
   const [terminarLavadoOpen, setTerminarLavadoOpen] = useState(false);
   const [secadorasDisp,    setSecadorasDisp]    = useState([]);
-  const [secTerminarSel,   setSecTerminarSel]   = useState('');
+  const [secAsignaciones,  setSecAsignaciones]  = useState({}); // lavadora_id → secadora_id
   const [loadingSecadoras, setLoadingSecadoras] = useState(false);
 
   // Terminar ciclo de secado (la nota pasa a Por Entregar)
@@ -198,10 +198,10 @@ export default function Salidas() {
   }
 
   // Abre el selector de secadoras disponibles para terminar el lavado:
-  // la lavadora se libera y la nota continúa su ciclo en la secadora.
+  // cada lavadora en uso se libera y su carga continúa en su propia secadora.
   async function iniciarTerminarLavado() {
     setErrorAccion('');
-    setSecTerminarSel('');
+    setSecAsignaciones({});
     setTerminarLavadoOpen(true);
     setLoadingSecadoras(true);
     try {
@@ -214,16 +214,21 @@ export default function Salidas() {
     }
   }
 
-  async function confirmarTerminarLavado() {
-    if (!secTerminarSel) return;
+  async function confirmarTerminarLavado(pares) {
     setLoadingMaquina(true);
     setErrorAccion('');
     try {
-      await api.patch(`/notas/${id}/terminar-lavado`, { secadora_id: Number(secTerminarSel) });
+      for (const [lavadoraId, secadoraId] of pares) {
+        await api.patch(`/notas/${id}/terminar-lavado`, {
+          lavadora_id: Number(lavadoraId),
+          secadora_id: Number(secadoraId),
+        });
+      }
       setTerminarLavadoOpen(false);
       await cargarDatos();
     } catch (err) {
       setErrorAccion(err.message);
+      await cargarDatos();
     } finally {
       setLoadingMaquina(false);
     }
@@ -299,9 +304,11 @@ export default function Salidas() {
   // El servidor promueve la nota a POR_PROCESAR al cumplirse el tiempo de
   // lavado; aquí solo lo reflejamos para mostrar el botón "Terminar Ciclo".
   const cicloTerminado = maquinaEnUso && nota?.estado === 'POR_PROCESAR';
-  // Fase de lavado: hay una lavadora en uso. Terminar su ciclo exige elegir
-  // secadora; cuando solo queda la secadora, terminar pasa a Por Entregar.
-  const faseLavado = maquinasAsignadas.some(m => m.tipo !== 'secadora' && m.estado === 'en_uso');
+  // Fase de lavado: hay lavadoras en uso. Terminar su ciclo exige elegir una
+  // secadora por lavadora; cuando solo quedan secadoras, terminar pasa la
+  // nota a Por Entregar.
+  const lavadorasEnUso = maquinasAsignadas.filter(m => m.tipo !== 'secadora' && m.estado === 'en_uso');
+  const faseLavado = lavadorasEnUso.length > 0;
 
   const nombresMaquinas = maquinasAsignadas.map(m => m.nombre).join(' y ');
 
@@ -706,70 +713,93 @@ export default function Salidas() {
         </div>
       )}
 
-      {/* Modal terminar lavado — elegir la secadora que continúa el ciclo */}
-      {terminarLavadoOpen && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4 max-h-[90vh] overflow-y-auto">
-            <div>
-              <h3 className="text-base font-bold text-gray-900">Terminar ciclo</h3>
-              <p className="text-sm text-gray-500 mt-1">
-                El lavado terminó. Elige la secadora donde continúa la nota: la lavadora
-                quedará disponible y la nota seguirá <span className="font-medium text-gray-700">En Proceso</span> (secando).
-              </p>
-            </div>
-
-            {loadingSecadoras ? (
-              <div className="flex justify-center py-6">
-                <div className="animate-spin rounded-full h-7 w-7 border-b-2 border-blue" />
+      {/* Modal terminar lavado — una secadora por cada lavadora en uso */}
+      {terminarLavadoOpen && (() => {
+        const pares = Object.entries(secAsignaciones).filter(([, s]) => s);
+        const completo = lavadorasEnUso.length > 0 && pares.length === lavadorasEnUso.length;
+        const faltanSecadoras = secadorasDisp.length < lavadorasEnUso.length;
+        return (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+              <div>
+                <h3 className="text-base font-bold text-gray-900">Iniciar secado</h3>
+                <p className="text-sm text-gray-500 mt-1">
+                  El lavado terminó. Elige la secadora donde continúa cada carga: las lavadoras
+                  quedarán disponibles y la nota seguirá <span className="font-medium text-gray-700">En Proceso</span> (secando).
+                </p>
               </div>
-            ) : secadorasDisp.length === 0 ? (
-              <p className="text-sm text-red-600 text-center py-6">
-                No hay secadoras disponibles. Libera una secadora para poder terminar el lavado.
-              </p>
-            ) : (
-              <div className="space-y-2">
-                {secadorasDisp.map(m => {
-                  const selected = String(secTerminarSel) === String(m.id);
-                  return (
-                    <button
-                      key={m.id}
-                      type="button"
-                      onClick={() => setSecTerminarSel(selected ? '' : String(m.id))}
-                      className={`w-full flex items-center justify-between gap-2 px-4 py-3 border-2 rounded-xl text-left transition-colors ${
-                        selected ? 'border-blue bg-light-blue' : 'border-gray-200 bg-white hover:border-blue-300'
-                      }`}
-                    >
-                      <span className="font-medium text-gray-800">{m.nombre}</span>
-                      {MAQUINA_TIPO_LABEL[m.tipo] && (
-                        <span className="text-xs text-gray-500">{MAQUINA_TIPO_LABEL[m.tipo]}</span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
 
-            <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={() => setTerminarLavadoOpen(false)}
-                disabled={loadingMaquina}
-                className="flex-1 border border-gray-300 text-gray-700 font-medium py-3.5 rounded-lg text-base hover:bg-gray-50 disabled:opacity-60 transition-colors"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={confirmarTerminarLavado}
-                disabled={loadingMaquina || !secTerminarSel}
-                className="flex-1 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
-              >
-                {loadingMaquina ? 'Terminando...' : 'Confirmar'}
-              </button>
+              {loadingSecadoras ? (
+                <div className="flex justify-center py-6">
+                  <div className="animate-spin rounded-full h-7 w-7 border-b-2 border-blue" />
+                </div>
+              ) : secadorasDisp.length === 0 ? (
+                <p className="text-sm text-red-600 text-center py-6">
+                  No hay secadoras disponibles. Libera una secadora para poder iniciar el secado.
+                </p>
+              ) : (
+                <div className="space-y-4">
+                  {faltanSecadoras && (
+                    <p className="text-sm text-red-600">
+                      Hay menos secadoras disponibles que lavadoras por terminar; libera otra secadora.
+                    </p>
+                  )}
+                  {lavadorasEnUso.map(lav => {
+                    // Secadoras aún no elegidas para otra lavadora.
+                    const opciones = secadorasDisp.filter(s =>
+                      !Object.entries(secAsignaciones).some(([lid, sid]) =>
+                        String(lid) !== String(lav.id) && String(sid) === String(s.id)));
+                    return (
+                      <div key={lav.id} className="space-y-2">
+                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{lav.nombre}</p>
+                        {opciones.map(m => {
+                          const selected = String(secAsignaciones[lav.id]) === String(m.id);
+                          return (
+                            <button
+                              key={m.id}
+                              type="button"
+                              onClick={() => setSecAsignaciones(prev => ({
+                                ...prev, [lav.id]: selected ? '' : String(m.id),
+                              }))}
+                              className={`w-full flex items-center justify-between gap-2 px-4 py-3 border-2 rounded-xl text-left transition-colors ${
+                                selected ? 'border-blue bg-light-blue' : 'border-gray-200 bg-white hover:border-blue-300'
+                              }`}
+                            >
+                              <span className="font-medium text-gray-800">{m.nombre}</span>
+                              {MAQUINA_TIPO_LABEL[m.tipo] && (
+                                <span className="text-xs text-gray-500">{MAQUINA_TIPO_LABEL[m.tipo]}</span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setTerminarLavadoOpen(false)}
+                  disabled={loadingMaquina}
+                  className="flex-1 border border-gray-300 text-gray-700 font-medium py-3.5 rounded-lg text-base hover:bg-gray-50 disabled:opacity-60 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => confirmarTerminarLavado(pares)}
+                  disabled={loadingMaquina || !completo}
+                  className="flex-1 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
+                >
+                  {loadingMaquina ? 'Iniciando...' : 'Iniciar secado'}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }

@@ -171,10 +171,15 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
 
   // ¿La máquina por terminar es una lavadora con nota? Entonces el ciclo que
   // termina es el lavado: se exige elegir una secadora disponible para pasar
-  // la nota a secado. Si es una secadora (o no hay nota), el flujo original:
-  // la nota pasa a "Por Entregar" y la máquina queda disponible.
+  // esa carga a secado. Si es una secadora, termina su secado; la nota pasa a
+  // "Por Entregar" solo si era su última máquina en uso.
   const terminaLavado = Boolean(confirmTerminar && confirmTerminar.tipo !== 'secadora' && notaParaTerminar);
   const secadorasDisponibles = maquinas.filter(m => m.tipo === 'secadora' && m.estado === 'disponible');
+  // ¿La nota tiene otras máquinas en uso además de esta? (otras cargas
+  // lavando o secando: al terminar esta, la nota sigue en proceso)
+  const otrasEnUso = Boolean(confirmTerminar && notaParaTerminar &&
+    maquinas.some(m => String(m.id) !== String(confirmTerminar.id)
+      && m.estado === 'en_uso' && notaUsaMaquina(notaParaTerminar, m.id)));
 
   const confirmarTerminarCiclo = async () => {
     if (!confirmTerminar) return;
@@ -187,19 +192,25 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
     guardarAccionPendiente({ tipo: 'terminar_ciclo', maquinaId: confirmTerminar.id });
     try {
       if (terminaLavado) {
-        // Termina el lavado: el servidor libera las lavadoras, arranca la
-        // secadora elegida y la nota sigue En Proceso (secando).
+        // Termina el lavado de ESTA lavadora: el servidor la libera, arranca
+        // la secadora elegida y la nota sigue En Proceso (secando). Las demás
+        // cargas de la nota no se tocan.
         const notaActualizada = await api.patch(`/notas/${notaParaTerminar.id}/terminar-lavado`, {
+          lavadora_id: Number(confirmTerminar.id),
           secadora_id: Number(secadoraSel),
         });
         if (notaActualizada === undefined) return; // sesión expiró: se conserva la acción pendiente
         setNotas(prev => prev.map(n => n.id === notaActualizada.id ? { ...n, ...notaActualizada } : n));
+      } else if (notaParaTerminar) {
+        // Termina el secado de ESTA secadora: el servidor la libera y, si era
+        // la última máquina de la nota, la pasa a "Por Entregar".
+        const notaActualizada = await api.patch(`/notas/${notaParaTerminar.id}/terminar-secado`, {
+          secadora_id: Number(confirmTerminar.id),
+        });
+        if (notaActualizada === undefined) return; // sesión expiró: se conserva la acción pendiente
+        setNotas(prev => prev.map(n => n.id === notaActualizada.id ? { ...n, ...notaActualizada } : n));
       } else {
-        if (notaParaTerminar) {
-          const notaActualizada = await api.patch(`/notas/${notaParaTerminar.id}/estado`, { estado: 'LISTA' });
-          if (notaActualizada === undefined) return; // sesión expiró: se conserva la acción pendiente
-          setNotas(prev => prev.map(n => n.id === notaActualizada.id ? { ...n, ...notaActualizada } : n));
-        }
+        // Máquina en uso sin nota vinculada: solo se libera.
         const actualizada = await api.patch(`/maquinas/${confirmTerminar.id}/estado`, { estado: 'disponible' });
         if (actualizada === undefined) return; // sesión expiró: se conserva la acción pendiente
         setMaquinas(prev => prev.map(m => m.id === actualizada.id ? actualizada : m));
@@ -227,9 +238,9 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
   const totalSecadoras = maquinas.length - totalLavadoras;
 
   // Construye la tarjeta de una máquina en uso: calcula el tiempo restante del
-  // ciclo y resuelve su nota relacionada. La nota y su estado son la fuente de
-  // verdad (el servidor promueve a POR_PROCESAR al cumplirse el tiempo); el
-  // contador es solo referencia visual del ciclo.
+  // ciclo y resuelve su nota relacionada. El botón de terminar es por máquina:
+  // aparece cuando ESTA máquina cumple su tiempo, aunque otras cargas de la
+  // nota sigan corriendo (cada carga es independiente).
   const renderCard = (m) => {
     const minutos = m.tipo === 'secadora'       ? tiempos.secadora
                   : m.tipo === 'lavadora_jumbo' ? tiempos.jumbo
@@ -247,7 +258,7 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
       ...m,
       progreso,
       tiempo_restante: inicio ? formatMMSS(restanteSeg) : '—:—',
-      necesita_terminar_ciclo: notaRel?.estado === 'POR_PROCESAR',
+      necesita_terminar_ciclo: Boolean(notaRel) && inicio != null && restanteSeg <= 0,
     };
     return (
       <MachineCard
@@ -380,9 +391,15 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
                   ¿Confirmar que la carga de <span className="font-semibold text-gray-800">{confirmTerminar.nombre}</span> ya terminó? La máquina pasará a disponible.
                 </p>
                 {notaParaTerminar && (
-                  <p className="text-sm text-gray-500">
-                    La nota <span className="font-semibold text-gray-800">{notaParaTerminar.folio ?? `#${notaParaTerminar.id}`}</span> pasará a estado <span className="font-semibold text-gray-800">"Por Entregar"</span>.
-                  </p>
+                  otrasEnUso ? (
+                    <p className="text-sm text-gray-500">
+                      Las demás cargas de la nota <span className="font-semibold text-gray-800">{notaParaTerminar.folio ?? `#${notaParaTerminar.id}`}</span> siguen en proceso; la nota aún no pasa a "Por Entregar".
+                    </p>
+                  ) : (
+                    <p className="text-sm text-gray-500">
+                      La nota <span className="font-semibold text-gray-800">{notaParaTerminar.folio ?? `#${notaParaTerminar.id}`}</span> pasará a estado <span className="font-semibold text-gray-800">"Por Entregar"</span>.
+                    </p>
+                  )
                 )}
               </>
             )}
