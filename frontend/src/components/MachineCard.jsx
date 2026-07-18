@@ -83,37 +83,51 @@ export default function MachineCard({ maquina, nota, onTerminarCiclo, onClick })
   }
 
   if (maquina.necesita_terminar_ciclo) {
+    // Lavadora que terminó el lavado: el siguiente paso es iniciar el secado
+    // (elegir secadora), en tonos rojos. Secadora que terminó el secado:
+    // cierra el ciclo de la nota, en verde.
+    const esSecadora = maquina.tipo === 'secadora';
+    const tono = esSecadora
+      ? { card: 'bg-light-green ring-green', header: 'bg-green', titulo: 'text-green', boton: 'bg-green ring ring-green-700' }
+      : { card: 'bg-white ring-white',     header: 'bg-red',   titulo: 'text-red',   boton: 'bg-red-500 ring ring-red-700' };
     return (
       <div
         {...containerProps}
-        className={`rounded-card bg-light-green shadow-card overflow-hidden ring-2 ring-inset ring-green ${interactivoCls}`}
+        className={`rounded-card ${tono.card} shadow-card overflow-hidden ring-2 ring-inset ${interactivoCls}`}
       >
-        <div className={`${headerCls} bg-green text-white`}>
+        <div className={`${headerCls} ${tono.header} text-white`}>
           <span className={nombreCls}>{maquina.nombre}</span>
         </div>
         <div className="px-card-pad pt-5 pb-6 flex flex-col items-center gap-3">
-          <p className="text-card-title text-green text-center uppercase tracking-wide">
-            Finalizó<br />lavadora
+          <p className={`text-card-title ${tono.titulo} text-center uppercase tracking-wide`}>
+            {esSecadora ? <>Finalizó<br />secadora</> : <>Iniciar<br />secadora</>}
           </p>
           {infoNota}
           <button
             onClick={(e) => { e.stopPropagation(); onTerminarCiclo?.(maquina); }}
-            className="w-full bg-green text-white text-section py-8 rounded-card-sm shadow-card hover:opacity-90 transition-opacity mt-1"
+            className={`w-full ${tono.boton} text-white text-section py-8 rounded-card-sm shadow-card hover:opacity-90 transition-opacity mt-1`}
           >
-            TERMINAR CICLO
+            {esSecadora ? 'FINALIZAR CARGA' : 'INICIAR SECADO'}
           </button>
         </div>
       </div>
     );
   }
 
+  // Temporizador en marcha. La secadora en uso va en tonos rojos (encabezado
+  // y aro del contador); las lavadoras conservan el azul.
+  const esSecadora = maquina.tipo === 'secadora';
   return (
     <div {...containerProps} className={`rounded-card bg-white shadow-card overflow-hidden ${interactivoCls}`}>
-      <div className={`${headerCls} ${header.cls}`}>
+      <div className={`${headerCls} ${esSecadora ? 'bg-red text-white' : header.cls}`}>
         <span className={nombreCls}>{maquina.nombre}</span>
       </div>
       <div className="px-card-pad pt-5 pb-6 flex flex-col items-center gap-4">
-        <CircularTimer progress={maquina.progreso ?? 1} label={maquina.tiempo_restante ?? '—:—'} />
+        <CircularTimer
+          progress={maquina.progreso ?? 1}
+          label={maquina.tiempo_restante ?? '—:—'}
+          color={esSecadora ? 'red' : 'blue'}
+        />
         {infoNota}
       </div>
     </div>

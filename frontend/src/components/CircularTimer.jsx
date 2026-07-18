@@ -7,10 +7,11 @@ export default function CircularTimer({
   tickLen = 11,
   tickWidth = 4,
 }) {
-  const isGreen     = color === 'green';
-  const filledColor = isGreen ? '#2F9F58' : '#0272C0';
-  const trackColor  = isGreen ? '#C9EAD3' : '#C7E1F0';
-  const textCls     = isGreen ? 'text-green' : 'text-dark-blue';
+  const filledColor = color === 'green' ? '#2F9F58' : color === 'red' ? '#E65001' : '#0272C0';
+  const trackColor  = color === 'green' ? '#C9EAD3' : color === 'red' ? '#FBD9CF' : '#C7E1F0';
+  // El número de la secadora (color rojo) conserva el mismo tono que la
+  // lavadora (dark-blue); solo el aro cambia a rojo.
+  const textCls     = color === 'green' ? 'text-green' : 'text-dark-blue';
 
   const c = size / 2;
   const outerR = c - 2;

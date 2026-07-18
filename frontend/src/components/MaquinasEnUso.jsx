@@ -343,14 +343,11 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
       {confirmTerminar && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
-            <h3 className="text-base font-bold text-gray-900">Terminar ciclo</h3>
-            <p className="text-sm text-gray-500">
-              ¿Confirmar que la carga de <span className="font-semibold text-gray-800">{confirmTerminar.nombre}</span> ya terminó? La máquina pasará a disponible.
-            </p>
+            <h3 className="text-base font-bold text-gray-900">{terminaLavado ? 'Iniciar secado' : 'Terminar ciclo'}</h3>
             {terminaLavado ? (
               <>
                 <p className="text-sm text-gray-500">
-                  Elige la secadora donde continúa la nota <span className="font-semibold text-gray-800">{notaParaTerminar.folio ?? `#${notaParaTerminar.id}`}</span>.
+                  El lavado en <span className="font-semibold text-gray-800">{confirmTerminar.nombre}</span> terminó y la lavadora pasará a disponible. Elige la secadora donde continúa la nota <span className="font-semibold text-gray-800">{notaParaTerminar.folio ?? `#${notaParaTerminar.id}`}</span>.
                 </p>
                 {secadorasDisponibles.length === 0 ? (
                   <p className="text-sm text-red-600">
@@ -377,10 +374,17 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
                   </div>
                 )}
               </>
-            ) : notaParaTerminar && (
-              <p className="text-sm text-gray-500">
-                La nota <span className="font-semibold text-gray-800">{notaParaTerminar.folio ?? `#${notaParaTerminar.id}`}</span> pasará a estado <span className="font-semibold text-gray-800">"Por Entregar"</span>.
-              </p>
+            ) : (
+              <>
+                <p className="text-sm text-gray-500">
+                  ¿Confirmar que la carga de <span className="font-semibold text-gray-800">{confirmTerminar.nombre}</span> ya terminó? La máquina pasará a disponible.
+                </p>
+                {notaParaTerminar && (
+                  <p className="text-sm text-gray-500">
+                    La nota <span className="font-semibold text-gray-800">{notaParaTerminar.folio ?? `#${notaParaTerminar.id}`}</span> pasará a estado <span className="font-semibold text-gray-800">"Por Entregar"</span>.
+                  </p>
+                )}
+              </>
             )}
             {errorTerminar && (
               <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">
@@ -402,7 +406,9 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
                 disabled={terminando || (terminaLavado && !secadoraSel)}
                 className="flex-1 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
               >
-                {terminando ? 'Terminando...' : 'Confirmar'}
+                {terminando
+                  ? (terminaLavado ? 'Iniciando...' : 'Terminando...')
+                  : (terminaLavado ? 'Iniciar secado' : 'Confirmar')}
               </button>
             </div>
           </div>
