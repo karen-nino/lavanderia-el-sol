@@ -762,7 +762,15 @@ export default function NuevaNota() {
               const idx = cargaActivaIdx;
               const c = encargoCargas[idx];
               const set = (cambios) => actualizarCargaEncargo(idx, cambios);
-              const lavadorasOpc = maquinas.filter(m => m.tipo !== 'secadora' && (c.tipo_prenda !== 'EDREDON' || m.tipo === 'lavadora_jumbo'));
+              // Una lavadora elegida en otra carga ya está ocupada: se excluye
+              // de las opciones de esta (salvo la propia selección de la carga).
+              const usadasEnOtras = new Set(
+                encargoCargas.filter((_, j) => j !== idx).map(x => String(x.maquina_id)).filter(Boolean)
+              );
+              const lavadorasOpc = maquinas.filter(m =>
+                m.tipo !== 'secadora'
+                && (c.tipo_prenda !== 'EDREDON' || m.tipo === 'lavadora_jumbo')
+                && !usadasEnOtras.has(String(m.id)));
               return (
                 <div className="space-y-6">
                   <h2 className="text-base font-semibold text-gray-900">Carga {idx + 1} de {nCargas}</h2>
@@ -1446,8 +1454,15 @@ export default function NuevaNota() {
           {/* Máquinas por carga */}
           <div className="space-y-3">
             {cargasAuto.map((c, i) => {
+              // Una lavadora elegida en otra carga ya está ocupada: se excluye
+              // de las opciones de esta (salvo la propia selección de la carga).
+              const usadasEnOtras = new Set(
+                cargasAuto.filter((_, j) => j !== i).map(x => String(x.lavadora_id)).filter(Boolean)
+              );
               const lavadorasOpc = maquinas.filter(m =>
-                m.tipo !== 'secadora' && (tipoPrenda !== 'EDREDON' || m.tipo === 'lavadora_jumbo'));
+                m.tipo !== 'secadora'
+                && (tipoPrenda !== 'EDREDON' || m.tipo === 'lavadora_jumbo')
+                && !usadasEnOtras.has(String(m.id)));
               return (
                 <div key={i} className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
                   <div className="flex items-center justify-between">
