@@ -31,7 +31,49 @@ const BADGE_PAGO = {
   PAGADO: { label: 'Pagado', cls: 'bg-green-100 text-green-700'  },
 };
 
-const ESTADO_ORDEN = ['EN_ESPERA', 'EN_PROCESO', 'POR_PROCESAR', 'LISTA', 'FINALIZADA'];
+// Ciclo de vida de la nota completa. El paso "En Proceso" se expande con el
+// avance Lavado/Secado de cada carga (ver desglose en el render), ya que con
+// varias cargas cada una puede ir en una fase distinta.
+const PASOS_ESTADO = [
+  { key: 'EN_ESPERA',  label: 'En Espera',    fechaKey: 'EN_ESPERA'  },
+  { key: 'EN_PROCESO', label: 'En Proceso',   fechaKey: 'EN_PROCESO' },
+  { key: 'LISTA',      label: 'Por Entregar', fechaKey: 'LISTA'       },
+  { key: 'FINALIZADA', label: 'Finalizada',   fechaKey: 'FINALIZADA'  },
+];
+
+// Índice del paso ACTUAL (0..3) según el estado de la nota.
+function progresoPasos(nota) {
+  if (nota.estado === 'EN_ESPERA') return 0;
+  if (['EN_PROCESO', 'POR_PROCESAR'].includes(nota.estado)) return 1;
+  if (['LISTA', 'PAGADA'].includes(nota.estado)) return 2;
+  if (nota.estado === 'FINALIZADA') return 3;
+  return 0;
+}
+
+// Fase de una máquina dentro de su carga, según si sigue asignada (en curso),
+// ya se usó y liberó (listo) o nunca se asignó (pendiente).
+const FASE_ESTILO = {
+  curso:     { label: 'En curso',  cls: 'text-blue-700',  dot: 'bg-blue-500 animate-pulse' },
+  listo:     { label: 'Listo',     cls: 'text-green-700', dot: 'bg-green-500' },
+  pendiente: { label: 'Pendiente', cls: 'text-gray-400',  dot: 'bg-gray-300' },
+};
+
+function faseMaquina(liveId, usadaId) {
+  if (liveId) return 'curso';
+  if (usadaId) return 'listo';
+  return 'pendiente';
+}
+
+function FaseChip({ label, fase }) {
+  const s = FASE_ESTILO[fase];
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span className={`w-1.5 h-1.5 rounded-full ${s.dot}`} />
+      <span className="text-gray-500">{label}</span>
+      <span className={`font-medium ${s.cls}`}>{s.label}</span>
+    </span>
+  );
+}
 
 function subtituloEstado(estado, { done, current }, fechaEstado) {
   if (fechaEstado) return fmtFechaHora(fechaEstado);
@@ -237,7 +279,7 @@ export default function DetalleNota() {
   const badgeModal    = BADGE_MODALIDAD[nota.modalidad] ?? BADGE_MODALIDAD.AUTOSERVICIO;
   const badgePago     = BADGE_PAGO[nota.estado_pago];
   const barcodeValue  = nota.folio ?? String(nota.id);
-  const estadoIdx     = ESTADO_ORDEN.indexOf(nota.estado);
+  const pasoActual    = progresoPasos(nota);
   const fechaPorEstado = Object.fromEntries(
     (nota.historial_estados || []).map(h => [h.estado, h.created_at])
   );
@@ -581,15 +623,13 @@ export default function DetalleNota() {
             </div>
           ) : (
             <ol className="relative">
-              {ESTADO_ORDEN.map((e, i) => {
-                const cfg     = BADGE_ESTADO[e];
-                if (!cfg) return null;
-                const done    = i < estadoIdx;
-                const current = i === estadoIdx;
-                const isLast  = i === ESTADO_ORDEN.length - 1;
+              {PASOS_ESTADO.map((paso, i) => {
+                const done    = i < pasoActual;
+                const current = i === pasoActual;
+                const isLast  = i === PASOS_ESTADO.length - 1;
                 const activo  = done || current;
                 return (
-                  <li key={e} className="relative flex gap-3 pb-6 last:pb-0">
+                  <li key={paso.key} className="relative flex gap-3 pb-6 last:pb-0">
                     {!isLast && (
                       <span
                         className={`absolute left-[11px] top-6 -bottom-0 w-px border-l-2 border-dashed ${
@@ -610,11 +650,25 @@ export default function DetalleNota() {
                         <span className="w-2 h-2 rounded-full bg-white" />
                       ) : null}
                     </span>
-                    <div className="-mt-0.5 pb-0.5">
+                    <div className="-mt-0.5 pb-0.5 min-w-0">
                       <p className={`text-sm font-semibold ${activo ? 'text-gray-900' : 'text-gray-400'}`}>
-                        {cfg.label}
+                        {paso.label}
                       </p>
-                      <p className="text-xs text-gray-400">{subtituloEstado(e, { done, current }, fechaPorEstado[e])}</p>
+                      <p className="text-xs text-gray-400">{subtituloEstado(paso.key, { done, current }, paso.fechaKey ? fechaPorEstado[paso.fechaKey] : undefined)}</p>
+
+                      {/* Desglose por carga dentro de "En Proceso": cada carga
+                          con su avance Lavado / Secado (independientes). */}
+                      {paso.key === 'EN_PROCESO' && activo && (nota.cargas ?? []).length > 0 && (
+                        <div className="mt-2 space-y-1.5">
+                          {nota.cargas.map(cg => (
+                            <div key={cg.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                              <span className="font-semibold text-gray-500">Carga {cg.orden}</span>
+                              <FaseChip label="Lavado" fase={faseMaquina(cg.lavadora_id, cg.lavadora_usada_id)} />
+                              <FaseChip label="Secado" fase={faseMaquina(cg.secadora_id, cg.secadora_usada_id)} />
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </li>
                 );
