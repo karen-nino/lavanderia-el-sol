@@ -30,7 +30,7 @@ export default function Salidas() {
   const [loadingMaquina,   setLoadingMaquina]   = useState(false);
   const [loadingProducto,  setLoadingProducto]  = useState(null); // id del producto en proceso
   const [errorAccion,      setErrorAccion]      = useState('');
-  const [confirmDetener,   setConfirmDetener]   = useState(false);
+  const [confirmDetener,   setConfirmDetener]   = useState(null); // máquina a detener
 
   // Activar nota En Espera
   const [activarOpen,      setActivarOpen]      = useState(false);
@@ -114,19 +114,19 @@ export default function Salidas() {
     }
   }
 
+  // Detiene el ciclo de UNA máquina (lavadora o secadora): pasa a disponible
+  // y reinicia su temporizador. Las demás máquinas de la nota no se tocan.
   async function detenerCiclo() {
-    if (maquinasNota.length === 0) return;
+    if (!confirmDetener) return;
     setLoadingMaquina(true);
     setErrorAccion('');
     try {
-      await Promise.all(
-        maquinasNota.map(mid => api.patch(`/maquinas/${mid}/detener-ciclo`))
-      );
-      setConfirmDetener(false);
+      await api.patch(`/maquinas/${confirmDetener.id}/detener-ciclo`);
+      setConfirmDetener(null);
       await cargarDatos();
     } catch (err) {
       setErrorAccion(err.message);
-      setConfirmDetener(false);
+      setConfirmDetener(null);
     } finally {
       setLoadingMaquina(false);
     }
@@ -328,12 +328,8 @@ export default function Salidas() {
                   : tiempos.mediana;
     return now - new Date(m.en_uso_desde).getTime() >= Math.max(0, Number(minutos) || 0) * 60000;
   };
-  // ¿Hay máquinas aún corriendo su ciclo? (para el botón Detener)
-  const algunaEnCurso = maquinasAsignadas.some(m => m.estado === 'en_uso' && !cicloCumplido(m));
   // ¿Otras máquinas de la nota siguen en uso además de esta?
   const otrasEnUso = (maq) => maquinasAsignadas.some(m => String(m.id) !== String(maq.id) && m.estado === 'en_uso');
-
-  const nombresMaquinas = maquinasAsignadas.map(m => m.nombre).join(' y ');
 
   const productosNota  = nota?.productos || [];
   const productosIdsEnNota = new Set(productosNota.map(p => p.producto_id));
@@ -395,22 +391,32 @@ export default function Salidas() {
                     )}
                   </div>
                   {/* Acción por máquina: cada carga es independiente */}
-                  {cicloCumplido(m) && (
-                    m.tipo === 'secadora' ? (
-                      <button
-                        onClick={() => setConfirmTerminarSec(m)}
-                        disabled={loadingMaquina}
-                        className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
-                      >
-                        Terminar Ciclo
-                      </button>
+                  {m.estado === 'en_uso' && (
+                    cicloCumplido(m) ? (
+                      m.tipo === 'secadora' ? (
+                        <button
+                          onClick={() => setConfirmTerminarSec(m)}
+                          disabled={loadingMaquina}
+                          className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
+                        >
+                          Finalizar Carga
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => iniciarTerminarLavado(m)}
+                          disabled={loadingMaquina}
+                          className="px-4 py-2 bg-red hover:opacity-90 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
+                        >
+                          Iniciar Secado
+                        </button>
+                      )
                     ) : (
                       <button
-                        onClick={() => iniciarTerminarLavado(m)}
+                        onClick={() => setConfirmDetener(m)}
                         disabled={loadingMaquina}
-                        className="px-4 py-2 bg-red hover:opacity-90 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
+                        className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
                       >
-                        Iniciar Secado
+                        {m.tipo === 'secadora' ? 'Detener Secado' : 'Detener Lavado'}
                       </button>
                     )
                   )}
@@ -423,8 +429,7 @@ export default function Salidas() {
 
           {/* Acciones a nivel nota */}
           {(maquinasPendientes.length > 0
-            || (maquinasPendientes.length === 0 && nota?.estado === 'EN_ESPERA')
-            || algunaEnCurso) && (
+            || (maquinasPendientes.length === 0 && nota?.estado === 'EN_ESPERA')) && (
             <div className="flex justify-end gap-2 pt-1">
               {/* Activar las cargas que siguen en espera (máquinas asignadas y libres) */}
               {maquinasPendientes.length > 0 && (
@@ -444,16 +449,6 @@ export default function Salidas() {
                   className="px-4 py-2 bg-blue hover:opacity-90 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
                 >
                   {loadingMaquina ? 'Activando...' : 'Activar'}
-                </button>
-              )}
-              {/* Máquinas aún corriendo su ciclo: detener */}
-              {algunaEnCurso && (
-                <button
-                  onClick={() => setConfirmDetener(true)}
-                  disabled={loadingMaquina}
-                  className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
-                >
-                  Detener Ciclo
                 </button>
               )}
             </div>
@@ -555,12 +550,12 @@ export default function Salidas() {
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
             <h3 className="text-base font-bold text-gray-900">Detener ciclo</h3>
             <p className="text-sm text-gray-500">
-              ¿Detener el ciclo de <span className="font-semibold text-gray-800">{nombresMaquinas}</span>? {maquinasAsignadas.length > 1 ? 'Las máquinas pasarán' : 'La máquina pasará'} a disponible y se reiniciará su temporizador.
+              ¿Detener el ciclo de <span className="font-semibold text-gray-800">{confirmDetener.nombre}</span>? La máquina pasará a disponible y se reiniciará su temporizador.
             </p>
             <div className="flex gap-3">
               <button
                 type="button"
-                onClick={() => setConfirmDetener(false)}
+                onClick={() => setConfirmDetener(null)}
                 disabled={loadingMaquina}
                 className="flex-1 border border-gray-300 text-gray-700 font-medium py-3.5 rounded-lg text-base hover:bg-gray-50 disabled:opacity-60 transition-colors"
               >

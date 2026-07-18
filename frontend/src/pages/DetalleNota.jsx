@@ -393,9 +393,19 @@ export default function DetalleNota() {
             <FilaDetalle label="Cargas">
               <div className="space-y-3">
                 {nota.cargas.map(cg => {
+                  // Se muestran las máquinas USADAS (registro que persiste aunque
+                  // el ciclo ya haya terminado y la máquina se liberara). El badge
+                  // de estado en vivo solo aparece si la máquina sigue asignada a
+                  // esta carga (lavadora_id / secadora_id presentes).
                   const maquinasCarga = [
-                    cg.lavadora_id && { nombre: cg.lavadora_nombre, tipo: cg.lavadora_tipo, estado: cg.lavadora_estado },
-                    cg.secadora_id && { nombre: cg.secadora_nombre, tipo: cg.secadora_tipo, estado: cg.secadora_estado },
+                    cg.lavadora_usada_id && {
+                      nombre: cg.lavadora_usada_nombre, tipo: cg.lavadora_usada_tipo,
+                      estado: cg.lavadora_id ? cg.lavadora_estado : null,
+                    },
+                    cg.secadora_usada_id && {
+                      nombre: cg.secadora_usada_nombre, tipo: cg.secadora_usada_tipo,
+                      estado: cg.secadora_id ? cg.secadora_estado : null,
+                    },
                   ].filter(Boolean);
                   const prods = cg.productos ?? [];
                   const totalProds = prods.reduce((s, p) => s + Number(p.subtotal ?? 0), 0);

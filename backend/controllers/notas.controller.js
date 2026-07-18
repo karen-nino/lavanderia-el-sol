@@ -253,9 +253,10 @@ async function insertarCargas(client, notaId, filas, sucursal) {
   for (const f of filas) {
     const { rows } = await client.query(
       `INSERT INTO nota_cargas
-         (nota_id, orden, lavadora_id, secadora_id, precio_lavadora, precio_secadora,
+         (nota_id, orden, lavadora_id, secadora_id, lavadora_usada_id, secadora_usada_id,
+          precio_lavadora, precio_secadora,
           tipo_prenda, tipo_tela, tamano_edredon, tamano, ajuste)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
+       VALUES ($1, $2, $3, $4, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
       [notaId, f.orden, f.lavadora_id, f.secadora_id, f.precio_lavadora, f.precio_secadora,
        f.tipo_prenda, f.tipo_tela, f.tamano_edredon, f.tamano, f.ajuste]
     );
@@ -278,10 +279,15 @@ async function cargasDeNota(client, notaId) {
             ml.nombre AS lavadora_nombre, ml.tipo AS lavadora_tipo, ml.estado AS lavadora_estado,
             ml.en_uso_desde AS lavadora_en_uso_desde,
             ms.nombre AS secadora_nombre, ms.tipo AS secadora_tipo, ms.estado AS secadora_estado,
-            ms.en_uso_desde AS secadora_en_uso_desde
+            ms.en_uso_desde AS secadora_en_uso_desde,
+            nc.lavadora_usada_id, nc.secadora_usada_id,
+            mlu.nombre AS lavadora_usada_nombre, mlu.tipo AS lavadora_usada_tipo,
+            msu.nombre AS secadora_usada_nombre, msu.tipo AS secadora_usada_tipo
        FROM nota_cargas nc
-       LEFT JOIN maquinas ml ON ml.id = nc.lavadora_id
-       LEFT JOIN maquinas ms ON ms.id = nc.secadora_id
+       LEFT JOIN maquinas ml  ON ml.id  = nc.lavadora_id
+       LEFT JOIN maquinas ms  ON ms.id  = nc.secadora_id
+       LEFT JOIN maquinas mlu ON mlu.id = nc.lavadora_usada_id
+       LEFT JOIN maquinas msu ON msu.id = nc.secadora_usada_id
       WHERE nc.nota_id = $1
       ORDER BY nc.orden ASC`,
     [notaId]
@@ -1379,7 +1385,12 @@ export const activarNota = async (req, res) => {
       const t = await tarifasCarga(client);
       for (const n of nuevas) {
         await client.query(
-          `UPDATE nota_cargas SET lavadora_id = $1, secadora_id = $2, precio_lavadora = $3, precio_secadora = $4 WHERE id = $5`,
+          `UPDATE nota_cargas
+              SET lavadora_id = $1, secadora_id = $2,
+                  lavadora_usada_id = COALESCE($1, lavadora_usada_id),
+                  secadora_usada_id = COALESCE($2, secadora_usada_id),
+                  precio_lavadora = $3, precio_secadora = $4
+            WHERE id = $5`,
           [
             n.lavadora_id,
             n.secadora_id,
@@ -1618,7 +1629,7 @@ export const asignarSecadora = async (req, res) => {
       [secadora_id]
     );
     await client.query(
-      `UPDATE nota_cargas SET secadora_id = $1, precio_secadora = $2 WHERE id = ANY($3)`,
+      `UPDATE nota_cargas SET secadora_id = $1, secadora_usada_id = $1, precio_secadora = $2 WHERE id = ANY($3)`,
       [secadora_id, tarifaSecadora, objetivo]
     );
     // Denormalización: la primera secadora de la nota, para lista y vistas legadas.
@@ -1725,7 +1736,7 @@ export const terminarLavado = async (req, res) => {
     // La secadora hereda las cargas de esa lavadora (sin costo extra: el
     // precio_secadora de las cargas no se toca)...
     await client.query(
-      `UPDATE nota_cargas SET secadora_id = $1
+      `UPDATE nota_cargas SET secadora_id = $1, secadora_usada_id = $1
         WHERE nota_id = $2 AND lavadora_id = $3 AND secadora_id IS NULL`,
       [secadora_id, id, lavadora_id]
     );
