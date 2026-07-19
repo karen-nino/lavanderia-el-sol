@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../lib/api';
 
-const ESTADOS = ['TODOS', 'EN_ESPERA', 'EN_PROCESO', 'POR_PROCESAR', 'POR_ENTREGAR', 'FINALIZADA', 'PENDIENTE', 'CANCELADA'];
+const ESTADOS = ['TODOS', 'EN_ESPERA', 'LAVANDO', 'SECANDO', 'POR_ENTREGAR', 'FINALIZADA', 'PENDIENTE', 'CANCELADA'];
 
 // Estados que se consideran "Por Entregar": listas sin entregar y pagadas sin
 // entregar. Coincide con el conteo del KPI del Dashboard.
@@ -49,8 +49,8 @@ function calcularRangoFecha(rango) {
 
 const BADGE_ESTADO = {
   EN_ESPERA:  { label: 'En Espera',  cls: 'bg-gray-100 text-gray-600'       },
-  EN_PROCESO: { label: 'En Proceso', cls: 'bg-light-blue text-blue-700'     },
-  POR_PROCESAR: { label: 'Por Procesar', cls: 'bg-purple-100 text-purple-700' },
+  LAVANDO:    { label: 'Lavando',    cls: 'bg-light-blue text-blue-700'     },
+  SECANDO:    { label: 'Secando',    cls: 'bg-purple-100 text-purple-700'   },
   LISTA:      { label: 'Por Entregar', cls: 'bg-yellow-100 text-yellow-800' },
   PAGADA:     { label: 'Pagada',     cls: 'bg-light-green text-green-700'   },
   FINALIZADA: { label: 'Finalizada', cls: 'bg-light-green text-green-700'   },
@@ -321,7 +321,7 @@ export default function Notas() {
                   </thead>
                   <tbody className="divide-y divide-gray-50">
                     {filtradas.map(n => {
-                      const badgeEstado    = BADGE_ESTADO[n.estado]       ?? BADGE_ESTADO.EN_PROCESO;
+                      const badgeEstado    = BADGE_ESTADO[n.estado]       ?? BADGE_ESTADO.LAVANDO;
                       const badgeModalidad = BADGE_MODALIDAD[n.modalidad] ?? BADGE_MODALIDAD.AUTOSERVICIO;
                       const badgePago      = BADGE_PAGO[n.estado_pago];
                       return (
@@ -375,7 +375,7 @@ export default function Notas() {
           {/* Cards — mobile */}
           <div className="md:hidden space-y-4">
             {filtradas.map(n => {
-              const badgeEstado    = BADGE_ESTADO[n.estado]       ?? BADGE_ESTADO.EN_PROCESO;
+              const badgeEstado    = BADGE_ESTADO[n.estado]       ?? BADGE_ESTADO.LAVANDO;
               const badgeModalidad = BADGE_MODALIDAD[n.modalidad] ?? BADGE_MODALIDAD.AUTOSERVICIO;
               const badgePago      = BADGE_PAGO[n.estado_pago];
               const cliente        = fmtCliente(n) ?? badgeModalidad.label;

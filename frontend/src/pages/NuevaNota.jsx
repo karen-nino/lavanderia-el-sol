@@ -456,8 +456,11 @@ export default function NuevaNota() {
       // la primera carga solo para la lista/badge.
       tipo_prenda:     cargasAuto[0]?.tipo_prenda || 'ROPA',
       // Sin máquinas la nota queda En Espera (se activa después desde
-      // Salidas); con alguna máquina nace directamente En Proceso.
-      estado:          algunaMaquina ? 'EN_PROCESO' : 'EN_ESPERA',
+      // Salidas); con lavadora nace Lavando y con solo secadora, Secando.
+      // (El servidor recalcula este estado a partir de las cargas.)
+      estado:          algunaMaquina
+        ? (cargasAuto.some(c => c.lavadora_id) ? 'LAVANDO' : 'SECANDO')
+        : 'EN_ESPERA',
       estado_pago:     'PAGADO',
       // null (no undefined) para que al editar, limpiar un campo lo borre.
       instrucciones:   form.instrucciones || null,

@@ -100,7 +100,8 @@ export default function Salidas() {
   )];
 
   // Activa las máquinas asignadas que siguen libres (cargas en espera). Sirve
-  // tanto para una nota En Espera como para una En Proceso con cargas pendientes.
+  // tanto para una nota En Espera como para una Lavando/Secando con cargas
+  // pendientes.
   async function activarPendientes() {
     setLoadingMaquina(true);
     setErrorAccion('');
@@ -322,7 +323,7 @@ export default function Salidas() {
   // "Terminar Ciclo", aunque otras cargas de la nota sigan corriendo.
   const cicloCumplido = (m) => {
     if (m.estado !== 'en_uso' || !m.en_uso_desde) return false;
-    if (!['EN_PROCESO', 'POR_PROCESAR'].includes(nota?.estado)) return false;
+    if (!['LAVANDO', 'SECANDO'].includes(nota?.estado)) return false;
     const minutos = m.tipo === 'secadora'       ? tiempos.secadora
                   : m.tipo === 'lavadora_jumbo' ? tiempos.jumbo
                   : tiempos.mediana;
@@ -623,7 +624,8 @@ export default function Salidas() {
                 {cargasSel.length > 0
                   ? 'Asigna las máquinas de cada carga. La nota pasará a '
                   : 'Selecciona lavadora y/o secadora. La nota pasará a '}
-                <span className="font-medium text-gray-700">En Proceso</span> y las máquinas quedarán en uso.
+                <span className="font-medium text-gray-700">Lavando</span> (o{' '}
+                <span className="font-medium text-gray-700">Secando</span> si solo lleva secadora) y las máquinas quedarán en uso.
               </p>
             </div>
 
@@ -762,8 +764,8 @@ export default function Salidas() {
               <h3 className="text-base font-bold text-gray-900">Iniciar secado</h3>
               <p className="text-sm text-gray-500 mt-1">
                 El lavado en <span className="font-semibold text-gray-800">{lavTerminando.nombre}</span> terminó y
-                la lavadora pasará a disponible. Elige la secadora donde continúa su carga; la nota
-                seguirá <span className="font-medium text-gray-700">En Proceso</span> (secando).
+                la lavadora pasará a disponible. Elige la secadora donde continúa su carga; si era
+                la última lavadora, la nota pasará a <span className="font-medium text-gray-700">Secando</span>.
               </p>
             </div>
 

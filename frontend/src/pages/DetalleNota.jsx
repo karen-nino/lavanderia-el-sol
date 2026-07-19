@@ -7,8 +7,8 @@ import { esAdmin as esAdminFn } from '../lib/roles';
 
 const BADGE_ESTADO = {
   EN_ESPERA:  { label: 'En Espera',   cls: 'bg-gray-100 text-gray-600'        },
-  EN_PROCESO: { label: 'En Proceso',  cls: 'bg-blue-100 text-blue-800'        },
-  POR_PROCESAR: { label: 'Por Procesar', cls: 'bg-purple-100 text-purple-700' },
+  LAVANDO:    { label: 'Lavando',     cls: 'bg-blue-100 text-blue-800'        },
+  SECANDO:    { label: 'Secando',     cls: 'bg-purple-100 text-purple-700'    },
   LISTA:      { label: 'Por Entregar', cls: 'bg-yellow-100 text-yellow-800'   },
   PAGADA:     { label: 'Pagada',      cls: 'bg-emerald-100 text-emerald-800'  },
   FINALIZADA: { label: 'Finalizada', cls: 'bg-green-800 text-white'          },
@@ -31,22 +31,24 @@ const BADGE_PAGO = {
   PAGADO: { label: 'Pagado', cls: 'bg-green-100 text-green-700'  },
 };
 
-// Ciclo de vida de la nota completa. El paso "En Proceso" se expande con el
-// avance Lavado/Secado de cada carga (ver desglose en el render), ya que con
-// varias cargas cada una puede ir en una fase distinta.
+// Ciclo de vida de la nota completa. Los pasos "Lavando" y "Secando" se
+// expanden con el avance Lavado/Secado de cada carga (ver desglose en el
+// render), ya que con varias cargas cada una puede ir en una fase distinta.
 const PASOS_ESTADO = [
   { key: 'EN_ESPERA',  label: 'En Espera',    fechaKey: 'EN_ESPERA'  },
-  { key: 'EN_PROCESO', label: 'En Proceso',   fechaKey: 'EN_PROCESO' },
-  { key: 'LISTA',      label: 'Por Entregar', fechaKey: 'LISTA'       },
-  { key: 'FINALIZADA', label: 'Finalizada',   fechaKey: 'FINALIZADA'  },
+  { key: 'LAVANDO',    label: 'Lavando',      fechaKey: 'LAVANDO'    },
+  { key: 'SECANDO',    label: 'Secando',      fechaKey: 'SECANDO'    },
+  { key: 'LISTA',      label: 'Por Entregar', fechaKey: 'LISTA'      },
+  { key: 'FINALIZADA', label: 'Finalizada',   fechaKey: 'FINALIZADA' },
 ];
 
-// Índice del paso ACTUAL (0..3) según el estado de la nota.
+// Índice del paso ACTUAL (0..4) según el estado de la nota.
 function progresoPasos(nota) {
   if (nota.estado === 'EN_ESPERA') return 0;
-  if (['EN_PROCESO', 'POR_PROCESAR'].includes(nota.estado)) return 1;
-  if (['LISTA', 'PAGADA'].includes(nota.estado)) return 2;
-  if (nota.estado === 'FINALIZADA') return 3;
+  if (nota.estado === 'LAVANDO') return 1;
+  if (nota.estado === 'SECANDO') return 2;
+  if (['LISTA', 'PAGADA'].includes(nota.estado)) return 3;
+  if (nota.estado === 'FINALIZADA') return 4;
   return 0;
 }
 
@@ -658,9 +660,9 @@ export default function DetalleNota() {
                       </p>
                       <p className="text-xs text-gray-400">{subtituloEstado(paso.key, { done, current }, paso.fechaKey ? fechaPorEstado[paso.fechaKey] : undefined)}</p>
 
-                      {/* Desglose por carga dentro de "En Proceso": cada carga
-                          con su avance Lavado / Secado (independientes). */}
-                      {paso.key === 'EN_PROCESO' && activo && (nota.cargas ?? []).length > 0 && (
+                      {/* Desglose por carga dentro de la fase actual: cada
+                          carga con su avance Lavado / Secado (independientes). */}
+                      {['LAVANDO', 'SECANDO'].includes(paso.key) && current && (nota.cargas ?? []).length > 0 && (
                         <div className="mt-2 space-y-1.5">
                           {nota.cargas.map(cg => (
                             <div key={cg.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">

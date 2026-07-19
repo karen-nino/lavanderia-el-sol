@@ -1,9 +1,9 @@
 import pool from '../db/pool.js';
 import { esAdmin } from '../middleware/roles.js';
 
-const ESTADOS_VALIDOS     = ['EN_ESPERA', 'EN_PROCESO', 'POR_PROCESAR', 'LISTA', 'PAGADA', 'FINALIZADA', 'CANCELADA'];
+const ESTADOS_VALIDOS     = ['EN_ESPERA', 'LAVANDO', 'SECANDO', 'LISTA', 'PAGADA', 'FINALIZADA', 'CANCELADA'];
 // Estados con los que puede nacer una nota.
-const ESTADOS_INICIALES   = ['EN_ESPERA', 'EN_PROCESO'];
+const ESTADOS_INICIALES   = ['EN_ESPERA', 'LAVANDO', 'SECANDO'];
 const MODALIDADES_VALIDAS = ['AUTOSERVICIO', 'EDREDON', 'POR_ENCARGO'];
 const ESTADOS_PAGO_VALIDOS = ['PENDIENTE', 'PAGADO'];
 const TAMANOS_VALIDOS     = ['chico', 'grande', 'jumbo'];
@@ -12,13 +12,13 @@ const TIEMPOS_ENTREGA_VALIDOS = ['MANANA', 'TARDE', 'NOCHE'];
 
 // Transiciones permitidas por estado actual
 const TRANSICIONES_VALIDAS = {
-  EN_ESPERA:    ['EN_PROCESO', 'LISTA',  'CANCELADA'],
-  EN_PROCESO:   ['POR_PROCESAR', 'LISTA', 'CANCELADA'],
-  POR_PROCESAR: ['LISTA',                'CANCELADA'],
-  LISTA:        ['PAGADA',  'FINALIZADA', 'CANCELADA'],
-  PAGADA:       ['FINALIZADA',            'CANCELADA'],
-  FINALIZADA:   [],
-  CANCELADA:    [],
+  EN_ESPERA:  ['LAVANDO', 'SECANDO', 'LISTA', 'CANCELADA'],
+  LAVANDO:    ['SECANDO', 'LISTA',            'CANCELADA'],
+  SECANDO:    ['LISTA',                       'CANCELADA'],
+  LISTA:      ['PAGADA',  'FINALIZADA',       'CANCELADA'],
+  PAGADA:     ['FINALIZADA',                  'CANCELADA'],
+  FINALIZADA: [],
+  CANCELADA:  [],
 };
 
 // Subconsulta con los IDs de todas las máquinas vinculadas a la nota `n`:
@@ -30,35 +30,27 @@ const SQL_MAQUINAS_DE_NOTA = `
   UNION SELECT n.maquina_id
   UNION SELECT n.secadora_id`;
 
-// Promueve a POR_PROCESAR las notas EN_PROCESO cuyas máquinas ya cumplieron
-// su tiempo de ciclo (en_uso_desde + minutos configurados en ajustes). Con
-// varias máquinas por nota, se promueve cuando TODAS las que siguen en uso
-// terminaron su ciclo. El servidor es la fuente de verdad: se llama al leer
-// notas para que el estado quede persistido sin procesos en segundo plano.
-async function promoverNotasPorProcesar() {
-  await pool.query(
-    `UPDATE notas n
-        SET estado = 'POR_PROCESAR'
-      WHERE n.estado = 'EN_PROCESO'
-        AND EXISTS (
-          SELECT 1 FROM maquinas m
-           WHERE m.estado = 'en_uso'
-             AND m.id IN (${SQL_MAQUINAS_DE_NOTA})
-        )
-        AND NOT EXISTS (
-          SELECT 1 FROM maquinas m CROSS JOIN ajustes a
-           WHERE a.id = 1
-             AND m.estado = 'en_uso'
-             AND m.id IN (${SQL_MAQUINAS_DE_NOTA})
-             AND (m.en_uso_desde IS NULL
-                  OR NOW() < m.en_uso_desde + ((
-                       CASE m.tipo
-                         WHEN 'secadora'       THEN COALESCE(a.tiempo_carga_secadora, 30)
-                         WHEN 'lavadora_jumbo' THEN COALESCE(a.tiempo_carga_jumbo, 45)
-                         ELSE COALESCE(a.tiempo_carga_mediana, 30)
-                       END) * interval '1 minute'))
-        )`
+// Fase de proceso de una nota según sus máquinas: LAVANDO si conserva alguna
+// lavadora vinculada y en uso; si solo le quedan secadoras trabajando,
+// SECANDO. (terminar-lavado desvincula la lavadora al pasar la carga a la
+// secadora, así que su presencia implica lavado en curso.)
+async function faseProcesoDeNota(client, notaId) {
+  const { rows } = await client.query(
+    `SELECT EXISTS (
+       SELECT 1
+         FROM notas n
+         CROSS JOIN LATERAL (
+           SELECT nc.lavadora_id AS mid FROM nota_cargas nc WHERE nc.nota_id = n.id
+           UNION SELECT n.maquina_id
+         ) x
+         JOIN maquinas m ON m.id = x.mid
+        WHERE n.id = $1
+          AND m.estado = 'en_uso'
+          AND m.tipo <> 'secadora'
+     ) AS lavando`,
+    [notaId]
   );
+  return rows[0].lavando ? 'LAVANDO' : 'SECANDO';
 }
 
 // IDs (sin repetir) de todas las máquinas vinculadas a una nota.
@@ -353,7 +345,6 @@ export const getNextFolio = async (req, res) => {
 // ── GET /notas ──────────────────────────────────────────────
 export const getNotas = async (req, res) => {
   try {
-    await promoverNotasPorProcesar();
     const { rows } = await pool.query(
       `SELECT n.*,
               c.nombre   AS cliente_nombre,
@@ -385,7 +376,6 @@ export const getNotas = async (req, res) => {
 export const getNotaById = async (req, res) => {
   const { id } = req.params;
   try {
-    await promoverNotasPorProcesar();
     const { rows } = await pool.query(
       `SELECT n.*,
               c.nombre   AS cliente_nombre,
@@ -521,8 +511,9 @@ export const createNota = async (req, res) => {
       message: `Estado inicial inválido. Valores permitidos: ${ESTADOS_INICIALES.join(', ')}.`,
     });
   }
-  // Estado inicial: EN_PROCESO por defecto; EN_ESPERA si así se indica.
-  const estadoInicial = estado || 'EN_PROCESO';
+  // Estado inicial: LAVANDO por defecto (SECANDO si la única máquina es una
+  // secadora); EN_ESPERA si así se indica.
+  const estadoInicial = estado || (!maquina_id && secadora_id ? 'SECANDO' : 'LAVANDO');
 
   // Montos: numéricos y sin negativos. El ajuste sí puede ser negativo
   // (es el descuento del formulario), pero el total final de la nota no;
@@ -638,7 +629,9 @@ export const createNota = async (req, res) => {
       ? [...new Set(filasCargas.filter(f => f.activar).flatMap(f => [f.lavadora_id, f.secadora_id]).filter(Boolean))]
       : [];
     const estadoNota = filasCargas
-      ? (idsActivar.length > 0 ? 'EN_PROCESO' : 'EN_ESPERA')
+      ? (idsActivar.length > 0
+          ? (filasCargas.some(f => f.activar && f.lavadora_id) ? 'LAVANDO' : 'SECANDO')
+          : 'EN_ESPERA')
       : estadoInicial;
 
     const { rows: notaRows } = await client.query(
@@ -922,7 +915,7 @@ export const updateNota = async (req, res) => {
       await client.query('DELETE FROM nota_cargas WHERE nota_id = $1', [id]);
       cargasNota = await insertarCargas(client, id, filasCargas, req.sucursal);
 
-      if (['EN_PROCESO', 'POR_PROCESAR'].includes(actual.estado)) {
+      if (['LAVANDO', 'SECANDO'].includes(actual.estado)) {
         const despues = new Set(
           filasCargas.flatMap(f => [f.lavadora_id, f.secadora_id]).filter(Boolean)
         );
@@ -1408,11 +1401,12 @@ export const activarNota = async (req, res) => {
         `UPDATE notas
             SET maquina_id  = $1,
                 secadora_id = $2,
-                estado = 'EN_PROCESO'
-          WHERE id = $3`,
+                estado = $3
+          WHERE id = $4`,
         [
           nuevas.find(n => n.lavadora_id)?.lavadora_id ?? null,
           nuevas.find(n => n.secadora_id)?.secadora_id ?? null,
+          nuevas.some(n => n.lavadora_id) ? 'LAVANDO' : 'SECANDO',
           id,
         ]
       );
@@ -1448,8 +1442,8 @@ export const activarNota = async (req, res) => {
         [maquinas]
       );
       await client.query(
-        `UPDATE notas SET maquina_id = $1, secadora_id = $2, estado = 'EN_PROCESO' WHERE id = $3`,
-        [lavadoraFinal || null, secadoraFinal || null, id]
+        `UPDATE notas SET maquina_id = $1, secadora_id = $2, estado = $3 WHERE id = $4`,
+        [lavadoraFinal || null, secadoraFinal || null, lavadoraFinal ? 'LAVANDO' : 'SECANDO', id]
       );
     }
 
@@ -1529,9 +1523,10 @@ export const activarMaquinasPendientes = async (req, res) => {
       `UPDATE maquinas SET estado = 'en_uso', en_uso_desde = NOW() WHERE id = ANY($1)`,
       [libres]
     );
-    if (notaRows[0].estado === 'EN_ESPERA') {
-      await client.query(`UPDATE notas SET estado = 'EN_PROCESO' WHERE id = $1`, [id]);
-    }
+    // La nota queda en la fase que dicten sus máquinas: si se activó una
+    // lavadora vuelve/queda en LAVANDO; si solo corren secadoras, SECANDO.
+    const fase = await faseProcesoDeNota(client, id);
+    await client.query(`UPDATE notas SET estado = $1 WHERE id = $2`, [fase, id]);
 
     await client.query('COMMIT');
 
@@ -1586,7 +1581,7 @@ export const asignarSecadora = async (req, res) => {
       return res.status(404).json({ message: 'Nota no encontrada.' });
     }
     const nota = notaRows[0];
-    if (!['EN_PROCESO', 'POR_PROCESAR'].includes(nota.estado)) {
+    if (!['LAVANDO', 'SECANDO'].includes(nota.estado)) {
       await client.query('ROLLBACK');
       return res.status(400).json({ message: 'Solo se puede asignar una secadora a una nota en proceso.' });
     }
@@ -1678,8 +1673,8 @@ export const asignarSecadora = async (req, res) => {
 // esa lavadora, marca en uso la secadora elegida (obligatoria) y la asigna a
 // las cargas que lavó esa lavadora. Cada carga es independiente: las demás
 // lavadoras de la nota no se tocan. No cambia el precio: la tarifa cobrada
-// ya incluye el secado. La nota pasa a LISTA cuando su última secadora
-// termina (ver terminarSecado).
+// ya incluye el secado. Si era la última lavadora la nota pasa a SECANDO,
+// y a LISTA cuando su última secadora termina (ver terminarSecado).
 export const terminarLavado = async (req, res) => {
   const { id } = req.params;
   const { lavadora_id, secadora_id } = req.body;
@@ -1700,9 +1695,9 @@ export const terminarLavado = async (req, res) => {
       await client.query('ROLLBACK');
       return res.status(404).json({ message: 'Nota no encontrada.' });
     }
-    if (!['EN_PROCESO', 'POR_PROCESAR'].includes(notaRows[0].estado)) {
+    if (notaRows[0].estado !== 'LAVANDO') {
       await client.query('ROLLBACK');
-      return res.status(400).json({ message: 'Solo se puede terminar el lavado de una nota en proceso.' });
+      return res.status(400).json({ message: 'Solo se puede terminar el lavado de una nota que está Lavando.' });
     }
 
     const { rows: maqRows } = await client.query(
@@ -1765,11 +1760,14 @@ export const terminarLavado = async (req, res) => {
           SET maquina_id = (SELECT nc.lavadora_id FROM nota_cargas nc
                              WHERE nc.nota_id = $2 AND nc.lavadora_id IS NOT NULL
                              ORDER BY nc.orden ASC LIMIT 1),
-              secadora_id = COALESCE(secadora_id, $1),
-              estado = 'EN_PROCESO'
+              secadora_id = COALESCE(secadora_id, $1)
         WHERE id = $2`,
       [secadora_id, id]
     );
+    // Si era la última lavadora, la nota pasa a SECANDO; si otras cargas
+    // siguen en lavadora, continúa LAVANDO.
+    const fase = await faseProcesoDeNota(client, id);
+    await client.query('UPDATE notas SET estado = $1 WHERE id = $2', [fase, id]);
 
     await client.query('COMMIT');
 
@@ -1825,7 +1823,7 @@ export const terminarSecado = async (req, res) => {
       await client.query('ROLLBACK');
       return res.status(404).json({ message: 'Nota no encontrada.' });
     }
-    if (!['EN_PROCESO', 'POR_PROCESAR'].includes(notaRows[0].estado)) {
+    if (!['LAVANDO', 'SECANDO'].includes(notaRows[0].estado)) {
       await client.query('ROLLBACK');
       return res.status(400).json({ message: 'Solo se puede terminar el secado de una nota en proceso.' });
     }

@@ -165,7 +165,7 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
   const notaParaTerminar = confirmTerminar
     ? notas
         .filter(n => notaUsaMaquina(n, confirmTerminar.id)
-                  && ['EN_PROCESO', 'POR_PROCESAR'].includes(n.estado))
+                  && ['LAVANDO', 'SECANDO'].includes(n.estado))
         .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0]
     : null;
 
@@ -193,8 +193,8 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
     try {
       if (terminaLavado) {
         // Termina el lavado de ESTA lavadora: el servidor la libera, arranca
-        // la secadora elegida y la nota sigue En Proceso (secando). Las demás
-        // cargas de la nota no se tocan.
+        // la secadora elegida y la nota pasa a Secando (o sigue Lavando si
+        // otras cargas siguen en lavadora). Las demás cargas no se tocan.
         const notaActualizada = await api.patch(`/notas/${notaParaTerminar.id}/terminar-lavado`, {
           lavadora_id: Number(confirmTerminar.id),
           secadora_id: Number(secadoraSel),
@@ -252,7 +252,7 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
     const progreso = duracionSeg > 0 ? restanteSeg / duracionSeg : 0;
     const notaRel = notas
       .filter(n => notaUsaMaquina(n, m.id)
-                && ['EN_PROCESO', 'POR_PROCESAR'].includes(n.estado))
+                && ['LAVANDO', 'SECANDO'].includes(n.estado))
       .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
     const maquinaAumentada = {
       ...m,
