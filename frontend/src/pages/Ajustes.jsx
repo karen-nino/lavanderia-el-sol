@@ -479,6 +479,9 @@ export default function Ajustes() {
     return handleGuardar(e);
   };
 
+  // Topes de precio por carga: opcionales. Vacío = sin tope (null).
+  const topeONull = (v) => (v === '' || v == null ? null : Number(v));
+
   const handleGuardarTodo = async () => {
     const nombreCompleto = `${perfilForm.nombre} ${perfilForm.apellido}`.trim();
     if (!nombreCompleto) {
@@ -501,6 +504,9 @@ export default function Ajustes() {
           precio_carga_jumbo:    Number(config.precio_carga_jumbo),
           precio_carga_secadora: Number(config.precio_carga_secadora),
           precio_edredon_jumbo:  Number(config.precio_edredon_jumbo),
+          tope_carga_chico:      topeONull(config.tope_carga_chico),
+          tope_carga_grande:     topeONull(config.tope_carga_grande),
+          tope_carga_jumbo:      topeONull(config.tope_carga_jumbo),
           tiempo_carga_mediana:  Number(config.tiempo_carga_mediana),
           tiempo_carga_jumbo:    Number(config.tiempo_carga_jumbo),
           tiempo_carga_secadora: Number(config.tiempo_carga_secadora),
@@ -531,6 +537,9 @@ export default function Ajustes() {
         precio_carga_jumbo:    Number(config.precio_carga_jumbo),
         precio_carga_secadora: Number(config.precio_carga_secadora),
         precio_edredon_jumbo:  Number(config.precio_edredon_jumbo),
+        tope_carga_chico:      topeONull(config.tope_carga_chico),
+        tope_carga_grande:     topeONull(config.tope_carga_grande),
+        tope_carga_jumbo:      topeONull(config.tope_carga_jumbo),
         tiempo_carga_mediana:  Number(config.tiempo_carga_mediana),
         tiempo_carga_jumbo:    Number(config.tiempo_carga_jumbo),
         tiempo_carga_secadora: Number(config.tiempo_carga_secadora),
@@ -770,6 +779,55 @@ export default function Ajustes() {
             step="0.01"
             required
             value={config.precio_edredon_jumbo ?? ''}
+            onChange={handleChange}
+            className={INPUT_CLS}
+          />
+          <span className="text-sm text-gray-500 flex-shrink-0">MXN</span>
+        </div>
+      </Field>
+
+      <div className="border-t border-gray-100" />
+
+      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Tope de precio por carga</p>
+      <Field label="Carga chica" hint="Precio máximo de una carga chica (máquinas + productos). Vacío = sin tope.">
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-gray-500 flex-shrink-0">$</span>
+          <input
+            type="number"
+            name="tope_carga_chico"
+            min="0"
+            step="0.01"
+            value={config.tope_carga_chico ?? ''}
+            onChange={handleChange}
+            className={INPUT_CLS}
+          />
+          <span className="text-sm text-gray-500 flex-shrink-0">MXN</span>
+        </div>
+      </Field>
+      <Field label="Carga grande" hint="Precio máximo de una carga grande (máquinas + productos). Vacío = sin tope.">
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-gray-500 flex-shrink-0">$</span>
+          <input
+            type="number"
+            name="tope_carga_grande"
+            min="0"
+            step="0.01"
+            value={config.tope_carga_grande ?? ''}
+            onChange={handleChange}
+            className={INPUT_CLS}
+          />
+          <span className="text-sm text-gray-500 flex-shrink-0">MXN</span>
+        </div>
+      </Field>
+      <Field label="Carga jumbo" hint="Precio máximo de una carga jumbo (máquinas + productos). Vacío = sin tope.">
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-gray-500 flex-shrink-0">$</span>
+          <input
+            type="number"
+            name="tope_carga_jumbo"
+            min="0"
+            step="0.01"
+            value={config.tope_carga_jumbo ?? ''}
             onChange={handleChange}
             className={INPUT_CLS}
           />
@@ -1358,6 +1416,57 @@ export default function Ajustes() {
               step="0.01"
               required
               value={config.precio_edredon_jumbo ?? ''}
+              onChange={handleChange}
+              className={MOBILE_INPUT_CLS}
+            />
+            <span className="text-base text-grey flex-shrink-0">MXN</span>
+          </div>
+        </MobileField>
+      </div>
+
+      <div className="border-t border-light-blue/60" />
+
+      <div className="space-y-5">
+        <p className="text-xs font-semibold text-grey uppercase tracking-wide">Tope de precio por carga</p>
+        <MobileField label="Carga chica" hint="Precio máximo de una carga chica (máquinas + productos). Vacío = sin tope.">
+          <div className="flex items-center gap-2">
+            <span className="text-base text-grey flex-shrink-0">$</span>
+            <input
+              type="number"
+              name="tope_carga_chico"
+              min="0"
+              step="0.01"
+              value={config.tope_carga_chico ?? ''}
+              onChange={handleChange}
+              className={MOBILE_INPUT_CLS}
+            />
+            <span className="text-base text-grey flex-shrink-0">MXN</span>
+          </div>
+        </MobileField>
+        <MobileField label="Carga grande" hint="Precio máximo de una carga grande (máquinas + productos). Vacío = sin tope.">
+          <div className="flex items-center gap-2">
+            <span className="text-base text-grey flex-shrink-0">$</span>
+            <input
+              type="number"
+              name="tope_carga_grande"
+              min="0"
+              step="0.01"
+              value={config.tope_carga_grande ?? ''}
+              onChange={handleChange}
+              className={MOBILE_INPUT_CLS}
+            />
+            <span className="text-base text-grey flex-shrink-0">MXN</span>
+          </div>
+        </MobileField>
+        <MobileField label="Carga jumbo" hint="Precio máximo de una carga jumbo (máquinas + productos). Vacío = sin tope.">
+          <div className="flex items-center gap-2">
+            <span className="text-base text-grey flex-shrink-0">$</span>
+            <input
+              type="number"
+              name="tope_carga_jumbo"
+              min="0"
+              step="0.01"
+              value={config.tope_carga_jumbo ?? ''}
               onChange={handleChange}
               className={MOBILE_INPUT_CLS}
             />

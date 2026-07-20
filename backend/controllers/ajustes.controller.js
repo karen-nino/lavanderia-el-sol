@@ -56,6 +56,9 @@ export const updateAjustes = async (req, res) => {
     precio_carga_jumbo,
     precio_carga_secadora,
     precio_edredon_jumbo,
+    tope_carga_chico,
+    tope_carga_grande,
+    tope_carga_jumbo,
     tiempo_carga_mediana,
     tiempo_carga_jumbo,
     tiempo_carga_secadora,
@@ -76,6 +79,17 @@ export const updateAjustes = async (req, res) => {
       return res.status(400).json({ message: `${campo} debe ser un número mayor o igual a 0.` });
     }
   }
+  // Topes de precio por tamaño de carga: opcionales. null o '' los borra
+  // (sin tope); si viene un valor debe ser un número mayor o igual a 0.
+  const topes = { tope_carga_chico, tope_carga_grande, tope_carga_jumbo };
+  for (const [campo, valor] of Object.entries(topes)) {
+    if (valor !== undefined && valor !== null && valor !== '' &&
+        (!esNumero(valor) || Number(valor) < 0)) {
+      return res.status(400).json({ message: `${campo} debe ser un número mayor o igual a 0, o vacío para quitar el tope.` });
+    }
+  }
+  const topeONull = (v) => (v === null || v === '' ? null : v);
+
   const tiempos = { tiempo_carga_mediana, tiempo_carga_jumbo, tiempo_carga_secadora };
   for (const [campo, valor] of Object.entries(tiempos)) {
     if (valor !== undefined && (!esNumero(valor) || !Number.isInteger(Number(valor)) || Number(valor) < 1)) {
@@ -95,6 +109,9 @@ export const updateAjustes = async (req, res) => {
   if (precio_carga_jumbo    !== undefined) { updates.push(`precio_carga_jumbo = $${i++}`);    values.push(precio_carga_jumbo); }
   if (precio_carga_secadora !== undefined) { updates.push(`precio_carga_secadora = $${i++}`); values.push(precio_carga_secadora); }
   if (precio_edredon_jumbo  !== undefined) { updates.push(`precio_edredon_jumbo = $${i++}`);  values.push(precio_edredon_jumbo); }
+  if (tope_carga_chico      !== undefined) { updates.push(`tope_carga_chico = $${i++}`);      values.push(topeONull(tope_carga_chico)); }
+  if (tope_carga_grande     !== undefined) { updates.push(`tope_carga_grande = $${i++}`);     values.push(topeONull(tope_carga_grande)); }
+  if (tope_carga_jumbo      !== undefined) { updates.push(`tope_carga_jumbo = $${i++}`);      values.push(topeONull(tope_carga_jumbo)); }
   if (tiempo_carga_mediana  !== undefined) { updates.push(`tiempo_carga_mediana = $${i++}`);  values.push(tiempo_carga_mediana); }
   if (tiempo_carga_jumbo    !== undefined) { updates.push(`tiempo_carga_jumbo = $${i++}`);    values.push(tiempo_carga_jumbo); }
   if (tiempo_carga_secadora !== undefined) { updates.push(`tiempo_carga_secadora = $${i++}`); values.push(tiempo_carga_secadora); }
