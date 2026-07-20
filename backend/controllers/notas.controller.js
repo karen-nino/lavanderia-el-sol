@@ -12,7 +12,7 @@ const TIEMPOS_ENTREGA_VALIDOS = ['MANANA', 'TARDE', 'NOCHE'];
 
 // Transiciones permitidas por estado actual
 const TRANSICIONES_VALIDAS = {
-  EN_ESPERA:  ['LAVANDO', 'SECANDO', 'LISTA', 'CANCELADA'],
+  EN_ESPERA:  ['LAVANDO', 'SECANDO',          'CANCELADA'],
   LAVANDO:    ['SECANDO', 'LISTA',            'CANCELADA'],
   SECANDO:    ['LISTA',                       'CANCELADA'],
   LISTA:      ['PAGADA',  'FINALIZADA',       'CANCELADA'],
