@@ -97,6 +97,8 @@ export default function NuevaNota() {
   const [telas,             setTelas]             = useState([]);
   const [tamanosEdredon,    setTamanosEdredon]    = useState([]);
   const [precios,           setPrecios]           = useState({ mediana: 70, jumbo: 70, secadora: 45, edredonJumbo: 80 });
+  // Tope de precio por tamaño de carga (Ajustes); null = sin tope.
+  const [topes,             setTopes]             = useState({ chico: null, grande: null, jumbo: null });
   const [loadingData,       setLoadingData]       = useState(true);
   const [form,              setForm]              = useState(FORM_INIT);
   const [productosLista,    setProductosLista]    = useState([]);
@@ -186,6 +188,11 @@ export default function NuevaNota() {
             jumbo:        cfg.precio_carga_jumbo    != null ? Number(cfg.precio_carga_jumbo)    : 70,
             secadora:     cfg.precio_carga_secadora != null ? Number(cfg.precio_carga_secadora) : 45,
             edredonJumbo: cfg.precio_edredon_jumbo  != null ? Number(cfg.precio_edredon_jumbo)  : 80,
+          });
+          setTopes({
+            chico:  cfg.tope_carga_chico  != null ? Number(cfg.tope_carga_chico)  : null,
+            grande: cfg.tope_carga_grande != null ? Number(cfg.tope_carga_grande) : null,
+            jumbo:  cfg.tope_carga_jumbo  != null ? Number(cfg.tope_carga_jumbo)  : null,
           });
         }
         setClientes(cli);
@@ -373,6 +380,20 @@ export default function NuevaNota() {
     return maq + subtotalProductosLista(c.productos) + (Number(c.ajuste) || 0);
   };
   const encargoPrecioTotal  = encargoCargas.reduce((s, c) => s + subtotalCargaEncargo(c), 0);
+
+  // Tope por tamaño (Ajustes): limita lavadora + secadora + productos de la
+  // carga. El ajuste manual NO cuenta contra el tope (va aparte).
+  const usadoContraTope = (c) => {
+    const lav = maquinas.find(m => String(m.id) === String(c.maquina_id));
+    return (lav ? precioPorTipo(lav.tipo, c.tipo_prenda) : 0)
+         + (c.secadora_id ? precios.secadora : 0)
+         + subtotalProductosLista(c.productos);
+  };
+  const topeDeCarga  = (c) => (c?.tamano ? (topes[c.tamano] ?? null) : null);
+  const excesoDeCarga = (c) => {
+    const tope = topeDeCarga(c);
+    return tope != null ? usadoContraTope(c) - tope : 0;
+  };
   const clienteSeleccionado = clientes.find(c => String(c.id) === String(encargoForm.cliente_id));
   const sinAcentos = (s) => (s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   const clienteSearchQ    = sinAcentos(clienteSearch.trim());
@@ -392,6 +413,8 @@ export default function NuevaNota() {
       if (!c || !c.tipo_prenda || !c.tamano) return false;
       // Si eligió lavadora, debe decidir si la activa (salvo en edición).
       if (!esEdicion && c.maquina_id && !c.activar_inmediatamente) return false;
+      // Tope de precio: no se puede avanzar con la carga pasada de presupuesto.
+      if (excesoDeCarga(c) > 0) return false;
       return true;
     }
     if (encargoStep === pasoPago) return !!encargoForm.pago_anticipado;
@@ -400,6 +423,16 @@ export default function NuevaNota() {
 
   const handleEncargoSubmit = async () => {
     setError('');
+    // Tope de precio por carga: el backend también lo rechaza, pero aquí se
+    // avisa antes de mandar (p. ej. si se regresó a editar una carga previa).
+    const idxExcedida = encargoCargas.findIndex(c => excesoDeCarga(c) > 0);
+    if (idxExcedida >= 0) {
+      const c = encargoCargas[idxExcedida];
+      setError(`La carga ${idxExcedida + 1} rebasa el tope de $${topeDeCarga(c).toFixed(2)} `
+        + `(máquinas + productos suman $${usadoContraTope(c).toFixed(2)}). `
+        + `Quita productos para continuar.`);
+      return;
+    }
     setEncargoLoading(true);
     try {
       const cargasPayload = encargoCargas.map(c => ({
@@ -1057,11 +1090,33 @@ export default function NuevaNota() {
                   </>
                   )}
 
-                  {c.tamano && c.tipo_prenda && (
-                    <p className="text-sm font-medium text-blue text-right">
-                      Subtotal carga: ${subtotalCargaEncargo(c).toFixed(2)}
-                    </p>
-                  )}
+                  {c.tamano && c.tipo_prenda && (() => {
+                    const tope   = topeDeCarga(c);
+                    const usado  = usadoContraTope(c);
+                    const exceso = tope != null ? usado - tope : 0;
+                    return (
+                      <div className="space-y-2">
+                        {tope != null && (exceso > 0 ? (
+                          <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2.5">
+                            <p className="text-sm font-semibold text-red-700">
+                              La carga rebasa el tope de ${tope.toFixed(2)} por ${exceso.toFixed(2)}
+                            </p>
+                            <p className="text-xs text-red-600 mt-0.5">
+                              Máquinas y productos suman ${usado.toFixed(2)}. Quita productos para
+                              poder continuar (el ajuste no cuenta contra el tope).
+                            </p>
+                          </div>
+                        ) : (
+                          <p className="text-xs text-gray-500 text-right">
+                            Tope de la carga: ${tope.toFixed(2)} · usado ${usado.toFixed(2)} · disponible ${(tope - usado).toFixed(2)}
+                          </p>
+                        ))}
+                        <p className="text-sm font-medium text-blue text-right">
+                          Subtotal carga: ${subtotalCargaEncargo(c).toFixed(2)}
+                        </p>
+                      </div>
+                    );
+                  })()}
                 </div>
               );
             })()}

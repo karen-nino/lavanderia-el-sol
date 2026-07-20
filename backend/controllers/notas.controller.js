@@ -125,6 +125,44 @@ function tarifaLavadora(tipoMaquina, tipoPrenda, t) {
   return t.mediana;
 }
 
+// Tope de precio por tamaño de carga (Ajustes): ninguna carga con tamaño
+// puede rebasar su tope sumando lavadora + secadora + productos. El ajuste
+// manual va aparte por decisión del negocio y NO cuenta contra el tope.
+// Es tope duro para todos los roles (incluido admin); NULL en Ajustes =
+// sin tope. Se llama antes del COMMIT en cada ruta que pueda encarecer una
+// carga (crear, editar, activar, asignar secadora). Devuelve el mensaje de
+// error o null si todas las cargas caben.
+async function validarTopesCargas(client, notaId) {
+  const { rows } = await client.query(
+    `SELECT nc.orden, nc.tamano,
+            nc.precio_lavadora + nc.precio_secadora AS maquinas,
+            COALESCE(SUM(np.cantidad * np.precio_unitario), 0) AS productos,
+            CASE nc.tamano
+              WHEN 'chico'  THEN a.tope_carga_chico
+              WHEN 'grande' THEN a.tope_carga_grande
+              WHEN 'jumbo'  THEN a.tope_carga_jumbo
+            END AS tope
+       FROM nota_cargas nc
+       CROSS JOIN ajustes a
+       LEFT JOIN nota_productos np ON np.carga_id = nc.id
+      WHERE nc.nota_id = $1 AND nc.tamano IS NOT NULL AND a.id = 1
+      GROUP BY nc.id, a.tope_carga_chico, a.tope_carga_grande, a.tope_carga_jumbo
+      ORDER BY nc.orden`,
+    [notaId]
+  );
+  const fmt = (n) => `$${Number(n).toFixed(2)}`;
+  for (const r of rows) {
+    if (r.tope == null) continue;
+    const total = Number(r.maquinas) + Number(r.productos);
+    if (total > Number(r.tope) + 1e-9) {
+      return `La carga ${r.orden} (${r.tamano}) rebasa el tope de ${fmt(r.tope)}: ` +
+             `máquinas ${fmt(r.maquinas)} + productos ${fmt(r.productos)} = ${fmt(total)}. ` +
+             `Quita ${fmt(total - Number(r.tope))} en productos para continuar.`;
+    }
+  }
+  return null;
+}
+
 // Reserva un producto para una nota (o una carga): valida stock disponible,
 // inserta la fila en nota_productos y aumenta stock_reservado. Lanza Error con
 // el mensaje para el cliente si el producto no existe o no hay stock.
@@ -772,6 +810,12 @@ export const createNota = async (req, res) => {
       return res.status(400).json({ message: 'El total de la nota no puede ser negativo. Revisa el ajuste.' });
     }
 
+    const errTope = await validarTopesCargas(client, nota.id);
+    if (errTope) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: errTope });
+    }
+
     await client.query('COMMIT');
     res.status(201).json({ ...nota, cargas: cargasInsertadas, productos: productosInsertados });
   } catch (err) {
@@ -1099,6 +1143,12 @@ export const updateNota = async (req, res) => {
     if (rows[0].precio_total != null && Number(rows[0].precio_total) < 0) {
       await client.query('ROLLBACK');
       return res.status(400).json({ message: 'El total de la nota no puede ser negativo. Revisa el ajuste.' });
+    }
+
+    const errTope = await validarTopesCargas(client, id);
+    if (errTope) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: errTope });
     }
 
     if (esReversionPago) {
@@ -1447,6 +1497,14 @@ export const activarNota = async (req, res) => {
       );
     }
 
+    // Al activarse, las cargas reciben su precio de máquinas: si con los
+    // productos ya reservados alguna rebasa su tope, se rechaza completo.
+    const errTope = await validarTopesCargas(client, id);
+    if (errTope) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: errTope });
+    }
+
     await client.query('COMMIT');
 
     const { rows } = await pool.query(
@@ -1633,6 +1691,12 @@ export const asignarSecadora = async (req, res) => {
       [secadora_id, id]
     );
     await recalcularPrecioTotal(client, id);
+
+    const errTope = await validarTopesCargas(client, id);
+    if (errTope) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: errTope });
+    }
 
     await client.query('COMMIT');
 
