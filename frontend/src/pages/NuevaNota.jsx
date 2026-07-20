@@ -96,7 +96,7 @@ export default function NuevaNota() {
   const [productosCatalogo, setProductosCatalogo] = useState([]);
   const [telas,             setTelas]             = useState([]);
   const [tamanosEdredon,    setTamanosEdredon]    = useState([]);
-  const [precios,           setPrecios]           = useState({ mediana: 70, jumbo: 70, secadora: 45, edredonJumbo: 80 });
+  const [precios,           setPrecios]           = useState({ mediana: 70, jumbo: 70, secadora: 45, secadoraJumbo: 45, secadoraEdredon: 45, edredonJumbo: 80 });
   // Tope de precio por tamaño de carga (Ajustes); null = sin tope.
   const [topes,             setTopes]             = useState({ chico: null, grande: null, jumbo: null });
   const [loadingData,       setLoadingData]       = useState(true);
@@ -137,11 +137,20 @@ export default function NuevaNota() {
     if (tipoMaquina === 'lavadora_jumbo') return precios.jumbo;
     return precios.mediana;
   };
+  // Tarifa de secado por categoría, "igual que su lavadora": prenda edredón →
+  // Edredón; lavadora jumbo → Jumbo; resto → Mediana. `lavadoraId` es la
+  // lavadora de la carga (puede no existir en solo-secado).
+  const precioSecado = (lavadoraId, tipoPrendaArg) => {
+    if (String(tipoPrendaArg).toUpperCase() === 'EDREDON') return precios.secadoraEdredon;
+    const lav = maquinas.find(m => String(m.id) === String(lavadoraId));
+    if (lav?.tipo === 'lavadora_jumbo') return precios.secadoraJumbo;
+    return precios.secadora;
+  };
   // Cada carga se cobra con la tarifa de su lavadora más la de su secadora.
   const subtotalDeCarga = (c) => {
     const lav = maquinas.find(m => String(m.id) === String(c.lavadora_id));
     return (lav ? precioPorTipo(lav.tipo, c.tipo_prenda) : 0)
-         + (c.secadora_id ? precios.secadora : 0);
+         + (c.secadora_id ? precioSecado(c.lavadora_id, c.tipo_prenda) : 0);
   };
   const ajusteNum      = Number(form.ajuste) || 0;
   const subtotalCargas = cargasAuto.reduce((s, c) => s + subtotalDeCarga(c), 0);
@@ -184,10 +193,13 @@ export default function NuevaNota() {
         setProductosCatalogo(prod);
         if (cfg) {
           setPrecios({
-            mediana:      cfg.precio_carga_mediana  != null ? Number(cfg.precio_carga_mediana)  : 70,
-            jumbo:        cfg.precio_carga_jumbo    != null ? Number(cfg.precio_carga_jumbo)    : 70,
-            secadora:     cfg.precio_carga_secadora != null ? Number(cfg.precio_carga_secadora) : 45,
-            edredonJumbo: cfg.precio_edredon_jumbo  != null ? Number(cfg.precio_edredon_jumbo)  : 80,
+            mediana:         cfg.precio_carga_mediana    != null ? Number(cfg.precio_carga_mediana)    : 70,
+            jumbo:           cfg.precio_carga_jumbo      != null ? Number(cfg.precio_carga_jumbo)      : 70,
+            // Secado por categoría; el precio plano (precio_carga_secadora) es Mediana.
+            secadora:        cfg.precio_carga_secadora   != null ? Number(cfg.precio_carga_secadora)   : 45,
+            secadoraJumbo:   cfg.precio_secadora_jumbo   != null ? Number(cfg.precio_secadora_jumbo)   : 45,
+            secadoraEdredon: cfg.precio_secadora_edredon != null ? Number(cfg.precio_secadora_edredon) : 45,
+            edredonJumbo:    cfg.precio_edredon_jumbo    != null ? Number(cfg.precio_edredon_jumbo)    : 80,
           });
           setTopes({
             chico:  cfg.tope_carga_chico  != null ? Number(cfg.tope_carga_chico)  : null,
@@ -376,7 +388,7 @@ export default function NuevaNota() {
   const subtotalCargaEncargo = (c) => {
     const lav = maquinas.find(m => String(m.id) === String(c.maquina_id));
     const maq = (lav ? precioPorTipo(lav.tipo, c.tipo_prenda) : 0)
-              + (c.secadora_id ? precios.secadora : 0);
+              + (c.secadora_id ? precioSecado(c.maquina_id, c.tipo_prenda) : 0);
     return maq + subtotalProductosLista(c.productos) + (Number(c.ajuste) || 0);
   };
   const encargoPrecioTotal  = encargoCargas.reduce((s, c) => s + subtotalCargaEncargo(c), 0);
@@ -386,7 +398,7 @@ export default function NuevaNota() {
   const usadoContraTope = (c) => {
     const lav = maquinas.find(m => String(m.id) === String(c.maquina_id));
     return (lav ? precioPorTipo(lav.tipo, c.tipo_prenda) : 0)
-         + (c.secadora_id ? precios.secadora : 0)
+         + (c.secadora_id ? precioSecado(c.maquina_id, c.tipo_prenda) : 0)
          + subtotalProductosLista(c.productos);
   };
   const topeDeCarga  = (c) => (c?.tamano ? (topes[c.tamano] ?? null) : null);

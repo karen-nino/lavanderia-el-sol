@@ -242,7 +242,11 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
   // aparece cuando ESTA máquina cumple su tiempo, aunque otras cargas de la
   // nota sigan corriendo (cada carga es independiente).
   const renderCard = (m) => {
-    const minutos = m.tipo === 'secadora'       ? tiempos.secadora
+    // El ciclo se sella al arrancar (ciclo_minutos): imprescindible para el
+    // secado, cuya duración depende del tipo de carga, no del tipo de máquina.
+    // Fallback por tipo para máquinas puestas en uso antes de la migración.
+    const minutos = m.ciclo_minutos != null ? m.ciclo_minutos
+                  : m.tipo === 'secadora'       ? tiempos.secadora
                   : m.tipo === 'lavadora_jumbo' ? tiempos.jumbo
                   : tiempos.mediana;
     const duracionSeg = Math.max(0, Number(minutos) || 0) * 60;

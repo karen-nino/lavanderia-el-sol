@@ -324,7 +324,10 @@ export default function Salidas() {
   const cicloCumplido = (m) => {
     if (m.estado !== 'en_uso' || !m.en_uso_desde) return false;
     if (!['LAVANDO', 'SECANDO'].includes(nota?.estado)) return false;
-    const minutos = m.tipo === 'secadora'       ? tiempos.secadora
+    // Ciclo sellado al arrancar (ciclo_minutos); fallback por tipo para
+    // máquinas en uso desde antes de la migración.
+    const minutos = m.ciclo_minutos != null ? m.ciclo_minutos
+                  : m.tipo === 'secadora'       ? tiempos.secadora
                   : m.tipo === 'lavadora_jumbo' ? tiempos.jumbo
                   : tiempos.mediana;
     return now - new Date(m.en_uso_desde).getTime() >= Math.max(0, Number(minutos) || 0) * 60000;

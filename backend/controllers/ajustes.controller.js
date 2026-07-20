@@ -55,6 +55,8 @@ export const updateAjustes = async (req, res) => {
     precio_carga_mediana,
     precio_carga_jumbo,
     precio_carga_secadora,
+    precio_secadora_jumbo,
+    precio_secadora_edredon,
     precio_edredon_jumbo,
     tope_carga_chico,
     tope_carga_grande,
@@ -62,6 +64,8 @@ export const updateAjustes = async (req, res) => {
     tiempo_carga_mediana,
     tiempo_carga_jumbo,
     tiempo_carga_secadora,
+    tiempo_secadora_jumbo,
+    tiempo_secadora_edredon,
     nombre_negocio,
     direccion,
     telefono,
@@ -73,7 +77,8 @@ export const updateAjustes = async (req, res) => {
   // base (texto produce un 500 y un negativo descuadra todas las notas).
   const esNumero = (v) => (typeof v === 'number' || (typeof v === 'string' && v.trim() !== '')) && Number.isFinite(Number(v));
 
-  const precios = { precio_carga_mediana, precio_carga_jumbo, precio_carga_secadora, precio_edredon_jumbo };
+  const precios = { precio_carga_mediana, precio_carga_jumbo, precio_carga_secadora,
+                    precio_secadora_jumbo, precio_secadora_edredon, precio_edredon_jumbo };
   for (const [campo, valor] of Object.entries(precios)) {
     if (valor !== undefined && (!esNumero(valor) || Number(valor) < 0)) {
       return res.status(400).json({ message: `${campo} debe ser un número mayor o igual a 0.` });
@@ -90,7 +95,8 @@ export const updateAjustes = async (req, res) => {
   }
   const topeONull = (v) => (v === null || v === '' ? null : v);
 
-  const tiempos = { tiempo_carga_mediana, tiempo_carga_jumbo, tiempo_carga_secadora };
+  const tiempos = { tiempo_carga_mediana, tiempo_carga_jumbo, tiempo_carga_secadora,
+                    tiempo_secadora_jumbo, tiempo_secadora_edredon };
   for (const [campo, valor] of Object.entries(tiempos)) {
     if (valor !== undefined && (!esNumero(valor) || !Number.isInteger(Number(valor)) || Number(valor) < 1)) {
       return res.status(400).json({ message: `${campo} debe ser un entero mayor o igual a 1 (minutos).` });
@@ -108,6 +114,8 @@ export const updateAjustes = async (req, res) => {
   if (precio_carga_mediana  !== undefined) { updates.push(`precio_carga_mediana = $${i++}`);  values.push(precio_carga_mediana); }
   if (precio_carga_jumbo    !== undefined) { updates.push(`precio_carga_jumbo = $${i++}`);    values.push(precio_carga_jumbo); }
   if (precio_carga_secadora !== undefined) { updates.push(`precio_carga_secadora = $${i++}`); values.push(precio_carga_secadora); }
+  if (precio_secadora_jumbo   !== undefined) { updates.push(`precio_secadora_jumbo = $${i++}`);   values.push(precio_secadora_jumbo); }
+  if (precio_secadora_edredon !== undefined) { updates.push(`precio_secadora_edredon = $${i++}`); values.push(precio_secadora_edredon); }
   if (precio_edredon_jumbo  !== undefined) { updates.push(`precio_edredon_jumbo = $${i++}`);  values.push(precio_edredon_jumbo); }
   if (tope_carga_chico      !== undefined) { updates.push(`tope_carga_chico = $${i++}`);      values.push(topeONull(tope_carga_chico)); }
   if (tope_carga_grande     !== undefined) { updates.push(`tope_carga_grande = $${i++}`);     values.push(topeONull(tope_carga_grande)); }
@@ -115,6 +123,8 @@ export const updateAjustes = async (req, res) => {
   if (tiempo_carga_mediana  !== undefined) { updates.push(`tiempo_carga_mediana = $${i++}`);  values.push(tiempo_carga_mediana); }
   if (tiempo_carga_jumbo    !== undefined) { updates.push(`tiempo_carga_jumbo = $${i++}`);    values.push(tiempo_carga_jumbo); }
   if (tiempo_carga_secadora !== undefined) { updates.push(`tiempo_carga_secadora = $${i++}`); values.push(tiempo_carga_secadora); }
+  if (tiempo_secadora_jumbo   !== undefined) { updates.push(`tiempo_secadora_jumbo = $${i++}`);   values.push(tiempo_secadora_jumbo); }
+  if (tiempo_secadora_edredon !== undefined) { updates.push(`tiempo_secadora_edredon = $${i++}`); values.push(tiempo_secadora_edredon); }
   if (nombre_negocio        !== undefined) { updates.push(`nombre_negocio = $${i++}`);        values.push(nombre_negocio); }
   if (direccion             !== undefined) { updates.push(`direccion = $${i++}`);              values.push(direccion); }
   if (telefono              !== undefined) { updates.push(`telefono = $${i++}`);               values.push(telefono); }

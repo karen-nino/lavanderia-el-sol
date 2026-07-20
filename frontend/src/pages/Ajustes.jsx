@@ -503,6 +503,8 @@ export default function Ajustes() {
           precio_carga_mediana:  Number(config.precio_carga_mediana),
           precio_carga_jumbo:    Number(config.precio_carga_jumbo),
           precio_carga_secadora: Number(config.precio_carga_secadora),
+          precio_secadora_jumbo:   Number(config.precio_secadora_jumbo),
+          precio_secadora_edredon: Number(config.precio_secadora_edredon),
           precio_edredon_jumbo:  Number(config.precio_edredon_jumbo),
           tope_carga_chico:      topeONull(config.tope_carga_chico),
           tope_carga_grande:     topeONull(config.tope_carga_grande),
@@ -510,6 +512,8 @@ export default function Ajustes() {
           tiempo_carga_mediana:  Number(config.tiempo_carga_mediana),
           tiempo_carga_jumbo:    Number(config.tiempo_carga_jumbo),
           tiempo_carga_secadora: Number(config.tiempo_carga_secadora),
+          tiempo_secadora_jumbo:   Number(config.tiempo_secadora_jumbo),
+          tiempo_secadora_edredon: Number(config.tiempo_secadora_edredon),
           nombre_negocio:        config.nombre_negocio,
           stock_minimo_global:   Number(config.stock_minimo_global),
           alerta_ciclo_detenido: !!config.alerta_ciclo_detenido,
@@ -536,6 +540,8 @@ export default function Ajustes() {
         precio_carga_mediana:  Number(config.precio_carga_mediana),
         precio_carga_jumbo:    Number(config.precio_carga_jumbo),
         precio_carga_secadora: Number(config.precio_carga_secadora),
+        precio_secadora_jumbo:   Number(config.precio_secadora_jumbo),
+        precio_secadora_edredon: Number(config.precio_secadora_edredon),
         precio_edredon_jumbo:  Number(config.precio_edredon_jumbo),
         tope_carga_chico:      topeONull(config.tope_carga_chico),
         tope_carga_grande:     topeONull(config.tope_carga_grande),
@@ -543,6 +549,8 @@ export default function Ajustes() {
         tiempo_carga_mediana:  Number(config.tiempo_carga_mediana),
         tiempo_carga_jumbo:    Number(config.tiempo_carga_jumbo),
         tiempo_carga_secadora: Number(config.tiempo_carga_secadora),
+        tiempo_secadora_jumbo:   Number(config.tiempo_secadora_jumbo),
+        tiempo_secadora_edredon: Number(config.tiempo_secadora_edredon),
         nombre_negocio:        config.nombre_negocio,
         stock_minimo_global:   Number(config.stock_minimo_global),
         alerta_ciclo_detenido: !!config.alerta_ciclo_detenido,
@@ -661,180 +669,99 @@ export default function Ajustes() {
     </Section>
   );
 
+  // Helpers de renglón (invocados como función, NO como <Componente/>, para
+  // no remontar los inputs y perder el foco al teclear).
+  const campoPrecio = (name, hint, required = true) => (
+    <Field label="Precio por carga" hint={hint}>
+      <div className="flex items-center gap-2">
+        <span className="text-sm text-gray-500 flex-shrink-0">$</span>
+        <input
+          type="number" name={name} min="0" step="0.01" required={required}
+          value={config[name] ?? ''} onChange={handleChange} className={INPUT_CLS}
+        />
+        <span className="text-sm text-gray-500 flex-shrink-0">MXN</span>
+      </div>
+    </Field>
+  );
+  const campoTiempo = (name, hint) => (
+    <Field label="Tiempo de carga" hint={hint}>
+      <div className="flex items-center gap-2">
+        <input
+          type="number" name={name} min="1" step="1" required
+          value={config[name] ?? ''} onChange={handleChange} className={INPUT_CLS}
+        />
+        <span className="text-sm text-gray-500 flex-shrink-0">min</span>
+      </div>
+    </Field>
+  );
+  const subTitulo = (txt) => (
+    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{txt}</p>
+  );
+
   const seccionPreciosDesktop = (
-    <Section titulo="Máquinas">
-      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Mediana</p>
-      <Field label="Precio por carga" hint="Aplica a lavadoras medianas en autoservicio y por encargo.">
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-500 flex-shrink-0">$</span>
-          <input
-            type="number"
-            name="precio_carga_mediana"
-            min="0"
-            step="0.01"
-            required
-            value={config.precio_carga_mediana ?? ''}
-            onChange={handleChange}
-            className={INPUT_CLS}
-          />
-          <span className="text-sm text-gray-500 flex-shrink-0">MXN</span>
-        </div>
-      </Field>
-      <Field label="Tiempo de carga" hint="Duración de un ciclo de lavado en una máquina mediana.">
-        <div className="flex items-center gap-2">
-          <input
-            type="number"
-            name="tiempo_carga_mediana"
-            min="1"
-            step="1"
-            required
-            value={config.tiempo_carga_mediana ?? ''}
-            onChange={handleChange}
-            className={INPUT_CLS}
-          />
-          <span className="text-sm text-gray-500 flex-shrink-0">min</span>
-        </div>
-      </Field>
+    <>
+    <Section titulo="Lavadora">
+      {subTitulo('Mediana')}
+      {campoPrecio('precio_carga_mediana', 'Aplica a lavadoras medianas en autoservicio y por encargo.')}
+      {campoTiempo('tiempo_carga_mediana', 'Duración de un ciclo de lavado en una máquina mediana.')}
 
       <div className="border-t border-gray-100" />
 
-      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Jumbo</p>
-      <Field label="Precio por carga" hint="Aplica a lavadoras jumbo en autoservicio y por encargo.">
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-500 flex-shrink-0">$</span>
-          <input
-            type="number"
-            name="precio_carga_jumbo"
-            min="0"
-            step="0.01"
-            required
-            value={config.precio_carga_jumbo ?? ''}
-            onChange={handleChange}
-            className={INPUT_CLS}
-          />
-          <span className="text-sm text-gray-500 flex-shrink-0">MXN</span>
-        </div>
-      </Field>
-      <Field label="Tiempo de carga" hint="Duración de un ciclo de lavado en una máquina jumbo.">
-        <div className="flex items-center gap-2">
-          <input
-            type="number"
-            name="tiempo_carga_jumbo"
-            min="1"
-            step="1"
-            required
-            value={config.tiempo_carga_jumbo ?? ''}
-            onChange={handleChange}
-            className={INPUT_CLS}
-          />
-          <span className="text-sm text-gray-500 flex-shrink-0">min</span>
-        </div>
-      </Field>
+      {subTitulo('Jumbo')}
+      {campoPrecio('precio_carga_jumbo', 'Aplica a lavadoras jumbo en autoservicio y por encargo.')}
+      {campoTiempo('tiempo_carga_jumbo', 'Duración de un ciclo de lavado en una máquina jumbo.')}
 
       <div className="border-t border-gray-100" />
 
-      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Secadora</p>
-      <Field label="Precio por carga" hint="Aplica al servicio de secado.">
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-500 flex-shrink-0">$</span>
-          <input
-            type="number"
-            name="precio_carga_secadora"
-            min="0"
-            step="0.01"
-            required
-            value={config.precio_carga_secadora ?? ''}
-            onChange={handleChange}
-            className={INPUT_CLS}
-          />
-          <span className="text-sm text-gray-500 flex-shrink-0">MXN</span>
-        </div>
-      </Field>
-      <Field label="Tiempo de carga" hint="Duración de un ciclo de secado.">
-        <div className="flex items-center gap-2">
-          <input
-            type="number"
-            name="tiempo_carga_secadora"
-            min="1"
-            step="1"
-            required
-            value={config.tiempo_carga_secadora ?? ''}
-            onChange={handleChange}
-            className={INPUT_CLS}
-          />
-          <span className="text-sm text-gray-500 flex-shrink-0">min</span>
-        </div>
-      </Field>
+      {subTitulo('Edredón')}
+      {campoPrecio('precio_edredon_jumbo', 'Tarifa fija por edredón lavado en máquina jumbo (usa el ciclo del jumbo).')}
+    </Section>
+
+    <Section titulo="Secadora">
+      {subTitulo('Mediana')}
+      {campoPrecio('precio_carga_secadora', 'Secado de cargas medianas (ropa en lavadora mediana).')}
+      {campoTiempo('tiempo_carga_secadora', 'Duración del secado de una carga mediana.')}
 
       <div className="border-t border-gray-100" />
 
-      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Edredón (Jumbo)</p>
-      <Field label="Precio por carga" hint="Tarifa fija por edredón lavado en máquina jumbo.">
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-500 flex-shrink-0">$</span>
-          <input
-            type="number"
-            name="precio_edredon_jumbo"
-            min="0"
-            step="0.01"
-            required
-            value={config.precio_edredon_jumbo ?? ''}
-            onChange={handleChange}
-            className={INPUT_CLS}
-          />
-          <span className="text-sm text-gray-500 flex-shrink-0">MXN</span>
-        </div>
-      </Field>
+      {subTitulo('Jumbo')}
+      {campoPrecio('precio_secadora_jumbo', 'Secado de cargas jumbo (ropa en lavadora jumbo).')}
+      {campoTiempo('tiempo_secadora_jumbo', 'Duración del secado de una carga jumbo.')}
 
       <div className="border-t border-gray-100" />
 
-      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Tope de precio por carga</p>
+      {subTitulo('Edredón')}
+      {campoPrecio('precio_secadora_edredon', 'Secado de edredones.')}
+      {campoTiempo('tiempo_secadora_edredon', 'Duración del secado de un edredón.')}
+    </Section>
+
+    <Section titulo="Tope de precio por carga">
       <Field label="Carga chica" hint="Precio máximo de una carga chica (máquinas + productos). Vacío = sin tope.">
         <div className="flex items-center gap-2">
           <span className="text-sm text-gray-500 flex-shrink-0">$</span>
-          <input
-            type="number"
-            name="tope_carga_chico"
-            min="0"
-            step="0.01"
-            value={config.tope_carga_chico ?? ''}
-            onChange={handleChange}
-            className={INPUT_CLS}
-          />
+          <input type="number" name="tope_carga_chico" min="0" step="0.01"
+            value={config.tope_carga_chico ?? ''} onChange={handleChange} className={INPUT_CLS} />
           <span className="text-sm text-gray-500 flex-shrink-0">MXN</span>
         </div>
       </Field>
       <Field label="Carga grande" hint="Precio máximo de una carga grande (máquinas + productos). Vacío = sin tope.">
         <div className="flex items-center gap-2">
           <span className="text-sm text-gray-500 flex-shrink-0">$</span>
-          <input
-            type="number"
-            name="tope_carga_grande"
-            min="0"
-            step="0.01"
-            value={config.tope_carga_grande ?? ''}
-            onChange={handleChange}
-            className={INPUT_CLS}
-          />
+          <input type="number" name="tope_carga_grande" min="0" step="0.01"
+            value={config.tope_carga_grande ?? ''} onChange={handleChange} className={INPUT_CLS} />
           <span className="text-sm text-gray-500 flex-shrink-0">MXN</span>
         </div>
       </Field>
       <Field label="Carga jumbo" hint="Precio máximo de una carga jumbo (máquinas + productos). Vacío = sin tope.">
         <div className="flex items-center gap-2">
           <span className="text-sm text-gray-500 flex-shrink-0">$</span>
-          <input
-            type="number"
-            name="tope_carga_jumbo"
-            min="0"
-            step="0.01"
-            value={config.tope_carga_jumbo ?? ''}
-            onChange={handleChange}
-            className={INPUT_CLS}
-          />
+          <input type="number" name="tope_carga_jumbo" min="0" step="0.01"
+            value={config.tope_carga_jumbo ?? ''} onChange={handleChange} className={INPUT_CLS} />
           <span className="text-sm text-gray-500 flex-shrink-0">MXN</span>
         </div>
       </Field>
     </Section>
+    </>
   );
 
   const seccionSucursalesDesktop = (
@@ -1291,137 +1218,79 @@ export default function Ajustes() {
     </div>
   );
 
+  // Helpers de renglón móvil (invocados como función, no como <Componente/>).
+  const campoPrecioM = (name, hint, required = true) => (
+    <MobileField label="Precio por carga" hint={hint}>
+      <div className="flex items-center gap-2">
+        <span className="text-base text-grey flex-shrink-0">$</span>
+        <input
+          type="number" name={name} min="0" step="0.01" required={required}
+          value={config[name] ?? ''} onChange={handleChange} className={MOBILE_INPUT_CLS}
+        />
+        <span className="text-base text-grey flex-shrink-0">MXN</span>
+      </div>
+    </MobileField>
+  );
+  const campoTiempoM = (name, hint) => (
+    <MobileField label="Tiempo de carga" hint={hint}>
+      <div className="flex items-center gap-2">
+        <input
+          type="number" name={name} min="1" step="1" required
+          value={config[name] ?? ''} onChange={handleChange} className={MOBILE_INPUT_CLS}
+        />
+        <span className="text-base text-grey flex-shrink-0">min</span>
+      </div>
+    </MobileField>
+  );
+  const subTituloM = (txt) => (
+    <p className="text-xs font-semibold text-grey uppercase tracking-wide">{txt}</p>
+  );
+
   const seccionPreciosMobile = (
     <div className="space-y-6">
+      <p className="text-sm font-bold text-gray-900">Lavadora</p>
       <div className="space-y-5">
-        <p className="text-xs font-semibold text-grey uppercase tracking-wide">Mediana</p>
-        <MobileField label="Precio por carga" hint="Aplica a lavadoras medianas (autoservicio y por encargo).">
-          <div className="flex items-center gap-2">
-            <span className="text-base text-grey flex-shrink-0">$</span>
-            <input
-              type="number"
-              name="precio_carga_mediana"
-              min="0"
-              step="0.01"
-              required
-              value={config.precio_carga_mediana ?? ''}
-              onChange={handleChange}
-              className={MOBILE_INPUT_CLS}
-            />
-            <span className="text-base text-grey flex-shrink-0">MXN</span>
-          </div>
-        </MobileField>
-        <MobileField label="Tiempo de carga" hint="Duración del ciclo de lavado en una máquina mediana.">
-          <div className="flex items-center gap-2">
-            <input
-              type="number"
-              name="tiempo_carga_mediana"
-              min="1"
-              step="1"
-              required
-              value={config.tiempo_carga_mediana ?? ''}
-              onChange={handleChange}
-              className={MOBILE_INPUT_CLS}
-            />
-            <span className="text-base text-grey flex-shrink-0">min</span>
-          </div>
-        </MobileField>
+        {subTituloM('Mediana')}
+        {campoPrecioM('precio_carga_mediana', 'Aplica a lavadoras medianas (autoservicio y por encargo).')}
+        {campoTiempoM('tiempo_carga_mediana', 'Duración del ciclo de lavado en una máquina mediana.')}
       </div>
 
       <div className="border-t border-light-blue/60" />
 
       <div className="space-y-5">
-        <p className="text-xs font-semibold text-grey uppercase tracking-wide">Jumbo</p>
-        <MobileField label="Precio por carga" hint="Aplica a lavadoras jumbo (autoservicio y por encargo).">
-          <div className="flex items-center gap-2">
-            <span className="text-base text-grey flex-shrink-0">$</span>
-            <input
-              type="number"
-              name="precio_carga_jumbo"
-              min="0"
-              step="0.01"
-              required
-              value={config.precio_carga_jumbo ?? ''}
-              onChange={handleChange}
-              className={MOBILE_INPUT_CLS}
-            />
-            <span className="text-base text-grey flex-shrink-0">MXN</span>
-          </div>
-        </MobileField>
-        <MobileField label="Tiempo de carga" hint="Duración del ciclo de lavado en una máquina jumbo.">
-          <div className="flex items-center gap-2">
-            <input
-              type="number"
-              name="tiempo_carga_jumbo"
-              min="1"
-              step="1"
-              required
-              value={config.tiempo_carga_jumbo ?? ''}
-              onChange={handleChange}
-              className={MOBILE_INPUT_CLS}
-            />
-            <span className="text-base text-grey flex-shrink-0">min</span>
-          </div>
-        </MobileField>
+        {subTituloM('Jumbo')}
+        {campoPrecioM('precio_carga_jumbo', 'Aplica a lavadoras jumbo (autoservicio y por encargo).')}
+        {campoTiempoM('tiempo_carga_jumbo', 'Duración del ciclo de lavado en una máquina jumbo.')}
       </div>
 
       <div className="border-t border-light-blue/60" />
 
       <div className="space-y-5">
-        <p className="text-xs font-semibold text-grey uppercase tracking-wide">Secadora</p>
-        <MobileField label="Precio por carga" hint="Aplica al servicio de secado.">
-          <div className="flex items-center gap-2">
-            <span className="text-base text-grey flex-shrink-0">$</span>
-            <input
-              type="number"
-              name="precio_carga_secadora"
-              min="0"
-              step="0.01"
-              required
-              value={config.precio_carga_secadora ?? ''}
-              onChange={handleChange}
-              className={MOBILE_INPUT_CLS}
-            />
-            <span className="text-base text-grey flex-shrink-0">MXN</span>
-          </div>
-        </MobileField>
-        <MobileField label="Tiempo de carga" hint="Duración del ciclo de secado.">
-          <div className="flex items-center gap-2">
-            <input
-              type="number"
-              name="tiempo_carga_secadora"
-              min="1"
-              step="1"
-              required
-              value={config.tiempo_carga_secadora ?? ''}
-              onChange={handleChange}
-              className={MOBILE_INPUT_CLS}
-            />
-            <span className="text-base text-grey flex-shrink-0">min</span>
-          </div>
-        </MobileField>
+        {subTituloM('Edredón')}
+        {campoPrecioM('precio_edredon_jumbo', 'Tarifa fija por edredón lavado en máquina jumbo (usa el ciclo del jumbo).')}
+      </div>
+
+      <p className="text-sm font-bold text-gray-900 pt-2">Secadora</p>
+      <div className="space-y-5">
+        {subTituloM('Mediana')}
+        {campoPrecioM('precio_carga_secadora', 'Secado de cargas medianas (ropa en lavadora mediana).')}
+        {campoTiempoM('tiempo_carga_secadora', 'Duración del secado de una carga mediana.')}
       </div>
 
       <div className="border-t border-light-blue/60" />
 
       <div className="space-y-5">
-        <p className="text-xs font-semibold text-grey uppercase tracking-wide">Edredón (Jumbo)</p>
-        <MobileField label="Precio por carga" hint="Tarifa fija por edredón lavado en máquina jumbo.">
-          <div className="flex items-center gap-2">
-            <span className="text-base text-grey flex-shrink-0">$</span>
-            <input
-              type="number"
-              name="precio_edredon_jumbo"
-              min="0"
-              step="0.01"
-              required
-              value={config.precio_edredon_jumbo ?? ''}
-              onChange={handleChange}
-              className={MOBILE_INPUT_CLS}
-            />
-            <span className="text-base text-grey flex-shrink-0">MXN</span>
-          </div>
-        </MobileField>
+        {subTituloM('Jumbo')}
+        {campoPrecioM('precio_secadora_jumbo', 'Secado de cargas jumbo (ropa en lavadora jumbo).')}
+        {campoTiempoM('tiempo_secadora_jumbo', 'Duración del secado de una carga jumbo.')}
+      </div>
+
+      <div className="border-t border-light-blue/60" />
+
+      <div className="space-y-5">
+        {subTituloM('Edredón')}
+        {campoPrecioM('precio_secadora_edredon', 'Secado de edredones.')}
+        {campoTiempoM('tiempo_secadora_edredon', 'Duración del secado de un edredón.')}
       </div>
 
       <div className="border-t border-light-blue/60" />

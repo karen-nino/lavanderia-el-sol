@@ -106,15 +106,37 @@ async function recalcularPrecioTotal(client, notaId) {
 async function tarifasCarga(client) {
   const { rows } = await client.query(
     `SELECT precio_carga_mediana, precio_carga_jumbo,
-            precio_carga_secadora, precio_edredon_jumbo
+            precio_carga_secadora, precio_secadora_jumbo, precio_secadora_edredon,
+            precio_edredon_jumbo
        FROM ajustes WHERE id = 1`
   );
   const c = rows[0] ?? {};
   return {
-    mediana:      c.precio_carga_mediana  != null ? Number(c.precio_carga_mediana)  : 70,
-    jumbo:        c.precio_carga_jumbo    != null ? Number(c.precio_carga_jumbo)    : 70,
-    secadora:     c.precio_carga_secadora != null ? Number(c.precio_carga_secadora) : 45,
-    edredonJumbo: c.precio_edredon_jumbo  != null ? Number(c.precio_edredon_jumbo)  : 80,
+    mediana:         c.precio_carga_mediana    != null ? Number(c.precio_carga_mediana)    : 70,
+    jumbo:           c.precio_carga_jumbo      != null ? Number(c.precio_carga_jumbo)      : 70,
+    // Secado por categoría. La columna plana precio_carga_secadora es la Mediana.
+    secadora:        c.precio_carga_secadora   != null ? Number(c.precio_carga_secadora)   : 45,
+    secadoraJumbo:   c.precio_secadora_jumbo   != null ? Number(c.precio_secadora_jumbo)   : 45,
+    secadoraEdredon: c.precio_secadora_edredon != null ? Number(c.precio_secadora_edredon) : 45,
+    edredonJumbo:    c.precio_edredon_jumbo    != null ? Number(c.precio_edredon_jumbo)    : 80,
+  };
+}
+
+// Tiempos de ciclo (minutos). El secado también por categoría (Mediana =
+// columna plana tiempo_carga_secadora). El lavado edredón usa el ciclo jumbo.
+async function tiemposCarga(client) {
+  const { rows } = await client.query(
+    `SELECT tiempo_carga_mediana, tiempo_carga_jumbo,
+            tiempo_carga_secadora, tiempo_secadora_jumbo, tiempo_secadora_edredon
+       FROM ajustes WHERE id = 1`
+  );
+  const c = rows[0] ?? {};
+  return {
+    mediana:         c.tiempo_carga_mediana    != null ? Number(c.tiempo_carga_mediana)    : 30,
+    jumbo:           c.tiempo_carga_jumbo      != null ? Number(c.tiempo_carga_jumbo)      : 45,
+    secMediana:      c.tiempo_carga_secadora   != null ? Number(c.tiempo_carga_secadora)   : 30,
+    secJumbo:        c.tiempo_secadora_jumbo   != null ? Number(c.tiempo_secadora_jumbo)   : 30,
+    secEdredon:      c.tiempo_secadora_edredon != null ? Number(c.tiempo_secadora_edredon) : 30,
   };
 }
 
@@ -123,6 +145,52 @@ function tarifaLavadora(tipoMaquina, tipoPrenda, t) {
     return String(tipoPrenda).toUpperCase() === 'EDREDON' ? t.edredonJumbo : t.jumbo;
   }
   return t.mediana;
+}
+
+// Categoría de secado de una carga, "igual que su lavadora": prenda edredón →
+// edredón; lavadora jumbo → jumbo; resto (incl. solo-secado sin lavadora) →
+// mediana. Devuelve 'mediana' | 'jumbo' | 'edredon'.
+function categoriaSecado(tipoLavadora, tipoPrenda) {
+  if (String(tipoPrenda).toUpperCase() === 'EDREDON') return 'edredon';
+  if (tipoLavadora === 'lavadora_jumbo') return 'jumbo';
+  return 'mediana';
+}
+
+// Tarifa de secado según la categoría de la carga (mirror de su lavadora).
+function tarifaSecadora(tipoLavadora, tipoPrenda, t) {
+  const cat = categoriaSecado(tipoLavadora, tipoPrenda);
+  if (cat === 'edredon') return t.secadoraEdredon;
+  if (cat === 'jumbo')   return t.secadoraJumbo;
+  return t.secadora; // mediana
+}
+
+// Sella maquinas.ciclo_minutos de todas las secadoras EN USO de la nota según
+// la categoría de la carga que están secando (deducida de nota_cargas). Las
+// lavadoras no se sellan: su ciclo se resuelve por tipo de máquina en el timer.
+// Idempotente; se llama tras poner secadoras en uso en cualquier flujo.
+async function sellarCicloSecadoras(client, notaId) {
+  const ti = await tiemposCarga(client);
+  await client.query(
+    `UPDATE maquinas m
+        SET ciclo_minutos = CASE cat.categoria
+              WHEN 'edredon' THEN $2::int
+              WHEN 'jumbo'   THEN $3::int
+              ELSE $4::int
+            END
+       FROM (
+         SELECT nc.secadora_id AS sid,
+                CASE
+                  WHEN UPPER(COALESCE(nc.tipo_prenda, '')) = 'EDREDON' THEN 'edredon'
+                  WHEN ml.tipo = 'lavadora_jumbo' THEN 'jumbo'
+                  ELSE 'mediana'
+                END AS categoria
+           FROM nota_cargas nc
+           LEFT JOIN maquinas ml ON ml.id = COALESCE(nc.lavadora_id, nc.lavadora_usada_id)
+          WHERE nc.nota_id = $1 AND nc.secadora_id IS NOT NULL
+       ) cat
+      WHERE m.id = cat.sid AND m.tipo = 'secadora' AND m.estado = 'en_uso'`,
+    [notaId, ti.secEdredon, ti.secJumbo, ti.secMediana]
+  );
 }
 
 // Tope de precio por tamaño de carga (Ajustes): ninguna carga con tamaño
@@ -262,7 +330,7 @@ async function prepararCargas(client, cargas, tipoPrendaNota, sucursal) {
       lavadora_id:     lavadoraId,
       secadora_id:     secadoraId,
       precio_lavadora: lavadoraId ? tarifaLavadora(tipoPorId.get(lavadoraId), prendaCarga, t) : 0,
-      precio_secadora: secadoraId ? t.secadora : 0,
+      precio_secadora: secadoraId ? tarifaSecadora(tipoPorId.get(lavadoraId), prendaCarga, t) : 0,
       tipo_prenda:     c.tipo_prenda ? prendaCarga : null,
       tipo_tela:       prendaCarga === 'ROPA' && c.tipo_tela ? String(c.tipo_tela).trim() : null,
       tamano_edredon:  prendaCarga === 'EDREDON' && c.tamano_edredon ? String(c.tamano_edredon).trim() : null,
@@ -729,6 +797,7 @@ export const createNota = async (req, res) => {
           `UPDATE maquinas SET estado = 'en_uso', en_uso_desde = NOW() WHERE id = ANY($1)`,
           [idsActivar]
         );
+        await sellarCicloSecadoras(client, nota.id);
       }
     }
 
@@ -979,6 +1048,7 @@ export const updateNota = async (req, res) => {
             [tomar]
           );
         }
+        await sellarCicloSecadoras(client, id);
       }
     }
 
@@ -1438,7 +1508,7 @@ export const activarNota = async (req, res) => {
             n.lavadora_id,
             n.secadora_id,
             n.lavadora_id ? tarifaLavadora(maqById.get(n.lavadora_id).tipo, n.tipo_prenda, t) : 0,
-            n.secadora_id ? t.secadora : 0,
+            n.secadora_id ? tarifaSecadora(n.lavadora_id ? maqById.get(n.lavadora_id).tipo : null, n.tipo_prenda, t) : 0,
             n.id,
           ]
         );
@@ -1447,6 +1517,7 @@ export const activarNota = async (req, res) => {
         `UPDATE maquinas SET estado = 'en_uso', en_uso_desde = NOW() WHERE id = ANY($1)`,
         [ids]
       );
+      await sellarCicloSecadoras(client, id);
       await client.query(
         `UPDATE notas
             SET maquina_id  = $1,
@@ -1491,6 +1562,7 @@ export const activarNota = async (req, res) => {
         `UPDATE maquinas SET estado = 'en_uso', en_uso_desde = NOW() WHERE id = ANY($1)`,
         [maquinas]
       );
+      await sellarCicloSecadoras(client, id);
       await client.query(
         `UPDATE notas SET maquina_id = $1, secadora_id = $2, estado = $3 WHERE id = $4`,
         [lavadoraFinal || null, secadoraFinal || null, lavadoraFinal ? 'LAVANDO' : 'SECANDO', id]
@@ -1581,6 +1653,7 @@ export const activarMaquinasPendientes = async (req, res) => {
       `UPDATE maquinas SET estado = 'en_uso', en_uso_desde = NOW() WHERE id = ANY($1)`,
       [libres]
     );
+    await sellarCicloSecadoras(client, id);
     // La nota queda en la fase que dicten sus máquinas: si se activó una
     // lavadora vuelve/queda en LAVANDO; si solo corren secadoras, SECANDO.
     const fase = await faseProcesoDeNota(client, id);
@@ -1644,19 +1717,23 @@ export const asignarSecadora = async (req, res) => {
       return res.status(400).json({ message: 'Solo se puede asignar una secadora a una nota en proceso.' });
     }
 
-    // La secadora se agrega a las primeras N cargas que no tienen una.
+    // La secadora se agrega a las primeras N cargas que no tienen una. Se trae
+    // la lavadora (actual o ya usada) y la prenda de cada carga para tarifar el
+    // secado por su categoría (mirror de la lavadora).
     const { rows: sinSecadora } = await client.query(
-      `SELECT id FROM nota_cargas
-        WHERE nota_id = $1 AND secadora_id IS NULL
-        ORDER BY orden ASC
-        FOR UPDATE`,
+      `SELECT nc.id, nc.tipo_prenda, ml.tipo AS lavadora_tipo
+         FROM nota_cargas nc
+         LEFT JOIN maquinas ml ON ml.id = COALESCE(nc.lavadora_id, nc.lavadora_usada_id)
+        WHERE nc.nota_id = $1 AND nc.secadora_id IS NULL
+        ORDER BY nc.orden ASC
+        FOR UPDATE OF nc`,
       [id]
     );
     if (sinSecadora.length === 0) {
       await client.query('ROLLBACK');
       return res.status(400).json({ message: 'La nota no tiene cargas sin secadora.' });
     }
-    const objetivo = sinSecadora.slice(0, cargasPedidas).map(r => r.id);
+    const objetivo = sinSecadora.slice(0, cargasPedidas);
 
     const { rows: maqRows } = await client.query(
       'SELECT tipo, estado FROM maquinas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
@@ -1675,21 +1752,25 @@ export const asignarSecadora = async (req, res) => {
       return res.status(400).json({ message: 'La secadora seleccionada no está disponible.' });
     }
 
-    const tarifaSecadora = (await tarifasCarga(client)).secadora;
+    const t = await tarifasCarga(client);
 
     await client.query(
       `UPDATE maquinas SET estado = 'en_uso', en_uso_desde = NOW() WHERE id = $1`,
       [secadora_id]
     );
-    await client.query(
-      `UPDATE nota_cargas SET secadora_id = $1, secadora_usada_id = $1, precio_secadora = $2 WHERE id = ANY($3)`,
-      [secadora_id, tarifaSecadora, objetivo]
-    );
+    // Cada carga cobra el secado según su propia categoría (mirror lavadora).
+    for (const c of objetivo) {
+      await client.query(
+        `UPDATE nota_cargas SET secadora_id = $1, secadora_usada_id = $1, precio_secadora = $2 WHERE id = $3`,
+        [secadora_id, tarifaSecadora(c.lavadora_tipo, c.tipo_prenda, t), c.id]
+      );
+    }
     // Denormalización: la primera secadora de la nota, para lista y vistas legadas.
     await client.query(
       `UPDATE notas SET secadora_id = COALESCE(secadora_id, $1) WHERE id = $2`,
       [secadora_id, id]
     );
+    await sellarCicloSecadoras(client, id);
     await recalcularPrecioTotal(client, id);
 
     const errTope = await validarTopesCargas(client, id);
@@ -1812,11 +1893,14 @@ export const terminarLavado = async (req, res) => {
       [lavadora_id]
     );
 
-    // La secadora entra en uso y su ciclo arranca ahora.
+    // La secadora entra en uso y su ciclo arranca ahora. Se sella su ciclo
+    // según la categoría de la carga (la lavadora que la lavó, ya en
+    // lavadora_usada_id, define mediana/jumbo; la prenda, edredón).
     await client.query(
       `UPDATE maquinas SET estado = 'en_uso', en_uso_desde = NOW() WHERE id = $1`,
       [secadora_id]
     );
+    await sellarCicloSecadoras(client, id);
     // Denormalización: maquina_id apunta a alguna lavadora que siga en la
     // nota (o NULL si esta era la última); secadora_id, a la primera secadora.
     await client.query(
