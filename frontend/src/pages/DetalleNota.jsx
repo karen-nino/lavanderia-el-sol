@@ -161,9 +161,10 @@ export default function DetalleNota() {
   const [confirmCancelar,  setConfirmCancelar]  = useState(false);
   const [confirmFinalizar,  setConfirmFinalizar]  = useState(false);
   const [confirmEliminar,  setConfirmEliminar]  = useState(false);
-  // Tarifa de secadora (Ajustes) para desglosar, solo en pantalla, el costo
-  // de cada carga en lavadora + secadora sin cambiar el total cobrado.
-  const [tarifaSecadora,   setTarifaSecadora]   = useState(45);
+  // Tarifas de secadora por categoría (Ajustes) para desglosar, solo en
+  // pantalla, el costo de cada carga en lavadora + secadora sin cambiar el
+  // total cobrado. Mediana = precio_carga_secadora (columna plana).
+  const [tarifasSecadora,  setTarifasSecadora]  = useState({ mediana: 45, jumbo: 45, edredon: 45 });
 
   useEffect(() => {
     let activo = true;
@@ -174,8 +175,12 @@ export default function DetalleNota() {
       .then(([data, ajustes]) => {
         if (!activo) return;
         setNota(data);
-        if (ajustes?.precio_carga_secadora != null) {
-          setTarifaSecadora(Number(ajustes.precio_carga_secadora));
+        if (ajustes) {
+          setTarifasSecadora({
+            mediana: ajustes.precio_carga_secadora   != null ? Number(ajustes.precio_carga_secadora)   : 45,
+            jumbo:   ajustes.precio_secadora_jumbo    != null ? Number(ajustes.precio_secadora_jumbo)    : 45,
+            edredon: ajustes.precio_secadora_edredon  != null ? Number(ajustes.precio_secadora_edredon)  : 45,
+          });
         }
       })
       .catch(err => { if (activo) setError(err.message); })
@@ -459,10 +464,18 @@ export default function DetalleNota() {
                   // le muestra su tarifa y a la lavadora el resto; si ya trae un
                   // precio propio (notas viejas) se respeta.
                   const totalMaquinas = Number(cg.precio_lavadora) + Number(cg.precio_secadora);
+                  // Tarifa de secado por categoría de la carga (mirror de su
+                  // lavadora): prenda edredón → Edredón; lavadora jumbo → Jumbo;
+                  // resto → Mediana. Solo para el respaldo visual cuando el
+                  // secado quedó en 0 ("ya cobrado").
+                  const catSecado =
+                    String(cg.tipo_prenda).toUpperCase() === 'EDREDON' ? 'edredon'
+                    : (cg.lavadora_usada_tipo ?? cg.lavadora_tipo) === 'lavadora_jumbo' ? 'jumbo'
+                    : 'mediana';
                   const secDisplay = cg.secadora_usada_id
                     ? (Number(cg.precio_secadora) > 0
                         ? Number(cg.precio_secadora)
-                        : Math.min(tarifaSecadora, totalMaquinas))
+                        : Math.min(tarifasSecadora[catSecado], totalMaquinas))
                     : 0;
                   const lavDisplay = totalMaquinas - secDisplay;
                   const maquinasCarga = [
