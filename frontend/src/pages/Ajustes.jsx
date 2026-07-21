@@ -513,6 +513,7 @@ export default function Ajustes() {
           tope_carga_edredon:    topeONull(config.tope_carga_edredon),
           tiempo_carga_mediana:  Number(config.tiempo_carga_mediana),
           tiempo_carga_jumbo:    Number(config.tiempo_carga_jumbo),
+          tiempo_edredon_jumbo:  Number(config.tiempo_edredon_jumbo),
           tiempo_carga_secadora: Number(config.tiempo_carga_secadora),
           tiempo_secadora_jumbo:   Number(config.tiempo_secadora_jumbo),
           tiempo_secadora_edredon: Number(config.tiempo_secadora_edredon),
@@ -551,6 +552,7 @@ export default function Ajustes() {
         tope_carga_edredon:    topeONull(config.tope_carga_edredon),
         tiempo_carga_mediana:  Number(config.tiempo_carga_mediana),
         tiempo_carga_jumbo:    Number(config.tiempo_carga_jumbo),
+        tiempo_edredon_jumbo:  Number(config.tiempo_edredon_jumbo),
         tiempo_carga_secadora: Number(config.tiempo_carga_secadora),
         tiempo_secadora_jumbo:   Number(config.tiempo_secadora_jumbo),
         tiempo_secadora_edredon: Number(config.tiempo_secadora_edredon),
@@ -717,7 +719,8 @@ export default function Ajustes() {
       <div className="border-t border-gray-100" />
 
       {subTitulo('Edredón')}
-      {campoPrecio('precio_edredon_jumbo', 'Tarifa fija por edredón lavado en máquina jumbo (usa el ciclo del jumbo).')}
+      {campoPrecio('precio_edredon_jumbo', 'Tarifa fija por edredón lavado en máquina jumbo.')}
+      {campoTiempo('tiempo_edredon_jumbo', 'Duración del lavado de un edredón en máquina jumbo.')}
     </Section>
 
     <Section titulo="Secadora">
@@ -1268,7 +1271,8 @@ export default function Ajustes() {
 
       <div className="space-y-5">
         {subTituloM('Edredón')}
-        {campoPrecioM('precio_edredon_jumbo', 'Tarifa fija por edredón lavado en máquina jumbo (usa el ciclo del jumbo).')}
+        {campoPrecioM('precio_edredon_jumbo', 'Tarifa fija por edredón lavado en máquina jumbo.')}
+        {campoTiempoM('tiempo_edredon_jumbo', 'Duración del lavado de un edredón en máquina jumbo.')}
       </div>
 
       <p className="text-sm font-bold text-gray-900 pt-20">Secadora</p>
