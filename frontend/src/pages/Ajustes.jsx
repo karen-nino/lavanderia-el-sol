@@ -758,10 +758,10 @@ export default function Ajustes() {
         Límite del precio de una carga (máquinas + productos) según su tamaño. El ajuste manual
         no cuenta contra el tope. Aplica a las cargas Por Encargo (que capturan tamaño).
       </p>
-      {campoTope('tope_carga_chico',  'Carga chica',  'chica')}
-      {campoTope('tope_carga_grande', 'Carga grande', 'grande')}
-      {campoTope('tope_carga_jumbo',  'Carga jumbo',  'jumbo')}
-      {campoTope('tope_carga_edredon', 'Carga edredón', 'de edredón')}
+      {campoTope('tope_carga_chico',  'Carga Chica',  'chica')}
+      {campoTope('tope_carga_grande', 'Carga Grande', 'grande')}
+      {campoTope('tope_carga_jumbo',  'Carga Jumbo',  'jumbo')}
+      {campoTope('tope_carga_edredon', 'Carga Edredón', 'de edredón')}
     </Section>
   );
 
@@ -1314,10 +1314,10 @@ export default function Ajustes() {
         no cuenta contra el tope. Aplica a las cargas Por Encargo (que capturan tamaño).
       </p>
       <div className="space-y-5">
-        {campoTopeM('tope_carga_chico',  'Carga chica',  'chica')}
-        {campoTopeM('tope_carga_grande', 'Carga grande', 'grande')}
-        {campoTopeM('tope_carga_jumbo',  'Carga jumbo',  'jumbo')}
-        {campoTopeM('tope_carga_edredon', 'Carga edredón', 'de edredón')}
+        {campoTopeM('tope_carga_chico',  'Carga Chica',  'chica')}
+        {campoTopeM('tope_carga_grande', 'Carga Grande', 'grande')}
+        {campoTopeM('tope_carga_jumbo',  'Carga Jumbo',  'jumbo')}
+        {campoTopeM('tope_carga_edredon', 'Carga Edredón', 'de edredón')}
       </div>
     </div>
   );
