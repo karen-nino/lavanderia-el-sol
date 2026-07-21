@@ -82,6 +82,7 @@ const MOBILE_SECTIONS = [
   { id: 'perfil',  label: 'Mi Perfil',                 subtitle: 'Información de perfil',    icon: SectionIcon.perfil  },
   { id: 'negocio', label: 'Sucursales',                subtitle: 'Información de sucursales', icon: SectionIcon.negocio },
   { id: 'maquinas', label: 'Máquinas',                  subtitle: 'Detalles de máquinas',      icon: SectionIcon.precios },
+  { id: 'cargas',   label: 'Cargas y Precios',          subtitle: 'Topes de precio por carga', icon: SectionIcon.precios },
   { id: 'alertas', label: 'Alertas y Notificaciones',  subtitle: 'Ajustes de alertas', icon: SectionIcon.alertas },
   { id: 'etiquetas', label: 'Etiquetas de encargo',    subtitle: 'Tipos de tela y tamaños de edredón', icon: SectionIcon.etiquetas },
 ];
@@ -734,34 +735,31 @@ export default function Ajustes() {
       {campoPrecio('precio_secadora_edredon', 'Secado de edredones.')}
       {campoTiempo('tiempo_secadora_edredon', 'Duración del secado de un edredón.')}
     </Section>
-
-    <Section titulo="Tope de precio por carga">
-      <Field label="Carga chica" hint="Precio máximo de una carga chica (máquinas + productos). Vacío = sin tope.">
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-500 flex-shrink-0">$</span>
-          <input type="number" name="tope_carga_chico" min="0" step="0.01"
-            value={config.tope_carga_chico ?? ''} onChange={handleChange} className={INPUT_CLS} />
-          <span className="text-sm text-gray-500 flex-shrink-0">MXN</span>
-        </div>
-      </Field>
-      <Field label="Carga grande" hint="Precio máximo de una carga grande (máquinas + productos). Vacío = sin tope.">
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-500 flex-shrink-0">$</span>
-          <input type="number" name="tope_carga_grande" min="0" step="0.01"
-            value={config.tope_carga_grande ?? ''} onChange={handleChange} className={INPUT_CLS} />
-          <span className="text-sm text-gray-500 flex-shrink-0">MXN</span>
-        </div>
-      </Field>
-      <Field label="Carga jumbo" hint="Precio máximo de una carga jumbo (máquinas + productos). Vacío = sin tope.">
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-500 flex-shrink-0">$</span>
-          <input type="number" name="tope_carga_jumbo" min="0" step="0.01"
-            value={config.tope_carga_jumbo ?? ''} onChange={handleChange} className={INPUT_CLS} />
-          <span className="text-sm text-gray-500 flex-shrink-0">MXN</span>
-        </div>
-      </Field>
-    </Section>
     </>
+  );
+
+  // Renglón de tope (opcional, vacío = sin tope) reutilizable.
+  const campoTope = (name, label, tamano) => (
+    <Field label={label} hint={`Precio máximo de una carga ${tamano} (máquinas + productos). Vacío = sin tope.`}>
+      <div className="flex items-center gap-2">
+        <span className="text-sm text-gray-500 flex-shrink-0">$</span>
+        <input type="number" name={name} min="0" step="0.01"
+          value={config[name] ?? ''} onChange={handleChange} className={INPUT_CLS} />
+        <span className="text-sm text-gray-500 flex-shrink-0">MXN</span>
+      </div>
+    </Field>
+  );
+
+  const seccionCargasPreciosDesktop = (
+    <Section titulo="Tope de precio por carga">
+      <p className="text-sm text-gray-500 -mt-1">
+        Límite del precio de una carga (máquinas + productos) según su tamaño. El ajuste manual
+        no cuenta contra el tope. Aplica a las cargas Por Encargo (que capturan tamaño).
+      </p>
+      {campoTope('tope_carga_chico',  'Carga chica',  'chica')}
+      {campoTope('tope_carga_grande', 'Carga grande', 'grande')}
+      {campoTope('tope_carga_jumbo',  'Carga jumbo',  'jumbo')}
+    </Section>
   );
 
   const seccionSucursalesDesktop = (
@@ -1292,56 +1290,30 @@ export default function Ajustes() {
         {campoPrecioM('precio_secadora_edredon', 'Secado de edredones.')}
         {campoTiempoM('tiempo_secadora_edredon', 'Duración del secado de un edredón.')}
       </div>
+    </div>
+  );
 
-      <div className="border-t border-light-blue/60" />
+  const campoTopeM = (name, label, tamano) => (
+    <MobileField label={label} hint={`Precio máximo de una carga ${tamano} (máquinas + productos). Vacío = sin tope.`}>
+      <div className="flex items-center gap-2">
+        <span className="text-base text-grey flex-shrink-0">$</span>
+        <input type="number" name={name} min="0" step="0.01"
+          value={config[name] ?? ''} onChange={handleChange} className={MOBILE_INPUT_CLS} />
+        <span className="text-base text-grey flex-shrink-0">MXN</span>
+      </div>
+    </MobileField>
+  );
 
+  const seccionCargasPreciosMobile = (
+    <div className="space-y-6">
+      <p className="text-sm text-grey">
+        Límite del precio de una carga (máquinas + productos) según su tamaño. El ajuste manual
+        no cuenta contra el tope. Aplica a las cargas Por Encargo (que capturan tamaño).
+      </p>
       <div className="space-y-5">
-        <p className="text-xs font-semibold text-grey uppercase tracking-wide">Tope de precio por carga</p>
-        <MobileField label="Carga chica" hint="Precio máximo de una carga chica (máquinas + productos). Vacío = sin tope.">
-          <div className="flex items-center gap-2">
-            <span className="text-base text-grey flex-shrink-0">$</span>
-            <input
-              type="number"
-              name="tope_carga_chico"
-              min="0"
-              step="0.01"
-              value={config.tope_carga_chico ?? ''}
-              onChange={handleChange}
-              className={MOBILE_INPUT_CLS}
-            />
-            <span className="text-base text-grey flex-shrink-0">MXN</span>
-          </div>
-        </MobileField>
-        <MobileField label="Carga grande" hint="Precio máximo de una carga grande (máquinas + productos). Vacío = sin tope.">
-          <div className="flex items-center gap-2">
-            <span className="text-base text-grey flex-shrink-0">$</span>
-            <input
-              type="number"
-              name="tope_carga_grande"
-              min="0"
-              step="0.01"
-              value={config.tope_carga_grande ?? ''}
-              onChange={handleChange}
-              className={MOBILE_INPUT_CLS}
-            />
-            <span className="text-base text-grey flex-shrink-0">MXN</span>
-          </div>
-        </MobileField>
-        <MobileField label="Carga jumbo" hint="Precio máximo de una carga jumbo (máquinas + productos). Vacío = sin tope.">
-          <div className="flex items-center gap-2">
-            <span className="text-base text-grey flex-shrink-0">$</span>
-            <input
-              type="number"
-              name="tope_carga_jumbo"
-              min="0"
-              step="0.01"
-              value={config.tope_carga_jumbo ?? ''}
-              onChange={handleChange}
-              className={MOBILE_INPUT_CLS}
-            />
-            <span className="text-base text-grey flex-shrink-0">MXN</span>
-          </div>
-        </MobileField>
+        {campoTopeM('tope_carga_chico',  'Carga chica',  'chica')}
+        {campoTopeM('tope_carga_grande', 'Carga grande', 'grande')}
+        {campoTopeM('tope_carga_jumbo',  'Carga jumbo',  'jumbo')}
       </div>
     </div>
   );
@@ -1399,6 +1371,7 @@ export default function Ajustes() {
     perfil:  seccionPerfilMobile,
     negocio: seccionSucursalesMobile,
     maquinas: seccionPreciosMobile,
+    cargas: seccionCargasPreciosMobile,
     alertas: seccionAlertasMobile,
     etiquetas: seccionEtiquetasMobile,
   };
@@ -1520,6 +1493,7 @@ export default function Ajustes() {
 
         <div className="space-y-6">
           {seccionPreciosDesktop}
+          {seccionCargasPreciosDesktop}
           {seccionSucursalesDesktop}
           {seccionAlertasDesktop}
           {seccionEtiquetasDesktop}
