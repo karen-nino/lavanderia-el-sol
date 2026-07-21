@@ -1271,7 +1271,7 @@ export default function Ajustes() {
         {campoPrecioM('precio_edredon_jumbo', 'Tarifa fija por edredón lavado en máquina jumbo (usa el ciclo del jumbo).')}
       </div>
 
-      <p className="text-sm font-bold text-gray-900 pt-2">Secadora</p>
+      <p className="text-sm font-bold text-gray-900 pt-20">Secadora</p>
       <div className="space-y-5">
         {subTituloM('Mediana')}
         {campoPrecioM('precio_carga_secadora', 'Secado de cargas medianas (ropa en lavadora mediana).')}
