@@ -197,9 +197,11 @@ async function sellarCicloSecadoras(client, notaId) {
 // puede rebasar su tope sumando lavadora + secadora + productos. El ajuste
 // manual va aparte por decisión del negocio y NO cuenta contra el tope.
 // Es tope duro para todos los roles (incluido admin); NULL en Ajustes =
-// sin tope. Se llama antes del COMMIT en cada ruta que pueda encarecer una
-// carga (crear, editar, activar, asignar secadora). Devuelve el mensaje de
-// error o null si todas las cargas caben.
+// sin tope. Aplica SOLO a Servicio por Encargo (modalidad POR_ENCARGO): el
+// Autoservicio no captura tamaño y queda fuera; el filtro por modalidad lo
+// hace explícito además del tamaño. Se llama antes del COMMIT en cada ruta
+// que pueda encarecer una carga (crear, editar, activar, asignar secadora).
+// Devuelve el mensaje de error o null si todas las cargas caben.
 async function validarTopesCargas(client, notaId) {
   const { rows } = await client.query(
     `SELECT nc.orden, nc.tamano,
@@ -211,9 +213,11 @@ async function validarTopesCargas(client, notaId) {
               WHEN 'jumbo'  THEN a.tope_carga_jumbo
             END AS tope
        FROM nota_cargas nc
+       JOIN notas n ON n.id = nc.nota_id
        CROSS JOIN ajustes a
        LEFT JOIN nota_productos np ON np.carga_id = nc.id
-      WHERE nc.nota_id = $1 AND nc.tamano IS NOT NULL AND a.id = 1
+      WHERE nc.nota_id = $1 AND n.modalidad = 'POR_ENCARGO'
+        AND nc.tamano IS NOT NULL AND a.id = 1
       GROUP BY nc.id, a.tope_carga_chico, a.tope_carga_grande, a.tope_carga_jumbo
       ORDER BY nc.orden`,
     [notaId]
