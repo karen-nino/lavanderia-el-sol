@@ -52,8 +52,20 @@ async function request(path, options = {}) {
   }
 
   if (res.status === 401) {
+    // Se intenta recuperar el motivo que manda el backend para avisarle al
+    // usuario por qué se cerró su sesión (p. ej. inició sesión en otro
+    // dispositivo). Se guarda en sessionStorage para que la pantalla de login
+    // lo muestre tras la redirección.
+    let motivo = null;
+    try {
+      const body = await res.json();
+      motivo = body?.message || null;
+    } catch {
+      // Respuesta sin JSON: sin motivo específico.
+    }
     localStorage.removeItem('token');
     localStorage.removeItem('usuario');
+    if (motivo) sessionStorage.setItem('authAviso', motivo);
     window.location.href = '/login';
     return;
   }

@@ -5,13 +5,13 @@ export const verifyToken = async (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
 
-  if (!token) return res.status(401).json({ message: 'Access denied. No token provided.' });
+  if (!token) return res.status(401).json({ message: 'Tu sesión terminó. Inicia sesión de nuevo.' });
 
   let decoded;
   try {
     decoded = jwt.verify(token, process.env.JWT_SECRET);
   } catch (err) {
-    return res.status(401).json({ message: 'Invalid or expired token.' });
+    return res.status(401).json({ message: 'Tu sesión expiró. Inicia sesión de nuevo.' });
   }
 
   // La firma del token no basta: el usuario pudo ser desactivado o cambiar

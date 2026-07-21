@@ -14,7 +14,19 @@ export default function Login() {
   const [buscando, setBuscando]         = useState(false);
   const [password, setPassword]         = useState('');
   const [error, setError]               = useState('');
+  const [aviso, setAviso]               = useState('');
   const [loading, setLoading]           = useState(false);
+
+  // Motivo por el que se cerró la sesión anterior (lo deja api.js al recibir un
+  // 401, p. ej. tras iniciar sesión en otro dispositivo). Se muestra una vez y
+  // se limpia para que no reaparezca en visitas posteriores al login.
+  useEffect(() => {
+    const motivo = sessionStorage.getItem('authAviso');
+    if (motivo) {
+      setAviso(motivo);
+      sessionStorage.removeItem('authAviso');
+    }
+  }, []);
 
   const { login } = useAuth();
   const navigate = useNavigate();
@@ -84,6 +96,7 @@ export default function Login() {
       return;
     }
     setError('');
+    setAviso('');
     setLoading(true);
     try {
       const data = await api.post('/auth/login', {
@@ -112,6 +125,13 @@ export default function Login() {
         {/* Card */}
         <div className="bg-white rounded-2xl shadow-2xl p-8">
           <h2 className="text-base font-semibold text-gray-800 mb-6">Iniciar sesión</h2>
+
+          {aviso && (
+            <div className="bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-lg px-3 py-2.5 mb-4">
+              {aviso}
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="space-y-4">
             <div ref={containerRef} className="relative">
               <label className="block text-sm font-medium text-gray-700 mb-1.5">
