@@ -19,13 +19,22 @@ export const verifyToken = async (req, res, next) => {
   // petición para que desactivar a alguien corte su sesión de inmediato.
   try {
     const { rows } = await pool.query(
-      'SELECT id, rol, sucursal FROM usuarios WHERE id = $1 AND activo = TRUE',
+      'SELECT id, rol, sucursal, session_id FROM usuarios WHERE id = $1 AND activo = TRUE',
       [decoded.id]
     );
     if (rows.length === 0) {
       return res.status(401).json({ message: 'Sesión revocada. Inicia sesión de nuevo.' });
     }
-    req.user = rows[0];
+
+    // Sesión única por cuenta: si el id de sesión del token no coincide con el
+    // vigente, significa que se inició sesión en otro dispositivo después. Se
+    // rechaza para que la sesión anterior quede cerrada.
+    if (rows[0].session_id && decoded.sid !== rows[0].session_id) {
+      return res.status(401).json({ message: 'Se inició sesión en otro dispositivo.' });
+    }
+
+    const { session_id, ...user } = rows[0];
+    req.user = user;
     next();
   } catch (err) {
     console.error('verifyToken error:', err);
