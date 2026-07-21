@@ -122,7 +122,9 @@ export default function Dashboard() {
   const enUso            = maquinas.filter(m => m.estado === 'en_uso').length;
   const notasPagadas     = notasDeHoy.filter(n => n.estado_pago === 'PAGADO').length;
   const notasPorCobrar   = notasDeHoy.filter(n => n.estado_pago === 'PENDIENTE').length;
-  const paraEntregar     = notasDeHoy.filter(n => ['LISTA', 'PAGADA'].includes(n.estado)).length;
+  // "Para Entregar" no se reinicia al día: cuenta todas las notas listas para
+  // entregar (LISTA/PAGADA) sin importar cuándo se crearon, hasta que finalicen.
+  const paraEntregar     = notas.filter(n => ['LISTA', 'PAGADA'].includes(n.estado)).length;
   const ventasHoy        = ventas?.tarjetas?.total_cobrado ?? 0;
 
   if (loading) {
