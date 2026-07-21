@@ -510,6 +510,7 @@ export default function Ajustes() {
           tope_carga_chico:      topeONull(config.tope_carga_chico),
           tope_carga_grande:     topeONull(config.tope_carga_grande),
           tope_carga_jumbo:      topeONull(config.tope_carga_jumbo),
+          tope_carga_edredon:    topeONull(config.tope_carga_edredon),
           tiempo_carga_mediana:  Number(config.tiempo_carga_mediana),
           tiempo_carga_jumbo:    Number(config.tiempo_carga_jumbo),
           tiempo_carga_secadora: Number(config.tiempo_carga_secadora),
@@ -547,6 +548,7 @@ export default function Ajustes() {
         tope_carga_chico:      topeONull(config.tope_carga_chico),
         tope_carga_grande:     topeONull(config.tope_carga_grande),
         tope_carga_jumbo:      topeONull(config.tope_carga_jumbo),
+        tope_carga_edredon:    topeONull(config.tope_carga_edredon),
         tiempo_carga_mediana:  Number(config.tiempo_carga_mediana),
         tiempo_carga_jumbo:    Number(config.tiempo_carga_jumbo),
         tiempo_carga_secadora: Number(config.tiempo_carga_secadora),
@@ -759,6 +761,7 @@ export default function Ajustes() {
       {campoTope('tope_carga_chico',  'Carga chica',  'chica')}
       {campoTope('tope_carga_grande', 'Carga grande', 'grande')}
       {campoTope('tope_carga_jumbo',  'Carga jumbo',  'jumbo')}
+      {campoTope('tope_carga_edredon', 'Carga edredón', 'de edredón')}
     </Section>
   );
 
@@ -1314,6 +1317,7 @@ export default function Ajustes() {
         {campoTopeM('tope_carga_chico',  'Carga chica',  'chica')}
         {campoTopeM('tope_carga_grande', 'Carga grande', 'grande')}
         {campoTopeM('tope_carga_jumbo',  'Carga jumbo',  'jumbo')}
+        {campoTopeM('tope_carga_edredon', 'Carga edredón', 'de edredón')}
       </div>
     </div>
   );

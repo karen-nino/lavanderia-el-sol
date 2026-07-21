@@ -97,8 +97,9 @@ export default function NuevaNota() {
   const [telas,             setTelas]             = useState([]);
   const [tamanosEdredon,    setTamanosEdredon]    = useState([]);
   const [precios,           setPrecios]           = useState({ mediana: 70, jumbo: 70, secadora: 45, secadoraJumbo: 45, secadoraEdredon: 45, edredonJumbo: 80 });
-  // Tope de precio por tamaño de carga (Ajustes); null = sin tope.
-  const [topes,             setTopes]             = useState({ chico: null, grande: null, jumbo: null });
+  // Tope de precio por carga (Ajustes); null = sin tope. `edredon` es un tope
+  // por prenda que manda sobre el del tamaño para las cargas de edredón.
+  const [topes,             setTopes]             = useState({ chico: null, grande: null, jumbo: null, edredon: null });
   const [loadingData,       setLoadingData]       = useState(true);
   const [form,              setForm]              = useState(FORM_INIT);
   const [productosLista,    setProductosLista]    = useState([]);
@@ -202,9 +203,10 @@ export default function NuevaNota() {
             edredonJumbo:    cfg.precio_edredon_jumbo    != null ? Number(cfg.precio_edredon_jumbo)    : 80,
           });
           setTopes({
-            chico:  cfg.tope_carga_chico  != null ? Number(cfg.tope_carga_chico)  : null,
-            grande: cfg.tope_carga_grande != null ? Number(cfg.tope_carga_grande) : null,
-            jumbo:  cfg.tope_carga_jumbo  != null ? Number(cfg.tope_carga_jumbo)  : null,
+            chico:   cfg.tope_carga_chico   != null ? Number(cfg.tope_carga_chico)   : null,
+            grande:  cfg.tope_carga_grande  != null ? Number(cfg.tope_carga_grande)  : null,
+            jumbo:   cfg.tope_carga_jumbo   != null ? Number(cfg.tope_carga_jumbo)   : null,
+            edredon: cfg.tope_carga_edredon != null ? Number(cfg.tope_carga_edredon) : null,
           });
         }
         setClientes(cli);
@@ -401,7 +403,11 @@ export default function NuevaNota() {
          + (c.secadora_id ? precioSecado(c.maquina_id, c.tipo_prenda) : 0)
          + subtotalProductosLista(c.productos);
   };
-  const topeDeCarga  = (c) => (c?.tamano ? (topes[c.tamano] ?? null) : null);
+  // Prenda edredón usa su tope dedicado (manda sobre el del tamaño).
+  const topeDeCarga  = (c) => {
+    if (String(c?.tipo_prenda).toUpperCase() === 'EDREDON') return topes.edredon ?? null;
+    return c?.tamano ? (topes[c.tamano] ?? null) : null;
+  };
   const excesoDeCarga = (c) => {
     const tope = topeDeCarga(c);
     return tope != null ? usadoContraTope(c) - tope : 0;

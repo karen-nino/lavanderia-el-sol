@@ -61,6 +61,7 @@ export const updateAjustes = async (req, res) => {
     tope_carga_chico,
     tope_carga_grande,
     tope_carga_jumbo,
+    tope_carga_edredon,
     tiempo_carga_mediana,
     tiempo_carga_jumbo,
     tiempo_carga_secadora,
@@ -86,7 +87,7 @@ export const updateAjustes = async (req, res) => {
   }
   // Topes de precio por tamaño de carga: opcionales. null o '' los borra
   // (sin tope); si viene un valor debe ser un número mayor o igual a 0.
-  const topes = { tope_carga_chico, tope_carga_grande, tope_carga_jumbo };
+  const topes = { tope_carga_chico, tope_carga_grande, tope_carga_jumbo, tope_carga_edredon };
   for (const [campo, valor] of Object.entries(topes)) {
     if (valor !== undefined && valor !== null && valor !== '' &&
         (!esNumero(valor) || Number(valor) < 0)) {
@@ -120,6 +121,7 @@ export const updateAjustes = async (req, res) => {
   if (tope_carga_chico      !== undefined) { updates.push(`tope_carga_chico = $${i++}`);      values.push(topeONull(tope_carga_chico)); }
   if (tope_carga_grande     !== undefined) { updates.push(`tope_carga_grande = $${i++}`);     values.push(topeONull(tope_carga_grande)); }
   if (tope_carga_jumbo      !== undefined) { updates.push(`tope_carga_jumbo = $${i++}`);      values.push(topeONull(tope_carga_jumbo)); }
+  if (tope_carga_edredon    !== undefined) { updates.push(`tope_carga_edredon = $${i++}`);    values.push(topeONull(tope_carga_edredon)); }
   if (tiempo_carga_mediana  !== undefined) { updates.push(`tiempo_carga_mediana = $${i++}`);  values.push(tiempo_carga_mediana); }
   if (tiempo_carga_jumbo    !== undefined) { updates.push(`tiempo_carga_jumbo = $${i++}`);    values.push(tiempo_carga_jumbo); }
   if (tiempo_carga_secadora !== undefined) { updates.push(`tiempo_carga_secadora = $${i++}`); values.push(tiempo_carga_secadora); }

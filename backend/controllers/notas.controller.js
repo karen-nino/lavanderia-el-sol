@@ -205,20 +205,24 @@ async function sellarCicloSecadoras(client, notaId) {
 async function validarTopesCargas(client, notaId) {
   const { rows } = await client.query(
     `SELECT nc.orden, nc.tamano,
+            UPPER(COALESCE(nc.tipo_prenda, '')) = 'EDREDON' AS es_edredon,
             nc.precio_lavadora + nc.precio_secadora AS maquinas,
             COALESCE(SUM(np.cantidad * np.precio_unitario), 0) AS productos,
-            CASE nc.tamano
-              WHEN 'chico'  THEN a.tope_carga_chico
-              WHEN 'grande' THEN a.tope_carga_grande
-              WHEN 'jumbo'  THEN a.tope_carga_jumbo
+            -- Prenda edredón: tope dedicado, por encima del de su tamaño.
+            CASE
+              WHEN UPPER(COALESCE(nc.tipo_prenda, '')) = 'EDREDON' THEN a.tope_carga_edredon
+              WHEN nc.tamano = 'chico'  THEN a.tope_carga_chico
+              WHEN nc.tamano = 'grande' THEN a.tope_carga_grande
+              WHEN nc.tamano = 'jumbo'  THEN a.tope_carga_jumbo
             END AS tope
        FROM nota_cargas nc
        JOIN notas n ON n.id = nc.nota_id
        CROSS JOIN ajustes a
        LEFT JOIN nota_productos np ON np.carga_id = nc.id
       WHERE nc.nota_id = $1 AND n.modalidad = 'POR_ENCARGO'
-        AND nc.tamano IS NOT NULL AND a.id = 1
-      GROUP BY nc.id, a.tope_carga_chico, a.tope_carga_grande, a.tope_carga_jumbo
+        AND (nc.tamano IS NOT NULL OR UPPER(COALESCE(nc.tipo_prenda, '')) = 'EDREDON')
+        AND a.id = 1
+      GROUP BY nc.id, a.tope_carga_chico, a.tope_carga_grande, a.tope_carga_jumbo, a.tope_carga_edredon
       ORDER BY nc.orden`,
     [notaId]
   );
@@ -227,7 +231,8 @@ async function validarTopesCargas(client, notaId) {
     if (r.tope == null) continue;
     const total = Number(r.maquinas) + Number(r.productos);
     if (total > Number(r.tope) + 1e-9) {
-      return `La carga ${r.orden} (${r.tamano}) rebasa el tope de ${fmt(r.tope)}: ` +
+      const etiqueta = r.es_edredon ? 'edredón' : r.tamano;
+      return `La carga ${r.orden} (${etiqueta}) rebasa el tope de ${fmt(r.tope)}: ` +
              `máquinas ${fmt(r.maquinas)} + productos ${fmt(r.productos)} = ${fmt(total)}. ` +
              `Quita ${fmt(total - Number(r.tope))} en productos para continuar.`;
     }
