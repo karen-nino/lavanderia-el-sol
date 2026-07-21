@@ -40,6 +40,12 @@ export default function Salidas() {
   const [cargasSel,        setCargasSel]        = useState([]);
   const [loadingMaquinas,  setLoadingMaquinas]  = useState(false);
 
+  // Asignar una máquina extra (lavadora o secadora): crea una carga nueva,
+  // por cobrar o sin cobro según elija el empleado.
+  const [asignarOpen,      setAsignarOpen]      = useState(false);
+  const [asignarMaqSel,    setAsignarMaqSel]    = useState('');
+  const [asignarCobrar,    setAsignarCobrar]    = useState(null); // true | false | null
+
   // Terminar el lavado de UNA lavadora: elegir la secadora de su carga
   const [lavTerminando,    setLavTerminando]    = useState(null); // máquina lavadora
   const [secadorasDisp,    setSecadorasDisp]    = useState([]);
@@ -191,6 +197,43 @@ export default function Salidas() {
         })),
       });
       setActivarOpen(false);
+      await cargarDatos();
+    } catch (err) {
+      setErrorAccion(err.message);
+    } finally {
+      setLoadingMaquina(false);
+    }
+  }
+
+  // Abre el selector para asignar una máquina extra (lavadora o secadora).
+  async function iniciarAsignar() {
+    setErrorAccion('');
+    setAsignarMaqSel('');
+    setAsignarCobrar(null);
+    setAsignarOpen(true);
+    setLoadingMaquinas(true);
+    try {
+      const data = await api.get('/maquinas');
+      setMaquinasDisp((data ?? []).filter(m => m.estado === 'disponible'));
+    } catch (err) {
+      setErrorAccion(err.message);
+    } finally {
+      setLoadingMaquinas(false);
+    }
+  }
+
+  // Asigna la máquina elegida: el backend crea la carga nueva (por cobrar o
+  // sin cobro) y la máquina arranca de inmediato.
+  async function confirmarAsignar() {
+    if (!asignarMaqSel || asignarCobrar === null) return;
+    setLoadingMaquina(true);
+    setErrorAccion('');
+    try {
+      await api.patch(`/notas/${id}/asignar-maquina`, {
+        maquina_id: Number(asignarMaqSel),
+        cobrar: asignarCobrar,
+      });
+      setAsignarOpen(false);
       await cargarDatos();
     } catch (err) {
       setErrorAccion(err.message);
@@ -371,10 +414,23 @@ export default function Salidas() {
 
       {/* Sección 1 — Máquinas */}
       <div className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
-        <div className="px-4 py-3 border-b border-gray-50">
+        <div className="px-4 py-3 border-b border-gray-50 flex items-center justify-between gap-2">
           <h2 className="text-sm font-semibold text-gray-700">
             {maquinasAsignadas.length > 1 ? 'Máquinas asignadas' : 'Máquina asignada'}
           </h2>
+          {/* Asignar una máquina extra: disponible salvo en notas cerradas */}
+          {nota && !['FINALIZADA', 'CANCELADA'].includes(nota.estado) && (
+            <button
+              onClick={iniciarAsignar}
+              disabled={loadingMaquina}
+              className="flex items-center gap-1 text-xs font-medium text-blue hover:underline disabled:opacity-60"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+              </svg>
+              Asignar Máquina
+            </button>
+          )}
         </div>
         <div className="px-4 py-4 space-y-3">
           {maquinasAsignadas.length > 0 ? (
@@ -753,6 +809,137 @@ export default function Salidas() {
                 className="flex-1 bg-blue hover:opacity-90 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
               >
                 {loadingMaquina ? 'Activando...' : 'Activar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal asignar máquina extra — cobro (por cobrar / sin cobro) + máquina */}
+      {asignarOpen && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div>
+              <h3 className="text-base font-bold text-gray-900">Asignar máquina</h3>
+              <p className="text-sm text-gray-500 mt-1">
+                Se agrega una <span className="font-medium text-gray-700">carga nueva</span> a la nota y la máquina arranca de inmediato.
+              </p>
+            </div>
+
+            {errorAccion && (
+              <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">
+                {errorAccion}
+              </div>
+            )}
+
+            {/* Cobro de la carga nueva */}
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Cobro</p>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setAsignarCobrar(true)}
+                  className={`flex flex-col items-start gap-0.5 px-4 py-3 border-2 rounded-xl text-left transition-colors ${
+                    asignarCobrar === true ? 'border-blue bg-light-blue' : 'border-gray-200 bg-white hover:border-blue-300'
+                  }`}
+                >
+                  <span className="text-sm font-medium text-gray-800">Por cobrar</span>
+                  <span className="text-xs text-gray-500">Suma la tarifa al total</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAsignarCobrar(false)}
+                  className={`flex flex-col items-start gap-0.5 px-4 py-3 border-2 rounded-xl text-left transition-colors ${
+                    asignarCobrar === false ? 'border-blue bg-light-blue' : 'border-gray-200 bg-white hover:border-blue-300'
+                  }`}
+                >
+                  <span className="text-sm font-medium text-gray-800">Sin cobro</span>
+                  <span className="text-xs text-gray-500">La carga va en $0</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Máquina (lavadora o secadora) */}
+            {loadingMaquinas ? (
+              <div className="flex justify-center py-6">
+                <div className="animate-spin rounded-full h-7 w-7 border-b-2 border-blue" />
+              </div>
+            ) : maquinasDisp.length === 0 ? (
+              <p className="text-sm text-gray-400 text-center py-6">No hay máquinas disponibles.</p>
+            ) : (
+              <div className="space-y-4">
+                {/* Lavadoras */}
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Lavadoras</p>
+                  {maquinasDisp.filter(m => m.tipo !== 'secadora').length === 0 ? (
+                    <p className="text-sm text-gray-400">No hay lavadoras disponibles.</p>
+                  ) : (
+                    maquinasDisp.filter(m => m.tipo !== 'secadora').map(m => {
+                      const selected = String(asignarMaqSel) === String(m.id);
+                      return (
+                        <button
+                          key={m.id}
+                          type="button"
+                          onClick={() => setAsignarMaqSel(selected ? '' : String(m.id))}
+                          className={`w-full flex items-center justify-between gap-2 px-4 py-3 border-2 rounded-xl text-left transition-colors ${
+                            selected ? 'border-blue bg-light-blue' : 'border-gray-200 bg-white hover:border-blue-300'
+                          }`}
+                        >
+                          <span className="font-medium text-gray-800">{m.nombre}</span>
+                          {MAQUINA_TIPO_LABEL[m.tipo] && (
+                            <span className="text-xs text-gray-500">{MAQUINA_TIPO_LABEL[m.tipo]}</span>
+                          )}
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+
+                {/* Secadoras */}
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Secadoras</p>
+                  {maquinasDisp.filter(m => m.tipo === 'secadora').length === 0 ? (
+                    <p className="text-sm text-gray-400">No hay secadoras disponibles.</p>
+                  ) : (
+                    maquinasDisp.filter(m => m.tipo === 'secadora').map(m => {
+                      const selected = String(asignarMaqSel) === String(m.id);
+                      return (
+                        <button
+                          key={m.id}
+                          type="button"
+                          onClick={() => setAsignarMaqSel(selected ? '' : String(m.id))}
+                          className={`w-full flex items-center justify-between gap-2 px-4 py-3 border-2 rounded-xl text-left transition-colors ${
+                            selected ? 'border-blue bg-light-blue' : 'border-gray-200 bg-white hover:border-blue-300'
+                          }`}
+                        >
+                          <span className="font-medium text-gray-800">{m.nombre}</span>
+                          {MAQUINA_TIPO_LABEL[m.tipo] && (
+                            <span className="text-xs text-gray-500">{MAQUINA_TIPO_LABEL[m.tipo]}</span>
+                          )}
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setAsignarOpen(false)}
+                disabled={loadingMaquina}
+                className="flex-1 border border-gray-300 text-gray-700 font-medium py-3.5 rounded-lg text-base hover:bg-gray-50 disabled:opacity-60 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={confirmarAsignar}
+                disabled={loadingMaquina || !asignarMaqSel || asignarCobrar === null}
+                className="flex-1 bg-blue hover:opacity-90 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
+              >
+                {loadingMaquina ? 'Asignando...' : 'Asignar'}
               </button>
             </div>
           </div>

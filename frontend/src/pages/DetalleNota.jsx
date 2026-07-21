@@ -66,6 +66,17 @@ function faseMaquina(liveId, usadaId) {
   return 'pendiente';
 }
 
+// Paso vivo de una carga (LAVANDO / SECANDO) según la máquina que tiene
+// asignada ahora mismo: con lavadora activa está lavando; si ya no tiene
+// lavadora pero sí secadora, está secando. Sin máquinas vivas devuelve null
+// (carga pendiente de arrancar o ya terminada). Permite listar cada carga bajo
+// su propio paso, ya que con varias cargas pueden ir desfasadas.
+function pasoCarga(cg) {
+  if (cg.lavadora_id) return 'LAVANDO';
+  if (cg.secadora_id) return 'SECANDO';
+  return null;
+}
+
 function FaseChip({ label, fase }) {
   const s = FASE_ESTILO[fase];
   return (
@@ -644,13 +655,23 @@ export default function DetalleNota() {
                 const done    = i < pasoActual;
                 const current = i === pasoActual;
                 const isLast  = i === PASOS_ESTADO.length - 1;
-                const activo  = done || current;
+                // Cargas que están viviendo ESTE paso ahora mismo (Lavando /
+                // Secando). Con varias cargas pueden ir desfasadas, así que
+                // cada una se lista bajo el paso que le corresponde, no bajo el
+                // paso general de la nota.
+                const cargasAqui = ['LAVANDO', 'SECANDO'].includes(paso.key)
+                  ? (nota.cargas ?? []).filter(cg => pasoCarga(cg) === paso.key)
+                  : [];
+                // Un paso se resalta si ya se pasó, es el actual de la nota, o
+                // tiene alguna carga viviéndolo (p. ej. Secando con una carga
+                // adelantada mientras otra sigue en Lavando).
+                const activo  = done || current || cargasAqui.length > 0;
                 return (
                   <li key={paso.key} className="relative flex gap-3 pb-6 last:pb-0">
                     {!isLast && (
                       <span
                         className={`absolute left-[11px] top-6 -bottom-0 w-px border-l-2 border-dashed ${
-                          done ? 'border-blue-600' : 'border-gray-200'
+                          done || cargasAqui.length > 0 ? 'border-blue-600' : 'border-gray-200'
                         }`}
                       />
                     )}
@@ -663,7 +684,7 @@ export default function DetalleNota() {
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
                         </svg>
-                      ) : current ? (
+                      ) : (current || cargasAqui.length > 0) ? (
                         <span className="w-2 h-2 rounded-full bg-white" />
                       ) : null}
                     </span>
@@ -673,11 +694,11 @@ export default function DetalleNota() {
                       </p>
                       <p className="text-xs text-gray-400">{subtituloEstado(paso.key, { done, current }, paso.fechaKey ? fechaPorEstado[paso.fechaKey] : undefined)}</p>
 
-                      {/* Desglose por carga dentro de la fase actual: cada
-                          carga con su avance Lavado / Secado (independientes). */}
-                      {['LAVANDO', 'SECANDO'].includes(paso.key) && current && (nota.cargas ?? []).length > 0 && (
+                      {/* Desglose de las cargas que viven este paso: cada una
+                          con su avance Lavado / Secado (independientes). */}
+                      {cargasAqui.length > 0 && (
                         <div className="mt-2 space-y-1.5">
-                          {nota.cargas.map(cg => (
+                          {cargasAqui.map(cg => (
                             <div key={cg.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
                               <span className="font-semibold text-gray-500">Carga {cg.orden}</span>
                               <FaseChip label="Lavado" fase={faseMaquina(cg.lavadora_id, cg.lavadora_usada_id)} />

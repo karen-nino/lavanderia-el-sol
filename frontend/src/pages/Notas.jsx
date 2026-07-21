@@ -379,6 +379,11 @@ export default function Notas() {
               const badgeModalidad = BADGE_MODALIDAD[n.modalidad] ?? BADGE_MODALIDAD.AUTOSERVICIO;
               const badgePago      = BADGE_PAGO[n.estado_pago];
               const cliente        = fmtCliente(n) ?? badgeModalidad.label;
+              // Todas las máquinas que la nota usa o usó (las devuelve el backend
+              // en maquinas_nombres). Fallback a la máquina legada por si acaso.
+              const maquinas       = Array.isArray(n.maquinas_nombres) && n.maquinas_nombres.length > 0
+                ? n.maquinas_nombres
+                : (n.maquina_nombre ? [n.maquina_nombre] : []);
               return (
                 <div
                   key={n.id}
@@ -409,9 +414,11 @@ export default function Notas() {
                       <span className="text-sm text-dark-grey">Fecha y Hora</span>
                       <span className="text-sm font-semibold text-dark-blue">{fmtFechaHora(n.created_at)}</span>
                     </div>
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-sm text-dark-grey">Máquina</span>
-                      <span className="text-sm font-semibold text-dark-blue">{n.maquina_nombre ?? 'Sin asignar'}</span>
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="text-sm text-dark-grey">{maquinas.length > 1 ? 'Máquinas' : 'Máquina'}</span>
+                      <span className="text-sm font-semibold text-dark-blue text-right">
+                        {maquinas.length > 0 ? maquinas.join(', ') : 'Sin asignar'}
+                      </span>
                     </div>
                     {badgePago && (
                       <div className="flex items-center justify-between gap-2">
