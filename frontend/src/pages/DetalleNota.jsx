@@ -52,28 +52,31 @@ function progresoPasos(nota) {
   return 0;
 }
 
-// Fase de una máquina dentro de su carga, según si sigue asignada (en curso),
-// ya se usó y liberó (listo) o nunca se asignó (pendiente).
+// Fase de una máquina dentro de su carga: en curso (asignada y EN USO), en
+// espera (asignada pero sin iniciar), listo (ya se usó y liberó) o pendiente
+// (nunca se asignó).
 const FASE_ESTILO = {
   curso:     { label: 'En curso',  cls: 'text-blue-700',  dot: 'bg-blue-500 animate-pulse' },
+  espera:    { label: 'En espera', cls: 'text-gray-500',  dot: 'bg-gray-400' },
   listo:     { label: 'Listo',     cls: 'text-green-700', dot: 'bg-green-500' },
   pendiente: { label: 'Pendiente', cls: 'text-gray-400',  dot: 'bg-gray-300' },
 };
 
-function faseMaquina(liveId, usadaId) {
-  if (liveId) return 'curso';
+// `estado` es el de la máquina viva (en_uso / disponible). Una máquina asignada
+// pero no iniciada está "en espera", no "en curso".
+function faseMaquina(liveId, usadaId, estado) {
+  if (liveId) return estado === 'en_uso' ? 'curso' : 'espera';
   if (usadaId) return 'listo';
   return 'pendiente';
 }
 
-// Paso vivo de una carga (LAVANDO / SECANDO) según la máquina que tiene
-// asignada ahora mismo: con lavadora activa está lavando; si ya no tiene
-// lavadora pero sí secadora, está secando. Sin máquinas vivas devuelve null
-// (carga pendiente de arrancar o ya terminada). Permite listar cada carga bajo
-// su propio paso, ya que con varias cargas pueden ir desfasadas.
+// Paso que la carga está viviendo AHORA (LAVANDO / SECANDO): requiere que su
+// máquina esté realmente EN USO. Una carga asignada pero sin iniciar, o ya
+// terminada, devuelve null (no se lista bajo Lavando/Secando). Permite listar
+// cada carga bajo su propio paso, ya que con varias pueden ir desfasadas.
 function pasoCarga(cg) {
-  if (cg.lavadora_id) return 'LAVANDO';
-  if (cg.secadora_id) return 'SECANDO';
+  if (cg.lavadora_id && cg.lavadora_estado === 'en_uso') return 'LAVANDO';
+  if (cg.secadora_id && cg.secadora_estado === 'en_uso') return 'SECANDO';
   return null;
 }
 
@@ -692,9 +695,9 @@ export default function DetalleNota() {
                             <div key={cg.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
                               <span className="font-semibold text-gray-500">Carga {cg.orden}</span>
                               {paso.key === 'LAVANDO' ? (
-                                <FaseChip label="Lavado" fase={faseMaquina(cg.lavadora_id, cg.lavadora_usada_id)} />
+                                <FaseChip label="Lavado" fase={faseMaquina(cg.lavadora_id, cg.lavadora_usada_id, cg.lavadora_estado)} />
                               ) : (
-                                <FaseChip label="Secado" fase={faseMaquina(cg.secadora_id, cg.secadora_usada_id)} />
+                                <FaseChip label="Secado" fase={faseMaquina(cg.secadora_id, cg.secadora_usada_id, cg.secadora_estado)} />
                               )}
                             </div>
                           ))}
