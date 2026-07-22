@@ -1347,30 +1347,14 @@ export default function NuevaNota() {
                 cargasAuto.filter((_, j) => j !== i).map(x => String(x.lavadora_id)).filter(Boolean)
               );
               const lavadorasOpc = maquinas.filter(m =>
-                m.tipo !== 'secadora'
-                && (c.tipo_prenda !== 'EDREDON' || m.tipo === 'lavadora_jumbo')
-                && !usadasEnOtras.has(String(m.id)));
-              // Al cambiar la prenda de una carga se limpian tela/edredón según
-              // corresponda y, si pasa a Edredón, se quita la lavadora si no es jumbo.
-              const cambiarPrenda = (v) => setCargasAuto(prev => prev.map((x, idx) => {
-                if (idx !== i) return x;
-                const next = { ...x, tipo_prenda: v };
-                if (v !== 'ROPA')    next.tipo_tela = '';
-                if (v !== 'EDREDON') next.tamano_edredon = '';
-                if (v === 'EDREDON') {
-                  const lav = maquinas.find(m => String(m.id) === String(x.lavadora_id));
-                  if (lav && lav.tipo !== 'lavadora_jumbo') next.lavadora_id = '';
-                }
-                return next;
-              }));
+                m.tipo !== 'secadora' && !usadasEnOtras.has(String(m.id)));
               return (
                 <div key={i} className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
                   <div className="flex items-center justify-between">
                     <p className="text-sm font-semibold text-gray-900">Carga {i + 1}</p>
                     <span className="text-sm font-medium text-blue">${subtotalDeCarga(c).toFixed(2)}</span>
                   </div>
-                  {/* Lavadora primero: sus opciones dependen de la prenda, y al
-                      cambiar a Edredón se limpia si la lavadora elegida no es jumbo. */}
+                  {/* Autoservicio: cada carga solo elige su lavadora (siempre ropa). */}
                   <div>
                     <label className="block text-xs font-medium text-gray-500 mb-1">Lavadora</label>
                     <select
@@ -1386,58 +1370,6 @@ export default function NuevaNota() {
                       ))}
                     </select>
                   </div>
-
-                  {/* Tipo de prenda por carga */}
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1">Tipo de prenda</label>
-                    <select
-                      value={c.tipo_prenda}
-                      onChange={e => cambiarPrenda(e.target.value)}
-                      className={INPUT_CLS}
-                    >
-                      {TIPOS_PRENDA.map(opt => (
-                        <option key={opt.v} value={opt.v}>{opt.label}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Tipo de tela (solo ropa) */}
-                  {c.tipo_prenda === 'ROPA' && (
-                    <div>
-                      <label className="block text-xs font-medium text-gray-500 mb-1">
-                        Tipo de tela <span className="font-normal text-gray-400">(opcional)</span>
-                      </label>
-                      <select
-                        value={c.tipo_tela}
-                        onChange={e => actualizarCarga(i, 'tipo_tela', e.target.value)}
-                        className={INPUT_CLS}
-                      >
-                        <option value="">Sin asignar</option>
-                        {telas.filter(t => t.activo || t.nombre === c.tipo_tela).map(t => (
-                          <option key={t.id} value={t.nombre}>{t.nombre}</option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-
-                  {/* Tamaño del edredón (solo edredón) */}
-                  {c.tipo_prenda === 'EDREDON' && (
-                    <div>
-                      <label className="block text-xs font-medium text-gray-500 mb-1">
-                        Tamaño del edredón <span className="font-normal text-gray-400">(opcional)</span>
-                      </label>
-                      <select
-                        value={c.tamano_edredon}
-                        onChange={e => actualizarCarga(i, 'tamano_edredon', e.target.value)}
-                        className={INPUT_CLS}
-                      >
-                        <option value="">Sin asignar</option>
-                        {tamanosEdredon.filter(t => t.activo || t.nombre === c.tamano_edredon).map(t => (
-                          <option key={t.id} value={t.nombre}>{t.nombre}</option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
                 </div>
               );
             })}

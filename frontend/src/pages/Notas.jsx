@@ -145,6 +145,12 @@ export default function Notas() {
       if (n.estado_pago !== 'PENDIENTE') return false;
     } else if (filtro === 'POR_ENTREGAR') {
       if (!ESTADOS_POR_ENTREGAR.includes(n.estado)) return false;
+    } else if (filtro === 'SECANDO') {
+      // Una nota que lava y seca a la vez tiene estado LAVANDO, pero también
+      // debe aparecer en el filtro Secando si tiene una secadora activa.
+      const secando = n.estado === 'SECANDO'
+        || (n.estado === 'LAVANDO' && n.hay_secadora_activa);
+      if (!secando) return false;
     } else if (filtro !== 'TODOS' && n.estado !== filtro) {
       return false;
     }
