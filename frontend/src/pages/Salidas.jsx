@@ -23,6 +23,13 @@ const MAQUINA_TIPO_LABEL = {
 // Edredón → E. Otros valores se muestran tal cual.
 const TAMANO_ABBR = { Mediana: 'M', Jumbo: 'J', Edredón: 'E' };
 
+// Etiqueta de tamaño de una máquina (para selectores): la secadora usa su
+// tamano (Mediana/Jumbo); la lavadora, su tipo. Cae al tipo si no hay tamano.
+const labelTamano = (m) =>
+  m.tipo === 'secadora' && m.tamano
+    ? m.tamano.charAt(0).toUpperCase() + m.tamano.slice(1)
+    : MAQUINA_TIPO_LABEL[m.tipo];
+
 export default function Salidas() {
   const { id }   = useParams();
   const navigate = useNavigate();
@@ -499,10 +506,8 @@ export default function Salidas() {
                 {grupo.maquinas.map((m, i) => {
                   const cfg = BADGE_MAQUINA_ESTADO[m.estado];
                   // La secadora muestra su tamaño (Mediana/Jumbo) igual que la
-                  // lavadora; sin tamaño cae a "Secadora". Se muestra abreviado (M/J/E).
-                  const tamanoLabel = m.tipo === 'secadora' && m.tamano
-                    ? m.tamano.charAt(0).toUpperCase() + m.tamano.slice(1)
-                    : MAQUINA_TIPO_LABEL[m.tipo];
+                  // lavadora; se muestra abreviado (M/J/E) en el renglón.
+                  const tamanoLabel = labelTamano(m);
                   const tipoLabel = TAMANO_ABBR[tamanoLabel] ?? tamanoLabel;
                   return (
                     <div key={i} className="flex flex-wrap items-center justify-between gap-2">
@@ -760,9 +765,7 @@ export default function Salidas() {
                 {maquinasDisp.map(m => {
                   const selected = String(cambiarSel) === String(m.id);
                   // Muestra el tamaño (Mediana/Jumbo); la secadora usa su tamano.
-                  const tamanoLabel = m.tipo === 'secadora' && m.tamano
-                    ? m.tamano.charAt(0).toUpperCase() + m.tamano.slice(1)
-                    : MAQUINA_TIPO_LABEL[m.tipo];
+                  const tamanoLabel = labelTamano(m);
                   return (
                     <button
                       key={m.id}
@@ -920,7 +923,7 @@ export default function Salidas() {
                         <option value="">Sin asignar</option>
                         {maquinasDisp.filter(m => m.tipo !== 'secadora').map(m => (
                           <option key={m.id} value={m.id}>
-                            {m.nombre}{MAQUINA_TIPO_LABEL[m.tipo] ? ` — ${MAQUINA_TIPO_LABEL[m.tipo]}` : ''}
+                            {m.nombre}{labelTamano(m) ? ` — ${labelTamano(m)}` : ''}
                           </option>
                         ))}
                       </select>
@@ -962,8 +965,8 @@ export default function Salidas() {
                           }`}
                         >
                           <span className="font-medium text-gray-800">{m.nombre}</span>
-                          {MAQUINA_TIPO_LABEL[m.tipo] && (
-                            <span className="text-xs text-gray-500">{MAQUINA_TIPO_LABEL[m.tipo]}</span>
+                          {labelTamano(m) && (
+                            <span className="text-xs text-gray-500">{labelTamano(m)}</span>
                           )}
                         </button>
                       );
@@ -989,8 +992,8 @@ export default function Salidas() {
                           }`}
                         >
                           <span className="font-medium text-gray-800">{m.nombre}</span>
-                          {MAQUINA_TIPO_LABEL[m.tipo] && (
-                            <span className="text-xs text-gray-500">{MAQUINA_TIPO_LABEL[m.tipo]}</span>
+                          {labelTamano(m) && (
+                            <span className="text-xs text-gray-500">{labelTamano(m)}</span>
                           )}
                         </button>
                       );
@@ -1095,8 +1098,8 @@ export default function Salidas() {
                           }`}
                         >
                           <span className="font-medium text-gray-800">{m.nombre}</span>
-                          {MAQUINA_TIPO_LABEL[m.tipo] && (
-                            <span className="text-xs text-gray-500">{MAQUINA_TIPO_LABEL[m.tipo]}</span>
+                          {labelTamano(m) && (
+                            <span className="text-xs text-gray-500">{labelTamano(m)}</span>
                           )}
                         </button>
                       );
@@ -1122,8 +1125,8 @@ export default function Salidas() {
                           }`}
                         >
                           <span className="font-medium text-gray-800">{m.nombre}</span>
-                          {MAQUINA_TIPO_LABEL[m.tipo] && (
-                            <span className="text-xs text-gray-500">{MAQUINA_TIPO_LABEL[m.tipo]}</span>
+                          {labelTamano(m) && (
+                            <span className="text-xs text-gray-500">{labelTamano(m)}</span>
                           )}
                         </button>
                       );
@@ -1198,8 +1201,8 @@ export default function Salidas() {
                       }`}
                     >
                       <span className="font-medium text-gray-800">{m.nombre}</span>
-                      {MAQUINA_TIPO_LABEL[m.tipo] && (
-                        <span className="text-xs text-gray-500">{MAQUINA_TIPO_LABEL[m.tipo]}</span>
+                      {labelTamano(m) && (
+                        <span className="text-xs text-gray-500">{labelTamano(m)}</span>
                       )}
                     </button>
                   );
