@@ -463,6 +463,7 @@ export default function DetalleNota() {
                     },
                     cg.secadora_usada_id && {
                       nombre: cg.secadora_usada_nombre, tipo: cg.secadora_usada_tipo,
+                      tamano: cg.secadora_usada_tamano,
                       estado: cg.secadora_id ? cg.secadora_estado : null,
                       precio: Number(cg.precio_secadora),
                     },
@@ -490,12 +491,17 @@ export default function DetalleNota() {
                       ) : (
                         maquinasCarga.map((m, i) => {
                           const cfg = BADGE_MAQUINA_ESTADO[m.estado];
+                          // La secadora muestra su tamaño (Mediana/Jumbo) igual
+                          // que la lavadora; sin tamaño cae a "Secadora".
+                          const tipoLabel = m.tipo === 'secadora' && m.tamano
+                            ? m.tamano.charAt(0).toUpperCase() + m.tamano.slice(1)
+                            : MAQUINA_TIPO_LABEL[m.tipo];
                           return (
                             <div key={i} className="flex items-start justify-between gap-2">
                               <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 min-w-0">
                                 <span className="text-sm font-medium text-gray-800">{m.nombre}</span>
-                                {MAQUINA_TIPO_LABEL[m.tipo] && (
-                                  <span className="text-xs text-gray-500">— {MAQUINA_TIPO_LABEL[m.tipo]}</span>
+                                {tipoLabel && (
+                                  <span className="text-xs text-gray-500">— {tipoLabel}</span>
                                 )}
                                 {cfg && (
                                   <span className={`inline-flex items-center gap-1.5 whitespace-nowrap text-xs font-semibold px-2.5 py-1 rounded-full ${cfg.cls}`}>

@@ -406,7 +406,8 @@ async function cargasDeNota(client, notaId) {
             ms.en_uso_desde AS secadora_en_uso_desde,
             nc.lavadora_usada_id, nc.secadora_usada_id,
             mlu.nombre AS lavadora_usada_nombre, mlu.tipo AS lavadora_usada_tipo,
-            msu.nombre AS secadora_usada_nombre, msu.tipo AS secadora_usada_tipo
+            msu.nombre AS secadora_usada_nombre, msu.tipo AS secadora_usada_tipo,
+            msu.tamano AS secadora_usada_tamano
        FROM nota_cargas nc
        LEFT JOIN maquinas ml  ON ml.id  = nc.lavadora_id
        LEFT JOIN maquinas ms  ON ms.id  = nc.secadora_id

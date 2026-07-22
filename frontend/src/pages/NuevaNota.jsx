@@ -1562,14 +1562,10 @@ export default function NuevaNota() {
                   const lav = maquinas.find(m => String(m.id) === String(c.lavadora_id));
                   const sec = maquinas.find(m => String(m.id) === String(c.secadora_id));
                   const partes = [lav?.nombre, sec?.nombre].filter(Boolean);
-                  const detalle = [
-                    PRENDA_LABEL[c.tipo_prenda],
-                    c.tipo_prenda === 'ROPA' ? c.tipo_tela : c.tamano_edredon,
-                  ].filter(Boolean).join(', ');
                   return (
                     <div key={i} className="flex justify-between">
                       <span>
-                        Carga {i + 1}{detalle ? ` — ${detalle}` : ''}{partes.length > 0 ? ` (${partes.join(' + ')})` : ' · sin máquinas'}
+                        Carga {i + 1}{partes.length > 0 ? ` (${partes.join(' + ')})` : ' · sin máquinas'}
                       </span>
                       <span>${subtotalDeCarga(c).toFixed(2)}</span>
                     </div>
