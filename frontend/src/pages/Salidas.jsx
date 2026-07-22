@@ -634,10 +634,10 @@ export default function Salidas() {
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
             <div className="flex items-center gap-3">
-              <span className="flex-shrink-0 w-9 h-9 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                    d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+              <span className="flex-shrink-0 w-9 h-9 rounded-full bg-green-100 text-green-600 flex items-center justify-center">
+                {/* Ícono de "play" (empezar) */}
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M8 5v14l11-7z" />
                 </svg>
               </span>
               <h3 className="text-base font-bold text-gray-900">
@@ -675,7 +675,16 @@ export default function Salidas() {
       {confirmDetener && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
-            <h3 className="text-base font-bold text-gray-900">Detener ciclo</h3>
+            <div className="flex items-center gap-3">
+              <span className="flex-shrink-0 w-9 h-9 rounded-full bg-red-100 text-red-600 flex items-center justify-center">
+                {/* Ícono de advertencia */}
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                    d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                </svg>
+              </span>
+              <h3 className="text-base font-bold text-gray-900">Detener ciclo</h3>
+            </div>
             <p className="text-sm text-gray-500">
               ¿Detener el ciclo de <span className="font-semibold text-gray-800">{confirmDetener.nombre}</span>? La máquina pasará a disponible y se reiniciará su temporizador.
             </p>
@@ -1018,8 +1027,16 @@ export default function Salidas() {
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4 max-h-[90vh] overflow-y-auto">
             <div>
-              <h3 className="text-base font-bold text-gray-900">Iniciar secado</h3>
-              <p className="text-sm text-gray-500 mt-1">
+              <div className="flex items-center gap-3">
+                <span className="flex-shrink-0 w-9 h-9 rounded-full bg-green-100 text-green-600 flex items-center justify-center">
+                  {/* Ícono de "play" (empezar) */}
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M8 5v14l11-7z" />
+                  </svg>
+                </span>
+                <h3 className="text-base font-bold text-gray-900">Iniciar secado</h3>
+              </div>
+              <p className="text-sm text-gray-500 mt-2">
                 El lavado en <span className="font-semibold text-gray-800">{lavTerminando.nombre}</span> terminó y
                 la lavadora pasará a disponible. Elige la secadora donde continúa su carga; si era
                 la última lavadora, la nota pasará a <span className="font-medium text-gray-700">Secando</span>.
