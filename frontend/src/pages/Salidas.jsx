@@ -759,6 +759,10 @@ export default function Salidas() {
               <div className="space-y-2">
                 {maquinasDisp.map(m => {
                   const selected = String(cambiarSel) === String(m.id);
+                  // Muestra el tamaño (Mediana/Jumbo); la secadora usa su tamano.
+                  const tamanoLabel = m.tipo === 'secadora' && m.tamano
+                    ? m.tamano.charAt(0).toUpperCase() + m.tamano.slice(1)
+                    : MAQUINA_TIPO_LABEL[m.tipo];
                   return (
                     <button
                       key={m.id}
@@ -769,8 +773,8 @@ export default function Salidas() {
                       }`}
                     >
                       <span className="font-medium text-gray-800">{m.nombre}</span>
-                      {MAQUINA_TIPO_LABEL[m.tipo] && (
-                        <span className="text-xs text-gray-500">{MAQUINA_TIPO_LABEL[m.tipo]}</span>
+                      {tamanoLabel && (
+                        <span className="text-xs text-gray-500">{tamanoLabel}</span>
                       )}
                     </button>
                   );
