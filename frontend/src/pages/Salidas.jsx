@@ -36,6 +36,7 @@ export default function Salidas() {
   const [loadingProducto,  setLoadingProducto]  = useState(null); // id del producto en proceso
   const [errorAccion,      setErrorAccion]      = useState('');
   const [confirmDetener,   setConfirmDetener]   = useState(null); // máquina a detener
+  const [confirmIniciar,   setConfirmIniciar]   = useState(null); // máquina a iniciar
 
   // Activar nota En Espera
   const [activarOpen,      setActivarOpen]      = useState(false);
@@ -113,14 +114,17 @@ export default function Salidas() {
   // Arranca UNA máquina asignada y libre (botón "Iniciar Lavado"/"Iniciar
   // Secado" por máquina): la pone en uso y la nota pasa a la fase que
   // corresponda. Las demás máquinas asignadas siguen en espera.
-  async function iniciarMaquina(maquinaId) {
+  async function iniciarMaquina() {
+    if (!confirmIniciar) return;
     setLoadingMaquina(true);
     setErrorAccion('');
     try {
-      await api.patch(`/notas/${id}/activar-pendientes`, { maquina_id: maquinaId });
+      await api.patch(`/notas/${id}/activar-pendientes`, { maquina_id: confirmIniciar.id });
+      setConfirmIniciar(null);
       await cargarDatos();
     } catch (err) {
       setErrorAccion(err.message);
+      setConfirmIniciar(null);
     } finally {
       setLoadingMaquina(false);
     }
@@ -475,11 +479,11 @@ export default function Salidas() {
                       {/* Acción por máquina: cada carga es independiente */}
                       {m.estado === 'disponible' && (
                         <button
-                          onClick={() => iniciarMaquina(m.id)}
+                          onClick={() => setConfirmIniciar(m)}
                           disabled={loadingMaquina}
                           className="px-4 py-2 bg-blue hover:opacity-90 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
                         >
-                          {loadingMaquina ? 'Iniciando...' : (m.tipo === 'secadora' ? 'Iniciar Secado' : 'Iniciar Lavado')}
+                          {m.tipo === 'secadora' ? 'Iniciar Secado' : 'Iniciar Lavado'}
                         </button>
                       )}
                       {m.estado === 'en_uso' && (
@@ -624,6 +628,48 @@ export default function Salidas() {
           </div>
         )}
       </div>
+
+      {/* Modal advertencia iniciar lavado/secado */}
+      {confirmIniciar && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <span className="flex-shrink-0 w-9 h-9 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                    d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                </svg>
+              </span>
+              <h3 className="text-base font-bold text-gray-900">
+                {confirmIniciar.tipo === 'secadora' ? 'Iniciar secado' : 'Iniciar lavado'}
+              </h3>
+            </div>
+            <p className="text-sm text-gray-500">
+              ¿Iniciar el {confirmIniciar.tipo === 'secadora' ? 'secado' : 'lavado'} de{' '}
+              <span className="font-semibold text-gray-800">{confirmIniciar.nombre}</span>? La máquina
+              arrancará su ciclo y quedará en uso. Asegúrate de que la carga ya está dentro.
+            </p>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setConfirmIniciar(null)}
+                disabled={loadingMaquina}
+                className="flex-1 border border-gray-300 text-gray-700 font-medium py-3.5 rounded-lg text-base hover:bg-gray-50 disabled:opacity-60 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={iniciarMaquina}
+                disabled={loadingMaquina}
+                className="flex-1 bg-blue hover:opacity-90 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
+              >
+                {loadingMaquina ? 'Iniciando...' : 'Iniciar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal confirmar detener ciclo */}
       {confirmDetener && (
