@@ -30,27 +30,33 @@ const SQL_MAQUINAS_DE_NOTA = `
   UNION SELECT n.maquina_id
   UNION SELECT n.secadora_id`;
 
-// Fase de proceso de una nota según sus máquinas: LAVANDO si conserva alguna
-// lavadora vinculada y en uso; si solo le quedan secadoras trabajando,
-// SECANDO. (terminar-lavado desvincula la lavadora al pasar la carga a la
-// secadora, así que su presencia implica lavado en curso.)
+// Fase de proceso de una nota según las máquinas EN USO ahora mismo: LAVANDO si
+// alguna lavadora corre; si no, SECANDO si alguna secadora corre; y EN_ESPERA si
+// no hay ninguna máquina en uso (todas asignadas pero sin iniciar, o ya
+// detenidas). (terminar-lavado desvincula la lavadora al pasar a la secadora,
+// así que una lavadora vinculada y en uso implica lavado en curso.)
 async function faseProcesoDeNota(client, notaId) {
   const { rows } = await client.query(
-    `SELECT EXISTS (
-       SELECT 1
-         FROM notas n
-         CROSS JOIN LATERAL (
-           SELECT nc.lavadora_id AS mid FROM nota_cargas nc WHERE nc.nota_id = n.id
-           UNION SELECT n.maquina_id
-         ) x
-         JOIN maquinas m ON m.id = x.mid
-        WHERE n.id = $1
-          AND m.estado = 'en_uso'
-          AND m.tipo <> 'secadora'
-     ) AS lavando`,
+    `SELECT
+       EXISTS (
+         SELECT 1 FROM nota_cargas nc JOIN maquinas m ON m.id = nc.lavadora_id
+          WHERE nc.nota_id = $1 AND m.estado = 'en_uso'
+       ) OR EXISTS (
+         SELECT 1 FROM maquinas m JOIN notas n ON n.maquina_id = m.id
+          WHERE n.id = $1 AND m.estado = 'en_uso' AND m.tipo <> 'secadora'
+       ) AS lavando,
+       EXISTS (
+         SELECT 1 FROM nota_cargas nc JOIN maquinas m ON m.id = nc.secadora_id
+          WHERE nc.nota_id = $1 AND m.estado = 'en_uso'
+       ) OR EXISTS (
+         SELECT 1 FROM maquinas m JOIN notas n ON n.secadora_id = m.id
+          WHERE n.id = $1 AND m.estado = 'en_uso' AND m.tipo = 'secadora'
+       ) AS secando`,
     [notaId]
   );
-  return rows[0].lavando ? 'LAVANDO' : 'SECANDO';
+  if (rows[0].lavando) return 'LAVANDO';
+  if (rows[0].secando) return 'SECANDO';
+  return 'EN_ESPERA';
 }
 
 // IDs (sin repetir) de todas las máquinas vinculadas a una nota.

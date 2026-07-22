@@ -208,6 +208,29 @@ export const detenerCiclo = async (req, res) => {
       [id]
     );
 
+    // Si la máquina pertenece a una nota en proceso, recalcular su fase: al
+    // soltarla la nota puede quedar sin ninguna máquina en uso y volver a
+    // "En Espera" (o seguir Lavando/Secando si otras cargas siguen corriendo).
+    await client.query(
+      `UPDATE notas n SET estado = (CASE
+           WHEN EXISTS (SELECT 1 FROM nota_cargas nc JOIN maquinas m ON m.id = nc.lavadora_id
+                         WHERE nc.nota_id = n.id AND m.estado = 'en_uso')
+             OR EXISTS (SELECT 1 FROM maquinas m WHERE m.id = n.maquina_id AND m.tipo <> 'secadora' AND m.estado = 'en_uso')
+             THEN 'LAVANDO'
+           WHEN EXISTS (SELECT 1 FROM nota_cargas nc JOIN maquinas m ON m.id = nc.secadora_id
+                         WHERE nc.nota_id = n.id AND m.estado = 'en_uso')
+             OR EXISTS (SELECT 1 FROM maquinas m WHERE m.id = n.secadora_id AND m.tipo = 'secadora' AND m.estado = 'en_uso')
+             THEN 'SECANDO'
+           ELSE 'EN_ESPERA'
+         END)::estado_orden
+       WHERE n.estado IN ('LAVANDO', 'SECANDO')
+         AND (
+           EXISTS (SELECT 1 FROM nota_cargas nc WHERE nc.nota_id = n.id AND (nc.lavadora_id = $1 OR nc.secadora_id = $1))
+           OR n.maquina_id = $1 OR n.secadora_id = $1
+         )`,
+      [id]
+    );
+
     if (estabaEnUso) {
       const { rows: cfg } = await client.query('SELECT alerta_ciclo_detenido FROM ajustes WHERE id = 1');
       if (cfg[0]?.alerta_ciclo_detenido) {
