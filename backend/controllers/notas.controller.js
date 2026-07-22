@@ -174,7 +174,7 @@ function tarifaSecadora(secadoraTamano, tipoPrenda, t) {
 // una misma máquina física (lavadora jumbo o cualquier secadora) puede tener
 // distinta duración según lo que procesa: edredón vs. ropa jumbo vs. mediana.
 //   Lavadora: prenda edredón (en jumbo) → edredonLavado; jumbo → jumbo; resto → mediana.
-//   Secadora: prenda edredón → secEdredon; lavadora jumbo → secJumbo; resto → secMediana.
+//   Secadora: prenda edredón → secEdredon; secadora jumbo → secJumbo; resto → secMediana.
 // Idempotente; se llama tras poner máquinas en uso en cualquier flujo.
 async function sellarCicloMaquinas(client, notaId) {
   const ti = await tiemposCarga(client);
@@ -193,15 +193,15 @@ async function sellarCicloMaquinas(client, notaId) {
            JOIN maquinas ml ON ml.id = nc.lavadora_id
           WHERE nc.nota_id = $1 AND nc.lavadora_id IS NOT NULL
          UNION ALL
-         -- Secadoras de la nota (categoría "igual que su lavadora")
+         -- Secadoras de la nota: por el TAMAÑO de la secadora (prenda edredón manda).
          SELECT nc.secadora_id AS mid,
                 CASE
                   WHEN UPPER(COALESCE(nc.tipo_prenda, '')) = 'EDREDON' THEN $5::int
-                  WHEN lav.tipo = 'lavadora_jumbo' THEN $6::int
+                  WHEN ms.tamano = 'jumbo' THEN $6::int
                   ELSE $7::int
                 END AS minutos
            FROM nota_cargas nc
-           LEFT JOIN maquinas lav ON lav.id = COALESCE(nc.lavadora_id, nc.lavadora_usada_id)
+           JOIN maquinas ms ON ms.id = nc.secadora_id
           WHERE nc.nota_id = $1 AND nc.secadora_id IS NOT NULL
        ) ciclos
       WHERE m.id = ciclos.mid AND m.estado = 'en_uso'`,
