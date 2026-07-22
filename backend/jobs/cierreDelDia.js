@@ -13,19 +13,38 @@ const INTERVALO_MS = 5 * 60 * 1000; // revisar cada 5 minutos
 const fmtHora  = new Intl.DateTimeFormat('en-US', { timeZone: TZ, hour: '2-digit', hourCycle: 'h23' });
 const fmtFecha = new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit' });
 
-// Libera todas las máquinas que quedaron en uso y marca sus notas en proceso
+// Libera todas las máquinas que quedaron en uso y cierra sus notas en proceso
 // como LISTA (mismo efecto que el "Procesar carga" manual). Idempotente: si no
-// hay nada en uso no cambia nada. Devuelve los conteos afectados.
+// hay nada en proceso no cambia nada. Devuelve los conteos afectados.
 export async function liberarMaquinasCierreDelDia() {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    // Primero las notas (mientras las máquinas siguen en_uso), luego se liberan.
+    // Se cierran TODAS las notas en proceso (no solo las de la columna legada
+    // maquina_id): con varias cargas la(s) máquina(s) puede(n) vivir solo en
+    // nota_cargas. Se guardan sus IDs para limpiar sus cargas.
     const notas = await client.query(
       `UPDATE notas SET estado = 'LISTA'
          WHERE estado IN ('LAVANDO', 'SECANDO')
-           AND maquina_id IN (SELECT id FROM maquinas WHERE estado = 'en_uso')`
+       RETURNING id`
     );
+    const notaIds = notas.rows.map(r => r.id);
+
+    // Las cargas conservan su máquina como "usada" (historial), pero sueltan la
+    // referencia viva (lavadora_id / secadora_id). Si no, la nota cerrada se
+    // seguiría viendo "en curso" en Detalle aunque su máquina ya esté libre.
+    if (notaIds.length > 0) {
+      await client.query(
+        `UPDATE nota_cargas
+            SET lavadora_usada_id = COALESCE(lavadora_usada_id, lavadora_id),
+                secadora_usada_id = COALESCE(secadora_usada_id, secadora_id),
+                lavadora_id = NULL,
+                secadora_id = NULL
+          WHERE nota_id = ANY($1)`,
+        [notaIds]
+      );
+    }
+
     const maquinas = await client.query(
       `UPDATE maquinas SET estado = 'disponible', en_uso_desde = NULL
          WHERE estado = 'en_uso'`
