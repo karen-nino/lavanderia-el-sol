@@ -600,9 +600,12 @@ export default function DetalleNota() {
                 )
               : <span className="text-gray-400 italic">Anónimo</span>}
           </FilaDetalle>
-          <FilaDetalle label="Instrucciones">
-            {nota.instrucciones ?? <span className="text-gray-400">—</span>}
-          </FilaDetalle>
+          {/* Autoservicio no lleva instrucciones */}
+          {nota.modalidad !== 'AUTOSERVICIO' && (
+            <FilaDetalle label="Instrucciones">
+              {nota.instrucciones ?? <span className="text-gray-400">—</span>}
+            </FilaDetalle>
+          )}
           <FilaDetalle label="Ajuste">
             {nota.ajuste != null ? fmtMonto(nota.ajuste) : '—'}
           </FilaDetalle>
