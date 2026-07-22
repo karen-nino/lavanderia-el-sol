@@ -436,15 +436,16 @@ export default function Salidas() {
               return (
                 <div key={i} className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex flex-wrap items-center gap-2 min-w-0">
+                    {/* Estado: solo el punto de color */}
+                    {cfg && (
+                      <span
+                        className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${cfg.dot} ${m.estado === 'en_uso' ? 'animate-pulse' : ''}`}
+                        title={cfg.label}
+                      />
+                    )}
                     <span className="text-sm font-medium text-gray-800">{m.nombre}</span>
                     {MAQUINA_TIPO_LABEL[m.tipo] && (
                       <span className="text-xs text-gray-500">— {MAQUINA_TIPO_LABEL[m.tipo]}</span>
-                    )}
-                    {cfg && (
-                      <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${cfg.cls}`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot} ${m.estado === 'en_uso' ? 'animate-pulse' : ''}`} />
-                        {cfg.label}
-                      </span>
                     )}
                   </div>
                   {/* Acción por máquina: cada carga es independiente */}
