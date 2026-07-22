@@ -596,15 +596,8 @@ export default function Salidas() {
                           </button>
                         )
                       )}
-                      {/* Ya cumplió su parte: sin acciones, solo indicador. */}
-                      {m.estado === 'terminado' && (
-                        <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-green-700 px-3 py-1.5 rounded-full bg-green-100">
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                          </svg>
-                          Finalizada
-                        </span>
-                      )}
+                      {/* estado "terminado": ya cumplió su parte, sin acciones
+                          (solo el punto verde a la izquierda lo indica). */}
                     </div>
                   );
                 })}
