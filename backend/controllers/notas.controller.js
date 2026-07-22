@@ -2034,6 +2034,148 @@ export const asignarMaquina = async (req, res) => {
   }
 };
 
+// ── PATCH /notas/:id/cambiar-maquina ────────────────────────
+// Cambia una máquina ASIGNADA PERO SIN INICIAR de una carga por otra disponible
+// del mismo tipo (lavadora↔lavadora, secadora↔secadora). Re-tarifa la carga con
+// la nueva máquina (p. ej. secadora mediana→jumbo cambia el precio) y recalcula
+// el total. No aplica a máquinas ya en uso: primero hay que detenerlas.
+export const cambiarMaquina = async (req, res) => {
+  const { id } = req.params;
+  const { maquina_actual_id, maquina_nueva_id } = req.body;
+
+  if (!maquina_actual_id || !maquina_nueva_id) {
+    return res.status(400).json({ message: 'maquina_actual_id y maquina_nueva_id son requeridos.' });
+  }
+  if (String(maquina_actual_id) === String(maquina_nueva_id)) {
+    return res.status(400).json({ message: 'Selecciona una máquina distinta.' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const { rows: notaRows } = await client.query(
+      'SELECT estado FROM notas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
+      [id, req.sucursal]
+    );
+    if (notaRows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: 'Nota no encontrada.' });
+    }
+    if (['FINALIZADA', 'CANCELADA'].includes(notaRows[0].estado)) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'No se puede cambiar una máquina de una nota finalizada o cancelada.' });
+    }
+
+    // La máquina actual debe estar asignada, disponible (sin iniciar) y en la sucursal.
+    const { rows: actRows } = await client.query(
+      'SELECT id, nombre, tipo, estado FROM maquinas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
+      [maquina_actual_id, req.sucursal]
+    );
+    if (actRows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'La máquina actual no existe.' });
+    }
+    if (actRows[0].estado !== 'disponible') {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'Solo puedes cambiar una máquina que aún no ha iniciado. Detén su ciclo primero.' });
+    }
+    const esSecadora = actRows[0].tipo === 'secadora';
+    const cargaCol   = esSecadora ? 'secadora_id'        : 'lavadora_id';
+    const usadaCol   = esSecadora ? 'secadora_usada_id'  : 'lavadora_usada_id';
+    const precioCol  = esSecadora ? 'precio_secadora'    : 'precio_lavadora';
+    const notaCol    = esSecadora ? 'secadora_id'        : 'maquina_id';
+
+    // La carga que usa esa máquina.
+    const { rows: cargaRows } = await client.query(
+      `SELECT id, tipo_prenda FROM nota_cargas WHERE nota_id = $1 AND ${cargaCol} = $2 FOR UPDATE`,
+      [id, maquina_actual_id]
+    );
+    if (cargaRows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'La máquina no está asignada a esta nota.' });
+    }
+    const carga = cargaRows[0];
+
+    // La máquina nueva: disponible, del mismo tipo y en la sucursal.
+    const { rows: nueRows } = await client.query(
+      'SELECT id, nombre, tipo, tamano, estado FROM maquinas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
+      [maquina_nueva_id, req.sucursal]
+    );
+    if (nueRows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'La máquina seleccionada no existe.' });
+    }
+    const nueva = nueRows[0];
+    if (nueva.estado !== 'disponible') {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: `La máquina ${nueva.nombre} no está disponible.` });
+    }
+    if ((nueva.tipo === 'secadora') !== esSecadora) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'Debes elegir una máquina del mismo tipo.' });
+    }
+    if (!esSecadora && String(carga.tipo_prenda).toUpperCase() === 'EDREDON' && nueva.tipo !== 'lavadora_jumbo') {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'Los edredones solo van en lavadora jumbo.' });
+    }
+
+    const t = await tarifasCarga(client);
+    const precio = esSecadora
+      ? tarifaSecadora(nueva.tamano, carga.tipo_prenda, t)
+      : tarifaLavadora(nueva.tipo, carga.tipo_prenda, t);
+
+    await client.query(
+      `UPDATE nota_cargas SET ${cargaCol} = $1, ${usadaCol} = $1, ${precioCol} = $2 WHERE id = $3`,
+      [maquina_nueva_id, precio, carga.id]
+    );
+    // Denormalización: si la nota apuntaba a la máquina vieja, apunta a la nueva.
+    await client.query(
+      `UPDATE notas SET ${notaCol} = $1 WHERE id = $2 AND ${notaCol} = $3`,
+      [maquina_nueva_id, id, maquina_actual_id]
+    );
+    await recalcularPrecioTotal(client, id);
+
+    const errTope = await validarTopesCargas(client, id);
+    if (errTope) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: errTope });
+    }
+
+    await client.query('COMMIT');
+
+    const { rows } = await pool.query(
+      `SELECT n.*,
+              c.nombre   AS cliente_nombre,
+              c.apellido AS cliente_apellido,
+              c.telefono AS cliente_telefono,
+              u.nombre   AS usuario_nombre,
+              m.nombre   AS maquina_nombre,
+              m.tipo     AS maquina_tipo,
+              m.estado   AS maquina_estado,
+              m.en_uso_desde AS maquina_en_uso_desde,
+              s.nombre   AS secadora_nombre,
+              s.tipo     AS secadora_tipo,
+              s.estado   AS secadora_estado,
+              s.en_uso_desde AS secadora_en_uso_desde
+       FROM notas n
+       LEFT JOIN clientes  c ON c.id = n.cliente_id
+       JOIN      usuarios  u ON u.id = n.usuario_id
+       LEFT JOIN maquinas  m ON m.id = n.maquina_id
+       LEFT JOIN maquinas  s ON s.id = n.secadora_id
+       WHERE n.id = $1`,
+      [id]
+    );
+    res.json({ ...rows[0], cargas: await cargasDeNota(pool, id) });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('cambiarMaquina error:', err);
+    res.status(500).json({ message: 'Error interno del servidor.' });
+  } finally {
+    client.release();
+  }
+};
+
 // ── PATCH /notas/:id/terminar-lavado ────────────────────────
 // Termina el lavado de UNA lavadora de la nota y arranca su secado: libera
 // esa lavadora, marca en uso la secadora elegida (obligatoria) y la asigna a

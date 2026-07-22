@@ -52,6 +52,10 @@ export default function Salidas() {
   const [asignarMaqSel,    setAsignarMaqSel]    = useState('');
   const [asignarCobrar,    setAsignarCobrar]    = useState(null); // true | false | null
 
+  // Cambiar una máquina asignada (sin iniciar) por otra del mismo tipo.
+  const [cambiarMaq,       setCambiarMaq]       = useState(null); // máquina a cambiar
+  const [cambiarSel,       setCambiarSel]       = useState('');
+
   // Terminar el lavado de UNA lavadora: elegir la secadora de su carga
   const [lavTerminando,    setLavTerminando]    = useState(null); // máquina lavadora
   const [secadorasDisp,    setSecadorasDisp]    = useState([]);
@@ -243,6 +247,45 @@ export default function Salidas() {
         cobrar: asignarCobrar,
       });
       setAsignarOpen(false);
+      await cargarDatos();
+    } catch (err) {
+      setErrorAccion(err.message);
+    } finally {
+      setLoadingMaquina(false);
+    }
+  }
+
+  // Abre el modal para cambiar una máquina (sin iniciar) por otra del mismo tipo.
+  async function iniciarCambiar(m) {
+    setErrorAccion('');
+    setCambiarSel('');
+    setCambiarMaq(m);
+    setLoadingMaquinas(true);
+    try {
+      const data = await api.get('/maquinas');
+      const esSecadora = m.tipo === 'secadora';
+      setMaquinasDisp((data ?? []).filter(x =>
+        x.estado === 'disponible'
+        && (esSecadora ? x.tipo === 'secadora' : x.tipo !== 'secadora')
+        && String(x.id) !== String(m.id)));
+    } catch (err) {
+      setErrorAccion(err.message);
+    } finally {
+      setLoadingMaquinas(false);
+    }
+  }
+
+  // Cambia la máquina elegida por la nueva (el backend re-tarifa la carga).
+  async function confirmarCambiar() {
+    if (!cambiarMaq || !cambiarSel) return;
+    setLoadingMaquina(true);
+    setErrorAccion('');
+    try {
+      await api.patch(`/notas/${id}/cambiar-maquina`, {
+        maquina_actual_id: cambiarMaq.id,
+        maquina_nueva_id: Number(cambiarSel),
+      });
+      setCambiarMaq(null);
       await cargarDatos();
     } catch (err) {
       setErrorAccion(err.message);
@@ -478,13 +521,28 @@ export default function Salidas() {
                       </div>
                       {/* Acción por máquina: cada carga es independiente */}
                       {m.estado === 'disponible' && (
-                        <button
-                          onClick={() => setConfirmIniciar(m)}
-                          disabled={loadingMaquina}
-                          className="px-4 py-2 bg-blue hover:opacity-90 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
-                        >
-                          {m.tipo === 'secadora' ? 'Iniciar Secado' : 'Iniciar Lavado'}
-                        </button>
+                        <div className="flex items-center gap-2">
+                          {/* Cambiar esta máquina por otra del mismo tipo */}
+                          <button
+                            onClick={() => iniciarCambiar(m)}
+                            disabled={loadingMaquina}
+                            aria-label="Cambiar máquina"
+                            title="Cambiar máquina"
+                            className="w-10 h-10 flex-shrink-0 flex items-center justify-center border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 disabled:opacity-60 transition-colors"
+                          >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                                d="M8 7h12m0 0l-4-4m4 4l-4 4M16 17H4m0 0l4 4m-4-4l4-4" />
+                            </svg>
+                          </button>
+                          <button
+                            onClick={() => setConfirmIniciar(m)}
+                            disabled={loadingMaquina}
+                            className="px-4 py-2 bg-blue hover:opacity-90 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
+                          >
+                            {m.tipo === 'secadora' ? 'Iniciar Secado' : 'Iniciar Lavado'}
+                          </button>
+                        </div>
                       )}
                       {m.estado === 'en_uso' && (
                         cicloCumplido(m) ? (
@@ -665,6 +723,77 @@ export default function Salidas() {
                 className="flex-1 bg-blue hover:opacity-90 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
               >
                 {loadingMaquina ? 'Iniciando...' : 'Iniciar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal cambiar máquina — elegir otra del mismo tipo */}
+      {cambiarMaq && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div>
+              <h3 className="text-base font-bold text-gray-900">Cambiar máquina</h3>
+              <p className="text-sm text-gray-500 mt-1">
+                Reemplaza <span className="font-semibold text-gray-800">{cambiarMaq.nombre}</span> por otra{' '}
+                {cambiarMaq.tipo === 'secadora' ? 'secadora' : 'lavadora'} disponible. La tarifa se ajusta al tamaño de la nueva máquina.
+              </p>
+            </div>
+
+            {errorAccion && (
+              <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">
+                {errorAccion}
+              </div>
+            )}
+
+            {loadingMaquinas ? (
+              <div className="flex justify-center py-6">
+                <div className="animate-spin rounded-full h-7 w-7 border-b-2 border-blue" />
+              </div>
+            ) : maquinasDisp.length === 0 ? (
+              <p className="text-sm text-gray-400 text-center py-6">
+                No hay otras {cambiarMaq.tipo === 'secadora' ? 'secadoras' : 'lavadoras'} disponibles.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {maquinasDisp.map(m => {
+                  const selected = String(cambiarSel) === String(m.id);
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => setCambiarSel(selected ? '' : String(m.id))}
+                      className={`w-full flex items-center justify-between gap-2 px-4 py-3 border-2 rounded-xl text-left transition-colors ${
+                        selected ? 'border-blue bg-light-blue' : 'border-gray-200 bg-white hover:border-blue-300'
+                      }`}
+                    >
+                      <span className="font-medium text-gray-800">{m.nombre}</span>
+                      {MAQUINA_TIPO_LABEL[m.tipo] && (
+                        <span className="text-xs text-gray-500">{MAQUINA_TIPO_LABEL[m.tipo]}</span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setCambiarMaq(null)}
+                disabled={loadingMaquina}
+                className="flex-1 border border-gray-300 text-gray-700 font-medium py-3.5 rounded-lg text-base hover:bg-gray-50 disabled:opacity-60 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={confirmarCambiar}
+                disabled={loadingMaquina || !cambiarSel}
+                className="flex-1 bg-blue hover:opacity-90 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
+              >
+                {loadingMaquina ? 'Cambiando...' : 'Cambiar'}
               </button>
             </div>
           </div>
