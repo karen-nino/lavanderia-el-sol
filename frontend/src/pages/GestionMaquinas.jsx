@@ -102,7 +102,7 @@ export default function GestionMaquinas() {
     setForm({
       nombre: m.nombre ?? '',
       tipo,
-      tamano,
+      tamano: m.tamano ?? tamano,
       capacidad: m.capacidad ?? '20kg',
       modelo: m.modelo ?? '',
       mantenimiento: m.estado === 'mantenimiento',
@@ -127,6 +127,9 @@ export default function GestionMaquinas() {
         ...rest,
         nombre: capitalizar(rest.nombre),
         tipo: tipoCompuesto(tipo, tamano),
+        // Tamaño también como columna propia: en lavadoras espeja el tipo; en
+        // secadoras es la única forma de guardarlo.
+        tamano,
       };
       if (editandoId != null) {
         // Solo tocamos el estado cuando el toggle de mantenimiento implica un
@@ -272,8 +275,10 @@ export default function GestionMaquinas() {
             const cfg = ESTADO_CFG[m.estado] ?? ESTADO_CFG.disponible;
             const { tipo, tamano } = descomponerTipo(m.tipo);
             const tipoLabel = tipo === 'lavadora' ? 'Lavadora' : 'Secadora';
-            const tamanoLabel = tipo === 'lavadora'
-              ? (tamano === 'jumbo' ? 'Jumbo' : 'Mediana')
+            // Tamaño desde la columna propia (secadoras) o del tipo (lavadoras).
+            const tamanoVal = m.tamano ?? (tipo === 'lavadora' ? tamano : null);
+            const tamanoLabel = tamanoVal
+              ? (tamanoVal === 'jumbo' ? 'Jumbo' : 'Mediana')
               : null;
             const borrando = eliminando === m.id;
 
@@ -405,18 +410,16 @@ export default function GestionMaquinas() {
                 </select>
               </div>
 
-              {form.tipo === 'lavadora' && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    Tamaño <span className="text-red-500">*</span>
-                  </label>
-                  <select name="tamano" value={form.tamano} onChange={handleChange} className={INPUT_CLS}>
-                    {TAMANOS.map(t => (
-                      <option key={t.v} value={t.v}>{t.label}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Tamaño <span className="text-red-500">*</span>
+                </label>
+                <select name="tamano" value={form.tamano} onChange={handleChange} className={INPUT_CLS}>
+                  {TAMANOS.map(t => (
+                    <option key={t.v} value={t.v}>{t.label}</option>
+                  ))}
+                </select>
+              </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">

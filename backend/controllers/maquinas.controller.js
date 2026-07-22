@@ -3,6 +3,7 @@ import pool from '../db/pool.js';
 const ESTADOS_VALIDOS = ['disponible', 'en_uso', 'mantenimiento'];
 const TIPOS_VALIDOS   = ['lavadora_mediana', 'lavadora_jumbo', 'secadora'];
 const CAPACIDADES_VALIDAS = ['20kg', '35kg'];
+const TAMANOS_VALIDOS = ['mediana', 'jumbo'];
 
 export const getMaquinas = async (req, res) => {
   try {
@@ -85,7 +86,7 @@ export const getUsoMaquina = async (req, res) => {
 };
 
 export const createMaquina = async (req, res) => {
-  const { nombre, tipo, modelo, capacidad, numero_serie, fecha_adquisicion, notas } = req.body;
+  const { nombre, tipo, tamano, modelo, capacidad, numero_serie, fecha_adquisicion, notas } = req.body;
 
   if (!nombre || !tipo) {
     return res.status(400).json({ message: 'Nombre y tipo son requeridos.' });
@@ -93,16 +94,19 @@ export const createMaquina = async (req, res) => {
   if (!TIPOS_VALIDOS.includes(tipo)) {
     return res.status(400).json({ message: `Tipo inválido. Valores permitidos: ${TIPOS_VALIDOS.join(', ')}.` });
   }
+  if (tamano != null && tamano !== '' && !TAMANOS_VALIDOS.includes(tamano)) {
+    return res.status(400).json({ message: `Tamaño inválido. Valores permitidos: ${TAMANOS_VALIDOS.join(', ')}.` });
+  }
   if (capacidad != null && !CAPACIDADES_VALIDAS.includes(capacidad)) {
     return res.status(400).json({ message: `Capacidad inválida. Valores permitidos: ${CAPACIDADES_VALIDAS.join(', ')}.` });
   }
 
   try {
     const { rows } = await pool.query(
-      `INSERT INTO maquinas (nombre, tipo, modelo, capacidad, numero_serie, fecha_adquisicion, sucursal, notas)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      `INSERT INTO maquinas (nombre, tipo, tamano, modelo, capacidad, numero_serie, fecha_adquisicion, sucursal, notas)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        RETURNING *`,
-      [nombre, tipo, modelo, capacidad, numero_serie, fecha_adquisicion, req.sucursal, notas]
+      [nombre, tipo, tamano || null, modelo, capacidad, numero_serie, fecha_adquisicion, req.sucursal, notas]
     );
     res.status(201).json(rows[0]);
   } catch (err) {
@@ -116,13 +120,16 @@ export const createMaquina = async (req, res) => {
 
 export const updateMaquina = async (req, res) => {
   const { id } = req.params;
-  const { nombre, tipo, modelo, capacidad, numero_serie, fecha_adquisicion, notas, estado } = req.body;
+  const { nombre, tipo, tamano, modelo, capacidad, numero_serie, fecha_adquisicion, notas, estado } = req.body;
 
   if (!nombre || !tipo) {
     return res.status(400).json({ message: 'Nombre y tipo son requeridos.' });
   }
   if (!TIPOS_VALIDOS.includes(tipo)) {
     return res.status(400).json({ message: `Tipo inválido. Valores permitidos: ${TIPOS_VALIDOS.join(', ')}.` });
+  }
+  if (tamano != null && tamano !== '' && !TAMANOS_VALIDOS.includes(tamano)) {
+    return res.status(400).json({ message: `Tamaño inválido. Valores permitidos: ${TAMANOS_VALIDOS.join(', ')}.` });
   }
   if (capacidad != null && !CAPACIDADES_VALIDAS.includes(capacidad)) {
     return res.status(400).json({ message: `Capacidad inválida. Valores permitidos: ${CAPACIDADES_VALIDAS.join(', ')}.` });
@@ -136,16 +143,16 @@ export const updateMaquina = async (req, res) => {
     // mantiene en_uso_desde coherente, igual que en cambiarEstadoMaquina.
     const { rows } = await pool.query(
       `UPDATE maquinas
-         SET nombre = $1, tipo = $2, modelo = $3, capacidad = $4, numero_serie = $5, fecha_adquisicion = $6, notas = $7,
-             estado = COALESCE($8::estado_maquina, estado),
+         SET nombre = $1, tipo = $2, tamano = $3, modelo = $4, capacidad = $5, numero_serie = $6, fecha_adquisicion = $7, notas = $8,
+             estado = COALESCE($9::estado_maquina, estado),
              en_uso_desde = CASE
-               WHEN $8::estado_maquina IS NULL THEN en_uso_desde
-               WHEN $8::estado_maquina = 'en_uso'::estado_maquina THEN NOW()
+               WHEN $9::estado_maquina IS NULL THEN en_uso_desde
+               WHEN $9::estado_maquina = 'en_uso'::estado_maquina THEN NOW()
                ELSE NULL
              END
-       WHERE id = $9 AND sucursal = $10
+       WHERE id = $10 AND sucursal = $11
        RETURNING *`,
-      [nombre, tipo, modelo, capacidad, numero_serie, fecha_adquisicion, notas, estado ?? null, id, req.sucursal]
+      [nombre, tipo, tamano || null, modelo, capacidad, numero_serie, fecha_adquisicion, notas, estado ?? null, id, req.sucursal]
     );
     if (rows.length === 0) {
       return res.status(404).json({ message: 'Máquina no encontrada.' });
