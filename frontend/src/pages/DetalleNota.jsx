@@ -472,7 +472,8 @@ export default function DetalleNota() {
                   const totalProds = prods.reduce((s, p) => s + Number(p.subtotal ?? 0), 0);
                   const totalCarga = Number(cg.precio_lavadora) + Number(cg.precio_secadora)
                     + Number(cg.ajuste ?? 0) + totalProds;
-                  const atributos = [
+                  // Autoservicio no maneja prenda/tela/tamaño: se omite esa línea.
+                  const atributos = nota.modalidad === 'AUTOSERVICIO' ? [] : [
                     PRENDA_LABEL[cg.tipo_prenda],
                     cg.tipo_tela,
                     cg.tamano_edredon,
