@@ -99,6 +99,8 @@ const BADGE_MAQUINA_ESTADO = {
   // "disponible" aquí = máquina asignada a la carga pero sin iniciar (En espera): gris.
   disponible:    { label: 'En espera',     cls: 'bg-gray-100 text-gray-600',   dot: 'bg-gray-400'  },
   en_uso:        { label: 'En uso',        cls: 'bg-blue-100 text-blue-700',   dot: 'bg-blue-500'  },
+  // "terminado" = la máquina ya cumplió su parte y se desvinculó de la carga: verde.
+  terminado:     { label: 'Terminó',       cls: 'bg-green-100 text-green-700', dot: 'bg-green-500' },
   mantenimiento: { label: 'Mantenimiento', cls: 'bg-red-100 text-red-700',     dot: 'bg-red-500'   },
 };
 
@@ -460,16 +462,19 @@ export default function DetalleNota() {
                   // Cada máquina muestra su costo real: la lavadora su
                   // precio_lavadora (lavado) y la secadora su precio_secadora
                   // (secado). Son cargos separados; no se reparte nada.
+                  // Si la máquina sigue vinculada (lavadora_id/secadora_id), su
+                  // estado en vivo (En espera / En uso); si ya se desvinculó,
+                  // cumplió su parte → "terminado" (verde).
                   const maquinasCarga = [
                     cg.lavadora_usada_id && {
                       nombre: cg.lavadora_usada_nombre, tipo: cg.lavadora_usada_tipo,
-                      estado: cg.lavadora_id ? cg.lavadora_estado : null,
+                      estado: cg.lavadora_id ? cg.lavadora_estado : 'terminado',
                       precio: Number(cg.precio_lavadora),
                     },
                     cg.secadora_usada_id && {
                       nombre: cg.secadora_usada_nombre, tipo: cg.secadora_usada_tipo,
                       tamano: cg.secadora_usada_tamano,
-                      estado: cg.secadora_id ? cg.secadora_estado : null,
+                      estado: cg.secadora_id ? cg.secadora_estado : 'terminado',
                       precio: Number(cg.precio_secadora),
                     },
                   ].filter(Boolean);
