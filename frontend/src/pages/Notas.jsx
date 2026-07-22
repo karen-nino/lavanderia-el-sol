@@ -324,6 +324,9 @@ export default function Notas() {
                       const badgeEstado    = BADGE_ESTADO[n.estado]       ?? BADGE_ESTADO.LAVANDO;
                       const badgeModalidad = BADGE_MODALIDAD[n.modalidad] ?? BADGE_MODALIDAD.AUTOSERVICIO;
                       const badgePago      = BADGE_PAGO[n.estado_pago];
+                      // Lavando y secando a la vez (cargas en distinta fase).
+                      const lavandoYSecando = ['LAVANDO', 'SECANDO'].includes(n.estado)
+                        && n.hay_lavadora_activa && n.hay_secadora_activa;
                       return (
                         <tr
                           key={n.id}
@@ -347,9 +350,20 @@ export default function Notas() {
                             )}
                           </td>
                           <td className="px-4 py-3">
-                            <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${badgeEstado.cls}`}>
-                              {badgeEstado.label}
-                            </span>
+                            {lavandoYSecando ? (
+                              <div className="flex flex-col items-start gap-1">
+                                <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${BADGE_ESTADO.LAVANDO.cls}`}>
+                                  {BADGE_ESTADO.LAVANDO.label}
+                                </span>
+                                <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${BADGE_ESTADO.SECANDO.cls}`}>
+                                  {BADGE_ESTADO.SECANDO.label}
+                                </span>
+                              </div>
+                            ) : (
+                              <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${badgeEstado.cls}`}>
+                                {badgeEstado.label}
+                              </span>
+                            )}
                           </td>
                           <td className="px-4 py-3">
                             {badgePago && (
@@ -384,6 +398,11 @@ export default function Notas() {
               const maquinas       = Array.isArray(n.maquinas_nombres) && n.maquinas_nombres.length > 0
                 ? n.maquinas_nombres
                 : (n.maquina_nombre ? [n.maquina_nombre] : []);
+              // Con varias cargas la nota puede estar lavando y secando a la vez
+              // (una carga en lavadora, otra en secadora): se muestran ambos
+              // estados apilados en lugar del único estado de la nota.
+              const lavandoYSecando = ['LAVANDO', 'SECANDO'].includes(n.estado)
+                && n.hay_lavadora_activa && n.hay_secadora_activa;
               return (
                 <div
                   key={n.id}
@@ -391,11 +410,22 @@ export default function Notas() {
                   onClick={() => navigate(`/notas/${n.id}`)}
                 >
                   {/* Folio + estado */}
-                  <div className="flex items-center justify-between gap-2 pb-2">
+                  <div className="flex items-start justify-between gap-2 pb-2">
                     <p className="text-xl font-bold text-dark-blue">#{n.folio?.split('-')[0] ?? n.id}</p>
-                    <span className={`text-xs font-bold tracking-wide px-3 py-1 rounded-pill ${badgeEstado.cls}`}>
-                      {badgeEstado.label}
-                    </span>
+                    {lavandoYSecando ? (
+                      <div className="flex flex-col items-end gap-1">
+                        <span className={`text-xs font-bold tracking-wide px-3 py-1 rounded-pill ${BADGE_ESTADO.LAVANDO.cls}`}>
+                          {BADGE_ESTADO.LAVANDO.label}
+                        </span>
+                        <span className={`text-xs font-bold tracking-wide px-3 py-1 rounded-pill ${BADGE_ESTADO.SECANDO.cls}`}>
+                          {BADGE_ESTADO.SECANDO.label}
+                        </span>
+                      </div>
+                    ) : (
+                      <span className={`text-xs font-bold tracking-wide px-3 py-1 rounded-pill ${badgeEstado.cls}`}>
+                        {badgeEstado.label}
+                      </span>
+                    )}
                   </div>
 
                   {/* Información: cliente + total */}

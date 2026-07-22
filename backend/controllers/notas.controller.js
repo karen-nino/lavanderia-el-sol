@@ -498,7 +498,18 @@ export const getNotas = async (req, res) => {
                    UNION SELECT n.maquina_id
                    UNION SELECT n.secadora_id
                  ) xm
-                 JOIN maquinas mm ON mm.id = xm.mid) AS maquinas_nombres
+                 JOIN maquinas mm ON mm.id = xm.mid) AS maquinas_nombres,
+              -- Fases vivas de la nota: si tiene lavadora(s) y/o secadora(s)
+              -- activas ahora mismo. Con varias cargas puede tener ambas a la
+              -- vez (una lavando, otra secando). Se basa en las columnas vivas
+              -- de las cargas; para notas legadas (sin cargas) usa maquina_id /
+              -- secadora_id.
+              (CASE WHEN EXISTS (SELECT 1 FROM nota_cargas nc WHERE nc.nota_id = n.id)
+                    THEN EXISTS (SELECT 1 FROM nota_cargas nc WHERE nc.nota_id = n.id AND nc.lavadora_id IS NOT NULL)
+                    ELSE n.maquina_id IS NOT NULL END) AS hay_lavadora_activa,
+              (CASE WHEN EXISTS (SELECT 1 FROM nota_cargas nc WHERE nc.nota_id = n.id)
+                    THEN EXISTS (SELECT 1 FROM nota_cargas nc WHERE nc.nota_id = n.id AND nc.secadora_id IS NOT NULL)
+                    ELSE n.secadora_id IS NOT NULL END) AS hay_secadora_activa
        FROM notas n
        LEFT JOIN clientes  c ON c.id = n.cliente_id
        JOIN      usuarios  u ON u.id = n.usuario_id
