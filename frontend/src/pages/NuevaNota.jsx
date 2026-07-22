@@ -85,6 +85,9 @@ const formatMaquina = (m) => {
   if (!m) return '';
   if (m.tipo === 'lavadora_mediana') return `${m.nombre} — Mediana`;
   if (m.tipo === 'lavadora_jumbo')   return `${m.nombre} — Jumbo`;
+  // Secadoras: mostrar su tamaño (mediana/jumbo) igual que las lavadoras.
+  if (m.tamano === 'jumbo')   return `${m.nombre} — Jumbo`;
+  if (m.tamano === 'mediana') return `${m.nombre} — Mediana`;
   return m.nombre;
 };
 
