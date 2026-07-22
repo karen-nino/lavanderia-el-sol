@@ -150,18 +150,20 @@ function tarifaLavadora(tipoMaquina, tipoPrenda, t) {
   return t.mediana;
 }
 
-// Categoría de secado de una carga, "igual que su lavadora": prenda edredón →
-// edredón; lavadora jumbo → jumbo; resto (incl. solo-secado sin lavadora) →
-// mediana. Devuelve 'mediana' | 'jumbo' | 'edredon'.
-function categoriaSecado(tipoLavadora, tipoPrenda) {
+// Categoría de secado según el TAMAÑO de la secadora: prenda edredón → edredón;
+// secadora jumbo → jumbo; resto (incl. secadora sin tamaño) → mediana.
+// Devuelve 'mediana' | 'jumbo' | 'edredon'.
+function categoriaSecado(secadoraTamano, tipoPrenda) {
   if (String(tipoPrenda).toUpperCase() === 'EDREDON') return 'edredon';
-  if (tipoLavadora === 'lavadora_jumbo') return 'jumbo';
+  if (secadoraTamano === 'jumbo') return 'jumbo';
   return 'mediana';
 }
 
-// Tarifa de secado según la categoría de la carga (mirror de su lavadora).
-function tarifaSecadora(tipoLavadora, tipoPrenda, t) {
-  const cat = categoriaSecado(tipoLavadora, tipoPrenda);
+// Tarifa de secado según el tamaño de la secadora (Ajustes → Máquinas):
+// mediana = precio_carga_secadora, jumbo = precio_secadora_jumbo, edredón =
+// precio_secadora_edredon.
+function tarifaSecadora(secadoraTamano, tipoPrenda, t) {
+  const cat = categoriaSecado(secadoraTamano, tipoPrenda);
   if (cat === 'edredon') return t.secadoraEdredon;
   if (cat === 'jumbo')   return t.secadoraJumbo;
   return t.secadora; // mediana
@@ -310,12 +312,13 @@ async function prepararCargas(client, cargas, tipoPrendaNota, sucursal) {
     cargas.flatMap(c => [c.lavadora_id, c.secadora_id]).filter(Boolean).map(Number)
   )];
   const tipoPorId = new Map();
+  const tamanoPorId = new Map();
   if (ids.length > 0) {
     const { rows } = await client.query(
-      'SELECT id, tipo FROM maquinas WHERE id = ANY($1) AND sucursal = $2',
+      'SELECT id, tipo, tamano FROM maquinas WHERE id = ANY($1) AND sucursal = $2',
       [ids, sucursal]
     );
-    rows.forEach(r => tipoPorId.set(Number(r.id), r.tipo));
+    rows.forEach(r => { tipoPorId.set(Number(r.id), r.tipo); tamanoPorId.set(Number(r.id), r.tamano); });
     const faltante = ids.find(id => !tipoPorId.has(id));
     if (faltante) throw new Error(`La máquina ${faltante} no existe.`);
   }
@@ -353,7 +356,7 @@ async function prepararCargas(client, cargas, tipoPrendaNota, sucursal) {
       lavadora_id:     lavadoraId,
       secadora_id:     secadoraId,
       precio_lavadora: lavadoraId ? tarifaLavadora(tipoPorId.get(lavadoraId), prendaCarga, t) : 0,
-      precio_secadora: secadoraId ? tarifaSecadora(tipoPorId.get(lavadoraId), prendaCarga, t) : 0,
+      precio_secadora: secadoraId ? tarifaSecadora(tamanoPorId.get(secadoraId), prendaCarga, t) : 0,
       tipo_prenda:     c.tipo_prenda ? prendaCarga : null,
       tipo_tela:       prendaCarga === 'ROPA' && c.tipo_tela ? String(c.tipo_tela).trim() : null,
       tamano_edredon:  prendaCarga === 'EDREDON' && c.tamano_edredon ? String(c.tamano_edredon).trim() : null,
@@ -1516,7 +1519,7 @@ export const activarNota = async (req, res) => {
         return res.status(400).json({ message: 'Se requiere al menos una máquina para activar la nota.' });
       }
       const { rows: maqs } = await client.query(
-        'SELECT id, nombre, tipo, estado FROM maquinas WHERE id = ANY($1) AND sucursal = $2 FOR UPDATE',
+        'SELECT id, nombre, tipo, tamano, estado FROM maquinas WHERE id = ANY($1) AND sucursal = $2 FOR UPDATE',
         [ids, req.sucursal]
       );
       const maqById = new Map(maqs.map(m => [Number(m.id), m]));
@@ -1558,7 +1561,7 @@ export const activarNota = async (req, res) => {
             n.lavadora_id,
             n.secadora_id,
             n.lavadora_id ? tarifaLavadora(maqById.get(n.lavadora_id).tipo, n.tipo_prenda, t) : 0,
-            n.secadora_id ? tarifaSecadora(n.lavadora_id ? maqById.get(n.lavadora_id).tipo : null, n.tipo_prenda, t) : 0,
+            n.secadora_id ? tarifaSecadora(maqById.get(n.secadora_id).tamano, n.tipo_prenda, t) : 0,
             n.id,
           ]
         );
@@ -1799,7 +1802,7 @@ export const asignarSecadora = async (req, res) => {
     const objetivo = sinSecadora.slice(0, cargasPedidas);
 
     const { rows: maqRows } = await client.query(
-      'SELECT tipo, estado FROM maquinas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
+      'SELECT tipo, tamano, estado FROM maquinas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
       [secadora_id, req.sucursal]
     );
     if (maqRows.length === 0) {
@@ -1814,6 +1817,7 @@ export const asignarSecadora = async (req, res) => {
       await client.query('ROLLBACK');
       return res.status(400).json({ message: 'La secadora seleccionada no está disponible.' });
     }
+    const secadoraTamano = maqRows[0].tamano;
 
     const t = await tarifasCarga(client);
 
@@ -1821,11 +1825,12 @@ export const asignarSecadora = async (req, res) => {
       `UPDATE maquinas SET estado = 'en_uso', en_uso_desde = NOW() WHERE id = $1`,
       [secadora_id]
     );
-    // Cada carga cobra el secado según su propia categoría (mirror lavadora).
+    // Cada carga cobra el secado según el tamaño de la secadora (prenda edredón
+    // manda sobre el tamaño).
     for (const c of objetivo) {
       await client.query(
         `UPDATE nota_cargas SET secadora_id = $1, secadora_usada_id = $1, precio_secadora = $2 WHERE id = $3`,
-        [secadora_id, tarifaSecadora(c.lavadora_tipo, c.tipo_prenda, t), c.id]
+        [secadora_id, tarifaSecadora(secadoraTamano, c.tipo_prenda, t), c.id]
       );
     }
     // Denormalización: la primera secadora de la nota, para lista y vistas legadas.
@@ -1913,7 +1918,7 @@ export const asignarMaquina = async (req, res) => {
     }
 
     const { rows: maqRows } = await client.query(
-      'SELECT id, nombre, tipo, estado FROM maquinas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
+      'SELECT id, nombre, tipo, tamano, estado FROM maquinas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
       [maquina_id, req.sucursal]
     );
     if (maqRows.length === 0) {
@@ -1947,7 +1952,7 @@ export const asignarMaquina = async (req, res) => {
 
     const t = await tarifasCarga(client);
     const precio = !cobrar ? 0
-      : esSecadora ? tarifaSecadora(null, tipoPrenda, t)
+      : esSecadora ? tarifaSecadora(maq.tamano, tipoPrenda, t)
       : tarifaLavadora(maq.tipo, tipoPrenda, t);
 
     await client.query(
@@ -2056,7 +2061,7 @@ export const terminarLavado = async (req, res) => {
     }
 
     const { rows: maqRows } = await client.query(
-      'SELECT tipo, estado FROM maquinas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
+      'SELECT tipo, tamano, estado FROM maquinas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
       [secadora_id, req.sucursal]
     );
     if (maqRows.length === 0) {
@@ -2071,6 +2076,7 @@ export const terminarLavado = async (req, res) => {
       await client.query('ROLLBACK');
       return res.status(400).json({ message: 'La secadora seleccionada no está disponible.' });
     }
+    const secadoraTamano = maqRows[0].tamano;
 
     // La lavadora debe pertenecer a la nota (cargas o columna legada).
     const { rows: cargasLav } = await client.query(
@@ -2084,14 +2090,13 @@ export const terminarLavado = async (req, res) => {
     }
 
     // La secadora hereda las cargas de esa lavadora y cobra su tarifa de secado
-    // (por categoría de cada carga: la lavadora que la lavó define mediana/jumbo;
-    // la prenda, edredón). Se tarifa aquí porque en Autoservicio la carga nace
-    // solo con lavadora (precio_secadora en 0) y el secado se cobra al iniciarlo.
+    // según el TAMAÑO de la secadora (prenda edredón manda sobre el tamaño). Se
+    // tarifa aquí porque en Autoservicio la carga nace solo con lavadora
+    // (precio_secadora en 0) y el secado se cobra al iniciarlo.
     const t = await tarifasCarga(client);
     const { rows: cargasMover } = await client.query(
-      `SELECT nc.id, nc.tipo_prenda, ml.tipo AS lavadora_tipo
+      `SELECT nc.id, nc.tipo_prenda
          FROM nota_cargas nc
-         LEFT JOIN maquinas ml ON ml.id = nc.lavadora_id
         WHERE nc.nota_id = $1 AND nc.lavadora_id = $2 AND nc.secadora_id IS NULL
         FOR UPDATE OF nc`,
       [id, lavadora_id]
@@ -2099,7 +2104,7 @@ export const terminarLavado = async (req, res) => {
     for (const c of cargasMover) {
       await client.query(
         `UPDATE nota_cargas SET secadora_id = $1, secadora_usada_id = $1, precio_secadora = $2 WHERE id = $3`,
-        [secadora_id, tarifaSecadora(c.lavadora_tipo, c.tipo_prenda, t), c.id]
+        [secadora_id, tarifaSecadora(secadoraTamano, c.tipo_prenda, t), c.id]
       );
     }
     // ...y la lavadora se desvincula y libera: queda libre para el siguiente

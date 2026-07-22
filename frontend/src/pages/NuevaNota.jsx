@@ -138,20 +138,20 @@ export default function NuevaNota() {
     if (tipoMaquina === 'lavadora_jumbo') return precios.jumbo;
     return precios.mediana;
   };
-  // Tarifa de secado por categoría, "igual que su lavadora": prenda edredón →
-  // Edredón; lavadora jumbo → Jumbo; resto → Mediana. `lavadoraId` es la
-  // lavadora de la carga (puede no existir en solo-secado).
-  const precioSecado = (lavadoraId, tipoPrendaArg) => {
+  // Tarifa de secado según el TAMAÑO de la secadora: prenda edredón → Edredón;
+  // secadora jumbo → Jumbo; resto → Mediana. `secadoraTamano` es 'mediana' /
+  // 'jumbo' de la secadora elegida.
+  const precioSecado = (secadoraTamano, tipoPrendaArg) => {
     if (String(tipoPrendaArg).toUpperCase() === 'EDREDON') return precios.secadoraEdredon;
-    const lav = maquinas.find(m => String(m.id) === String(lavadoraId));
-    if (lav?.tipo === 'lavadora_jumbo') return precios.secadoraJumbo;
+    if (secadoraTamano === 'jumbo') return precios.secadoraJumbo;
     return precios.secadora;
   };
+  const tamanoDe = (maquinaId) => maquinas.find(m => String(m.id) === String(maquinaId))?.tamano;
   // Cada carga se cobra con la tarifa de su lavadora más la de su secadora.
   const subtotalDeCarga = (c) => {
     const lav = maquinas.find(m => String(m.id) === String(c.lavadora_id));
     return (lav ? precioPorTipo(lav.tipo, c.tipo_prenda) : 0)
-         + (c.secadora_id ? precioSecado(c.lavadora_id, c.tipo_prenda) : 0);
+         + (c.secadora_id ? precioSecado(tamanoDe(c.secadora_id), c.tipo_prenda) : 0);
   };
   const ajusteNum      = Number(form.ajuste) || 0;
   const subtotalCargas = cargasAuto.reduce((s, c) => s + subtotalDeCarga(c), 0);
@@ -390,7 +390,7 @@ export default function NuevaNota() {
   const subtotalCargaEncargo = (c) => {
     const lav = maquinas.find(m => String(m.id) === String(c.maquina_id));
     const maq = (lav ? precioPorTipo(lav.tipo, c.tipo_prenda) : 0)
-              + (c.secadora_id ? precioSecado(c.maquina_id, c.tipo_prenda) : 0);
+              + (c.secadora_id ? precioSecado(tamanoDe(c.secadora_id), c.tipo_prenda) : 0);
     return maq + subtotalProductosLista(c.productos) + (Number(c.ajuste) || 0);
   };
   const encargoPrecioTotal  = encargoCargas.reduce((s, c) => s + subtotalCargaEncargo(c), 0);
@@ -400,7 +400,7 @@ export default function NuevaNota() {
   const usadoContraTope = (c) => {
     const lav = maquinas.find(m => String(m.id) === String(c.maquina_id));
     return (lav ? precioPorTipo(lav.tipo, c.tipo_prenda) : 0)
-         + (c.secadora_id ? precioSecado(c.maquina_id, c.tipo_prenda) : 0)
+         + (c.secadora_id ? precioSecado(tamanoDe(c.secadora_id), c.tipo_prenda) : 0)
          + subtotalProductosLista(c.productos);
   };
   // Prenda edredón usa su tope dedicado (manda sobre el del tamaño).
@@ -1385,7 +1385,7 @@ export default function NuevaNota() {
                       <option value="">Sin asignar</option>
                       {secadorasOpc.map(m => (
                         <option key={m.id} value={m.id}>
-                          {formatMaquina(m)} — ${precioSecado(c.lavadora_id, c.tipo_prenda).toFixed(2)}
+                          {formatMaquina(m)} — ${precioSecado(m.tamano, c.tipo_prenda).toFixed(2)}
                         </option>
                       ))}
                     </select>
