@@ -340,22 +340,30 @@ export default function Salidas() {
     );
   }
 
-  // Lista de máquinas asignadas (sin repetir) para mostrarlas con su badge:
-  // de las cargas si las hay, o de las columnas legadas.
-  const maquinasAsignadas = (() => {
+  // Máquinas agrupadas por carga (cada carga con su lavadora y/o secadora), para
+  // mostrarlas bajo su encabezado "Carga N". Si la nota es legada (sin cargas),
+  // se agrupa como una sola carga con las columnas legadas.
+  const cargasMaquinas = (() => {
     if (cargasNota.length === 0) {
-      return [
+      const ms = [
         nota?.maquina_id  && { id: nota.maquina_id,  nombre: nota.maquina_nombre,  tipo: nota.maquina_tipo,  estado: nota.maquina_estado,  en_uso_desde: nota.maquina_en_uso_desde  },
         nota?.secadora_id && { id: nota.secadora_id, nombre: nota.secadora_nombre, tipo: nota.secadora_tipo, estado: nota.secadora_estado, en_uso_desde: nota.secadora_en_uso_desde },
       ].filter(Boolean);
+      return ms.length > 0 ? [{ orden: null, maquinas: ms }] : [];
     }
-    const porId = new Map();
-    for (const c of cargasNota) {
-      if (c.lavadora_id) porId.set(c.lavadora_id, { id: c.lavadora_id, nombre: c.lavadora_nombre, tipo: c.lavadora_tipo, estado: c.lavadora_estado, en_uso_desde: c.lavadora_en_uso_desde });
-      if (c.secadora_id) porId.set(c.secadora_id, { id: c.secadora_id, nombre: c.secadora_nombre, tipo: c.secadora_tipo, estado: c.secadora_estado, en_uso_desde: c.secadora_en_uso_desde });
-    }
-    return [...porId.values()];
+    return cargasNota
+      .map(c => ({
+        orden: c.orden,
+        maquinas: [
+          c.lavadora_id && { id: c.lavadora_id, nombre: c.lavadora_nombre, tipo: c.lavadora_tipo, estado: c.lavadora_estado, en_uso_desde: c.lavadora_en_uso_desde },
+          c.secadora_id && { id: c.secadora_id, nombre: c.secadora_nombre, tipo: c.secadora_tipo, estado: c.secadora_estado, en_uso_desde: c.secadora_en_uso_desde },
+        ].filter(Boolean),
+      }))
+      .filter(g => g.maquinas.length > 0);
   })();
+
+  // Lista plana (para conteo del encabezado y validaciones de acciones a nivel nota).
+  const maquinasAsignadas = cargasMaquinas.flatMap(g => g.maquinas);
 
   // ¿Esta máquina ya cumplió su tiempo de ciclo? Cada máquina es
   // independiente (mismo cálculo que las tarjetas del dashboard): la
@@ -429,67 +437,74 @@ export default function Salidas() {
             </button>
           )}
         </div>
-        <div className="px-4 py-4 space-y-3">
-          {maquinasAsignadas.length > 0 ? (
-            maquinasAsignadas.map((m, i) => {
-              const cfg = BADGE_MAQUINA_ESTADO[m.estado];
-              return (
-                <div key={i} className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex flex-wrap items-center gap-2 min-w-0">
-                    {/* Estado: solo el punto de color */}
-                    {cfg && (
-                      <span
-                        className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${cfg.dot} ${m.estado === 'en_uso' ? 'animate-pulse' : ''}`}
-                        title={cfg.label}
-                      />
-                    )}
-                    <span className="text-sm font-medium text-gray-800">{m.nombre}</span>
-                    {MAQUINA_TIPO_LABEL[m.tipo] && (
-                      <span className="text-xs text-gray-500">— {MAQUINA_TIPO_LABEL[m.tipo]}</span>
-                    )}
-                  </div>
-                  {/* Acción por máquina: cada carga es independiente */}
-                  {m.estado === 'disponible' && (
-                    <button
-                      onClick={() => iniciarMaquina(m.id)}
-                      disabled={loadingMaquina}
-                      className="px-4 py-2 bg-blue hover:opacity-90 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
-                    >
-                      {loadingMaquina ? 'Iniciando...' : (m.tipo === 'secadora' ? 'Iniciar Secado' : 'Iniciar Lavado')}
-                    </button>
-                  )}
-                  {m.estado === 'en_uso' && (
-                    cicloCumplido(m) ? (
-                      m.tipo === 'secadora' ? (
+        <div className="px-4 py-4 space-y-4">
+          {cargasMaquinas.length > 0 ? (
+            cargasMaquinas.map((grupo, gi) => (
+              <div key={gi} className="space-y-2 [&:not(:first-child)]:border-t [&:not(:first-child)]:border-gray-100 [&:not(:first-child)]:pt-4">
+                {grupo.orden != null && (
+                  <p className="text-xs font-semibold text-gray-500">Carga {grupo.orden}</p>
+                )}
+                {grupo.maquinas.map((m, i) => {
+                  const cfg = BADGE_MAQUINA_ESTADO[m.estado];
+                  return (
+                    <div key={i} className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex flex-wrap items-center gap-2 min-w-0">
+                        {/* Estado: solo el punto de color */}
+                        {cfg && (
+                          <span
+                            className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${cfg.dot} ${m.estado === 'en_uso' ? 'animate-pulse' : ''}`}
+                            title={cfg.label}
+                          />
+                        )}
+                        <span className="text-sm font-medium text-gray-800">{m.nombre}</span>
+                        {MAQUINA_TIPO_LABEL[m.tipo] && (
+                          <span className="text-xs text-gray-500">— {MAQUINA_TIPO_LABEL[m.tipo]}</span>
+                        )}
+                      </div>
+                      {/* Acción por máquina: cada carga es independiente */}
+                      {m.estado === 'disponible' && (
                         <button
-                          onClick={() => setConfirmTerminarSec(m)}
+                          onClick={() => iniciarMaquina(m.id)}
                           disabled={loadingMaquina}
-                          className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
+                          className="px-4 py-2 bg-blue hover:opacity-90 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
                         >
-                          Finalizar Carga
+                          {loadingMaquina ? 'Iniciando...' : (m.tipo === 'secadora' ? 'Iniciar Secado' : 'Iniciar Lavado')}
                         </button>
-                      ) : (
-                        <button
-                          onClick={() => iniciarTerminarLavado(m)}
-                          disabled={loadingMaquina}
-                          className="px-4 py-2 bg-red hover:opacity-90 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
-                        >
-                          Iniciar Secado
-                        </button>
-                      )
-                    ) : (
-                      <button
-                        onClick={() => setConfirmDetener(m)}
-                        disabled={loadingMaquina}
-                        className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
-                      >
-                        {m.tipo === 'secadora' ? 'Detener Secado' : 'Detener Lavado'}
-                      </button>
-                    )
-                  )}
-                </div>
-              );
-            })
+                      )}
+                      {m.estado === 'en_uso' && (
+                        cicloCumplido(m) ? (
+                          m.tipo === 'secadora' ? (
+                            <button
+                              onClick={() => setConfirmTerminarSec(m)}
+                              disabled={loadingMaquina}
+                              className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
+                            >
+                              Finalizar Carga
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => iniciarTerminarLavado(m)}
+                              disabled={loadingMaquina}
+                              className="px-4 py-2 bg-red hover:opacity-90 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
+                            >
+                              Iniciar Secado
+                            </button>
+                          )
+                        ) : (
+                          <button
+                            onClick={() => setConfirmDetener(m)}
+                            disabled={loadingMaquina}
+                            className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
+                          >
+                            {m.tipo === 'secadora' ? 'Detener Secado' : 'Detener Lavado'}
+                          </button>
+                        )
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ))
           ) : (
             <p className="text-sm text-gray-400 italic">Sin máquina asignada</p>
           )}

@@ -1346,13 +1346,20 @@ export default function NuevaNota() {
               );
               const lavadorasOpc = maquinas.filter(m =>
                 m.tipo !== 'secadora' && !usadasEnOtras.has(String(m.id)));
+              // Una secadora elegida en otra carga ya está ocupada: se excluye.
+              const secadorasUsadasEnOtras = new Set(
+                cargasAuto.filter((_, j) => j !== i).map(x => String(x.secadora_id)).filter(Boolean)
+              );
+              const secadorasOpc = maquinas.filter(m =>
+                m.tipo === 'secadora' && !secadorasUsadasEnOtras.has(String(m.id)));
               return (
                 <div key={i} className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
                   <div className="flex items-center justify-between">
                     <p className="text-sm font-semibold text-gray-900">Carga {i + 1}</p>
                     <span className="text-sm font-medium text-blue">${subtotalDeCarga(c).toFixed(2)}</span>
                   </div>
-                  {/* Autoservicio: cada carga solo elige su lavadora (siempre ropa). */}
+                  {/* Autoservicio: cada carga elige su lavadora y su secadora
+                      (siempre ropa). El secado se cobra desde la creación. */}
                   <div>
                     <label className="block text-xs font-medium text-gray-500 mb-1">Lavadora</label>
                     <select
@@ -1364,6 +1371,21 @@ export default function NuevaNota() {
                       {lavadorasOpc.map(m => (
                         <option key={m.id} value={m.id}>
                           {formatMaquina(m)} — ${precioPorTipo(m.tipo, c.tipo_prenda).toFixed(2)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1">Secadora</label>
+                    <select
+                      value={c.secadora_id}
+                      onChange={e => actualizarCarga(i, 'secadora_id', e.target.value)}
+                      className={INPUT_CLS}
+                    >
+                      <option value="">Sin asignar</option>
+                      {secadorasOpc.map(m => (
+                        <option key={m.id} value={m.id}>
+                          {formatMaquina(m)} — ${precioSecado(c.lavadora_id, c.tipo_prenda).toFixed(2)}
                         </option>
                       ))}
                     </select>

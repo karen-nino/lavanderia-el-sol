@@ -2026,9 +2026,10 @@ export const asignarMaquina = async (req, res) => {
 // Termina el lavado de UNA lavadora de la nota y arranca su secado: libera
 // esa lavadora, marca en uso la secadora elegida (obligatoria) y la asigna a
 // las cargas que lavó esa lavadora. Cada carga es independiente: las demás
-// lavadoras de la nota no se tocan. No cambia el precio: la tarifa cobrada
-// ya incluye el secado. Si era la última lavadora la nota pasa a SECANDO,
-// y a LISTA cuando su última secadora termina (ver terminarSecado).
+// lavadoras de la nota no se tocan. Cobra la tarifa de secado de esas cargas
+// (el secado es un cargo aparte del lavado), así que el total sube. Si era la
+// última lavadora la nota pasa a SECANDO, y a LISTA cuando su última secadora
+// termina (ver terminarSecado).
 export const terminarLavado = async (req, res) => {
   const { id } = req.params;
   const { lavadora_id, secadora_id } = req.body;
@@ -2082,13 +2083,25 @@ export const terminarLavado = async (req, res) => {
       return res.status(400).json({ message: 'La lavadora no está asignada a esta nota.' });
     }
 
-    // La secadora hereda las cargas de esa lavadora (sin costo extra: el
-    // precio_secadora de las cargas no se toca)...
-    await client.query(
-      `UPDATE nota_cargas SET secadora_id = $1, secadora_usada_id = $1
-        WHERE nota_id = $2 AND lavadora_id = $3 AND secadora_id IS NULL`,
-      [secadora_id, id, lavadora_id]
+    // La secadora hereda las cargas de esa lavadora y cobra su tarifa de secado
+    // (por categoría de cada carga: la lavadora que la lavó define mediana/jumbo;
+    // la prenda, edredón). Se tarifa aquí porque en Autoservicio la carga nace
+    // solo con lavadora (precio_secadora en 0) y el secado se cobra al iniciarlo.
+    const t = await tarifasCarga(client);
+    const { rows: cargasMover } = await client.query(
+      `SELECT nc.id, nc.tipo_prenda, ml.tipo AS lavadora_tipo
+         FROM nota_cargas nc
+         LEFT JOIN maquinas ml ON ml.id = nc.lavadora_id
+        WHERE nc.nota_id = $1 AND nc.lavadora_id = $2 AND nc.secadora_id IS NULL
+        FOR UPDATE OF nc`,
+      [id, lavadora_id]
     );
+    for (const c of cargasMover) {
+      await client.query(
+        `UPDATE nota_cargas SET secadora_id = $1, secadora_usada_id = $1, precio_secadora = $2 WHERE id = $3`,
+        [secadora_id, tarifaSecadora(c.lavadora_tipo, c.tipo_prenda, t), c.id]
+      );
+    }
     // ...y la lavadora se desvincula y libera: queda libre para el siguiente
     // cliente y no debe re-liberarse (ni frenar el secado) si otra nota la
     // toma. El cobro del lavado ya quedó guardado en precio_lavadora.
@@ -2125,6 +2138,15 @@ export const terminarLavado = async (req, res) => {
     // siguen en lavadora, continúa LAVANDO.
     const fase = await faseProcesoDeNota(client, id);
     await client.query('UPDATE notas SET estado = $1 WHERE id = $2', [fase, id]);
+
+    // El secado recién cobrado sube el total; se recalcula y se valida que
+    // ninguna carga rebase su tope.
+    await recalcularPrecioTotal(client, id);
+    const errTope = await validarTopesCargas(client, id);
+    if (errTope) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: errTope });
+    }
 
     await client.query('COMMIT');
 

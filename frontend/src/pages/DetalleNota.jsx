@@ -172,28 +172,11 @@ export default function DetalleNota() {
   const [confirmCancelar,  setConfirmCancelar]  = useState(false);
   const [confirmFinalizar,  setConfirmFinalizar]  = useState(false);
   const [confirmEliminar,  setConfirmEliminar]  = useState(false);
-  // Tarifas de secadora por categoría (Ajustes) para desglosar, solo en
-  // pantalla, el costo de cada carga en lavadora + secadora sin cambiar el
-  // total cobrado. Mediana = precio_carga_secadora (columna plana).
-  const [tarifasSecadora,  setTarifasSecadora]  = useState({ mediana: 45, jumbo: 45, edredon: 45 });
 
   useEffect(() => {
     let activo = true;
-    Promise.all([
-      api.get(`/notas/${id}`),
-      api.get('/ajustes').catch(() => null),
-    ])
-      .then(([data, ajustes]) => {
-        if (!activo) return;
-        setNota(data);
-        if (ajustes) {
-          setTarifasSecadora({
-            mediana: ajustes.precio_carga_secadora   != null ? Number(ajustes.precio_carga_secadora)   : 45,
-            jumbo:   ajustes.precio_secadora_jumbo    != null ? Number(ajustes.precio_secadora_jumbo)    : 45,
-            edredon: ajustes.precio_secadora_edredon  != null ? Number(ajustes.precio_secadora_edredon)  : 45,
-          });
-        }
-      })
+    api.get(`/notas/${id}`)
+      .then(data => { if (activo) setNota(data); })
       .catch(err => { if (activo) setError(err.message); })
       .finally(() => { if (activo) setLoading(false); });
     return () => { activo = false; };
@@ -469,36 +452,19 @@ export default function DetalleNota() {
                   // el ciclo ya haya terminado y la máquina se liberara). El badge
                   // de estado en vivo solo aparece si la máquina sigue asignada a
                   // esta carga (lavadora_id / secadora_id presentes).
-                  // Desglose SOLO visual del costo de la carga: el total de las
-                  // máquinas (lavadora + secadora) no cambia. Si la carga tiene
-                  // secadora pero su precio quedó en 0 (secado "ya cobrado"), se
-                  // le muestra su tarifa y a la lavadora el resto; si ya trae un
-                  // precio propio (notas viejas) se respeta.
-                  const totalMaquinas = Number(cg.precio_lavadora) + Number(cg.precio_secadora);
-                  // Tarifa de secado por categoría de la carga (mirror de su
-                  // lavadora): prenda edredón → Edredón; lavadora jumbo → Jumbo;
-                  // resto → Mediana. Solo para el respaldo visual cuando el
-                  // secado quedó en 0 ("ya cobrado").
-                  const catSecado =
-                    String(cg.tipo_prenda).toUpperCase() === 'EDREDON' ? 'edredon'
-                    : (cg.lavadora_usada_tipo ?? cg.lavadora_tipo) === 'lavadora_jumbo' ? 'jumbo'
-                    : 'mediana';
-                  const secDisplay = cg.secadora_usada_id
-                    ? (Number(cg.precio_secadora) > 0
-                        ? Number(cg.precio_secadora)
-                        : Math.min(tarifasSecadora[catSecado], totalMaquinas))
-                    : 0;
-                  const lavDisplay = totalMaquinas - secDisplay;
+                  // Cada máquina muestra su costo real: la lavadora su
+                  // precio_lavadora (lavado) y la secadora su precio_secadora
+                  // (secado). Son cargos separados; no se reparte nada.
                   const maquinasCarga = [
                     cg.lavadora_usada_id && {
                       nombre: cg.lavadora_usada_nombre, tipo: cg.lavadora_usada_tipo,
                       estado: cg.lavadora_id ? cg.lavadora_estado : null,
-                      precio: lavDisplay,
+                      precio: Number(cg.precio_lavadora),
                     },
                     cg.secadora_usada_id && {
                       nombre: cg.secadora_usada_nombre, tipo: cg.secadora_usada_tipo,
                       estado: cg.secadora_id ? cg.secadora_estado : null,
-                      precio: secDisplay,
+                      precio: Number(cg.precio_secadora),
                     },
                   ].filter(Boolean);
                   const prods = cg.productos ?? [];
