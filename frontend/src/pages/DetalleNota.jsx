@@ -695,14 +695,18 @@ export default function DetalleNota() {
                       <p className="text-xs text-gray-400">{subtituloEstado(paso.key, { done, current }, paso.fechaKey ? fechaPorEstado[paso.fechaKey] : undefined)}</p>
 
                       {/* Desglose de las cargas que viven este paso: cada una
-                          con su avance Lavado / Secado (independientes). */}
+                          con el avance de ESE paso (Lavado bajo Lavando, Secado
+                          bajo Secando), no ambos. */}
                       {cargasAqui.length > 0 && (
                         <div className="mt-2 space-y-1.5">
                           {cargasAqui.map(cg => (
                             <div key={cg.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
                               <span className="font-semibold text-gray-500">Carga {cg.orden}</span>
-                              <FaseChip label="Lavado" fase={faseMaquina(cg.lavadora_id, cg.lavadora_usada_id)} />
-                              <FaseChip label="Secado" fase={faseMaquina(cg.secadora_id, cg.secadora_usada_id)} />
+                              {paso.key === 'LAVANDO' ? (
+                                <FaseChip label="Lavado" fase={faseMaquina(cg.lavadora_id, cg.lavadora_usada_id)} />
+                              ) : (
+                                <FaseChip label="Secado" fase={faseMaquina(cg.secadora_id, cg.secadora_usada_id)} />
+                              )}
                             </div>
                           ))}
                         </div>
