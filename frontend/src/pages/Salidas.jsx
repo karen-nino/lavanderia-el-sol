@@ -105,14 +105,14 @@ export default function Salidas() {
       : [nota?.maquina_id, nota?.secadora_id].filter(Boolean)
   )];
 
-  // Activa las máquinas asignadas que siguen libres (cargas en espera). Sirve
-  // tanto para una nota En Espera como para una Lavando/Secando con cargas
-  // pendientes.
-  async function activarPendientes() {
+  // Arranca UNA máquina asignada y libre (botón "Iniciar Lavado"/"Iniciar
+  // Secado" por máquina): la pone en uso y la nota pasa a la fase que
+  // corresponda. Las demás máquinas asignadas siguen en espera.
+  async function iniciarMaquina(maquinaId) {
     setLoadingMaquina(true);
     setErrorAccion('');
     try {
-      await api.patch(`/notas/${id}/activar-pendientes`);
+      await api.patch(`/notas/${id}/activar-pendientes`, { maquina_id: maquinaId });
       await cargarDatos();
     } catch (err) {
       setErrorAccion(err.message);
@@ -357,9 +357,6 @@ export default function Salidas() {
     return [...porId.values()];
   })();
 
-  // Máquinas ya asignadas a la nota que siguen libres (cargas en espera).
-  const maquinasPendientes = maquinasAsignadas.filter(m => m.estado === 'disponible');
-
   // ¿Esta máquina ya cumplió su tiempo de ciclo? Cada máquina es
   // independiente (mismo cálculo que las tarjetas del dashboard): la
   // lavadora terminada ofrece "Iniciar Secado" y la secadora terminada
@@ -451,6 +448,15 @@ export default function Salidas() {
                     )}
                   </div>
                   {/* Acción por máquina: cada carga es independiente */}
+                  {m.estado === 'disponible' && (
+                    <button
+                      onClick={() => iniciarMaquina(m.id)}
+                      disabled={loadingMaquina}
+                      className="px-4 py-2 bg-blue hover:opacity-90 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
+                    >
+                      {loadingMaquina ? 'Iniciando...' : (m.tipo === 'secadora' ? 'Iniciar Secado' : 'Iniciar Lavado')}
+                    </button>
+                  )}
                   {m.estado === 'en_uso' && (
                     cicloCumplido(m) ? (
                       m.tipo === 'secadora' ? (
@@ -487,30 +493,18 @@ export default function Salidas() {
             <p className="text-sm text-gray-400 italic">Sin máquina asignada</p>
           )}
 
-          {/* Acciones a nivel nota */}
-          {(maquinasPendientes.length > 0
-            || (maquinasPendientes.length === 0 && nota?.estado === 'EN_ESPERA')) && (
+          {/* En Espera sin ninguna máquina asignada: abrir selector para
+              elegirlas. Con máquinas asignadas, cada una se arranca con su
+              propio botón "Iniciar Lavado" de arriba. */}
+          {maquinasAsignadas.length === 0 && nota?.estado === 'EN_ESPERA' && (
             <div className="flex justify-end gap-2 pt-1">
-              {/* Activar las cargas que siguen en espera (máquinas asignadas y libres) */}
-              {maquinasPendientes.length > 0 && (
-                <button
-                  onClick={activarPendientes}
-                  disabled={loadingMaquina}
-                  className="px-4 py-2 bg-blue hover:opacity-90 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
-                >
-                  {loadingMaquina ? 'Activando...' : 'Activar'}
-                </button>
-              )}
-              {/* En Espera sin máquinas asignadas: abrir selector para elegirlas */}
-              {maquinasPendientes.length === 0 && nota?.estado === 'EN_ESPERA' && (
-                <button
-                  onClick={iniciarActivar}
-                  disabled={loadingMaquina}
-                  className="px-4 py-2 bg-blue hover:opacity-90 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
-                >
-                  {loadingMaquina ? 'Activando...' : 'Activar'}
-                </button>
-              )}
+              <button
+                onClick={iniciarActivar}
+                disabled={loadingMaquina}
+                className="px-4 py-2 bg-blue hover:opacity-90 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
+              >
+                {loadingMaquina ? 'Activando...' : 'Activar'}
+              </button>
             </div>
           )}
         </div>

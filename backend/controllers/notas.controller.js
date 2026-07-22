@@ -1660,11 +1660,14 @@ export const activarNota = async (req, res) => {
 };
 
 // ── PATCH /notas/:id/activar-pendientes ─────────────────────
-// Activa (marca en uso) todas las máquinas ya asignadas a la nota que sigan
-// disponibles. Sirve para poner en marcha las cargas que quedaron en espera,
-// tanto en una nota En Espera como en una nota ya En Proceso (caso mixto).
+// Activa (marca en uso) las máquinas ya asignadas a la nota que sigan
+// disponibles. Sin body activa TODAS; con { maquina_id } activa solo esa (para
+// el botón "Iniciar Lavado" por máquina en Salidas). Sirve para poner en marcha
+// las cargas que quedaron en espera, tanto en una nota En Espera como en una
+// ya En Proceso (caso mixto).
 export const activarMaquinasPendientes = async (req, res) => {
   const { id } = req.params;
+  const { maquina_id } = req.body ?? {};
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -1691,10 +1694,20 @@ export const activarMaquinasPendientes = async (req, res) => {
       'SELECT id, estado FROM maquinas WHERE id = ANY($1) AND sucursal = $2 FOR UPDATE',
       [ids, req.sucursal]
     );
-    const libres = maqs.filter(m => m.estado === 'disponible').map(m => m.id);
+    let libres = maqs.filter(m => m.estado === 'disponible').map(m => m.id);
     if (libres.length === 0) {
       await client.query('ROLLBACK');
       return res.status(400).json({ message: 'No hay máquinas pendientes por activar.' });
+    }
+
+    // Con maquina_id se activa solo esa (botón por máquina); debe estar
+    // asignada a la nota y disponible.
+    if (maquina_id != null) {
+      if (!libres.some(x => String(x) === String(maquina_id))) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ message: 'La máquina no está asignada a la nota o no está disponible.' });
+      }
+      libres = [Number(maquina_id)];
     }
 
     await client.query(

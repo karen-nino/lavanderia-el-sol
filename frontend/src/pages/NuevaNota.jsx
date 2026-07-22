@@ -499,31 +499,29 @@ export default function NuevaNota() {
     setError('');
     setLoading(true);
 
-    const algunaMaquina = cargasAuto.some(c => c.lavadora_id || c.secadora_id);
-
     const payload = {
       modalidad:       'AUTOSERVICIO',
       // La prenda/tela ahora viven en cada carga; a nivel nota se guarda la de
       // la primera carga solo para la lista/badge.
       tipo_prenda:     cargasAuto[0]?.tipo_prenda || 'ROPA',
-      // Sin máquinas la nota queda En Espera (se activa después desde
-      // Salidas); con lavadora nace Lavando y con solo secadora, Secando.
-      // (El servidor recalcula este estado a partir de las cargas.)
-      estado:          algunaMaquina
-        ? (cargasAuto.some(c => c.lavadora_id) ? 'LAVANDO' : 'SECANDO')
-        : 'EN_ESPERA',
+      // Autoservicio nace SIEMPRE En Espera: las máquinas quedan asignadas pero
+      // libres y el empleado las arranca una por una desde Salidas ("Iniciar
+      // Lavado"). El servidor recalcula el estado a partir de las cargas.
+      estado:          'EN_ESPERA',
       estado_pago:     'PAGADO',
       // null (no undefined) para que al editar, limpiar un campo lo borre.
       instrucciones:   form.instrucciones || null,
       tipo_tela:       null,
       tamano_edredon:  null,
-      // El servidor tarifica cada carga y marca las máquinas en uso.
+      // El servidor tarifica cada carga. activar:false = no toma las máquinas
+      // al crear; se activan luego desde Salidas.
       cargas:          cargasAuto.map(c => ({
         lavadora_id:    c.lavadora_id ? Number(c.lavadora_id) : null,
         secadora_id:    c.secadora_id ? Number(c.secadora_id) : null,
         tipo_prenda:    c.tipo_prenda || 'ROPA',
         tipo_tela:      (c.tipo_prenda || 'ROPA') === 'ROPA' ? (c.tipo_tela || null) : null,
         tamano_edredon: c.tipo_prenda === 'EDREDON' ? (c.tamano_edredon || null) : null,
+        activar:        false,
       })),
       ajuste:          ajusteNum,
       productos:       productosLista
