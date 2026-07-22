@@ -7,7 +7,8 @@ function fmtMonto(n) {
 }
 
 const BADGE_MAQUINA_ESTADO = {
-  disponible:    { label: 'Disponible',    cls: 'bg-green-100 text-green-700', dot: 'bg-green-500' },
+  // "disponible" aquí = máquina asignada a la carga pero sin iniciar (En espera): gris.
+  disponible:    { label: 'En espera',     cls: 'bg-gray-100 text-gray-600',   dot: 'bg-gray-400'  },
   en_uso:        { label: 'En uso',        cls: 'bg-blue-100 text-blue-700',   dot: 'bg-blue-500'  },
   mantenimiento: { label: 'Mantenimiento', cls: 'bg-red-100 text-red-700',     dot: 'bg-red-500'   },
 };

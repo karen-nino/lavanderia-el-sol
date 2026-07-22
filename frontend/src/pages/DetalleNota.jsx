@@ -96,7 +96,8 @@ function subtituloEstado(estado, { done, current }, fechaEstado) {
 }
 
 const BADGE_MAQUINA_ESTADO = {
-  disponible:    { label: 'Disponible',    cls: 'bg-green-100 text-green-700', dot: 'bg-green-500' },
+  // "disponible" aquí = máquina asignada a la carga pero sin iniciar (En espera): gris.
+  disponible:    { label: 'En espera',     cls: 'bg-gray-100 text-gray-600',   dot: 'bg-gray-400'  },
   en_uso:        { label: 'En uso',        cls: 'bg-blue-100 text-blue-700',   dot: 'bg-blue-500'  },
   mantenimiento: { label: 'Mantenimiento', cls: 'bg-red-100 text-red-700',     dot: 'bg-red-500'   },
 };
@@ -106,6 +107,10 @@ const MAQUINA_TIPO_LABEL = {
   lavadora_jumbo:   'Jumbo',
   secadora:         'Secadora',
 };
+
+// Abreviatura del tamaño para el desglose de cargas: Mediana → M, Jumbo → J,
+// Edredón → E. Otros valores se muestran tal cual.
+const TAMANO_ABBR = { Mediana: 'M', Jumbo: 'J', Edredón: 'E' };
 
 function fmtMonto(n) {
   return n != null ? `$${Number(n).toFixed(2)}` : '—';
@@ -493,10 +498,12 @@ export default function DetalleNota() {
                         maquinasCarga.map((m, i) => {
                           const cfg = BADGE_MAQUINA_ESTADO[m.estado];
                           // La secadora muestra su tamaño (Mediana/Jumbo) igual
-                          // que la lavadora; sin tamaño cae a "Secadora".
-                          const tipoLabel = m.tipo === 'secadora' && m.tamano
+                          // que la lavadora; sin tamaño cae a "Secadora". Se
+                          // muestra abreviado (M/J/E).
+                          const tamanoLabel = m.tipo === 'secadora' && m.tamano
                             ? m.tamano.charAt(0).toUpperCase() + m.tamano.slice(1)
                             : MAQUINA_TIPO_LABEL[m.tipo];
+                          const tipoLabel = TAMANO_ABBR[tamanoLabel] ?? tamanoLabel;
                           return (
                             <div key={i} className="flex items-start justify-between gap-2">
                               <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 min-w-0">
