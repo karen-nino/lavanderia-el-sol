@@ -19,6 +19,10 @@ const MAQUINA_TIPO_LABEL = {
   secadora:         'Secadora',
 };
 
+// Abreviatura del tamaño en la lista de máquinas: Mediana → M, Jumbo → J,
+// Edredón → E. Otros valores se muestran tal cual.
+const TAMANO_ABBR = { Mediana: 'M', Jumbo: 'J', Edredón: 'E' };
+
 export default function Salidas() {
   const { id }   = useParams();
   const navigate = useNavigate();
@@ -348,7 +352,7 @@ export default function Salidas() {
     if (cargasNota.length === 0) {
       const ms = [
         nota?.maquina_id  && { id: nota.maquina_id,  nombre: nota.maquina_nombre,  tipo: nota.maquina_tipo,  estado: nota.maquina_estado,  en_uso_desde: nota.maquina_en_uso_desde  },
-        nota?.secadora_id && { id: nota.secadora_id, nombre: nota.secadora_nombre, tipo: nota.secadora_tipo, estado: nota.secadora_estado, en_uso_desde: nota.secadora_en_uso_desde },
+        nota?.secadora_id && { id: nota.secadora_id, nombre: nota.secadora_nombre, tipo: nota.secadora_tipo, tamano: nota.secadora_tamano, estado: nota.secadora_estado, en_uso_desde: nota.secadora_en_uso_desde },
       ].filter(Boolean);
       return ms.length > 0 ? [{ orden: null, maquinas: ms }] : [];
     }
@@ -357,7 +361,7 @@ export default function Salidas() {
         orden: c.orden,
         maquinas: [
           c.lavadora_id && { id: c.lavadora_id, nombre: c.lavadora_nombre, tipo: c.lavadora_tipo, estado: c.lavadora_estado, en_uso_desde: c.lavadora_en_uso_desde },
-          c.secadora_id && { id: c.secadora_id, nombre: c.secadora_nombre, tipo: c.secadora_tipo, estado: c.secadora_estado, en_uso_desde: c.secadora_en_uso_desde },
+          c.secadora_id && { id: c.secadora_id, nombre: c.secadora_nombre, tipo: c.secadora_tipo, tamano: c.secadora_tamano, estado: c.secadora_estado, en_uso_desde: c.secadora_en_uso_desde },
         ].filter(Boolean),
       }))
       .filter(g => g.maquinas.length > 0);
@@ -447,6 +451,12 @@ export default function Salidas() {
                 )}
                 {grupo.maquinas.map((m, i) => {
                   const cfg = BADGE_MAQUINA_ESTADO[m.estado];
+                  // La secadora muestra su tamaño (Mediana/Jumbo) igual que la
+                  // lavadora; sin tamaño cae a "Secadora". Se muestra abreviado (M/J/E).
+                  const tamanoLabel = m.tipo === 'secadora' && m.tamano
+                    ? m.tamano.charAt(0).toUpperCase() + m.tamano.slice(1)
+                    : MAQUINA_TIPO_LABEL[m.tipo];
+                  const tipoLabel = TAMANO_ABBR[tamanoLabel] ?? tamanoLabel;
                   return (
                     <div key={i} className="flex flex-wrap items-center justify-between gap-2">
                       <div className="flex flex-wrap items-center gap-2 min-w-0">
@@ -458,8 +468,8 @@ export default function Salidas() {
                           />
                         )}
                         <span className="text-sm font-medium text-gray-800">{m.nombre}</span>
-                        {MAQUINA_TIPO_LABEL[m.tipo] && (
-                          <span className="text-xs text-gray-500">— {MAQUINA_TIPO_LABEL[m.tipo]}</span>
+                        {tipoLabel && (
+                          <span className="text-xs text-gray-500">— {tipoLabel}</span>
                         )}
                       </div>
                       {/* Acción por máquina: cada carga es independiente */}

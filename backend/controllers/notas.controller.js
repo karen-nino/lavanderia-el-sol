@@ -403,7 +403,7 @@ async function cargasDeNota(client, notaId) {
             ml.nombre AS lavadora_nombre, ml.tipo AS lavadora_tipo, ml.estado AS lavadora_estado,
             ml.en_uso_desde AS lavadora_en_uso_desde,
             ms.nombre AS secadora_nombre, ms.tipo AS secadora_tipo, ms.estado AS secadora_estado,
-            ms.en_uso_desde AS secadora_en_uso_desde,
+            ms.tamano AS secadora_tamano, ms.en_uso_desde AS secadora_en_uso_desde,
             nc.lavadora_usada_id, nc.secadora_usada_id,
             mlu.nombre AS lavadora_usada_nombre, mlu.tipo AS lavadora_usada_tipo,
             msu.nombre AS secadora_usada_nombre, msu.tipo AS secadora_usada_tipo,
