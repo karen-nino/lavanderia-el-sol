@@ -10,6 +10,8 @@ const BADGE_MAQUINA_ESTADO = {
   // "disponible" aquí = máquina asignada a la carga pero sin iniciar (En espera): gris.
   disponible:    { label: 'En espera',     cls: 'bg-gray-100 text-gray-600',   dot: 'bg-gray-400'  },
   en_uso:        { label: 'En uso',        cls: 'bg-blue-100 text-blue-700',   dot: 'bg-blue-500'  },
+  // "terminado" = la máquina ya cumplió su parte y se desvinculó de la carga: verde.
+  terminado:     { label: 'Terminó',       cls: 'bg-green-100 text-green-700', dot: 'bg-green-500' },
   mantenimiento: { label: 'Mantenimiento', cls: 'bg-red-100 text-red-700',     dot: 'bg-red-500'   },
 };
 
@@ -410,12 +412,28 @@ export default function Salidas() {
       ].filter(Boolean);
       return ms.length > 0 ? [{ orden: null, maquinas: ms }] : [];
     }
+    // Se incluyen también las máquinas ya desvinculadas (usada): la que sigue
+    // viva muestra su estado (En espera / En uso); la que ya cumplió su parte
+    // se queda como "terminado" (verde), sin botones.
     return cargasNota
       .map(c => ({
         orden: c.orden,
         maquinas: [
-          c.lavadora_id && { id: c.lavadora_id, nombre: c.lavadora_nombre, tipo: c.lavadora_tipo, estado: c.lavadora_estado, en_uso_desde: c.lavadora_en_uso_desde },
-          c.secadora_id && { id: c.secadora_id, nombre: c.secadora_nombre, tipo: c.secadora_tipo, tamano: c.secadora_tamano, estado: c.secadora_estado, en_uso_desde: c.secadora_en_uso_desde },
+          (c.lavadora_id || c.lavadora_usada_id) && {
+            id: c.lavadora_id || c.lavadora_usada_id,
+            nombre: c.lavadora_id ? c.lavadora_nombre : c.lavadora_usada_nombre,
+            tipo:   c.lavadora_id ? c.lavadora_tipo   : c.lavadora_usada_tipo,
+            estado: c.lavadora_id ? c.lavadora_estado : 'terminado',
+            en_uso_desde: c.lavadora_en_uso_desde,
+          },
+          (c.secadora_id || c.secadora_usada_id) && {
+            id: c.secadora_id || c.secadora_usada_id,
+            nombre: c.secadora_id ? c.secadora_nombre : c.secadora_usada_nombre,
+            tipo:   c.secadora_id ? c.secadora_tipo   : c.secadora_usada_tipo,
+            tamano: c.secadora_id ? c.secadora_tamano : c.secadora_usada_tamano,
+            estado: c.secadora_id ? c.secadora_estado : 'terminado',
+            en_uso_desde: c.secadora_en_uso_desde,
+          },
         ].filter(Boolean),
       }))
       .filter(g => g.maquinas.length > 0);
@@ -577,6 +595,15 @@ export default function Salidas() {
                             {m.tipo === 'secadora' ? 'Detener Secado' : 'Detener Lavado'}
                           </button>
                         )
+                      )}
+                      {/* Ya cumplió su parte: sin acciones, solo indicador. */}
+                      {m.estado === 'terminado' && (
+                        <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-green-700 px-3 py-1.5 rounded-full bg-green-100">
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                          </svg>
+                          Finalizada
+                        </span>
                       )}
                     </div>
                   );
