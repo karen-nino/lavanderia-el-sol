@@ -1916,10 +1916,10 @@ export const asignarSecadora = async (req, res) => {
 
 // ── PATCH /notas/:id/asignar-maquina ────────────────────────
 // Asigna una máquina extra (lavadora o secadora) a la nota creando una CARGA
-// NUEVA que arranca de inmediato. `cobrar` decide si la carga suma su tarifa
-// al total (true) o va sin costo (false, precio 0). Disponible mientras la
-// nota no esté finalizada ni cancelada; tras asignar, la nota queda en
-// LAVANDO o SECANDO según sus máquinas activas (igual que faseProcesoDeNota).
+// NUEVA. La máquina queda ASIGNADA pero disponible (En Espera): NO arranca aquí,
+// el empleado la inicia manualmente desde Salidas (igual que al crear la nota).
+// `cobrar` decide si la carga suma su tarifa al total (true) o va sin costo
+// (false, precio 0). Disponible mientras la nota no esté finalizada ni cancelada.
 // No toca estado_pago: igual que agregar productos, un cobro posterior a una
 // nota pagada se maneja aparte.
 export const asignarMaquina = async (req, res) => {
@@ -2002,14 +2002,12 @@ export const asignarMaquina = async (req, res) => {
         tipoPrenda,
       ]
     );
-    await client.query(
-      `UPDATE maquinas SET estado = 'en_uso', en_uso_desde = NOW() WHERE id = $1`,
-      [maq.id]
-    );
-    await sellarCicloMaquinas(client, id);
+    // La máquina NO arranca aquí: queda asignada pero disponible (En Espera) y
+    // el empleado la inicia manualmente desde Salidas, igual que al crear la nota.
 
     // Denormalizados (primera lavadora/secadora de la nota) y estado según las
-    // máquinas activas: si queda alguna lavadora en uso LAVANDO; si no, SECANDO.
+    // máquinas EN USO: la nueva no cuenta (no se inició). Si nada corre, la nota
+    // queda En Espera (reabre una nota LISTA para poder iniciarla).
     await client.query(
       esSecadora
         ? 'UPDATE notas SET secadora_id = COALESCE(secadora_id, $1) WHERE id = $2'

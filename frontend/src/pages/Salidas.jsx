@@ -236,7 +236,10 @@ export default function Salidas() {
     setLoadingMaquinas(true);
     try {
       const data = await api.get('/maquinas');
-      setMaquinasDisp((data ?? []).filter(m => m.estado === 'disponible'));
+      // Excluye las que ya están asignadas a la nota (no tiene sentido volver a asignarlas).
+      setMaquinasDisp((data ?? []).filter(m =>
+        m.estado === 'disponible'
+        && !maquinasNota.some(mid => String(mid) === String(m.id))));
     } catch (err) {
       setErrorAccion(err.message);
     } finally {
@@ -245,7 +248,7 @@ export default function Salidas() {
   }
 
   // Asigna la máquina elegida: el backend crea la carga nueva (por cobrar o
-  // sin cobro) y la máquina arranca de inmediato.
+  // sin cobro); la máquina queda asignada (sin iniciar).
   async function confirmarAsignar() {
     if (!asignarMaqSel || asignarCobrar === null) return;
     setLoadingMaquina(true);
@@ -273,10 +276,11 @@ export default function Salidas() {
     try {
       const data = await api.get('/maquinas');
       const esSecadora = m.tipo === 'secadora';
+      // Del mismo tipo, disponibles, y que no estén ya asignadas a la nota.
       setMaquinasDisp((data ?? []).filter(x =>
         x.estado === 'disponible'
         && (esSecadora ? x.tipo === 'secadora' : x.tipo !== 'secadora')
-        && String(x.id) !== String(m.id)));
+        && !maquinasNota.some(mid => String(mid) === String(x.id))));
     } catch (err) {
       setErrorAccion(err.message);
     } finally {
@@ -522,7 +526,11 @@ export default function Salidas() {
                   <p className="text-xs font-semibold text-gray-500">Carga {grupo.orden}</p>
                 )}
                 {grupo.maquinas.map((m, i) => {
-                  const cfg = BADGE_MAQUINA_ESTADO[m.estado];
+                  // Lavadora que ya cumplió su ciclo (terminó el lavado): se
+                  // muestra en verde y sin botón; el secado se inicia aparte
+                  // desde la secadora de la carga.
+                  const lavadoTerminado = m.estado === 'en_uso' && m.tipo !== 'secadora' && cicloCumplido(m);
+                  const cfg = lavadoTerminado ? BADGE_MAQUINA_ESTADO.terminado : BADGE_MAQUINA_ESTADO[m.estado];
                   // La secadora muestra su tamaño (Mediana/Jumbo) igual que la
                   // lavadora; se muestra abreviado (M/J/E) en el renglón.
                   const tamanoLabel = labelTamano(m);
@@ -533,7 +541,7 @@ export default function Salidas() {
                         {/* Estado: solo el punto de color */}
                         {cfg && (
                           <span
-                            className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${cfg.dot} ${m.estado === 'en_uso' ? 'animate-pulse' : ''}`}
+                            className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${cfg.dot} ${m.estado === 'en_uso' && !lavadoTerminado ? 'animate-pulse' : ''}`}
                             title={cfg.label}
                           />
                         )}
@@ -569,6 +577,8 @@ export default function Salidas() {
                       )}
                       {m.estado === 'en_uso' && (
                         cicloCumplido(m) ? (
+                          // Secadora que terminó: finalizar la carga. Lavadora
+                          // que terminó: sin botón (verde), el secado va aparte.
                           m.tipo === 'secadora' ? (
                             <button
                               onClick={() => setConfirmTerminarSec(m)}
@@ -577,15 +587,7 @@ export default function Salidas() {
                             >
                               Finalizar Carga
                             </button>
-                          ) : (
-                            <button
-                              onClick={() => iniciarTerminarLavado(m)}
-                              disabled={loadingMaquina}
-                              className="px-4 py-2 bg-red hover:opacity-90 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
-                            >
-                              Iniciar Secado
-                            </button>
-                          )
+                          ) : null
                         ) : (
                           <button
                             onClick={() => setConfirmDetener(m)}
@@ -1054,7 +1056,7 @@ export default function Salidas() {
             <div>
               <h3 className="text-base font-bold text-gray-900">Asignar máquina</h3>
               <p className="text-sm text-gray-500 mt-1">
-                Se agrega una <span className="font-medium text-gray-700">carga nueva</span> a la nota y la máquina arranca de inmediato.
+                Se agrega una <span className="font-medium text-gray-700">carga nueva</span> a la nota. La máquina queda asignada; la inicias después con su botón.
               </p>
             </div>
 
