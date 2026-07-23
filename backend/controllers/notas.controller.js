@@ -1722,10 +1722,36 @@ export const activarMaquinasPendientes = async (req, res) => {
       libres = [Number(maquina_id)];
     }
 
+    // Al iniciar el secado de una carga cuya lavadora seguía lavando (en uso),
+    // esa lavadora ya cumplió: se captura antes de tomar la secadora para
+    // soltarla (desvincular + liberar) después. La carga conserva la lavadora
+    // en lavadora_usada_id (historial). Solo aplica a lavadoras realmente en uso.
+    const { rows: lavASoltar } = await client.query(
+      `SELECT nc.id AS carga_id, nc.lavadora_id
+         FROM nota_cargas nc
+         JOIN maquinas ml ON ml.id = nc.lavadora_id
+        WHERE nc.nota_id = $1 AND nc.secadora_id = ANY($2) AND ml.estado = 'en_uso'`,
+      [id, libres]
+    );
+
     await client.query(
       `UPDATE maquinas SET estado = 'en_uso', en_uso_desde = NOW() WHERE id = ANY($1)`,
       [libres]
     );
+
+    if (lavASoltar.length > 0) {
+      const lavIds   = lavASoltar.map(r => r.lavadora_id);
+      const cargaIds = lavASoltar.map(r => r.carga_id);
+      await client.query(
+        `UPDATE maquinas SET estado = 'disponible', en_uso_desde = NULL WHERE id = ANY($1)`,
+        [lavIds]
+      );
+      await client.query(
+        'UPDATE nota_cargas SET lavadora_id = NULL WHERE id = ANY($1)',
+        [cargaIds]
+      );
+    }
+
     await sellarCicloMaquinas(client, id);
     // La nota queda en la fase que dicten sus máquinas: si se activó una
     // lavadora vuelve/queda en LAVANDO; si solo corren secadoras, SECANDO.
