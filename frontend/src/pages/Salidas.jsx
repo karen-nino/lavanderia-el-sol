@@ -529,8 +529,9 @@ export default function Salidas() {
           <h2 className="text-sm font-semibold text-gray-700">
             {maquinasAsignadas.length > 1 ? 'Máquinas asignadas' : 'Máquina asignada'}
           </h2>
-          {/* Asignar una máquina extra: disponible salvo en notas cerradas */}
-          {nota && !['FINALIZADA', 'CANCELADA'].includes(nota.estado) && (
+          {/* Asignar una máquina extra: solo si ya hay alguna asignada (si no,
+              se usa el botón de abajo). Disponible salvo en notas cerradas. */}
+          {nota && maquinasAsignadas.length > 0 && !['FINALIZADA', 'CANCELADA'].includes(nota.estado) && (
             <button
               onClick={iniciarAsignar}
               disabled={loadingMaquina}
@@ -629,7 +630,7 @@ export default function Salidas() {
                 disabled={loadingMaquina}
                 className="px-4 py-2 bg-blue hover:opacity-90 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
               >
-                {loadingMaquina ? 'Activando...' : 'Activar'}
+                {loadingMaquina ? 'Asignando...' : 'Asignar Máquina'}
               </button>
             </div>
           )}
