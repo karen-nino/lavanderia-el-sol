@@ -1938,7 +1938,7 @@ export const asignarMaquina = async (req, res) => {
     await client.query('BEGIN');
 
     const { rows: notaRows } = await client.query(
-      'SELECT estado, tipo_prenda FROM notas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
+      'SELECT estado, tipo_prenda, precio_base FROM notas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
       [id, req.sucursal]
     );
     if (notaRows.length === 0) {
@@ -1972,15 +1972,17 @@ export const asignarMaquina = async (req, res) => {
       return res.status(400).json({ message: 'Los edredones solo van en lavadora jumbo.' });
     }
 
-    // Solo notas con cargas: en las de formato antiguo (sin nota_cargas) crear
-    // una carga cambiaría la fórmula del total y borraría el cobro original.
-    const { rows: [{ total, max_orden }] } = await client.query(
-      'SELECT COUNT(*)::int AS total, COALESCE(MAX(orden), 0)::int AS max_orden FROM nota_cargas WHERE nota_id = $1',
+    // Las notas de formato antiguo (legadas) usan precio_base/cantidad_cargas en
+    // vez de nota_cargas; crear una carga cambiaría su fórmula de total. Se
+    // reconocen por tener precio_base. Una nota de cargas que se quedó sin cargas
+    // (p. ej. tras quitar todas) tiene precio_base NULL y sí admite asignar.
+    const { rows: [{ max_orden }] } = await client.query(
+      'SELECT COALESCE(MAX(orden), 0)::int AS max_orden FROM nota_cargas WHERE nota_id = $1',
       [id]
     );
-    if (total === 0) {
+    if (notaRows[0].precio_base != null) {
       await client.query('ROLLBACK');
-      return res.status(400).json({ message: 'Esta nota es de un formato antiguo sin cargas; no admite asignar máquinas extra.' });
+      return res.status(400).json({ message: 'Esta nota es de un formato antiguo; no admite asignar máquinas extra.' });
     }
 
     const t = await tarifasCarga(client);

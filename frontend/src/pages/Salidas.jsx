@@ -623,10 +623,10 @@ export default function Salidas() {
           {/* En Espera sin ninguna máquina asignada: abrir selector para
               elegirlas. Con máquinas asignadas, cada una se arranca con su
               propio botón "Iniciar Lavado" de arriba. */}
-          {maquinasAsignadas.length === 0 && nota?.estado === 'EN_ESPERA' && (
+          {maquinasAsignadas.length === 0 && nota && !['FINALIZADA', 'CANCELADA'].includes(nota.estado) && (
             <div className="flex justify-end gap-2 pt-1">
               <button
-                onClick={iniciarActivar}
+                onClick={iniciarAsignar}
                 disabled={loadingMaquina}
                 className="px-4 py-2 bg-blue hover:opacity-90 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
               >
