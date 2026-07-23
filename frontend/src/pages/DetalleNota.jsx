@@ -70,16 +70,6 @@ function faseMaquina(liveId, usadaId, estado) {
   return 'pendiente';
 }
 
-// Paso que la carga está viviendo AHORA (LAVANDO / SECANDO): requiere que su
-// máquina esté realmente EN USO. Una carga asignada pero sin iniciar, o ya
-// terminada, devuelve null (no se lista bajo Lavando/Secando). Permite listar
-// cada carga bajo su propio paso, ya que con varias pueden ir desfasadas.
-function pasoCarga(cg) {
-  if (cg.lavadora_id && cg.lavadora_estado === 'en_uso') return 'LAVANDO';
-  if (cg.secadora_id && cg.secadora_estado === 'en_uso') return 'SECANDO';
-  return null;
-}
-
 function FaseChip({ label, fase }) {
   const s = FASE_ESTILO[fase];
   return (
@@ -647,12 +637,12 @@ export default function DetalleNota() {
                 const done    = i < pasoActual;
                 const current = i === pasoActual;
                 const isLast  = i === PASOS_ESTADO.length - 1;
-                // Cargas que están viviendo ESTE paso ahora mismo (Lavando /
-                // Secando). Con varias cargas pueden ir desfasadas, así que
-                // cada una se lista bajo el paso que le corresponde, no bajo el
-                // paso general de la nota.
-                const cargasAqui = ['LAVANDO', 'SECANDO'].includes(paso.key)
-                  ? (nota.cargas ?? []).filter(cg => pasoCarga(cg) === paso.key)
+                // Cargas con su máquina EN USO en este paso. Se evalúa cada paso
+                // por separado: una carga con lavadora y secadora corriendo a la
+                // vez aparece bajo Lavando y bajo Secando.
+                const cargasAqui =
+                  paso.key === 'LAVANDO' ? (nota.cargas ?? []).filter(cg => cg.lavadora_id && cg.lavadora_estado === 'en_uso')
+                  : paso.key === 'SECANDO' ? (nota.cargas ?? []).filter(cg => cg.secadora_id && cg.secadora_estado === 'en_uso')
                   : [];
                 // Un paso se resalta si ya se pasó, es el actual de la nota, o
                 // tiene alguna carga viviéndolo (p. ej. Secando con una carga
