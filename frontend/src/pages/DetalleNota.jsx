@@ -94,6 +94,8 @@ const BADGE_MAQUINA_ESTADO = {
   en_uso:        { label: 'En uso',        cls: 'bg-blue-100 text-blue-700',   dot: 'bg-blue-500'  },
   // "terminado" = la máquina ya cumplió su parte y se desvinculó de la carga: verde.
   terminado:     { label: 'Terminó',       cls: 'bg-green-100 text-green-700', dot: 'bg-green-500' },
+  // "removida" = estuvo asignada y se eliminó: gris tenue, línea tachada.
+  removida:      { label: 'Eliminada',     cls: 'bg-gray-100 text-gray-400',   dot: 'bg-gray-300' },
   mantenimiento: { label: 'Mantenimiento', cls: 'bg-red-100 text-red-700',     dot: 'bg-red-500'   },
 };
 
@@ -461,13 +463,13 @@ export default function DetalleNota() {
                   const maquinasCarga = [
                     cg.lavadora_usada_id && {
                       nombre: cg.lavadora_usada_nombre, tipo: cg.lavadora_usada_tipo,
-                      estado: cg.lavadora_id ? cg.lavadora_estado : 'terminado',
+                      estado: cg.lavadora_id ? cg.lavadora_estado : (cg.lavadora_removida ? 'removida' : 'terminado'),
                       precio: Number(cg.precio_lavadora),
                     },
                     cg.secadora_usada_id && {
                       nombre: cg.secadora_usada_nombre, tipo: cg.secadora_usada_tipo,
                       tamano: cg.secadora_usada_tamano,
-                      estado: cg.secadora_id ? cg.secadora_estado : 'terminado',
+                      estado: cg.secadora_id ? cg.secadora_estado : (cg.secadora_removida ? 'removida' : 'terminado'),
                       precio: Number(cg.precio_secadora),
                     },
                   ].filter(Boolean);
@@ -502,8 +504,10 @@ export default function DetalleNota() {
                             ? m.tamano.charAt(0).toUpperCase() + m.tamano.slice(1)
                             : MAQUINA_TIPO_LABEL[m.tipo];
                           const tipoLabel = TAMANO_ABBR[tamanoLabel] ?? tamanoLabel;
+                          // Máquina eliminada: línea tachada y en gris.
+                          const removida = m.estado === 'removida';
                           return (
-                            <div key={i} className="flex items-start justify-between gap-2">
+                            <div key={i} className={`flex items-start justify-between gap-2 ${removida ? 'line-through text-gray-400' : ''}`}>
                               <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 min-w-0">
                                 {/* Estado: solo el punto de color al inicio */}
                                 {cfg && (
@@ -512,7 +516,7 @@ export default function DetalleNota() {
                                     title={cfg.label}
                                   />
                                 )}
-                                <span className="text-sm font-medium text-gray-800">{m.nombre}</span>
+                                <span className={`text-sm font-medium ${removida ? 'text-gray-400' : 'text-gray-800'}`}>{m.nombre}</span>
                                 {tipoLabel && (
                                   <span className="text-xs text-gray-500">— {tipoLabel}</span>
                                 )}
