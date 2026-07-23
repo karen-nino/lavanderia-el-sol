@@ -12,6 +12,8 @@ const BADGE_MAQUINA_ESTADO = {
   en_uso:        { label: 'En uso',        cls: 'bg-blue-100 text-blue-700',   dot: 'bg-blue-500'  },
   // "terminado" = la máquina ya cumplió su parte y se desvinculó de la carga: verde.
   terminado:     { label: 'Terminó',       cls: 'bg-green-100 text-green-700', dot: 'bg-green-500' },
+  // "removida" = estuvo asignada y se eliminó: gris tenue, línea tachada.
+  removida:      { label: 'Eliminada',     cls: 'bg-gray-100 text-gray-400',   dot: 'bg-gray-300' },
   mantenimiento: { label: 'Mantenimiento', cls: 'bg-red-100 text-red-700',     dot: 'bg-red-500'   },
 };
 
@@ -382,7 +384,8 @@ export default function Salidas() {
             id: c.lavadora_id || c.lavadora_usada_id,
             nombre: c.lavadora_id ? c.lavadora_nombre : c.lavadora_usada_nombre,
             tipo:   c.lavadora_id ? c.lavadora_tipo   : c.lavadora_usada_tipo,
-            estado: c.lavadora_id ? c.lavadora_estado : 'terminado',
+            // Desvinculada y removida → eliminada (tachada); si no → terminó.
+            estado: c.lavadora_id ? c.lavadora_estado : (c.lavadora_removida ? 'removida' : 'terminado'),
             en_uso_desde: c.lavadora_en_uso_desde,
           },
           (c.secadora_id || c.secadora_usada_id) && {
@@ -390,7 +393,7 @@ export default function Salidas() {
             nombre: c.secadora_id ? c.secadora_nombre : c.secadora_usada_nombre,
             tipo:   c.secadora_id ? c.secadora_tipo   : c.secadora_usada_tipo,
             tamano: c.secadora_id ? c.secadora_tamano : c.secadora_usada_tamano,
-            estado: c.secadora_id ? c.secadora_estado : 'terminado',
+            estado: c.secadora_id ? c.secadora_estado : (c.secadora_removida ? 'removida' : 'terminado'),
             en_uso_desde: c.secadora_en_uso_desde,
           },
         ].filter(Boolean),
@@ -491,9 +494,11 @@ export default function Salidas() {
                   // lavadora; se muestra abreviado (M/J/E) en el renglón.
                   const tamanoLabel = labelTamano(m);
                   const tipoLabel = TAMANO_ABBR[tamanoLabel] ?? tamanoLabel;
+                  // Máquina eliminada: línea tachada y en gris (estuvo asignada).
+                  const removida = m.estado === 'removida';
                   return (
                     <div key={i} className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex flex-wrap items-center gap-2 min-w-0">
+                      <div className={`flex flex-wrap items-center gap-2 min-w-0 ${removida ? 'line-through text-gray-400' : ''}`}>
                         {/* Estado: solo el punto de color */}
                         {cfg && (
                           <span
@@ -501,7 +506,7 @@ export default function Salidas() {
                             title={cfg.label}
                           />
                         )}
-                        <span className="text-sm font-medium text-gray-800">{m.nombre}</span>
+                        <span className={`text-sm font-medium ${removida ? 'text-gray-400' : 'text-gray-800'}`}>{m.nombre}</span>
                         {tipoLabel && (
                           <span className="text-xs text-gray-500">— {tipoLabel}</span>
                         )}

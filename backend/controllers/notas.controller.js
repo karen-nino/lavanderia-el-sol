@@ -411,6 +411,7 @@ async function cargasDeNota(client, notaId) {
             ms.nombre AS secadora_nombre, ms.tipo AS secadora_tipo, ms.estado AS secadora_estado,
             ms.tamano AS secadora_tamano, ms.en_uso_desde AS secadora_en_uso_desde,
             nc.lavadora_usada_id, nc.secadora_usada_id,
+            nc.lavadora_removida, nc.secadora_removida,
             mlu.nombre AS lavadora_usada_nombre, mlu.tipo AS lavadora_usada_tipo,
             msu.nombre AS secadora_usada_nombre, msu.tipo AS secadora_usada_tipo,
             msu.tamano AS secadora_usada_tamano
@@ -2043,11 +2044,11 @@ export const quitarMaquina = async (req, res) => {
       await client.query('ROLLBACK');
       return res.status(400).json({ message: 'Solo puedes quitar una máquina que aún no ha iniciado. Detén su ciclo primero.' });
     }
-    const esSecadora = maqRows[0].tipo === 'secadora';
-    const cargaCol  = esSecadora ? 'secadora_id'       : 'lavadora_id';
-    const usadaCol  = esSecadora ? 'secadora_usada_id' : 'lavadora_usada_id';
-    const precioCol = esSecadora ? 'precio_secadora'   : 'precio_lavadora';
-    const notaCol   = esSecadora ? 'secadora_id'       : 'maquina_id';
+    const esSecadora  = maqRows[0].tipo === 'secadora';
+    const cargaCol    = esSecadora ? 'secadora_id'       : 'lavadora_id';
+    const precioCol   = esSecadora ? 'precio_secadora'   : 'precio_lavadora';
+    const removidaCol = esSecadora ? 'secadora_removida' : 'lavadora_removida';
+    const notaCol     = esSecadora ? 'secadora_id'       : 'maquina_id';
 
     const { rows: cargaRows } = await client.query(
       `SELECT id FROM nota_cargas WHERE nota_id = $1 AND ${cargaCol} = $2 FOR UPDATE`,
@@ -2059,9 +2060,11 @@ export const quitarMaquina = async (req, res) => {
     }
     const cargaId = cargaRows[0].id;
 
-    // Limpiar la máquina de la carga (viva, usada y su precio).
+    // Se marca la máquina como ELIMINADA: se conserva su referencia usada (para
+    // mostrar la línea tachada de "estuvo asignada"), se limpia la viva y su
+    // precio, y se marca removida = TRUE. La carga NO se borra.
     await client.query(
-      `UPDATE nota_cargas SET ${cargaCol} = NULL, ${usadaCol} = NULL, ${precioCol} = 0 WHERE id = $1`,
+      `UPDATE nota_cargas SET ${cargaCol} = NULL, ${precioCol} = 0, ${removidaCol} = TRUE WHERE id = $1`,
       [cargaId]
     );
     // Denormalización: si la nota apuntaba a esta máquina, dejar de apuntarla.
@@ -2069,19 +2072,6 @@ export const quitarMaquina = async (req, res) => {
       `UPDATE notas SET ${notaCol} = NULL WHERE id = $1 AND ${notaCol} = $2`,
       [id, maquina_id]
     );
-
-    // Si la carga quedó sin máquinas y sin productos, se elimina.
-    const { rows: [carga] } = await client.query(
-      `SELECT lavadora_id, secadora_id, lavadora_usada_id, secadora_usada_id,
-              (SELECT COUNT(*) FROM nota_productos np WHERE np.carga_id = nc.id)::int AS productos
-         FROM nota_cargas nc WHERE nc.id = $1`,
-      [cargaId]
-    );
-    const sinMaquinas = !carga.lavadora_id && !carga.secadora_id
-      && !carga.lavadora_usada_id && !carga.secadora_usada_id;
-    if (sinMaquinas && carga.productos === 0) {
-      await client.query('DELETE FROM nota_cargas WHERE id = $1', [cargaId]);
-    }
 
     // Estado según máquinas en uso (la quitada no contaba); total recalculado.
     const nuevoEstado = await faseProcesoDeNota(client, id);
