@@ -2200,6 +2200,127 @@ export const cambiarMaquina = async (req, res) => {
   }
 };
 
+// ── PATCH /notas/:id/quitar-maquina ─────────────────────────
+// Desasigna una máquina SIN INICIAR de su carga (para que ya no esté en la
+// nota). Limpia su columna en la carga (viva y usada) y su precio. Si la carga
+// queda sin máquinas y sin productos, se elimina. Recalcula el total. No aplica
+// a máquinas en uso (primero hay que detenerlas).
+export const quitarMaquina = async (req, res) => {
+  const { id } = req.params;
+  const { maquina_id } = req.body;
+
+  if (!maquina_id) {
+    return res.status(400).json({ message: 'maquina_id es requerido.' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const { rows: notaRows } = await client.query(
+      'SELECT estado FROM notas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
+      [id, req.sucursal]
+    );
+    if (notaRows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: 'Nota no encontrada.' });
+    }
+    if (['FINALIZADA', 'CANCELADA'].includes(notaRows[0].estado)) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'No se puede quitar una máquina de una nota finalizada o cancelada.' });
+    }
+
+    const { rows: maqRows } = await client.query(
+      'SELECT id, nombre, tipo, estado FROM maquinas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
+      [maquina_id, req.sucursal]
+    );
+    if (maqRows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'La máquina no existe.' });
+    }
+    if (maqRows[0].estado !== 'disponible') {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'Solo puedes quitar una máquina que aún no ha iniciado. Detén su ciclo primero.' });
+    }
+    const esSecadora = maqRows[0].tipo === 'secadora';
+    const cargaCol  = esSecadora ? 'secadora_id'       : 'lavadora_id';
+    const usadaCol  = esSecadora ? 'secadora_usada_id' : 'lavadora_usada_id';
+    const precioCol = esSecadora ? 'precio_secadora'   : 'precio_lavadora';
+    const notaCol   = esSecadora ? 'secadora_id'       : 'maquina_id';
+
+    const { rows: cargaRows } = await client.query(
+      `SELECT id FROM nota_cargas WHERE nota_id = $1 AND ${cargaCol} = $2 FOR UPDATE`,
+      [id, maquina_id]
+    );
+    if (cargaRows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'La máquina no está asignada a esta nota.' });
+    }
+    const cargaId = cargaRows[0].id;
+
+    // Limpiar la máquina de la carga (viva, usada y su precio).
+    await client.query(
+      `UPDATE nota_cargas SET ${cargaCol} = NULL, ${usadaCol} = NULL, ${precioCol} = 0 WHERE id = $1`,
+      [cargaId]
+    );
+    // Denormalización: si la nota apuntaba a esta máquina, dejar de apuntarla.
+    await client.query(
+      `UPDATE notas SET ${notaCol} = NULL WHERE id = $1 AND ${notaCol} = $2`,
+      [id, maquina_id]
+    );
+
+    // Si la carga quedó sin máquinas y sin productos, se elimina.
+    const { rows: [carga] } = await client.query(
+      `SELECT lavadora_id, secadora_id, lavadora_usada_id, secadora_usada_id,
+              (SELECT COUNT(*) FROM nota_productos np WHERE np.carga_id = nc.id)::int AS productos
+         FROM nota_cargas nc WHERE nc.id = $1`,
+      [cargaId]
+    );
+    const sinMaquinas = !carga.lavadora_id && !carga.secadora_id
+      && !carga.lavadora_usada_id && !carga.secadora_usada_id;
+    if (sinMaquinas && carga.productos === 0) {
+      await client.query('DELETE FROM nota_cargas WHERE id = $1', [cargaId]);
+    }
+
+    // Estado según máquinas en uso (la quitada no contaba); total recalculado.
+    const nuevoEstado = await faseProcesoDeNota(client, id);
+    await client.query('UPDATE notas SET estado = $1 WHERE id = $2', [nuevoEstado, id]);
+    await recalcularPrecioTotal(client, id);
+
+    await client.query('COMMIT');
+
+    const { rows } = await pool.query(
+      `SELECT n.*,
+              c.nombre   AS cliente_nombre,
+              c.apellido AS cliente_apellido,
+              c.telefono AS cliente_telefono,
+              u.nombre   AS usuario_nombre,
+              m.nombre   AS maquina_nombre,
+              m.tipo     AS maquina_tipo,
+              m.estado   AS maquina_estado,
+              m.en_uso_desde AS maquina_en_uso_desde,
+              s.nombre   AS secadora_nombre,
+              s.tipo     AS secadora_tipo,
+              s.estado   AS secadora_estado,
+              s.en_uso_desde AS secadora_en_uso_desde
+       FROM notas n
+       LEFT JOIN clientes  c ON c.id = n.cliente_id
+       JOIN      usuarios  u ON u.id = n.usuario_id
+       LEFT JOIN maquinas  m ON m.id = n.maquina_id
+       LEFT JOIN maquinas  s ON s.id = n.secadora_id
+       WHERE n.id = $1`,
+      [id]
+    );
+    res.json({ ...rows[0], cargas: await cargasDeNota(pool, id) });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('quitarMaquina error:', err);
+    res.status(500).json({ message: 'Error interno del servidor.' });
+  } finally {
+    client.release();
+  }
+};
+
 // ── PATCH /notas/:id/terminar-lavado ────────────────────────
 // Termina el lavado de UNA lavadora de la nota y arranca su secado: libera
 // esa lavadora, marca en uso la secadora elegida (obligatoria) y la asigna a
