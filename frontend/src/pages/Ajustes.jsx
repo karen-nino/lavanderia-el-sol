@@ -10,6 +10,13 @@ const INPUT_CLS =
 const MOBILE_INPUT_CLS =
   'w-full px-4 py-3.5 border border-grey/30 rounded-lg text-base text-dark-blue placeholder-grey/60 focus:outline-none focus:border-blue transition';
 
+// Botones +/- de los campos numéricos (mismo estilo que el paso de cargas en
+// autoservicio), en tamaño desktop y móvil.
+const STEP_BTN_CLS =
+  'flex-shrink-0 w-10 py-2.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-lg font-semibold leading-none hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors';
+const STEP_BTN_CLS_M =
+  'flex-shrink-0 w-12 py-3.5 rounded-lg border border-grey/30 bg-white text-dark-blue text-xl font-semibold leading-none hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors';
+
 const ROL_LABEL = { admin_main: 'Admin Main', admin: 'Admin', operador: 'Empleado' };
 
 const SectionIcon = {
@@ -438,6 +445,30 @@ export default function Ajustes() {
     setConfig(prev => ({ ...prev, [name]: next }));
   };
 
+  // Suma/resta `delta` a un campo numérico (los botones +/-). Un campo vacío
+  // cuenta como 0; no baja de `min`. Redondea a 2 decimales para evitar
+  // arrastres de flotante (p. ej. 0.1 + 0.2).
+  const stepCampo = (name, delta, min = 0) => {
+    setConfig(prev => {
+      const base = prev[name] === '' || prev[name] == null ? 0 : Number(prev[name]);
+      let next = (Number.isFinite(base) ? base : 0) + delta;
+      if (min != null && next < min) next = min;
+      next = Math.round(next * 100) / 100;
+      return { ...prev, [name]: String(next) };
+    });
+  };
+
+  // Par de botones − / + para un campo, en tamaño desktop o móvil.
+  const stepBtns = (name, step, min = 0, mobile = false) => {
+    const cls = mobile ? STEP_BTN_CLS_M : STEP_BTN_CLS;
+    return (
+      <>
+        <button type="button" aria-label="Disminuir" onClick={() => stepCampo(name, -step, min)} className={cls}>−</button>
+        <button type="button" aria-label="Aumentar"  onClick={() => stepCampo(name,  step, min)} className={cls}>+</button>
+      </>
+    );
+  };
+
   const handlePerfilChange = (e) => {
     const { name, value } = e.target;
     if (name === 'password' && perfilForm.password === '' && value.length > 0) {
@@ -685,6 +716,7 @@ export default function Ajustes() {
           value={config[name] ?? ''} onChange={handleChange} className={INPUT_CLS}
         />
         <span className="text-sm text-gray-500 flex-shrink-0">MXN</span>
+        {stepBtns(name, 5, 0)}
       </div>
     </Field>
   );
@@ -696,6 +728,7 @@ export default function Ajustes() {
           value={config[name] ?? ''} onChange={handleChange} className={INPUT_CLS}
         />
         <span className="text-sm text-gray-500 flex-shrink-0">min</span>
+        {stepBtns(name, 1, 1)}
       </div>
     </Field>
   );
@@ -751,6 +784,7 @@ export default function Ajustes() {
         <input type="number" name={name} min="0" step="0.01"
           value={config[name] ?? ''} onChange={handleChange} className={INPUT_CLS} />
         <span className="text-sm text-gray-500 flex-shrink-0">MXN</span>
+        {stepBtns(name, 5, 0)}
       </div>
     </Field>
   );
@@ -1232,6 +1266,7 @@ export default function Ajustes() {
           value={config[name] ?? ''} onChange={handleChange} className={MOBILE_INPUT_CLS}
         />
         <span className="text-base text-grey flex-shrink-0">MXN</span>
+        {stepBtns(name, 5, 0, true)}
       </div>
     </MobileField>
   );
@@ -1243,6 +1278,7 @@ export default function Ajustes() {
           value={config[name] ?? ''} onChange={handleChange} className={MOBILE_INPUT_CLS}
         />
         <span className="text-base text-grey flex-shrink-0">min</span>
+        {stepBtns(name, 1, 1, true)}
       </div>
     </MobileField>
   );
@@ -1307,6 +1343,7 @@ export default function Ajustes() {
         <input type="number" name={name} min="0" step="0.01"
           value={config[name] ?? ''} onChange={handleChange} className={MOBILE_INPUT_CLS} />
         <span className="text-base text-grey flex-shrink-0">MXN</span>
+        {stepBtns(name, 5, 0, true)}
       </div>
     </MobileField>
   );

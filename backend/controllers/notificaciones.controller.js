@@ -6,7 +6,7 @@ import pool from '../db/pool.js';
 export const getNotificaciones = async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT n.id, n.tipo, n.mensaje, n.maquina_id, n.created_at,
+      `SELECT n.id, n.tipo, n.mensaje, n.maquina_id, n.nota_folio, n.created_at,
               m.nombre AS maquina_nombre,
               u.nombre AS usuario_nombre
          FROM notificaciones n

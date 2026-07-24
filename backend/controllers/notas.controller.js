@@ -465,10 +465,11 @@ async function registrarReversionPago(client, nota, usuarioId, sucursal) {
 async function registrarCancelacionNota(client, nota, usuarioId, sucursal) {
   const { rows } = await client.query('SELECT nombre FROM usuarios WHERE id = $1', [usuarioId]);
   const quien = rows[0]?.nombre ?? 'un empleado';
+  const folio = nota.folio ?? `#${nota.id}`;
   await client.query(
-    `INSERT INTO notificaciones (tipo, mensaje, usuario_id, sucursal)
-     VALUES ('nota_cancelada', $1, $2, $3)`,
-    [`Nota ${nota.folio ?? `#${nota.id}`} cancelada por ${quien}`, usuarioId, sucursal]
+    `INSERT INTO notificaciones (tipo, mensaje, nota_folio, usuario_id, sucursal)
+     VALUES ('nota_cancelada', $1, $2, $3, $4)`,
+    [`Nota ${folio} cancelada por ${quien}`, folio, usuarioId, sucursal]
   );
 }
 
@@ -478,10 +479,11 @@ async function registrarCancelacionNota(client, nota, usuarioId, sucursal) {
 async function registrarEliminacionNota(client, nota, usuarioId, sucursal) {
   const { rows } = await client.query('SELECT nombre FROM usuarios WHERE id = $1', [usuarioId]);
   const quien = rows[0]?.nombre ?? 'un administrador';
+  const folio = nota.folio ?? `#${nota.id}`;
   await client.query(
-    `INSERT INTO notificaciones (tipo, mensaje, usuario_id, sucursal)
-     VALUES ('nota_eliminada', $1, $2, $3)`,
-    [`Nota ${nota.folio ?? `#${nota.id}`} eliminada por ${quien}`, usuarioId, sucursal]
+    `INSERT INTO notificaciones (tipo, mensaje, nota_folio, usuario_id, sucursal)
+     VALUES ('nota_eliminada', $1, $2, $3, $4)`,
+    [`Nota ${folio} eliminada por ${quien}`, folio, usuarioId, sucursal]
   );
 }
 

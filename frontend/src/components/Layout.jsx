@@ -619,12 +619,14 @@ export default function Layout() {
           n.tipo === 'nota_cancelada'
             ? { title: 'Nota cancelada', severity: 'cancelada', to: '/notas', accionLabel: 'Ver notas',
                 detalles: [
+                  { label: 'Nota',          value: n.nota_folio ?? '—' },
                   { label: 'Cancelada por', value: n.usuario_nombre ?? '—' },
                   { label: 'Fecha y hora',  value: fechaHora },
                 ] }
         : n.tipo === 'nota_eliminada'
             ? { title: 'Nota eliminada', severity: 'eliminada', to: '/notas', accionLabel: 'Ver notas',
                 detalles: [
+                  { label: 'Nota',          value: n.nota_folio ?? '—' },
                   { label: 'Eliminada por', value: n.usuario_nombre ?? '—' },
                   { label: 'Fecha y hora',  value: fechaHora },
                 ] }
