@@ -274,12 +274,13 @@ const AlertTriangle = (
   </svg>
 );
 
-function AlertsModal({ open, onClose, alertas, onSelect, onDismiss }) {
+function AlertsModal({ open, onClose, alertas, onSelect, onDismiss, onDismissAll }) {
   const [detalle, setDetalle] = useState(null);
 
   if (!open) return null;
 
   const cerrar = () => { setDetalle(null); onClose(); };
+  const hayDescartables = alertas.some(a => a.dismissable);
 
   return (
     <div
@@ -367,6 +368,18 @@ function AlertsModal({ open, onClose, alertas, onSelect, onDismiss }) {
                 {Icon.close}
               </button>
             </div>
+
+            {hayDescartables && onDismissAll && (
+              <div className="flex justify-end mb-2">
+                <button
+                  type="button"
+                  onClick={onDismissAll}
+                  className="text-xs font-semibold text-blue hover:opacity-80 transition-opacity"
+                >
+                  Descartar todas
+                </button>
+              </div>
+            )}
 
             {alertas.length === 0 ? (
               <p className="text-sm text-grey text-center py-8">No hay alertas activas.</p>
@@ -602,6 +615,13 @@ export default function Layout() {
     try { await api.post(`/notificaciones/${a.id}/descartar`); } catch { /* la lista ya se actualizó localmente */ }
   };
 
+  // Descarta todas las notificaciones a la vez (las alertas de stock no son
+  // descartables: reflejan el inventario en vivo y se quedan).
+  const handleDismissTodas = async () => {
+    setNotificaciones([]);
+    try { await api.post('/notificaciones/descartar-todas'); } catch { /* la lista ya se actualizó localmente */ }
+  };
+
   const handleSelectAlerta = (a) => {
     setAlertsOpen(false);
     navigate(a.to);
@@ -681,6 +701,7 @@ export default function Layout() {
         alertas={alertas}
         onSelect={handleSelectAlerta}
         onDismiss={handleDismissAlerta}
+        onDismissAll={handleDismissTodas}
       />
 
       {confirmLogout && (

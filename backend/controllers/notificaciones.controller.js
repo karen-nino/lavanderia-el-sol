@@ -52,3 +52,24 @@ export const descartarNotificacion = async (req, res) => {
     res.status(500).json({ message: 'Error interno del servidor.' });
   }
 };
+
+// ── POST /notificaciones/descartar-todas ────────────────────
+// Descarta para el usuario actual todas las notificaciones que hoy ve en la
+// campana (sucursal activa, últimas 24 h). Igual que el descarte individual, no
+// borra nada ni afecta a los demás usuarios.
+export const descartarTodas = async (req, res) => {
+  try {
+    await pool.query(
+      `INSERT INTO notificacion_descartes (notificacion_id, usuario_id)
+       SELECT n.id, $2 FROM notificaciones n
+        WHERE n.sucursal = $1
+          AND n.created_at >= NOW() - INTERVAL '24 hours'
+       ON CONFLICT DO NOTHING`,
+      [req.sucursal, req.user.id]
+    );
+    res.status(204).send();
+  } catch (err) {
+    console.error('descartarTodas error:', err);
+    res.status(500).json({ message: 'Error interno del servidor.' });
+  }
+};
