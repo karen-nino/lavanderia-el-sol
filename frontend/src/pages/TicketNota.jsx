@@ -2,30 +2,10 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 
-const BADGE_ESTADO = {
-  EN_ESPERA:  'En Espera',
-  LAVANDO:    'Lavando',
-  SECANDO:    'Secando',
-  LISTA:      'Por Entregar',
-  PAGADA:     'Pagada',
-  FINALIZADA: 'Finalizada',
-  CANCELADA:  'Cancelada',
-};
-
 const BADGE_MODALIDAD = {
   AUTOSERVICIO: 'Autoservicio',
   EDREDON:      'Edredón',
   POR_ENCARGO:  'Por encargo',
-};
-
-const BADGE_PAGO = {
-  PENDIENTE: 'Pendiente',
-  PAGADO:    'Pagado',
-};
-
-const PRENDA_LABEL = {
-  ROPA:    'Ropa',
-  EDREDON: 'Edredón',
 };
 
 const MAQUINA_TIPO_LABEL = {
@@ -121,10 +101,6 @@ function armarTextoTicket(nota) {
   }
 
   L.push('', `*Total: ${fmtMonto(nota.precio_total)}*`);
-  L.push(`Estado: ${BADGE_ESTADO[nota.estado] ?? nota.estado}`);
-  if (nota.estado_pago && BADGE_PAGO[nota.estado_pago]) {
-    L.push(`Pago: ${BADGE_PAGO[nota.estado_pago]}`);
-  }
   if (nota.fecha_entrega) {
     L.push(`Entrega: ${fmtFecha(nota.fecha_entrega)}`);
   }
@@ -285,10 +261,6 @@ export default function TicketNota() {
               <Linea label="Ajuste" value={`${Number(nota.ajuste) > 0 ? '+' : ''}${fmtMonto(nota.ajuste)}`} />
             )}
             <Linea label="Total" value={fmtMonto(nota.precio_total)} fuerte />
-            <Linea label="Estado" value={BADGE_ESTADO[nota.estado] ?? nota.estado} />
-            {nota.estado_pago && BADGE_PAGO[nota.estado_pago] && (
-              <Linea label="Pago" value={BADGE_PAGO[nota.estado_pago]} />
-            )}
             {nota.fecha_entrega && <Linea label="Entrega" value={fmtFecha(nota.fecha_entrega)} />}
           </div>
 
