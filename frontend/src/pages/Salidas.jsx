@@ -34,6 +34,21 @@ const labelTamano = (m) =>
     ? m.tamano.charAt(0).toUpperCase() + m.tamano.slice(1)
     : MAQUINA_TIPO_LABEL[m.tipo];
 
+// Casilla de selección (multiselección de máquinas al asignar).
+function SelCheck({ on }) {
+  return (
+    <span className={`flex-shrink-0 w-5 h-5 rounded-md border-2 flex items-center justify-center transition-colors ${
+      on ? 'border-blue bg-blue text-white' : 'border-gray-300 bg-white'
+    }`}>
+      {on && (
+        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+        </svg>
+      )}
+    </span>
+  );
+}
+
 export default function Salidas() {
   const { id }   = useParams();
   const navigate = useNavigate();
@@ -54,10 +69,11 @@ export default function Salidas() {
   const [maquinasDisp,     setMaquinasDisp]     = useState([]);
   const [loadingMaquinas,  setLoadingMaquinas]  = useState(false);
 
-  // Asignar una máquina extra (lavadora o secadora): crea una carga nueva,
-  // por cobrar o sin cobro según elija el empleado.
+  // Asignar máquinas extra (una o varias): crea carga(s) nueva(s), por cobrar o
+  // sin cobro según elija el empleado. Se pueden elegir varias a la vez; una
+  // lavadora + una secadora se emparejan en una misma carga.
   const [asignarOpen,      setAsignarOpen]      = useState(false);
-  const [asignarMaqSel,    setAsignarMaqSel]    = useState('');
+  const [asignarMaqSel,    setAsignarMaqSel]    = useState([]); // ids seleccionados
   const [asignarCobrar,    setAsignarCobrar]    = useState(null); // true | false | null
 
   // Cambiar una máquina asignada (sin iniciar) por otra del mismo tipo.
@@ -187,7 +203,7 @@ export default function Salidas() {
   // Abre el selector para asignar una máquina extra (lavadora o secadora).
   async function iniciarAsignar() {
     setErrorAccion('');
-    setAsignarMaqSel('');
+    setAsignarMaqSel([]);
     setAsignarCobrar(null);
     setAsignarOpen(true);
     setLoadingMaquinas(true);
@@ -204,15 +220,22 @@ export default function Salidas() {
     }
   }
 
-  // Asigna la máquina elegida: el backend crea la carga nueva (por cobrar o
-  // sin cobro); la máquina queda asignada (sin iniciar).
+  // Alterna una máquina en la selección múltiple del modal de asignar.
+  function toggleAsignarMaq(maqId) {
+    const s = String(maqId);
+    setAsignarMaqSel(prev =>
+      prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s]);
+  }
+
+  // Asigna las máquinas elegidas: el backend crea la(s) carga(s) nueva(s) (por
+  // cobrar o sin cobro); las máquinas quedan asignadas (sin iniciar).
   async function confirmarAsignar() {
-    if (!asignarMaqSel || asignarCobrar === null) return;
+    if (asignarMaqSel.length === 0 || asignarCobrar === null) return;
     setLoadingMaquina(true);
     setErrorAccion('');
     try {
       await api.patch(`/notas/${id}/asignar-maquina`, {
-        maquina_id: Number(asignarMaqSel),
+        maquina_ids: asignarMaqSel.map(Number),
         cobrar: asignarCobrar,
       });
       setAsignarOpen(false);
@@ -935,7 +958,7 @@ export default function Salidas() {
             <div>
               <h3 className="text-base font-bold text-gray-900">Asignar máquina</h3>
               <p className="text-sm text-gray-500 mt-1">
-                Se agrega una <span className="font-medium text-gray-700">carga nueva</span> a la nota. La máquina queda asignada; la inicias después con su botón.
+                Puedes elegir <span className="font-medium text-gray-700">varias</span>. Una lavadora y una secadora se agrupan en una misma carga. Quedan asignadas; las inicias después con su botón.
               </p>
             </div>
 
@@ -988,19 +1011,22 @@ export default function Salidas() {
                     <p className="text-sm text-gray-400">No hay lavadoras disponibles.</p>
                   ) : (
                     maquinasDisp.filter(m => m.tipo !== 'secadora').map(m => {
-                      const selected = String(asignarMaqSel) === String(m.id);
+                      const selected = asignarMaqSel.includes(String(m.id));
                       return (
                         <button
                           key={m.id}
                           type="button"
-                          onClick={() => setAsignarMaqSel(selected ? '' : String(m.id))}
+                          onClick={() => toggleAsignarMaq(m.id)}
                           className={`w-full flex items-center justify-between gap-2 px-4 py-3 border-2 rounded-xl text-left transition-colors ${
                             selected ? 'border-blue bg-light-blue' : 'border-gray-200 bg-white hover:border-blue-300'
                           }`}
                         >
-                          <span className="font-medium text-gray-800">{m.nombre}</span>
+                          <span className="flex items-center gap-2 min-w-0">
+                            <SelCheck on={selected} />
+                            <span className="font-medium text-gray-800 truncate">{m.nombre}</span>
+                          </span>
                           {labelTamano(m) && (
-                            <span className="text-xs text-gray-500">{labelTamano(m)}</span>
+                            <span className="text-xs text-gray-500 flex-shrink-0">{labelTamano(m)}</span>
                           )}
                         </button>
                       );
@@ -1015,19 +1041,22 @@ export default function Salidas() {
                     <p className="text-sm text-gray-400">No hay secadoras disponibles.</p>
                   ) : (
                     maquinasDisp.filter(m => m.tipo === 'secadora').map(m => {
-                      const selected = String(asignarMaqSel) === String(m.id);
+                      const selected = asignarMaqSel.includes(String(m.id));
                       return (
                         <button
                           key={m.id}
                           type="button"
-                          onClick={() => setAsignarMaqSel(selected ? '' : String(m.id))}
+                          onClick={() => toggleAsignarMaq(m.id)}
                           className={`w-full flex items-center justify-between gap-2 px-4 py-3 border-2 rounded-xl text-left transition-colors ${
                             selected ? 'border-blue bg-light-blue' : 'border-gray-200 bg-white hover:border-blue-300'
                           }`}
                         >
-                          <span className="font-medium text-gray-800">{m.nombre}</span>
+                          <span className="flex items-center gap-2 min-w-0">
+                            <SelCheck on={selected} />
+                            <span className="font-medium text-gray-800 truncate">{m.nombre}</span>
+                          </span>
                           {labelTamano(m) && (
-                            <span className="text-xs text-gray-500">{labelTamano(m)}</span>
+                            <span className="text-xs text-gray-500 flex-shrink-0">{labelTamano(m)}</span>
                           )}
                         </button>
                       );
@@ -1049,10 +1078,12 @@ export default function Salidas() {
               <button
                 type="button"
                 onClick={confirmarAsignar}
-                disabled={loadingMaquina || !asignarMaqSel || asignarCobrar === null}
+                disabled={loadingMaquina || asignarMaqSel.length === 0 || asignarCobrar === null}
                 className="flex-1 bg-blue hover:opacity-90 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
               >
-                {loadingMaquina ? 'Asignando...' : 'Asignar'}
+                {loadingMaquina
+                  ? 'Asignando...'
+                  : asignarMaqSel.length > 1 ? `Asignar (${asignarMaqSel.length})` : 'Asignar'}
               </button>
             </div>
           </div>

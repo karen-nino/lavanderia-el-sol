@@ -1724,10 +1724,16 @@ export const asignarSecadora = async (req, res) => {
 // nota pagada se maneja aparte.
 export const asignarMaquina = async (req, res) => {
   const { id } = req.params;
-  const { maquina_id, cobrar } = req.body;
+  const { maquina_id, maquina_ids, cobrar } = req.body;
 
-  if (!maquina_id) {
-    return res.status(400).json({ message: 'maquina_id es requerido.' });
+  // Acepta una máquina (maquina_id, formato viejo) o varias (maquina_ids). Se
+  // normaliza a una lista de ids únicos.
+  const idsRaw = Array.isArray(maquina_ids) ? maquina_ids
+    : (maquina_id != null ? [maquina_id] : []);
+  const ids = [...new Set(idsRaw.map(Number).filter(n => Number.isInteger(n)))];
+
+  if (ids.length === 0) {
+    return res.status(400).json({ message: 'Selecciona al menos una máquina.' });
   }
   if (typeof cobrar !== 'boolean') {
     return res.status(400).json({ message: 'cobrar es requerido: true (carga por cobrar) o false (sin cobro).' });
@@ -1751,23 +1757,27 @@ export const asignarMaquina = async (req, res) => {
     }
 
     const { rows: maqRows } = await client.query(
-      'SELECT id, nombre, tipo, tamano, estado FROM maquinas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
-      [maquina_id, req.sucursal]
+      'SELECT id, nombre, tipo, tamano, estado FROM maquinas WHERE id = ANY($1) AND sucursal = $2 FOR UPDATE',
+      [ids, req.sucursal]
     );
-    if (maqRows.length === 0) {
+    if (maqRows.length !== ids.length) {
       await client.query('ROLLBACK');
-      return res.status(400).json({ message: 'La máquina seleccionada no existe.' });
+      return res.status(400).json({ message: 'Alguna de las máquinas seleccionadas no existe.' });
     }
-    const maq = maqRows[0];
-    if (maq.estado !== 'disponible') {
+    const noDisp = maqRows.find(m => m.estado !== 'disponible');
+    if (noDisp) {
       await client.query('ROLLBACK');
-      return res.status(400).json({ message: `La máquina ${maq.nombre} no está disponible.` });
+      return res.status(400).json({ message: `La máquina ${noDisp.nombre} no está disponible.` });
     }
 
-    // La carga nueva hereda la prenda de la nota para tarifar con su categoría.
+    // La(s) carga(s) nueva(s) heredan la prenda de la nota para tarifar con su
+    // categoría.
     const tipoPrenda = notaRows[0].tipo_prenda ?? null;
-    const esSecadora = maq.tipo === 'secadora';
-    if (!esSecadora && String(tipoPrenda).toUpperCase() === 'EDREDON' && maq.tipo !== 'lavadora_jumbo') {
+    const esEdredon  = String(tipoPrenda).toUpperCase() === 'EDREDON';
+    const lavadoras  = maqRows.filter(m => m.tipo !== 'secadora');
+    const secadoras  = maqRows.filter(m => m.tipo === 'secadora');
+    const lavNoJumbo = esEdredon && lavadoras.find(m => m.tipo !== 'lavadora_jumbo');
+    if (lavNoJumbo) {
       await client.query('ROLLBACK');
       return res.status(400).json({ message: 'Los edredones solo van en lavadora jumbo.' });
     }
@@ -1786,36 +1796,52 @@ export const asignarMaquina = async (req, res) => {
     }
 
     const t = await tarifasCarga(client);
-    const precio = !cobrar ? 0
-      : esSecadora ? tarifaSecadora(maq.tamano, tipoPrenda, t)
-      : tarifaLavadora(maq.tipo, tipoPrenda, t);
+    const precioLav = m => cobrar ? tarifaLavadora(m.tipo, tipoPrenda, t) : 0;
+    const precioSec = m => cobrar ? tarifaSecadora(m.tamano, tipoPrenda, t) : 0;
 
-    await client.query(
-      `INSERT INTO nota_cargas
-         (nota_id, orden, lavadora_id, secadora_id, lavadora_usada_id, secadora_usada_id,
-          precio_lavadora, precio_secadora, tipo_prenda, es_adicional)
-       VALUES ($1, $2, $3, $4, $3, $4, $5, $6, $7, TRUE)`,
-      [
-        id, max_orden + 1,
-        esSecadora ? null : maq.id,
-        esSecadora ? maq.id : null,
-        esSecadora ? 0 : precio,
-        esSecadora ? precio : 0,
-        tipoPrenda,
-      ]
-    );
+    // Empareja lavadora+secadora en una misma carga (un ciclo completo). Las que
+    // sobran de un tipo van cada una en su propia carga.
+    const nuevas = [];
+    const n = Math.max(lavadoras.length, secadoras.length);
+    for (let i = 0; i < n; i++) {
+      nuevas.push({ lavadora: lavadoras[i] ?? null, secadora: secadoras[i] ?? null });
+    }
+
     // La máquina NO arranca aquí: queda asignada pero disponible (En Espera) y
     // el empleado la inicia manualmente desde Salidas, igual que al crear la nota.
+    for (let i = 0; i < nuevas.length; i++) {
+      const { lavadora, secadora } = nuevas[i];
+      await client.query(
+        `INSERT INTO nota_cargas
+           (nota_id, orden, lavadora_id, secadora_id, lavadora_usada_id, secadora_usada_id,
+            precio_lavadora, precio_secadora, tipo_prenda, es_adicional)
+         VALUES ($1, $2, $3, $4, $3, $4, $5, $6, $7, TRUE)`,
+        [
+          id, max_orden + 1 + i,
+          lavadora ? lavadora.id : null,
+          secadora ? secadora.id : null,
+          lavadora ? precioLav(lavadora) : 0,
+          secadora ? precioSec(secadora) : 0,
+          tipoPrenda,
+        ]
+      );
+    }
 
     // Denormalizados (primera lavadora/secadora de la nota) y estado según las
-    // máquinas EN USO: la nueva no cuenta (no se inició). Si nada corre, la nota
-    // queda En Espera (reabre una nota LISTA para poder iniciarla).
-    await client.query(
-      esSecadora
-        ? 'UPDATE notas SET secadora_id = COALESCE(secadora_id, $1) WHERE id = $2'
-        : 'UPDATE notas SET maquina_id = COALESCE(maquina_id, $1) WHERE id = $2',
-      [maq.id, id]
-    );
+    // máquinas EN USO: las nuevas no cuentan (no se iniciaron). Si nada corre, la
+    // nota queda En Espera (reabre una nota LISTA para poder iniciarla).
+    if (lavadoras[0]) {
+      await client.query(
+        'UPDATE notas SET maquina_id = COALESCE(maquina_id, $1) WHERE id = $2',
+        [lavadoras[0].id, id]
+      );
+    }
+    if (secadoras[0]) {
+      await client.query(
+        'UPDATE notas SET secadora_id = COALESCE(secadora_id, $1) WHERE id = $2',
+        [secadoras[0].id, id]
+      );
+    }
     const nuevoEstado = await faseProcesoDeNota(client, id);
     await client.query('UPDATE notas SET estado = $1 WHERE id = $2', [nuevoEstado, id]);
     await recalcularPrecioTotal(client, id);
