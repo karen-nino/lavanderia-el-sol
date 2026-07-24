@@ -71,21 +71,31 @@ function armarTextoTicket(nota) {
   }
   L.push(`Tipo: ${BADGE_MODALIDAD[nota.modalidad] ?? nota.modalidad}`);
 
-  const cargas = nota.cargas ?? [];
-  if (cargas.length > 0) {
-    L.push('', '*Desglose*');
-    cargas.forEach(cg => {
-      L.push(`Carga ${cg.orden}:`);
-      maquinasDeCarga(cg).forEach(m => {
-        L.push(`  • ${m.nombre} (${m.tipo}) — ${fmtMonto(m.precio)}`);
-      });
-      (cg.productos ?? []).forEach(p => {
-        L.push(`  • ${p.nombre} x${p.cantidad} — ${fmtMonto(p.subtotal)}`);
-      });
-      if (Number(cg.ajuste)) {
-        L.push(`  • Ajuste: ${Number(cg.ajuste) > 0 ? '+' : ''}${fmtMonto(cg.ajuste)}`);
-      }
+  // Vuelca las líneas de una carga (máquinas, productos, ajuste) al arreglo L.
+  const volcarCarga = cg => {
+    L.push(`Carga ${cg.orden}:`);
+    maquinasDeCarga(cg).forEach(m => {
+      L.push(`  • ${m.nombre} (${m.tipo}) — ${fmtMonto(m.precio)}`);
     });
+    (cg.productos ?? []).forEach(p => {
+      L.push(`  • ${p.nombre} x${p.cantidad} — ${fmtMonto(p.subtotal)}`);
+    });
+    if (Number(cg.ajuste)) {
+      L.push(`  • Ajuste: ${Number(cg.ajuste) > 0 ? '+' : ''}${fmtMonto(cg.ajuste)}`);
+    }
+  };
+
+  const cargas      = nota.cargas ?? [];
+  const originales  = cargas.filter(cg => !cg.es_adicional);
+  const adicionales = cargas.filter(cg => cg.es_adicional);
+
+  if (originales.length > 0) {
+    L.push('', '*Desglose*');
+    originales.forEach(volcarCarga);
+  }
+  if (adicionales.length > 0) {
+    L.push('', '*Adicional*');
+    adicionales.forEach(volcarCarga);
   }
 
   const productos = nota.productos ?? [];
@@ -152,8 +162,50 @@ export default function TicketNota() {
 
   if (!nota) return null;
 
-  const cargas    = nota.cargas ?? [];
-  const productos = nota.productos ?? [];
+  const cargas      = nota.cargas ?? [];
+  const productos   = nota.productos ?? [];
+  // Cargas creadas al dar de alta la nota (originales) vs. las agregadas
+  // después (adicionales), para mostrarlas en bloques separados.
+  const originales  = cargas.filter(cg => !cg.es_adicional);
+  const adicionales = cargas.filter(cg => cg.es_adicional);
+
+  // Render de una carga del recibo: encabezado con su total y el detalle de
+  // máquinas, productos y ajuste. Se reusa para el bloque original y el adicional.
+  const renderCarga = cg => {
+    const maquinas   = maquinasDeCarga(cg);
+    const prods      = cg.productos ?? [];
+    const totalProds = prods.reduce((s, p) => s + Number(p.subtotal ?? 0), 0);
+    const totalCarga = Number(cg.precio_lavadora) + Number(cg.precio_secadora)
+      + Number(cg.ajuste ?? 0) + totalProds;
+    return (
+      <div key={cg.id}>
+        <div className="flex items-baseline justify-between">
+          <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Carga {cg.orden}</span>
+          <span className="text-sm font-semibold text-gray-700">{fmtMonto(totalCarga)}</span>
+        </div>
+        <div className="mt-1 space-y-0.5">
+          {maquinas.map((m, i) => (
+            <div key={i} className="flex items-baseline justify-between gap-3">
+              <span className="text-sm text-gray-700">{m.nombre} <span className="text-xs text-gray-400">· {m.tipo}</span></span>
+              <span className="text-sm text-gray-600">{fmtMonto(m.precio)}</span>
+            </div>
+          ))}
+          {prods.map(p => (
+            <div key={p.id} className="flex items-baseline justify-between gap-3">
+              <span className="text-sm text-gray-700">{p.nombre} <span className="text-xs text-gray-400">×{p.cantidad}</span></span>
+              <span className="text-sm text-gray-600">{fmtMonto(p.subtotal)}</span>
+            </div>
+          ))}
+          {Number(cg.ajuste) !== 0 && (
+            <div className="flex items-baseline justify-between gap-3">
+              <span className="text-sm text-gray-700">Ajuste</span>
+              <span className="text-sm text-gray-600">{Number(cg.ajuste) > 0 ? '+' : ''}{fmtMonto(cg.ajuste)}</span>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="min-h-full bg-slate-100">
@@ -199,44 +251,18 @@ export default function TicketNota() {
             <Linea label="Tipo" value={BADGE_MODALIDAD[nota.modalidad] ?? nota.modalidad} />
           </div>
 
-          {/* Desglose por cargas */}
-          {cargas.length > 0 && (
+          {/* Desglose por cargas (originales) */}
+          {originales.length > 0 && (
             <div className="px-5 py-3 border-b border-dashed border-gray-200 space-y-3">
-              {cargas.map(cg => {
-                const maquinas   = maquinasDeCarga(cg);
-                const prods      = cg.productos ?? [];
-                const totalProds = prods.reduce((s, p) => s + Number(p.subtotal ?? 0), 0);
-                const totalCarga = Number(cg.precio_lavadora) + Number(cg.precio_secadora)
-                  + Number(cg.ajuste ?? 0) + totalProds;
-                return (
-                  <div key={cg.id}>
-                    <div className="flex items-baseline justify-between">
-                      <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Carga {cg.orden}</span>
-                      <span className="text-sm font-semibold text-gray-700">{fmtMonto(totalCarga)}</span>
-                    </div>
-                    <div className="mt-1 space-y-0.5">
-                      {maquinas.map((m, i) => (
-                        <div key={i} className="flex items-baseline justify-between gap-3">
-                          <span className="text-sm text-gray-700">{m.nombre} <span className="text-xs text-gray-400">· {m.tipo}</span></span>
-                          <span className="text-sm text-gray-600">{fmtMonto(m.precio)}</span>
-                        </div>
-                      ))}
-                      {prods.map(p => (
-                        <div key={p.id} className="flex items-baseline justify-between gap-3">
-                          <span className="text-sm text-gray-700">{p.nombre} <span className="text-xs text-gray-400">×{p.cantidad}</span></span>
-                          <span className="text-sm text-gray-600">{fmtMonto(p.subtotal)}</span>
-                        </div>
-                      ))}
-                      {Number(cg.ajuste) !== 0 && (
-                        <div className="flex items-baseline justify-between gap-3">
-                          <span className="text-sm text-gray-700">Ajuste</span>
-                          <span className="text-sm text-gray-600">{Number(cg.ajuste) > 0 ? '+' : ''}{fmtMonto(cg.ajuste)}</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
+              {originales.map(renderCarga)}
+            </div>
+          )}
+
+          {/* Cargas adicionales (agregadas después de crear la nota) */}
+          {adicionales.length > 0 && (
+            <div className="px-5 py-3 border-b border-dashed border-gray-200 space-y-3">
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">Adicional</p>
+              {adicionales.map(renderCarga)}
             </div>
           )}
 

@@ -404,7 +404,7 @@ async function insertarCargas(client, notaId, filas, sucursal) {
 async function cargasDeNota(client, notaId) {
   const { rows } = await client.query(
     `SELECT nc.id, nc.orden, nc.lavadora_id, nc.secadora_id,
-            nc.precio_lavadora, nc.precio_secadora,
+            nc.precio_lavadora, nc.precio_secadora, nc.es_adicional,
             nc.tipo_prenda, nc.tipo_tela, nc.tamano_edredon, nc.tamano, nc.ajuste,
             ml.nombre AS lavadora_nombre, ml.tipo AS lavadora_tipo, ml.estado AS lavadora_estado,
             ml.en_uso_desde AS lavadora_en_uso_desde,
@@ -1793,8 +1793,8 @@ export const asignarMaquina = async (req, res) => {
     await client.query(
       `INSERT INTO nota_cargas
          (nota_id, orden, lavadora_id, secadora_id, lavadora_usada_id, secadora_usada_id,
-          precio_lavadora, precio_secadora, tipo_prenda)
-       VALUES ($1, $2, $3, $4, $3, $4, $5, $6, $7)`,
+          precio_lavadora, precio_secadora, tipo_prenda, es_adicional)
+       VALUES ($1, $2, $3, $4, $3, $4, $5, $6, $7, TRUE)`,
       [
         id, max_orden + 1,
         esSecadora ? null : maq.id,
