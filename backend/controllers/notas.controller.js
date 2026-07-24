@@ -804,6 +804,12 @@ export const createNota = async (req, res) => {
         await client.query('ROLLBACK');
         return res.status(400).json({ message: e.message });
       }
+      // Autoservicio: al menos una carga debe traer una máquina (lavadora o
+      // secadora). No tiene sentido una nota de autoservicio sin ninguna máquina.
+      if (modalidad === 'AUTOSERVICIO' && !filasCargas.some(f => f.lavadora_id || f.secadora_id)) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ message: 'Agrega al menos una carga con una lavadora o secadora.' });
+      }
     }
     const cargasSum = filasCargas
       ? filasCargas.reduce((s, f) => s + f.precio_lavadora + f.precio_secadora, 0)

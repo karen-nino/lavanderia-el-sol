@@ -500,6 +500,13 @@ export default function NuevaNota() {
     e.preventDefault();
     if (tipoServicio !== 'AUTOSERVICIO') return;
     setError('');
+
+    // Autoservicio necesita al menos una carga con máquina (lavadora o secadora).
+    if (!cargasAuto.some(c => c.lavadora_id || c.secadora_id)) {
+      setError('Agrega al menos una carga con una lavadora o secadora.');
+      return;
+    }
+
     setLoading(true);
 
     const payload = {
