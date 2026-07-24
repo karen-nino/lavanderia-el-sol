@@ -64,7 +64,6 @@ const CARGA_ENCARGO_INIT = {
   tamano_edredon:         '',
   tamano:                 '',
   maquina_id:             '',
-  activar_inmediatamente: '',
   secadora_id:            '',
   ajuste:                 '0',
   productos:              [],
@@ -249,7 +248,6 @@ export default function NuevaNota() {
               tamano:                 c.tamano         ?? '',
               maquina_id:             c.lavadora_id ? String(c.lavadora_id) : '',
               secadora_id:            c.secadora_id ? String(c.secadora_id) : '',
-              activar_inmediatamente: '',
               ajuste:                 c.ajuste != null ? String(c.ajuste) : '0',
               productos:              (c.productos ?? []).map(p => ({
                 producto_id: String(p.producto_id), cantidad: String(p.cantidad),
@@ -432,8 +430,6 @@ export default function NuevaNota() {
     if (esPasoCarga) {
       const c = encargoCargas[cargaActivaIdx];
       if (!c || !c.tipo_prenda || !c.tamano) return false;
-      // Si eligió lavadora, debe decidir si la activa (salvo en edición).
-      if (!esEdicion && c.maquina_id && !c.activar_inmediatamente) return false;
       // Tope de precio: no se puede avanzar con la carga pasada de presupuesto.
       if (excesoDeCarga(c) > 0) return false;
       return true;
@@ -463,8 +459,9 @@ export default function NuevaNota() {
         tamano:         c.tamano || null,
         lavadora_id:    c.maquina_id  ? Number(c.maquina_id)  : null,
         secadora_id:    c.secadora_id ? Number(c.secadora_id) : null,
-        // Solo se activa la carga si tiene lavadora y se marcó "Sí".
-        activar:        !esEdicion && !!c.maquina_id && c.activar_inmediatamente === 'SI',
+        // La máquina queda asignada sin iniciar; se arranca luego desde Salidas
+        // (igual que autoservicio).
+        activar:        false,
         ajuste:         Number(c.ajuste) || 0,
         productos:      (c.productos ?? [])
           .filter(p => p.producto_id && p.cantidad)
@@ -867,7 +864,7 @@ export default function NuevaNota() {
                               if (opt.v !== 'EDREDON') cambios.tamano_edredon = '';
                               if (opt.v === 'EDREDON') {
                                 const lav = maquinas.find(m => String(m.id) === String(c.maquina_id));
-                                if (lav && lav.tipo !== 'lavadora_jumbo') { cambios.maquina_id = ''; cambios.activar_inmediatamente = ''; }
+                                if (lav && lav.tipo !== 'lavadora_jumbo') { cambios.maquina_id = ''; }
                               }
                               set(cambios);
                             }}
@@ -941,7 +938,7 @@ export default function NuevaNota() {
                       <label className="block text-xs font-medium text-gray-500 mb-1">Lavadora</label>
                       <select
                         value={c.maquina_id}
-                        onChange={e => set({ maquina_id: e.target.value, ...(e.target.value ? {} : { activar_inmediatamente: '' }) })}
+                        onChange={e => set({ maquina_id: e.target.value })}
                         className={`${INPUT_CLS} bg-white`}
                       >
                         <option value="">Sin asignar</option>
@@ -952,29 +949,6 @@ export default function NuevaNota() {
                         ))}
                       </select>
                     </div>
-
-                    {c.maquina_id && !esEdicion && (
-                      <div>
-                        <label className="block text-xs font-medium text-gray-500 mb-1">Activar inmediatamente <span className="text-red-500">*</span></label>
-                        <div className="grid grid-cols-2 gap-3">
-                          {[{ v: 'SI', label: 'Sí' }, { v: 'NO', label: 'No' }].map(opt => {
-                            const selected = c.activar_inmediatamente === opt.v;
-                            return (
-                              <button
-                                key={opt.v}
-                                type="button"
-                                onClick={() => set({ activar_inmediatamente: opt.v })}
-                                className={`py-8 border-2 rounded-xl font-semibold text-lg transition-colors ${
-                                  selected ? 'border-blue bg-light-blue text-blue-700' : 'border-gray-300 bg-white text-gray-700 hover:border-blue-300'
-                                }`}
-                              >
-                                {opt.label}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
                   </div>
                   </>
                   )}
