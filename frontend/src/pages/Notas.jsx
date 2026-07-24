@@ -16,6 +16,19 @@ const FILTRO_LABEL = {
   CANCELADA:    'Canceladas',
 };
 
+// Mensaje del estado vacío según el filtro activo, para que el texto se
+// relacione con el filtro (p. ej. "No hay notas con pagos pendientes").
+const FILTRO_VACIO = {
+  TODOS:        'No hay notas',
+  EN_ESPERA:    'No hay notas en espera',
+  LAVANDO:      'No hay notas lavando',
+  SECANDO:      'No hay notas secando',
+  POR_ENTREGAR: 'No hay notas por entregar',
+  FINALIZADA:   'No hay notas finalizadas',
+  PENDIENTE:    'No hay notas con pagos pendientes',
+  CANCELADA:    'No hay notas canceladas',
+};
+
 const RANGOS_FECHA = [
   { value: 'TODAS',     label: 'Todas las fechas' },
   { value: 'HOY',       label: 'Hoy' },
@@ -303,7 +316,7 @@ export default function Notas() {
       {!loading && !error && filtradas.length === 0 && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 text-center py-12">
           <p className="text-gray-400 text-sm">
-            {busqueda ? 'No se encontraron notas con ese criterio' : 'No hay notas con este filtro'}
+            {busqueda ? 'No se encontraron notas con ese criterio' : (FILTRO_VACIO[filtro] ?? 'No hay notas con este filtro')}
           </p>
         </div>
       )}
