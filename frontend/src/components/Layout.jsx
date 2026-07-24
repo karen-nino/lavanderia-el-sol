@@ -276,13 +276,17 @@ const AlertTriangle = (
 
 function AlertsModal({ open, onClose, alertas, onSelect, onDismiss, onDismissAll }) {
   const [detalle, setDetalle] = useState(null);
+  const [confirmAll, setConfirmAll] = useState(false);
 
   if (!open) return null;
 
-  const cerrar = () => { setDetalle(null); onClose(); };
-  const hayDescartables = alertas.some(a => a.dismissable);
+  const cerrar = () => { setDetalle(null); setConfirmAll(false); onClose(); };
+  // El botón "Descartar todas" solo tiene sentido con más de una descartable;
+  // con una sola basta su propia X.
+  const hayDescartables = alertas.filter(a => a.dismissable).length > 1;
 
   return (
+    <>
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-dark-blue/40 p-4"
       onClick={cerrar}
@@ -373,7 +377,7 @@ function AlertsModal({ open, onClose, alertas, onSelect, onDismiss, onDismissAll
               <div className="flex justify-end mb-2">
                 <button
                   type="button"
-                  onClick={onDismissAll}
+                  onClick={() => setConfirmAll(true)}
                   className="text-xs font-semibold text-blue hover:opacity-80 transition-opacity"
                 >
                   Descartar todas
@@ -426,6 +430,43 @@ function AlertsModal({ open, onClose, alertas, onSelect, onDismiss, onDismissAll
         )}
       </div>
     </div>
+
+    {/* Confirmación antes de descartar todas las notificaciones */}
+    {confirmAll && (
+      <div
+        className="fixed inset-0 z-[60] flex items-center justify-center bg-dark-blue/40 p-4"
+        onClick={() => setConfirmAll(false)}
+      >
+        <div
+          className="w-full max-w-xs bg-white rounded-card shadow-xl p-5 space-y-4"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div>
+            <h3 className="text-card-title text-dark-blue font-bold">Descartar todas</h3>
+            <p className="text-sm text-grey mt-1">
+              Se ocultarán todas las notificaciones de la campana. Esta acción no se puede deshacer.
+            </p>
+          </div>
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={() => setConfirmAll(false)}
+              className="flex-1 border border-gray-300 text-gray-700 font-medium py-2.5 rounded-lg text-sm hover:bg-gray-50 transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={() => { onDismissAll(); setConfirmAll(false); }}
+              className="flex-1 bg-red text-white font-medium py-2.5 rounded-lg text-sm hover:opacity-90 transition-opacity"
+            >
+              Descartar todas
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }
 
