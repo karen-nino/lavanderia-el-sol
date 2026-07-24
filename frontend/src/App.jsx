@@ -14,6 +14,7 @@ import MaquinaUso from './pages/MaquinaUso';
 import Inventario from './pages/Inventario';
 import Caja from './pages/Caja';
 import DetalleNota from './pages/DetalleNota';
+import TicketNota from './pages/TicketNota';
 import Salidas from './pages/Salidas';
 import Ventas from './pages/Ventas';
 import Empleados from './pages/Empleados';
@@ -38,6 +39,7 @@ export default function App() {
             <Route path="notas" element={<Notas />} />
             <Route path="notas/nueva" element={<NuevaNota />} />
             <Route path="notas/:id" element={<DetalleNota />} />
+            <Route path="notas/:id/ticket" element={<TicketNota />} />
             <Route path="notas/:id/editar" element={<NuevaNota />} />
             <Route path="notas/:id/salidas" element={<Salidas />} />
             <Route path="clientes" element={<Clientes />} />
