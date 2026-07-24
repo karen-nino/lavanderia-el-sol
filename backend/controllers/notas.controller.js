@@ -459,6 +459,32 @@ async function registrarReversionPago(client, nota, usuarioId, sucursal) {
   );
 }
 
+// Deja rastro en la campana del Dashboard cuando se cancela una nota: es una
+// acción fuerte (libera stock y máquinas), así que siempre queda registrado
+// quién la canceló y qué nota fue.
+async function registrarCancelacionNota(client, nota, usuarioId, sucursal) {
+  const { rows } = await client.query('SELECT nombre FROM usuarios WHERE id = $1', [usuarioId]);
+  const quien = rows[0]?.nombre ?? 'un empleado';
+  await client.query(
+    `INSERT INTO notificaciones (tipo, mensaje, usuario_id, sucursal)
+     VALUES ('nota_cancelada', $1, $2, $3)`,
+    [`Nota ${nota.folio ?? `#${nota.id}`} cancelada por ${quien}`, usuarioId, sucursal]
+  );
+}
+
+// Deja rastro en la campana del Dashboard cuando se elimina una nota: borra el
+// registro por completo, así que siempre queda constancia de quién la eliminó y
+// qué nota era.
+async function registrarEliminacionNota(client, nota, usuarioId, sucursal) {
+  const { rows } = await client.query('SELECT nombre FROM usuarios WHERE id = $1', [usuarioId]);
+  const quien = rows[0]?.nombre ?? 'un administrador';
+  await client.query(
+    `INSERT INTO notificaciones (tipo, mensaje, usuario_id, sucursal)
+     VALUES ('nota_eliminada', $1, $2, $3)`,
+    [`Nota ${nota.folio ?? `#${nota.id}`} eliminada por ${quien}`, usuarioId, sucursal]
+  );
+}
+
 function generarFolio(id, fecha) {
   const d = new Date(fecha);
   const yy = String(d.getFullYear()).slice(-2);
@@ -1315,7 +1341,7 @@ export const eliminarNota = async (req, res) => {
     await client.query('BEGIN');
 
     const { rows: notaRows } = await client.query(
-      'SELECT estado FROM notas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
+      'SELECT estado, folio FROM notas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
       [id, req.sucursal]
     );
     if (notaRows.length === 0) {
@@ -1362,6 +1388,9 @@ export const eliminarNota = async (req, res) => {
         [maquinasNota]
       );
     }
+
+    // Alerta en la campana del Dashboard: la nota se borró por completo.
+    await registrarEliminacionNota(client, { id, folio: notaRows[0].folio }, req.user.id, req.sucursal);
 
     await client.query('COMMIT');
     res.status(204).send();
@@ -1458,6 +1487,11 @@ export const cambiarEstadoNota = async (req, res) => {
     // ya no necesitan liberar máquina por máquina.
     if (estado === 'LISTA' || estado === 'CANCELADA') {
       await liberarMaquinasDeNota(client, id);
+    }
+
+    // Alerta en la campana del Dashboard cuando se cancela una nota.
+    if (estado === 'CANCELADA') {
+      await registrarCancelacionNota(client, rows[0], req.user.id, req.sucursal);
     }
 
     await client.query('COMMIT');

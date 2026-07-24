@@ -253,11 +253,20 @@ function MobileTopbar({ usuario, alertas, onAlerts }) {
   );
 }
 
-const sevCls = (sev) => sev === 'agotado'
-  ? 'bg-light-red text-red'
-  : sev === 'ciclo' ? 'bg-light-blue text-blue' : 'bg-light-bronce text-bronce';
-const sevBadge = (sev) => sev === 'agotado'
-  ? 'Agotado' : sev === 'ciclo' ? 'Ciclo detenido' : 'Por agotarse';
+const sevCls = (sev) =>
+    sev === 'agotado'   ? 'bg-light-red text-red'
+  : sev === 'ciclo'     ? 'bg-light-blue text-blue'
+  : sev === 'cancelada' ? 'bg-light-red text-red'
+  : sev === 'eliminada' ? 'bg-light-red text-red'
+  : sev === 'pago'      ? 'bg-light-red text-red'
+  : 'bg-light-bronce text-bronce';
+const sevBadge = (sev) =>
+    sev === 'agotado'   ? 'Agotado'
+  : sev === 'ciclo'     ? 'Ciclo detenido'
+  : sev === 'cancelada' ? 'Nota cancelada'
+  : sev === 'eliminada' ? 'Nota eliminada'
+  : sev === 'pago'      ? 'Pago revertido'
+  : 'Por agotarse';
 const AlertTriangle = (
   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -549,21 +558,42 @@ export default function Layout() {
           ],
         };
       });
-    const notifs = notificaciones.map(n => ({
-      key:         `notif-${n.id}`,
-      id:          n.id,
-      title:       'Ciclo detenido',
-      description: n.mensaje,
-      severity:    'ciclo',
-      to:          '/maquinas',
-      dismissable: true,
-      accionLabel: 'Ver máquinas',
-      detalles: [
-        { label: 'Máquina',      value: n.maquina_nombre ?? '—' },
-        { label: 'Detenida por', value: n.usuario_nombre ?? '—' },
-        { label: 'Fecha y hora', value: new Date(n.created_at).toLocaleString('es-MX', { day: '2-digit', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true }) },
-      ],
-    }));
+    const notifs = notificaciones.map(n => {
+      const fechaHora = new Date(n.created_at).toLocaleString('es-MX', { day: '2-digit', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
+      // Cada tipo de notificación tiene su título, color, destino y detalles.
+      const cfg =
+          n.tipo === 'nota_cancelada'
+            ? { title: 'Nota cancelada', severity: 'cancelada', to: '/notas', accionLabel: 'Ver notas',
+                detalles: [
+                  { label: 'Cancelada por', value: n.usuario_nombre ?? '—' },
+                  { label: 'Fecha y hora',  value: fechaHora },
+                ] }
+        : n.tipo === 'nota_eliminada'
+            ? { title: 'Nota eliminada', severity: 'eliminada', to: '/notas', accionLabel: 'Ver notas',
+                detalles: [
+                  { label: 'Eliminada por', value: n.usuario_nombre ?? '—' },
+                  { label: 'Fecha y hora',  value: fechaHora },
+                ] }
+        : n.tipo === 'pago_revertido'
+            ? { title: 'Pago revertido', severity: 'pago', to: '/notas', accionLabel: 'Ver notas',
+                detalles: [
+                  { label: 'Revertido por', value: n.usuario_nombre ?? '—' },
+                  { label: 'Fecha y hora',  value: fechaHora },
+                ] }
+        : { title: 'Ciclo detenido', severity: 'ciclo', to: '/maquinas', accionLabel: 'Ver máquinas',
+            detalles: [
+              { label: 'Máquina',      value: n.maquina_nombre ?? '—' },
+              { label: 'Detenida por', value: n.usuario_nombre ?? '—' },
+              { label: 'Fecha y hora', value: fechaHora },
+            ] };
+      return {
+        key:         `notif-${n.id}`,
+        id:          n.id,
+        description: n.mensaje,
+        dismissable: true,
+        ...cfg,
+      };
+    });
     return [...stock, ...notifs];
   }, [productos, notificaciones]);
 
