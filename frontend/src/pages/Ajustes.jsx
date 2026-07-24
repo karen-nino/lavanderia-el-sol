@@ -13,9 +13,9 @@ const MOBILE_INPUT_CLS =
 // Botones +/- de los campos numéricos (mismo estilo que el paso de cargas en
 // autoservicio), en tamaño desktop y móvil.
 const STEP_BTN_CLS =
-  'flex-shrink-0 w-10 py-2.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-lg font-semibold leading-none hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors';
+  'flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-full border border-gray-300 bg-white text-gray-700 text-lg font-semibold leading-none hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors';
 const STEP_BTN_CLS_M =
-  'flex-shrink-0 w-12 py-3.5 rounded-lg border border-grey/30 bg-white text-dark-blue text-xl font-semibold leading-none hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors';
+  'flex-shrink-0 w-11 h-11 flex items-center justify-center rounded-full border border-grey/30 bg-white text-dark-blue text-xl font-semibold leading-none hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors';
 
 const ROL_LABEL = { admin_main: 'Admin Main', admin: 'Admin', operador: 'Empleado' };
 
