@@ -416,10 +416,13 @@ export default function NuevaNota() {
   const clienteSeleccionado = clientes.find(c => String(c.id) === String(encargoForm.cliente_id));
   const sinAcentos = (s) => (s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   const clienteSearchQ    = sinAcentos(clienteSearch.trim());
+  // Coincide si alguna palabra del nombre/apellido EMPIEZA con la búsqueda (no
+  // subcadena: "ana" no debe traer "Pastrana"). El teléfono sí por subcadena.
+  const empiezaAlgunaPalabra = (texto) =>
+    sinAcentos(texto).split(/\s+/).some(w => w.startsWith(clienteSearchQ));
   const clientesFiltrados = clienteSearchQ
     ? clientes.filter(c =>
-        sinAcentos(c.nombre).includes(clienteSearchQ) ||
-        sinAcentos(c.apellido).includes(clienteSearchQ) ||
+        empiezaAlgunaPalabra(`${c.nombre ?? ''} ${c.apellido ?? ''}`) ||
         sinAcentos(c.telefono).includes(clienteSearchQ)
       )
     : clientes;
