@@ -841,10 +841,19 @@ export default function NuevaNota() {
                             type="button"
                             onClick={() => {
                               const cambios = { tamano: t.v };
-                              // Chico/Grande son siempre Ropa: se fija la prenda y
-                              // se ocultan las opciones de edredón. Jumbo conserva
-                              // la elección de prenda (Ropa/Edredón).
-                              if (t.v !== 'jumbo') { cambios.tipo_prenda = 'ROPA'; cambios.tamano_edredon = ''; }
+                              if (t.v !== 'jumbo') {
+                                // Chico/Grande son siempre Ropa: se fija la prenda
+                                // y se ocultan las opciones de edredón.
+                                cambios.tipo_prenda = 'ROPA';
+                                cambios.tamano_edredon = '';
+                              } else {
+                                // Jumbo: el edredón es el caso principal, queda por
+                                // defecto. Una lavadora no-jumbo ya no sirve.
+                                cambios.tipo_prenda = 'EDREDON';
+                                cambios.tipo_tela = '';
+                                const lav = maquinas.find(m => String(m.id) === String(c.maquina_id));
+                                if (lav && lav.tipo !== 'lavadora_jumbo') cambios.maquina_id = '';
+                              }
                               set(cambios);
                             }}
                             className={`py-6 border-2 rounded-xl font-semibold text-lg transition-colors ${
