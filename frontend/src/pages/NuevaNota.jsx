@@ -863,7 +863,8 @@ export default function NuevaNota() {
                   <div className="space-y-3">
                     <h3 className="text-sm font-semibold text-gray-900">Tipo de prenda</h3>
                     <div className="grid grid-cols-2 gap-3">
-                      {TIPOS_PRENDA.map(opt => {
+                      {/* En Jumbo el edredón es el caso principal: va primero. */}
+                      {[...TIPOS_PRENDA].sort((a, b) => (a.v === 'EDREDON' ? -1 : b.v === 'EDREDON' ? 1 : 0)).map(opt => {
                         const selected = c.tipo_prenda === opt.v;
                         return (
                           <button
