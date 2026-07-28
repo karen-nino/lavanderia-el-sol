@@ -839,7 +839,14 @@ export default function NuevaNota() {
                           <button
                             key={t.v}
                             type="button"
-                            onClick={() => set({ tamano: t.v })}
+                            onClick={() => {
+                              const cambios = { tamano: t.v };
+                              // Chico/Grande son siempre Ropa: se fija la prenda y
+                              // se ocultan las opciones de edredón. Jumbo conserva
+                              // la elección de prenda (Ropa/Edredón).
+                              if (t.v !== 'jumbo') { cambios.tipo_prenda = 'ROPA'; cambios.tamano_edredon = ''; }
+                              set(cambios);
+                            }}
                             className={`py-6 border-2 rounded-xl font-semibold text-lg transition-colors ${
                               selected ? 'border-blue bg-light-blue text-blue-700' : 'border-gray-300 bg-white text-gray-700 hover:border-blue-300'
                             }`}
@@ -849,9 +856,10 @@ export default function NuevaNota() {
                         );
                       })}
                     </div>
-                  </div>                  
+                  </div>
 
-                  {/* Tipo de prenda */}
+                  {/* Tipo de prenda — solo en Jumbo (Chico/Grande se dan por Ropa) */}
+                  {c.tamano === 'jumbo' && (
                   <div className="space-y-3">
                     <h3 className="text-sm font-semibold text-gray-900">Tipo de prenda</h3>
                     <div className="grid grid-cols-2 gap-3">
@@ -881,6 +889,7 @@ export default function NuevaNota() {
                       })}
                     </div>
                   </div>
+                  )}
 
                   {/* Tipo de tela (ropa) */}
                   {c.tipo_prenda === 'ROPA' && (
