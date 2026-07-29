@@ -30,15 +30,20 @@ function CeldaNumero({ value, onClick }) {
   );
 }
 
-function FilaModal({ left, sub, right, onClick }) {
+function FilaModal({ left, sub, right, rightSub, onClick }) {
   const contenido = (
     <>
       <div className="min-w-0">
         <p className={`text-sm truncate ${onClick ? 'text-blue font-medium' : 'text-gray-800'}`}>{left}</p>
         {sub && <p className="text-xs text-gray-400 truncate">{sub}</p>}
       </div>
-      {right != null && (
-        <span className="text-sm font-medium text-gray-700 whitespace-nowrap flex-shrink-0">{right}</span>
+      {(right != null || rightSub) && (
+        <div className="flex flex-col items-end gap-1 flex-shrink-0">
+          {right != null && (
+            <span className="text-sm font-medium text-gray-700 whitespace-nowrap">{right}</span>
+          )}
+          {rightSub}
+        </div>
       )}
     </>
   );
@@ -72,6 +77,26 @@ const MODALIDAD_LABEL = {
   EDREDON:      'Edredón',
 };
 
+const ESTADO_BADGE = {
+  EN_ESPERA:  { label: 'En Espera',    cls: 'bg-gray-100 text-gray-600'     },
+  LAVANDO:    { label: 'Lavando',      cls: 'bg-light-blue text-blue-700'   },
+  SECANDO:    { label: 'Secando',      cls: 'bg-red-100 text-red-700'       },
+  LISTA:      { label: 'Por Entregar', cls: 'bg-yellow-100 text-yellow-800' },
+  PAGADA:     { label: 'Pagada',       cls: 'bg-light-green text-green-700' },
+  FINALIZADA: { label: 'Finalizada',   cls: 'bg-light-green text-green-700' },
+  CANCELADA:  { label: 'Cancelada',    cls: 'bg-red-100 text-red-700'       },
+};
+
+function EstadoBadge({ estado }) {
+  const b = ESTADO_BADGE[estado];
+  if (!b) return null;
+  return (
+    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${b.cls}`}>
+      {b.label}
+    </span>
+  );
+}
+
 // Modal con el detalle de una métrica de un día.
 function MetricaModal({ metrica, fecha, count, items, onClose }) {
   const navigate = useNavigate();
@@ -101,6 +126,7 @@ function MetricaModal({ metrica, fecha, count, items, onClose }) {
               <FilaModal key={i} left={`Nota ${n.folio}`}
                 sub={[MODALIDAD_LABEL[n.modalidad] ?? n.modalidad, n.cliente].filter(Boolean).join(' · ')}
                 right={fmtMoneda(n.precio)}
+                rightSub={<EstadoBadge estado={n.estado} />}
                 onClick={n.id ? () => { onClose(); navigate(`/notas/${n.id}`); } : undefined} />
             ))
           ) : metrica === 'maquinas' ? (

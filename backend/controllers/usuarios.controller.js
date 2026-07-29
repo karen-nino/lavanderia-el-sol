@@ -1,16 +1,21 @@
 import pool from '../db/pool.js';
 import bcrypt from 'bcrypt';
+import { esAdmin } from '../middleware/roles.js';
 
 const ROL_VALIDOS = ['admin_main', 'admin', 'operador'];
 
 export const getEmpleados = async (req, res) => {
   try {
+    // Un admin ve los empleados de TODAS las sucursales (Empleados es
+    // admin-only). Si no es admin, se limita a la sucursal activa.
+    const sucursalFiltro = esAdmin(req.user?.rol) ? null : req.sucursal;
     const { rows } = await pool.query(
       `SELECT id, nombre, rol, sucursal, activo, created_at
          FROM usuarios
-        WHERE activo = TRUE AND sucursal = $1
-        ORDER BY nombre ASC`,
-      [req.sucursal]
+        WHERE activo = TRUE
+          AND ($1::text IS NULL OR sucursal = $1)
+        ORDER BY sucursal ASC, nombre ASC`,
+      [sucursalFiltro]
     );
     res.json(rows);
   } catch (err) {
@@ -40,7 +45,7 @@ export const getDesempeno = async (req, res) => {
     // El desglose por día (con el detalle de cada métrica) se arma en JS para
     // que cada número y el contenido de su modal siempre coincidan.
     const { rows: notas } = await pool.query(
-      `SELECT n.id, DATE(n.created_at) AS fecha, n.folio, n.modalidad,
+      `SELECT n.id, DATE(n.created_at) AS fecha, n.folio, n.modalidad, n.estado,
               n.precio_total, n.cantidad_cargas, n.cliente_id,
               c.nombre AS cliente_nombre, c.apellido AS cliente_apellido,
               n.maquina_id,  ml.nombre AS maquina_nombre,  ml.tipo AS maquina_tipo,
@@ -115,6 +120,7 @@ export const getDesempeno = async (req, res) => {
         id:        n.id,
         folio:     n.folio,
         modalidad: n.modalidad,
+        estado:    n.estado,
         cliente:   clienteNombre || null,
         precio:    Number(n.precio_total) || 0,
       });
