@@ -1,12 +1,12 @@
 import pool from '../db/pool.js';
 
 // Hora local del negocio en la que se hace el barrido de "cierre del día".
-// Configurable con CIERRE_HORA (0-23) y TZ_NEGOCIO; por defecto 03:00 en
-// America/Mexico_City (de madrugada, con el negocio ya cerrado).
+// Configurable con CIERRE_HORA (0-23) y TZ_NEGOCIO; por defecto 00:00 en
+// America/Mexico_City (medianoche, con el negocio ya cerrado).
 const TZ = process.env.TZ_NEGOCIO || 'America/Mexico_City';
 const CIERRE_HORA = (() => {
   const h = Number(process.env.CIERRE_HORA);
-  return Number.isInteger(h) && h >= 0 && h <= 23 ? h : 3;
+  return Number.isInteger(h) && h >= 0 && h <= 23 ? h : 0;
 })();
 const INTERVALO_MS = 5 * 60 * 1000; // revisar cada 5 minutos
 

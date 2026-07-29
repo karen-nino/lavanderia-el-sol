@@ -9,7 +9,7 @@ primary_region = "dfw"
 
 [env]
   PORT = "4000"
-  CIERRE_HORA = "3"
+  CIERRE_HORA = "0"
   TZ_NEGOCIO = "America/Mexico_City"
 
 [http_service]
