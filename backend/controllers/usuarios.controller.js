@@ -36,31 +36,52 @@ export const getDesempeno = async (req, res) => {
     );
     if (emp.length === 0) return res.status(404).json({ message: 'Empleado no encontrado.' });
 
-    // Se pre-agregan los productos por nota para no multiplicar los demás
-    // totales al unir con nota_productos.
+    // Se pre-agregan los productos y las máquinas por día para no multiplicar
+    // los demás totales al unirlos. Las máquinas de una nota pueden venir de sus
+    // cargas (autoservicio, nota_cargas) o de las columnas legadas
+    // maquina_id / secadora_id (Por Encargo y notas viejas).
     const { rows: dias } = await pool.query(
-      `SELECT
-          DATE(n.created_at)                                              AS fecha,
+      `WITH base AS (
+          SELECT n.id, DATE(n.created_at) AS fecha, n.precio_total,
+                 n.cantidad_cargas, n.cliente_id, n.modalidad,
+                 n.maquina_id, n.secadora_id
+            FROM notas n
+           WHERE n.usuario_id = $1 AND n.estado <> 'CANCELADA'
+        ),
+        maq AS (
+          SELECT b.fecha, COUNT(DISTINCT ids.mid)::int AS maquinas
+            FROM base b
+            CROSS JOIN LATERAL (
+              SELECT b.maquina_id  AS mid
+              UNION ALL SELECT b.secadora_id
+              UNION ALL SELECT nc.lavadora_id FROM nota_cargas nc WHERE nc.nota_id = b.id
+              UNION ALL SELECT nc.secadora_id FROM nota_cargas nc WHERE nc.nota_id = b.id
+            ) ids
+           WHERE ids.mid IS NOT NULL
+           GROUP BY b.fecha
+        )
+        SELECT
+          b.fecha                                                         AS fecha,
           COUNT(*)::int                                                   AS notas,
-          COALESCE(SUM(n.precio_total), 0)                                AS vendido,
-          COUNT(DISTINCT n.maquina_id) FILTER (WHERE n.maquina_id IS NOT NULL)::int AS maquinas,
-          COALESCE(SUM(n.cantidad_cargas), 0)::int                        AS cargas,
+          COALESCE(SUM(b.precio_total), 0)                                AS vendido,
+          COALESCE(MAX(maq.maquinas), 0)::int                             AS maquinas,
+          COALESCE(SUM(b.cantidad_cargas), 0)::int                        AS cargas,
           COALESCE(SUM(np.qty), 0)::int                                   AS productos,
           -- Clientes: cada nota de autoservicio cuenta como 1 cliente (no lleva
           -- cliente registrado); las demás suman sus clientes distintos.
           (
-            COUNT(*) FILTER (WHERE n.modalidad = 'AUTOSERVICIO')
-            + COUNT(DISTINCT n.cliente_id) FILTER (WHERE n.cliente_id IS NOT NULL)
+            COUNT(*) FILTER (WHERE b.modalidad = 'AUTOSERVICIO')
+            + COUNT(DISTINCT b.cliente_id) FILTER (WHERE b.cliente_id IS NOT NULL)
           )::int                                                          AS clientes
-        FROM notas n
+        FROM base b
         LEFT JOIN (
           SELECT nota_id, SUM(cantidad) AS qty
           FROM nota_productos
           GROUP BY nota_id
-        ) np ON np.nota_id = n.id
-        WHERE n.usuario_id = $1 AND n.estado <> 'CANCELADA'
-        GROUP BY DATE(n.created_at)
-        ORDER BY fecha DESC`,
+        ) np ON np.nota_id = b.id
+        LEFT JOIN maq ON maq.fecha = b.fecha
+        GROUP BY b.fecha
+        ORDER BY b.fecha DESC`,
       [id]
     );
 
