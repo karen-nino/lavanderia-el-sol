@@ -477,6 +477,12 @@ export default function Notas() {
                         </span>
                       </div>
                     )}
+                    {n.sucursal_nombre && (
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="text-sm text-dark-grey">Sucursal</span>
+                        <span className="text-sm font-semibold text-dark-blue text-right">{n.sucursal_nombre}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               );

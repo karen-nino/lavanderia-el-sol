@@ -521,6 +521,7 @@ export const getNotas = async (req, res) => {
               u.nombre   AS usuario_nombre,
               m.nombre   AS maquina_nombre,
               s.nombre   AS secadora_nombre,
+              su.nombre  AS sucursal_nombre,
               (SELECT COALESCE(json_agg(DISTINCT x.mid), '[]'::json)
                  FROM (${SQL_MAQUINAS_DE_NOTA}) x
                 WHERE x.mid IS NOT NULL) AS maquinas_ids,
@@ -552,10 +553,11 @@ export const getNotas = async (req, res) => {
                                   WHERE nc.nota_id = n.id AND ms.estado = 'en_uso')
                     ELSE (s.id IS NOT NULL AND s.estado = 'en_uso') END) AS hay_secadora_activa
        FROM notas n
-       LEFT JOIN clientes  c ON c.id = n.cliente_id
-       JOIN      usuarios  u ON u.id = n.usuario_id
-       LEFT JOIN maquinas  m ON m.id = n.maquina_id
-       LEFT JOIN maquinas  s ON s.id = n.secadora_id
+       LEFT JOIN clientes   c  ON c.id = n.cliente_id
+       JOIN      usuarios   u  ON u.id = n.usuario_id
+       LEFT JOIN maquinas   m  ON m.id = n.maquina_id
+       LEFT JOIN maquinas   s  ON s.id = n.secadora_id
+       LEFT JOIN sucursales su ON su.slug = n.sucursal
        WHERE n.sucursal = $1
        ORDER BY n.created_at DESC`,
       [req.sucursal]
@@ -584,12 +586,14 @@ export const getNotaById = async (req, res) => {
               s.nombre   AS secadora_nombre,
               s.tipo     AS secadora_tipo,
               s.estado   AS secadora_estado,
-              s.en_uso_desde AS secadora_en_uso_desde
+              s.en_uso_desde AS secadora_en_uso_desde,
+              su.nombre  AS sucursal_nombre
        FROM notas n
-       LEFT JOIN clientes  c ON c.id = n.cliente_id
-       JOIN      usuarios  u ON u.id = n.usuario_id
-       LEFT JOIN maquinas  m ON m.id = n.maquina_id
-       LEFT JOIN maquinas  s ON s.id = n.secadora_id
+       LEFT JOIN clientes   c  ON c.id = n.cliente_id
+       JOIN      usuarios   u  ON u.id = n.usuario_id
+       LEFT JOIN maquinas   m  ON m.id = n.maquina_id
+       LEFT JOIN maquinas   s  ON s.id = n.secadora_id
+       LEFT JOIN sucursales su ON su.slug = n.sucursal
        WHERE n.id = $1 AND n.sucursal = $2`,
       [id, req.sucursal]
     );

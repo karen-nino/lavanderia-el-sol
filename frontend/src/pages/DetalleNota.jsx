@@ -410,6 +410,11 @@ export default function DetalleNota() {
               <span className="text-sm font-medium text-gray-800">{nota.usuario_nombre}</span>
             </FilaDetalle>
           )}
+          {nota.sucursal_nombre && (
+            <FilaDetalle label="Sucursal">
+              <span className="text-sm font-medium text-gray-800">{nota.sucursal_nombre}</span>
+            </FilaDetalle>
+          )}
           <FilaDetalle label="Tipo">
             <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${badgeModal.cls}`}>
               {badgeModal.label}
