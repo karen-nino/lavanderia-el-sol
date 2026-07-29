@@ -1770,7 +1770,7 @@ export const asignarSecadora = async (req, res) => {
 // nota pagada se maneja aparte.
 export const asignarMaquina = async (req, res) => {
   const { id } = req.params;
-  const { maquina_id, maquina_ids, cobrar } = req.body;
+  const { maquina_id, maquina_ids, cobrar, carga_id } = req.body;
 
   // Acepta una máquina (maquina_id, formato viejo) o varias (maquina_ids). Se
   // normaliza a una lista de ids únicos.
@@ -1845,6 +1845,29 @@ export const asignarMaquina = async (req, res) => {
     const precioLav = m => cobrar ? tarifaLavadora(m.tipo, tipoPrenda, t) : 0;
     const precioSec = m => cobrar ? tarifaSecadora(m.tamano, tipoPrenda, t) : 0;
 
+    // Si se indica carga_id, la primera pareja llena esa carga vacía (creada al
+    // hacer la nota pero sin máquina) en vez de crear una carga nueva; las
+    // parejas que sobren sí se agregan como cargas nuevas.
+    let cargaObjetivo = null;
+    if (carga_id != null) {
+      const { rows: cRows } = await client.query(
+        `SELECT id, orden, tipo_prenda, lavadora_id, secadora_id,
+                lavadora_usada_id, secadora_usada_id
+           FROM nota_cargas WHERE id = $1 AND nota_id = $2 FOR UPDATE`,
+        [Number(carga_id), id]
+      );
+      if (cRows.length === 0) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ message: 'La carga indicada no existe en esta nota.' });
+      }
+      const c = cRows[0];
+      if (c.lavadora_id || c.secadora_id || c.lavadora_usada_id || c.secadora_usada_id) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ message: 'La carga indicada ya tiene una máquina asignada.' });
+      }
+      cargaObjetivo = c;
+    }
+
     // Empareja lavadora+secadora en una misma carga (un ciclo completo). Las que
     // sobran de un tipo van cada una en su propia carga.
     const nuevas = [];
@@ -1855,15 +1878,41 @@ export const asignarMaquina = async (req, res) => {
 
     // La máquina NO arranca aquí: queda asignada pero disponible (En Espera) y
     // el empleado la inicia manualmente desde Salidas, igual que al crear la nota.
+    let nuevoOrden = max_orden;
     for (let i = 0; i < nuevas.length; i++) {
       const { lavadora, secadora } = nuevas[i];
+      // La primera pareja llena la carga objetivo (si se indicó): conserva su
+      // orden, prenda y es_adicional originales; solo se le ponen las máquinas.
+      if (cargaObjetivo && i === 0) {
+        const prendaCarga = cargaObjetivo.tipo_prenda ?? tipoPrenda;
+        if (String(prendaCarga).toUpperCase() === 'EDREDON' && lavadora && lavadora.tipo !== 'lavadora_jumbo') {
+          await client.query('ROLLBACK');
+          return res.status(400).json({ message: 'Los edredones solo van en lavadora jumbo.' });
+        }
+        await client.query(
+          `UPDATE nota_cargas
+              SET lavadora_id = $1, secadora_id = $2,
+                  lavadora_usada_id = $1, secadora_usada_id = $2,
+                  precio_lavadora = $3, precio_secadora = $4
+            WHERE id = $5`,
+          [
+            lavadora ? lavadora.id : null,
+            secadora ? secadora.id : null,
+            lavadora && cobrar ? tarifaLavadora(lavadora.tipo, prendaCarga, t) : 0,
+            secadora && cobrar ? tarifaSecadora(secadora.tamano, prendaCarga, t) : 0,
+            cargaObjetivo.id,
+          ]
+        );
+        continue;
+      }
+      nuevoOrden += 1;
       await client.query(
         `INSERT INTO nota_cargas
            (nota_id, orden, lavadora_id, secadora_id, lavadora_usada_id, secadora_usada_id,
             precio_lavadora, precio_secadora, tipo_prenda, es_adicional)
          VALUES ($1, $2, $3, $4, $3, $4, $5, $6, $7, TRUE)`,
         [
-          id, max_orden + 1 + i,
+          id, nuevoOrden,
           lavadora ? lavadora.id : null,
           secadora ? secadora.id : null,
           lavadora ? precioLav(lavadora) : 0,

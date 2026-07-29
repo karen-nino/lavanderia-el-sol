@@ -75,6 +75,9 @@ export default function Salidas() {
   const [asignarOpen,      setAsignarOpen]      = useState(false);
   const [asignarMaqSel,    setAsignarMaqSel]    = useState([]); // ids seleccionados
   const [asignarCobrar,    setAsignarCobrar]    = useState(null); // true | false | null
+  // Carga vacía que se está llenando (creada al hacer la nota pero sin máquina).
+  // null = asignar una máquina extra en una carga nueva.
+  const [asignarCarga,     setAsignarCarga]     = useState(null);
 
   // Cambiar una máquina asignada (sin iniciar) por otra del mismo tipo.
   const [cambiarMaq,       setCambiarMaq]       = useState(null); // máquina a cambiar
@@ -200,11 +203,13 @@ export default function Salidas() {
     }
   }
 
-  // Abre el selector para asignar una máquina extra (lavadora o secadora).
-  async function iniciarAsignar() {
+  // Abre el selector para asignar una máquina. Sin argumento crea una carga
+  // nueva (máquina extra); con una carga vacía, llena esa carga.
+  async function iniciarAsignar(carga = null) {
     setErrorAccion('');
     setAsignarMaqSel([]);
     setAsignarCobrar(null);
+    setAsignarCarga(carga);
     setAsignarOpen(true);
     setLoadingMaquinas(true);
     try {
@@ -237,8 +242,10 @@ export default function Salidas() {
       await api.patch(`/notas/${id}/asignar-maquina`, {
         maquina_ids: asignarMaqSel.map(Number),
         cobrar: asignarCobrar,
+        ...(asignarCarga ? { carga_id: asignarCarga.id } : {}),
       });
       setAsignarOpen(false);
+      setAsignarCarga(null);
       await cargarDatos();
     } catch (err) {
       setErrorAccion(err.message);
@@ -427,6 +434,13 @@ export default function Salidas() {
   // Lista plana (para conteo del encabezado y validaciones de acciones a nivel nota).
   const maquinasAsignadas = cargasMaquinas.flatMap(g => g.maquinas);
 
+  // Cargas que se eligieron al hacer la nota pero se quedaron sin máquina (ni
+  // asignada ni ya usada). Se muestran para poder asignarles una rápidamente.
+  const notaCerrada = ['FINALIZADA', 'CANCELADA'].includes(nota?.estado);
+  const cargasVacias = notaCerrada ? [] : cargasNota.filter(c =>
+    !c.lavadora_id && !c.secadora_id && !c.lavadora_usada_id && !c.secadora_usada_id
+  );
+
   // ¿Esta máquina ya cumplió su tiempo de ciclo? Cada máquina es
   // independiente (mismo cálculo que las tarjetas del dashboard): la
   // lavadora terminada ofrece "Iniciar Secado" y la secadora terminada
@@ -489,7 +503,7 @@ export default function Salidas() {
               se usa el botón de abajo). Disponible salvo en notas cerradas. */}
           {nota && maquinasAsignadas.length > 0 && !['FINALIZADA', 'CANCELADA'].includes(nota.estado) && (
             <button
-              onClick={iniciarAsignar}
+              onClick={() => iniciarAsignar()}
               disabled={loadingMaquina}
               className="flex items-center gap-1 text-xs font-medium text-blue hover:underline disabled:opacity-60"
             >
@@ -574,17 +588,35 @@ export default function Salidas() {
                 })}
               </div>
             ))
-          ) : (
+          ) : cargasVacias.length === 0 ? (
             <p className="text-sm text-gray-400 italic">Sin máquina asignada</p>
-          )}
+          ) : null}
 
-          {/* En Espera sin ninguna máquina asignada: abrir selector para
-              elegirlas. Con máquinas asignadas, cada una se arranca con su
-              propio botón "Iniciar Lavado" de arriba. */}
-          {maquinasAsignadas.length === 0 && nota && !['FINALIZADA', 'CANCELADA'].includes(nota.estado) && (
+          {/* Cargas que se eligieron al hacer la nota pero se quedaron sin
+              máquina: se muestran para asignarles una rápidamente. */}
+          {cargasVacias.map(c => (
+            <div key={`vacia-${c.id}`} className="space-y-2 [&:not(:first-child)]:border-t [&:not(:first-child)]:border-gray-100 [&:not(:first-child)]:pt-4">
+              <p className="text-xs font-semibold text-gray-500">Carga {c.orden}</p>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-sm text-gray-400 italic">Sin máquina asignada</span>
+                <button
+                  onClick={() => iniciarAsignar(c)}
+                  disabled={loadingMaquina}
+                  className="px-4 py-2 bg-blue hover:opacity-90 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
+                >
+                  Asignar máquina
+                </button>
+              </div>
+            </div>
+          ))}
+
+          {/* En Espera sin ninguna máquina asignada ni carga pendiente: abrir
+              selector para elegirlas. Con máquinas asignadas, cada una se
+              arranca con su propio botón "Iniciar Lavado" de arriba. */}
+          {maquinasAsignadas.length === 0 && cargasVacias.length === 0 && nota && !['FINALIZADA', 'CANCELADA'].includes(nota.estado) && (
             <div className="flex justify-end gap-2 pt-1">
               <button
-                onClick={iniciarAsignar}
+                onClick={() => iniciarAsignar()}
                 disabled={loadingMaquina}
                 className="px-4 py-2 bg-blue hover:opacity-90 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
               >
@@ -956,9 +988,13 @@ export default function Salidas() {
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4 max-h-[90vh] overflow-y-auto">
             <div>
-              <h3 className="text-base font-bold text-gray-900">Asignar máquina</h3>
+              <h3 className="text-base font-bold text-gray-900">
+                {asignarCarga ? `Asignar máquina · Carga ${asignarCarga.orden}` : 'Asignar máquina'}
+              </h3>
               <p className="text-sm text-gray-500 mt-1">
-                Puedes elegir <span className="font-medium text-gray-700">varias</span>. Una lavadora y una secadora se agrupan en una misma carga. Quedan asignadas; las inicias después con su botón.
+                {asignarCarga
+                  ? <>Elige la máquina para la <span className="font-medium text-gray-700">Carga {asignarCarga.orden}</span>. Una lavadora y una secadora se agrupan en la misma carga. Queda asignada; la inicias después con su botón.</>
+                  : <>Puedes elegir <span className="font-medium text-gray-700">varias</span>. Una lavadora y una secadora se agrupan en una misma carga. Quedan asignadas; las inicias después con su botón.</>}
               </p>
             </div>
 
@@ -1069,7 +1105,7 @@ export default function Salidas() {
             <div className="flex gap-3">
               <button
                 type="button"
-                onClick={() => setAsignarOpen(false)}
+                onClick={() => { setAsignarOpen(false); setAsignarCarga(null); }}
                 disabled={loadingMaquina}
                 className="flex-1 border border-gray-300 text-gray-700 font-medium py-3.5 rounded-lg text-base hover:bg-gray-50 disabled:opacity-60 transition-colors"
               >
