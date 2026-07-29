@@ -571,6 +571,9 @@ export default function Layout() {
   const [confirmLogout, setConfirmLogout] = useState(false);
   const [productos, setProductos] = useState([]);
   const [notificaciones, setNotificaciones] = useState([]);
+  // Alertas de stock ocultadas manualmente (por firma id+stock). Es solo de
+  // sesión: reaparecen si cambia el stock o al recargar.
+  const [stockOcultas, setStockOcultas] = useState(() => new Set());
   const isDashboard = location.pathname === '/';
 
   useEffect(() => {
@@ -593,11 +596,16 @@ export default function Layout() {
     const orden = { agotado: 0, por_agotarse: 1 };
     const stock = productos
       .filter(p => p.estado_stock && p.estado_stock !== 'ok')
+      // Firma con el stock actual: si el stock cambia, la firma cambia y la
+      // alerta vuelve a mostrarse aunque se hubiera ocultado.
+      .filter(p => !stockOcultas.has(`producto-${p.id}:${p.stock_actual}`))
       .sort((a, b) => (orden[a.estado_stock] ?? 99) - (orden[b.estado_stock] ?? 99))
       .map(p => {
         const disponible = Number(p.stock_actual) - Number(p.stock_reservado ?? 0);
         return {
           key:         `producto-${p.id}`,
+          dismissKey:  `producto-${p.id}:${p.stock_actual}`,
+          dismissable: true,
           title:       p.nombre,
           description: `Stock: ${Number(p.stock_actual).toFixed(2)} ${p.unidad}`,
           severity:    p.estado_stock,
@@ -651,16 +659,26 @@ export default function Layout() {
       };
     });
     return [...stock, ...notifs];
-  }, [productos, notificaciones]);
+  }, [productos, notificaciones, stockOcultas]);
 
   const handleDismissAlerta = async (a) => {
+    // Alerta de stock (sin id): se oculta solo en esta sesión.
+    if (!a.id) {
+      setStockOcultas(prev => new Set(prev).add(a.dismissKey));
+      return;
+    }
     setNotificaciones(prev => prev.filter(n => n.id !== a.id));
     try { await api.post(`/notificaciones/${a.id}/descartar`); } catch { /* la lista ya se actualizó localmente */ }
   };
 
-  // Descarta todas las notificaciones a la vez (las alertas de stock no son
-  // descartables: reflejan el inventario en vivo y se quedan).
+  // Descarta todo lo visible: las notificaciones en la base y las alertas de
+  // stock se ocultan en esta sesión (reaparecen si cambia el stock o al recargar).
   const handleDismissTodas = async () => {
+    setStockOcultas(prev => {
+      const next = new Set(prev);
+      alertas.forEach(a => { if (!a.id && a.dismissKey) next.add(a.dismissKey); });
+      return next;
+    });
     setNotificaciones([]);
     try { await api.post('/notificaciones/descartar-todas'); } catch { /* la lista ya se actualizó localmente */ }
   };
