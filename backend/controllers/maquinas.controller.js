@@ -22,7 +22,8 @@ export const getMaquinas = async (req, res) => {
 // Uso diario de la máquina, derivado de las notas que la usaron.
 // "Generado" = dinero cobrado (notas PAGADAS), atribuido al día en que se
 // usó la máquina. Métricas por día: usos, cargas, generado, empleados que
-// la operaron y clientes atendidos. Excluye notas canceladas.
+// la operaron y clientes atendidos (cada autoservicio cuenta como 1 cliente;
+// el resto, sus clientes distintos). Excluye notas canceladas.
 export const getUsoMaquina = async (req, res) => {
   const id = Number(req.params.id);
   if (!id) return res.status(400).json({ message: 'Máquina inválida.' });
@@ -45,7 +46,12 @@ export const getUsoMaquina = async (req, res) => {
           COALESCE(SUM(CASE WHEN cm.cnt > 0 THEN cm.cnt ELSE n.cantidad_cargas END), 0)::int AS cargas,
           COALESCE(SUM(n.precio_total) FILTER (WHERE n.estado_pago = 'PAGADO'), 0) AS generado,
           COUNT(DISTINCT n.usuario_id)::int                               AS empleados,
-          COUNT(DISTINCT n.cliente_id) FILTER (WHERE n.cliente_id IS NOT NULL)::int AS clientes
+          -- Clientes: cada nota de autoservicio cuenta como 1 cliente (no lleva
+          -- cliente registrado); las demás suman sus clientes distintos.
+          (
+            COUNT(*) FILTER (WHERE n.modalidad = 'AUTOSERVICIO')
+            + COUNT(DISTINCT n.cliente_id) FILTER (WHERE n.cliente_id IS NOT NULL)
+          )::int                                                          AS clientes
         FROM notas n
         LEFT JOIN LATERAL (
           SELECT COUNT(*)::int AS cnt

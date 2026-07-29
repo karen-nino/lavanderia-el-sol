@@ -23,7 +23,8 @@ export const getEmpleados = async (req, res) => {
 // Desempeño diario del empleado, derivado de las notas que creó.
 // "Vendido" = valor (precio_total) de todas sus notas no canceladas,
 // atribuido al día en que se crearon. Métricas por día: notas, vendido,
-// máquinas distintas, cargas, productos despachados y clientes distintos.
+// máquinas distintas, cargas, productos despachados y clientes (cada
+// autoservicio cuenta como 1 cliente; el resto, sus clientes distintos).
 export const getDesempeno = async (req, res) => {
   const id = Number(req.params.id);
   if (!id) return res.status(400).json({ message: 'Empleado inválido.' });
@@ -45,7 +46,12 @@ export const getDesempeno = async (req, res) => {
           COUNT(DISTINCT n.maquina_id) FILTER (WHERE n.maquina_id IS NOT NULL)::int AS maquinas,
           COALESCE(SUM(n.cantidad_cargas), 0)::int                        AS cargas,
           COALESCE(SUM(np.qty), 0)::int                                   AS productos,
-          COUNT(DISTINCT n.cliente_id) FILTER (WHERE n.cliente_id IS NOT NULL)::int AS clientes
+          -- Clientes: cada nota de autoservicio cuenta como 1 cliente (no lleva
+          -- cliente registrado); las demás suman sus clientes distintos.
+          (
+            COUNT(*) FILTER (WHERE n.modalidad = 'AUTOSERVICIO')
+            + COUNT(DISTINCT n.cliente_id) FILTER (WHERE n.cliente_id IS NOT NULL)
+          )::int                                                          AS clientes
         FROM notas n
         LEFT JOIN (
           SELECT nota_id, SUM(cantidad) AS qty
