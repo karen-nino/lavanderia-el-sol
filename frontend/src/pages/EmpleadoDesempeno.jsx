@@ -17,6 +17,94 @@ function ResumenCard({ label, value }) {
   );
 }
 
+// Número de la tabla que abre su modal de detalle. En 0 no es botón.
+function CeldaNumero({ value, onClick }) {
+  if (!value) return <span className="text-gray-400">0</span>;
+  return (
+    <button
+      onClick={onClick}
+      className="font-medium text-blue hover:text-blue-700 hover:underline underline-offset-2 transition-colors"
+    >
+      {value}
+    </button>
+  );
+}
+
+function FilaModal({ left, sub, right }) {
+  return (
+    <div className="flex items-center justify-between gap-3 px-5 py-2.5 border-b border-gray-50 last:border-0">
+      <div className="min-w-0">
+        <p className="text-sm text-gray-800 truncate">{left}</p>
+        {sub && <p className="text-xs text-gray-400 truncate">{sub}</p>}
+      </div>
+      {right != null && (
+        <span className="text-sm font-medium text-gray-700 whitespace-nowrap flex-shrink-0">{right}</span>
+      )}
+    </div>
+  );
+}
+
+const tipoMaquinaLabel = (tipo) =>
+  tipo === 'secadora'         ? 'Secadora'
+  : tipo === 'lavadora_jumbo' ? 'Lavadora jumbo'
+  : tipo                      ? 'Lavadora'
+  :                             '';
+
+const METRICA_TITULO = {
+  maquinas:  'Máquinas',
+  cargas:    'Cargas',
+  productos: 'Productos',
+  clientes:  'Clientes',
+};
+
+// Modal con el detalle de una métrica de un día.
+function MetricaModal({ metrica, fecha, count, items, onClose }) {
+  const noun = { maquinas: 'máquina', cargas: 'carga', productos: 'producto', clientes: 'cliente' }[metrica];
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div
+        className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[85vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-gray-100 flex-shrink-0">
+          <div>
+            <h2 className="text-base font-semibold text-gray-900">{METRICA_TITULO[metrica]}</h2>
+            <p className="text-xs text-gray-500">{fecha} · {count} {count === 1 ? noun : `${noun}s`}</p>
+          </div>
+          <button onClick={onClose} aria-label="Cerrar" className="text-gray-400 hover:text-gray-600">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <div className="overflow-y-auto py-1">
+          {items.length === 0 ? (
+            <p className="text-center text-gray-400 text-sm py-10">Sin registros</p>
+          ) : metrica === 'maquinas' ? (
+            items.map((m, i) => (
+              <FilaModal key={i} left={m.nombre} sub={tipoMaquinaLabel(m.tipo)}
+                right={`${m.usos} ${m.usos === 1 ? 'uso' : 'usos'}`} />
+            ))
+          ) : metrica === 'cargas' ? (
+            items.map((c, i) => (
+              <FilaModal key={i} left={c.descripcion} sub={c.folio ? `Nota ${c.folio}` : null}
+                right={fmtMoneda(c.precio)} />
+            ))
+          ) : metrica === 'productos' ? (
+            items.map((p, i) => (
+              <FilaModal key={i} left={p.nombre} right={`× ${p.cantidad}`} />
+            ))
+          ) : (
+            items.map((cl, i) => (
+              <FilaModal key={i} left={cl.nombre} sub={cl.folio ? `Nota ${cl.folio}` : null} />
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function EmpleadoDesempeno() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -24,6 +112,7 @@ export default function EmpleadoDesempeno() {
   const [data,    setData]    = useState(null);
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState('');
+  const [modal,   setModal]   = useState(null); // { dia, metrica }
 
   useEffect(() => {
     let activo = true;
@@ -99,10 +188,18 @@ export default function EmpleadoDesempeno() {
                         <td className="px-4 py-2.5 text-gray-700 whitespace-nowrap">{fmtFecha(d.fecha)}</td>
                         <td className="px-4 py-2.5 text-right">{d.notas}</td>
                         <td className="px-4 py-2.5 text-right font-medium text-dark-blue">{fmtMoneda(d.vendido)}</td>
-                        <td className="px-4 py-2.5 text-right">{d.maquinas}</td>
-                        <td className="px-4 py-2.5 text-right">{d.cargas}</td>
-                        <td className="px-4 py-2.5 text-right">{d.productos}</td>
-                        <td className="px-4 py-2.5 text-right">{d.clientes}</td>
+                        <td className="px-4 py-2.5 text-right">
+                          <CeldaNumero value={d.maquinas} onClick={() => setModal({ dia: d, metrica: 'maquinas' })} />
+                        </td>
+                        <td className="px-4 py-2.5 text-right">
+                          <CeldaNumero value={d.cargas} onClick={() => setModal({ dia: d, metrica: 'cargas' })} />
+                        </td>
+                        <td className="px-4 py-2.5 text-right">
+                          <CeldaNumero value={d.productos} onClick={() => setModal({ dia: d, metrica: 'productos' })} />
+                        </td>
+                        <td className="px-4 py-2.5 text-right">
+                          <CeldaNumero value={d.clientes} onClick={() => setModal({ dia: d, metrica: 'clientes' })} />
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -112,6 +209,16 @@ export default function EmpleadoDesempeno() {
           </div>
         ) : null}
       </div>
+
+      {modal && (
+        <MetricaModal
+          metrica={modal.metrica}
+          fecha={fmtFecha(modal.dia.fecha)}
+          count={modal.dia[modal.metrica]}
+          items={modal.dia.detalle?.[modal.metrica] ?? []}
+          onClose={() => setModal(null)}
+        />
+      )}
     </div>
   );
 }

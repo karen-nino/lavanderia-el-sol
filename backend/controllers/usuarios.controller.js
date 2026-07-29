@@ -36,69 +36,139 @@ export const getDesempeno = async (req, res) => {
     );
     if (emp.length === 0) return res.status(404).json({ message: 'Empleado no encontrado.' });
 
-    // Se pre-agregan los productos y las máquinas por día para no multiplicar
-    // los demás totales al unirlos. Las máquinas de una nota pueden venir de sus
-    // cargas (autoservicio, nota_cargas) o de las columnas legadas
-    // maquina_id / secadora_id (Por Encargo y notas viejas). En cada carga se
-    // cuentan tanto la máquina activa (lavadora_id/secadora_id) como la que ya
-    // se usó y se desvinculó al terminar (lavadora_usada_id/secadora_usada_id),
-    // para no perder las notas ya terminadas.
-    const { rows: dias } = await pool.query(
-      `WITH base AS (
-          SELECT n.id, DATE(n.created_at) AS fecha, n.precio_total,
-                 n.cantidad_cargas, n.cliente_id, n.modalidad,
-                 n.maquina_id, n.secadora_id
-            FROM notas n
-           WHERE n.usuario_id = $1 AND n.estado <> 'CANCELADA'
-        ),
-        maq AS (
-          SELECT b.fecha, COUNT(DISTINCT ids.mid)::int AS maquinas
-            FROM base b
-            CROSS JOIN LATERAL (
-              SELECT b.maquina_id  AS mid
-              UNION ALL SELECT b.secadora_id
-              UNION ALL SELECT nc.lavadora_id       FROM nota_cargas nc WHERE nc.nota_id = b.id
-              UNION ALL SELECT nc.secadora_id       FROM nota_cargas nc WHERE nc.nota_id = b.id
-              UNION ALL SELECT nc.lavadora_usada_id FROM nota_cargas nc WHERE nc.nota_id = b.id
-              UNION ALL SELECT nc.secadora_usada_id FROM nota_cargas nc WHERE nc.nota_id = b.id
-            ) ids
-           WHERE ids.mid IS NOT NULL
-           GROUP BY b.fecha
-        )
-        SELECT
-          b.fecha                                                         AS fecha,
-          COUNT(*)::int                                                   AS notas,
-          COALESCE(SUM(b.precio_total), 0)                                AS vendido,
-          COALESCE(MAX(maq.maquinas), 0)::int                             AS maquinas,
-          COALESCE(SUM(b.cantidad_cargas), 0)::int                        AS cargas,
-          COALESCE(SUM(np.qty), 0)::int                                   AS productos,
-          -- Clientes: cada nota de autoservicio cuenta como 1 cliente (no lleva
-          -- cliente registrado); las demás suman sus clientes distintos.
-          (
-            COUNT(*) FILTER (WHERE b.modalidad = 'AUTOSERVICIO')
-            + COUNT(DISTINCT b.cliente_id) FILTER (WHERE b.cliente_id IS NOT NULL)
-          )::int                                                          AS clientes
-        FROM base b
-        LEFT JOIN (
-          SELECT nota_id, SUM(cantidad) AS qty
-          FROM nota_productos
-          GROUP BY nota_id
-        ) np ON np.nota_id = b.id
-        LEFT JOIN maq ON maq.fecha = b.fecha
-        GROUP BY b.fecha
-        ORDER BY b.fecha DESC`,
+    // Se traen las notas del empleado y, por separado, sus cargas y productos.
+    // El desglose por día (con el detalle de cada métrica) se arma en JS para
+    // que cada número y el contenido de su modal siempre coincidan.
+    const { rows: notas } = await pool.query(
+      `SELECT n.id, DATE(n.created_at) AS fecha, n.folio, n.modalidad,
+              n.precio_total, n.cantidad_cargas, n.cliente_id,
+              c.nombre AS cliente_nombre, c.apellido AS cliente_apellido,
+              n.maquina_id,  ml.nombre AS maquina_nombre,  ml.tipo AS maquina_tipo,
+              n.secadora_id, ms.nombre AS secadora_nombre, ms.tipo AS secadora_tipo
+         FROM notas n
+         LEFT JOIN clientes c  ON c.id  = n.cliente_id
+         LEFT JOIN maquinas ml ON ml.id = n.maquina_id
+         LEFT JOIN maquinas ms ON ms.id = n.secadora_id
+        WHERE n.usuario_id = $1 AND n.estado <> 'CANCELADA'
+        ORDER BY n.created_at DESC`,
       [id]
     );
 
-    const diasFmt = dias.map((d) => ({
-      fecha:     d.fecha,
-      notas:     d.notas,
-      vendido:   parseFloat(d.vendido),
-      maquinas:  d.maquinas,
-      cargas:    d.cargas,
-      productos: d.productos,
-      clientes:  d.clientes,
-    }));
+    // Cargas con la máquina que se usó: la activa (lavadora_id/secadora_id) o,
+    // si ya terminó y se desvinculó, la registrada (lavadora_usada_id/…).
+    const { rows: cargas } = await pool.query(
+      `SELECT nc.nota_id, nc.precio_lavadora, nc.precio_secadora,
+              COALESCE(nc.lavadora_id, nc.lavadora_usada_id) AS lav_id,
+              ml.nombre AS lav_nombre, ml.tipo AS lav_tipo,
+              COALESCE(nc.secadora_id, nc.secadora_usada_id) AS sec_id,
+              ms.nombre AS sec_nombre, ms.tipo AS sec_tipo
+         FROM nota_cargas nc
+         JOIN notas n ON n.id = nc.nota_id
+         LEFT JOIN maquinas ml ON ml.id = COALESCE(nc.lavadora_id, nc.lavadora_usada_id)
+         LEFT JOIN maquinas ms ON ms.id = COALESCE(nc.secadora_id, nc.secadora_usada_id)
+        WHERE n.usuario_id = $1 AND n.estado <> 'CANCELADA'
+        ORDER BY nc.nota_id, nc.orden`,
+      [id]
+    );
+
+    const { rows: productos } = await pool.query(
+      `SELECT np.nota_id, np.cantidad, p.nombre
+         FROM nota_productos np
+         JOIN notas n ON n.id = np.nota_id
+         JOIN productos p ON p.id = np.producto_id
+        WHERE n.usuario_id = $1 AND n.estado <> 'CANCELADA'`,
+      [id]
+    );
+
+    // ── Agregación por día ──────────────────────────────────
+    const notaPorId = new Map(notas.map((n) => [n.id, n]));
+    const notasConCargas = new Set(cargas.map((c) => c.nota_id));
+    const buckets = new Map();
+    const getBucket = (fecha) => {
+      const k = new Date(fecha).toISOString();
+      if (!buckets.has(k)) {
+        buckets.set(k, {
+          fecha, notas: 0, vendido: 0,
+          _maquinas: new Map(),    // id -> { nombre, tipo, usos }
+          _cargas: [],
+          _productos: new Map(),   // nombre -> cantidad
+          _clientesReg: new Map(), // cliente_id -> nombre
+          _autoservicios: [],      // { folio }
+        });
+      }
+      return buckets.get(k);
+    };
+    const sumarMaquina = (b, mid, nombre, tipo) => {
+      if (!mid) return;
+      const m = b._maquinas.get(mid) ?? { nombre: nombre || 'Máquina', tipo, usos: 0 };
+      m.usos += 1;
+      b._maquinas.set(mid, m);
+    };
+
+    for (const n of notas) {
+      const b = getBucket(n.fecha);
+      b.notas   += 1;
+      b.vendido += Number(n.precio_total) || 0;
+      // Clientes: autoservicio = 1 cliente cada uno; el resto, por cliente.
+      if (n.modalidad === 'AUTOSERVICIO') {
+        b._autoservicios.push({ folio: n.folio });
+      } else if (n.cliente_id) {
+        const nom = `${n.cliente_nombre ?? ''}${n.cliente_apellido ? ' ' + n.cliente_apellido : ''}`.trim();
+        b._clientesReg.set(n.cliente_id, nom || 'Cliente');
+      }
+      // Notas legadas sin filas en nota_cargas: máquinas y cargas denormalizadas.
+      if (!notasConCargas.has(n.id)) {
+        sumarMaquina(b, n.maquina_id,  n.maquina_nombre,  n.maquina_tipo);
+        sumarMaquina(b, n.secadora_id, n.secadora_nombre, n.secadora_tipo);
+        const nCargas = Number(n.cantidad_cargas) || 0;
+        const desc = [n.maquina_nombre, n.secadora_nombre].filter(Boolean).join(' + ') || 'Sin máquina';
+        for (let k = 0; k < nCargas; k++) {
+          b._cargas.push({ folio: n.folio, descripcion: desc, precio: nCargas > 0 ? (Number(n.precio_total) || 0) / nCargas : 0 });
+        }
+      }
+    }
+
+    for (const c of cargas) {
+      const n = notaPorId.get(c.nota_id);
+      if (!n) continue;
+      const b = getBucket(n.fecha);
+      sumarMaquina(b, c.lav_id, c.lav_nombre, c.lav_tipo);
+      sumarMaquina(b, c.sec_id, c.sec_nombre, c.sec_tipo);
+      const partes = [c.lav_nombre, c.sec_nombre].filter(Boolean);
+      b._cargas.push({
+        folio: n.folio,
+        descripcion: partes.join(' + ') || 'Sin máquina',
+        precio: (Number(c.precio_lavadora) || 0) + (Number(c.precio_secadora) || 0),
+      });
+    }
+
+    for (const p of productos) {
+      const n = notaPorId.get(p.nota_id);
+      if (!n) continue;
+      const b = getBucket(n.fecha);
+      b._productos.set(p.nombre, (b._productos.get(p.nombre) || 0) + Number(p.cantidad));
+    }
+
+    const diasFmt = [...buckets.values()]
+      .sort((a, b) => new Date(b.fecha) - new Date(a.fecha))
+      .map((b) => {
+        const maquinas  = [...b._maquinas.values()].map((m) => ({ nombre: m.nombre, tipo: m.tipo, usos: m.usos }));
+        const productos = [...b._productos.entries()].map(([nombre, cantidad]) => ({ nombre, cantidad }));
+        const clientes  = [
+          ...b._autoservicios.map((a) => ({ nombre: 'Autoservicio', folio: a.folio })),
+          ...[...b._clientesReg.values()].map((nombre) => ({ nombre, folio: null })),
+        ];
+        return {
+          fecha:     b.fecha,
+          notas:     b.notas,
+          vendido:   b.vendido,
+          maquinas:  maquinas.length,
+          cargas:    b._cargas.length,
+          productos: productos.reduce((s, p) => s + p.cantidad, 0),
+          clientes:  clientes.length,
+          detalle:   { maquinas, cargas: b._cargas, productos, clientes },
+        };
+      });
 
     const resumen = diasFmt.reduce(
       (acc, d) => ({
