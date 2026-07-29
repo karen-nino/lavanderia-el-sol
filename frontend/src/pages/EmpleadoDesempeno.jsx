@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 
@@ -7,6 +7,14 @@ const fmtMoneda = (n) =>
 
 const fmtFecha = (iso) =>
   new Date(iso).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
+
+// Día local en formato YYYY-MM-DD, para comparar con los inputs date.
+const diaKey = (iso) => {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
+const POR_PAGINA = 20;
 
 function ResumenCard({ label, value }) {
   return (
@@ -162,6 +170,9 @@ export default function EmpleadoDesempeno() {
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState('');
   const [modal,   setModal]   = useState(null); // { dia, metrica }
+  const [fDesde,  setFDesde]  = useState('');
+  const [fHasta,  setFHasta]  = useState('');
+  const [pagina,  setPagina]  = useState(1);
 
   useEffect(() => {
     let activo = true;
@@ -171,6 +182,26 @@ export default function EmpleadoDesempeno() {
       .finally(() => { if (activo) setLoading(false); });
     return () => { activo = false; };
   }, [id]);
+
+  // Filtro por rango de fecha (comparación por día local).
+  const diasFiltrados = useMemo(() => {
+    const dias = data?.dias ?? [];
+    return dias.filter(d => {
+      const k = diaKey(d.fecha);
+      if (fDesde && k < fDesde) return false;
+      if (fHasta && k > fHasta) return false;
+      return true;
+    });
+  }, [data, fDesde, fHasta]);
+
+  const totalPaginas = Math.max(1, Math.ceil(diasFiltrados.length / POR_PAGINA));
+  const paginaSegura = Math.min(pagina, totalPaginas);
+  const diasPagina   = diasFiltrados.slice((paginaSegura - 1) * POR_PAGINA, paginaSegura * POR_PAGINA);
+
+  // Al cambiar el filtro se vuelve a la primera página.
+  const cambiarDesde  = (v) => { setFDesde(v); setPagina(1); };
+  const cambiarHasta  = (v) => { setFHasta(v); setPagina(1); };
+  const limpiarFiltro = ()  => { setFDesde(''); setFHasta(''); setPagina(1); };
 
   return (
     <div className="min-h-full bg-slate-100">
@@ -215,8 +246,24 @@ export default function EmpleadoDesempeno() {
 
             {/* Tabla por día */}
             <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-              <div className="px-5 py-4 border-b border-gray-100">
-                <h2 className="text-sm font-semibold text-gray-800">Desempeño por día</h2>
+              <div className="px-5 py-4 border-b border-gray-100 flex flex-wrap items-end gap-3">
+                <h2 className="text-sm font-semibold text-gray-800 mr-auto">Desempeño por día</h2>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Desde</label>
+                  <input type="date" value={fDesde} max={fHasta || undefined} onChange={e => cambiarDesde(e.target.value)}
+                    className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent" />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Hasta</label>
+                  <input type="date" value={fHasta} min={fDesde || undefined} onChange={e => cambiarHasta(e.target.value)}
+                    className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent" />
+                </div>
+                {(fDesde || fHasta) && (
+                  <button type="button" onClick={limpiarFiltro}
+                    className="px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors">
+                    Limpiar
+                  </button>
+                )}
               </div>
               <div className="overflow-x-auto">
                 <table className="min-w-full text-sm">
@@ -232,7 +279,13 @@ export default function EmpleadoDesempeno() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {data.dias.map((d) => (
+                    {diasPagina.length === 0 ? (
+                      <tr>
+                        <td colSpan={7} className="px-4 py-10 text-center text-gray-400 text-sm">
+                          No hay días en el rango seleccionado.
+                        </td>
+                      </tr>
+                    ) : diasPagina.map((d) => (
                       <tr key={d.fecha} className="hover:bg-gray-50">
                         <td className="px-4 py-2.5 text-gray-700 whitespace-nowrap">{fmtFecha(d.fecha)}</td>
                         <td className="px-4 py-2.5 text-right">
@@ -256,6 +309,27 @@ export default function EmpleadoDesempeno() {
                   </tbody>
                 </table>
               </div>
+              {totalPaginas > 1 && (
+                <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100 text-sm">
+                  <button
+                    type="button"
+                    onClick={() => setPagina(p => Math.max(1, p - 1))}
+                    disabled={paginaSegura <= 1}
+                    className="px-3 py-1.5 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Anterior
+                  </button>
+                  <span className="text-gray-500">Página {paginaSegura} de {totalPaginas}</span>
+                  <button
+                    type="button"
+                    onClick={() => setPagina(p => Math.min(totalPaginas, p + 1))}
+                    disabled={paginaSegura >= totalPaginas}
+                    className="px-3 py-1.5 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Siguiente
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         ) : null}
