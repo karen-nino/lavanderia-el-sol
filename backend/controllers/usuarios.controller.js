@@ -89,6 +89,7 @@ export const getDesempeno = async (req, res) => {
       if (!buckets.has(k)) {
         buckets.set(k, {
           fecha, notas: 0, vendido: 0,
+          _notas: [],              // { folio, modalidad, cliente, precio }
           _maquinas: new Map(),    // id -> { nombre, tipo, usos }
           _cargas: [],
           _productos: new Map(),   // nombre -> cantidad
@@ -109,12 +110,19 @@ export const getDesempeno = async (req, res) => {
       const b = getBucket(n.fecha);
       b.notas   += 1;
       b.vendido += Number(n.precio_total) || 0;
+      const clienteNombre = `${n.cliente_nombre ?? ''}${n.cliente_apellido ? ' ' + n.cliente_apellido : ''}`.trim();
+      b._notas.push({
+        id:        n.id,
+        folio:     n.folio,
+        modalidad: n.modalidad,
+        cliente:   clienteNombre || null,
+        precio:    Number(n.precio_total) || 0,
+      });
       // Clientes: autoservicio = 1 cliente cada uno; el resto, por cliente.
       if (n.modalidad === 'AUTOSERVICIO') {
         b._autoservicios.push({ folio: n.folio });
       } else if (n.cliente_id) {
-        const nom = `${n.cliente_nombre ?? ''}${n.cliente_apellido ? ' ' + n.cliente_apellido : ''}`.trim();
-        b._clientesReg.set(n.cliente_id, nom || 'Cliente');
+        b._clientesReg.set(n.cliente_id, clienteNombre || 'Cliente');
       }
       // Notas legadas sin filas en nota_cargas: máquinas y cargas denormalizadas.
       if (!notasConCargas.has(n.id)) {
@@ -166,7 +174,7 @@ export const getDesempeno = async (req, res) => {
           cargas:    b._cargas.length,
           productos: productos.reduce((s, p) => s + p.cantidad, 0),
           clientes:  clientes.length,
-          detalle:   { maquinas, cargas: b._cargas, productos, clientes },
+          detalle:   { notas: b._notas, maquinas, cargas: b._cargas, productos, clientes },
         };
       });
 

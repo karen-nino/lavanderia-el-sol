@@ -30,17 +30,25 @@ function CeldaNumero({ value, onClick }) {
   );
 }
 
-function FilaModal({ left, sub, right }) {
-  return (
-    <div className="flex items-center justify-between gap-3 px-5 py-2.5 border-b border-gray-50 last:border-0">
+function FilaModal({ left, sub, right, onClick }) {
+  const contenido = (
+    <>
       <div className="min-w-0">
-        <p className="text-sm text-gray-800 truncate">{left}</p>
+        <p className={`text-sm truncate ${onClick ? 'text-blue font-medium' : 'text-gray-800'}`}>{left}</p>
         {sub && <p className="text-xs text-gray-400 truncate">{sub}</p>}
       </div>
       {right != null && (
         <span className="text-sm font-medium text-gray-700 whitespace-nowrap flex-shrink-0">{right}</span>
       )}
-    </div>
+    </>
+  );
+  const base = 'w-full flex items-center justify-between gap-3 px-5 py-2.5 border-b border-gray-50 last:border-0 text-left';
+  return onClick ? (
+    <button type="button" onClick={onClick} className={`${base} hover:bg-gray-50 transition-colors`}>
+      {contenido}
+    </button>
+  ) : (
+    <div className={base}>{contenido}</div>
   );
 }
 
@@ -51,15 +59,23 @@ const tipoMaquinaLabel = (tipo) =>
   :                             '';
 
 const METRICA_TITULO = {
+  notas:     'Notas',
   maquinas:  'Máquinas',
   cargas:    'Cargas',
   productos: 'Productos',
   clientes:  'Clientes',
 };
 
+const MODALIDAD_LABEL = {
+  AUTOSERVICIO: 'Autoservicio',
+  POR_ENCARGO:  'Por encargo',
+  EDREDON:      'Edredón',
+};
+
 // Modal con el detalle de una métrica de un día.
 function MetricaModal({ metrica, fecha, count, items, onClose }) {
-  const noun = { maquinas: 'máquina', cargas: 'carga', productos: 'producto', clientes: 'cliente' }[metrica];
+  const navigate = useNavigate();
+  const noun = { notas: 'nota', maquinas: 'máquina', cargas: 'carga', productos: 'producto', clientes: 'cliente' }[metrica];
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
       <div
@@ -80,6 +96,13 @@ function MetricaModal({ metrica, fecha, count, items, onClose }) {
         <div className="overflow-y-auto py-1">
           {items.length === 0 ? (
             <p className="text-center text-gray-400 text-sm py-10">Sin registros</p>
+          ) : metrica === 'notas' ? (
+            items.map((n, i) => (
+              <FilaModal key={i} left={`Nota ${n.folio}`}
+                sub={[MODALIDAD_LABEL[n.modalidad] ?? n.modalidad, n.cliente].filter(Boolean).join(' · ')}
+                right={fmtMoneda(n.precio)}
+                onClick={n.id ? () => { onClose(); navigate(`/notas/${n.id}`); } : undefined} />
+            ))
           ) : metrica === 'maquinas' ? (
             items.map((m, i) => (
               <FilaModal key={i} left={m.nombre} sub={tipoMaquinaLabel(m.tipo)}
@@ -186,7 +209,9 @@ export default function EmpleadoDesempeno() {
                     {data.dias.map((d) => (
                       <tr key={d.fecha} className="hover:bg-gray-50">
                         <td className="px-4 py-2.5 text-gray-700 whitespace-nowrap">{fmtFecha(d.fecha)}</td>
-                        <td className="px-4 py-2.5 text-right">{d.notas}</td>
+                        <td className="px-4 py-2.5 text-right">
+                          <CeldaNumero value={d.notas} onClick={() => setModal({ dia: d, metrica: 'notas' })} />
+                        </td>
                         <td className="px-4 py-2.5 text-right font-medium text-dark-blue">{fmtMoneda(d.vendido)}</td>
                         <td className="px-4 py-2.5 text-right">
                           <CeldaNumero value={d.maquinas} onClick={() => setModal({ dia: d, metrica: 'maquinas' })} />
