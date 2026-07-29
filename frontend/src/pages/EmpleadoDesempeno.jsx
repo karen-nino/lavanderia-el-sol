@@ -392,6 +392,9 @@ export default function EmpleadoDesempeno() {
             </div>
           </div>
         ) : null}
+        {/* Espacio extra abajo para poder desplazarse y ver el dropdown de
+            fecha completo sin que lo tape la barra inferior. */}
+        {mostrarFecha && <div className="h-80" aria-hidden />}
       </div>
 
       {modal && (
