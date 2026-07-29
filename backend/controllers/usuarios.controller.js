@@ -39,7 +39,10 @@ export const getDesempeno = async (req, res) => {
     // Se pre-agregan los productos y las máquinas por día para no multiplicar
     // los demás totales al unirlos. Las máquinas de una nota pueden venir de sus
     // cargas (autoservicio, nota_cargas) o de las columnas legadas
-    // maquina_id / secadora_id (Por Encargo y notas viejas).
+    // maquina_id / secadora_id (Por Encargo y notas viejas). En cada carga se
+    // cuentan tanto la máquina activa (lavadora_id/secadora_id) como la que ya
+    // se usó y se desvinculó al terminar (lavadora_usada_id/secadora_usada_id),
+    // para no perder las notas ya terminadas.
     const { rows: dias } = await pool.query(
       `WITH base AS (
           SELECT n.id, DATE(n.created_at) AS fecha, n.precio_total,
@@ -54,8 +57,10 @@ export const getDesempeno = async (req, res) => {
             CROSS JOIN LATERAL (
               SELECT b.maquina_id  AS mid
               UNION ALL SELECT b.secadora_id
-              UNION ALL SELECT nc.lavadora_id FROM nota_cargas nc WHERE nc.nota_id = b.id
-              UNION ALL SELECT nc.secadora_id FROM nota_cargas nc WHERE nc.nota_id = b.id
+              UNION ALL SELECT nc.lavadora_id       FROM nota_cargas nc WHERE nc.nota_id = b.id
+              UNION ALL SELECT nc.secadora_id       FROM nota_cargas nc WHERE nc.nota_id = b.id
+              UNION ALL SELECT nc.lavadora_usada_id FROM nota_cargas nc WHERE nc.nota_id = b.id
+              UNION ALL SELECT nc.secadora_usada_id FROM nota_cargas nc WHERE nc.nota_id = b.id
             ) ids
            WHERE ids.mid IS NOT NULL
            GROUP BY b.fecha
