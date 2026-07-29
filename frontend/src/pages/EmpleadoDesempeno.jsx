@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 
@@ -8,11 +8,39 @@ const fmtMoneda = (n) =>
 const fmtFecha = (iso) =>
   new Date(iso).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
 
-// Día local en formato YYYY-MM-DD, para comparar con los inputs date.
-const diaKey = (iso) => {
-  const d = new Date(iso);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-};
+// Filtro de fecha por rangos, como en la página de Notas.
+const RANGOS_FECHA = [
+  { value: 'TODAS',     label: 'Todas las fechas' },
+  { value: 'HOY',       label: 'Hoy' },
+  { value: 'AYER',      label: 'Ayer' },
+  { value: 'ULTIMOS_7', label: 'Últimos 7 días' },
+  { value: 'ESTE_MES',  label: 'Este mes' },
+];
+
+function calcularRangoFecha(rango) {
+  if (rango === 'TODAS') return null;
+  const ahora = new Date();
+  const hoyInicio = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
+  const manana = new Date(hoyInicio); manana.setDate(manana.getDate() + 1);
+  switch (rango) {
+    case 'HOY':
+      return { desde: hoyInicio, hasta: manana };
+    case 'AYER': {
+      const ayer = new Date(hoyInicio); ayer.setDate(ayer.getDate() - 1);
+      return { desde: ayer, hasta: hoyInicio };
+    }
+    case 'ULTIMOS_7': {
+      const desde = new Date(hoyInicio); desde.setDate(desde.getDate() - 6);
+      return { desde, hasta: manana };
+    }
+    case 'ESTE_MES':
+      return { desde: new Date(ahora.getFullYear(), ahora.getMonth(), 1), hasta: manana };
+    default:
+      return null;
+  }
+}
+
+const RANGO_LABEL = Object.fromEntries(RANGOS_FECHA.map(r => [r.value, r.label]));
 
 const POR_PAGINA = 20;
 
@@ -169,10 +197,11 @@ export default function EmpleadoDesempeno() {
   const [data,    setData]    = useState(null);
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState('');
-  const [modal,   setModal]   = useState(null); // { dia, metrica }
-  const [fDesde,  setFDesde]  = useState('');
-  const [fHasta,  setFHasta]  = useState('');
-  const [pagina,  setPagina]  = useState(1);
+  const [modal,        setModal]        = useState(null); // { dia, metrica }
+  const [rangoFecha,   setRangoFecha]   = useState('TODAS');
+  const [mostrarFecha, setMostrarFecha] = useState(false);
+  const [pagina,       setPagina]       = useState(1);
+  const fechaRef = useRef(null);
 
   useEffect(() => {
     let activo = true;
@@ -183,25 +212,33 @@ export default function EmpleadoDesempeno() {
     return () => { activo = false; };
   }, [id]);
 
-  // Filtro por rango de fecha (comparación por día local).
+  // Cierra el dropdown de fecha al hacer clic fuera.
+  useEffect(() => {
+    if (!mostrarFecha) return;
+    const onDown = (e) => {
+      if (fechaRef.current && !fechaRef.current.contains(e.target)) setMostrarFecha(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [mostrarFecha]);
+
+  // Filtro por rango de fecha (mismo criterio que Notas).
+  const rango = useMemo(() => calcularRangoFecha(rangoFecha), [rangoFecha]);
   const diasFiltrados = useMemo(() => {
     const dias = data?.dias ?? [];
+    if (!rango) return dias;
     return dias.filter(d => {
-      const k = diaKey(d.fecha);
-      if (fDesde && k < fDesde) return false;
-      if (fHasta && k > fHasta) return false;
-      return true;
+      const f = new Date(d.fecha);
+      return f >= rango.desde && f < rango.hasta;
     });
-  }, [data, fDesde, fHasta]);
+  }, [data, rango]);
 
   const totalPaginas = Math.max(1, Math.ceil(diasFiltrados.length / POR_PAGINA));
   const paginaSegura = Math.min(pagina, totalPaginas);
   const diasPagina   = diasFiltrados.slice((paginaSegura - 1) * POR_PAGINA, paginaSegura * POR_PAGINA);
 
-  // Al cambiar el filtro se vuelve a la primera página.
-  const cambiarDesde  = (v) => { setFDesde(v); setPagina(1); };
-  const cambiarHasta  = (v) => { setFHasta(v); setPagina(1); };
-  const limpiarFiltro = ()  => { setFDesde(''); setFHasta(''); setPagina(1); };
+  // Al elegir un rango se vuelve a la primera página.
+  const elegirRango = (v) => { setRangoFecha(v); setMostrarFecha(false); setPagina(1); };
 
   return (
     <div className="min-h-full bg-slate-100">
@@ -245,25 +282,47 @@ export default function EmpleadoDesempeno() {
             </div>
 
             {/* Tabla por día */}
-            <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-              <div className="px-5 py-4 border-b border-gray-100 flex flex-wrap items-end gap-3">
+            <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
+              <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-3">
                 <h2 className="text-sm font-semibold text-gray-800 mr-auto">Desempeño por día</h2>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Desde</label>
-                  <input type="date" value={fDesde} max={fHasta || undefined} onChange={e => cambiarDesde(e.target.value)}
-                    className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent" />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Hasta</label>
-                  <input type="date" value={fHasta} min={fDesde || undefined} onChange={e => cambiarHasta(e.target.value)}
-                    className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent" />
-                </div>
-                {(fDesde || fHasta) && (
-                  <button type="button" onClick={limpiarFiltro}
-                    className="px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors">
-                    Limpiar
+                <div ref={fechaRef} className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setMostrarFecha(v => !v)}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                      rangoFecha !== 'TODAS'
+                        ? 'border-blue bg-light-blue text-blue-700'
+                        : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <rect x="3" y="5" width="18" height="16" rx="2" strokeWidth={2} />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M8 3v4M16 3v4" />
+                    </svg>
+                    {RANGO_LABEL[rangoFecha]}
                   </button>
-                )}
+                  {mostrarFecha && (
+                    <div className="absolute right-0 top-12 z-10 bg-white border border-gray-200 rounded-xl shadow-lg p-3 w-56">
+                      <p className="text-xs font-semibold text-gray-500 uppercase mb-2 px-1">Fecha</p>
+                      <div className="flex flex-col gap-1">
+                        {RANGOS_FECHA.map(r => (
+                          <button
+                            key={r.value}
+                            type="button"
+                            onClick={() => elegirRango(r.value)}
+                            className={`text-left text-sm px-3 py-2 rounded-lg transition-colors ${
+                              rangoFecha === r.value
+                                ? 'bg-light-blue text-blue-700 font-medium'
+                                : 'text-gray-700 hover:bg-gray-50'
+                            }`}
+                          >
+                            {r.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
               <div className="overflow-x-auto">
                 <table className="min-w-full text-sm">
