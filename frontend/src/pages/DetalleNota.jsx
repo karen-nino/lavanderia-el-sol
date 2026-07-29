@@ -405,6 +405,11 @@ export default function DetalleNota() {
           <FilaDetalle label="Creada">
             {fmtFecha(nota.created_at)}
           </FilaDetalle>
+          {nota.usuario_nombre && (
+            <FilaDetalle label="Atendió">
+              <span className="text-sm font-medium text-gray-800">{nota.usuario_nombre}</span>
+            </FilaDetalle>
+          )}
           <FilaDetalle label="Tipo">
             <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${badgeModal.cls}`}>
               {badgeModal.label}
