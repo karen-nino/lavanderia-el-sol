@@ -250,8 +250,10 @@ export const updateEmpleado = async (req, res) => {
     }
     const target = targetRows[0];
 
-    if (target.rol === 'admin_main' && !callerEsMain) {
-      return res.status(403).json({ message: 'Solo el Admin Main puede modificar al Admin Main.' });
+    // Solo el Admin Main puede modificar a un administrador (admin o admin_main);
+    // cualquiera puede editar su propio usuario.
+    if (esAdmin(target.rol) && !callerEsMain && targetId !== req.user.id) {
+      return res.status(403).json({ message: 'Solo el Admin Main puede modificar a un administrador.' });
     }
 
     const updates = [];
@@ -325,8 +327,9 @@ export const deleteEmpleado = async (req, res) => {
     if (targetRows.length === 0) {
       return res.status(404).json({ message: 'Empleado no encontrado.' });
     }
-    if (targetRows[0].rol === 'admin_main' && req.user.rol !== 'admin_main') {
-      return res.status(403).json({ message: 'Solo el Admin Main puede eliminar al Admin Main.' });
+    // Solo el Admin Main puede eliminar a un administrador (admin o admin_main).
+    if (esAdmin(targetRows[0].rol) && req.user.rol !== 'admin_main') {
+      return res.status(403).json({ message: 'Solo el Admin Main puede eliminar a un administrador.' });
     }
 
     const { rows } = await pool.query(

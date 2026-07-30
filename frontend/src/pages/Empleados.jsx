@@ -81,11 +81,20 @@ export default function Empleados() {
       .catch(() => {});
   }, []);
 
-  const filtrados = empleados.filter(e => {
-    if (e.rol === 'admin_main') return false;
-    if (filtroRol !== 'todos' && e.rol !== filtroRol) return false;
-    return e.nombre.toLowerCase().includes(busqueda.toLowerCase());
-  });
+  const filtrados = empleados
+    .filter(e => {
+      // El admin_main se oculta de la lista, salvo el propio usuario (para
+      // que siempre vea su tarjeta).
+      if (e.rol === 'admin_main' && e.id !== usuario?.id) return false;
+      if (filtroRol !== 'todos' && e.rol !== filtroRol) return false;
+      return e.nombre.toLowerCase().includes(busqueda.toLowerCase());
+    })
+    // La tarjeta del usuario actual va siempre hasta arriba.
+    .sort((a, b) => {
+      if (a.id === usuario?.id) return -1;
+      if (b.id === usuario?.id) return 1;
+      return a.nombre.localeCompare(b.nombre);
+    });
 
   const partirNombre = (e) => splitNombre(e.nombre);
   const nombreCompleto = (e) => e.nombre;
@@ -293,8 +302,9 @@ export default function Empleados() {
             const { nombre, apellido } = partirNombre(emp);
             const iniciales = `${nombre[0] ?? ''}${apellido[0] ?? ''}`.toUpperCase();
             const esMismoUsuario = usuario?.id === emp.id;
-            const empEsMain = emp.rol === 'admin_main';
-            const puedeModificar = esAdmin && (!empEsMain || esAdminMain);
+            // Solo el Admin Main puede modificar/eliminar a un administrador
+            // (cada quien puede editarse a sí mismo).
+            const puedeModificar = esAdmin && (esMismoUsuario || !esAdminFn(emp.rol) || esAdminMain);
             const puedeEliminar  = puedeModificar && !esMismoUsuario;
 
             const cabecera = (
@@ -305,6 +315,9 @@ export default function Empleados() {
                 <div className="min-w-0 flex-1">
                   <p className="font-semibold text-gray-900 text-sm truncate">{nombreCompleto(emp)}</p>
                   <div className="flex flex-wrap items-center gap-1 mt-0.5">
+                    {esMismoUsuario && (
+                      <span className="inline-block text-xs px-2 py-0.5 rounded-full bg-blue text-white font-medium">Tú</span>
+                    )}
                     <span className="inline-block text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
                       {ROL_LABEL[emp.rol] ?? emp.rol}
                     </span>
@@ -324,13 +337,17 @@ export default function Empleados() {
                 <button
                   type="button"
                   onClick={() => setInfoEmpleado(emp)}
-                  className="sm:hidden w-full text-left bg-white rounded-xl shadow-sm border border-gray-100 p-4 hover:bg-gray-50 active:bg-gray-100 transition-colors"
+                  className={`sm:hidden w-full text-left bg-white rounded-xl shadow-sm border p-4 hover:bg-gray-50 active:bg-gray-100 transition-colors ${
+                    esMismoUsuario ? 'border-blue ring-2 ring-blue/30' : 'border-gray-100'
+                  }`}
                 >
                   {cabecera}
                 </button>
 
                 {/* Desktop: card con acciones inline */}
-                <div className="hidden sm:flex flex-col gap-3 bg-white rounded-xl shadow-sm border border-gray-100 p-4 hover:shadow-md transition-shadow">
+                <div className={`hidden sm:flex flex-col gap-3 bg-white rounded-xl shadow-sm border p-4 hover:shadow-md transition-shadow ${
+                  esMismoUsuario ? 'border-blue ring-2 ring-blue/30' : 'border-gray-100'
+                }`}>
                   {cabecera}
                   <div className="flex items-center justify-between gap-1 pt-2 border-t border-gray-100">
                     <button
@@ -381,8 +398,9 @@ export default function Empleados() {
         const { nombre, apellido } = partirNombre(infoEmpleado);
         const iniciales = `${nombre[0] ?? ''}${apellido[0] ?? ''}`.toUpperCase();
         const esMismoUsuario = usuario?.id === infoEmpleado.id;
-        const empEsMain = infoEmpleado.rol === 'admin_main';
-        const puedeModificar = esAdmin && (!empEsMain || esAdminMain);
+        // Solo el Admin Main puede modificar/eliminar a un administrador
+        // (cada quien puede editarse a sí mismo).
+        const puedeModificar = esAdmin && (esMismoUsuario || !esAdminFn(infoEmpleado.rol) || esAdminMain);
         const puedeEliminar  = puedeModificar && !esMismoUsuario;
         return (
           <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4 sm:hidden">
