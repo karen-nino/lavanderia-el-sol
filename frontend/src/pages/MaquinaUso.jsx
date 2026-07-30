@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
+import SucursalBar from '../components/SucursalBar';
 
 const fmtMoneda = (n) =>
   '$' + Number(n ?? 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -248,6 +249,8 @@ export default function MaquinaUso() {
           </div>
         </div>
       </div>
+
+      <SucursalBar />
 
       {/* Contenido */}
       <div className="px-6 md:px-8 py-6 max-w-4xl mx-auto">

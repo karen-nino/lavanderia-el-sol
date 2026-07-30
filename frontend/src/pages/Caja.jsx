@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { esAdmin as esAdminFn } from '../lib/roles';
+import SucursalBar from '../components/SucursalBar';
 
 const fmt = (n) =>
   new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(n ?? 0);
@@ -421,6 +422,8 @@ export default function Caja() {
           <h1 className="text-xl font-bold text-gray-800">Caja</h1>
         </div>
       </div>
+
+      <SucursalBar />
 
       {/* Contenido */}
       <div className="max-w-3xl mx-auto px-6 md:px-8 py-6 space-y-6">

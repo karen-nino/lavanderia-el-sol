@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { esAdmin as esAdminFn } from '../lib/roles';
+import SucursalBar from '../components/SucursalBar';
 
 const ESTADO_CFG = {
   disponible:    { label: 'Disponible',    cls: 'bg-green-100 text-green-700', clsActive: 'bg-green-600 text-white', dot: 'bg-green-500' },
@@ -209,6 +210,8 @@ export default function GestionMaquinas() {
         )}
         </div>
       </div>
+
+      <SucursalBar />
 
       {/* Contenido */}
       <div className="px-6 md:px-8 py-4 space-y-4">

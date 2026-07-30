@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
+import SucursalBar from '../components/SucursalBar';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
@@ -131,6 +132,8 @@ export default function Ventas() {
           <h1 className="text-xl font-bold text-gray-800">Ventas</h1>
         </div>
       </div>
+
+      <SucursalBar />
 
       {/* Contenido */}
       <div className="max-w-7xl mx-auto px-6 md:px-8 py-6 space-y-6">

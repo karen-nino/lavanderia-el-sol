@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import MaquinasEnUso from '../components/MaquinasEnUso';
+import SucursalBar from '../components/SucursalBar';
 
 export default function Maquinas() {
   const monitorRef = useRef(null);
@@ -43,6 +44,8 @@ export default function Maquinas() {
           </button>
         </div>
       </div>
+
+      <SucursalBar />
 
       {/* Contenido */}
       <div className="px-6 md:px-8 py-6">

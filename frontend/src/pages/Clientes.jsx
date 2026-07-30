@@ -3,6 +3,7 @@ import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { esAdmin as esAdminFn } from '../lib/roles';
 import { capitalizarNombre } from '../lib/texto';
+import SucursalBar from '../components/SucursalBar';
 
 const INPUT_CLS =
   'w-full px-4 py-3.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent transition';
@@ -233,6 +234,8 @@ export default function Clientes() {
             </button>
           </div>
         </div>
+
+        <SucursalBar />
 
         {/* Búsqueda */}
         <div className="bg-slate-100 px-6 md:px-8 pt-4 pb-2">

@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { esAdmin as esAdminFn } from '../lib/roles';
+import SucursalBar from '../components/SucursalBar';
 
 const INPUT_CLS =
   'w-full px-4 py-3.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent transition';
@@ -393,6 +394,8 @@ export default function Inventario() {
         )}
         </div>
       </div>
+
+      <SucursalBar />
 
       {/* Contenido */}
       <div className="px-6 md:px-8 py-4 space-y-4">

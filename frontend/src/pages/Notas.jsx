@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../lib/api';
-import { useAuth } from '../context/AuthContext';
+import SucursalBar from '../components/SucursalBar';
 
 const ESTADOS = ['TODOS', 'EN_ESPERA', 'LAVANDO', 'SECANDO', 'POR_ENTREGAR', 'FINALIZADA', 'PENDIENTE', 'CANCELADA'];
 
@@ -133,29 +133,12 @@ export default function Notas() {
   const estadoRef = useRef(null);
   const fechaRef  = useRef(null);
 
-  const { usuario, sucursalActiva } = useAuth();
-  const [sucursalNombre, setSucursalNombre] = useState('');
-
   useEffect(() => {
     api.get('/notas')
       .then(setNotas)
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
   }, []);
-
-  // Nombre de la sucursal activa (para la barra). El slug viene del contexto
-  // de sesión; el nombre legible se resuelve contra /sucursales.
-  useEffect(() => {
-    let activo = true;
-    api.get('/sucursales')
-      .then((list) => {
-        if (!activo) return;
-        const slug = sucursalActiva || usuario?.sucursal;
-        setSucursalNombre((list ?? []).find((s) => s.slug === slug)?.nombre ?? '');
-      })
-      .catch(() => {});
-    return () => { activo = false; };
-  }, [sucursalActiva, usuario?.sucursal]);
 
   useEffect(() => {
     if (!mostrarEstado && !mostrarFecha) return;
@@ -303,12 +286,7 @@ export default function Notas() {
         </div>
       </div>
 
-      {/* Barra de sucursal activa */}
-      {sucursalNombre && (
-        <div className="bg-blue text-white text-center py-1 px-4">
-          <span className="text-xs font-semibold tracking-wider">{sucursalNombre}</span>
-        </div>
-      )}
+      <SucursalBar />
 
       {/* Contenido */}
       <div className="px-6 md:px-8 py-4 space-y-4">
@@ -509,12 +487,6 @@ export default function Notas() {
                         <span className={`text-sm font-bold ${n.estado_pago === 'PENDIENTE' ? 'text-red' : 'text-green'}`}>
                           {badgePago.label}
                         </span>
-                      </div>
-                    )}
-                    {n.sucursal_nombre && (
-                      <div className="flex items-start justify-between gap-2">
-                        <span className="text-sm text-dark-grey">Sucursal</span>
-                        <span className="text-sm font-semibold text-dark-blue text-right">{n.sucursal_nombre}</span>
                       </div>
                     )}
                   </div>
