@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import {
@@ -40,6 +40,7 @@ const PERIODOS = [
   { id: 'hoy',    label: 'Hoy' },
   { id: 'semana', label: 'Esta semana' },
   { id: 'mes',    label: 'Este mes' },
+  { id: 'anio',   label: 'Este año' },
   { id: 'custom', label: 'Personalizado' },
 ];
 
@@ -79,17 +80,43 @@ export default function Ventas() {
   const [error, setError] = useState(null);
   const [paginaNotas, setPaginaNotas] = useState(1);
 
+  const anioActual = new Date().getFullYear();
+  const [anioSel, setAnioSel] = useState(anioActual);
+  const [aniosDisponibles, setAniosDisponibles] = useState([]);
+  const [mostrarAnios, setMostrarAnios] = useState(false);
+  const anioRef = useRef(null);
+
   useEffect(() => {
     if (periodo === 'custom' && (!desde || !hasta)) return;
     let activo = true;
     let url = `/ventas/resumen?periodo=${periodo}`;
     if (periodo === 'custom') url += `&desde=${desde}&hasta=${hasta}`;
+    if (periodo === 'anio') url += `&year=${anioSel}`;
     api.get(url)
       .then(result => { if (activo) { setData(result); setError(null); } })
       .catch(e => { if (activo) setError(e.message); })
       .finally(() => { if (activo) setLoading(false); });
     return () => { activo = false; };
-  }, [periodo, desde, hasta]);
+  }, [periodo, desde, hasta, anioSel]);
+
+  // Años disponibles para el selector (siempre incluye el año en curso).
+  useEffect(() => {
+    api.get('/ventas/anios').then(setAniosDisponibles).catch(() => {});
+  }, []);
+  const anios = useMemo(
+    () => [...new Set([anioActual, ...aniosDisponibles])].sort((a, b) => b - a),
+    [aniosDisponibles, anioActual]
+  );
+
+  // Cierra el selector de año al hacer clic fuera.
+  useEffect(() => {
+    if (!mostrarAnios) return;
+    const onDown = (e) => {
+      if (anioRef.current && !anioRef.current.contains(e.target)) setMostrarAnios(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [mostrarAnios]);
 
   const listaNotas   = data?.lista_notas ?? [];
   const totalPaginas = Math.max(1, Math.ceil(listaNotas.length / NOTAS_POR_PAGINA));
@@ -111,19 +138,60 @@ export default function Ventas() {
       {/* Filtro de período */}
       <div className="space-y-3">
         <div className="flex flex-wrap gap-2">
-          {PERIODOS.map((p) => (
-            <button
-              key={p.id}
-              onClick={() => { setPeriodo(p.id); setPaginaNotas(1); }}
-              className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                periodo === p.id
-                  ? 'bg-blue text-white'
-                  : 'bg-white text-gray-600 border border-gray-300 hover:bg-gray-50'
-              }`}
-            >
-              {p.label}
-            </button>
-          ))}
+          {PERIODOS.map((p) => {
+            // El período "año" es un selector: muestra el año elegido y
+            // despliega la lista de años disponibles.
+            if (p.id === 'anio') {
+              const activo = periodo === 'anio';
+              return (
+                <div key={p.id} ref={anioRef} className="relative">
+                  <button
+                    onClick={() => { setPeriodo('anio'); setPaginaNotas(1); setMostrarAnios(v => !v); }}
+                    className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                      activo
+                        ? 'bg-blue text-white'
+                        : 'bg-white text-gray-600 border border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    Año: {anioSel}
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                  {mostrarAnios && (
+                    <div className="absolute left-0 top-10 z-10 bg-white border border-gray-200 rounded-xl shadow-lg p-2 w-32 max-h-64 overflow-y-auto">
+                      {anios.map((y) => (
+                        <button
+                          key={y}
+                          onClick={() => { setAnioSel(y); setPeriodo('anio'); setMostrarAnios(false); setPaginaNotas(1); }}
+                          className={`block w-full text-left text-sm px-3 py-2 rounded-lg transition-colors ${
+                            anioSel === y
+                              ? 'bg-light-blue text-blue-700 font-medium'
+                              : 'text-gray-700 hover:bg-gray-50'
+                          }`}
+                        >
+                          {y}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            }
+            return (
+              <button
+                key={p.id}
+                onClick={() => { setPeriodo(p.id); setPaginaNotas(1); setMostrarAnios(false); }}
+                className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                  periodo === p.id
+                    ? 'bg-blue text-white'
+                    : 'bg-white text-gray-600 border border-gray-300 hover:bg-gray-50'
+                }`}
+              >
+                {p.label}
+              </button>
+            );
+          })}
         </div>
         {periodo === 'custom' && (
           <div className="flex flex-wrap gap-3 items-center">

@@ -5,27 +5,35 @@ import pool from '../db/pool.js';
 // pagado_en nunca es NULL en las filas que llegan a estas consultas.
 // La lista de notas (todas, no solo las pagadas) usa created_at, porque una
 // nota pendiente aún no tiene pagado_en.
-function buildPeriodSQL(periodo, col = 'o.pagado_en') {
+// anioParam indica que se eligió un año específico (llega en $1); sin él,
+// "anio" significa el año en curso.
+function buildPeriodSQL(periodo, col = 'o.pagado_en', anioParam = false) {
   switch (periodo) {
     case 'semana': return `${col} >= NOW() - INTERVAL '7 days'`;
     case 'mes':    return `${col} >= DATE_TRUNC('month', NOW())`;
+    case 'anio':   return anioParam
+      ? `DATE_PART('year', ${col}) = $1`
+      : `${col} >= DATE_TRUNC('year', NOW())`;
     case 'custom': return `DATE(${col}) BETWEEN $1::date AND $2::date`; // params $1/$2 set by caller
     default:       return `DATE(${col}) = CURRENT_DATE`;
   }
 }
 
 export async function getResumen(req, res) {
-  const { periodo = 'hoy', desde, hasta } = req.query;
+  const { periodo = 'hoy', desde, hasta, year } = req.query;
 
-  const periodSQL = buildPeriodSQL(periodo);
-  const periodListSQL = buildPeriodSQL(periodo, 'o.created_at');
   const isCustom = periodo === 'custom';
+  // Año específico: solo aplica al período 'anio' y con un año válido de 4 dígitos.
+  const anioSel = periodo === 'anio' && /^\d{4}$/.test(String(year ?? '')) ? Number(year) : null;
+
+  const periodSQL = buildPeriodSQL(periodo, 'o.pagado_en', anioSel != null);
+  const periodListSQL = buildPeriodSQL(periodo, 'o.created_at', anioSel != null);
 
   if (isCustom && (!desde || !hasta)) {
     return res.status(400).json({ message: 'Se requieren los parámetros desde y hasta para el período personalizado.' });
   }
 
-  const periodParams = isCustom ? [desde, hasta] : [];
+  const periodParams = isCustom ? [desde, hasta] : (anioSel != null ? [anioSel] : []);
 
   // "Ingresado" = dinero efectivamente cobrado: notas con pago registrado
   // (estado_pago = 'PAGADO') y no canceladas, de la sucursal activa. El
@@ -154,5 +162,23 @@ export async function getResumen(req, res) {
   } catch (err) {
     console.error('Error en ventas/resumen:', err);
     res.status(500).json({ message: 'Error al obtener el resumen de ventas.' });
+  }
+}
+
+// Años con notas (no canceladas) de la sucursal activa, para el selector de
+// año del filtro de período. Se mide por created_at (toda nota lo tiene).
+export async function getAnios(req, res) {
+  try {
+    const { rows } = await pool.query(
+      `SELECT DISTINCT DATE_PART('year', created_at)::int AS anio
+         FROM notas
+        WHERE sucursal = $1 AND estado != 'CANCELADA'
+        ORDER BY anio DESC`,
+      [req.sucursal]
+    );
+    res.json(rows.map((r) => r.anio));
+  } catch (err) {
+    console.error('Error en ventas/anios:', err);
+    res.status(500).json({ message: 'Error al obtener los años de ventas.' });
   }
 }
