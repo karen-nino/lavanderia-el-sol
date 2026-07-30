@@ -309,14 +309,16 @@ export default function Empleados() {
 
             const cabecera = (
               <div className="flex items-start gap-3">
-                <div className="flex-shrink-0 w-11 h-11 rounded-full bg-light-blue text-blue flex items-center justify-center text-sm font-semibold">
+                <div className={`flex-shrink-0 w-11 h-11 rounded-full flex items-center justify-center text-sm font-semibold ${
+                  esMismoUsuario ? 'bg-blue text-white' : 'bg-light-blue text-blue'
+                }`}>
                   {iniciales || '?'}
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="font-semibold text-gray-900 text-sm truncate">{nombreCompleto(emp)}</p>
                   <div className="flex flex-wrap items-center gap-1 mt-0.5">
                     {esMismoUsuario && (
-                      <span className="inline-block text-xs px-2 py-0.5 rounded-full bg-blue text-white font-medium">Tú</span>
+                      <span className="inline-block text-xs px-2 py-0.5 rounded-full bg-blue text-white font-medium">Mi cuenta</span>
                     )}
                     <span className="inline-block text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
                       {ROL_LABEL[emp.rol] ?? emp.rol}
@@ -337,16 +339,18 @@ export default function Empleados() {
                 <button
                   type="button"
                   onClick={() => setInfoEmpleado(emp)}
-                  className={`sm:hidden w-full text-left bg-white rounded-xl shadow-sm border p-4 hover:bg-gray-50 active:bg-gray-100 transition-colors ${
-                    esMismoUsuario ? 'border-blue ring-2 ring-blue/30' : 'border-gray-100'
+                  className={`sm:hidden w-full text-left rounded-xl shadow-sm border p-4 transition-colors ${
+                    esMismoUsuario
+                      ? 'bg-light-blue border-blue/40 hover:bg-light-blue/80'
+                      : 'bg-white border-gray-100 hover:bg-gray-50 active:bg-gray-100'
                   }`}
                 >
                   {cabecera}
                 </button>
 
                 {/* Desktop: card con acciones inline */}
-                <div className={`hidden sm:flex flex-col gap-3 bg-white rounded-xl shadow-sm border p-4 hover:shadow-md transition-shadow ${
-                  esMismoUsuario ? 'border-blue ring-2 ring-blue/30' : 'border-gray-100'
+                <div className={`hidden sm:flex flex-col gap-3 rounded-xl shadow-sm border p-4 hover:shadow-md transition-shadow ${
+                  esMismoUsuario ? 'bg-light-blue border-blue/40' : 'bg-white border-gray-100'
                 }`}>
                   {cabecera}
                   <div className="flex items-center justify-between gap-1 pt-2 border-t border-gray-100">
