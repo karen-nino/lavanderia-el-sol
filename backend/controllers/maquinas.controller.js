@@ -24,6 +24,8 @@ export const getMaquinas = async (req, res) => {
 // usó la máquina. Métricas por día: usos, cargas, generado, empleados que
 // la operaron y clientes atendidos (cada autoservicio cuenta como 1 cliente;
 // el resto, sus clientes distintos). Excluye notas canceladas.
+// El desglose por día se arma en JS (igual que el desempeño de empleados)
+// para que cada número y el contenido de su modal siempre coincidan.
 export const getUsoMaquina = async (req, res) => {
   const id = Number(req.params.id);
   if (!id) return res.status(400).json({ message: 'Máquina inválida.' });
@@ -37,42 +39,132 @@ export const getUsoMaquina = async (req, res) => {
 
     // Una nota "usó" la máquina si la tiene en alguna de sus cargas
     // (autoservicio, tabla nota_cargas) o en sus columnas legadas
-    // maquina_id / secadora_id (Por Encargo y notas viejas). Las cargas se
-    // cuentan por máquina cuando hay detalle; si no, cantidad_cargas.
-    const { rows: dias } = await pool.query(
-      `SELECT
-          DATE(n.created_at)                                              AS fecha,
-          COUNT(*)::int                                                   AS usos,
-          COALESCE(SUM(CASE WHEN cm.cnt > 0 THEN cm.cnt ELSE n.cantidad_cargas END), 0)::int AS cargas,
-          COALESCE(SUM(n.precio_total) FILTER (WHERE n.estado_pago = 'PAGADO'), 0) AS generado,
-          COUNT(DISTINCT n.usuario_id)::int                               AS empleados,
-          -- Clientes: cada nota de autoservicio cuenta como 1 cliente (no lleva
-          -- cliente registrado); las demás suman sus clientes distintos.
-          (
-            COUNT(*) FILTER (WHERE n.modalidad = 'AUTOSERVICIO')
-            + COUNT(DISTINCT n.cliente_id) FILTER (WHERE n.cliente_id IS NOT NULL)
-          )::int                                                          AS clientes
-        FROM notas n
-        LEFT JOIN LATERAL (
-          SELECT COUNT(*)::int AS cnt
-            FROM nota_cargas nc
-           WHERE nc.nota_id = n.id AND (nc.lavadora_id = $1 OR nc.secadora_id = $1)
-        ) cm ON true
-        WHERE (n.maquina_id = $1 OR n.secadora_id = $1 OR cm.cnt > 0)
+    // maquina_id / secadora_id (Por Encargo y notas viejas).
+    const { rows: notas } = await pool.query(
+      `SELECT n.id, DATE(n.created_at) AS fecha, n.folio, n.modalidad, n.estado,
+              n.precio_total, n.estado_pago, n.cantidad_cargas, n.cliente_id,
+              n.usuario_id, u.nombre AS empleado_nombre,
+              c.nombre AS cliente_nombre, c.apellido AS cliente_apellido
+         FROM notas n
+         LEFT JOIN usuarios u ON u.id = n.usuario_id
+         LEFT JOIN clientes c ON c.id = n.cliente_id
+        WHERE (
+                n.maquina_id = $1 OR n.secadora_id = $1
+                OR EXISTS (
+                     SELECT 1 FROM nota_cargas nc
+                      WHERE nc.nota_id = n.id AND (nc.lavadora_id = $1 OR nc.secadora_id = $1)
+                   )
+              )
           AND n.estado <> 'CANCELADA'
-        GROUP BY DATE(n.created_at)
-        ORDER BY fecha DESC`,
+        ORDER BY n.created_at DESC`,
       [id]
     );
 
-    const diasFmt = dias.map((d) => ({
-      fecha:     d.fecha,
-      usos:      d.usos,
-      cargas:    d.cargas,
-      generado:  parseFloat(d.generado),
-      empleados: d.empleados,
-      clientes:  d.clientes,
-    }));
+    // Cargas de esta máquina (autoservicio): cada fila es una carga. El precio
+    // atribuido es el del rol en que participó esta máquina (lavado o secado).
+    const { rows: cargas } = await pool.query(
+      `SELECT nc.nota_id, nc.precio_lavadora, nc.precio_secadora,
+              nc.lavadora_id, ml.nombre AS lav_nombre,
+              nc.secadora_id, ms.nombre AS sec_nombre
+         FROM nota_cargas nc
+         JOIN notas n ON n.id = nc.nota_id
+         LEFT JOIN maquinas ml ON ml.id = nc.lavadora_id
+         LEFT JOIN maquinas ms ON ms.id = nc.secadora_id
+        WHERE (nc.lavadora_id = $1 OR nc.secadora_id = $1)
+          AND n.estado <> 'CANCELADA'
+        ORDER BY nc.nota_id, nc.orden`,
+      [id]
+    );
+
+    // ── Agregación por día ──────────────────────────────────
+    const notaPorId = new Map(notas.map((n) => [n.id, n]));
+    const notasConCargas = new Set(cargas.map((c) => c.nota_id));
+    const buckets = new Map();
+    const getBucket = (fecha) => {
+      const k = new Date(fecha).toISOString();
+      if (!buckets.has(k)) {
+        buckets.set(k, {
+          fecha, generado: 0,
+          _usos: [],               // { id, folio, modalidad, estado, cliente, precio }
+          _cargas: [],             // { folio, descripcion, precio }
+          _empleados: new Map(),   // usuario_id -> { nombre, usos }
+          _clientesReg: new Map(), // cliente_id -> nombre
+          _autoservicios: [],      // { folio }
+        });
+      }
+      return buckets.get(k);
+    };
+
+    for (const n of notas) {
+      const b = getBucket(n.fecha);
+      if (n.estado_pago === 'PAGADO') b.generado += Number(n.precio_total) || 0;
+      const clienteNombre = `${n.cliente_nombre ?? ''}${n.cliente_apellido ? ' ' + n.cliente_apellido : ''}`.trim();
+      // Cada nota que usó la máquina cuenta como un uso.
+      b._usos.push({
+        id:        n.id,
+        folio:     n.folio,
+        modalidad: n.modalidad,
+        estado:    n.estado,
+        cliente:   clienteNombre || null,
+        precio:    Number(n.precio_total) || 0,
+      });
+      // Empleado que operó la máquina.
+      if (n.usuario_id) {
+        const e = b._empleados.get(n.usuario_id) ?? { nombre: n.empleado_nombre || 'Empleado', usos: 0 };
+        e.usos += 1;
+        b._empleados.set(n.usuario_id, e);
+      }
+      // Clientes: autoservicio = 1 cliente cada uno; el resto, por cliente.
+      if (n.modalidad === 'AUTOSERVICIO') {
+        b._autoservicios.push({ folio: n.folio });
+      } else if (n.cliente_id) {
+        b._clientesReg.set(n.cliente_id, clienteNombre || 'Cliente');
+      }
+      // Notas legadas sin filas en nota_cargas: cargas denormalizadas.
+      if (!notasConCargas.has(n.id)) {
+        const nCargas = Number(n.cantidad_cargas) || 0;
+        for (let k = 0; k < nCargas; k++) {
+          b._cargas.push({
+            folio: n.folio,
+            descripcion: maq[0].nombre,
+            precio: nCargas > 0 ? (Number(n.precio_total) || 0) / nCargas : 0,
+          });
+        }
+      }
+    }
+
+    for (const c of cargas) {
+      const n = notaPorId.get(c.nota_id);
+      if (!n) continue;
+      const b = getBucket(n.fecha);
+      const esLav = c.lavadora_id === id;
+      const esSec = c.secadora_id === id;
+      const partes = [c.lav_nombre, c.sec_nombre].filter(Boolean);
+      b._cargas.push({
+        folio: n.folio,
+        descripcion: partes.join(' + ') || maq[0].nombre,
+        precio: (esLav ? Number(c.precio_lavadora) || 0 : 0) + (esSec ? Number(c.precio_secadora) || 0 : 0),
+      });
+    }
+
+    const diasFmt = [...buckets.values()]
+      .sort((a, b) => new Date(b.fecha) - new Date(a.fecha))
+      .map((b) => {
+        const empleados = [...b._empleados.values()].map((e) => ({ nombre: e.nombre, usos: e.usos }));
+        const clientes  = [
+          ...b._autoservicios.map((a) => ({ nombre: 'Autoservicio', folio: a.folio })),
+          ...[...b._clientesReg.values()].map((nombre) => ({ nombre, folio: null })),
+        ];
+        return {
+          fecha:     b.fecha,
+          usos:      b._usos.length,
+          generado:  b.generado,
+          cargas:    b._cargas.length,
+          empleados: empleados.length,
+          clientes:  clientes.length,
+          detalle:   { usos: b._usos, cargas: b._cargas, empleados, clientes },
+        };
+      });
 
     const resumen = diasFmt.reduce(
       (acc, d) => ({
