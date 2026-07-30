@@ -16,6 +16,26 @@ const fmtFecha = (fecha) => {
 
 const NOTAS_POR_PAGINA = 10;
 
+const ESTADO_BADGE = {
+  EN_ESPERA:  { label: 'En Espera',    cls: 'bg-gray-100 text-gray-600'     },
+  LAVANDO:    { label: 'Lavando',      cls: 'bg-light-blue text-blue-700'   },
+  SECANDO:    { label: 'Secando',      cls: 'bg-red-100 text-red-700'       },
+  LISTA:      { label: 'Por Entregar', cls: 'bg-yellow-100 text-yellow-800' },
+  PAGADA:     { label: 'Pagada',       cls: 'bg-light-green text-green-700' },
+  FINALIZADA: { label: 'Finalizada',   cls: 'bg-light-green text-green-700' },
+  CANCELADA:  { label: 'Cancelada',    cls: 'bg-red-100 text-red-700'       },
+};
+
+function EstadoBadge({ estado }) {
+  const b = ESTADO_BADGE[estado];
+  if (!b) return <span className="text-gray-400">—</span>;
+  return (
+    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${b.cls}`}>
+      {b.label}
+    </span>
+  );
+}
+
 const PERIODOS = [
   { id: 'hoy',    label: 'Hoy' },
   { id: 'semana', label: 'Esta semana' },
@@ -217,6 +237,7 @@ export default function Ventas() {
                       <tr>
                         <th className="px-4 py-3 text-left">Folio</th>
                         <th className="px-4 py-3 text-left">Fecha</th>
+                        <th className="px-4 py-3 text-left">Estado</th>
                         <th className="px-4 py-3 text-left">Máquina</th>
                         <th className="px-4 py-3 text-right">Cargas</th>
                         <th className="px-4 py-3 text-right">Productos</th>
@@ -236,6 +257,7 @@ export default function Ventas() {
                             </button>
                           </td>
                           <td className="px-4 py-3 text-gray-600">{fmtFecha(nota.fecha)}</td>
+                          <td className="px-4 py-3"><EstadoBadge estado={nota.estado} /></td>
                           <td className="px-4 py-3 text-gray-600">{nota.maquina}</td>
                           <td className="px-4 py-3 text-right text-gray-600">{nota.cargas}</td>
                           <td className="px-4 py-3 text-right text-gray-600">{fmt(nota.total_productos)}</td>
