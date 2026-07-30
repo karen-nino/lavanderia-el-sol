@@ -86,14 +86,19 @@ function fmtFecha(iso) {
 }
 
 const MESES_ABR = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+const DIAS_SEMANA = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 
-function fmtFechaHora(iso) {
+// Fecha con día de la semana: "Miércoles, 29 Jul 2026".
+function fmtFechaDia(iso) {
   const d = new Date(iso);
+  const diaSem = DIAS_SEMANA[d.getDay()];
   const dia  = String(d.getDate()).padStart(2, '0');
   const mes  = MESES_ABR[d.getMonth()];
-  const anio = String(d.getFullYear()).slice(-2);
-  const hora = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
-  return `${dia} ${mes} ${anio}, ${hora}`;
+  return `${diaSem}, ${dia} ${mes} ${d.getFullYear()}`;
+}
+
+function fmtHora(iso) {
+  return new Date(iso).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
 }
 
 function fmtMonto(n) {
@@ -459,9 +464,13 @@ export default function Notas() {
 
                   {/* Detalles */}
                   <div className="space-y-2.5">
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="text-sm text-dark-grey">Fecha</span>
+                      <span className="text-sm font-semibold text-dark-blue text-right">{fmtFechaDia(n.created_at)}</span>
+                    </div>
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-sm text-dark-grey">Fecha y Hora</span>
-                      <span className="text-sm font-semibold text-dark-blue">{fmtFechaHora(n.created_at)}</span>
+                      <span className="text-sm text-dark-grey">Hora</span>
+                      <span className="text-sm font-semibold text-dark-blue">{fmtHora(n.created_at)}</span>
                     </div>
                     <div className="flex items-start justify-between gap-2">
                       <span className="text-sm text-dark-grey">{maquinas.length > 1 ? 'Máquinas' : 'Máquina'}</span>
