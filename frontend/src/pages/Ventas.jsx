@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -12,6 +13,8 @@ const fmtFecha = (fecha) => {
   const d = new Date(fecha);
   return d.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
 };
+
+const NOTAS_POR_PAGINA = 10;
 
 const PERIODOS = [
   { id: 'hoy',    label: 'Hoy' },
@@ -47,12 +50,14 @@ function CustomTooltip({ active, payload, label }) {
 }
 
 export default function Ventas() {
+  const navigate = useNavigate();
   const [periodo, setPeriodo] = useState('hoy');
   const [desde, setDesde] = useState('');
   const [hasta, setHasta] = useState('');
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [paginaNotas, setPaginaNotas] = useState(1);
 
   useEffect(() => {
     if (periodo === 'custom' && (!desde || !hasta)) return;
@@ -65,6 +70,11 @@ export default function Ventas() {
       .finally(() => { if (activo) setLoading(false); });
     return () => { activo = false; };
   }, [periodo, desde, hasta]);
+
+  const listaNotas   = data?.lista_notas ?? [];
+  const totalPaginas = Math.max(1, Math.ceil(listaNotas.length / NOTAS_POR_PAGINA));
+  const paginaSegura = Math.min(paginaNotas, totalPaginas);
+  const notasPagina  = listaNotas.slice((paginaSegura - 1) * NOTAS_POR_PAGINA, paginaSegura * NOTAS_POR_PAGINA);
 
   return (
     <div className="min-h-full bg-slate-100">
@@ -84,7 +94,7 @@ export default function Ventas() {
           {PERIODOS.map((p) => (
             <button
               key={p.id}
-              onClick={() => setPeriodo(p.id)}
+              onClick={() => { setPeriodo(p.id); setPaginaNotas(1); }}
               className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
                 periodo === p.id
                   ? 'bg-blue text-white'
@@ -102,7 +112,7 @@ export default function Ventas() {
               <input
                 type="date"
                 value={desde}
-                onChange={(e) => setDesde(e.target.value)}
+                onChange={(e) => { setDesde(e.target.value); setPaginaNotas(1); }}
                 className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm"
               />
             </div>
@@ -111,7 +121,7 @@ export default function Ventas() {
               <input
                 type="date"
                 value={hasta}
-                onChange={(e) => setHasta(e.target.value)}
+                onChange={(e) => { setHasta(e.target.value); setPaginaNotas(1); }}
                 className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm"
               />
             </div>
@@ -193,39 +203,70 @@ export default function Ventas() {
           {/* Lista de notas */}
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
             <div className="px-4 py-3 border-b border-gray-200">
-              <h2 className="text-sm font-semibold text-gray-700">Notas pagadas</h2>
+              <h2 className="text-sm font-semibold text-gray-700">Notas</h2>
             </div>
-            {data.lista_notas.length === 0 ? (
+            {listaNotas.length === 0 ? (
               <p className="text-sm text-gray-400 text-center py-10">
                 Sin notas en este período
               </p>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wide">
-                    <tr>
-                      <th className="px-4 py-3 text-left">Folio</th>
-                      <th className="px-4 py-3 text-left">Fecha</th>
-                      <th className="px-4 py-3 text-left">Máquina</th>
-                      <th className="px-4 py-3 text-right">Cargas</th>
-                      <th className="px-4 py-3 text-right">Productos</th>
-                      <th className="px-4 py-3 text-right">Total</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {data.lista_notas.map((nota) => (
-                      <tr key={nota.folio} className="hover:bg-gray-50">
-                        <td className="px-4 py-3 font-mono text-xs text-gray-600">{nota.folio}</td>
-                        <td className="px-4 py-3 text-gray-600">{fmtFecha(nota.fecha)}</td>
-                        <td className="px-4 py-3 text-gray-600">{nota.maquina}</td>
-                        <td className="px-4 py-3 text-right text-gray-600">{nota.cargas}</td>
-                        <td className="px-4 py-3 text-right text-gray-600">{fmt(nota.total_productos)}</td>
-                        <td className="px-4 py-3 text-right font-semibold text-gray-800">{fmt(nota.total)}</td>
+              <>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wide">
+                      <tr>
+                        <th className="px-4 py-3 text-left">Folio</th>
+                        <th className="px-4 py-3 text-left">Fecha</th>
+                        <th className="px-4 py-3 text-left">Máquina</th>
+                        <th className="px-4 py-3 text-right">Cargas</th>
+                        <th className="px-4 py-3 text-right">Productos</th>
+                        <th className="px-4 py-3 text-right">Total</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {notasPagina.map((nota) => (
+                        <tr key={nota.id ?? nota.folio} className="hover:bg-gray-50">
+                          <td className="px-4 py-3">
+                            <button
+                              type="button"
+                              onClick={() => navigate(`/notas/${nota.id}`)}
+                              className="font-mono text-xs text-blue hover:text-blue-700 hover:underline underline-offset-2 transition-colors"
+                            >
+                              {nota.folio}
+                            </button>
+                          </td>
+                          <td className="px-4 py-3 text-gray-600">{fmtFecha(nota.fecha)}</td>
+                          <td className="px-4 py-3 text-gray-600">{nota.maquina}</td>
+                          <td className="px-4 py-3 text-right text-gray-600">{nota.cargas}</td>
+                          <td className="px-4 py-3 text-right text-gray-600">{fmt(nota.total_productos)}</td>
+                          <td className="px-4 py-3 text-right font-semibold text-gray-800">{fmt(nota.total)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {totalPaginas > 1 && (
+                  <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 text-sm">
+                    <button
+                      type="button"
+                      onClick={() => setPaginaNotas(p => Math.max(1, p - 1))}
+                      disabled={paginaSegura <= 1}
+                      className="px-3 py-1.5 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    >
+                      Anterior
+                    </button>
+                    <span className="text-gray-500">Página {paginaSegura} de {totalPaginas}</span>
+                    <button
+                      type="button"
+                      onClick={() => setPaginaNotas(p => Math.min(totalPaginas, p + 1))}
+                      disabled={paginaSegura >= totalPaginas}
+                      className="px-3 py-1.5 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    >
+                      Siguiente
+                    </button>
+                  </div>
+                )}
+              </>
             )}
           </div>
 

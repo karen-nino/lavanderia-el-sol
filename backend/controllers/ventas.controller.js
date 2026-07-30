@@ -3,19 +3,22 @@ import pool from '../db/pool.js';
 // El período se mide por pagado_en (día real del cobro), no por la fecha de
 // creación de la nota. whereBase filtra estado_pago = 'PAGADO', así que
 // pagado_en nunca es NULL en las filas que llegan a estas consultas.
-function buildPeriodSQL(periodo, alias = 'o') {
+// La lista de notas (todas, no solo las pagadas) usa created_at, porque una
+// nota pendiente aún no tiene pagado_en.
+function buildPeriodSQL(periodo, col = 'o.pagado_en') {
   switch (periodo) {
-    case 'semana': return { sql: `${alias}.pagado_en >= NOW() - INTERVAL '7 days'`, params: [] };
-    case 'mes':    return { sql: `${alias}.pagado_en >= DATE_TRUNC('month', NOW())`, params: [] };
-    case 'custom': return { sql: `DATE(${alias}.pagado_en) BETWEEN $1::date AND $2::date`, params: null }; // params set by caller
-    default:       return { sql: `DATE(${alias}.pagado_en) = CURRENT_DATE`, params: [] };
+    case 'semana': return `${col} >= NOW() - INTERVAL '7 days'`;
+    case 'mes':    return `${col} >= DATE_TRUNC('month', NOW())`;
+    case 'custom': return `DATE(${col}) BETWEEN $1::date AND $2::date`; // params $1/$2 set by caller
+    default:       return `DATE(${col}) = CURRENT_DATE`;
   }
 }
 
 export async function getResumen(req, res) {
   const { periodo = 'hoy', desde, hasta } = req.query;
 
-  const { sql: periodSQL } = buildPeriodSQL(periodo);
+  const periodSQL = buildPeriodSQL(periodo);
+  const periodListSQL = buildPeriodSQL(periodo, 'o.created_at');
   const isCustom = periodo === 'custom';
 
   if (isCustom && (!desde || !hasta)) {
@@ -31,6 +34,8 @@ export async function getResumen(req, res) {
   const sucIdx = periodParams.length + 1;
   const params = [...periodParams, req.sucursal];
   const whereBase = `o.estado_pago = 'PAGADO' AND o.estado != 'CANCELADA' AND o.sucursal = $${sucIdx} AND ${periodSQL}`;
+  // Lista: todas las notas no canceladas del período (pagadas o no).
+  const whereLista = `o.estado != 'CANCELADA' AND o.sucursal = $${sucIdx} AND ${periodListSQL}`;
 
   try {
     const [tarjetasRes, pendientesRes, graficaRes, listaRes, corteRes] = await Promise.all([
@@ -68,11 +73,13 @@ export async function getResumen(req, res) {
         params
       ),
 
-      // Lista de notas
+      // Lista de notas: todas las del período (pagadas o no)
       pool.query(
         `SELECT
+          o.id,
           o.folio,
-          DATE(o.pagado_en)                           AS fecha,
+          DATE(o.created_at)                          AS fecha,
+          o.estado_pago,
           COALESCE(m.nombre, 'N/A')                   AS maquina,
           o.cantidad_cargas                            AS cargas,
           COALESCE(np_t.total_productos, 0)            AS total_productos,
@@ -84,8 +91,8 @@ export async function getResumen(req, res) {
           FROM nota_productos
           GROUP BY nota_id
         ) np_t ON np_t.nota_id = o.id
-        WHERE ${whereBase}
-        ORDER BY o.pagado_en DESC`,
+        WHERE ${whereLista}
+        ORDER BY o.created_at DESC`,
         params
       ),
 
@@ -126,8 +133,10 @@ export async function getResumen(req, res) {
         total: parseFloat(r.total),
       })),
       lista_notas: listaRes.rows.map((r) => ({
+        id:              r.id,
         folio:           r.folio,
         fecha:           r.fecha,
+        estado_pago:     r.estado_pago,
         maquina:         r.maquina,
         cargas:          parseInt(r.cargas, 10),
         total_productos: parseFloat(r.total_productos),
