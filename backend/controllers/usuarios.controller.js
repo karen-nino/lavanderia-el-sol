@@ -215,9 +215,10 @@ export const createEmpleado = async (req, res) => {
     return res.status(403).json({ message: 'Solo el Admin Main puede asignar este rol.' });
   }
 
-  // El admin elige la sucursal del empleado en el formulario; si no llega,
-  // se asigna a la sucursal activa de quien lo crea.
-  const sucursalFinal = sucursal?.trim() || req.sucursal;
+  // Un administrador es global: no se liga a ninguna sucursal (NULL). Para un
+  // empleado (operador) se usa la sucursal del formulario o, si no llega, la
+  // sucursal activa de quien lo crea.
+  const sucursalFinal = esAdmin(rolFinal) ? null : (sucursal?.trim() || req.sucursal);
 
   try {
     const hashed = await bcrypt.hash(password, 10);
@@ -273,7 +274,12 @@ export const updateEmpleado = async (req, res) => {
       }
       updates.push(`rol = $${i++}`); values.push(rol);
     }
-    if (sucursal !== undefined) {
+    // Un administrador es global (sucursal NULL); un empleado requiere una.
+    // El rol resultante es el que venga en la petición o, si no cambia, el actual.
+    const rolResultante = rol !== undefined ? rol : target.rol;
+    if (esAdmin(rolResultante)) {
+      updates.push(`sucursal = $${i++}`); values.push(null);
+    } else if (sucursal !== undefined) {
       if (!sucursal?.trim()) return res.status(400).json({ message: 'La sucursal no puede estar vacía.' });
       updates.push(`sucursal = $${i++}`); values.push(sucursal.trim());
     }

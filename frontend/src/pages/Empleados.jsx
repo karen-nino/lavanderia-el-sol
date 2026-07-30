@@ -112,7 +112,8 @@ export default function Empleados() {
         nombre: nombreCompletoStr,
         password: form.password,
         rol: form.rol,
-        sucursal: form.sucursal,
+        // Un admin es global: no lleva sucursal.
+        sucursal: esAdminFn(form.rol) ? '' : form.sucursal,
       });
       setEmpleados(prev => [...prev, nuevo].sort((a, b) => a.nombre.localeCompare(b.nombre)));
       cerrarModal();
@@ -150,7 +151,8 @@ export default function Empleados() {
       const payload = {
         nombre: `${editForm.nombre} ${editForm.apellido}`.trim(),
         rol: editForm.rol,
-        sucursal: editForm.sucursal,
+        // Un admin es global: no lleva sucursal.
+        sucursal: esAdminFn(editForm.rol) ? '' : editForm.sucursal,
       };
       if (editForm.password) payload.password = editForm.password;
       const actualizado = await api.patch(`/usuarios/${editEmpleado.id}`, payload);
@@ -481,17 +483,20 @@ export default function Empleados() {
                   <option value="admin">Admin</option>
                 </select>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                  Sucursal <span className="text-red-500">*</span>
-                </label>
-                <select name="sucursal" required value={form.sucursal} onChange={handleChange} className={`${INPUT_CLS} bg-white`}>
-                  <option value="" disabled>Selecciona una sucursal</option>
-                  {sucursales.map(s => (
-                    <option key={s.slug} value={s.slug}>{s.nombre}</option>
-                  ))}
-                </select>
-              </div>
+              {/* Un administrador es global: no se liga a una sucursal. */}
+              {!esAdminFn(form.rol) && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    Sucursal <span className="text-red-500">*</span>
+                  </label>
+                  <select name="sucursal" required value={form.sucursal} onChange={handleChange} className={`${INPUT_CLS} bg-white`}>
+                    <option value="" disabled>Selecciona una sucursal</option>
+                    {sucursales.map(s => (
+                      <option key={s.slug} value={s.slug}>{s.nombre}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
                   Nombre <span className="text-red-500">*</span>
@@ -559,17 +564,20 @@ export default function Empleados() {
                   )}
                 </select>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                  Sucursal <span className="text-red-500">*</span>
-                </label>
-                <select name="sucursal" required value={editForm.sucursal} onChange={handleEditChange} className={`${INPUT_CLS} bg-white`}>
-                  <option value="" disabled>Selecciona una sucursal</option>
-                  {sucursales.map(s => (
-                    <option key={s.slug} value={s.slug}>{s.nombre}</option>
-                  ))}
-                </select>
-              </div>
+              {/* Un administrador es global: no se liga a una sucursal. */}
+              {!esAdminFn(editForm.rol) && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    Sucursal <span className="text-red-500">*</span>
+                  </label>
+                  <select name="sucursal" required value={editForm.sucursal} onChange={handleEditChange} className={`${INPUT_CLS} bg-white`}>
+                    <option value="" disabled>Selecciona una sucursal</option>
+                    {sucursales.map(s => (
+                      <option key={s.slug} value={s.slug}>{s.nombre}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
                   Nombre <span className="text-red-500">*</span>
