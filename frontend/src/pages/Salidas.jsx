@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
+import IniciandoLavadoOverlay from '../components/IniciandoLavadoOverlay';
 
 function fmtMonto(n) {
   return n != null ? `$${Number(n).toFixed(2)}` : '—';
@@ -64,6 +65,7 @@ export default function Salidas() {
   const [confirmDetener,   setConfirmDetener]   = useState(null); // máquina a detener
   const [confirmIniciar,   setConfirmIniciar]   = useState(null); // máquina a iniciar
   const [confirmQuitar,    setConfirmQuitar]    = useState(null); // máquina a eliminar de la nota
+  const [iniciando,        setIniciando]        = useState(null); // máquina arrancando (animación)
 
   // Máquinas disponibles para los modales de asignar/cambiar máquina.
   const [maquinasDisp,     setMaquinasDisp]     = useState([]);
@@ -141,16 +143,24 @@ export default function Salidas() {
   // corresponda. Las demás máquinas asignadas siguen en espera.
   async function iniciarMaquina() {
     if (!confirmIniciar) return;
+    const maq = confirmIniciar;
     setLoadingMaquina(true);
     setErrorAccion('');
+    setIniciando(maq); // arranca la animación de lavadora
     try {
-      await api.patch(`/notas/${id}/activar-pendientes`, { maquina_id: confirmIniciar.id });
+      // Duración mínima para que la animación se alcance a ver aunque la API
+      // responda al instante.
+      await Promise.all([
+        api.patch(`/notas/${id}/activar-pendientes`, { maquina_id: maq.id }),
+        new Promise((r) => setTimeout(r, 1700)),
+      ]);
       setConfirmIniciar(null);
       await cargarDatos();
     } catch (err) {
+      // El modal de confirmación sigue abierto detrás; ahí se muestra el error.
       setErrorAccion(err.message);
-      setConfirmIniciar(null);
     } finally {
+      setIniciando(null);
       setLoadingMaquina(false);
     }
   }
@@ -675,6 +685,8 @@ export default function Salidas() {
       </div>
 
       {/* Modal advertencia iniciar lavado/secado */}
+      {iniciando && <IniciandoLavadoOverlay tipo={iniciando.tipo} nombre={iniciando.nombre} />}
+
       {confirmIniciar && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
