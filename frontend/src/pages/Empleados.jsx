@@ -12,6 +12,10 @@ const FORM_INIT = { nombre: '', apellido: '', rol: 'operador', password: '', suc
 
 const ROL_LABEL = { admin_main: 'Admin Main', admin: 'Admin', operador: 'Empleado' };
 
+// Usuarios de prueba (Prueba_Admin, Prueba_Empleado): no están ligados a una
+// sucursal y en la lista de Empleados solo los ve el admin_main.
+const esUsuarioPrueba = (e) => /^Prueba_/i.test(e?.nombre ?? '');
+
 const splitNombre = (full) => {
   const [n, ...resto] = (full ?? '').trim().split(' ');
   return { nombre: n ?? '', apellido: resto.join(' ') };
@@ -86,12 +90,16 @@ export default function Empleados() {
 
   const filtrados = empleados
     .filter(e => {
+      const prueba = esUsuarioPrueba(e);
+      // Los usuarios de prueba solo los ve el admin_main (y siempre, sin
+      // importar la sucursal activa).
+      if (prueba && !esAdminMain) return false;
       // El admin_main se oculta de la lista, salvo el propio usuario (para
       // que siempre vea su tarjeta).
       if (e.rol === 'admin_main' && e.id !== usuario?.id) return false;
       // Solo empleados (operadores) de la sucursal activa; los admins son
-      // globales y se ven en cualquier sucursal.
-      if (!esAdminFn(e.rol) && sucursalVista && e.sucursal !== sucursalVista) return false;
+      // globales y los usuarios de prueba se ven en cualquier sucursal.
+      if (!prueba && !esAdminFn(e.rol) && sucursalVista && e.sucursal !== sucursalVista) return false;
       if (filtroRol !== 'todos' && e.rol !== filtroRol) return false;
       return e.nombre.toLowerCase().includes(busqueda.toLowerCase());
     })
