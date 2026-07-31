@@ -323,12 +323,13 @@ export default function Empleados() {
                 <div className="min-w-0 flex-1">
                   <p className="font-semibold text-gray-900 text-sm truncate">{nombreCompleto(emp)}</p>
                   <div className="flex flex-wrap items-center gap-1 mt-0.5">
-                    {esMismoUsuario && (
+                    {esMismoUsuario ? (
                       <span className="inline-block text-xs px-2 py-0.5 rounded-full bg-blue text-white font-medium">Mi cuenta</span>
+                    ) : (
+                      <span className="inline-block text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
+                        {ROL_LABEL[emp.rol] ?? emp.rol}
+                      </span>
                     )}
-                    <span className="inline-block text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
-                      {ROL_LABEL[emp.rol] ?? emp.rol}
-                    </span>
                   </div>
                 </div>
               </div>
@@ -426,9 +427,13 @@ export default function Empleados() {
                   <div className="min-w-0 flex-1">
                     <p className="font-semibold text-gray-900 text-base">{nombreCompleto(infoEmpleado)}</p>
                     <div className="flex flex-wrap items-center gap-1 mt-0.5">
-                      <span className="inline-block text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
-                        {ROL_LABEL[infoEmpleado.rol] ?? infoEmpleado.rol}
-                      </span>
+                      {esMismoUsuario ? (
+                        <span className="inline-block text-xs px-2 py-0.5 rounded-full bg-blue text-white font-medium">Mi cuenta</span>
+                      ) : (
+                        <span className="inline-block text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
+                          {ROL_LABEL[infoEmpleado.rol] ?? infoEmpleado.rol}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
