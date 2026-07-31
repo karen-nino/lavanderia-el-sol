@@ -9,6 +9,15 @@ const fmtMoneda = (n) =>
 const fmtFecha = (iso) =>
   new Date(iso).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
 
+// Nombre para el título: deja el nombre completo y corta el apellido a tres
+// letras seguidas de punto. Ej.: "Sofía Monrraz" → "Sofía Mon.".
+const nombreConApellidoCorto = (full) => {
+  const partes = (full ?? '').trim().split(/\s+/).filter(Boolean);
+  if (partes.length <= 1) return partes[0] ?? '—';
+  const [nombre, ...resto] = partes;
+  return `${nombre} ${resto.join(' ').slice(0, 3)}.`;
+};
+
 // Filtro de fecha por rangos, como en la página de Notas.
 const RANGOS_FECHA = [
   { value: 'TODAS',     label: 'Todas las fechas' },
@@ -256,8 +265,8 @@ export default function EmpleadoDesempeno() {
             </svg>
           </button>
           <div>
-            <h1 className="text-xl font-bold text-gray-900">{data?.empleado?.nombre ?? '—'}</h1>
-            <p className="text-sm text-gray-500">Información de desempeño</p>
+            <h1 className="text-xl font-bold text-gray-900">{nombreConApellidoCorto(data?.empleado?.nombre)}</h1>
+            <p className="text-sm text-gray-500">Detalles</p>
           </div>
         </div>
       </div>
