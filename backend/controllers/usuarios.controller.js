@@ -1,6 +1,7 @@
 import pool from '../db/pool.js';
 import bcrypt from 'bcrypt';
 import { esAdmin } from '../middleware/roles.js';
+import { capitalizarNombre } from '../utils/nombres.js';
 
 const ROL_VALIDOS = ['admin_main', 'admin', 'operador'];
 
@@ -226,7 +227,7 @@ export const createEmpleado = async (req, res) => {
       `INSERT INTO usuarios (nombre, apellido, password, rol, sucursal)
        VALUES ($1, $2, $3, $4, $5)
        RETURNING id, nombre, apellido, rol, sucursal, activo, es_prueba, created_at`,
-      [nombre.trim(), apellido?.trim() || null, hashed, rolFinal, sucursalFinal]
+      [capitalizarNombre(nombre), capitalizarNombre(apellido) || null, hashed, rolFinal, sucursalFinal]
     );
     res.status(201).json(rows[0]);
   } catch (err) {
@@ -262,10 +263,10 @@ export const updateEmpleado = async (req, res) => {
 
     if (nombre !== undefined) {
       if (!nombre.trim()) return res.status(400).json({ message: 'El nombre no puede estar vacío.' });
-      updates.push(`nombre = $${i++}`); values.push(nombre.trim());
+      updates.push(`nombre = $${i++}`); values.push(capitalizarNombre(nombre));
     }
     if (apellido !== undefined) {
-      updates.push(`apellido = $${i++}`); values.push(apellido?.trim() || null);
+      updates.push(`apellido = $${i++}`); values.push(capitalizarNombre(apellido) || null);
     }
     if (rol !== undefined) {
       if (!ROL_VALIDOS.includes(rol)) {

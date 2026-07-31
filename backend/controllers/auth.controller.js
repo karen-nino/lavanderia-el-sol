@@ -2,6 +2,7 @@ import pool from '../db/pool.js';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { randomUUID } from 'crypto';
+import { capitalizarNombre } from '../utils/nombres.js';
 
 // ── GET /auth/buscar-usuarios?q=... ─────────────────────────
 // Endpoint público usado por la pantalla de login para autocompletar
@@ -122,10 +123,10 @@ export const updateMe = async (req, res) => {
 
   if (nombre !== undefined) {
     if (!nombre.trim()) return res.status(400).json({ message: 'El nombre no puede estar vacío.' });
-    updates.push(`nombre = $${i++}`); values.push(nombre.trim());
+    updates.push(`nombre = $${i++}`); values.push(capitalizarNombre(nombre));
   }
   if (apellido !== undefined) {
-    updates.push(`apellido = $${i++}`); values.push(apellido?.trim() || null);
+    updates.push(`apellido = $${i++}`); values.push(capitalizarNombre(apellido) || null);
   }
   if (password) {
     if (password.length < 8) {
