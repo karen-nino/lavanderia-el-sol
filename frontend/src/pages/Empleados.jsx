@@ -12,9 +12,10 @@ const FORM_INIT = { nombre: '', apellido: '', rol: 'operador', password: '', suc
 
 const ROL_LABEL = { admin_main: 'Admin Main', admin: 'Admin', operador: 'Empleado' };
 
-// Usuarios de prueba (Prueba_Admin, Prueba_Empleado): no están ligados a una
-// sucursal y en la lista de Empleados solo los ve el admin_main.
-const esUsuarioPrueba = (e) => /^Prueba_/i.test(e?.nombre ?? '');
+// Usuarios de prueba (Prueba Admin, Prueba_Empleado, etc.): no están ligados a
+// una sucursal y en la lista de Empleados solo los ve el admin_main. Se
+// detectan por el nombre: "Prueba" seguido de espacio, guion, guion bajo o fin.
+const esUsuarioPrueba = (e) => /^prueba([ _-]|$)/i.test((e?.nombre ?? '').trim());
 
 const splitNombre = (full) => {
   const [n, ...resto] = (full ?? '').trim().split(' ');
@@ -103,10 +104,14 @@ export default function Empleados() {
       if (filtroRol !== 'todos' && e.rol !== filtroRol) return false;
       return e.nombre.toLowerCase().includes(busqueda.toLowerCase());
     })
-    // La tarjeta del usuario actual va siempre hasta arriba.
+    // Orden: el usuario actual hasta arriba, luego los usuarios de prueba y
+    // por último el resto (alfabético).
     .sort((a, b) => {
       if (a.id === usuario?.id) return -1;
       if (b.id === usuario?.id) return 1;
+      const pa = esUsuarioPrueba(a);
+      const pb = esUsuarioPrueba(b);
+      if (pa !== pb) return pa ? -1 : 1;
       return a.nombre.localeCompare(b.nombre);
     });
 
@@ -316,6 +321,7 @@ export default function Empleados() {
             const { nombre, apellido } = partirNombre(emp);
             const iniciales = `${nombre[0] ?? ''}${apellido[0] ?? ''}`.toUpperCase();
             const esMismoUsuario = usuario?.id === emp.id;
+            const esPrueba = esUsuarioPrueba(emp);
             // Solo el Admin Main puede modificar/eliminar a un administrador
             // (cada quien puede editarse a sí mismo).
             const puedeModificar = esAdmin && (esMismoUsuario || !esAdminFn(emp.rol) || esAdminMain);
@@ -324,7 +330,9 @@ export default function Empleados() {
             const cabecera = (
               <div className="flex items-start gap-3">
                 <div className={`flex-shrink-0 w-11 h-11 rounded-full flex items-center justify-center text-sm font-semibold ${
-                  esMismoUsuario ? 'bg-blue text-white' : 'bg-light-blue text-blue'
+                  esMismoUsuario ? 'bg-blue text-white'
+                    : esPrueba ? 'bg-amber-500 text-white'
+                    : 'bg-light-blue text-blue'
                 }`}>
                   {iniciales || '?'}
                 </div>
@@ -333,6 +341,8 @@ export default function Empleados() {
                   <div className="flex flex-wrap items-center gap-1 mt-0.5">
                     {esMismoUsuario ? (
                       <span className="inline-block text-xs px-2 py-0.5 rounded-full bg-blue text-white font-medium">Mi cuenta</span>
+                    ) : esPrueba ? (
+                      <span className="inline-block text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-medium">Prueba</span>
                     ) : (
                       <span className="inline-block text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
                         {ROL_LABEL[emp.rol] ?? emp.rol}
@@ -352,7 +362,9 @@ export default function Empleados() {
                   className={`sm:hidden w-full text-left rounded-xl shadow-sm border p-4 transition-colors ${
                     esMismoUsuario
                       ? 'bg-light-blue border-blue/40 hover:bg-light-blue/80'
-                      : 'bg-white border-gray-100 hover:bg-gray-50 active:bg-gray-100'
+                      : esPrueba
+                        ? 'bg-amber-50 border-amber-300 hover:bg-amber-100'
+                        : 'bg-white border-gray-100 hover:bg-gray-50 active:bg-gray-100'
                   }`}
                 >
                   {cabecera}
@@ -360,7 +372,9 @@ export default function Empleados() {
 
                 {/* Desktop: card con acciones inline */}
                 <div className={`hidden sm:flex flex-col gap-3 rounded-xl shadow-sm border p-4 hover:shadow-md transition-shadow ${
-                  esMismoUsuario ? 'bg-light-blue border-blue/40' : 'bg-white border-gray-100'
+                  esMismoUsuario ? 'bg-light-blue border-blue/40'
+                    : esPrueba ? 'bg-amber-50 border-amber-300'
+                    : 'bg-white border-gray-100'
                 }`}>
                   {cabecera}
                   <div className="flex items-center justify-between gap-1 pt-2 border-t border-gray-100">
@@ -412,6 +426,7 @@ export default function Empleados() {
         const { nombre, apellido } = partirNombre(infoEmpleado);
         const iniciales = `${nombre[0] ?? ''}${apellido[0] ?? ''}`.toUpperCase();
         const esMismoUsuario = usuario?.id === infoEmpleado.id;
+        const esPrueba = esUsuarioPrueba(infoEmpleado);
         // Solo el Admin Main puede modificar/eliminar a un administrador
         // (cada quien puede editarse a sí mismo).
         const puedeModificar = esAdmin && (esMismoUsuario || !esAdminFn(infoEmpleado.rol) || esAdminMain);
@@ -429,7 +444,11 @@ export default function Empleados() {
               </div>
               <div className="p-5 space-y-5 overflow-y-auto">
                 <div className="flex items-center gap-3">
-                  <div className="flex-shrink-0 w-14 h-14 rounded-full bg-light-blue text-blue flex items-center justify-center text-lg font-semibold">
+                  <div className={`flex-shrink-0 w-14 h-14 rounded-full flex items-center justify-center text-lg font-semibold ${
+                    esMismoUsuario ? 'bg-blue text-white'
+                      : esPrueba ? 'bg-amber-500 text-white'
+                      : 'bg-light-blue text-blue'
+                  }`}>
                     {iniciales || '?'}
                   </div>
                   <div className="min-w-0 flex-1">
@@ -437,6 +456,8 @@ export default function Empleados() {
                     <div className="flex flex-wrap items-center gap-1 mt-0.5">
                       {esMismoUsuario ? (
                         <span className="inline-block text-xs px-2 py-0.5 rounded-full bg-blue text-white font-medium">Mi cuenta</span>
+                      ) : esPrueba ? (
+                        <span className="inline-block text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-medium">Prueba</span>
                       ) : (
                         <span className="inline-block text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
                           {ROL_LABEL[infoEmpleado.rol] ?? infoEmpleado.rol}
