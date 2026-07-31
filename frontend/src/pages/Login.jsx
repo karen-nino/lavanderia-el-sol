@@ -14,18 +14,15 @@ export default function Login() {
   const [buscando, setBuscando]         = useState(false);
   const [password, setPassword]         = useState('');
   const [error, setError]               = useState('');
-  const [aviso, setAviso]               = useState('');
+  // Motivo por el que se cerró la sesión anterior (lo deja api.js al recibir un
+  // 401, p. ej. tras iniciar sesión en otro dispositivo). Se lee una sola vez al
+  // montar; el efecto solo lo borra de sessionStorage para que no reaparezca.
+  const [aviso, setAviso]               = useState(() => sessionStorage.getItem('authAviso') || '');
   const [loading, setLoading]           = useState(false);
 
-  // Motivo por el que se cerró la sesión anterior (lo deja api.js al recibir un
-  // 401, p. ej. tras iniciar sesión en otro dispositivo). Se muestra una vez y
-  // se limpia para que no reaparezca en visitas posteriores al login.
   useEffect(() => {
-    const motivo = sessionStorage.getItem('authAviso');
-    if (motivo) {
-      setAviso(motivo);
-      sessionStorage.removeItem('authAviso');
-    }
+    if (aviso) sessionStorage.removeItem('authAviso');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const { login } = useAuth();
@@ -37,9 +34,9 @@ export default function Login() {
   useEffect(() => {
     if (seleccionado) return;
     const q = query.trim();
-    if (!q) { setSugerencias([]); return; }
 
     const t = setTimeout(async () => {
+      if (!q) { setSugerencias([]); return; }
       setBuscando(true);
       try {
         const data = await api.get(`/auth/buscar-usuarios?q=${encodeURIComponent(q)}`);
