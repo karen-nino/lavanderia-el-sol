@@ -4,6 +4,8 @@ import { useAuth } from '../context/AuthContext';
 import { api } from '../lib/api';
 import { esAdmin as esAdminFn, esAdminMain as esAdminMainFn } from '../lib/roles';
 import SucursalBar from '../components/SucursalBar';
+import EmpleadoEditModal from '../components/EmpleadoEditModal';
+import EmpleadoDeleteModal from '../components/EmpleadoDeleteModal';
 
 const INPUT_CLS =
   'w-full px-4 py-3.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent transition';
@@ -55,19 +57,9 @@ export default function Empleados() {
   const [guardando, setGuardando] = useState(false);
   const [formError, setFormError] = useState('');
 
-  // Modal editar
-  const [editEmpleado, setEditEmpleado] = useState(null);
-  const [editForm, setEditForm]         = useState(FORM_INIT);
-  const [editando, setEditando]         = useState(false);
-  const [editError, setEditError]       = useState('');
-
-  // Modal eliminar
+  // Modal editar / eliminar (usan componentes reutilizables)
+  const [editEmpleado, setEditEmpleado]     = useState(null);
   const [deleteEmpleado, setDeleteEmpleado] = useState(null);
-  const [eliminando, setEliminando]         = useState(false);
-  const [deleteError, setDeleteError]       = useState('');
-
-  // Modal info (mobile)
-  const [infoEmpleado, setInfoEmpleado]     = useState(null);
 
   // Abre la página de desempeño del empleado.
   const abrirDesempeno = (emp) => navigate(`/empleados/${emp.id}/desempeno`);
@@ -152,66 +144,18 @@ export default function Empleados() {
     }
   };
 
-  // ── Editar ─────────────────────────────────────────────
-  const abrirEditar = (emp) => {
-    const { nombre, apellido } = partirNombre(emp);
-    setEditEmpleado(emp);
-    setEditForm({
-      nombre,
-      apellido,
-      rol: emp.rol ?? 'operador',
-      password: '',
-      sucursal: emp.sucursal ?? '',
-    });
-    setEditError('');
-  };
-  const cerrarEditar = () => setEditEmpleado(null);
-  const handleEditChange = e => {
-    const { name, value } = e.target;
-    setEditForm(f => ({ ...f, [name]: value }));
+  // ── Editar / Eliminar (callbacks de los modales) ───────
+  const onEmpleadoGuardado = (actualizado) => {
+    setEmpleados(prev =>
+      prev.map(emp => emp.id === actualizado.id ? actualizado : emp)
+          .sort((a, b) => a.nombre.localeCompare(b.nombre))
+    );
+    setEditEmpleado(null);
   };
 
-  const handleEditSubmit = async e => {
-    e.preventDefault();
-    setEditError('');
-    setEditando(true);
-    try {
-      const payload = {
-        nombre: `${editForm.nombre} ${editForm.apellido}`.trim(),
-        rol: editForm.rol,
-        // Un admin es global: no lleva sucursal.
-        sucursal: esAdminFn(editForm.rol) ? '' : editForm.sucursal,
-      };
-      if (editForm.password) payload.password = editForm.password;
-      const actualizado = await api.patch(`/usuarios/${editEmpleado.id}`, payload);
-      setEmpleados(prev =>
-        prev.map(emp => emp.id === actualizado.id ? actualizado : emp)
-            .sort((a, b) => a.nombre.localeCompare(b.nombre))
-      );
-      cerrarEditar();
-    } catch (err) {
-      setEditError(err.message);
-    } finally {
-      setEditando(false);
-    }
-  };
-
-  // ── Eliminar ───────────────────────────────────────────
-  const abrirEliminar = (emp) => { setDeleteEmpleado(emp); setDeleteError(''); };
-  const cerrarEliminar = () => setDeleteEmpleado(null);
-
-  const handleDelete = async () => {
-    setDeleteError('');
-    setEliminando(true);
-    try {
-      await api.delete(`/usuarios/${deleteEmpleado.id}`);
-      setEmpleados(prev => prev.filter(emp => emp.id !== deleteEmpleado.id));
-      cerrarEliminar();
-    } catch (err) {
-      setDeleteError(err.message);
-    } finally {
-      setEliminando(false);
-    }
+  const onEmpleadoEliminado = (id) => {
+    setEmpleados(prev => prev.filter(emp => emp.id !== id));
+    setDeleteEmpleado(null);
   };
 
   return (
@@ -355,10 +299,10 @@ export default function Empleados() {
 
             return (
               <div key={emp.id}>
-                {/* Mobile: card como botón que abre modal info */}
+                {/* Mobile: card como botón que abre la página de detalles */}
                 <button
                   type="button"
-                  onClick={() => setInfoEmpleado(emp)}
+                  onClick={() => abrirDesempeno(emp)}
                   className={`sm:hidden w-full text-left rounded-xl shadow-sm border p-4 transition-colors ${
                     esMismoUsuario
                       ? 'bg-light-blue border-blue/40 hover:bg-light-blue/80'
@@ -388,7 +332,7 @@ export default function Empleados() {
                     {puedeModificar && (
                       <div className="flex items-center gap-1">
                         <button
-                          onClick={() => abrirEditar(emp)}
+                          onClick={() => setEditEmpleado(emp)}
                           className="p-1.5 text-gray-400 hover:text-blue hover:bg-light-blue rounded-lg transition-colors"
                           title="Editar"
                         >
@@ -399,7 +343,7 @@ export default function Empleados() {
                         </button>
                         {puedeEliminar && (
                           <button
-                            onClick={() => abrirEliminar(emp)}
+                            onClick={() => setDeleteEmpleado(emp)}
                             className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                             title="Eliminar"
                           >
@@ -420,100 +364,6 @@ export default function Empleados() {
       )}
 
       </div>
-
-      {/* ── Modal: Info empleado (mobile) ─────────────────── */}
-      {infoEmpleado && (() => {
-        const { nombre, apellido } = partirNombre(infoEmpleado);
-        const iniciales = `${nombre[0] ?? ''}${apellido[0] ?? ''}`.toUpperCase();
-        const esMismoUsuario = usuario?.id === infoEmpleado.id;
-        const esPrueba = esUsuarioPrueba(infoEmpleado);
-        // Solo el Admin Main puede modificar/eliminar a un administrador
-        // (cada quien puede editarse a sí mismo).
-        const puedeModificar = esAdmin && (esMismoUsuario || !esAdminFn(infoEmpleado.rol) || esAdminMain);
-        const puedeEliminar  = puedeModificar && !esMismoUsuario;
-        return (
-          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4 sm:hidden">
-            <div className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] flex flex-col">
-              <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-gray-100 flex-shrink-0">
-                <h2 className="text-base font-semibold text-gray-900">Empleado</h2>
-                <button onClick={() => setInfoEmpleado(null)} className="text-gray-400 hover:text-gray-600">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-              <div className="p-5 space-y-5 overflow-y-auto">
-                <div className="flex items-center gap-3">
-                  <div className={`flex-shrink-0 w-14 h-14 rounded-full flex items-center justify-center text-lg font-semibold ${
-                    esMismoUsuario ? 'bg-blue text-white'
-                      : esPrueba ? 'bg-amber-500 text-white'
-                      : 'bg-light-blue text-blue'
-                  }`}>
-                    {iniciales || '?'}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="font-semibold text-gray-900 text-base">{nombreCompleto(infoEmpleado)}</p>
-                    <div className="flex flex-wrap items-center gap-1 mt-0.5">
-                      {esMismoUsuario ? (
-                        <span className="inline-block text-xs px-2 py-0.5 rounded-full bg-blue text-white font-medium">Mi cuenta</span>
-                      ) : esPrueba ? (
-                        <span className="inline-block text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-medium">Prueba</span>
-                      ) : (
-                        <span className="inline-block text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
-                          {ROL_LABEL[infoEmpleado.rol] ?? infoEmpleado.rol}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => { const e = infoEmpleado; setInfoEmpleado(null); abrirDesempeno(e); }}
-                  className="w-full flex items-center justify-center gap-2 py-3 border border-blue text-blue font-medium rounded-lg text-sm transition-colors"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                      d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                  </svg>
-                  Información
-                </button>
-
-                {puedeModificar ? (
-                  <div className="space-y-2 pt-1">
-                    <button
-                      type="button"
-                      onClick={() => { const e = infoEmpleado; setInfoEmpleado(null); abrirEditar(e); }}
-                      className="w-full flex items-center justify-center gap-2 py-3 bg-blue hover:opacity-90 text-white font-medium rounded-lg text-sm transition-colors"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                          d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                      </svg>
-                      Editar
-                    </button>
-                    {puedeEliminar && (
-                      <button
-                        type="button"
-                        onClick={() => { const e = infoEmpleado; setInfoEmpleado(null); abrirEliminar(e); }}
-                        className="w-full flex items-center justify-center gap-2 py-3 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg text-sm transition-colors"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                        Eliminar
-                      </button>
-                    )}
-                  </div>
-                ) : (
-                  <p className="text-xs text-gray-400 text-center pt-1">No tienes permiso para modificar este empleado.</p>
-                )}
-              </div>
-            </div>
-          </div>
-        );
-      })()}
 
       {/* ── Modal: Nuevo empleado ─────────────────────────── */}
       {modalOpen && (
@@ -589,116 +439,21 @@ export default function Empleados() {
 
       {/* ── Modal: Editar empleado ────────────────────────── */}
       {editEmpleado && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] flex flex-col">
-            <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-gray-100 flex-shrink-0">
-              <h2 className="text-base font-semibold text-gray-900">Editar empleado</h2>
-              <button onClick={cerrarEditar} className="text-gray-400 hover:text-gray-600">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            <form onSubmit={handleEditSubmit} className="p-5 space-y-4 overflow-y-auto">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Rol</label>
-                <select
-                  name="rol"
-                  value={editForm.rol}
-                  onChange={handleEditChange}
-                  disabled={editEmpleado.id === usuario?.id || editForm.rol === 'admin_main'}
-                  className={`${INPUT_CLS} bg-white disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed`}
-                >
-                  <option value="operador">Empleado</option>
-                  <option value="admin">Admin</option>
-                  {editForm.rol === 'admin_main' && (
-                    <option value="admin_main">Admin Main</option>
-                  )}
-                </select>
-              </div>
-              {/* Un administrador y un usuario de prueba son globales: no se
-                  ligan a una sucursal. */}
-              {!esAdminFn(editForm.rol) && !esUsuarioPrueba(editEmpleado) && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    Sucursal <span className="text-red-500">*</span>
-                  </label>
-                  <select name="sucursal" required value={editForm.sucursal} onChange={handleEditChange} className={`${INPUT_CLS} bg-white`}>
-                    <option value="" disabled>Selecciona una sucursal</option>
-                    {sucursales.map(s => (
-                      <option key={s.slug} value={s.slug}>{s.nombre}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                  Nombre <span className="text-red-500">*</span>
-                </label>
-                <input name="nombre" required value={editForm.nombre} onChange={handleEditChange}
-                  placeholder="Nombre" className={INPUT_CLS} />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Apellido</label>
-                <input name="apellido" value={editForm.apellido} onChange={handleEditChange}
-                  placeholder="Apellido" className={INPUT_CLS} />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Nueva contraseña</label>
-                <input type="password" name="password" minLength={6} value={editForm.password} onChange={handleEditChange}
-                  placeholder="Dejar vacío para no cambiar" className={INPUT_CLS} />
-                <p className="text-xs text-gray-500 mt-1">Mínimo 8 caracteres.</p>
-              </div>
-              {editError && (
-                <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">{editError}</div>
-              )}
-              <div className="flex gap-3 pt-1">
-                <button type="button" onClick={cerrarEditar}
-                  className="flex-1 border border-gray-300 text-gray-700 font-medium py-3.5 rounded-lg text-base hover:bg-gray-50 transition-colors">
-                  Cancelar
-                </button>
-                <button type="submit" disabled={editando}
-                  className="flex-1 bg-blue hover:opacity-90 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors">
-                  {editando ? 'Guardando...' : 'Guardar cambios'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+        <EmpleadoEditModal
+          empleado={editEmpleado}
+          sucursales={sucursales}
+          onClose={() => setEditEmpleado(null)}
+          onSaved={onEmpleadoGuardado}
+        />
       )}
 
       {/* ── Modal: Confirmar eliminar ─────────────────────── */}
       {deleteEmpleado && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm max-h-[90vh] overflow-y-auto">
-            <div className="p-6">
-              <div className="flex items-center justify-center w-12 h-12 rounded-full bg-red-100 mx-auto mb-4">
-                <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
-              </div>
-              <h3 className="text-base font-semibold text-gray-900 text-center mb-1">Eliminar empleado</h3>
-              <p className="text-sm text-gray-500 text-center mb-4">
-                ¿Eliminar a <span className="font-medium text-gray-700">{nombreCompleto(deleteEmpleado)}</span>?
-                Esta acción no se puede deshacer.
-              </p>
-              {deleteError && (
-                <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3 mb-4">{deleteError}</div>
-              )}
-              <div className="flex gap-3">
-                <button type="button" onClick={cerrarEliminar}
-                  className="flex-1 border border-gray-300 text-gray-700 font-medium py-3.5 rounded-lg text-base hover:bg-gray-50 transition-colors">
-                  Cancelar
-                </button>
-                <button type="button" onClick={handleDelete} disabled={eliminando}
-                  className="flex-1 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors">
-                  {eliminando ? 'Eliminando...' : 'Eliminar'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <EmpleadoDeleteModal
+          empleado={deleteEmpleado}
+          onClose={() => setDeleteEmpleado(null)}
+          onDeleted={onEmpleadoEliminado}
+        />
       )}
 
     </div>

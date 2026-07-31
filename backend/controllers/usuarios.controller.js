@@ -36,7 +36,7 @@ export const getDesempeno = async (req, res) => {
 
   try {
     const { rows: emp } = await pool.query(
-      'SELECT id, nombre, rol, sucursal FROM usuarios WHERE id = $1',
+      'SELECT id, nombre, rol, sucursal, es_prueba FROM usuarios WHERE id = $1',
       [id]
     );
     if (emp.length === 0) return res.status(404).json({ message: 'Empleado no encontrado.' });

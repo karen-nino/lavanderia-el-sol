@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import { esAdmin as esAdminFn, esAdminMain as esAdminMainFn } from '../lib/roles';
 import { api } from '../lib/api';
 import SucursalBar from '../components/SucursalBar';
+import EmpleadoEditModal from '../components/EmpleadoEditModal';
+import EmpleadoDeleteModal from '../components/EmpleadoDeleteModal';
 
 const fmtMoneda = (n) =>
   '$' + Number(n ?? 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -203,6 +207,7 @@ function MetricaModal({ metrica, fecha, count, items, onClose }) {
 export default function EmpleadoDesempeno() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { usuario } = useAuth();
 
   const [data,    setData]    = useState(null);
   const [loading, setLoading] = useState(true);
@@ -213,6 +218,11 @@ export default function EmpleadoDesempeno() {
   const [pagina,       setPagina]       = useState(1);
   const fechaRef = useRef(null);
 
+  // Editar / eliminar (modales reutilizables)
+  const [sucursales, setSucursales] = useState([]);
+  const [editOpen,   setEditOpen]   = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+
   useEffect(() => {
     let activo = true;
     api.get(`/usuarios/${id}/desempeno`)
@@ -221,6 +231,29 @@ export default function EmpleadoDesempeno() {
       .finally(() => { if (activo) setLoading(false); });
     return () => { activo = false; };
   }, [id]);
+
+  useEffect(() => {
+    api.get('/sucursales')
+      .then(d => setSucursales(d ?? []))
+      .catch(() => {});
+  }, []);
+
+  const empleado      = data?.empleado;
+  const esMismoUsuario = usuario?.id === empleado?.id;
+  // Solo el Admin Main puede modificar/eliminar a un administrador; cada quien
+  // puede editarse a sí mismo. No se puede eliminar la propia cuenta.
+  const puedeModificar = !!empleado && esAdminFn(usuario?.rol)
+    && (esMismoUsuario || !esAdminFn(empleado.rol) || esAdminMainFn(usuario?.rol));
+  const puedeEliminar  = puedeModificar && !esMismoUsuario;
+
+  const onGuardado = (actualizado) => {
+    setData(prev => (prev ? { ...prev, empleado: { ...prev.empleado, ...actualizado } } : prev));
+    setEditOpen(false);
+  };
+  const onEliminado = () => {
+    setDeleteOpen(false);
+    navigate('/empleados');
+  };
 
   // Cierra el dropdown de fecha al hacer clic fuera.
   useEffect(() => {
@@ -254,20 +287,51 @@ export default function EmpleadoDesempeno() {
     <div className="min-h-full bg-slate-100">
       {/* Cabecera */}
       <div className="bg-white border-b-2 border-gray-200">
-        <div className="px-6 md:px-8 pt-10 md:pt-14 pb-4 flex items-center gap-3">
-          <button
-            onClick={() => navigate('/empleados')}
-            aria-label="Volver"
-            className="w-11 h-11 rounded-full border border-gray-300 text-gray-700 flex items-center justify-center hover:bg-gray-50 transition duration-200 ease-out active:scale-[1.3] active:bg-white active:shadow-md flex-shrink-0"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-          </button>
-          <div>
-            <h1 className="text-xl font-bold text-gray-900">{nombreConApellidoCorto(data?.empleado?.nombre)}</h1>
-            <p className="text-sm text-gray-500">Detalles</p>
+        <div className="px-6 md:px-8 pt-10 md:pt-14 pb-4 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <button
+              onClick={() => navigate('/empleados')}
+              aria-label="Volver"
+              className="w-11 h-11 rounded-full border border-gray-300 text-gray-700 flex items-center justify-center hover:bg-gray-50 transition duration-200 ease-out active:scale-[1.3] active:bg-white active:shadow-md flex-shrink-0"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+            <div className="min-w-0">
+              <h1 className="text-xl font-bold text-gray-900 truncate">{nombreConApellidoCorto(data?.empleado?.nombre)}</h1>
+              <p className="text-sm text-gray-500">Detalles</p>
+            </div>
           </div>
+
+          {(puedeModificar || puedeEliminar) && (
+            <div className="flex items-center gap-2 flex-shrink-0">
+              {puedeModificar && (
+                <button
+                  onClick={() => setEditOpen(true)}
+                  aria-label="Editar"
+                  className="w-11 h-11 rounded-full bg-blue hover:opacity-90 text-white flex items-center justify-center transition-colors flex-shrink-0"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                      d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                </button>
+              )}
+              {puedeEliminar && (
+                <button
+                  onClick={() => setDeleteOpen(true)}
+                  aria-label="Eliminar"
+                  className="w-11 h-11 rounded-full bg-red-600 hover:bg-red-700 text-white flex items-center justify-center transition-colors flex-shrink-0"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -416,6 +480,23 @@ export default function EmpleadoDesempeno() {
           count={modal.dia[modal.metrica]}
           items={modal.dia.detalle?.[modal.metrica] ?? []}
           onClose={() => setModal(null)}
+        />
+      )}
+
+      {editOpen && empleado && (
+        <EmpleadoEditModal
+          empleado={empleado}
+          sucursales={sucursales}
+          onClose={() => setEditOpen(false)}
+          onSaved={onGuardado}
+        />
+      )}
+
+      {deleteOpen && empleado && (
+        <EmpleadoDeleteModal
+          empleado={empleado}
+          onClose={() => setDeleteOpen(false)}
+          onDeleted={onEliminado}
         />
       )}
     </div>
