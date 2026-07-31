@@ -63,8 +63,9 @@ export default function MaquinaCicloOverlay({ modo = 'iniciar', tipo, nombre }) 
           <g clipPath="url(#sol-glass)">
             <rect x="34" y="64" width="52" height="52" fill={pal.glass} />
 
-            {/* Tambor: gira en bucle (iniciar) o desacelera hasta frenar (detener) */}
-            <g style={pal.drumStyle}>
+            {/* Interior (agujeros + ropa). Al detener el tambor gira y frena;
+                al iniciar queda quieto y el agua lo va cubriendo. */}
+            <g style={esDetener ? pal.drumStyle : undefined}>
               {[0, 45, 90, 135, 180, 225, 270, 315].map((a) => {
                 const r = 21;
                 const x = 60 + r * Math.cos((a * Math.PI) / 180);
@@ -76,23 +77,33 @@ export default function MaquinaCicloOverlay({ modo = 'iniciar', tipo, nombre }) 
               <rect x="50" y="92" width="13" height="9" rx="4.5" fill={esDetener ? '#ef7f7f' : '#7fb2ff'} transform="rotate(40 56 96)" />
             </g>
 
-            {/* Burbujas subiendo (solo al iniciar) */}
-            {!esDetener && [
-              { cx: 50, r: 2.6, d: '0s'   },
-              { cx: 60, r: 3.2, d: '.5s'  },
-              { cx: 69, r: 2.2, d: '.9s'  },
-              { cx: 56, r: 2,   d: '1.3s' },
-            ].map((b, i) => (
-              <circle
-                key={i}
-                cx={b.cx}
-                cy="112"
-                r={b.r}
-                fill="#ffffff"
-                opacity="0.9"
-                style={{ animation: `sol-bubble 1.8s ease-in ${b.d} infinite` }}
-              />
-            ))}
+            {/* Iniciar: agua que sube llenando + burbujas */}
+            {!esDetener && (
+              <>
+                <g style={{ animation: 'sol-fill 2.3s cubic-bezier(.37,0,.24,1) both' }}>
+                  {/* Cuerpo de agua translúcido (la ropa se ve sumergida) */}
+                  <rect x="34" y="64" width="52" height="52" fill="#5aa9f0" opacity="0.5" />
+                  {/* Línea de superficie, un poco más clara */}
+                  <rect x="34" y="64" width="52" height="3" fill="#a9d6fb" opacity="0.9" />
+                </g>
+                {[
+                  { cx: 50, r: 2.6, d: '0s'   },
+                  { cx: 60, r: 3.2, d: '.5s'  },
+                  { cx: 69, r: 2.2, d: '.9s'  },
+                  { cx: 56, r: 2,   d: '1.3s' },
+                ].map((b, i) => (
+                  <circle
+                    key={i}
+                    cx={b.cx}
+                    cy="112"
+                    r={b.r}
+                    fill="#ffffff"
+                    opacity="0.9"
+                    style={{ animation: `sol-bubble 1.8s ease-in ${b.d} infinite` }}
+                  />
+                ))}
+              </>
+            )}
           </g>
 
           {/* Reflejo del vidrio */}
@@ -110,6 +121,7 @@ export default function MaquinaCicloOverlay({ modo = 'iniciar', tipo, nombre }) 
       <style>{`
         @keyframes sol-drum      { to { transform: rotate(360deg); } }
         @keyframes sol-drum-stop { from { transform: rotate(0deg); } to { transform: rotate(540deg); } }
+        @keyframes sol-fill      { from { transform: translateY(52px); } to { transform: translateY(0); } }
         @keyframes sol-pop       { from { opacity: 0; transform: scale(.85); } to { opacity: 1; transform: scale(1); } }
         @keyframes sol-bubble {
           0%   { transform: translateY(0);    opacity: 0; }
@@ -121,7 +133,7 @@ export default function MaquinaCicloOverlay({ modo = 'iniciar', tipo, nombre }) 
           100% { transform: scale(1.3);  opacity: 0; }
         }
         @media (prefers-reduced-motion: reduce) {
-          [style*="sol-drum"], [style*="sol-bubble"], [style*="sol-ring"] { animation: none !important; }
+          [style*="sol-drum"], [style*="sol-bubble"], [style*="sol-ring"], [style*="sol-fill"] { animation: none !important; }
         }
       `}</style>
     </div>

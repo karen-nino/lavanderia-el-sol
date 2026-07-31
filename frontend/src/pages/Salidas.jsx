@@ -149,11 +149,11 @@ export default function Salidas() {
     setErrorAccion('');
     setIniciando(maq); // arranca la animación de lavadora
     try {
-      // Duración mínima para que la animación se alcance a ver aunque la API
-      // responda al instante.
+      // Duración mínima para que la animación (agua llenándose) se alcance a
+      // ver aunque la API responda al instante.
       await Promise.all([
         api.patch(`/notas/${id}/activar-pendientes`, { maquina_id: maq.id }),
-        new Promise((r) => setTimeout(r, 1700)),
+        new Promise((r) => setTimeout(r, 2500)),
       ]);
       setConfirmIniciar(null);
       await cargarDatos();
