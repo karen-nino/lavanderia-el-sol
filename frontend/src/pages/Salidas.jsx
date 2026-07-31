@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
-import IniciandoLavadoOverlay from '../components/IniciandoLavadoOverlay';
+import MaquinaCicloOverlay from '../components/MaquinaCicloOverlay';
 
 function fmtMonto(n) {
   return n != null ? `$${Number(n).toFixed(2)}` : '—';
@@ -66,6 +66,7 @@ export default function Salidas() {
   const [confirmIniciar,   setConfirmIniciar]   = useState(null); // máquina a iniciar
   const [confirmQuitar,    setConfirmQuitar]    = useState(null); // máquina a eliminar de la nota
   const [iniciando,        setIniciando]        = useState(null); // máquina arrancando (animación)
+  const [deteniendo,       setDeteniendo]       = useState(null); // máquina deteniéndose (animación)
 
   // Máquinas disponibles para los modales de asignar/cambiar máquina.
   const [maquinasDisp,     setMaquinasDisp]     = useState([]);
@@ -193,16 +194,23 @@ export default function Salidas() {
   // y reinicia su temporizador. Las demás máquinas de la nota no se tocan.
   async function detenerCiclo() {
     if (!confirmDetener) return;
+    const maq = confirmDetener;
     setLoadingMaquina(true);
     setErrorAccion('');
+    setDeteniendo(maq); // arranca la animación de detener
     try {
-      await api.patch(`/maquinas/${confirmDetener.id}/detener-ciclo`);
+      // Duración mínima para que la animación se alcance a ver.
+      await Promise.all([
+        api.patch(`/maquinas/${maq.id}/detener-ciclo`),
+        new Promise((r) => setTimeout(r, 1700)),
+      ]);
       setConfirmDetener(null);
       await cargarDatos();
     } catch (err) {
+      // El modal de confirmación sigue abierto detrás; ahí se muestra el error.
       setErrorAccion(err.message);
-      setConfirmDetener(null);
     } finally {
+      setDeteniendo(null);
       setLoadingMaquina(false);
     }
   }
@@ -685,7 +693,8 @@ export default function Salidas() {
       </div>
 
       {/* Modal advertencia iniciar lavado/secado */}
-      {iniciando && <IniciandoLavadoOverlay tipo={iniciando.tipo} nombre={iniciando.nombre} />}
+      {iniciando && <MaquinaCicloOverlay modo="iniciar" tipo={iniciando.tipo} nombre={iniciando.nombre} />}
+      {deteniendo && <MaquinaCicloOverlay modo="detener" tipo={deteniendo.tipo} nombre={deteniendo.nombre} />}
 
       {confirmIniciar && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
