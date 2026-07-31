@@ -12,10 +12,10 @@ const FORM_INIT = { nombre: '', apellido: '', rol: 'operador', password: '', suc
 
 const ROL_LABEL = { admin_main: 'Admin Main', admin: 'Admin', operador: 'Empleado' };
 
-// Usuarios de prueba (Prueba Admin, Prueba_Empleado, etc.): no están ligados a
-// una sucursal y en la lista de Empleados solo los ve el admin_main. Se
-// detectan por el nombre: "Prueba" seguido de espacio, guion, guion bajo o fin.
-const esUsuarioPrueba = (e) => /^prueba([ _-]|$)/i.test((e?.nombre ?? '').trim());
+// Usuarios de prueba: no están ligados a una sucursal y en la lista de
+// Empleados solo los ve el admin_main. Se identifican con la bandera es_prueba
+// de la base (no por el nombre), así se pueden renombrar sin perder la marca.
+const esUsuarioPrueba = (e) => e?.es_prueba === true;
 
 const splitNombre = (full) => {
   const [n, ...resto] = (full ?? '').trim().split(' ');

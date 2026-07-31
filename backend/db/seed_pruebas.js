@@ -33,15 +33,15 @@ async function main() {
       if (existente.rowCount > 0) {
         await client.query(
           `UPDATE usuarios
-           SET password = $1, rol = $2, sucursal = NULL, activo = TRUE, updated_at = NOW()
+           SET password = $1, rol = $2, sucursal = NULL, activo = TRUE, es_prueba = TRUE, updated_at = NOW()
            WHERE nombre = $3`,
           [hash, rol, nombre]
         );
         console.log(`Actualizado: ${nombre} (${rol}, sin sucursal)`);
       } else {
         await client.query(
-          `INSERT INTO usuarios (nombre, password, rol, sucursal)
-           VALUES ($1, $2, $3, NULL)`,
+          `INSERT INTO usuarios (nombre, password, rol, sucursal, es_prueba)
+           VALUES ($1, $2, $3, NULL, TRUE)`,
           [nombre, hash, rol]
         );
         console.log(`Creado:      ${nombre} (${rol}, sin sucursal)`);

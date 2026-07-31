@@ -10,7 +10,7 @@ export const getEmpleados = async (req, res) => {
     // admin-only). Si no es admin, se limita a la sucursal activa.
     const sucursalFiltro = esAdmin(req.user?.rol) ? null : req.sucursal;
     const { rows } = await pool.query(
-      `SELECT id, nombre, rol, sucursal, activo, created_at
+      `SELECT id, nombre, rol, sucursal, activo, es_prueba, created_at
          FROM usuarios
         WHERE activo = TRUE
           AND ($1::text IS NULL OR sucursal = $1)
@@ -225,7 +225,7 @@ export const createEmpleado = async (req, res) => {
     const { rows } = await pool.query(
       `INSERT INTO usuarios (nombre, password, rol, sucursal)
        VALUES ($1, $2, $3, $4)
-       RETURNING id, nombre, rol, sucursal, activo, created_at`,
+       RETURNING id, nombre, rol, sucursal, activo, es_prueba, created_at`,
       [nombre.trim(), hashed, rolFinal, sucursalFinal]
     );
     res.status(201).json(rows[0]);
@@ -301,7 +301,7 @@ export const updateEmpleado = async (req, res) => {
     const { rows } = await pool.query(
       `UPDATE usuarios SET ${updates.join(', ')}
          WHERE id = $${i} AND activo = TRUE
-         RETURNING id, nombre, rol, sucursal, activo, created_at`,
+         RETURNING id, nombre, rol, sucursal, activo, es_prueba, created_at`,
       values
     );
     if (rows.length === 0) return res.status(404).json({ message: 'Empleado no encontrado.' });
