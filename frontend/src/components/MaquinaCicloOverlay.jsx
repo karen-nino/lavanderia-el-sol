@@ -1,29 +1,44 @@
-// Overlay con una lavadora animada, para dar feedback al arrancar o detener una
-// máquina.
-//   modo:   'iniciar' → tonos azules, tambor girando en bucle, burbujas, luz
-//                       verde.
-//           'detener' → tonos rojos, el tambor DESACELERA hasta frenar, sin
-//                       burbujas, luz roja y anillo de alerta pulsando.
+// Overlay con una lavadora/secadora animada, para dar feedback al arrancar o
+// detener una máquina. Hay tres variantes visuales:
+//   - 'lavar'   (iniciar + lavadora): tonos azules, el tambor se LLENA de agua.
+//   - 'secar'   (iniciar + secadora): tonos cálidos, el tambor GIRA con ondas
+//                de calor subiendo.
+//   - 'detener' (cualquier tipo):     tonos rojos, el tambor DESACELERA hasta
+//                frenar y un anillo de alerta pulsa.
+//
+//   modo:   'iniciar' | 'detener'
 //   tipo:   'secadora' → "Secadora"; cualquier otro → "Lavadora".
 //   nombre: nombre de la máquina (L1, S1, …).
 export default function MaquinaCicloOverlay({ modo = 'iniciar', tipo, nombre }) {
   const esDetener = modo === 'detener';
-  const tipoLabel = tipo === 'secadora' ? 'Secadora' : 'Lavadora';
+  const esSecadora = tipo === 'secadora';
+  const tipoLabel = esSecadora ? 'Secadora' : 'Lavadora';
   const titulo = esDetener ? 'Deteniendo máquina…' : 'Iniciando máquina…';
 
-  // Paleta y movimiento según el modo.
-  const pal = esDetener
-    ? { glass: '#fde3e3', ring: '#eda3a3', holes: '#e08a8a', light: '#ef4444', lightDur: '1s',
-        rim: '#e6a3a3', reflejo: '#fff',
-        drumStyle: { transformBox: 'view-box', transformOrigin: '60px 90px', animation: 'sol-drum-stop 1.5s cubic-bezier(.12,.7,.2,1) both' } }
-    : { glass: '#cfeaff', ring: '#b7cbe8', holes: '#9fccf3', light: '#22c55e', lightDur: '1.4s',
-        rim: '#a9c8ea', reflejo: '#fff',
-        drumStyle: { transformBox: 'view-box', transformOrigin: '60px 90px', animation: 'sol-drum 2.4s linear infinite' } };
-
-  // Colores del texto.
-  const tituloCls = esDetener ? 'text-red-400' : 'text-gray-400';
-  const tipoCls   = esDetener ? 'text-red-700' : 'text-dark-blue';
-  const nombreCls = esDetener ? 'text-red-600' : 'text-blue';
+  const variant = esDetener ? 'detener' : esSecadora ? 'secar' : 'lavar';
+  const CFG = {
+    lavar: {
+      glass: '#cfeaff', holes: '#9fccf3', rim: '#a9c8ea', ring: '#b7cbe8', aro: '#eef4fb',
+      light: '#22c55e', lightDur: '1.4s', knob: '#2f6fed', knob2: '#cfe0fb',
+      cloth2: '#ffd27f', cloth3: '#7fb2ff', drum: undefined,
+      tituloCls: 'text-gray-400', tipoCls: 'text-dark-blue', nombreCls: 'text-blue',
+    },
+    secar: {
+      glass: '#fde3e3', holes: '#e79191', rim: '#e6a3a3', ring: '#eda3a3', aro: '#fbeaea',
+      light: '#ef4444', lightDur: '1.2s', knob: '#ef4444', knob2: '#f6cccc',
+      cloth2: '#f7a8a8', cloth3: '#ef7f7f',
+      drum: { transformBox: 'view-box', transformOrigin: '60px 90px', animation: 'sol-drum 2.2s linear infinite' },
+      tituloCls: 'text-gray-400', tipoCls: 'text-red-700', nombreCls: 'text-red-600',
+    },
+    detener: {
+      glass: '#fde3e3', holes: '#e08a8a', rim: '#e6a3a3', ring: '#eda3a3', aro: '#fbeaea',
+      light: '#ef4444', lightDur: '1s', knob: '#ef4444', knob2: '#f6cccc',
+      cloth2: '#f7a8a8', cloth3: '#ef7f7f',
+      drum: { transformBox: 'view-box', transformOrigin: '60px 90px', animation: 'sol-drum-stop 1.5s cubic-bezier(.12,.7,.2,1) both' },
+      tituloCls: 'text-red-400', tipoCls: 'text-red-700', nombreCls: 'text-red-600',
+    },
+  };
+  const c = CFG[variant];
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/55 backdrop-blur-sm">
@@ -36,10 +51,10 @@ export default function MaquinaCicloOverlay({ modo = 'iniciar', tipo, nombre }) 
           <rect x="12" y="8" width="96" height="134" rx="16" fill="#ffffff" stroke="#d7e3f4" strokeWidth="3" />
           {/* Panel superior */}
           <line x1="12" y1="38" x2="108" y2="38" stroke="#eaf0f8" strokeWidth="2" />
-          <circle cx="26" cy="23" r="4" fill={esDetener ? '#ef4444' : '#2f6fed'} />
-          <circle cx="40" cy="23" r="3" fill={esDetener ? '#f6cccc' : '#cfe0fb'} />
-          <circle cx="96" cy="23" r="3.5" fill={pal.light}>
-            <animate attributeName="opacity" values="1;.35;1" dur={pal.lightDur} repeatCount="indefinite" />
+          <circle cx="26" cy="23" r="4" fill={c.knob} />
+          <circle cx="40" cy="23" r="3" fill={c.knob2} />
+          <circle cx="96" cy="23" r="3.5" fill={c.light}>
+            <animate attributeName="opacity" values="1;.35;1" dur={c.lightDur} repeatCount="indefinite" />
           </circle>
 
           {/* Anillo de alerta (solo al detener) */}
@@ -51,8 +66,8 @@ export default function MaquinaCicloOverlay({ modo = 'iniciar', tipo, nombre }) 
           )}
 
           {/* Aro metálico de la puerta */}
-          <circle cx="60" cy="90" r="34" fill={esDetener ? '#fbeaea' : '#eef4fb'} stroke={pal.rim} strokeWidth="2" />
-          <circle cx="60" cy="90" r="30" fill="none" stroke={pal.ring} strokeWidth="4" />
+          <circle cx="60" cy="90" r="34" fill={c.aro} stroke={c.rim} strokeWidth="2" />
+          <circle cx="60" cy="90" r="30" fill="none" stroke={c.ring} strokeWidth="4" />
 
           {/* Interior del vidrio (recortado al círculo) */}
           <defs>
@@ -61,29 +76,27 @@ export default function MaquinaCicloOverlay({ modo = 'iniciar', tipo, nombre }) 
             </clipPath>
           </defs>
           <g clipPath="url(#sol-glass)">
-            <rect x="34" y="64" width="52" height="52" fill={pal.glass} />
+            <rect x="34" y="64" width="52" height="52" fill={c.glass} />
 
-            {/* Interior (agujeros + ropa). Al detener el tambor gira y frena;
-                al iniciar queda quieto y el agua lo va cubriendo. */}
-            <g style={esDetener ? pal.drumStyle : undefined}>
+            {/* Interior (agujeros + ropa). Gira al secar y al detener (frena);
+                queda quieto al lavar mientras el agua sube. */}
+            <g style={c.drum}>
               {[0, 45, 90, 135, 180, 225, 270, 315].map((a) => {
                 const r = 21;
                 const x = 60 + r * Math.cos((a * Math.PI) / 180);
                 const y = 90 + r * Math.sin((a * Math.PI) / 180);
-                return <circle key={a} cx={x} cy={y} r="2" fill={pal.holes} />;
+                return <circle key={a} cx={x} cy={y} r="2" fill={c.holes} />;
               })}
               <rect x="49" y="81" width="16" height="11" rx="5" fill="#ffffff" transform="rotate(18 57 86)" />
-              <rect x="58" y="90" width="15" height="10" rx="5" fill={esDetener ? '#f7a8a8' : '#ffd27f'} transform="rotate(-24 65 95)" />
-              <rect x="50" y="92" width="13" height="9" rx="4.5" fill={esDetener ? '#ef7f7f' : '#7fb2ff'} transform="rotate(40 56 96)" />
+              <rect x="58" y="90" width="15" height="10" rx="5" fill={c.cloth2} transform="rotate(-24 65 95)" />
+              <rect x="50" y="92" width="13" height="9" rx="4.5" fill={c.cloth3} transform="rotate(40 56 96)" />
             </g>
 
-            {/* Iniciar: agua que sube llenando + burbujas */}
-            {!esDetener && (
+            {/* Lavar: agua que sube llenando + burbujas */}
+            {variant === 'lavar' && (
               <>
                 <g style={{ animation: 'sol-fill 2.3s cubic-bezier(.37,0,.24,1) both' }}>
-                  {/* Cuerpo de agua translúcido (la ropa se ve sumergida) */}
                   <rect x="34" y="64" width="52" height="52" fill="#5aa9f0" opacity="0.5" />
-                  {/* Línea de superficie, un poco más clara */}
                   <rect x="34" y="64" width="52" height="3" fill="#a9d6fb" opacity="0.9" />
                 </g>
                 {[
@@ -92,29 +105,40 @@ export default function MaquinaCicloOverlay({ modo = 'iniciar', tipo, nombre }) 
                   { cx: 69, r: 2.2, d: '.9s'  },
                   { cx: 56, r: 2,   d: '1.3s' },
                 ].map((b, i) => (
-                  <circle
-                    key={i}
-                    cx={b.cx}
-                    cy="112"
-                    r={b.r}
-                    fill="#ffffff"
-                    opacity="0.9"
-                    style={{ animation: `sol-bubble 1.8s ease-in ${b.d} infinite` }}
-                  />
+                  <circle key={i} cx={b.cx} cy="112" r={b.r} fill="#ffffff" opacity="0.9"
+                    style={{ animation: `sol-bubble 1.8s ease-in ${b.d} infinite` }} />
                 ))}
               </>
             )}
           </g>
 
+          {/* Secar: ondas de calor subiendo (fuera del vidrio, sobre la puerta) */}
+          {variant === 'secar' && [
+            { x: 48, d: '0s'   },
+            { x: 60, d: '.8s'  },
+            { x: 72, d: '1.6s' },
+          ].map((w, i) => (
+            <path
+              key={i}
+              d={`M${w.x} 78 q 6 -6 0 -12 q -6 -6 0 -12`}
+              fill="none"
+              stroke="#ef4444"
+              strokeWidth="3"
+              strokeLinecap="round"
+              opacity="0"
+              style={{ animation: `sol-heat 2.6s ease-in-out ${w.d} infinite` }}
+            />
+          ))}
+
           {/* Reflejo del vidrio */}
-          <path d="M46 78 A26 26 0 0 1 68 68" fill="none" stroke={pal.reflejo} strokeWidth="3" strokeLinecap="round" opacity="0.7" />
-          <circle cx="60" cy="90" r="26" fill="none" stroke={pal.rim} strokeWidth="2" />
+          <path d="M46 78 A26 26 0 0 1 68 68" fill="none" stroke="#ffffff" strokeWidth="3" strokeLinecap="round" opacity="0.7" />
+          <circle cx="60" cy="90" r="26" fill="none" stroke={c.rim} strokeWidth="2" />
         </svg>
 
         <div className="text-center">
-          <p className={`text-xs font-semibold uppercase tracking-wide ${tituloCls}`}>{titulo}</p>
-          <p className={`text-xl font-bold mt-1.5 ${tipoCls}`}>{tipoLabel}</p>
-          {nombre && <p className={`text-3xl font-extrabold leading-tight ${nombreCls}`}>{nombre}</p>}
+          <p className={`text-xs font-semibold uppercase tracking-wide ${c.tituloCls}`}>{titulo}</p>
+          <p className={`text-xl font-bold mt-1.5 ${c.tipoCls}`}>{tipoLabel}</p>
+          {nombre && <p className={`text-3xl font-extrabold leading-tight ${c.nombreCls}`}>{nombre}</p>}
         </div>
       </div>
 
@@ -128,12 +152,18 @@ export default function MaquinaCicloOverlay({ modo = 'iniciar', tipo, nombre }) 
           20%  { opacity: .9; }
           100% { transform: translateY(-30px); opacity: 0; }
         }
+        @keyframes sol-heat {
+          0%   { transform: translateY(10px); opacity: 0; }
+          25%  { opacity: .95; }
+          70%  { opacity: .95; }
+          100% { transform: translateY(-26px); opacity: 0; }
+        }
         @keyframes sol-ring {
-          0%   { transform: scale(1);    opacity: .7; }
-          100% { transform: scale(1.3);  opacity: 0; }
+          0%   { transform: scale(1);   opacity: .7; }
+          100% { transform: scale(1.3); opacity: 0; }
         }
         @media (prefers-reduced-motion: reduce) {
-          [style*="sol-drum"], [style*="sol-bubble"], [style*="sol-ring"], [style*="sol-fill"] { animation: none !important; }
+          [style*="sol-drum"], [style*="sol-bubble"], [style*="sol-fill"], [style*="sol-heat"], [style*="sol-ring"] { animation: none !important; }
         }
       `}</style>
     </div>
