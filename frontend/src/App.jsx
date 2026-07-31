@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider } from './context/AuthContext';
+import { AuthProvider } from './context/AuthProvider';
 import PrivateRoute from './components/PrivateRoute';
 import AdminRoute from './components/AdminRoute';
 import SucursalGate from './components/SucursalGate';
