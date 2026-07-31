@@ -10,21 +10,23 @@ export const buscarUsuarios = async (req, res) => {
   const raw = (req.query.q ?? '').trim();
   if (!raw) return res.json([]);
 
-  const mostrarAdminMain = raw.startsWith('***');
-  const q = mostrarAdminMain ? raw.slice(3).trim() : raw;
+  // El prefijo *** revela los usuarios ocultos: el admin_main y los usuarios
+  // de prueba. Sin él, esos usuarios no aparecen en la búsqueda normal.
+  const mostrarOcultos = raw.startsWith('***');
+  const q = mostrarOcultos ? raw.slice(3).trim() : raw;
 
   // Mínimo 2 caracteres (también tras el prefijo ***) para dificultar la
   // enumeración de empleados; con menos, no se listan resultados.
   if (q.length < 2) return res.json([]);
 
-  const sql = mostrarAdminMain
+  const sql = mostrarOcultos
     ? `SELECT id, nombre FROM usuarios
-        WHERE activo = TRUE AND rol = 'admin_main'
+        WHERE activo = TRUE AND (rol = 'admin_main' OR es_prueba = TRUE)
           AND unaccent(nombre) ILIKE unaccent($1)
         ORDER BY nombre ASC
         LIMIT 8`
     : `SELECT id, nombre FROM usuarios
-        WHERE activo = TRUE AND rol <> 'admin_main'
+        WHERE activo = TRUE AND rol <> 'admin_main' AND es_prueba = FALSE
           AND unaccent(nombre) ILIKE unaccent($1)
         ORDER BY nombre ASC
         LIMIT 8`;
@@ -49,7 +51,7 @@ export const login = async (req, res) => {
 
   try {
     const { rows } = await pool.query(
-      `SELECT id, nombre, password, rol, sucursal FROM usuarios WHERE id = $1 AND activo = TRUE`,
+      `SELECT id, nombre, password, rol, sucursal, es_prueba FROM usuarios WHERE id = $1 AND activo = TRUE`,
       [userId]
     );
 
@@ -84,6 +86,7 @@ export const login = async (req, res) => {
         nombre: usuario.nombre,
         rol: usuario.rol,
         sucursal: usuario.sucursal,
+        es_prueba: usuario.es_prueba,
       },
     });
   } catch (err) {
@@ -96,7 +99,7 @@ export const login = async (req, res) => {
 export const getMe = async (req, res) => {
   try {
     const { rows } = await pool.query(
-      'SELECT id, nombre, rol, sucursal FROM usuarios WHERE id = $1 AND activo = TRUE',
+      'SELECT id, nombre, rol, sucursal, es_prueba FROM usuarios WHERE id = $1 AND activo = TRUE',
       [req.user.id]
     );
     if (rows.length === 0) return res.status(404).json({ message: 'Usuario no encontrado.' });

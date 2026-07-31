@@ -242,7 +242,7 @@ export const updateEmpleado = async (req, res) => {
 
   try {
     const { rows: targetRows } = await pool.query(
-      'SELECT id, rol FROM usuarios WHERE id = $1 AND activo = TRUE',
+      'SELECT id, rol, es_prueba FROM usuarios WHERE id = $1 AND activo = TRUE',
       [targetId]
     );
     if (targetRows.length === 0) {
@@ -276,10 +276,11 @@ export const updateEmpleado = async (req, res) => {
       }
       updates.push(`rol = $${i++}`); values.push(rol);
     }
-    // Un administrador es global (sucursal NULL); un empleado requiere una.
-    // El rol resultante es el que venga en la petición o, si no cambia, el actual.
+    // Un administrador y un usuario de prueba son globales (sucursal NULL); un
+    // empleado normal requiere una. El rol resultante es el que venga en la
+    // petición o, si no cambia, el actual.
     const rolResultante = rol !== undefined ? rol : target.rol;
-    if (esAdmin(rolResultante)) {
+    if (esAdmin(rolResultante) || target.es_prueba) {
       updates.push(`sucursal = $${i++}`); values.push(null);
     } else if (sucursal !== undefined) {
       if (!sucursal?.trim()) return res.status(400).json({ message: 'La sucursal no puede estar vacía.' });

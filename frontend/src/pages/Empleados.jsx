@@ -616,8 +616,9 @@ export default function Empleados() {
                   )}
                 </select>
               </div>
-              {/* Un administrador es global: no se liga a una sucursal. */}
-              {!esAdminFn(editForm.rol) && (
+              {/* Un administrador y un usuario de prueba son globales: no se
+                  ligan a una sucursal. */}
+              {!esAdminFn(editForm.rol) && !esUsuarioPrueba(editEmpleado) && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">
                     Sucursal <span className="text-red-500">*</span>
