@@ -24,7 +24,6 @@ export default function Empleados() {
   const esAdminMain = esAdminMainFn(usuario?.rol);
 
   const [sucursales, setSucursales]     = useState([]);
-  const nombreSucursal = (slug) => sucursales.find(s => s.slug === slug)?.nombre ?? slug;
 
   const [empleados, setEmpleados]       = useState([]);
   const [cargando, setCargando]         = useState(true);
@@ -81,11 +80,18 @@ export default function Empleados() {
       .catch(() => {});
   }, []);
 
+  // Sucursal que se está viendo. Los operadores se limitan a ella; los admins
+  // son globales y se muestran siempre.
+  const sucursalVista = sucursalActiva || usuario?.sucursal || null;
+
   const filtrados = empleados
     .filter(e => {
       // El admin_main se oculta de la lista, salvo el propio usuario (para
       // que siempre vea su tarjeta).
       if (e.rol === 'admin_main' && e.id !== usuario?.id) return false;
+      // Solo empleados (operadores) de la sucursal activa; los admins son
+      // globales y se ven en cualquier sucursal.
+      if (!esAdminFn(e.rol) && sucursalVista && e.sucursal !== sucursalVista) return false;
       if (filtroRol !== 'todos' && e.rol !== filtroRol) return false;
       return e.nombre.toLowerCase().includes(busqueda.toLowerCase());
     })
@@ -323,11 +329,6 @@ export default function Empleados() {
                     <span className="inline-block text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
                       {ROL_LABEL[emp.rol] ?? emp.rol}
                     </span>
-                    {emp.sucursal && (
-                      <span className="inline-block text-xs px-2 py-0.5 rounded-full bg-light-blue text-blue">
-                        {nombreSucursal(emp.sucursal)}
-                      </span>
-                    )}
                   </div>
                 </div>
               </div>
@@ -428,11 +429,6 @@ export default function Empleados() {
                       <span className="inline-block text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
                         {ROL_LABEL[infoEmpleado.rol] ?? infoEmpleado.rol}
                       </span>
-                      {infoEmpleado.sucursal && (
-                        <span className="inline-block text-xs px-2 py-0.5 rounded-full bg-light-blue text-blue">
-                          {nombreSucursal(infoEmpleado.sucursal)}
-                        </span>
-                      )}
                     </div>
                   </div>
                 </div>
