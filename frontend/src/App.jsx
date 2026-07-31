@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import PrivateRoute from './components/PrivateRoute';
 import AdminRoute from './components/AdminRoute';
+import SucursalGate from './components/SucursalGate';
 import Layout from './components/Layout';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
@@ -31,7 +32,9 @@ export default function App() {
             path="/"
             element={
               <PrivateRoute>
-                <Layout />
+                <SucursalGate>
+                  <Layout />
+                </SucursalGate>
               </PrivateRoute>
             }
           >

@@ -50,12 +50,14 @@ export function AuthProvider({ children }) {
     });
   };
 
-  // Cambia la sucursal activa (admin). Recarga para que todas las vistas y
-  // sus refrescos periódicos vuelvan a pedir datos de la nueva sucursal.
-  const setSucursalActiva = (slug) => {
+  // Cambia la sucursal activa (admin). Por defecto recarga para que todas las
+  // vistas y sus refrescos periódicos vuelvan a pedir datos de la nueva
+  // sucursal. En la selección inicial tras el login (cuando aún no hay panel
+  // montado) se pasa { reload: false } para entrar sin recargar.
+  const setSucursalActiva = (slug, { reload = true } = {}) => {
     if (!slug || slug === sucursalActiva) return;
     persistSucursal(slug);
-    window.location.reload();
+    if (reload) window.location.reload();
   };
 
   return (
