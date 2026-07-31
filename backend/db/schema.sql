@@ -18,6 +18,7 @@ CREATE TYPE tipo_movimiento AS ENUM ('entrada', 'salida');
 CREATE TABLE usuarios (
   id          SERIAL PRIMARY KEY,
   nombre      VARCHAR(100) NOT NULL,
+  apellido    VARCHAR(100),
   password    TEXT NOT NULL,
   rol         rol_usuario NOT NULL DEFAULT 'operador',
   activo      BOOLEAN NOT NULL DEFAULT TRUE,

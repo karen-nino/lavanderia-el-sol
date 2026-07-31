@@ -10,7 +10,7 @@ export const getEmpleados = async (req, res) => {
     // admin-only). Si no es admin, se limita a la sucursal activa.
     const sucursalFiltro = esAdmin(req.user?.rol) ? null : req.sucursal;
     const { rows } = await pool.query(
-      `SELECT id, nombre, rol, sucursal, activo, es_prueba, created_at
+      `SELECT id, nombre, apellido, rol, sucursal, activo, es_prueba, created_at
          FROM usuarios
         WHERE activo = TRUE
           AND ($1::text IS NULL OR sucursal = $1)
@@ -36,7 +36,7 @@ export const getDesempeno = async (req, res) => {
 
   try {
     const { rows: emp } = await pool.query(
-      'SELECT id, nombre, rol, sucursal, es_prueba FROM usuarios WHERE id = $1',
+      'SELECT id, nombre, apellido, rol, sucursal, es_prueba FROM usuarios WHERE id = $1',
       [id]
     );
     if (emp.length === 0) return res.status(404).json({ message: 'Empleado no encontrado.' });
@@ -203,7 +203,7 @@ export const getDesempeno = async (req, res) => {
 };
 
 export const createEmpleado = async (req, res) => {
-  const { nombre, password, rol, sucursal } = req.body;
+  const { nombre, apellido, password, rol, sucursal } = req.body;
 
   if (!nombre?.trim()) return res.status(400).json({ message: 'El nombre es requerido.' });
   if (!password || password.length < 8) {
@@ -223,10 +223,10 @@ export const createEmpleado = async (req, res) => {
   try {
     const hashed = await bcrypt.hash(password, 10);
     const { rows } = await pool.query(
-      `INSERT INTO usuarios (nombre, password, rol, sucursal)
-       VALUES ($1, $2, $3, $4)
-       RETURNING id, nombre, rol, sucursal, activo, es_prueba, created_at`,
-      [nombre.trim(), hashed, rolFinal, sucursalFinal]
+      `INSERT INTO usuarios (nombre, apellido, password, rol, sucursal)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id, nombre, apellido, rol, sucursal, activo, es_prueba, created_at`,
+      [nombre.trim(), apellido?.trim() || null, hashed, rolFinal, sucursalFinal]
     );
     res.status(201).json(rows[0]);
   } catch (err) {
@@ -237,7 +237,7 @@ export const createEmpleado = async (req, res) => {
 
 export const updateEmpleado = async (req, res) => {
   const targetId = Number(req.params.id);
-  const { nombre, password, rol, sucursal } = req.body;
+  const { nombre, apellido, password, rol, sucursal } = req.body;
   const callerEsMain = req.user.rol === 'admin_main';
 
   try {
@@ -263,6 +263,9 @@ export const updateEmpleado = async (req, res) => {
     if (nombre !== undefined) {
       if (!nombre.trim()) return res.status(400).json({ message: 'El nombre no puede estar vacío.' });
       updates.push(`nombre = $${i++}`); values.push(nombre.trim());
+    }
+    if (apellido !== undefined) {
+      updates.push(`apellido = $${i++}`); values.push(apellido?.trim() || null);
     }
     if (rol !== undefined) {
       if (!ROL_VALIDOS.includes(rol)) {
@@ -302,7 +305,7 @@ export const updateEmpleado = async (req, res) => {
     const { rows } = await pool.query(
       `UPDATE usuarios SET ${updates.join(', ')}
          WHERE id = $${i} AND activo = TRUE
-         RETURNING id, nombre, rol, sucursal, activo, es_prueba, created_at`,
+         RETURNING id, nombre, apellido, rol, sucursal, activo, es_prueba, created_at`,
       values
     );
     if (rows.length === 0) return res.status(404).json({ message: 'Empleado no encontrado.' });

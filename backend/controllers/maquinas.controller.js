@@ -43,7 +43,7 @@ export const getUsoMaquina = async (req, res) => {
     const { rows: notas } = await pool.query(
       `SELECT n.id, DATE(n.created_at) AS fecha, n.folio, n.modalidad, n.estado,
               n.precio_total, n.estado_pago, n.cantidad_cargas, n.cliente_id,
-              n.usuario_id, u.nombre AS empleado_nombre,
+              n.usuario_id, TRIM(u.nombre || ' ' || COALESCE(u.apellido, '')) AS empleado_nombre,
               c.nombre AS cliente_nombre, c.apellido AS cliente_apellido
          FROM notas n
          LEFT JOIN usuarios u ON u.id = n.usuario_id
@@ -332,7 +332,7 @@ export const detenerCiclo = async (req, res) => {
     if (estabaEnUso) {
       const { rows: cfg } = await client.query('SELECT alerta_ciclo_detenido FROM ajustes WHERE id = 1');
       if (cfg[0]?.alerta_ciclo_detenido) {
-        const { rows: u } = await client.query('SELECT nombre FROM usuarios WHERE id = $1', [req.user.id]);
+        const { rows: u } = await client.query("SELECT TRIM(nombre || ' ' || COALESCE(apellido, '')) AS nombre FROM usuarios WHERE id = $1", [req.user.id]);
         const quien = u[0]?.nombre ?? 'un empleado';
         await client.query(
           `INSERT INTO notificaciones (tipo, mensaje, maquina_id, usuario_id, sucursal)

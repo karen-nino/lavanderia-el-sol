@@ -199,7 +199,7 @@ function DesktopHeader({ usuario, now }) {
         </div>
         <div>
           <p className="text-kpi-label text-grey">{ROL_LABEL[usuario?.rol] ?? 'Usuario'}</p>
-          <p className="text-2xl font-bold text-dark-blue">{usuario?.nombre ?? '—'}</p>
+          <p className="text-2xl font-bold text-dark-blue">{[usuario?.nombre, usuario?.apellido].filter(Boolean).join(' ') || '—'}</p>
         </div>
       </div>
 
@@ -228,7 +228,7 @@ function MobileTopbar({ usuario, alertas, onAlerts }) {
       <div className="flex items-center gap-3">
         <div>
           <p className="text-kpi-label text-grey">{ROL_LABEL[usuario?.rol] ?? 'Usuario'}</p>
-          <p className="text-xl font-bold text-dark-blue pb-2">{usuario?.nombre ?? 'Usuario'}</p>
+          <p className="text-xl font-bold text-dark-blue pb-2">{[usuario?.nombre, usuario?.apellido].filter(Boolean).join(' ') || 'Usuario'}</p>
           <div className="flex items-center gap-1">
             <span className="w-2 h-2 rounded-pill bg-green" />
             <span className="text-kpi-label font-bold text-green uppercase tracking-wide">Conectado</span>

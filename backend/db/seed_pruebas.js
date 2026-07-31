@@ -2,6 +2,10 @@
 // distintos roles. NO están ligados a ninguna sucursal (sucursal = NULL).
 // En la página de Empleados solo los ve el admin_main.
 //
+// Idempotente: localiza al usuario de prueba de cada rol por la bandera
+// es_prueba (sin importar cómo se llame ahora) y lo actualiza; si no existe,
+// lo crea.
+//
 // Uso:   node db/seed_pruebas.js [contraseña]
 // Si no se pasa contraseña, se usa PRUEBA_PASSWORD_DEFECTO.
 import bcrypt from 'bcrypt';
@@ -10,8 +14,8 @@ import pool from './pool.js';
 const PRUEBA_PASSWORD_DEFECTO = 'Prueba1234';
 
 const USUARIOS_PRUEBA = [
-  { nombre: 'Prueba_Admin',    rol: 'admin' },
-  { nombre: 'Prueba_Empleado', rol: 'operador' },
+  { nombre: 'Prueba', apellido: 'Admin',    rol: 'admin' },
+  { nombre: 'Prueba', apellido: 'Empleado', rol: 'operador' },
 ];
 
 async function main() {
@@ -24,27 +28,29 @@ async function main() {
   const hash = await bcrypt.hash(password, 10);
   const client = await pool.connect();
   try {
-    for (const { nombre, rol } of USUARIOS_PRUEBA) {
-      // Idempotente: si ya existe (por nombre) se actualiza; si no, se inserta.
+    for (const { nombre, apellido, rol } of USUARIOS_PRUEBA) {
       const existente = await client.query(
-        'SELECT id FROM usuarios WHERE nombre = $1',
-        [nombre]
+        'SELECT id, nombre, apellido FROM usuarios WHERE es_prueba = TRUE AND rol = $1 ORDER BY id LIMIT 1',
+        [rol]
       );
       if (existente.rowCount > 0) {
+        // Ya hay un usuario de prueba con ese rol: solo se reactiva y se le
+        // renueva la contraseña, respetando el nombre que tenga ahora.
         await client.query(
           `UPDATE usuarios
-           SET password = $1, rol = $2, sucursal = NULL, activo = TRUE, es_prueba = TRUE, updated_at = NOW()
-           WHERE nombre = $3`,
-          [hash, rol, nombre]
+           SET password = $1, sucursal = NULL, activo = TRUE, updated_at = NOW()
+           WHERE id = $2`,
+          [hash, existente.rows[0].id]
         );
-        console.log(`Actualizado: ${nombre} (${rol}, sin sucursal)`);
+        const u = existente.rows[0];
+        console.log(`Actualizado: ${[u.nombre, u.apellido].filter(Boolean).join(' ')} (${rol}, sin sucursal)`);
       } else {
         await client.query(
-          `INSERT INTO usuarios (nombre, password, rol, sucursal, es_prueba)
-           VALUES ($1, $2, $3, NULL, TRUE)`,
-          [nombre, hash, rol]
+          `INSERT INTO usuarios (nombre, apellido, password, rol, sucursal, es_prueba)
+           VALUES ($1, $2, $3, $4, NULL, TRUE)`,
+          [nombre, apellido, hash, rol]
         );
-        console.log(`Creado:      ${nombre} (${rol}, sin sucursal)`);
+        console.log(`Creado:      ${nombre} ${apellido} (${rol}, sin sucursal)`);
       }
     }
     console.log(`\nContraseña para ambos: ${password}`);

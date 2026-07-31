@@ -450,7 +450,7 @@ async function perteneceASucursal(tabla, id, sucursal) {
 // (PAGADO → PENDIENTE): es el vector directo para desaparecer una venta,
 // así que siempre queda registrado quién lo hizo y en qué nota.
 async function registrarReversionPago(client, nota, usuarioId, sucursal) {
-  const { rows } = await client.query('SELECT nombre FROM usuarios WHERE id = $1', [usuarioId]);
+  const { rows } = await client.query("SELECT TRIM(nombre || ' ' || COALESCE(apellido, '')) AS nombre FROM usuarios WHERE id = $1", [usuarioId]);
   const quien = rows[0]?.nombre ?? 'un administrador';
   await client.query(
     `INSERT INTO notificaciones (tipo, mensaje, usuario_id, sucursal)
@@ -463,7 +463,7 @@ async function registrarReversionPago(client, nota, usuarioId, sucursal) {
 // acción fuerte (libera stock y máquinas), así que siempre queda registrado
 // quién la canceló y qué nota fue.
 async function registrarCancelacionNota(client, nota, usuarioId, sucursal) {
-  const { rows } = await client.query('SELECT nombre FROM usuarios WHERE id = $1', [usuarioId]);
+  const { rows } = await client.query("SELECT TRIM(nombre || ' ' || COALESCE(apellido, '')) AS nombre FROM usuarios WHERE id = $1", [usuarioId]);
   const quien = rows[0]?.nombre ?? 'un empleado';
   const folio = nota.folio ?? `#${nota.id}`;
   await client.query(
@@ -477,7 +477,7 @@ async function registrarCancelacionNota(client, nota, usuarioId, sucursal) {
 // registro por completo, así que siempre queda constancia de quién la eliminó y
 // qué nota era.
 async function registrarEliminacionNota(client, nota, usuarioId, sucursal) {
-  const { rows } = await client.query('SELECT nombre FROM usuarios WHERE id = $1', [usuarioId]);
+  const { rows } = await client.query("SELECT TRIM(nombre || ' ' || COALESCE(apellido, '')) AS nombre FROM usuarios WHERE id = $1", [usuarioId]);
   const quien = rows[0]?.nombre ?? 'un administrador';
   const folio = nota.folio ?? `#${nota.id}`;
   await client.query(
@@ -518,7 +518,7 @@ export const getNotas = async (req, res) => {
               c.nombre   AS cliente_nombre,
               c.apellido AS cliente_apellido,
               c.telefono AS cliente_telefono,
-              u.nombre   AS usuario_nombre,
+              TRIM(u.nombre || ' ' || COALESCE(u.apellido, '')) AS usuario_nombre,
               m.nombre   AS maquina_nombre,
               s.nombre   AS secadora_nombre,
               su.nombre  AS sucursal_nombre,
@@ -578,7 +578,7 @@ export const getNotaById = async (req, res) => {
               c.nombre   AS cliente_nombre,
               c.apellido AS cliente_apellido,
               c.telefono AS cliente_telefono,
-              u.nombre   AS usuario_nombre,
+              TRIM(u.nombre || ' ' || COALESCE(u.apellido, '')) AS usuario_nombre,
               m.nombre   AS maquina_nombre,
               m.tipo     AS maquina_tipo,
               m.estado   AS maquina_estado,
@@ -1733,7 +1733,7 @@ export const asignarSecadora = async (req, res) => {
               c.nombre   AS cliente_nombre,
               c.apellido AS cliente_apellido,
               c.telefono AS cliente_telefono,
-              u.nombre   AS usuario_nombre,
+              TRIM(u.nombre || ' ' || COALESCE(u.apellido, '')) AS usuario_nombre,
               m.nombre   AS maquina_nombre,
               m.tipo     AS maquina_tipo,
               m.estado   AS maquina_estado,
@@ -1954,7 +1954,7 @@ export const asignarMaquina = async (req, res) => {
               c.nombre   AS cliente_nombre,
               c.apellido AS cliente_apellido,
               c.telefono AS cliente_telefono,
-              u.nombre   AS usuario_nombre,
+              TRIM(u.nombre || ' ' || COALESCE(u.apellido, '')) AS usuario_nombre,
               m.nombre   AS maquina_nombre,
               m.tipo     AS maquina_tipo,
               m.estado   AS maquina_estado,
@@ -2096,7 +2096,7 @@ export const cambiarMaquina = async (req, res) => {
               c.nombre   AS cliente_nombre,
               c.apellido AS cliente_apellido,
               c.telefono AS cliente_telefono,
-              u.nombre   AS usuario_nombre,
+              TRIM(u.nombre || ' ' || COALESCE(u.apellido, '')) AS usuario_nombre,
               m.nombre   AS maquina_nombre,
               m.tipo     AS maquina_tipo,
               m.estado   AS maquina_estado,
@@ -2206,7 +2206,7 @@ export const quitarMaquina = async (req, res) => {
               c.nombre   AS cliente_nombre,
               c.apellido AS cliente_apellido,
               c.telefono AS cliente_telefono,
-              u.nombre   AS usuario_nombre,
+              TRIM(u.nombre || ' ' || COALESCE(u.apellido, '')) AS usuario_nombre,
               m.nombre   AS maquina_nombre,
               m.tipo     AS maquina_tipo,
               m.estado   AS maquina_estado,
@@ -2366,7 +2366,7 @@ export const terminarLavado = async (req, res) => {
               c.nombre   AS cliente_nombre,
               c.apellido AS cliente_apellido,
               c.telefono AS cliente_telefono,
-              u.nombre   AS usuario_nombre,
+              TRIM(u.nombre || ' ' || COALESCE(u.apellido, '')) AS usuario_nombre,
               s.nombre   AS secadora_nombre,
               s.tipo     AS secadora_tipo,
               s.estado   AS secadora_estado,
@@ -2467,7 +2467,7 @@ export const terminarSecado = async (req, res) => {
               c.nombre   AS cliente_nombre,
               c.apellido AS cliente_apellido,
               c.telefono AS cliente_telefono,
-              u.nombre   AS usuario_nombre,
+              TRIM(u.nombre || ' ' || COALESCE(u.apellido, '')) AS usuario_nombre,
               s.nombre   AS secadora_nombre,
               s.tipo     AS secadora_tipo,
               s.estado   AS secadora_estado,

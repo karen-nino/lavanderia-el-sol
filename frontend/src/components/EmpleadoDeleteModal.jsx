@@ -35,7 +35,7 @@ export default function EmpleadoDeleteModal({ empleado, onClose, onDeleted }) {
           </div>
           <h3 className="text-base font-semibold text-gray-900 text-center mb-1">Eliminar empleado</h3>
           <p className="text-sm text-gray-500 text-center mb-4">
-            ¿Eliminar a <span className="font-medium text-gray-700">{empleado.nombre}</span>?
+            ¿Eliminar a <span className="font-medium text-gray-700">{[empleado.nombre, empleado.apellido].filter(Boolean).join(' ')}</span>?
             Esta acción no se puede deshacer.
           </p>
           {error && (

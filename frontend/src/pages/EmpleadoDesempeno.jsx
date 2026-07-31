@@ -6,21 +6,13 @@ import { api } from '../lib/api';
 import SucursalBar from '../components/SucursalBar';
 import EmpleadoEditModal from '../components/EmpleadoEditModal';
 import EmpleadoDeleteModal from '../components/EmpleadoDeleteModal';
+import NombreEmpleado from '../components/NombreEmpleado';
 
 const fmtMoneda = (n) =>
   '$' + Number(n ?? 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const fmtFecha = (iso) =>
   new Date(iso).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
-
-// Nombre para el título: deja el nombre completo y corta el apellido a tres
-// letras seguidas de punto. Ej.: "Sofía Monrraz" → "Sofía Mon.".
-const nombreConApellidoCorto = (full) => {
-  const partes = (full ?? '').trim().split(/\s+/).filter(Boolean);
-  if (partes.length <= 1) return partes[0] ?? '—';
-  const [nombre, ...resto] = partes;
-  return `${nombre} ${resto.join(' ').slice(0, 3)}.`;
-};
 
 // Filtro de fecha por rangos, como en la página de Notas.
 const RANGOS_FECHA = [
@@ -218,10 +210,12 @@ export default function EmpleadoDesempeno() {
   const [pagina,       setPagina]       = useState(1);
   const fechaRef = useRef(null);
 
-  // Editar / eliminar (modales reutilizables)
+  // Editar / eliminar (modales reutilizables) y menú de acciones (⋯)
   const [sucursales, setSucursales] = useState([]);
   const [editOpen,   setEditOpen]   = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [menuOpen,   setMenuOpen]   = useState(false);
+  const menuRef = useRef(null);
 
   useEffect(() => {
     let activo = true;
@@ -265,6 +259,16 @@ export default function EmpleadoDesempeno() {
     return () => document.removeEventListener('mousedown', onDown);
   }, [mostrarFecha]);
 
+  // Cierra el menú de acciones (⋯) al hacer clic fuera.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onDown = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [menuOpen]);
+
   // Filtro por rango de fecha (mismo criterio que Notas).
   const rango = useMemo(() => calcularRangoFecha(rangoFecha), [rangoFecha]);
   const diasFiltrados = useMemo(() => {
@@ -299,36 +303,63 @@ export default function EmpleadoDesempeno() {
               </svg>
             </button>
             <div className="min-w-0">
-              <h1 className="text-xl font-bold text-gray-900 truncate">{nombreConApellidoCorto(data?.empleado?.nombre)}</h1>
+              <NombreEmpleado
+                nombre={data?.empleado?.nombre}
+                apellido={data?.empleado?.apellido}
+                className="text-xl font-bold text-gray-900"
+              />
               <p className="text-sm text-gray-500">Detalles</p>
             </div>
           </div>
 
           {(puedeModificar || puedeEliminar) && (
-            <div className="flex items-center gap-2 flex-shrink-0">
-              {puedeModificar && (
-                <button
-                  onClick={() => setEditOpen(true)}
-                  aria-label="Editar"
-                  className="w-11 h-11 rounded-full bg-blue hover:opacity-90 text-white flex items-center justify-center transition-colors flex-shrink-0"
+            <div ref={menuRef} className="relative flex-shrink-0">
+              <button
+                onClick={() => setMenuOpen(v => !v)}
+                aria-label="Acciones"
+                aria-haspopup="menu"
+                aria-expanded={menuOpen}
+                className="w-11 h-11 rounded-full border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 flex items-center justify-center transition-colors"
+              >
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                  <circle cx="12" cy="5" r="2" />
+                  <circle cx="12" cy="12" r="2" />
+                  <circle cx="12" cy="19" r="2" />
+                </svg>
+              </button>
+
+              {menuOpen && (
+                <div
+                  role="menu"
+                  className="absolute right-0 top-12 z-20 bg-white border border-gray-200 rounded-xl shadow-lg p-1 w-44"
                 >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                      d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                  </svg>
-                </button>
-              )}
-              {puedeEliminar && (
-                <button
-                  onClick={() => setDeleteOpen(true)}
-                  aria-label="Eliminar"
-                  className="w-11 h-11 rounded-full bg-red-600 hover:bg-red-700 text-white flex items-center justify-center transition-colors flex-shrink-0"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                  </svg>
-                </button>
+                  {puedeModificar && (
+                    <button
+                      role="menuitem"
+                      onClick={() => { setMenuOpen(false); setEditOpen(true); }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left text-sm text-gray-700 hover:bg-light-blue hover:text-blue-700 transition-colors"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                          d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                      Editar
+                    </button>
+                  )}
+                  {puedeEliminar && (
+                    <button
+                      role="menuitem"
+                      onClick={() => { setMenuOpen(false); setDeleteOpen(true); }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left text-sm text-red-600 hover:bg-red-50 transition-colors"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                      Eliminar
+                    </button>
+                  )}
+                </div>
               )}
             </div>
           )}

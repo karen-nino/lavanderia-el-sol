@@ -6,6 +6,7 @@ import { esAdmin as esAdminFn, esAdminMain as esAdminMainFn } from '../lib/roles
 import SucursalBar from '../components/SucursalBar';
 import EmpleadoEditModal from '../components/EmpleadoEditModal';
 import EmpleadoDeleteModal from '../components/EmpleadoDeleteModal';
+import NombreEmpleado from '../components/NombreEmpleado';
 
 const INPUT_CLS =
   'w-full px-4 py-3.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent transition';
@@ -18,11 +19,6 @@ const ROL_LABEL = { admin_main: 'Admin Main', admin: 'Admin', operador: 'Emplead
 // Empleados solo los ve el admin_main. Se identifican con la bandera es_prueba
 // de la base (no por el nombre), así se pueden renombrar sin perder la marca.
 const esUsuarioPrueba = (e) => e?.es_prueba === true;
-
-const splitNombre = (full) => {
-  const [n, ...resto] = (full ?? '').trim().split(' ');
-  return { nombre: n ?? '', apellido: resto.join(' ') };
-};
 
 export default function Empleados() {
   const navigate = useNavigate();
@@ -94,7 +90,8 @@ export default function Empleados() {
       // globales y los usuarios de prueba se ven en cualquier sucursal.
       if (!prueba && !esAdminFn(e.rol) && sucursalVista && e.sucursal !== sucursalVista) return false;
       if (filtroRol !== 'todos' && e.rol !== filtroRol) return false;
-      return e.nombre.toLowerCase().includes(busqueda.toLowerCase());
+      const nombreCompleto = `${e.nombre} ${e.apellido ?? ''}`.toLowerCase();
+      return nombreCompleto.includes(busqueda.toLowerCase());
     })
     // Orden: el usuario actual hasta arriba, luego los usuarios de prueba y
     // por último el resto (alfabético).
@@ -106,9 +103,6 @@ export default function Empleados() {
       if (pa !== pb) return pa ? -1 : 1;
       return a.nombre.localeCompare(b.nombre);
     });
-
-  const partirNombre = (e) => splitNombre(e.nombre);
-  const nombreCompleto = (e) => e.nombre;
 
   // ── Crear ──────────────────────────────────────────────
   const abrirModal = () => {
@@ -127,9 +121,9 @@ export default function Empleados() {
     setFormError('');
     setGuardando(true);
     try {
-      const nombreCompletoStr = `${form.nombre} ${form.apellido}`.trim();
       const nuevo = await api.post('/usuarios', {
-        nombre: nombreCompletoStr,
+        nombre: form.nombre.trim(),
+        apellido: form.apellido.trim(),
         password: form.password,
         rol: form.rol,
         // Un admin es global: no lleva sucursal.
@@ -262,8 +256,7 @@ export default function Empleados() {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {filtrados.map(emp => {
-            const { nombre, apellido } = partirNombre(emp);
-            const iniciales = `${nombre[0] ?? ''}${apellido[0] ?? ''}`.toUpperCase();
+            const iniciales = `${emp.nombre?.[0] ?? ''}${emp.apellido?.[0] ?? ''}`.toUpperCase();
             const esMismoUsuario = usuario?.id === emp.id;
             const esPrueba = esUsuarioPrueba(emp);
             // Solo el Admin Main puede modificar/eliminar a un administrador
@@ -281,7 +274,7 @@ export default function Empleados() {
                   {iniciales || '?'}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="font-semibold text-gray-900 text-sm truncate">{nombreCompleto(emp)}</p>
+                  <NombreEmpleado nombre={emp.nombre} apellido={emp.apellido} className="font-semibold text-gray-900 text-sm" />
                   <div className="flex flex-wrap items-center gap-1 mt-0.5">
                     {esMismoUsuario ? (
                       <span className="inline-block text-xs px-2 py-0.5 rounded-full bg-blue text-white font-medium">Mi cuenta</span>

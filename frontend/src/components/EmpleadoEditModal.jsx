@@ -6,23 +6,17 @@ import { api } from '../lib/api';
 const INPUT_CLS =
   'w-full px-4 py-3.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent transition';
 
-const splitNombre = (full) => {
-  const [n, ...resto] = (full ?? '').trim().split(' ');
-  return { nombre: n ?? '', apellido: resto.join(' ') };
-};
-
 // Modal para editar un empleado. Reutilizable desde la lista de Empleados y
 // desde la página de detalles del empleado.
-//   empleado:  usuario a editar (con id, nombre, rol, sucursal, es_prueba)
+//   empleado:  usuario a editar (con id, nombre, apellido, rol, sucursal, es_prueba)
 //   sucursales: catálogo para el selector
 //   onClose():  cerrar sin guardar
 //   onSaved(actualizado): tras guardar con éxito, con el usuario actualizado
 export default function EmpleadoEditModal({ empleado, sucursales = [], onClose, onSaved }) {
   const { usuario } = useAuth();
-  const { nombre, apellido } = splitNombre(empleado.nombre);
   const [form, setForm] = useState({
-    nombre,
-    apellido,
+    nombre: empleado.nombre ?? '',
+    apellido: empleado.apellido ?? '',
     rol: empleado.rol ?? 'operador',
     password: '',
     sucursal: empleado.sucursal ?? '',
@@ -43,7 +37,8 @@ export default function EmpleadoEditModal({ empleado, sucursales = [], onClose, 
     setGuardando(true);
     try {
       const payload = {
-        nombre: `${form.nombre} ${form.apellido}`.trim(),
+        nombre: form.nombre.trim(),
+        apellido: form.apellido.trim(),
         rol: form.rol,
         // Un admin es global: no lleva sucursal.
         sucursal: esAdminFn(form.rol) ? '' : form.sucursal,

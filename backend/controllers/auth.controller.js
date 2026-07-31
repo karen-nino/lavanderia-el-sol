@@ -19,15 +19,17 @@ export const buscarUsuarios = async (req, res) => {
   // enumeración de empleados; con menos, no se listan resultados.
   if (q.length < 2) return res.json([]);
 
+  // Nombre completo (nombre + apellido) para mostrar y para buscar.
+  const nombreCompleto = "TRIM(nombre || ' ' || COALESCE(apellido, ''))";
   const sql = mostrarOcultos
-    ? `SELECT id, nombre FROM usuarios
+    ? `SELECT id, ${nombreCompleto} AS nombre FROM usuarios
         WHERE activo = TRUE AND (rol = 'admin_main' OR es_prueba = TRUE)
-          AND unaccent(nombre) ILIKE unaccent($1)
+          AND unaccent(${nombreCompleto}) ILIKE unaccent($1)
         ORDER BY nombre ASC
         LIMIT 8`
-    : `SELECT id, nombre FROM usuarios
+    : `SELECT id, ${nombreCompleto} AS nombre FROM usuarios
         WHERE activo = TRUE AND rol <> 'admin_main' AND es_prueba = FALSE
-          AND unaccent(nombre) ILIKE unaccent($1)
+          AND unaccent(${nombreCompleto}) ILIKE unaccent($1)
         ORDER BY nombre ASC
         LIMIT 8`;
   const params = [`%${q}%`];
@@ -51,7 +53,7 @@ export const login = async (req, res) => {
 
   try {
     const { rows } = await pool.query(
-      `SELECT id, nombre, password, rol, sucursal, es_prueba FROM usuarios WHERE id = $1 AND activo = TRUE`,
+      `SELECT id, nombre, apellido, password, rol, sucursal, es_prueba FROM usuarios WHERE id = $1 AND activo = TRUE`,
       [userId]
     );
 
@@ -84,6 +86,7 @@ export const login = async (req, res) => {
       usuario: {
         id: usuario.id,
         nombre: usuario.nombre,
+        apellido: usuario.apellido,
         rol: usuario.rol,
         sucursal: usuario.sucursal,
         es_prueba: usuario.es_prueba,
@@ -99,7 +102,7 @@ export const login = async (req, res) => {
 export const getMe = async (req, res) => {
   try {
     const { rows } = await pool.query(
-      'SELECT id, nombre, rol, sucursal, es_prueba FROM usuarios WHERE id = $1 AND activo = TRUE',
+      'SELECT id, nombre, apellido, rol, sucursal, es_prueba FROM usuarios WHERE id = $1 AND activo = TRUE',
       [req.user.id]
     );
     if (rows.length === 0) return res.status(404).json({ message: 'Usuario no encontrado.' });
@@ -112,7 +115,7 @@ export const getMe = async (req, res) => {
 
 // ── PATCH /auth/me ───────────────────────────────────────────
 export const updateMe = async (req, res) => {
-  const { nombre, password } = req.body;
+  const { nombre, apellido, password } = req.body;
   const updates = [];
   const values  = [];
   let i = 1;
@@ -120,6 +123,9 @@ export const updateMe = async (req, res) => {
   if (nombre !== undefined) {
     if (!nombre.trim()) return res.status(400).json({ message: 'El nombre no puede estar vacío.' });
     updates.push(`nombre = $${i++}`); values.push(nombre.trim());
+  }
+  if (apellido !== undefined) {
+    updates.push(`apellido = $${i++}`); values.push(apellido?.trim() || null);
   }
   if (password) {
     if (password.length < 8) {
@@ -137,7 +143,7 @@ export const updateMe = async (req, res) => {
 
   try {
     const { rows } = await pool.query(
-      `UPDATE usuarios SET ${updates.join(', ')} WHERE id = $${i} AND activo = TRUE RETURNING id, nombre, rol`,
+      `UPDATE usuarios SET ${updates.join(', ')} WHERE id = $${i} AND activo = TRUE RETURNING id, nombre, apellido, rol`,
       values
     );
     if (rows.length === 0) return res.status(404).json({ message: 'Usuario no encontrado.' });

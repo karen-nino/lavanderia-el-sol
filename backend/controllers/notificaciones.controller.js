@@ -8,7 +8,7 @@ export const getNotificaciones = async (req, res) => {
     const { rows } = await pool.query(
       `SELECT n.id, n.tipo, n.mensaje, n.maquina_id, n.nota_folio, n.created_at,
               m.nombre AS maquina_nombre,
-              u.nombre AS usuario_nombre
+              TRIM(u.nombre || ' ' || COALESCE(u.apellido, '')) AS usuario_nombre
          FROM notificaciones n
          LEFT JOIN maquinas m ON m.id = n.maquina_id
          LEFT JOIN usuarios u ON u.id = n.usuario_id

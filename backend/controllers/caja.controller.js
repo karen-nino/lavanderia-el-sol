@@ -36,7 +36,7 @@ export async function getCajaActual(req, res) {
   const client = await pool.connect();
   try {
     const cajaRes = await client.query(
-      `SELECT c.*, u.nombre AS usuario_apertura
+      `SELECT c.*, TRIM(u.nombre || ' ' || COALESCE(u.apellido, '')) AS usuario_apertura
          FROM cajas c
          JOIN usuarios u ON u.id = c.usuario_apertura_id
         WHERE c.estado = 'abierta' AND c.sucursal = $1
@@ -51,7 +51,7 @@ export async function getCajaActual(req, res) {
     const caja = cajaRes.rows[0];
 
     const movsRes = await client.query(
-      `SELECT mc.id, mc.tipo, mc.concepto, mc.monto, mc.created_at, u.nombre AS usuario
+      `SELECT mc.id, mc.tipo, mc.concepto, mc.monto, mc.created_at, TRIM(u.nombre || ' ' || COALESCE(u.apellido, '')) AS usuario
          FROM movimientos_caja mc
          JOIN usuarios u ON u.id = mc.usuario_id
         WHERE mc.caja_id = $1
@@ -232,8 +232,8 @@ export async function getHistorial(req, res) {
           c.notas_cierre,
           c.abierta_at,
           c.cerrada_at,
-          ua.nombre AS usuario_apertura,
-          uc.nombre AS usuario_cierre,
+          TRIM(ua.nombre || ' ' || COALESCE(ua.apellido, '')) AS usuario_apertura,
+          TRIM(uc.nombre || ' ' || COALESCE(uc.apellido, '')) AS usuario_cierre,
           COALESCE((
             SELECT SUM(precio_total) FROM notas
              WHERE estado_pago = 'PAGADO'

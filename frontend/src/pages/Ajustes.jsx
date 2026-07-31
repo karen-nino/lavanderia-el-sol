@@ -307,14 +307,11 @@ export default function Ajustes() {
   const [logoPreview,   setLogoPreview]   = useState(null);
   const [mensaje,       setMensaje]       = useState(null);
   const [mobileSection, setMobileSection] = useState(null);
-  const [perfilForm,    setPerfilForm]    = useState(() => {
-    const [nombre = '', ...resto] = (usuario?.nombre ?? '').split(' ');
-    return {
-      nombre,
-      apellido: resto.join(' '),
-      password: '',
-    };
-  });
+  const [perfilForm,    setPerfilForm]    = useState(() => ({
+    nombre: usuario?.nombre ?? '',
+    apellido: usuario?.apellido ?? '',
+    password: '',
+  }));
   const [showPassword, setShowPassword] = useState(false);
   const logoInputRef = useRef(null);
 
@@ -490,11 +487,12 @@ export default function Ajustes() {
     setSaving(true);
     setMensaje(null);
     try {
-      const payload = { nombre: nombreCompleto };
+      const payload = { nombre: perfilForm.nombre.trim(), apellido: perfilForm.apellido.trim() };
       if (perfilForm.password) payload.password = perfilForm.password;
       const updated = await api.patch('/auth/me', payload);
       updateUsuario({
         nombre: updated.nombre,
+        apellido: updated.apellido,
         rol: updated.rol,
       });
       setPerfilForm(f => ({ ...f, password: '' }));
@@ -526,7 +524,7 @@ export default function Ajustes() {
     setSaving(true);
     setMensaje(null);
     try {
-      const perfilPayload = { nombre: nombreCompleto };
+      const perfilPayload = { nombre: perfilForm.nombre.trim(), apellido: perfilForm.apellido.trim() };
       if (perfilForm.password) perfilPayload.password = perfilForm.password;
 
       const [updatedPerfil, updatedConfig] = await Promise.all([
@@ -554,7 +552,7 @@ export default function Ajustes() {
         }),
       ]);
 
-      updateUsuario({ nombre: updatedPerfil.nombre, rol: updatedPerfil.rol });
+      updateUsuario({ nombre: updatedPerfil.nombre, apellido: updatedPerfil.apellido, rol: updatedPerfil.rol });
       setPerfilForm(f => ({ ...f, password: '' }));
       setConfig(updatedConfig);
       setMensaje({ tipo: 'ok', texto: 'Cambios guardados correctamente.' });
