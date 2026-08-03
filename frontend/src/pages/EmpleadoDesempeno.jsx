@@ -308,11 +308,13 @@ export default function EmpleadoDesempeno() {
                 apellido={data?.empleado?.apellido}
                 className="text-xl font-bold text-gray-900"
               />
-              <p className="text-sm text-gray-500">Detalles</p>
+              <p className="text-sm text-gray-500">{esMismoUsuario ? 'Mi cuenta' : 'Detalles'}</p>
             </div>
           </div>
 
-          {(puedeModificar || puedeEliminar) && (
+          {/* En la propia cuenta se oculta el menú de acciones (como al ver a
+              otro admin); el perfil propio se edita desde Ajustes → Mi Perfil. */}
+          {!esMismoUsuario && (puedeModificar || puedeEliminar) && (
             <div ref={menuRef} className="relative flex-shrink-0">
               <button
                 onClick={() => setMenuOpen(v => !v)}
