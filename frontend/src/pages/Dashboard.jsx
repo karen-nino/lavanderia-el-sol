@@ -190,8 +190,10 @@ export default function Dashboard() {
           derecha el monitor de máquinas). En móvil se apila en una sola. */}
       <div className="space-y-16 md:space-y-0 md:grid md:grid-cols-[minmax(0,22rem)_1fr] md:gap-8 md:items-start">
 
-        {/* Columna izquierda */}
-        <div className="space-y-16">
+        {/* Columna izquierda. El hueco entre Ventas y Caja usa space-y-10 para
+            igualar el de la columna derecha (Lavadoras a Secadoras) y que la
+            etiqueta Caja quede a la misma altura que Secadoras. */}
+        <div className="space-y-10">
           {/* Ventas — solo desktop; en móvil ya se muestra arriba en "Hoy" */}
           <div className="hidden md:block space-y-4">
             <p className="text-section text-grey">Ventas</p>
