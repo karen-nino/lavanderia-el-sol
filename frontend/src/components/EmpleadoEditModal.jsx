@@ -39,10 +39,13 @@ export default function EmpleadoEditModal({ empleado, sucursales = [], onClose, 
       const payload = {
         nombre: form.nombre.trim(),
         apellido: form.apellido.trim(),
-        rol: form.rol,
         // Un admin es global: no lleva sucursal.
         sucursal: esAdminFn(form.rol) ? '' : form.sucursal,
       };
+      // Solo se manda el rol cuando de verdad cambió. Si no, editar la propia
+      // cuenta (con el rol bloqueado) dispararía "No puedes cambiar tu propio
+      // rol" en el backend y no dejaría guardar ni el nombre ni el apellido.
+      if (form.rol !== empleado.rol) payload.rol = form.rol;
       if (form.password) payload.password = form.password;
       const actualizado = await api.patch(`/usuarios/${empleado.id}`, payload);
       onSaved(actualizado);
