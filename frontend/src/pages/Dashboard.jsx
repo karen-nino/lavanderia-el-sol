@@ -186,7 +186,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Cuerpo: en desktop, dos columnas (izquierda Ventas + Corte de caja,
+      {/* Cuerpo: en desktop, dos columnas (izquierda Ventas + Caja,
           derecha el monitor de máquinas). En móvil se apila en una sola. */}
       <div className="space-y-16 md:space-y-0 md:grid md:grid-cols-[minmax(0,22rem)_1fr] md:gap-8 md:items-start">
 
@@ -198,9 +198,9 @@ export default function Dashboard() {
             <SalesCard total={ventasHoy} label="Ingresado hoy" to={ventasLink} />
           </div>
 
-          {/* Corte de caja */}
+          {/* Caja */}
           <div className="space-y-6">
-            <p className="text-section text-grey">Corte de caja</p>
+            <p className="text-section text-grey">Caja</p>
             <div className="space-y-4">
               <CashCutCard />
             </div>

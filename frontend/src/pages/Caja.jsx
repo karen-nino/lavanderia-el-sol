@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { esAdmin as esAdminFn } from '../lib/roles';
@@ -108,9 +109,9 @@ function Apertura({ data, onAbrir }) {
       </div>
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">Nota (opcional)</label>
-        <input
-          type="text" value={notas} onChange={(e) => setNotas(e.target.value)}
-          className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-base"
+        <textarea
+          rows={4} value={notas} onChange={(e) => setNotas(e.target.value)}
+          className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-base resize-y min-h-[6rem]"
         />
       </div>
       <button
@@ -304,9 +305,9 @@ function Corte({ data, onCerrar }) {
         )}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Nota de cierre (opcional)</label>
-          <input
-            type="text" value={notas} onChange={(e) => setNotas(e.target.value)}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-base"
+          <textarea
+            rows={4} value={notas} onChange={(e) => setNotas(e.target.value)}
+            className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-base resize-y min-h-[6rem]"
           />
         </div>
         <button
@@ -383,7 +384,13 @@ export default function Caja() {
   // el endpoint también lo exige.
   const tabs = esAdmin ? TABS : TABS.filter((t) => t.id !== 'historial');
 
-  const [tab, setTab] = useState('apertura');
+  // Se puede entrar directo a una pestaña con ?tab=... (ej. desde la tarjeta
+  // de Corte del Dashboard, que enlaza a /caja?tab=corte).
+  const [searchParams] = useSearchParams();
+  const [tab, setTab] = useState(() => {
+    const req = searchParams.get('tab');
+    return tabs.some((t) => t.id === req) ? req : 'apertura';
+  });
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
