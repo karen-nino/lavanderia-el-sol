@@ -200,8 +200,10 @@ export default function Dashboard() {
             <SalesCard total={ventasHoy} label="Ingresado hoy" to={ventasLink} />
           </div>
 
-          {/* Caja */}
-          <div className="space-y-6">
+          {/* Caja. La etiqueta y la tarjeta usan space-y-4 (igual que los
+              carruseles de la derecha) para que la tarjeta quede a la misma
+              altura que la de Secadoras. */}
+          <div className="space-y-4">
             <p className="text-section text-grey">Caja</p>
             <div className="space-y-4">
               <CashCutCard />
