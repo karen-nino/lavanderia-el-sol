@@ -108,6 +108,72 @@ export const updateProducto = async (req, res) => {
   }
 };
 
+// Borrado múltiple (solo admin). Igual que en clientes, con dos modos según
+// `confirmar`:
+//   • confirmar = false → verificación (dry-run): no borra; devuelve los
+//     productos con ventas registradas (bloqueados) y los ids eliminables.
+//   • confirmar = true  → borra los eliminables (omite los bloqueados) en una
+//     transacción.
+// Un producto referenciado en nota_productos (con ventas) no se puede borrar
+// por la restricción de llave foránea. Todo acotado a la sucursal.
+export const deleteProductosMultiples = async (req, res) => {
+  const { ids, confirmar } = req.body;
+
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return res.status(400).json({ message: 'No se recibieron productos a eliminar.' });
+  }
+  const idsNum = [...new Set(ids.map(Number).filter(Number.isInteger))];
+  if (idsNum.length === 0) {
+    return res.status(400).json({ message: 'Productos inválidos.' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const { rows: productos } = await client.query(
+      'SELECT id, nombre FROM productos WHERE id = ANY($1) AND sucursal = $2 FOR UPDATE',
+      [idsNum, req.sucursal]
+    );
+    const idsValidos = productos.map((p) => p.id);
+
+    // Productos con ventas registradas: no se pueden borrar.
+    let bloqueadosSet = new Set();
+    if (idsValidos.length > 0) {
+      const { rows } = await client.query(
+        'SELECT DISTINCT producto_id FROM nota_productos WHERE producto_id = ANY($1)',
+        [idsValidos]
+      );
+      bloqueadosSet = new Set(rows.map((r) => r.producto_id));
+    }
+
+    const bloqueados  = productos.filter((p) => bloqueadosSet.has(p.id));
+    const eliminables = productos.filter((p) => !bloqueadosSet.has(p.id));
+
+    if (!confirmar) {
+      await client.query('ROLLBACK');
+      return res.json({ bloqueados, eliminables: eliminables.map((p) => p.id) });
+    }
+
+    let eliminados = [];
+    if (eliminables.length > 0) {
+      const { rows } = await client.query(
+        'DELETE FROM productos WHERE id = ANY($1) AND sucursal = $2 RETURNING id',
+        [eliminables.map((p) => p.id), req.sucursal]
+      );
+      eliminados = rows.map((r) => r.id);
+    }
+    await client.query('COMMIT');
+    res.json({ eliminados, bloqueados });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('deleteProductosMultiples error:', err);
+    res.status(500).json({ message: 'Error interno del servidor.' });
+  } finally {
+    client.release();
+  }
+};
+
 export const deleteProducto = async (req, res) => {
   const { id } = req.params;
   try {

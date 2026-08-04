@@ -323,6 +323,14 @@ export default function Inventario() {
   const [modalProducto,   setModalProducto]   = useState(null);  // null | 'nuevo' | producto
   const [prodAEliminar,   setProdAEliminar]   = useState(null);
   const [infoProducto,    setInfoProducto]    = useState(null);  // info modal (mobile)
+
+  // Selección múltiple (admin, desktop) para borrado en lote.
+  const [seleccionados,   setSeleccionados]   = useState(() => new Set());
+  const [bulkOpen,        setBulkOpen]        = useState(false);
+  const [bulkInfo,        setBulkInfo]        = useState(null); // { bloqueados, eliminables }
+  const [bulkLoading,     setBulkLoading]     = useState(false);
+  const [bulkDeleting,    setBulkDeleting]    = useState(false);
+  const [bulkError,       setBulkError]       = useState('');
   const [searchParams, setSearchParams] = useSearchParams();
   const highlightAplicadoRef = useRef(null);
 
@@ -368,6 +376,63 @@ export default function Inventario() {
     await api.delete(`/productos/${prodAEliminar.id}`);
     setProductos(prev => prev.filter(p => p.id !== prodAEliminar.id));
     setProdAEliminar(null);
+  };
+
+  // ── Selección múltiple ─────────────────────────────────
+  const toggleSeleccion = (id) => {
+    setSeleccionados(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+  const todosSeleccionados =
+    productos.length > 0 && productos.every(p => seleccionados.has(p.id));
+  const toggleTodos = () => {
+    setSeleccionados(prev => {
+      const next = new Set(prev);
+      const yaTodos = productos.every(p => next.has(p.id));
+      productos.forEach(p => { if (yaTodos) next.delete(p.id); else next.add(p.id); });
+      return next;
+    });
+  };
+  const limpiarSeleccion = () => setSeleccionados(new Set());
+
+  // Abre el modal de borrado múltiple: primero verifica (dry-run) cuáles tienen
+  // ventas registradas para advertirlo antes de borrar.
+  const abrirBulk = async () => {
+    setBulkError('');
+    setBulkInfo(null);
+    setBulkLoading(true);
+    setBulkOpen(true);
+    try {
+      const info = await api.post('/productos/eliminar-multiples', {
+        ids: [...seleccionados], confirmar: false,
+      });
+      setBulkInfo(info);
+    } catch (err) {
+      setBulkError(err.message);
+    } finally {
+      setBulkLoading(false);
+    }
+  };
+  const cerrarBulk = () => { setBulkOpen(false); setBulkInfo(null); setBulkError(''); };
+  const confirmarBulk = async () => {
+    setBulkError('');
+    setBulkDeleting(true);
+    try {
+      const res = await api.post('/productos/eliminar-multiples', {
+        ids: [...seleccionados], confirmar: true,
+      });
+      const eliminados = new Set(res.eliminados ?? []);
+      setProductos(prev => prev.filter(p => !eliminados.has(p.id)));
+      setSeleccionados(new Set());
+      cerrarBulk();
+    } catch (err) {
+      setBulkError(err.message);
+    } finally {
+      setBulkDeleting(false);
+    }
   };
 
   return (
@@ -448,12 +513,38 @@ export default function Inventario() {
 
       {!loading && !error && productos.length > 0 && (
         <>
+          {/* Barra de acciones de selección múltiple (admin, desktop) */}
+          {esAdmin && seleccionados.size > 0 && (
+            <div className="hidden md:flex items-center justify-between gap-3 bg-white rounded-xl shadow-sm border border-gray-100 px-4 py-3 mb-4">
+              <span className="text-sm text-gray-700">
+                <span className="font-semibold">{seleccionados.size}</span> seleccionado(s)
+              </span>
+              <div className="flex items-center gap-2">
+                <button onClick={limpiarSeleccion} className="text-sm text-gray-500 hover:text-gray-700 px-3 py-2">
+                  Limpiar
+                </button>
+                <button onClick={abrirBulk}
+                  className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+                  <IconoBasura />
+                  Eliminar seleccionados
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Tabla — desktop */}
           <div className="hidden md:block bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-100">
+                    {esAdmin && (
+                      <th className="w-10 px-4 py-3">
+                        <input type="checkbox" checked={todosSeleccionados} onChange={toggleTodos}
+                          aria-label="Seleccionar todos"
+                          className="w-4 h-4 rounded border-gray-300 text-blue focus:ring-blue cursor-pointer" />
+                      </th>
+                    )}
                     <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Producto</th>
                     <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Categoría</th>
                     <th className="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Precio unit.</th>
@@ -467,7 +558,14 @@ export default function Inventario() {
                     const es = p.estado_stock ?? 'ok';
                     const rowCls = es === 'agotado' ? 'bg-red-50/40' : es === 'por_agotarse' ? 'bg-amber-50/40' : '';
                     return (
-                      <tr key={p.id} data-producto-id={p.id} className={`hover:bg-gray-50 transition-colors ${rowCls}`}>
+                      <tr key={p.id} data-producto-id={p.id} className={`transition-colors ${seleccionados.has(p.id) ? 'bg-light-blue/40' : `hover:bg-gray-50 ${rowCls}`}`}>
+                        {esAdmin && (
+                          <td className="px-4 py-3">
+                            <input type="checkbox" checked={seleccionados.has(p.id)} onChange={() => toggleSeleccion(p.id)}
+                              aria-label={`Seleccionar ${p.nombre}`}
+                              className="w-4 h-4 rounded border-gray-300 text-blue focus:ring-blue cursor-pointer" />
+                          </td>
+                        )}
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2">
                             {es !== 'ok' && <IconoAdvertencia severity={es} />}
@@ -667,6 +765,78 @@ export default function Inventario() {
           onClose={() => setProdAEliminar(null)}
           onConfirmar={handleEliminar}
         />
+      )}
+
+      {/* Modal: Eliminar varios (con advertencia de ventas registradas) */}
+      {bulkOpen && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              {bulkLoading ? (
+                <p className="text-sm text-gray-500 text-center py-6">Verificando…</p>
+              ) : bulkError ? (
+                <>
+                  <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3 mb-4">{bulkError}</div>
+                  <button type="button" onClick={cerrarBulk}
+                    className="w-full border border-gray-300 text-gray-700 font-medium py-3.5 rounded-lg text-base hover:bg-gray-50 transition-colors">
+                    Cerrar
+                  </button>
+                </>
+              ) : bulkInfo && (() => {
+                const bloqueados = bulkInfo.bloqueados ?? [];
+                const nEliminables = (bulkInfo.eliminables ?? []).length;
+                const todosBloqueados = nEliminables === 0;
+                return (
+                  <>
+                    <div className={`flex items-center justify-center w-12 h-12 rounded-full mx-auto mb-4 ${todosBloqueados ? 'bg-amber-100' : 'bg-red-100'}`}>
+                      <svg className={`w-6 h-6 ${todosBloqueados ? 'text-amber-600' : 'text-red-600'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                          d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
+                    </div>
+                    <h3 className="text-base font-semibold text-gray-900 text-center mb-2">
+                      {todosBloqueados ? 'No se puede eliminar' : 'Eliminar productos'}
+                    </h3>
+
+                    {bloqueados.length > 0 && (
+                      <div className="bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-lg p-3 mb-3">
+                        <p className="font-medium mb-1">
+                          {todosBloqueados
+                            ? 'Ninguno se puede eliminar porque tiene ventas registradas:'
+                            : 'Estos tienen ventas registradas y no se eliminarán:'}
+                        </p>
+                        <ul className="list-disc list-inside space-y-0.5">
+                          {bloqueados.map(p => <li key={p.id}>{p.nombre}</li>)}
+                        </ul>
+                      </div>
+                    )}
+
+                    {!todosBloqueados && (
+                      <p className="text-sm text-gray-500 text-center mb-4">
+                        {bloqueados.length > 0
+                          ? `Se eliminarán los otros ${nEliminables} producto(s). Esta acción no se puede deshacer.`
+                          : `¿Eliminar ${nEliminables} producto(s)? Esta acción no se puede deshacer.`}
+                      </p>
+                    )}
+
+                    <div className="flex gap-3">
+                      <button type="button" onClick={cerrarBulk}
+                        className="flex-1 border border-gray-300 text-gray-700 font-medium py-3.5 rounded-lg text-base hover:bg-gray-50 transition-colors">
+                        {todosBloqueados ? 'Cerrar' : 'Cancelar'}
+                      </button>
+                      {!todosBloqueados && (
+                        <button type="button" onClick={confirmarBulk} disabled={bulkDeleting}
+                          className="flex-1 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors">
+                          {bulkDeleting ? 'Eliminando…' : `Eliminar ${nEliminables}`}
+                        </button>
+                      )}
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
