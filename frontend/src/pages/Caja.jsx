@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
@@ -382,18 +382,28 @@ export default function Caja() {
   const esAdmin = esAdminFn(usuario?.rol);
   // El historial de cortes (con diferencias de caja) es solo para admins;
   // el endpoint también lo exige.
-  const tabs = esAdmin ? TABS : TABS.filter((t) => t.id !== 'historial');
+  // Para admins el Historial es lo más importante: va primero en las pestañas.
+  // Los no-admins no ven Historial.
+  const tabs = esAdmin
+    ? [TABS.find((t) => t.id === 'historial'), ...TABS.filter((t) => t.id !== 'historial')]
+    : TABS.filter((t) => t.id !== 'historial');
 
   // Se puede entrar directo a una pestaña con ?tab=... (ej. desde la tarjeta
-  // de Corte del Dashboard, que enlaza a /caja?tab=corte).
+  // de Corte del Dashboard, que enlaza a /caja?tab=corte). Sin ?tab, los admins
+  // abren en Historial y los demás en Apertura.
   const [searchParams] = useSearchParams();
   const [tab, setTab] = useState(() => {
     const req = searchParams.get('tab');
-    return tabs.some((t) => t.id === req) ? req : 'apertura';
+    return tabs.some((t) => t.id === req) ? req : (esAdmin ? 'historial' : 'apertura');
   });
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  // Menú de acciones (⋮) para admins: Apertura, Movimientos y Corte pasan aquí
+  // como secundarias; el Historial es la página principal.
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef(null);
 
   const fetchActual = useCallback(async () => {
     setLoading(true);
@@ -421,12 +431,64 @@ export default function Caja() {
   const handleAbrir = () => { fetchActual(); setTab('movimientos'); };
   const handleCerrar = () => { fetchActual(); setTab(esAdmin ? 'historial' : 'apertura'); };
 
+  // Cierra el menú de acciones (⋮) al hacer clic fuera.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onDown = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [menuOpen]);
+
+  const seccionLabel = tabs.find((t) => t.id === tab)?.label ?? '';
+
   return (
     <div className="min-h-full bg-slate-100">
       {/* Cabecera (barra superior) */}
       <div className="bg-white border-b-2 border-gray-200">
-        <div className="max-w-3xl mx-auto px-6 md:px-8 pt-10 md:pt-14 pb-4">
-          <h1 className="text-xl font-bold text-gray-800">Caja</h1>
+        <div className="max-w-3xl mx-auto px-6 md:px-8 pt-10 md:pt-14 pb-4 flex items-start justify-between gap-3">
+          <div>
+            <h1 className="text-xl font-bold text-gray-800">Caja</h1>
+            {/* Para admins la página es el Historial; el subtítulo refleja la
+                sección actual. */}
+            {esAdmin && <p className="text-sm text-gray-500 mt-0.5">{seccionLabel}</p>}
+          </div>
+
+          {/* Menú de acciones (⋮): Apertura / Movimientos / Corte como secundarias. */}
+          {esAdmin && (
+            <div ref={menuRef} className="relative flex-shrink-0">
+              <button
+                onClick={() => setMenuOpen((v) => !v)}
+                aria-label="Acciones de caja"
+                aria-haspopup="menu"
+                aria-expanded={menuOpen}
+                className="w-10 h-10 rounded-full border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 flex items-center justify-center transition-colors"
+              >
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                  <circle cx="12" cy="5" r="2" />
+                  <circle cx="12" cy="12" r="2" />
+                  <circle cx="12" cy="19" r="2" />
+                </svg>
+              </button>
+              {menuOpen && (
+                <div role="menu" className="absolute right-0 top-12 z-20 bg-white border border-gray-200 rounded-xl shadow-lg p-1 w-44">
+                  {TABS.filter((t) => t.id !== 'historial').map((t) => (
+                    <button
+                      key={t.id}
+                      role="menuitem"
+                      onClick={() => { setTab(t.id); setMenuOpen(false); }}
+                      className={`w-full text-left text-sm px-3 py-2.5 rounded-lg transition-colors ${
+                        tab === t.id ? 'bg-light-blue text-blue-700 font-medium' : 'text-gray-700 hover:bg-gray-50'
+                      }`}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -435,21 +497,37 @@ export default function Caja() {
       {/* Contenido */}
       <div className="max-w-3xl mx-auto px-6 md:px-8 py-6 space-y-6">
 
-      <div className="flex flex-wrap gap-2">
-        {tabs.map((t) => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
-              tab === t.id
-                ? 'bg-blue text-white'
-                : 'bg-white text-gray-600 border border-gray-300 hover:bg-gray-50'
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+      {/* No-admins conservan las pestañas (no tienen Historial). */}
+      {!esAdmin && (
+        <div className="flex flex-wrap gap-2">
+          {tabs.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                tab === t.id
+                  ? 'bg-blue text-white'
+                  : 'bg-white text-gray-600 border border-gray-300 hover:bg-gray-50'
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Admins: al entrar a una sección secundaria, un enlace para volver. */}
+      {esAdmin && tab !== 'historial' && (
+        <button
+          onClick={() => setTab('historial')}
+          className="flex items-center gap-1.5 text-sm font-medium text-blue hover:opacity-80"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+          Volver al historial
+        </button>
+      )}
 
       {loading && tab !== 'historial' && <Spinner />}
       {error && tab !== 'historial' && <ErrorBox message={error} />}
