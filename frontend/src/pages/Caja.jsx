@@ -410,7 +410,7 @@ function Corte({ data, onCerrar }) {
 }
 
 // ── Historial ───────────────────────────────────────────────
-function Historial() {
+function Historial({ onFiltroLabel }) {
   const [cortes, setCortes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -454,6 +454,24 @@ function Historial() {
     document.addEventListener('mousedown', onDown);
     return () => document.removeEventListener('mousedown', onDown);
   }, [mostrarMeses]);
+
+  // Etiqueta del filtro activo, para mostrarla como subtítulo del encabezado
+  // (igual que en Ventas).
+  const fmtDiaMes = (s) => {
+    if (!s) return '';
+    return new Date(`${s}T00:00:00`).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
+  };
+  const filtroLabel = (() => {
+    switch (periodo) {
+      case 'hoy':    return 'Hoy';
+      case 'semana': return 'Esta semana';
+      case 'mes':    return `${MESES[mesSel]} ${anioSel}`;
+      case 'anio':   return `${anioSel}`;
+      case 'custom': return (desde && hasta) ? `Del ${fmtDiaMes(desde)} al ${fmtDiaMes(hasta)}` : 'Personalizado';
+      default:       return '';
+    }
+  })();
+  useEffect(() => { onFiltroLabel?.(filtroLabel); }, [filtroLabel, onFiltroLabel]);
 
   if (loading) return <Spinner />;
   if (error) return <ErrorBox message={error} />;
@@ -658,6 +676,10 @@ export default function Caja() {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
 
+  // Etiqueta del filtro activo del Historial, reportada por ese componente,
+  // para mostrarla como subtítulo del encabezado en esa pestaña.
+  const [historialFiltro, setHistorialFiltro] = useState('');
+
   const fetchActual = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -703,9 +725,13 @@ export default function Caja() {
         <div className="max-w-3xl mx-auto px-6 md:px-8 pt-10 md:pt-14 pb-4 flex items-start justify-between gap-3">
           <div>
             <h1 className="text-xl font-bold text-gray-800">Caja</h1>
-            {/* Para admins la página es el Historial; el subtítulo refleja la
-                sección actual. */}
-            {esAdmin && <p className="text-sm text-gray-500 mt-0.5">{seccionLabel}</p>}
+            {/* Para admins la página es el Historial; el subtítulo refleja el
+                filtro activo en esa pestaña y la sección actual en las demás. */}
+            {esAdmin && (
+              <p className="text-sm text-gray-500 mt-0.5">
+                {tab === 'historial' ? historialFiltro : seccionLabel}
+              </p>
+            )}
           </div>
 
           {/* Menú de acciones (⋮): Apertura / Movimientos / Corte como secundarias. */}
@@ -792,7 +818,7 @@ export default function Caja() {
           {tab === 'corte'       && <Corte data={data} onCerrar={handleCerrar} />}
         </>
       )}
-      {tab === 'historial' && <Historial />}
+      {tab === 'historial' && <Historial onFiltroLabel={setHistorialFiltro} />}
       </div>
     </div>
   );
