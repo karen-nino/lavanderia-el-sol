@@ -7,10 +7,13 @@ import pool from '../db/pool.js';
 // nota pendiente aún no tiene pagado_en.
 // anioParam indica que se eligió un año específico (llega en $1); sin él,
 // "anio" significa el año en curso.
-function buildPeriodSQL(periodo, col = 'o.pagado_en', anioParam = false) {
+function buildPeriodSQL(periodo, col = 'o.pagado_en', anioParam = false, mesParam = false) {
   switch (periodo) {
     case 'semana': return `${col} >= NOW() - INTERVAL '7 days'`;
-    case 'mes':    return `${col} >= DATE_TRUNC('month', NOW())`;
+    case 'mes':    return mesParam
+      // Mes específico del año en curso (el número de mes 1-12 llega en $1).
+      ? `DATE_PART('year', ${col}) = DATE_PART('year', NOW()) AND DATE_PART('month', ${col}) = $1`
+      : `${col} >= DATE_TRUNC('month', NOW())`;
     case 'anio':   return anioParam
       ? `DATE_PART('year', ${col}) = $1`
       : `${col} >= DATE_TRUNC('year', NOW())`;
@@ -20,20 +23,25 @@ function buildPeriodSQL(periodo, col = 'o.pagado_en', anioParam = false) {
 }
 
 export async function getResumen(req, res) {
-  const { periodo = 'hoy', desde, hasta, year } = req.query;
+  const { periodo = 'hoy', desde, hasta, year, month } = req.query;
 
   const isCustom = periodo === 'custom';
   // Año específico: solo aplica al período 'anio' y con un año válido de 4 dígitos.
   const anioSel = periodo === 'anio' && /^\d{4}$/.test(String(year ?? '')) ? Number(year) : null;
+  // Mes específico (0-11, como JS): solo aplica al período 'mes'.
+  const mesRaw = Number(month);
+  const mesSel = periodo === 'mes' && Number.isInteger(mesRaw) && mesRaw >= 0 && mesRaw <= 11 ? mesRaw : null;
 
-  const periodSQL = buildPeriodSQL(periodo, 'o.pagado_en', anioSel != null);
-  const periodListSQL = buildPeriodSQL(periodo, 'o.created_at', anioSel != null);
+  const periodSQL = buildPeriodSQL(periodo, 'o.pagado_en', anioSel != null, mesSel != null);
+  const periodListSQL = buildPeriodSQL(periodo, 'o.created_at', anioSel != null, mesSel != null);
 
   if (isCustom && (!desde || !hasta)) {
     return res.status(400).json({ message: 'Se requieren los parámetros desde y hasta para el período personalizado.' });
   }
 
-  const periodParams = isCustom ? [desde, hasta] : (anioSel != null ? [anioSel] : []);
+  const periodParams = isCustom
+    ? [desde, hasta]
+    : anioSel != null ? [anioSel] : (mesSel != null ? [mesSel + 1] : []);
 
   // "Ingresado" = dinero efectivamente cobrado: notas con pago registrado
   // (estado_pago = 'PAGADO') y no canceladas, de la sucursal activa. El

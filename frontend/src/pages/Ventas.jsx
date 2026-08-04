@@ -40,10 +40,16 @@ function EstadoBadge({ estado }) {
 const PERIODOS = [
   { id: 'hoy',    label: 'Hoy' },
   { id: 'semana', label: 'Esta semana' },
-  { id: 'mes',    label: 'Este mes' },
+  { id: 'mes',    label: 'Mes' },
   { id: 'anio',   label: 'Este año' },
   { id: 'custom', label: 'Personalizado' },
 ];
+
+// Nombres de meses capitalizados (Enero … Diciembre) para el selector de mes.
+const MESES = Array.from({ length: 12 }, (_, i) => {
+  const m = new Date(2020, i, 1).toLocaleDateString('es-MX', { month: 'long' });
+  return m.charAt(0).toUpperCase() + m.slice(1);
+});
 
 function Tarjeta({ titulo, valor, sub, color }) {
   const colores = {
@@ -87,18 +93,23 @@ export default function Ventas() {
   const [mostrarAnios, setMostrarAnios] = useState(false);
   const anioRef = useRef(null);
 
+  const [mesSel, setMesSel] = useState(() => new Date().getMonth());
+  const [mostrarMeses, setMostrarMeses] = useState(false);
+  const mesRef = useRef(null);
+
   useEffect(() => {
     if (periodo === 'custom' && (!desde || !hasta)) return;
     let activo = true;
     let url = `/ventas/resumen?periodo=${periodo}`;
     if (periodo === 'custom') url += `&desde=${desde}&hasta=${hasta}`;
     if (periodo === 'anio') url += `&year=${anioSel}`;
+    if (periodo === 'mes') url += `&month=${mesSel}`;
     api.get(url)
       .then(result => { if (activo) { setData(result); setError(null); } })
       .catch(e => { if (activo) setError(e.message); })
       .finally(() => { if (activo) setLoading(false); });
     return () => { activo = false; };
-  }, [periodo, desde, hasta, anioSel]);
+  }, [periodo, desde, hasta, anioSel, mesSel]);
 
   // Años disponibles para el selector (siempre incluye el año en curso).
   useEffect(() => {
@@ -118,6 +129,16 @@ export default function Ventas() {
     document.addEventListener('mousedown', onDown);
     return () => document.removeEventListener('mousedown', onDown);
   }, [mostrarAnios]);
+
+  // Cierra el selector de mes al hacer clic fuera.
+  useEffect(() => {
+    if (!mostrarMeses) return;
+    const onDown = (e) => {
+      if (mesRef.current && !mesRef.current.contains(e.target)) setMostrarMeses(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [mostrarMeses]);
 
   const listaNotas   = data?.lista_notas ?? [];
   const totalPaginas = Math.max(1, Math.ceil(listaNotas.length / NOTAS_POR_PAGINA));
@@ -142,6 +163,45 @@ export default function Ventas() {
       <div className="space-y-3">
         <div className="flex flex-wrap gap-2">
           {PERIODOS.map((p) => {
+            // El período "mes" es un selector: muestra el mes elegido y
+            // despliega la lista de meses (del año en curso).
+            if (p.id === 'mes') {
+              const activoMes = periodo === 'mes';
+              return (
+                <div key={p.id} ref={mesRef} className="relative">
+                  <button
+                    onClick={() => { setPeriodo('mes'); setPaginaNotas(1); setMostrarAnios(false); setMostrarMeses(v => !v); }}
+                    className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                      activoMes
+                        ? 'bg-blue text-white'
+                        : 'bg-white text-gray-600 border border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    {MESES[mesSel]}
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                  {mostrarMeses && (
+                    <div className="absolute left-0 top-10 z-10 bg-white border border-gray-200 rounded-xl shadow-lg p-2 w-40 max-h-64 overflow-y-auto">
+                      {MESES.map((nombre, i) => (
+                        <button
+                          key={i}
+                          onClick={() => { setMesSel(i); setPeriodo('mes'); setMostrarMeses(false); setPaginaNotas(1); }}
+                          className={`block w-full text-left text-sm px-3 py-2 rounded-lg transition-colors ${
+                            mesSel === i
+                              ? 'bg-light-blue text-blue-700 font-medium'
+                              : 'text-gray-700 hover:bg-gray-50'
+                          }`}
+                        >
+                          {nombre}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            }
             // El período "año" es un selector: muestra el año elegido y
             // despliega la lista de años disponibles.
             if (p.id === 'anio') {
@@ -149,7 +209,7 @@ export default function Ventas() {
               return (
                 <div key={p.id} ref={anioRef} className="relative">
                   <button
-                    onClick={() => { setPeriodo('anio'); setPaginaNotas(1); setMostrarAnios(v => !v); }}
+                    onClick={() => { setPeriodo('anio'); setPaginaNotas(1); setMostrarMeses(false); setMostrarAnios(v => !v); }}
                     className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
                       activo
                         ? 'bg-blue text-white'
@@ -184,7 +244,7 @@ export default function Ventas() {
             return (
               <button
                 key={p.id}
-                onClick={() => { setPeriodo(p.id); setPaginaNotas(1); setMostrarAnios(false); }}
+                onClick={() => { setPeriodo(p.id); setPaginaNotas(1); setMostrarAnios(false); setMostrarMeses(false); }}
                 className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
                   periodo === p.id
                     ? 'bg-blue text-white'
