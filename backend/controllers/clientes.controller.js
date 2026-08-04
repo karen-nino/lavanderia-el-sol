@@ -108,6 +108,75 @@ export const deleteCliente = async (req, res) => {
   }
 };
 
+// Borrado múltiple (solo admin). Trabaja en dos modos según `confirmar`:
+//   • confirmar = false → verificación (dry-run): no borra; devuelve los
+//     clientes con notas activas (bloqueados) y los ids que sí se pueden
+//     borrar (eliminables), para alimentar la advertencia del modal.
+//   • confirmar = true  → borra los eliminables (omite los bloqueados) dentro
+//     de una transacción y devuelve qué se eliminó.
+// Todo acotado a la sucursal del admin, como el borrado individual.
+export const deleteClientesMultiples = async (req, res) => {
+  const { ids, confirmar } = req.body;
+
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return res.status(400).json({ message: 'No se recibieron clientes a eliminar.' });
+  }
+  const idsNum = [...new Set(ids.map(Number).filter(Number.isInteger))];
+  if (idsNum.length === 0) {
+    return res.status(400).json({ message: 'Clientes inválidos.' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Solo clientes de la sucursal del admin (se ignoran ids ajenos).
+    const { rows: clientes } = await client.query(
+      'SELECT id, nombre, apellido FROM clientes WHERE id = ANY($1) AND sucursal = $2 FOR UPDATE',
+      [idsNum, req.sucursal]
+    );
+    const idsValidos = clientes.map((c) => c.id);
+
+    // Cuáles tienen notas activas: esos no se pueden borrar.
+    let bloqueadosSet = new Set();
+    if (idsValidos.length > 0) {
+      const { rows: activas } = await client.query(
+        `SELECT DISTINCT cliente_id FROM notas
+          WHERE cliente_id = ANY($1)
+            AND estado NOT IN ('CANCELADA', 'FINALIZADA')`,
+        [idsValidos]
+      );
+      bloqueadosSet = new Set(activas.map((r) => r.cliente_id));
+    }
+
+    const bloqueados  = clientes.filter((c) => bloqueadosSet.has(c.id));
+    const eliminables = clientes.filter((c) => !bloqueadosSet.has(c.id));
+
+    // Modo verificación: no se borra nada.
+    if (!confirmar) {
+      await client.query('ROLLBACK');
+      return res.json({ bloqueados, eliminables: eliminables.map((c) => c.id) });
+    }
+
+    let eliminados = [];
+    if (eliminables.length > 0) {
+      const { rows } = await client.query(
+        'DELETE FROM clientes WHERE id = ANY($1) AND sucursal = $2 RETURNING id',
+        [eliminables.map((c) => c.id), req.sucursal]
+      );
+      eliminados = rows.map((r) => r.id);
+    }
+    await client.query('COMMIT');
+    res.json({ eliminados, bloqueados });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('deleteClientesMultiples error:', err);
+    res.status(500).json({ message: 'Error interno del servidor.' });
+  } finally {
+    client.release();
+  }
+};
+
 export const updateCliente = async (req, res) => {
   const { id } = req.params;
   const { nombre, apellido, telefono, notas, activo } = req.body;
