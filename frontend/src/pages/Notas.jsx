@@ -98,10 +98,6 @@ function fmtFechaDia(iso) {
   return `${diaSem}, ${dia} ${mes} ${d.getFullYear()}`;
 }
 
-function fmtHora(iso) {
-  return new Date(iso).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
-}
-
 function fmtMonto(n) {
   return n != null ? `$${Number(n).toFixed(2)}` : '—';
 }
@@ -184,6 +180,17 @@ export default function Notas() {
     const telefono = normalizar(n.cliente_telefono);
     return folio.includes(q) || cliente.includes(q) || apellido.includes(q) || telefono.includes(q);
   });
+
+  // Para las tarjetas de móvil, las notas se agrupan por día: un encabezado de
+  // fecha arriba de cada grupo, así la fecha ya no se repite en cada tarjeta.
+  // Se respeta el orden en que vienen filtradas.
+  const gruposMobile = [];
+  for (const n of filtradas) {
+    const clave = new Date(n.created_at).toDateString();
+    const ultimo = gruposMobile[gruposMobile.length - 1];
+    if (ultimo && ultimo.clave === clave) ultimo.notas.push(n);
+    else gruposMobile.push({ clave, fecha: fmtFechaDia(n.created_at), notas: [n] });
+  }
 
   return (
     <div className="min-h-full bg-slate-100">
@@ -413,18 +420,18 @@ export default function Notas() {
             </div>
           </div>
 
-          {/* Cards — mobile */}
-          <div className="md:hidden space-y-4">
-            {filtradas.map(n => {
+          {/* Cards — mobile, agrupadas por día. El encabezado de fecha va
+              arriba de cada grupo, así la tarjeta ya no repite la fecha. */}
+          <div className="md:hidden pt-8 space-y-16">
+            {gruposMobile.map(grupo => (
+              <div key={grupo.clave} className="space-y-4">
+                <h3 className="text-sm font-bold text-dark-blue px-1">{grupo.fecha}</h3>
+                <div className="space-y-4">
+                  {grupo.notas.map(n => {
               const badgeEstado    = BADGE_ESTADO[n.estado]       ?? BADGE_ESTADO.LAVANDO;
               const badgeModalidad = BADGE_MODALIDAD[n.modalidad] ?? BADGE_MODALIDAD.AUTOSERVICIO;
               const badgePago      = BADGE_PAGO[n.estado_pago];
               const cliente        = fmtCliente(n) ?? badgeModalidad.label;
-              // Todas las máquinas que la nota usa o usó (las devuelve el backend
-              // en maquinas_nombres). Fallback a la máquina legada por si acaso.
-              const maquinas       = Array.isArray(n.maquinas_nombres) && n.maquinas_nombres.length > 0
-                ? n.maquinas_nombres
-                : (n.maquina_nombre ? [n.maquina_nombre] : []);
               // Con varias cargas la nota puede estar lavando y secando a la vez
               // (una carga en lavadora, otra en secadora): se muestran ambos
               // estados apilados en lugar del único estado de la nota.
@@ -462,37 +469,25 @@ export default function Notas() {
                     <p className="text-xl font-bold text-dark-grey">{fmtMonto(n.precio_total)}</p>
                   </div>
 
-                  {/* Separador */}
-                  <div className="border-t border-dashed border-gray-300 my-4" />
-
-                  {/* Detalles */}
-                  <div className="space-y-2.5">
-                    <div className="flex items-start justify-between gap-2">
-                      <span className="text-sm text-dark-grey">Fecha</span>
-                      <span className="text-sm font-semibold text-dark-blue text-right">{fmtFechaDia(n.created_at)}</span>
-                    </div>
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-sm text-dark-grey">Hora</span>
-                      <span className="text-sm font-semibold text-dark-blue">{fmtHora(n.created_at)}</span>
-                    </div>
-                    <div className="flex items-start justify-between gap-2">
-                      <span className="text-sm text-dark-grey">{maquinas.length > 1 ? 'Máquinas' : 'Máquina'}</span>
-                      <span className="text-sm font-semibold text-dark-blue text-right">
-                        {maquinas.length > 0 ? maquinas.join(', ') : 'Sin asignar'}
-                      </span>
-                    </div>
-                    {badgePago && (
+                  {/* Estado de pago (la fecha/hora/máquinas viven ahora en el
+                      Detalle de nota, a un toque). */}
+                  {badgePago && (
+                    <>
+                      <div className="border-t border-dashed border-gray-300 my-4" />
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-sm text-dark-grey">Estado de pago</span>
                         <span className={`text-sm font-bold ${n.estado_pago === 'PENDIENTE' ? 'text-red' : 'text-green'}`}>
                           {badgePago.label}
                         </span>
                       </div>
-                    )}
-                  </div>
+                    </>
+                  )}
                 </div>
               );
-            })}
+                  })}
+                </div>
+              </div>
+            ))}
           </div>
         </>
       )}
