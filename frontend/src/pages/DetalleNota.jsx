@@ -124,6 +124,11 @@ function fmtFechaHora(iso) {
   return `${d.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}, ${d.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}`;
 }
 
+function fmtHora(iso) {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+}
+
 function FilaDetalle({ label, children }) {
   return (
     <div className="flex gap-3 py-2.5 border-b border-gray-50 last:border-0">
@@ -402,8 +407,11 @@ export default function DetalleNota() {
           <FilaDetalle label="# Nota">
             <span className="text-sm font-medium text-gray-800">{nota.folio ?? `#${nota.id}`}</span>
           </FilaDetalle>
-          <FilaDetalle label="Creada">
+          <FilaDetalle label="Fecha">
             {fmtFecha(nota.created_at)}
+          </FilaDetalle>
+          <FilaDetalle label="Hora">
+            {fmtHora(nota.created_at)}
           </FilaDetalle>
           {nota.usuario_nombre && (
             <FilaDetalle label="Atendió">
