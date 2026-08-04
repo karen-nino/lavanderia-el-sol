@@ -145,12 +145,29 @@ export default function Ventas() {
   const paginaSegura = Math.min(paginaNotas, totalPaginas);
   const notasPagina  = listaNotas.slice((paginaSegura - 1) * NOTAS_POR_PAGINA, paginaSegura * NOTAS_POR_PAGINA);
 
+  // Etiqueta del filtro activo, para mostrarla como subtítulo del encabezado.
+  const fmtDiaMes = (s) => {
+    if (!s) return '';
+    return new Date(`${s}T00:00:00`).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
+  };
+  const filtroLabel = (() => {
+    switch (periodo) {
+      case 'hoy':    return 'Hoy';
+      case 'semana': return 'Esta semana';
+      case 'mes':    return `${MESES[mesSel]} ${anioSel}`;
+      case 'anio':   return `${anioSel}`;
+      case 'custom': return (desde && hasta) ? `Del ${fmtDiaMes(desde)} al ${fmtDiaMes(hasta)}` : 'Personalizado';
+      default:       return '';
+    }
+  })();
+
   return (
     <div className="min-h-full bg-slate-100">
       {/* Cabecera (barra superior) */}
       <div className="bg-white border-b-2 border-gray-200">
         <div className="max-w-7xl mx-auto px-6 md:px-8 pt-10 md:pt-14 pb-4">
           <h1 className="text-xl font-bold text-gray-800">Ventas</h1>
+          <p className="text-sm text-gray-500 mt-0.5">{filtroLabel}</p>
         </div>
       </div>
 
@@ -216,7 +233,7 @@ export default function Ventas() {
                         : 'bg-white text-gray-600 border border-gray-300 hover:bg-gray-50'
                     }`}
                   >
-                    Año: {anioSel}
+                    {anioSel}
                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                     </svg>
