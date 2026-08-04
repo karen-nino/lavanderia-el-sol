@@ -103,7 +103,7 @@ export default function Ventas() {
     let url = `/ventas/resumen?periodo=${periodo}`;
     if (periodo === 'custom') url += `&desde=${desde}&hasta=${hasta}`;
     if (periodo === 'anio') url += `&year=${anioSel}`;
-    if (periodo === 'mes') url += `&month=${mesSel}`;
+    if (periodo === 'mes') url += `&month=${mesSel}&year=${anioSel}`;
     api.get(url)
       .then(result => { if (activo) { setData(result); setError(null); } })
       .catch(e => { if (activo) setError(e.message); })

@@ -11,8 +11,8 @@ function buildPeriodSQL(periodo, col = 'o.pagado_en', anioParam = false, mesPara
   switch (periodo) {
     case 'semana': return `${col} >= NOW() - INTERVAL '7 days'`;
     case 'mes':    return mesParam
-      // Mes específico del año en curso (el número de mes 1-12 llega en $1).
-      ? `DATE_PART('year', ${col}) = DATE_PART('year', NOW()) AND DATE_PART('month', ${col}) = $1`
+      // Mes específico de un año dado (año en $1, mes 1-12 en $2).
+      ? `DATE_PART('year', ${col}) = $1 AND DATE_PART('month', ${col}) = $2`
       : `${col} >= DATE_TRUNC('month', NOW())`;
     case 'anio':   return anioParam
       ? `DATE_PART('year', ${col}) = $1`
@@ -26,11 +26,14 @@ export async function getResumen(req, res) {
   const { periodo = 'hoy', desde, hasta, year, month } = req.query;
 
   const isCustom = periodo === 'custom';
-  // Año específico: solo aplica al período 'anio' y con un año válido de 4 dígitos.
-  const anioSel = periodo === 'anio' && /^\d{4}$/.test(String(year ?? '')) ? Number(year) : null;
-  // Mes específico (0-11, como JS): solo aplica al período 'mes'.
+  const yearNum = /^\d{4}$/.test(String(year ?? '')) ? Number(year) : null;
+  // Año específico: solo aplica al período 'anio'.
+  const anioSel = periodo === 'anio' && yearNum != null ? yearNum : null;
+  // Mes específico (0-11, como JS): solo aplica al período 'mes'. Usa el año
+  // elegido (o el actual si no llega uno válido).
   const mesRaw = Number(month);
   const mesSel = periodo === 'mes' && Number.isInteger(mesRaw) && mesRaw >= 0 && mesRaw <= 11 ? mesRaw : null;
+  const anioMes = mesSel != null ? (yearNum != null ? yearNum : new Date().getFullYear()) : null;
 
   const periodSQL = buildPeriodSQL(periodo, 'o.pagado_en', anioSel != null, mesSel != null);
   const periodListSQL = buildPeriodSQL(periodo, 'o.created_at', anioSel != null, mesSel != null);
@@ -41,7 +44,7 @@ export async function getResumen(req, res) {
 
   const periodParams = isCustom
     ? [desde, hasta]
-    : anioSel != null ? [anioSel] : (mesSel != null ? [mesSel + 1] : []);
+    : anioSel != null ? [anioSel] : (mesSel != null ? [anioMes, mesSel + 1] : []);
 
   // "Ingresado" = dinero efectivamente cobrado: notas con pago registrado
   // (estado_pago = 'PAGADO') y no canceladas, de la sucursal activa. El

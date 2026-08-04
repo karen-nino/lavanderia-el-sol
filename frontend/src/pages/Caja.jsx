@@ -77,7 +77,7 @@ const MESES = Array.from({ length: 12 }, (_, i) => {
 });
 
 // Rango [desde, hasta) según el periodo elegido. null = sin filtro (p. ej.
-// Personalizado sin fechas todavía). El mes elegido se toma del año en curso.
+// Personalizado sin fechas todavía). El mes se toma del año seleccionado.
 const rangoDePeriodo = (periodo, anio, mes, desde, hasta) => {
   const ahora = new Date();
   const hoy0 = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
@@ -90,10 +90,7 @@ const rangoDePeriodo = (periodo, anio, mes, desde, hasta) => {
       return { desde: l, hasta: f };
     }
     case 'mes':
-      return {
-        desde: new Date(ahora.getFullYear(), mes, 1),
-        hasta: new Date(ahora.getFullYear(), mes + 1, 1),
-      };
+      return { desde: new Date(anio, mes, 1), hasta: new Date(anio, mes + 1, 1) };
     case 'anio':
       return { desde: new Date(anio, 0, 1), hasta: new Date(anio + 1, 0, 1) };
     case 'custom': {
