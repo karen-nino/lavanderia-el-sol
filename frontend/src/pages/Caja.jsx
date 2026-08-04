@@ -60,18 +60,25 @@ const fmtSemanaHeader = (fecha) => {
     : `Semana del ${dd(lunes)} de ${mes(lunes)} al ${dd(domingo)} de ${mes(domingo)}`;
 };
 
-// Filtro de fecha del historial, con las mismas opciones que Ventas.
+// Filtro de fecha del historial, con las mismas opciones que Ventas. El "mes"
+// se elige de un dropdown (como el año), por eso no lleva etiqueta fija.
 const PERIODOS = [
   { id: 'hoy',    label: 'Hoy' },
   { id: 'semana', label: 'Esta semana' },
-  { id: 'mes',    label: 'Este mes' },
+  { id: 'mes',    label: 'Mes' },
   { id: 'anio',   label: 'Este año' },
   { id: 'custom', label: 'Personalizado' },
 ];
 
+// Nombres de meses capitalizados (Enero … Diciembre).
+const MESES = Array.from({ length: 12 }, (_, i) => {
+  const m = new Date(2020, i, 1).toLocaleDateString('es-MX', { month: 'long' });
+  return m.charAt(0).toUpperCase() + m.slice(1);
+});
+
 // Rango [desde, hasta) según el periodo elegido. null = sin filtro (p. ej.
-// Personalizado sin fechas todavía).
-const rangoDePeriodo = (periodo, anio, desde, hasta) => {
+// Personalizado sin fechas todavía). El mes elegido se toma del año en curso.
+const rangoDePeriodo = (periodo, anio, mes, desde, hasta) => {
   const ahora = new Date();
   const hoy0 = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
   switch (periodo) {
@@ -84,8 +91,8 @@ const rangoDePeriodo = (periodo, anio, desde, hasta) => {
     }
     case 'mes':
       return {
-        desde: new Date(ahora.getFullYear(), ahora.getMonth(), 1),
-        hasta: new Date(ahora.getFullYear(), ahora.getMonth() + 1, 1),
+        desde: new Date(ahora.getFullYear(), mes, 1),
+        hasta: new Date(ahora.getFullYear(), mes + 1, 1),
       };
     case 'anio':
       return { desde: new Date(anio, 0, 1), hasta: new Date(anio + 1, 0, 1) };
@@ -411,13 +418,16 @@ function Historial() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Filtro de período, igual que en Ventas.
+  // Filtro de período, igual que en Ventas (con mes y año en dropdown).
   const [periodo, setPeriodo] = useState('hoy');
   const [anioSel, setAnioSel] = useState(() => new Date().getFullYear());
+  const [mesSel, setMesSel] = useState(() => new Date().getMonth());
   const [desde, setDesde] = useState('');
   const [hasta, setHasta] = useState('');
   const [mostrarAnios, setMostrarAnios] = useState(false);
+  const [mostrarMeses, setMostrarMeses] = useState(false);
   const anioRef = useRef(null);
+  const mesRef = useRef(null);
 
   useEffect(() => {
     let activo = true;
@@ -438,6 +448,16 @@ function Historial() {
     return () => document.removeEventListener('mousedown', onDown);
   }, [mostrarAnios]);
 
+  // Cierra el selector de mes al hacer clic fuera.
+  useEffect(() => {
+    if (!mostrarMeses) return;
+    const onDown = (e) => {
+      if (mesRef.current && !mesRef.current.contains(e.target)) setMostrarMeses(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [mostrarMeses]);
+
   if (loading) return <Spinner />;
   if (error) return <ErrorBox message={error} />;
   if (cortes.length === 0) return <EmptyState>Aún no hay cortes registrados.</EmptyState>;
@@ -446,7 +466,7 @@ function Historial() {
   const anios = [...new Set([new Date().getFullYear(), ...cortes.map((c) => new Date(c.cerrada_at).getFullYear())])]
     .sort((a, b) => b - a);
 
-  const rango = rangoDePeriodo(periodo, anioSel, desde, hasta);
+  const rango = rangoDePeriodo(periodo, anioSel, mesSel, desde, hasta);
   const visibles = rango
     ? cortes.filter((c) => {
         const f = new Date(c.cerrada_at);
@@ -471,12 +491,45 @@ function Historial() {
       <div className="space-y-3">
         <div className="flex flex-wrap gap-2">
           {PERIODOS.map((p) => {
+            if (p.id === 'mes') {
+              const activoMes = periodo === 'mes';
+              return (
+                <div key={p.id} ref={mesRef} className="relative">
+                  <button
+                    onClick={() => { setPeriodo('mes'); setMostrarAnios(false); setMostrarMeses((v) => !v); }}
+                    className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                      activoMes ? 'bg-blue text-white' : 'bg-white text-gray-600 border border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    {MESES[mesSel]}
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                  {mostrarMeses && (
+                    <div className="absolute left-0 top-10 z-10 bg-white border border-gray-200 rounded-xl shadow-lg p-2 w-40 max-h-64 overflow-y-auto">
+                      {MESES.map((nombre, i) => (
+                        <button
+                          key={i}
+                          onClick={() => { setMesSel(i); setPeriodo('mes'); setMostrarMeses(false); }}
+                          className={`block w-full text-left text-sm px-3 py-2 rounded-lg transition-colors ${
+                            mesSel === i ? 'bg-light-blue text-blue-700 font-medium' : 'text-gray-700 hover:bg-gray-50'
+                          }`}
+                        >
+                          {nombre}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            }
             if (p.id === 'anio') {
               const activoAnio = periodo === 'anio';
               return (
                 <div key={p.id} ref={anioRef} className="relative">
                   <button
-                    onClick={() => { setPeriodo('anio'); setMostrarAnios((v) => !v); }}
+                    onClick={() => { setPeriodo('anio'); setMostrarMeses(false); setMostrarAnios((v) => !v); }}
                     className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
                       activoAnio ? 'bg-blue text-white' : 'bg-white text-gray-600 border border-gray-300 hover:bg-gray-50'
                     }`}
@@ -507,7 +560,7 @@ function Historial() {
             return (
               <button
                 key={p.id}
-                onClick={() => { setPeriodo(p.id); setMostrarAnios(false); }}
+                onClick={() => { setPeriodo(p.id); setMostrarAnios(false); setMostrarMeses(false); }}
                 className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
                   periodo === p.id ? 'bg-blue text-white' : 'bg-white text-gray-600 border border-gray-300 hover:bg-gray-50'
                 }`}
