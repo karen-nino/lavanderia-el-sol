@@ -60,6 +60,46 @@ const fmtSemanaHeader = (fecha) => {
     : `Semana del ${dd(lunes)} de ${mes(lunes)} al ${dd(domingo)} de ${mes(domingo)}`;
 };
 
+// Filtro de fecha del historial, con las mismas opciones que Ventas.
+const PERIODOS = [
+  { id: 'hoy',    label: 'Hoy' },
+  { id: 'semana', label: 'Esta semana' },
+  { id: 'mes',    label: 'Este mes' },
+  { id: 'anio',   label: 'Este año' },
+  { id: 'custom', label: 'Personalizado' },
+];
+
+// Rango [desde, hasta) según el periodo elegido. null = sin filtro (p. ej.
+// Personalizado sin fechas todavía).
+const rangoDePeriodo = (periodo, anio, desde, hasta) => {
+  const ahora = new Date();
+  const hoy0 = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
+  switch (periodo) {
+    case 'hoy':
+      return { desde: hoy0, hasta: new Date(hoy0.getTime() + 86400000) };
+    case 'semana': {
+      const l = inicioSemana(ahora);
+      const f = new Date(l); f.setDate(f.getDate() + 7);
+      return { desde: l, hasta: f };
+    }
+    case 'mes':
+      return {
+        desde: new Date(ahora.getFullYear(), ahora.getMonth(), 1),
+        hasta: new Date(ahora.getFullYear(), ahora.getMonth() + 1, 1),
+      };
+    case 'anio':
+      return { desde: new Date(anio, 0, 1), hasta: new Date(anio + 1, 0, 1) };
+    case 'custom': {
+      if (!desde || !hasta) return null;
+      const d = new Date(`${desde}T00:00:00`);
+      const h = new Date(`${hasta}T00:00:00`); h.setDate(h.getDate() + 1);
+      return { desde: d, hasta: h };
+    }
+    default:
+      return null;
+  }
+};
+
 const TABS = [
   { id: 'apertura',    label: 'Apertura' },
   { id: 'movimientos', label: 'Movimientos' },
@@ -371,6 +411,14 @@ function Historial() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // Filtro de período, igual que en Ventas.
+  const [periodo, setPeriodo] = useState('hoy');
+  const [anioSel, setAnioSel] = useState(() => new Date().getFullYear());
+  const [desde, setDesde] = useState('');
+  const [hasta, setHasta] = useState('');
+  const [mostrarAnios, setMostrarAnios] = useState(false);
+  const anioRef = useRef(null);
+
   useEffect(() => {
     let activo = true;
     api.get('/caja/historial')
@@ -380,14 +428,36 @@ function Historial() {
     return () => { activo = false; };
   }, []);
 
+  // Cierra el selector de año al hacer clic fuera.
+  useEffect(() => {
+    if (!mostrarAnios) return;
+    const onDown = (e) => {
+      if (anioRef.current && !anioRef.current.contains(e.target)) setMostrarAnios(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [mostrarAnios]);
+
   if (loading) return <Spinner />;
   if (error) return <ErrorBox message={error} />;
   if (cortes.length === 0) return <EmptyState>Aún no hay cortes registrados.</EmptyState>;
 
+  // Años disponibles a partir de los cortes (más el actual), de mayor a menor.
+  const anios = [...new Set([new Date().getFullYear(), ...cortes.map((c) => new Date(c.cerrada_at).getFullYear())])]
+    .sort((a, b) => b - a);
+
+  const rango = rangoDePeriodo(periodo, anioSel, desde, hasta);
+  const visibles = rango
+    ? cortes.filter((c) => {
+        const f = new Date(c.cerrada_at);
+        return f >= rango.desde && f < rango.hasta;
+      })
+    : cortes;
+
   // Se agrupan los cortes por semana (encabezado con el rango lunes–domingo),
   // respetando el orden en que llegan (más recientes primero).
   const grupos = [];
-  for (const c of cortes) {
+  for (const c of visibles) {
     const clave = inicioSemana(c.cerrada_at).getTime();
     const ultimo = grupos[grupos.length - 1];
     if (ultimo && ultimo.clave === clave) ultimo.cortes.push(c);
@@ -395,10 +465,81 @@ function Historial() {
   }
 
   return (
-    <div className="space-y-8">
-      {grupos.map((g) => (
-        <div key={g.clave} className="space-y-3">
-          <h3 className="text-sm font-bold text-dark-blue px-1">{g.titulo}</h3>
+    <div className="space-y-6">
+      {/* Filtro de período (igual que Ventas): Hoy, Esta semana, Este mes,
+          Este año (con selector) y Personalizado. */}
+      <div className="space-y-3">
+        <div className="flex flex-wrap gap-2">
+          {PERIODOS.map((p) => {
+            if (p.id === 'anio') {
+              const activoAnio = periodo === 'anio';
+              return (
+                <div key={p.id} ref={anioRef} className="relative">
+                  <button
+                    onClick={() => { setPeriodo('anio'); setMostrarAnios((v) => !v); }}
+                    className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                      activoAnio ? 'bg-blue text-white' : 'bg-white text-gray-600 border border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    Año: {anioSel}
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                  {mostrarAnios && (
+                    <div className="absolute left-0 top-10 z-10 bg-white border border-gray-200 rounded-xl shadow-lg p-2 w-32 max-h-64 overflow-y-auto">
+                      {anios.map((y) => (
+                        <button
+                          key={y}
+                          onClick={() => { setAnioSel(y); setPeriodo('anio'); setMostrarAnios(false); }}
+                          className={`block w-full text-left text-sm px-3 py-2 rounded-lg transition-colors ${
+                            anioSel === y ? 'bg-light-blue text-blue-700 font-medium' : 'text-gray-700 hover:bg-gray-50'
+                          }`}
+                        >
+                          {y}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            }
+            return (
+              <button
+                key={p.id}
+                onClick={() => { setPeriodo(p.id); setMostrarAnios(false); }}
+                className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                  periodo === p.id ? 'bg-blue text-white' : 'bg-white text-gray-600 border border-gray-300 hover:bg-gray-50'
+                }`}
+              >
+                {p.label}
+              </button>
+            );
+          })}
+        </div>
+        {periodo === 'custom' && (
+          <div className="flex flex-wrap gap-3 items-center">
+            <div className="flex items-center gap-2">
+              <label className="text-sm text-gray-600">Desde</label>
+              <input type="date" value={desde} onChange={(e) => setDesde(e.target.value)}
+                className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm" />
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="text-sm text-gray-600">Hasta</label>
+              <input type="date" value={hasta} onChange={(e) => setHasta(e.target.value)}
+                className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm" />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {visibles.length === 0 ? (
+        <EmptyState>No hay cortes en este periodo.</EmptyState>
+      ) : (
+        <div className="space-y-8">
+          {grupos.map((g) => (
+            <div key={g.clave} className="space-y-3">
+              <h3 className="text-sm font-bold text-dark-blue px-1">{g.titulo}</h3>
           {g.cortes.map((c) => {
             const cuadra = c.diferencia != null && Math.abs(c.diferencia) < 0.005;
             return (
@@ -431,8 +572,10 @@ function Historial() {
               </div>
             );
           })}
+            </div>
+          ))}
         </div>
-      ))}
+      )}
     </div>
   );
 }
