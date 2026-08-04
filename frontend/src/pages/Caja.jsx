@@ -16,6 +16,50 @@ const fmtFechaHora = (fecha) => {
   });
 };
 
+const fmtHora = (fecha) => {
+  if (!fecha) return '—';
+  return new Date(fecha).toLocaleTimeString('es-MX', { hour: 'numeric', minute: '2-digit', hour12: true });
+};
+
+// Ej.: Lunes, 03 Ago 26
+const fmtFechaCorta = (fecha) => {
+  if (!fecha) return '—';
+  const d = new Date(fecha);
+  const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+  const diaSem = cap(d.toLocaleDateString('es-MX', { weekday: 'long' }));
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mes = cap(d.toLocaleDateString('es-MX', { month: 'short' }).replace('.', ''));
+  const yy = String(d.getFullYear()).slice(-2);
+  return `${diaSem}, ${dd} ${mes} ${yy}`;
+};
+
+// Lunes (inicio) de la semana a la que pertenece una fecha. Sirve de clave para
+// agrupar el historial por semana.
+const inicioSemana = (fecha) => {
+  const d = new Date(fecha);
+  d.setHours(0, 0, 0, 0);
+  const dow = (d.getDay() + 6) % 7; // 0 = lunes
+  d.setDate(d.getDate() - dow);
+  return d;
+};
+
+// Encabezado de la sección de semana: rango lunes–domingo.
+// Ej.: Semana del 03-09 de Agosto. Si cruza de mes, muestra ambos meses:
+// Semana del 28 de Julio al 03 de Agosto.
+const fmtSemanaHeader = (fecha) => {
+  const lunes = inicioSemana(fecha);
+  const domingo = new Date(lunes);
+  domingo.setDate(domingo.getDate() + 6);
+  const dd = (d) => String(d.getDate()).padStart(2, '0');
+  const mes = (d) => {
+    const m = d.toLocaleDateString('es-MX', { month: 'long' });
+    return m.charAt(0).toUpperCase() + m.slice(1);
+  };
+  return lunes.getMonth() === domingo.getMonth()
+    ? `Semana del ${dd(lunes)}-${dd(domingo)} de ${mes(domingo)}`
+    : `Semana del ${dd(lunes)} de ${mes(lunes)} al ${dd(domingo)} de ${mes(domingo)}`;
+};
+
 const TABS = [
   { id: 'apertura',    label: 'Apertura' },
   { id: 'movimientos', label: 'Movimientos' },
@@ -340,39 +384,55 @@ function Historial() {
   if (error) return <ErrorBox message={error} />;
   if (cortes.length === 0) return <EmptyState>Aún no hay cortes registrados.</EmptyState>;
 
+  // Se agrupan los cortes por semana (encabezado con el rango lunes–domingo),
+  // respetando el orden en que llegan (más recientes primero).
+  const grupos = [];
+  for (const c of cortes) {
+    const clave = inicioSemana(c.cerrada_at).getTime();
+    const ultimo = grupos[grupos.length - 1];
+    if (ultimo && ultimo.clave === clave) ultimo.cortes.push(c);
+    else grupos.push({ clave, titulo: fmtSemanaHeader(c.cerrada_at), cortes: [c] });
+  }
+
   return (
-    <div className="space-y-3">
-      {cortes.map((c) => {
-        const cuadra = c.diferencia != null && Math.abs(c.diferencia) < 0.005;
-        return (
-          <div key={c.id} className="bg-white rounded-xl border border-gray-200 p-4">
-            <div className="flex items-start justify-between mb-3">
-              <div>
-                <p className="text-sm font-semibold text-gray-800">{fmtFechaHora(c.cerrada_at)}</p>
-                <p className="text-xs text-gray-400">
-                  Cerró {c.usuario_cierre ?? '—'} · Abrió {c.usuario_apertura}
-                </p>
+    <div className="space-y-8">
+      {grupos.map((g) => (
+        <div key={g.clave} className="space-y-3">
+          <h3 className="text-sm font-bold text-dark-blue px-1">{g.titulo}</h3>
+          {g.cortes.map((c) => {
+            const cuadra = c.diferencia != null && Math.abs(c.diferencia) < 0.005;
+            return (
+              <div key={c.id} className="bg-white rounded-xl border border-gray-200 p-4">
+                <div className="flex items-start justify-between mb-3">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-800">{fmtFechaCorta(c.cerrada_at)}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">{fmtHora(c.cerrada_at)}</p>
+                    <p className="text-xs text-gray-400 mt-1">
+                      Abrió {c.usuario_apertura} · Cerró {c.usuario_cierre ?? '—'}
+                    </p>
+                  </div>
+                  {c.diferencia != null && (
+                    <span className={`text-xs font-semibold px-2 py-1 rounded-full ${
+                      cuadra ? 'bg-green-50 text-green-700' : 'bg-orange-50 text-orange-700'
+                    }`}>
+                      {cuadra ? 'Cuadra' : `${c.diferencia > 0 ? '+' : ''}${fmt(c.diferencia)}`}
+                    </span>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+                  <span className="text-gray-500">Fondo</span><span className="text-right text-gray-700">{fmt(c.monto_inicial)}</span>
+                  <span className="text-gray-500">Ventas</span><span className="text-right text-gray-700">{fmt(c.ventas)}</span>
+                  <span className="text-gray-500">Entradas</span><span className="text-right text-gray-700">{fmt(c.entradas)}</span>
+                  <span className="text-gray-500">Salidas</span><span className="text-right text-gray-700">{fmt(c.salidas)}</span>
+                  <span className="text-gray-500 font-medium">Esperado</span><span className="text-right font-medium text-gray-800">{fmt(c.esperado)}</span>
+                  <span className="text-gray-500 font-medium">Contado</span><span className="text-right font-medium text-gray-800">{c.contado != null ? fmt(c.contado) : '—'}</span>
+                </div>
+                {c.notas_cierre && <p className="mt-2 text-xs text-gray-500">Nota: {c.notas_cierre}</p>}
               </div>
-              {c.diferencia != null && (
-                <span className={`text-xs font-semibold px-2 py-1 rounded-full ${
-                  cuadra ? 'bg-green-50 text-green-700' : 'bg-orange-50 text-orange-700'
-                }`}>
-                  {cuadra ? 'Cuadra' : `${c.diferencia > 0 ? '+' : ''}${fmt(c.diferencia)}`}
-                </span>
-              )}
-            </div>
-            <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
-              <span className="text-gray-500">Fondo</span><span className="text-right text-gray-700">{fmt(c.monto_inicial)}</span>
-              <span className="text-gray-500">Ventas</span><span className="text-right text-gray-700">{fmt(c.ventas)}</span>
-              <span className="text-gray-500">Entradas</span><span className="text-right text-gray-700">{fmt(c.entradas)}</span>
-              <span className="text-gray-500">Salidas</span><span className="text-right text-gray-700">{fmt(c.salidas)}</span>
-              <span className="text-gray-500 font-medium">Esperado</span><span className="text-right font-medium text-gray-800">{fmt(c.esperado)}</span>
-              <span className="text-gray-500 font-medium">Contado</span><span className="text-right font-medium text-gray-800">{c.contado != null ? fmt(c.contado) : '—'}</span>
-            </div>
-            {c.notas_cierre && <p className="mt-2 text-xs text-gray-500">Nota: {c.notas_cierre}</p>}
-          </div>
-        );
-      })}
+            );
+          })}
+        </div>
+      ))}
     </div>
   );
 }
