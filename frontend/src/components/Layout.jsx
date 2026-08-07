@@ -493,7 +493,11 @@ function MenuModal({ open, onClose, extraItems = [], onSettings, onLogout }) {
         </div>
 
         <div className="flex flex-col gap-2">
-          <SucursalSelector variant="menu" />
+          {/* En desktop la sucursal ya se cambia desde el header del Dashboard;
+              aquí solo se muestra en móvil. */}
+          <div className="md:hidden">
+            <SucursalSelector variant="menu" />
+          </div>
           {extraItems.map(({ label, icon, onClick }) => (
             <button
               key={label}
