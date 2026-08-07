@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef, useLayoutEffect } from 'react';
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { esAdmin, ROL_LABEL } from '../lib/roles';
@@ -120,7 +120,20 @@ const navItems = [
   { to: '/inventario', label: 'Inventario', icon: Icon.inventario },
 ];
 
-const ventasItem = { to: '/ventas', label: 'Ventas', icon: Icon.ventas };
+// Navegación de escritorio: una sola lista ordenada por prioridad. El sidebar
+// muestra los que quepan verticalmente y el resto pasa al menú de overflow, sin
+// duplicar botones entre el sidebar y el modal.
+const buildDesktopNav = (isAdmin) => [
+  { to: '/',                 label: 'Dashboard',           icon: Icon.dashboard, end: true },
+  { to: '/maquinas',         label: 'Máquinas',            icon: Icon.maquinas },
+  { to: '/notas',            label: 'Notas',               icon: Icon.notas },
+  { to: '/clientes',         label: 'Clientes',            icon: Icon.clientes },
+  { to: '/inventario',       label: 'Inventario',          icon: Icon.inventario },
+  ...(isAdmin ? [{ to: '/ventas', label: 'Ventas', icon: Icon.ventas }] : []),
+  { to: '/caja',             label: 'Caja',                icon: Icon.caja },
+  { to: '/gestion-maquinas', label: 'Gestión de máquinas', short: 'Gestión', icon: Icon.maquinas },
+  ...(isAdmin ? [{ to: '/empleados', label: 'Empleados', icon: Icon.empleados }] : []),
+];
 
 function useClock() {
   const [now, setNow] = useState(() => new Date());
@@ -131,7 +144,7 @@ function useClock() {
   return now;
 }
 
-function SidebarItem({ to, label, icon, end }) {
+function SidebarItem({ to, label, short, icon, end }) {
   return (
     <NavLink
       to={to}
@@ -152,7 +165,7 @@ function SidebarItem({ to, label, icon, end }) {
             {icon}
           </span>
           <span className={`text-[11px] font-medium ${isActive ? 'text-blue' : 'text-dark-blue'}`}>
-            {label}
+            {short ?? label}
           </span>
         </>
       )}
@@ -160,24 +173,55 @@ function SidebarItem({ to, label, icon, end }) {
   );
 }
 
-function DesktopSidebar({ items, onMenu }) {
+// Sidebar de escritorio: muestra los ítems de navegación que quepan y el resto
+// pasa al botón Menú (fijo al fondo), que abre el modal con esos accesos más
+// Ajustes y Cerrar sesión. Reporta al padre los ítems que no caben.
+function DesktopSidebar({ items, onMenu, onOverflowChange }) {
+  const slotRef = useRef(null);
+  const [capacity, setCapacity] = useState(items.length);
+
+  useLayoutEffect(() => {
+    const slot = slotRef.current;
+    if (!slot) return undefined;
+    const GAP = 12; // gap-3 entre ítems
+    const medir = () => {
+      const primerItem = slot.firstElementChild;
+      const itemH = primerItem?.offsetHeight ?? 64;
+      const slotH = slot.clientHeight;
+      const cap = Math.max(1, Math.floor((slotH + GAP) / (itemH + GAP)));
+      setCapacity(cap);
+    };
+    medir();
+    const ro = new ResizeObserver(medir);
+    ro.observe(slot);
+    return () => ro.disconnect();
+  }, [items.length]);
+
+  const visibles = items.slice(0, capacity);
+  const overflow = items.slice(capacity);
+
+  useEffect(() => {
+    onOverflowChange?.(overflow);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [overflow.map((i) => i.to).join('|')]);
+
   return (
     <aside className="hidden md:flex md:flex-col md:flex-shrink-0 w-24 bg-white border-r border-light-blue/60 py-8 px-2">
-      <div className="flex justify-center mb-6">
+      <div className="flex justify-center mb-6 flex-shrink-0">
         <div className="w-12 h-12 rounded-card-sm bg-dark-blue flex items-center justify-center">
           {Icon.brand}
         </div>
       </div>
 
-      <nav className="flex-1 flex flex-col gap-3">
-        {items.map((item) => (
+      <div ref={slotRef} className="flex-1 min-h-0 flex flex-col gap-3 overflow-hidden">
+        {visibles.map((item) => (
           <SidebarItem key={item.to} {...item} />
         ))}
-      </nav>
+      </div>
 
       <button
         onClick={onMenu}
-        className="group flex flex-col items-center gap-1.5 py-1"
+        className="group flex flex-col items-center gap-1.5 py-1 flex-shrink-0 mt-3"
       >
         <span className="w-12 h-12 rounded-card-sm flex items-center justify-center text-dark-blue group-hover:bg-light-blue/60 transition-colors">
           {Icon.menu}
@@ -470,7 +514,24 @@ function AlertsModal({ open, onClose, alertas, onSelect, onDismiss, onDismissAll
   );
 }
 
-function MenuModal({ open, onClose, extraItems = [], onSettings, onLogout }) {
+function MenuItemButton({ label, icon, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      className="flex items-center gap-3 px-3 py-3 rounded-card-sm text-dark-blue hover:bg-light-blue/60 transition-colors"
+    >
+      <span className="w-10 h-10 rounded-card-sm bg-light-blue/60 text-blue flex items-center justify-center">
+        {icon}
+      </span>
+      <span className="text-base font-medium">{label}</span>
+    </button>
+  );
+}
+
+// Modal Menú. En móvil muestra el menú completo (sucursal, accesos, ajustes,
+// cerrar sesión). En desktop solo los accesos de navegación que no cupieron en
+// el sidebar; el resto (ajustes/cerrar sesión) vive en el menú de cuenta.
+function MenuModal({ open, onClose, mobileItems = [], desktopItems = [], onSettings, onLogout }) {
   if (!open) return null;
   return (
     <div
@@ -492,34 +553,34 @@ function MenuModal({ open, onClose, extraItems = [], onSettings, onLogout }) {
           </button>
         </div>
 
-        <div className="flex flex-col gap-2">
-          {/* En desktop la sucursal ya se cambia desde el header del Dashboard;
-              aquí solo se muestra en móvil. */}
-          <div className="md:hidden">
-            <SucursalSelector variant="menu" />
-          </div>
-          {extraItems.map(({ label, icon, onClick }) => (
-            <button
-              key={label}
-              onClick={onClick}
-              className="flex items-center gap-3 px-3 py-3 rounded-card-sm text-dark-blue hover:bg-light-blue/60 transition-colors"
-            >
-              <span className="w-10 h-10 rounded-card-sm bg-light-blue/60 text-blue flex items-center justify-center">
-                {icon}
-              </span>
-              <span className="text-base font-medium">{label}</span>
-            </button>
+        {/* Móvil: menú completo */}
+        <div className="md:hidden flex flex-col gap-2">
+          <SucursalSelector variant="menu" />
+          {mobileItems.map((item) => (
+            <MenuItemButton key={item.label} {...item} />
           ))}
           {onSettings && (
-            <button
-              onClick={onSettings}
-              className="flex items-center gap-3 px-3 py-3 rounded-card-sm text-dark-blue hover:bg-light-blue/60 transition-colors"
-            >
-              <span className="w-10 h-10 rounded-card-sm bg-light-blue/60 text-blue flex items-center justify-center">
-                {Icon.ajustes}
-              </span>
-              <span className="text-base font-medium">Ajustes</span>
-            </button>
+            <MenuItemButton label="Ajustes" icon={Icon.ajustes} onClick={onSettings} />
+          )}
+          <button
+            onClick={onLogout}
+            className="flex items-center gap-3 px-3 py-3 rounded-card-sm text-red hover:bg-red/10 transition-colors"
+          >
+            <span className="w-10 h-10 rounded-card-sm bg-red/10 text-red flex items-center justify-center">
+              {Icon.logout}
+            </span>
+            <span className="text-base font-medium">Cerrar sesión</span>
+          </button>
+        </div>
+
+        {/* Desktop: los accesos de navegación que no cupieron en el sidebar,
+            más Ajustes y Cerrar sesión. */}
+        <div className="hidden md:flex flex-col gap-2">
+          {desktopItems.map((item) => (
+            <MenuItemButton key={item.label} {...item} />
+          ))}
+          {onSettings && (
+            <MenuItemButton label="Ajustes" icon={Icon.ajustes} onClick={onSettings} />
           )}
           <button
             onClick={onLogout}
@@ -713,17 +774,17 @@ export default function Layout() {
     navigate(to);
   };
 
-  const sidebarItems = esAdmin(usuario?.rol)
-    ? [...navItems, ventasItem]
-    : navItems;
+  const isAdmin = esAdmin(usuario?.rol);
+  const desktopNav = useMemo(() => buildDesktopNav(isAdmin), [isAdmin]);
 
   const mobileBottomItems = navItems.filter((item) => item.to !== '/inventario');
 
+  // Menú móvil: accesos que no están en la barra inferior (igual que antes).
   const menuExtraItems = [
     { label: 'Caja',                icon: Icon.caja,       onClick: () => goTo('/caja') },
     { label: 'Inventario',          icon: Icon.inventario, onClick: () => goTo('/inventario') },
     { label: 'Gestión de máquinas', icon: Icon.maquinas,   onClick: () => goTo('/gestion-maquinas') },
-    ...(esAdmin(usuario?.rol)
+    ...(isAdmin
       ? [
           { label: 'Ventas',    icon: Icon.ventas,    onClick: () => goTo('/ventas') },
           { label: 'Empleados', icon: Icon.empleados, onClick: () => goTo('/empleados') },
@@ -731,9 +792,21 @@ export default function Layout() {
       : []),
   ];
 
+  // Accesos de navegación que no cupieron en el sidebar (desktop) → modal Menú.
+  const [desktopOverflow, setDesktopOverflow] = useState([]);
+  const desktopMenuItems = desktopOverflow.map((item) => ({
+    label: item.label,
+    icon: item.icon,
+    onClick: () => goTo(item.to),
+  }));
+
   return (
     <div className="flex h-full overflow-hidden">
-      <DesktopSidebar items={sidebarItems} onMenu={() => setMenuOpen(true)} />
+      <DesktopSidebar
+        items={desktopNav}
+        onMenu={() => setMenuOpen(true)}
+        onOverflowChange={setDesktopOverflow}
+      />
 
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
         <main className="flex-1 overflow-y-auto">
@@ -755,8 +828,9 @@ export default function Layout() {
       <MenuModal
         open={menuOpen}
         onClose={() => setMenuOpen(false)}
-        extraItems={menuExtraItems}
-        onSettings={esAdmin(usuario?.rol) ? handleSettings : undefined}
+        mobileItems={menuExtraItems}
+        desktopItems={desktopMenuItems}
+        onSettings={isAdmin ? handleSettings : undefined}
         onLogout={handleLogout}
       />
 
