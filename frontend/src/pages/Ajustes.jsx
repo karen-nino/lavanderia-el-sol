@@ -313,6 +313,7 @@ export default function Ajustes() {
     password: '',
   }));
   const [showPassword, setShowPassword] = useState(false);
+  const [perfilGuardado, setPerfilGuardado] = useState(false); // muestra la animación de guardado
   const logoInputRef = useRef(null);
 
   // Sucursales: cada una con su nombre, dirección y teléfono editables.
@@ -496,7 +497,8 @@ export default function Ajustes() {
         rol: updated.rol,
       });
       setPerfilForm(f => ({ ...f, password: '' }));
-      setMensaje({ tipo: 'ok', texto: 'Perfil actualizado.' });
+      setPerfilGuardado(true);
+      setTimeout(() => setPerfilGuardado(false), 2200);
     } catch (err) {
       setMensaje({ tipo: 'error', texto: err.message });
     } finally {
@@ -1490,13 +1492,21 @@ export default function Ajustes() {
               </button>
               <button
                 type="submit"
-                disabled={saving}
-                className="bg-blue hover:opacity-90 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors flex items-center justify-center gap-2"
+                disabled={saving || perfilGuardado}
+                className={`${perfilGuardado ? 'bg-green-600' : 'bg-blue hover:opacity-90'} disabled:opacity-100 text-white font-medium py-3.5 rounded-lg text-base transition-colors flex items-center justify-center gap-2`}
               >
                 {saving ? (
                   <>
                     <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                     Guardando...
+                  </>
+                ) : perfilGuardado ? (
+                  <>
+                    <svg className="w-5 h-5 animate-pop-in" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7"
+                        style={{ strokeDasharray: 48, strokeDashoffset: 48 }} className="animate-draw-check" />
+                    </svg>
+                    ¡Guardado!
                   </>
                 ) : (
                   'Guardar'
