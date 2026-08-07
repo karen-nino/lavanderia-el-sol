@@ -625,18 +625,20 @@ function Historial({ onFiltroLabel }) {
       {visibles.length === 0 ? (
         <EmptyState>No hay cortes en este periodo.</EmptyState>
       ) : (
-        <div className="space-y-8">
+        <div className="space-y-10">
           {grupos.map((g) => (
-            <div key={g.clave} className="space-y-3">
-              <h3 className="text-sm font-bold text-dark-blue px-1">{g.titulo}</h3>
+            <div key={g.clave} className="space-y-5">
+              {periodo !== 'hoy' && (
+                <h3 className="text-base font-bold text-dark-blue px-1">{g.titulo}</h3>
+              )}
           {g.cortes.map((c) => {
             const cuadra = c.diferencia != null && Math.abs(c.diferencia) < 0.005;
             return (
               <div key={c.id} className="bg-white rounded-xl border border-gray-200 p-4">
-                <div className="flex items-start justify-between mb-3">
+                <div className="flex items-start justify-between mb-5">
                   <div>
                     <p className="text-base font-semibold text-gray-800">{fmtFechaCorta(c.cerrada_at)}</p>
-                    <p className="text-sm text-gray-500 mt-0.5">{fmtHora(c.cerrada_at)}</p>
+                    <p className="text-base text-gray-500 mt-0.5">{fmtHora(c.cerrada_at)}</p>
                   </div>
                   {c.diferencia != null && (
                     <span className={`text-sm font-semibold px-2.5 py-1 rounded-full ${
@@ -647,7 +649,7 @@ function Historial({ onFiltroLabel }) {
                   )}
                 </div>
 
-                <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-base">
+                <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-base">
                   <span className="text-gray-500">Fondo</span><span className="text-right text-gray-700">{fmt(c.monto_inicial)}</span>
                   <span className="text-gray-500">Ventas</span><span className="text-right text-gray-700">{fmt(c.ventas)}</span>
                   <span className="text-gray-500">Entradas</span><span className="text-right text-gray-700">{fmt(c.entradas)}</span>
@@ -655,8 +657,8 @@ function Historial({ onFiltroLabel }) {
                   <span className="text-gray-500 font-medium">Esperado</span><span className="text-right font-medium text-gray-800">{fmt(c.esperado)}</span>
                   <span className="text-gray-500 font-medium">Contado</span><span className="text-right font-medium text-gray-800">{c.contado != null ? fmt(c.contado) : '—'}</span>
                 </div>
-                <div className="mt-3 pt-3 border-t border-gray-100 divide-y divide-gray-100">
-                  <div className="py-4 first:pt-0 last:pb-0">
+                <div className="mt-5 pt-5 border-t border-gray-100 divide-y divide-gray-100">
+                  <div className="py-6 first:pt-0 last:pb-0">
                     <div className="flex items-center gap-2 text-sm">
                       <IconEntrada className="w-5 h-5 text-gray-400 flex-shrink-0" />
                       <span className="text-gray-400 w-12">Abrió</span>
@@ -666,7 +668,7 @@ function Historial({ onFiltroLabel }) {
                       <p className="mt-2 ml-7 pl-3 border-l-2 border-gray-100 text-sm text-gray-500">{c.notas_apertura}</p>
                     )}
                   </div>
-                  <div className="py-4 first:pt-0 last:pb-0">
+                  <div className="py-6 first:pt-0 last:pb-0">
                     <div className="flex items-center gap-2 text-sm">
                       <IconSalida className="w-5 h-5 text-gray-400 flex-shrink-0" />
                       <span className="text-gray-400 w-12">Cerró</span>
