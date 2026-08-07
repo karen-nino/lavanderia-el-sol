@@ -62,8 +62,8 @@ const inicioSemana = (fecha) => {
 };
 
 // Encabezado de la sección de semana: rango lunes–domingo.
-// Ej.: Semana del 03-09 de Agosto. Si cruza de mes, muestra ambos meses:
-// Semana del 28 de Julio al 03 de Agosto.
+// Ej.: 03 - 09 de Agosto. Si cruza de mes, muestra ambos meses:
+// 28 de Julio al 03 de Agosto.
 const fmtSemanaHeader = (fecha) => {
   const lunes = inicioSemana(fecha);
   const domingo = new Date(lunes);
@@ -74,8 +74,8 @@ const fmtSemanaHeader = (fecha) => {
     return m.charAt(0).toUpperCase() + m.slice(1);
   };
   return lunes.getMonth() === domingo.getMonth()
-    ? `Semana del ${dd(lunes)}-${dd(domingo)} de ${mes(domingo)}`
-    : `Semana del ${dd(lunes)} de ${mes(lunes)} al ${dd(domingo)} de ${mes(domingo)}`;
+    ? `${dd(lunes)} - ${dd(domingo)} de ${mes(domingo)}`
+    : `${dd(lunes)} de ${mes(lunes)} al ${dd(domingo)} de ${mes(domingo)}`;
 };
 
 // Filtro de fecha del historial, con las mismas opciones que Ventas. El "mes"
@@ -521,7 +521,7 @@ function Historial({ onFiltroLabel }) {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-10">
       {/* Filtro de período (igual que Ventas): Hoy, Esta semana, Este mes,
           Este año (con selector) y Personalizado. */}
       <div className="space-y-3">
@@ -629,7 +629,7 @@ function Historial({ onFiltroLabel }) {
           {grupos.map((g) => (
             <div key={g.clave} className="space-y-5">
               {periodo !== 'hoy' && (
-                <h3 className="text-base font-bold text-dark-blue px-1">{g.titulo}</h3>
+                <h3 className="text-lg font-bold text-dark-blue px-1">{g.titulo}</h3>
               )}
           {g.cortes.map((c) => {
             const cuadra = c.diferencia != null && Math.abs(c.diferencia) < 0.005;
