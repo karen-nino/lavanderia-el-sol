@@ -635,11 +635,11 @@ function Historial({ onFiltroLabel }) {
               <div key={c.id} className="bg-white rounded-xl border border-gray-200 p-4">
                 <div className="flex items-start justify-between mb-3">
                   <div>
-                    <p className="text-sm font-semibold text-gray-800">{fmtFechaCorta(c.cerrada_at)}</p>
-                    <p className="text-xs text-gray-500 mt-0.5">{fmtHora(c.cerrada_at)}</p>
+                    <p className="text-base font-semibold text-gray-800">{fmtFechaCorta(c.cerrada_at)}</p>
+                    <p className="text-sm text-gray-500 mt-0.5">{fmtHora(c.cerrada_at)}</p>
                   </div>
                   {c.diferencia != null && (
-                    <span className={`text-xs font-semibold px-2 py-1 rounded-full ${
+                    <span className={`text-sm font-semibold px-2.5 py-1 rounded-full ${
                       cuadra ? 'bg-green-50 text-green-700' : 'bg-orange-50 text-orange-700'
                     }`}>
                       {cuadra ? 'Cuadra' : `${c.diferencia > 0 ? '+' : ''}${fmt(c.diferencia)}`}
@@ -647,7 +647,7 @@ function Historial({ onFiltroLabel }) {
                   )}
                 </div>
 
-                <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-base">
                   <span className="text-gray-500">Fondo</span><span className="text-right text-gray-700">{fmt(c.monto_inicial)}</span>
                   <span className="text-gray-500">Ventas</span><span className="text-right text-gray-700">{fmt(c.ventas)}</span>
                   <span className="text-gray-500">Entradas</span><span className="text-right text-gray-700">{fmt(c.entradas)}</span>
@@ -657,23 +657,23 @@ function Historial({ onFiltroLabel }) {
                 </div>
                 <div className="mt-3 pt-3 border-t border-gray-100 divide-y divide-gray-100">
                   <div className="py-4 first:pt-0 last:pb-0">
-                    <div className="flex items-center gap-2 text-xs">
-                      <IconEntrada className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                      <span className="text-gray-400 w-10">Abrió</span>
+                    <div className="flex items-center gap-2 text-sm">
+                      <IconEntrada className="w-5 h-5 text-gray-400 flex-shrink-0" />
+                      <span className="text-gray-400 w-12">Abrió</span>
                       <span className="font-medium text-gray-700">{c.usuario_apertura}</span>
                     </div>
                     {c.notas_apertura && (
-                      <p className="mt-2 ml-6 pl-2.5 border-l-2 border-gray-100 text-xs text-gray-500">{c.notas_apertura}</p>
+                      <p className="mt-2 ml-7 pl-3 border-l-2 border-gray-100 text-sm text-gray-500">{c.notas_apertura}</p>
                     )}
                   </div>
                   <div className="py-4 first:pt-0 last:pb-0">
-                    <div className="flex items-center gap-2 text-xs">
-                      <IconSalida className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                      <span className="text-gray-400 w-10">Cerró</span>
+                    <div className="flex items-center gap-2 text-sm">
+                      <IconSalida className="w-5 h-5 text-gray-400 flex-shrink-0" />
+                      <span className="text-gray-400 w-12">Cerró</span>
                       <span className="font-medium text-gray-700">{c.usuario_cierre ?? '—'}</span>
                     </div>
                     {c.notas_cierre && (
-                      <p className="mt-2 ml-6 pl-2.5 border-l-2 border-gray-100 text-xs text-gray-500">{c.notas_cierre}</p>
+                      <p className="mt-2 ml-7 pl-3 border-l-2 border-gray-100 text-sm text-gray-500">{c.notas_cierre}</p>
                     )}
                   </div>
                 </div>
