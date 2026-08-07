@@ -160,7 +160,10 @@ function Apertura({ data, onAbrir }) {
           </div>
         </div>
         {caja.notas_apertura && (
-          <p className="text-sm text-gray-500">Nota: {caja.notas_apertura}</p>
+          <div className="bg-white rounded-xl border border-gray-200 px-4 py-3">
+            <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Nota</p>
+            <p className="mt-2.5 text-sm text-gray-800">{caja.notas_apertura}</p>
+          </div>
         )}
       </div>
     );
@@ -636,7 +639,16 @@ function Historial({ onFiltroLabel }) {
                   <span className="text-gray-500 font-medium">Esperado</span><span className="text-right font-medium text-gray-800">{fmt(c.esperado)}</span>
                   <span className="text-gray-500 font-medium">Contado</span><span className="text-right font-medium text-gray-800">{c.contado != null ? fmt(c.contado) : '—'}</span>
                 </div>
-                {c.notas_cierre && <p className="mt-2 text-xs text-gray-500">Nota: {c.notas_cierre}</p>}
+                {(c.notas_apertura || c.notas_cierre) && (
+                  <div className="mt-2 space-y-0.5">
+                    {c.notas_apertura && (
+                      <p className="text-xs text-gray-500">Nota de apertura: {c.notas_apertura}</p>
+                    )}
+                    {c.notas_cierre && (
+                      <p className="text-xs text-gray-500">Nota de cierre: {c.notas_cierre}</p>
+                    )}
+                  </div>
+                )}
               </div>
             );
           })}
