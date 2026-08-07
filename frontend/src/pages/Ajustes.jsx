@@ -298,6 +298,31 @@ function CatalogoEtiquetas({ endpoint, singular, inputCls, onMensaje }) {
   );
 }
 
+// Palomita animada (mismo trazo que el éxito de NuevaNota) para el estado
+// "guardado" de los botones de Ajustes.
+function IconoGuardado() {
+  return (
+    <svg className="w-5 h-5 animate-pop-in" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7"
+        style={{ strokeDasharray: 48, strokeDashoffset: 48 }} className="animate-draw-check" />
+    </svg>
+  );
+}
+
+// Contenido de un botón de guardar según su estado: cargando · guardado · reposo.
+function ContenidoGuardar({ saving, ok, children, guardando = 'Guardando...', okLabel = '¡Guardado!' }) {
+  if (saving) {
+    return (
+      <>
+        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+        {guardando}
+      </>
+    );
+  }
+  if (ok) return (<><IconoGuardado />{okLabel}</>);
+  return children;
+}
+
 export default function Ajustes() {
   const { usuario, updateUsuario, sucursalActiva } = useAuth();
   const [config,        setConfig]        = useState(null);
@@ -313,7 +338,12 @@ export default function Ajustes() {
     password: '',
   }));
   const [showPassword, setShowPassword] = useState(false);
-  const [perfilGuardado, setPerfilGuardado] = useState(false); // muestra la animación de guardado
+  // Clave del botón que acaba de guardar, para mostrarle la animación de palomita.
+  const [guardadoOk, setGuardadoOk] = useState(null);
+  const marcarGuardado = (clave) => {
+    setGuardadoOk(clave);
+    setTimeout(() => setGuardadoOk((actual) => (actual === clave ? null : actual)), 2200);
+  };
   const logoInputRef = useRef(null);
 
   // Sucursales: cada una con su nombre, dirección y teléfono editables.
@@ -374,7 +404,7 @@ export default function Ajustes() {
       setSucursales(prev => prev.map(x =>
         x.slug === slug ? { ...updated, telefono: formatTelefono(updated.telefono ?? '') } : x
       ));
-      setMensaje({ tipo: 'ok', texto: `Sucursal "${updated.nombre}" actualizada.` });
+      marcarGuardado(`sucursal:${slug}`);
     } catch (err) {
       setMensaje({ tipo: 'error', texto: err.message });
     } finally {
@@ -404,7 +434,7 @@ export default function Ajustes() {
       setSucursalSel(creada.slug);       // pasa a editar la recién creada
       setNuevaSucursal({ nombre: '', direccion: '', telefono: '' });
       setAgregando(false);
-      setMensaje({ tipo: 'ok', texto: `Sucursal "${creada.nombre}" creada.` });
+      marcarGuardado(`sucursal:${creada.slug}`);
     } catch (err) {
       setMensaje({ tipo: 'error', texto: err.message });
     } finally {
@@ -497,8 +527,7 @@ export default function Ajustes() {
         rol: updated.rol,
       });
       setPerfilForm(f => ({ ...f, password: '' }));
-      setPerfilGuardado(true);
-      setTimeout(() => setPerfilGuardado(false), 2200);
+      marcarGuardado('mobile');
     } catch (err) {
       setMensaje({ tipo: 'error', texto: err.message });
     } finally {
@@ -557,7 +586,7 @@ export default function Ajustes() {
       updateUsuario({ nombre: updatedPerfil.nombre, apellido: updatedPerfil.apellido, rol: updatedPerfil.rol });
       setPerfilForm(f => ({ ...f, password: '' }));
       setConfig(updatedConfig);
-      setMensaje({ tipo: 'ok', texto: 'Cambios guardados correctamente.' });
+      marcarGuardado('todo');
     } catch (err) {
       setMensaje({ tipo: 'error', texto: err.message });
     } finally {
@@ -592,7 +621,7 @@ export default function Ajustes() {
         alerta_ciclo_detenido: !!config.alerta_ciclo_detenido,
       });
       setConfig(updated);
-      setMensaje({ tipo: 'ok', texto: 'Ajustes guardados correctamente.' });
+      marcarGuardado('mobile');
     } catch (err) {
       setMensaje({ tipo: 'error', texto: err.message });
     } finally {
@@ -628,7 +657,7 @@ export default function Ajustes() {
       if (!res.ok) throw new Error(mensajeDeError(res.status, data));
       setConfig(prev => ({ ...prev, logo_url: data.logo_url }));
       setLogoPreview(data.logo_url);
-      setMensaje({ tipo: 'ok', texto: 'Logo actualizado.' });
+      marcarGuardado('logo');
     } catch (err) {
       setMensaje({ tipo: 'error', texto: err.message });
     } finally {
@@ -832,12 +861,19 @@ export default function Ajustes() {
               type="button"
               onClick={() => logoInputRef.current?.click()}
               disabled={uploadingLogo}
-              className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-60 transition-colors"
+              className={`flex items-center gap-2 px-3 py-2 border rounded-lg text-sm hover:bg-gray-50 disabled:opacity-60 transition-colors ${
+                guardadoOk === 'logo' ? 'border-green-300 text-green-700' : 'border-gray-300 text-gray-600'
+              }`}
             >
               {uploadingLogo ? (
                 <>
                   <div className="w-4 h-4 border-2 border-blue border-t-transparent rounded-full animate-spin" />
                   Subiendo...
+                </>
+              ) : guardadoOk === 'logo' ? (
+                <>
+                  <IconoGuardado />
+                  Logo actualizado
                 </>
               ) : (
                 'Cambiar logo'
@@ -969,17 +1005,15 @@ export default function Ajustes() {
               <button
                 type="button"
                 onClick={() => guardarSucursal(sucursalActual.slug)}
-                disabled={savingSucursal === sucursalActual.slug}
-                className="flex items-center gap-2 px-6 bg-blue hover:opacity-90 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
+                disabled={savingSucursal === sucursalActual.slug || guardadoOk === `sucursal:${sucursalActual.slug}`}
+                className={`flex items-center gap-2 px-6 ${guardadoOk === `sucursal:${sucursalActual.slug}` ? 'bg-green-600' : 'bg-blue hover:opacity-90'} disabled:opacity-100 text-white font-medium py-3.5 rounded-lg text-base transition-colors`}
               >
-                {savingSucursal === sucursalActual.slug ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    Guardando...
-                  </>
-                ) : (
-                  'Guardar sucursal'
-                )}
+                <ContenidoGuardar
+                  saving={savingSucursal === sucursalActual.slug}
+                  ok={guardadoOk === `sucursal:${sucursalActual.slug}`}
+                >
+                  Guardar sucursal
+                </ContenidoGuardar>
               </button>
             </div>
           </>
@@ -1115,9 +1149,16 @@ export default function Ajustes() {
                 type="button"
                 onClick={() => logoInputRef.current?.click()}
                 disabled={uploadingLogo}
-                className="px-4 py-2 border border-grey/40 rounded-lg text-sm text-dark-blue bg-white disabled:opacity-60"
+                className={`px-4 py-2 border rounded-lg text-sm bg-white disabled:opacity-60 flex items-center gap-2 ${
+                  guardadoOk === 'logo' ? 'border-green-300 text-green-700' : 'border-grey/40 text-dark-blue'
+                }`}
               >
-                {uploadingLogo ? 'Subiendo...' : 'Cambiar logo'}
+                {uploadingLogo ? 'Subiendo...' : guardadoOk === 'logo' ? (
+                  <>
+                    <IconoGuardado />
+                    Logo actualizado
+                  </>
+                ) : 'Cambiar logo'}
               </button>
               <p className="text-xs text-grey">JPG, PNG o WebP Max. 2 MB</p>
             </div>
@@ -1227,10 +1268,15 @@ export default function Ajustes() {
             <button
               type="button"
               onClick={() => guardarSucursal(sucursalActual.slug)}
-              disabled={savingSucursal === sucursalActual.slug}
-              className="w-full bg-blue hover:opacity-90 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
+              disabled={savingSucursal === sucursalActual.slug || guardadoOk === `sucursal:${sucursalActual.slug}`}
+              className={`w-full ${guardadoOk === `sucursal:${sucursalActual.slug}` ? 'bg-green-600' : 'bg-blue hover:opacity-90'} disabled:opacity-100 text-white font-medium py-3.5 rounded-lg text-base transition-colors flex items-center justify-center gap-2`}
             >
-              {savingSucursal === sucursalActual.slug ? 'Guardando...' : 'Guardar sucursal'}
+              <ContenidoGuardar
+                saving={savingSucursal === sucursalActual.slug}
+                ok={guardadoOk === `sucursal:${sucursalActual.slug}`}
+              >
+                Guardar sucursal
+              </ContenidoGuardar>
             </button>
             {esMain && (
               <button
@@ -1492,25 +1538,10 @@ export default function Ajustes() {
               </button>
               <button
                 type="submit"
-                disabled={saving || perfilGuardado}
-                className={`${perfilGuardado ? 'bg-green-600' : 'bg-blue hover:opacity-90'} disabled:opacity-100 text-white font-medium py-3.5 rounded-lg text-base transition-colors flex items-center justify-center gap-2`}
+                disabled={saving || guardadoOk === 'mobile'}
+                className={`${guardadoOk === 'mobile' ? 'bg-green-600' : 'bg-blue hover:opacity-90'} disabled:opacity-100 text-white font-medium py-3.5 rounded-lg text-base transition-colors flex items-center justify-center gap-2`}
               >
-                {saving ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    Guardando...
-                  </>
-                ) : perfilGuardado ? (
-                  <>
-                    <svg className="w-5 h-5 animate-pop-in" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7"
-                        style={{ strokeDasharray: 48, strokeDashoffset: 48 }} className="animate-draw-check" />
-                    </svg>
-                    ¡Guardado!
-                  </>
-                ) : (
-                  'Guardar'
-                )}
+                <ContenidoGuardar saving={saving} ok={guardadoOk === 'mobile'}>Guardar</ContenidoGuardar>
               </button>
             </div>
             )}
@@ -1558,17 +1589,10 @@ export default function Ajustes() {
             <button
               type="button"
               onClick={handleGuardarTodo}
-              disabled={saving}
-              className="flex items-center gap-2 px-6 py-3.5 bg-blue hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed text-white text-base font-medium rounded-lg transition-colors"
+              disabled={saving || guardadoOk === 'todo'}
+              className={`flex items-center gap-2 px-6 py-3.5 ${guardadoOk === 'todo' ? 'bg-green-600' : 'bg-blue hover:opacity-90'} disabled:opacity-100 disabled:cursor-not-allowed text-white text-base font-medium rounded-lg transition-colors`}
             >
-              {saving ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  Guardando...
-                </>
-              ) : (
-                'Guardar cambios'
-              )}
+              <ContenidoGuardar saving={saving} ok={guardadoOk === 'todo'} okLabel="¡Guardado!">Guardar cambios</ContenidoGuardar>
             </button>
           </div>
         </div>
