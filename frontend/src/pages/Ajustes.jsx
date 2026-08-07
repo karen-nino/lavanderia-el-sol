@@ -1467,13 +1467,40 @@ export default function Ajustes() {
     etiquetas: seccionEtiquetasMobile,
   };
 
-  const mensajeBanner = mensaje && (
-    <div className={`rounded-lg px-4 py-3 text-sm ${
-      mensaje.tipo === 'ok'
-        ? 'bg-green-50 border border-green-200 text-green-700'
-        : 'bg-red-50 border border-red-200 text-red-700'
-    }`}>
+  // Éxitos: banner verde en línea. Errores: modal (igual que autoservicio).
+  const mensajeBanner = mensaje?.tipo === 'ok' && (
+    <div className="rounded-lg px-4 py-3 text-sm bg-green-50 border border-green-200 text-green-700">
       {mensaje.texto}
+    </div>
+  );
+
+  const errorModal = mensaje?.tipo === 'error' && (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-8 text-center space-y-5 animate-shake">
+        <div className="w-20 h-20 mx-auto rounded-full bg-red-100 flex items-center justify-center animate-pop-in">
+          <svg className="w-12 h-12 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={3}
+              d="M6 6L18 18M18 6L6 18"
+              style={{ strokeDasharray: 40, strokeDashoffset: 40 }}
+              className="animate-draw-x"
+            />
+          </svg>
+        </div>
+        <div className="space-y-1">
+          <h3 className="text-lg font-bold text-gray-900">Ocurrió un error</h3>
+          <p className="text-sm text-gray-500">{mensaje.texto}</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setMensaje(null)}
+          className="w-full bg-red-600 hover:bg-red-700 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
+        >
+          Cerrar
+        </button>
+      </div>
     </div>
   );
 
@@ -1481,6 +1508,8 @@ export default function Ajustes() {
 
   return (
     <>
+      {errorModal}
+
       {/* ── Vista móvil ── */}
       <div className="md:hidden min-h-full bg-slate-100">
         {!activeSection ? (
