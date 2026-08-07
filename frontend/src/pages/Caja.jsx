@@ -8,6 +8,24 @@ import SucursalBar from '../components/SucursalBar';
 const fmt = (n) =>
   new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(n ?? 0);
 
+// Íconos de entrada/salida para las filas de apertura y cierre del corte.
+function IconEntrada({ className }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
+      <path strokeLinecap="round" strokeLinejoin="round"
+        d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15M12 9l3 3m0 0-3 3m3-3H2.25" />
+    </svg>
+  );
+}
+function IconSalida({ className }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
+      <path strokeLinecap="round" strokeLinejoin="round"
+        d="M8.25 9V5.25A2.25 2.25 0 0 1 10.5 3h6a2.25 2.25 0 0 1 2.25 2.25v13.5A2.25 2.25 0 0 1 16.5 21h-6a2.25 2.25 0 0 1-2.25-2.25V15m-3 0-3-3m0 0 3-3m-3 3h12.75" />
+    </svg>
+  );
+}
+
 const fmtFechaHora = (fecha) => {
   if (!fecha) return '—';
   const d = new Date(fecha);
@@ -619,9 +637,6 @@ function Historial({ onFiltroLabel }) {
                   <div>
                     <p className="text-sm font-semibold text-gray-800">{fmtFechaCorta(c.cerrada_at)}</p>
                     <p className="text-xs text-gray-500 mt-0.5">{fmtHora(c.cerrada_at)}</p>
-                    <p className="text-xs text-gray-400 mt-1">
-                      Abrió {c.usuario_apertura} · Cerró {c.usuario_cierre ?? '—'}
-                    </p>
                   </div>
                   {c.diferencia != null && (
                     <span className={`text-xs font-semibold px-2 py-1 rounded-full ${
@@ -631,6 +646,7 @@ function Historial({ onFiltroLabel }) {
                     </span>
                   )}
                 </div>
+
                 <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
                   <span className="text-gray-500">Fondo</span><span className="text-right text-gray-700">{fmt(c.monto_inicial)}</span>
                   <span className="text-gray-500">Ventas</span><span className="text-right text-gray-700">{fmt(c.ventas)}</span>
@@ -639,22 +655,28 @@ function Historial({ onFiltroLabel }) {
                   <span className="text-gray-500 font-medium">Esperado</span><span className="text-right font-medium text-gray-800">{fmt(c.esperado)}</span>
                   <span className="text-gray-500 font-medium">Contado</span><span className="text-right font-medium text-gray-800">{c.contado != null ? fmt(c.contado) : '—'}</span>
                 </div>
-                {(c.notas_apertura || c.notas_cierre) && (
-                  <div className="mt-3 pt-3 border-t border-gray-100 divide-y divide-gray-100">
+                <div className="mt-3 pt-3 border-t border-gray-100 divide-y divide-gray-100">
+                  <div className="py-4 first:pt-0 last:pb-0">
+                    <div className="flex items-center gap-2 text-xs">
+                      <IconEntrada className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                      <span className="text-gray-400 w-10">Abrió</span>
+                      <span className="font-medium text-gray-700">{c.usuario_apertura}</span>
+                    </div>
                     {c.notas_apertura && (
-                      <div className="py-4 first:pt-0 last:pb-0">
-                        <p className="text-[11px] font-medium uppercase tracking-wide text-gray-400">Nota de apertura</p>
-                        <p className="mt-1 text-sm text-gray-700">{c.notas_apertura}</p>
-                      </div>
-                    )}
-                    {c.notas_cierre && (
-                      <div className="py-4 first:pt-0 last:pb-0">
-                        <p className="text-[11px] font-medium uppercase tracking-wide text-gray-400">Nota de cierre</p>
-                        <p className="mt-1 text-sm text-gray-700">{c.notas_cierre}</p>
-                      </div>
+                      <p className="mt-2 ml-6 pl-2.5 border-l-2 border-gray-100 text-xs text-gray-500">{c.notas_apertura}</p>
                     )}
                   </div>
-                )}
+                  <div className="py-4 first:pt-0 last:pb-0">
+                    <div className="flex items-center gap-2 text-xs">
+                      <IconSalida className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                      <span className="text-gray-400 w-10">Cerró</span>
+                      <span className="font-medium text-gray-700">{c.usuario_cierre ?? '—'}</span>
+                    </div>
+                    {c.notas_cierre && (
+                      <p className="mt-2 ml-6 pl-2.5 border-l-2 border-gray-100 text-xs text-gray-500">{c.notas_cierre}</p>
+                    )}
+                  </div>
+                </div>
               </div>
             );
           })}
