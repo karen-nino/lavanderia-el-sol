@@ -640,12 +640,18 @@ function Historial({ onFiltroLabel }) {
                   <span className="text-gray-500 font-medium">Contado</span><span className="text-right font-medium text-gray-800">{c.contado != null ? fmt(c.contado) : '—'}</span>
                 </div>
                 {(c.notas_apertura || c.notas_cierre) && (
-                  <div className="mt-2 space-y-0.5">
+                  <div className="mt-3 pt-3 border-t border-gray-100 divide-y divide-gray-100">
                     {c.notas_apertura && (
-                      <p className="text-xs text-gray-500">Nota de apertura: {c.notas_apertura}</p>
+                      <div className="py-4 first:pt-0 last:pb-0">
+                        <p className="text-[11px] font-medium uppercase tracking-wide text-gray-400">Nota de apertura</p>
+                        <p className="mt-1 text-sm text-gray-700">{c.notas_apertura}</p>
+                      </div>
                     )}
                     {c.notas_cierre && (
-                      <p className="text-xs text-gray-500">Nota de cierre: {c.notas_cierre}</p>
+                      <div className="py-4 first:pt-0 last:pb-0">
+                        <p className="text-[11px] font-medium uppercase tracking-wide text-gray-400">Nota de cierre</p>
+                        <p className="mt-1 text-sm text-gray-700">{c.notas_cierre}</p>
+                      </div>
                     )}
                   </div>
                 )}
