@@ -1501,7 +1501,7 @@ export default function Ajustes() {
       {errorModal}
 
       {/* ── Vista móvil ── */}
-      <div className="md:hidden min-h-full bg-slate-100">
+      <div className="md:hidden min-h-full bg-gray-50">
         {!activeSection ? (
           <>
             <div className="bg-white border-b-2 border-gray-200">
@@ -1579,7 +1579,7 @@ export default function Ajustes() {
       />
 
       {/* ── Vista desktop ── */}
-      <div className="hidden md:block min-h-full bg-slate-100">
+      <div className="hidden md:block min-h-full bg-gray-50">
         {/* Cabecera (barra superior) */}
         <div className="bg-white border-b-2 border-gray-200">
           <div className="max-w-2xl mx-auto px-6 pt-14 pb-4">
