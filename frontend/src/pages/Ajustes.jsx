@@ -32,10 +32,12 @@ const SectionIcon = {
         d="M3 9l1.5-4.5h15L21 9M3 9v10a1 1 0 001 1h16a1 1 0 001-1V9M3 9h18M9 14h6v6H9z" />
     </svg>
   ),
-  precios: (
-    <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-        d="M12 8c-2 0-3 1-3 2.5S10 13 12 13s3 1 3 2.5S14 18 12 18m0-10V6m0 12v2m0-12c1.5 0 2.7.7 3 2" />
+  // Signo de dólar (sin círculo), para "Cargas y Precios". viewBox acercado al
+  // glifo para que se vea más grande, con el trazo ajustado a ese acercamiento.
+  cargas: (
+    <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="5.5 5.5 13 13">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.1}
+        d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
     </svg>
   ),
   // Lavadora, igual que el icono de "Máquinas" del nav inferior.
@@ -98,7 +100,7 @@ const MOBILE_SECTIONS = [
   { id: 'perfil',  label: 'Mi Perfil',                 subtitle: 'Información de perfil',    icon: SectionIcon.perfil  },
   { id: 'negocio', label: 'Sucursales',                subtitle: 'Información de sucursales', icon: SectionIcon.negocio },
   { id: 'maquinas', label: 'Máquinas',                  subtitle: 'Detalles de máquinas',      icon: SectionIcon.maquinas },
-  { id: 'cargas',   label: 'Cargas y Precios',          subtitle: 'Topes de precio por carga', icon: SectionIcon.precios },
+  { id: 'cargas',   label: 'Cargas y Precios',          subtitle: 'Topes de precio por carga', icon: SectionIcon.cargas },
   { id: 'alertas', label: 'Alertas y Notificaciones',  subtitle: 'Ajustes de alertas', icon: SectionIcon.alertas },
   { id: 'etiquetas', label: 'Etiquetas de encargo',    subtitle: 'Tipos de tela y tamaños de edredón', icon: SectionIcon.etiquetas },
 ];
