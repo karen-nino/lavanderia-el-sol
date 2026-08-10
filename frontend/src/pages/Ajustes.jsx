@@ -350,7 +350,6 @@ export default function Ajustes() {
   // sucursalSel = slug de la sucursal que se está editando en el selector.
   const [sucursales,     setSucursales]     = useState([]);
   const [sucursalSel,    setSucursalSel]    = useState('');
-  const [savingSucursal, setSavingSucursal] = useState(null); // slug guardándose
   const [cambiandoActiva, setCambiandoActiva] = useState(null); // slug activándose/desactivándose
   const [agregando,      setAgregando]      = useState(false);
   const [creando,        setCreando]        = useState(false);
@@ -387,29 +386,25 @@ export default function Ajustes() {
     setSucursales(prev => prev.map(s => s.slug === slug ? { ...s, [field]: next } : s));
   };
 
-  const guardarSucursal = async (slug) => {
-    const s = sucursales.find(x => x.slug === slug);
-    if (!s) return;
+  // Valida y guarda la sucursal seleccionada. Devuelve la fila actualizada, o
+  // null si no hay ninguna cargada. Lanza si el nombre está vacío o falla la API.
+  // No maneja su propia animación de guardado: eso lo controla quien la llama
+  // (ahora es "Guardar cambios"), para que la sucursal se guarde junto con lo demás.
+  const patchSucursalActual = async () => {
+    const s = sucursales.find(x => x.slug === sucursalSel);
+    if (!s) return null;
     if (!String(s.nombre ?? '').trim()) {
-      return setMensaje({ tipo: 'error', texto: 'El nombre de la sucursal no puede estar vacío.' });
+      throw new Error('El nombre de la sucursal no puede estar vacío.');
     }
-    setSavingSucursal(slug);
-    setMensaje(null);
-    try {
-      const updated = await api.patch(`/sucursales/${slug}`, {
-        nombre:    s.nombre,
-        direccion: s.direccion ?? '',
-        telefono:  s.telefono  ?? '',
-      });
-      setSucursales(prev => prev.map(x =>
-        x.slug === slug ? { ...updated, telefono: formatTelefono(updated.telefono ?? '') } : x
-      ));
-      marcarGuardado(`sucursal:${slug}`);
-    } catch (err) {
-      setMensaje({ tipo: 'error', texto: err.message });
-    } finally {
-      setSavingSucursal(null);
-    }
+    const updated = await api.patch(`/sucursales/${s.slug}`, {
+      nombre:    s.nombre,
+      direccion: s.direccion ?? '',
+      telefono:  s.telefono  ?? '',
+    });
+    setSucursales(prev => prev.map(x =>
+      x.slug === updated.slug ? { ...updated, telefono: formatTelefono(updated.telefono ?? '') } : x
+    ));
+    return updated;
   };
 
   const handleNuevaChange = (field, value) => {
@@ -537,11 +532,62 @@ export default function Ajustes() {
 
   const handleSubmitMobile = (e) => {
     if (mobileSection === 'perfil') return handleGuardarPerfil(e);
+    if (mobileSection === 'negocio') return handleGuardarNegocioMobile(e);
     return handleGuardar(e);
+  };
+
+  // Guardado de la sección "Sucursales" en móvil con el botón "Guardar" del pie:
+  // guarda tanto los datos del negocio (nombre_negocio; el logo va aparte) como
+  // la sucursal seleccionada, en una sola acción.
+  const handleGuardarNegocioMobile = async (e) => {
+    e?.preventDefault();
+    const s = sucursales.find(x => x.slug === sucursalSel);
+    if (s && !String(s.nombre ?? '').trim()) {
+      return setMensaje({ tipo: 'error', texto: 'El nombre de la sucursal no puede estar vacío.' });
+    }
+    setSaving(true);
+    setMensaje(null);
+    try {
+      const [updatedConfig] = await Promise.all([
+        api.patch('/ajustes', buildConfigPayload()),
+        patchSucursalActual(),
+      ]);
+      setConfig(updatedConfig);
+      marcarGuardado('mobile');
+    } catch (err) {
+      setMensaje({ tipo: 'error', texto: err.message });
+    } finally {
+      setSaving(false);
+    }
   };
 
   // Topes de precio por carga: opcionales. Vacío = sin tope (null).
   const topeONull = (v) => (v === '' || v == null ? null : Number(v));
+
+  // Payload de configuración del negocio para PATCH /ajustes. Se arma con el
+  // estado completo de `config`, así que guardar desde cualquier sección envía
+  // todos los campos (los no editados van con su valor actual).
+  const buildConfigPayload = () => ({
+    precio_carga_mediana:  Number(config.precio_carga_mediana),
+    precio_carga_jumbo:    Number(config.precio_carga_jumbo),
+    precio_carga_secadora: Number(config.precio_carga_secadora),
+    precio_secadora_jumbo:   Number(config.precio_secadora_jumbo),
+    precio_secadora_edredon: Number(config.precio_secadora_edredon),
+    precio_edredon_jumbo:  Number(config.precio_edredon_jumbo),
+    tope_carga_chico:      topeONull(config.tope_carga_chico),
+    tope_carga_grande:     topeONull(config.tope_carga_grande),
+    tope_carga_jumbo:      topeONull(config.tope_carga_jumbo),
+    tope_carga_edredon:    topeONull(config.tope_carga_edredon),
+    tiempo_carga_mediana:  Number(config.tiempo_carga_mediana),
+    tiempo_carga_jumbo:    Number(config.tiempo_carga_jumbo),
+    tiempo_edredon_jumbo:  Number(config.tiempo_edredon_jumbo),
+    tiempo_carga_secadora: Number(config.tiempo_carga_secadora),
+    tiempo_secadora_jumbo:   Number(config.tiempo_secadora_jumbo),
+    tiempo_secadora_edredon: Number(config.tiempo_secadora_edredon),
+    nombre_negocio:        config.nombre_negocio,
+    stock_minimo_global:   Number(config.stock_minimo_global),
+    alerta_ciclo_detenido: !!config.alerta_ciclo_detenido,
+  });
 
   const handleGuardarTodo = async () => {
     const nombreCompleto = `${perfilForm.nombre} ${perfilForm.apellido}`.trim();
@@ -550,6 +596,10 @@ export default function Ajustes() {
     }
     if (perfilForm.password && perfilForm.password.length < 8) {
       return setMensaje({ tipo: 'error', texto: 'La contraseña debe tener al menos 8 caracteres.' });
+    }
+    const sucursalActualEdit = sucursales.find(x => x.slug === sucursalSel);
+    if (sucursalActualEdit && !String(sucursalActualEdit.nombre ?? '').trim()) {
+      return setMensaje({ tipo: 'error', texto: 'El nombre de la sucursal no puede estar vacío.' });
     }
 
     setSaving(true);
@@ -560,27 +610,10 @@ export default function Ajustes() {
 
       const [updatedPerfil, updatedConfig] = await Promise.all([
         api.patch('/auth/me', perfilPayload),
-        api.patch('/ajustes', {
-          precio_carga_mediana:  Number(config.precio_carga_mediana),
-          precio_carga_jumbo:    Number(config.precio_carga_jumbo),
-          precio_carga_secadora: Number(config.precio_carga_secadora),
-          precio_secadora_jumbo:   Number(config.precio_secadora_jumbo),
-          precio_secadora_edredon: Number(config.precio_secadora_edredon),
-          precio_edredon_jumbo:  Number(config.precio_edredon_jumbo),
-          tope_carga_chico:      topeONull(config.tope_carga_chico),
-          tope_carga_grande:     topeONull(config.tope_carga_grande),
-          tope_carga_jumbo:      topeONull(config.tope_carga_jumbo),
-          tope_carga_edredon:    topeONull(config.tope_carga_edredon),
-          tiempo_carga_mediana:  Number(config.tiempo_carga_mediana),
-          tiempo_carga_jumbo:    Number(config.tiempo_carga_jumbo),
-          tiempo_edredon_jumbo:  Number(config.tiempo_edredon_jumbo),
-          tiempo_carga_secadora: Number(config.tiempo_carga_secadora),
-          tiempo_secadora_jumbo:   Number(config.tiempo_secadora_jumbo),
-          tiempo_secadora_edredon: Number(config.tiempo_secadora_edredon),
-          nombre_negocio:        config.nombre_negocio,
-          stock_minimo_global:   Number(config.stock_minimo_global),
-          alerta_ciclo_detenido: !!config.alerta_ciclo_detenido,
-        }),
+        api.patch('/ajustes', buildConfigPayload()),
+        // La sucursal seleccionada se guarda junto con el resto. patchSucursalActual
+        // actualiza su estado por dentro; su resultado no se necesita aquí.
+        patchSucursalActual(),
       ]);
 
       updateUsuario({ nombre: updatedPerfil.nombre, apellido: updatedPerfil.apellido, rol: updatedPerfil.rol });
@@ -599,27 +632,7 @@ export default function Ajustes() {
     setSaving(true);
     setMensaje(null);
     try {
-      const updated = await api.patch('/ajustes', {
-        precio_carga_mediana:  Number(config.precio_carga_mediana),
-        precio_carga_jumbo:    Number(config.precio_carga_jumbo),
-        precio_carga_secadora: Number(config.precio_carga_secadora),
-        precio_secadora_jumbo:   Number(config.precio_secadora_jumbo),
-        precio_secadora_edredon: Number(config.precio_secadora_edredon),
-        precio_edredon_jumbo:  Number(config.precio_edredon_jumbo),
-        tope_carga_chico:      topeONull(config.tope_carga_chico),
-        tope_carga_grande:     topeONull(config.tope_carga_grande),
-        tope_carga_jumbo:      topeONull(config.tope_carga_jumbo),
-        tope_carga_edredon:    topeONull(config.tope_carga_edredon),
-        tiempo_carga_mediana:  Number(config.tiempo_carga_mediana),
-        tiempo_carga_jumbo:    Number(config.tiempo_carga_jumbo),
-        tiempo_edredon_jumbo:  Number(config.tiempo_edredon_jumbo),
-        tiempo_carga_secadora: Number(config.tiempo_carga_secadora),
-        tiempo_secadora_jumbo:   Number(config.tiempo_secadora_jumbo),
-        tiempo_secadora_edredon: Number(config.tiempo_secadora_edredon),
-        nombre_negocio:        config.nombre_negocio,
-        stock_minimo_global:   Number(config.stock_minimo_global),
-        alerta_ciclo_detenido: !!config.alerta_ciclo_detenido,
-      });
+      const updated = await api.patch('/ajustes', buildConfigPayload());
       setConfig(updated);
       marcarGuardado('mobile');
     } catch (err) {
@@ -985,8 +998,10 @@ export default function Ajustes() {
                 className={INPUT_CLS}
               />
             </Field>
-            <div className="flex items-center justify-between pt-1">
-              {esMain ? (
+            {/* Los datos de la sucursal se guardan con "Guardar cambios" al pie.
+                Aquí solo queda activar/desactivar (Admin Main). */}
+            {esMain && (
+              <div className="pt-1">
                 <button
                   type="button"
                   onClick={() => sucursalActual.activa
@@ -1001,21 +1016,8 @@ export default function Ajustes() {
                     ? 'Aplicando...'
                     : sucursalActual.activa ? 'Desactivar sucursal' : 'Reactivar sucursal'}
                 </button>
-              ) : <span />}
-              <button
-                type="button"
-                onClick={() => guardarSucursal(sucursalActual.slug)}
-                disabled={savingSucursal === sucursalActual.slug || guardadoOk === `sucursal:${sucursalActual.slug}`}
-                className={`flex items-center gap-2 px-6 ${guardadoOk === `sucursal:${sucursalActual.slug}` ? 'bg-green-600' : 'bg-blue hover:opacity-90'} disabled:opacity-100 text-white font-medium py-3.5 rounded-lg text-base transition-colors`}
-              >
-                <ContenidoGuardar
-                  saving={savingSucursal === sucursalActual.slug}
-                  ok={guardadoOk === `sucursal:${sucursalActual.slug}`}
-                >
-                  Guardar sucursal
-                </ContenidoGuardar>
-              </button>
-            </div>
+              </div>
+            )}
           </>
         )}
       </div>
@@ -1265,19 +1267,7 @@ export default function Ajustes() {
                 className={MOBILE_INPUT_CLS}
               />
             </MobileField>
-            <button
-              type="button"
-              onClick={() => guardarSucursal(sucursalActual.slug)}
-              disabled={savingSucursal === sucursalActual.slug || guardadoOk === `sucursal:${sucursalActual.slug}`}
-              className={`w-full ${guardadoOk === `sucursal:${sucursalActual.slug}` ? 'bg-green-600' : 'bg-blue hover:opacity-90'} disabled:opacity-100 text-white font-medium py-3.5 rounded-lg text-base transition-colors flex items-center justify-center gap-2`}
-            >
-              <ContenidoGuardar
-                saving={savingSucursal === sucursalActual.slug}
-                ok={guardadoOk === `sucursal:${sucursalActual.slug}`}
-              >
-                Guardar sucursal
-              </ContenidoGuardar>
-            </button>
+            {/* Los datos de la sucursal se guardan con el botón "Guardar" del pie. */}
             {esMain && (
               <button
                 type="button"
