@@ -11,8 +11,10 @@ import NombreEmpleado from '../components/NombreEmpleado';
 const fmtMoneda = (n) =>
   '$' + Number(n ?? 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+// `fecha` llega como 'YYYY-MM-DD' (día local del negocio). Se le agrega la hora
+// para que se interprete en la zona local del navegador y no se corra un día.
 const fmtFecha = (iso) =>
-  new Date(iso).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
+  new Date(iso + 'T00:00:00').toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
 
 // Filtro de fecha por rangos, como en la página de Notas.
 const RANGOS_FECHA = [
@@ -275,7 +277,7 @@ export default function EmpleadoDesempeno() {
     const dias = data?.dias ?? [];
     if (!rango) return dias;
     return dias.filter(d => {
-      const f = new Date(d.fecha);
+      const f = new Date(d.fecha + 'T00:00:00');
       return f >= rango.desde && f < rango.hasta;
     });
   }, [data, rango]);
@@ -438,6 +440,7 @@ export default function EmpleadoDesempeno() {
                   <thead className="bg-gray-50 text-gray-500 text-xs uppercase">
                     <tr>
                       <th className="text-left px-4 py-2.5 font-medium">Fecha</th>
+                      <th className="text-left px-4 py-2.5 font-medium">Entrada</th>
                       <th className="text-right px-4 py-2.5 font-medium">Notas</th>
                       <th className="text-right px-4 py-2.5 font-medium">Vendido</th>
                       <th className="text-right px-4 py-2.5 font-medium">Máquinas</th>
@@ -449,13 +452,14 @@ export default function EmpleadoDesempeno() {
                   <tbody className="divide-y divide-gray-100">
                     {diasPagina.length === 0 ? (
                       <tr>
-                        <td colSpan={7} className="px-4 py-10 text-center text-gray-400 text-sm">
+                        <td colSpan={8} className="px-4 py-10 text-center text-gray-400 text-sm">
                           No hay días en el rango seleccionado.
                         </td>
                       </tr>
                     ) : diasPagina.map((d) => (
                       <tr key={d.fecha} className="hover:bg-gray-50">
                         <td className="px-4 py-2.5 text-gray-700 whitespace-nowrap">{fmtFecha(d.fecha)}</td>
+                        <td className="px-4 py-2.5 text-gray-700 whitespace-nowrap">{d.checkin ?? '—'}</td>
                         <td className="px-4 py-2.5 text-right">
                           <CeldaNumero value={d.notas} onClick={() => setModal({ dia: d, metrica: 'notas' })} />
                         </td>

@@ -3,6 +3,7 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { randomUUID } from 'crypto';
 import { capitalizarNombre } from '../utils/nombres.js';
+import { fechaLocal } from '../utils/tz.js';
 
 // ── GET /auth/buscar-usuarios?q=... ─────────────────────────
 // Endpoint público usado por la pantalla de login para autocompletar
@@ -75,6 +76,20 @@ export const login = async (req, res) => {
     // otro dispositivo.
     const sessionId = randomUUID();
     await pool.query('UPDATE usuarios SET session_id = $1 WHERE id = $2', [sessionId, usuario.id]);
+
+    // Check-in del día: el primer login después de la medianoche local cuenta
+    // como la hora de entrada. El ON CONFLICT hace que los logins posteriores
+    // del mismo día no cambien nada. Nunca debe bloquear el inicio de sesión,
+    // por eso va en su propio try/catch.
+    try {
+      await pool.query(
+        `INSERT INTO checkins (usuario_id, fecha) VALUES ($1, $2)
+           ON CONFLICT (usuario_id, fecha) DO NOTHING`,
+        [usuario.id, fechaLocal()]
+      );
+    } catch (err) {
+      console.error('checkin error:', err);
+    }
 
     const token = jwt.sign(
       { id: usuario.id, rol: usuario.rol, sucursal: usuario.sucursal, sid: sessionId },

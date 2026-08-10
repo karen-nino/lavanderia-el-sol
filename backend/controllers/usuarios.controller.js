@@ -2,6 +2,7 @@ import pool from '../db/pool.js';
 import bcrypt from 'bcrypt';
 import { esAdmin } from '../middleware/roles.js';
 import { capitalizarNombre } from '../utils/nombres.js';
+import { TZ_NEGOCIO } from '../utils/tz.js';
 
 const ROL_VALIDOS = ['admin_main', 'admin', 'operador'];
 
@@ -46,7 +47,7 @@ export const getDesempeno = async (req, res) => {
     // El desglose por día (con el detalle de cada métrica) se arma en JS para
     // que cada número y el contenido de su modal siempre coincidan.
     const { rows: notas } = await pool.query(
-      `SELECT n.id, DATE(n.created_at) AS fecha, n.folio, n.modalidad, n.estado,
+      `SELECT n.id, to_char(n.created_at AT TIME ZONE $2, 'YYYY-MM-DD') AS fecha, n.folio, n.modalidad, n.estado,
               n.precio_total, n.cantidad_cargas, n.cliente_id,
               c.nombre AS cliente_nombre, c.apellido AS cliente_apellido,
               n.maquina_id,  ml.nombre AS maquina_nombre,  ml.tipo AS maquina_tipo,
@@ -57,7 +58,15 @@ export const getDesempeno = async (req, res) => {
          LEFT JOIN maquinas ms ON ms.id = n.secadora_id
         WHERE n.usuario_id = $1 AND n.estado <> 'CANCELADA'
         ORDER BY n.created_at DESC`,
-      [id]
+      [id, TZ_NEGOCIO]
+    );
+
+    // Check-ins (hora de entrada) del empleado, por día local del negocio.
+    const { rows: checkins } = await pool.query(
+      `SELECT to_char(created_at AT TIME ZONE $2, 'YYYY-MM-DD') AS fecha,
+              to_char(created_at AT TIME ZONE $2, 'HH24:MI')    AS hora
+         FROM checkins WHERE usuario_id = $1`,
+      [id, TZ_NEGOCIO]
     );
 
     // Cargas con la máquina que se usó: la activa (lavadora_id/secadora_id) o,
@@ -91,10 +100,10 @@ export const getDesempeno = async (req, res) => {
     const notasConCargas = new Set(cargas.map((c) => c.nota_id));
     const buckets = new Map();
     const getBucket = (fecha) => {
-      const k = new Date(fecha).toISOString();
+      const k = fecha; // 'YYYY-MM-DD' (día local del negocio)
       if (!buckets.has(k)) {
         buckets.set(k, {
-          fecha, notas: 0, vendido: 0,
+          fecha, notas: 0, vendido: 0, checkin: null,
           _notas: [],              // { folio, modalidad, cliente, precio }
           _maquinas: new Map(),    // id -> { nombre, tipo, usos }
           _cargas: [],
@@ -164,8 +173,14 @@ export const getDesempeno = async (req, res) => {
       b._productos.set(p.nombre, (b._productos.get(p.nombre) || 0) + Number(p.cantidad));
     }
 
+    // Hora de entrada por día. Un check-in sin notas crea su propio bucket con
+    // métricas en 0, para que el día de asistencia aparezca igual en la tabla.
+    for (const ci of checkins) {
+      getBucket(ci.fecha).checkin = ci.hora;
+    }
+
     const diasFmt = [...buckets.values()]
-      .sort((a, b) => new Date(b.fecha) - new Date(a.fecha))
+      .sort((a, b) => (a.fecha < b.fecha ? 1 : a.fecha > b.fecha ? -1 : 0))
       .map((b) => {
         const maquinas  = [...b._maquinas.values()].map((m) => ({ nombre: m.nombre, tipo: m.tipo, usos: m.usos }));
         const productos = [...b._productos.entries()].map(([nombre, cantidad]) => ({ nombre, cantidad }));
@@ -175,6 +190,7 @@ export const getDesempeno = async (req, res) => {
         ];
         return {
           fecha:     b.fecha,
+          checkin:   b.checkin,
           notas:     b.notas,
           vendido:   b.vendido,
           maquinas:  maquinas.length,
