@@ -55,10 +55,14 @@ const SectionIcon = {
         d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
     </svg>
   ),
+  // Dos etiquetas (Lucide "tags"), acorde con "Etiquetas de encargo" (plural).
   etiquetas: (
     <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-        d="M7 7h.01M7 3h5a1.99 1.99 0 011.414.586l7 7a2 2 0 010 2.828l-5 5a2 2 0 01-2.828 0l-7-7A1.99 1.99 0 013 8V3a2 2 0 012-2z" />
+        d="M9 5H2v7l6.29 6.29c.94.94 2.48.94 3.42 0l3.58-3.58c.94-.94.94-2.48 0-3.42L9 5Z" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 9.01V9" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+        d="m15 5 6.3 6.3a2.4 2.4 0 0 1 0 3.4L17 19" />
     </svg>
   ),
   gear: (
