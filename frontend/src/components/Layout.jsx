@@ -232,7 +232,7 @@ function DesktopSidebar({ items, onMenu, onOverflowChange }) {
   );
 }
 
-function DesktopHeader({ usuario, now }) {
+function DesktopHeader({ usuario, sucursalNombre, now }) {
   const fecha = now.toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' });
   const hora  = now.toLocaleTimeString('es-MX', { hour: 'numeric', minute: '2-digit', hour12: true });
   return (
@@ -251,7 +251,7 @@ function DesktopHeader({ usuario, now }) {
         <SucursalSelector />
         <div className="flex items-center gap-1 mt-2">
           <span className="w-2 h-2 rounded-pill bg-green" />
-          <span className="text-kpi-label font-bold text-green uppercase tracking-wide">Conectado</span>
+          <span className="text-kpi-label font-bold text-green uppercase tracking-wide">{sucursalNombre}</span>
         </div>
         <p className="text-sm font-medium text-grey mt-1">{fecha}</p>
         <p className="text-2xl font-bold text-dark-blue">{hora}</p>
@@ -260,7 +260,7 @@ function DesktopHeader({ usuario, now }) {
   );
 }
 
-function MobileTopbar({ usuario, alertas, onAlerts }) {
+function MobileTopbar({ usuario, sucursalNombre, alertas, onAlerts }) {
   const count = alertas.length;
   const tieneAlertas = count > 0;
   const hayCritica = alertas.some(a => a.severity === 'agotado');
@@ -275,7 +275,7 @@ function MobileTopbar({ usuario, alertas, onAlerts }) {
           <p className="text-xl font-bold text-dark-blue pb-2">{[usuario?.nombre, usuario?.apellido].filter(Boolean).join(' ') || 'Usuario'}</p>
           <div className="flex items-center gap-1">
             <span className="w-2 h-2 rounded-pill bg-green" />
-            <span className="text-kpi-label font-bold text-green uppercase tracking-wide">Conectado</span>
+            <span className="text-kpi-label font-bold text-green uppercase tracking-wide">{sucursalNombre}</span>
           </div>
         </div>
       </div>
@@ -627,7 +627,7 @@ function MobileBottomNav({ items, onMenu }) {
 }
 
 export default function Layout() {
-  const { usuario, logout } = useAuth();
+  const { usuario, logout, sucursalActiva } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const now = useClock();
@@ -636,6 +636,7 @@ export default function Layout() {
   const [confirmLogout, setConfirmLogout] = useState(false);
   const [productos, setProductos] = useState([]);
   const [notificaciones, setNotificaciones] = useState([]);
+  const [sucursales, setSucursales] = useState([]);
   // Alertas de stock ocultadas manualmente (por firma id+stock). Es solo de
   // sesión: reaparecen si cambia el stock o al recargar.
   const [stockOcultas, setStockOcultas] = useState(() => new Set());
@@ -656,6 +657,22 @@ export default function Layout() {
     const id = setInterval(cargar, 60_000);
     return () => { activo = false; clearInterval(id); };
   }, [location.pathname]);
+
+  // Lista de sucursales para mostrar el nombre de la sucursal actual en el
+  // encabezado (el usuario guarda solo el slug).
+  useEffect(() => {
+    let activo = true;
+    api.get('/sucursales')
+      .then(data => { if (activo) setSucursales(data ?? []); })
+      .catch(() => {});
+    return () => { activo = false; };
+  }, []);
+
+  // Sucursal actual: la activa (admin) o la propia del usuario. Se muestra su
+  // nombre; si aún no cargó la lista, se cae al slug como respaldo.
+  const sucursalSlug = sucursalActiva || usuario?.sucursal || null;
+  const sucursalNombre =
+    sucursales.find(s => s.slug === sucursalSlug)?.nombre ?? sucursalSlug ?? '—';
 
   const alertas = useMemo(() => {
     const orden = { agotado: 0, por_agotarse: 1 };
@@ -812,8 +829,8 @@ export default function Layout() {
         <main className="flex-1 overflow-y-auto">
           {isDashboard && (
             <>
-              <MobileTopbar usuario={usuario} alertas={alertas} onAlerts={() => setAlertsOpen(true)} />
-              <DesktopHeader usuario={usuario} now={now} />
+              <MobileTopbar usuario={usuario} sucursalNombre={sucursalNombre} alertas={alertas} onAlerts={() => setAlertsOpen(true)} />
+              <DesktopHeader usuario={usuario} sucursalNombre={sucursalNombre} now={now} />
             </>
           )}
           <Outlet />
