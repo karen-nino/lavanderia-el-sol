@@ -87,7 +87,7 @@ export const getDesempeno = async (req, res) => {
     );
 
     const { rows: productos } = await pool.query(
-      `SELECT np.nota_id, np.cantidad, p.nombre
+      `SELECT np.nota_id, np.cantidad, np.precio_unitario, p.nombre
          FROM nota_productos np
          JOIN notas n ON n.id = np.nota_id
          JOIN productos p ON p.id = np.producto_id
@@ -170,7 +170,12 @@ export const getDesempeno = async (req, res) => {
       const n = notaPorId.get(p.nota_id);
       if (!n) continue;
       const b = getBucket(n.fecha);
-      b._productos.set(p.nombre, (b._productos.get(p.nombre) || 0) + Number(p.cantidad));
+      const cantidad = Number(p.cantidad) || 0;
+      const vendido  = cantidad * (Number(p.precio_unitario) || 0);
+      const acc = b._productos.get(p.nombre) ?? { cantidad: 0, vendido: 0 };
+      acc.cantidad += cantidad;
+      acc.vendido  += vendido;
+      b._productos.set(p.nombre, acc);
     }
 
     // Hora de entrada por día. Un check-in sin notas crea su propio bucket con
@@ -183,7 +188,7 @@ export const getDesempeno = async (req, res) => {
       .sort((a, b) => (a.fecha < b.fecha ? 1 : a.fecha > b.fecha ? -1 : 0))
       .map((b) => {
         const maquinas  = [...b._maquinas.values()].map((m) => ({ nombre: m.nombre, tipo: m.tipo, usos: m.usos }));
-        const productos = [...b._productos.entries()].map(([nombre, cantidad]) => ({ nombre, cantidad }));
+        const productos = [...b._productos.entries()].map(([nombre, v]) => ({ nombre, cantidad: v.cantidad, vendido: v.vendido }));
         const clientes  = [
           ...b._autoservicios.map((a) => ({ nombre: 'Autoservicio', folio: a.folio })),
           ...[...b._clientesReg.values()].map((nombre) => ({ nombre, folio: null })),
