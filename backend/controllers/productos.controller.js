@@ -30,7 +30,7 @@ export const getProductos = async (req, res) => {
 };
 
 export const createProducto = async (req, res) => {
-  const { nombre, descripcion, unidad = 'pieza', precio_unitario, stock_actual = 0 } = req.body;
+  const { nombre, descripcion, unidad = 'pieza', precio_unitario, stock_actual = 0, categoria } = req.body;
 
   if (!nombre) {
     return res.status(400).json({ message: 'Nombre es requerido.' });
@@ -38,12 +38,12 @@ export const createProducto = async (req, res) => {
 
   try {
     const { rows } = await pool.query(
-      `INSERT INTO productos (nombre, descripcion, unidad, precio_unitario, stock_actual, sucursal)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO productos (nombre, descripcion, unidad, precio_unitario, stock_actual, categoria, sucursal)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING *,
                  (stock_actual - stock_reservado) AS stock_disponible,
                  ${ESTADO_STOCK_SQL}`,
-      [nombre, descripcion || null, unidad, precio_unitario ?? null, stock_actual, req.sucursal]
+      [nombre, descripcion || null, unidad, precio_unitario ?? null, stock_actual, categoria || null, req.sucursal]
     );
     res.status(201).json(rows[0]);
   } catch (err) {
@@ -54,7 +54,7 @@ export const createProducto = async (req, res) => {
 
 export const updateProducto = async (req, res) => {
   const { id } = req.params;
-  const { nombre, descripcion, unidad, precio_unitario, stock_actual } = req.body;
+  const { nombre, descripcion, unidad, precio_unitario, stock_actual, categoria } = req.body;
 
   // Un empleado (no admin) solo puede ajustar el stock; los demás campos
   // (nombre, precio, unidad...) se conservan intactos.
@@ -90,13 +90,13 @@ export const updateProducto = async (req, res) => {
     const { rows } = await pool.query(
       `UPDATE productos
          SET nombre = $1, descripcion = $2, unidad = $3,
-             precio_unitario = $4, stock_actual = $5,
+             precio_unitario = $4, stock_actual = $5, categoria = $8,
              updated_at = NOW()
        WHERE id = $6 AND sucursal = $7
        RETURNING *,
                  (stock_actual - stock_reservado) AS stock_disponible,
                  ${ESTADO_STOCK_SQL}`,
-      [nombre, descripcion || null, unidad, precio_unitario ?? null, stock_actual, id, req.sucursal]
+      [nombre, descripcion || null, unidad, precio_unitario ?? null, stock_actual, id, req.sucursal, categoria || null]
     );
     if (rows.length === 0) {
       return res.status(404).json({ message: 'Producto no encontrado.' });
