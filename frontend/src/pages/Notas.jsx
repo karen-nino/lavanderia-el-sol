@@ -466,7 +466,7 @@ export default function Notas() {
                   <p className="text-sm text-dark-grey mt-2">Información:</p>
                   <div className="flex items-center justify-between gap-2 mt-0.5">
                     <p className="text-md font-semibold">{cliente}</p>
-                    <p className="text-xl font-bold text-dark-grey">{fmtMonto(n.precio_total)}</p>
+                    <p className="text-xl font-bold">{fmtMonto(n.precio_total)}</p>
                   </div>
 
                   {/* Estado de pago (la fecha/hora/máquinas viven ahora en el
