@@ -48,13 +48,14 @@ const Icon = {
   inventario: (
     <svg width="24" height="24" className={navIconCls} fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-        d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+        d="M10 2h4v3.2c0 .5.14 1 .4 1.44l1.2 2.02c.26.44.4.94.4 1.45V20a2 2 0 01-2 2H10a2 2 0 01-2-2V10.11c0-.51.14-1.01.4-1.45l1.2-2.02c.26-.43.4-.93.4-1.44V2z" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 13h8" />
     </svg>
   ),
   ventas: (
     <svg width="24" height="24" className={navIconCls} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-        d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2 5h12m-7 3a1 1 0 11-2 0 1 1 0 012 0zm8 0a1 1 0 11-2 0 1 1 0 012 0z" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v16h16" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 20v-4M12 20v-8M16 20V9" />
     </svg>
   ),
   caja: (
@@ -66,11 +67,8 @@ const Icon = {
   ),
   empleados: (
     <svg width="24" height="24" className={navIconCls} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <circle cx="9" cy="8" r="3" strokeWidth={2} />
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-        d="M3 20c0-3 2.5-5 6-5s6 2 6 5" />
-      <rect x="14" y="9" width="7" height="6" rx="1.5" strokeWidth={2} />
-      <path strokeLinecap="round" strokeWidth={2} d="M17 9V7.5h2V9" />
+        d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
     </svg>
   ),
   ajustes: (
