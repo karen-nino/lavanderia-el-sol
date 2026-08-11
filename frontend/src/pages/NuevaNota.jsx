@@ -460,6 +460,12 @@ export default function NuevaNota() {
 
   const handleEncargoSubmit = async () => {
     setError('');
+    // Igual que autoservicio: la nota necesita al menos una carga con máquina
+    // (lavadora o secadora) para poder crearse.
+    if (!encargoCargas.some(c => c.maquina_id || c.secadora_id)) {
+      setError('Agrega al menos una carga con una lavadora o secadora.');
+      return;
+    }
     // Tope de precio por carga: el backend también lo rechaza, pero aquí se
     // avisa antes de mandar (p. ej. si se regresó a editar una carga previa).
     const idxExcedida = encargoCargas.findIndex(c => excesoDeCarga(c) > 0);
@@ -1280,6 +1286,12 @@ export default function NuevaNota() {
                 <p className="text-3xl font-bold text-blue-700 border-t border-blue-200 pt-2">
                   ${encargoPrecioTotal.toFixed(2)}
                 </p>
+              </div>
+            )}
+
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">
+                {error}
               </div>
             )}
 
