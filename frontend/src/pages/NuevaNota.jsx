@@ -1038,7 +1038,7 @@ export default function NuevaNota() {
                                   <option value="">Selecciona un producto…</option>
                                   {productosCatalogo.map(p => (
                                     <option key={p.id} value={p.id}>
-                                      {p.nombre}{p.precio_unitario ? ` — $${Number(p.precio_unitario).toFixed(2)}` : ''} ({Number(p.stock_disponible ?? p.stock_actual)} {p.unidad})
+                                      {p.nombre}{p.categoria ? ` · ${p.categoria}` : ''}{p.precio_unitario ? ` — $${Number(p.precio_unitario).toFixed(2)}` : ''} ({Number(p.stock_disponible ?? p.stock_actual)} {p.unidad})
                                     </option>
                                   ))}
                                 </select>
@@ -1530,7 +1530,7 @@ export default function NuevaNota() {
                         <option value="">Selecciona un producto…</option>
                         {productosCatalogo.map(p => (
                           <option key={p.id} value={p.id}>
-                            {p.nombre}{p.precio_unitario ? ` — $${Number(p.precio_unitario).toFixed(2)}` : ''} ({Number(p.stock_disponible ?? p.stock_actual)} {p.unidad})
+                            {p.nombre}{p.categoria ? ` · ${p.categoria}` : ''}{p.precio_unitario ? ` — $${Number(p.precio_unitario).toFixed(2)}` : ''} ({Number(p.stock_disponible ?? p.stock_actual)} {p.unidad})
                           </option>
                         ))}
                       </select>
