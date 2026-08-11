@@ -79,7 +79,7 @@ const BADGE_MODALIDAD = {
 
 const BADGE_PAGO = {
   PENDIENTE: { label: 'Pendiente', cls: 'bg-red-100 text-red-700'  },
-  PAGADO: { label: 'PAGADO', cls: 'bg-green-100 text-green-700' },
+  PAGADO: { label: 'Pagado', cls: 'bg-green-100 text-green-700' },
 };
 
 function fmtFecha(iso) {
@@ -476,7 +476,7 @@ export default function Notas() {
                       <div className="border-t border-dashed border-gray-300 my-4" />
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-sm text-dark-grey">Estado de pago</span>
-                        <span className={`text-sm font-bold ${n.estado_pago === 'PENDIENTE' ? 'text-red' : 'text-green'}`}>
+                        <span className={`text-sm font-bold ${n.estado_pago === 'PENDIENTE' ? 'text-red' : 'text-dark-grey'}`}>
                           {badgePago.label}
                         </span>
                       </div>
