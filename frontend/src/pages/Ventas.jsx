@@ -50,6 +50,10 @@ const fmtDiaSemanaCorto = (fecha) => {
 
 const NOTAS_POR_PAGINA = 20;
 
+// Cuántas máquinas se muestran en la celda antes de resumir con "+N" (que abre
+// el modal con la lista completa).
+const MAQUINAS_VISIBLES = 2;
+
 const ESTADO_BADGE = {
   EN_ESPERA:  { label: 'En Espera',    cls: 'bg-gray-100 text-gray-600'     },
   LAVANDO:    { label: 'Lavando',      cls: 'bg-light-blue text-blue-700'   },
@@ -124,6 +128,8 @@ export default function Ventas() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [paginaNotas, setPaginaNotas] = useState(1);
+  // Nota cuyas máquinas se ven completas en el modal (cuando son demasiadas).
+  const [maquinasModal, setMaquinasModal] = useState(null); // { folio, maquinas }
   // En pantallas angostas (mobile) los nombres de los días se abrevian para que
   // los 7 quepan sin encimarse en el eje X de la gráfica semanal.
   const [esAngosto, setEsAngosto] = useState(
@@ -581,7 +587,6 @@ export default function Ventas() {
                         {periodo === 'hoy' && <th className="px-4 py-3 text-left">Hora</th>}
                         <th className="px-4 py-3 text-left">Estado</th>
                         <th className="px-4 py-3 text-left">Máquina</th>
-                        <th className="px-4 py-3 text-right">Cargas</th>
                         <th className="px-4 py-3 text-right">Productos</th>
                         <th className="px-4 py-3 text-right">Total</th>
                       </tr>
@@ -602,8 +607,22 @@ export default function Ventas() {
                           {periodo !== 'hoy' && <td className="px-4 py-3 text-gray-600">{fmtFecha(nota.fecha)}</td>}
                           {periodo === 'hoy' && <td className="px-4 py-3 text-gray-600">{fmtHora(nota.creado_en)}</td>}
                           <td className="px-4 py-3"><EstadoBadge estado={nota.estado} /></td>
-                          <td className="px-4 py-3 text-gray-600">{nota.maquina}</td>
-                          <td className="px-4 py-3 text-right text-gray-600">{nota.cargas}</td>
+                          <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
+                            {(nota.maquinas?.length ?? 0) === 0 ? (
+                              <span className="text-gray-400">N/A</span>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => setMaquinasModal({ folio: nota.folio, maquinas: nota.maquinas })}
+                                className="text-blue hover:text-blue-700 hover:underline underline-offset-2 transition-colors"
+                              >
+                                {nota.maquinas.slice(0, MAQUINAS_VISIBLES).map(m => m.nombre).join(', ')}
+                                {nota.maquinas.length > MAQUINAS_VISIBLES && (
+                                  <span className="font-medium"> +{nota.maquinas.length - MAQUINAS_VISIBLES}</span>
+                                )}
+                              </button>
+                            )}
+                          </td>
                           <td className="px-4 py-3 text-right text-gray-600">{fmt(nota.total_productos)}</td>
                           <td className="px-4 py-3 text-right font-semibold text-gray-800">{fmt(nota.total)}</td>
                         </tr>
@@ -636,6 +655,45 @@ export default function Ventas() {
         </>
       )}
       </div>
+
+      {/* Modal: todas las máquinas de una nota (cuando son demasiadas) */}
+      {maquinasModal && (
+        <div
+          className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
+          onClick={() => setMaquinasModal(null)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-xl w-full max-w-xs max-h-[80vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-gray-100">
+              <h3 className="text-base font-semibold text-gray-900">
+                Máquinas · <span className="font-mono text-sm text-gray-500">{maquinasModal.folio}</span>
+              </h3>
+              <button
+                onClick={() => setMaquinasModal(null)}
+                aria-label="Cerrar"
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <ul className="p-4 space-y-1.5 overflow-y-auto">
+              {maquinasModal.maquinas.map((m, i) => (
+                <li key={i} className="flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-gray-50 text-sm">
+                  <span className="flex items-center gap-2 text-gray-700">
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue flex-shrink-0" />
+                    {m.nombre}
+                  </span>
+                  <span className="text-gray-500">{m.cargas} {m.cargas === 1 ? 'carga' : 'cargas'}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

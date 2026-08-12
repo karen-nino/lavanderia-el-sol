@@ -101,12 +101,31 @@ export async function getResumen(req, res) {
           o.created_at                                AS creado_en,
           o.estado,
           o.estado_pago,
-          COALESCE(m.nombre, 'N/A')                   AS maquina,
+          -- Máquina(s) de la nota con su número de cargas: [{ nombre, cargas }].
+          -- Autoservicio: cuenta las cargas (nota_cargas) donde aparece cada
+          -- máquina, incluidas las ya desvinculadas (*_usada_id). Legado (sin
+          -- nota_cargas): la lavadora/secadora con la cantidad de cargas de la nota.
+          COALESCE((
+            SELECT json_agg(json_build_object('nombre', t.nombre, 'cargas', t.cargas) ORDER BY t.nombre)
+              FROM (
+                SELECT mm.nombre, COUNT(*)::int AS cargas
+                  FROM nota_cargas nc
+                  JOIN maquinas mm
+                    ON mm.id = ANY(ARRAY[nc.lavadora_id, nc.secadora_id,
+                                         nc.lavadora_usada_id, nc.secadora_usada_id])
+                 WHERE nc.nota_id = o.id
+                 GROUP BY mm.nombre
+                UNION ALL
+                SELECT mm.nombre, o.cantidad_cargas::int AS cargas
+                  FROM maquinas mm
+                 WHERE NOT EXISTS (SELECT 1 FROM nota_cargas nc WHERE nc.nota_id = o.id)
+                   AND mm.id IN (o.maquina_id, o.secadora_id)
+              ) t
+          ), '[]'::json)                               AS maquinas,
           o.cantidad_cargas                            AS cargas,
           COALESCE(np_t.total_productos, 0)            AS total_productos,
           o.precio_total                               AS total
         FROM notas o
-        LEFT JOIN maquinas m ON m.id = o.maquina_id
         LEFT JOIN (
           SELECT nota_id, SUM(cantidad * precio_unitario) AS total_productos
           FROM nota_productos
@@ -160,7 +179,7 @@ export async function getResumen(req, res) {
         creado_en:       r.creado_en,
         estado:          r.estado,
         estado_pago:     r.estado_pago,
-        maquina:         r.maquina,
+        maquinas:        r.maquinas ?? [],
         cargas:          parseInt(r.cargas, 10),
         total_productos: parseFloat(r.total_productos),
         total:           parseFloat(r.total),
