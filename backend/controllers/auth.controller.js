@@ -60,7 +60,7 @@ export const login = async (req, res) => {
     );
 
     if (rows.length === 0) {
-      return res.status(401).json({ message: 'Credenciales inválidas.' });
+      return res.status(401).json({ message: 'Usuario no encontrado.' });
     }
 
     const usuario = rows[0];
