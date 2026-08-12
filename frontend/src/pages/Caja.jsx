@@ -476,19 +476,34 @@ function Historial({ onFiltroLabel }) {
     return () => document.removeEventListener('mousedown', onDown);
   }, [mostrarMeses]);
 
-  // Etiqueta del filtro activo, para mostrarla como subtítulo del encabezado
-  // (igual que en Ventas).
-  const fmtDiaMes = (s) => {
-    if (!s) return '';
-    return new Date(`${s}T00:00:00`).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
-  };
+  // Etiqueta del filtro activo, para mostrarla como subtítulo del encabezado.
+  // Misma idea que los títulos de Ventas: Hoy con su fecha, la semana con su
+  // rango, y el personalizado con día, mes y año (con ambos años si cruza).
   const filtroLabel = (() => {
+    const hoyD = new Date();
     switch (periodo) {
-      case 'hoy':    return 'Hoy';
-      case 'semana': return 'Esta semana';
+      case 'hoy':
+        return `Hoy - ${hoyD.getDate()} de ${MESES[hoyD.getMonth()]}`;
+      case 'semana': {
+        const lunes = inicioSemana(hoyD);
+        const domingo = new Date(lunes); domingo.setDate(lunes.getDate() + 6);
+        const mesL = MESES[lunes.getMonth()];
+        const mesD = MESES[domingo.getMonth()];
+        return lunes.getMonth() === domingo.getMonth()
+          ? `Del ${lunes.getDate()} - ${domingo.getDate()} de ${mesL}`
+          : `Del ${lunes.getDate()} de ${mesL} - ${domingo.getDate()} de ${mesD}`;
+      }
       case 'mes':    return `${MESES[mesSel]} ${anioSel}`;
       case 'anio':   return `${anioSel}`;
-      case 'custom': return (desde && hasta) ? `Del ${fmtDiaMes(desde)} al ${fmtDiaMes(hasta)}` : 'Personalizado';
+      case 'custom': {
+        if (!desde || !hasta) return 'Personalizado';
+        const d1 = new Date(`${desde}T00:00:00`);
+        const d2 = new Date(`${hasta}T00:00:00`);
+        const mismoAnio = d1.getFullYear() === d2.getFullYear();
+        const p1 = `${d1.getDate()} de ${MESES[d1.getMonth()]}${mismoAnio ? '' : ` ${d1.getFullYear()}`}`;
+        const p2 = `${d2.getDate()} de ${MESES[d2.getMonth()]} ${d2.getFullYear()}`;
+        return `Del ${p1} al ${p2}`;
+      }
       default:       return '';
     }
   })();
