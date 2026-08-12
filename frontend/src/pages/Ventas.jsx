@@ -200,8 +200,20 @@ export default function Ventas() {
         total,
       }));
     }
+    if (periodo === 'custom') {
+      if (!desde || !hasta) return g;
+      // Todos los días del rango elegido, rellenando con 0 los que no tuvieron ventas.
+      const porFecha = new Map(g.map(d => [ymd(d.fecha), Number(d.total) || 0]));
+      const fin = fechaLocal(hasta);
+      const dias = [];
+      for (let d = fechaLocal(desde); d <= fin; d.setDate(d.getDate() + 1)) {
+        const key = ymd(d);
+        dias.push({ fecha: key, total: porFecha.get(key) ?? 0 });
+      }
+      return dias;
+    }
     return g;
-  }, [data, periodo, anioSel, mesSel]);
+  }, [data, periodo, anioSel, mesSel, desde, hasta]);
 
   // Título de la vista semanal con el rango de la semana en curso, p. ej.
   // "Ingresos del 10 al 16 de Agosto" (si cruza de mes, muestra ambos meses).
@@ -483,7 +495,7 @@ export default function Ventas() {
                             ? `${fechaLocal(v).getDate()} de ${MESES[fechaLocal(v).getMonth()]}`
                             : periodo === 'anio'
                               ? MESES[fechaLocal(v).getMonth()].slice(0, 3)
-                              : (() => { const d = new Date(v); return `${d.getDate()}/${d.getMonth() + 1}`; })()
+                              : (() => { const d = fechaLocal(v); return `${d.getDate()}/${d.getMonth() + 1}`; })()
                     }
                   />
                   <YAxis
