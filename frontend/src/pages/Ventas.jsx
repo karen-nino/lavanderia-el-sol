@@ -9,16 +9,27 @@ import {
 const fmt = (n) =>
   new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(n ?? 0);
 
+// Parte YYYY-MM-DD de una fecha (evita corrimientos por zona horaria).
+const ymd = (fecha) => {
+  if (typeof fecha === 'string') return fecha.slice(0, 10);
+  const d = new Date(fecha);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+// Date en horario local a partir de solo la parte de fecha (sin corrimiento).
+const fechaLocal = (fecha) => {
+  const [y, m, d] = ymd(fecha).split('-').map(Number);
+  return new Date(y, m - 1, d);
+};
+
 const fmtFecha = (fecha) => {
   if (!fecha) return '—';
-  const d = new Date(fecha);
-  return d.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
+  return fechaLocal(fecha).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
 };
 
 // Nombre del día de la semana capitalizado (Lunes, Martes, …).
 const fmtDiaSemana = (fecha) => {
   if (!fecha) return '—';
-  const s = new Date(fecha).toLocaleDateString('es-MX', { weekday: 'long' });
+  const s = fechaLocal(fecha).toLocaleDateString('es-MX', { weekday: 'long' });
   return s.charAt(0).toUpperCase() + s.slice(1);
 };
 
@@ -126,6 +137,29 @@ export default function Ventas() {
     () => [...new Set([anioActual, ...aniosDisponibles])].sort((a, b) => b - a),
     [aniosDisponibles, anioActual]
   );
+
+  // Datos de la gráfica: en la vista semanal se muestran SIEMPRE los 7 días de la
+  // semana en curso, de Lunes a Domingo, rellenando con 0 los días sin ventas
+  // (los días aún por venir quedan en 0); en los demás períodos se usa la
+  // gráfica tal cual la manda el backend.
+  const graficaData = useMemo(() => {
+    const g = data?.grafica ?? [];
+    if (periodo !== 'semana') return g;
+    const porFecha = new Map(g.map(d => [ymd(d.fecha), Number(d.total) || 0]));
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    // Lunes de esta semana: getDay() da 0=Domingo … 6=Sábado; se retrocede al lunes.
+    const lunes = new Date(hoy);
+    lunes.setDate(hoy.getDate() - ((hoy.getDay() + 6) % 7));
+    const dias = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(lunes);
+      d.setDate(lunes.getDate() + i);
+      const key = ymd(d);
+      dias.push({ fecha: key, total: porFecha.get(key) ?? 0 });
+    }
+    return dias;
+  }, [data, periodo]);
 
   // Cierra el selector de año al hacer clic fuera.
   useEffect(() => {
@@ -351,11 +385,11 @@ export default function Ventas() {
             <h2 className="text-sm font-semibold text-gray-700 mb-4">
               {periodo === 'semana' ? 'Ingresos por semana' : 'Ingresos por día'}
             </h2>
-            {data.grafica.length === 0 ? (
+            {graficaData.length === 0 ? (
               <p className="text-sm text-gray-400 text-center py-8">Sin datos para este período</p>
             ) : (
               <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={data.grafica} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+                <BarChart data={graficaData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                   <XAxis
                     dataKey="fecha"
