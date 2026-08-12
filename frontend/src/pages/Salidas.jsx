@@ -847,19 +847,29 @@ export default function Salidas() {
                   const selected = String(cambiarSel) === String(m.id);
                   // Muestra el tamaño (Mediana/Jumbo); la secadora usa su tamano.
                   const tamanoLabel = labelTamano(m);
+                  // Reservada por otra nota abierta: se muestra pero no se elige.
+                  const reservada = Boolean(m.reservada);
                   return (
                     <button
                       key={m.id}
                       type="button"
+                      disabled={reservada}
                       onClick={() => setCambiarSel(selected ? '' : String(m.id))}
                       className={`w-full flex items-center justify-between gap-2 px-4 py-3 border-2 rounded-xl text-left transition-colors ${
-                        selected ? 'border-blue bg-light-blue' : 'border-gray-200 bg-white hover:border-blue-300'
+                        reservada
+                          ? 'border-gray-200 bg-gray-50 opacity-60 cursor-not-allowed'
+                          : selected ? 'border-blue bg-light-blue' : 'border-gray-200 bg-white hover:border-blue-300'
                       }`}
                     >
                       <span className="font-medium text-gray-800">{m.nombre}</span>
-                      {tamanoLabel && (
-                        <span className="text-xs text-gray-500">{tamanoLabel}</span>
-                      )}
+                      <span className="flex items-center gap-2">
+                        {reservada && (
+                          <span className="text-xs font-medium text-amber-600">Reservada</span>
+                        )}
+                        {tamanoLabel && (
+                          <span className="text-xs text-gray-500">{tamanoLabel}</span>
+                        )}
+                      </span>
                     </button>
                   );
                 })}
@@ -1031,22 +1041,30 @@ export default function Salidas() {
                   ) : (
                     maquinasDisp.filter(m => m.tipo !== 'secadora').map(m => {
                       const selected = asignarMaqSel.includes(String(m.id));
+                      // Reservada por otra nota abierta: se muestra pero no se elige.
+                      const reservada = Boolean(m.reservada);
                       return (
                         <button
                           key={m.id}
                           type="button"
+                          disabled={reservada}
                           onClick={() => toggleAsignarMaq(m.id)}
                           className={`w-full flex items-center justify-between gap-2 px-4 py-3 border-2 rounded-xl text-left transition-colors ${
-                            selected ? 'border-blue bg-light-blue' : 'border-gray-200 bg-white hover:border-blue-300'
+                            reservada
+                              ? 'border-gray-200 bg-gray-50 opacity-60 cursor-not-allowed'
+                              : selected ? 'border-blue bg-light-blue' : 'border-gray-200 bg-white hover:border-blue-300'
                           }`}
                         >
                           <span className="flex items-center gap-2 min-w-0">
                             <SelCheck on={selected} />
                             <span className="font-medium text-gray-800 truncate">{m.nombre}</span>
                           </span>
-                          {labelTamano(m) && (
-                            <span className="text-xs text-gray-500 flex-shrink-0">{labelTamano(m)}</span>
-                          )}
+                          <span className="flex items-center gap-2 flex-shrink-0">
+                            {reservada && <span className="text-xs font-medium text-amber-600">Reservada</span>}
+                            {labelTamano(m) && (
+                              <span className="text-xs text-gray-500">{labelTamano(m)}</span>
+                            )}
+                          </span>
                         </button>
                       );
                     })
@@ -1061,22 +1079,30 @@ export default function Salidas() {
                   ) : (
                     maquinasDisp.filter(m => m.tipo === 'secadora').map(m => {
                       const selected = asignarMaqSel.includes(String(m.id));
+                      // Reservada por otra nota abierta: se muestra pero no se elige.
+                      const reservada = Boolean(m.reservada);
                       return (
                         <button
                           key={m.id}
                           type="button"
+                          disabled={reservada}
                           onClick={() => toggleAsignarMaq(m.id)}
                           className={`w-full flex items-center justify-between gap-2 px-4 py-3 border-2 rounded-xl text-left transition-colors ${
-                            selected ? 'border-blue bg-light-blue' : 'border-gray-200 bg-white hover:border-blue-300'
+                            reservada
+                              ? 'border-gray-200 bg-gray-50 opacity-60 cursor-not-allowed'
+                              : selected ? 'border-blue bg-light-blue' : 'border-gray-200 bg-white hover:border-blue-300'
                           }`}
                         >
                           <span className="flex items-center gap-2 min-w-0">
                             <SelCheck on={selected} />
                             <span className="font-medium text-gray-800 truncate">{m.nombre}</span>
                           </span>
-                          {labelTamano(m) && (
-                            <span className="text-xs text-gray-500 flex-shrink-0">{labelTamano(m)}</span>
-                          )}
+                          <span className="flex items-center gap-2 flex-shrink-0">
+                            {reservada && <span className="text-xs font-medium text-amber-600">Reservada</span>}
+                            {labelTamano(m) && (
+                              <span className="text-xs text-gray-500">{labelTamano(m)}</span>
+                            )}
+                          </span>
                         </button>
                       );
                     })

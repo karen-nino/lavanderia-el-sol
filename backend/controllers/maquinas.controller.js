@@ -7,8 +7,28 @@ const TAMANOS_VALIDOS = ['mediana', 'jumbo'];
 
 export const getMaquinas = async (req, res) => {
   try {
+    // "reservada": la máquina está libre (estado disponible) pero ya la tiene
+    // apartada otra nota abierta y sin arrancar (En Espera). Sirve para que las
+    // pantallas de asignación la muestren como Reservada y no la dejen elegir de
+    // nuevo, evitando que dos notas tomen la misma máquina.
     const { rows } = await pool.query(
-      'SELECT * FROM maquinas WHERE sucursal = $1 ORDER BY tipo ASC, nombre ASC',
+      `SELECT m.*,
+              (m.estado = 'disponible' AND EXISTS (
+                 SELECT 1 FROM notas n
+                  WHERE n.estado IN ('EN_ESPERA', 'LAVANDO', 'SECANDO')
+                    AND (
+                      n.maquina_id = m.id
+                      OR n.secadora_id = m.id
+                      OR EXISTS (
+                        SELECT 1 FROM nota_cargas nc
+                         WHERE nc.nota_id = n.id
+                           AND (nc.lavadora_id = m.id OR nc.secadora_id = m.id)
+                      )
+                    )
+              )) AS reservada
+         FROM maquinas m
+        WHERE m.sucursal = $1
+        ORDER BY m.tipo ASC, m.nombre ASC`,
       [req.sucursal]
     );
     res.json(rows);

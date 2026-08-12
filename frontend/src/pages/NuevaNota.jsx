@@ -99,6 +99,9 @@ export default function NuevaNota() {
   const { id } = useParams();
   const esEdicion = Boolean(id);
   const [maquinas,          setMaquinas]          = useState([]);
+  // IDs de las máquinas que ya trae esta nota (en edición): nunca se muestran
+  // como "Reservada", porque están apartadas por la propia nota.
+  const [maquinasNotaIds,   setMaquinasNotaIds]   = useState(() => new Set());
   const [productosCatalogo, setProductosCatalogo] = useState([]);
   const [telas,             setTelas]             = useState([]);
   const [tamanosEdredon,    setTamanosEdredon]    = useState([]);
@@ -153,6 +156,8 @@ export default function NuevaNota() {
     return precios.secadora;
   };
   const tamanoDe = (maquinaId) => maquinas.find(m => String(m.id) === String(maquinaId))?.tamano;
+  // ¿La máquina está apartada por OTRA nota abierta? (las de esta nota no cuentan)
+  const esReservada = (m) => Boolean(m?.reservada) && !maquinasNotaIds.has(String(m.id));
   // Cada carga se cobra con la tarifa de su lavadora más la de su secadora.
   const subtotalDeCarga = (c) => {
     const lav = maquinas.find(m => String(m.id) === String(c.lavadora_id));
@@ -193,10 +198,14 @@ export default function NuevaNota() {
               ...(nota?.cargas ?? []).flatMap(c => [c.lavadora_id, c.secadora_id]),
             ].filter(Boolean)
           : [];
+        // Se incluyen también las máquinas "reservada" (libres pero apartadas
+        // por otra nota abierta): no se ocultan, se muestran deshabilitadas como
+        // Reservada. Las de la propia nota (idsActuales) siempre quedan elegibles.
         const maquinasFiltradas = m.filter(
           maq => maq.estado === 'disponible' || idsActuales.includes(maq.id)
         );
         setMaquinas(maquinasFiltradas);
+        setMaquinasNotaIds(new Set(idsActuales.map(String)));
         setProductosCatalogo(prod);
         if (cfg) {
           setPrecios({
@@ -984,8 +993,8 @@ export default function NuevaNota() {
                       >
                         <option value="">Sin asignar</option>
                         {lavadorasOpc.map(m => (
-                          <option key={m.id} value={m.id}>
-                            {formatMaquina(m)} — ${precioPorTipo(m.tipo, c.tipo_prenda).toFixed(2)}
+                          <option key={m.id} value={m.id} disabled={esReservada(m)}>
+                            {formatMaquina(m)} — ${precioPorTipo(m.tipo, c.tipo_prenda).toFixed(2)}{esReservada(m) ? ' — Reservada' : ''}
                           </option>
                         ))}
                       </select>
@@ -1426,8 +1435,8 @@ export default function NuevaNota() {
                       >
                         <option value="">Sin asignar</option>
                         {lavadorasOpc.map(m => (
-                          <option key={m.id} value={m.id}>
-                            {formatMaquina(m)} — ${precioPorTipo(m.tipo, c.tipo_prenda).toFixed(2)}
+                          <option key={m.id} value={m.id} disabled={esReservada(m)}>
+                            {formatMaquina(m)} — ${precioPorTipo(m.tipo, c.tipo_prenda).toFixed(2)}{esReservada(m) ? ' — Reservada' : ''}
                           </option>
                         ))}
                       </select>
@@ -1439,8 +1448,8 @@ export default function NuevaNota() {
                       >
                         <option value="">Sin asignar</option>
                         {secadorasOpc.map(m => (
-                          <option key={m.id} value={m.id}>
-                            {formatMaquina(m)} — ${precioSecado(m.tamano, c.tipo_prenda).toFixed(2)}
+                          <option key={m.id} value={m.id} disabled={esReservada(m)}>
+                            {formatMaquina(m)} — ${precioSecado(m.tamano, c.tipo_prenda).toFixed(2)}{esReservada(m) ? ' — Reservada' : ''}
                           </option>
                         ))}
                       </select>

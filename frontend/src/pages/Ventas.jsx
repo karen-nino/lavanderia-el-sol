@@ -15,6 +15,13 @@ const fmtFecha = (fecha) => {
   return d.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
 };
 
+// Nombre del día de la semana capitalizado (Lunes, Martes, …).
+const fmtDiaSemana = (fecha) => {
+  if (!fecha) return '—';
+  const s = new Date(fecha).toLocaleDateString('es-MX', { weekday: 'long' });
+  return s.charAt(0).toUpperCase() + s.slice(1);
+};
+
 const NOTAS_POR_PAGINA = 10;
 
 const ESTADO_BADGE = {
@@ -341,7 +348,9 @@ export default function Ventas() {
 
           {/* Gráfica */}
           <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <h2 className="text-sm font-semibold text-gray-700 mb-4">Ingresos por día</h2>
+            <h2 className="text-sm font-semibold text-gray-700 mb-4">
+              {periodo === 'semana' ? 'Ingresos por semana' : 'Ingresos por día'}
+            </h2>
             {data.grafica.length === 0 ? (
               <p className="text-sm text-gray-400 text-center py-8">Sin datos para este período</p>
             ) : (
@@ -351,10 +360,12 @@ export default function Ventas() {
                   <XAxis
                     dataKey="fecha"
                     tick={{ fontSize: 11, fill: '#6b7280' }}
-                    tickFormatter={(v) => {
-                      const d = new Date(v);
-                      return `${d.getDate()}/${d.getMonth() + 1}`;
-                    }}
+                    interval={0}
+                    tickFormatter={(v) =>
+                      periodo === 'semana'
+                        ? fmtDiaSemana(v)
+                        : (() => { const d = new Date(v); return `${d.getDate()}/${d.getMonth() + 1}`; })()
+                    }
                   />
                   <YAxis
                     tick={{ fontSize: 11, fill: '#6b7280' }}
