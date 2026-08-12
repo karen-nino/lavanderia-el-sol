@@ -189,6 +189,22 @@ export default function Ventas() {
     return g;
   }, [data, periodo, anioSel, mesSel]);
 
+  // Título de la vista semanal con el rango de la semana en curso, p. ej.
+  // "Ingresos del 10 al 16 de Agosto" (si cruza de mes, muestra ambos meses).
+  const tituloSemana = useMemo(() => {
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    const lunes = new Date(hoy);
+    lunes.setDate(hoy.getDate() - ((hoy.getDay() + 6) % 7));
+    const domingo = new Date(lunes);
+    domingo.setDate(lunes.getDate() + 6);
+    const mesL = MESES[lunes.getMonth()];
+    const mesD = MESES[domingo.getMonth()];
+    return lunes.getMonth() === domingo.getMonth()
+      ? `Ingresos del ${lunes.getDate()} - ${domingo.getDate()} de ${mesL}`
+      : `Ingresos del ${lunes.getDate()} de ${mesL} - ${domingo.getDate()} de ${mesD}`;
+  }, []);
+
   // Cierra el selector de año al hacer clic fuera.
   useEffect(() => {
     if (!mostrarAnios) return;
@@ -411,7 +427,7 @@ export default function Ventas() {
           {/* Gráfica */}
           <div className="bg-white rounded-xl border border-gray-200 p-4">
             <h2 className="text-sm font-semibold text-gray-700 mb-4">
-              {periodo === 'semana' ? 'Ingresos por semana'
+              {periodo === 'semana' ? tituloSemana
                 : periodo === 'mes' ? `Ingresos en ${MESES[mesSel]}`
                 : 'Ingresos por día'}
             </h2>
