@@ -259,10 +259,6 @@ export default function Empleados() {
             const iniciales = `${emp.nombre?.[0] ?? ''}${emp.apellido?.[0] ?? ''}`.toUpperCase();
             const esMismoUsuario = usuario?.id === emp.id;
             const esPrueba = esUsuarioPrueba(emp);
-            // Solo el Admin Main puede modificar/eliminar a un administrador
-            // (cada quien puede editarse a sí mismo).
-            const puedeModificar = esAdmin && (esMismoUsuario || !esAdminFn(emp.rol) || esAdminMain);
-            const puedeEliminar  = puedeModificar && !esMismoUsuario;
 
             const cabecera = (
               <div className="flex items-start gap-3">
@@ -307,48 +303,24 @@ export default function Empleados() {
                   {cabecera}
                 </button>
 
-                {/* Desktop: card con acciones inline */}
-                <div className={`hidden sm:flex flex-col gap-3 rounded-xl shadow-sm border p-4 hover:shadow-md transition-shadow ${
-                  esMismoUsuario ? 'bg-light-blue border-blue/40'
-                    : esPrueba ? 'bg-amber-50 border-amber-300'
-                    : 'bg-white border-gray-100'
-                }`}>
+                {/* Desktop: toda la tarjeta es el botón que abre los detalles */}
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => abrirDesempeno(emp)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      abrirDesempeno(emp);
+                    }
+                  }}
+                  className={`hidden sm:flex flex-col gap-3 rounded-xl shadow-sm border p-4 cursor-pointer hover:shadow-md transition-shadow ${
+                    esMismoUsuario ? 'bg-light-blue border-blue/40'
+                      : esPrueba ? 'bg-amber-50 border-amber-300'
+                      : 'bg-white border-gray-100'
+                  }`}
+                >
                   {cabecera}
-                  <div className="flex items-center justify-between gap-1 pt-2 border-t border-gray-100">
-                    <button
-                      type="button"
-                      onClick={() => abrirDesempeno(emp)}
-                      className="text-sm font-medium text-blue hover:opacity-80"
-                    >
-                      Información
-                    </button>
-                    {puedeModificar && (
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => setEditEmpleado(emp)}
-                          className="p-1.5 text-gray-400 hover:text-blue hover:bg-light-blue rounded-lg transition-colors"
-                          title="Editar"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                              d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                          </svg>
-                        </button>
-                        {puedeEliminar && (
-                          <button
-                            onClick={() => setDeleteEmpleado(emp)}
-                            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                            title="Eliminar"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                          </button>
-                        )}
-                      </div>
-                    )}
-                  </div>
                 </div>
               </div>
             );
