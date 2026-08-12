@@ -154,28 +154,40 @@ export default function Ventas() {
     [aniosDisponibles, anioActual]
   );
 
-  // Datos de la gráfica: en la vista semanal se muestran SIEMPRE los 7 días de la
-  // semana en curso, de Lunes a Domingo, rellenando con 0 los días sin ventas
-  // (los días aún por venir quedan en 0); en los demás períodos se usa la
-  // gráfica tal cual la manda el backend.
+  // Datos de la gráfica, rellenando con 0 los días sin ventas:
+  //  - "semana": los 7 días de la semana en curso (Lunes a Domingo).
+  //  - "mes": todos los días del mes seleccionado (1 … último).
+  //  - otros períodos: la gráfica tal cual la manda el backend.
   const graficaData = useMemo(() => {
     const g = data?.grafica ?? [];
-    if (periodo !== 'semana') return g;
-    const porFecha = new Map(g.map(d => [ymd(d.fecha), Number(d.total) || 0]));
-    const hoy = new Date();
-    hoy.setHours(0, 0, 0, 0);
-    // Lunes de esta semana: getDay() da 0=Domingo … 6=Sábado; se retrocede al lunes.
-    const lunes = new Date(hoy);
-    lunes.setDate(hoy.getDate() - ((hoy.getDay() + 6) % 7));
-    const dias = [];
-    for (let i = 0; i < 7; i++) {
-      const d = new Date(lunes);
-      d.setDate(lunes.getDate() + i);
-      const key = ymd(d);
-      dias.push({ fecha: key, total: porFecha.get(key) ?? 0 });
+    if (periodo === 'semana') {
+      const porFecha = new Map(g.map(d => [ymd(d.fecha), Number(d.total) || 0]));
+      const hoy = new Date();
+      hoy.setHours(0, 0, 0, 0);
+      // Lunes de esta semana: getDay() da 0=Domingo … 6=Sábado; se retrocede al lunes.
+      const lunes = new Date(hoy);
+      lunes.setDate(hoy.getDate() - ((hoy.getDay() + 6) % 7));
+      const dias = [];
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(lunes);
+        d.setDate(lunes.getDate() + i);
+        const key = ymd(d);
+        dias.push({ fecha: key, total: porFecha.get(key) ?? 0 });
+      }
+      return dias;
     }
-    return dias;
-  }, [data, periodo]);
+    if (periodo === 'mes') {
+      const porFecha = new Map(g.map(d => [ymd(d.fecha), Number(d.total) || 0]));
+      const diasEnMes = new Date(anioSel, mesSel + 1, 0).getDate();
+      const dias = [];
+      for (let day = 1; day <= diasEnMes; day++) {
+        const key = ymd(new Date(anioSel, mesSel, day));
+        dias.push({ fecha: key, total: porFecha.get(key) ?? 0 });
+      }
+      return dias;
+    }
+    return g;
+  }, [data, periodo, anioSel, mesSel]);
 
   // Cierra el selector de año al hacer clic fuera.
   useEffect(() => {
@@ -399,7 +411,9 @@ export default function Ventas() {
           {/* Gráfica */}
           <div className="bg-white rounded-xl border border-gray-200 p-4">
             <h2 className="text-sm font-semibold text-gray-700 mb-4">
-              {periodo === 'semana' ? 'Ingresos por semana' : 'Ingresos por día'}
+              {periodo === 'semana' ? 'Ingresos por semana'
+                : periodo === 'mes' ? `Ingresos en ${MESES[mesSel]}`
+                : 'Ingresos por día'}
             </h2>
             {graficaData.length === 0 ? (
               <p className="text-sm text-gray-400 text-center py-8">Sin datos para este período</p>
@@ -410,11 +424,16 @@ export default function Ventas() {
                   <XAxis
                     dataKey="fecha"
                     tick={{ fontSize: 11, fill: '#6b7280' }}
-                    interval={0}
+                    // Semana: los 7 días (interval 0). Mes: en pantallas angostas
+                    // se muestra 1 de cada 4 días para que no se encimen; en anchas,
+                    // 1 de cada 2. Otros períodos: densidad automática de Recharts.
+                    interval={periodo === 'semana' ? 0 : periodo === 'mes' ? (esAngosto ? 3 : 1) : undefined}
                     tickFormatter={(v) =>
                       periodo === 'semana'
                         ? (esAngosto ? fmtDiaSemanaCorto(v) : fmtDiaSemana(v))
-                        : (() => { const d = new Date(v); return `${d.getDate()}/${d.getMonth() + 1}`; })()
+                        : periodo === 'mes'
+                          ? String(fechaLocal(v).getDate())
+                          : (() => { const d = new Date(v); return `${d.getDate()}/${d.getMonth() + 1}`; })()
                     }
                   />
                   <YAxis
