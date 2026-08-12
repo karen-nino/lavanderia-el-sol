@@ -61,13 +61,19 @@ const inicioSemana = (fecha) => {
   return d;
 };
 
-// ¿La fecha cae en el día de hoy? Para separar los cortes de hoy dentro de la semana.
-const esHoy = (fecha) => {
-  const d = new Date(fecha);
-  const n = new Date();
-  return d.getFullYear() === n.getFullYear()
-    && d.getMonth() === n.getMonth()
-    && d.getDate() === n.getDate();
+// ¿Dos fechas caen en el mismo día calendario?
+const mismoDia = (a, b) => {
+  const x = new Date(a), y = new Date(b);
+  return x.getFullYear() === y.getFullYear()
+    && x.getMonth() === y.getMonth()
+    && x.getDate() === y.getDate();
+};
+// ¿La fecha cae en el día de hoy?
+const esHoy = (fecha) => mismoDia(fecha, new Date());
+// Nombre del día de la semana capitalizado (Lunes, Martes, …).
+const nombreDia = (d) => {
+  const s = d.toLocaleDateString('es-MX', { weekday: 'long' });
+  return s.charAt(0).toUpperCase() + s.slice(1);
 };
 
 // Encabezado de la sección de semana: rango lunes–domingo, con el mismo estilo
@@ -543,6 +549,16 @@ function Historial({ onFiltroLabel }) {
     else grupos.push({ clave, titulo: fmtSemanaHeader(c.cerrada_at), cortes: [c] });
   }
 
+  // Vista "Esta semana": los 7 días en curso (Lunes → Domingo) como contenedores,
+  // para ver de un vistazo en qué días hubo o falta corte.
+  const lunesSemana = inicioSemana(new Date());
+  const diasSemana = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(lunesSemana);
+    d.setDate(lunesSemana.getDate() + i);
+    return d;
+  });
+  const hoy0 = new Date(); hoy0.setHours(0, 0, 0, 0);
+
   // Tarjeta de un corte (se reutiliza para los cortes de hoy y los del resto).
   const renderCorte = (c) => {
     const cuadra = c.diferencia != null && Math.abs(c.diferencia) < 0.005;
@@ -698,7 +714,48 @@ function Historial({ onFiltroLabel }) {
         )}
       </div>
 
-      {visibles.length === 0 ? (
+      {periodo === 'semana' ? (
+        // Un contenedor por día de la semana (Lunes → Domingo). Los días sin
+        // corte se ven como un espacio vacío; hoy va resaltado y los días que
+        // aún no llegan quedan como "Pendiente".
+        <div className="space-y-4">
+          <h3 className="text-lg font-bold text-dark-blue px-1">{fmtSemanaHeader(new Date())}</h3>
+          {diasSemana.map((dia) => {
+            const cortesDia = visibles.filter((c) => mismoDia(c.cerrada_at, dia));
+            const hoy = mismoDia(dia, hoy0);
+            const futuro = dia > hoy0;
+            return (
+              <div
+                key={dia.toISOString()}
+                className={`rounded-xl border p-4 ${
+                  hoy ? 'border-blue bg-light-blue/40'
+                    : cortesDia.length > 0 ? 'border-gray-200 bg-white'
+                    : 'border-dashed border-gray-300 bg-gray-50'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-sm font-semibold text-gray-700">
+                    {nombreDia(dia)} {dia.getDate()}
+                    {hoy && (
+                      <span className="ml-2 text-[10px] font-bold uppercase tracking-wide text-blue">Hoy</span>
+                    )}
+                  </h4>
+                  {cortesDia.length > 0 && (
+                    <span className="text-xs text-gray-400">
+                      {cortesDia.length} {cortesDia.length === 1 ? 'corte' : 'cortes'}
+                    </span>
+                  )}
+                </div>
+                {cortesDia.length > 0 ? (
+                  <div className="space-y-4">{cortesDia.map(renderCorte)}</div>
+                ) : (
+                  <p className="text-sm text-gray-400 italic">{futuro ? 'Pendiente' : 'Sin corte'}</p>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      ) : visibles.length === 0 ? (
         <EmptyState>No hay cortes en este periodo.</EmptyState>
       ) : (
         <div className="space-y-10">
