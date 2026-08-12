@@ -478,7 +478,7 @@ export default function Ventas() {
             <h2 className="text-sm font-semibold text-gray-700 mb-4">
               {periodo === 'semana' ? tituloSemana
                 : periodo === 'mes' ? `Ingresos en ${MESES[mesSel]} ${anioSel}`
-                : periodo === 'hoy' ? 'Ingresos de hoy'
+                : periodo === 'hoy' ? `Ingresos de hoy - ${new Date().getDate()} de ${MESES[new Date().getMonth()]}`
                 : periodo === 'anio' ? `Ingresos en ${anioSel}`
                 : periodo === 'custom' ? tituloPersonalizado
                 : 'Ingresos por día'}
@@ -502,7 +502,7 @@ export default function Ventas() {
                         : periodo === 'mes'
                           ? String(fechaLocal(v).getDate())
                           : periodo === 'hoy'
-                            ? `${fechaLocal(v).getDate()} de ${MESES[fechaLocal(v).getMonth()]}`
+                            ? 'Hoy'
                             : periodo === 'anio'
                               ? MESES[fechaLocal(v).getMonth()].slice(0, 3)
                               : (() => { const d = fechaLocal(v); return `${d.getDate()}/${MESES[d.getMonth()].slice(0, 3)}/${String(d.getFullYear()).slice(-2)}`; })()
@@ -535,6 +535,31 @@ export default function Ventas() {
             )}
           </div>
 
+          {/* Corte de caja */}
+          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <div className="px-4 py-3 border-b border-gray-200">
+              <h2 className="text-sm font-semibold text-gray-700">Corte de caja</h2>
+            </div>
+            <div className="divide-y divide-gray-100">
+              <div className="flex justify-between px-4 py-3 text-sm text-gray-600">
+                <span>Total por cargas de lavado</span>
+                <span>{fmt(data.corte.total_cargas)}</span>
+              </div>
+              <div className="flex justify-between px-4 py-3 text-sm text-gray-600">
+                <span>Total por artículos vendidos</span>
+                <span>{fmt(data.corte.total_productos)}</span>
+              </div>
+              <div className="flex justify-between px-4 py-3 text-sm text-gray-600">
+                <span>Total ajustes</span>
+                <span>{fmt(data.corte.total_ajustes)}</span>
+              </div>
+              <div className="flex justify-between px-4 py-4 text-base font-bold text-gray-900 bg-gray-50">
+                <span>TOTAL GENERAL</span>
+                <span className="text-lg">{fmt(data.corte.total_general)}</span>
+              </div>
+            </div>
+          </div>
+
           {/* Lista de notas */}
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
             <div className="px-4 py-3 border-b border-gray-200">
@@ -552,7 +577,7 @@ export default function Ventas() {
                       <tr>
                         <th className="px-4 py-3 text-left">Folio</th>
                         {periodo === 'semana' && <th className="px-4 py-3 text-left">Día</th>}
-                        <th className="px-4 py-3 text-left">Fecha</th>
+                        {periodo !== 'hoy' && <th className="px-4 py-3 text-left">Fecha</th>}
                         {periodo === 'hoy' && <th className="px-4 py-3 text-left">Hora</th>}
                         <th className="px-4 py-3 text-left">Estado</th>
                         <th className="px-4 py-3 text-left">Máquina</th>
@@ -574,7 +599,7 @@ export default function Ventas() {
                             </button>
                           </td>
                           {periodo === 'semana' && <td className="px-4 py-3 text-gray-600">{fmtDiaSemana(nota.fecha)}</td>}
-                          <td className="px-4 py-3 text-gray-600">{fmtFecha(nota.fecha)}</td>
+                          {periodo !== 'hoy' && <td className="px-4 py-3 text-gray-600">{fmtFecha(nota.fecha)}</td>}
                           {periodo === 'hoy' && <td className="px-4 py-3 text-gray-600">{fmtHora(nota.creado_en)}</td>}
                           <td className="px-4 py-3"><EstadoBadge estado={nota.estado} /></td>
                           <td className="px-4 py-3 text-gray-600">{nota.maquina}</td>
@@ -609,31 +634,6 @@ export default function Ventas() {
                 )}
               </>
             )}
-          </div>
-
-          {/* Corte de caja */}
-          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-            <div className="px-4 py-3 border-b border-gray-200">
-              <h2 className="text-sm font-semibold text-gray-700">Corte de caja</h2>
-            </div>
-            <div className="divide-y divide-gray-100">
-              <div className="flex justify-between px-4 py-3 text-sm text-gray-600">
-                <span>Total por cargas de lavado</span>
-                <span>{fmt(data.corte.total_cargas)}</span>
-              </div>
-              <div className="flex justify-between px-4 py-3 text-sm text-gray-600">
-                <span>Total por artículos vendidos</span>
-                <span>{fmt(data.corte.total_productos)}</span>
-              </div>
-              <div className="flex justify-between px-4 py-3 text-sm text-gray-600">
-                <span>Total ajustes</span>
-                <span>{fmt(data.corte.total_ajustes)}</span>
-              </div>
-              <div className="flex justify-between px-4 py-4 text-base font-bold text-gray-900 bg-gray-50">
-                <span>TOTAL GENERAL</span>
-                <span className="text-lg">{fmt(data.corte.total_general)}</span>
-              </div>
-            </div>
           </div>
         </>
       )}
