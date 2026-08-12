@@ -219,6 +219,19 @@ export default function Ventas() {
       : `Ingresos del ${lunes.getDate()} de ${mesL} - ${domingo.getDate()} de ${mesD}`;
   }, []);
 
+  // Título del período personalizado con el rango elegido, p. ej.
+  // "Ingresos del 10 de Agosto al 13 de Agosto 2026". Si el rango cruza de año,
+  // muestra el año en ambas fechas.
+  const tituloPersonalizado = useMemo(() => {
+    if (!desde || !hasta) return 'Ingresos';
+    const d1 = fechaLocal(desde);
+    const d2 = fechaLocal(hasta);
+    const mismoAnio = d1.getFullYear() === d2.getFullYear();
+    const p1 = `${d1.getDate()} de ${MESES[d1.getMonth()]}${mismoAnio ? '' : ` ${d1.getFullYear()}`}`;
+    const p2 = `${d2.getDate()} de ${MESES[d2.getMonth()]} ${d2.getFullYear()}`;
+    return `Ingresos del ${p1} al ${p2}`;
+  }, [desde, hasta]);
+
   // Cierra el selector de año al hacer clic fuera.
   useEffect(() => {
     if (!mostrarAnios) return;
@@ -445,6 +458,7 @@ export default function Ventas() {
                 : periodo === 'mes' ? `Ingresos en ${MESES[mesSel]} ${anioSel}`
                 : periodo === 'hoy' ? 'Ingresos de hoy'
                 : periodo === 'anio' ? `Ingresos en ${anioSel}`
+                : periodo === 'custom' ? tituloPersonalizado
                 : 'Ingresos por día'}
             </h2>
             {graficaData.length === 0 ? (
