@@ -476,12 +476,20 @@ export default function Ventas() {
                     tick={{ fontSize: 11, fill: '#6b7280' }}
                     tickFormatter={(v) => `$${v}`}
                     width={60}
-                    // Aire arriba: el tope llega al menos a $1,000 y deja un 15%
-                    // de margen sobre la barra más alta (redondeado a centenas).
-                    domain={[0, (dataMax) => Math.max(1000, Math.ceil((dataMax * 1.15) / 100) * 100)]}
+                    // Aire arriba: al menos $1,000 de tope y ~15% de margen sobre
+                    // la barra más alta, redondeado hacia arriba a un paso acorde a
+                    // la magnitud (para dejar aire parejo y números limpios en el
+                    // eje en cualquier escala: día, semana, mes o año).
+                    domain={[0, (dataMax) => {
+                      const conAire = Math.max(1000, dataMax * 1.15);
+                      const paso = Math.pow(10, Math.floor(Math.log10(conAire))) / 2;
+                      return Math.ceil(conAire / paso) * paso;
+                    }]}
                   />
                   <Tooltip content={<CustomTooltip periodo={periodo} />} />
-                  <Bar dataKey="total" fill="#16a34a" radius={[4, 4, 0, 0]} />
+                  {/* En "hoy" hay una sola barra: se le da un ancho fijo cómodo
+                      para que no salga tan angosta. Los demás períodos, automático. */}
+                  <Bar dataKey="total" fill="#16a34a" radius={[4, 4, 0, 0]} barSize={periodo === 'hoy' ? 106 : undefined} />
                 </BarChart>
               </ResponsiveContainer>
             )}
