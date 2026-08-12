@@ -864,7 +864,9 @@ export default function Salidas() {
                       <span className="font-medium text-gray-800">{m.nombre}</span>
                       <span className="flex items-center gap-2">
                         {reservada && (
-                          <span className="text-xs font-medium text-amber-600">Reservada</span>
+                          <span className="text-xs font-medium text-amber-600">
+                            Reservada{m.reservada_folio ? ` (${m.reservada_folio})` : ''}
+                          </span>
                         )}
                         {tamanoLabel && (
                           <span className="text-xs text-gray-500">{tamanoLabel}</span>
@@ -1060,7 +1062,7 @@ export default function Salidas() {
                             <span className="font-medium text-gray-800 truncate">{m.nombre}</span>
                           </span>
                           <span className="flex items-center gap-2 flex-shrink-0">
-                            {reservada && <span className="text-xs font-medium text-amber-600">Reservada</span>}
+                            {reservada && <span className="text-xs font-medium text-amber-600">Reservada{m.reservada_folio ? ` (${m.reservada_folio})` : ''}</span>}
                             {labelTamano(m) && (
                               <span className="text-xs text-gray-500">{labelTamano(m)}</span>
                             )}
@@ -1098,7 +1100,7 @@ export default function Salidas() {
                             <span className="font-medium text-gray-800 truncate">{m.nombre}</span>
                           </span>
                           <span className="flex items-center gap-2 flex-shrink-0">
-                            {reservada && <span className="text-xs font-medium text-amber-600">Reservada</span>}
+                            {reservada && <span className="text-xs font-medium text-amber-600">Reservada{m.reservada_folio ? ` (${m.reservada_folio})` : ''}</span>}
                             {labelTamano(m) && (
                               <span className="text-xs text-gray-500">{labelTamano(m)}</span>
                             )}

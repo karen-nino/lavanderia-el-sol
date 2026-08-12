@@ -7,9 +7,15 @@ import SucursalBar from '../components/SucursalBar';
 
 const ESTADO_CFG = {
   disponible:    { label: 'Disponible',    cls: 'bg-green-100 text-green-700', clsActive: 'bg-green-600 text-white', dot: 'bg-green-500' },
+  // "Reservada": libre pero apartada por otra nota abierta (no es un estado real
+  // de la máquina, se deriva de `reservada` que devuelve el backend).
+  reservada:     { label: 'Reservada',     cls: 'bg-amber-100 text-amber-700', clsActive: 'bg-amber-500 text-white', dot: 'bg-amber-500' },
   en_uso:        { label: 'En uso',        cls: 'bg-blue-100 text-blue-700',   clsActive: 'bg-blue-600 text-white',  dot: 'bg-blue-500'  },
   mantenimiento: { label: 'Mantenimiento', cls: 'bg-red-100 text-red-700',     clsActive: 'bg-red-600 text-white',   dot: 'bg-red-500'   },
 };
+
+// Estado a mostrar: una máquina disponible pero apartada se muestra como Reservada.
+const estadoVisual = (m) => (m.reservada ? 'reservada' : m.estado);
 
 const INPUT_CLS =
   'w-full px-4 py-3.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent transition';
@@ -171,13 +177,13 @@ export default function GestionMaquinas() {
   const conteos = {
     todos: maquinas.length,
     ...Object.fromEntries(
-      Object.keys(ESTADO_CFG).map(e => [e, maquinas.filter(m => m.estado === e).length])
+      Object.keys(ESTADO_CFG).map(e => [e, maquinas.filter(m => estadoVisual(m) === e).length])
     ),
   };
 
   const filtradas = filtro === 'todos'
     ? maquinas
-    : maquinas.filter(m => m.estado === filtro);
+    : maquinas.filter(m => estadoVisual(m) === filtro);
 
   if (loading) {
     return (
@@ -275,7 +281,7 @@ export default function GestionMaquinas() {
               </h2>
               <div className="grid grid-cols-2 gap-4">
                 {grupo.items.map(m => {
-            const cfg = ESTADO_CFG[m.estado] ?? ESTADO_CFG.disponible;
+            const cfg = ESTADO_CFG[estadoVisual(m)] ?? ESTADO_CFG.disponible;
             const { tipo, tamano } = descomponerTipo(m.tipo);
             const tipoLabel = tipo === 'lavadora' ? 'Lavadora' : 'Secadora';
             // Tamaño desde la columna propia (secadoras) o del tipo (lavadoras).
@@ -363,6 +369,9 @@ export default function GestionMaquinas() {
                     <span className={`w-1.5 h-1.5 rounded-full bg-white ${m.estado === 'en_uso' ? 'animate-pulse' : ''}`} />
                     {cfg.label}
                   </span>
+                  {m.reservada && m.reservada_folio && (
+                    <p className="text-xs text-amber-600 mt-1">Apartada por {m.reservada_folio}</p>
+                  )}
                 </div>
               </div>
             );

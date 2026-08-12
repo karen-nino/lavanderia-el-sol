@@ -8,25 +8,32 @@ const TAMANOS_VALIDOS = ['mediana', 'jumbo'];
 export const getMaquinas = async (req, res) => {
   try {
     // "reservada": la máquina está libre (estado disponible) pero ya la tiene
-    // apartada otra nota abierta y sin arrancar (En Espera). Sirve para que las
-    // pantallas de asignación la muestren como Reservada y no la dejen elegir de
-    // nuevo, evitando que dos notas tomen la misma máquina.
+    // apartada otra nota abierta y sin arrancar (En Espera). `reservada_folio` es
+    // el folio de esa nota (la más antigua que la aparta). Sirve para que las
+    // pantallas de asignación la muestren como Reservada, con su folio, y no la
+    // dejen elegir de nuevo, evitando que dos notas tomen la misma máquina.
     const { rows } = await pool.query(
       `SELECT m.*,
-              (m.estado = 'disponible' AND EXISTS (
-                 SELECT 1 FROM notas n
-                  WHERE n.estado IN ('EN_ESPERA', 'LAVANDO', 'SECANDO')
-                    AND (
-                      n.maquina_id = m.id
-                      OR n.secadora_id = m.id
-                      OR EXISTS (
-                        SELECT 1 FROM nota_cargas nc
-                         WHERE nc.nota_id = n.id
-                           AND (nc.lavadora_id = m.id OR nc.secadora_id = m.id)
-                      )
-                    )
-              )) AS reservada
+              (r.folio IS NOT NULL) AS reservada,
+              r.folio               AS reservada_folio
          FROM maquinas m
+         LEFT JOIN LATERAL (
+           SELECT n.folio
+             FROM notas n
+            WHERE m.estado = 'disponible'
+              AND n.estado IN ('EN_ESPERA', 'LAVANDO', 'SECANDO')
+              AND (
+                n.maquina_id = m.id
+                OR n.secadora_id = m.id
+                OR EXISTS (
+                  SELECT 1 FROM nota_cargas nc
+                   WHERE nc.nota_id = n.id
+                     AND (nc.lavadora_id = m.id OR nc.secadora_id = m.id)
+                )
+              )
+            ORDER BY n.created_at ASC
+            LIMIT 1
+         ) r ON TRUE
         WHERE m.sucursal = $1
         ORDER BY m.tipo ASC, m.nombre ASC`,
       [req.sucursal]

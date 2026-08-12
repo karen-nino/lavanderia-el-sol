@@ -158,6 +158,9 @@ export default function NuevaNota() {
   const tamanoDe = (maquinaId) => maquinas.find(m => String(m.id) === String(maquinaId))?.tamano;
   // ¿La máquina está apartada por OTRA nota abierta? (las de esta nota no cuentan)
   const esReservada = (m) => Boolean(m?.reservada) && !maquinasNotaIds.has(String(m.id));
+  // Sufijo " — Reservada (folio)" para las opciones del selector; vacío si no.
+  const sufijoReservada = (m) =>
+    esReservada(m) ? ` — Reservada${m.reservada_folio ? ` (${m.reservada_folio})` : ''}` : '';
   // Cada carga se cobra con la tarifa de su lavadora más la de su secadora.
   const subtotalDeCarga = (c) => {
     const lav = maquinas.find(m => String(m.id) === String(c.lavadora_id));
@@ -994,7 +997,7 @@ export default function NuevaNota() {
                         <option value="">Sin asignar</option>
                         {lavadorasOpc.map(m => (
                           <option key={m.id} value={m.id} disabled={esReservada(m)}>
-                            {formatMaquina(m)} — ${precioPorTipo(m.tipo, c.tipo_prenda).toFixed(2)}{esReservada(m) ? ' — Reservada' : ''}
+                            {formatMaquina(m)} — ${precioPorTipo(m.tipo, c.tipo_prenda).toFixed(2)}{sufijoReservada(m)}
                           </option>
                         ))}
                       </select>
@@ -1436,7 +1439,7 @@ export default function NuevaNota() {
                         <option value="">Sin asignar</option>
                         {lavadorasOpc.map(m => (
                           <option key={m.id} value={m.id} disabled={esReservada(m)}>
-                            {formatMaquina(m)} — ${precioPorTipo(m.tipo, c.tipo_prenda).toFixed(2)}{esReservada(m) ? ' — Reservada' : ''}
+                            {formatMaquina(m)} — ${precioPorTipo(m.tipo, c.tipo_prenda).toFixed(2)}{sufijoReservada(m)}
                           </option>
                         ))}
                       </select>
@@ -1449,7 +1452,7 @@ export default function NuevaNota() {
                         <option value="">Sin asignar</option>
                         {secadorasOpc.map(m => (
                           <option key={m.id} value={m.id} disabled={esReservada(m)}>
-                            {formatMaquina(m)} — ${precioSecado(m.tamano, c.tipo_prenda).toFixed(2)}{esReservada(m) ? ' — Reservada' : ''}
+                            {formatMaquina(m)} — ${precioSecado(m.tamano, c.tipo_prenda).toFixed(2)}{sufijoReservada(m)}
                           </option>
                         ))}
                       </select>
