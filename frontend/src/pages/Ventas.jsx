@@ -29,6 +29,13 @@ const fmtFecha = (fecha) => {
   return fechaLocal(fecha).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
 };
 
+// Hora local en formato de 12 horas con am/pm (p. ej. 2:30 p.m.), a partir del
+// timestamp de creación de la nota (created_at).
+const fmtHora = (fecha) => {
+  if (!fecha) return '—';
+  return new Date(fecha).toLocaleTimeString('es-MX', { hour: 'numeric', minute: '2-digit', hour12: true });
+};
+
 // Nombre del día de la semana capitalizado (Lunes, Martes, …).
 const fmtDiaSemana = (fecha) => {
   if (!fecha) return '—';
@@ -544,7 +551,9 @@ export default function Ventas() {
                     <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wide">
                       <tr>
                         <th className="px-4 py-3 text-left">Folio</th>
+                        {periodo === 'semana' && <th className="px-4 py-3 text-left">Día</th>}
                         <th className="px-4 py-3 text-left">Fecha</th>
+                        {periodo === 'hoy' && <th className="px-4 py-3 text-left">Hora</th>}
                         <th className="px-4 py-3 text-left">Estado</th>
                         <th className="px-4 py-3 text-left">Máquina</th>
                         <th className="px-4 py-3 text-right">Cargas</th>
@@ -564,7 +573,9 @@ export default function Ventas() {
                               {nota.folio}
                             </button>
                           </td>
+                          {periodo === 'semana' && <td className="px-4 py-3 text-gray-600">{fmtDiaSemana(nota.fecha)}</td>}
                           <td className="px-4 py-3 text-gray-600">{fmtFecha(nota.fecha)}</td>
+                          {periodo === 'hoy' && <td className="px-4 py-3 text-gray-600">{fmtHora(nota.creado_en)}</td>}
                           <td className="px-4 py-3"><EstadoBadge estado={nota.estado} /></td>
                           <td className="px-4 py-3 text-gray-600">{nota.maquina}</td>
                           <td className="px-4 py-3 text-right text-gray-600">{nota.cargas}</td>
