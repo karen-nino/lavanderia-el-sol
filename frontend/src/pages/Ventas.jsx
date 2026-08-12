@@ -371,9 +371,12 @@ export default function Ventas() {
                     tick={{ fontSize: 11, fill: '#6b7280' }}
                     tickFormatter={(v) => `$${v}`}
                     width={60}
+                    // Aire arriba: el tope llega al menos a $1,000 y deja un 15%
+                    // de margen sobre la barra más alta (redondeado a centenas).
+                    domain={[0, (dataMax) => Math.max(1000, Math.ceil((dataMax * 1.15) / 100) * 100)]}
                   />
                   <Tooltip content={<CustomTooltip />} />
-                  <Bar dataKey="total" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="total" fill="#16a34a" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             )}
