@@ -428,7 +428,7 @@ export default function Ventas() {
           <div className="bg-white rounded-xl border border-gray-200 p-4">
             <h2 className="text-sm font-semibold text-gray-700 mb-4">
               {periodo === 'semana' ? tituloSemana
-                : periodo === 'mes' ? `Ingresos en ${MESES[mesSel]}`
+                : periodo === 'mes' ? `Ingresos en ${MESES[mesSel]} ${anioSel}`
                 : 'Ingresos por día'}
             </h2>
             {graficaData.length === 0 ? (
