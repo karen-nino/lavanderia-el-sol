@@ -587,6 +587,7 @@ export default function Ventas() {
                         {periodo === 'hoy' && <th className="px-4 py-3 text-left">Hora</th>}
                         <th className="px-4 py-3 text-left">Estado</th>
                         <th className="px-4 py-3 text-left">Máquina</th>
+                        <th className="px-4 py-3 text-left">Atendió</th>
                         <th className="px-4 py-3 text-right">Productos</th>
                         <th className="px-4 py-3 text-right">Total</th>
                       </tr>
@@ -623,6 +624,7 @@ export default function Ventas() {
                               </button>
                             )}
                           </td>
+                          <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{nota.atendio ?? <span className="text-gray-400">—</span>}</td>
                           <td className="px-4 py-3 text-right text-gray-600">{fmt(nota.total_productos)}</td>
                           <td className="px-4 py-3 text-right font-semibold text-gray-800">{fmt(nota.total)}</td>
                         </tr>

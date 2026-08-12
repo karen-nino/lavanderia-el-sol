@@ -122,10 +122,12 @@ export async function getResumen(req, res) {
                    AND mm.id IN (o.maquina_id, o.secadora_id)
               ) t
           ), '[]'::json)                               AS maquinas,
+          NULLIF(TRIM(u.nombre || ' ' || COALESCE(u.apellido, '')), '') AS atendio,
           o.cantidad_cargas                            AS cargas,
           COALESCE(np_t.total_productos, 0)            AS total_productos,
           o.precio_total                               AS total
         FROM notas o
+        LEFT JOIN usuarios u ON u.id = o.usuario_id
         LEFT JOIN (
           SELECT nota_id, SUM(cantidad * precio_unitario) AS total_productos
           FROM nota_productos
@@ -180,6 +182,7 @@ export async function getResumen(req, res) {
         estado:          r.estado,
         estado_pago:     r.estado_pago,
         maquinas:        r.maquinas ?? [],
+        atendio:         r.atendio,
         cargas:          parseInt(r.cargas, 10),
         total_productos: parseFloat(r.total_productos),
         total:           parseFloat(r.total),
