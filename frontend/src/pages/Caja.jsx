@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
-import { esAdmin as esAdminFn } from '../lib/roles';
+import { esAdmin as esAdminFn, esAdminMain as esAdminMainFn } from '../lib/roles';
 import SucursalBar from '../components/SucursalBar';
 
 const fmt = (n) =>
@@ -447,6 +447,10 @@ function Corte({ data, onCerrar }) {
 
 // ── Historial ───────────────────────────────────────────────
 function Historial({ onFiltroLabel }) {
+  // Solo el Admin Main puede eliminar cortes.
+  const { usuario } = useAuth();
+  const esAdminMain = esAdminMainFn(usuario?.rol);
+
   const [cortes, setCortes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -462,6 +466,12 @@ function Historial({ onFiltroLabel }) {
   const [mostrarMeses, setMostrarMeses] = useState(false);
   const anioRef = useRef(null);
   const mesRef = useRef(null);
+
+  // Menú de opciones (⋮) por corte y confirmación de borrado.
+  const [menuCorte, setMenuCorte] = useState(null);       // id del corte con el menú abierto
+  const [confirmEliminar, setConfirmEliminar] = useState(null); // corte a eliminar
+  const [eliminando, setEliminando] = useState(false);
+  const menuRef = useRef(null);
 
   useEffect(() => {
     let activo = true;
@@ -491,6 +501,32 @@ function Historial({ onFiltroLabel }) {
     document.addEventListener('mousedown', onDown);
     return () => document.removeEventListener('mousedown', onDown);
   }, [mostrarMeses]);
+
+  // Cierra el menú de opciones de un corte al hacer clic fuera.
+  useEffect(() => {
+    if (menuCorte == null) return;
+    const onDown = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) setMenuCorte(null);
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [menuCorte]);
+
+  // Elimina el corte confirmado (y sus movimientos, en cascada en el backend).
+  const eliminarCorte = async () => {
+    if (!confirmEliminar) return;
+    setEliminando(true);
+    try {
+      await api.delete(`/caja/historial/${confirmEliminar.id}`);
+      setCortes((prev) => prev.filter((c) => c.id !== confirmEliminar.id));
+      setConfirmEliminar(null);
+    } catch (e) {
+      setError(e.message);
+      setConfirmEliminar(null);
+    } finally {
+      setEliminando(false);
+    }
+  };
 
   // Etiqueta del filtro activo, para mostrarla como subtítulo del encabezado.
   // Misma idea que los títulos de Ventas: Hoy con su fecha, la semana con su
@@ -569,13 +605,48 @@ function Historial({ onFiltroLabel }) {
             <p className="text-base font-semibold text-gray-800">{fmtFechaCorta(c.cerrada_at)}</p>
             <p className="text-base text-gray-500 mt-0.5">{fmtHora(c.cerrada_at)}</p>
           </div>
-          {c.diferencia != null && (
-            <span className={`text-sm font-semibold px-2.5 py-1 rounded-full ${
-              cuadra ? 'bg-green-50 text-green-700' : 'bg-orange-50 text-orange-700'
-            }`}>
-              {cuadra ? 'Cuadra' : `${c.diferencia > 0 ? '+' : ''}${fmt(c.diferencia)}`}
-            </span>
-          )}
+          <div className="flex items-center gap-2">
+            {c.diferencia != null && (
+              <span className={`text-sm font-semibold px-2.5 py-1 rounded-full ${
+                cuadra ? 'bg-green-50 text-green-700' : 'bg-orange-50 text-orange-700'
+              }`}>
+                {cuadra ? 'Cuadra' : `${c.diferencia > 0 ? '+' : ''}${fmt(c.diferencia)}`}
+              </span>
+            )}
+            {/* Menú de opciones (⋮): por ahora, eliminar el corte. Solo Admin Main. */}
+            {esAdminMain && (
+            <div className="relative" ref={menuCorte === c.id ? menuRef : null}>
+              <button
+                type="button"
+                onClick={() => setMenuCorte((prev) => (prev === c.id ? null : c.id))}
+                aria-haspopup="menu"
+                aria-expanded={menuCorte === c.id}
+                aria-label="Opciones"
+                className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+              >
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                  <circle cx="12" cy="5" r="1.8" />
+                  <circle cx="12" cy="12" r="1.8" />
+                  <circle cx="12" cy="19" r="1.8" />
+                </svg>
+              </button>
+              {menuCorte === c.id && (
+                <div className="absolute right-0 mt-1 z-10 w-40 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => { setMenuCorte(null); setConfirmEliminar(c); }}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm font-medium text-red-600 hover:bg-red-50"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3" />
+                    </svg>
+                    Eliminar
+                  </button>
+                </div>
+              )}
+            </div>
+            )}
+          </div>
         </div>
 
         <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-base">
@@ -776,6 +847,46 @@ function Historial({ onFiltroLabel }) {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Confirmación de eliminar corte */}
+      {confirmEliminar && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <span className="flex-shrink-0 w-9 h-9 rounded-full bg-red-100 text-red-600 flex items-center justify-center">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                    d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                </svg>
+              </span>
+              <h3 className="text-base font-bold text-gray-900">Eliminar corte</h3>
+            </div>
+            <p className="text-sm text-gray-500">
+              ¿Eliminar el corte del{' '}
+              <span className="font-semibold text-gray-800">{fmtFechaCorta(confirmEliminar.cerrada_at)}</span>?
+              Se borrará junto con sus movimientos. Esta acción no se puede deshacer.
+            </p>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setConfirmEliminar(null)}
+                disabled={eliminando}
+                className="flex-1 border border-gray-300 text-gray-700 font-medium py-3.5 rounded-lg text-base hover:bg-gray-50 disabled:opacity-60 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={eliminarCorte}
+                disabled={eliminando}
+                className="flex-1 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
+              >
+                {eliminando ? 'Eliminando...' : 'Eliminar'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

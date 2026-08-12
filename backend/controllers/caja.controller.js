@@ -289,3 +289,27 @@ export async function getHistorial(req, res) {
     res.status(500).json({ message: 'Error al obtener el historial de cortes.' });
   }
 }
+
+// ── DELETE /caja/historial/:id ──────────────────────────────
+// Elimina un corte (sesión de caja ya cerrada) del historial. Solo Admin.
+// Los movimientos de esa sesión se borran en cascada (ON DELETE CASCADE).
+export async function eliminarCorte(req, res) {
+  const id = Number(req.params.id);
+  if (!id) return res.status(400).json({ message: 'Corte inválido.' });
+
+  try {
+    const { rows } = await pool.query(
+      `DELETE FROM cajas
+        WHERE id = $1 AND sucursal = $2 AND estado = 'cerrada'
+        RETURNING id`,
+      [id, req.sucursal]
+    );
+    if (rows.length === 0) {
+      return res.status(404).json({ message: 'Corte no encontrado o aún abierto.' });
+    }
+    res.status(204).end();
+  } catch (err) {
+    console.error('Error al eliminar corte:', err);
+    res.status(500).json({ message: 'Error al eliminar el corte.' });
+  }
+}
