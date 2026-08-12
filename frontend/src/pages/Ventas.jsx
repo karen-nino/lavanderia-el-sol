@@ -32,6 +32,11 @@ const fmtDiaSemana = (fecha) => {
   const s = fechaLocal(fecha).toLocaleDateString('es-MX', { weekday: 'long' });
   return s.charAt(0).toUpperCase() + s.slice(1);
 };
+// Versión abreviada (Lun, Mar, Mié, …) para cuando hay poco espacio (mobile).
+const fmtDiaSemanaCorto = (fecha) => {
+  if (!fecha) return '—';
+  return fmtDiaSemana(fecha).slice(0, 3);
+};
 
 const NOTAS_POR_PAGINA = 10;
 
@@ -104,6 +109,17 @@ export default function Ventas() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [paginaNotas, setPaginaNotas] = useState(1);
+  // En pantallas angostas (mobile) los nombres de los días se abrevian para que
+  // los 7 quepan sin encimarse en el eje X de la gráfica semanal.
+  const [esAngosto, setEsAngosto] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 640px)').matches
+  );
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 640px)');
+    const onChange = () => setEsAngosto(mq.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
 
   const anioActual = new Date().getFullYear();
   const [anioSel, setAnioSel] = useState(anioActual);
@@ -397,7 +413,7 @@ export default function Ventas() {
                     interval={0}
                     tickFormatter={(v) =>
                       periodo === 'semana'
-                        ? fmtDiaSemana(v)
+                        ? (esAngosto ? fmtDiaSemanaCorto(v) : fmtDiaSemana(v))
                         : (() => { const d = new Date(v); return `${d.getDate()}/${d.getMonth() + 1}`; })()
                     }
                   />
