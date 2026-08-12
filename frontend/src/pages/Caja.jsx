@@ -76,20 +76,21 @@ const nombreDia = (d) => {
   return s.charAt(0).toUpperCase() + s.slice(1);
 };
 
-// Encabezado de la sección de semana: rango lunes–domingo, con el mismo estilo
-// de los títulos de Ventas (día sin cero a la izquierda y "-" como separador).
-// Ej.: 3 - 9 de Agosto. Si cruza de mes: 28 de Julio - 3 de Agosto.
+// Encabezado de la sección de semana (Mes/Año/Personalizado): rango lunes–domingo
+// con día a dos dígitos. Ej.: Semana del 03 - 09 de Agosto. Si cruza de mes,
+// muestra ambos: Semana del 28 de Julio - 03 de Agosto.
 const fmtSemanaHeader = (fecha) => {
   const lunes = inicioSemana(fecha);
   const domingo = new Date(lunes);
   domingo.setDate(domingo.getDate() + 6);
+  const dd = (d) => String(d.getDate()).padStart(2, '0');
   const mes = (d) => {
     const m = d.toLocaleDateString('es-MX', { month: 'long' });
     return m.charAt(0).toUpperCase() + m.slice(1);
   };
   return lunes.getMonth() === domingo.getMonth()
-    ? `${lunes.getDate()} - ${domingo.getDate()} de ${mes(domingo)}`
-    : `${lunes.getDate()} de ${mes(lunes)} - ${domingo.getDate()} de ${mes(domingo)}`;
+    ? `Semana del ${dd(lunes)} - ${dd(domingo)} de ${mes(domingo)}`
+    : `Semana del ${dd(lunes)} de ${mes(lunes)} - ${dd(domingo)} de ${mes(domingo)}`;
 };
 
 // Filtro de fecha del historial, con las mismas opciones que Ventas. El "mes"
