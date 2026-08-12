@@ -291,10 +291,19 @@ export default function GestionMaquinas() {
               : null;
             const borrando = eliminando === m.id;
 
+            // Toda la tarjeta abre la información de uso de la máquina (igual que
+            // la tarjeta de empleados abre su desempeño). Solo Admin, y con
+            // soporte de teclado (Enter/Espacio).
+            const verUso = () => navigate(`/gestion-maquinas/${m.id}/uso`);
             return (
               <div
                 key={m.id}
-                onClick={esAdmin ? () => navigate(`/gestion-maquinas/${m.id}/uso`) : undefined}
+                role={esAdmin ? 'button' : undefined}
+                tabIndex={esAdmin ? 0 : undefined}
+                onClick={esAdmin ? verUso : undefined}
+                onKeyDown={esAdmin ? (e) => {
+                  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); verUso(); }
+                } : undefined}
                 className={`relative bg-white rounded-2xl shadow-sm border border-gray-100 p-5 flex flex-col ${
                   esAdmin ? 'cursor-pointer hover:shadow-md transition-shadow' : ''
                 }`}

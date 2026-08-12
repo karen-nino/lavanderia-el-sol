@@ -48,7 +48,7 @@ const fmtDiaSemanaCorto = (fecha) => {
   return fmtDiaSemana(fecha).slice(0, 3);
 };
 
-const NOTAS_POR_PAGINA = 10;
+const NOTAS_POR_PAGINA = 20;
 
 const ESTADO_BADGE = {
   EN_ESPERA:  { label: 'En Espera',    cls: 'bg-gray-100 text-gray-600'     },
@@ -611,27 +611,25 @@ export default function Ventas() {
                     </tbody>
                   </table>
                 </div>
-                {totalPaginas > 1 && (
-                  <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 text-sm">
-                    <button
-                      type="button"
-                      onClick={() => setPaginaNotas(p => Math.max(1, p - 1))}
-                      disabled={paginaSegura <= 1}
-                      className="px-3 py-1.5 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                    >
-                      Anterior
-                    </button>
-                    <span className="text-gray-500">Página {paginaSegura} de {totalPaginas}</span>
-                    <button
-                      type="button"
-                      onClick={() => setPaginaNotas(p => Math.min(totalPaginas, p + 1))}
-                      disabled={paginaSegura >= totalPaginas}
-                      className="px-3 py-1.5 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                    >
-                      Siguiente
-                    </button>
-                  </div>
-                )}
+                <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 text-sm">
+                  <button
+                    type="button"
+                    onClick={() => setPaginaNotas(p => Math.max(1, p - 1))}
+                    disabled={paginaSegura <= 1}
+                    className="px-3 py-1.5 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Anterior
+                  </button>
+                  <span className="text-gray-500">Página {paginaSegura} de {totalPaginas}</span>
+                  <button
+                    type="button"
+                    onClick={() => setPaginaNotas(p => Math.min(totalPaginas, p + 1))}
+                    disabled={paginaSegura >= totalPaginas}
+                    className="px-3 py-1.5 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Siguiente
+                  </button>
+                </div>
               </>
             )}
           </div>
