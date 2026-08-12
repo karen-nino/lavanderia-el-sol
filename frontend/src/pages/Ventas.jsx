@@ -3,8 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import SucursalBar from '../components/SucursalBar';
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
+
+// Tonos de verde que se alternan barra a barra para distinguir una de otra.
+const VERDES_BARRA = ['#16a34a', '#4ade80'];
 
 const fmt = (n) =>
   new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(n ?? 0);
@@ -515,7 +518,11 @@ export default function Ventas() {
                   <Tooltip content={<CustomTooltip periodo={periodo} />} />
                   {/* En "hoy" hay una sola barra: se le da un ancho fijo cómodo
                       para que no salga tan angosta. Los demás períodos, automático. */}
-                  <Bar dataKey="total" fill="#16a34a" radius={[4, 4, 0, 0]} barSize={periodo === 'hoy' ? 106 : undefined} />
+                  <Bar dataKey="total" fill="#16a34a" radius={[4, 4, 0, 0]} barSize={periodo === 'hoy' ? 106 : undefined}>
+                    {graficaData.map((_, i) => (
+                      <Cell key={i} fill={VERDES_BARRA[i % VERDES_BARRA.length]} />
+                    ))}
+                  </Bar>
                 </BarChart>
               </ResponsiveContainer>
             )}
