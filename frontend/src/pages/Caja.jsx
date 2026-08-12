@@ -790,7 +790,6 @@ function Historial({ onFiltroLabel }) {
         // corte se ven como un espacio vacío; hoy va resaltado y los días que
         // aún no llegan quedan como "Pendiente".
         <div className="space-y-4">
-          <h3 className="text-lg font-bold text-dark-blue px-1">{fmtSemanaHeader(new Date())}</h3>
           {diasSemana.map((dia) => {
             const cortesDia = visibles.filter((c) => mismoDia(c.cerrada_at, dia));
             const hoy = mismoDia(dia, hoy0);
@@ -806,7 +805,7 @@ function Historial({ onFiltroLabel }) {
               >
                 <div className="flex items-center justify-between mb-3">
                   <h4 className="text-sm font-semibold text-gray-700">
-                    {nombreDia(dia)} {dia.getDate()}
+                    {nombreDia(dia)} - {dia.getDate()} {MESES[dia.getMonth()]}
                     {hoy && (
                       <span className="ml-2 text-[10px] font-bold uppercase tracking-wide text-blue">Hoy</span>
                     )}
