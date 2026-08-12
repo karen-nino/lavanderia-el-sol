@@ -61,27 +61,36 @@ const inicioSemana = (fecha) => {
   return d;
 };
 
-// Encabezado de la sección de semana: rango lunes–domingo.
-// Ej.: 03 - 09 de Agosto. Si cruza de mes, muestra ambos meses:
-// 28 de Julio al 03 de Agosto.
+// ¿La fecha cae en el día de hoy? Para separar los cortes de hoy dentro de la semana.
+const esHoy = (fecha) => {
+  const d = new Date(fecha);
+  const n = new Date();
+  return d.getFullYear() === n.getFullYear()
+    && d.getMonth() === n.getMonth()
+    && d.getDate() === n.getDate();
+};
+
+// Encabezado de la sección de semana: rango lunes–domingo, con el mismo estilo
+// de los títulos de Ventas (día sin cero a la izquierda y "-" como separador).
+// Ej.: 3 - 9 de Agosto. Si cruza de mes: 28 de Julio - 3 de Agosto.
 const fmtSemanaHeader = (fecha) => {
   const lunes = inicioSemana(fecha);
   const domingo = new Date(lunes);
   domingo.setDate(domingo.getDate() + 6);
-  const dd = (d) => String(d.getDate()).padStart(2, '0');
   const mes = (d) => {
     const m = d.toLocaleDateString('es-MX', { month: 'long' });
     return m.charAt(0).toUpperCase() + m.slice(1);
   };
   return lunes.getMonth() === domingo.getMonth()
-    ? `${dd(lunes)} - ${dd(domingo)} de ${mes(domingo)}`
-    : `${dd(lunes)} de ${mes(lunes)} al ${dd(domingo)} de ${mes(domingo)}`;
+    ? `${lunes.getDate()} - ${domingo.getDate()} de ${mes(domingo)}`
+    : `${lunes.getDate()} de ${mes(lunes)} - ${domingo.getDate()} de ${mes(domingo)}`;
 };
 
 // Filtro de fecha del historial, con las mismas opciones que Ventas. El "mes"
 // se elige de un dropdown (como el año), por eso no lleva etiqueta fija.
+// "Hoy" se combinó dentro de "Esta semana": los cortes de hoy se separan con su
+// propio subtítulo dentro de la semana.
 const PERIODOS = [
-  { id: 'hoy',    label: 'Hoy' },
   { id: 'semana', label: 'Esta semana' },
   { id: 'mes',    label: 'Mes' },
   { id: 'anio',   label: 'Este año' },
@@ -436,8 +445,9 @@ function Historial({ onFiltroLabel }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Filtro de período, igual que en Ventas (con mes y año en dropdown).
-  const [periodo, setPeriodo] = useState('hoy');
+  // Filtro de período (con mes y año en dropdown). "Hoy" ya no es un filtro
+  // aparte: vive dentro de "Esta semana".
+  const [periodo, setPeriodo] = useState('semana');
   const [anioSel, setAnioSel] = useState(() => new Date().getFullYear());
   const [mesSel, setMesSel] = useState(() => new Date().getMonth());
   const [desde, setDesde] = useState('');
@@ -482,8 +492,6 @@ function Historial({ onFiltroLabel }) {
   const filtroLabel = (() => {
     const hoyD = new Date();
     switch (periodo) {
-      case 'hoy':
-        return `Hoy - ${hoyD.getDate()} de ${MESES[hoyD.getMonth()]}`;
       case 'semana': {
         const lunes = inicioSemana(hoyD);
         const domingo = new Date(lunes); domingo.setDate(lunes.getDate() + 6);
@@ -535,10 +543,63 @@ function Historial({ onFiltroLabel }) {
     else grupos.push({ clave, titulo: fmtSemanaHeader(c.cerrada_at), cortes: [c] });
   }
 
+  // Tarjeta de un corte (se reutiliza para los cortes de hoy y los del resto).
+  const renderCorte = (c) => {
+    const cuadra = c.diferencia != null && Math.abs(c.diferencia) < 0.005;
+    return (
+      <div key={c.id} className="bg-white rounded-xl border border-gray-200 p-4">
+        <div className="flex items-start justify-between mb-5">
+          <div>
+            <p className="text-base font-semibold text-gray-800">{fmtFechaCorta(c.cerrada_at)}</p>
+            <p className="text-base text-gray-500 mt-0.5">{fmtHora(c.cerrada_at)}</p>
+          </div>
+          {c.diferencia != null && (
+            <span className={`text-sm font-semibold px-2.5 py-1 rounded-full ${
+              cuadra ? 'bg-green-50 text-green-700' : 'bg-orange-50 text-orange-700'
+            }`}>
+              {cuadra ? 'Cuadra' : `${c.diferencia > 0 ? '+' : ''}${fmt(c.diferencia)}`}
+            </span>
+          )}
+        </div>
+
+        <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-base">
+          <span className="text-gray-500">Fondo</span><span className="text-right text-gray-700">{fmt(c.monto_inicial)}</span>
+          <span className="text-gray-500">Ventas</span><span className="text-right text-gray-700">{fmt(c.ventas)}</span>
+          <span className="text-gray-500">Entradas</span><span className="text-right text-gray-700">{fmt(c.entradas)}</span>
+          <span className="text-gray-500">Salidas</span><span className="text-right text-gray-700">{fmt(c.salidas)}</span>
+          <span className="text-gray-500 font-medium">Esperado</span><span className="text-right font-medium text-gray-800">{fmt(c.esperado)}</span>
+          <span className="text-gray-500 font-medium">Contado</span><span className="text-right font-medium text-gray-800">{c.contado != null ? fmt(c.contado) : '—'}</span>
+        </div>
+        <div className="mt-5 pt-5 border-t border-gray-100 divide-y divide-gray-100">
+          <div className="py-6 first:pt-0 last:pb-0">
+            <div className="flex items-center gap-2 text-sm">
+              <IconEntrada className="w-5 h-5 text-gray-400 flex-shrink-0" />
+              <span className="text-gray-400 w-12">Abrió</span>
+              <span className="font-medium text-gray-700">{c.usuario_apertura}</span>
+            </div>
+            {c.notas_apertura && (
+              <p className="mt-2 ml-7 pl-3 border-l-2 border-gray-100 text-sm text-gray-500">{c.notas_apertura}</p>
+            )}
+          </div>
+          <div className="py-6 first:pt-0 last:pb-0">
+            <div className="flex items-center gap-2 text-sm">
+              <IconSalida className="w-5 h-5 text-gray-400 flex-shrink-0" />
+              <span className="text-gray-400 w-12">Cerró</span>
+              <span className="font-medium text-gray-700">{c.usuario_cierre ?? '—'}</span>
+            </div>
+            {c.notas_cierre && (
+              <p className="mt-2 ml-7 pl-3 border-l-2 border-gray-100 text-sm text-gray-500">{c.notas_cierre}</p>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-10">
-      {/* Filtro de período (igual que Ventas): Hoy, Esta semana, Este mes,
-          Este año (con selector) y Personalizado. */}
+      {/* Filtro de período: Esta semana (incluye Hoy), Mes, Este año (con
+          selector) y Personalizado. */}
       <div className="space-y-3">
         <div className="flex flex-wrap gap-2">
           {PERIODOS.map((p) => {
@@ -641,64 +702,23 @@ function Historial({ onFiltroLabel }) {
         <EmptyState>No hay cortes en este periodo.</EmptyState>
       ) : (
         <div className="space-y-10">
-          {grupos.map((g) => (
-            <div key={g.clave} className="space-y-5">
-              {periodo !== 'hoy' && (
-                <h3 className="text-lg font-bold text-dark-blue px-1">{g.titulo}</h3>
-              )}
-          {g.cortes.map((c) => {
-            const cuadra = c.diferencia != null && Math.abs(c.diferencia) < 0.005;
+          {grupos.map((g) => {
+            // Dentro de la semana, los cortes de hoy van primero bajo su subtítulo.
+            const hoyCortes = g.cortes.filter((c) => esHoy(c.cerrada_at));
+            const otros = g.cortes.filter((c) => !esHoy(c.cerrada_at));
             return (
-              <div key={c.id} className="bg-white rounded-xl border border-gray-200 p-4">
-                <div className="flex items-start justify-between mb-5">
-                  <div>
-                    <p className="text-base font-semibold text-gray-800">{fmtFechaCorta(c.cerrada_at)}</p>
-                    <p className="text-base text-gray-500 mt-0.5">{fmtHora(c.cerrada_at)}</p>
+              <div key={g.clave} className="space-y-5">
+                <h3 className="text-lg font-bold text-dark-blue px-1">{g.titulo}</h3>
+                {hoyCortes.length > 0 && (
+                  <div className="space-y-5">
+                    <h4 className="text-sm font-semibold text-gray-500 px-1">Hoy</h4>
+                    {hoyCortes.map(renderCorte)}
                   </div>
-                  {c.diferencia != null && (
-                    <span className={`text-sm font-semibold px-2.5 py-1 rounded-full ${
-                      cuadra ? 'bg-green-50 text-green-700' : 'bg-orange-50 text-orange-700'
-                    }`}>
-                      {cuadra ? 'Cuadra' : `${c.diferencia > 0 ? '+' : ''}${fmt(c.diferencia)}`}
-                    </span>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-base">
-                  <span className="text-gray-500">Fondo</span><span className="text-right text-gray-700">{fmt(c.monto_inicial)}</span>
-                  <span className="text-gray-500">Ventas</span><span className="text-right text-gray-700">{fmt(c.ventas)}</span>
-                  <span className="text-gray-500">Entradas</span><span className="text-right text-gray-700">{fmt(c.entradas)}</span>
-                  <span className="text-gray-500">Salidas</span><span className="text-right text-gray-700">{fmt(c.salidas)}</span>
-                  <span className="text-gray-500 font-medium">Esperado</span><span className="text-right font-medium text-gray-800">{fmt(c.esperado)}</span>
-                  <span className="text-gray-500 font-medium">Contado</span><span className="text-right font-medium text-gray-800">{c.contado != null ? fmt(c.contado) : '—'}</span>
-                </div>
-                <div className="mt-5 pt-5 border-t border-gray-100 divide-y divide-gray-100">
-                  <div className="py-6 first:pt-0 last:pb-0">
-                    <div className="flex items-center gap-2 text-sm">
-                      <IconEntrada className="w-5 h-5 text-gray-400 flex-shrink-0" />
-                      <span className="text-gray-400 w-12">Abrió</span>
-                      <span className="font-medium text-gray-700">{c.usuario_apertura}</span>
-                    </div>
-                    {c.notas_apertura && (
-                      <p className="mt-2 ml-7 pl-3 border-l-2 border-gray-100 text-sm text-gray-500">{c.notas_apertura}</p>
-                    )}
-                  </div>
-                  <div className="py-6 first:pt-0 last:pb-0">
-                    <div className="flex items-center gap-2 text-sm">
-                      <IconSalida className="w-5 h-5 text-gray-400 flex-shrink-0" />
-                      <span className="text-gray-400 w-12">Cerró</span>
-                      <span className="font-medium text-gray-700">{c.usuario_cierre ?? '—'}</span>
-                    </div>
-                    {c.notas_cierre && (
-                      <p className="mt-2 ml-7 pl-3 border-l-2 border-gray-100 text-sm text-gray-500">{c.notas_cierre}</p>
-                    )}
-                  </div>
-                </div>
+                )}
+                {otros.map(renderCorte)}
               </div>
             );
           })}
-            </div>
-          ))}
         </div>
       )}
     </div>
