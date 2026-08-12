@@ -90,11 +90,16 @@ function Tarjeta({ titulo, valor, sub, color }) {
   );
 }
 
-function CustomTooltip({ active, payload, label }) {
+function CustomTooltip({ active, payload, label, periodo }) {
   if (!active || !payload?.length) return null;
+  // En la vista anual cada barra es un mes: se muestra "Mes Año" en vez de una
+  // fecha con día (que sería engañosa, siempre el día 1).
+  const titulo = periodo === 'anio'
+    ? `${MESES[fechaLocal(label).getMonth()]} ${fechaLocal(label).getFullYear()}`
+    : fmtFecha(label);
   return (
     <div className="bg-white border border-gray-200 rounded-lg shadow px-3 py-2 text-sm">
-      <p className="font-medium text-gray-700">{fmtFecha(label)}</p>
+      <p className="font-medium text-gray-700">{titulo}</p>
       <p className="text-blue font-semibold">{fmt(payload[0].value)}</p>
     </div>
   );
@@ -185,6 +190,15 @@ export default function Ventas() {
         dias.push({ fecha: key, total: porFecha.get(key) ?? 0 });
       }
       return dias;
+    }
+    if (periodo === 'anio') {
+      // Se agregan los datos diarios por mes: 12 barras (Enero … Diciembre).
+      const porMes = new Array(12).fill(0);
+      for (const d of g) porMes[fechaLocal(d.fecha).getMonth()] += Number(d.total) || 0;
+      return porMes.map((total, m) => ({
+        fecha: `${anioSel}-${String(m + 1).padStart(2, '0')}-01`,
+        total,
+      }));
     }
     return g;
   }, [data, periodo, anioSel, mesSel]);
@@ -429,6 +443,8 @@ export default function Ventas() {
             <h2 className="text-sm font-semibold text-gray-700 mb-4">
               {periodo === 'semana' ? tituloSemana
                 : periodo === 'mes' ? `Ingresos en ${MESES[mesSel]} ${anioSel}`
+                : periodo === 'hoy' ? 'Ingresos de hoy'
+                : periodo === 'anio' ? `Ingresos en ${anioSel}`
                 : 'Ingresos por día'}
             </h2>
             {graficaData.length === 0 ? (
@@ -443,13 +459,17 @@ export default function Ventas() {
                     // Semana: los 7 días (interval 0). Mes: en pantallas angostas
                     // se muestra 1 de cada 4 días para que no se encimen; en anchas,
                     // 1 de cada 2. Otros períodos: densidad automática de Recharts.
-                    interval={periodo === 'semana' ? 0 : periodo === 'mes' ? (esAngosto ? 3 : 1) : undefined}
+                    interval={periodo === 'semana' || periodo === 'anio' ? 0 : periodo === 'mes' ? (esAngosto ? 3 : 1) : undefined}
                     tickFormatter={(v) =>
                       periodo === 'semana'
                         ? (esAngosto ? fmtDiaSemanaCorto(v) : fmtDiaSemana(v))
                         : periodo === 'mes'
                           ? String(fechaLocal(v).getDate())
-                          : (() => { const d = new Date(v); return `${d.getDate()}/${d.getMonth() + 1}`; })()
+                          : periodo === 'hoy'
+                            ? `${fechaLocal(v).getDate()} de ${MESES[fechaLocal(v).getMonth()]}`
+                            : periodo === 'anio'
+                              ? MESES[fechaLocal(v).getMonth()].slice(0, 3)
+                              : (() => { const d = new Date(v); return `${d.getDate()}/${d.getMonth() + 1}`; })()
                     }
                   />
                   <YAxis
@@ -460,7 +480,7 @@ export default function Ventas() {
                     // de margen sobre la barra más alta (redondeado a centenas).
                     domain={[0, (dataMax) => Math.max(1000, Math.ceil((dataMax * 1.15) / 100) * 100)]}
                   />
-                  <Tooltip content={<CustomTooltip />} />
+                  <Tooltip content={<CustomTooltip periodo={periodo} />} />
                   <Bar dataKey="total" fill="#16a34a" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
