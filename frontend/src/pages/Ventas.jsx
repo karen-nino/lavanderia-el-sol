@@ -495,7 +495,7 @@ export default function Ventas() {
                             ? `${fechaLocal(v).getDate()} de ${MESES[fechaLocal(v).getMonth()]}`
                             : periodo === 'anio'
                               ? MESES[fechaLocal(v).getMonth()].slice(0, 3)
-                              : (() => { const d = fechaLocal(v); return `${d.getDate()}/${d.getMonth() + 1}`; })()
+                              : (() => { const d = fechaLocal(v); return `${d.getDate()}/${MESES[d.getMonth()].slice(0, 3)}/${String(d.getFullYear()).slice(-2)}`; })()
                     }
                   />
                   <YAxis
