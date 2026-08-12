@@ -67,7 +67,7 @@ export const login = async (req, res) => {
     const valid = await bcrypt.compare(password, usuario.password);
 
     if (!valid) {
-      return res.status(401).json({ message: 'Credenciales inválidas.' });
+      return res.status(401).json({ message: 'Contraseña incorrecta.' });
     }
 
     // Sesión única por cuenta: se genera un id de sesión nuevo en cada login y

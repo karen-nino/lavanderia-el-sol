@@ -99,7 +99,7 @@ export default function Login() {
       const data = await api.post('/auth/login', {
         usuario_id: seleccionado.id,
         password,
-      });
+      }, { skipAuthRedirect: true });
       login(data.token, data.usuario);
       navigate('/');
     } catch (err) {
@@ -190,12 +190,14 @@ export default function Login() {
                 autoComplete="current-password"
                 placeholder="••••••••"
                 disabled={!seleccionado}
-                className={`${INPUT_CLS} disabled:bg-gray-50 disabled:cursor-not-allowed`}
+                className={`${INPUT_CLS} disabled:bg-gray-50 disabled:cursor-not-allowed ${
+                  error ? 'border-red-400 focus:ring-red-400' : ''
+                }`}
               />
             </div>
 
             {error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2.5">
+              <div className="bg-red-50 border border-red-300 text-red-700 text-sm font-medium rounded-lg px-3 py-2.5">
                 {error}
               </div>
             )}
