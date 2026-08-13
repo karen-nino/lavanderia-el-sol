@@ -597,91 +597,153 @@ function Historial({ onFiltroLabel }) {
   const hoy0 = new Date(); hoy0.setHours(0, 0, 0, 0);
 
   // Tarjeta de un corte (se reutiliza para los cortes de hoy y los del resto).
-  const renderCorte = (c) => {
+  // Menú de opciones (badge de diferencia + ⋮ para eliminar). Solo Admin Main
+  // ve el menú de opciones.
+  const menuOpciones = (c) => {
     const cuadra = c.diferencia != null && Math.abs(c.diferencia) < 0.005;
     return (
-      <div key={c.id} className="bg-white rounded-xl border border-gray-200 p-4">
-        <div className="flex items-start justify-between mb-5">
-          <div>
-            <p className="text-base font-semibold text-gray-800">{fmtFechaCorta(c.cerrada_at)}</p>
-            <p className="text-base text-gray-500 mt-0.5">{fmtHora(c.cerrada_at)}</p>
-          </div>
-          <div className="flex items-center gap-2">
-            {c.diferencia != null && (
-              <span className={`text-sm font-semibold px-2.5 py-1 rounded-full ${
-                cuadra ? 'bg-green-50 text-green-700' : 'bg-orange-50 text-orange-700'
-              }`}>
-                {cuadra ? 'Cuadra' : `${c.diferencia > 0 ? '+' : ''}${fmt(c.diferencia)}`}
-              </span>
-            )}
-            {/* Menú de opciones (⋮): por ahora, eliminar el corte. Solo Admin Main. */}
-            {esAdminMain && (
-            <div className="relative" ref={menuCorte === c.id ? menuRef : null}>
-              <button
-                type="button"
-                onClick={() => setMenuCorte((prev) => (prev === c.id ? null : c.id))}
-                aria-haspopup="menu"
-                aria-expanded={menuCorte === c.id}
-                aria-label="Opciones"
-                className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
-              >
-                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                  <circle cx="12" cy="5" r="1.8" />
-                  <circle cx="12" cy="12" r="1.8" />
-                  <circle cx="12" cy="19" r="1.8" />
-                </svg>
-              </button>
-              {menuCorte === c.id && (
-                <div className="absolute right-0 mt-1 z-10 w-40 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
-                  <button
-                    type="button"
-                    onClick={() => { setMenuCorte(null); setConfirmEliminar(c); }}
-                    className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm font-medium text-red-600 hover:bg-red-50"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3" />
-                    </svg>
-                    Eliminar
-                  </button>
-                </div>
-              )}
-            </div>
+      <div className="flex items-center gap-2 flex-shrink-0">
+        {c.diferencia != null && (
+          <span className={`text-sm font-semibold px-2.5 py-1 rounded-full ${
+            cuadra ? 'bg-green-50 text-green-700' : 'bg-orange-50 text-orange-700'
+          }`}>
+            {cuadra ? 'Cuadra' : `${c.diferencia > 0 ? '+' : ''}${fmt(c.diferencia)}`}
+          </span>
+        )}
+        {esAdminMain && (
+          <div className="relative" ref={menuCorte === c.id ? menuRef : null}>
+            <button
+              type="button"
+              onClick={() => setMenuCorte((prev) => (prev === c.id ? null : c.id))}
+              aria-haspopup="menu"
+              aria-expanded={menuCorte === c.id}
+              aria-label="Opciones"
+              className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+            >
+              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                <circle cx="12" cy="5" r="1.8" />
+                <circle cx="12" cy="12" r="1.8" />
+                <circle cx="12" cy="19" r="1.8" />
+              </svg>
+            </button>
+            {menuCorte === c.id && (
+              <div className="absolute right-0 mt-1 z-10 w-40 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => { setMenuCorte(null); setConfirmEliminar(c); }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm font-medium text-red-600 hover:bg-red-50"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3" />
+                  </svg>
+                  Eliminar
+                </button>
+              </div>
             )}
           </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-base">
-          <span className="text-gray-500">Fondo</span><span className="text-right text-gray-700">{fmt(c.monto_inicial)}</span>
-          <span className="text-gray-500">Ventas</span><span className="text-right text-gray-700">{fmt(c.ventas)}</span>
-          <span className="text-gray-500">Entradas</span><span className="text-right text-gray-700">{fmt(c.entradas)}</span>
-          <span className="text-gray-500">Salidas</span><span className="text-right text-gray-700">{fmt(c.salidas)}</span>
-          <span className="text-gray-500 font-medium">Esperado</span><span className="text-right font-medium text-gray-800">{fmt(c.esperado)}</span>
-          <span className="text-gray-500 font-medium">Contado</span><span className="text-right font-medium text-gray-800">{c.contado != null ? fmt(c.contado) : '—'}</span>
-        </div>
-        <div className="mt-5 pt-5 border-t border-gray-100 divide-y divide-gray-100">
-          <div className="py-6 first:pt-0 last:pb-0">
-            <div className="flex items-center gap-2 text-sm">
-              <IconEntrada className="w-5 h-5 text-gray-400 flex-shrink-0" />
-              <span className="text-gray-400 w-12">Abrió</span>
-              <span className="font-medium text-gray-700">{c.usuario_apertura}</span>
-            </div>
-            {c.notas_apertura && (
-              <p className="mt-2 ml-7 pl-3 border-l-2 border-gray-100 text-sm text-gray-500">{c.notas_apertura}</p>
-            )}
-          </div>
-          <div className="py-6 first:pt-0 last:pb-0">
-            <div className="flex items-center gap-2 text-sm">
-              <IconSalida className="w-5 h-5 text-gray-400 flex-shrink-0" />
-              <span className="text-gray-400 w-12">Cerró</span>
-              <span className="font-medium text-gray-700">{c.usuario_cierre ?? '—'}</span>
-            </div>
-            {c.notas_cierre && (
-              <p className="mt-2 ml-7 pl-3 border-l-2 border-gray-100 text-sm text-gray-500">{c.notas_cierre}</p>
-            )}
-          </div>
-        </div>
+        )}
       </div>
     );
+  };
+
+  // Cuerpo del corte (montos + quién abrió/cerró). Sin contenedor propio: se
+  // inserta dentro de la tarjeta del día o de la tarjeta de corte.
+  const cuerpoCorte = (c) => (
+    <>
+      <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-base">
+        <span className="text-gray-500">Fondo</span><span className="text-right text-gray-700">{fmt(c.monto_inicial)}</span>
+        <span className="text-gray-500">Ventas</span><span className="text-right text-gray-700">{fmt(c.ventas)}</span>
+        <span className="text-gray-500">Entradas</span><span className="text-right text-gray-700">{fmt(c.entradas)}</span>
+        <span className="text-gray-500">Salidas</span><span className="text-right text-gray-700">{fmt(c.salidas)}</span>
+        <span className="text-gray-500 font-medium">Esperado</span><span className="text-right font-medium text-gray-800">{fmt(c.esperado)}</span>
+        <span className="text-gray-500 font-medium">Contado</span><span className="text-right font-medium text-gray-800">{c.contado != null ? fmt(c.contado) : '—'}</span>
+      </div>
+      <div className="mt-5 pt-5 border-t border-gray-100 divide-y divide-gray-100">
+        <div className="py-6 first:pt-0 last:pb-0">
+          <div className="flex items-center gap-2 text-sm">
+            <IconEntrada className="w-5 h-5 text-gray-400 flex-shrink-0" />
+            <span className="text-gray-400 w-12">Abrió</span>
+            <span className="font-medium text-gray-700">{c.usuario_apertura}</span>
+          </div>
+          {c.notas_apertura && (
+            <p className="mt-2 ml-7 pl-3 border-l-2 border-gray-100 text-sm text-gray-500">{c.notas_apertura}</p>
+          )}
+        </div>
+        <div className="py-6 first:pt-0 last:pb-0">
+          <div className="flex items-center gap-2 text-sm">
+            <IconSalida className="w-5 h-5 text-gray-400 flex-shrink-0" />
+            <span className="text-gray-400 w-12">Cerró</span>
+            <span className="font-medium text-gray-700">{c.usuario_cierre ?? '—'}</span>
+          </div>
+          {c.notas_cierre && (
+            <p className="mt-2 ml-7 pl-3 border-l-2 border-gray-100 text-sm text-gray-500">{c.notas_cierre}</p>
+          )}
+        </div>
+      </div>
+    </>
+  );
+
+  // Tarjeta de corte suelta (para Año/Personalizado, agrupadas por semana).
+  const renderCorte = (c) => (
+    <div key={c.id} className="bg-white rounded-xl border border-gray-200 p-4">
+      <div className="flex items-start justify-between mb-5">
+        <div>
+          <p className="text-base font-semibold text-gray-800">{fmtFechaCorta(c.cerrada_at)}</p>
+          <p className="text-base text-gray-500 mt-0.5">{fmtHora(c.cerrada_at)}</p>
+        </div>
+        {menuOpciones(c)}
+      </div>
+      {cuerpoCorte(c)}
+    </div>
+  );
+
+  // Tarjeta de un día: como hay un solo corte por día, la propia tarjeta ES el
+  // corte (sin tarjeta anidada). Si no hubo corte, se ve vacía.
+  const renderDia = (dia) => {
+    const c = visibles.find((x) => mismoDia(x.cerrada_at, dia));
+    const hoy = mismoDia(dia, hoy0);
+    const futuro = dia > hoy0;
+    return (
+      <div
+        key={dia.toISOString()}
+        className={`rounded-xl border p-4 ${
+          hoy ? 'border-blue bg-light-blue/40'
+            : c ? 'border-gray-200 bg-white'
+            : 'border-dashed border-gray-300 bg-gray-50'
+        }`}
+      >
+        <div className="flex items-start justify-between mb-3">
+          <div>
+            <h4 className="text-sm font-semibold text-gray-700">
+              {nombreDia(dia)} - {dia.getDate()} {MESES[dia.getMonth()]}
+              {hoy && (
+                <span className="ml-2 text-[10px] font-bold uppercase tracking-wide text-blue">Hoy</span>
+              )}
+            </h4>
+            {c && <p className="text-sm text-gray-500 mt-0.5">{fmtHora(c.cerrada_at)}</p>}
+          </div>
+          {c && menuOpciones(c)}
+        </div>
+        {c ? cuerpoCorte(c) : (
+          <p className="text-sm text-gray-400 italic">{futuro ? 'Pendiente' : 'Sin corte'}</p>
+        )}
+      </div>
+    );
+  };
+
+  // Días del mes seleccionado agrupados por semana (para la vista "Mes"), cada
+  // semana con su encabezado y las tarjetas de sus días (vacías si no hubo corte).
+  const semanasDelMes = () => {
+    const ultimoDia = new Date(anioSel, mesSel + 1, 0).getDate();
+    const semanas = [];
+    for (let n = 1; n <= ultimoDia; n++) {
+      const dia = new Date(anioSel, mesSel, n);
+      const clave = inicioSemana(dia).getTime();
+      const ultima = semanas[semanas.length - 1];
+      if (ultima && ultima.clave === clave) ultima.dias.push(dia);
+      else semanas.push({ clave, titulo: fmtSemanaHeader(dia), dias: [dia] });
+    }
+    return semanas;
   };
 
   return (
@@ -791,40 +853,18 @@ function Historial({ onFiltroLabel }) {
         // corte se ven como un espacio vacío; hoy va resaltado y los días que
         // aún no llegan quedan como "Pendiente".
         <div className="space-y-4">
-          {diasSemana.map((dia) => {
-            const cortesDia = visibles.filter((c) => mismoDia(c.cerrada_at, dia));
-            const hoy = mismoDia(dia, hoy0);
-            const futuro = dia > hoy0;
-            return (
-              <div
-                key={dia.toISOString()}
-                className={`rounded-xl border p-4 ${
-                  hoy ? 'border-blue bg-light-blue/40'
-                    : cortesDia.length > 0 ? 'border-gray-200 bg-white'
-                    : 'border-dashed border-gray-300 bg-gray-50'
-                }`}
-              >
-                <div className="flex items-center justify-between mb-3">
-                  <h4 className="text-sm font-semibold text-gray-700">
-                    {nombreDia(dia)} - {dia.getDate()} {MESES[dia.getMonth()]}
-                    {hoy && (
-                      <span className="ml-2 text-[10px] font-bold uppercase tracking-wide text-blue">Hoy</span>
-                    )}
-                  </h4>
-                  {cortesDia.length > 0 && (
-                    <span className="text-xs text-gray-400">
-                      {cortesDia.length} {cortesDia.length === 1 ? 'corte' : 'cortes'}
-                    </span>
-                  )}
-                </div>
-                {cortesDia.length > 0 ? (
-                  <div className="space-y-4">{cortesDia.map(renderCorte)}</div>
-                ) : (
-                  <p className="text-sm text-gray-400 italic">{futuro ? 'Pendiente' : 'Sin corte'}</p>
-                )}
-              </div>
-            );
-          })}
+          {diasSemana.map(renderDia)}
+        </div>
+      ) : periodo === 'mes' ? (
+        // Cada semana del mes con su encabezado y las tarjetas de sus días
+        // (vacías si no hubo corte), igual que en "Esta semana".
+        <div className="space-y-24">
+          {semanasDelMes().map((sem) => (
+            <div key={sem.clave} className="space-y-4">
+              <h3 className="text-lg font-bold text-dark-blue px-1">{sem.titulo}</h3>
+              {sem.dias.map(renderDia)}
+            </div>
+          ))}
         </div>
       ) : visibles.length === 0 ? (
         <EmptyState>No hay cortes en este periodo.</EmptyState>
