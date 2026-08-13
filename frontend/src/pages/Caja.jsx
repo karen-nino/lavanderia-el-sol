@@ -68,8 +68,6 @@ const mismoDia = (a, b) => {
     && x.getMonth() === y.getMonth()
     && x.getDate() === y.getDate();
 };
-// ¿La fecha cae en el día de hoy?
-const esHoy = (fecha) => mismoDia(fecha, new Date());
 // Nombre del día de la semana capitalizado (Lunes, Martes, …).
 const nombreDia = (d) => {
   const s = d.toLocaleDateString('es-MX', { weekday: 'long' });
@@ -581,16 +579,6 @@ function Historial({ onFiltroLabel }) {
       })
     : cortes;
 
-  // Se agrupan los cortes por semana (encabezado con el rango lunes–domingo),
-  // respetando el orden en que llegan (más recientes primero).
-  const grupos = [];
-  for (const c of visibles) {
-    const clave = inicioSemana(c.cerrada_at).getTime();
-    const ultimo = grupos[grupos.length - 1];
-    if (ultimo && ultimo.clave === clave) ultimo.cortes.push(c);
-    else grupos.push({ clave, titulo: fmtSemanaHeader(c.cerrada_at), cortes: [c] });
-  }
-
   // Vista "Esta semana": los 7 días en curso (Lunes → Domingo) como contenedores,
   // para ver de un vistazo en qué días hubo o falta corte.
   const lunesSemana = inicioSemana(new Date());
@@ -688,20 +676,6 @@ function Historial({ onFiltroLabel }) {
     </>
   );
 
-  // Tarjeta de corte suelta (para Año/Personalizado, agrupadas por semana).
-  const renderCorte = (c) => (
-    <div key={c.id} className="bg-white rounded-xl border border-gray-200 p-4">
-      <div className="flex items-start justify-between mb-5">
-        <div>
-          <p className="text-base font-semibold text-gray-800">{fmtFechaCorta(c.cerrada_at)}</p>
-          <p className="text-base text-gray-500 mt-0.5">{fmtHora(c.cerrada_at)}</p>
-        </div>
-        {menuOpciones(c)}
-      </div>
-      {cuerpoCorte(c)}
-    </div>
-  );
-
   // Tarjeta de un día: como hay un solo corte por día, la propia tarjeta ES el
   // corte (sin tarjeta anidada). Si no hubo corte, se ve vacía.
   const renderDia = (dia) => {
@@ -755,6 +729,14 @@ function Historial({ onFiltroLabel }) {
   const diasDeAnio = (anio) => {
     const dias = [];
     for (let m = 0; m < 12; m++) dias.push(...diasDeMes(anio, m));
+    return dias;
+  };
+  const diasDeRango = (desdeStr, hastaStr) => {
+    const dias = [];
+    const fin = new Date(`${hastaStr}T00:00:00`);
+    for (let d = new Date(`${desdeStr}T00:00:00`); d <= fin; d.setDate(d.getDate() + 1)) {
+      dias.push(new Date(d));
+    }
     return dias;
   };
 
@@ -867,38 +849,22 @@ function Historial({ onFiltroLabel }) {
         <div className="space-y-4">
           {diasSemana.map(renderDia)}
         </div>
-      ) : periodo === 'mes' || periodo === 'anio' ? (
-        // Cada semana (del mes o del año) con su encabezado y las tarjetas de sus
-        // días (vacías si no hubo corte), igual que en "Esta semana".
+      ) : periodo === 'custom' && (!desde || !hasta) ? (
+        <EmptyState>Elige las fechas del rango.</EmptyState>
+      ) : (
+        // Mes, Año y Personalizado: cada semana con su encabezado y las tarjetas
+        // de sus días (vacías si no hubo corte), igual que en "Esta semana".
         <div className="space-y-24">
-          {agruparEnSemanas(periodo === 'mes' ? diasDeMes(anioSel, mesSel) : diasDeAnio(anioSel)).map((sem) => (
+          {agruparEnSemanas(
+            periodo === 'mes' ? diasDeMes(anioSel, mesSel)
+              : periodo === 'anio' ? diasDeAnio(anioSel)
+              : diasDeRango(desde, hasta)
+          ).map((sem) => (
             <div key={sem.clave} className="space-y-4">
               <h3 className="text-lg font-bold text-dark-blue px-1">{sem.titulo}</h3>
               {sem.dias.map(renderDia)}
             </div>
           ))}
-        </div>
-      ) : visibles.length === 0 ? (
-        <EmptyState>No hay cortes en este periodo.</EmptyState>
-      ) : (
-        <div className="space-y-10">
-          {grupos.map((g) => {
-            // Dentro de la semana, los cortes de hoy van primero bajo su subtítulo.
-            const hoyCortes = g.cortes.filter((c) => esHoy(c.cerrada_at));
-            const otros = g.cortes.filter((c) => !esHoy(c.cerrada_at));
-            return (
-              <div key={g.clave} className="space-y-5">
-                <h3 className="text-lg font-bold text-dark-blue px-1">{g.titulo}</h3>
-                {hoyCortes.length > 0 && (
-                  <div className="space-y-5">
-                    <h4 className="text-sm font-semibold text-gray-500 px-1">Hoy</h4>
-                    {hoyCortes.map(renderCorte)}
-                  </div>
-                )}
-                {otros.map(renderCorte)}
-              </div>
-            );
-          })}
         </div>
       )}
 
