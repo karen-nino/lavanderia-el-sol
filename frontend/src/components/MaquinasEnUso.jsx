@@ -2,6 +2,7 @@ import { forwardRef, useCallback, useEffect, useImperativeHandle, useState } fro
 import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import MachineCard from './MachineCard';
+import MaquinaCicloOverlay from './MaquinaCicloOverlay';
 
 // Cada cuánto se re-consultan notas y máquinas en segundo plano.
 const REFRESCO_MS = 15000;
@@ -51,6 +52,8 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
   const [loading, setLoading]   = useState(true);
   const [now, setNow]           = useState(() => Date.now());
   const [confirmTerminar, setConfirmTerminar] = useState(null);
+  // Secadora que arranca al terminar el lavado (para la animación de ciclo).
+  const [iniciandoSecadora, setIniciandoSecadora] = useState(null);
   const [secadoraSel, setSecadoraSel] = useState('');
   const [terminando, setTerminando] = useState(false);
   const [errorTerminar, setErrorTerminar] = useState('');
@@ -195,10 +198,17 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
         // Termina el lavado de ESTA lavadora: el servidor la libera, arranca
         // la secadora elegida y la nota pasa a Secando (o sigue Lavando si
         // otras cargas siguen en lavadora). Las demás cargas no se tocan.
-        const notaActualizada = await api.patch(`/notas/${notaParaTerminar.id}/terminar-lavado`, {
-          lavadora_id: Number(confirmTerminar.id),
-          secadora_id: Number(secadoraSel),
-        });
+        // Se muestra la animación de arranque de la secadora (como en Salidas),
+        // con una duración mínima para que alcance a verse.
+        const secadora = secadorasDisponibles.find(m => String(m.id) === String(secadoraSel));
+        setIniciandoSecadora(secadora || null);
+        const [notaActualizada] = await Promise.all([
+          api.patch(`/notas/${notaParaTerminar.id}/terminar-lavado`, {
+            lavadora_id: Number(confirmTerminar.id),
+            secadora_id: Number(secadoraSel),
+          }),
+          new Promise((r) => setTimeout(r, 2500)),
+        ]);
         if (notaActualizada === undefined) return; // sesión expiró: se conserva la acción pendiente
         setNotas(prev => prev.map(n => n.id === notaActualizada.id ? { ...n, ...notaActualizada } : n));
       } else if (notaParaTerminar) {
@@ -226,6 +236,7 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
       setErrorTerminar(err.message);
     } finally {
       setTerminando(false);
+      setIniciandoSecadora(null);
     }
   };
 
@@ -369,6 +380,11 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
             </div>
           )}
         </>
+      )}
+
+      {/* Animación de arranque de la secadora al terminar el lavado (como en Salidas) */}
+      {iniciandoSecadora && (
+        <MaquinaCicloOverlay modo="iniciar" tipo={iniciandoSecadora.tipo} nombre={iniciandoSecadora.nombre} />
       )}
 
       {confirmTerminar && (
