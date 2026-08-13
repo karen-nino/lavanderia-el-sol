@@ -179,7 +179,7 @@ function Apertura({ data, onAbrir }) {
   if (data?.abierta) {
     const { caja, totales } = data;
     return (
-      <div className="space-y-4">
+      <div className="space-y-4 max-w-md mx-auto">
         <div className="bg-green-50 border border-green-200 rounded-xl p-4">
           <p className="text-xs font-medium uppercase tracking-wide text-green-700">Caja abierta</p>
           <p className="mt-1 text-2xl font-bold text-green-700">{fmt(caja.monto_inicial)}</p>
@@ -223,7 +223,7 @@ function Apertura({ data, onAbrir }) {
   };
 
   return (
-    <form onSubmit={submit} className="space-y-4 max-w-md">
+    <form onSubmit={submit} className="space-y-4 max-w-md mx-auto">
       <p className="text-sm text-gray-500">No hay una caja abierta. Ingresa el fondo inicial para abrirla.</p>
       <ErrorBox message={error} />
       <div>
@@ -284,7 +284,7 @@ function Movimientos({ data, onChange }) {
 
   return (
     <div className="space-y-6">
-      <form onSubmit={submit} className="space-y-4 max-w-md">
+      <form onSubmit={submit} className="space-y-4 max-w-md mx-auto">
         <ErrorBox message={error} />
         <div className="flex gap-2">
           {[
@@ -392,7 +392,7 @@ function Corte({ data, onCerrar }) {
   ];
 
   return (
-    <div className="space-y-6 max-w-md">
+    <div className="space-y-6 max-w-md mx-auto">
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <div className="px-4 py-3 border-b border-gray-200">
           <h2 className="text-sm font-semibold text-gray-700">Desglose esperado</h2>
