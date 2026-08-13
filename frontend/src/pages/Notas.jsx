@@ -370,10 +370,8 @@ export default function Notas() {
                           <td className="px-4 py-3 font-mono text-xs text-gray-600">
                             #{n.folio?.split('-')[0] ?? n.id}
                           </td>
-                          <td className="px-4 py-3">
-                            <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${badgeModalidad.cls}`}>
-                              {badgeModalidad.label}
-                            </span>
+                          <td className="px-4 py-3 text-sm text-gray-600">
+                            {badgeModalidad.label}
                           </td>
                           <td className="px-4 py-3">
                             <p className="font-medium text-gray-800">
@@ -401,9 +399,14 @@ export default function Notas() {
                           </td>
                           <td className="px-4 py-3">
                             {badgePago && (
-                              <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${badgePago.cls}`}>
-                                {badgePago.label}
-                              </span>
+                              n.estado_pago === 'PAGADO' ? (
+                                // Pagado va como texto plano; solo Pendiente conserva su pill.
+                                <span className="text-sm text-gray-600">{badgePago.label}</span>
+                              ) : (
+                                <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${badgePago.cls}`}>
+                                  {badgePago.label}
+                                </span>
+                              )
                             )}
                           </td>
                           <td className="px-4 py-3 text-right text-gray-600">
