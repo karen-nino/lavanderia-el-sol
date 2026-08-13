@@ -26,6 +26,13 @@ const PRENDA_LABEL = {
   EDREDON: 'Edredón',
 };
 
+// Tiempo de entrega elegido en el paso de Entrega (paso 5 de 6).
+const TIEMPO_ENTREGA_LABEL = {
+  MANANA: 'Mañana',
+  TARDE:  'Tarde',
+  NOCHE:  'Noche',
+};
+
 const BADGE_PAGO = {
   PENDIENTE: { label: 'Pendiente', cls: 'bg-red-100 text-red-700'   },
   PAGADO: { label: 'Pagado', cls: 'bg-green-100 text-green-700'  },
@@ -424,10 +431,32 @@ export default function DetalleNota() {
         </div>
       </div>
 
+      {/* Información de entrega (datos del paso de Entrega) — solo Por Encargo */}
+      {nota.modalidad !== 'AUTOSERVICIO' && (
+        <div className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
+          <div className="px-4 py-3 border-b border-gray-50">
+            <h2 className="text-sm font-semibold text-gray-700">Entrega</h2>
+          </div>
+          <div className="px-4">
+            <FilaDetalle label="Fecha de entrega">
+              {nota.fecha_entrega ? fmtFecha(nota.fecha_entrega) : <span className="text-gray-400">—</span>}
+            </FilaDetalle>
+            <FilaDetalle label="Tiempo de entrega">
+              {nota.tiempo_entrega
+                ? (TIEMPO_ENTREGA_LABEL[nota.tiempo_entrega] ?? nota.tiempo_entrega)
+                : <span className="text-gray-400">—</span>}
+            </FilaDetalle>
+            <FilaDetalle label="Instrucciones">
+              {nota.instrucciones ?? <span className="text-gray-400">—</span>}
+            </FilaDetalle>
+          </div>
+        </div>
+      )}
+
       {/* Información de la nota */}
       <div className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
         <div className="px-4 py-3 border-b border-gray-50">
-          <h2 className="text-sm font-semibold text-gray-700">Información</h2>
+          <h2 className="text-sm font-semibold text-gray-700">Detalles</h2>
         </div>
         <div className="px-4">
           <FilaDetalle label="ID">
@@ -634,12 +663,6 @@ export default function DetalleNota() {
                 )
               : <span className="text-gray-400 italic">Anónimo</span>}
           </FilaDetalle>
-          {/* Autoservicio no lleva instrucciones */}
-          {nota.modalidad !== 'AUTOSERVICIO' && (
-            <FilaDetalle label="Instrucciones">
-              {nota.instrucciones ?? <span className="text-gray-400">—</span>}
-            </FilaDetalle>
-          )}
           <FilaDetalle label="Ajuste">
             {nota.ajuste != null ? fmtMonto(nota.ajuste) : '—'}
           </FilaDetalle>
