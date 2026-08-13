@@ -985,7 +985,7 @@ export default function Caja() {
     <div className="min-h-full bg-slate-100">
       {/* Cabecera (barra superior) */}
       <div className="bg-white border-b-2 border-gray-200">
-        <div className="max-w-3xl mx-auto px-6 md:px-8 pt-10 md:pt-14 pb-4 flex items-start justify-between gap-3">
+        <div className="max-w-7xl mx-auto px-6 md:px-8 pt-10 md:pt-14 pb-4 flex items-start justify-between gap-3">
           <div>
             <h1 className="text-xl font-bold text-gray-800">Caja</h1>
             {/* Para admins la página es el Historial; el subtítulo refleja el
@@ -1037,7 +1037,7 @@ export default function Caja() {
       <SucursalBar />
 
       {/* Contenido */}
-      <div className="max-w-3xl mx-auto px-6 md:px-8 py-6 space-y-6">
+      <div className="max-w-7xl mx-auto px-6 md:px-8 py-6 space-y-6">
 
       {/* No-admins conservan las pestañas (no tienen Historial). */}
       {!esAdmin && (

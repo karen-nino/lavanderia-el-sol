@@ -306,7 +306,7 @@ export default function EmpleadoDesempeno() {
     <div className="min-h-full bg-slate-100">
       {/* Cabecera */}
       <div className="bg-white border-b-2 border-gray-200">
-        <div className="px-6 md:px-8 pt-10 md:pt-14 pb-4 flex items-center justify-between gap-3">
+        <div className="max-w-7xl mx-auto px-6 md:px-8 pt-10 md:pt-14 pb-4 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
             <button
               onClick={() => navigate('/empleados')}
@@ -386,7 +386,7 @@ export default function EmpleadoDesempeno() {
       <SucursalBar />
 
       {/* Contenido */}
-      <div className="px-6 md:px-8 py-6 max-w-4xl mx-auto">
+      <div className="px-6 md:px-8 py-6 max-w-7xl mx-auto">
         {loading ? (
           <div className="text-center text-gray-400 text-sm py-16">Cargando...</div>
         ) : error ? (
