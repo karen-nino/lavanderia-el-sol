@@ -342,7 +342,7 @@ export default function DetalleNota() {
       {/* Botones de acción */}
       {!terminal && (
         <div className="flex flex-wrap gap-2">
-          {puedeEditar && (
+          {puedeEditar && (esAdmin || nota.estado === 'EN_ESPERA') && (
             <button
               onClick={() => navigate(`/notas/${id}/editar`)}
               className="flex items-center gap-1.5 px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-colors"
