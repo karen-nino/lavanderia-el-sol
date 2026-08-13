@@ -654,8 +654,8 @@ function Historial({ onFiltroLabel }) {
       <div className="mt-5 pt-5 border-t border-gray-100 divide-y divide-gray-100">
         <div className="py-6 first:pt-0 last:pb-0">
           <div className="flex items-center gap-2 text-sm">
-            <IconEntrada className="w-5 h-5 text-gray-400 flex-shrink-0" />
-            <span className="text-gray-400 w-12">Abrió</span>
+            <IconEntrada className="w-5 h-5 text-green-500 flex-shrink-0" />
+            <span className="font-medium text-green-600 w-12">Abrió</span>
             <span className="font-medium text-gray-700">{c.usuario_apertura}</span>
           </div>
           {c.notas_apertura && (
@@ -664,8 +664,8 @@ function Historial({ onFiltroLabel }) {
         </div>
         <div className="py-6 first:pt-0 last:pb-0">
           <div className="flex items-center gap-2 text-sm">
-            <IconSalida className="w-5 h-5 text-gray-400 flex-shrink-0" />
-            <span className="text-gray-400 w-12">Cerró</span>
+            <IconSalida className="w-5 h-5 text-orange-500 flex-shrink-0" />
+            <span className="font-medium text-orange-600 w-12">Cerró</span>
             <span className="font-medium text-gray-700">{c.usuario_cierre ?? '—'}</span>
           </div>
           {c.notas_cierre && (
