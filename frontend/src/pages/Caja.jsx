@@ -361,6 +361,7 @@ function Corte({ data, onCerrar }) {
   const [notas, setNotas] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
+  const [exito, setExito] = useState(false); // animación de "caja cerrada"
 
   if (!data?.abierta) {
     return <EmptyState>Abre la caja primero para hacer el corte.</EmptyState>;
@@ -378,10 +379,11 @@ function Corte({ data, onCerrar }) {
       await api.post('/caja/cerrar', { monto_contado: contadoNum, notas_cierre: notas });
       setContado('');
       setNotas('');
-      onCerrar();
+      // Se muestra la animación de éxito un momento antes de salir del corte.
+      setExito(true);
+      setTimeout(() => onCerrar(), 1800);
     } catch (err) {
       setError(err.message);
-    } finally {
       setSaving(false);
     }
   };
@@ -447,6 +449,23 @@ function Corte({ data, onCerrar }) {
           {saving ? 'Cerrando…' : 'Cerrar caja'}
         </button>
       </form>
+
+      {/* Animación de éxito al cerrar la caja */}
+      {exito && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/55 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl px-8 py-10 flex flex-col items-center gap-4 text-center animate-pop-in">
+            <span className="w-20 h-20 rounded-full bg-green-100 flex items-center justify-center">
+              <svg className="w-11 h-11 text-green-600" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+            </span>
+            <div>
+              <p className="text-lg font-bold text-gray-900">Caja cerrada</p>
+              <p className="text-sm text-gray-500 mt-0.5">El corte se guardó correctamente.</p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
