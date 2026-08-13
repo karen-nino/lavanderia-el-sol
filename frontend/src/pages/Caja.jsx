@@ -26,12 +26,14 @@ function IconSalida({ className }) {
   );
 }
 
+// Ej.: 12 de Agosto, 6:57 p.m.
 const fmtFechaHora = (fecha) => {
   if (!fecha) return '—';
   const d = new Date(fecha);
-  return d.toLocaleString('es-MX', {
-    day: '2-digit', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true,
-  });
+  const mes = d.toLocaleDateString('es-MX', { month: 'long' });
+  const mesCap = mes.charAt(0).toUpperCase() + mes.slice(1);
+  const hora = d.toLocaleTimeString('es-MX', { hour: 'numeric', minute: '2-digit', hour12: true });
+  return `${d.getDate()} de ${mesCap}, ${hora}`;
 };
 
 const fmtHora = (fecha) => {
