@@ -89,6 +89,30 @@ function fmtFecha(iso) {
 const MESES_ABR = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 const DIAS_SEMANA = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 
+const TIEMPO_ENTREGA_LABEL = { MANANA: 'Mañana', TARDE: 'Tarde', NOCHE: 'Noche' };
+
+// Fecha de entrega (solo la parte de fecha, sin corrimiento por zona horaria).
+// Ej.: "14 Ago" (sin año).
+function fmtFechaEntrega(fecha) {
+  if (!fecha) return null;
+  const s = typeof fecha === 'string' ? fecha.slice(0, 10) : new Date(fecha).toISOString().slice(0, 10);
+  const [, m, d] = s.split('-').map(Number);
+  return `${d} ${MESES_ABR[m - 1]}`;
+}
+
+// Etiqueta de la fecha de entrega: "Hoy" si es hoy, "Mañana" si es el día
+// siguiente; en otro caso la fecha completa (15 Ago 2026).
+function etiquetaFechaEntrega(fecha) {
+  if (!fecha) return null;
+  const s = typeof fecha === 'string' ? fecha.slice(0, 10) : new Date(fecha).toISOString().slice(0, 10);
+  const [y, m, d] = s.split('-').map(Number);
+  const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+  const diff = Math.round((new Date(y, m - 1, d) - hoy) / 86400000);
+  if (diff === 0) return 'Hoy';
+  if (diff === 1) return 'Mañana';
+  return fmtFechaEntrega(fecha);
+}
+
 // Fecha con día de la semana: "Miércoles, 29 Jul 2026".
 function fmtFechaDia(iso) {
   const d = new Date(iso);
@@ -351,6 +375,7 @@ export default function Notas() {
                       <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Pago</th>
                       <th className="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Total</th>
                       <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Fecha</th>
+                      <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Entrega</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
@@ -414,6 +439,18 @@ export default function Notas() {
                           </td>
                           <td className="px-4 py-3 text-gray-400 text-xs">
                             {fmtFecha(n.created_at)}
+                          </td>
+                          <td className="px-4 py-3 text-xs">
+                            {n.fecha_entrega ? (
+                              <span className="text-gray-600">
+                                {etiquetaFechaEntrega(n.fecha_entrega)}
+                                {n.tiempo_entrega && (
+                                  <span className="text-gray-400"> · {TIEMPO_ENTREGA_LABEL[n.tiempo_entrega] ?? n.tiempo_entrega}</span>
+                                )}
+                              </span>
+                            ) : (
+                              <span className="text-gray-400">—</span>
+                            )}
                           </td>
                         </tr>
                       );
