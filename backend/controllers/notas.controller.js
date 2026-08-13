@@ -1488,7 +1488,7 @@ export const cambiarEstadoNota = async (req, res) => {
     await client.query('BEGIN');
 
     const { rows: notaRows } = await client.query(
-      'SELECT estado FROM notas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
+      'SELECT estado, estado_pago FROM notas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
       [id, req.sucursal]
     );
     if (notaRows.length === 0) {
@@ -1510,6 +1510,15 @@ export const cambiarEstadoNota = async (req, res) => {
       await client.query('ROLLBACK');
       return res.status(400).json({
         message: `Transición no válida: ${estadoActual} → ${estado}. Permitidas: ${permitidos.join(', ') || 'ninguna'}.`,
+      });
+    }
+
+    // No se puede finalizar (entregar) una nota pendiente de pago: primero se
+    // liquida. La UI muestra el botón "Liquidar" en vez de "Finalizar".
+    if (estado === 'FINALIZADA' && notaRows[0].estado_pago === 'PENDIENTE') {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        message: 'No se puede finalizar una nota pendiente de pago. Liquídala primero.',
       });
     }
 

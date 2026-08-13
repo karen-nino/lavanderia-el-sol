@@ -178,6 +178,7 @@ export default function DetalleNota() {
   const [errorAccion,      setErrorAccion]      = useState('');
   const [confirmCancelar,  setConfirmCancelar]  = useState(false);
   const [confirmFinalizar,  setConfirmFinalizar]  = useState(false);
+  const [confirmLiquidar,  setConfirmLiquidar]  = useState(false);
   const [confirmEliminar,  setConfirmEliminar]  = useState(false);
 
   useEffect(() => {
@@ -228,6 +229,23 @@ export default function DetalleNota() {
     } catch (err) {
       setErrorAccion(err.message);
       setConfirmFinalizar(false);
+    } finally {
+      setLoadingAccion(false);
+    }
+  }
+
+  // Liquidar = cobrar la nota (estado_pago → PAGADO). Solo entonces se puede
+  // finalizar. No cambia el estado (sigue LISTA/Por Entregar).
+  async function liquidarNota() {
+    setLoadingAccion(true);
+    setErrorAccion('');
+    try {
+      const updated = await api.patch(`/notas/${id}/estado-pago`, { estado_pago: 'PAGADO' });
+      setNota(prev => ({ ...prev, estado_pago: updated.estado_pago }));
+      setConfirmLiquidar(false);
+    } catch (err) {
+      setErrorAccion(err.message);
+      setConfirmLiquidar(false);
     } finally {
       setLoadingAccion(false);
     }
@@ -332,13 +350,24 @@ export default function DetalleNota() {
             Salidas
           </button>
           {nota.estado === 'LISTA' && (
-            <button
-              onClick={() => setConfirmFinalizar(true)}
-              disabled={loadingAccion}
-              className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
-            >
-              Finalizar
-            </button>
+            nota.estado_pago === 'PENDIENTE' ? (
+              // No se puede finalizar una nota pendiente: primero hay que cobrarla.
+              <button
+                onClick={() => setConfirmLiquidar(true)}
+                disabled={loadingAccion}
+                className="flex items-center gap-1.5 px-4 py-2 bg-blue hover:opacity-90 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
+              >
+                Liquidar
+              </button>
+            ) : (
+              <button
+                onClick={() => setConfirmFinalizar(true)}
+                disabled={loadingAccion}
+                className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
+              >
+                Finalizar
+              </button>
+            )
           )}
           {puedeCancelar && (
             <button
@@ -750,6 +779,18 @@ export default function DetalleNota() {
           onConfirmar={cancelarNota}
           loading={loadingAccion}
           colorBtn="bg-orange-500 hover:bg-orange-600"
+        />
+      )}
+
+      {/* Modal confirmar liquidación (cobro) */}
+      {confirmLiquidar && (
+        <ModalConfirmar
+          titulo="Liquidar nota"
+          mensaje={`¿Marcar la nota ${nota.folio ?? `#${nota.id}`} como pagada (${fmtMonto(nota.precio_total)})? Después podrás finalizarla.`}
+          onCancelar={() => setConfirmLiquidar(false)}
+          onConfirmar={liquidarNota}
+          loading={loadingAccion}
+          colorBtn="bg-blue hover:opacity-90"
         />
       )}
 
