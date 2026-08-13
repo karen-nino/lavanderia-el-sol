@@ -632,6 +632,8 @@ export default function Layout() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [alertsOpen, setAlertsOpen] = useState(false);
   const [confirmLogout, setConfirmLogout] = useState(false);
+  // true si el usuario que quiere salir es quien abrió la caja y sigue abierta.
+  const [cajaSinCerrar, setCajaSinCerrar] = useState(false);
   const [productos, setProductos] = useState([]);
   const [notificaciones, setNotificaciones] = useState([]);
   const [sucursales, setSucursales] = useState([]);
@@ -768,8 +770,17 @@ export default function Layout() {
     navigate(a.to);
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     setMenuOpen(false);
+    setCajaSinCerrar(false);
+    // Si el propio usuario abrió la caja y sigue abierta, se le advierte antes
+    // de cerrar sesión. Si la consulta falla, no se bloquea el cierre.
+    try {
+      const data = await api.get('/caja/actual');
+      if (data?.abierta && String(data.caja?.usuario_apertura_id) === String(usuario?.id)) {
+        setCajaSinCerrar(true);
+      }
+    } catch { /* ignorar */ }
     setConfirmLogout(true);
   };
 
@@ -777,6 +788,11 @@ export default function Layout() {
     setConfirmLogout(false);
     logout();
     navigate('/login');
+  };
+
+  const irACaja = () => {
+    setConfirmLogout(false);
+    navigate('/caja?tab=corte');
   };
 
   const handleSettings = () => {
@@ -862,21 +878,58 @@ export default function Layout() {
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
             <h3 className="text-base font-bold text-gray-900">Cerrar sesión</h3>
-            <p className="text-sm text-gray-500">¿Seguro que quieres cerrar sesión?</p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setConfirmLogout(false)}
-                className="flex-1 border border-gray-300 text-gray-700 font-medium py-3.5 rounded-lg text-base hover:bg-gray-50 transition-colors"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={confirmarLogout}
-                className="flex-1 bg-red-600 hover:bg-red-700 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
-              >
-                Cerrar sesión
-              </button>
-            </div>
+            {cajaSinCerrar ? (
+              <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                <svg className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                    d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                </svg>
+                <p className="text-sm text-amber-800">
+                  Abriste la caja y aún se ha cerrado. Realiza el corte antes de salir.
+                </p>
+              </div>
+            ) : (
+              <p className="text-sm text-gray-500">¿Seguro que quieres cerrar sesión?</p>
+            )}
+            {cajaSinCerrar ? (
+              // Con caja abierta se apilan: la acción recomendada (ir a Caja)
+              // arriba, luego salir de todos modos y cancelar.
+              <div className="space-y-2.5">
+                <button
+                  onClick={irACaja}
+                  className="w-full bg-blue hover:opacity-90 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
+                >
+                  Ir a Caja
+                </button>
+                <button
+                  onClick={confirmarLogout}
+                  className="w-full bg-red-600 hover:bg-red-700 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
+                >
+                  Cerrar sesión de todos modos
+                </button>
+                <button
+                  onClick={() => setConfirmLogout(false)}
+                  className="w-full border border-gray-300 text-gray-700 font-medium py-3.5 rounded-lg text-base hover:bg-gray-50 transition-colors"
+                >
+                  Cancelar
+                </button>
+              </div>
+            ) : (
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setConfirmLogout(false)}
+                  className="flex-1 border border-gray-300 text-gray-700 font-medium py-3.5 rounded-lg text-base hover:bg-gray-50 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={confirmarLogout}
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
+                >
+                  Cerrar sesión
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

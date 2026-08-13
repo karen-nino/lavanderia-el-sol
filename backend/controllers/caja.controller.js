@@ -68,6 +68,7 @@ export async function getCajaActual(req, res) {
       abierta: true,
       caja: {
         id:               caja.id,
+        usuario_apertura_id: caja.usuario_apertura_id,
         usuario_apertura: caja.usuario_apertura,
         monto_inicial,
         notas_apertura:   caja.notas_apertura,
