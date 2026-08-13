@@ -136,7 +136,7 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="pt-4 pb-16 px-6 md:py-10 md:px-8 space-y-16">
+    <div className="max-w-7xl mx-auto pt-4 pb-16 px-6 md:py-10 md:px-8 space-y-16">
 
       {/* Sección resumen: KPIs de "Hoy" */}
 

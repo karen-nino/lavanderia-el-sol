@@ -234,7 +234,7 @@ function DesktopHeader({ usuario, sucursalNombre, now }) {
   const fecha = now.toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' });
   const hora  = now.toLocaleTimeString('es-MX', { hour: 'numeric', minute: '2-digit', hour12: true });
   return (
-    <header className="hidden md:flex items-start justify-between px-8 pt-14">
+    <header className="hidden md:flex items-start justify-between w-full max-w-7xl mx-auto px-8 pt-14">
       <div className="flex items-center gap-2">
         <div className="w-12 h-12 rounded-pill bg-grey/30 flex items-center justify-center text-white font-bold text-lg">
           {usuario?.nombre?.[0]?.toUpperCase() ?? 'A'}
