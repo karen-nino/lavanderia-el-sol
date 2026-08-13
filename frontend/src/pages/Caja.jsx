@@ -77,8 +77,9 @@ const nombreDia = (d) => {
 };
 
 // Encabezado de la sección de semana (Mes/Año/Personalizado): rango lunes–domingo
-// con día a dos dígitos. Ej.: Semana del 03 - 09 de Agosto. Si cruza de mes,
-// muestra ambos: Semana del 28 de Julio - 03 de Agosto.
+// con día a dos dígitos y el año. Ej.: Semana del 05 - 11 de Enero 2026. Si cruza
+// de mes: Semana del 28 de Julio - 03 de Agosto 2026. Si cruza de año, muestra
+// ambos años: Semana del 29 de Diciembre 2025 - 04 de Enero 2026.
 const fmtSemanaHeader = (fecha) => {
   const lunes = inicioSemana(fecha);
   const domingo = new Date(lunes);
@@ -88,9 +89,13 @@ const fmtSemanaHeader = (fecha) => {
     const m = d.toLocaleDateString('es-MX', { month: 'long' });
     return m.charAt(0).toUpperCase() + m.slice(1);
   };
+  if (lunes.getFullYear() !== domingo.getFullYear()) {
+    return `Semana del ${dd(lunes)} de ${mes(lunes)} ${lunes.getFullYear()} - ${dd(domingo)} de ${mes(domingo)} ${domingo.getFullYear()}`;
+  }
+  const anio = domingo.getFullYear();
   return lunes.getMonth() === domingo.getMonth()
-    ? `Semana del ${dd(lunes)} - ${dd(domingo)} de ${mes(domingo)}`
-    : `Semana del ${dd(lunes)} de ${mes(lunes)} - ${dd(domingo)} de ${mes(domingo)}`;
+    ? `Semana del ${dd(lunes)} - ${dd(domingo)} de ${mes(domingo)} ${anio}`
+    : `Semana del ${dd(lunes)} de ${mes(lunes)} - ${dd(domingo)} de ${mes(domingo)} ${anio}`;
 };
 
 // Filtro de fecha del historial, con las mismas opciones que Ventas. El "mes"
@@ -731,19 +736,26 @@ function Historial({ onFiltroLabel }) {
     );
   };
 
-  // Días del mes seleccionado agrupados por semana (para la vista "Mes"), cada
-  // semana con su encabezado y las tarjetas de sus días (vacías si no hubo corte).
-  const semanasDelMes = () => {
-    const ultimoDia = new Date(anioSel, mesSel + 1, 0).getDate();
+  // Agrupa una lista de días (en orden) por semana, cada una con su encabezado y
+  // sus tarjetas de día (vacías si no hubo corte). Se usa en "Mes" y "Año".
+  const agruparEnSemanas = (dias) => {
     const semanas = [];
-    for (let n = 1; n <= ultimoDia; n++) {
-      const dia = new Date(anioSel, mesSel, n);
+    for (const dia of dias) {
       const clave = inicioSemana(dia).getTime();
       const ultima = semanas[semanas.length - 1];
       if (ultima && ultima.clave === clave) ultima.dias.push(dia);
       else semanas.push({ clave, titulo: fmtSemanaHeader(dia), dias: [dia] });
     }
     return semanas;
+  };
+  const diasDeMes = (anio, mes) => {
+    const ultimo = new Date(anio, mes + 1, 0).getDate();
+    return Array.from({ length: ultimo }, (_, i) => new Date(anio, mes, i + 1));
+  };
+  const diasDeAnio = (anio) => {
+    const dias = [];
+    for (let m = 0; m < 12; m++) dias.push(...diasDeMes(anio, m));
+    return dias;
   };
 
   return (
@@ -855,11 +867,11 @@ function Historial({ onFiltroLabel }) {
         <div className="space-y-4">
           {diasSemana.map(renderDia)}
         </div>
-      ) : periodo === 'mes' ? (
-        // Cada semana del mes con su encabezado y las tarjetas de sus días
-        // (vacías si no hubo corte), igual que en "Esta semana".
+      ) : periodo === 'mes' || periodo === 'anio' ? (
+        // Cada semana (del mes o del año) con su encabezado y las tarjetas de sus
+        // días (vacías si no hubo corte), igual que en "Esta semana".
         <div className="space-y-24">
-          {semanasDelMes().map((sem) => (
+          {agruparEnSemanas(periodo === 'mes' ? diasDeMes(anioSel, mesSel) : diasDeAnio(anioSel)).map((sem) => (
             <div key={sem.clave} className="space-y-4">
               <h3 className="text-lg font-bold text-dark-blue px-1">{sem.titulo}</h3>
               {sem.dias.map(renderDia)}
