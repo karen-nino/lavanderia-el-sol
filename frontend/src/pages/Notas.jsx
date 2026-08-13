@@ -369,12 +369,12 @@ export default function Notas() {
                   <thead>
                     <tr className="bg-gray-50 border-b border-gray-100">
                       <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Folio</th>
+                      <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Fecha</th>
                       <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Tipo</th>
                       <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Cliente</th>
                       <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Estado</th>
                       <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Pago</th>
                       <th className="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Total</th>
-                      <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Fecha</th>
                       <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Entrega</th>
                     </tr>
                   </thead>
@@ -394,6 +394,9 @@ export default function Notas() {
                         >
                           <td className="px-4 py-3 font-mono text-xs text-gray-600">
                             #{n.folio?.split('-')[0] ?? n.id}
+                          </td>
+                          <td className="px-4 py-3 text-gray-400 text-xs">
+                            {fmtFecha(n.created_at)}
                           </td>
                           <td className="px-4 py-3 text-sm text-gray-600">
                             {badgeModalidad.label}
@@ -436,9 +439,6 @@ export default function Notas() {
                           </td>
                           <td className="px-4 py-3 text-right text-gray-600">
                             {fmtMonto(n.precio_total)}
-                          </td>
-                          <td className="px-4 py-3 text-gray-400 text-xs">
-                            {fmtFecha(n.created_at)}
                           </td>
                           <td className="px-4 py-3 text-xs">
                             {n.fecha_entrega ? (
