@@ -15,10 +15,11 @@ export const getMaquinas = async (req, res) => {
     const { rows } = await pool.query(
       `SELECT m.*,
               (r.folio IS NOT NULL) AS reservada,
-              r.folio               AS reservada_folio
+              r.folio               AS reservada_folio,
+              r.id                  AS reservada_nota_id
          FROM maquinas m
          LEFT JOIN LATERAL (
-           SELECT n.folio
+           SELECT n.id, n.folio
              FROM notas n
             WHERE m.estado = 'disponible'
               AND n.estado IN ('EN_ESPERA', 'LAVANDO', 'SECANDO')

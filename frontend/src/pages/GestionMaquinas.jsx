@@ -379,7 +379,18 @@ export default function GestionMaquinas() {
                     {cfg.label}
                   </span>
                   {m.reservada && m.reservada_folio && (
-                    <p className="text-xs text-amber-600 mt-1">Apartada por {m.reservada_folio}</p>
+                    <p className="text-xs text-amber-600 mt-1">
+                      Apartada por{' '}
+                      {m.reservada_nota_id ? (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); navigate(`/notas/${m.reservada_nota_id}`); }}
+                          className="font-semibold underline underline-offset-2 hover:text-amber-700"
+                        >
+                          {m.reservada_folio}
+                        </button>
+                      ) : m.reservada_folio}
+                    </p>
                   )}
                 </div>
               </div>
