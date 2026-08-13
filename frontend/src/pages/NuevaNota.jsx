@@ -80,6 +80,13 @@ const TIEMPOS_ENTREGA = [
 ];
 const TIEMPO_ENTREGA_LABEL = Object.fromEntries(TIEMPOS_ENTREGA.map(t => [t.v, t.label]));
 
+// Fecha de hoy en formato YYYY-MM-DD (local). Se usa como entrega por defecto
+// cuando no se elige una fecha en el paso de Entrega.
+const fechaHoyISO = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
 // Pasos fijos del wizard, además de una pantalla por carga:
 // Cliente, Cantidad de cargas, [Carga ×N], Pago, Entrega, Instrucciones, Resumen.
 const ENCARGO_STEPS_FIJOS = 5;
@@ -509,7 +516,8 @@ export default function NuevaNota() {
         cargas:         cargasPayload,
         ajuste:         0, // el ajuste va por carga
         estado_pago:    encargoForm.pago_anticipado === 'SI' ? 'PAGADO' : 'PENDIENTE',
-        fecha_entrega:  encargoForm.fecha_entrega  || null,
+        // Si no se eligió fecha, la entrega se da por hecho para hoy.
+        fecha_entrega:  encargoForm.fecha_entrega  || fechaHoyISO(),
         tiempo_entrega: encargoForm.tiempo_entrega || null,
         instrucciones:  encargoForm.instrucciones  || null,
       };
@@ -1213,7 +1221,11 @@ export default function NuevaNota() {
                     <input
                       type="date" name="fecha_entrega"
                       value={encargoForm.fecha_entrega} onChange={handleEncargoChange}
-                      className={`${INPUT_CLS} appearance-none min-w-0 block bg-white h-[54px] ${
+                      // Con appearance-none se oculta el ícono del calendario; al
+                      // hacer click se abre el selector nativo (showPicker) para que
+                      // se pueda elegir la fecha tocando cualquier parte del campo.
+                      onClick={(e) => { try { e.currentTarget.showPicker?.(); } catch { /* no soportado */ } }}
+                      className={`${INPUT_CLS} min-w-0 block bg-white h-[54px] cursor-pointer ${
                         encargoForm.fecha_entrega ? '' : 'text-transparent'
                       }`}
                     />
