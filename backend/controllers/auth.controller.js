@@ -91,10 +91,13 @@ export const login = async (req, res) => {
       console.error('checkin error:', err);
     }
 
+    // La sesión dura 30 días (antes 8 h): así se comporta como "stand by" y
+    // normalmente solo se cierra con el botón Cerrar sesión. La sesión única
+    // (sid) sigue cerrándola si se inicia sesión en otro dispositivo.
     const token = jwt.sign(
       { id: usuario.id, rol: usuario.rol, sucursal: usuario.sucursal, sid: sessionId },
       process.env.JWT_SECRET,
-      { expiresIn: '8h' }
+      { expiresIn: '30d' }
     );
 
     res.json({
