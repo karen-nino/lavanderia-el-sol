@@ -522,6 +522,17 @@ export default function Notas() {
                       </div>
                     </>
                   )}
+
+                  {/* Entrega (paso 5): solo notas por encargo */}
+                  {n.fecha_entrega && (
+                    <div className="flex items-center justify-between gap-2 mt-3">
+                      <span className="text-sm text-dark-grey">Entrega</span>
+                      <span className="text-sm font-bold text-dark-grey">
+                        {etiquetaFechaEntrega(n.fecha_entrega)}
+                        {n.tiempo_entrega && ` · ${TIEMPO_ENTREGA_LABEL[n.tiempo_entrega] ?? n.tiempo_entrega}`}
+                      </span>
+                    </div>
+                  )}
                 </div>
               );
                   })}
