@@ -20,7 +20,7 @@ export default function Maquinas() {
     <div className="min-h-full bg-slate-100">
       {/* Cabecera (barra superior) */}
       <div className="bg-white border-b-2 border-gray-200">
-        <div className="px-6 md:px-8 pt-10 md:pt-14 pb-4 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-6 md:px-8 pt-10 md:pt-14 pb-4 flex items-center justify-between">
           <div>
             <h1 className="text-xl font-bold text-gray-900">Máquinas</h1>
             <p className="text-sm text-gray-500">Máquinas en uso ({enUso})</p>
@@ -48,7 +48,7 @@ export default function Maquinas() {
       <SucursalBar />
 
       {/* Contenido */}
-      <div className="px-6 md:px-8 py-6">
+      <div className="max-w-7xl mx-auto px-6 md:px-8 py-6">
         <MaquinasEnUso ref={monitorRef} showHeader={false} onCountChange={setEnUso} />
       </div>
     </div>

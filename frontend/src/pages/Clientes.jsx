@@ -283,7 +283,7 @@ export default function Clientes() {
       {/* Cabecera + búsqueda (sticky) */}
       <div ref={stickyRef} className="sticky top-0 z-20">
         <div className="bg-white border-b-2 border-gray-200">
-          <div className="px-6 md:px-8 pt-10 md:pt-14 pb-4 flex items-center justify-between">
+          <div className="max-w-7xl mx-auto px-6 md:px-8 pt-10 md:pt-14 pb-4 flex items-center justify-between">
             <div>
               <h1 className="text-xl font-bold text-gray-900">Clientes</h1>
               <p className="text-sm text-gray-500">{filtrados.length} cliente(s)</p>
@@ -304,7 +304,7 @@ export default function Clientes() {
         <SucursalBar />
 
         {/* Búsqueda */}
-        <div className="bg-slate-100 px-6 md:px-8 pt-4 pb-2">
+        <div className="bg-slate-100 max-w-7xl mx-auto px-6 md:px-8 pt-4 pb-2">
           <div className="relative">
             <svg
               className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400"
@@ -325,7 +325,7 @@ export default function Clientes() {
       </div>
 
       {/* Contenido */}
-      <div className="px-6 md:px-8 pb-4 pt-2 space-y-4">
+      <div className="max-w-7xl mx-auto px-6 md:px-8 pb-4 pt-2 space-y-4">
 
       {loading && (
         <div className="flex justify-center py-12">
