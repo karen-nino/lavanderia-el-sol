@@ -292,10 +292,18 @@ async function validarTopesCargas(client, notaId) {
   return null;
 }
 
+// Precio efectivo de un producto dentro de una nota. Los productos por
+// tapa/medida van INCLUIDOS (sin costo) en Por Encargo; en Autoservicio se
+// cobra su precio por tapa. Los demás productos cobran su precio siempre.
+function precioProductoEnNota(art, modalidad) {
+  if (modalidad === 'POR_ENCARGO' && art.es_por_tapa) return 0;
+  return art.precio_unitario ?? 0;
+}
+
 // Reserva un producto para una nota (o una carga): valida stock disponible,
 // inserta la fila en nota_productos y aumenta stock_reservado. Lanza Error con
 // el mensaje para el cliente si el producto no existe o no hay stock.
-async function reservarProducto(client, notaId, cargaId, productoId, cantidad, sucursal) {
+async function reservarProducto(client, notaId, cargaId, productoId, cantidad, sucursal, modalidad) {
   const { rows: artRows } = await client.query(
     'SELECT * FROM productos WHERE id = $1 AND sucursal = $2 FOR UPDATE',
     [productoId, sucursal]
@@ -311,7 +319,7 @@ async function reservarProducto(client, notaId, cargaId, productoId, cantidad, s
   const { rows: npRows } = await client.query(
     `INSERT INTO nota_productos (nota_id, carga_id, producto_id, cantidad, precio_unitario)
      VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-    [notaId, cargaId, productoId, cantidad, art.precio_unitario ?? 0]
+    [notaId, cargaId, productoId, cantidad, precioProductoEnNota(art, modalidad)]
   );
   await client.query(
     'UPDATE productos SET stock_reservado = stock_reservado + $1 WHERE id = $2',
@@ -408,7 +416,7 @@ async function prepararCargas(client, cargas, tipoPrendaNota, sucursal) {
 
 // Inserta las filas de nota_cargas ya preparadas (con sus productos, que
 // reservan stock). Devuelve las cargas con sus productos.
-async function insertarCargas(client, notaId, filas, sucursal) {
+async function insertarCargas(client, notaId, filas, sucursal, modalidad) {
   const insertadas = [];
   for (const f of filas) {
     const { rows } = await client.query(
@@ -423,7 +431,7 @@ async function insertarCargas(client, notaId, filas, sucursal) {
     const carga = rows[0];
     const productos = [];
     for (const p of (f.productos ?? [])) {
-      productos.push(await reservarProducto(client, notaId, carga.id, p.producto_id, p.cantidad, sucursal));
+      productos.push(await reservarProducto(client, notaId, carga.id, p.producto_id, p.cantidad, sucursal, modalidad));
     }
     insertadas.push({ ...carga, productos });
   }
@@ -456,6 +464,7 @@ async function cargasDeNota(client, notaId) {
   );
   const { rows: prods } = await client.query(
     `SELECT np.id, np.carga_id, np.producto_id, a.nombre, np.cantidad, np.precio_unitario,
+            a.es_por_tapa,
             (np.cantidad * np.precio_unitario) AS subtotal
        FROM nota_productos np
        JOIN productos a ON a.id = np.producto_id
@@ -633,6 +642,7 @@ export const getNotaById = async (req, res) => {
 
     const { rows: productos } = await pool.query(
       `SELECT np.id, np.producto_id, a.nombre, np.cantidad, np.precio_unitario,
+              a.es_por_tapa,
               (np.cantidad * np.precio_unitario) AS subtotal
        FROM nota_productos np
        JOIN productos a ON a.id = np.producto_id
@@ -926,7 +936,7 @@ export const createNota = async (req, res) => {
     // Insertar las cargas y tomar las máquinas de las cargas activadas.
     let cargasInsertadas = [];
     if (filasCargas) {
-      cargasInsertadas = await insertarCargas(client, nota.id, filasCargas, req.sucursal);
+      cargasInsertadas = await insertarCargas(client, nota.id, filasCargas, req.sucursal, modalidad);
       if (idsActivar.length > 0) {
         const { rows: maqs } = await client.query(
           'SELECT id, nombre, estado FROM maquinas WHERE id = ANY($1) FOR UPDATE',
@@ -1000,7 +1010,7 @@ export const createNota = async (req, res) => {
         `INSERT INTO nota_productos (nota_id, producto_id, cantidad, precio_unitario)
          VALUES ($1, $2, $3, $4)
          RETURNING *`,
-        [nota.id, producto_id, cantidad, art.precio_unitario ?? 0]
+        [nota.id, producto_id, cantidad, precioProductoEnNota(art, modalidad)]
       );
       await client.query(
         'UPDATE productos SET stock_reservado = stock_reservado + $1 WHERE id = $2',
@@ -1182,7 +1192,7 @@ export const updateNota = async (req, res) => {
         [id]
       );
       await client.query('DELETE FROM nota_cargas WHERE nota_id = $1', [id]);
-      cargasNota = await insertarCargas(client, id, filasCargas, req.sucursal);
+      cargasNota = await insertarCargas(client, id, filasCargas, req.sucursal, actual.modalidad);
 
       if (['LAVANDO', 'SECANDO'].includes(actual.estado)) {
         const despues = new Set(
@@ -1271,7 +1281,7 @@ export const updateNota = async (req, res) => {
           `INSERT INTO nota_productos (nota_id, producto_id, cantidad, precio_unitario)
            VALUES ($1, $2, $3, $4)
            RETURNING *`,
-          [id, producto_id, cantidad, art.precio_unitario ?? 0]
+          [id, producto_id, cantidad, precioProductoEnNota(art, actual.modalidad)]
         );
         await client.query(
           'UPDATE productos SET stock_reservado = stock_reservado + $1 WHERE id = $2',

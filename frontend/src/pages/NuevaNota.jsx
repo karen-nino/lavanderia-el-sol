@@ -175,10 +175,17 @@ export default function NuevaNota() {
          + (c.secadora_id ? precioSecado(tamanoDe(c.secadora_id), c.tipo_prenda) : 0);
   };
   const ajusteNum      = Number(form.ajuste) || 0;
+  // Precio efectivo de un producto en la nota: los productos por tapa/medida van
+  // incluidos (sin costo) en Por Encargo; en Autoservicio se cobran normal.
+  const precioProducto = (prod) => {
+    if (!prod) return 0;
+    if (tipoServicio === 'POR_ENCARGO' && prod.es_por_tapa) return 0;
+    return Number(prod.precio_unitario) || 0;
+  };
   const subtotalCargas = cargasAuto.reduce((s, c) => s + subtotalDeCarga(c), 0);
   const subtotalProductos = productosLista.reduce((sum, p) => {
     const prod = productosCatalogo.find(x => String(x.id) === String(p.producto_id));
-    return sum + (prod ? (Number(prod.precio_unitario) || 0) * (Number(p.cantidad) || 0) : 0);
+    return sum + precioProducto(prod) * (Number(p.cantidad) || 0);
   }, 0);
   const precioTotal = subtotalCargas + ajusteNum + subtotalProductos;
 
@@ -419,7 +426,7 @@ export default function NuevaNota() {
 
   const subtotalProductosLista = (lista) => (lista ?? []).reduce((sum, p) => {
     const prod = productosCatalogo.find(x => String(x.id) === String(p.producto_id));
-    return sum + (prod ? (Number(prod.precio_unitario) || 0) * (Number(p.cantidad) || 0) : 0);
+    return sum + precioProducto(prod) * (Number(p.cantidad) || 0);
   }, 0);
 
   // Precio de una carga de encargo = tarifa lavadora (según la prenda de la
@@ -1046,7 +1053,8 @@ export default function NuevaNota() {
                         {c.productos.map((item, j) => {
                           const prod = productosCatalogo.find(x => String(x.id) === String(item.producto_id));
                           const cant = Number(item.cantidad) || 0;
-                          const subtotal = prod ? (Number(prod.precio_unitario) || 0) * cant : 0;
+                          const incluido = prod?.es_por_tapa && tipoServicio === 'POR_ENCARGO';
+                          const subtotal = precioProducto(prod) * cant;
                           return (
                             <div key={j} className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
                               <div className="flex items-center gap-2">
@@ -1075,7 +1083,9 @@ export default function NuevaNota() {
                               </div>
                               <div className="flex items-end justify-between gap-3">
                                 <div>
-                                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Cantidad</p>
+                                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+                                    {prod?.es_por_tapa ? 'Tapas' : 'Cantidad'}
+                                  </p>
                                   <div className="flex items-center gap-2">
                                     <button
                                       type="button"
@@ -1097,7 +1107,12 @@ export default function NuevaNota() {
                                     </button>
                                   </div>
                                 </div>
-                                {subtotal > 0 && (
+                                {incluido ? (
+                                  <div className="text-right">
+                                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Subtotal</p>
+                                    <p className="text-sm font-semibold text-green-700">Incluido</p>
+                                  </div>
+                                ) : subtotal > 0 && (
                                   <div className="text-right">
                                     <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Subtotal</p>
                                     <p className="text-lg font-bold text-blue-700">${subtotal.toFixed(2)}</p>
@@ -1542,7 +1557,7 @@ export default function NuevaNota() {
               {productosLista.map((item, i) => {
                 const prod = productosCatalogo.find(x => String(x.id) === String(item.producto_id));
                 const cant = Number(item.cantidad) || 0;
-                const subtotal = prod ? (Number(prod.precio_unitario) || 0) * cant : 0;
+                const subtotal = precioProducto(prod) * cant;
                 return (
                   <div key={i} className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
                     <div className="flex items-center gap-2">
@@ -1572,7 +1587,9 @@ export default function NuevaNota() {
 
                     <div className="flex items-end justify-between gap-3">
                       <div>
-                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Cantidad</p>
+                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+                          {prod?.es_por_tapa ? 'Tapas' : 'Cantidad'}
+                        </p>
                         <div className="flex items-center gap-2">
                           <button
                             type="button"

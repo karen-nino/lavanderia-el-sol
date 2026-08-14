@@ -10,6 +10,7 @@ const INPUT_CLS =
 
 const CATEGORIAS = ['Detergente', 'Suavizante', 'Blanqueador', 'Bolsas', 'Otro'];
 const UNIDADES   = ['Litros', 'Kilos', 'Piezas', 'Mililitros'];
+const ENVASES    = ['Cubeta', 'Caja', 'Garrafa', 'Botella'];
 
 function pluralizarUnidad(cantidad, unidad) {
   const n = Math.round(Number(cantidad));
@@ -20,23 +21,51 @@ function pluralizarUnidad(cantidad, unidad) {
   return u;
 }
 
+function pluralizarEnvase(n, envase) {
+  const e = envase || 'envase';
+  return n === 1 ? e : `${e}s`;
+}
+
+// Cantidad de stock legible. Productos por tapa/medida se muestran en tapas con
+// una equivalencia en envases (ej. "62 tapas ≈ 3 cubetas"); los demás en piezas.
+function formatoStock(p) {
+  const n = Math.round(Number(p.stock_actual));
+  if (p.es_por_tapa) {
+    const porEnv  = Number(p.tapas_por_envase) || 0;
+    const envases = porEnv > 0 ? Math.floor(n / porEnv) : 0;
+    return {
+      cantidad:     `${n} ${n === 1 ? 'tapa' : 'tapas'}`,
+      equivalencia: envases > 0 ? `≈ ${envases} ${pluralizarEnvase(envases, (p.envase || '').toLowerCase())}` : '',
+    };
+  }
+  return { cantidad: `${n} ${n === 1 ? 'Pieza' : 'Piezas'}`, equivalencia: '' };
+}
+
 const FORM_VACIO = {
-  nombre:          '',
-  categoria:       '',
-  precio_unitario: '',
-  unidad:          '',
-  stock_actual:    '0',
+  nombre:           '',
+  categoria:        '',
+  precio_unitario:  '',
+  unidad:           '',
+  stock_actual:     '0',
+  es_por_tapa:      false,
+  envase:           '',
+  tapas_por_envase: '',
+  stock_minimo:     '0',
 };
 
 // ── Modal crear / editar ────────────────────────────────────────
 function ModalProducto({ producto, esAdmin, onClose, onGuardado }) {
   const [form, setForm]     = useState(producto
     ? {
-        nombre:          producto.nombre,
-        categoria:       producto.categoria ?? '',
-        precio_unitario: producto.precio_unitario ?? '',
-        unidad:          producto.unidad,
-        stock_actual:    producto.stock_actual,
+        nombre:           producto.nombre,
+        categoria:        producto.categoria ?? '',
+        precio_unitario:  producto.precio_unitario ?? '',
+        unidad:           producto.unidad,
+        stock_actual:     producto.stock_actual,
+        es_por_tapa:      !!producto.es_por_tapa,
+        envase:           producto.envase ?? '',
+        tapas_por_envase: producto.tapas_por_envase ?? '',
+        stock_minimo:     producto.stock_minimo ?? '0',
       }
     : FORM_VACIO
   );
@@ -58,11 +87,15 @@ function ModalProducto({ producto, esAdmin, onClose, onGuardado }) {
     setLoading(true);
 
     const body = {
-      nombre:          form.nombre.trim(),
-      categoria:       form.categoria || null,
-      unidad:          form.unidad,
-      stock_actual:    Number(form.stock_actual),
-      precio_unitario: form.precio_unitario !== '' ? Number(form.precio_unitario) : null,
+      nombre:           form.nombre.trim(),
+      categoria:        form.categoria || null,
+      unidad:           form.es_por_tapa ? 'Tapas' : form.unidad,
+      stock_actual:     Number(form.stock_actual),
+      precio_unitario:  form.precio_unitario !== '' ? Number(form.precio_unitario) : null,
+      es_por_tapa:      form.es_por_tapa,
+      tapas_por_envase: form.es_por_tapa && form.tapas_por_envase !== '' ? Number(form.tapas_por_envase) : null,
+      envase:           form.es_por_tapa ? (form.envase || null) : null,
+      stock_minimo:     form.es_por_tapa ? Number(form.stock_minimo) || 0 : 0,
     };
 
     try {
@@ -120,10 +153,25 @@ function ModalProducto({ producto, esAdmin, onClose, onGuardado }) {
             </select>
           </div>
 
+          {/* Se consume por tapa/medida */}
+          <label className="flex items-start gap-3 p-3 rounded-lg border border-gray-200 bg-gray-50 cursor-pointer">
+            <input
+              type="checkbox" name="es_por_tapa" checked={form.es_por_tapa}
+              onChange={(e) => setForm(f => ({ ...f, es_por_tapa: e.target.checked }))}
+              className="mt-0.5 w-5 h-5 rounded border-gray-300 text-blue focus:ring-blue"
+            />
+            <span className="text-sm">
+              <span className="block font-medium text-gray-800">Se consume por tapa/medida</span>
+              <span className="block text-gray-500">
+                Se compra por envase pero se usa por tapa. El stock se lleva en tapas.
+              </span>
+            </span>
+          </label>
+
           {/* Precio unitario */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              Precio unitario ($) <span className="text-red-500">*</span>
+              {form.es_por_tapa ? 'Precio por tapa ($)' : 'Precio unitario ($)'} <span className="text-red-500">*</span>
             </label>
             <div className="flex items-center gap-2">
               <div className="relative flex-1">
@@ -155,23 +203,51 @@ function ModalProducto({ producto, esAdmin, onClose, onGuardado }) {
             </div>
           </div>
 
-          {/* Unidad */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              Unidad <span className="text-red-500">*</span>
-            </label>
-            <select name="unidad" required value={form.unidad} onChange={handleChange} className={INPUT_CLS}>
-              <option value="">Seleccionar...</option>
-              {UNIDADES.map(u => <option key={u} value={u}>{u}</option>)}
-            </select>
-          </div>
+          {form.es_por_tapa ? (
+            <>
+              {/* Envase */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Envase <span className="text-red-500">*</span>
+                </label>
+                <select name="envase" required value={form.envase} onChange={handleChange} className={INPUT_CLS}>
+                  <option value="">Seleccionar...</option>
+                  {ENVASES.map(e => <option key={e} value={e}>{e}</option>)}
+                </select>
+              </div>
+
+              {/* Tapas por envase (rendimiento) */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  ¿Cuántas tapas rinde un envase? <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="number" name="tapas_por_envase" min="1" step="1" required
+                  value={form.tapas_por_envase} onChange={handleChange}
+                  placeholder="Ej. 200"
+                  className={`${INPUT_CLS} text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`}
+                />
+              </div>
+            </>
+          ) : (
+            /* Unidad */
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                Unidad <span className="text-red-500">*</span>
+              </label>
+              <select name="unidad" required value={form.unidad} onChange={handleChange} className={INPUT_CLS}>
+                <option value="">Seleccionar...</option>
+                {UNIDADES.map(u => <option key={u} value={u}>{u}</option>)}
+              </select>
+            </div>
+          )}
           </>
           )}
 
           {/* Stock actual */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              Stock actual <span className="text-red-500">*</span>
+              {form.es_por_tapa ? 'Stock actual (tapas)' : 'Stock actual'} <span className="text-red-500">*</span>
             </label>
             <div className="flex items-center gap-2">
               <input
@@ -197,7 +273,34 @@ function ModalProducto({ producto, esAdmin, onClose, onGuardado }) {
                 +
               </button>
             </div>
+            {form.es_por_tapa && Number(form.tapas_por_envase) > 0 && (
+              <button
+                type="button"
+                onClick={() => setForm(f => ({
+                  ...f,
+                  stock_actual: String((Number(f.stock_actual) || 0) + Number(f.tapas_por_envase)),
+                }))}
+                className="mt-2 w-full py-2.5 rounded-lg border border-blue/40 bg-blue/5 text-blue text-sm font-medium hover:bg-blue/10 transition-colors"
+              >
+                + Agregar 1 envase ({form.tapas_por_envase} tapas)
+              </button>
+            )}
           </div>
+
+          {/* Alerta de stock bajo (solo por tapa) */}
+          {form.es_por_tapa && !soloStock && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                Avisar cuando queden (tapas)
+              </label>
+              <input
+                type="number" name="stock_minimo" min="0" step="1"
+                value={form.stock_minimo} onChange={handleChange}
+                placeholder="Ej. 20"
+                className={`${INPUT_CLS} text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`}
+              />
+            </div>
+          )}
 
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">
@@ -284,6 +387,66 @@ function ModalEliminar({ producto, onClose, onConfirmar }) {
   );
 }
 
+// ── Modal confirmar archivar ────────────────────────────────────
+function ModalArchivar({ producto, onClose, onConfirmar }) {
+  const [loading, setLoading] = useState(false);
+  const [error,   setError]   = useState('');
+
+  const handleArchivar = async () => {
+    setError('');
+    setLoading(true);
+    try {
+      await onConfirmar();
+    } catch (err) {
+      setError(err.message);
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center gap-3">
+          <div className="flex-shrink-0 w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center">
+            <svg className="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+            </svg>
+          </div>
+          <div>
+            <h3 className="text-base font-semibold text-gray-900">Archivar producto</h3>
+            <p className="text-sm text-gray-500 mt-0.5">
+              <span className="font-medium text-gray-700">{producto.nombre}</span> se ocultará del inventario y de Nueva Nota.
+              Las notas anteriores no se ven afectadas y puedes restaurarlo cuando quieras.
+            </p>
+          </div>
+        </div>
+
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">
+            {error}
+          </div>
+        )}
+
+        <div className="flex gap-3">
+          <button
+            onClick={onClose}
+            className="flex-1 border border-gray-300 text-gray-700 font-medium py-3.5 rounded-lg text-base hover:bg-gray-50 transition-colors"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={handleArchivar} disabled={loading}
+            className="flex-1 bg-amber-600 hover:bg-amber-700 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
+          >
+            {loading ? 'Archivando...' : 'Archivar'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Íconos ─────────────────────────────────────────────────────
 function IconoLapiz() {
   return (
@@ -299,6 +462,15 @@ function IconoBasura() {
     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
         d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+    </svg>
+  );
+}
+
+function IconoArchivar() {
+  return (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+        d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
     </svg>
   );
 }
@@ -322,7 +494,14 @@ export default function Inventario() {
   const [error,           setError]           = useState('');
   const [modalProducto,   setModalProducto]   = useState(null);  // null | 'nuevo' | producto
   const [prodAEliminar,   setProdAEliminar]   = useState(null);
+  const [prodAArchivar,   setProdAArchivar]   = useState(null);
   const [infoProducto,    setInfoProducto]    = useState(null);  // info modal (mobile)
+
+  // Archivados: se cargan bajo demanda al abrir el panel "Ver archivados".
+  const [verArchivados,   setVerArchivados]   = useState(false);
+  const [archivados,      setArchivados]      = useState([]);
+  const [archLoading,     setArchLoading]     = useState(false);
+  const [archError,       setArchError]       = useState('');
 
   // Selección múltiple (admin, desktop) para borrado en lote.
   const [seleccionados,   setSeleccionados]   = useState(() => new Set());
@@ -376,6 +555,38 @@ export default function Inventario() {
     await api.delete(`/productos/${prodAEliminar.id}`);
     setProductos(prev => prev.filter(p => p.id !== prodAEliminar.id));
     setProdAEliminar(null);
+  };
+
+  // ── Archivar / restaurar ───────────────────────────────
+  const cargarArchivados = async () => {
+    setArchError('');
+    setArchLoading(true);
+    try {
+      const data = await api.get('/productos?archivados=1');
+      setArchivados(data);
+    } catch (err) {
+      setArchError(err.message);
+    } finally {
+      setArchLoading(false);
+    }
+  };
+  const toggleVerArchivados = () => {
+    const abrir = !verArchivados;
+    setVerArchivados(abrir);
+    if (abrir) cargarArchivados();
+  };
+  const handleArchivar = async () => {
+    const p = prodAArchivar;
+    await api.patch(`/productos/${p.id}/archivar`, { archivado: true });
+    setProductos(prev => prev.filter(x => x.id !== p.id));
+    setSeleccionados(prev => { const n = new Set(prev); n.delete(p.id); return n; });
+    if (verArchivados) setArchivados(prev => [...prev, p].sort((a, b) => a.nombre.localeCompare(b.nombre)));
+    setProdAArchivar(null);
+  };
+  const restaurarProducto = async (p) => {
+    const restaurado = await api.patch(`/productos/${p.id}/archivar`, { archivado: false });
+    setArchivados(prev => prev.filter(x => x.id !== p.id));
+    setProductos(prev => [...prev, restaurado].sort((a, b) => a.nombre.localeCompare(b.nombre)));
   };
 
   // ── Selección múltiple ─────────────────────────────────
@@ -594,7 +805,11 @@ export default function Inventario() {
                             )}
                           </div>
                         </td>
-                        <td className="px-4 py-3 text-gray-600">{pluralizarUnidad(p.stock_actual, p.unidad)}</td>
+                        <td className="px-4 py-3 text-gray-600">
+                          {p.es_por_tapa
+                            ? <>Tapas {formatoStock(p).equivalencia && <span className="text-gray-400">{formatoStock(p).equivalencia}</span>}</>
+                            : pluralizarUnidad(p.stock_actual, p.unidad)}
+                        </td>
                         <td className="px-4 py-3">
                           <div className="flex items-center justify-end gap-1">
                             <button
@@ -604,6 +819,15 @@ export default function Inventario() {
                             >
                               <IconoLapiz />
                             </button>
+                            {esAdmin && (
+                              <button
+                                onClick={() => setProdAArchivar(p)}
+                                className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
+                                title="Archivar (ocultar del inventario)"
+                              >
+                                <IconoArchivar />
+                              </button>
+                            )}
                             {esAdmin && (
                               <button
                                 onClick={() => setProdAEliminar(p)}
@@ -645,8 +869,11 @@ export default function Inventario() {
                   )}
                   <div className="flex items-center gap-2 mt-1 flex-wrap">
                     <span className="text-sm font-mono font-semibold text-gray-700">
-                      {Math.round(Number(p.stock_actual))} {Math.round(Number(p.stock_actual)) === 1 ? 'Pieza' : 'Piezas'}
+                      {formatoStock(p).cantidad}
                     </span>
+                    {p.es_por_tapa && formatoStock(p).equivalencia && (
+                      <span className="text-xs text-gray-400">{formatoStock(p).equivalencia}</span>
+                    )}
                     {es === 'agotado' && (
                       <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700">Agotado</span>
                     )}
@@ -655,11 +882,11 @@ export default function Inventario() {
                     )}
                     {p.precio_unitario != null && (
                       <span className="text-xs text-gray-500">
-                        ${Number(p.precio_unitario).toFixed(2)}
+                        ${Number(p.precio_unitario).toFixed(2)}{p.es_por_tapa ? '/tapa' : ''}
                       </span>
                     )}
                   </div>
-                  {p.unidad && (
+                  {!p.es_por_tapa && p.unidad && (
                     <p className="text-xs text-gray-500 mt-0.5">Unidad: {p.unidad}</p>
                   )}
                 </button>
@@ -667,6 +894,52 @@ export default function Inventario() {
             })}
           </div>
         </>
+      )}
+
+      {/* Archivados */}
+      {esAdmin && !loading && !error && (
+        <div className="pt-2">
+          <button
+            type="button"
+            onClick={toggleVerArchivados}
+            className="text-sm text-gray-500 hover:text-gray-700 font-medium inline-flex items-center gap-1.5 transition-colors"
+          >
+            <svg className={`w-4 h-4 transition-transform ${verArchivados ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+            {verArchivados ? 'Ocultar archivados' : 'Ver productos archivados'}
+          </button>
+
+          {verArchivados && (
+            <div className="mt-3">
+              {archLoading ? (
+                <p className="text-sm text-gray-400 py-4">Cargando…</p>
+              ) : archError ? (
+                <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">{archError}</div>
+              ) : archivados.length === 0 ? (
+                <p className="text-sm text-gray-400 italic py-2">No hay productos archivados.</p>
+              ) : (
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100 divide-y divide-gray-50">
+                  {archivados.map(p => (
+                    <div key={p.id} className="px-4 py-3 flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-gray-700 truncate">{p.nombre}</p>
+                        {p.categoria && <p className="text-xs text-gray-400">{p.categoria}</p>}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => restaurarProducto(p)}
+                        className="flex-shrink-0 text-sm font-medium text-blue hover:text-blue-800 border border-blue/30 hover:bg-light-blue rounded-lg px-3 py-1.5 transition-colors"
+                      >
+                        Restaurar
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       )}
 
       </div>
@@ -696,7 +969,9 @@ export default function Inventario() {
                   <p className="text-base text-gray-700">{p.categoria ?? <span className="text-gray-400 italic">Sin categoría</span>}</p>
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Precio unitario</p>
+                  <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">
+                    {p.es_por_tapa ? 'Precio por tapa' : 'Precio unitario'}
+                  </p>
                   <p className="text-base text-gray-700">
                     {p.precio_unitario != null ? `$${Number(p.precio_unitario).toFixed(2)}` : '—'}
                   </p>
@@ -705,8 +980,11 @@ export default function Inventario() {
                   <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Stock actual</p>
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-base font-mono font-semibold text-gray-800">
-                      {Math.round(Number(p.stock_actual))} {Math.round(Number(p.stock_actual)) === 1 ? 'Pieza' : 'Piezas'}
+                      {formatoStock(p).cantidad}
                     </span>
+                    {p.es_por_tapa && formatoStock(p).equivalencia && (
+                      <span className="text-sm text-gray-400">{formatoStock(p).equivalencia}</span>
+                    )}
                     {es === 'agotado' && (
                       <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700">Agotado</span>
                     )}
@@ -716,9 +994,13 @@ export default function Inventario() {
                   </div>
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Unidad</p>
+                  <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">
+                    {p.es_por_tapa ? 'Envase' : 'Unidad'}
+                  </p>
                   <p className="text-base text-gray-700">
-                    {p.unidad ?? <span className="text-gray-400 italic">—</span>}
+                    {p.es_por_tapa
+                      ? (p.envase ? `${p.envase} · rinde ${p.tapas_por_envase} tapas` : `Rinde ${p.tapas_por_envase} tapas`)
+                      : (p.unidad ?? <span className="text-gray-400 italic">—</span>)}
                   </p>
                 </div>
 
@@ -731,6 +1013,16 @@ export default function Inventario() {
                     <IconoLapiz />
                     Editar
                   </button>
+                  {esAdmin && (
+                    <button
+                      type="button"
+                      onClick={() => { setInfoProducto(null); setProdAArchivar(p); }}
+                      className="w-full flex items-center justify-center gap-2 py-3 border border-amber-300 text-amber-700 hover:bg-amber-50 font-medium rounded-lg text-sm transition-colors"
+                    >
+                      <IconoArchivar />
+                      Archivar
+                    </button>
+                  )}
                   {esAdmin && (
                     <button
                       type="button"
@@ -764,6 +1056,15 @@ export default function Inventario() {
           producto={prodAEliminar}
           onClose={() => setProdAEliminar(null)}
           onConfirmar={handleEliminar}
+        />
+      )}
+
+      {/* Modal confirmar archivar */}
+      {prodAArchivar && (
+        <ModalArchivar
+          producto={prodAArchivar}
+          onClose={() => setProdAArchivar(null)}
+          onConfirmar={handleArchivar}
         />
       )}
 

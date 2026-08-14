@@ -592,7 +592,9 @@ export default function DetalleNota() {
                       )}
                       {prods.map(p => (
                         <p key={p.id} className="text-xs text-gray-500">
-                          {p.nombre} · {p.cantidad} × {fmtMonto(p.precio_unitario)} = {fmtMonto(p.subtotal)}
+                          {p.es_por_tapa && Number(p.subtotal) === 0
+                            ? <>{p.nombre} · {p.cantidad} {Number(p.cantidad) === 1 ? 'tapa' : 'tapas'} · <span className="text-green-700 font-medium">Incluido</span></>
+                            : <>{p.nombre} · {p.cantidad} × {fmtMonto(p.precio_unitario)} = {fmtMonto(p.subtotal)}</>}
                         </p>
                       ))}
                       {Number(cg.ajuste) !== 0 && (
@@ -773,17 +775,26 @@ export default function DetalleNota() {
           <p className="text-sm text-gray-400 italic px-4 py-4">Sin productos agregados</p>
         ) : (
           <div className="divide-y divide-gray-50">
-            {(nota.productos || []).map(p => (
+            {(nota.productos || []).map(p => {
+              const incluido = p.es_por_tapa && Number(p.subtotal) === 0;
+              return (
               <div key={p.id} className="px-4 py-3 flex items-center justify-between gap-3">
                 <div>
                   <p className="text-sm font-medium text-gray-800">{p.nombre}</p>
-                  <p className="text-xs text-gray-400">Cant. {p.cantidad} × {fmtMonto(p.precio_unitario)}</p>
+                  <p className="text-xs text-gray-400">
+                    {incluido
+                      ? `${p.cantidad} ${Number(p.cantidad) === 1 ? 'tapa' : 'tapas'}`
+                      : `Cant. ${p.cantidad} × ${fmtMonto(p.precio_unitario)}`}
+                  </p>
                 </div>
-                <span className="text-sm font-semibold text-gray-700 flex-shrink-0">
-                  {fmtMonto(p.subtotal)}
+                <span className="text-sm font-semibold flex-shrink-0">
+                  {incluido
+                    ? <span className="text-green-700">Incluido</span>
+                    : <span className="text-gray-700">{fmtMonto(p.subtotal)}</span>}
                 </span>
               </div>
-            ))}
+              );
+            })}
             <div className="px-4 py-3 flex justify-between bg-gray-50">
               <span className="text-sm font-semibold text-gray-700">Total productos</span>
               <span className="text-sm font-bold text-gray-900">{fmtMonto(totalProductos)}</span>

@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../lib/api';
+import { useAuth } from '../context/AuthContext';
+import { esAdminMain as esAdminMainFn } from '../lib/roles';
 import SucursalBar from '../components/SucursalBar';
 
 const ESTADOS = ['TODOS', 'EN_ESPERA', 'LAVANDO', 'SECANDO', 'POR_ENTREGAR', 'FINALIZADA', 'PENDIENTE', 'CANCELADA'];
@@ -135,6 +137,8 @@ function fmtCliente(n) {
 export default function Notas() {
   const navigate                              = useNavigate();
   const [searchParams]                        = useSearchParams();
+  const { usuario }                           = useAuth();
+  const esAdminMain                           = esAdminMainFn(usuario?.rol);
 
   // Filtro inicial desde la URL (?estado=EN_ESPERA), p. ej. al entrar desde un
   // KPI del Dashboard. Solo se acepta si es un estado válido.
@@ -152,6 +156,12 @@ export default function Notas() {
   const [mostrarFecha,      setMostrarFecha]      = useState(false);
   const estadoRef = useRef(null);
   const fechaRef  = useRef(null);
+
+  // Selección múltiple para borrado en lote (solo admin_main, desktop).
+  const [seleccion,         setSeleccion]         = useState(() => new Set());
+  const [confirmarBorrado,  setConfirmarBorrado]  = useState(false);
+  const [borrando,          setBorrando]          = useState(false);
+  const [errBorrado,        setErrBorrado]        = useState('');
 
   useEffect(() => {
     api.get('/notas')
@@ -215,6 +225,53 @@ export default function Notas() {
     if (ultimo && ultimo.clave === clave) ultimo.notas.push(n);
     else gruposMobile.push({ clave, fecha: fmtFechaDia(n.created_at), notas: [n] });
   }
+
+  // ── Selección múltiple (admin_main) ─────────────────────
+  const toggleSeleccion = (id) => {
+    setSeleccion(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+  const todasSeleccionadas = filtradas.length > 0 && filtradas.every(n => seleccion.has(n.id));
+  const toggleTodas = () => {
+    setSeleccion(prev => {
+      const next = new Set(prev);
+      if (filtradas.every(n => next.has(n.id))) filtradas.forEach(n => next.delete(n.id));
+      else filtradas.forEach(n => next.add(n.id));
+      return next;
+    });
+  };
+  const limpiarSeleccion = () => setSeleccion(new Set());
+
+  // Borra las notas seleccionadas una por una reusando DELETE /notas/:id (que
+  // libera stock y máquinas y deja rastro). Continúa aunque alguna falle.
+  const borrarSeleccionadas = async () => {
+    setErrBorrado('');
+    setBorrando(true);
+    const ids = [...seleccion];
+    const borradas = [];
+    const fallidas = [];
+    for (const id of ids) {
+      try {
+        await api.delete(`/notas/${id}`);
+        borradas.push(id);
+      } catch {
+        fallidas.push(id);
+      }
+    }
+    if (borradas.length > 0) {
+      const set = new Set(borradas);
+      setNotas(prev => prev.filter(n => !set.has(n.id)));
+    }
+    setSeleccion(new Set(fallidas));
+    setBorrando(false);
+    setConfirmarBorrado(false);
+    if (fallidas.length > 0) {
+      setErrBorrado(`No se pudieron eliminar ${fallidas.length} nota(s).`);
+    }
+  };
 
   return (
     <div className="min-h-full bg-slate-100">
@@ -362,12 +419,49 @@ export default function Notas() {
 
       {!loading && !error && filtradas.length > 0 && (
         <>
+          {/* Barra de selección múltiple (admin_main, desktop) */}
+          {esAdminMain && seleccion.size > 0 && (
+            <div className="hidden md:flex items-center justify-between gap-3 bg-white rounded-xl shadow-sm border border-gray-100 px-4 py-3 mb-3">
+              <span className="text-sm text-gray-700">
+                {seleccion.size} nota(s) seleccionada(s)
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={limpiarSeleccion}
+                  className="text-sm text-gray-500 hover:text-gray-700 font-medium px-3 py-1.5 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Limpiar
+                </button>
+                <button
+                  onClick={() => { setErrBorrado(''); setConfirmarBorrado(true); }}
+                  className="text-sm font-medium text-white bg-red-600 hover:bg-red-700 px-4 py-1.5 rounded-lg transition-colors"
+                >
+                  Eliminar seleccionadas
+                </button>
+              </div>
+            </div>
+          )}
+          {esAdminMain && errBorrado && (
+            <div className="hidden md:block bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3 mb-3">{errBorrado}</div>
+          )}
+
           {/* Tabla — desktop */}
           <div className="hidden md:block bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-gray-50 border-b border-gray-100">
+                      {esAdminMain && (
+                        <th className="px-4 py-3 w-10">
+                          <input
+                            type="checkbox"
+                            checked={todasSeleccionadas}
+                            onChange={toggleTodas}
+                            aria-label="Seleccionar todas"
+                            className="w-4 h-4 rounded border-gray-300 text-blue focus:ring-blue cursor-pointer"
+                          />
+                        </th>
+                      )}
                       <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Folio</th>
                       <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Fecha</th>
                       <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Tipo</th>
@@ -390,8 +484,19 @@ export default function Notas() {
                         <tr
                           key={n.id}
                           onClick={() => navigate(`/notas/${n.id}`)}
-                          className="hover:bg-light-blue transition-colors cursor-pointer"
+                          className={`hover:bg-light-blue transition-colors cursor-pointer ${seleccion.has(n.id) ? 'bg-light-blue/60' : ''}`}
                         >
+                          {esAdminMain && (
+                            <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                              <input
+                                type="checkbox"
+                                checked={seleccion.has(n.id)}
+                                onChange={() => toggleSeleccion(n.id)}
+                                aria-label={`Seleccionar nota ${n.folio ?? n.id}`}
+                                className="w-4 h-4 rounded border-gray-300 text-blue focus:ring-blue cursor-pointer"
+                              />
+                            </td>
+                          )}
                           <td className="px-4 py-3 font-mono text-xs text-gray-600">
                             #{n.folio?.split('-')[0] ?? n.id}
                           </td>
@@ -544,6 +649,44 @@ export default function Notas() {
       )}
 
       </div>
+
+      {/* Modal confirmar borrado múltiple (admin_main) */}
+      {confirmarBorrado && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="flex-shrink-0 w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
+                <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-base font-semibold text-gray-900">Eliminar notas</h3>
+                <p className="text-sm text-gray-500 mt-0.5">
+                  ¿Eliminar <span className="font-medium text-gray-700">{seleccion.size}</span> nota(s)? Esta acción no se puede deshacer.
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setConfirmarBorrado(false)}
+                disabled={borrando}
+                className="flex-1 border border-gray-300 text-gray-700 font-medium py-3.5 rounded-lg text-base hover:bg-gray-50 transition-colors disabled:opacity-60"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={borrarSeleccionadas}
+                disabled={borrando}
+                className="flex-1 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
+              >
+                {borrando ? 'Eliminando...' : 'Eliminar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
