@@ -9,7 +9,6 @@ const INPUT_CLS =
   'w-full px-4 py-3.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent transition';
 
 const CATEGORIAS = ['Detergente', 'Suavizante', 'Blanqueador', 'Bolsas', 'Otro'];
-const UNIDADES   = ['Litros', 'Kilos', 'Piezas', 'Mililitros'];
 const ENVASES    = ['Cubeta', 'Caja', 'Garrafa', 'Botella'];
 
 function pluralizarUnidad(cantidad, unidad) {
@@ -98,6 +97,8 @@ function ModalProducto({ producto, esAdmin, onClose, onGuardado }) {
   const tapaMlNum   = Number(form.tapa_ml) || 0;
   const volMlNum    = aMl(form.volumen_envase, form.unidad_volumen);
   const tapasPorVol = tapaMlNum > 0 ? Math.floor(volMlNum / tapaMlNum) : 0;
+  // Tapas por envase efectivas: calculadas por volumen o escritas directo.
+  const tapasEfectivas = form.metodo_rendimiento === 'volumen' ? tapasPorVol : (Number(form.tapas_por_envase) || 0);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -109,7 +110,8 @@ function ModalProducto({ producto, esAdmin, onClose, onGuardado }) {
     setError('');
     setLoading(true);
 
-    const porVolumen = form.es_por_tapa && form.metodo_rendimiento === 'volumen';
+    // Todos los productos se consumen por tapa/medida.
+    const porVolumen = form.metodo_rendimiento === 'volumen';
     const tapaMlVal  = Number(form.tapa_ml) || 0;
     const volMl      = aMl(form.volumen_envase, form.unidad_volumen);
     // Las tapas del rendimiento: calculadas por volumen o escritas directo.
@@ -120,13 +122,13 @@ function ModalProducto({ producto, esAdmin, onClose, onGuardado }) {
     const body = {
       nombre:            form.nombre.trim(),
       categoria:         form.categoria || null,
-      unidad:            form.es_por_tapa ? 'Tapas' : form.unidad,
+      unidad:            'Tapas',
       stock_actual:      Number(form.stock_actual),
       precio_unitario:   form.precio_unitario !== '' ? Number(form.precio_unitario) : null,
-      es_por_tapa:       form.es_por_tapa,
-      tapas_por_envase:  form.es_por_tapa && tapas > 0 ? tapas : null,
-      envase:            form.es_por_tapa ? (form.envase || null) : null,
-      stock_minimo:      form.es_por_tapa ? Number(form.stock_minimo) || 0 : 0,
+      es_por_tapa:       true,
+      tapas_por_envase:  tapas > 0 ? tapas : null,
+      envase:            form.envase || null,
+      stock_minimo:      Number(form.stock_minimo) || 0,
       volumen_envase_ml: porVolumen && volMl > 0 ? volMl : null,
       tapa_ml:           porVolumen && tapaMlVal > 0 ? tapaMlVal : null,
     };
@@ -186,25 +188,10 @@ function ModalProducto({ producto, esAdmin, onClose, onGuardado }) {
             </select>
           </div>
 
-          {/* Se consume por tapa/medida */}
-          <label className="flex items-start gap-3 p-3 rounded-lg border border-gray-200 bg-gray-50 cursor-pointer">
-            <input
-              type="checkbox" name="es_por_tapa" checked={form.es_por_tapa}
-              onChange={(e) => setForm(f => ({ ...f, es_por_tapa: e.target.checked }))}
-              className="mt-0.5 w-5 h-5 rounded border-gray-300 text-blue focus:ring-blue"
-            />
-            <span className="text-sm">
-              <span className="block font-medium text-gray-800">Se consume por tapa/medida</span>
-              <span className="block text-gray-500">
-                Se compra por envase pero se usa por tapa. El stock se lleva en tapas.
-              </span>
-            </span>
-          </label>
-
-          {/* Precio unitario */}
+          {/* Precio por tapa */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              {form.es_por_tapa ? 'Precio por tapa ($)' : 'Precio unitario ($)'} <span className="text-red-500">*</span>
+              Precio por tapa ($) <span className="text-red-500">*</span>
             </label>
             <div className="flex items-center gap-2">
               <div className="relative flex-1">
@@ -236,8 +223,6 @@ function ModalProducto({ producto, esAdmin, onClose, onGuardado }) {
             </div>
           </div>
 
-          {form.es_por_tapa ? (
-            <>
               {/* Envase */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
@@ -289,9 +274,12 @@ function ModalProducto({ producto, esAdmin, onClose, onGuardado }) {
                           type="number" name="volumen_envase" min="0" step="any" required
                           value={form.volumen_envase} onChange={handleChange}
                           placeholder="Ej. 15"
-                          className={`${INPUT_CLS} flex-1 text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`}
+                          className={`${INPUT_CLS} flex-1 min-w-0 text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`}
                         />
-                        <select name="unidad_volumen" value={form.unidad_volumen} onChange={handleChange} className={`${INPUT_CLS} w-36`}>
+                        <select
+                          name="unidad_volumen" value={form.unidad_volumen} onChange={handleChange}
+                          className="w-28 flex-shrink-0 px-3 py-3.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent transition"
+                        >
                           {UNIDADES_VOLUMEN.map(u => <option key={u} value={u}>{u}</option>)}
                         </select>
                       </div>
@@ -322,26 +310,13 @@ function ModalProducto({ producto, esAdmin, onClose, onGuardado }) {
                   />
                 )}
               </div>
-            </>
-          ) : (
-            /* Unidad */
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                Unidad <span className="text-red-500">*</span>
-              </label>
-              <select name="unidad" required value={form.unidad} onChange={handleChange} className={INPUT_CLS}>
-                <option value="">Seleccionar...</option>
-                {UNIDADES.map(u => <option key={u} value={u}>{u}</option>)}
-              </select>
-            </div>
-          )}
           </>
           )}
 
           {/* Stock actual */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              {form.es_por_tapa ? 'Stock actual (tapas)' : 'Stock actual'} <span className="text-red-500">*</span>
+              Stock actual (tapas) <span className="text-red-500">*</span>
             </label>
             <div className="flex items-center gap-2">
               <input
@@ -367,22 +342,22 @@ function ModalProducto({ producto, esAdmin, onClose, onGuardado }) {
                 +
               </button>
             </div>
-            {form.es_por_tapa && Number(form.tapas_por_envase) > 0 && (
+            {tapasEfectivas > 0 && (
               <button
                 type="button"
                 onClick={() => setForm(f => ({
                   ...f,
-                  stock_actual: String((Number(f.stock_actual) || 0) + Number(f.tapas_por_envase)),
+                  stock_actual: String((Number(f.stock_actual) || 0) + tapasEfectivas),
                 }))}
                 className="mt-2 w-full py-2.5 rounded-lg border border-blue/40 bg-blue/5 text-blue text-sm font-medium hover:bg-blue/10 transition-colors"
               >
-                + Agregar 1 envase ({form.tapas_por_envase} tapas)
+                + Agregar 1 envase ({tapasEfectivas} tapas)
               </button>
             )}
           </div>
 
-          {/* Alerta de stock bajo (solo por tapa) */}
-          {form.es_por_tapa && !soloStock && (
+          {/* Alerta de stock bajo */}
+          {!soloStock && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">
                 Avisar cuando queden (tapas)
