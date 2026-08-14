@@ -8,8 +8,6 @@ import SucursalBar from '../components/SucursalBar';
 const INPUT_CLS =
   'w-full px-4 py-3.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent transition';
 
-const CATEGORIAS = ['Detergente', 'Suavizante', 'Blanqueador', 'Otro'];
-const ENVASES    = ['Cubeta', 'Garrafa', 'Botella'];
 
 function pluralizarUnidad(cantidad, unidad) {
   const n = Math.round(Number(cantidad));
@@ -63,7 +61,7 @@ const FORM_VACIO = {
 };
 
 // ── Modal crear / editar ────────────────────────────────────────
-function ModalProducto({ producto, esAdmin, onClose, onGuardado }) {
+function ModalProducto({ producto, esAdmin, onClose, onGuardado, categorias = [], envases = [] }) {
   const [form, setForm]     = useState(producto
     ? {
         nombre:              producto.nombre,
@@ -98,6 +96,11 @@ function ModalProducto({ producto, esAdmin, onClose, onGuardado }) {
   const tapasPorVol = tapaMlNum > 0 ? Math.floor(volMlNum / tapaMlNum) : 0;
   // Tapas por envase efectivas: calculadas por volumen o escritas directo.
   const tapasEfectivas = form.metodo_rendimiento === 'volumen' ? tapasPorVol : (Number(form.tapas_por_envase) || 0);
+
+  // Opciones de los catálogos; si el producto trae un valor que ya no está en
+  // el catálogo (se desactivó), se conserva para no perderlo al editar.
+  const catOptions = form.categoria && !categorias.includes(form.categoria) ? [form.categoria, ...categorias] : categorias;
+  const envOptions = form.envase && !envases.includes(form.envase) ? [form.envase, ...envases] : envases;
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -188,7 +191,7 @@ function ModalProducto({ producto, esAdmin, onClose, onGuardado }) {
             </label>
             <select name="categoria" required value={form.categoria} onChange={handleChange} className={INPUT_CLS}>
               <option value="">Seleccionar...</option>
-              {CATEGORIAS.map(c => <option key={c} value={c}>{c}</option>)}
+              {catOptions.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
 
@@ -199,7 +202,7 @@ function ModalProducto({ producto, esAdmin, onClose, onGuardado }) {
                 </label>
                 <select name="envase" required value={form.envase} onChange={handleChange} className={INPUT_CLS}>
                   <option value="">Seleccionar...</option>
-                  {ENVASES.map(e => <option key={e} value={e}>{e}</option>)}
+                  {envOptions.map(e => <option key={e} value={e}>{e}</option>)}
                 </select>
               </div>
 
@@ -580,6 +583,21 @@ export default function Inventario() {
   const [bulkError,       setBulkError]       = useState('');
   const [searchParams, setSearchParams] = useSearchParams();
   const highlightAplicadoRef = useRef(null);
+
+  // Catálogos editables (Ajustes → Inventario). Solo los activos se ofrecen.
+  const [categorias, setCategorias] = useState([]);
+  const [envases,    setEnvases]    = useState([]);
+
+  useEffect(() => {
+    let activo = true;
+    api.get('/etiquetas/categorias-producto')
+      .then(data => { if (activo) setCategorias((data ?? []).filter(x => x.activo).map(x => x.nombre)); })
+      .catch(() => {});
+    api.get('/etiquetas/envases-producto')
+      .then(data => { if (activo) setEnvases((data ?? []).filter(x => x.activo).map(x => x.nombre)); })
+      .catch(() => {});
+    return () => { activo = false; };
+  }, []);
 
   useEffect(() => {
     let activo = true;
@@ -1113,6 +1131,8 @@ export default function Inventario() {
         <ModalProducto
           producto={modalProducto === 'nuevo' ? null : modalProducto}
           esAdmin={esAdmin}
+          categorias={categorias}
+          envases={envases}
           onClose={() => setModalProducto(null)}
           onGuardado={handleGuardado}
         />

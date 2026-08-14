@@ -65,6 +65,14 @@ const SectionIcon = {
         d="m15 5 6.3 6.3a2.4 2.4 0 0 1 0 3.4L17 19" />
     </svg>
   ),
+  // Caja de inventario (Lucide "package").
+  inventario: (
+    <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+        d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.27 6.96L12 12.01l8.73-5.05M12 22.08V12" />
+    </svg>
+  ),
   gear: (
     <svg className="w-7 h-7 text-grey" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -107,6 +115,7 @@ const MOBILE_SECTIONS = [
   { id: 'cargas',   label: 'Cargas y Precios',          subtitle: 'Topes de precio por carga', icon: SectionIcon.cargas },
   { id: 'alertas', label: 'Alertas y Notificaciones',  subtitle: 'Ajustes de alertas', icon: SectionIcon.alertas },
   { id: 'etiquetas', label: 'Etiquetas de encargo',    subtitle: 'Tipos de tela y tamaños de edredón', icon: SectionIcon.etiquetas },
+  { id: 'inventario', label: 'Inventario',              subtitle: 'Categorías y envases de productos', icon: SectionIcon.inventario },
 ];
 
 function Section({ titulo, children }) {
@@ -1081,6 +1090,19 @@ export default function Ajustes() {
     </Section>
   );
 
+  const seccionInventarioDesktop = (
+    <Section titulo="Inventario">
+      <Field label="Categorías" hint="Se ofrecen al crear un producto. Desactivar una opción la quita de la lista sin afectar a los productos que ya la usan.">
+        <CatalogoEtiquetas endpoint="/etiquetas/categorias-producto" singular="Categoría" inputCls={INPUT_CLS} onMensaje={setMensaje} />
+      </Field>
+      <div className="border-t border-gray-100 pt-4">
+        <Field label="Envases" hint="Se ofrecen al capturar el envase de un producto por tapa/medida.">
+          <CatalogoEtiquetas endpoint="/etiquetas/envases-producto" singular="Envase" inputCls={INPUT_CLS} onMensaje={setMensaje} />
+        </Field>
+      </div>
+    </Section>
+  );
+
   // ── Mobile: contenido por sección ──
   const seccionPerfilMobile = (
     <div className="space-y-5">
@@ -1463,6 +1485,26 @@ export default function Ajustes() {
     </div>
   );
 
+  const seccionInventarioMobile = (
+    <div className="space-y-6">
+      <MobileField
+        label="Categorías"
+        hint="Se ofrecen al crear un producto. Desactivar una opción la quita de la lista sin afectar a los productos que ya la usan."
+      >
+        <CatalogoEtiquetas endpoint="/etiquetas/categorias-producto" singular="Categoría" inputCls={MOBILE_INPUT_CLS} onMensaje={setMensaje} />
+      </MobileField>
+
+      <div className="border-t border-light-blue/60 pt-5">
+        <MobileField
+          label="Envases"
+          hint="Se ofrecen al capturar el envase de un producto por tapa/medida."
+        >
+          <CatalogoEtiquetas endpoint="/etiquetas/envases-producto" singular="Envase" inputCls={MOBILE_INPUT_CLS} onMensaje={setMensaje} />
+        </MobileField>
+      </div>
+    </div>
+  );
+
   const mobileSectionContent = {
     perfil:  seccionPerfilMobile,
     negocio: seccionSucursalesMobile,
@@ -1470,6 +1512,7 @@ export default function Ajustes() {
     cargas: seccionCargasPreciosMobile,
     alertas: seccionAlertasMobile,
     etiquetas: seccionEtiquetasMobile,
+    inventario: seccionInventarioMobile,
   };
 
   // Éxitos: banner verde en línea. Errores: modal (igual que autoservicio).
@@ -1561,7 +1604,7 @@ export default function Ajustes() {
             <div className="px-6 py-6 space-y-6">
             {mobileSectionContent[activeSection.id]}
 
-            {activeSection.id !== 'etiquetas' && (
+            {activeSection.id !== 'etiquetas' && activeSection.id !== 'inventario' && (
             <div className="grid grid-cols-2 gap-3 pt-2">
               <button
                 type="button"
@@ -1615,6 +1658,7 @@ export default function Ajustes() {
           {seccionSucursalesDesktop}
           {seccionAlertasDesktop}
           {seccionEtiquetasDesktop}
+          {seccionInventarioDesktop}
         </div>
 
         <div className="space-y-3">

@@ -91,5 +91,7 @@ function crearControladorEtiqueta(tabla) {
   return { getAll, create, update };
 }
 
-export const tiposTela      = crearControladorEtiqueta('tipos_tela');
-export const tamanosEdredon = crearControladorEtiqueta('tamanos_edredon');
+export const tiposTela          = crearControladorEtiqueta('tipos_tela');
+export const tamanosEdredon     = crearControladorEtiqueta('tamanos_edredon');
+export const categoriasProducto = crearControladorEtiqueta('categorias_producto');
+export const envasesProducto    = crearControladorEtiqueta('envases_producto');
