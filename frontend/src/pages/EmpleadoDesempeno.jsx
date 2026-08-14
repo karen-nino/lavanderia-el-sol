@@ -454,6 +454,7 @@ export default function EmpleadoDesempeno() {
                     <tr>
                       <th className="text-left px-4 py-2.5 font-medium">Fecha</th>
                       <th className="text-left px-4 py-2.5 font-medium">Entrada</th>
+                      <th className="text-left px-4 py-2.5 font-medium">Salida</th>
                       <th className="text-right px-4 py-2.5 font-medium">Notas</th>
                       <th className="text-right px-4 py-2.5 font-medium">Vendido</th>
                       <th className="text-right px-4 py-2.5 font-medium">Máquinas</th>
@@ -465,7 +466,7 @@ export default function EmpleadoDesempeno() {
                   <tbody className="divide-y divide-gray-100">
                     {diasPagina.length === 0 ? (
                       <tr>
-                        <td colSpan={8} className="px-4 py-10 text-center text-gray-400 text-sm">
+                        <td colSpan={9} className="px-4 py-10 text-center text-gray-400 text-sm">
                           No hay días en el rango seleccionado.
                         </td>
                       </tr>
@@ -473,6 +474,7 @@ export default function EmpleadoDesempeno() {
                       <tr key={d.fecha} className="hover:bg-gray-50">
                         <td className="px-4 py-2.5 text-gray-700 whitespace-nowrap">{fmtFecha(d.fecha)}</td>
                         <td className="px-4 py-2.5 text-gray-700 whitespace-nowrap">{d.checkin ?? '—'}</td>
+                        <td className="px-4 py-2.5 text-gray-700 whitespace-nowrap">{d.salida ?? '—'}</td>
                         <td className="px-4 py-2.5 text-right">
                           <CeldaNumero value={d.notas} onClick={() => setModal({ dia: d, metrica: 'notas' })} />
                         </td>

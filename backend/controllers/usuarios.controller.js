@@ -61,10 +61,13 @@ export const getDesempeno = async (req, res) => {
       [id, TZ_NEGOCIO]
     );
 
-    // Check-ins (hora de entrada) del empleado, por día local del negocio.
+    // Check-ins del empleado, por día local del negocio: entrada (primer login,
+    // created_at) y salida (cierre de sesión manual).
     const { rows: checkins } = await pool.query(
       `SELECT to_char(created_at AT TIME ZONE $2, 'YYYY-MM-DD') AS fecha,
-              to_char(created_at AT TIME ZONE $2, 'HH24:MI')    AS hora
+              to_char(created_at AT TIME ZONE $2, 'HH24:MI')    AS hora,
+              CASE WHEN salida IS NOT NULL
+                   THEN to_char(salida AT TIME ZONE $2, 'HH24:MI') END AS hora_salida
          FROM checkins WHERE usuario_id = $1`,
       [id, TZ_NEGOCIO]
     );
@@ -103,7 +106,7 @@ export const getDesempeno = async (req, res) => {
       const k = fecha; // 'YYYY-MM-DD' (día local del negocio)
       if (!buckets.has(k)) {
         buckets.set(k, {
-          fecha, notas: 0, vendido: 0, checkin: null,
+          fecha, notas: 0, vendido: 0, checkin: null, salida: null,
           _notas: [],              // { folio, modalidad, cliente, precio }
           _maquinas: new Map(),    // id -> { nombre, tipo, usos }
           _cargas: [],
@@ -182,7 +185,9 @@ export const getDesempeno = async (req, res) => {
     // Hora de entrada por día. Un check-in sin notas crea su propio bucket con
     // métricas en 0, para que el día de asistencia aparezca igual en la tabla.
     for (const ci of checkins) {
-      getBucket(ci.fecha).checkin = ci.hora;
+      const b = getBucket(ci.fecha);
+      b.checkin = ci.hora;
+      b.salida  = ci.hora_salida ?? null;
     }
 
     const diasFmt = [...buckets.values()]
@@ -197,6 +202,7 @@ export const getDesempeno = async (req, res) => {
         return {
           fecha:     b.fecha,
           checkin:   b.checkin,
+          salida:    b.salida,
           notas:     b.notas,
           vendido:   b.vendido,
           maquinas:  maquinas.length,

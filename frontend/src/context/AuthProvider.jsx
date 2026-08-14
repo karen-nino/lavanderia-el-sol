@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { AuthContext } from './AuthContext';
+import { api } from '../lib/api';
 
 export function AuthProvider({ children }) {
   const [token, setToken] = useState(() => localStorage.getItem('token'));
@@ -34,6 +35,10 @@ export function AuthProvider({ children }) {
   };
 
   const logout = () => {
+    // Registrar la salida (cierre de sesión manual) antes de borrar el token.
+    // Es "fire-and-forget": la petición ya lleva el token y no debe frenar el
+    // cierre de sesión aunque falle.
+    api.post('/auth/logout').catch(() => {});
     localStorage.removeItem('token');
     localStorage.removeItem('usuario');
     persistSucursal(null);

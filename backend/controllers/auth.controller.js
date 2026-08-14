@@ -117,6 +117,24 @@ export const login = async (req, res) => {
   }
 };
 
+// ── POST /auth/logout ────────────────────────────────────────
+// Registra el cierre de sesión manual como la "salida" del día en el check-in.
+// Actualiza la fila del día local; si cierra sesión varias veces, queda la
+// última. Nunca debe bloquear el cierre de sesión, por eso va en try/catch y
+// siempre responde 200.
+export const logout = async (req, res) => {
+  try {
+    await pool.query(
+      `UPDATE checkins SET salida = NOW()
+        WHERE usuario_id = $1 AND fecha = $2`,
+      [req.user.id, fechaLocal()]
+    );
+  } catch (err) {
+    console.error('logout (salida) error:', err);
+  }
+  res.json({ ok: true });
+};
+
 // ── GET /auth/me ─────────────────────────────────────────────
 export const getMe = async (req, res) => {
   try {
