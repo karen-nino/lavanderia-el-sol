@@ -41,31 +41,49 @@ function formatoStock(p) {
   return { cantidad: `${n} ${n === 1 ? 'Pieza' : 'Piezas'}`, equivalencia: '' };
 }
 
+const UNIDADES_VOLUMEN = ['Litros', 'Mililitros'];
+
+// Convierte un valor a mililitros según su unidad.
+function aMl(valor, unidad) {
+  const v = Number(valor) || 0;
+  return unidad === 'Litros' ? v * 1000 : v;
+}
+
 const FORM_VACIO = {
-  nombre:           '',
-  categoria:        '',
-  precio_unitario:  '',
-  unidad:           '',
-  stock_actual:     '0',
-  es_por_tapa:      false,
-  envase:           '',
-  tapas_por_envase: '',
-  stock_minimo:     '0',
+  nombre:              '',
+  categoria:           '',
+  precio_unitario:     '',
+  unidad:              '',
+  stock_actual:        '0',
+  es_por_tapa:         false,
+  envase:              '',
+  tapas_por_envase:    '',
+  stock_minimo:        '0',
+  metodo_rendimiento:  'volumen',   // 'volumen' (litros + mL) | 'tapas' (directo)
+  volumen_envase:      '',
+  unidad_volumen:      'Litros',
+  tapa_ml:             '',
 };
 
 // ── Modal crear / editar ────────────────────────────────────────
 function ModalProducto({ producto, esAdmin, onClose, onGuardado }) {
   const [form, setForm]     = useState(producto
     ? {
-        nombre:           producto.nombre,
-        categoria:        producto.categoria ?? '',
-        precio_unitario:  producto.precio_unitario ?? '',
-        unidad:           producto.unidad,
-        stock_actual:     producto.stock_actual,
-        es_por_tapa:      !!producto.es_por_tapa,
-        envase:           producto.envase ?? '',
-        tapas_por_envase: producto.tapas_por_envase ?? '',
-        stock_minimo:     producto.stock_minimo ?? '0',
+        nombre:              producto.nombre,
+        categoria:           producto.categoria ?? '',
+        precio_unitario:     producto.precio_unitario ?? '',
+        unidad:              producto.unidad,
+        stock_actual:        producto.stock_actual,
+        es_por_tapa:         !!producto.es_por_tapa,
+        envase:              producto.envase ?? '',
+        tapas_por_envase:    producto.tapas_por_envase ?? '',
+        stock_minimo:        producto.stock_minimo ?? '0',
+        metodo_rendimiento:  producto.volumen_envase_ml ? 'volumen' : (producto.es_por_tapa ? 'tapas' : 'volumen'),
+        volumen_envase:      producto.volumen_envase_ml
+          ? (producto.volumen_envase_ml % 1000 === 0 ? String(producto.volumen_envase_ml / 1000) : String(producto.volumen_envase_ml))
+          : '',
+        unidad_volumen:      producto.volumen_envase_ml && producto.volumen_envase_ml % 1000 !== 0 ? 'Mililitros' : 'Litros',
+        tapa_ml:             producto.tapa_ml ?? '',
       }
     : FORM_VACIO
   );
@@ -75,6 +93,11 @@ function ModalProducto({ producto, esAdmin, onClose, onGuardado }) {
   const esEdicion = Boolean(producto);
   // Un empleado (no admin) editando solo puede ver y ajustar el stock.
   const soloStock = esEdicion && !esAdmin;
+
+  // Rendimiento en tapas calculado por volumen (para mostrarlo en vivo).
+  const tapaMlNum   = Number(form.tapa_ml) || 0;
+  const volMlNum    = aMl(form.volumen_envase, form.unidad_volumen);
+  const tapasPorVol = tapaMlNum > 0 ? Math.floor(volMlNum / tapaMlNum) : 0;
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -86,16 +109,26 @@ function ModalProducto({ producto, esAdmin, onClose, onGuardado }) {
     setError('');
     setLoading(true);
 
+    const porVolumen = form.es_por_tapa && form.metodo_rendimiento === 'volumen';
+    const tapaMlVal  = Number(form.tapa_ml) || 0;
+    const volMl      = aMl(form.volumen_envase, form.unidad_volumen);
+    // Las tapas del rendimiento: calculadas por volumen o escritas directo.
+    const tapas = porVolumen
+      ? (tapaMlVal > 0 ? Math.floor(volMl / tapaMlVal) : 0)
+      : (Number(form.tapas_por_envase) || 0);
+
     const body = {
-      nombre:           form.nombre.trim(),
-      categoria:        form.categoria || null,
-      unidad:           form.es_por_tapa ? 'Tapas' : form.unidad,
-      stock_actual:     Number(form.stock_actual),
-      precio_unitario:  form.precio_unitario !== '' ? Number(form.precio_unitario) : null,
-      es_por_tapa:      form.es_por_tapa,
-      tapas_por_envase: form.es_por_tapa && form.tapas_por_envase !== '' ? Number(form.tapas_por_envase) : null,
-      envase:           form.es_por_tapa ? (form.envase || null) : null,
-      stock_minimo:     form.es_por_tapa ? Number(form.stock_minimo) || 0 : 0,
+      nombre:            form.nombre.trim(),
+      categoria:         form.categoria || null,
+      unidad:            form.es_por_tapa ? 'Tapas' : form.unidad,
+      stock_actual:      Number(form.stock_actual),
+      precio_unitario:   form.precio_unitario !== '' ? Number(form.precio_unitario) : null,
+      es_por_tapa:       form.es_por_tapa,
+      tapas_por_envase:  form.es_por_tapa && tapas > 0 ? tapas : null,
+      envase:            form.es_por_tapa ? (form.envase || null) : null,
+      stock_minimo:      form.es_por_tapa ? Number(form.stock_minimo) || 0 : 0,
+      volumen_envase_ml: porVolumen && volMl > 0 ? volMl : null,
+      tapa_ml:           porVolumen && tapaMlVal > 0 ? tapaMlVal : null,
     };
 
     try {
@@ -216,17 +249,78 @@ function ModalProducto({ producto, esAdmin, onClose, onGuardado }) {
                 </select>
               </div>
 
-              {/* Tapas por envase (rendimiento) */}
+              {/* Rendimiento: por volumen (exacto) o tapas directo */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                  ¿Cuántas tapas rinde un envase? <span className="text-red-500">*</span>
+                  Rendimiento del envase <span className="text-red-500">*</span>
                 </label>
-                <input
-                  type="number" name="tapas_por_envase" min="1" step="1" required
-                  value={form.tapas_por_envase} onChange={handleChange}
-                  placeholder="Ej. 200"
-                  className={`${INPUT_CLS} text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`}
-                />
+                <div className="flex gap-2 mb-3">
+                  <button
+                    type="button"
+                    onClick={() => setForm(f => ({ ...f, metodo_rendimiento: 'volumen' }))}
+                    className={`flex-1 py-2.5 rounded-lg border text-sm font-medium transition-colors ${
+                      form.metodo_rendimiento === 'volumen'
+                        ? 'border-blue bg-light-blue text-blue'
+                        : 'border-gray-300 bg-white text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    Por volumen
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setForm(f => ({ ...f, metodo_rendimiento: 'tapas' }))}
+                    className={`flex-1 py-2.5 rounded-lg border text-sm font-medium transition-colors ${
+                      form.metodo_rendimiento === 'tapas'
+                        ? 'border-blue bg-light-blue text-blue'
+                        : 'border-gray-300 bg-white text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    Solo tapas
+                  </button>
+                </div>
+
+                {form.metodo_rendimiento === 'volumen' ? (
+                  <div className="space-y-3">
+                    {/* Contenido del envase */}
+                    <div>
+                      <p className="text-xs text-gray-500 mb-1.5">¿Cuánto trae el envase?</p>
+                      <div className="flex gap-2">
+                        <input
+                          type="number" name="volumen_envase" min="0" step="any" required
+                          value={form.volumen_envase} onChange={handleChange}
+                          placeholder="Ej. 15"
+                          className={`${INPUT_CLS} flex-1 text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`}
+                        />
+                        <select name="unidad_volumen" value={form.unidad_volumen} onChange={handleChange} className={`${INPUT_CLS} w-36`}>
+                          {UNIDADES_VOLUMEN.map(u => <option key={u} value={u}>{u}</option>)}
+                        </select>
+                      </div>
+                    </div>
+                    {/* Tamaño de la tapa */}
+                    <div>
+                      <p className="text-xs text-gray-500 mb-1.5">¿De qué tamaño es la tapa/medida? (mL)</p>
+                      <input
+                        type="number" name="tapa_ml" min="1" step="any" required
+                        value={form.tapa_ml} onChange={handleChange}
+                        placeholder="Ej. 100"
+                        className={`${INPUT_CLS} text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`}
+                      />
+                    </div>
+                    {/* Resultado calculado */}
+                    <div className={`rounded-lg px-4 py-3 text-sm ${tapasPorVol > 0 ? 'bg-green-50 text-green-800' : 'bg-gray-50 text-gray-500'}`}>
+                      {tapasPorVol > 0
+                        ? <>Rinde <span className="font-bold">{tapasPorVol} tapas</span> por {(form.envase || 'envase').toLowerCase()}.</>
+                        : 'Captura el contenido y el tamaño de la tapa para calcular las tapas.'}
+                    </div>
+                  </div>
+                ) : (
+                  <input
+                    type="number" name="tapas_por_envase" min="1" step="1" required
+                    value={form.tapas_por_envase} onChange={handleChange}
+                    placeholder="Ej. 150 tapas por envase"
+                    className={`${INPUT_CLS} text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`}
+                  />
+                )}
               </div>
             </>
           ) : (

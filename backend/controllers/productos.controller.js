@@ -67,6 +67,7 @@ export const createProducto = async (req, res) => {
   const {
     nombre, descripcion, unidad = 'pieza', precio_unitario, stock_actual = 0, categoria,
     es_por_tapa = false, tapas_por_envase, envase, stock_minimo = 0,
+    volumen_envase_ml, tapa_ml,
   } = req.body;
 
   if (!nombre) {
@@ -80,14 +81,16 @@ export const createProducto = async (req, res) => {
     const { rows } = await pool.query(
       `INSERT INTO productos
          (nombre, descripcion, unidad, precio_unitario, stock_actual, categoria, sucursal,
-          es_por_tapa, tapas_por_envase, envase, stock_minimo)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+          es_por_tapa, tapas_por_envase, envase, stock_minimo, volumen_envase_ml, tapa_ml)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
        RETURNING *,
                  (stock_actual - stock_reservado) AS stock_disponible,
                  ${ESTADO_STOCK_SQL}`,
       [nombre, descripcion || null, unidad, precio_unitario ?? null, stock_actual, categoria || null, req.sucursal,
        !!es_por_tapa, es_por_tapa ? Number(tapas_por_envase) : null, es_por_tapa ? (envase || null) : null,
-       Number(stock_minimo) || 0]
+       Number(stock_minimo) || 0,
+       es_por_tapa && volumen_envase_ml ? Number(volumen_envase_ml) : null,
+       es_por_tapa && tapa_ml ? Number(tapa_ml) : null]
     );
     res.status(201).json(rows[0]);
   } catch (err) {
@@ -101,6 +104,7 @@ export const updateProducto = async (req, res) => {
   const {
     nombre, descripcion, unidad, precio_unitario, stock_actual, categoria,
     es_por_tapa = false, tapas_por_envase, envase, stock_minimo = 0,
+    volumen_envase_ml, tapa_ml,
   } = req.body;
 
   // Un empleado (no admin) solo puede ajustar el stock; los demás campos
@@ -142,6 +146,7 @@ export const updateProducto = async (req, res) => {
          SET nombre = $1, descripcion = $2, unidad = $3,
              precio_unitario = $4, stock_actual = $5, categoria = $8,
              es_por_tapa = $9, tapas_por_envase = $10, envase = $11, stock_minimo = $12,
+             volumen_envase_ml = $13, tapa_ml = $14,
              updated_at = NOW()
        WHERE id = $6 AND sucursal = $7
        RETURNING *,
@@ -149,7 +154,9 @@ export const updateProducto = async (req, res) => {
                  ${ESTADO_STOCK_SQL}`,
       [nombre, descripcion || null, unidad, precio_unitario ?? null, stock_actual, id, req.sucursal, categoria || null,
        !!es_por_tapa, es_por_tapa ? Number(tapas_por_envase) : null, es_por_tapa ? (envase || null) : null,
-       Number(stock_minimo) || 0]
+       Number(stock_minimo) || 0,
+       es_por_tapa && volumen_envase_ml ? Number(volumen_envase_ml) : null,
+       es_por_tapa && tapa_ml ? Number(tapa_ml) : null]
     );
     if (rows.length === 0) {
       return res.status(404).json({ message: 'Producto no encontrado.' });
