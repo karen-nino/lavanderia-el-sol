@@ -207,12 +207,64 @@ function CatalogoEtiquetas({ endpoint, singular, inputCls, onMensaje }) {
   const [editId,     setEditId]     = useState(null);
   const [editNombre, setEditNombre] = useState('');
 
-  const ordenar = (a, b) =>
-    (b.activo === a.activo ? 0 : b.activo ? 1 : -1) || a.nombre.localeCompare(b.nombre);
+  // Reordenamiento con Pointer Events: funciona igual con mouse (desktop) y con
+  // el dedo (touch/móvil), a diferencia del arrastre nativo del navegador.
+  const listRef      = useRef(null);
+  const dragIdRef    = useRef(null);
+  const [draggingId, setDraggingId] = useState(null);
 
   useEffect(() => {
-    api.get(endpoint).then(data => setItems((data ?? []).slice().sort(ordenar))).catch(() => {});
+    api.get(endpoint).then(data => setItems(data ?? [])).catch(() => {});
   }, [endpoint]);
+
+  // Guarda el nuevo orden (lista de ids) en el servidor.
+  const persistirOrden = async (lista) => {
+    try {
+      await api.patch(`${endpoint}/reordenar`, { ids: lista.map(x => x.id) });
+    } catch (err) {
+      onMensaje?.({ tipo: 'error', texto: err.message });
+    }
+  };
+
+  const onHandleDown = (e, id) => {
+    if (e.button != null && e.button !== 0) return; // solo botón principal
+    dragIdRef.current = id;
+    setDraggingId(id);
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* noop */ }
+  };
+
+  // Al mover el puntero, se coloca el elemento arrastrado en la posición de la
+  // fila que está debajo (según su posición vertical).
+  const onHandleMove = (e) => {
+    const id = dragIdRef.current;
+    if (id == null || !listRef.current) return;
+    const y = e.clientY;
+    const filas = [...listRef.current.querySelectorAll('[data-row]')];
+    const objetivo = filas.find(f => {
+      const r = f.getBoundingClientRect();
+      return y >= r.top && y <= r.bottom;
+    });
+    if (!objetivo) return;
+    const targetId = Number(objetivo.getAttribute('data-row'));
+    if (targetId === id) return;
+    setItems(prev => {
+      const from = prev.findIndex(x => x.id === id);
+      const to   = prev.findIndex(x => x.id === targetId);
+      if (from === -1 || to === -1 || from === to) return prev;
+      const lista = [...prev];
+      const [movido] = lista.splice(from, 1);
+      lista.splice(to, 0, movido);
+      return lista;
+    });
+  };
+
+  const onHandleUp = (e) => {
+    if (dragIdRef.current == null) return;
+    try { e.currentTarget.releasePointerCapture(e.pointerId); } catch { /* noop */ }
+    dragIdRef.current = null;
+    setDraggingId(null);
+    setItems(prev => { persistirOrden(prev); return prev; });
+  };
 
   // Se pide confirmación antes de agregar.
   const pedirAgregar = () => {
@@ -226,7 +278,7 @@ function CatalogoEtiquetas({ endpoint, singular, inputCls, onMensaje }) {
     setSaving(true);
     try {
       const creado = await api.post(endpoint, { nombre });
-      setItems(prev => [...prev, creado].sort(ordenar));
+      setItems(prev => [...prev, creado]);
       setNuevo('');
       setConfirmar(false);
       onMensaje?.({ tipo: 'ok', texto: `${singular} "${creado.nombre}" agregada.` });
@@ -243,7 +295,7 @@ function CatalogoEtiquetas({ endpoint, singular, inputCls, onMensaje }) {
     if (!nombre) return;
     try {
       const upd = await api.put(`${endpoint}/${id}`, { nombre });
-      setItems(prev => prev.map(x => (x.id === id ? upd : x)).sort(ordenar));
+      setItems(prev => prev.map(x => (x.id === id ? upd : x)));
       setEditId(null);
       onMensaje?.({ tipo: 'ok', texto: 'Etiqueta actualizada.' });
     } catch (err) {
@@ -254,7 +306,7 @@ function CatalogoEtiquetas({ endpoint, singular, inputCls, onMensaje }) {
   const toggleActivo = async (item) => {
     try {
       const upd = await api.put(`${endpoint}/${item.id}`, { activo: !item.activo });
-      setItems(prev => prev.map(x => (x.id === item.id ? upd : x)).sort(ordenar));
+      setItems(prev => prev.map(x => (x.id === item.id ? upd : x)));
     } catch (err) {
       onMensaje?.({ tipo: 'error', texto: err.message });
     }
@@ -285,9 +337,13 @@ function CatalogoEtiquetas({ endpoint, singular, inputCls, onMensaje }) {
       {items.length === 0 ? (
         <p className="text-sm text-gray-400">Aún no hay etiquetas.</p>
       ) : (
-        <ul className="divide-y divide-gray-100 border border-gray-100 rounded-lg overflow-hidden">
-          {items.map(item => (
-            <li key={item.id} className="flex items-center gap-2 px-3 py-2.5 bg-white">
+        <ul ref={listRef} className="divide-y divide-gray-100 border border-gray-100 rounded-lg overflow-hidden">
+          {items.map((item) => (
+            <li
+              key={item.id}
+              data-row={item.id}
+              className={`flex items-center gap-2 px-3 py-2.5 bg-white ${draggingId === item.id ? 'opacity-40 ring-2 ring-blue/40 ring-inset' : ''}`}
+            >
               {editId === item.id ? (
                 <>
                   <input
@@ -305,6 +361,20 @@ function CatalogoEtiquetas({ endpoint, singular, inputCls, onMensaje }) {
                 </>
               ) : (
                 <>
+                  <span
+                    onPointerDown={(e) => onHandleDown(e, item.id)}
+                    onPointerMove={onHandleMove}
+                    onPointerUp={onHandleUp}
+                    onPointerCancel={onHandleUp}
+                    style={{ touchAction: 'none' }}
+                    className="flex-shrink-0 cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 -ml-1 p-1"
+                    title="Arrastrar para reordenar"
+                    aria-label="Arrastrar para reordenar"
+                  >
+                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                      <path d="M7 4a1 1 0 100 2 1 1 0 000-2zM7 9a1 1 0 100 2 1 1 0 000-2zM7 14a1 1 0 100 2 1 1 0 000-2zM13 4a1 1 0 100 2 1 1 0 000-2zM13 9a1 1 0 100 2 1 1 0 000-2zM13 14a1 1 0 100 2 1 1 0 000-2z" />
+                    </svg>
+                  </span>
                   <span className={`flex-1 text-sm ${item.activo ? 'text-gray-800' : 'text-gray-400 line-through'}`}>
                     {item.nombre}
                   </span>

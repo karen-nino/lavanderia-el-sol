@@ -9,7 +9,7 @@ function crearControladorEtiqueta(tabla) {
   const getAll = async (req, res) => {
     try {
       const { rows } = await pool.query(
-        `SELECT * FROM ${tabla} ORDER BY activo DESC, nombre ASC`
+        `SELECT * FROM ${tabla} ORDER BY orden ASC NULLS LAST, id ASC`
       );
       res.json(rows);
     } catch (err) {
@@ -27,8 +27,11 @@ function crearControladorEtiqueta(tabla) {
       return res.status(400).json({ message: 'El nombre es requerido.' });
     }
     try {
+      // Se agrega al final del orden actual.
       const { rows } = await pool.query(
-        `INSERT INTO ${tabla} (nombre) VALUES ($1) RETURNING *`,
+        `INSERT INTO ${tabla} (nombre, orden)
+         VALUES ($1, (SELECT COALESCE(MAX(orden), 0) + 1 FROM ${tabla}))
+         RETURNING *`,
         [nombre]
       );
       res.status(201).json(rows[0]);
@@ -88,7 +91,40 @@ function crearControladorEtiqueta(tabla) {
     }
   };
 
-  return { getAll, create, update };
+  // Reordena todo el catálogo: recibe { ids: [...] } en el nuevo orden y asigna
+  // orden = posición. En una transacción para que quede consistente.
+  const reorder = async (req, res) => {
+    if (!esAdmin(req.user.rol)) {
+      return res.status(403).json({ message: 'Solo un administrador puede realizar esta acción.' });
+    }
+    const ids = Array.isArray(req.body.ids) ? req.body.ids.map(Number).filter(Number.isInteger) : [];
+    if (ids.length === 0) {
+      return res.status(400).json({ message: 'Se requiere la lista de ids en orden.' });
+    }
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      for (let i = 0; i < ids.length; i++) {
+        await client.query(
+          `UPDATE ${tabla} SET orden = $1, updated_at = NOW() WHERE id = $2`,
+          [i + 1, ids[i]]
+        );
+      }
+      await client.query('COMMIT');
+      const { rows } = await client.query(
+        `SELECT * FROM ${tabla} ORDER BY orden ASC NULLS LAST, id ASC`
+      );
+      res.json(rows);
+    } catch (err) {
+      await client.query('ROLLBACK');
+      console.error(`reorder ${tabla} error:`, err);
+      res.status(500).json({ message: 'Error interno del servidor.' });
+    } finally {
+      client.release();
+    }
+  };
+
+  return { getAll, create, update, reorder };
 }
 
 export const tiposTela          = crearControladorEtiqueta('tipos_tela');
