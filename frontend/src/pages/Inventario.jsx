@@ -85,6 +85,7 @@ function ModalProducto({ producto, esAdmin, onClose, onGuardado, categorias = []
   );
   const [error,   setError]   = useState('');
   const [loading, setLoading] = useState(false);
+  const [confirmar, setConfirmar] = useState(false);
 
   const esEdicion = Boolean(producto);
   // Un empleado (no admin) editando solo puede ver y ajustar el stock.
@@ -107,8 +108,14 @@ function ModalProducto({ producto, esAdmin, onClose, onGuardado, categorias = []
     setForm(f => ({ ...f, [name]: value }));
   };
 
-  const handleSubmit = async (e) => {
+  // Al crear un producto nuevo se pide confirmación primero; al editar no.
+  const handleSubmit = (e) => {
     e.preventDefault();
+    if (!esEdicion && !confirmar) { setConfirmar(true); return; }
+    ejecutarGuardado();
+  };
+
+  const ejecutarGuardado = async () => {
     setError('');
     setLoading(true);
 
@@ -150,12 +157,14 @@ function ModalProducto({ producto, esAdmin, onClose, onGuardado, categorias = []
       onGuardado(resultado, esEdicion);
     } catch (err) {
       setError(err.message);
+      setConfirmar(false); // volver al formulario para mostrar el error
     } finally {
       setLoading(false);
     }
   };
 
   return (
+    <>
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] flex flex-col">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 flex-shrink-0">
@@ -396,6 +405,42 @@ function ModalProducto({ producto, esAdmin, onClose, onGuardado, categorias = []
         </form>
       </div>
     </div>
+
+    {/* Confirmación antes de agregar un producto nuevo */}
+    {confirmar && (
+      <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40">
+        <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-4">
+          <div className="flex items-center gap-3">
+            <div className="flex-shrink-0 w-10 h-10 bg-light-blue rounded-full flex items-center justify-center">
+              <svg className="w-5 h-5 text-blue" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v12m6-6H6" />
+              </svg>
+            </div>
+            <div>
+              <h3 className="text-base font-semibold text-gray-900">Agregar producto</h3>
+              <p className="text-sm text-gray-500 mt-0.5">
+                ¿Agregar <span className="font-medium text-gray-700">{form.nombre.trim() || 'este producto'}</span> al inventario?
+              </p>
+            </div>
+          </div>
+          <div className="flex gap-3">
+            <button
+              type="button" onClick={() => setConfirmar(false)} disabled={loading}
+              className="flex-1 border border-gray-300 text-gray-700 font-medium py-3.5 rounded-lg text-base hover:bg-gray-50 transition-colors disabled:opacity-60"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button" onClick={ejecutarGuardado} disabled={loading}
+              className="flex-1 bg-blue hover:opacity-90 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
+            >
+              {loading ? 'Agregando...' : 'Agregar'}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }
 
