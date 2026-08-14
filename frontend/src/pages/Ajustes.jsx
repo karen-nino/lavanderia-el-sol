@@ -206,6 +206,7 @@ function CatalogoEtiquetas({ endpoint, singular, inputCls, onMensaje }) {
   const [confirmar,  setConfirmar]  = useState(false);
   const [editId,     setEditId]     = useState(null);
   const [editNombre, setEditNombre] = useState('');
+  const [savedId,    setSavedId]    = useState(null);
 
   // Reordenamiento con Pointer Events: funciona igual con mouse (desktop) y con
   // el dedo (touch/móvil), a diferencia del arrastre nativo del navegador.
@@ -281,7 +282,9 @@ function CatalogoEtiquetas({ endpoint, singular, inputCls, onMensaje }) {
       setItems(prev => [...prev, creado]);
       setNuevo('');
       setConfirmar(false);
-      onMensaje?.({ tipo: 'ok', texto: `${singular} "${creado.nombre}" agregada.` });
+      // Confirmación como animación (palomita) en la fila recién agregada.
+      setSavedId(creado.id);
+      setTimeout(() => setSavedId(s => (s === creado.id ? null : s)), 1800);
     } catch (err) {
       setConfirmar(false);
       onMensaje?.({ tipo: 'error', texto: err.message });
@@ -297,7 +300,9 @@ function CatalogoEtiquetas({ endpoint, singular, inputCls, onMensaje }) {
       const upd = await api.put(`${endpoint}/${id}`, { nombre });
       setItems(prev => prev.map(x => (x.id === id ? upd : x)));
       setEditId(null);
-      onMensaje?.({ tipo: 'ok', texto: 'Etiqueta actualizada.' });
+      // Confirmación como animación (palomita) en la fila, en vez de banner.
+      setSavedId(id);
+      setTimeout(() => setSavedId(s => (s === id ? null : s)), 1800);
     } catch (err) {
       onMensaje?.({ tipo: 'error', texto: err.message });
     }
@@ -378,6 +383,12 @@ function CatalogoEtiquetas({ endpoint, singular, inputCls, onMensaje }) {
                   <span className={`flex-1 text-sm ${item.activo ? 'text-gray-800' : 'text-gray-400 line-through'}`}>
                     {item.nombre}
                   </span>
+                  {savedId === item.id && (
+                    <span className="flex items-center gap-1 text-green-600 text-xs font-medium animate-fade-in">
+                      <IconoGuardado />
+                      Guardado
+                    </span>
+                  )}
                   <button
                     type="button"
                     onClick={() => { setEditId(item.id); setEditNombre(item.nombre); }}

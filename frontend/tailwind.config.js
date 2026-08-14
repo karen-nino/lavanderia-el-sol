@@ -62,12 +62,17 @@ export default {
           '20%, 60%':     { transform: 'translateX(-6px)' },
           '40%, 80%':     { transform: 'translateX(6px)'  },
         },
+        'fade-in': {
+          '0%':   { opacity: '0', transform: 'translateX(4px)' },
+          '100%': { opacity: '1', transform: 'translateX(0)'   },
+        },
       },
       animation: {
         'pop-in':     'pop-in 0.4s ease-out forwards',
         'draw-check': 'draw-check 0.4s 0.2s ease-out forwards',
         'draw-x':     'draw-x 0.4s 0.2s ease-out forwards',
         'shake':      'shake 0.5s ease-in-out',
+        'fade-in':    'fade-in 0.3s ease-out forwards',
       },
     },
   },
