@@ -8,8 +8,8 @@ import SucursalBar from '../components/SucursalBar';
 const INPUT_CLS =
   'w-full px-4 py-3.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent transition';
 
-const CATEGORIAS = ['Detergente', 'Suavizante', 'Blanqueador', 'Bolsas', 'Otro'];
-const ENVASES    = ['Cubeta', 'Caja', 'Garrafa', 'Botella'];
+const CATEGORIAS = ['Detergente', 'Suavizante', 'Blanqueador', 'Otro'];
+const ENVASES    = ['Cubeta', 'Garrafa', 'Botella'];
 
 function pluralizarUnidad(cantidad, unidad) {
   const n = Math.round(Number(cantidad));
@@ -52,9 +52,7 @@ const FORM_VACIO = {
   nombre:              '',
   categoria:           '',
   precio_unitario:     '',
-  unidad:              '',
-  stock_actual:        '0',
-  es_por_tapa:         false,
+  stock_envases:       '0',
   envase:              '',
   tapas_por_envase:    '',
   stock_minimo:        '0',
@@ -71,9 +69,10 @@ function ModalProducto({ producto, esAdmin, onClose, onGuardado }) {
         nombre:              producto.nombre,
         categoria:           producto.categoria ?? '',
         precio_unitario:     producto.precio_unitario ?? '',
-        unidad:              producto.unidad,
-        stock_actual:        producto.stock_actual,
-        es_por_tapa:         !!producto.es_por_tapa,
+        // El stock se guarda en tapas; en el formulario se muestra en envases.
+        stock_envases:       Number(producto.tapas_por_envase) > 0
+          ? String(+(Number(producto.stock_actual) / Number(producto.tapas_por_envase)).toFixed(2))
+          : String(producto.stock_actual ?? 0),
         envase:              producto.envase ?? '',
         tapas_por_envase:    producto.tapas_por_envase ?? '',
         stock_minimo:        producto.stock_minimo ?? '0',
@@ -119,11 +118,16 @@ function ModalProducto({ producto, esAdmin, onClose, onGuardado }) {
       ? (tapaMlVal > 0 ? Math.floor(volMl / tapaMlVal) : 0)
       : (Number(form.tapas_por_envase) || 0);
 
+    // El stock se captura en envases y se guarda en tapas (envases × tapas).
+    const stockTapas = tapas > 0
+      ? Math.round((Number(form.stock_envases) || 0) * tapas)
+      : Number(form.stock_envases) || 0;
+
     const body = {
       nombre:            form.nombre.trim(),
       categoria:         form.categoria || null,
       unidad:            'Tapas',
-      stock_actual:      Number(form.stock_actual),
+      stock_actual:      stockTapas,
       precio_unitario:   form.precio_unitario !== '' ? Number(form.precio_unitario) : null,
       es_por_tapa:       true,
       tapas_por_envase:  tapas > 0 ? tapas : null,
@@ -188,42 +192,7 @@ function ModalProducto({ producto, esAdmin, onClose, onGuardado }) {
             </select>
           </div>
 
-          {/* Precio por tapa */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              Precio por tapa ($) <span className="text-red-500">*</span>
-            </label>
-            <div className="flex items-center gap-2">
-              <div className="relative flex-1">
-                <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 text-base">$</span>
-                <input
-                  type="number" name="precio_unitario" min="0" step="10" required
-                  value={form.precio_unitario} onChange={handleChange}
-                  placeholder="0.00"
-                  className={`${INPUT_CLS} pl-8 text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`}
-                />
-              </div>
-              <button
-                type="button"
-                onClick={() => setForm(f => ({ ...f, precio_unitario: String(Math.max(0, (Number(f.precio_unitario) || 0) - 10)) }))}
-                disabled={(Number(form.precio_unitario) || 0) <= 0}
-                aria-label="Disminuir precio"
-                className="flex-shrink-0 w-14 py-3.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-xl font-semibold hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-              >
-                −
-              </button>
-              <button
-                type="button"
-                onClick={() => setForm(f => ({ ...f, precio_unitario: String((Number(f.precio_unitario) || 0) + 10) }))}
-                aria-label="Aumentar precio"
-                className="flex-shrink-0 w-14 py-3.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-xl font-semibold hover:bg-gray-50 transition-colors"
-              >
-                +
-              </button>
-            </div>
-          </div>
-
-              {/* Envase */}
+          {/* Envase */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
                   Envase <span className="text-red-500">*</span>
@@ -313,62 +282,92 @@ function ModalProducto({ producto, esAdmin, onClose, onGuardado }) {
           </>
           )}
 
-          {/* Stock actual */}
+          {/* Stock actual (en envases) */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              Stock actual (tapas) <span className="text-red-500">*</span>
+              Stock actual (envases) <span className="text-red-500">*</span>
             </label>
             <div className="flex items-center gap-2">
               <input
-                type="number" name="stock_actual" min="0" step="1" required
-                value={form.stock_actual} onChange={handleChange}
+                type="number" name="stock_envases" min="0" step="any" required
+                value={form.stock_envases} onChange={handleChange}
                 className={`${INPUT_CLS} text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`}
               />
               <button
                 type="button"
-                onClick={() => setForm(f => ({ ...f, stock_actual: String(Math.max(0, (Number(f.stock_actual) || 0) - 1)) }))}
-                disabled={(Number(form.stock_actual) || 0) <= 0}
-                aria-label="Disminuir stock"
+                onClick={() => setForm(f => ({ ...f, stock_envases: String(Math.max(0, (Number(f.stock_envases) || 0) - 1)) }))}
+                disabled={(Number(form.stock_envases) || 0) <= 0}
+                aria-label="Disminuir envases"
                 className="flex-shrink-0 w-14 py-3.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-xl font-semibold hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               >
                 −
               </button>
               <button
                 type="button"
-                onClick={() => setForm(f => ({ ...f, stock_actual: String((Number(f.stock_actual) || 0) + 1) }))}
-                aria-label="Aumentar stock"
+                onClick={() => setForm(f => ({ ...f, stock_envases: String((Number(f.stock_envases) || 0) + 1) }))}
+                aria-label="Aumentar envases"
                 className="flex-shrink-0 w-14 py-3.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-xl font-semibold hover:bg-gray-50 transition-colors"
               >
                 +
               </button>
             </div>
-            {tapasEfectivas > 0 && (
-              <button
-                type="button"
-                onClick={() => setForm(f => ({
-                  ...f,
-                  stock_actual: String((Number(f.stock_actual) || 0) + tapasEfectivas),
-                }))}
-                className="mt-2 w-full py-2.5 rounded-lg border border-blue/40 bg-blue/5 text-blue text-sm font-medium hover:bg-blue/10 transition-colors"
-              >
-                + Agregar 1 envase ({tapasEfectivas} tapas)
-              </button>
+            {tapasEfectivas > 0 && Number(form.stock_envases) > 0 && (
+              <p className="mt-2 text-xs text-gray-500">
+                = {Math.round(Number(form.stock_envases) * tapasEfectivas)} tapas en total
+              </p>
             )}
           </div>
 
-          {/* Alerta de stock bajo */}
           {!soloStock && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                Avisar cuando queden (tapas)
-              </label>
-              <input
-                type="number" name="stock_minimo" min="0" step="1"
-                value={form.stock_minimo} onChange={handleChange}
-                placeholder="Ej. 20"
-                className={`${INPUT_CLS} text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`}
-              />
+          <>
+          {/* Precio por tapa */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+              Precio por tapa ($) <span className="text-red-500">*</span>
+            </label>
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 text-base">$</span>
+                <input
+                  type="number" name="precio_unitario" min="0" step="10" required
+                  value={form.precio_unitario} onChange={handleChange}
+                  placeholder="0.00"
+                  className={`${INPUT_CLS} pl-8 text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`}
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => setForm(f => ({ ...f, precio_unitario: String(Math.max(0, (Number(f.precio_unitario) || 0) - 10)) }))}
+                disabled={(Number(form.precio_unitario) || 0) <= 0}
+                aria-label="Disminuir precio"
+                className="flex-shrink-0 w-14 py-3.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-xl font-semibold hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                −
+              </button>
+              <button
+                type="button"
+                onClick={() => setForm(f => ({ ...f, precio_unitario: String((Number(f.precio_unitario) || 0) + 10) }))}
+                aria-label="Aumentar precio"
+                className="flex-shrink-0 w-14 py-3.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-xl font-semibold hover:bg-gray-50 transition-colors"
+              >
+                +
+              </button>
             </div>
+          </div>
+
+          {/* Alerta de stock bajo */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+              Avisar cuando queden (tapas)
+            </label>
+            <input
+              type="number" name="stock_minimo" min="0" step="1"
+              value={form.stock_minimo} onChange={handleChange}
+              placeholder="Ej. 20"
+              className={`${INPUT_CLS} text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`}
+            />
+          </div>
+          </>
           )}
 
           {error && (
