@@ -203,6 +203,7 @@ function CatalogoEtiquetas({ endpoint, singular, inputCls, onMensaje }) {
   const [items,      setItems]      = useState([]);
   const [nuevo,      setNuevo]      = useState('');
   const [saving,     setSaving]     = useState(false);
+  const [confirmar,  setConfirmar]  = useState(false);
   const [editId,     setEditId]     = useState(null);
   const [editNombre, setEditNombre] = useState('');
 
@@ -213,7 +214,13 @@ function CatalogoEtiquetas({ endpoint, singular, inputCls, onMensaje }) {
     api.get(endpoint).then(data => setItems((data ?? []).slice().sort(ordenar))).catch(() => {});
   }, [endpoint]);
 
-  const agregar = async () => {
+  // Se pide confirmación antes de agregar.
+  const pedirAgregar = () => {
+    if (!nuevo.trim()) return;
+    setConfirmar(true);
+  };
+
+  const ejecutarAgregar = async () => {
     const nombre = nuevo.trim();
     if (!nombre) return;
     setSaving(true);
@@ -221,8 +228,10 @@ function CatalogoEtiquetas({ endpoint, singular, inputCls, onMensaje }) {
       const creado = await api.post(endpoint, { nombre });
       setItems(prev => [...prev, creado].sort(ordenar));
       setNuevo('');
+      setConfirmar(false);
       onMensaje?.({ tipo: 'ok', texto: `${singular} "${creado.nombre}" agregada.` });
     } catch (err) {
+      setConfirmar(false);
       onMensaje?.({ tipo: 'error', texto: err.message });
     } finally {
       setSaving(false);
@@ -252,19 +261,20 @@ function CatalogoEtiquetas({ endpoint, singular, inputCls, onMensaje }) {
   };
 
   return (
+    <>
     <div className="space-y-3">
       <div className="flex gap-2">
         <input
           type="text"
           value={nuevo}
           onChange={(e) => setNuevo(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); agregar(); } }}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); pedirAgregar(); } }}
           placeholder={`Agregar ${singular.toLowerCase()}`}
           className={inputCls}
         />
         <button
           type="button"
-          onClick={agregar}
+          onClick={pedirAgregar}
           disabled={saving || !nuevo.trim()}
           className="px-4 py-2.5 rounded-lg bg-blue text-white text-sm font-medium disabled:opacity-50 flex-shrink-0"
         >
@@ -319,6 +329,42 @@ function CatalogoEtiquetas({ endpoint, singular, inputCls, onMensaje }) {
         </ul>
       )}
     </div>
+
+    {/* Confirmación antes de agregar */}
+    {confirmar && (
+      <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40">
+        <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-4">
+          <div className="flex items-center gap-3">
+            <div className="flex-shrink-0 w-10 h-10 bg-light-blue rounded-full flex items-center justify-center">
+              <svg className="w-5 h-5 text-blue" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v12m6-6H6" />
+              </svg>
+            </div>
+            <div>
+              <h3 className="text-base font-semibold text-gray-900">Agregar {singular.toLowerCase()}</h3>
+              <p className="text-sm text-gray-500 mt-0.5">
+                ¿Agregar <span className="font-medium text-gray-700">{nuevo.trim()}</span> a la lista?
+              </p>
+            </div>
+          </div>
+          <div className="flex gap-3">
+            <button
+              type="button" onClick={() => setConfirmar(false)} disabled={saving}
+              className="flex-1 border border-gray-300 text-gray-700 font-medium py-3 rounded-lg text-base hover:bg-gray-50 transition-colors disabled:opacity-60"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button" onClick={ejecutarAgregar} disabled={saving}
+              className="flex-1 bg-blue hover:opacity-90 disabled:opacity-60 text-white font-medium py-3 rounded-lg text-base transition-colors"
+            >
+              {saving ? 'Agregando...' : 'Agregar'}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }
 
