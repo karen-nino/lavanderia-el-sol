@@ -7,6 +7,24 @@ import SucursalBar from '../components/SucursalBar';
 
 const ESTADOS = ['TODOS', 'EN_ESPERA', 'LAVANDO', 'SECANDO', 'POR_ENTREGAR', 'FINALIZADA', 'PENDIENTE', 'CANCELADA'];
 
+// Renglones por página en la tabla de escritorio.
+const POR_PAGINA = 15;
+
+// Páginas a mostrar en los botones: primera, última, y una ventana alrededor de
+// la actual; el resto se colapsa en "…".
+function rangoPaginas(actual, total) {
+  const delta = 2;
+  const out = [];
+  for (let i = 1; i <= total; i++) {
+    if (i === 1 || i === total || (i >= actual - delta && i <= actual + delta)) {
+      out.push(i);
+    } else if (out[out.length - 1] !== '…') {
+      out.push('…');
+    }
+  }
+  return out;
+}
+
 // Estados que se consideran "Por Entregar": listas sin entregar y pagadas sin
 // entregar. Coincide con el conteo del KPI del Dashboard.
 const ESTADOS_POR_ENTREGAR = ['LISTA', 'PAGADA'];
@@ -154,6 +172,7 @@ export default function Notas() {
   const [error,             setError]             = useState('');
   const [mostrarEstado,     setMostrarEstado]     = useState(false);
   const [mostrarFecha,      setMostrarFecha]      = useState(false);
+  const [pagina,            setPagina]            = useState(1);
   const estadoRef = useRef(null);
   const fechaRef  = useRef(null);
 
@@ -214,6 +233,13 @@ export default function Notas() {
     const telefono = normalizar(n.cliente_telefono);
     return folio.includes(q) || cliente.includes(q) || apellido.includes(q) || telefono.includes(q);
   });
+
+  // Paginación (solo escritorio): 15 renglones por página. `paginaActual` va
+  // acotada por si `pagina` quedó fuera de rango (al filtrar o borrar); los
+  // botones operan sobre este valor ya acotado.
+  const totalPaginas = Math.max(1, Math.ceil(filtradas.length / POR_PAGINA));
+  const paginaActual = Math.min(Math.max(1, pagina), totalPaginas);
+  const paginadas = filtradas.slice((paginaActual - 1) * POR_PAGINA, paginaActual * POR_PAGINA);
 
   // Para las tarjetas de móvil, las notas se agrupan por día: un encabezado de
   // fecha arriba de cada grupo, así la fecha ya no se repite en cada tarjeta.
@@ -306,7 +332,7 @@ export default function Notas() {
                   {ESTADOS.map(e => (
                     <button
                       key={e}
-                      onClick={() => { setFiltro(e); setMostrarEstado(false); }}
+                      onClick={() => { setFiltro(e); setPagina(1); setMostrarEstado(false); }}
                       className={`text-left text-sm px-3 py-2 rounded-lg transition-colors ${
                         filtro === e
                           ? 'bg-light-blue text-blue-700 font-medium'
@@ -345,7 +371,7 @@ export default function Notas() {
                   {RANGOS_FECHA.map(r => (
                     <button
                       key={r.value}
-                      onClick={() => { setRangoFecha(r.value); setMostrarFecha(false); }}
+                      onClick={() => { setRangoFecha(r.value); setPagina(1); setMostrarFecha(false); }}
                       className={`text-left text-sm px-3 py-2 rounded-lg transition-colors ${
                         rangoFecha === r.value
                           ? 'bg-light-blue text-blue-700 font-medium'
@@ -392,7 +418,7 @@ export default function Notas() {
           type="text"
           placeholder="Buscar por folio, cliente o teléfono..."
           value={busqueda}
-          onChange={e => setBusqueda(e.target.value)}
+          onChange={e => { setBusqueda(e.target.value); setPagina(1); }}
           className="w-full pl-11 pr-4 py-3.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent bg-white transition"
         />
       </div>
@@ -473,7 +499,7 @@ export default function Notas() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
-                    {filtradas.map(n => {
+                    {paginadas.map(n => {
                       const badgeEstado    = BADGE_ESTADO[n.estado]       ?? BADGE_ESTADO.LAVANDO;
                       const badgeModalidad = BADGE_MODALIDAD[n.modalidad] ?? BADGE_MODALIDAD.AUTOSERVICIO;
                       const badgePago      = BADGE_PAGO[n.estado_pago];
@@ -562,6 +588,51 @@ export default function Notas() {
                     })}
                   </tbody>
               </table>
+            </div>
+          </div>
+
+          {/* Paginación (escritorio) — siempre visible */}
+          <div className="hidden md:flex items-center justify-between gap-3 mt-3">
+            <span className="text-xs text-gray-500">
+              {filtradas.length === 0
+                ? 'Sin notas'
+                : `${(paginaActual - 1) * POR_PAGINA + 1}–${Math.min(paginaActual * POR_PAGINA, filtradas.length)} de ${filtradas.length}`}
+            </span>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setPagina(Math.max(1, paginaActual - 1))}
+                disabled={paginaActual <= 1}
+                className="px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                aria-label="Página anterior"
+              >
+                Anterior
+              </button>
+              {rangoPaginas(paginaActual, totalPaginas).map((p, i) => (
+                p === '…' ? (
+                  <span key={`e${i}`} className="px-2 text-gray-400 text-sm select-none">…</span>
+                ) : (
+                  <button
+                    key={p}
+                    onClick={() => setPagina(p)}
+                    aria-current={p === paginaActual ? 'page' : undefined}
+                    className={`min-w-[2.25rem] px-2 py-1.5 rounded-lg border text-sm transition-colors ${
+                      p === paginaActual
+                        ? 'border-blue bg-blue text-white font-semibold'
+                        : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    {p}
+                  </button>
+                )
+              ))}
+              <button
+                onClick={() => setPagina(Math.min(totalPaginas, paginaActual + 1))}
+                disabled={paginaActual >= totalPaginas}
+                className="px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                aria-label="Página siguiente"
+              >
+                Siguiente
+              </button>
             </div>
           </div>
 
