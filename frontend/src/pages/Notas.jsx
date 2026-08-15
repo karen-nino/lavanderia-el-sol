@@ -51,7 +51,6 @@ const FILTRO_VACIO = {
 };
 
 const RANGOS_FECHA = [
-  { value: 'TODAS',     label: 'Todas las fechas' },
   { value: 'HOY',       label: 'Hoy' },
   { value: 'AYER',      label: 'Ayer' },
   { value: 'ULTIMOS_7', label: 'Últimos 7 días' },
@@ -179,7 +178,7 @@ export default function Notas() {
   const [filtro,            setFiltro]            = useState(
     ESTADOS.includes(estadoParam) ? estadoParam : 'TODOS'
   );
-  const [rangoFecha,        setRangoFecha]        = useState('TODAS');
+  const [rangoFecha,        setRangoFecha]        = useState('HOY');
   const [busqueda,          setBusqueda]          = useState('');
   const [loading,           setLoading]           = useState(true);
   const [error,             setError]             = useState('');
@@ -434,6 +433,16 @@ export default function Notas() {
                     }`}
                   >
                     {rangoFecha.startsWith('ANIO:') ? rangoFecha.slice(5) : 'Por año'}
+                  </button>
+                  <button
+                    onClick={() => { setRangoFecha('TODAS'); setPagina(1); setMostrarFecha(false); }}
+                    className={`text-left text-sm px-3 py-2 rounded-lg transition-colors ${
+                      rangoFecha === 'TODAS'
+                        ? 'bg-light-blue text-blue-700 font-medium'
+                        : 'text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    Todas las fechas
                   </button>
                 </div>
               </div>
