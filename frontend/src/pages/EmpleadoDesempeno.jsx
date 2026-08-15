@@ -25,8 +25,22 @@ const RANGOS_FECHA = [
   { value: 'ESTE_MES',  label: 'Este mes' },
 ];
 
+const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+               'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+const MESES_ABR = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+
 function calcularRangoFecha(rango) {
   if (rango === 'TODAS') return null;
+  // Mes específico: 'MES:YYYY-MM'
+  if (rango.startsWith('MES:')) {
+    const [y, m] = rango.slice(4).split('-').map(Number);
+    return { desde: new Date(y, m - 1, 1), hasta: new Date(y, m, 1) };
+  }
+  // Año completo: 'ANIO:YYYY'
+  if (rango.startsWith('ANIO:')) {
+    const y = Number(rango.slice(5));
+    return { desde: new Date(y, 0, 1), hasta: new Date(y + 1, 0, 1) };
+  }
   const ahora = new Date();
   const hoyInicio = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
   const manana = new Date(hoyInicio); manana.setDate(manana.getDate() + 1);
@@ -49,6 +63,13 @@ function calcularRangoFecha(rango) {
 }
 
 const RANGO_LABEL = Object.fromEntries(RANGOS_FECHA.map(r => [r.value, r.label]));
+
+// Etiqueta del botón del filtro, incluyendo mes/año específicos.
+function etiquetaRango(rango) {
+  if (rango.startsWith('MES:'))  return MESES[Number(rango.slice(9, 11)) - 1];
+  if (rango.startsWith('ANIO:')) return rango.slice(5);
+  return RANGO_LABEL[rango];
+}
 
 const POR_PAGINA = 20;
 
@@ -222,6 +243,7 @@ export default function EmpleadoDesempeno() {
   const [modal,        setModal]        = useState(null); // { dia, metrica }
   const [rangoFecha,   setRangoFecha]   = useState('TODAS');
   const [mostrarFecha, setMostrarFecha] = useState(false);
+  const [modalFecha,   setModalFecha]   = useState(null); // 'MES' | 'ANIO' | null
   const [pagina,       setPagina]       = useState(1);
   const fechaRef = useRef(null);
 
@@ -294,6 +316,24 @@ export default function EmpleadoDesempeno() {
       return f >= rango.desde && f < rango.hasta;
     });
   }, [data, rango]);
+
+  // Años con actividad (desc) y meses del año en curso con actividad, para los
+  // selectores "Por año" / "Por mes".
+  const anioActual = new Date().getFullYear();
+  const { aniosConDatos, mesesAnioActual } = useMemo(() => {
+    const anios = new Set();
+    const mesesActual = new Set(); // números de mes (1-12) del año en curso
+    for (const d of (data?.dias ?? [])) {
+      const [y, m] = d.fecha.split('-').map(Number);
+      if (!y) continue;
+      anios.add(y);
+      if (y === anioActual) mesesActual.add(m);
+    }
+    return {
+      aniosConDatos: [...anios].sort((a, b) => b - a),
+      mesesAnioActual: mesesActual,
+    };
+  }, [data, anioActual]);
 
   const totalPaginas = Math.max(1, Math.ceil(diasFiltrados.length / POR_PAGINA));
   const paginaSegura = Math.min(pagina, totalPaginas);
@@ -423,7 +463,7 @@ export default function EmpleadoDesempeno() {
                       <rect x="3" y="5" width="18" height="16" rx="2" strokeWidth={2} />
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M8 3v4M16 3v4" />
                     </svg>
-                    {RANGO_LABEL[rangoFecha]}
+                    {etiquetaRango(rangoFecha)}
                   </button>
                   {mostrarFecha && (
                     <div className="absolute right-0 top-12 z-10 bg-white border border-gray-200 rounded-xl shadow-lg p-3 w-56">
@@ -443,6 +483,29 @@ export default function EmpleadoDesempeno() {
                             {r.label}
                           </button>
                         ))}
+
+                        <button
+                          type="button"
+                          onClick={() => { setMostrarFecha(false); setModalFecha('MES'); }}
+                          className={`text-left text-sm px-3 py-2 rounded-lg transition-colors ${
+                            rangoFecha.startsWith('MES:')
+                              ? 'bg-light-blue text-blue-700 font-medium'
+                              : 'text-gray-700 hover:bg-gray-50'
+                          }`}
+                        >
+                          {rangoFecha.startsWith('MES:') ? MESES[Number(rangoFecha.slice(9, 11)) - 1] : 'Por mes'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { setMostrarFecha(false); setModalFecha('ANIO'); }}
+                          className={`text-left text-sm px-3 py-2 rounded-lg transition-colors ${
+                            rangoFecha.startsWith('ANIO:')
+                              ? 'bg-light-blue text-blue-700 font-medium'
+                              : 'text-gray-700 hover:bg-gray-50'
+                          }`}
+                        >
+                          {rangoFecha.startsWith('ANIO:') ? rangoFecha.slice(5) : 'Por año'}
+                        </button>
                       </div>
                     </div>
                   )}
@@ -533,6 +596,74 @@ export default function EmpleadoDesempeno() {
           items={modal.dia.detalle?.[modal.metrica] ?? []}
           onClose={() => setModal(null)}
         />
+      )}
+
+      {/* Selector "Por mes": los 12 meses del año en curso; se deshabilitan los
+          que no tienen actividad. */}
+      {modalFecha === 'MES' && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={() => setModalFecha(null)}>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-xs p-5" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-base font-semibold text-gray-900">Selecciona un mes</h3>
+              <span className="text-sm font-medium text-gray-500">{anioActual}</span>
+            </div>
+            <div className="grid grid-cols-4 gap-2">
+              {MESES_ABR.map((abr, i) => {
+                const mesNum   = i + 1;
+                const ym       = `${anioActual}-${String(mesNum).padStart(2, '0')}`;
+                const hayDatos = mesesAnioActual.has(mesNum);
+                const activo   = rangoFecha === `MES:${ym}`;
+                return (
+                  <button
+                    key={abr}
+                    type="button"
+                    disabled={!hayDatos}
+                    onClick={() => { setRangoFecha(`MES:${ym}`); setPagina(1); setModalFecha(null); }}
+                    className={`py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                      activo
+                        ? 'bg-blue text-white'
+                        : hayDatos
+                          ? 'bg-gray-50 text-gray-800 hover:bg-gray-100'
+                          : 'text-gray-300 cursor-not-allowed'
+                    }`}
+                  >
+                    {abr}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Selector "Por año": años con actividad. */}
+      {modalFecha === 'ANIO' && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={() => setModalFecha(null)}>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-xs p-5" onClick={e => e.stopPropagation()}>
+            <h3 className="text-base font-semibold text-gray-900 mb-4">Selecciona un año</h3>
+            {aniosConDatos.length === 0 ? (
+              <p className="text-sm text-gray-500">No hay actividad registrada.</p>
+            ) : (
+              <div className="grid grid-cols-3 gap-2">
+                {aniosConDatos.map(anio => {
+                  const activo = rangoFecha === `ANIO:${anio}`;
+                  return (
+                    <button
+                      key={anio}
+                      type="button"
+                      onClick={() => { setRangoFecha(`ANIO:${anio}`); setPagina(1); setModalFecha(null); }}
+                      className={`py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                        activo ? 'bg-blue text-white' : 'bg-gray-50 text-gray-800 hover:bg-gray-100'
+                      }`}
+                    >
+                      {anio}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
       {editOpen && empleado && (
