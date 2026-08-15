@@ -422,14 +422,20 @@ function Corte({ data, onCerrar }) {
           <input
             type="number" min="0" step="0.01" required value={contado} onChange={(e) => setContado(e.target.value)}
             placeholder="0.00"
-            className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-base"
+            className={`w-full border border-gray-300 rounded-lg px-3 py-2.5 text-base font-medium ${
+              diferencia === null ? 'text-gray-900'
+                : Math.abs(diferencia) < 0.005 ? 'text-blue-600'
+                : diferencia < 0 ? 'text-red-600' : 'text-green-600'
+            }`}
           />
         </div>
         {diferencia !== null && (
           <div className={`rounded-lg px-4 py-3 text-sm font-medium ${
             Math.abs(diferencia) < 0.005
-              ? 'bg-green-50 text-green-700'
-              : 'bg-orange-50 text-orange-700'
+              ? 'bg-blue-50 text-blue-700'
+              : diferencia < 0
+              ? 'bg-red-50 text-red-700'
+              : 'bg-green-50 text-green-700'
           }`}>
             Diferencia: {diferencia > 0 ? '+' : ''}{fmt(diferencia)}
             {Math.abs(diferencia) < 0.005 ? ' (cuadra)' : (diferencia > 0 ? ' (sobrante)' : ' (faltante)')}
@@ -619,7 +625,8 @@ function Historial({ onFiltroLabel }) {
       <div className="flex items-center gap-2 flex-shrink-0">
         {c.diferencia != null && (
           <span className={`text-sm font-semibold px-2.5 py-1 rounded-full ${
-            cuadra ? 'bg-green-50 text-green-700' : 'bg-orange-50 text-orange-700'
+            cuadra ? 'bg-blue-50 text-blue-700'
+              : c.diferencia < 0 ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'
           }`}>
             {cuadra ? 'Cuadra' : `${c.diferencia > 0 ? '+' : ''}${fmt(c.diferencia)}`}
           </span>
@@ -670,7 +677,11 @@ function Historial({ onFiltroLabel }) {
         <span className="text-gray-500">Entradas</span><span className="text-right text-gray-700">{fmt(c.entradas)}</span>
         <span className="text-gray-500">Salidas</span><span className="text-right text-gray-700">{fmt(c.salidas)}</span>
         <span className="text-gray-500 font-medium">Esperado</span><span className="text-right font-medium text-gray-800">{fmt(c.esperado)}</span>
-        <span className="text-gray-500 font-medium">Contado</span><span className="text-right font-medium text-gray-800">{c.contado != null ? fmt(c.contado) : '—'}</span>
+        <span className="text-gray-500 font-medium">Contado</span><span className={`text-right font-medium ${
+          c.contado == null || c.diferencia == null ? 'text-gray-800'
+            : Math.abs(c.diferencia) < 0.005 ? 'text-blue-600'
+            : c.diferencia < 0 ? 'text-red-600' : 'text-green-600'
+        }`}>{c.contado != null ? fmt(c.contado) : '—'}</span>
       </div>
       <div className="mt-5 pt-5 border-t border-gray-100 divide-y divide-gray-100">
         <div className="py-6 first:pt-0 last:pb-0">
