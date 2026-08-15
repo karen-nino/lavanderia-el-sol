@@ -559,27 +559,25 @@ export default function EmpleadoDesempeno() {
                   </tbody>
                 </table>
               </div>
-              {totalPaginas > 1 && (
-                <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100 text-sm">
-                  <button
-                    type="button"
-                    onClick={() => setPagina(p => Math.max(1, p - 1))}
-                    disabled={paginaSegura <= 1}
-                    className="px-3 py-1.5 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                  >
-                    Anterior
-                  </button>
-                  <span className="text-gray-500">Página {paginaSegura} de {totalPaginas}</span>
-                  <button
-                    type="button"
-                    onClick={() => setPagina(p => Math.min(totalPaginas, p + 1))}
-                    disabled={paginaSegura >= totalPaginas}
-                    className="px-3 py-1.5 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                  >
-                    Siguiente
-                  </button>
-                </div>
-              )}
+              <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100 text-sm">
+                <button
+                  type="button"
+                  onClick={() => setPagina(p => Math.max(1, p - 1))}
+                  disabled={paginaSegura <= 1}
+                  className="px-3 py-1.5 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  Anterior
+                </button>
+                <span className="text-gray-500">Página {paginaSegura} de {totalPaginas}</span>
+                <button
+                  type="button"
+                  onClick={() => setPagina(p => Math.min(totalPaginas, p + 1))}
+                  disabled={paginaSegura >= totalPaginas}
+                  className="px-3 py-1.5 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  Siguiente
+                </button>
+              </div>
             </div>
           </div>
         ) : null}
