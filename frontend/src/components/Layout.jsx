@@ -891,6 +891,17 @@ export default function Layout() {
             ) : (
               <p className="text-sm text-gray-500">¿Seguro que quieres cerrar sesión?</p>
             )}
+            {!isAdmin && (
+              <div className="flex items-start gap-2 bg-light-blue/50 border border-blue/20 rounded-lg p-3">
+                <svg className="w-4 h-4 text-blue flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <circle cx="12" cy="12" r="9" strokeWidth={2} />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 7v5l3 2" />
+                </svg>
+                <p className="text-xs text-gray-600">
+                  Se registrará esta hora como tu <span className="font-medium text-gray-800">hora de salida</span> del día.
+                </p>
+              </div>
+            )}
             {cajaSinCerrar ? (
               // Con caja abierta se apilan: la acción recomendada (ir a Caja)
               // arriba, luego salir de todos modos y cancelar.
