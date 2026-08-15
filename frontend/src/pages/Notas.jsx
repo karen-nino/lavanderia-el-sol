@@ -58,8 +58,21 @@ const RANGOS_FECHA = [
   { value: 'ESTE_MES',  label: 'Este mes' },
 ];
 
+const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+               'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+
 function calcularRangoFecha(rango) {
   if (rango === 'TODAS') return null;
+  // Mes específico: 'MES:YYYY-MM'
+  if (rango.startsWith('MES:')) {
+    const [y, m] = rango.slice(4).split('-').map(Number);
+    return { desde: new Date(y, m - 1, 1), hasta: new Date(y, m, 1) };
+  }
+  // Año completo: 'ANIO:YYYY'
+  if (rango.startsWith('ANIO:')) {
+    const y = Number(rango.slice(5));
+    return { desde: new Date(y, 0, 1), hasta: new Date(y + 1, 0, 1) };
+  }
   const ahora = new Date();
   const hoyInicio = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
   const manana = new Date(hoyInicio); manana.setDate(manana.getDate() + 1);
@@ -172,6 +185,7 @@ export default function Notas() {
   const [error,             setError]             = useState('');
   const [mostrarEstado,     setMostrarEstado]     = useState(false);
   const [mostrarFecha,      setMostrarFecha]      = useState(false);
+  const [modalFecha,        setModalFecha]        = useState(null); // 'MES' | 'ANIO' | null
   const [pagina,            setPagina]            = useState(1);
   const estadoRef = useRef(null);
   const fechaRef  = useRef(null);
@@ -208,6 +222,25 @@ export default function Notas() {
     (s ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
   const q = normalizar(busqueda.trim());
   const rango = useMemo(() => calcularRangoFecha(rangoFecha), [rangoFecha]);
+
+  // Años con notas (desc) y meses del año en curso que tienen notas, para los
+  // selectores "Por año" / "Por mes" del filtro de fecha.
+  const anioActual = new Date().getFullYear();
+  const { aniosConNotas, mesesAnioActual } = useMemo(() => {
+    const anios = new Set();
+    const mesesActual = new Set(); // números de mes (1-12) del año en curso
+    for (const n of notas) {
+      const d = new Date(n.created_at);
+      if (Number.isNaN(d.getTime())) continue;
+      anios.add(d.getFullYear());
+      if (d.getFullYear() === anioActual) mesesActual.add(d.getMonth() + 1);
+    }
+    return {
+      aniosConNotas: [...anios].sort((a, b) => b - a),
+      mesesAnioActual: mesesActual,
+    };
+  }, [notas, anioActual]);
+
   const filtradas = notas.filter(n => {
     if (filtro === 'PENDIENTE') {
       if (n.estado_pago !== 'PENDIENTE') return false;
@@ -381,6 +414,27 @@ export default function Notas() {
                       {r.label}
                     </button>
                   ))}
+
+                  <button
+                    onClick={() => { setMostrarFecha(false); setModalFecha('MES'); }}
+                    className={`text-left text-sm px-3 py-2 rounded-lg transition-colors ${
+                      rangoFecha.startsWith('MES:')
+                        ? 'bg-light-blue text-blue-700 font-medium'
+                        : 'text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    {rangoFecha.startsWith('MES:') ? MESES[Number(rangoFecha.slice(9, 11)) - 1] : 'Por mes'}
+                  </button>
+                  <button
+                    onClick={() => { setMostrarFecha(false); setModalFecha('ANIO'); }}
+                    className={`text-left text-sm px-3 py-2 rounded-lg transition-colors ${
+                      rangoFecha.startsWith('ANIO:')
+                        ? 'bg-light-blue text-blue-700 font-medium'
+                        : 'text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    {rangoFecha.startsWith('ANIO:') ? rangoFecha.slice(5) : 'Por año'}
+                  </button>
                 </div>
               </div>
             )}
@@ -755,6 +809,72 @@ export default function Notas() {
                 {borrando ? 'Eliminando...' : 'Eliminar'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Selector "Por mes": los 12 meses del año en curso; se deshabilitan los
+          que no tienen notas. */}
+      {modalFecha === 'MES' && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={() => setModalFecha(null)}>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-xs p-5" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-base font-semibold text-gray-900">Selecciona un mes</h3>
+              <span className="text-sm font-medium text-gray-500">{anioActual}</span>
+            </div>
+            <div className="grid grid-cols-4 gap-2">
+              {MESES_ABR.map((abr, i) => {
+                const mesNum  = i + 1;
+                const ym      = `${anioActual}-${String(mesNum).padStart(2, '0')}`;
+                const hayNotas = mesesAnioActual.has(mesNum);
+                const activo  = rangoFecha === `MES:${ym}`;
+                return (
+                  <button
+                    key={abr}
+                    disabled={!hayNotas}
+                    onClick={() => { setRangoFecha(`MES:${ym}`); setPagina(1); setModalFecha(null); }}
+                    className={`py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                      activo
+                        ? 'bg-blue text-white'
+                        : hayNotas
+                          ? 'bg-gray-50 text-gray-800 hover:bg-gray-100'
+                          : 'text-gray-300 cursor-not-allowed'
+                    }`}
+                  >
+                    {abr}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Selector "Por año": años que tienen notas. */}
+      {modalFecha === 'ANIO' && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={() => setModalFecha(null)}>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-xs p-5" onClick={e => e.stopPropagation()}>
+            <h3 className="text-base font-semibold text-gray-900 mb-4">Selecciona un año</h3>
+            {aniosConNotas.length === 0 ? (
+              <p className="text-sm text-gray-500">No hay notas registradas.</p>
+            ) : (
+              <div className="grid grid-cols-3 gap-2">
+                {aniosConNotas.map(anio => {
+                  const activo = rangoFecha === `ANIO:${anio}`;
+                  return (
+                    <button
+                      key={anio}
+                      onClick={() => { setRangoFecha(`ANIO:${anio}`); setPagina(1); setModalFecha(null); }}
+                      className={`py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                        activo ? 'bg-blue text-white' : 'bg-gray-50 text-gray-800 hover:bg-gray-100'
+                      }`}
+                    >
+                      {anio}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
       )}
