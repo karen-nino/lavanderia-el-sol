@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import pool from '../db/pool.js';
 
 // Hora local del negocio en la que se hace el barrido de "cierre del día".
@@ -59,6 +60,22 @@ export async function liberarMaquinasCierreDelDia() {
   }
 }
 
+// Cierra (invalida) las sesiones de los empleados al cierre del día. Al asignar
+// un session_id nuevo, los tokens vigentes dejan de coincidir (verifyToken los
+// rechaza) y el empleado tendrá que iniciar sesión de nuevo al día siguiente,
+// registrando así su nueva hora de entrada. NO registra "salida": si el
+// empleado no cerró sesión manualmente, ese día su salida queda en null y se
+// muestra como "—". Solo afecta empleados (operador); los admin conservan su
+// sesión.
+export async function cerrarSesionesEmpleados() {
+  const { rowCount } = await pool.query(
+    `UPDATE usuarios SET session_id = $1
+       WHERE activo = TRUE AND rol = 'operador' AND session_id IS NOT NULL`,
+    [randomUUID()]
+  );
+  return rowCount;
+}
+
 // Scheduler ligero (sin dependencias): revisa cada pocos minutos y ejecuta el
 // barrido una sola vez al llegar la hora de cierre, deduplicando por fecha local.
 export function iniciarCierreDelDia() {
@@ -76,6 +93,15 @@ export function iniciarCierreDelDia() {
       }
     } catch (err) {
       console.error('[cierre] error al liberar máquinas:', err.message);
+    }
+    // Cerrar las sesiones de los empleados que no cerraron manualmente.
+    try {
+      const cerradas = await cerrarSesionesEmpleados();
+      if (cerradas > 0) {
+        console.log(`[cierre] ${fecha}: ${cerradas} sesión(es) de empleado cerrada(s)`);
+      }
+    } catch (err) {
+      console.error('[cierre] error al cerrar sesiones de empleados:', err.message);
     }
   };
 
