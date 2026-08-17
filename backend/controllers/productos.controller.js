@@ -65,7 +65,7 @@ export const archivarProducto = async (req, res) => {
 
 export const createProducto = async (req, res) => {
   const {
-    nombre, descripcion, unidad = 'pieza', precio_unitario, stock_actual = 0, categoria,
+    nombre, descripcion, unidad = 'pieza', precio_unitario, stock_actual = 0, marca,
     es_por_tapa = false, tapas_por_envase, envase, stock_minimo = 0,
     volumen_envase_ml, tapa_ml,
   } = req.body;
@@ -80,13 +80,13 @@ export const createProducto = async (req, res) => {
   try {
     const { rows } = await pool.query(
       `INSERT INTO productos
-         (nombre, descripcion, unidad, precio_unitario, stock_actual, categoria, sucursal,
+         (nombre, descripcion, unidad, precio_unitario, stock_actual, marca, sucursal,
           es_por_tapa, tapas_por_envase, envase, stock_minimo, volumen_envase_ml, tapa_ml)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
        RETURNING *,
                  (stock_actual - stock_reservado) AS stock_disponible,
                  ${ESTADO_STOCK_SQL}`,
-      [nombre, descripcion || null, unidad, precio_unitario ?? null, stock_actual, categoria || null, req.sucursal,
+      [nombre, descripcion || null, unidad, precio_unitario ?? null, stock_actual, marca || null, req.sucursal,
        !!es_por_tapa, es_por_tapa ? Number(tapas_por_envase) : null, es_por_tapa ? (envase || null) : null,
        Number(stock_minimo) || 0,
        es_por_tapa && volumen_envase_ml ? Number(volumen_envase_ml) : null,
@@ -102,7 +102,7 @@ export const createProducto = async (req, res) => {
 export const updateProducto = async (req, res) => {
   const { id } = req.params;
   const {
-    nombre, descripcion, unidad, precio_unitario, stock_actual, categoria,
+    nombre, descripcion, unidad, precio_unitario, stock_actual, marca,
     es_por_tapa = false, tapas_por_envase, envase, stock_minimo = 0,
     volumen_envase_ml, tapa_ml,
   } = req.body;
@@ -144,7 +144,7 @@ export const updateProducto = async (req, res) => {
     const { rows } = await pool.query(
       `UPDATE productos
          SET nombre = $1, descripcion = $2, unidad = $3,
-             precio_unitario = $4, stock_actual = $5, categoria = $8,
+             precio_unitario = $4, stock_actual = $5, marca = $8,
              es_por_tapa = $9, tapas_por_envase = $10, envase = $11, stock_minimo = $12,
              volumen_envase_ml = $13, tapa_ml = $14,
              updated_at = NOW()
@@ -152,7 +152,7 @@ export const updateProducto = async (req, res) => {
        RETURNING *,
                  (stock_actual - stock_reservado) AS stock_disponible,
                  ${ESTADO_STOCK_SQL}`,
-      [nombre, descripcion || null, unidad, precio_unitario ?? null, stock_actual, id, req.sucursal, categoria || null,
+      [nombre, descripcion || null, unidad, precio_unitario ?? null, stock_actual, id, req.sucursal, marca || null,
        !!es_por_tapa, es_por_tapa ? Number(tapas_por_envase) : null, es_por_tapa ? (envase || null) : null,
        Number(stock_minimo) || 0,
        es_por_tapa && volumen_envase_ml ? Number(volumen_envase_ml) : null,

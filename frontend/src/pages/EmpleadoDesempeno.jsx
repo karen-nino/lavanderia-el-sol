@@ -208,14 +208,14 @@ function MetricaModal({ metrica, fecha, count, items, onClose }) {
             <>
               <div className="flex items-center gap-3 px-5 py-2 border-b border-gray-100 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
                 <span className="flex-1">Producto</span>
-                <span className="w-24">Categoría</span>
+                <span className="w-24">Marca</span>
                 <span className="w-12 text-right">Cant.</span>
                 <span className="w-20 text-right">Vendido</span>
               </div>
               {items.map((p, i) => (
                 <div key={i} className="flex items-center gap-3 px-5 py-2.5 border-b border-gray-50 last:border-0">
                   <span className="flex-1 min-w-0 truncate text-sm text-gray-800">{p.nombre}</span>
-                  <span className="w-24 truncate text-sm text-gray-500">{p.categoria ?? '—'}</span>
+                  <span className="w-24 truncate text-sm text-gray-500">{p.marca ?? '—'}</span>
                   <span className="w-12 text-right text-sm text-gray-700">{p.cantidad}</span>
                   <span className="w-20 text-right text-sm font-medium text-gray-700">{fmtMoneda(p.vendido)}</span>
                 </div>

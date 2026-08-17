@@ -48,7 +48,7 @@ function aMl(valor, unidad) {
 
 const FORM_VACIO = {
   nombre:              '',
-  categoria:           '',
+  marca:               '',
   precio_unitario:     '',
   stock_envases:       '0',
   envase:              '',
@@ -61,11 +61,11 @@ const FORM_VACIO = {
 };
 
 // ── Modal crear / editar ────────────────────────────────────────
-function ModalProducto({ producto, esAdmin, onClose, onGuardado, categorias = [], envases = [] }) {
+function ModalProducto({ producto, esAdmin, onClose, onGuardado, marcas = [], envases = [] }) {
   const [form, setForm]     = useState(producto
     ? {
         nombre:              producto.nombre,
-        categoria:           producto.categoria ?? '',
+        marca:               producto.marca ?? '',
         precio_unitario:     producto.precio_unitario ?? '',
         // El stock se guarda en tapas; en el formulario se muestra en envases.
         stock_envases:       Number(producto.tapas_por_envase) > 0
@@ -100,7 +100,7 @@ function ModalProducto({ producto, esAdmin, onClose, onGuardado, categorias = []
 
   // Opciones de los catálogos; si el producto trae un valor que ya no está en
   // el catálogo (se desactivó), se conserva para no perderlo al editar.
-  const catOptions = form.categoria && !categorias.includes(form.categoria) ? [form.categoria, ...categorias] : categorias;
+  const marcaOptions = form.marca && !marcas.includes(form.marca) ? [form.marca, ...marcas] : marcas;
   const envOptions = form.envase && !envases.includes(form.envase) ? [form.envase, ...envases] : envases;
 
   const handleChange = (e) => {
@@ -135,7 +135,7 @@ function ModalProducto({ producto, esAdmin, onClose, onGuardado, categorias = []
 
     const body = {
       nombre:            form.nombre.trim(),
-      categoria:         form.categoria || null,
+      marca:             form.marca || null,
       unidad:            'Tapas',
       stock_actual:      stockTapas,
       precio_unitario:   form.precio_unitario !== '' ? Number(form.precio_unitario) : null,
@@ -198,9 +198,9 @@ function ModalProducto({ producto, esAdmin, onClose, onGuardado, categorias = []
             <label className="block text-sm font-medium text-gray-700 mb-1.5">
               Marca <span className="text-red-500">*</span>
             </label>
-            <select name="categoria" required value={form.categoria} onChange={handleChange} className={INPUT_CLS}>
+            <select name="marca" required value={form.marca} onChange={handleChange} className={INPUT_CLS}>
               <option value="">Seleccionar...</option>
-              {catOptions.map(c => <option key={c} value={c}>{c}</option>)}
+              {marcaOptions.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
 
@@ -630,13 +630,13 @@ export default function Inventario() {
   const highlightAplicadoRef = useRef(null);
 
   // Catálogos editables (Ajustes → Inventario). Solo los activos se ofrecen.
-  const [categorias, setCategorias] = useState([]);
-  const [envases,    setEnvases]    = useState([]);
+  const [marcas,  setMarcas]  = useState([]);
+  const [envases, setEnvases] = useState([]);
 
   useEffect(() => {
     let activo = true;
-    api.get('/etiquetas/categorias-producto')
-      .then(data => { if (activo) setCategorias((data ?? []).filter(x => x.activo).map(x => x.nombre)); })
+    api.get('/etiquetas/marcas-producto')
+      .then(data => { if (activo) setMarcas((data ?? []).filter(x => x.activo).map(x => x.nombre)); })
       .catch(() => {});
     api.get('/etiquetas/envases-producto')
       .then(data => { if (activo) setEnvases((data ?? []).filter(x => x.activo).map(x => x.nombre)); })
@@ -915,7 +915,7 @@ export default function Inventario() {
                           </div>
                         </td>
                         <td className="px-4 py-3 text-gray-500 text-xs">
-                          {p.categoria ?? '—'}
+                          {p.marca ?? '—'}
                         </td>
                         <td className="px-4 py-3 text-right text-gray-600">
                           {p.precio_unitario != null ? `$${Number(p.precio_unitario).toFixed(2)}` : '—'}
@@ -995,8 +995,8 @@ export default function Inventario() {
                     {es !== 'ok' && <IconoAdvertencia severity={es} />}
                     <p className="font-medium text-gray-800 text-sm">{p.nombre}</p>
                   </div>
-                  {p.categoria && (
-                    <p className="text-xs text-gray-400 mt-0.5">{p.categoria}</p>
+                  {p.marca && (
+                    <p className="text-xs text-gray-400 mt-0.5">{p.marca}</p>
                   )}
                   <div className="flex items-center gap-2 mt-1 flex-wrap">
                     <span className="text-sm font-mono font-semibold text-gray-700">
@@ -1055,7 +1055,7 @@ export default function Inventario() {
                     <div key={p.id} className="px-4 py-3 flex items-center justify-between gap-3">
                       <div className="min-w-0">
                         <p className="text-sm font-medium text-gray-700 truncate">{p.nombre}</p>
-                        {p.categoria && <p className="text-xs text-gray-400">{p.categoria}</p>}
+                        {p.marca && <p className="text-xs text-gray-400">{p.marca}</p>}
                       </div>
                       <button
                         type="button"
@@ -1097,7 +1097,7 @@ export default function Inventario() {
                 </div>
                 <div>
                   <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Marca</p>
-                  <p className="text-base text-gray-700">{p.categoria ?? <span className="text-gray-400 italic">Sin marca</span>}</p>
+                  <p className="text-base text-gray-700">{p.marca ?? <span className="text-gray-400 italic">Sin marca</span>}</p>
                 </div>
                 <div>
                   <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">
@@ -1176,7 +1176,7 @@ export default function Inventario() {
         <ModalProducto
           producto={modalProducto === 'nuevo' ? null : modalProducto}
           esAdmin={esAdmin}
-          categorias={categorias}
+          marcas={marcas}
           envases={envases}
           onClose={() => setModalProducto(null)}
           onGuardado={handleGuardado}

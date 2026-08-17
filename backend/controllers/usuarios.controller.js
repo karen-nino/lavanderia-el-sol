@@ -90,7 +90,7 @@ export const getDesempeno = async (req, res) => {
     );
 
     const { rows: productos } = await pool.query(
-      `SELECT np.nota_id, np.cantidad, np.precio_unitario, p.nombre, p.categoria
+      `SELECT np.nota_id, np.cantidad, np.precio_unitario, p.nombre, p.marca
          FROM nota_productos np
          JOIN notas n ON n.id = np.nota_id
          JOIN productos p ON p.id = np.producto_id
@@ -175,10 +175,10 @@ export const getDesempeno = async (req, res) => {
       const b = getBucket(n.fecha);
       const cantidad = Number(p.cantidad) || 0;
       const vendido  = cantidad * (Number(p.precio_unitario) || 0);
-      const acc = b._productos.get(p.nombre) ?? { cantidad: 0, vendido: 0, categoria: p.categoria || null };
+      const acc = b._productos.get(p.nombre) ?? { cantidad: 0, vendido: 0, marca: p.marca || null };
       acc.cantidad += cantidad;
       acc.vendido  += vendido;
-      if (!acc.categoria && p.categoria) acc.categoria = p.categoria;
+      if (!acc.marca && p.marca) acc.marca = p.marca;
       b._productos.set(p.nombre, acc);
     }
 
@@ -194,7 +194,7 @@ export const getDesempeno = async (req, res) => {
       .sort((a, b) => (a.fecha < b.fecha ? 1 : a.fecha > b.fecha ? -1 : 0))
       .map((b) => {
         const maquinas  = [...b._maquinas.values()].map((m) => ({ nombre: m.nombre, tipo: m.tipo, usos: m.usos }));
-        const productos = [...b._productos.entries()].map(([nombre, v]) => ({ nombre, categoria: v.categoria, cantidad: v.cantidad, vendido: v.vendido }));
+        const productos = [...b._productos.entries()].map(([nombre, v]) => ({ nombre, marca: v.marca, cantidad: v.cantidad, vendido: v.vendido }));
         const clientes  = [
           ...b._autoservicios.map((a) => ({ nombre: 'Autoservicio', folio: a.folio })),
           ...[...b._clientesReg.values()].map((nombre) => ({ nombre, folio: null })),

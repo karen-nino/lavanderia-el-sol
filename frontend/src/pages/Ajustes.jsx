@@ -1220,7 +1220,7 @@ export default function Ajustes() {
   const seccionInventarioDesktop = (
     <Section titulo="Inventario">
       <Field label="Marcas" hint="Se ofrecen al crear un producto. Desactivar una opción la quita de la lista sin afectar a los productos que ya la usan.">
-        <CatalogoEtiquetas endpoint="/etiquetas/categorias-producto" singular="Marca" inputCls={INPUT_CLS} onMensaje={setMensaje} />
+        <CatalogoEtiquetas endpoint="/etiquetas/marcas-producto" singular="Marca" inputCls={INPUT_CLS} onMensaje={setMensaje} />
       </Field>
       <div className="border-t border-gray-100 pt-4">
         <Field label="Envases" hint="Se ofrecen al capturar el envase de un producto por tapa/medida.">
@@ -1618,7 +1618,7 @@ export default function Ajustes() {
         label="Marcas"
         hint="Se ofrecen al crear un producto. Desactivar una opción la quita de la lista sin afectar a los productos que ya la usan."
       >
-        <CatalogoEtiquetas endpoint="/etiquetas/categorias-producto" singular="Marca" inputCls={MOBILE_INPUT_CLS} onMensaje={setMensaje} />
+        <CatalogoEtiquetas endpoint="/etiquetas/marcas-producto" singular="Marca" inputCls={MOBILE_INPUT_CLS} onMensaje={setMensaje} />
       </MobileField>
 
       <div className="border-t border-light-blue/60 pt-5">

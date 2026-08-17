@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { verifyToken } from '../middleware/auth.js';
-import { tiposTela, tamanosEdredon, categoriasProducto, envasesProducto } from '../controllers/etiquetas.controller.js';
+import { tiposTela, tamanosEdredon, marcasProducto, envasesProducto } from '../controllers/etiquetas.controller.js';
 
 const router = Router();
 
@@ -18,11 +18,11 @@ router.post('/tamanos-edredon',           tamanosEdredon.create);
 router.patch('/tamanos-edredon/reordenar', tamanosEdredon.reorder);
 router.put('/tamanos-edredon/:id',        tamanosEdredon.update);
 
-// Categorías de producto (Inventario)
-router.get('/categorias-producto',            categoriasProducto.getAll);
-router.post('/categorias-producto',           categoriasProducto.create);
-router.patch('/categorias-producto/reordenar', categoriasProducto.reorder);
-router.put('/categorias-producto/:id',        categoriasProducto.update);
+// Marcas de producto (Inventario)
+router.get('/marcas-producto',            marcasProducto.getAll);
+router.post('/marcas-producto',           marcasProducto.create);
+router.patch('/marcas-producto/reordenar', marcasProducto.reorder);
+router.put('/marcas-producto/:id',        marcasProducto.update);
 
 // Envases de producto (Inventario)
 router.get('/envases-producto',            envasesProducto.getAll);

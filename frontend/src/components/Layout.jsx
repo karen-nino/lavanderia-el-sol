@@ -698,7 +698,7 @@ export default function Layout() {
             { label: 'Estado',       value: p.estado_stock === 'agotado' ? 'Agotado' : 'Por agotarse' },
             { label: 'Stock actual', value: `${Number(p.stock_actual).toFixed(2)} ${p.unidad}` },
             { label: 'Disponible',   value: `${disponible.toFixed(2)} ${p.unidad}` },
-            ...(p.categoria ? [{ label: 'Categoría', value: p.categoria }] : []),
+            ...(p.marca ? [{ label: 'Marca', value: p.marca }] : []),
           ],
         };
       });
