@@ -193,10 +193,10 @@ function ModalProducto({ producto, esAdmin, onClose, onGuardado, categorias = []
             />
           </div>
 
-          {/* Categoría */}
+          {/* Marca */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              Categoría <span className="text-red-500">*</span>
+              Marca <span className="text-red-500">*</span>
             </label>
             <select name="categoria" required value={form.categoria} onChange={handleChange} className={INPUT_CLS}>
               <option value="">Seleccionar...</option>
@@ -888,7 +888,7 @@ export default function Inventario() {
                       </th>
                     )}
                     <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Producto</th>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Categoría</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Marca</th>
                     <th className="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Precio unit.</th>
                     <th className="text-center px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Stock actual</th>
                     <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Unidad</th>
@@ -1096,8 +1096,8 @@ export default function Inventario() {
                   <p className="text-base font-medium text-gray-900">{p.nombre}</p>
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Categoría</p>
-                  <p className="text-base text-gray-700">{p.categoria ?? <span className="text-gray-400 italic">Sin categoría</span>}</p>
+                  <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Marca</p>
+                  <p className="text-base text-gray-700">{p.categoria ?? <span className="text-gray-400 italic">Sin marca</span>}</p>
                 </div>
                 <div>
                   <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">
