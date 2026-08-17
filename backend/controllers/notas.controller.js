@@ -1,5 +1,6 @@
 import pool from '../db/pool.js';
 import { esAdmin } from '../middleware/roles.js';
+import { categoriaSecado, tarifaSecadora, precioProductoEnNota, generarFolio } from '../utils/calculosNotas.js';
 
 const ESTADOS_VALIDOS     = ['EN_ESPERA', 'LAVANDO', 'SECANDO', 'LISTA', 'PAGADA', 'FINALIZADA', 'CANCELADA'];
 // Estados con los que puede nacer una nota.
@@ -186,25 +187,6 @@ function tarifaLavadora(tipoMaquina, tipoPrenda, t) {
   return t.mediana;
 }
 
-// Categoría de secado según el TAMAÑO de la secadora: prenda edredón → edredón;
-// secadora jumbo → jumbo; resto (incl. secadora sin tamaño) → mediana.
-// Devuelve 'mediana' | 'jumbo' | 'edredon'.
-function categoriaSecado(secadoraTamano, tipoPrenda) {
-  if (String(tipoPrenda).toUpperCase() === 'EDREDON') return 'edredon';
-  if (secadoraTamano === 'jumbo') return 'jumbo';
-  return 'mediana';
-}
-
-// Tarifa de secado según el tamaño de la secadora (Ajustes → Máquinas):
-// mediana = precio_carga_secadora, jumbo = precio_secadora_jumbo, edredón =
-// precio_secadora_edredon.
-function tarifaSecadora(secadoraTamano, tipoPrenda, t) {
-  const cat = categoriaSecado(secadoraTamano, tipoPrenda);
-  if (cat === 'edredon') return t.secadoraEdredon;
-  if (cat === 'jumbo')   return t.secadoraJumbo;
-  return t.secadora; // mediana
-}
-
 // Sella maquinas.ciclo_minutos de TODAS las máquinas EN USO de la nota
 // (lavadoras y secadoras) según la categoría de su carga. Necesario porque
 // una misma máquina física (lavadora jumbo o cualquier secadora) puede tener
@@ -290,14 +272,6 @@ async function validarTopesCargas(client, notaId) {
     }
   }
   return null;
-}
-
-// Precio efectivo de un producto dentro de una nota. Los productos por
-// tapa/medida van INCLUIDOS (sin costo) en Por Encargo; en Autoservicio se
-// cobra su precio por tapa. Los demás productos cobran su precio siempre.
-function precioProductoEnNota(art, tipo_servicio) {
-  if (tipo_servicio === 'POR_ENCARGO' && art.es_por_tapa) return 0;
-  return art.precio_unitario ?? 0;
 }
 
 // Reserva un producto para una nota (o una carga): valida stock disponible,
@@ -524,15 +498,6 @@ async function registrarEliminacionNota(client, nota, usuarioId, sucursal) {
      VALUES ('nota_eliminada', $1, $2, $3, $4)`,
     [`Nota ${folio} eliminada por ${quien}`, folio, usuarioId, sucursal]
   );
-}
-
-function generarFolio(id, fecha) {
-  const d = new Date(fecha);
-  const yy = String(d.getFullYear()).slice(-2);
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const dd = String(d.getDate()).padStart(2, '0');
-  const seq = String(id).padStart(4, '0');
-  return `${seq}-${dd}${mm}${yy}`;
 }
 
 // ── GET /notas/next-folio ───────────────────────────────────
