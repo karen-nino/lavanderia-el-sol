@@ -19,7 +19,7 @@ export default function MachineCard({ maquina, nota, onTerminarCiclo, onClick })
   const folioTxt    = nota?.folio
     ? `#${String(nota.folio).split('-')[0]}`
     : (nota?.id != null ? `#${nota.id}` : null);
-  const clienteTxt  = nota?.modalidad === 'AUTOSERVICIO'
+  const clienteTxt  = nota?.tipo_servicio === 'AUTOSERVICIO'
     ? 'Autoservicio'
     : formatearCliente(nota?.cliente_nombre, nota?.cliente_apellido);
   const infoNota = (folioTxt || clienteTxt) ? (

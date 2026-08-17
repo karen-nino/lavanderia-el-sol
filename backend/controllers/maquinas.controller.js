@@ -69,7 +69,7 @@ export const getUsoMaquina = async (req, res) => {
     // (autoservicio, tabla nota_cargas) o en sus columnas legadas
     // maquina_id / secadora_id (Por Encargo y notas viejas).
     const { rows: notas } = await pool.query(
-      `SELECT n.id, DATE(n.created_at) AS fecha, n.folio, n.modalidad, n.estado,
+      `SELECT n.id, DATE(n.created_at) AS fecha, n.folio, n.tipo_servicio, n.estado,
               n.precio_total, n.estado_pago, n.cantidad_cargas, n.cliente_id,
               n.usuario_id, TRIM(u.nombre || ' ' || COALESCE(u.apellido, '')) AS empleado_nombre,
               c.nombre AS cliente_nombre, c.apellido AS cliente_apellido
@@ -113,7 +113,7 @@ export const getUsoMaquina = async (req, res) => {
       if (!buckets.has(k)) {
         buckets.set(k, {
           fecha, generado: 0,
-          _usos: [],               // { id, folio, modalidad, estado, cliente, precio }
+          _usos: [],               // { id, folio, tipo_servicio, estado, cliente, precio }
           _cargas: [],             // { folio, descripcion, precio }
           _empleados: new Map(),   // usuario_id -> { nombre, usos }
           _clientesReg: new Map(), // cliente_id -> nombre
@@ -131,7 +131,7 @@ export const getUsoMaquina = async (req, res) => {
       b._usos.push({
         id:        n.id,
         folio:     n.folio,
-        modalidad: n.modalidad,
+        tipo_servicio: n.tipo_servicio,
         estado:    n.estado,
         cliente:   clienteNombre || null,
         precio:    Number(n.precio_total) || 0,
@@ -143,7 +143,7 @@ export const getUsoMaquina = async (req, res) => {
         b._empleados.set(n.usuario_id, e);
       }
       // Clientes: autoservicio = 1 cliente cada uno; el resto, por cliente.
-      if (n.modalidad === 'AUTOSERVICIO') {
+      if (n.tipo_servicio === 'AUTOSERVICIO') {
         b._autoservicios.push({ folio: n.folio });
       } else if (n.cliente_id) {
         b._clientesReg.set(n.cliente_id, clienteNombre || 'Cliente');

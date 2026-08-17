@@ -244,12 +244,12 @@ export default function NuevaNota() {
         setClientes(cli);
 
         if (esEdicion && nota) {
-          // Compat con notas viejas: modalidad=EDREDON significa autoservicio+edredón
+          // Compat con notas viejas: tipo_servicio=EDREDON significa autoservicio+edredón
           // si no tiene cliente_id, o por_encargo+edredón si lo tiene.
-          const esEncargoLegacy = nota.modalidad === 'EDREDON' && nota.cliente_id;
-          const esEncargo  = nota.modalidad === 'POR_ENCARGO' || esEncargoLegacy;
+          const esEncargoLegacy = nota.tipo_servicio === 'EDREDON' && nota.cliente_id;
+          const esEncargo  = nota.tipo_servicio === 'POR_ENCARGO' || esEncargoLegacy;
           const prendaNota = nota.tipo_prenda
-            ?? (nota.modalidad === 'EDREDON' ? 'EDREDON' : 'ROPA');
+            ?? (nota.tipo_servicio === 'EDREDON' ? 'EDREDON' : 'ROPA');
 
           if (esEncargo) {
             setTipoServicio('POR_ENCARGO');
@@ -516,7 +516,7 @@ export default function NuevaNota() {
           .map(p => ({ producto_id: Number(p.producto_id), cantidad: Number(p.cantidad) })),
       }));
       const payload = {
-        modalidad:      'POR_ENCARGO',
+        tipo_servicio:      'POR_ENCARGO',
         // Prenda a nivel nota (para lista/badge): la de la primera carga.
         tipo_prenda:    encargoCargas[0]?.tipo_prenda || 'ROPA',
         cliente_id:     Number(encargoForm.cliente_id),
@@ -556,7 +556,7 @@ export default function NuevaNota() {
     setLoading(true);
 
     const payload = {
-      modalidad:       'AUTOSERVICIO',
+      tipo_servicio:       'AUTOSERVICIO',
       // La prenda/tela ahora viven en cada carga; a nivel nota se guarda la de
       // la primera carga solo para la lista/badge.
       tipo_prenda:     cargasAuto[0]?.tipo_prenda || 'ROPA',

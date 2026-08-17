@@ -103,7 +103,7 @@ const BADGE_ESTADO = {
   CANCELADA:  { label: 'Cancelada',  cls: 'bg-red-100 text-red-700'         },
 };
 
-const BADGE_MODALIDAD = {
+const BADGE_TIPO_SERVICIO = {
   AUTOSERVICIO: { label: 'Autoservicio', cls: 'bg-light-blue text-blue-700' },
   EDREDON:      { label: 'Edredón',      cls: 'bg-sky-100 text-sky-700'       },
   POR_ENCARGO:  { label: 'Por Encargo',  cls: 'bg-amber-100 text-amber-700'   },
@@ -564,7 +564,7 @@ export default function Notas() {
                   <tbody className="divide-y divide-gray-50">
                     {paginadas.map(n => {
                       const badgeEstado    = BADGE_ESTADO[n.estado]       ?? BADGE_ESTADO.LAVANDO;
-                      const badgeModalidad = BADGE_MODALIDAD[n.modalidad] ?? BADGE_MODALIDAD.AUTOSERVICIO;
+                      const badgeTipoServicio = BADGE_TIPO_SERVICIO[n.tipo_servicio] ?? BADGE_TIPO_SERVICIO.AUTOSERVICIO;
                       const badgePago      = BADGE_PAGO[n.estado_pago];
                       // Lavando y secando a la vez (cargas en distinta fase).
                       const lavandoYSecando = ['LAVANDO', 'SECANDO'].includes(n.estado)
@@ -593,7 +593,7 @@ export default function Notas() {
                             {fmtFecha(n.created_at)}
                           </td>
                           <td className="px-4 py-3 text-sm text-gray-600">
-                            {badgeModalidad.label}
+                            {badgeTipoServicio.label}
                           </td>
                           <td className="px-4 py-3">
                             <p className="font-medium text-gray-800">
@@ -708,9 +708,9 @@ export default function Notas() {
                 <div className="space-y-4">
                   {grupo.notas.map(n => {
               const badgeEstado    = BADGE_ESTADO[n.estado]       ?? BADGE_ESTADO.LAVANDO;
-              const badgeModalidad = BADGE_MODALIDAD[n.modalidad] ?? BADGE_MODALIDAD.AUTOSERVICIO;
+              const badgeTipoServicio = BADGE_TIPO_SERVICIO[n.tipo_servicio] ?? BADGE_TIPO_SERVICIO.AUTOSERVICIO;
               const badgePago      = BADGE_PAGO[n.estado_pago];
-              const cliente        = fmtCliente(n) ?? badgeModalidad.label;
+              const cliente        = fmtCliente(n) ?? badgeTipoServicio.label;
               // Con varias cargas la nota puede estar lavando y secando a la vez
               // (una carga en lavadora, otra en secadora): se muestran ambos
               // estados apilados en lugar del único estado de la nota.

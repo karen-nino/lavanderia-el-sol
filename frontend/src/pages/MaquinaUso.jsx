@@ -94,7 +94,7 @@ function FilaModal({ left, sub, right, rightSub, onClick }) {
   );
 }
 
-const MODALIDAD_LABEL = {
+const TIPO_SERVICIO_LABEL = {
   AUTOSERVICIO: 'Autoservicio',
   POR_ENCARGO:  'Por encargo',
   EDREDON:      'Edredón',
@@ -154,7 +154,7 @@ function MetricaModal({ metrica, fecha, count, items, onClose }) {
           ) : metrica === 'usos' ? (
             items.map((n, i) => (
               <FilaModal key={i} left={`Nota ${n.folio}`}
-                sub={[MODALIDAD_LABEL[n.modalidad] ?? n.modalidad, n.cliente].filter(Boolean).join(' · ')}
+                sub={[TIPO_SERVICIO_LABEL[n.tipo_servicio] ?? n.tipo_servicio, n.cliente].filter(Boolean).join(' · ')}
                 right={fmtMoneda(n.precio)}
                 rightSub={<EstadoBadge estado={n.estado} />}
                 onClick={n.id ? () => { onClose(); navigate(`/notas/${n.id}`); } : undefined} />

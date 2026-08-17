@@ -47,7 +47,7 @@ export const getDesempeno = async (req, res) => {
     // El desglose por día (con el detalle de cada métrica) se arma en JS para
     // que cada número y el contenido de su modal siempre coincidan.
     const { rows: notas } = await pool.query(
-      `SELECT n.id, to_char(n.created_at AT TIME ZONE $2, 'YYYY-MM-DD') AS fecha, n.folio, n.modalidad, n.estado,
+      `SELECT n.id, to_char(n.created_at AT TIME ZONE $2, 'YYYY-MM-DD') AS fecha, n.folio, n.tipo_servicio, n.estado,
               n.precio_total, n.cantidad_cargas, n.cliente_id,
               c.nombre AS cliente_nombre, c.apellido AS cliente_apellido,
               n.maquina_id,  ml.nombre AS maquina_nombre,  ml.tipo AS maquina_tipo,
@@ -107,7 +107,7 @@ export const getDesempeno = async (req, res) => {
       if (!buckets.has(k)) {
         buckets.set(k, {
           fecha, notas: 0, vendido: 0, checkin: null, salida: null,
-          _notas: [],              // { folio, modalidad, cliente, precio }
+          _notas: [],              // { folio, tipo_servicio, cliente, precio }
           _maquinas: new Map(),    // id -> { nombre, tipo, usos }
           _cargas: [],
           _productos: new Map(),   // nombre -> cantidad
@@ -132,13 +132,13 @@ export const getDesempeno = async (req, res) => {
       b._notas.push({
         id:        n.id,
         folio:     n.folio,
-        modalidad: n.modalidad,
+        tipo_servicio: n.tipo_servicio,
         estado:    n.estado,
         cliente:   clienteNombre || null,
         precio:    Number(n.precio_total) || 0,
       });
       // Clientes: autoservicio = 1 cliente cada uno; el resto, por cliente.
-      if (n.modalidad === 'AUTOSERVICIO') {
+      if (n.tipo_servicio === 'AUTOSERVICIO') {
         b._autoservicios.push({ folio: n.folio });
       } else if (n.cliente_id) {
         b._clientesReg.set(n.cliente_id, clienteNombre || 'Cliente');

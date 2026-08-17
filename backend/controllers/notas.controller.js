@@ -4,7 +4,7 @@ import { esAdmin } from '../middleware/roles.js';
 const ESTADOS_VALIDOS     = ['EN_ESPERA', 'LAVANDO', 'SECANDO', 'LISTA', 'PAGADA', 'FINALIZADA', 'CANCELADA'];
 // Estados con los que puede nacer una nota.
 const ESTADOS_INICIALES   = ['EN_ESPERA', 'LAVANDO', 'SECANDO'];
-const MODALIDADES_VALIDAS = ['AUTOSERVICIO', 'EDREDON', 'POR_ENCARGO'];
+const TIPOS_SERVICIO_VALIDOS = ['AUTOSERVICIO', 'EDREDON', 'POR_ENCARGO'];
 const ESTADOS_PAGO_VALIDOS = ['PENDIENTE', 'PAGADO'];
 const TAMANOS_VALIDOS     = ['chico', 'grande', 'jumbo'];
 const TIPOS_PRENDA_VALIDOS = ['ROPA', 'EDREDON'];
@@ -249,8 +249,8 @@ async function sellarCicloMaquinas(client, notaId) {
 // puede rebasar su tope sumando lavadora + secadora + productos. El ajuste
 // manual va aparte por decisión del negocio y NO cuenta contra el tope.
 // Es tope duro para todos los roles (incluido admin); NULL en Ajustes =
-// sin tope. Aplica SOLO a Servicio por Encargo (modalidad POR_ENCARGO): el
-// Autoservicio no captura tamaño y queda fuera; el filtro por modalidad lo
+// sin tope. Aplica SOLO a Servicio por Encargo (tipo de servicio POR_ENCARGO): el
+// Autoservicio no captura tamaño y queda fuera; el filtro por tipo de servicio lo
 // hace explícito además del tamaño. Se llama antes del COMMIT en cada ruta
 // que pueda encarecer una carga (crear, editar, activar, asignar secadora).
 // Devuelve el mensaje de error o null si todas las cargas caben.
@@ -271,7 +271,7 @@ async function validarTopesCargas(client, notaId) {
        JOIN notas n ON n.id = nc.nota_id
        CROSS JOIN ajustes a
        LEFT JOIN nota_productos np ON np.carga_id = nc.id
-      WHERE nc.nota_id = $1 AND n.modalidad = 'POR_ENCARGO'
+      WHERE nc.nota_id = $1 AND n.tipo_servicio = 'POR_ENCARGO'
         AND (nc.tamano IS NOT NULL OR UPPER(COALESCE(nc.tipo_prenda, '')) = 'EDREDON')
         AND a.id = 1
       GROUP BY nc.id, a.tope_carga_chico, a.tope_carga_grande, a.tope_carga_jumbo, a.tope_carga_edredon
@@ -295,15 +295,15 @@ async function validarTopesCargas(client, notaId) {
 // Precio efectivo de un producto dentro de una nota. Los productos por
 // tapa/medida van INCLUIDOS (sin costo) en Por Encargo; en Autoservicio se
 // cobra su precio por tapa. Los demás productos cobran su precio siempre.
-function precioProductoEnNota(art, modalidad) {
-  if (modalidad === 'POR_ENCARGO' && art.es_por_tapa) return 0;
+function precioProductoEnNota(art, tipo_servicio) {
+  if (tipo_servicio === 'POR_ENCARGO' && art.es_por_tapa) return 0;
   return art.precio_unitario ?? 0;
 }
 
 // Reserva un producto para una nota (o una carga): valida stock disponible,
 // inserta la fila en nota_productos y aumenta stock_reservado. Lanza Error con
 // el mensaje para el cliente si el producto no existe o no hay stock.
-async function reservarProducto(client, notaId, cargaId, productoId, cantidad, sucursal, modalidad) {
+async function reservarProducto(client, notaId, cargaId, productoId, cantidad, sucursal, tipo_servicio) {
   const { rows: artRows } = await client.query(
     'SELECT * FROM productos WHERE id = $1 AND sucursal = $2 FOR UPDATE',
     [productoId, sucursal]
@@ -319,7 +319,7 @@ async function reservarProducto(client, notaId, cargaId, productoId, cantidad, s
   const { rows: npRows } = await client.query(
     `INSERT INTO nota_productos (nota_id, carga_id, producto_id, cantidad, precio_unitario)
      VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-    [notaId, cargaId, productoId, cantidad, precioProductoEnNota(art, modalidad)]
+    [notaId, cargaId, productoId, cantidad, precioProductoEnNota(art, tipo_servicio)]
   );
   await client.query(
     'UPDATE productos SET stock_reservado = stock_reservado + $1 WHERE id = $2',
@@ -343,7 +343,7 @@ async function liberarProductosDeNota(client, notaId) {
 // Valida y tarifica las cargas recibidas en el body. Cada carga puede traer:
 //   { lavadora_id, secadora_id, tipo_prenda, tipo_tela, tamano_edredon,
 //     tamano, ajuste, productos: [{ producto_id, cantidad }] }
-// (todo opcional salvo que la modalidad lo exija). Devuelve las filas listas
+// (todo opcional salvo que el tipo de servicio lo exija). Devuelve las filas listas
 // para insertar o lanza un Error con el mensaje para el cliente.
 async function prepararCargas(client, cargas, tipoPrendaNota, sucursal) {
   if (!Array.isArray(cargas) || cargas.length === 0) {
@@ -416,7 +416,7 @@ async function prepararCargas(client, cargas, tipoPrendaNota, sucursal) {
 
 // Inserta las filas de nota_cargas ya preparadas (con sus productos, que
 // reservan stock). Devuelve las cargas con sus productos.
-async function insertarCargas(client, notaId, filas, sucursal, modalidad) {
+async function insertarCargas(client, notaId, filas, sucursal, tipo_servicio) {
   const insertadas = [];
   for (const f of filas) {
     const { rows } = await client.query(
@@ -431,7 +431,7 @@ async function insertarCargas(client, notaId, filas, sucursal, modalidad) {
     const carga = rows[0];
     const productos = [];
     for (const p of (f.productos ?? [])) {
-      productos.push(await reservarProducto(client, notaId, carga.id, p.producto_id, p.cantidad, sucursal, modalidad));
+      productos.push(await reservarProducto(client, notaId, carga.id, p.producto_id, p.cantidad, sucursal, tipo_servicio));
     }
     insertadas.push({ ...carga, productos });
   }
@@ -683,7 +683,7 @@ export const createNota = async (req, res) => {
     cliente_id,
     maquina_id,
     secadora_id,
-    modalidad = 'POR_ENCARGO',
+    tipo_servicio = 'POR_ENCARGO',
     tipo_prenda = 'ROPA',
     estado,
     estado_pago,
@@ -713,9 +713,9 @@ export const createNota = async (req, res) => {
     return res.status(400).json({ message: 'cargas debe ser una lista con al menos una carga.' });
   }
 
-  if (!MODALIDADES_VALIDAS.includes(modalidad)) {
+  if (!TIPOS_SERVICIO_VALIDOS.includes(tipo_servicio)) {
     return res.status(400).json({
-      message: `Modalidad inválida. Valores permitidos: ${MODALIDADES_VALIDAS.join(', ')}.`,
+      message: `Tipo de servicio inválido. Valores permitidos: ${TIPOS_SERVICIO_VALIDOS.join(', ')}.`,
     });
   }
   if (!TIPOS_PRENDA_VALIDOS.includes(String(tipo_prenda).toUpperCase())) {
@@ -728,7 +728,7 @@ export const createNota = async (req, res) => {
       message: `Estado de pago inválido. Valores permitidos: ${ESTADOS_PAGO_VALIDOS.join(', ')}.`,
     });
   }
-  if (modalidad === 'POR_ENCARGO') {
+  if (tipo_servicio === 'POR_ENCARGO') {
     if (!cliente_id) {
       return res.status(400).json({ message: 'cliente_id es requerido para notas Por Encargo.' });
     }
@@ -789,7 +789,7 @@ export const createNota = async (req, res) => {
 
   // Leer precio desde ajustes si no se envió en el body (flujo legado sin
   // cargas: Por Encargo y notas viejas). Depende del tipo de máquina
-  // (mediana / jumbo / secadora) y la modalidad (EDREDON en jumbo tiene su
+  // (mediana / jumbo / secadora) y el tipo de servicio (EDREDON en jumbo tiene su
   // propia tarifa). Con cargas, la tarificación es por carga más adelante.
   let precioBaseNum = precio_base != null ? Number(precio_base) : null;
   if (precioBaseNum === null && !esNotaConCargas) {
@@ -852,7 +852,7 @@ export const createNota = async (req, res) => {
       }
       // Autoservicio: al menos una carga debe traer una máquina (lavadora o
       // secadora). No tiene sentido una nota de autoservicio sin ninguna máquina.
-      if (modalidad === 'AUTOSERVICIO' && !filasCargas.some(f => f.lavadora_id || f.secadora_id)) {
+      if (tipo_servicio === 'AUTOSERVICIO' && !filasCargas.some(f => f.lavadora_id || f.secadora_id)) {
         await client.query('ROLLBACK');
         return res.status(400).json({ message: 'Agrega al menos una carga con una lavadora o secadora.' });
       }
@@ -896,7 +896,7 @@ export const createNota = async (req, res) => {
 
     const { rows: notaRows } = await client.query(
       `INSERT INTO notas
-         (cliente_id, usuario_id, maquina_id, secadora_id, modalidad, tipo_prenda, estado, estado_pago, sucursal,
+         (cliente_id, usuario_id, maquina_id, secadora_id, tipo_servicio, tipo_prenda, estado, estado_pago, sucursal,
           peso_kg, precio_total, fecha_entrega, tiempo_entrega, instrucciones,
           tamano, tipo_tela, tamano_edredon, precio_base, ajuste, cantidad_cargas,
           cantidad_cargas_secadora, precio_base_secadora)
@@ -907,7 +907,7 @@ export const createNota = async (req, res) => {
         req.user.id,
         maquinaIdNota,
         secadoraIdNota,
-        modalidad,
+        tipo_servicio,
         String(tipo_prenda).toUpperCase(),
         estadoNota,
         estado_pago,
@@ -936,7 +936,7 @@ export const createNota = async (req, res) => {
     // Insertar las cargas y tomar las máquinas de las cargas activadas.
     let cargasInsertadas = [];
     if (filasCargas) {
-      cargasInsertadas = await insertarCargas(client, nota.id, filasCargas, req.sucursal, modalidad);
+      cargasInsertadas = await insertarCargas(client, nota.id, filasCargas, req.sucursal, tipo_servicio);
       if (idsActivar.length > 0) {
         const { rows: maqs } = await client.query(
           'SELECT id, nombre, estado FROM maquinas WHERE id = ANY($1) FOR UPDATE',
@@ -955,7 +955,7 @@ export const createNota = async (req, res) => {
       }
     }
 
-    if (modalidad === 'POR_ENCARGO' || modalidad === 'AUTOSERVICIO') {
+    if (tipo_servicio === 'POR_ENCARGO' || tipo_servicio === 'AUTOSERVICIO') {
       for (const { insumo_id, cantidad } of insumos) {
         if (!insumo_id || !cantidad || cantidad <= 0) continue;
 
@@ -1010,7 +1010,7 @@ export const createNota = async (req, res) => {
         `INSERT INTO nota_productos (nota_id, producto_id, cantidad, precio_unitario)
          VALUES ($1, $2, $3, $4)
          RETURNING *`,
-        [nota.id, producto_id, cantidad, precioProductoEnNota(art, modalidad)]
+        [nota.id, producto_id, cantidad, precioProductoEnNota(art, tipo_servicio)]
       );
       await client.query(
         'UPDATE productos SET stock_reservado = stock_reservado + $1 WHERE id = $2',
@@ -1192,7 +1192,7 @@ export const updateNota = async (req, res) => {
         [id]
       );
       await client.query('DELETE FROM nota_cargas WHERE nota_id = $1', [id]);
-      cargasNota = await insertarCargas(client, id, filasCargas, req.sucursal, actual.modalidad);
+      cargasNota = await insertarCargas(client, id, filasCargas, req.sucursal, actual.tipo_servicio);
 
       if (['LAVANDO', 'SECANDO'].includes(actual.estado)) {
         const despues = new Set(
@@ -1281,7 +1281,7 @@ export const updateNota = async (req, res) => {
           `INSERT INTO nota_productos (nota_id, producto_id, cantidad, precio_unitario)
            VALUES ($1, $2, $3, $4)
            RETURNING *`,
-          [id, producto_id, cantidad, precioProductoEnNota(art, actual.modalidad)]
+          [id, producto_id, cantidad, precioProductoEnNota(art, actual.tipo_servicio)]
         );
         await client.query(
           'UPDATE productos SET stock_reservado = stock_reservado + $1 WHERE id = $2',

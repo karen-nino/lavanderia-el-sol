@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 
-const BADGE_MODALIDAD = {
+const BADGE_TIPO_SERVICIO = {
   AUTOSERVICIO: 'Autoservicio',
   EDREDON:      'Edredón',
   POR_ENCARGO:  'Por encargo',
@@ -69,7 +69,7 @@ function armarTextoTicket(nota) {
     const apellido = nota.cliente_apellido ? ` ${nota.cliente_apellido}` : '';
     L.push(`Cliente: ${nota.cliente_nombre}${apellido}`);
   }
-  L.push(`Tipo: ${BADGE_MODALIDAD[nota.modalidad] ?? nota.modalidad}`);
+  L.push(`Tipo: ${BADGE_TIPO_SERVICIO[nota.tipo_servicio] ?? nota.tipo_servicio}`);
 
   // Vuelca las líneas de una carga (máquinas, productos, ajuste) al arreglo L.
   const volcarCarga = cg => {
@@ -252,7 +252,7 @@ export default function TicketNota() {
                 : 'Anónimo'}
             />
             {nota.cliente_telefono && <Linea label="Teléfono" value={nota.cliente_telefono} />}
-            <Linea label="Tipo" value={BADGE_MODALIDAD[nota.modalidad] ?? nota.modalidad} />
+            <Linea label="Tipo" value={BADGE_TIPO_SERVICIO[nota.tipo_servicio] ?? nota.tipo_servicio} />
           </div>
 
           {/* Desglose por cargas (originales) */}

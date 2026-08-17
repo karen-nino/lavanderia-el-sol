@@ -15,7 +15,7 @@ const BADGE_ESTADO = {
   CANCELADA:  { label: 'Cancelada',   cls: 'bg-red-100 text-red-700'          },
 };
 
-const BADGE_MODALIDAD = {
+const BADGE_TIPO_SERVICIO = {
   AUTOSERVICIO: { label: 'Autoservicio', cls: 'bg-light-blue text-blue-700' },
   EDREDON:      { label: 'Edredón',      cls: 'bg-sky-100 text-sky-700'       },
   POR_ENCARGO:  { label: 'Por encargo',  cls: 'bg-amber-100 text-amber-700'   },
@@ -279,7 +279,7 @@ export default function DetalleNota() {
   const terminal     = ['FINALIZADA', 'CANCELADA'].includes(nota.estado);
   const puedeEditar  = !['PAGADA', 'FINALIZADA', 'CANCELADA'].includes(nota.estado);
   const puedeCancelar = !['CANCELADA'].includes(nota.estado);
-  const badgeModal    = BADGE_MODALIDAD[nota.modalidad] ?? BADGE_MODALIDAD.AUTOSERVICIO;
+  const badgeTipoServicio    = BADGE_TIPO_SERVICIO[nota.tipo_servicio] ?? BADGE_TIPO_SERVICIO.AUTOSERVICIO;
   const badgePago     = BADGE_PAGO[nota.estado_pago];
   const barcodeValue  = nota.folio ?? String(nota.id);
   const pasoActual    = progresoPasos(nota);
@@ -432,7 +432,7 @@ export default function DetalleNota() {
       </div>
 
       {/* Información de entrega (datos del paso de Entrega) — solo Por Encargo */}
-      {nota.modalidad !== 'AUTOSERVICIO' && (
+      {nota.tipo_servicio !== 'AUTOSERVICIO' && (
         <div className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
           <div className="px-4 py-3 border-b border-gray-50">
             <h2 className="text-sm font-semibold text-gray-700">Entrega</h2>
@@ -482,8 +482,8 @@ export default function DetalleNota() {
             </FilaDetalle>
           )}
           <FilaDetalle label="Tipo">
-            <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${badgeModal.cls}`}>
-              {badgeModal.label}
+            <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${badgeTipoServicio.cls}`}>
+              {badgeTipoServicio.label}
             </span>
             {nota.tamano && <span className="ml-2 text-xs text-gray-500 capitalize">{nota.tamano}</span>}
           </FilaDetalle>
@@ -539,7 +539,7 @@ export default function DetalleNota() {
                   const totalCarga = Number(cg.precio_lavadora) + Number(cg.precio_secadora)
                     + Number(cg.ajuste ?? 0) + totalProds;
                   // Autoservicio no maneja prenda/tela/tamaño: se omite esa línea.
-                  const atributos = nota.modalidad === 'AUTOSERVICIO' ? [] : [
+                  const atributos = nota.tipo_servicio === 'AUTOSERVICIO' ? [] : [
                     PRENDA_LABEL[cg.tipo_prenda],
                     cg.tipo_tela,
                     cg.tamano_edredon,
