@@ -157,13 +157,11 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
     onCountChange?.(maquinas.filter(m => m.estado === 'en_uso').length);
   }, [maquinas, onCountChange]);
 
-  // Una nota está vinculada a la máquina si esta aparece en cualquiera de
-  // sus cargas (maquinas_ids, calculado por el servidor) o en su columna
-  // legada maquina_id.
+  // Una nota está vinculada a la máquina si esta aparece en cualquiera de sus
+  // cargas (maquinas_ids, calculado por el servidor).
   const notaUsaMaquina = (n, maquinaId) =>
-    Array.isArray(n.maquinas_ids)
-      ? n.maquinas_ids.some(mid => String(mid) === String(maquinaId))
-      : String(n.maquina_id) === String(maquinaId);
+    Array.isArray(n.maquinas_ids) &&
+    n.maquinas_ids.some(mid => String(mid) === String(maquinaId));
 
   const notaParaTerminar = confirmTerminar
     ? notas

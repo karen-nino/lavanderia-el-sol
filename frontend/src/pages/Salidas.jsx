@@ -370,19 +370,10 @@ export default function Salidas() {
   }
 
   // Máquinas agrupadas por carga (cada carga con su lavadora y/o secadora), para
-  // mostrarlas bajo su encabezado "Carga N". Si la nota es legada (sin cargas),
-  // se agrupa como una sola carga con las columnas legadas.
+  // mostrarlas bajo su encabezado "Carga N". Se incluyen también las máquinas ya
+  // desvinculadas (usada): la que sigue viva muestra su estado (En espera / En
+  // uso); la que ya cumplió su parte se queda como "terminado" (verde), sin botones.
   const cargasMaquinas = (() => {
-    if (cargasNota.length === 0) {
-      const ms = [
-        nota?.maquina_id  && { id: nota.maquina_id,  nombre: nota.maquina_nombre,  tipo: nota.maquina_tipo,  estado: nota.maquina_estado,  en_uso_desde: nota.maquina_en_uso_desde  },
-        nota?.secadora_id && { id: nota.secadora_id, nombre: nota.secadora_nombre, tipo: nota.secadora_tipo, tamano: nota.secadora_tamano, estado: nota.secadora_estado, en_uso_desde: nota.secadora_en_uso_desde },
-      ].filter(Boolean);
-      return ms.length > 0 ? [{ orden: null, maquinas: ms }] : [];
-    }
-    // Se incluyen también las máquinas ya desvinculadas (usada): la que sigue
-    // viva muestra su estado (En espera / En uso); la que ya cumplió su parte
-    // se queda como "terminado" (verde), sin botones.
     return cargasNota
       .map(c => ({
         orden: c.orden,

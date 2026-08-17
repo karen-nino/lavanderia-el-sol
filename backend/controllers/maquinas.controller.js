@@ -23,14 +23,10 @@ export const getMaquinas = async (req, res) => {
              FROM notas n
             WHERE m.estado = 'disponible'
               AND n.estado IN ('EN_ESPERA', 'LAVANDO', 'SECANDO')
-              AND (
-                n.maquina_id = m.id
-                OR n.secadora_id = m.id
-                OR EXISTS (
-                  SELECT 1 FROM nota_cargas nc
-                   WHERE nc.nota_id = n.id
-                     AND (nc.lavadora_id = m.id OR nc.secadora_id = m.id)
-                )
+              AND EXISTS (
+                SELECT 1 FROM nota_cargas nc
+                 WHERE nc.nota_id = n.id
+                   AND (nc.lavadora_id = m.id OR nc.secadora_id = m.id)
               )
             ORDER BY n.created_at ASC
             LIMIT 1
@@ -66,22 +62,18 @@ export const getUsoMaquina = async (req, res) => {
     if (maq.length === 0) return res.status(404).json({ message: 'Máquina no encontrada.' });
 
     // Una nota "usó" la máquina si la tiene en alguna de sus cargas
-    // (autoservicio, tabla nota_cargas) o en sus columnas legadas
-    // maquina_id / secadora_id (Por Encargo y notas viejas).
+    // (tabla nota_cargas).
     const { rows: notas } = await pool.query(
       `SELECT n.id, DATE(n.created_at) AS fecha, n.folio, n.tipo_servicio, n.estado,
-              n.precio_total, n.estado_pago, n.cantidad_cargas, n.cliente_id,
+              n.precio_total, n.estado_pago, n.cliente_id,
               n.usuario_id, TRIM(u.nombre || ' ' || COALESCE(u.apellido, '')) AS empleado_nombre,
               c.nombre AS cliente_nombre, c.apellido AS cliente_apellido
          FROM notas n
          LEFT JOIN usuarios u ON u.id = n.usuario_id
          LEFT JOIN clientes c ON c.id = n.cliente_id
-        WHERE (
-                n.maquina_id = $1 OR n.secadora_id = $1
-                OR EXISTS (
-                     SELECT 1 FROM nota_cargas nc
-                      WHERE nc.nota_id = n.id AND (nc.lavadora_id = $1 OR nc.secadora_id = $1)
-                   )
+        WHERE EXISTS (
+                SELECT 1 FROM nota_cargas nc
+                 WHERE nc.nota_id = n.id AND (nc.lavadora_id = $1 OR nc.secadora_id = $1)
               )
           AND n.estado <> 'CANCELADA'
         ORDER BY n.created_at DESC`,
@@ -106,7 +98,6 @@ export const getUsoMaquina = async (req, res) => {
 
     // ── Agregación por día ──────────────────────────────────
     const notaPorId = new Map(notas.map((n) => [n.id, n]));
-    const notasConCargas = new Set(cargas.map((c) => c.nota_id));
     const buckets = new Map();
     const getBucket = (fecha) => {
       const k = new Date(fecha).toISOString();
@@ -147,17 +138,6 @@ export const getUsoMaquina = async (req, res) => {
         b._autoservicios.push({ folio: n.folio });
       } else if (n.cliente_id) {
         b._clientesReg.set(n.cliente_id, clienteNombre || 'Cliente');
-      }
-      // Notas legadas sin filas en nota_cargas: cargas denormalizadas.
-      if (!notasConCargas.has(n.id)) {
-        const nCargas = Number(n.cantidad_cargas) || 0;
-        for (let k = 0; k < nCargas; k++) {
-          b._cargas.push({
-            folio: n.folio,
-            descripcion: maq[0].nombre,
-            precio: nCargas > 0 ? (Number(n.precio_total) || 0) / nCargas : 0,
-          });
-        }
       }
     }
 
@@ -341,19 +321,14 @@ export const detenerCiclo = async (req, res) => {
       `UPDATE notas n SET estado = (CASE
            WHEN EXISTS (SELECT 1 FROM nota_cargas nc JOIN maquinas m ON m.id = nc.lavadora_id
                          WHERE nc.nota_id = n.id AND m.estado = 'en_uso')
-             OR EXISTS (SELECT 1 FROM maquinas m WHERE m.id = n.maquina_id AND m.tipo <> 'secadora' AND m.estado = 'en_uso')
              THEN 'LAVANDO'
            WHEN EXISTS (SELECT 1 FROM nota_cargas nc JOIN maquinas m ON m.id = nc.secadora_id
                          WHERE nc.nota_id = n.id AND m.estado = 'en_uso')
-             OR EXISTS (SELECT 1 FROM maquinas m WHERE m.id = n.secadora_id AND m.tipo = 'secadora' AND m.estado = 'en_uso')
              THEN 'SECANDO'
            ELSE 'EN_ESPERA'
          END)::estado_orden
        WHERE n.estado IN ('LAVANDO', 'SECANDO')
-         AND (
-           EXISTS (SELECT 1 FROM nota_cargas nc WHERE nc.nota_id = n.id AND (nc.lavadora_id = $1 OR nc.secadora_id = $1))
-           OR n.maquina_id = $1 OR n.secadora_id = $1
-         )`,
+         AND EXISTS (SELECT 1 FROM nota_cargas nc WHERE nc.nota_id = n.id AND (nc.lavadora_id = $1 OR nc.secadora_id = $1))`,
       [id]
     );
 

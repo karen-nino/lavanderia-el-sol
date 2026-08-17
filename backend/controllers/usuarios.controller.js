@@ -48,14 +48,10 @@ export const getDesempeno = async (req, res) => {
     // que cada número y el contenido de su modal siempre coincidan.
     const { rows: notas } = await pool.query(
       `SELECT n.id, to_char(n.created_at AT TIME ZONE $2, 'YYYY-MM-DD') AS fecha, n.folio, n.tipo_servicio, n.estado,
-              n.precio_total, n.cantidad_cargas, n.cliente_id,
-              c.nombre AS cliente_nombre, c.apellido AS cliente_apellido,
-              n.maquina_id,  ml.nombre AS maquina_nombre,  ml.tipo AS maquina_tipo,
-              n.secadora_id, ms.nombre AS secadora_nombre, ms.tipo AS secadora_tipo
+              n.precio_total, n.cliente_id,
+              c.nombre AS cliente_nombre, c.apellido AS cliente_apellido
          FROM notas n
          LEFT JOIN clientes c  ON c.id  = n.cliente_id
-         LEFT JOIN maquinas ml ON ml.id = n.maquina_id
-         LEFT JOIN maquinas ms ON ms.id = n.secadora_id
         WHERE n.usuario_id = $1 AND n.estado <> 'CANCELADA'
         ORDER BY n.created_at DESC`,
       [id, TZ_NEGOCIO]
@@ -100,7 +96,6 @@ export const getDesempeno = async (req, res) => {
 
     // ── Agregación por día ──────────────────────────────────
     const notaPorId = new Map(notas.map((n) => [n.id, n]));
-    const notasConCargas = new Set(cargas.map((c) => c.nota_id));
     const buckets = new Map();
     const getBucket = (fecha) => {
       const k = fecha; // 'YYYY-MM-DD' (día local del negocio)
@@ -142,16 +137,6 @@ export const getDesempeno = async (req, res) => {
         b._autoservicios.push({ folio: n.folio });
       } else if (n.cliente_id) {
         b._clientesReg.set(n.cliente_id, clienteNombre || 'Cliente');
-      }
-      // Notas legadas sin filas en nota_cargas: máquinas y cargas denormalizadas.
-      if (!notasConCargas.has(n.id)) {
-        sumarMaquina(b, n.maquina_id,  n.maquina_nombre,  n.maquina_tipo);
-        sumarMaquina(b, n.secadora_id, n.secadora_nombre, n.secadora_tipo);
-        const nCargas = Number(n.cantidad_cargas) || 0;
-        const desc = [n.maquina_nombre, n.secadora_nombre].filter(Boolean).join(' + ') || 'Sin máquina';
-        for (let k = 0; k < nCargas; k++) {
-          b._cargas.push({ folio: n.folio, descripcion: desc, precio: nCargas > 0 ? (Number(n.precio_total) || 0) / nCargas : 0 });
-        }
       }
     }
 

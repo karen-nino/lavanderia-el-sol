@@ -209,11 +209,7 @@ export default function NuevaNota() {
         setFolio(esEdicion ? (nota?.folio ?? '') : (extra?.folio ?? ''));
         // En edición, incluir las máquinas de la nota aunque no estén "disponibles"
         const idsActuales = esEdicion
-          ? [
-              nota?.maquina_id,
-              nota?.secadora_id,
-              ...(nota?.cargas ?? []).flatMap(c => [c.lavadora_id, c.secadora_id]),
-            ].filter(Boolean)
+          ? (nota?.cargas ?? []).flatMap(c => [c.lavadora_id, c.secadora_id]).filter(Boolean)
           : [];
         // Se incluyen también las máquinas "reservada" (libres pero apartadas
         // por otra nota abierta): no se ocultan, se muestran deshabilitadas como
@@ -289,7 +285,6 @@ export default function NuevaNota() {
               tipo_tela:      nota.tipo_tela      ?? '',
               tamano_edredon: nota.tamano_edredon ?? '',
               tamano:         nota.tamano         ?? '',
-              maquina_id:     nota.maquina_id ? String(nota.maquina_id) : '',
               ajuste:         nota.ajuste != null ? String(nota.ajuste) : '0',
               productos:      prods,
             }]);

@@ -91,6 +91,62 @@ describe('POST /api/notas — Autoservicio (happy path)', () => {
   });
 });
 
+describe('lecturas del modelo por cargas (invariantes que deben sobrevivir el refactor)', () => {
+  async function crearAutoservicio() {
+    const lavadoraId = await seedMaquina({ nombre: 'Lavadora 1', tipo: 'lavadora_mediana' });
+    const res = await request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'AUTOSERVICIO',
+      tipo_prenda: 'ROPA',
+      estado_pago: 'PENDIENTE',
+      cargas: [{ lavadora_id: lavadoraId, activar: true }],
+    });
+    return { notaId: res.body.id, lavadoraId };
+  }
+
+  it('getNotaById devuelve las cargas con la info de su lavadora', async () => {
+    const { notaId, lavadoraId } = await crearAutoservicio();
+    const res = await request(app).get(`/api/notas/${notaId}`).set(auth(admin.token));
+    expect(res.status).toBe(200);
+    expect(res.body.cargas).toHaveLength(1);
+    expect(res.body.cargas[0].lavadora_id).toBe(lavadoraId);
+    expect(res.body.cargas[0].lavadora_nombre).toBe('Lavadora 1');
+    expect(res.body.cargas[0].lavadora_estado).toBe('en_uso');
+  });
+
+  it('getNotas marca hay_lavadora_activa cuando una lavadora corre', async () => {
+    await crearAutoservicio();
+    const res = await request(app).get('/api/notas').set(auth(admin.token));
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(1);
+    expect(res.body[0].hay_lavadora_activa).toBe(true);
+    expect(res.body[0].hay_secadora_activa).toBe(false);
+    expect(res.body[0].maquinas_nombres).toContain('Lavadora 1');
+  });
+
+  it('PATCH edita un campo simple conservando las cargas', async () => {
+    const { notaId } = await crearAutoservicio();
+    const res = await request(app).patch(`/api/notas/${notaId}`).set(auth(admin.token))
+      .send({ instrucciones: 'Sin suavizante' });
+    expect(res.status).toBe(200);
+    expect(res.body.instrucciones).toBe('Sin suavizante');
+    expect(res.body.cargas).toHaveLength(1);
+  });
+
+  it('PATCH reemplaza las cargas y retarifica', async () => {
+    const { notaId } = await crearAutoservicio();
+    const otra = await seedMaquina({ nombre: 'Lavadora 2', tipo: 'lavadora_mediana' });
+    const res = await request(app).patch(`/api/notas/${notaId}`).set(auth(admin.token))
+      .send({ cargas: [{ lavadora_id: otra, activar: true }] });
+    expect(res.status).toBe(200);
+    expect(res.body.cargas).toHaveLength(1);
+    expect(res.body.cargas[0].lavadora_id).toBe(otra);
+    // La lavadora anterior se liberó, la nueva quedó en uso.
+    const { rows } = await pool.query('SELECT nombre, estado FROM maquinas ORDER BY id');
+    expect(rows.find(m => m.nombre === 'Lavadora 1').estado).toBe('disponible');
+    expect(rows.find(m => m.nombre === 'Lavadora 2').estado).toBe('en_uso');
+  });
+});
+
 describe('aislamiento por sucursal', () => {
   it('una máquina de otra sucursal no es usable (400)', async () => {
     await seedSucursal('norte', 'Norte');

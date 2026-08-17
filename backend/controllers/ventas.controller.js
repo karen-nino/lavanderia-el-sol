@@ -102,9 +102,8 @@ export async function getResumen(req, res) {
           o.estado,
           o.estado_pago,
           -- Máquina(s) de la nota con su número de cargas: [{ nombre, cargas }].
-          -- Autoservicio: cuenta las cargas (nota_cargas) donde aparece cada
-          -- máquina, incluidas las ya desvinculadas (*_usada_id). Legado (sin
-          -- nota_cargas): la lavadora/secadora con la cantidad de cargas de la nota.
+          -- Cuenta las cargas (nota_cargas) donde aparece cada máquina,
+          -- incluidas las ya desvinculadas (*_usada_id).
           COALESCE((
             SELECT json_agg(json_build_object('nombre', t.nombre, 'cargas', t.cargas) ORDER BY t.nombre)
               FROM (
@@ -115,15 +114,10 @@ export async function getResumen(req, res) {
                                          nc.lavadora_usada_id, nc.secadora_usada_id])
                  WHERE nc.nota_id = o.id
                  GROUP BY mm.nombre
-                UNION ALL
-                SELECT mm.nombre, o.cantidad_cargas::int AS cargas
-                  FROM maquinas mm
-                 WHERE NOT EXISTS (SELECT 1 FROM nota_cargas nc WHERE nc.nota_id = o.id)
-                   AND mm.id IN (o.maquina_id, o.secadora_id)
               ) t
           ), '[]'::json)                               AS maquinas,
           NULLIF(TRIM(u.nombre || ' ' || COALESCE(u.apellido, '')), '') AS atendio,
-          o.cantidad_cargas                            AS cargas,
+          (SELECT COUNT(*) FROM nota_cargas nc WHERE nc.nota_id = o.id)::int AS cargas,
           COALESCE(np_t.total_productos, 0)            AS total_productos,
           o.precio_total                               AS total
         FROM notas o
@@ -141,10 +135,15 @@ export async function getResumen(req, res) {
       // Corte de caja
       pool.query(
         `SELECT
-          COALESCE(SUM(o.cantidad_cargas * COALESCE(o.precio_base, 0)), 0) AS total_cargas,
+          COALESCE(SUM(nc_t.total_cargas), 0)                              AS total_cargas,
           COALESCE(SUM(np_t.total_art), 0)                                  AS total_productos,
           COALESCE(SUM(o.ajuste), 0)                                        AS total_ajustes
         FROM notas o
+        LEFT JOIN (
+          SELECT nota_id, SUM(precio_lavadora + precio_secadora) AS total_cargas
+          FROM nota_cargas
+          GROUP BY nota_id
+        ) nc_t ON nc_t.nota_id = o.id
         LEFT JOIN (
           SELECT nota_id, SUM(cantidad * precio_unitario) AS total_art
           FROM nota_productos

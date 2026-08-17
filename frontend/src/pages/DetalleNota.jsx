@@ -507,7 +507,7 @@ export default function DetalleNota() {
               ? <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${badgePago.cls}`}>{badgePago.label}</span>
               : <span className="text-gray-400">—</span>}
           </FilaDetalle>
-          {(nota.cargas ?? []).length > 0 ? (
+          {(nota.cargas ?? []).length > 0 && (
             <FilaDetalle label="Cargas">
               <div className="space-y-3">
                 {nota.cargas.map(cg => {
@@ -607,51 +607,6 @@ export default function DetalleNota() {
                 })}
               </div>
             </FilaDetalle>
-          ) : (
-            <>
-              <FilaDetalle label={nota.secadora_nombre ? 'Lavadora' : 'Máquina'}>
-                {nota.maquina_nombre ? (
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-medium text-gray-800">{nota.maquina_nombre}</span>
-                    {MAQUINA_TIPO_LABEL[nota.maquina_tipo] && (
-                      <span className="text-xs text-gray-500">— {MAQUINA_TIPO_LABEL[nota.maquina_tipo]}</span>
-                    )}
-                    {(() => {
-                      const cfg = BADGE_MAQUINA_ESTADO[nota.maquina_estado];
-                      if (!cfg) return null;
-                      return (
-                        <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${cfg.cls}`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot} ${nota.maquina_estado === 'en_uso' ? 'animate-pulse' : ''}`} />
-                          {cfg.label}
-                        </span>
-                      );
-                    })()}
-                  </div>
-                ) : (
-                  <span className="text-gray-400">—</span>
-                )}
-              </FilaDetalle>
-              {nota.secadora_nombre && (
-                <FilaDetalle label="Secadora">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-medium text-gray-800">{nota.secadora_nombre}</span>
-                    {MAQUINA_TIPO_LABEL[nota.secadora_tipo] && (
-                      <span className="text-xs text-gray-500">— {MAQUINA_TIPO_LABEL[nota.secadora_tipo]}</span>
-                    )}
-                    {(() => {
-                      const cfg = BADGE_MAQUINA_ESTADO[nota.secadora_estado];
-                      if (!cfg) return null;
-                      return (
-                        <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${cfg.cls}`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot} ${nota.secadora_estado === 'en_uso' ? 'animate-pulse' : ''}`} />
-                          {cfg.label}
-                        </span>
-                      );
-                    })()}
-                  </div>
-                </FilaDetalle>
-              )}
-            </>
           )}
           <FilaDetalle label="Cliente">
             {nota.cliente_nombre
