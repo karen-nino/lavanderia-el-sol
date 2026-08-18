@@ -1,6 +1,7 @@
 // Utilidades para las pruebas de integración: limpiar la base entre tests,
 // sembrar datos mínimos y firmar tokens como lo hace el login real.
 import jwt from 'jsonwebtoken';
+import bcrypt from 'bcrypt';
 import pool from '../db/pool.js';
 
 // Vacía todas las tablas de negocio (menos el registro de migraciones) y
@@ -97,6 +98,31 @@ export async function seedAjustes(overrides = {}) {
      ON CONFLICT (id) DO UPDATE SET ${set}`,
     valores
   );
+}
+
+// Inserta un insumo y devuelve su id. Por defecto con stock suficiente.
+export async function seedInsumo({
+  nombre = 'Jabón', unidad = 'litro', stock_actual = 100, stock_minimo = 0,
+  sucursal = 'centro',
+} = {}) {
+  const { rows } = await pool.query(
+    `INSERT INTO insumos (nombre, unidad, stock_actual, stock_minimo, sucursal)
+     VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+    [nombre, unidad, stock_actual, stock_minimo, sucursal]
+  );
+  return rows[0].id;
+}
+
+// Inserta un usuario con una contraseña real (hash bcrypt) para probar el
+// login de verdad. Devuelve { id, password, rol, sucursal }.
+export async function seedLogin({ rol = 'admin', sucursal = 'centro', nombre = 'Login', password = 'secret123' } = {}) {
+  const hash = await bcrypt.hash(password, 4); // costo bajo: tests rápidos
+  const { rows } = await pool.query(
+    `INSERT INTO usuarios (nombre, password, rol, sucursal, activo)
+     VALUES ($1, $2, $3, $4, TRUE) RETURNING id`,
+    [nombre, hash, rol, sucursal]
+  );
+  return { id: rows[0].id, password, rol, sucursal };
 }
 
 // Firma un JWT como el login (payload { id }). Sin sid: el middleware solo
