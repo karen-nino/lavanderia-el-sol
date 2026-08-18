@@ -13,9 +13,10 @@ export default defineConfig({
     },
   },
   test: {
-    // jsdom para que localStorage/DOM existan (helpers de lib y, a futuro,
-    // pruebas de componentes). Los archivos *.test.js viven junto al código.
+    // jsdom para que localStorage/DOM existan (helpers de lib y pruebas de
+    // componentes). Los archivos *.test.js viven junto al código.
     environment: 'jsdom',
     include: ['src/**/*.test.{js,jsx}'],
+    setupFiles: ['./src/test/setup.js'],
   },
 })
