@@ -125,6 +125,20 @@ export async function seedLogin({ rol = 'admin', sucursal = 'centro', nombre = '
   return { id: rows[0].id, password, rol, sucursal };
 }
 
+// Inserta una notificación (campana del Dashboard) y devuelve su id.
+// `minutosAtras` la envejece para probar la ventana de 24 h.
+export async function seedNotificacion({
+  tipo = 'aviso', mensaje = 'Notificación de prueba', sucursal = 'centro',
+  usuario_id = null, minutosAtras = 0,
+} = {}) {
+  const { rows } = await pool.query(
+    `INSERT INTO notificaciones (tipo, mensaje, sucursal, usuario_id, created_at)
+     VALUES ($1, $2, $3, $4, NOW() - ($5 || ' minutes')::interval) RETURNING id`,
+    [tipo, mensaje, sucursal, usuario_id, String(minutosAtras)]
+  );
+  return rows[0].id;
+}
+
 // Firma un JWT como el login (payload { id }). Sin sid: el middleware solo
 // exige coincidencia de sesión si el usuario tiene session_id, y el sembrado
 // lo deja en NULL.
