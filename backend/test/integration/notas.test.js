@@ -327,6 +327,105 @@ describe('handlers de máquina — ciclo de vida', () => {
   });
 });
 
+describe('handlers de máquina — asignar / cambiar / quitar', () => {
+  // Nota Por Encargo En Espera: la lavadora queda asignada pero disponible
+  // (sin iniciar), que es el estado que exigen cambiar y quitar máquina.
+  async function porEncargoEnEspera() {
+    const clienteId = await seedCliente();
+    const lavadoraId = await seedMaquina({ nombre: 'Lavadora 1', tipo: 'lavadora_mediana' });
+    const res = await request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'POR_ENCARGO', cliente_id: clienteId, tipo_prenda: 'ROPA',
+      estado_pago: 'PENDIENTE', cargas: [{ lavadora_id: lavadoraId, activar: false }],
+    });
+    return { notaId: res.body.id, lavadoraId };
+  }
+
+  it('asignar-maquina agrega una carga nueva y suma su tarifa', async () => {
+    const { notaId } = await porEncargoEnEspera();
+    const otra = await seedMaquina({ nombre: 'Lavadora 2', tipo: 'lavadora_mediana' });
+    const res = await request(app).patch(`/api/notas/${notaId}/asignar-maquina`)
+      .set(auth(admin.token)).send({ maquina_id: otra, cobrar: true });
+    expect(res.status).toBe(200);
+    expect(res.body.cargas).toHaveLength(2);
+    expect(Number(res.body.precio_total)).toBe(140); // 70 + 70
+    // La máquina agregada queda asignada pero sin iniciar (disponible).
+    const { rows } = await pool.query('SELECT estado FROM maquinas WHERE id = $1', [otra]);
+    expect(rows[0].estado).toBe('disponible');
+  });
+
+  it('asignar-maquina exige el flag cobrar', async () => {
+    const { notaId } = await porEncargoEnEspera();
+    const otra = await seedMaquina({ nombre: 'Lavadora 2' });
+    const res = await request(app).patch(`/api/notas/${notaId}/asignar-maquina`)
+      .set(auth(admin.token)).send({ maquina_id: otra });
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/cobrar/i);
+  });
+
+  it('asignar-secadora agrega el secado a la carga y ocupa la secadora', async () => {
+    const lavadoraId = await seedMaquina({ nombre: 'Lavadora 1', tipo: 'lavadora_mediana' });
+    const secadoraId = await seedMaquina({ nombre: 'Secadora 1', tipo: 'secadora', tamano: 'mediana' });
+    const creada = await request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE',
+      cargas: [{ lavadora_id: lavadoraId, activar: true }],
+    });
+    const res = await request(app).patch(`/api/notas/${creada.body.id}/asignar-secadora`)
+      .set(auth(admin.token)).send({ secadora_id: secadoraId });
+    expect(res.status).toBe(200);
+    expect(Number(res.body.precio_total)).toBe(115); // 70 lavado + 45 secado
+    expect(res.body.cargas[0].secadora_id).toBe(secadoraId);
+    const { rows } = await pool.query('SELECT estado FROM maquinas WHERE id = $1', [secadoraId]);
+    expect(rows[0].estado).toBe('en_uso');
+  });
+
+  it('cambiar-maquina reemplaza una lavadora sin iniciar por otra disponible', async () => {
+    const { notaId, lavadoraId } = await porEncargoEnEspera();
+    const nueva = await seedMaquina({ nombre: 'Lavadora 2', tipo: 'lavadora_mediana' });
+    const res = await request(app).patch(`/api/notas/${notaId}/cambiar-maquina`)
+      .set(auth(admin.token)).send({ maquina_actual_id: lavadoraId, maquina_nueva_id: nueva });
+    expect(res.status).toBe(200);
+    expect(res.body.cargas[0].lavadora_id).toBe(nueva);
+    // La anterior vuelve a estar libre, la nueva sigue asignada sin iniciar.
+    const { rows } = await pool.query('SELECT id, estado FROM maquinas ORDER BY id');
+    expect(rows.find(m => m.id === lavadoraId).estado).toBe('disponible');
+    expect(rows.find(m => m.id === nueva).estado).toBe('disponible');
+  });
+
+  it('cambiar-maquina rechaza cambiar a una máquina de otro tipo', async () => {
+    const { notaId, lavadoraId } = await porEncargoEnEspera();
+    const secadora = await seedMaquina({ nombre: 'Secadora 1', tipo: 'secadora', tamano: 'mediana' });
+    const res = await request(app).patch(`/api/notas/${notaId}/cambiar-maquina`)
+      .set(auth(admin.token)).send({ maquina_actual_id: lavadoraId, maquina_nueva_id: secadora });
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/mismo tipo/i);
+  });
+
+  it('quitar-maquina desasigna una lavadora sin iniciar y pone su precio en 0', async () => {
+    const { notaId, lavadoraId } = await porEncargoEnEspera();
+    const res = await request(app).patch(`/api/notas/${notaId}/quitar-maquina`)
+      .set(auth(admin.token)).send({ maquina_id: lavadoraId });
+    expect(res.status).toBe(200);
+    expect(res.body.cargas[0].lavadora_id).toBeNull();
+    expect(Number(res.body.cargas[0].precio_lavadora)).toBe(0);
+    expect(Number(res.body.precio_total)).toBe(0);
+    // La máquina liberada sigue disponible para otra nota.
+    const { rows } = await pool.query('SELECT estado FROM maquinas WHERE id = $1', [lavadoraId]);
+    expect(rows[0].estado).toBe('disponible');
+  });
+
+  it('no se puede quitar una máquina que ya arrancó (en uso)', async () => {
+    const lavadoraId = await seedMaquina({ nombre: 'Lavadora 1', tipo: 'lavadora_mediana' });
+    const creada = await request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE',
+      cargas: [{ lavadora_id: lavadoraId, activar: true }],
+    });
+    const res = await request(app).patch(`/api/notas/${creada.body.id}/quitar-maquina`)
+      .set(auth(admin.token)).send({ maquina_id: lavadoraId });
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/no ha iniciado/i);
+  });
+});
+
 describe('permisos por rol', () => {
   it('un empleado no puede eliminar una nota (403); un admin sí (204)', async () => {
     const empleado = await seedUsuario({ rol: 'operador', sucursal: 'centro', nombre: 'Empleado' });
@@ -339,6 +438,145 @@ describe('permisos por rol', () => {
 
     await request(app).delete(`/api/notas/${notaId}`).set(auth(empleado.token)).expect(403);
     await request(app).delete(`/api/notas/${notaId}`).set(auth(admin.token)).expect(204);
+  });
+});
+
+describe('cargas múltiples', () => {
+  it('crea una nota con dos cargas y toma ambas lavadoras', async () => {
+    const lav1 = await seedMaquina({ nombre: 'Lavadora 1', tipo: 'lavadora_mediana' });
+    const lav2 = await seedMaquina({ nombre: 'Lavadora 2', tipo: 'lavadora_mediana' });
+    const res = await request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE',
+      cargas: [
+        { lavadora_id: lav1, activar: true },
+        { lavadora_id: lav2, activar: true },
+      ],
+    });
+    expect(res.status).toBe(201);
+    expect(res.body.cargas).toHaveLength(2);
+    expect(Number(res.body.precio_total)).toBe(140); // 70 + 70
+    const { rows } = await pool.query('SELECT estado FROM maquinas WHERE id = ANY($1)', [[lav1, lav2]]);
+    expect(rows.every(m => m.estado === 'en_uso')).toBe(true);
+  });
+
+  it('activar-pendientes con maquina_id arranca solo esa máquina', async () => {
+    const clienteId = await seedCliente();
+    const lav1 = await seedMaquina({ nombre: 'Lavadora 1', tipo: 'lavadora_mediana' });
+    const lav2 = await seedMaquina({ nombre: 'Lavadora 2', tipo: 'lavadora_mediana' });
+    const creada = await request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'POR_ENCARGO', cliente_id: clienteId, tipo_prenda: 'ROPA',
+      estado_pago: 'PENDIENTE',
+      cargas: [
+        { lavadora_id: lav1, activar: false },
+        { lavadora_id: lav2, activar: false },
+      ],
+    });
+    expect(creada.body.estado).toBe('EN_ESPERA');
+
+    const res = await request(app).patch(`/api/notas/${creada.body.id}/activar-pendientes`)
+      .set(auth(admin.token)).send({ maquina_id: lav1 });
+    expect(res.status).toBe(200);
+    expect(res.body.estado).toBe('LAVANDO');
+    const { rows } = await pool.query('SELECT id, estado FROM maquinas ORDER BY id');
+    expect(rows.find(m => m.id === lav1).estado).toBe('en_uso');
+    expect(rows.find(m => m.id === lav2).estado).toBe('disponible');
+  });
+});
+
+describe('edredón (lavadora jumbo)', () => {
+  it('tarifa el lavado de edredón con la tarifa jumbo de edredón', async () => {
+    const clienteId = await seedCliente();
+    const jumbo = await seedMaquina({ nombre: 'Jumbo 1', tipo: 'lavadora_jumbo', tamano: 'jumbo' });
+    const res = await request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'POR_ENCARGO', cliente_id: clienteId, tipo_prenda: 'EDREDON',
+      estado_pago: 'PENDIENTE', cargas: [{ lavadora_id: jumbo, activar: false }],
+    });
+    expect(res.status).toBe(201);
+    expect(Number(res.body.precio_total)).toBe(80); // edredonJumbo (default)
+    expect(Number(res.body.cargas[0].precio_lavadora)).toBe(80);
+  });
+
+  it('rechaza edredón en una lavadora que no es jumbo', async () => {
+    const clienteId = await seedCliente();
+    const mediana = await seedMaquina({ nombre: 'Lavadora 1', tipo: 'lavadora_mediana' });
+    const res = await request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'POR_ENCARGO', cliente_id: clienteId, tipo_prenda: 'EDREDON',
+      estado_pago: 'PENDIENTE', cargas: [{ lavadora_id: mediana, activar: false }],
+    });
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/jumbo/i);
+  });
+
+  it('aplica el tope de edredón (lavado 80 + producto 90 > 160)', async () => {
+    await seedAjustes({ precio_edredon_jumbo: 80, tope_carga_edredon: 160 });
+    const clienteId = await seedCliente();
+    const jumbo = await seedMaquina({ nombre: 'Jumbo 1', tipo: 'lavadora_jumbo', tamano: 'jumbo' });
+    const productoId = await seedProducto({ precio_unitario: 90 });
+    const res = await request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'POR_ENCARGO', cliente_id: clienteId, tipo_prenda: 'EDREDON',
+      estado_pago: 'PENDIENTE',
+      // La prenda va en la carga (como la manda el frontend): así validarTopesCargas
+      // la reconoce como edredón y aplica el tope dedicado.
+      cargas: [{ lavadora_id: jumbo, tipo_prenda: 'EDREDON', activar: false,
+                 productos: [{ producto_id: productoId, cantidad: 1 }] }],
+    });
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/rebasa el tope/i);
+  });
+});
+
+describe('productos por tapa', () => {
+  it('en Por Encargo el producto por tapa va incluido (precio 0) pero reserva stock', async () => {
+    const clienteId = await seedCliente();
+    const lavadoraId = await seedMaquina({ nombre: 'Lavadora 1', tipo: 'lavadora_mediana' });
+    const tapa = await seedProducto({ nombre: 'Suavizante', precio_unitario: 15, es_por_tapa: true });
+    const res = await request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'POR_ENCARGO', cliente_id: clienteId, tipo_prenda: 'ROPA',
+      estado_pago: 'PENDIENTE', cargas: [{ lavadora_id: lavadoraId, activar: false }],
+      productos: [{ producto_id: tapa, cantidad: 2 }],
+    });
+    expect(res.status).toBe(201);
+    expect(Number(res.body.precio_total)).toBe(70); // solo el lavado; la tapa va incluida
+    const { rows } = await pool.query('SELECT stock_reservado FROM productos WHERE id = $1', [tapa]);
+    expect(Number(rows[0].stock_reservado)).toBe(2);
+  });
+
+  it('en Autoservicio el producto por tapa sí se cobra', async () => {
+    const lavadoraId = await seedMaquina({ nombre: 'Lavadora 1', tipo: 'lavadora_mediana' });
+    const tapa = await seedProducto({ nombre: 'Suavizante', precio_unitario: 15, es_por_tapa: true });
+    const res = await request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE',
+      cargas: [{ lavadora_id: lavadoraId, activar: true }],
+      productos: [{ producto_id: tapa, cantidad: 2 }],
+    });
+    expect(res.status).toBe(201);
+    expect(Number(res.body.precio_total)).toBe(100); // 70 lavado + 2×15 tapa
+  });
+});
+
+describe('cancelar nota', () => {
+  it('cancelar devuelve el stock reservado y libera las máquinas', async () => {
+    const clienteId = await seedCliente();
+    const lavadoraId = await seedMaquina({ nombre: 'Lavadora 1', tipo: 'lavadora_mediana' });
+    const productoId = await seedProducto({ precio_unitario: 30, stock_actual: 10 });
+    const creada = await request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'POR_ENCARGO', cliente_id: clienteId, tipo_prenda: 'ROPA',
+      estado_pago: 'PENDIENTE', cargas: [{ lavadora_id: lavadoraId, activar: false }],
+      productos: [{ producto_id: productoId, cantidad: 3 }],
+    });
+    let prod = await pool.query('SELECT stock_reservado FROM productos WHERE id = $1', [productoId]);
+    expect(Number(prod.rows[0].stock_reservado)).toBe(3); // se reservó al crear
+
+    const res = await request(app).patch(`/api/notas/${creada.body.id}/estado`)
+      .set(auth(admin.token)).send({ estado: 'CANCELADA' });
+    expect(res.status).toBe(200);
+    expect(res.body.estado).toBe('CANCELADA');
+
+    prod = await pool.query('SELECT stock_actual, stock_reservado FROM productos WHERE id = $1', [productoId]);
+    expect(Number(prod.rows[0].stock_reservado)).toBe(0);  // reserva devuelta
+    expect(Number(prod.rows[0].stock_actual)).toBe(10);    // intacto: nunca se consumió
+    const { rows } = await pool.query('SELECT estado FROM maquinas WHERE id = $1', [lavadoraId]);
+    expect(rows[0].estado).toBe('disponible');
   });
 });
 
