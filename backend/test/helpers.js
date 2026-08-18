@@ -54,6 +54,51 @@ export async function seedMaquina({
   return rows[0].id;
 }
 
+// Inserta un cliente en la sucursal dada y devuelve su id. Necesario para las
+// notas Por Encargo, que exigen cliente_id de la misma sucursal.
+export async function seedCliente({ nombre = 'Cliente', apellido = 'Prueba', sucursal = 'centro' } = {}) {
+  const { rows } = await pool.query(
+    `INSERT INTO clientes (nombre, apellido, sucursal, activo)
+     VALUES ($1, $2, $3, TRUE) RETURNING id`,
+    [nombre, apellido, sucursal]
+  );
+  return rows[0].id;
+}
+
+// Inserta un producto con stock y devuelve su id. Por defecto un producto
+// normal (no por tapa) con precio y stock suficientes para reservarlo.
+export async function seedProducto({
+  nombre = 'Detergente',
+  precio_unitario = 40,
+  stock_actual = 100,
+  es_por_tapa = false,
+  sucursal = 'centro',
+} = {}) {
+  const { rows } = await pool.query(
+    `INSERT INTO productos (nombre, precio_unitario, stock_actual, stock_reservado, es_por_tapa, sucursal)
+     VALUES ($1, $2, $3, 0, $4, $5) RETURNING id`,
+    [nombre, precio_unitario, stock_actual, es_por_tapa, sucursal]
+  );
+  return rows[0].id;
+}
+
+// Crea/actualiza la fila de ajustes (id = 1) con las tarifas y topes que el
+// test necesite. Los topes solo aplican a Por Encargo y comparan
+// lavadora + secadora + productos contra el tope del tamaño de la carga.
+export async function seedAjustes(overrides = {}) {
+  const cols = { precio_carga_mediana: 70, precio_carga_secadora: 45, ...overrides };
+  const nombres = Object.keys(cols);
+  const valores = Object.values(cols);
+  const placeholders = nombres.map((_, i) => `$${i + 1}`).join(', ');
+  const set = nombres.map((n) => `${n} = EXCLUDED.${n}`).join(', ');
+  await pool.query(
+    `INSERT INTO ajustes (id, ${nombres.join(', ')})
+       VALUES (1, ${placeholders})
+     ON CONFLICT (id) DO UPDATE SET ${set}`,
+    valores
+  );
+}
+
 // Firma un JWT como el login (payload { id }). Sin sid: el middleware solo
 // exige coincidencia de sesión si el usuario tiene session_id, y el sembrado
 // lo deja en NULL.
