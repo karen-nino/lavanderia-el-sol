@@ -426,6 +426,116 @@ describe('handlers de máquina — asignar / cambiar / quitar', () => {
   });
 });
 
+describe('PATCH /api/notas/:id — edición', () => {
+  async function autoservicio({ estado_pago = 'PENDIENTE', productos } = {}) {
+    const lavadoraId = await seedMaquina({ nombre: 'Lavadora 1', tipo: 'lavadora_mediana' });
+    const res = await request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago,
+      instrucciones: 'Original', cargas: [{ lavadora_id: lavadoraId, activar: true }],
+      ...(productos ? { productos } : {}),
+    });
+    return { notaId: res.body.id, lavadoraId };
+  }
+
+  it('es un PATCH real: los campos ausentes conservan su valor', async () => {
+    const { notaId } = await autoservicio();
+    const res = await request(app).patch(`/api/notas/${notaId}`).set(auth(admin.token))
+      .send({ ajuste: 10 });
+    expect(res.status).toBe(200);
+    expect(Number(res.body.precio_total)).toBe(80);   // 70 carga + 10 ajuste
+    expect(res.body.instrucciones).toBe('Original');    // no se tocó
+    expect(res.body.estado_pago).toBe('PENDIENTE');     // no se tocó
+    expect(res.body.cargas).toHaveLength(1);
+  });
+
+  it('no se puede editar una nota cancelada', async () => {
+    const { notaId } = await autoservicio();
+    await request(app).patch(`/api/notas/${notaId}/estado`)
+      .set(auth(admin.token)).send({ estado: 'CANCELADA' }).expect(200);
+    const res = await request(app).patch(`/api/notas/${notaId}`).set(auth(admin.token))
+      .send({ instrucciones: 'tarde' });
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/no se puede editar/i);
+  });
+
+  it('revertir un pago desde la edición es solo para admin', async () => {
+    const empleado = await seedUsuario({ rol: 'operador', sucursal: 'centro', nombre: 'Empleado' });
+    const { notaId } = await autoservicio({ estado_pago: 'PAGADO' });
+
+    // El empleado no puede revertir el pago.
+    const bloqueado = await request(app).patch(`/api/notas/${notaId}`)
+      .set(auth(empleado.token)).send({ estado_pago: 'PENDIENTE' });
+    expect(bloqueado.status).toBe(403);
+    expect(bloqueado.body.message).toMatch(/administrador/i);
+
+    // El admin sí.
+    const ok = await request(app).patch(`/api/notas/${notaId}`)
+      .set(auth(admin.token)).send({ estado_pago: 'PENDIENTE' });
+    expect(ok.status).toBe(200);
+    expect(ok.body.estado_pago).toBe('PENDIENTE');
+  });
+
+  it('productos que no es lista → 400', async () => {
+    const { notaId } = await autoservicio();
+    const res = await request(app).patch(`/api/notas/${notaId}`).set(auth(admin.token))
+      .send({ productos: 'nope' });
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/productos/i);
+  });
+
+  it('estado_pago inválido → 400', async () => {
+    const { notaId } = await autoservicio();
+    const res = await request(app).patch(`/api/notas/${notaId}`).set(auth(admin.token))
+      .send({ estado_pago: 'X' });
+    expect(res.status).toBe(400);
+  });
+
+  it('reemplazar los productos libera el stock viejo y reserva el nuevo', async () => {
+    const viejo = await seedProducto({ nombre: 'Viejo', precio_unitario: 20, stock_actual: 50 });
+    const nuevo = await seedProducto({ nombre: 'Nuevo', precio_unitario: 35, stock_actual: 50 });
+    const { notaId } = await autoservicio({ productos: [{ producto_id: viejo, cantidad: 2 }] });
+
+    // Al crear se reservaron 2 del viejo.
+    let r = await pool.query('SELECT stock_reservado FROM productos WHERE id = $1', [viejo]);
+    expect(Number(r.rows[0].stock_reservado)).toBe(2);
+
+    const res = await request(app).patch(`/api/notas/${notaId}`).set(auth(admin.token))
+      .send({ productos: [{ producto_id: nuevo, cantidad: 1 }] });
+    expect(res.status).toBe(200);
+    expect(Number(res.body.precio_total)).toBe(105); // 70 carga + 35 nuevo
+
+    r = await pool.query('SELECT stock_reservado FROM productos WHERE id = $1', [viejo]);
+    expect(Number(r.rows[0].stock_reservado)).toBe(0);  // liberado
+    r = await pool.query('SELECT stock_reservado FROM productos WHERE id = $1', [nuevo]);
+    expect(Number(r.rows[0].stock_reservado)).toBe(1);  // reservado
+  });
+
+  it('un ajuste que deja el total negativo → 400', async () => {
+    const { notaId } = await autoservicio();
+    const res = await request(app).patch(`/api/notas/${notaId}`).set(auth(admin.token))
+      .send({ ajuste: -1000 }); // 70 - 1000 < 0
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/no puede ser negativo/i);
+  });
+
+  it('editar cargas también respeta el tope de precio', async () => {
+    await seedAjustes({ precio_carga_mediana: 70, tope_carga_grande: 100 });
+    const clienteId = await seedCliente();
+    const lavadoraId = await seedMaquina({ nombre: 'Lavadora 1', tipo: 'lavadora_mediana' });
+    const productoId = await seedProducto({ precio_unitario: 40 });
+    const creada = await request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'POR_ENCARGO', cliente_id: clienteId, tipo_prenda: 'ROPA',
+      estado_pago: 'PENDIENTE', cargas: [{ lavadora_id: lavadoraId, tamano: 'grande', activar: false }],
+    });
+    // Editar la carga metiéndole un producto que la pasa del tope (70 + 40 > 100).
+    const res = await request(app).patch(`/api/notas/${creada.body.id}`).set(auth(admin.token))
+      .send({ cargas: [{ lavadora_id: lavadoraId, tamano: 'grande', activar: false,
+                         productos: [{ producto_id: productoId, cantidad: 1 }] }] });
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/rebasa el tope/i);
+  });
+});
+
 describe('permisos por rol', () => {
   it('un empleado no puede eliminar una nota (403); un admin sí (204)', async () => {
     const empleado = await seedUsuario({ rol: 'operador', sucursal: 'centro', nombre: 'Empleado' });
