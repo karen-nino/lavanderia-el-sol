@@ -171,3 +171,30 @@ describe('permisos de historial', () => {
     expect(res.status).toBe(403);
   });
 });
+
+describe('DELETE /api/caja/historial/:id (eliminar corte)', () => {
+  // Abre y cierra una caja para dejar un corte en el historial; devuelve su id.
+  async function cerrarUnCorte() {
+    await request(app).post('/api/caja/abrir').set(auth(admin.token)).send({ monto_inicial: 100 });
+    await request(app).post('/api/caja/cerrar').set(auth(admin.token)).send({ monto_contado: 100 });
+    const historial = await request(app).get('/api/caja/historial').set(auth(admin.token));
+    return historial.body[0].id;
+  }
+
+  it('un admin normal no puede eliminar un corte (requiere admin_main → 403)', async () => {
+    const corteId = await cerrarUnCorte();
+    const res = await request(app).delete(`/api/caja/historial/${corteId}`).set(auth(admin.token));
+    expect(res.status).toBe(403);
+  });
+
+  it('el admin_main elimina un corte y desaparece del historial', async () => {
+    const corteId = await cerrarUnCorte();
+    const adminMain = await seedUsuario({ rol: 'admin_main', sucursal: 'centro', nombre: 'Jefe' });
+
+    const res = await request(app).delete(`/api/caja/historial/${corteId}`).set(auth(adminMain.token, 'centro'));
+    expect(res.status).toBe(204);
+
+    const historial = await request(app).get('/api/caja/historial').set(auth(admin.token));
+    expect(historial.body.map((c) => c.id)).not.toContain(corteId);
+  });
+});
