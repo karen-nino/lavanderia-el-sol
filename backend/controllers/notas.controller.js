@@ -9,6 +9,9 @@ const TIPOS_SERVICIO_VALIDOS = ['AUTOSERVICIO', 'EDREDON', 'POR_ENCARGO'];
 const ESTADOS_PAGO_VALIDOS = ['PENDIENTE', 'PAGADO'];
 const TAMANOS_VALIDOS     = ['chico', 'grande', 'jumbo'];
 const TIPOS_PRENDA_VALIDOS = ['ROPA', 'EDREDON'];
+// Tipo de máquina previsto por carga en Por Encargo (define el precio; la
+// máquina física real se asigna después en Salidas).
+const TIPOS_MAQUINA_VALIDOS = ['mediana', 'jumbo', 'edredon'];
 const TIEMPOS_ENTREGA_VALIDOS = ['MANANA', 'TARDE', 'NOCHE'];
 
 // Transiciones permitidas por estado actual
@@ -329,14 +332,17 @@ async function liberarProductosDeNota(client, notaId) {
 //     tamano, ajuste, productos: [{ producto_id, cantidad }] }
 // (todo opcional salvo que el tipo de servicio lo exija). Devuelve las filas listas
 // para insertar o lanza un Error con el mensaje para el cliente.
-async function prepararCargas(client, cargas, tipoPrendaNota, sucursal) {
+async function prepararCargas(client, cargas, tipoPrendaNota, sucursal, tipo_servicio) {
   if (!Array.isArray(cargas) || cargas.length === 0) {
     throw new Error('cargas debe ser una lista con al menos una carga.');
   }
   if (cargas.length > 20) {
     throw new Error('Máximo 20 cargas por nota.');
   }
-  const ids = [...new Set(
+  // Por Encargo: la carga elige TIPO de máquina (no máquina física), así que no
+  // se buscan ni validan máquinas por id (se asignan luego en Salidas).
+  const esPorEncargo = tipo_servicio === 'POR_ENCARGO';
+  const ids = esPorEncargo ? [] : [...new Set(
     cargas.flatMap(c => [c.lavadora_id, c.secadora_id]).filter(Boolean).map(Number)
   )];
   const tipoPorId = new Map();
@@ -352,23 +358,12 @@ async function prepararCargas(client, cargas, tipoPrendaNota, sucursal) {
   }
   const t = await tarifasCarga(client);
   return cargas.map((c, i) => {
-    const lavadoraId = c.lavadora_id ? Number(c.lavadora_id) : null;
-    const secadoraId = c.secadora_id ? Number(c.secadora_id) : null;
     const prendaCarga = (c.tipo_prenda ? String(c.tipo_prenda).toUpperCase() : tipoPrendaNota) || 'ROPA';
     if (c.tipo_prenda && !TIPOS_PRENDA_VALIDOS.includes(prendaCarga)) {
       throw new Error(`tipo_prenda inválido en la carga ${i + 1}.`);
     }
     if (c.tamano && !TAMANOS_VALIDOS.includes(String(c.tamano).toLowerCase())) {
       throw new Error(`tamano inválido en la carga ${i + 1}.`);
-    }
-    if (lavadoraId && tipoPorId.get(lavadoraId) === 'secadora') {
-      throw new Error(`La máquina de lavado de la carga ${i + 1} es una secadora.`);
-    }
-    if (secadoraId && tipoPorId.get(secadoraId) !== 'secadora') {
-      throw new Error(`La máquina de secado de la carga ${i + 1} no es una secadora.`);
-    }
-    if (prendaCarga === 'EDREDON' && lavadoraId && tipoPorId.get(lavadoraId) !== 'lavadora_jumbo') {
-      throw new Error(`Los edredones solo van en lavadora jumbo (carga ${i + 1}).`);
     }
     const ajusteCarga = c.ajuste != null && c.ajuste !== '' ? Number(c.ajuste) : 0;
     if (!Number.isFinite(ajusteCarga)) {
@@ -379,20 +374,67 @@ async function prepararCargas(client, cargas, tipoPrendaNota, sucursal) {
           .filter(p => p.producto_id && p.cantidad && Number(p.cantidad) > 0)
           .map(p => ({ producto_id: Number(p.producto_id), cantidad: Number(p.cantidad) }))
       : [];
+
+    // Por Encargo: la carga elige TIPO de máquina (no máquina física). El precio
+    // se deriva del tipo; lavadora_id/secadora_id quedan NULL hasta asignar en
+    // Salidas. La nota nace En Espera (activar=false, no hay máquina que iniciar).
+    let lavadoraId = null, secadoraId = null, lavadoraTipo = null, secadoraTipo = null;
+    let precioLavadora = 0, precioSecadora = 0, activar;
+    if (esPorEncargo) {
+      lavadoraTipo = c.lavadora_tipo ? String(c.lavadora_tipo).toLowerCase() : null;
+      secadoraTipo = c.secadora_tipo ? String(c.secadora_tipo).toLowerCase() : null;
+      if (lavadoraTipo && !TIPOS_MAQUINA_VALIDOS.includes(lavadoraTipo)) {
+        throw new Error(`Tipo de lavadora inválido en la carga ${i + 1}.`);
+      }
+      if (secadoraTipo && !TIPOS_MAQUINA_VALIDOS.includes(secadoraTipo)) {
+        throw new Error(`Tipo de secadora inválido en la carga ${i + 1}.`);
+      }
+      if (prendaCarga === 'EDREDON' && lavadoraTipo && lavadoraTipo !== 'jumbo') {
+        throw new Error(`Los edredones solo van en lavadora jumbo (carga ${i + 1}).`);
+      }
+      if (!lavadoraTipo && !secadoraTipo) {
+        throw new Error(`La carga ${i + 1} necesita al menos un tipo de lavado o secado.`);
+      }
+      if (lavadoraTipo) {
+        precioLavadora = tarifaLavadora(lavadoraTipo === 'jumbo' ? 'lavadora_jumbo' : 'lavadora_mediana', prendaCarga, t);
+      }
+      if (secadoraTipo) {
+        precioSecadora = tarifaSecadora(secadoraTipo, prendaCarga, t);
+      }
+      activar = false;
+    } else {
+      // Autoservicio: máquina física específica al crear (como siempre).
+      lavadoraId = c.lavadora_id ? Number(c.lavadora_id) : null;
+      secadoraId = c.secadora_id ? Number(c.secadora_id) : null;
+      if (lavadoraId && tipoPorId.get(lavadoraId) === 'secadora') {
+        throw new Error(`La máquina de lavado de la carga ${i + 1} es una secadora.`);
+      }
+      if (secadoraId && tipoPorId.get(secadoraId) !== 'secadora') {
+        throw new Error(`La máquina de secado de la carga ${i + 1} no es una secadora.`);
+      }
+      if (prendaCarga === 'EDREDON' && lavadoraId && tipoPorId.get(lavadoraId) !== 'lavadora_jumbo') {
+        throw new Error(`Los edredones solo van en lavadora jumbo (carga ${i + 1}).`);
+      }
+      precioLavadora = lavadoraId ? tarifaLavadora(tipoPorId.get(lavadoraId), prendaCarga, t) : 0;
+      precioSecadora = secadoraId ? tarifaSecadora(tamanoPorId.get(secadoraId), prendaCarga, t) : 0;
+      // Autoservicio arranca de inmediato; cada carga puede decidir con `activar`.
+      activar = c.activar !== false;
+    }
+
     return {
       orden:           i + 1,
       lavadora_id:     lavadoraId,
       secadora_id:     secadoraId,
-      precio_lavadora: lavadoraId ? tarifaLavadora(tipoPorId.get(lavadoraId), prendaCarga, t) : 0,
-      precio_secadora: secadoraId ? tarifaSecadora(tamanoPorId.get(secadoraId), prendaCarga, t) : 0,
+      lavadora_tipo:   lavadoraTipo,
+      secadora_tipo:   secadoraTipo,
+      precio_lavadora: precioLavadora,
+      precio_secadora: precioSecadora,
       tipo_prenda:     c.tipo_prenda ? prendaCarga : null,
       tipo_tela:       prendaCarga === 'ROPA' && c.tipo_tela ? String(c.tipo_tela).trim() : null,
       tamano_edredon:  prendaCarga === 'EDREDON' && c.tamano_edredon ? String(c.tamano_edredon).trim() : null,
       tamano:          c.tamano ? String(c.tamano).toLowerCase() : null,
       ajuste:          ajusteCarga,
-      // Tomar la(s) máquina(s) de la carga al crear. Por defecto sí (Autoservicio
-      // arranca de inmediato); en Por Encargo cada carga decide con `activar`.
-      activar:         c.activar !== false,
+      activar,
       productos,
     };
   });
@@ -406,10 +448,11 @@ async function insertarCargas(client, notaId, filas, sucursal, tipo_servicio) {
     const { rows } = await client.query(
       `INSERT INTO nota_cargas
          (nota_id, orden, lavadora_id, secadora_id, lavadora_usada_id, secadora_usada_id,
-          precio_lavadora, precio_secadora,
+          lavadora_tipo, secadora_tipo, precio_lavadora, precio_secadora,
           tipo_prenda, tipo_tela, tamano_edredon, tamano, ajuste)
-       VALUES ($1, $2, $3, $4, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
-      [notaId, f.orden, f.lavadora_id, f.secadora_id, f.precio_lavadora, f.precio_secadora,
+       VALUES ($1, $2, $3, $4, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING *`,
+      [notaId, f.orden, f.lavadora_id, f.secadora_id, f.lavadora_tipo, f.secadora_tipo,
+       f.precio_lavadora, f.precio_secadora,
        f.tipo_prenda, f.tipo_tela, f.tamano_edredon, f.tamano, f.ajuste]
     );
     const carga = rows[0];
@@ -700,7 +743,7 @@ export const createNota = async (req, res) => {
     // Se validan y tarifican las cargas primero; de ellas sale el total.
     let filasCargas;
     try {
-      filasCargas = await prepararCargas(client, cargas, tipo_prenda, req.sucursal);
+      filasCargas = await prepararCargas(client, cargas, tipo_prenda, req.sucursal, tipo_servicio);
     } catch (e) {
       await client.query('ROLLBACK');
       return res.status(400).json({ message: e.message });
@@ -975,7 +1018,7 @@ export const updateNota = async (req, res) => {
       const maquinasAntes = await maquinasDeNota(client, id);
       const prendaEfectiva = tipo_prenda ? String(tipo_prenda).toUpperCase() : actual.tipo_prenda;
       try {
-        filasCargas = await prepararCargas(client, cargas, prendaEfectiva, req.sucursal);
+        filasCargas = await prepararCargas(client, cargas, prendaEfectiva, req.sucursal, actual.tipo_servicio);
       } catch (e) {
         await client.query('ROLLBACK');
         return res.status(400).json({ message: e.message });
