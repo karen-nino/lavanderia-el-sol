@@ -173,12 +173,16 @@ export default function Notas() {
   // Filtro inicial desde la URL (?estado=EN_ESPERA), p. ej. al entrar desde un
   // KPI del Dashboard. Solo se acepta si es un estado válido.
   const estadoParam = (searchParams.get('estado') || '').toUpperCase();
+  const estadoInicial = ESTADOS.includes(estadoParam) ? estadoParam : 'TODOS';
 
   const [notas,             setNotas]             = useState([]);
-  const [filtro,            setFiltro]            = useState(
-    ESTADOS.includes(estadoParam) ? estadoParam : 'TODOS'
+  const [filtro,            setFiltro]            = useState(estadoInicial);
+  // Con un estado preseleccionado (desde un KPI del Dashboard) se arranca en
+  // TODAS las fechas, igual que al elegir un estado en el desplegable; así no
+  // se esconden notas de días anteriores. Sin estado, la vista default es HOY.
+  const [rangoFecha,        setRangoFecha]        = useState(
+    estadoInicial !== 'TODOS' ? 'TODAS' : 'HOY'
   );
-  const [rangoFecha,        setRangoFecha]        = useState('HOY');
   const [busqueda,          setBusqueda]          = useState('');
   const [loading,           setLoading]           = useState(true);
   const [error,             setError]             = useState('');
@@ -364,7 +368,10 @@ export default function Notas() {
                   {ESTADOS.map(e => (
                     <button
                       key={e}
-                      onClick={() => { setFiltro(e); setPagina(1); setMostrarEstado(false); }}
+                      // Al elegir un estado se busca en TODAS las fechas, para no
+                      // esconder notas de días anteriores (p. ej. pagos pendientes
+                      // viejos). El filtro de fecha queda disponible para acotar.
+                      onClick={() => { setFiltro(e); setRangoFecha('TODAS'); setPagina(1); setMostrarEstado(false); }}
                       className={`text-left text-sm px-3 py-2 rounded-lg transition-colors ${
                         filtro === e
                           ? 'bg-light-blue text-blue-700 font-medium'
