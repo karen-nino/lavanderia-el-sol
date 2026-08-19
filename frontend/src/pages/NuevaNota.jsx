@@ -449,6 +449,9 @@ export default function NuevaNota() {
     return base + (Number(c.ajuste) || 0);
   };
   const encargoPrecioTotal  = encargoCargas.reduce((s, c) => s + subtotalCargaEncargo(c), 0);
+  // Subtotal real de la nota: suma del costo real (máquinas + productos) de
+  // todas las cargas. Informativo para el empleado; el cliente paga el total.
+  const encargoSubtotalReal = encargoCargas.reduce((s, c) => s + usadoContraTope(c), 0);
 
   const excesoDeCarga = (c) => {
     const tope = topeDeCarga(c);
@@ -1301,42 +1304,69 @@ export default function NuevaNota() {
                     <div className="flex justify-between"><span>Tiempo</span><span className="font-medium">{TIEMPO_ENTREGA_LABEL[encargoForm.tiempo_entrega]}</span></div>
                   )}
                 </div>
-                <div className="space-y-1 mb-2 text-sm text-blue border-t border-blue-200 pt-3">
+                <div className="space-y-3 mb-2 text-sm text-blue border-t border-blue-200 pt-3">
                   {encargoCargas.map((c, i) => {
                     const lav = maquinas.find(m => String(m.id) === String(c.maquina_id));
                     const sec = maquinas.find(m => String(m.id) === String(c.secadora_id));
                     const partes = [lav?.nombre, sec?.nombre].filter(Boolean);
                     const detalle = [PRENDA_LABEL[c.tipo_prenda], c.tamano ? TAMANO_LABEL[c.tamano] : null].filter(Boolean).join(', ');
                     const productosCarga = (c.productos ?? []).filter(p => p.producto_id && Number(p.cantidad) > 0);
+                    const lavPrecio = lav ? precioPorTipo(lav.tipo, c.tipo_prenda) : 0;
+                    const secPrecio = c.secadora_id ? precioSecado(tamanoDe(c.secadora_id), c.tipo_prenda) : 0;
+                    const ajuste = Number(c.ajuste) || 0;
                     return (
-                      <div key={i}>
-                        <div className="flex justify-between gap-2">
-                          <span>Carga {i + 1}{detalle ? ` — ${detalle}` : ''}{partes.length > 0 ? ` (${partes.join(' + ')})` : ''}</span>
-                          <span>${subtotalCargaEncargo(c).toFixed(2)}</span>
+                      <div key={i} className="pb-2 border-b border-blue-200/60 last:border-0 last:pb-0">
+                        <p className="font-medium">
+                          Carga {i + 1}{detalle ? ` — ${detalle}` : ''}{partes.length > 0 ? ` (${partes.join(' + ')})` : ''}
+                        </p>
+                        {/* Costo real: desglose de máquinas y productos */}
+                        <p className="mt-1 text-xs font-semibold text-blue-700/70 uppercase tracking-wide">Costo real</p>
+                        <ul className="ml-3 space-y-0.5 text-xs text-blue-700/80">
+                          {lav && (
+                            <li className="flex justify-between gap-2"><span>· Lavado {lav.nombre}</span><span>${lavPrecio.toFixed(2)}</span></li>
+                          )}
+                          {sec && (
+                            <li className="flex justify-between gap-2"><span>· Secado {sec.nombre}</span><span>${secPrecio.toFixed(2)}</span></li>
+                          )}
+                          {productosCarga.map((p, j) => {
+                            const prod = productosCatalogo.find(x => String(x.id) === String(p.producto_id));
+                            if (!prod) return null;
+                            const cant = Number(p.cantidad) || 0;
+                            const unidad = prod.es_por_tapa ? (cant === 1 ? 'tapa' : 'tapas') : (prod.unidad || 'u');
+                            return (
+                              <li key={j} className="flex justify-between gap-2">
+                                <span>· {prod.nombre}{prod.marca ? ` ${prod.marca}` : ''} × {cant} {unidad}</span>
+                                <span>${(precioProducto(prod) * cant).toFixed(2)}</span>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                        {/* Subtotal (costo real), ajuste y total de la carga */}
+                        <div className="mt-1 space-y-0.5">
+                          <div className="flex justify-between gap-2"><span>Subtotal</span><span>${usadoContraTope(c).toFixed(2)}</span></div>
+                          {ajuste !== 0 && (
+                            <div className="flex justify-between gap-2">
+                              <span>Ajuste</span>
+                              <span>{ajuste < 0 ? '−' : '+'}${Math.abs(ajuste).toFixed(2)}</span>
+                            </div>
+                          )}
+                          <div className="flex justify-between gap-2 font-semibold">
+                            <span>Total carga</span><span>${subtotalCargaEncargo(c).toFixed(2)}</span>
+                          </div>
                         </div>
-                        {productosCarga.length > 0 && (
-                          <ul className="mt-0.5 mb-1 ml-3 space-y-0.5 text-xs text-blue-700/80">
-                            {productosCarga.map((p, j) => {
-                              const prod = productosCatalogo.find(x => String(x.id) === String(p.producto_id));
-                              if (!prod) return null;
-                              const cant = Number(p.cantidad) || 0;
-                              const unidad = prod.es_por_tapa ? (cant === 1 ? 'tapa' : 'tapas') : (prod.unidad || 'u');
-                              return (
-                                <li key={j} className="flex justify-between gap-2">
-                                  <span>· {prod.nombre}{prod.marca ? ` ${prod.marca}` : ''} × {cant} {unidad}</span>
-                                  <span>${(precioProducto(prod) * cant).toFixed(2)}</span>
-                                </li>
-                              );
-                            })}
-                          </ul>
-                        )}
                       </div>
                     );
                   })}
                 </div>
-                <p className="text-3xl font-bold text-blue-700 border-t border-blue-200 pt-2">
-                  ${encargoPrecioTotal.toFixed(2)}
-                </p>
+                {/* Subtotal de la nota (costo real, informativo) y total a pagar */}
+                <div className="flex justify-between text-sm text-blue border-t border-blue-200 pt-2">
+                  <span>Subtotal (costo real)</span>
+                  <span>${encargoSubtotalReal.toFixed(2)}</span>
+                </div>
+                <div className="flex items-baseline justify-between pt-1">
+                  <span className="text-sm font-medium text-blue">Total de la nota</span>
+                  <span className="text-3xl font-bold text-blue-700">${encargoPrecioTotal.toFixed(2)}</span>
+                </div>
               </div>
             )}
 
