@@ -71,6 +71,8 @@ export default function Salidas() {
   // Máquinas disponibles para los modales de asignar/cambiar máquina.
   const [maquinasDisp,     setMaquinasDisp]     = useState([]);
   const [loadingMaquinas,  setLoadingMaquinas]  = useState(false);
+  // Todas las máquinas de la sucursal (para asignar por tipo en Por Encargo).
+  const [todasMaquinas,    setTodasMaquinas]    = useState([]);
 
   // Asignar máquinas extra (una o varias): crea carga(s) nueva(s), por cobrar o
   // sin cobro según elija el empleado. Se pueden elegir varias a la vez; una
@@ -96,13 +98,15 @@ export default function Salidas() {
 
   const cargarDatos = useCallback(async () => {
     try {
-      const [notaData, productosData, ajustes] = await Promise.all([
+      const [notaData, productosData, ajustes, maquinasData] = await Promise.all([
         api.get(`/notas/${id}`),
         api.get('/productos'),
         api.get('/ajustes').catch(() => null),
+        api.get('/maquinas').catch(() => []),
       ]);
       setNota(notaData);
       setProductos(productosData);
+      if (Array.isArray(maquinasData)) setTodasMaquinas(maquinasData);
       if (ajustes) {
         setTiempos({
           mediana:  ajustes.tiempo_carga_mediana  != null ? Number(ajustes.tiempo_carga_mediana)  : 30,
@@ -185,6 +189,24 @@ export default function Salidas() {
     } catch (err) {
       setErrorAccion(err.message);
       setConfirmQuitar(null);
+    } finally {
+      setLoadingMaquina(false);
+    }
+  }
+
+  // Asigna una máquina física a una carga de Por Encargo creada con TIPO (la
+  // máquina queda asignada En Espera; se arranca con "Iniciar" de arriba).
+  async function asignarTipoCarga(cargaId, slot, maquinaId) {
+    if (!maquinaId) return;
+    setLoadingMaquina(true);
+    setErrorAccion('');
+    try {
+      await api.patch(`/notas/${id}/asignar-carga-maquina`, {
+        carga_id: cargaId, slot, maquina_id: Number(maquinaId),
+      });
+      await cargarDatos();
+    } catch (err) {
+      setErrorAccion(err.message);
     } finally {
       setLoadingMaquina(false);
     }
@@ -407,7 +429,31 @@ export default function Salidas() {
   const notaCerrada = ['FINALIZADA', 'CANCELADA'].includes(nota?.estado);
   const cargasVacias = notaCerrada ? [] : cargasNota.filter(c =>
     !c.lavadora_id && !c.secadora_id && !c.lavadora_usada_id && !c.secadora_usada_id
+    // Las cargas de Por Encargo con TIPO previsto se asignan en su sección propia.
+    && !c.lavadora_tipo_previsto && !c.secadora_tipo_previsto
   );
+
+  // Slots de Por Encargo con TIPO elegido pero sin máquina física: se asignan
+  // eligiendo una máquina disponible del tipo correspondiente.
+  const TIPO_MAQ_LABEL = { mediana: 'Mediana', jumbo: 'Jumbo', edredon: 'Edredón' };
+  const slotsPorAsignar = notaCerrada ? [] : cargasNota.flatMap(c => {
+    const out = [];
+    if (c.lavadora_tipo_previsto && !c.lavadora_id && !c.lavadora_usada_id) {
+      out.push({ carga: c, slot: 'lavadora', tipo: c.lavadora_tipo_previsto });
+    }
+    if (c.secadora_tipo_previsto && !c.secadora_id && !c.secadora_usada_id) {
+      out.push({ carga: c, slot: 'secadora', tipo: c.secadora_tipo_previsto });
+    }
+    return out;
+  });
+  // Máquinas disponibles que coinciden con un slot (lavadora/secadora) y su tipo.
+  const maquinasParaSlot = (slot, tipo) => todasMaquinas.filter(m => {
+    if (m.estado !== 'disponible') return false;
+    if (slot === 'lavadora') {
+      return m.tipo === (tipo === 'jumbo' ? 'lavadora_jumbo' : 'lavadora_mediana');
+    }
+    return m.tipo === 'secadora' && (m.tamano === 'jumbo' ? 'jumbo' : 'mediana') === tipo;
+  });
 
   // ¿Esta máquina ya cumplió su tiempo de ciclo? Cada máquina es
   // independiente (mismo cálculo que las tarjetas del dashboard): la
@@ -560,6 +606,38 @@ export default function Salidas() {
             <p className="text-sm text-gray-400 italic">Sin máquina asignada</p>
           ) : null}
 
+          {/* Por Encargo: cargas con TIPO elegido, sin máquina física. Se
+              asigna eligiendo una máquina disponible del tipo correspondiente. */}
+          {slotsPorAsignar.map(({ carga, slot, tipo }) => {
+            const opciones = maquinasParaSlot(slot, tipo);
+            return (
+              <div key={`slot-${carga.id}-${slot}`} className="space-y-2 [&:not(:first-child)]:border-t [&:not(:first-child)]:border-gray-100 [&:not(:first-child)]:pt-4">
+                <p className="text-xs font-semibold text-gray-500">Carga {carga.orden}</p>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-sm text-gray-600">
+                    {slot === 'lavadora' ? 'Lavadora' : 'Secadora'} {TIPO_MAQ_LABEL[tipo] ?? tipo}
+                    <span className="text-gray-400 italic"> — sin asignar</span>
+                  </span>
+                  {opciones.length === 0 ? (
+                    <span className="text-sm text-red-600">No hay {slot === 'lavadora' ? 'lavadoras' : 'secadoras'} {TIPO_MAQ_LABEL[tipo] ?? tipo} disponibles</span>
+                  ) : (
+                    <select
+                      defaultValue=""
+                      disabled={loadingMaquina}
+                      onChange={e => asignarTipoCarga(carga.id, slot, e.target.value)}
+                      className="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white disabled:opacity-60"
+                    >
+                      <option value="" disabled>Asignar máquina…</option>
+                      {opciones.map(m => (
+                        <option key={m.id} value={m.id}>{m.nombre}</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+
           {/* Cargas que se eligieron al hacer la nota pero se quedaron sin
               máquina: se muestran para asignarles una rápidamente. */}
           {cargasVacias.map(c => (
@@ -581,7 +659,7 @@ export default function Salidas() {
           {/* En Espera sin ninguna máquina asignada ni carga pendiente: abrir
               selector para elegirlas. Con máquinas asignadas, cada una se
               arranca con su propio botón "Iniciar Lavado" de arriba. */}
-          {maquinasAsignadas.length === 0 && cargasVacias.length === 0 && nota && !['FINALIZADA', 'CANCELADA'].includes(nota.estado) && (
+          {maquinasAsignadas.length === 0 && cargasVacias.length === 0 && slotsPorAsignar.length === 0 && nota && !['FINALIZADA', 'CANCELADA'].includes(nota.estado) && (
             <div className="flex justify-end gap-2 pt-1">
               <button
                 onClick={() => iniciarAsignar()}

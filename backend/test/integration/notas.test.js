@@ -151,9 +151,8 @@ describe('lecturas del modelo por cargas (invariantes que deben sobrevivir el re
 });
 
 describe('POST /api/notas — Por Encargo', () => {
-  it('nace En Espera con cliente cuando la carga no se activa', async () => {
+  it('nace En Espera con el tipo de máquina elegido, sin máquina asignada', async () => {
     const clienteId = await seedCliente({ nombre: 'Ana', apellido: 'López' });
-    const lavadoraId = await seedMaquina({ nombre: 'Lavadora 1', tipo: 'lavadora_mediana' });
 
     const res = await request(app).post('/api/notas').set(auth(admin.token)).send({
       tipo_servicio: 'POR_ENCARGO',
@@ -161,7 +160,7 @@ describe('POST /api/notas — Por Encargo', () => {
       tipo_prenda: 'ROPA',
       estado_pago: 'PENDIENTE',
       tiempo_entrega: 'TARDE',
-      cargas: [{ lavadora_id: lavadoraId, activar: false }],
+      cargas: [{ tamano: 'chico', lavadora_tipo: 'mediana' }],
     });
 
     expect(res.status).toBe(201);
@@ -169,12 +168,46 @@ describe('POST /api/notas — Por Encargo', () => {
     expect(res.body.estado).toBe('EN_ESPERA');
     expect(res.body.estado_pago).toBe('PENDIENTE');
     expect(res.body.cliente_id).toBe(clienteId);
-    // La carga no se activó: la lavadora queda asignada pero libre.
-    const { rows } = await pool.query('SELECT estado FROM maquinas WHERE id = $1', [lavadoraId]);
-    expect(rows[0].estado).toBe('disponible');
+    // No se reserva máquina: la carga guarda el tipo previsto, sin lavadora_id.
+    // Precio derivado del tipo mediana (tarifa default 70).
+    expect(res.body.cargas).toHaveLength(1);
+    expect(res.body.cargas[0].lavadora_id).toBeNull();
+    expect(res.body.cargas[0].lavadora_tipo).toBe('mediana');
+    expect(Number(res.body.precio_total)).toBe(70);
 
     const detalle = await request(app).get(`/api/notas/${res.body.id}`).set(auth(admin.token));
     expect(detalle.body.cliente_nombre).toBe('Ana');
+    // El detalle expone el tipo previsto para asignar la máquina en Salidas.
+    expect(detalle.body.cargas[0].lavadora_tipo_previsto).toBe('mediana');
+    expect(detalle.body.cargas[0].lavadora_id).toBeNull();
+  });
+
+  it('asignar-carga-maquina pone la máquina en la carga (y rechaza otro tipo)', async () => {
+    const clienteId = await seedCliente();
+    const lavMed = await seedMaquina({ nombre: 'Lav Mediana', tipo: 'lavadora_mediana', tamano: 'mediana' });
+    const lavJum = await seedMaquina({ nombre: 'Lav Jumbo', tipo: 'lavadora_jumbo', tamano: 'jumbo' });
+
+    const nota = await request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'POR_ENCARGO', cliente_id: clienteId, tipo_prenda: 'ROPA',
+      estado_pago: 'PENDIENTE', cargas: [{ tamano: 'chico', lavadora_tipo: 'mediana' }],
+    });
+    const cargaId = nota.body.cargas[0].id;
+
+    // Rechaza una lavadora jumbo en un slot mediana.
+    const malo = await request(app).patch(`/api/notas/${nota.body.id}/asignar-carga-maquina`)
+      .set(auth(admin.token)).send({ carga_id: cargaId, slot: 'lavadora', maquina_id: lavJum });
+    expect(malo.status).toBe(400);
+
+    // Asigna la lavadora mediana correcta.
+    const ok = await request(app).patch(`/api/notas/${nota.body.id}/asignar-carga-maquina`)
+      .set(auth(admin.token)).send({ carga_id: cargaId, slot: 'lavadora', maquina_id: lavMed });
+    expect(ok.status).toBe(200);
+    expect(ok.body.cargas[0].lavadora_id).toBe(lavMed);
+    expect(ok.body.cargas[0].lavadora_nombre).toBe('Lav Mediana');
+    // La máquina queda asignada En Espera (no se arranca sola).
+    const { rows } = await pool.query('SELECT estado FROM maquinas WHERE id = $1', [lavMed]);
+    expect(rows[0].estado).toBe('disponible');
+    expect(ok.body.estado).toBe('EN_ESPERA');
   });
 
   it('tiempo_entrega inválido → 400', async () => {

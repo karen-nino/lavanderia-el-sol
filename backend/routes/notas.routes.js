@@ -11,6 +11,7 @@ import {
   cambiarEstadoNota,
   activarMaquinasPendientes,
   asignarMaquina,
+  asignarCargaMaquina,
   cambiarMaquina,
   quitarMaquina,
   asignarSecadora,
@@ -35,6 +36,7 @@ router.delete('/:id', eliminarNota);
 router.patch('/:id/estado',      cambiarEstadoNota);
 router.patch('/:id/activar-pendientes', activarMaquinasPendientes);
 router.patch('/:id/asignar-maquina', asignarMaquina);
+router.patch('/:id/asignar-carga-maquina', asignarCargaMaquina);
 router.patch('/:id/cambiar-maquina', cambiarMaquina);
 router.patch('/:id/quitar-maquina', quitarMaquina);
 router.patch('/:id/asignar-secadora', asignarSecadora);

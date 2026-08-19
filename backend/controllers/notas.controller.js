@@ -471,6 +471,8 @@ async function cargasDeNota(client, notaId) {
     `SELECT nc.id, nc.orden, nc.lavadora_id, nc.secadora_id,
             nc.precio_lavadora, nc.precio_secadora, nc.es_adicional,
             nc.tipo_prenda, nc.tipo_tela, nc.tamano_edredon, nc.tamano, nc.ajuste,
+            nc.lavadora_tipo AS lavadora_tipo_previsto,
+            nc.secadora_tipo AS secadora_tipo_previsto,
             ml.nombre AS lavadora_nombre, ml.tipo AS lavadora_tipo, ml.estado AS lavadora_estado,
             ml.en_uso_desde AS lavadora_en_uso_desde,
             ms.nombre AS secadora_nombre, ms.tipo AS secadora_tipo, ms.estado AS secadora_estado,
@@ -1514,6 +1516,116 @@ export const activarMaquinasPendientes = async (req, res) => {
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('activarMaquinasPendientes error:', err);
+    res.status(500).json({ message: 'Error interno del servidor.' });
+  } finally {
+    client.release();
+  }
+};
+
+// ── PATCH /notas/:id/asignar-carga-maquina ──────────────────
+// Asigna una máquina física a una carga de Por Encargo que fue creada con TIPO
+// pero sin máquina. Valida que la máquina coincida con el tipo previsto del
+// slot. La máquina queda asignada En Espera (se arranca luego con "Iniciar").
+// El precio ya está fijado por el tipo: NO se recalcula.
+export const asignarCargaMaquina = async (req, res) => {
+  const { id } = req.params;
+  const { carga_id, slot, maquina_id } = req.body; // slot: 'lavadora' | 'secadora'
+
+  if (!['lavadora', 'secadora'].includes(slot)) {
+    return res.status(400).json({ message: "slot inválido: usa 'lavadora' o 'secadora'." });
+  }
+  if (!carga_id || !maquina_id) {
+    return res.status(400).json({ message: 'carga_id y maquina_id son requeridos.' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const { rows: notaRows } = await client.query(
+      'SELECT estado FROM notas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
+      [id, req.sucursal]
+    );
+    if (notaRows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: 'Nota no encontrada.' });
+    }
+    if (['FINALIZADA', 'CANCELADA'].includes(notaRows[0].estado)) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'No se puede asignar una máquina a una nota finalizada o cancelada.' });
+    }
+
+    const { rows: cargaRows } = await client.query(
+      `SELECT id, lavadora_id, secadora_id, lavadora_tipo, secadora_tipo
+         FROM nota_cargas WHERE id = $1 AND nota_id = $2 FOR UPDATE`,
+      [carga_id, id]
+    );
+    if (cargaRows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: 'La carga no pertenece a la nota.' });
+    }
+    const carga = cargaRows[0];
+    const tipoPrevisto = slot === 'lavadora' ? carga.lavadora_tipo : carga.secadora_tipo;
+    const yaAsignada   = slot === 'lavadora' ? carga.lavadora_id   : carga.secadora_id;
+    if (!tipoPrevisto) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: `La carga no tiene ${slot} por asignar.` });
+    }
+    if (yaAsignada) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: `La carga ya tiene ${slot} asignada.` });
+    }
+
+    const { rows: maqRows } = await client.query(
+      'SELECT id, nombre, tipo, tamano, estado FROM maquinas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
+      [maquina_id, req.sucursal]
+    );
+    if (maqRows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: 'Máquina no encontrada.' });
+    }
+    const maq = maqRows[0];
+    if (maq.estado !== 'disponible') {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: `La máquina ${maq.nombre} no está disponible.` });
+    }
+
+    // El tipo de la máquina debe coincidir con el previsto de la carga.
+    if (slot === 'lavadora') {
+      if (maq.tipo === 'secadora') {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ message: `${maq.nombre} es una secadora, no una lavadora.` });
+      }
+      const tipoMaq = maq.tipo === 'lavadora_jumbo' ? 'jumbo' : 'mediana';
+      if (tipoMaq !== tipoPrevisto) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ message: `La lavadora debe ser ${tipoPrevisto} (${maq.nombre} es ${tipoMaq}).` });
+      }
+    } else {
+      if (maq.tipo !== 'secadora') {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ message: `${maq.nombre} no es una secadora.` });
+      }
+      const tamMaq = maq.tamano === 'jumbo' ? 'jumbo' : 'mediana';
+      if (tamMaq !== tipoPrevisto) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ message: `La secadora debe ser ${tipoPrevisto} (${maq.nombre} es ${tamMaq}).` });
+      }
+    }
+
+    const col = slot === 'lavadora' ? 'lavadora_id' : 'secadora_id';
+    const colUsada = slot === 'lavadora' ? 'lavadora_usada_id' : 'secadora_usada_id';
+    await client.query(
+      `UPDATE nota_cargas SET ${col} = $1, ${colUsada} = $1 WHERE id = $2`,
+      [maquina_id, carga_id]
+    );
+
+    await client.query('COMMIT');
+    const { rows } = await pool.query('SELECT n.* FROM notas n WHERE n.id = $1', [id]);
+    res.json({ ...rows[0], cargas: await cargasDeNota(pool, id) });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('asignarCargaMaquina error:', err);
     res.status(500).json({ message: 'Error interno del servidor.' });
   } finally {
     client.release();
