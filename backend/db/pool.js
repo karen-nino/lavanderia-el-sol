@@ -18,17 +18,21 @@ const ca = fs.readFileSync(path.join(__dirname, 'supabase-ca.crt'), 'utf8');
 
 // En producción (Supabase/Fly) se usa una sola cadena de conexión con SSL.
 // En local se siguen usando las variables DB_* sueltas del .env.
-const pool = process.env.DATABASE_URL
-  ? new Pool({
+// Se exporta también la config para poder crear conexiones dedicadas fuera del
+// pool (p. ej. el listener LISTEN/NOTIFY, que necesita una conexión persistente).
+export const dbConfig = process.env.DATABASE_URL
+  ? {
       connectionString: process.env.DATABASE_URL,
       ssl: { ca, rejectUnauthorized: true },
-    })
-  : new Pool({
+    }
+  : {
       host: process.env.DB_HOST,
       port: process.env.DB_PORT,
       user: process.env.DB_USER,
       password: process.env.DB_PASSWORD,
       database: process.env.DB_NAME,
-    });
+    };
+
+const pool = new Pool(dbConfig);
 
 export default pool;

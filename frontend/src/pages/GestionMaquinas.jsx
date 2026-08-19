@@ -77,6 +77,8 @@ export default function GestionMaquinas() {
   const [guardando, setGuardando] = useState(false);
   const [formError, setFormError] = useState('');
   const [eliminando, setEliminando] = useState(null);
+  const [probando, setProbando] = useState(false);
+  const [probarMsg, setProbarMsg] = useState(null); // { ok, texto }
   const [filtro, setFiltro] = useState('todos');
   const [accionesMenuId, setAccionesMenuId] = useState(null);
   const accionesMenuRef = useRef(null);
@@ -101,6 +103,7 @@ export default function GestionMaquinas() {
     setForm(FORM_INIT);
     setEditandoId(null);
     setFormError('');
+    setProbarMsg(null);
     setModalOpen(true);
   };
 
@@ -119,10 +122,28 @@ export default function GestionMaquinas() {
     });
     setEditandoId(m.id);
     setFormError('');
+    setProbarMsg(null);
     setModalOpen(true);
   };
 
   const cerrarModal = () => setModalOpen(false);
+
+  // Prueba el enlace con el Sonoff guardado (no cambia el estado operativo).
+  // Requiere que la máquina ya exista con su device_id guardado.
+  const handleProbar = async () => {
+    if (editandoId == null) return;
+    setProbando(true);
+    setProbarMsg(null);
+    try {
+      const r = await api.post(`/maquinas/${editandoId}/probar-sonoff`, {});
+      if (r?.maquina) setMaquinas(prev => prev.map(m => m.id === editandoId ? r.maquina : m));
+      setProbarMsg({ ok: true, texto: r?.message ?? 'Sonoff enlazado correctamente.' });
+    } catch (err) {
+      setProbarMsg({ ok: false, texto: err.message });
+    } finally {
+      setProbando(false);
+    }
+  };
 
   const handleChange = e => setForm(f => ({ ...f, [e.target.name]: e.target.value }));
 
@@ -483,13 +504,33 @@ export default function GestionMaquinas() {
                   <span className="ml-1 font-normal text-gray-400">(opcional)</span>
                 </label>
                 <input
-                  name="device_id" value={form.device_id} onChange={handleChange}
+                  name="device_id" value={form.device_id}
+                  onChange={(e) => { setProbarMsg(null); handleChange(e); }}
                   placeholder="Device ID de eWeLink (ej. 10001abcd2)"
                   className={INPUT_CLS}
                 />
                 <p className="mt-1 text-xs text-gray-400">
                   Se ve en la app eWeLink, en la información del dispositivo.
                 </p>
+
+                {editandoId != null && form.device_id.trim() !== '' && (
+                  <div className="mt-2">
+                    <button
+                      type="button" onClick={handleProbar} disabled={probando}
+                      className="text-sm font-medium text-blue border border-blue/40 rounded-lg px-4 py-2 hover:bg-blue/5 disabled:opacity-60 transition-colors"
+                    >
+                      {probando ? 'Probando…' : 'Probar enlace'}
+                    </button>
+                    <p className="mt-1 text-xs text-gray-400">
+                      Prueba el ID ya guardado; si lo cambiaste, guarda primero.
+                    </p>
+                    {probarMsg && (
+                      <p className={`mt-1.5 text-sm font-medium ${probarMsg.ok ? 'text-green-600' : 'text-red-600'}`}>
+                        {probarMsg.ok ? '✓ ' : '✗ '}{probarMsg.texto}
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
 
               {form.device_id.trim() !== '' && (

@@ -1,4 +1,5 @@
 import pool from '../db/pool.js';
+import * as dispositivos from '../services/dispositivos/index.js';
 
 const ESTADOS_VALIDOS = ['disponible', 'en_uso', 'mantenimiento'];
 const TIPOS_VALIDOS   = ['lavadora_mediana', 'lavadora_jumbo', 'secadora'];
@@ -427,6 +428,53 @@ export const cambiarEstadoMaquina = async (req, res) => {
     res.json(rows[0]);
   } catch (err) {
     console.error('cambiarEstadoMaquina error:', err);
+    res.status(500).json({ message: 'Error interno del servidor.' });
+  }
+};
+
+// ── POST /maquinas/:id/probar-sonoff ────────────────────────
+// Verifica el enlace con el Sonoff SIN cambiar el estado operativo de la
+// máquina: solo lee el estado del dispositivo. Actualiza sonoff_estado
+// ('enlazada' si respondió, 'error' si no, 'sin_enlazar' si no tiene device_id)
+// y devuelve la máquina actualizada. Útil al asignar el device_id en Gestión.
+export const probarSonoff = async (req, res) => {
+  const { id } = req.params;
+  try {
+    const { rows } = await pool.query(
+      'SELECT id, device_id, device_canal FROM maquinas WHERE id = $1 AND sucursal = $2',
+      [id, req.sucursal]
+    );
+    if (rows.length === 0) {
+      return res.status(404).json({ message: 'Máquina no encontrada.' });
+    }
+    const maq = rows[0];
+
+    if (!dispositivos.tieneDispositivo(maq)) {
+      const { rows: upd } = await pool.query(
+        `UPDATE maquinas SET sonoff_estado = 'sin_enlazar', sonoff_sync_at = NOW()
+          WHERE id = $1 RETURNING *`,
+        [id]
+      );
+      return res.status(400).json({ message: 'La máquina no tiene un Sonoff enlazado.', maquina: upd[0] });
+    }
+
+    const resultado = await dispositivos.estado(maq);
+    const nuevo = resultado.ok ? 'enlazada' : 'error';
+    const { rows: upd } = await pool.query(
+      `UPDATE maquinas SET sonoff_estado = $1, sonoff_sync_at = NOW()
+        WHERE id = $2 RETURNING *`,
+      [nuevo, id]
+    );
+
+    if (!resultado.ok) {
+      return res.status(502).json({
+        message: `El Sonoff no respondió (${resultado.motivo ?? 'sin detalle'}).`,
+        maquina: upd[0],
+      });
+    }
+    res.json({ message: 'Sonoff enlazado correctamente.', estado: resultado.estado, maquina: upd[0] });
+  } catch (err) {
+    console.error('probarSonoff error:', err);
     res.status(500).json({ message: 'Error interno del servidor.' });
   }
 };

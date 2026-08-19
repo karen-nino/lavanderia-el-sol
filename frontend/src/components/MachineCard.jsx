@@ -6,6 +6,28 @@ const HEADER_BY_ESTADO = {
   mantenimiento: { cls: 'bg-red text-white',   label: 'MANT' },
 };
 
+// Indicador del enlace con el Sonoff. Solo se muestra si la máquina tiene un
+// dispositivo enlazado o falló; una máquina sin Sonoff configurado no dibuja
+// nada (para no ensuciar la tarjeta). Estados: 'enlazada' | 'sin_enlazar' | 'error'.
+const SONOFF_INDICADOR = {
+  enlazada:    { dot: 'bg-green', texto: 'text-green', label: 'Sonoff OK' },
+  error:       { dot: 'bg-red',   texto: 'text-red',   label: 'Sin conexión' },
+  sin_enlazar: { dot: 'bg-grey',  texto: 'text-grey',  label: 'Sin Sonoff' },
+};
+
+function SonoffIndicador({ estado, mostrarSinEnlazar = false }) {
+  if (estado == null) return null;
+  if (estado === 'sin_enlazar' && !mostrarSinEnlazar) return null;
+  const cfg = SONOFF_INDICADOR[estado];
+  if (!cfg) return null;
+  return (
+    <div className="flex items-center gap-1.5" title={`Enlace Sonoff: ${cfg.label}`}>
+      <span className={`inline-block w-2 h-2 rounded-full ${cfg.dot}`} />
+      <span className={`text-xs font-medium uppercase tracking-wide ${cfg.texto}`}>{cfg.label}</span>
+    </div>
+  );
+}
+
 function formatearCliente(nombre, apellido) {
   const n = nombre?.trim();
   const a = apellido?.trim();
@@ -129,6 +151,7 @@ export default function MachineCard({ maquina, nota, onTerminarCiclo, onClick })
           color={esSecadora ? 'red' : 'blue'}
         />
         {infoNota}
+        <SonoffIndicador estado={maquina.sonoff_estado} mostrarSinEnlazar />
       </div>
     </div>
   );
