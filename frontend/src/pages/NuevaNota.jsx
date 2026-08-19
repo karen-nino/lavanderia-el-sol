@@ -1304,7 +1304,7 @@ export default function NuevaNota() {
                     <div className="flex justify-between"><span>Tiempo</span><span className="font-medium">{TIEMPO_ENTREGA_LABEL[encargoForm.tiempo_entrega]}</span></div>
                   )}
                 </div>
-                <div className="space-y-3 mb-2 text-sm text-blue border-t border-blue-200 pt-3">
+                <div className="space-y-5 mb-2 text-sm text-blue border-t border-blue-200 pt-4">
                   {encargoCargas.map((c, i) => {
                     const lav = maquinas.find(m => String(m.id) === String(c.maquina_id));
                     const sec = maquinas.find(m => String(m.id) === String(c.secadora_id));
@@ -1315,13 +1315,13 @@ export default function NuevaNota() {
                     const secPrecio = c.secadora_id ? precioSecado(tamanoDe(c.secadora_id), c.tipo_prenda) : 0;
                     const ajuste = Number(c.ajuste) || 0;
                     return (
-                      <div key={i} className="pb-2 border-b border-blue-200/60 last:border-0 last:pb-0">
+                      <div key={i} className="pb-4 border-b border-blue-200/60 last:border-0 last:pb-0">
                         <p className="font-medium">
                           Carga {i + 1}{detalle ? ` — ${detalle}` : ''}{partes.length > 0 ? ` (${partes.join(' + ')})` : ''}
                         </p>
                         {/* Costo real: desglose de máquinas y productos */}
-                        <p className="mt-1 text-xs font-semibold text-blue-700/70 uppercase tracking-wide">Costo real</p>
-                        <ul className="ml-3 space-y-0.5 text-xs text-blue-700/80">
+                        <p className="mt-2.5 text-xs font-semibold text-blue-700/70 uppercase tracking-wide">Costo real</p>
+                        <ul className="mt-1.5 ml-3 space-y-2 text-xs text-blue-700/80">
                           {lav && (
                             <li className="flex justify-between gap-2"><span>· Lavado {lav.nombre}</span><span>${lavPrecio.toFixed(2)}</span></li>
                           )}
@@ -1342,7 +1342,7 @@ export default function NuevaNota() {
                           })}
                         </ul>
                         {/* Subtotal (costo real), ajuste y total de la carga */}
-                        <div className="mt-1 space-y-0.5">
+                        <div className="mt-3 space-y-2">
                           <div className="flex justify-between gap-2"><span>Subtotal</span><span>${usadoContraTope(c).toFixed(2)}</span></div>
                           {ajuste !== 0 && (
                             <div className="flex justify-between gap-2">
@@ -1359,11 +1359,11 @@ export default function NuevaNota() {
                   })}
                 </div>
                 {/* Subtotal de la nota (costo real, informativo) y total a pagar */}
-                <div className="flex justify-between text-sm text-blue border-t border-blue-200 pt-2">
+                <div className="flex justify-between text-sm text-blue border-t border-blue-200 pt-4">
                   <span>Subtotal (costo real)</span>
                   <span>${encargoSubtotalReal.toFixed(2)}</span>
                 </div>
-                <div className="flex items-baseline justify-between pt-1">
+                <div className="flex items-baseline justify-between pt-3">
                   <span className="text-sm font-medium text-blue">Total de la nota</span>
                   <span className="text-3xl font-bold text-blue-700">${encargoPrecioTotal.toFixed(2)}</span>
                 </div>
