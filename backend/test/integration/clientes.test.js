@@ -13,10 +13,9 @@ beforeEach(async () => {
 
 // Crea una nota Por Encargo activa para un cliente (lo "ata" a una nota).
 async function notaActivaPara(clienteId) {
-  const lavadoraId = await seedMaquina({ nombre: 'Lavadora 1', tipo: 'lavadora_mediana' });
   await request(app).post('/api/notas').set(auth(admin.token)).send({
     tipo_servicio: 'POR_ENCARGO', cliente_id: clienteId, tipo_prenda: 'ROPA',
-    estado_pago: 'PENDIENTE', cargas: [{ lavadora_id: lavadoraId, activar: false }],
+    estado_pago: 'PENDIENTE', cargas: [{ lavadora_tipo: 'mediana' }],
   }).expect(201);
 }
 

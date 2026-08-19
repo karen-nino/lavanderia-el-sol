@@ -534,6 +534,19 @@ export default function DetalleNota() {
                       precio: Number(cg.precio_secadora),
                     },
                   ].filter(Boolean);
+                  // Por Encargo: slots con TIPO elegido pero sin máquina física
+                  // todavía (se asignan en Salidas). Se muestran como "sin asignar".
+                  const TIPO_MAQ_LABEL = { mediana: 'Mediana', jumbo: 'Jumbo', edredon: 'Edredón' };
+                  const slotsPrevistos = [
+                    !cg.lavadora_usada_id && cg.lavadora_tipo_previsto && {
+                      label: `Lavadora ${TIPO_MAQ_LABEL[cg.lavadora_tipo_previsto] ?? cg.lavadora_tipo_previsto}`,
+                      precio: Number(cg.precio_lavadora),
+                    },
+                    !cg.secadora_usada_id && cg.secadora_tipo_previsto && {
+                      label: `Secadora ${TIPO_MAQ_LABEL[cg.secadora_tipo_previsto] ?? cg.secadora_tipo_previsto}`,
+                      precio: Number(cg.precio_secadora),
+                    },
+                  ].filter(Boolean);
                   const prods = cg.productos ?? [];
                   const totalProds = prods.reduce((s, p) => s + Number(p.subtotal ?? 0), 0);
                   const totalCarga = Number(cg.precio_lavadora) + Number(cg.precio_secadora)
@@ -553,7 +566,7 @@ export default function DetalleNota() {
                         <span className="text-xs font-semibold text-gray-500">Carga {cg.orden}</span>
                         <span className="text-sm font-medium text-gray-700">{fmtMonto(totalCarga)}</span>
                       </div>
-                      {maquinasCarga.length === 0 ? (
+                      {maquinasCarga.length === 0 && slotsPrevistos.length === 0 ? (
                         <span className="text-sm text-gray-400 italic">Sin máquinas</span>
                       ) : (
                         maquinasCarga.map((m, i) => {
@@ -587,6 +600,14 @@ export default function DetalleNota() {
                           );
                         })
                       )}
+                      {slotsPrevistos.map((s, i) => (
+                        <div key={`prev-${i}`} className="flex items-start justify-between gap-2">
+                          <span className="text-sm text-gray-600 min-w-0">
+                            {s.label} <span className="text-gray-400 italic">— sin asignar</span>
+                          </span>
+                          <span className="flex-shrink-0 text-sm text-gray-600">{fmtMonto(s.precio)}</span>
+                        </div>
+                      ))}
                       {atributos.length > 0 && (
                         <p className="text-xs text-gray-500">{atributos.join(' · ')}</p>
                       )}

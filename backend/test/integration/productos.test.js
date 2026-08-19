@@ -99,10 +99,9 @@ describe('DELETE múltiple /api/productos/eliminar-multiples', () => {
   async function productoUsadoEnNota() {
     const productoId = await seedProducto({ nombre: 'Usado' });
     const clienteId = await seedCliente();
-    const lavadoraId = await seedMaquina({ nombre: 'Lavadora 1', tipo: 'lavadora_mediana' });
     await request(app).post('/api/notas').set(auth(admin.token)).send({
       tipo_servicio: 'POR_ENCARGO', cliente_id: clienteId, tipo_prenda: 'ROPA',
-      estado_pago: 'PENDIENTE', cargas: [{ lavadora_id: lavadoraId, activar: false }],
+      estado_pago: 'PENDIENTE', cargas: [{ lavadora_tipo: 'mediana' }],
       productos: [{ producto_id: productoId, cantidad: 1 }],
     }).expect(201);
     return productoId;
