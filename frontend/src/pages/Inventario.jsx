@@ -341,7 +341,7 @@ function ModalProducto({ producto, esAdmin, onClose, onGuardado, marcas = [], en
               <div className="relative flex-1">
                 <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 text-base">$</span>
                 <input
-                  type="number" name="precio_unitario" min="0" step="10" required
+                  type="number" name="precio_unitario" min="0" step="any" required
                   value={form.precio_unitario} onChange={handleChange}
                   placeholder="0.00"
                   className={`${INPUT_CLS} pl-8 text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`}

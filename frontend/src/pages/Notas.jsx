@@ -93,6 +93,25 @@ function calcularRangoFecha(rango) {
   }
 }
 
+// Sufijo del rango de fecha para el mensaje del estado vacío (p. ej. "de hoy"),
+// para que "No hay notas" también se relacione con el filtro de fecha. Con
+// 'TODAS' no agrega nada.
+function sufijoRangoFecha(rango) {
+  if (!rango || rango === 'TODAS') return '';
+  if (rango.startsWith('MES:')) {
+    const [y, m] = rango.slice(4).split('-').map(Number);
+    return `de ${MESES[m - 1]} ${y}`;
+  }
+  if (rango.startsWith('ANIO:')) return `de ${rango.slice(5)}`;
+  switch (rango) {
+    case 'HOY':       return 'de hoy';
+    case 'AYER':      return 'de ayer';
+    case 'ULTIMOS_7': return 'de los últimos 7 días';
+    case 'ESTE_MES':  return 'de este mes';
+    default:          return '';
+  }
+}
+
 const BADGE_ESTADO = {
   EN_ESPERA:  { label: 'En Espera',  cls: 'bg-gray-100 text-gray-600'       },
   LAVANDO:    { label: 'Lavando',    cls: 'bg-light-blue text-blue-700'     },
@@ -407,6 +426,16 @@ export default function Notas() {
               <div className="absolute right-0 top-12 z-10 bg-white border border-gray-200 rounded-xl shadow-lg p-3 w-56">
                 <p className="text-xs font-semibold text-gray-500 uppercase mb-2 px-1">Fecha</p>
                 <div className="flex flex-col gap-1">
+                  <button
+                    onClick={() => { setRangoFecha('TODAS'); setPagina(1); setMostrarFecha(false); }}
+                    className={`text-left text-sm px-3 py-2 rounded-lg transition-colors ${
+                      rangoFecha === 'TODAS'
+                        ? 'bg-light-blue text-blue-700 font-medium'
+                        : 'text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    Todas las fechas
+                  </button>
                   {RANGOS_FECHA.map(r => (
                     <button
                       key={r.value}
@@ -440,16 +469,6 @@ export default function Notas() {
                     }`}
                   >
                     {rangoFecha.startsWith('ANIO:') ? rangoFecha.slice(5) : 'Por año'}
-                  </button>
-                  <button
-                    onClick={() => { setRangoFecha('TODAS'); setPagina(1); setMostrarFecha(false); }}
-                    className={`text-left text-sm px-3 py-2 rounded-lg transition-colors ${
-                      rangoFecha === 'TODAS'
-                        ? 'bg-light-blue text-blue-700 font-medium'
-                        : 'text-gray-700 hover:bg-gray-50'
-                    }`}
-                  >
-                    Todas las fechas
                   </button>
                 </div>
               </div>
@@ -508,7 +527,9 @@ export default function Notas() {
       {!loading && !error && filtradas.length === 0 && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 text-center py-12">
           <p className="text-gray-400 text-sm">
-            {busqueda ? 'No se encontraron notas con ese criterio' : (FILTRO_VACIO[filtro] ?? 'No hay notas con este filtro')}
+            {busqueda
+              ? 'No se encontraron notas con ese criterio'
+              : `${FILTRO_VACIO[filtro] ?? 'No hay notas'} ${sufijoRangoFecha(rangoFecha)}`.trim()}
           </p>
         </div>
       )}
