@@ -211,7 +211,7 @@ describe('topes de precio por carga (solo Por Encargo)', () => {
     return { clienteId, lavadoraId };
   }
 
-  it('una carga dentro del tope se crea (máquinas 70 ≤ 100)', async () => {
+  it('con tope, el precio de la carga es el tope (100), aunque máquinas cuesten 70', async () => {
     const { clienteId, lavadoraId } = await armar();
     const res = await request(app).post('/api/notas').set(auth(admin.token)).send({
       tipo_servicio: 'POR_ENCARGO', cliente_id: clienteId, tipo_prenda: 'ROPA',
@@ -219,7 +219,9 @@ describe('topes de precio por carga (solo Por Encargo)', () => {
       cargas: [{ lavadora_id: lavadoraId, tamano: 'grande', activar: false }],
     });
     expect(res.status).toBe(201);
-    expect(Number(res.body.precio_total)).toBe(70);
+    // Precio fijo por carga: la carga grande cuesta su tope (100), no las
+    // máquinas (70). El costo interno 70 ≤ 100, así que se crea.
+    expect(Number(res.body.precio_total)).toBe(100);
   });
 
   it('un producto que rebasa el tope → 400 y no crea la nota', async () => {
@@ -636,7 +638,7 @@ describe('edredón (lavadora jumbo)', () => {
 });
 
 describe('productos por tapa', () => {
-  it('en Por Encargo el producto por tapa va incluido (precio 0) pero reserva stock', async () => {
+  it('en Por Encargo el producto por tapa se cobra (cuenta al total) y reserva stock', async () => {
     const clienteId = await seedCliente();
     const lavadoraId = await seedMaquina({ nombre: 'Lavadora 1', tipo: 'lavadora_mediana' });
     const tapa = await seedProducto({ nombre: 'Suavizante', precio_unitario: 15, es_por_tapa: true });
@@ -646,7 +648,9 @@ describe('productos por tapa', () => {
       productos: [{ producto_id: tapa, cantidad: 2 }],
     });
     expect(res.status).toBe(201);
-    expect(Number(res.body.precio_total)).toBe(70); // solo el lavado; la tapa va incluida
+    // Sin tope (la carga no tiene tamaño): suma real. La tapa ya no va gratis:
+    // 70 lavado + 2×15 tapa = 100.
+    expect(Number(res.body.precio_total)).toBe(100);
     const { rows } = await pool.query('SELECT stock_reservado FROM productos WHERE id = $1', [tapa]);
     expect(Number(rows[0].stock_reservado)).toBe(2);
   });

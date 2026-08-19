@@ -101,20 +101,46 @@ async function liberarMaquinasDeNota(client, notaId) {
   );
 }
 
-// Recalcula precio_total de una nota con la fórmula completa:
-//   suma de cargas (nota_cargas) + productos + ajuste.
+// Recalcula precio_total de una nota.
+//
+// Precio cobrado por carga:
+//   - Por Encargo CON tope: el precio ES el tope (precio fijo de la carga),
+//     aunque el costo interno (máquinas + productos) sea menor. Los productos
+//     de la carga quedan absorbidos en el tope (no se suman aparte).
+//   - Por Encargo SIN tope, o Autoservicio: suma real = máquinas + productos
+//     de la carga.
+//   + el ajuste por carga (nota_cargas.ajuste), que va aparte del tope.
+// Más: productos a nivel nota (carga_id NULL, Autoservicio) + ajuste de nota.
 async function recalcularPrecioTotal(client, notaId) {
-  // El ajuste por carga (nota_cargas.ajuste) es para Por Encargo; el ajuste a
-  // nivel nota (notas.ajuste) es para Autoservicio. Solo uno está en uso a la
-  // vez (el otro es 0), así que sumar ambos es correcto en los dos casos.
   const { rows } = await client.query(
     `UPDATE notas n
         SET precio_total =
-          COALESCE(
-            (SELECT SUM(nc.precio_lavadora + nc.precio_secadora + nc.ajuste)
-               FROM nota_cargas nc WHERE nc.nota_id = n.id), 0)
+          COALESCE((
+            SELECT SUM(
+              CASE
+                WHEN n.tipo_servicio = 'POR_ENCARGO' AND carga.tope IS NOT NULL
+                  THEN carga.tope
+                ELSE carga.maquinas + carga.productos
+              END
+              + carga.ajuste)
+            FROM (
+              SELECT nc.ajuste,
+                     nc.precio_lavadora + nc.precio_secadora AS maquinas,
+                     COALESCE((SELECT SUM(np.cantidad * np.precio_unitario)
+                                 FROM nota_productos np WHERE np.carga_id = nc.id), 0) AS productos,
+                     CASE
+                       WHEN UPPER(COALESCE(nc.tipo_prenda, '')) = 'EDREDON' THEN a.tope_carga_edredon
+                       WHEN nc.tamano = 'chico'  THEN a.tope_carga_chico
+                       WHEN nc.tamano = 'grande' THEN a.tope_carga_grande
+                       WHEN nc.tamano = 'jumbo'  THEN a.tope_carga_jumbo
+                     END AS tope
+                FROM nota_cargas nc LEFT JOIN ajustes a ON a.id = 1
+               WHERE nc.nota_id = n.id
+            ) carga
+          ), 0)
           + COALESCE((SELECT SUM(np.cantidad * np.precio_unitario)
-                        FROM nota_productos np WHERE np.nota_id = n.id), 0)
+                        FROM nota_productos np
+                       WHERE np.nota_id = n.id AND np.carga_id IS NULL), 0)
           + n.ajuste
       WHERE n.id = $1
       RETURNING precio_total`,
@@ -1091,6 +1117,8 @@ export const updateNota = async (req, res) => {
       cargasSum = sumRows[0]?.s != null ? Number(sumRows[0].s) : 0;
     }
 
+    // Provisional: recalcularPrecioTotal (abajo) fija el definitivo con la
+    // regla de tope (en Por Encargo el precio de la carga es su tope).
     const subtotalProductos = productosNota.reduce((s, p) => s + Number(p.subtotal), 0);
     const precioFinal = cargasSum + ajusteNum + subtotalProductos;
 
@@ -1124,6 +1152,10 @@ export const updateNota = async (req, res) => {
         precioFinal,
       ]
     );
+
+    // Total definitivo con la regla de tope (precio fijo por carga en Por
+    // Encargo). Sobrescribe el provisional de arriba.
+    rows[0].precio_total = await recalcularPrecioTotal(client, id);
 
     if (rows[0].precio_total != null && Number(rows[0].precio_total) < 0) {
       await client.query('ROLLBACK');

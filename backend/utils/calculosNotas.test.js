@@ -42,8 +42,8 @@ describe('precioProductoEnNota', () => {
   const porTapa = { es_por_tapa: true, precio_unitario: 15 };
   const normal  = { es_por_tapa: false, precio_unitario: 40 };
 
-  it('producto por tapa va incluido (0) en Por Encargo', () => {
-    expect(precioProductoEnNota(porTapa, 'POR_ENCARGO')).toBe(0);
+  it('producto por tapa se cobra su precio en Por Encargo (cuenta contra el tope)', () => {
+    expect(precioProductoEnNota(porTapa, 'POR_ENCARGO')).toBe(15);
   });
 
   it('producto por tapa se cobra en Autoservicio', () => {

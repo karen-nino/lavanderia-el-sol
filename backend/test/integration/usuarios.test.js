@@ -122,13 +122,13 @@ describe('GET /api/usuarios/:id/desempeno', () => {
 
     let res = await request(app).get(`/api/usuarios/${u.id}/desempeno`).set(auth(admin.token));
     expect(res.body.dias).toHaveLength(1);
-    expect(res.body.dias[0].checkin).toMatch(/^\d{2}:\d{2}$/); // hora de entrada
+    expect(res.body.dias[0].checkin).toMatch(/^\d{1,2}:\d{2} (am|pm)$/); // hora de entrada (12h)
     expect(res.body.dias[0].salida).toBeNull();
 
     // Cerrar sesión registra la salida del día.
     await request(app).post('/api/auth/logout').set(auth(login.body.token)).expect(200);
 
     res = await request(app).get(`/api/usuarios/${u.id}/desempeno`).set(auth(admin.token));
-    expect(res.body.dias[0].salida).toMatch(/^\d{2}:\d{2}$/);
+    expect(res.body.dias[0].salida).toMatch(/^\d{1,2}:\d{2} (am|pm)$/);
   });
 });

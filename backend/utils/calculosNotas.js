@@ -21,11 +21,11 @@ export function tarifaSecadora(secadoraTamano, tipoPrenda, t) {
   return t.secadora; // mediana
 }
 
-// Precio efectivo de un producto dentro de una nota. Los productos por
-// tapa/medida van INCLUIDOS (sin costo) en Por Encargo; en Autoservicio se
-// cobra su precio por tapa. Los demás productos cobran su precio siempre.
-export function precioProductoEnNota(art, tipo_servicio) {
-  if (tipo_servicio === 'POR_ENCARGO' && art.es_por_tapa) return 0;
+// Precio efectivo de un producto dentro de una nota: siempre su precio unitario
+// (incluidos los productos por tapa/medida en Por Encargo). En Por Encargo el
+// costo de los productos cuenta contra el tope de la carga y suma al total real
+// (con techo en el tope); ya no van "incluidos" sin costo.
+export function precioProductoEnNota(art /* , tipo_servicio */) {
   return art.precio_unitario ?? 0;
 }
 

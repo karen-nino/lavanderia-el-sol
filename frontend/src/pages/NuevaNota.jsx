@@ -175,11 +175,11 @@ export default function NuevaNota() {
          + (c.secadora_id ? precioSecado(tamanoDe(c.secadora_id), c.tipo_prenda) : 0);
   };
   const ajusteNum      = Number(form.ajuste) || 0;
-  // Precio efectivo de un producto en la nota: los productos por tapa/medida van
-  // incluidos (sin costo) en Por Encargo; en Autoservicio se cobran normal.
+  // Precio efectivo de un producto en la nota: siempre su precio unitario. En
+  // Por Encargo cuenta contra el tope de la carga y suma al total (con techo en
+  // el tope); ya no va "incluido" sin costo.
   const precioProducto = (prod) => {
     if (!prod) return 0;
-    if (tipoServicio === 'POR_ENCARGO' && prod.es_por_tapa) return 0;
     return Number(prod.precio_unitario) || 0;
   };
   const subtotalCargas = cargasAuto.reduce((s, c) => s + subtotalDeCarga(c), 0);
@@ -424,29 +424,32 @@ export default function NuevaNota() {
     return sum + precioProducto(prod) * (Number(p.cantidad) || 0);
   }, 0);
 
-  // Precio de una carga de encargo = tarifa lavadora (según la prenda de la
-  // carga) + secadora + sus productos + su ajuste.
-  const subtotalCargaEncargo = (c) => {
-    const lav = maquinas.find(m => String(m.id) === String(c.maquina_id));
-    const maq = (lav ? precioPorTipo(lav.tipo, c.tipo_prenda) : 0)
-              + (c.secadora_id ? precioSecado(tamanoDe(c.secadora_id), c.tipo_prenda) : 0);
-    return maq + subtotalProductosLista(c.productos) + (Number(c.ajuste) || 0);
+  // Tope de la carga (Ajustes). Prenda edredón usa su tope dedicado (manda
+  // sobre el del tamaño). NULL = sin tope configurado.
+  const topeDeCarga  = (c) => {
+    if (String(c?.tipo_prenda).toUpperCase() === 'EDREDON') return topes.edredon ?? null;
+    return c?.tamano ? (topes[c.tamano] ?? null) : null;
   };
-  const encargoPrecioTotal  = encargoCargas.reduce((s, c) => s + subtotalCargaEncargo(c), 0);
 
-  // Tope por tamaño (Ajustes): limita lavadora + secadora + productos de la
-  // carga. El ajuste manual NO cuenta contra el tope (va aparte).
+  // Costo interno de la carga: lavadora + secadora + productos. Es lo que se
+  // compara contra el tope (el ajuste manual va aparte y NO cuenta).
   const usadoContraTope = (c) => {
     const lav = maquinas.find(m => String(m.id) === String(c.maquina_id));
     return (lav ? precioPorTipo(lav.tipo, c.tipo_prenda) : 0)
          + (c.secadora_id ? precioSecado(tamanoDe(c.secadora_id), c.tipo_prenda) : 0)
          + subtotalProductosLista(c.productos);
   };
-  // Prenda edredón usa su tope dedicado (manda sobre el del tamaño).
-  const topeDeCarga  = (c) => {
-    if (String(c?.tipo_prenda).toUpperCase() === 'EDREDON') return topes.edredon ?? null;
-    return c?.tamano ? (topes[c.tamano] ?? null) : null;
+
+  // Precio cobrado por una carga de encargo. Con tope configurado el precio ES
+  // el tope (precio fijo de la carga, aunque el costo interno sea menor); sin
+  // tope, es la suma real. En ambos casos se suma el ajuste manual (va aparte).
+  const subtotalCargaEncargo = (c) => {
+    const tope = topeDeCarga(c);
+    const base = tope != null ? Number(tope) : usadoContraTope(c);
+    return base + (Number(c.ajuste) || 0);
   };
+  const encargoPrecioTotal  = encargoCargas.reduce((s, c) => s + subtotalCargaEncargo(c), 0);
+
   const excesoDeCarga = (c) => {
     const tope = topeDeCarga(c);
     return tope != null ? usadoContraTope(c) - tope : 0;
@@ -1048,7 +1051,6 @@ export default function NuevaNota() {
                         {c.productos.map((item, j) => {
                           const prod = productosCatalogo.find(x => String(x.id) === String(item.producto_id));
                           const cant = Number(item.cantidad) || 0;
-                          const incluido = prod?.es_por_tapa && tipoServicio === 'POR_ENCARGO';
                           const subtotal = precioProducto(prod) * cant;
                           return (
                             <div key={j} className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
@@ -1102,12 +1104,7 @@ export default function NuevaNota() {
                                     </button>
                                   </div>
                                 </div>
-                                {incluido ? (
-                                  <div className="text-right">
-                                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Subtotal</p>
-                                    <p className="text-sm font-semibold text-green-700">Incluido</p>
-                                  </div>
-                                ) : subtotal > 0 && (
+                                {subtotal > 0 && (
                                   <div className="text-right">
                                     <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Subtotal</p>
                                     <p className="text-lg font-bold text-blue-700">${subtotal.toFixed(2)}</p>
@@ -1310,10 +1307,29 @@ export default function NuevaNota() {
                     const sec = maquinas.find(m => String(m.id) === String(c.secadora_id));
                     const partes = [lav?.nombre, sec?.nombre].filter(Boolean);
                     const detalle = [PRENDA_LABEL[c.tipo_prenda], c.tamano ? TAMANO_LABEL[c.tamano] : null].filter(Boolean).join(', ');
+                    const productosCarga = (c.productos ?? []).filter(p => p.producto_id && Number(p.cantidad) > 0);
                     return (
-                      <div key={i} className="flex justify-between gap-2">
-                        <span>Carga {i + 1}{detalle ? ` — ${detalle}` : ''}{partes.length > 0 ? ` (${partes.join(' + ')})` : ''}</span>
-                        <span>${subtotalCargaEncargo(c).toFixed(2)}</span>
+                      <div key={i}>
+                        <div className="flex justify-between gap-2">
+                          <span>Carga {i + 1}{detalle ? ` — ${detalle}` : ''}{partes.length > 0 ? ` (${partes.join(' + ')})` : ''}</span>
+                          <span>${subtotalCargaEncargo(c).toFixed(2)}</span>
+                        </div>
+                        {productosCarga.length > 0 && (
+                          <ul className="mt-0.5 mb-1 ml-3 space-y-0.5 text-xs text-blue-700/80">
+                            {productosCarga.map((p, j) => {
+                              const prod = productosCatalogo.find(x => String(x.id) === String(p.producto_id));
+                              if (!prod) return null;
+                              const cant = Number(p.cantidad) || 0;
+                              const unidad = prod.es_por_tapa ? (cant === 1 ? 'tapa' : 'tapas') : (prod.unidad || 'u');
+                              return (
+                                <li key={j} className="flex justify-between gap-2">
+                                  <span>· {prod.nombre}{prod.marca ? ` ${prod.marca}` : ''} × {cant} {unidad}</span>
+                                  <span>${(precioProducto(prod) * cant).toFixed(2)}</span>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        )}
                       </div>
                     );
                   })}
