@@ -5,6 +5,20 @@ const TIPOS_VALIDOS   = ['lavadora_mediana', 'lavadora_jumbo', 'secadora'];
 const CAPACIDADES_VALIDAS = ['20kg', '35kg'];
 const TAMANOS_VALIDOS = ['mediana', 'jumbo'];
 
+// device_id del Sonoff en eWeLink: cadena recortada, o null si viene vacío.
+const normalizarDeviceId = (v) => {
+  if (v == null) return null;
+  const s = String(v).trim();
+  return s === '' ? null : s;
+};
+
+// Canal/relé del dispositivo (Sonoff multi-relé): entero >= 0, o null.
+const normalizarDeviceCanal = (v) => {
+  if (v == null || v === '') return null;
+  const n = Number(v);
+  return Number.isInteger(n) && n >= 0 ? n : null;
+};
+
 export const getMaquinas = async (req, res) => {
   try {
     // "reservada": la máquina está libre (estado disponible) pero ya la tiene
@@ -192,7 +206,7 @@ export const getUsoMaquina = async (req, res) => {
 };
 
 export const createMaquina = async (req, res) => {
-  const { nombre, tipo, tamano, modelo, capacidad, numero_serie, fecha_adquisicion, notas } = req.body;
+  const { nombre, tipo, tamano, modelo, capacidad, numero_serie, fecha_adquisicion, notas, device_id, device_canal } = req.body;
 
   if (!nombre || !tipo) {
     return res.status(400).json({ message: 'Nombre y tipo son requeridos.' });
@@ -207,12 +221,19 @@ export const createMaquina = async (req, res) => {
     return res.status(400).json({ message: `Capacidad inválida. Valores permitidos: ${CAPACIDADES_VALIDAS.join(', ')}.` });
   }
 
+  const deviceId = normalizarDeviceId(device_id);
+  const deviceCanal = normalizarDeviceCanal(device_canal);
+  // Sin dispositivo enlazado la máquina queda 'sin_enlazar'; con dispositivo
+  // arranca en 'error' (aún no confirmado) hasta que el reconciliador o el
+  // botón "Probar" verifiquen que responde y lo marquen 'enlazada'.
+  const sonoffEstado = deviceId ? 'error' : 'sin_enlazar';
+
   try {
     const { rows } = await pool.query(
-      `INSERT INTO maquinas (nombre, tipo, tamano, modelo, capacidad, numero_serie, fecha_adquisicion, sucursal, notas)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      `INSERT INTO maquinas (nombre, tipo, tamano, modelo, capacidad, numero_serie, fecha_adquisicion, sucursal, notas, device_id, device_canal, sonoff_estado)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
        RETURNING *`,
-      [nombre, tipo, tamano || null, modelo, capacidad, numero_serie, fecha_adquisicion, req.sucursal, notas]
+      [nombre, tipo, tamano || null, modelo, capacidad, numero_serie, fecha_adquisicion, req.sucursal, notas, deviceId, deviceCanal, sonoffEstado]
     );
     res.status(201).json(rows[0]);
   } catch (err) {
@@ -226,7 +247,7 @@ export const createMaquina = async (req, res) => {
 
 export const updateMaquina = async (req, res) => {
   const { id } = req.params;
-  const { nombre, tipo, tamano, modelo, capacidad, numero_serie, fecha_adquisicion, notas, estado } = req.body;
+  const { nombre, tipo, tamano, modelo, capacidad, numero_serie, fecha_adquisicion, notas, estado, device_id, device_canal } = req.body;
 
   if (!nombre || !tipo) {
     return res.status(400).json({ message: 'Nombre y tipo son requeridos.' });
@@ -244,9 +265,17 @@ export const updateMaquina = async (req, res) => {
     return res.status(400).json({ message: `Estado inválido. Valores permitidos: ${ESTADOS_VALIDOS.join(', ')}.` });
   }
 
+  const deviceId = normalizarDeviceId(device_id);
+  const deviceCanal = normalizarDeviceCanal(device_canal);
+
   try {
     // estado es opcional: si llega null se conserva el actual. Al cambiarlo se
     // mantiene en_uso_desde coherente, igual que en cambiarEstadoMaquina.
+    //
+    // sonoff_estado/sonoff_sync_at se recalculan según el enlace: sin
+    // dispositivo → 'sin_enlazar'; si el device_id cambia → 'error' (aún sin
+    // confirmar) y se limpia sync_at para que el reconciliador/probar lo
+    // reverifiquen; si no cambia, se conserva el estado actual.
     const { rows } = await pool.query(
       `UPDATE maquinas
          SET nombre = $1, tipo = $2, tamano = $3, modelo = $4, capacidad = $5, numero_serie = $6, fecha_adquisicion = $7, notas = $8,
@@ -255,10 +284,21 @@ export const updateMaquina = async (req, res) => {
                WHEN $9::estado_maquina IS NULL THEN en_uso_desde
                WHEN $9::estado_maquina = 'en_uso'::estado_maquina THEN NOW()
                ELSE NULL
+             END,
+             device_id = $12,
+             device_canal = $13,
+             sonoff_estado = CASE
+               WHEN $12 IS NULL THEN 'sin_enlazar'
+               WHEN device_id IS DISTINCT FROM $12 THEN 'error'
+               ELSE sonoff_estado
+             END,
+             sonoff_sync_at = CASE
+               WHEN device_id IS DISTINCT FROM $12 THEN NULL
+               ELSE sonoff_sync_at
              END
        WHERE id = $10 AND sucursal = $11
        RETURNING *`,
-      [nombre, tipo, tamano || null, modelo, capacidad, numero_serie, fecha_adquisicion, notas, estado ?? null, id, req.sucursal]
+      [nombre, tipo, tamano || null, modelo, capacidad, numero_serie, fecha_adquisicion, notas, estado ?? null, id, req.sucursal, deviceId, deviceCanal]
     );
     if (rows.length === 0) {
       return res.status(404).json({ message: 'Máquina no encontrada.' });

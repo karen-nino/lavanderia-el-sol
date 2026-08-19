@@ -35,7 +35,7 @@ const CAPACIDADES = [
   { v: '35kg', label: '35kg' },
 ];
 
-const FORM_INIT = { nombre: '', tipo: 'lavadora', tamano: 'mediana', capacidad: '20kg', modelo: '', mantenimiento: false, notas: '' };
+const FORM_INIT = { nombre: '', tipo: 'lavadora', tamano: 'mediana', capacidad: '20kg', modelo: '', mantenimiento: false, notas: '', device_id: '', device_canal: '' };
 
 const tipoCompuesto = (tipo, tamano) =>
   tipo === 'lavadora' ? `lavadora_${tamano}` : tipo;
@@ -114,6 +114,8 @@ export default function GestionMaquinas() {
       modelo: m.modelo ?? '',
       mantenimiento: m.estado === 'mantenimiento',
       notas:  m.notas ?? '',
+      device_id: m.device_id ?? '',
+      device_canal: m.device_canal ?? '',
     });
     setEditandoId(m.id);
     setFormError('');
@@ -472,6 +474,37 @@ export default function GestionMaquinas() {
                   className={INPUT_CLS}
                 />
               </div>
+
+              {/* Enlace con el Sonoff (eWeLink). Vacío = máquina sin control
+                  remoto; el sistema la sigue manejando de forma manual. */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Sonoff — ID del dispositivo
+                  <span className="ml-1 font-normal text-gray-400">(opcional)</span>
+                </label>
+                <input
+                  name="device_id" value={form.device_id} onChange={handleChange}
+                  placeholder="Device ID de eWeLink (ej. 10001abcd2)"
+                  className={INPUT_CLS}
+                />
+                <p className="mt-1 text-xs text-gray-400">
+                  Se ve en la app eWeLink, en la información del dispositivo.
+                </p>
+              </div>
+
+              {form.device_id.trim() !== '' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    Sonoff — canal
+                    <span className="ml-1 font-normal text-gray-400">(solo multi-relé)</span>
+                  </label>
+                  <input
+                    name="device_canal" type="number" min="0" value={form.device_canal} onChange={handleChange}
+                    placeholder="0"
+                    className={INPUT_CLS}
+                  />
+                </div>
+              )}
 
               {editandoId != null && (
                 <div className="flex items-center justify-between">
