@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { esAdmin as esAdminFn, esAdminMain as esAdminMainFn } from '../lib/roles';
+import { formatHora12 } from '../lib/fecha';
 import SucursalBar from '../components/SucursalBar';
 
 const fmt = (n) =>
@@ -32,13 +33,13 @@ const fmtFechaHora = (fecha) => {
   const d = new Date(fecha);
   const mes = d.toLocaleDateString('es-MX', { month: 'long' });
   const mesCap = mes.charAt(0).toUpperCase() + mes.slice(1);
-  const hora = d.toLocaleTimeString('es-MX', { hour: 'numeric', minute: '2-digit', hour12: true });
+  const hora = formatHora12(d);
   return `${d.getDate()} de ${mesCap}, ${hora}`;
 };
 
 const fmtHora = (fecha) => {
   if (!fecha) return '—';
-  return new Date(fecha).toLocaleTimeString('es-MX', { hour: 'numeric', minute: '2-digit', hour12: true });
+  return formatHora12(fecha);
 };
 
 // Ej.: Lunes, 03 Ago 26

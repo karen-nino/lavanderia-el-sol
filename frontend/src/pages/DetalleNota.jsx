@@ -4,6 +4,7 @@ import Barcode from 'react-barcode';
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { esAdmin as esAdminFn } from '../lib/roles';
+import { formatHora12, formatFechaHora12 } from '../lib/fecha';
 
 const BADGE_ESTADO = {
   EN_ESPERA:  { label: 'En Espera',   cls: 'bg-gray-100 text-gray-600'        },
@@ -127,13 +128,12 @@ function fmtFecha(iso) {
 
 function fmtFechaHora(iso) {
   if (!iso) return '—';
-  const d = new Date(iso);
-  return `${d.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}, ${d.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}`;
+  return formatFechaHora12(iso);
 }
 
 function fmtHora(iso) {
   if (!iso) return '—';
-  return new Date(iso).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+  return formatHora12(iso);
 }
 
 function FilaDetalle({ label, children }) {

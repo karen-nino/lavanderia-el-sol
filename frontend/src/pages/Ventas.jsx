@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
+import { formatHora12 } from '../lib/fecha';
 import SucursalBar from '../components/SucursalBar';
 import {
   BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -33,7 +34,7 @@ const fmtFecha = (fecha) => {
 // timestamp de creación de la nota (created_at).
 const fmtHora = (fecha) => {
   if (!fecha) return '—';
-  return new Date(fecha).toLocaleTimeString('es-MX', { hour: 'numeric', minute: '2-digit', hour12: true });
+  return formatHora12(fecha);
 };
 
 // Nombre del día de la semana capitalizado (Lunes, Martes, …).

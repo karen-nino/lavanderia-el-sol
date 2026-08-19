@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
+import { formatFechaHora12 } from '../lib/fecha';
 
 const BADGE_TIPO_SERVICIO = {
   AUTOSERVICIO: 'Autoservicio',
@@ -25,8 +26,7 @@ function fmtFecha(iso) {
 
 function fmtFechaHora(iso) {
   if (!iso) return '—';
-  const d = new Date(iso);
-  return `${d.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}, ${d.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}`;
+  return formatFechaHora12(iso);
 }
 
 // Máquinas efectivamente usadas por una carga (persisten aunque el ciclo ya

@@ -3,6 +3,7 @@ import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { esAdmin, ROL_LABEL } from '../lib/roles';
 import { api } from '../lib/api';
+import { formatHora12, formatFechaHora12 } from '../lib/fecha';
 import SucursalSelector from './SucursalSelector';
 
 const navIconCls = 'w-6 h-6';
@@ -232,7 +233,7 @@ function DesktopSidebar({ items, onMenu, onOverflowChange }) {
 
 function DesktopHeader({ usuario, sucursalNombre, now }) {
   const fecha = now.toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' });
-  const hora  = now.toLocaleTimeString('es-MX', { hour: 'numeric', minute: '2-digit', hour12: true });
+  const hora  = formatHora12(now);
   return (
     <header className="hidden md:flex items-start justify-between w-full max-w-7xl mx-auto px-8 pt-14">
       <div className="flex items-center gap-2">
@@ -703,7 +704,7 @@ export default function Layout() {
         };
       });
     const notifs = notificaciones.map(n => {
-      const fechaHora = new Date(n.created_at).toLocaleString('es-MX', { day: '2-digit', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
+      const fechaHora = formatFechaHora12(n.created_at);
       // Cada tipo de notificación tiene su título, color, destino y detalles.
       const cfg =
           n.tipo === 'nota_cancelada'

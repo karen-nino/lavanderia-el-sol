@@ -61,9 +61,9 @@ export const getDesempeno = async (req, res) => {
     // created_at) y salida (cierre de sesión manual).
     const { rows: checkins } = await pool.query(
       `SELECT to_char(created_at AT TIME ZONE $2, 'YYYY-MM-DD')  AS fecha,
-              to_char(created_at AT TIME ZONE $2, 'FMHH12:MI am') AS hora,
+              to_char(created_at AT TIME ZONE $2, 'HH12:MI am') AS hora,
               CASE WHEN salida IS NOT NULL
-                   THEN to_char(salida AT TIME ZONE $2, 'FMHH12:MI am') END AS hora_salida
+                   THEN to_char(salida AT TIME ZONE $2, 'HH12:MI am') END AS hora_salida
          FROM checkins WHERE usuario_id = $1`,
       [id, TZ_NEGOCIO]
     );
