@@ -677,6 +677,7 @@ export const createNota = async (req, res) => {
     tipo_servicio = 'POR_ENCARGO',
     tipo_prenda = 'ROPA',
     estado_pago,
+    forma_pago,
     peso_kg,
     fecha_entrega,
     tiempo_entrega,
@@ -777,8 +778,8 @@ export const createNota = async (req, res) => {
       `INSERT INTO notas
          (cliente_id, usuario_id, tipo_servicio, tipo_prenda, estado, estado_pago, sucursal,
           peso_kg, precio_total, fecha_entrega, tiempo_entrega, instrucciones,
-          tamano, tipo_tela, tamano_edredon, ajuste)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+          tamano, tipo_tela, tamano_edredon, ajuste, forma_pago)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
        RETURNING *`,
       [
         cliente_id   || null,
@@ -797,6 +798,9 @@ export const createNota = async (req, res) => {
         tipo_tela ? String(tipo_tela).trim() : null,
         tamano_edredon ? String(tamano_edredon).trim() : null,
         ajusteNum,
+        // Forma de pago solo con pago anticipado (PAGADO); si no, null.
+        (estado_pago === 'PAGADO' && ['EFECTIVO', 'TRANSFERENCIA'].includes(String(forma_pago).toUpperCase()))
+          ? String(forma_pago).toUpperCase() : null,
       ]
     );
     const nota = notaRows[0];

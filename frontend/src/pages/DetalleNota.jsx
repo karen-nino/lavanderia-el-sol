@@ -507,6 +507,11 @@ export default function DetalleNota() {
               ? <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${badgePago.cls}`}>{badgePago.label}</span>
               : <span className="text-gray-400">—</span>}
           </FilaDetalle>
+          {nota.forma_pago && (
+            <FilaDetalle label="Forma de pago">
+              <span className="text-gray-700">{nota.forma_pago === 'EFECTIVO' ? 'Efectivo' : 'Transferencia'}</span>
+            </FilaDetalle>
+          )}
           {(nota.cargas ?? []).length > 0 && (
             <FilaDetalle label="Cargas">
               <div className="space-y-3">

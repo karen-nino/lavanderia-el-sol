@@ -55,6 +55,7 @@ const TAMANO_LABEL = Object.fromEntries(TAMANOS.map(t => [t.v, t.label]));
 const ENCARGO_INIT = {
   cliente_id:      '',
   pago_anticipado: '',
+  forma_pago:      '',
   fecha_entrega:   '',
   tiempo_entrega:  '',
   instrucciones:   '',
@@ -262,6 +263,7 @@ export default function NuevaNota() {
             setEncargoForm({
               cliente_id:      nota.cliente_id ? String(nota.cliente_id) : '',
               pago_anticipado: nota.estado_pago === 'PAGADO' ? 'SI' : 'NO',
+              forma_pago:      nota.forma_pago ?? '',
               fecha_entrega:   nota.fecha_entrega  ? String(nota.fecha_entrega).slice(0, 10) : '',
               tiempo_entrega:  nota.tiempo_entrega ?? '',
               instrucciones:   nota.instrucciones  ?? '',
@@ -482,7 +484,12 @@ export default function NuevaNota() {
       if (excesoDeCarga(c) > 0) return false;
       return true;
     }
-    if (encargoStep === pasoPago) return !!encargoForm.pago_anticipado;
+    if (encargoStep === pasoPago) {
+      if (!encargoForm.pago_anticipado) return false;
+      // Si pagó anticipado, hay que elegir la forma de pago.
+      if (encargoForm.pago_anticipado === 'SI' && !encargoForm.forma_pago) return false;
+      return true;
+    }
     return true;
   })();
 
@@ -522,6 +529,8 @@ export default function NuevaNota() {
         cargas:         cargasPayload,
         ajuste:         0, // el ajuste va por carga
         estado_pago:    encargoForm.pago_anticipado === 'SI' ? 'PAGADO' : 'PENDIENTE',
+        // Forma de pago solo si pagó anticipado; si queda a deber, va null.
+        forma_pago:     encargoForm.pago_anticipado === 'SI' ? (encargoForm.forma_pago || null) : null,
         // Si no se eligió fecha, la entrega se da por hecho para hoy.
         fecha_entrega:  encargoForm.fecha_entrega  || fechaHoyISO(),
         tiempo_entrega: encargoForm.tiempo_entrega || null,
@@ -1216,7 +1225,7 @@ export default function NuevaNota() {
                       <button
                         key={opt.v}
                         type="button"
-                        onClick={() => setEncargoForm(f => ({ ...f, pago_anticipado: opt.v }))}
+                        onClick={() => setEncargoForm(f => ({ ...f, pago_anticipado: opt.v, forma_pago: opt.v === 'SI' ? f.forma_pago : '' }))}
                         className={`py-8 border-2 rounded-xl font-semibold text-lg transition-colors ${
                           selected ? 'border-blue bg-light-blue text-blue-700' : 'border-gray-300 bg-white text-gray-700 hover:border-blue-300'
                         }`}
@@ -1226,6 +1235,31 @@ export default function NuevaNota() {
                     );
                   })}
                 </div>
+
+                {/* Forma de pago: solo si pagó anticipado (si queda a deber, aún
+                    no hay pago). */}
+                {encargoForm.pago_anticipado === 'SI' && (
+                  <div className="space-y-3 pt-2">
+                    <h2 className="text-base font-semibold text-gray-900">Forma de pago</h2>
+                    <div className="grid grid-cols-2 gap-3">
+                      {[{ v: 'EFECTIVO', label: 'Efectivo' }, { v: 'TRANSFERENCIA', label: 'Transferencia' }].map(opt => {
+                        const selected = encargoForm.forma_pago === opt.v;
+                        return (
+                          <button
+                            key={opt.v}
+                            type="button"
+                            onClick={() => setEncargoForm(f => ({ ...f, forma_pago: opt.v }))}
+                            className={`py-6 border-2 rounded-xl font-semibold text-base transition-colors ${
+                              selected ? 'border-blue bg-light-blue text-blue-700' : 'border-gray-300 bg-white text-gray-700 hover:border-blue-300'
+                            }`}
+                          >
+                            {opt.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -1305,6 +1339,14 @@ export default function NuevaNota() {
                       {encargoForm.pago_anticipado === 'SI' ? 'Sí' : encargoForm.pago_anticipado === 'NO' ? 'No' : '—'}
                     </span>
                   </div>
+                  {encargoForm.pago_anticipado === 'SI' && encargoForm.forma_pago && (
+                    <div className="flex justify-between">
+                      <span>Forma de pago</span>
+                      <span className="font-medium">
+                        {encargoForm.forma_pago === 'EFECTIVO' ? 'Efectivo' : 'Transferencia'}
+                      </span>
+                    </div>
+                  )}
                   {encargoForm.fecha_entrega && (
                     <div className="flex justify-between"><span>Entrega</span><span className="font-medium">{encargoForm.fecha_entrega}</span></div>
                   )}
