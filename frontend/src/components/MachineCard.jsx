@@ -105,11 +105,13 @@ export default function MachineCard({ maquina, nota, onTerminarCiclo, onClick })
   }
 
   if (maquina.necesita_terminar_ciclo) {
-    // Lavadora que terminó el lavado: el siguiente paso es iniciar el secado
-    // (elegir secadora), en tonos rojos. Secadora que terminó el secado:
-    // cierra el ciclo de la nota, en verde.
+    // Secadora que terminó, o lavadora de AUTOSERVICIO (que no pasa a secado):
+    // se finaliza la carga, en verde. Lavadora de Por Encargo: el siguiente paso
+    // es iniciar el secado (elegir secadora), en tonos rojos.
     const esSecadora = maquina.tipo === 'secadora';
-    const tono = esSecadora
+    const esAutoservicio = nota?.tipo_servicio === 'AUTOSERVICIO';
+    const finalizaCarga = esSecadora || esAutoservicio;
+    const tono = finalizaCarga
       ? { card: 'bg-light-green ring-green', header: 'bg-green', titulo: 'text-green', boton: 'bg-green ring ring-green-700' }
       : { card: 'bg-white ring-white',     header: 'bg-red',   titulo: 'text-red',   boton: 'bg-red-500 ring ring-red-700' };
     return (
@@ -122,14 +124,16 @@ export default function MachineCard({ maquina, nota, onTerminarCiclo, onClick })
         </div>
         <div className="px-card-pad pt-5 pb-6 flex flex-col items-center gap-3">
           <p className={`text-card-title ${tono.titulo} text-center uppercase tracking-wide`}>
-            {esSecadora ? <>Finalizó<br />secadora</> : <>Iniciar<br />secadora</>}
+            {finalizaCarga
+              ? (esSecadora ? <>Finalizó<br />secadora</> : <>Finalizó<br />lavadora</>)
+              : <>Iniciar<br />secadora</>}
           </p>
           {infoNota}
           <button
             onClick={(e) => { e.stopPropagation(); onTerminarCiclo?.(maquina); }}
             className={`w-full ${tono.boton} text-white text-section py-8 rounded-card-sm shadow-card hover:opacity-90 transition-opacity mt-1`}
           >
-            {esSecadora ? 'FINALIZAR CARGA' : 'INICIAR SECADO'}
+            {finalizaCarga ? 'FINALIZAR CARGA' : 'INICIAR SECADO'}
           </button>
         </div>
       </div>

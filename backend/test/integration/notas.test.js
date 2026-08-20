@@ -310,6 +310,18 @@ describe('handlers de máquina — ciclo de vida', () => {
     expect(rows.find(m => m.id === secadoraId).estado).toBe('en_uso');
   });
 
+  it('terminar-lavado-final (Autoservicio) finaliza la carga sin secado y deja la nota Lista', async () => {
+    const { notaId, lavadoraId } = await autoservicioLavando();
+
+    const res = await request(app).patch(`/api/notas/${notaId}/terminar-lavado-final`)
+      .set(auth(admin.token)).send({ lavadora_id: lavadoraId });
+    expect(res.status).toBe(200);
+    expect(res.body.estado).toBe('LISTA'); // era la única máquina en uso
+
+    const { rows } = await pool.query('SELECT estado FROM maquinas WHERE id = $1', [lavadoraId]);
+    expect(rows[0].estado).toBe('disponible');
+  });
+
   it('terminar-secado deja la nota Lista y libera la secadora', async () => {
     const { notaId, lavadoraId, secadoraId } = await autoservicioLavando();
     await request(app).patch(`/api/notas/${notaId}/terminar-lavado`)

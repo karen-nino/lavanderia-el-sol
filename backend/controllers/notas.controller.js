@@ -2406,6 +2406,91 @@ export const terminarSecado = async (req, res) => {
   }
 };
 
+// ── PATCH /notas/:id/terminar-lavado-final ──────────────────
+// Finaliza una carga de Autoservicio cuya máquina es una LAVADORA, SIN pasar a
+// secado (en Autoservicio cada carga es una sola máquina independiente). Libera
+// la lavadora y, si era la última máquina en uso, deja la nota LISTA; si quedan
+// otras, recalcula la fase. Espejo de terminarSecado pero para el slot lavadora.
+export const terminarLavadoFinal = async (req, res) => {
+  const { id } = req.params;
+  const { lavadora_id } = req.body;
+
+  if (!lavadora_id) {
+    return res.status(400).json({ message: 'lavadora_id es requerido.' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const { rows: notaRows } = await client.query(
+      'SELECT estado FROM notas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
+      [id, req.sucursal]
+    );
+    if (notaRows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: 'Nota no encontrada.' });
+    }
+    if (!['LAVANDO', 'SECANDO'].includes(notaRows[0].estado)) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'Solo se puede terminar el lavado de una nota en proceso.' });
+    }
+
+    const { rowCount: cargasLav } = await client.query(
+      'SELECT id FROM nota_cargas WHERE nota_id = $1 AND lavadora_id = $2 FOR UPDATE',
+      [id, lavadora_id]
+    );
+    if (cargasLav === 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'La lavadora no está asignada a esta nota.' });
+    }
+
+    // Desvincular y liberar la lavadora (queda libre para el siguiente cliente).
+    await client.query(
+      'UPDATE nota_cargas SET lavadora_id = NULL WHERE nota_id = $1 AND lavadora_id = $2',
+      [id, lavadora_id]
+    );
+    await client.query(
+      `UPDATE maquinas SET estado = 'disponible', en_uso_desde = NULL
+        WHERE id = $1 AND estado = 'en_uso'`,
+      [lavadora_id]
+    );
+
+    // ¿Quedan máquinas en uso? Si no, la nota está lista; si sí, se recalcula fase.
+    const restantes = await maquinasDeNota(client, id);
+    const { rowCount: enUso } = restantes.length === 0
+      ? { rowCount: 0 }
+      : await client.query(
+          `SELECT id FROM maquinas WHERE id = ANY($1) AND estado = 'en_uso'`,
+          [restantes]
+        );
+    const nuevoEstado = enUso === 0 ? 'LISTA' : await faseProcesoDeNota(client, id);
+    await client.query(`UPDATE notas SET estado = $1 WHERE id = $2`, [nuevoEstado, id]);
+
+    await client.query('COMMIT');
+
+    const { rows } = await pool.query(
+      `SELECT n.*,
+              c.nombre   AS cliente_nombre,
+              c.apellido AS cliente_apellido,
+              c.telefono AS cliente_telefono,
+              TRIM(u.nombre || ' ' || COALESCE(u.apellido, '')) AS usuario_nombre
+       FROM notas n
+       LEFT JOIN clientes  c ON c.id = n.cliente_id
+       JOIN      usuarios  u ON u.id = n.usuario_id
+       WHERE n.id = $1`,
+      [id]
+    );
+    res.json({ ...rows[0], cargas: await cargasDeNota(pool, id) });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('terminarLavadoFinal error:', err);
+    res.status(500).json({ message: 'Error interno del servidor.' });
+  } finally {
+    client.release();
+  }
+};
+
 // ── PATCH /notas/:id/estado-pago ────────────────────────────
 export const cambiarEstadoPago = async (req, res) => {
   const { id } = req.params;

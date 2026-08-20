@@ -174,7 +174,12 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
   // termina es el lavado: se exige elegir una secadora disponible para pasar
   // esa carga a secado. Si es una secadora, termina su secado; la nota pasa a
   // "Por Entregar" solo si era su última máquina en uso.
-  const terminaLavado = Boolean(confirmTerminar && confirmTerminar.tipo !== 'secadora' && notaParaTerminar);
+  // En Autoservicio la lavadora NO pasa a secado: se finaliza la carga directo.
+  // Solo Por Encargo exige elegir secadora al terminar el lavado.
+  const terminaLavado = Boolean(
+    confirmTerminar && confirmTerminar.tipo !== 'secadora' && notaParaTerminar
+    && notaParaTerminar.tipo_servicio !== 'AUTOSERVICIO'
+  );
   const secadorasDisponibles = maquinas.filter(m => m.tipo === 'secadora' && m.estado === 'disponible');
   // ¿La nota tiene otras máquinas en uso además de esta? (otras cargas
   // lavando o secando: al terminar esta, la nota sigue en proceso)
@@ -210,11 +215,13 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
         if (notaActualizada === undefined) return; // sesión expiró: se conserva la acción pendiente
         setNotas(prev => prev.map(n => n.id === notaActualizada.id ? { ...n, ...notaActualizada } : n));
       } else if (notaParaTerminar) {
-        // Termina el secado de ESTA secadora: el servidor la libera y, si era
-        // la última máquina de la nota, la pasa a "Por Entregar".
-        const notaActualizada = await api.patch(`/notas/${notaParaTerminar.id}/terminar-secado`, {
-          secadora_id: Number(confirmTerminar.id),
-        });
+        // Finaliza la carga de ESTA máquina: la libera y, si era la última de la
+        // nota, la pasa a "Por Entregar". Secadora → terminar-secado; lavadora de
+        // Autoservicio → terminar-lavado-final (no pasa a secado).
+        const esSecadora = confirmTerminar.tipo === 'secadora';
+        const notaActualizada = esSecadora
+          ? await api.patch(`/notas/${notaParaTerminar.id}/terminar-secado`, { secadora_id: Number(confirmTerminar.id) })
+          : await api.patch(`/notas/${notaParaTerminar.id}/terminar-lavado-final`, { lavadora_id: Number(confirmTerminar.id) });
         if (notaActualizada === undefined) return; // sesión expiró: se conserva la acción pendiente
         setNotas(prev => prev.map(n => n.id === notaActualizada.id ? { ...n, ...notaActualizada } : n));
       } else {

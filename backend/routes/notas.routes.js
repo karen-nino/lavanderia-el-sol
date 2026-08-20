@@ -16,6 +16,7 @@ import {
   quitarMaquina,
   asignarSecadora,
   terminarLavado,
+  terminarLavadoFinal,
   terminarSecado,
   cambiarEstadoPago,
   guardarTelefono,
@@ -42,6 +43,7 @@ router.patch('/:id/cambiar-maquina', cambiarMaquina);
 router.patch('/:id/quitar-maquina', quitarMaquina);
 router.patch('/:id/asignar-secadora', asignarSecadora);
 router.patch('/:id/terminar-lavado', terminarLavado);
+router.patch('/:id/terminar-lavado-final', terminarLavadoFinal);
 router.patch('/:id/terminar-secado', terminarSecado);
 router.patch('/:id/estado-pago', cambiarEstadoPago);
 router.patch('/:id/telefono', guardarTelefono);
