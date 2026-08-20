@@ -18,6 +18,7 @@ import {
   terminarLavado,
   terminarSecado,
   cambiarEstadoPago,
+  guardarTelefono,
   getNotaProductos,
   addProductoToNota,
   removeProductoFromNota,
@@ -43,6 +44,7 @@ router.patch('/:id/asignar-secadora', asignarSecadora);
 router.patch('/:id/terminar-lavado', terminarLavado);
 router.patch('/:id/terminar-secado', terminarSecado);
 router.patch('/:id/estado-pago', cambiarEstadoPago);
+router.patch('/:id/telefono', guardarTelefono);
 router.get('/:id/productos',    getNotaProductos);
 router.post('/:id/productos',   addProductoToNota);
 router.delete('/:id/productos/:productoId', removeProductoFromNota);

@@ -2461,6 +2461,29 @@ export const cambiarEstadoPago = async (req, res) => {
   }
 };
 
+// ── PATCH /notas/:id/telefono ───────────────────────────────
+// Guarda un teléfono de contacto a nivel nota (para el ticket de Autoservicio,
+// que es anónimo). Se normaliza a solo dígitos; vacío = null.
+export const guardarTelefono = async (req, res) => {
+  const { id } = req.params;
+  const { telefono } = req.body;
+  const digits = String(telefono ?? '').replace(/\D/g, '');
+  const valor = digits.length > 0 ? digits : null;
+  try {
+    const { rows } = await pool.query(
+      'UPDATE notas SET telefono = $1 WHERE id = $2 AND sucursal = $3 RETURNING id, telefono',
+      [valor, id, req.sucursal]
+    );
+    if (rows.length === 0) {
+      return res.status(404).json({ message: 'Nota no encontrada.' });
+    }
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('guardarTelefono error:', err);
+    res.status(500).json({ message: 'Error interno del servidor.' });
+  }
+};
+
 // ── GET /notas/:id/productos ────────────────────────────────
 export const getNotaProductos = async (req, res) => {
   const { id } = req.params;

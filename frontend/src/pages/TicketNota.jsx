@@ -133,11 +133,26 @@ export default function TicketNota() {
   useEffect(() => {
     let activo = true;
     api.get(`/notas/${id}`)
-      .then(data => { if (activo) setNota(data); })
+      .then(data => {
+        if (!activo) return;
+        setNota(data);
+        // Precargar el teléfono ya guardado en la nota (si lo hay).
+        if (data?.telefono) setTelefonoManual(String(data.telefono));
+      })
       .catch(err => { if (activo) setError(err.message); })
       .finally(() => { if (activo) setLoading(false); });
     return () => { activo = false; };
   }, [id]);
+
+  // Guarda el teléfono capturado en la nota (best-effort; no bloquea el envío).
+  async function guardarTelefonoEnNota() {
+    const digits = String(telefonoManual || '').replace(/\D/g, '');
+    if (nota?.cliente_telefono || digits === String(nota?.telefono ?? '')) return;
+    try {
+      await api.patch(`/notas/${id}/telefono`, { telefono: digits });
+      setNota(prev => (prev ? { ...prev, telefono: digits || null } : prev));
+    } catch { /* no bloquear por esto */ }
+  }
 
   // Teléfono a usar: el del cliente (Por Encargo) o el capturado a mano
   // (Autoservicio anónimo).
@@ -147,6 +162,7 @@ export default function TicketNota() {
 
   function enviarPorWhatsapp() {
     if (!puedeEnviar) return;
+    guardarTelefonoEnNota(); // best-effort, no bloquea el envío
     const phone = telefonoDigits.startsWith('52') ? telefonoDigits : `52${telefonoDigits}`;
     const texto = encodeURIComponent(armarTextoTicket(nota));
     window.open(`https://wa.me/${phone}?text=${texto}`, '_blank', 'noopener,noreferrer');
@@ -316,6 +332,7 @@ export default function TicketNota() {
               inputMode="numeric"
               value={telefonoManual}
               onChange={(e) => setTelefonoManual(e.target.value)}
+              onBlur={guardarTelefonoEnNota}
               placeholder="33-1234-5678"
               maxLength={12}
               className="w-full px-4 py-3.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent transition"
