@@ -474,6 +474,88 @@ function ContenidoGuardar({ saving, ok, children, guardando = 'Guardando...', ok
   return children;
 }
 
+// Lista de sucursales reordenable por arrastre (Pointer Events: mouse y touch).
+// Al soltar persiste el nuevo orden con PATCH /sucursales/reordenar { slugs }.
+function SucursalesOrden({ sucursales, setSucursales, onMensaje }) {
+  const listRef = useRef(null);
+  const dragSlugRef = useRef(null);
+  const [draggingSlug, setDraggingSlug] = useState(null);
+
+  const persistir = async (lista) => {
+    try {
+      await api.patch('/sucursales/reordenar', { slugs: lista.map(s => s.slug) });
+    } catch (err) {
+      onMensaje?.({ tipo: 'error', texto: err.message });
+    }
+  };
+  const onDown = (e, slug) => {
+    if (e.button != null && e.button !== 0) return;
+    dragSlugRef.current = slug;
+    setDraggingSlug(slug);
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* noop */ }
+  };
+  const onMove = (e) => {
+    const slug = dragSlugRef.current;
+    if (slug == null || !listRef.current) return;
+    const y = e.clientY;
+    const filas = [...listRef.current.querySelectorAll('[data-row]')];
+    const objetivo = filas.find(f => {
+      const r = f.getBoundingClientRect();
+      return y >= r.top && y <= r.bottom;
+    });
+    if (!objetivo) return;
+    const targetSlug = objetivo.getAttribute('data-row');
+    if (targetSlug === slug) return;
+    setSucursales(prev => {
+      const from = prev.findIndex(x => x.slug === slug);
+      const to   = prev.findIndex(x => x.slug === targetSlug);
+      if (from === -1 || to === -1 || from === to) return prev;
+      const lista = [...prev];
+      const [movido] = lista.splice(from, 1);
+      lista.splice(to, 0, movido);
+      return lista;
+    });
+  };
+  const onUp = (e) => {
+    if (dragSlugRef.current == null) return;
+    try { e.currentTarget.releasePointerCapture(e.pointerId); } catch { /* noop */ }
+    dragSlugRef.current = null;
+    setDraggingSlug(null);
+    setSucursales(prev => { persistir(prev); return prev; });
+  };
+
+  if (sucursales.length < 2) return null;
+  return (
+    <ul ref={listRef} className="divide-y divide-gray-100 border border-gray-100 rounded-lg overflow-hidden">
+      {sucursales.map((s) => (
+        <li
+          key={s.slug}
+          data-row={s.slug}
+          className={`flex items-center gap-2 px-3 py-2.5 bg-white ${draggingSlug === s.slug ? 'opacity-40 ring-2 ring-blue/40 ring-inset' : ''}`}
+        >
+          <span
+            onPointerDown={(e) => onDown(e, s.slug)}
+            onPointerMove={onMove}
+            onPointerUp={onUp}
+            onPointerCancel={onUp}
+            style={{ touchAction: 'none' }}
+            className="flex-shrink-0 cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 -ml-1 p-1"
+            title="Arrastrar para reordenar"
+            aria-label="Arrastrar para reordenar"
+          >
+            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+              <path d="M7 4a1 1 0 100 2 1 1 0 000-2zM7 9a1 1 0 100 2 1 1 0 000-2zM7 14a1 1 0 100 2 1 1 0 000-2zM13 4a1 1 0 100 2 1 1 0 000-2zM13 9a1 1 0 100 2 1 1 0 000-2zM13 14a1 1 0 100 2 1 1 0 000-2z" />
+            </svg>
+          </span>
+          <span className={`flex-1 text-sm ${s.activa ? 'text-gray-800' : 'text-gray-400'}`}>
+            {s.nombre}{s.activa ? '' : ' (inactiva)'}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export default function Ajustes() {
   const { usuario, updateUsuario, sucursalActiva } = useAuth();
   const [config,        setConfig]        = useState(null);
@@ -1106,6 +1188,10 @@ export default function Ajustes() {
           </div>
         )}
 
+        <Field label="Orden de las sucursales" hint="Arrastra para cambiar cómo aparecen en el selector.">
+          <SucursalesOrden sucursales={sucursales} setSucursales={setSucursales} onMensaje={setMensaje} />
+        </Field>
+
         <Field label="Sucursal a editar">
           <select
             value={sucursalSel}
@@ -1387,6 +1473,10 @@ export default function Ajustes() {
             </button>
           </div>
         )}
+
+        <MobileField label="Orden de las sucursales" hint="Arrastra para cambiar cómo aparecen en el selector.">
+          <SucursalesOrden sucursales={sucursales} setSucursales={setSucursales} onMensaje={setMensaje} />
+        </MobileField>
 
         <MobileField label="Sucursal a editar">
           <select

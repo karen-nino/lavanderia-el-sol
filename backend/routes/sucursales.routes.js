@@ -6,6 +6,7 @@ import {
   createSucursal,
   updateSucursal,
   setActivaSucursal,
+  reordenarSucursales,
 } from '../controllers/sucursales.controller.js';
 
 const router = Router();
@@ -14,6 +15,8 @@ router.use(verifyToken);
 
 router.get('/', getSucursales);
 router.post('/', requireAdmin, createSucursal);
+// Antes de /:slug para que "reordenar" no se interprete como un slug.
+router.patch('/reordenar', requireAdmin, reordenarSucursales);
 router.patch('/:slug', requireAdmin, updateSucursal);
 router.patch('/:slug/activa', requireAdminMain, setActivaSucursal);
 

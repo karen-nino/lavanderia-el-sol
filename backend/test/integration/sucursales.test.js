@@ -65,6 +65,28 @@ describe('PATCH /api/sucursales/:slug', () => {
   });
 });
 
+describe('PATCH /api/sucursales/reordenar', () => {
+  it('reordena por slugs y devuelve la lista en el nuevo orden', async () => {
+    await seedSucursal('norte', 'Norte');
+    // Pide "norte" primero, "centro" después.
+    const res = await request(app).patch('/api/sucursales/reordenar').set(auth(admin.token))
+      .send({ slugs: ['norte', 'centro'] });
+    expect(res.status).toBe(200);
+    expect(res.body.map(s => s.slug)).toEqual(['norte', 'centro']);
+
+    // El GET respeta el nuevo orden.
+    const lista = await request(app).get('/api/sucursales').set(auth(admin.token));
+    expect(lista.body.map(s => s.slug)).toEqual(['norte', 'centro']);
+  });
+
+  it('la ruta no colisiona con :slug y exige admin', async () => {
+    const empleado = await seedUsuario({ rol: 'operador', sucursal: 'centro', nombre: 'Emp' });
+    const res = await request(app).patch('/api/sucursales/reordenar').set(auth(empleado.token))
+      .send({ slugs: ['centro'] });
+    expect(res.status).toBe(403);
+  });
+});
+
 describe('PATCH /api/sucursales/:slug/activa', () => {
   it('un admin normal no puede activar/desactivar (requiere admin_main → 403)', async () => {
     const res = await request(app).patch('/api/sucursales/centro/activa').set(auth(admin.token))
