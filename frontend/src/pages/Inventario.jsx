@@ -594,8 +594,8 @@ function IconoArchivar() {
 function IconoAdvertencia({ severity }) {
   const cls = severity === 'agotado' ? 'text-red-600' : 'text-amber-500';
   return (
-    <svg className={`w-4 h-4 flex-shrink-0 ${cls}`} fill="currentColor" viewBox="0 0 24 24" aria-label={severity === 'agotado' ? 'Agotado' : 'Stock bajo'}>
-      <path d="M12 2L1 21h22L12 2zm0 6l7.53 13H4.47L12 8zm-1 3v5h2v-5h-2zm0 6v2h2v-2h-2z" />
+    <svg className={`w-4 h-4 flex-shrink-0 block ${cls}`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-label={severity === 'agotado' ? 'Agotado' : 'Stock bajo'}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
     </svg>
   );
 }
