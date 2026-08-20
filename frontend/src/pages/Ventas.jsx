@@ -560,6 +560,14 @@ export default function Ventas() {
                 <span>Total ajustes</span>
                 <span>{fmt(data.corte.total_ajustes)}</span>
               </div>
+              <div className="flex justify-between px-4 py-3 text-sm text-gray-600">
+                <span>Total en efectivo</span>
+                <span>{fmt(data.corte.total_efectivo)}</span>
+              </div>
+              <div className="flex justify-between px-4 py-3 text-sm text-gray-600">
+                <span>Total en transferencia</span>
+                <span>{fmt(data.corte.total_transferencia)}</span>
+              </div>
               <div className="flex justify-between px-4 py-4 text-base font-bold text-gray-900 bg-gray-50">
                 <span>TOTAL GENERAL</span>
                 <span className="text-lg">{fmt(data.corte.total_general)}</span>
@@ -589,6 +597,7 @@ export default function Ventas() {
                         <th className="px-4 py-3 text-left">Estado</th>
                         <th className="px-4 py-3 text-left">Máquina</th>
                         <th className="px-4 py-3 text-left">Atendió</th>
+                        <th className="px-4 py-3 text-left">Forma de pago</th>
                         <th className="px-4 py-3 text-right">Productos</th>
                         <th className="px-4 py-3 text-right">Total</th>
                       </tr>
@@ -626,6 +635,11 @@ export default function Ventas() {
                             )}
                           </td>
                           <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{nota.atendio ?? <span className="text-gray-400">—</span>}</td>
+                          <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
+                            {nota.forma_pago === 'EFECTIVO' ? 'Efectivo'
+                              : nota.forma_pago === 'TRANSFERENCIA' ? 'Transferencia'
+                              : <span className="text-gray-400">—</span>}
+                          </td>
                           <td className="px-4 py-3 text-right text-gray-600">{fmt(nota.total_productos)}</td>
                           <td className="px-4 py-3 text-right font-semibold text-gray-800">{fmt(nota.total)}</td>
                         </tr>

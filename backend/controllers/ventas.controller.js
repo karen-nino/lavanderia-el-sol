@@ -101,6 +101,7 @@ export async function getResumen(req, res) {
           o.created_at                                AS creado_en,
           o.estado,
           o.estado_pago,
+          o.forma_pago,
           -- Máquina(s) de la nota con su número de cargas: [{ nombre, cargas }].
           -- Cuenta las cargas (nota_cargas) donde aparece cada máquina,
           -- incluidas las ya desvinculadas (*_usada_id).
@@ -137,7 +138,9 @@ export async function getResumen(req, res) {
         `SELECT
           COALESCE(SUM(nc_t.total_cargas), 0)                              AS total_cargas,
           COALESCE(SUM(np_t.total_art), 0)                                  AS total_productos,
-          COALESCE(SUM(o.ajuste), 0)                                        AS total_ajustes
+          COALESCE(SUM(o.ajuste), 0)                                        AS total_ajustes,
+          COALESCE(SUM(CASE WHEN o.forma_pago = 'EFECTIVO'      THEN o.precio_total ELSE 0 END), 0) AS total_efectivo,
+          COALESCE(SUM(CASE WHEN o.forma_pago = 'TRANSFERENCIA' THEN o.precio_total ELSE 0 END), 0) AS total_transferencia
         FROM notas o
         LEFT JOIN (
           SELECT nota_id, SUM(precio_lavadora + precio_secadora) AS total_cargas
@@ -161,6 +164,8 @@ export async function getResumen(req, res) {
     const total_cargas    = parseFloat(corte.total_cargas);
     const total_productos = parseFloat(corte.total_productos);
     const total_ajustes   = parseFloat(corte.total_ajustes);
+    const total_efectivo      = parseFloat(corte.total_efectivo);
+    const total_transferencia = parseFloat(corte.total_transferencia);
 
     res.json({
       tarjetas: {
@@ -180,6 +185,7 @@ export async function getResumen(req, res) {
         creado_en:       r.creado_en,
         estado:          r.estado,
         estado_pago:     r.estado_pago,
+        forma_pago:      r.forma_pago,
         maquinas:        r.maquinas ?? [],
         atendio:         r.atendio,
         cargas:          parseInt(r.cargas, 10),
@@ -191,6 +197,8 @@ export async function getResumen(req, res) {
         total_productos,
         total_ajustes,
         total_general: total_cargas + total_productos + total_ajustes,
+        total_efectivo,
+        total_transferencia,
       },
     });
   } catch (err) {
