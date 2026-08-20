@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
+import { useAuth } from '../context/AuthContext';
+import { esAdmin as esAdminFn } from '../lib/roles';
 import MaquinaCicloOverlay from '../components/MaquinaCicloOverlay';
 
 function fmtMonto(n) {
@@ -53,6 +55,8 @@ function SelCheck({ on }) {
 export default function Salidas() {
   const { id }   = useParams();
   const navigate = useNavigate();
+  const { usuario } = useAuth();
+  const esAdmin = esAdminFn(usuario?.rol);
 
   const [nota,            setNota]            = useState(null);
   const [productos,        setProductos]        = useState([]);
@@ -587,13 +591,17 @@ export default function Salidas() {
                             </button>
                           ) : null
                         ) : (
-                          <button
-                            onClick={() => setConfirmDetener(m)}
-                            disabled={loadingMaquina}
-                            className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
-                          >
-                            {m.tipo === 'secadora' ? 'Detener Secado' : 'Detener Lavado'}
-                          </button>
+                          // Solo un admin puede detener una LAVADORA; la secadora
+                          // la puede detener cualquier usuario.
+                          (m.tipo === 'secadora' || esAdmin) && (
+                            <button
+                              onClick={() => setConfirmDetener(m)}
+                              disabled={loadingMaquina}
+                              className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
+                            >
+                              {m.tipo === 'secadora' ? 'Detener Secado' : 'Detener Lavado'}
+                            </button>
+                          )
                         )
                       )}
                       {/* estado "terminado": ya cumplió su parte, sin acciones

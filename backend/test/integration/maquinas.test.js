@@ -101,3 +101,26 @@ describe('DELETE /api/maquinas/:id', () => {
     expect(res.status).toBe(404);
   });
 });
+
+describe('PATCH /api/maquinas/:id/detener-ciclo — permiso por tipo', () => {
+  it('un empleado NO puede detener una lavadora (403)', async () => {
+    const empleado = await seedUsuario({ rol: 'operador', sucursal: 'centro', nombre: 'Empleado' });
+    const lav = await seedMaquina({ nombre: 'L1', tipo: 'lavadora_mediana' });
+    const res = await request(app).patch(`/api/maquinas/${lav}/detener-ciclo`).set(auth(empleado.token));
+    expect(res.status).toBe(403);
+    expect(res.body.message).toMatch(/administrador/i);
+  });
+
+  it('un empleado SÍ puede detener una secadora (200)', async () => {
+    const empleado = await seedUsuario({ rol: 'operador', sucursal: 'centro', nombre: 'Empleado' });
+    const sec = await seedMaquina({ nombre: 'S1', tipo: 'secadora', tamano: 'mediana' });
+    const res = await request(app).patch(`/api/maquinas/${sec}/detener-ciclo`).set(auth(empleado.token));
+    expect(res.status).toBe(200);
+  });
+
+  it('un admin SÍ puede detener una lavadora (200)', async () => {
+    const lav = await seedMaquina({ nombre: 'L1', tipo: 'lavadora_mediana' });
+    const res = await request(app).patch(`/api/maquinas/${lav}/detener-ciclo`).set(auth(admin.token));
+    expect(res.status).toBe(200);
+  });
+});

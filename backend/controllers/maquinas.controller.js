@@ -1,5 +1,6 @@
 import pool from '../db/pool.js';
 import * as dispositivos from '../services/dispositivos/index.js';
+import { esAdmin } from '../middleware/roles.js';
 
 const ESTADOS_VALIDOS = ['disponible', 'en_uso', 'mantenimiento'];
 const TIPOS_VALIDOS   = ['lavadora_mediana', 'lavadora_jumbo', 'secadora'];
@@ -340,7 +341,7 @@ export const detenerCiclo = async (req, res) => {
     await client.query('BEGIN');
 
     const { rows: maqRows } = await client.query(
-      'SELECT id, nombre, estado FROM maquinas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
+      'SELECT id, nombre, tipo, estado FROM maquinas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
       [id, req.sucursal]
     );
     if (maqRows.length === 0) {
@@ -348,6 +349,12 @@ export const detenerCiclo = async (req, res) => {
       return res.status(404).json({ message: 'Máquina no encontrada.' });
     }
     const maq = maqRows[0];
+    // Solo un admin puede detener una LAVADORA; la secadora la puede detener
+    // cualquier usuario.
+    if (maq.tipo !== 'secadora' && !esAdmin(req.user?.rol)) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ message: 'Solo un administrador puede detener una lavadora.' });
+    }
     const estabaEnUso = maq.estado === 'en_uso';
 
     const { rows: upd } = await client.query(
