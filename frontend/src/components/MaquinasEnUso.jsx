@@ -412,9 +412,7 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
                           }`}
                         >
                           <span className="font-medium text-gray-800">{m.nombre}</span>
-                          <span className="text-xs text-gray-500">
-                            Secadora{m.tamano ? ` · ${m.tamano.charAt(0).toUpperCase() + m.tamano.slice(1)}` : ''}
-                          </span>
+                          <span className="text-xs text-gray-500">Secadora</span>
                         </button>
                       );
                     })}
