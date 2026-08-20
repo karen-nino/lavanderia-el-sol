@@ -156,14 +156,8 @@ export default function NuevaNota() {
     if (tipoMaquina === 'lavadora_jumbo') return precios.jumbo;
     return precios.mediana;
   };
-  // Tarifa de secado según el TAMAÑO de la secadora: prenda edredón → Edredón;
-  // secadora jumbo → Jumbo; resto → Mediana. `secadoraTamano` es 'mediana' /
-  // 'jumbo' de la secadora elegida.
-  const precioSecado = (secadoraTamano, tipoPrendaArg) => {
-    if (String(tipoPrendaArg).toUpperCase() === 'EDREDON') return precios.secadoraEdredon;
-    if (secadoraTamano === 'jumbo') return precios.secadoraJumbo;
-    return precios.secadora;
-  };
+  // La secadora es de un solo tamaño: precio único (ignora tamaño y prenda).
+  const precioSecado = () => precios.secadora;
   const tamanoDe = (maquinaId) => maquinas.find(m => String(m.id) === String(maquinaId))?.tamano;
   // Precio por TIPO de máquina en Por Encargo (mediana/jumbo), independiente de
   // qué máquina física se asigne luego.
@@ -1028,8 +1022,7 @@ export default function NuevaNota() {
                         className={`${INPUT_CLS} bg-white`}
                       >
                         <option value="">Sin secado</option>
-                        <option value="mediana">Mediana — ${precioSecadoTipo('mediana', c.tipo_prenda).toFixed(2)}</option>
-                        <option value="jumbo">Jumbo — ${precioSecadoTipo('jumbo', c.tipo_prenda).toFixed(2)}</option>
+                        <option value="mediana">Con secado — ${precioSecadoTipo('mediana', c.tipo_prenda).toFixed(2)}</option>
                       </select>
                     </div>
                     {!c.lavadora_tipo && !c.secadora_tipo && (
@@ -1326,7 +1319,7 @@ export default function NuevaNota() {
                     const tipoLabel = t => t === 'jumbo' ? 'Jumbo' : t === 'mediana' ? 'Mediana' : t === 'edredon' ? 'Edredón' : '';
                     const partes = [
                       c.lavadora_tipo && `Lavadora ${tipoLabel(c.lavadora_tipo)}`,
-                      c.secadora_tipo && `Secadora ${tipoLabel(c.secadora_tipo)}`,
+                      c.secadora_tipo && `Secadora`,
                     ].filter(Boolean);
                     const detalle = [PRENDA_LABEL[c.tipo_prenda], c.tamano ? TAMANO_LABEL[c.tamano] : null].filter(Boolean).join(', ');
                     const productosCarga = (c.productos ?? []).filter(p => p.producto_id && Number(p.cantidad) > 0);
@@ -1345,7 +1338,7 @@ export default function NuevaNota() {
                             <li className="flex justify-between gap-2"><span>· Lavado {tipoLabel(c.lavadora_tipo)}</span><span>${lavPrecio.toFixed(2)}</span></li>
                           )}
                           {c.secadora_tipo && (
-                            <li className="flex justify-between gap-2"><span>· Secado {tipoLabel(c.secadora_tipo)}</span><span>${secPrecio.toFixed(2)}</span></li>
+                            <li className="flex justify-between gap-2"><span>· Secado</span><span>${secPrecio.toFixed(2)}</span></li>
                           )}
                           {productosCarga.map((p, j) => {
                             const prod = productosCatalogo.find(x => String(x.id) === String(p.producto_id));

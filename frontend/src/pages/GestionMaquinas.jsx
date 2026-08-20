@@ -465,6 +465,8 @@ export default function GestionMaquinas() {
                 </select>
               </div>
 
+              {/* La secadora es de un solo tamaño: el tamaño solo aplica a lavadoras. */}
+              {form.tipo === 'lavadora' && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
                   Tamaño <span className="text-red-500">*</span>
@@ -475,6 +477,7 @@ export default function GestionMaquinas() {
                   ))}
                 </select>
               </div>
+              )}
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">

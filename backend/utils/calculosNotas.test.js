@@ -1,40 +1,18 @@
 import { describe, it, expect } from 'vitest';
 import {
-  categoriaSecado,
   tarifaSecadora,
   precioProductoEnNota,
   generarFolio,
 } from './calculosNotas.js';
 
-describe('categoriaSecado', () => {
-  it('prenda edredón manda sobre el tamaño de la secadora', () => {
-    expect(categoriaSecado('mediana', 'EDREDON')).toBe('edredon');
-    expect(categoriaSecado('jumbo', 'EDREDON')).toBe('edredon');
-    expect(categoriaSecado('jumbo', 'edredon')).toBe('edredon'); // case-insensitive
-  });
-
-  it('secadora jumbo con ropa → jumbo', () => {
-    expect(categoriaSecado('jumbo', 'ROPA')).toBe('jumbo');
-  });
-
-  it('resto (mediana o sin tamaño) → mediana', () => {
-    expect(categoriaSecado('mediana', 'ROPA')).toBe('mediana');
-    expect(categoriaSecado(null, 'ROPA')).toBe('mediana');
-    expect(categoriaSecado(undefined, undefined)).toBe('mediana');
-  });
-});
-
 describe('tarifaSecadora', () => {
   const t = { secadora: 20, secadoraJumbo: 35, secadoraEdredon: 50 };
 
-  it('cobra la tarifa según la categoría', () => {
+  it('la secadora es de un solo tamaño: precio único, ignora tamaño y prenda', () => {
     expect(tarifaSecadora('mediana', 'ROPA', t)).toBe(20);
-    expect(tarifaSecadora('jumbo', 'ROPA', t)).toBe(35);
-    expect(tarifaSecadora('mediana', 'EDREDON', t)).toBe(50);
-  });
-
-  it('prenda edredón usa tarifa de edredón aunque la secadora sea jumbo', () => {
-    expect(tarifaSecadora('jumbo', 'EDREDON', t)).toBe(50);
+    expect(tarifaSecadora('jumbo', 'ROPA', t)).toBe(20);
+    expect(tarifaSecadora('jumbo', 'EDREDON', t)).toBe(20);
+    expect(tarifaSecadora(null, undefined, t)).toBe(20);
   });
 });
 

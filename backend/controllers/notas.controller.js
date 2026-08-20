@@ -1,6 +1,6 @@
 import pool from '../db/pool.js';
 import { esAdmin } from '../middleware/roles.js';
-import { categoriaSecado, tarifaSecadora, precioProductoEnNota, generarFolio } from '../utils/calculosNotas.js';
+import { tarifaSecadora, precioProductoEnNota, generarFolio } from '../utils/calculosNotas.js';
 
 const ESTADOS_VALIDOS     = ['EN_ESPERA', 'LAVANDO', 'SECANDO', 'LISTA', 'PAGADA', 'FINALIZADA', 'CANCELADA'];
 // Estados con los que puede nacer una nota.
@@ -205,7 +205,7 @@ function tarifaLavadora(tipoMaquina, tipoPrenda, t) {
 // una misma máquina física (lavadora jumbo o cualquier secadora) puede tener
 // distinta duración según lo que procesa: edredón vs. ropa jumbo vs. mediana.
 //   Lavadora: prenda edredón (en jumbo) → edredonLavado; jumbo → jumbo; resto → mediana.
-//   Secadora: prenda edredón → secEdredon; secadora jumbo → secJumbo; resto → secMediana.
+//   Secadora: tiempo único (la secadora es de un solo tamaño).
 // Idempotente; se llama tras poner máquinas en uso en cualquier flujo.
 async function sellarCicloMaquinas(client, notaId) {
   const ti = await tiemposCarga(client);
@@ -224,19 +224,13 @@ async function sellarCicloMaquinas(client, notaId) {
            JOIN maquinas ml ON ml.id = nc.lavadora_id
           WHERE nc.nota_id = $1 AND nc.lavadora_id IS NOT NULL
          UNION ALL
-         -- Secadoras de la nota: por el TAMAÑO de la secadora (prenda edredón manda).
-         SELECT nc.secadora_id AS mid,
-                CASE
-                  WHEN UPPER(COALESCE(nc.tipo_prenda, '')) = 'EDREDON' THEN $5::int
-                  WHEN ms.tamano = 'jumbo' THEN $6::int
-                  ELSE $7::int
-                END AS minutos
+         -- Secadoras de la nota: tiempo de secado único (secadora sin tamaño).
+         SELECT nc.secadora_id AS mid, $5::int AS minutos
            FROM nota_cargas nc
-           JOIN maquinas ms ON ms.id = nc.secadora_id
           WHERE nc.nota_id = $1 AND nc.secadora_id IS NOT NULL
        ) ciclos
       WHERE m.id = ciclos.mid AND m.estado = 'en_uso'`,
-    [notaId, ti.edredonLavado, ti.jumbo, ti.mediana, ti.secEdredon, ti.secJumbo, ti.secMediana]
+    [notaId, ti.edredonLavado, ti.jumbo, ti.mediana, ti.secMediana]
   );
 }
 
@@ -1602,14 +1596,10 @@ export const asignarCargaMaquina = async (req, res) => {
         return res.status(400).json({ message: `La lavadora debe ser ${tipoPrevisto} (${maq.nombre} es ${tipoMaq}).` });
       }
     } else {
+      // La secadora es de un solo tamaño: cualquier secadora disponible sirve.
       if (maq.tipo !== 'secadora') {
         await client.query('ROLLBACK');
         return res.status(400).json({ message: `${maq.nombre} no es una secadora.` });
-      }
-      const tamMaq = maq.tamano === 'jumbo' ? 'jumbo' : 'mediana';
-      if (tamMaq !== tipoPrevisto) {
-        await client.query('ROLLBACK');
-        return res.status(400).json({ message: `La secadora debe ser ${tipoPrevisto} (${maq.nombre} es ${tamMaq}).` });
       }
     }
 

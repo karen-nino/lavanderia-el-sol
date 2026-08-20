@@ -1032,21 +1032,8 @@ export default function Ajustes() {
     </Section>
 
     <Section titulo="Secadora">
-      {subTitulo('Mediana')}
-      {campoPrecio('precio_carga_secadora', 'Secado de cargas medianas (ropa en lavadora mediana).')}
-      {campoTiempo('tiempo_carga_secadora', 'Duración del secado de una carga mediana.')}
-
-      <div className="border-t border-gray-100" />
-
-      {subTitulo('Jumbo')}
-      {campoPrecio('precio_secadora_jumbo', 'Secado de cargas jumbo (ropa en lavadora jumbo).')}
-      {campoTiempo('tiempo_secadora_jumbo', 'Duración del secado de una carga jumbo.')}
-
-      <div className="border-t border-gray-100" />
-
-      {subTitulo('Edredón')}
-      {campoPrecio('precio_secadora_edredon', 'Secado de edredones.')}
-      {campoTiempo('tiempo_secadora_edredon', 'Duración del secado de un edredón.')}
+      {campoPrecio('precio_carga_secadora', 'Precio del secado de una carga.')}
+      {campoTiempo('tiempo_carga_secadora', 'Duración del secado de una carga.')}
     </Section>
     </>
   );
@@ -1603,25 +1590,8 @@ export default function Ajustes() {
 
       <p className="text-sm font-bold text-gray-900 pt-20">Secadora</p>
       <div className="space-y-5">
-        {subTituloM('Mediana')}
-        {campoPrecioM('precio_carga_secadora', 'Secado de cargas medianas (ropa en lavadora mediana).')}
-        {campoTiempoM('tiempo_carga_secadora', 'Duración del secado de una carga mediana.')}
-      </div>
-
-      <div className="border-t border-light-blue/60" />
-
-      <div className="space-y-5">
-        {subTituloM('Jumbo')}
-        {campoPrecioM('precio_secadora_jumbo', 'Secado de cargas jumbo (ropa en lavadora jumbo).')}
-        {campoTiempoM('tiempo_secadora_jumbo', 'Duración del secado de una carga jumbo.')}
-      </div>
-
-      <div className="border-t border-light-blue/60" />
-
-      <div className="space-y-5">
-        {subTituloM('Edredón')}
-        {campoPrecioM('precio_secadora_edredon', 'Secado de edredones.')}
-        {campoTiempoM('tiempo_secadora_edredon', 'Duración del secado de un edredón.')}
+        {campoPrecioM('precio_carga_secadora', 'Precio del secado de una carga.')}
+        {campoTiempoM('tiempo_carga_secadora', 'Duración del secado de una carga.')}
       </div>
     </div>
   );

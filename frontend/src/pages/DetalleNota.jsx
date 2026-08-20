@@ -543,7 +543,7 @@ export default function DetalleNota() {
                       precio: Number(cg.precio_lavadora),
                     },
                     !cg.secadora_usada_id && cg.secadora_tipo_previsto && {
-                      label: `Secadora ${TIPO_MAQ_LABEL[cg.secadora_tipo_previsto] ?? cg.secadora_tipo_previsto}`,
+                      label: `Secadora`,
                       precio: Number(cg.precio_secadora),
                     },
                   ].filter(Boolean);

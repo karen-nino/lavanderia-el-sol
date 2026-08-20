@@ -452,7 +452,8 @@ export default function Salidas() {
     if (slot === 'lavadora') {
       return m.tipo === (tipo === 'jumbo' ? 'lavadora_jumbo' : 'lavadora_mediana');
     }
-    return m.tipo === 'secadora' && (m.tamano === 'jumbo' ? 'jumbo' : 'mediana') === tipo;
+    // La secadora es de un solo tamaño: cualquier secadora disponible sirve.
+    return m.tipo === 'secadora';
   });
 
   // ¿Esta máquina ya cumplió su tiempo de ciclo? Cada máquina es
@@ -615,11 +616,11 @@ export default function Salidas() {
                 <p className="text-xs font-semibold text-gray-500">Carga {carga.orden}</p>
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="text-sm text-gray-600">
-                    {slot === 'lavadora' ? 'Lavadora' : 'Secadora'} {TIPO_MAQ_LABEL[tipo] ?? tipo}
+                    {slot === 'lavadora' ? `Lavadora ${TIPO_MAQ_LABEL[tipo] ?? tipo}` : 'Secadora'}
                     <span className="text-gray-400 italic"> — sin asignar</span>
                   </span>
                   {opciones.length === 0 ? (
-                    <span className="text-sm text-red-600">No hay {slot === 'lavadora' ? 'lavadoras' : 'secadoras'} {TIPO_MAQ_LABEL[tipo] ?? tipo} disponibles</span>
+                    <span className="text-sm text-red-600">No hay {slot === 'lavadora' ? `lavadoras ${TIPO_MAQ_LABEL[tipo] ?? tipo}` : 'secadoras'} disponibles</span>
                   ) : (
                     <select
                       defaultValue=""
