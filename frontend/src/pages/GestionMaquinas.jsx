@@ -307,8 +307,8 @@ export default function GestionMaquinas() {
             const cfg = ESTADO_CFG[estadoVisual(m)] ?? ESTADO_CFG.disponible;
             const { tipo, tamano } = descomponerTipo(m.tipo);
             const tipoLabel = tipo === 'lavadora' ? 'Lavadora' : 'Secadora';
-            // Tamaño desde la columna propia (secadoras) o del tipo (lavadoras).
-            const tamanoVal = m.tamano ?? (tipo === 'lavadora' ? tamano : null);
+            // El tamaño solo aplica a lavadoras: la secadora es de un solo tamaño.
+            const tamanoVal = tipo === 'lavadora' ? (m.tamano ?? tamano) : null;
             const tamanoLabel = tamanoVal
               ? (tamanoVal === 'jumbo' ? 'Jumbo' : 'Mediana')
               : null;
