@@ -22,7 +22,7 @@ export const getSucursales = async (req, res) => {
       `SELECT slug, nombre, direccion, telefono, activa
          FROM sucursales
         ${todas ? '' : 'WHERE activa = TRUE'}
-        ORDER BY activa DESC, nombre ASC`
+        ORDER BY activa DESC, orden ASC, nombre ASC`
     );
     res.json(rows);
   } catch (err) {
