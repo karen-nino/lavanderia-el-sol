@@ -32,6 +32,7 @@ const FORM_INIT = {
   tamano_edredon: '',
   ajuste:         '0',
   instrucciones:  '',
+  forma_pago:     '',
 };
 
 // Autoservicio: cada carga es UNA sola máquina. Primero se elige el tipo
@@ -298,6 +299,7 @@ export default function NuevaNota() {
               tamano_edredon:  nota.tamano_edredon ?? '',
               ajuste:          nota.ajuste         != null ? String(nota.ajuste) : '0',
               instrucciones:   nota.instrucciones  ?? '',
+              forma_pago:      nota.forma_pago     ?? '',
             });
             // Cada carga ahora lleva UNA máquina. Las notas viejas podían tener
             // lavadora y secadora en la misma carga: se separan en dos.
@@ -560,6 +562,11 @@ export default function NuevaNota() {
       setError('Agrega al menos una carga con una lavadora o secadora.');
       return;
     }
+    // Autoservicio se cobra al momento: hay que elegir la forma de pago.
+    if (!form.forma_pago) {
+      setError('Elige la forma de pago (Efectivo o Transferencia).');
+      return;
+    }
 
     setLoading(true);
 
@@ -573,6 +580,7 @@ export default function NuevaNota() {
       // Lavado"). El servidor recalcula el estado a partir de las cargas.
       estado:          'EN_ESPERA',
       estado_pago:     'PAGADO',
+      forma_pago:      form.forma_pago || null,
       // null (no undefined) para que al editar, limpiar un campo lo borre.
       instrucciones:   form.instrucciones || null,
       tipo_tela:       null,
@@ -1777,6 +1785,28 @@ export default function NuevaNota() {
             </div>
           );
         })()}
+
+        {/* Forma de pago — al final: Autoservicio se cobra al momento. */}
+        <div>
+          <label className={LABEL_CLS}>Forma de pago</label>
+          <div className="grid grid-cols-2 gap-3">
+            {[{ v: 'EFECTIVO', label: 'Efectivo' }, { v: 'TRANSFERENCIA', label: 'Transferencia' }].map(opt => {
+              const selected = form.forma_pago === opt.v;
+              return (
+                <button
+                  key={opt.v}
+                  type="button"
+                  onClick={() => setForm(f => ({ ...f, forma_pago: opt.v }))}
+                  className={`py-4 border-2 rounded-xl font-semibold text-base transition-colors ${
+                    selected ? 'border-blue bg-light-blue text-blue-700' : 'border-gray-300 bg-white text-gray-700 hover:border-blue-300'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
 
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">
