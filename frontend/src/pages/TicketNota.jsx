@@ -126,6 +126,9 @@ export default function TicketNota() {
   const [nota, setNota]       = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState('');
+  // Autoservicio es anónimo (sin cliente): el empleado captura aquí el teléfono
+  // para enviar el ticket por WhatsApp.
+  const [telefonoManual, setTelefonoManual] = useState('');
 
   useEffect(() => {
     let activo = true;
@@ -136,11 +139,15 @@ export default function TicketNota() {
     return () => { activo = false; };
   }, [id]);
 
+  // Teléfono a usar: el del cliente (Por Encargo) o el capturado a mano
+  // (Autoservicio anónimo).
+  const telefonoDestino = nota?.cliente_telefono || telefonoManual;
+  const telefonoDigits  = String(telefonoDestino || '').replace(/\D/g, '');
+  const puedeEnviar     = telefonoDigits.length >= 10;
+
   function enviarPorWhatsapp() {
-    if (!nota?.cliente_telefono) return;
-    const digits = String(nota.cliente_telefono).replace(/\D/g, '');
-    if (digits.length === 0) return;
-    const phone = digits.startsWith('52') ? digits : `52${digits}`;
+    if (!puedeEnviar) return;
+    const phone = telefonoDigits.startsWith('52') ? telefonoDigits : `52${telefonoDigits}`;
     const texto = encodeURIComponent(armarTextoTicket(nota));
     window.open(`https://wa.me/${phone}?text=${texto}`, '_blank', 'noopener,noreferrer');
   }
@@ -299,11 +306,28 @@ export default function TicketNota() {
           <p className="px-5 py-4 text-center text-xs text-gray-400">¡Gracias por su preferencia!</p>
         </div>
 
+        {/* Teléfono para WhatsApp: si la nota no tiene cliente (Autoservicio
+            anónimo), se captura a mano aquí. */}
+        {!nota.cliente_telefono && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Teléfono para enviar el ticket</label>
+            <input
+              type="tel"
+              inputMode="numeric"
+              value={telefonoManual}
+              onChange={(e) => setTelefonoManual(e.target.value)}
+              placeholder="33-1234-5678"
+              maxLength={12}
+              className="w-full px-4 py-3.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent transition"
+            />
+          </div>
+        )}
+
         {/* Enviar por WhatsApp */}
         <button
           onClick={enviarPorWhatsapp}
-          disabled={!nota.cliente_telefono}
-          title={nota.cliente_telefono ? 'Abrir WhatsApp con el ticket' : 'El cliente no tiene teléfono registrado'}
+          disabled={!puedeEnviar}
+          title={puedeEnviar ? 'Abrir WhatsApp con el ticket' : 'Escribe un teléfono válido (10 dígitos)'}
           className="w-full flex items-center justify-center gap-2 bg-[#27A910] hover:bg-[#218f0d] disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium py-3.5 rounded-lg text-base transition-colors"
         >
           <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 19 19">
