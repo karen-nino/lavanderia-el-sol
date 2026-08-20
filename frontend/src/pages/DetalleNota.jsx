@@ -571,13 +571,10 @@ export default function DetalleNota() {
                       ) : (
                         maquinasCarga.map((m, i) => {
                           const cfg = BADGE_MAQUINA_ESTADO[m.estado];
-                          // La secadora muestra su tamaño (Mediana/Jumbo) igual
-                          // que la lavadora; sin tamaño cae a "Secadora". Se
-                          // muestra abreviado (M/J/E).
-                          const tamanoLabel = m.tipo === 'secadora' && m.tamano
-                            ? m.tamano.charAt(0).toUpperCase() + m.tamano.slice(1)
-                            : MAQUINA_TIPO_LABEL[m.tipo];
-                          const tipoLabel = TAMANO_ABBR[tamanoLabel] ?? tamanoLabel;
+                          // El tamaño (M/J) solo aplica a lavadoras; la secadora
+                          // es de un solo tamaño, así que va solo con su nombre.
+                          const tamanoLabel = m.tipo === 'secadora' ? null : MAQUINA_TIPO_LABEL[m.tipo];
+                          const tipoLabel = tamanoLabel ? (TAMANO_ABBR[tamanoLabel] ?? tamanoLabel) : null;
                           // Máquina eliminada: línea tachada y en gris.
                           const removida = m.estado === 'removida';
                           return (

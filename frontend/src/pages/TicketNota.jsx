@@ -40,9 +40,8 @@ function maquinasDeCarga(cg) {
     },
     cg.secadora_usada_id && !cg.secadora_removida && {
       nombre: cg.secadora_usada_nombre,
-      tipo: cg.secadora_usada_tamano
-        ? cg.secadora_usada_tamano.charAt(0).toUpperCase() + cg.secadora_usada_tamano.slice(1)
-        : (MAQUINA_TIPO_LABEL[cg.secadora_usada_tipo] ?? 'Secadora'),
+      // La secadora es de un solo tamaño: sin tamaño, solo "Secadora".
+      tipo: MAQUINA_TIPO_LABEL[cg.secadora_usada_tipo] ?? 'Secadora',
       precio: Number(cg.precio_secadora),
     },
   ].filter(Boolean);
