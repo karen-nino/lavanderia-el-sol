@@ -30,12 +30,10 @@ const MAQUINA_TIPO_LABEL = {
 // Edredón → E. Otros valores se muestran tal cual.
 const TAMANO_ABBR = { Mediana: 'M', Jumbo: 'J', Edredón: 'E' };
 
-// Etiqueta de tamaño de una máquina (para selectores): la secadora usa su
-// tamano (Mediana/Jumbo); la lavadora, su tipo. Cae al tipo si no hay tamano.
+// Etiqueta de tamaño de una máquina: solo aplica a lavadoras (Mediana/Jumbo).
+// La secadora es de un solo tamaño, así que no muestra tamaño (null).
 const labelTamano = (m) =>
-  m.tipo === 'secadora' && m.tamano
-    ? m.tamano.charAt(0).toUpperCase() + m.tamano.slice(1)
-    : MAQUINA_TIPO_LABEL[m.tipo];
+  m.tipo === 'secadora' ? null : MAQUINA_TIPO_LABEL[m.tipo];
 
 // Casilla de selección (multiselección de máquinas al asignar).
 function SelCheck({ on }) {
@@ -923,7 +921,7 @@ export default function Salidas() {
               <div className="space-y-2">
                 {maquinasDisp.map(m => {
                   const selected = String(cambiarSel) === String(m.id);
-                  // Muestra el tamaño (Mediana/Jumbo); la secadora usa su tamano.
+                  // Tamaño (Mediana/Jumbo) solo para lavadoras; la secadora no lo muestra.
                   const tamanoLabel = labelTamano(m);
                   // Reservada por otra nota abierta: se muestra pero no se elige.
                   const reservada = Boolean(m.reservada);
