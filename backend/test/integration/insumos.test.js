@@ -113,11 +113,10 @@ describe('DELETE /api/insumos/:id', () => {
 describe('consumo de insumos al crear una nota', () => {
   it('una nota con insumos descuenta su stock', async () => {
     const insumoId = await seedInsumo({ stock_actual: 10 });
-    const lavadoraId = await seedMaquina({ nombre: 'Lavadora 1', tipo: 'lavadora_mediana' });
 
     await request(app).post('/api/notas').set(auth(admin.token)).send({
       tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE',
-      cargas: [{ lavadora_id: lavadoraId, activar: true }],
+      cargas: [{ lavadora_tipo: 'mediana' }],
       insumos: [{ insumo_id: insumoId, cantidad: 3 }],
     }).expect(201);
 

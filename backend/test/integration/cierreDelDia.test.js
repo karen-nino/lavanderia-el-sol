@@ -17,9 +17,14 @@ describe('liberarMaquinasCierreDelDia', () => {
     const lavadoraId = await seedMaquina({ nombre: 'L1', tipo: 'lavadora_mediana' });
     const creada = await request(app).post('/api/notas').set(auth(admin.token)).send({
       tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PAGADO',
-      cargas: [{ lavadora_id: lavadoraId, activar: true }],
+      cargas: [{ lavadora_tipo: 'mediana' }],
     });
-    expect(creada.body.estado).toBe('LAVANDO');
+    // Nuevo flujo: asignar la lavadora física (Salidas) y arrancarla → LAVANDO.
+    await request(app).patch(`/api/notas/${creada.body.id}/asignar-carga-maquina`).set(auth(admin.token))
+      .send({ carga_id: creada.body.cargas[0].id, slot: 'lavadora', maquina_id: lavadoraId });
+    const arranque = await request(app).patch(`/api/notas/${creada.body.id}/activar-pendientes`)
+      .set(auth(admin.token)).send({ maquina_id: lavadoraId });
+    expect(arranque.body.estado).toBe('LAVANDO');
 
     const r = await liberarMaquinasCierreDelDia();
     expect(r).toEqual({ maquinasLiberadas: 1, notasListas: 1 });

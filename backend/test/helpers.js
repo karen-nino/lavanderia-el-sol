@@ -2,6 +2,8 @@
 // sembrar datos mínimos y firmar tokens como lo hace el login real.
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
+import request from 'supertest';
+import app from '../app.js';
 import pool from '../db/pool.js';
 
 // Vacía todas las tablas de negocio (menos el registro de migraciones) y
@@ -149,6 +151,24 @@ export function tokenFor(id) {
 // Cabeceras de una petición autenticada (token + sucursal activa).
 export function auth(token, sucursal = 'centro') {
   return { Authorization: `Bearer ${token}`, 'X-Sucursal': sucursal };
+}
+
+// Flujo nuevo de Autoservicio: crea la nota con TIPO de lavado, le asigna la
+// lavadora física (Salidas) y la arranca → nota LAVANDO. Devuelve
+// { notaId, lavadoraId }. Reutilizable en los tests que necesitan una lavadora
+// de autoservicio en uso.
+export async function autoservicioLavando({ token, sucursal = 'centro', nombre = 'Lav Auto', estado_pago = 'PAGADO' } = {}) {
+  const lavadoraId = await seedMaquina({ nombre, tipo: 'lavadora_mediana', tamano: 'mediana', sucursal });
+  const crea = await request(app).post('/api/notas').set(auth(token, sucursal)).send({
+    tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago,
+    cargas: [{ lavadora_tipo: 'mediana' }],
+  });
+  const cargaId = crea.body.cargas[0].id;
+  await request(app).patch(`/api/notas/${crea.body.id}/asignar-carga-maquina`).set(auth(token, sucursal))
+    .send({ carga_id: cargaId, slot: 'lavadora', maquina_id: lavadoraId });
+  await request(app).patch(`/api/notas/${crea.body.id}/activar-pendientes`).set(auth(token, sucursal))
+    .send({ maquina_id: lavadoraId });
+  return { notaId: crea.body.id, lavadoraId };
 }
 
 export { pool };

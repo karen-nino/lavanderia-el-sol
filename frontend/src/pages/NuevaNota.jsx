@@ -41,7 +41,9 @@ const TIPOS_MAQUINA = [
   { v: 'lavadora', label: 'Lavadora' },
   { v: 'secadora', label: 'Secadora' },
 ];
-const CARGA_INIT  = { tipo_maquina: 'lavadora', lavadora_id: '', secadora_id: '', tipo_prenda: 'ROPA', tipo_tela: '', tamano_edredon: '' };
+// Autoservicio: la carga elige el TIPO de lavado y/o secado (no la máquina
+// física, que se asigna después en Salidas), igual que Por Encargo.
+const CARGA_INIT  = { lavadora_tipo: '', secadora_tipo: '', tipo_prenda: 'ROPA', tipo_tela: '', tamano_edredon: '' };
 const MAX_CARGAS  = 20;
 
 const TAMANOS = [
@@ -171,12 +173,9 @@ export default function NuevaNota() {
   // Sufijo " — Reservada (folio)" para las opciones del selector; vacío si no.
   const sufijoReservada = (m) =>
     esReservada(m) ? ` — Reservada${m.reservada_folio ? ` (${m.reservada_folio})` : ''}` : '';
-  // Cada carga se cobra con la tarifa de su lavadora más la de su secadora.
-  const subtotalDeCarga = (c) => {
-    const lav = maquinas.find(m => String(m.id) === String(c.lavadora_id));
-    return (lav ? precioPorTipo(lav.tipo, c.tipo_prenda) : 0)
-         + (c.secadora_id ? precioSecado(tamanoDe(c.secadora_id), c.tipo_prenda) : 0);
-  };
+  // Cada carga se cobra con la tarifa del TIPO de lavado más la del secado.
+  const subtotalDeCarga = (c) =>
+    precioLavadoTipo(c.lavadora_tipo, c.tipo_prenda) + precioSecadoTipo(c.secadora_tipo, c.tipo_prenda);
   const ajusteNum      = Number(form.ajuste) || 0;
   // Precio efectivo de un producto en la nota: siempre su precio unitario. En
   // Por Encargo cuenta contra el tope de la carga y suma al total (con techo en
@@ -301,20 +300,15 @@ export default function NuevaNota() {
               instrucciones:   nota.instrucciones  ?? '',
               forma_pago:      nota.forma_pago     ?? '',
             });
-            // Cada carga ahora lleva UNA máquina. Las notas viejas podían tener
-            // lavadora y secadora en la misma carga: se separan en dos.
-            const cargasNota = (nota.cargas ?? []).flatMap(c => {
-              const base = {
-                tipo_prenda:    (c.tipo_prenda ?? prendaNota) || 'ROPA',
-                tipo_tela:      c.tipo_tela      ?? '',
-                tamano_edredon: c.tamano_edredon ?? '',
-              };
-              const items = [];
-              if (c.lavadora_id) items.push({ ...base, tipo_maquina: 'lavadora', lavadora_id: String(c.lavadora_id), secadora_id: '' });
-              if (c.secadora_id) items.push({ ...base, tipo_maquina: 'secadora', lavadora_id: '', secadora_id: String(c.secadora_id) });
-              if (items.length === 0) items.push({ ...base, tipo_maquina: 'lavadora', lavadora_id: '', secadora_id: '' });
-              return items;
-            });
+            // Cada carga lleva su TIPO de lavado y/o secado (la máquina se asigna
+            // en Salidas).
+            const cargasNota = (nota.cargas ?? []).map(c => ({
+              tipo_prenda:    (c.tipo_prenda ?? prendaNota) || 'ROPA',
+              tipo_tela:      c.tipo_tela      ?? '',
+              tamano_edredon: c.tamano_edredon ?? '',
+              lavadora_tipo:  c.lavadora_tipo_previsto ?? '',
+              secadora_tipo:  c.secadora_tipo_previsto ?? '',
+            }));
             setCargasAuto(cargasNota.length > 0 ? cargasNota : [{ ...CARGA_INIT }]);
             setProductosLista(prods);
           }
@@ -352,11 +346,9 @@ export default function NuevaNota() {
   const actualizarCarga = (i, campo, valor) =>
     setCargasAuto(prev => prev.map((c, idx) => (idx === i ? { ...c, [campo]: valor } : c)));
 
-  // Cambiar entre lavadora/secadora limpia la máquina elegida del otro tipo,
-  // para que la carga quede con una sola máquina.
-  const cambiarTipoMaquina = (i, tipo) =>
-    setCargasAuto(prev => prev.map((c, idx) =>
-      (idx === i ? { ...c, tipo_maquina: tipo, lavadora_id: '', secadora_id: '' } : c)));
+  // Actualiza una carga de Autoservicio con un objeto de cambios parcial.
+  const actualizarCargaObj = (i, cambios) =>
+    setCargasAuto(prev => prev.map((c, idx) => (idx === i ? { ...c, ...cambios } : c)));
 
   const handleEncargoChange = (e) => {
     const { name, value } = e.target;
@@ -557,9 +549,9 @@ export default function NuevaNota() {
     if (tipoServicio !== 'AUTOSERVICIO') return;
     setError('');
 
-    // Autoservicio necesita al menos una carga con máquina (lavadora o secadora).
-    if (!cargasAuto.some(c => c.lavadora_id || c.secadora_id)) {
-      setError('Agrega al menos una carga con una lavadora o secadora.');
+    // Cada carga necesita al menos un tipo de lavado o secado.
+    if (!cargasAuto.every(c => c.lavadora_tipo || c.secadora_tipo)) {
+      setError('Cada carga necesita al menos un tipo de lavado o secado.');
       return;
     }
     // Autoservicio se cobra al momento: hay que elegir la forma de pago.
@@ -575,9 +567,8 @@ export default function NuevaNota() {
       // La prenda/tela ahora viven en cada carga; a nivel nota se guarda la de
       // la primera carga solo para la lista/badge.
       tipo_prenda:     cargasAuto[0]?.tipo_prenda || 'ROPA',
-      // Autoservicio nace SIEMPRE En Espera: las máquinas quedan asignadas pero
-      // libres y el empleado las arranca una por una desde Salidas ("Iniciar
-      // Lavado"). El servidor recalcula el estado a partir de las cargas.
+      // Autoservicio nace En Espera SIN máquina: se elige el tipo y la máquina
+      // física se asigna después en Salidas (igual que Por Encargo).
       estado:          'EN_ESPERA',
       estado_pago:     'PAGADO',
       forma_pago:      form.forma_pago || null,
@@ -585,15 +576,13 @@ export default function NuevaNota() {
       instrucciones:   form.instrucciones || null,
       tipo_tela:       null,
       tamano_edredon:  null,
-      // El servidor tarifica cada carga. activar:false = no toma las máquinas
-      // al crear; se activan luego desde Salidas.
+      // La carga elige el TIPO de lavado/secado; la máquina se asigna en Salidas.
       cargas:          cargasAuto.map(c => ({
-        lavadora_id:    c.lavadora_id ? Number(c.lavadora_id) : null,
-        secadora_id:    c.secadora_id ? Number(c.secadora_id) : null,
+        lavadora_tipo:  c.lavadora_tipo || null,
+        secadora_tipo:  c.secadora_tipo || null,
         tipo_prenda:    c.tipo_prenda || 'ROPA',
         tipo_tela:      (c.tipo_prenda || 'ROPA') === 'ROPA' ? (c.tipo_tela || null) : null,
         tamano_edredon: c.tipo_prenda === 'EDREDON' ? (c.tamano_edredon || null) : null,
-        activar:        false,
       })),
       ajuste:          ajusteNum,
       productos:       productosLista
@@ -1515,77 +1504,42 @@ export default function NuevaNota() {
           {/* Máquinas por carga */}
           <div className="space-y-3">
             {cargasAuto.map((c, i) => {
-              // Una lavadora elegida en otra carga ya está ocupada: se excluye
-              // de las opciones de esta (salvo la propia selección de la carga).
-              const usadasEnOtras = new Set(
-                cargasAuto.filter((_, j) => j !== i).map(x => String(x.lavadora_id)).filter(Boolean)
-              );
-              const lavadorasOpc = maquinas.filter(m =>
-                m.tipo !== 'secadora' && !usadasEnOtras.has(String(m.id)));
-              // Una secadora elegida en otra carga ya está ocupada: se excluye.
-              const secadorasUsadasEnOtras = new Set(
-                cargasAuto.filter((_, j) => j !== i).map(x => String(x.secadora_id)).filter(Boolean)
-              );
-              const secadorasOpc = maquinas.filter(m =>
-                m.tipo === 'secadora' && !secadorasUsadasEnOtras.has(String(m.id)));
+              const set = (cambios) => actualizarCargaObj(i, cambios);
               return (
                 <div key={i} className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
                   <div className="flex items-center justify-between">
                     <p className="text-sm font-semibold text-gray-900">Carga {i + 1}</p>
                     <span className="text-sm font-medium text-blue">${subtotalDeCarga(c).toFixed(2)}</span>
                   </div>
-                  {/* Autoservicio: cada carga es UNA máquina. Primero se elige
-                      el tipo (lavadora o secadora) y luego la máquina. */}
+                  {/* Autoservicio: se elige el TIPO de lavado y/o secado; la
+                      máquina física se asigna después en Salidas. */}
                   <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1">Tipo de máquina</label>
-                    <div className="grid grid-cols-2 gap-2">
-                      {TIPOS_MAQUINA.map(opt => {
-                        const selected = (c.tipo_maquina || 'lavadora') === opt.v;
-                        return (
-                          <button
-                            key={opt.v}
-                            type="button"
-                            onClick={() => cambiarTipoMaquina(i, opt.v)}
-                            className={`py-2.5 border-2 rounded-lg font-medium text-sm transition-colors ${
-                              selected ? 'border-blue bg-light-blue text-blue-700' : 'border-gray-300 bg-white text-gray-700 hover:border-blue-300'
-                            }`}
-                          >
-                            {opt.label}
-                          </button>
-                        );
-                      })}
-                    </div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1">Lavado</label>
+                    <select
+                      value={c.lavadora_tipo}
+                      onChange={e => set({ lavadora_tipo: e.target.value })}
+                      className={`${INPUT_CLS} bg-white`}
+                    >
+                      <option value="">Sin lavado</option>
+                      <option value="mediana">Mediana — ${precioLavadoTipo('mediana', c.tipo_prenda).toFixed(2)}</option>
+                      <option value="jumbo">Jumbo — ${precioLavadoTipo('jumbo', c.tipo_prenda).toFixed(2)}</option>
+                    </select>
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1">Máquina</label>
-                    {(c.tipo_maquina || 'lavadora') === 'lavadora' ? (
-                      <select
-                        value={c.lavadora_id}
-                        onChange={e => actualizarCarga(i, 'lavadora_id', e.target.value)}
-                        className={INPUT_CLS}
-                      >
-                        <option value="">Sin asignar</option>
-                        {lavadorasOpc.map(m => (
-                          <option key={m.id} value={m.id} disabled={esReservada(m)}>
-                            {formatMaquina(m)} — ${precioPorTipo(m.tipo, c.tipo_prenda).toFixed(2)}{sufijoReservada(m)}
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
-                      <select
-                        value={c.secadora_id}
-                        onChange={e => actualizarCarga(i, 'secadora_id', e.target.value)}
-                        className={INPUT_CLS}
-                      >
-                        <option value="">Sin asignar</option>
-                        {secadorasOpc.map(m => (
-                          <option key={m.id} value={m.id} disabled={esReservada(m)}>
-                            {formatMaquina(m)} — ${precioSecado(m.tamano, c.tipo_prenda).toFixed(2)}{sufijoReservada(m)}
-                          </option>
-                        ))}
-                      </select>
-                    )}
+                    <label className="block text-xs font-medium text-gray-500 mb-1">Secado</label>
+                    <select
+                      value={c.secadora_tipo}
+                      onChange={e => set({ secadora_tipo: e.target.value })}
+                      className={`${INPUT_CLS} bg-white`}
+                    >
+                      <option value="">Sin secado</option>
+                      <option value="mediana">Con secado — ${precioSecadoTipo('mediana', c.tipo_prenda).toFixed(2)}</option>
+                    </select>
                   </div>
+                  {!c.lavadora_tipo && !c.secadora_tipo && (
+                    <p className="text-sm text-red-600">Elige al menos un tipo de lavado o secado.</p>
+                  )}
+                  <p className="text-xs text-gray-400">La máquina física se asigna después en Salidas de la nota.</p>
                 </div>
               );
             })}

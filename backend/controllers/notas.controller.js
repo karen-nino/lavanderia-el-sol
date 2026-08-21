@@ -333,9 +333,10 @@ async function prepararCargas(client, cargas, tipoPrendaNota, sucursal, tipo_ser
   if (cargas.length > 20) {
     throw new Error('Máximo 20 cargas por nota.');
   }
-  // Por Encargo: la carga elige TIPO de máquina (no máquina física), así que no
-  // se buscan ni validan máquinas por id (se asignan luego en Salidas).
-  const esPorEncargo = tipo_servicio === 'POR_ENCARGO';
+  // Por Encargo y Autoservicio: la carga elige TIPO de máquina (no máquina
+  // física), así que no se buscan ni validan máquinas por id (se asignan luego
+  // en Salidas). Solo el legado EDREDON usa máquina específica.
+  const esPorEncargo = tipo_servicio === 'POR_ENCARGO' || tipo_servicio === 'AUTOSERVICIO';
   const ids = esPorEncargo ? [] : [...new Set(
     cargas.flatMap(c => [c.lavadora_id, c.secadora_id]).filter(Boolean).map(Number)
   )];
@@ -745,12 +746,8 @@ export const createNota = async (req, res) => {
       await client.query('ROLLBACK');
       return res.status(400).json({ message: e.message });
     }
-    // Autoservicio: al menos una carga debe traer una máquina (lavadora o
-    // secadora). No tiene sentido una nota de autoservicio sin ninguna máquina.
-    if (tipo_servicio === 'AUTOSERVICIO' && !filasCargas.some(f => f.lavadora_id || f.secadora_id)) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ message: 'Agrega al menos una carga con una lavadora o secadora.' });
-    }
+    // Cada carga (Autoservicio y Por Encargo) exige al menos un tipo de lavado o
+    // secado; eso lo valida prepararCargas. Aquí ya no se exige máquina física.
     const cargasSum = filasCargas.reduce((s, f) => s + f.precio_lavadora + f.precio_secadora, 0);
 
     // Ninguna máquina de la nota puede estar ya apartada por otra nota abierta

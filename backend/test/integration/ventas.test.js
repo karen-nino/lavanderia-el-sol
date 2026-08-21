@@ -17,12 +17,18 @@ beforeEach(async () => {
 describe('GET /api/ventas/resumen', () => {
   it('responde con la estructura esperada y cuenta las cargas por nota', async () => {
     const lavadoraId = await seedMaquina({ nombre: 'Lavadora 1', tipo: 'lavadora_mediana' });
-    await request(app).post('/api/notas').set(auth(admin.token)).send({
+    const creada = await request(app).post('/api/notas').set(auth(admin.token)).send({
       tipo_servicio: 'AUTOSERVICIO',
       tipo_prenda: 'ROPA',
       estado_pago: 'PENDIENTE',
-      cargas: [{ lavadora_id: lavadoraId, activar: true }],
-    }).expect(201);
+      cargas: [{ lavadora_tipo: 'mediana' }],
+    });
+    expect(creada.status).toBe(201);
+    // Asignar la lavadora física y arrancarla para que la venta la refleje.
+    await request(app).patch(`/api/notas/${creada.body.id}/asignar-carga-maquina`).set(auth(admin.token))
+      .send({ carga_id: creada.body.cargas[0].id, slot: 'lavadora', maquina_id: lavadoraId });
+    await request(app).patch(`/api/notas/${creada.body.id}/activar-pendientes`).set(auth(admin.token))
+      .send({ maquina_id: lavadoraId });
 
     const res = await request(app)
       .get('/api/ventas/resumen?periodo=hoy')
@@ -51,10 +57,18 @@ async function crearNota(token, { nombreMaquina, estado_pago = 'PENDIENTE', ajus
   const lavadoraId = await seedMaquina({ nombre: nombreMaquina, tipo: 'lavadora_mediana', sucursal });
   const body = {
     tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago, ajuste,
-    cargas: [{ lavadora_id: lavadoraId, activar: true }],
+    cargas: [{ lavadora_tipo: 'mediana' }],
   };
   if (productos) body.productos = productos;
-  return request(app).post('/api/notas').set(auth(token, sucursal)).send(body);
+  const creada = await request(app).post('/api/notas').set(auth(token, sucursal)).send(body);
+  // Asigna la lavadora física y la arranca (Salidas): la venta refleja la máquina.
+  if (creada.status === 201) {
+    await request(app).patch(`/api/notas/${creada.body.id}/asignar-carga-maquina`).set(auth(token, sucursal))
+      .send({ carga_id: creada.body.cargas[0].id, slot: 'lavadora', maquina_id: lavadoraId });
+    await request(app).patch(`/api/notas/${creada.body.id}/activar-pendientes`).set(auth(token, sucursal))
+      .send({ maquina_id: lavadoraId });
+  }
+  return creada;
 }
 
 describe('GET /api/ventas/resumen — tarjetas y período', () => {

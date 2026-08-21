@@ -96,12 +96,10 @@ describe('GET /api/usuarios/:id/desempeno', () => {
 
   it('agrega por día las notas que creó el empleado', async () => {
     const emp = await seedUsuario({ rol: 'operador', sucursal: 'centro', nombre: 'Vendedor' });
-    const lav1 = await seedMaquina({ nombre: 'L1', tipo: 'lavadora_mediana' });
-    const lav2 = await seedMaquina({ nombre: 'L2', tipo: 'lavadora_mediana' });
-    for (const lav of [lav1, lav2]) {
+    for (let i = 0; i < 2; i++) {
       await request(app).post('/api/notas').set(auth(emp.token)).send({
         tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PAGADO',
-        cargas: [{ lavadora_id: lav, activar: true }],
+        cargas: [{ lavadora_tipo: 'mediana' }],
       }).expect(201);
     }
 
