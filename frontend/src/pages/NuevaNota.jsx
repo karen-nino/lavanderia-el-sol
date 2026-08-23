@@ -177,17 +177,26 @@ export default function NuevaNota() {
   const subtotalDeCarga = (c) =>
     precioLavadoTipo(c.lavadora_tipo, c.tipo_prenda) + precioSecadoTipo(c.secadora_tipo, c.tipo_prenda);
   const ajusteNum      = Number(form.ajuste) || 0;
-  // Precio efectivo de un producto en la nota: siempre su precio unitario. En
-  // Por Encargo cuenta contra el tope de la carga y suma al total (con techo en
-  // el tope); ya no va "incluido" sin costo.
-  const precioProducto = (prod) => {
+  // Precio efectivo de un producto según la unidad de venta: en Autoservicio se
+  // vende por BOTELLA (precio_botella); en Por Encargo por TAPA (precio_unitario).
+  const precioProducto = (prod, unidad = 'tapa') => {
     if (!prod) return 0;
-    return Number(prod.precio_unitario) || 0;
+    return unidad === 'botella'
+      ? (Number(prod.precio_botella) || 0)
+      : (Number(prod.precio_unitario) || 0);
+  };
+  // Botellas disponibles de un producto (el stock viene en tapas).
+  const botellasDisponibles = (prod) => {
+    if (!prod) return 0;
+    const tpb = Number(prod.tapas_por_botella) || 0;
+    const disp = Number(prod.stock_disponible ?? prod.stock_actual) || 0;
+    return tpb > 0 ? Math.floor(disp / tpb) : disp;
   };
   const subtotalCargas = cargasAuto.reduce((s, c) => s + subtotalDeCarga(c), 0);
+  // Autoservicio: los productos a nivel nota se cobran por botella.
   const subtotalProductos = productosLista.reduce((sum, p) => {
     const prod = productosCatalogo.find(x => String(x.id) === String(p.producto_id));
-    return sum + precioProducto(prod) * (Number(p.cantidad) || 0);
+    return sum + precioProducto(prod, 'botella') * (Number(p.cantidad) || 0);
   }, 0);
   const precioTotal = subtotalCargas + ajusteNum + subtotalProductos;
 
@@ -1080,7 +1089,7 @@ export default function NuevaNota() {
                                   <option value="">Selecciona un producto…</option>
                                   {productosCatalogo.map(p => (
                                     <option key={p.id} value={p.id}>
-                                      {p.nombre}{p.marca ? ` · ${p.marca}` : ''}{p.precio_unitario ? ` — $${Number(p.precio_unitario).toFixed(2)}` : ''} ({Number(p.stock_disponible ?? p.stock_actual)} {p.unidad})
+                                      {p.nombre}{p.marca ? ` · ${p.marca}` : ''}{p.precio_unitario ? ` — $${Number(p.precio_unitario).toFixed(2)}/tapa` : ''} ({Number(p.stock_disponible ?? p.stock_actual)} tapas)
                                     </option>
                                   ))}
                                 </select>
@@ -1098,7 +1107,7 @@ export default function NuevaNota() {
                               <div className="flex items-end justify-between gap-3">
                                 <div>
                                   <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
-                                    {prod?.es_por_tapa ? 'Tapas' : 'Cantidad'}
+                                    Tapas
                                   </p>
                                   <div className="flex items-center gap-2">
                                     <button
@@ -1612,7 +1621,7 @@ export default function NuevaNota() {
               {productosLista.map((item, i) => {
                 const prod = productosCatalogo.find(x => String(x.id) === String(item.producto_id));
                 const cant = Number(item.cantidad) || 0;
-                const subtotal = precioProducto(prod) * cant;
+                const subtotal = precioProducto(prod, 'botella') * cant;
                 return (
                   <div key={i} className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
                     <div className="flex items-center gap-2">
@@ -1624,7 +1633,7 @@ export default function NuevaNota() {
                         <option value="">Selecciona un producto…</option>
                         {productosCatalogo.map(p => (
                           <option key={p.id} value={p.id}>
-                            {p.nombre}{p.marca ? ` · ${p.marca}` : ''}{p.precio_unitario ? ` — $${Number(p.precio_unitario).toFixed(2)}` : ''} ({Number(p.stock_disponible ?? p.stock_actual)} {p.unidad})
+                            {p.nombre}{p.marca ? ` · ${p.marca}` : ''}{p.precio_botella ? ` — $${Number(p.precio_botella).toFixed(2)}/botella` : ''} ({botellasDisponibles(p)} botellas)
                           </option>
                         ))}
                       </select>
@@ -1643,7 +1652,7 @@ export default function NuevaNota() {
                     <div className="flex items-end justify-between gap-3">
                       <div>
                         <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
-                          {prod?.es_por_tapa ? 'Tapas' : 'Cantidad'}
+                          Botellas
                         </p>
                         <div className="flex items-center gap-2">
                           <button

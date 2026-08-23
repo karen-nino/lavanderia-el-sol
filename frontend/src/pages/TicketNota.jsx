@@ -19,6 +19,13 @@ function fmtMonto(n) {
   return n != null ? `$${Number(n).toFixed(2)}` : '—';
 }
 
+// Unidad de venta de un producto en texto ("2 botellas" / "3 tapas").
+function unidadProdTxt(p) {
+  const n = Number(p.cantidad);
+  if (p.unidad === 'botella') return n === 1 ? 'botella' : 'botellas';
+  return n === 1 ? 'tapa' : 'tapas';
+}
+
 function fmtFecha(iso) {
   if (!iso) return '—';
   return new Date(iso).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -78,7 +85,7 @@ function armarTextoTicket(nota) {
     });
     (cg.productos ?? []).forEach(p => {
       const monto = p.es_por_tapa && Number(p.subtotal) === 0 ? 'Incluido' : fmtMonto(p.subtotal);
-      L.push(`  • ${p.nombre} x${p.cantidad} — ${monto}`);
+      L.push(`  • ${p.nombre} x${p.cantidad} ${unidadProdTxt(p)} — ${monto}`);
     });
     if (Number(cg.ajuste)) {
       L.push(`  • Ajuste: ${Number(cg.ajuste) > 0 ? '+' : ''}${fmtMonto(cg.ajuste)}`);
@@ -103,7 +110,7 @@ function armarTextoTicket(nota) {
     L.push('', '*Productos*');
     productos.forEach(p => {
       const monto = p.es_por_tapa && Number(p.subtotal) === 0 ? 'Incluido' : fmtMonto(p.subtotal);
-      L.push(`  • ${p.nombre} x${p.cantidad} — ${monto}`);
+      L.push(`  • ${p.nombre} x${p.cantidad} ${unidadProdTxt(p)} — ${monto}`);
     });
   }
 
@@ -216,7 +223,7 @@ export default function TicketNota() {
           ))}
           {prods.map(p => (
             <div key={p.id} className="flex items-baseline justify-between gap-3">
-              <span className="text-sm text-gray-700">{p.nombre} <span className="text-xs text-gray-400">×{p.cantidad}</span></span>
+              <span className="text-sm text-gray-700">{p.nombre} <span className="text-xs text-gray-400">×{p.cantidad} {unidadProdTxt(p)}</span></span>
               {p.es_por_tapa && Number(p.subtotal) === 0
                 ? <span className="text-sm text-green-700">Incluido</span>
                 : <span className="text-sm text-gray-600">{fmtMonto(p.subtotal)}</span>}
@@ -299,7 +306,7 @@ export default function TicketNota() {
               <div className="space-y-0.5">
                 {productos.map(p => (
                   <div key={p.id} className="flex items-baseline justify-between gap-3">
-                    <span className="text-sm text-gray-700">{p.nombre} <span className="text-xs text-gray-400">×{p.cantidad}</span></span>
+                    <span className="text-sm text-gray-700">{p.nombre} <span className="text-xs text-gray-400">×{p.cantidad} {unidadProdTxt(p)}</span></span>
                     {p.es_por_tapa && Number(p.subtotal) === 0
                       ? <span className="text-sm text-green-700">Incluido</span>
                       : <span className="text-sm text-gray-600">{fmtMonto(p.subtotal)}</span>}

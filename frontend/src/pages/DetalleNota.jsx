@@ -6,6 +6,13 @@ import { useAuth } from '../context/AuthContext';
 import { esAdmin as esAdminFn } from '../lib/roles';
 import { formatHora12, formatFechaHora12 } from '../lib/fecha';
 
+// Unidad de venta de un producto de la nota, en texto ("2 botellas" / "3 tapas").
+function unidadProdTxt(p) {
+  const n = Number(p.cantidad);
+  if (p.unidad === 'botella') return n === 1 ? 'botella' : 'botellas';
+  return n === 1 ? 'tapa' : 'tapas';
+}
+
 const BADGE_ESTADO = {
   EN_ESPERA:  { label: 'En Espera',   cls: 'bg-gray-100 text-gray-600'        },
   LAVANDO:    { label: 'Lavando',     cls: 'bg-blue-100 text-blue-800'        },
@@ -616,8 +623,8 @@ export default function DetalleNota() {
                       {prods.map(p => (
                         <p key={p.id} className="text-xs text-gray-500">
                           {p.es_por_tapa && Number(p.subtotal) === 0
-                            ? <>{p.nombre} · {p.cantidad} {Number(p.cantidad) === 1 ? 'tapa' : 'tapas'} · <span className="text-green-700 font-medium">Incluido</span></>
-                            : <>{p.nombre} · {p.cantidad} × {fmtMonto(p.precio_unitario)} = {fmtMonto(p.subtotal)}</>}
+                            ? <>{p.nombre} · {p.cantidad} {unidadProdTxt(p)} · <span className="text-green-700 font-medium">Incluido</span></>
+                            : <>{p.nombre} · {p.cantidad} {unidadProdTxt(p)} × {fmtMonto(p.precio_unitario)} = {fmtMonto(p.subtotal)}</>}
                         </p>
                       ))}
                       {Number(cg.ajuste) !== 0 && (
@@ -761,8 +768,8 @@ export default function DetalleNota() {
                   <p className="text-sm font-medium text-gray-800">{p.nombre}</p>
                   <p className="text-xs text-gray-400">
                     {incluido
-                      ? `${p.cantidad} ${Number(p.cantidad) === 1 ? 'tapa' : 'tapas'}`
-                      : `Cant. ${p.cantidad} × ${fmtMonto(p.precio_unitario)}`}
+                      ? `${p.cantidad} ${unidadProdTxt(p)}`
+                      : `${p.cantidad} ${unidadProdTxt(p)} × ${fmtMonto(p.precio_unitario)}`}
                   </p>
                 </div>
                 <span className="text-sm font-semibold flex-shrink-0">

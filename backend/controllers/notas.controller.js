@@ -1,6 +1,6 @@
 import pool from '../db/pool.js';
 import { esAdmin } from '../middleware/roles.js';
-import { tarifaSecadora, precioProductoEnNota, generarFolio } from '../utils/calculosNotas.js';
+import { tarifaSecadora, precioProductoEnNota, unidadDeServicio, tapasPorUnidad, generarFolio } from '../utils/calculosNotas.js';
 
 const ESTADOS_VALIDOS     = ['EN_ESPERA', 'LAVANDO', 'SECANDO', 'LISTA', 'PAGADA', 'FINALIZADA', 'CANCELADA'];
 // Estados con los que puede nacer una nota.
@@ -293,18 +293,23 @@ async function reservarProducto(client, notaId, cargaId, productoId, cantidad, s
     throw new Error(`Producto ${productoId} no encontrado.`);
   }
   const art = artRows[0];
-  const disponible = Number(art.stock_actual) - Number(art.stock_reservado);
-  if (disponible < Number(cantidad)) {
-    throw new Error(`Stock insuficiente para "${art.nombre}". Disponible: ${disponible}, solicitado: ${cantidad}.`);
+  // La unidad la define el servicio: botella (Autoservicio) o tapa (Por Encargo).
+  const unidad = unidadDeServicio(tipo_servicio);
+  const tpu = tapasPorUnidad(art, unidad);
+  const cantidadTapas = Number(cantidad) * tpu;
+  const disponibleTapas = Number(art.stock_actual) - Number(art.stock_reservado);
+  if (disponibleTapas < cantidadTapas) {
+    const dispUnidad = unidad === 'botella' ? Math.floor(disponibleTapas / tpu) : disponibleTapas;
+    throw new Error(`Stock insuficiente para "${art.nombre}". Disponible: ${dispUnidad}, solicitado: ${cantidad}.`);
   }
   const { rows: npRows } = await client.query(
-    `INSERT INTO nota_productos (nota_id, carga_id, producto_id, cantidad, precio_unitario)
-     VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-    [notaId, cargaId, productoId, cantidad, precioProductoEnNota(art, tipo_servicio)]
+    `INSERT INTO nota_productos (nota_id, carga_id, producto_id, cantidad, unidad, precio_unitario, cantidad_tapas)
+     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+    [notaId, cargaId, productoId, cantidad, unidad, precioProductoEnNota(art, tipo_servicio), cantidadTapas]
   );
   await client.query(
     'UPDATE productos SET stock_reservado = stock_reservado + $1 WHERE id = $2',
-    [cantidad, productoId]
+    [cantidadTapas, productoId]
   );
   return { ...npRows[0], nombre: art.nombre, subtotal: Number(npRows[0].cantidad) * Number(npRows[0].precio_unitario) };
 }
@@ -313,12 +318,28 @@ async function reservarProducto(client, notaId, cargaId, productoId, cantidad, s
 async function liberarProductosDeNota(client, notaId) {
   await client.query(
     `UPDATE productos a
-        SET stock_reservado = stock_reservado - np.cantidad
+        SET stock_reservado = stock_reservado - np.cantidad_tapas
       FROM nota_productos np
       WHERE np.nota_id = $1 AND np.producto_id = a.id`,
     [notaId]
   );
   await client.query('DELETE FROM nota_productos WHERE nota_id = $1', [notaId]);
+}
+
+// Registra en el historial de inventario los movimientos de los productos de una
+// nota: 'venta' cuando se consume el stock (pago/entrega) o 'liberacion' cuando
+// se devuelve al anular una venta. Una fila por producto de la nota.
+async function registrarMovimientosProductosNota(client, notaId, sucursal, usuarioId, tipo) {
+  await client.query(
+    `INSERT INTO producto_movimientos
+       (producto_id, sucursal, usuario_id, tipo, destino, cantidad_tapas, descripcion, nota_id)
+     SELECT np.producto_id, $2, $3, $4, 'botellas', np.cantidad_tapas,
+            np.cantidad || (CASE WHEN np.unidad = 'botella' THEN ' botella(s)' ELSE ' tapa(s)' END),
+            np.nota_id
+       FROM nota_productos np
+      WHERE np.nota_id = $1`,
+    [notaId, sucursal, usuarioId ?? null, tipo]
+  );
 }
 
 // Valida y tarifica las cargas recibidas en el body. Cada carga puede traer:
@@ -487,7 +508,7 @@ async function cargasDeNota(client, notaId) {
     [notaId]
   );
   const { rows: prods } = await client.query(
-    `SELECT np.id, np.carga_id, np.producto_id, a.nombre, np.cantidad, np.precio_unitario,
+    `SELECT np.id, np.carga_id, np.producto_id, a.nombre, np.cantidad, np.unidad, np.precio_unitario,
             a.es_por_tapa,
             (np.cantidad * np.precio_unitario) AS subtotal
        FROM nota_productos np
@@ -635,7 +656,7 @@ export const getNotaById = async (req, res) => {
     }
 
     const { rows: productos } = await pool.query(
-      `SELECT np.id, np.producto_id, a.nombre, np.cantidad, np.precio_unitario,
+      `SELECT np.id, np.producto_id, a.nombre, np.cantidad, np.unidad, np.precio_unitario,
               a.es_por_tapa,
               (np.cantidad * np.precio_unitario) AS subtotal
        FROM nota_productos np
@@ -855,42 +876,19 @@ export const createNota = async (req, res) => {
     }
 
     // ── Insertar productos en nota_productos ────────────────
+    // (nivel nota, carga_id NULL). La unidad/precio/tapas los resuelve
+    // reservarProducto según el servicio (botella en Autoservicio, tapa en Por Encargo).
     const productosInsertados = [];
     for (const { producto_id, cantidad } of productos) {
       if (!producto_id || !cantidad || Number(cantidad) <= 0) continue;
-
-      const { rows: artRows } = await client.query(
-        'SELECT * FROM productos WHERE id = $1 AND sucursal = $2 FOR UPDATE',
-        [producto_id, req.sucursal]
-      );
-      if (artRows.length === 0) {
+      try {
+        productosInsertados.push(
+          await reservarProducto(client, nota.id, null, producto_id, cantidad, req.sucursal, tipo_servicio)
+        );
+      } catch (e) {
         await client.query('ROLLBACK');
-        return res.status(404).json({ message: `Producto ${producto_id} no encontrado.` });
+        return res.status(400).json({ message: e.message });
       }
-      const art = artRows[0];
-      const stockDisponible = art.stock_actual - art.stock_reservado;
-      if (stockDisponible < Number(cantidad)) {
-        await client.query('ROLLBACK');
-        return res.status(400).json({
-          message: `Stock insuficiente para "${art.nombre}". Disponible: ${stockDisponible}, solicitado: ${cantidad}.`,
-        });
-      }
-
-      const { rows: npRows } = await client.query(
-        `INSERT INTO nota_productos (nota_id, producto_id, cantidad, precio_unitario)
-         VALUES ($1, $2, $3, $4)
-         RETURNING *`,
-        [nota.id, producto_id, cantidad, precioProductoEnNota(art, tipo_servicio)]
-      );
-      await client.query(
-        'UPDATE productos SET stock_reservado = stock_reservado + $1 WHERE id = $2',
-        [cantidad, producto_id]
-      );
-      productosInsertados.push({
-        ...npRows[0],
-        nombre:  art.nombre,
-        subtotal: Number(npRows[0].cantidad) * Number(npRows[0].precio_unitario),
-      });
     }
 
     // Recalcular precio_total con la fórmula completa (cargas + productos + ajuste).
@@ -1037,7 +1035,7 @@ export const updateNota = async (req, res) => {
       // stock_reservado). Los nuevos productos se reservan en insertarCargas.
       await client.query(
         `UPDATE productos a
-            SET stock_reservado = stock_reservado - np.cantidad
+            SET stock_reservado = stock_reservado - np.cantidad_tapas
           FROM nota_productos np
           WHERE np.nota_id = $1 AND np.carga_id IS NOT NULL AND np.producto_id = a.id`,
         [id]
@@ -1086,50 +1084,26 @@ export const updateNota = async (req, res) => {
       // de cargas se manejan junto con sus cargas.
       await client.query(
         `UPDATE productos a
-           SET stock_reservado = stock_reservado - np.cantidad
+           SET stock_reservado = stock_reservado - np.cantidad_tapas
          FROM nota_productos np
          WHERE np.nota_id = $1 AND np.carga_id IS NULL AND np.producto_id = a.id`,
         [id]
       );
       await client.query('DELETE FROM nota_productos WHERE nota_id = $1 AND carga_id IS NULL', [id]);
 
-      // Insertar los nuevos productos
+      // Insertar los nuevos productos (nivel nota). La unidad/precio/tapas los
+      // resuelve reservarProducto según el servicio.
       const productosInsertados = [];
       for (const { producto_id, cantidad } of productos) {
         if (!producto_id || !cantidad || Number(cantidad) <= 0) continue;
-
-        const { rows: artRows } = await client.query(
-          'SELECT * FROM productos WHERE id = $1 AND sucursal = $2 FOR UPDATE',
-          [producto_id, req.sucursal]
-        );
-        if (artRows.length === 0) {
+        try {
+          productosInsertados.push(
+            await reservarProducto(client, id, null, producto_id, cantidad, req.sucursal, actual.tipo_servicio)
+          );
+        } catch (e) {
           await client.query('ROLLBACK');
-          return res.status(404).json({ message: `Producto ${producto_id} no encontrado.` });
+          return res.status(400).json({ message: e.message });
         }
-        const art = artRows[0];
-        const stockDisponible = Number(art.stock_actual) - Number(art.stock_reservado);
-        if (stockDisponible < Number(cantidad)) {
-          await client.query('ROLLBACK');
-          return res.status(400).json({
-            message: `Stock insuficiente para "${art.nombre}". Disponible: ${stockDisponible}, solicitado: ${cantidad}.`,
-          });
-        }
-
-        const { rows: npRows } = await client.query(
-          `INSERT INTO nota_productos (nota_id, producto_id, cantidad, precio_unitario)
-           VALUES ($1, $2, $3, $4)
-           RETURNING *`,
-          [id, producto_id, cantidad, precioProductoEnNota(art, actual.tipo_servicio)]
-        );
-        await client.query(
-          'UPDATE productos SET stock_reservado = stock_reservado + $1 WHERE id = $2',
-          [cantidad, producto_id]
-        );
-        productosInsertados.push({
-          ...npRows[0],
-          nombre: art.nombre,
-          subtotal: Number(npRows[0].cantidad) * Number(npRows[0].precio_unitario),
-        });
       }
       productosNota = productosInsertados;
     } else {
@@ -1259,9 +1233,10 @@ export const eliminarNota = async (req, res) => {
     //     se liberó; no hay nada que revertir.
     //   - Estados activos: solo liberar la reserva.
     if (estadoNota === 'PAGADA') {
+      await registrarMovimientosProductosNota(client, id, req.sucursal, req.user.id, 'liberacion');
       await client.query(
         `UPDATE productos a
-           SET stock_actual = stock_actual + np.cantidad
+           SET stock_actual = stock_actual + np.cantidad_tapas
          FROM nota_productos np
          WHERE np.nota_id = $1 AND np.producto_id = a.id`,
         [id]
@@ -1269,7 +1244,7 @@ export const eliminarNota = async (req, res) => {
     } else if (!['FINALIZADA', 'CANCELADA'].includes(estadoNota)) {
       await client.query(
         `UPDATE productos a
-           SET stock_reservado = stock_reservado - np.cantidad
+           SET stock_reservado = stock_reservado - np.cantidad_tapas
          FROM nota_productos np
          WHERE np.nota_id = $1 AND np.producto_id = a.id`,
         [id]
@@ -1357,9 +1332,10 @@ export const cambiarEstadoNota = async (req, res) => {
       if (estadoActual === 'PAGADA') {
         // El pago ya consumió stock_actual y liberó la reserva; al anular
         // la venta el producto vuelve al estante.
+        await registrarMovimientosProductosNota(client, id, req.sucursal, req.user.id, 'liberacion');
         await client.query(
           `UPDATE productos a
-             SET stock_actual = stock_actual + np.cantidad
+             SET stock_actual = stock_actual + np.cantidad_tapas
            FROM nota_productos np
            WHERE np.nota_id = $1 AND np.producto_id = a.id`,
           [id]
@@ -1367,7 +1343,7 @@ export const cambiarEstadoNota = async (req, res) => {
       } else {
         await client.query(
           `UPDATE productos a
-             SET stock_reservado = stock_reservado - np.cantidad
+             SET stock_reservado = stock_reservado - np.cantidad_tapas
            FROM nota_productos np
            WHERE np.nota_id = $1 AND np.producto_id = a.id`,
           [id]
@@ -1376,10 +1352,11 @@ export const cambiarEstadoNota = async (req, res) => {
     } else if (estado === 'PAGADA' || (estado === 'FINALIZADA' && estadoActual !== 'PAGADA')) {
       // Consumir stock al cobrar o al entregar, lo que ocurra primero.
       // (PAGADA → FINALIZADA no vuelve a consumir.)
+      await registrarMovimientosProductosNota(client, id, req.sucursal, req.user.id, 'venta');
       await client.query(
         `UPDATE productos a
-           SET stock_actual    = stock_actual    - np.cantidad,
-               stock_reservado = stock_reservado - np.cantidad
+           SET stock_actual    = stock_actual    - np.cantidad_tapas,
+               stock_reservado = stock_reservado - np.cantidad_tapas
          FROM nota_productos np
          WHERE np.nota_id = $1 AND np.producto_id = a.id`,
         [id]
@@ -2601,7 +2578,7 @@ export const addProductoToNota = async (req, res) => {
     await client.query('BEGIN');
 
     const { rows: notaRows } = await client.query(
-      'SELECT estado FROM notas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
+      'SELECT estado, tipo_servicio FROM notas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
       [id, req.sucursal]
     );
     if (notaRows.length === 0) {
@@ -2615,40 +2592,19 @@ export const addProductoToNota = async (req, res) => {
       });
     }
 
-    const { rows: artRows } = await client.query(
-      'SELECT * FROM productos WHERE id = $1 AND sucursal = $2 FOR UPDATE',
-      [producto_id, req.sucursal]
-    );
-    if (artRows.length === 0) {
+    // La unidad/precio/tapas se resuelven según el servicio (botella o tapa).
+    let fila;
+    try {
+      fila = await reservarProducto(client, id, null, producto_id, cantidad, req.sucursal, notaRows[0].tipo_servicio);
+    } catch (e) {
       await client.query('ROLLBACK');
-      return res.status(404).json({ message: 'Producto no encontrado.' });
+      return res.status(400).json({ message: e.message });
     }
-    const art = artRows[0];
-    const stockDisponible = art.stock_actual - art.stock_reservado;
-
-    if (stockDisponible < Number(cantidad)) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({
-        message: `Stock insuficiente. Disponible: ${stockDisponible}, solicitado: ${cantidad}.`,
-      });
-    }
-
-    const { rows: npRows } = await client.query(
-      `INSERT INTO nota_productos (nota_id, producto_id, cantidad, precio_unitario)
-       VALUES ($1, $2, $3, $4)
-       RETURNING *`,
-      [id, producto_id, cantidad, art.precio_unitario ?? 0]
-    );
-
-    await client.query(
-      'UPDATE productos SET stock_reservado = stock_reservado + $1 WHERE id = $2',
-      [cantidad, producto_id]
-    );
 
     await recalcularPrecioTotal(client, id);
 
     await client.query('COMMIT');
-    res.status(201).json(npRows[0]);
+    res.status(201).json(fila);
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('addProductoToNota error:', err);
@@ -2691,7 +2647,7 @@ export const removeProductoFromNota = async (req, res) => {
 
     await client.query(
       'UPDATE productos SET stock_reservado = stock_reservado - $1 WHERE id = $2',
-      [np.cantidad, productoId]
+      [np.cantidad_tapas, productoId]
     );
 
     await recalcularPrecioTotal(client, id);

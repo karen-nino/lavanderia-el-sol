@@ -545,23 +545,25 @@ describe('PATCH /api/notas/:id — edición', () => {
   });
 
   it('reemplazar los productos libera el stock viejo y reserva el nuevo', async () => {
-    const viejo = await seedProducto({ nombre: 'Viejo', precio_unitario: 20, stock_actual: 50 });
-    const nuevo = await seedProducto({ nombre: 'Nuevo', precio_unitario: 35, stock_actual: 50 });
+    // Autoservicio vende por BOTELLA (precio_botella); el stock se reserva en
+    // tapas (4 por botella con los tamaños por defecto).
+    const viejo = await seedProducto({ nombre: 'Viejo', precio_botella: 20, stock_actual: 50 });
+    const nuevo = await seedProducto({ nombre: 'Nuevo', precio_botella: 35, stock_actual: 50 });
     const { notaId } = await autoservicio({ productos: [{ producto_id: viejo, cantidad: 2 }] });
 
-    // Al crear se reservaron 2 del viejo.
+    // Al crear se reservaron 2 botellas del viejo = 8 tapas.
     let r = await pool.query('SELECT stock_reservado FROM productos WHERE id = $1', [viejo]);
-    expect(Number(r.rows[0].stock_reservado)).toBe(2);
+    expect(Number(r.rows[0].stock_reservado)).toBe(8);
 
     const res = await request(app).patch(`/api/notas/${notaId}`).set(auth(admin.token))
       .send({ productos: [{ producto_id: nuevo, cantidad: 1 }] });
     expect(res.status).toBe(200);
-    expect(Number(res.body.precio_total)).toBe(105); // 70 carga + 35 nuevo
+    expect(Number(res.body.precio_total)).toBe(105); // 70 carga + 1 botella × 35
 
     r = await pool.query('SELECT stock_reservado FROM productos WHERE id = $1', [viejo]);
     expect(Number(r.rows[0].stock_reservado)).toBe(0);  // liberado
     r = await pool.query('SELECT stock_reservado FROM productos WHERE id = $1', [nuevo]);
-    expect(Number(r.rows[0].stock_reservado)).toBe(1);  // reservado
+    expect(Number(r.rows[0].stock_reservado)).toBe(4);  // 1 botella × 4 tapas
   });
 
   it('un ajuste que deja el total negativo → 400', async () => {
@@ -717,15 +719,52 @@ describe('productos por tapa', () => {
     expect(Number(rows[0].stock_reservado)).toBe(2);
   });
 
-  it('en Autoservicio el producto por tapa sí se cobra', async () => {
-    const tapa = await seedProducto({ nombre: 'Suavizante', precio_unitario: 15, es_por_tapa: true });
+  it('en Autoservicio el producto se vende por botella (precio_botella)', async () => {
+    const prod = await seedProducto({ nombre: 'Suavizante', precio_botella: 15 });
     const res = await request(app).post('/api/notas').set(auth(admin.token)).send({
       tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE',
       cargas: [{ lavadora_tipo: 'mediana' }],
-      productos: [{ producto_id: tapa, cantidad: 2 }],
+      productos: [{ producto_id: prod, cantidad: 2 }],
     });
     expect(res.status).toBe(201);
-    expect(Number(res.body.precio_total)).toBe(100); // 70 lavado + 2×15 tapa
+    expect(Number(res.body.precio_total)).toBe(100); // 70 lavado + 2 botellas × 15
+    // Se reservan 2 botellas = 8 tapas.
+    const { rows } = await pool.query('SELECT stock_reservado FROM productos WHERE id = $1', [prod]);
+    expect(Number(rows[0].stock_reservado)).toBe(8);
+  });
+
+  it('al finalizar se consume el stock del producto (en tapas) y se registra la venta', async () => {
+    const clienteId = await seedCliente();
+    const lavadoraId = await seedMaquina({ nombre: 'L1', tipo: 'lavadora_mediana', tamano: 'mediana' });
+    const prod = await seedProducto({ nombre: 'Suavizante', precio_unitario: 15, stock_actual: 40 }); // 40 tapas
+    const creada = await request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'POR_ENCARGO', cliente_id: clienteId, tipo_prenda: 'ROPA',
+      estado_pago: 'PENDIENTE',
+      cargas: [{ lavadora_tipo: 'mediana', productos: [{ producto_id: prod, cantidad: 3 }] }],
+    });
+    const notaId = creada.body.id;
+    // Por Encargo → tapa: 3 tapas reservadas, stock intacto.
+    let r = await pool.query('SELECT stock_actual, stock_reservado FROM productos WHERE id = $1', [prod]);
+    expect(Number(r.rows[0].stock_actual)).toBe(40);
+    expect(Number(r.rows[0].stock_reservado)).toBe(3);
+
+    // Asignar + arrancar → LAVANDO → LISTA → pagar → FINALIZAR.
+    await request(app).patch(`/api/notas/${notaId}/asignar-carga-maquina`)
+      .set(auth(admin.token)).send({ carga_id: creada.body.cargas[0].id, slot: 'lavadora', maquina_id: lavadoraId });
+    await request(app).patch(`/api/notas/${notaId}/activar-pendientes`)
+      .set(auth(admin.token)).send({ maquina_id: lavadoraId }).expect(200);
+    await request(app).patch(`/api/notas/${notaId}/estado`).set(auth(admin.token)).send({ estado: 'LISTA' }).expect(200);
+    await request(app).patch(`/api/notas/${notaId}/estado-pago`).set(auth(admin.token)).send({ estado_pago: 'PAGADO' }).expect(200);
+    await request(app).patch(`/api/notas/${notaId}/estado`).set(auth(admin.token)).send({ estado: 'FINALIZADA' }).expect(200);
+
+    // El stock se consumió (40 - 3 = 37) y se soltó la reserva.
+    r = await pool.query('SELECT stock_actual, stock_reservado FROM productos WHERE id = $1', [prod]);
+    expect(Number(r.rows[0].stock_actual)).toBe(37);
+    expect(Number(r.rows[0].stock_reservado)).toBe(0);
+
+    // Quedó registrada la venta en el historial.
+    const movs = await request(app).get(`/api/productos/${prod}/movimientos`).set(auth(admin.token));
+    expect(movs.body.some(m => m.tipo === 'venta' && Number(m.cantidad_tapas) === 3 && m.nota_id === notaId)).toBe(true);
   });
 });
 

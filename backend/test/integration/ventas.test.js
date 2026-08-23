@@ -88,7 +88,7 @@ describe('GET /api/ventas/resumen — tarjetas y período', () => {
   it('el corte cuadra: total_general = cargas + productos + ajustes', async () => {
     await crearNota(admin.token, {
       nombreMaquina: 'L1', estado_pago: 'PAGADO', ajuste: 5,
-      productos: [{ producto_id: await seedProducto({ precio_unitario: 30 }), cantidad: 1 }],
+      productos: [{ producto_id: await seedProducto({ precio_botella: 30 }), cantidad: 1 }],
     });
 
     const res = await request(app).get('/api/ventas/resumen?periodo=hoy').set(auth(admin.token));
