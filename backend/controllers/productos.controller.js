@@ -90,7 +90,10 @@ export const getProductos = async (req, res) => {
       `SELECT ${SELECT_PRODUCTO}
        FROM productos
        WHERE sucursal = $1 AND archivado = $2
-       ORDER BY nombre ASC`,
+       ORDER BY CASE WHEN tipo_liquido = 'granel' THEN 0
+                     WHEN tipo_liquido = 'marca'  THEN 1
+                     ELSE 2 END,
+                nombre ASC`,
       [req.sucursal, soloArchivados]
     );
     res.json(rows);

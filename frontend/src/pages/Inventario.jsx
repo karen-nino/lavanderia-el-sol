@@ -77,6 +77,13 @@ function tituloProd(p) {
 function subtituloProd(p) {
   return p.tipo_liquido === 'marca' && p.marca ? p.nombre : null;
 }
+// Orden de la lista: primero los de granel, luego los de marca; dentro de cada
+// grupo, por nombre.
+function ordenProd(a, b) {
+  const rank = (p) => (p.tipo_liquido === 'granel' ? 0 : p.tipo_liquido === 'marca' ? 1 : 2);
+  const r = rank(a) - rank(b);
+  return r !== 0 ? r : a.nombre.localeCompare(b.nombre);
+}
 // Mensajes de aviso (estilo "Se acabaron … — hay N actualmente").
 function mensajeAvisoBotellas(p) {
   if (p.estado_stock === 'agotado') return 'Se acabaron las botellas';
@@ -1020,7 +1027,7 @@ export default function Inventario() {
     if (esEdicion) {
       reemplazarProducto(resultado);
     } else {
-      setProductos(prev => [...prev, resultado].sort((a, b) => a.nombre.localeCompare(b.nombre)));
+      setProductos(prev => [...prev, resultado].sort(ordenProd));
       // Nace en cero: no dispares advertencias hasta que se le cargue existencia.
       setRecienCreados(prev => new Set(prev).add(resultado.id));
     }
@@ -1056,13 +1063,13 @@ export default function Inventario() {
     await api.patch(`/productos/${p.id}/archivar`, { archivado: true });
     setProductos(prev => prev.filter(x => x.id !== p.id));
     setSeleccionados(prev => { const n = new Set(prev); n.delete(p.id); return n; });
-    if (verArchivados) setArchivados(prev => [...prev, p].sort((a, b) => a.nombre.localeCompare(b.nombre)));
+    if (verArchivados) setArchivados(prev => [...prev, p].sort(ordenProd));
     setProdAArchivar(null);
   };
   const restaurarProducto = async (p) => {
     const restaurado = await api.patch(`/productos/${p.id}/archivar`, { archivado: false });
     setArchivados(prev => prev.filter(x => x.id !== p.id));
-    setProductos(prev => [...prev, restaurado].sort((a, b) => a.nombre.localeCompare(b.nombre)));
+    setProductos(prev => [...prev, restaurado].sort(ordenProd));
   };
 
   // ── Selección múltiple ─────────────────────────────────
