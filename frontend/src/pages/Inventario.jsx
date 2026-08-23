@@ -71,16 +71,14 @@ function precioTxt(v) {
 }
 // Mensajes de aviso (estilo "Se acabaron … — hay N actualmente").
 function mensajeAvisoBotellas(p) {
+  if (p.estado_stock === 'agotado') return 'Se acabaron las botellas';
   const { botellas } = desglosarBotellas(p.stock_actual, p);
-  return p.estado_stock === 'agotado'
-    ? 'Se acabaron las botellas — hay 0 actualmente'
-    : `Quedan pocas botellas — hay ${botellas} actualmente`;
+  return `Están por acabarse las botellas — hay ${botellas} actualmente`;
 }
 function mensajeAvisoGranel(p) {
+  if (p.estado_granel === 'agotado') return 'Se acabaron los bidones';
   const { bidones } = desglosarBidones(p.stock_granel_tapas, p);
-  return p.estado_granel === 'agotado'
-    ? 'Se acabaron los bidones — hay 0 actualmente'
-    : `Quedan pocos bidones — hay ${bidones} actualmente`;
+  return `Están por acabarse los bidones — hay ${bidones} actualmente`;
 }
 function fechaHoraCorta(iso) {
   try {
