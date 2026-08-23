@@ -17,15 +17,54 @@ const ESTADO_STOCK_SQL = `
   END AS estado_stock
 `.trim();
 
+// Campos derivados que necesita el frontend para mostrar botellas/bidones:
+//   tapas_por_botella  = floor(botella_ml / tapa_ml)
+//   botellas_por_bidon = floor(volumen_envase_ml / botella_ml)   (volumen_envase_ml = mL del bidón)
+const DERIVADOS_SQL = `
+  CASE WHEN botella_ml > 0 AND tapa_ml > 0
+       THEN floor(botella_ml::numeric / tapa_ml) END AS tapas_por_botella,
+  CASE WHEN volumen_envase_ml > 0 AND botella_ml > 0
+       THEN floor(volumen_envase_ml::numeric / botella_ml) END AS botellas_por_bidon
+`.trim();
+
+// SELECT estándar de un producto con sus campos calculados.
+const SELECT_PRODUCTO = `*,
+              (stock_actual - stock_reservado) AS stock_disponible,
+              ${DERIVADOS_SQL},
+              ${ESTADO_STOCK_SQL}`;
+
+// Tapas que representa una unidad dada, según los volúmenes del producto.
+//   tapa → 1 · botella → tapas_por_botella · bidon → tapas del bidón completo.
+function tapasDeUnidad(unidad, p) {
+  const tapaMl    = Number(p.tapa_ml) || 0;
+  const botellaMl = Number(p.botella_ml) || 0;
+  const bidonMl   = Number(p.volumen_envase_ml) || 0;
+  if (unidad === 'tapa')    return 1;
+  if (unidad === 'botella') return tapaMl > 0 ? Math.floor(botellaMl / tapaMl) : 0;
+  if (unidad === 'bidon')   return tapaMl > 0 ? Math.floor(bidonMl / tapaMl) : 0;
+  return 0;
+}
+
+// Inserta una fila en el historial de movimientos de stock.
+async function registrarMovimiento(client, {
+  productoId, sucursal, usuarioId, tipo, destino, cantidadTapas,
+  descripcion = null, motivo = null, notaId = null,
+}) {
+  await client.query(
+    `INSERT INTO producto_movimientos
+       (producto_id, sucursal, usuario_id, tipo, destino, cantidad_tapas, descripcion, motivo, nota_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+    [productoId, sucursal, usuarioId ?? null, tipo, destino, cantidadTapas, descripcion, motivo, notaId]
+  );
+}
+
 export const getProductos = async (req, res) => {
   // Por defecto solo productos activos; con ?archivados=1 devuelve los archivados
   // (para la vista de "ver archivados / restaurar").
   const soloArchivados = req.query.archivados === '1';
   try {
     const { rows } = await pool.query(
-      `SELECT *,
-              (stock_actual - stock_reservado) AS stock_disponible,
-              ${ESTADO_STOCK_SQL}
+      `SELECT ${SELECT_PRODUCTO}
        FROM productos
        WHERE sucursal = $1 AND archivado = $2
        ORDER BY nombre ASC`,
@@ -48,9 +87,7 @@ export const archivarProducto = async (req, res) => {
       `UPDATE productos
          SET archivado = $1, updated_at = NOW()
        WHERE id = $2 AND sucursal = $3
-       RETURNING *,
-                 (stock_actual - stock_reservado) AS stock_disponible,
-                 ${ESTADO_STOCK_SQL}`,
+       RETURNING ${SELECT_PRODUCTO}`,
       [archivado, id, req.sucursal]
     );
     if (rows.length === 0) {
@@ -65,98 +102,125 @@ export const archivarProducto = async (req, res) => {
 
 export const createProducto = async (req, res) => {
   const {
-    nombre, descripcion, unidad = 'pieza', precio_unitario, stock_actual = 0, marca,
-    es_por_tapa = false, tapas_por_envase, envase, stock_minimo = 0,
-    volumen_envase_ml, tapa_ml,
+    nombre, descripcion, unidad = 'Tapas', precio_unitario, marca,
+    tipo_liquido = 'granel', envase, stock_minimo = 0,
+    volumen_envase_ml, botella_ml, tapa_ml, precio_botella,
+    // Existencias iniciales: botellas rellenadas y (granel) bidones a granel.
+    stock_botellas = 0, stock_bidones = 0,
   } = req.body;
 
   if (!nombre) {
     return res.status(400).json({ message: 'Nombre es requerido.' });
   }
-  if (es_por_tapa && (!tapas_por_envase || Number(tapas_por_envase) <= 0)) {
-    return res.status(400).json({ message: 'Indica cuántas tapas rinde el envase.' });
+  if (!['granel', 'marca'].includes(tipo_liquido)) {
+    return res.status(400).json({ message: 'Tipo de líquido inválido.' });
+  }
+  if (!botella_ml || Number(botella_ml) <= 0 || !tapa_ml || Number(tapa_ml) <= 0) {
+    return res.status(400).json({ message: 'Indica el tamaño de la botella y de la tapa (mL).' });
+  }
+  if (tipo_liquido === 'granel' && (!volumen_envase_ml || Number(volumen_envase_ml) <= 0)) {
+    return res.status(400).json({ message: 'Indica el volumen del bidón (mL).' });
   }
 
+  const tapaMl    = Number(tapa_ml);
+  const botellaMl = Number(botella_ml);
+  const bidonMl   = tipo_liquido === 'granel' ? Number(volumen_envase_ml) : null;
+  const tapasPorBotella = Math.floor(botellaMl / tapaMl);
+  const tapasPorBidon   = bidonMl ? Math.floor(bidonMl / tapaMl) : 0;
+  const tapasPorEnvase  = tipo_liquido === 'granel' ? tapasPorBidon : tapasPorBotella;
+
+  // El stock se guarda en TAPAS: rellenadas (stock_actual) y a granel (bidón).
+  const stockActual = Math.round((Number(stock_botellas) || 0) * tapasPorBotella);
+  const stockGranel = Math.round((Number(stock_bidones)  || 0) * tapasPorBidon);
+
+  const client = await pool.connect();
   try {
-    const { rows } = await pool.query(
+    await client.query('BEGIN');
+    const { rows } = await client.query(
       `INSERT INTO productos
-         (nombre, descripcion, unidad, precio_unitario, stock_actual, marca, sucursal,
-          es_por_tapa, tapas_por_envase, envase, stock_minimo, volumen_envase_ml, tapa_ml)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-       RETURNING *,
-                 (stock_actual - stock_reservado) AS stock_disponible,
-                 ${ESTADO_STOCK_SQL}`,
-      [nombre, descripcion || null, unidad, precio_unitario ?? null, stock_actual, marca || null, req.sucursal,
-       !!es_por_tapa, es_por_tapa ? Number(tapas_por_envase) : null, es_por_tapa ? (envase || null) : null,
-       Number(stock_minimo) || 0,
-       es_por_tapa && volumen_envase_ml ? Number(volumen_envase_ml) : null,
-       es_por_tapa && tapa_ml ? Number(tapa_ml) : null]
+         (nombre, descripcion, unidad, precio_unitario, precio_botella, stock_actual,
+          stock_granel_tapas, marca, sucursal, tipo_liquido, es_por_tapa, tapas_por_envase,
+          envase, stock_minimo, volumen_envase_ml, botella_ml, tapa_ml)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, true, $11, $12, $13, $14, $15, $16)
+       RETURNING ${SELECT_PRODUCTO}`,
+      [nombre, descripcion || null, unidad, precio_unitario ?? null, precio_botella ?? null,
+       stockActual, stockGranel, marca || null, req.sucursal, tipo_liquido, tapasPorEnvase,
+       envase || null, Number(stock_minimo) || 0, bidonMl, botellaMl, tapaMl]
     );
-    res.status(201).json(rows[0]);
+    const prod = rows[0];
+    // Semilla del historial: registra las existencias iniciales como entradas.
+    if (stockGranel > 0) {
+      await registrarMovimiento(client, {
+        productoId: prod.id, sucursal: req.sucursal, usuarioId: req.user?.id,
+        tipo: 'entrada', destino: 'granel', cantidadTapas: stockGranel,
+        descripcion: `${Number(stock_bidones)} bidón(es) inicial(es)`, motivo: 'Existencia inicial',
+      });
+    }
+    if (stockActual > 0) {
+      await registrarMovimiento(client, {
+        productoId: prod.id, sucursal: req.sucursal, usuarioId: req.user?.id,
+        tipo: 'entrada', destino: 'botellas', cantidadTapas: stockActual,
+        descripcion: `${Number(stock_botellas)} botella(s) inicial(es)`, motivo: 'Existencia inicial',
+      });
+    }
+    await client.query('COMMIT');
+    res.status(201).json(prod);
   } catch (err) {
+    await client.query('ROLLBACK');
     console.error('createProducto error:', err);
     res.status(500).json({ message: 'Error interno del servidor.' });
+  } finally {
+    client.release();
   }
 };
 
+// Edita los ATRIBUTOS del producto (nombre, precios, volúmenes, etc.). Solo
+// admin. El stock ya NO se cambia aquí: se mueve con las acciones de
+// entrada / salida / rellenar (que quedan en el historial).
 export const updateProducto = async (req, res) => {
   const { id } = req.params;
-  const {
-    nombre, descripcion, unidad, precio_unitario, stock_actual, marca,
-    es_por_tapa = false, tapas_por_envase, envase, stock_minimo = 0,
-    volumen_envase_ml, tapa_ml,
-  } = req.body;
-
-  // Un empleado (no admin) solo puede ajustar el stock; los demás campos
-  // (nombre, precio, unidad...) se conservan intactos.
   if (!esAdmin(req.user.rol)) {
-    if (stock_actual === undefined || stock_actual === null || Number.isNaN(Number(stock_actual))) {
-      return res.status(400).json({ message: 'Stock actual inválido.' });
-    }
-    try {
-      const { rows } = await pool.query(
-        `UPDATE productos
-           SET stock_actual = $1, updated_at = NOW()
-         WHERE id = $2 AND sucursal = $3
-         RETURNING *,
-                   (stock_actual - stock_reservado) AS stock_disponible,
-                   ${ESTADO_STOCK_SQL}`,
-        [Number(stock_actual), id, req.sucursal]
-      );
-      if (rows.length === 0) {
-        return res.status(404).json({ message: 'Producto no encontrado.' });
-      }
-      return res.json(rows[0]);
-    } catch (err) {
-      console.error('updateProducto (stock) error:', err);
-      return res.status(500).json({ message: 'Error interno del servidor.' });
-    }
+    return res.status(403).json({ message: 'Solo un administrador puede editar el producto.' });
   }
+
+  const {
+    nombre, descripcion, unidad = 'Tapas', precio_unitario, marca,
+    tipo_liquido = 'granel', envase, stock_minimo = 0,
+    volumen_envase_ml, botella_ml, tapa_ml, precio_botella,
+  } = req.body;
 
   if (!nombre) {
     return res.status(400).json({ message: 'Nombre es requerido.' });
   }
-  if (es_por_tapa && (!tapas_por_envase || Number(tapas_por_envase) <= 0)) {
-    return res.status(400).json({ message: 'Indica cuántas tapas rinde el envase.' });
+  if (!['granel', 'marca'].includes(tipo_liquido)) {
+    return res.status(400).json({ message: 'Tipo de líquido inválido.' });
   }
+  if (!botella_ml || Number(botella_ml) <= 0 || !tapa_ml || Number(tapa_ml) <= 0) {
+    return res.status(400).json({ message: 'Indica el tamaño de la botella y de la tapa (mL).' });
+  }
+  if (tipo_liquido === 'granel' && (!volumen_envase_ml || Number(volumen_envase_ml) <= 0)) {
+    return res.status(400).json({ message: 'Indica el volumen del bidón (mL).' });
+  }
+
+  const tapaMl    = Number(tapa_ml);
+  const botellaMl = Number(botella_ml);
+  const bidonMl   = tipo_liquido === 'granel' ? Number(volumen_envase_ml) : null;
+  const tapasPorEnvase = tipo_liquido === 'granel'
+    ? Math.floor(bidonMl / tapaMl)
+    : Math.floor(botellaMl / tapaMl);
 
   try {
     const { rows } = await pool.query(
       `UPDATE productos
-         SET nombre = $1, descripcion = $2, unidad = $3,
-             precio_unitario = $4, stock_actual = $5, marca = $8,
-             es_por_tapa = $9, tapas_por_envase = $10, envase = $11, stock_minimo = $12,
-             volumen_envase_ml = $13, tapa_ml = $14,
-             updated_at = NOW()
-       WHERE id = $6 AND sucursal = $7
-       RETURNING *,
-                 (stock_actual - stock_reservado) AS stock_disponible,
-                 ${ESTADO_STOCK_SQL}`,
-      [nombre, descripcion || null, unidad, precio_unitario ?? null, stock_actual, id, req.sucursal, marca || null,
-       !!es_por_tapa, es_por_tapa ? Number(tapas_por_envase) : null, es_por_tapa ? (envase || null) : null,
-       Number(stock_minimo) || 0,
-       es_por_tapa && volumen_envase_ml ? Number(volumen_envase_ml) : null,
-       es_por_tapa && tapa_ml ? Number(tapa_ml) : null]
+         SET nombre = $1, descripcion = $2, unidad = $3, precio_unitario = $4,
+             precio_botella = $5, marca = $6, tipo_liquido = $7, tapas_por_envase = $8,
+             envase = $9, stock_minimo = $10, volumen_envase_ml = $11, botella_ml = $12,
+             tapa_ml = $13, es_por_tapa = true, updated_at = NOW()
+       WHERE id = $14 AND sucursal = $15
+       RETURNING ${SELECT_PRODUCTO}`,
+      [nombre, descripcion || null, unidad, precio_unitario ?? null, precio_botella ?? null,
+       marca || null, tipo_liquido, tapasPorEnvase, envase || null, Number(stock_minimo) || 0,
+       bidonMl, botellaMl, tapaMl, id, req.sucursal]
     );
     if (rows.length === 0) {
       return res.status(404).json({ message: 'Producto no encontrado.' });
@@ -164,6 +228,171 @@ export const updateProducto = async (req, res) => {
     res.json(rows[0]);
   } catch (err) {
     console.error('updateProducto error:', err);
+    res.status(500).json({ message: 'Error interno del servidor.' });
+  }
+};
+
+// ── POST /productos/:id/rellenar ────────────────────────────────
+// Rellena N botellas desde el bidón (solo granel). Mueve N×tapas_por_botella
+// de "a granel" a "rellenadas". Topa N a lo que alcance el líquido a granel.
+export const rellenarBotellas = async (req, res) => {
+  const { id } = req.params;
+  const botellas = Number(req.body?.botellas);
+
+  if (!Number.isInteger(botellas) || botellas <= 0) {
+    return res.status(400).json({ message: 'Indica cuántas botellas rellenaste (entero > 0).' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows } = await client.query(
+      'SELECT * FROM productos WHERE id = $1 AND sucursal = $2 FOR UPDATE',
+      [id, req.sucursal]
+    );
+    if (rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: 'Producto no encontrado.' });
+    }
+    const p = rows[0];
+    if (p.tipo_liquido !== 'granel') {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'Solo los productos a granel se rellenan desde un bidón.' });
+    }
+    const tapasPorBotella = tapasDeUnidad('botella', p);
+    if (tapasPorBotella <= 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'El producto no tiene bien definidos los tamaños de botella y tapa.' });
+    }
+    const maxBotellas = Math.floor(Number(p.stock_granel_tapas) / tapasPorBotella);
+    if (botellas > maxBotellas) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: `Solo alcanza para ${maxBotellas} botella(s) con el líquido a granel disponible.` });
+    }
+    const tapas = botellas * tapasPorBotella;
+    const { rows: upd } = await client.query(
+      `UPDATE productos
+         SET stock_granel_tapas = stock_granel_tapas - $1,
+             stock_actual = stock_actual + $1,
+             updated_at = NOW()
+       WHERE id = $2 AND sucursal = $3
+       RETURNING ${SELECT_PRODUCTO}`,
+      [tapas, id, req.sucursal]
+    );
+    await registrarMovimiento(client, {
+      productoId: p.id, sucursal: req.sucursal, usuarioId: req.user?.id,
+      tipo: 'rellenar', destino: 'botellas', cantidadTapas: tapas,
+      descripcion: `${botellas} botella(s)`, motivo: 'Rellenado desde bidón',
+    });
+    await client.query('COMMIT');
+    res.json(upd[0]);
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('rellenarBotellas error:', err);
+    res.status(500).json({ message: 'Error interno del servidor.' });
+  } finally {
+    client.release();
+  }
+};
+
+// ── POST /productos/:id/movimiento ──────────────────────────────
+// Entrada o salida manual de stock. destino: 'granel' (bidón) o 'botellas'.
+// unidad: 'bidon' | 'botella' | 'tapa' (se convierte a tapas).
+export const crearMovimiento = async (req, res) => {
+  const { id } = req.params;
+  const { tipo, destino, cantidad, unidad, motivo } = req.body;
+
+  if (!['entrada', 'salida'].includes(tipo)) {
+    return res.status(400).json({ message: 'Tipo de movimiento inválido.' });
+  }
+  if (!['granel', 'botellas'].includes(destino)) {
+    return res.status(400).json({ message: 'Destino inválido.' });
+  }
+  if (!['bidon', 'botella', 'tapa'].includes(unidad)) {
+    return res.status(400).json({ message: 'Unidad inválida.' });
+  }
+  const cant = Number(cantidad);
+  if (!(cant > 0)) {
+    return res.status(400).json({ message: 'La cantidad debe ser mayor a 0.' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows } = await client.query(
+      'SELECT * FROM productos WHERE id = $1 AND sucursal = $2 FOR UPDATE',
+      [id, req.sucursal]
+    );
+    if (rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: 'Producto no encontrado.' });
+    }
+    const p = rows[0];
+    if (destino === 'granel' && p.tipo_liquido !== 'granel') {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'Este producto no maneja existencia a granel.' });
+    }
+    const tapasPorUnidad = tapasDeUnidad(unidad, p);
+    if (tapasPorUnidad <= 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'No se puede convertir la unidad; revisa los tamaños del producto.' });
+    }
+    const tapas = Math.round(cant * tapasPorUnidad);
+    const columna = destino === 'granel' ? 'stock_granel_tapas' : 'stock_actual';
+    const delta = tipo === 'entrada' ? tapas : -tapas;
+
+    // En salidas, valida que haya existencia suficiente (no negativa; en botellas
+    // respeta lo reservado por notas).
+    if (tipo === 'salida') {
+      const disponible = destino === 'granel'
+        ? Number(p.stock_granel_tapas)
+        : Number(p.stock_actual) - Number(p.stock_reservado);
+      if (tapas > disponible) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ message: 'No hay suficiente existencia para esa salida.' });
+      }
+    }
+
+    const { rows: upd } = await client.query(
+      `UPDATE productos SET ${columna} = ${columna} + $1, updated_at = NOW()
+        WHERE id = $2 AND sucursal = $3
+        RETURNING ${SELECT_PRODUCTO}`,
+      [delta, id, req.sucursal]
+    );
+    const unidadTxt = unidad === 'bidon' ? 'bidón(es)' : unidad === 'botella' ? 'botella(s)' : 'tapa(s)';
+    await registrarMovimiento(client, {
+      productoId: p.id, sucursal: req.sucursal, usuarioId: req.user?.id,
+      tipo, destino, cantidadTapas: tapas,
+      descripcion: `${cant} ${unidadTxt}`, motivo: motivo?.trim() || null,
+    });
+    await client.query('COMMIT');
+    res.json(upd[0]);
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('crearMovimiento error:', err);
+    res.status(500).json({ message: 'Error interno del servidor.' });
+  } finally {
+    client.release();
+  }
+};
+
+// ── GET /productos/:id/movimientos ──────────────────────────────
+// Historial de movimientos de un producto (más reciente primero).
+export const getMovimientos = async (req, res) => {
+  const { id } = req.params;
+  try {
+    const { rows } = await pool.query(
+      `SELECT m.*, TRIM(u.nombre || ' ' || COALESCE(u.apellido, '')) AS usuario_nombre
+         FROM producto_movimientos m
+         LEFT JOIN usuarios u ON u.id = m.usuario_id
+        WHERE m.producto_id = $1 AND m.sucursal = $2
+        ORDER BY m.created_at DESC, m.id DESC
+        LIMIT 200`,
+      [id, req.sucursal]
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error('getMovimientos error:', err);
     res.status(500).json({ message: 'Error interno del servidor.' });
   }
 };

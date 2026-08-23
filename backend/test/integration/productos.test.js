@@ -12,13 +12,36 @@ beforeEach(async () => {
 });
 
 describe('POST /api/productos — validaciones', () => {
-  it('crea un producto normal', async () => {
+  it('crea un producto de granel y calcula los derivados y el stock en tapas', async () => {
     const res = await request(app).post('/api/productos').set(auth(admin.token))
-      .send({ nombre: 'Detergente', precio_unitario: 30, stock_actual: 20 });
+      .send({
+        nombre: 'Suavizante', tipo_liquido: 'granel', precio_unitario: 5, precio_botella: 40,
+        volumen_envase_ml: 20000, botella_ml: 800, tapa_ml: 200,
+        stock_bidones: 1, stock_botellas: 10,
+      });
     expect(res.status).toBe(201);
-    expect(res.body.nombre).toBe('Detergente');
+    expect(res.body.nombre).toBe('Suavizante');
     expect(res.body.sucursal).toBe('centro');
     expect(res.body.archivado).toBe(false);
+    expect(res.body.tipo_liquido).toBe('granel');
+    expect(Number(res.body.tapas_por_botella)).toBe(4);   // 800 / 200
+    expect(Number(res.body.botellas_por_bidon)).toBe(25); // 20000 / 800
+    // Stock en tapas: 10 botellas × 4 = 40 rellenadas; 1 bidón = 100 a granel.
+    expect(Number(res.body.stock_actual)).toBe(40);
+    expect(Number(res.body.stock_granel_tapas)).toBe(100);
+  });
+
+  it('crea un producto de marca (sin bidón)', async () => {
+    const res = await request(app).post('/api/productos').set(auth(admin.token))
+      .send({
+        nombre: 'Ariel', tipo_liquido: 'marca', precio_unitario: 8, precio_botella: 60,
+        botella_ml: 1000, tapa_ml: 200, stock_botellas: 5,
+      });
+    expect(res.status).toBe(201);
+    expect(res.body.tipo_liquido).toBe('marca');
+    expect(Number(res.body.tapas_por_botella)).toBe(5);      // 1000 / 200
+    expect(Number(res.body.stock_actual)).toBe(25);          // 5 × 5
+    expect(Number(res.body.stock_granel_tapas)).toBe(0);
   });
 
   it('sin nombre → 400', async () => {
@@ -28,11 +51,78 @@ describe('POST /api/productos — validaciones', () => {
     expect(res.body.message).toMatch(/nombre/i);
   });
 
-  it('por tapa sin tapas_por_envase → 400', async () => {
+  it('sin tamaño de botella/tapa → 400', async () => {
     const res = await request(app).post('/api/productos').set(auth(admin.token))
-      .send({ nombre: 'Suavizante', es_por_tapa: true });
+      .send({ nombre: 'Suavizante', tipo_liquido: 'granel' });
     expect(res.status).toBe(400);
-    expect(res.body.message).toMatch(/tapas/i);
+    expect(res.body.message).toMatch(/botella y de la tapa|mL/i);
+  });
+
+  it('granel sin volumen de bidón → 400', async () => {
+    const res = await request(app).post('/api/productos').set(auth(admin.token))
+      .send({ nombre: 'Suavizante', tipo_liquido: 'granel', botella_ml: 800, tapa_ml: 200 });
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/bidón/i);
+  });
+});
+
+describe('movimientos de stock (rellenar / entrada / salida / historial)', () => {
+  async function crearGranel(overrides = {}) {
+    const res = await request(app).post('/api/productos').set(auth(admin.token)).send({
+      nombre: 'Suavizante', tipo_liquido: 'granel', precio_unitario: 5, precio_botella: 40,
+      volumen_envase_ml: 20000, botella_ml: 800, tapa_ml: 200,
+      stock_bidones: 1, stock_botellas: 0, ...overrides,
+    });
+    return res.body;
+  }
+
+  it('rellenar mueve líquido del bidón a botellas rellenadas', async () => {
+    const p = await crearGranel(); // 100 tapas a granel, 0 rellenadas
+    const res = await request(app).post(`/api/productos/${p.id}/rellenar`).set(auth(admin.token))
+      .send({ botellas: 15 });
+    expect(res.status).toBe(200);
+    // 15 botellas × 4 = 60 tapas movidas.
+    expect(Number(res.body.stock_actual)).toBe(60);        // rellenadas
+    expect(Number(res.body.stock_granel_tapas)).toBe(40);  // quedan en el bidón (10 botellas)
+  });
+
+  it('rellenar por encima de lo disponible a granel → 400 (topado)', async () => {
+    const p = await crearGranel(); // alcanza para 25 botellas
+    const res = await request(app).post(`/api/productos/${p.id}/rellenar`).set(auth(admin.token))
+      .send({ botellas: 30 });
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/alcanza para 25/i);
+  });
+
+  it('entrada de bidón sube el granel; salida de botellas valida existencia', async () => {
+    const p = await crearGranel({ stock_bidones: 0, stock_botellas: 5 }); // 0 granel, 20 rellenadas
+
+    const entrada = await request(app).post(`/api/productos/${p.id}/movimiento`).set(auth(admin.token))
+      .send({ tipo: 'entrada', destino: 'granel', cantidad: 1, unidad: 'bidon' });
+    expect(entrada.status).toBe(200);
+    expect(Number(entrada.body.stock_granel_tapas)).toBe(100);
+
+    const salida = await request(app).post(`/api/productos/${p.id}/movimiento`).set(auth(admin.token))
+      .send({ tipo: 'salida', destino: 'botellas', cantidad: 2, unidad: 'botella', motivo: 'Derrame' });
+    expect(salida.status).toBe(200);
+    expect(Number(salida.body.stock_actual)).toBe(12); // 20 - 8
+
+    const excede = await request(app).post(`/api/productos/${p.id}/movimiento`).set(auth(admin.token))
+      .send({ tipo: 'salida', destino: 'botellas', cantidad: 100, unidad: 'botella' });
+    expect(excede.status).toBe(400);
+  });
+
+  it('el historial registra cada movimiento (más reciente primero)', async () => {
+    const p = await crearGranel();
+    await request(app).post(`/api/productos/${p.id}/rellenar`).set(auth(admin.token))
+      .send({ botellas: 5 }).expect(200);
+
+    const res = await request(app).get(`/api/productos/${p.id}/movimientos`).set(auth(admin.token));
+    expect(res.status).toBe(200);
+    // Entrada inicial del bidón + el rellenado.
+    expect(res.body.length).toBeGreaterThanOrEqual(2);
+    expect(res.body[0].tipo).toBe('rellenar');
+    expect(res.body[0].cantidad_tapas).toBe(20); // 5 × 4
   });
 });
 

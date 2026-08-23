@@ -7,36 +7,8 @@ import SucursalBar from '../components/SucursalBar';
 
 const INPUT_CLS =
   'w-full px-4 py-3.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent transition';
-
-
-function pluralizarUnidad(cantidad, unidad) {
-  const n = Math.round(Number(cantidad));
-  const u = unidad ?? '';
-  if (n === 1 && u.toLowerCase().endsWith('s')) {
-    return u.slice(0, -1);
-  }
-  return u;
-}
-
-function pluralizarEnvase(n, envase) {
-  const e = envase || 'envase';
-  return n === 1 ? e : `${e}s`;
-}
-
-// Cantidad de stock legible. Productos por tapa/medida se muestran en tapas con
-// una equivalencia en envases (ej. "62 tapas ≈ 3 cubetas"); los demás en piezas.
-function formatoStock(p) {
-  const n = Math.round(Number(p.stock_actual));
-  if (p.es_por_tapa) {
-    const porEnv  = Number(p.tapas_por_envase) || 0;
-    const envases = porEnv > 0 ? Math.floor(n / porEnv) : 0;
-    return {
-      cantidad:     `${n} ${n === 1 ? 'tapa' : 'tapas'}`,
-      equivalencia: envases > 0 ? `≈ ${envases} ${pluralizarEnvase(envases, (p.envase || '').toLowerCase())}` : '',
-    };
-  }
-  return { cantidad: `${n} ${n === 1 ? 'Pieza' : 'Piezas'}`, equivalencia: '' };
-}
+const NUM_CLS =
+  `${INPUT_CLS} text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`;
 
 const UNIDADES_VOLUMEN = ['Litros', 'Mililitros'];
 
@@ -46,69 +18,125 @@ function aMl(valor, unidad) {
   return unidad === 'Litros' ? v * 1000 : v;
 }
 
+// ── Conversiones de existencias (todo se guarda en TAPAS) ───────
+function tapasPorBotella(p) {
+  const t = Number(p.tapas_por_botella)
+    || (Number(p.botella_ml) && Number(p.tapa_ml) ? Math.floor(Number(p.botella_ml) / Number(p.tapa_ml)) : 0);
+  return t > 0 ? t : 0;
+}
+function botellasPorBidon(p) {
+  const b = Number(p.botellas_por_bidon)
+    || (Number(p.volumen_envase_ml) && Number(p.botella_ml) ? Math.floor(Number(p.volumen_envase_ml) / Number(p.botella_ml)) : 0);
+  return b > 0 ? b : 0;
+}
+// Descompone unas tapas en "X botellas y Y tapas".
+function desglosarBotellas(tapas, p) {
+  const tpb = tapasPorBotella(p);
+  const t = Math.round(Number(tapas) || 0);
+  if (tpb <= 0) return { botellas: 0, tapas: t };
+  return { botellas: Math.floor(t / tpb), tapas: t % tpb };
+}
+// Descompone el líquido a granel en "N bidones y M botellas".
+function desglosarBidones(tapasGranel, p) {
+  const tpb = tapasPorBotella(p);
+  const tapasPorBidon = tpb * botellasPorBidon(p);
+  const t = Math.round(Number(tapasGranel) || 0);
+  if (tapasPorBidon <= 0) return { bidones: 0, botellas: tpb > 0 ? Math.floor(t / tpb) : 0 };
+  return { bidones: Math.floor(t / tapasPorBidon), botellas: tpb > 0 ? Math.floor((t % tapasPorBidon) / tpb) : 0 };
+}
+function plural(n, sing, plur) {
+  return `${n} ${n === 1 ? sing : plur}`;
+}
+// Texto de las botellas rellenadas (con las tapas sueltas si las hay).
+function textoRellenadas(p) {
+  const { botellas, tapas } = desglosarBotellas(p.stock_actual, p);
+  const partes = [plural(botellas, 'botella', 'botellas')];
+  if (tapas > 0) partes.push(plural(tapas, 'tapa', 'tapas'));
+  return partes.join(' y ');
+}
+// Texto del líquido a granel (bidones + botellas equivalentes).
+function textoGranel(p) {
+  if (p.tipo_liquido !== 'granel') return '';
+  const { bidones, botellas } = desglosarBidones(p.stock_granel_tapas, p);
+  const partes = [];
+  if (bidones > 0) partes.push(plural(bidones, 'bidón', 'bidones'));
+  partes.push(plural(botellas, 'botella', 'botellas'));
+  return partes.join(' y ');
+}
+function precioTxt(v) {
+  return v != null && v !== '' ? `$${Number(v).toFixed(2)}` : '—';
+}
+function fechaHoraCorta(iso) {
+  try {
+    const d = new Date(iso);
+    const fecha = d.toLocaleDateString('es-MX', { day: '2-digit', month: 'short' });
+    const hora = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }).toLowerCase();
+    return `${fecha} · ${hora}`;
+  } catch {
+    return '';
+  }
+}
+
 const FORM_VACIO = {
-  nombre:              '',
-  marca:               '',
-  precio_unitario:     '',
-  stock_envases:       '0',
-  envase:              '',
-  tapas_por_envase:    '',
-  stock_minimo:        '0',
-  metodo_rendimiento:  'volumen',   // 'volumen' (litros + mL) | 'tapas' (directo)
-  volumen_envase:      '',
-  unidad_volumen:      'Litros',
-  tapa_ml:             '',
+  nombre:         '',
+  marca:          '',
+  tipo_liquido:   'granel',
+  envase:         'Bidón',
+  bidon_valor:    '',
+  bidon_unidad:   'Litros',
+  botella_ml:     '',
+  tapa_ml:        '',
+  precio_tapa:    '',
+  precio_botella: '',
+  stock_botellas: '0',
+  stock_bidones:  '0',
+  stock_minimo:   '0',
 };
 
 // ── Modal crear / editar ────────────────────────────────────────
-function ModalProducto({ producto, esAdmin, onClose, onGuardado, marcas = [], envases = [] }) {
-  const [form, setForm]     = useState(producto
+function ModalProducto({ producto, onClose, onGuardado, marcas = [], envases = [] }) {
+  const esEdicion = Boolean(producto);
+  const [form, setForm] = useState(producto
     ? {
-        nombre:              producto.nombre,
-        marca:               producto.marca ?? '',
-        precio_unitario:     producto.precio_unitario ?? '',
-        // El stock se guarda en tapas; en el formulario se muestra en envases.
-        stock_envases:       Number(producto.tapas_por_envase) > 0
-          ? String(+(Number(producto.stock_actual) / Number(producto.tapas_por_envase)).toFixed(2))
-          : String(producto.stock_actual ?? 0),
-        envase:              producto.envase ?? '',
-        tapas_por_envase:    producto.tapas_por_envase ?? '',
-        stock_minimo:        producto.stock_minimo ?? '0',
-        metodo_rendimiento:  producto.volumen_envase_ml ? 'volumen' : (producto.es_por_tapa ? 'tapas' : 'volumen'),
-        volumen_envase:      producto.volumen_envase_ml
+        nombre:         producto.nombre,
+        marca:          producto.marca ?? '',
+        tipo_liquido:   producto.tipo_liquido ?? 'granel',
+        envase:         producto.envase ?? 'Bidón',
+        bidon_valor:    producto.volumen_envase_ml
           ? (producto.volumen_envase_ml % 1000 === 0 ? String(producto.volumen_envase_ml / 1000) : String(producto.volumen_envase_ml))
           : '',
-        unidad_volumen:      producto.volumen_envase_ml && producto.volumen_envase_ml % 1000 !== 0 ? 'Mililitros' : 'Litros',
-        tapa_ml:             producto.tapa_ml ?? '',
+        bidon_unidad:   producto.volumen_envase_ml && producto.volumen_envase_ml % 1000 !== 0 ? 'Mililitros' : 'Litros',
+        botella_ml:     producto.botella_ml ?? '',
+        tapa_ml:        producto.tapa_ml ?? '',
+        precio_tapa:    producto.precio_unitario ?? '',
+        precio_botella: producto.precio_botella ?? '',
+        stock_botellas: '0',
+        stock_bidones:  '0',
+        stock_minimo:   producto.stock_minimo ?? '0',
       }
     : FORM_VACIO
   );
-  const [error,   setError]   = useState('');
-  const [loading, setLoading] = useState(false);
+  const [error,     setError]     = useState('');
+  const [loading,   setLoading]   = useState(false);
   const [confirmar, setConfirmar] = useState(false);
 
-  const esEdicion = Boolean(producto);
-  // Un empleado (no admin) editando solo puede ver y ajustar el stock.
-  const soloStock = esEdicion && !esAdmin;
+  const esGranel = form.tipo_liquido === 'granel';
 
-  // Rendimiento en tapas calculado por volumen (para mostrarlo en vivo).
-  const tapaMlNum   = Number(form.tapa_ml) || 0;
-  const volMlNum    = aMl(form.volumen_envase, form.unidad_volumen);
-  const tapasPorVol = tapaMlNum > 0 ? Math.floor(volMlNum / tapaMlNum) : 0;
-  // Tapas por envase efectivas: calculadas por volumen o escritas directo.
-  const tapasEfectivas = form.metodo_rendimiento === 'volumen' ? tapasPorVol : (Number(form.tapas_por_envase) || 0);
+  // Cálculos en vivo para mostrar el rendimiento.
+  const botellaMl = Number(form.botella_ml) || 0;
+  const tapaMl    = Number(form.tapa_ml) || 0;
+  const bidonMl   = aMl(form.bidon_valor, form.bidon_unidad);
+  const tapasBotella = tapaMl > 0 ? Math.floor(botellaMl / tapaMl) : 0;
+  const botellasBidon = botellaMl > 0 ? Math.floor(bidonMl / botellaMl) : 0;
 
-  // Opciones de los catálogos; si el producto trae un valor que ya no está en
-  // el catálogo (se desactivó), se conserva para no perderlo al editar.
   const marcaOptions = form.marca && !marcas.includes(form.marca) ? [form.marca, ...marcas] : marcas;
-  const envOptions = form.envase && !envases.includes(form.envase) ? [form.envase, ...envases] : envases;
+  const envOptions   = form.envase && !envases.includes(form.envase) ? [form.envase, ...envases] : envases;
 
   const handleChange = (e) => {
     const { name, value } = e.target;
     setForm(f => ({ ...f, [name]: value }));
   };
 
-  // Al crear un producto nuevo se pide confirmación primero; al editar no.
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!esEdicion && !confirmar) { setConfirmar(true); return; }
@@ -119,45 +147,33 @@ function ModalProducto({ producto, esAdmin, onClose, onGuardado, marcas = [], en
     setError('');
     setLoading(true);
 
-    // Todos los productos se consumen por tapa/medida.
-    const porVolumen = form.metodo_rendimiento === 'volumen';
-    const tapaMlVal  = Number(form.tapa_ml) || 0;
-    const volMl      = aMl(form.volumen_envase, form.unidad_volumen);
-    // Las tapas del rendimiento: calculadas por volumen o escritas directo.
-    const tapas = porVolumen
-      ? (tapaMlVal > 0 ? Math.floor(volMl / tapaMlVal) : 0)
-      : (Number(form.tapas_por_envase) || 0);
-
-    // El stock se captura en envases y se guarda en tapas (envases × tapas).
-    const stockTapas = tapas > 0
-      ? Math.round((Number(form.stock_envases) || 0) * tapas)
-      : Number(form.stock_envases) || 0;
-
     const body = {
       nombre:            form.nombre.trim(),
       marca:             form.marca || null,
+      tipo_liquido:      form.tipo_liquido,
       unidad:            'Tapas',
-      stock_actual:      stockTapas,
-      precio_unitario:   form.precio_unitario !== '' ? Number(form.precio_unitario) : null,
-      es_por_tapa:       true,
-      tapas_por_envase:  tapas > 0 ? tapas : null,
-      envase:            form.envase || null,
+      envase:            esGranel ? (form.envase || null) : null,
+      precio_unitario:   form.precio_tapa !== '' ? Number(form.precio_tapa) : null,
+      precio_botella:    form.precio_botella !== '' ? Number(form.precio_botella) : null,
+      volumen_envase_ml: esGranel && bidonMl > 0 ? bidonMl : null,
+      botella_ml:        botellaMl > 0 ? botellaMl : null,
+      tapa_ml:           tapaMl > 0 ? tapaMl : null,
       stock_minimo:      Number(form.stock_minimo) || 0,
-      volumen_envase_ml: porVolumen && volMl > 0 ? volMl : null,
-      tapa_ml:           porVolumen && tapaMlVal > 0 ? tapaMlVal : null,
     };
+    // Existencias iniciales solo al crear.
+    if (!esEdicion) {
+      body.stock_botellas = Number(form.stock_botellas) || 0;
+      body.stock_bidones  = esGranel ? (Number(form.stock_bidones) || 0) : 0;
+    }
 
     try {
-      let resultado;
-      if (esEdicion) {
-        resultado = await api.put(`/productos/${producto.id}`, body);
-      } else {
-        resultado = await api.post('/productos', body);
-      }
+      const resultado = esEdicion
+        ? await api.put(`/productos/${producto.id}`, body)
+        : await api.post('/productos', body);
       onGuardado(resultado, esEdicion);
     } catch (err) {
       setError(err.message);
-      setConfirmar(false); // volver al formulario para mostrar el error
+      setConfirmar(false);
     } finally {
       setLoading(false);
     }
@@ -179,8 +195,27 @@ function ModalProducto({ producto, esAdmin, onClose, onGuardado, marcas = [], en
         </div>
 
         <form onSubmit={handleSubmit} className="p-5 space-y-4 overflow-y-auto">
-          {!soloStock && (
-          <>
+          {/* Tipo de líquido */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+              Tipo de producto <span className="text-red-500">*</span>
+            </label>
+            <div className="flex gap-2">
+              {[['granel', 'Granel', 'Se rellena desde un bidón'], ['marca', 'De marca', 'Se compra embotellado']].map(([val, label, hint]) => (
+                <button
+                  key={val} type="button"
+                  onClick={() => setForm(f => ({ ...f, tipo_liquido: val }))}
+                  className={`flex-1 py-2.5 px-2 rounded-lg border text-sm font-medium transition-colors ${
+                    form.tipo_liquido === val ? 'border-blue bg-light-blue text-blue' : 'border-gray-300 bg-white text-gray-600 hover:bg-gray-50'
+                  }`}
+                >
+                  <span className="block">{label}</span>
+                  <span className="block text-[11px] font-normal text-gray-400 mt-0.5">{hint}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* Nombre */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">
@@ -189,7 +224,7 @@ function ModalProducto({ producto, esAdmin, onClose, onGuardado, marcas = [], en
             <input
               type="text" name="nombre" required
               value={form.nombre} onChange={handleChange}
-              placeholder="Ej. Detergente líquido" className={INPUT_CLS}
+              placeholder="Ej. Suavizante" className={INPUT_CLS}
             />
           </div>
 
@@ -204,168 +239,131 @@ function ModalProducto({ producto, esAdmin, onClose, onGuardado, marcas = [], en
             </select>
           </div>
 
-          {/* Envase */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                  Envase <span className="text-red-500">*</span>
-                </label>
-                <select name="envase" required value={form.envase} onChange={handleChange} className={INPUT_CLS}>
-                  <option value="">Seleccionar...</option>
-                  {envOptions.map(e => <option key={e} value={e}>{e}</option>)}
-                </select>
-              </div>
-
-              {/* Rendimiento: por volumen (exacto) o tapas directo */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                  Rendimiento del envase <span className="text-red-500">*</span>
-                </label>
-                <div className="flex gap-2 mb-3">
-                  <button
-                    type="button"
-                    onClick={() => setForm(f => ({ ...f, metodo_rendimiento: 'volumen' }))}
-                    className={`flex-1 py-2.5 rounded-lg border text-sm font-medium transition-colors ${
-                      form.metodo_rendimiento === 'volumen'
-                        ? 'border-blue bg-light-blue text-blue'
-                        : 'border-gray-300 bg-white text-gray-600 hover:bg-gray-50'
-                    }`}
-                  >
-                    Por volumen
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setForm(f => ({ ...f, metodo_rendimiento: 'tapas' }))}
-                    className={`flex-1 py-2.5 rounded-lg border text-sm font-medium transition-colors ${
-                      form.metodo_rendimiento === 'tapas'
-                        ? 'border-blue bg-light-blue text-blue'
-                        : 'border-gray-300 bg-white text-gray-600 hover:bg-gray-50'
-                    }`}
-                  >
-                    Solo tapas
-                  </button>
-                </div>
-
-                {form.metodo_rendimiento === 'volumen' ? (
-                  <div className="space-y-3">
-                    {/* Contenido del envase */}
-                    <div>
-                      <p className="text-xs text-gray-500 mb-1.5">¿Cuánto trae el envase?</p>
-                      <div className="flex gap-2">
-                        <input
-                          type="number" name="volumen_envase" min="0" step="any" required
-                          value={form.volumen_envase} onChange={handleChange}
-                          placeholder="Ej. 15"
-                          className={`${INPUT_CLS} flex-1 min-w-0 text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`}
-                        />
-                        <select
-                          name="unidad_volumen" value={form.unidad_volumen} onChange={handleChange}
-                          className="w-28 flex-shrink-0 px-3 py-3.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent transition"
-                        >
-                          {UNIDADES_VOLUMEN.map(u => <option key={u} value={u}>{u}</option>)}
-                        </select>
-                      </div>
-                    </div>
-                    {/* Tamaño de la tapa */}
-                    <div>
-                      <p className="text-xs text-gray-500 mb-1.5">¿De qué tamaño es la tapa/medida? (mL)</p>
-                      <input
-                        type="number" name="tapa_ml" min="1" step="any" required
-                        value={form.tapa_ml} onChange={handleChange}
-                        placeholder="Ej. 100"
-                        className={`${INPUT_CLS} text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`}
-                      />
-                    </div>
-                    {/* Resultado calculado */}
-                    <div className={`rounded-lg px-4 py-3 text-sm ${tapasPorVol > 0 ? 'bg-green-50 text-green-800' : 'bg-gray-50 text-gray-500'}`}>
-                      {tapasPorVol > 0
-                        ? <>Rinde <span className="font-bold">{tapasPorVol} tapas</span> por {(form.envase || 'envase').toLowerCase()}.</>
-                        : 'Captura el contenido y el tamaño de la tapa para calcular las tapas.'}
-                    </div>
-                  </div>
-                ) : (
-                  <input
-                    type="number" name="tapas_por_envase" min="1" step="1" required
-                    value={form.tapas_por_envase} onChange={handleChange}
-                    placeholder="Ej. 150 tapas por envase"
-                    className={`${INPUT_CLS} text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`}
-                  />
-                )}
-              </div>
-          </>
+          {/* Envase (solo granel) */}
+          {esGranel && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                Envase a granel <span className="text-red-500">*</span>
+              </label>
+              <select name="envase" required value={form.envase} onChange={handleChange} className={INPUT_CLS}>
+                <option value="">Seleccionar...</option>
+                {envOptions.map(e => <option key={e} value={e}>{e}</option>)}
+              </select>
+            </div>
           )}
 
-          {/* Stock actual (en envases) */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              Stock actual (envases) <span className="text-red-500">*</span>
-            </label>
-            <div className="flex items-center gap-2">
-              <input
-                type="number" name="stock_envases" min="0" step="any" required
-                value={form.stock_envases} onChange={handleChange}
-                className={`${INPUT_CLS} text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`}
-              />
-              <button
-                type="button"
-                onClick={() => setForm(f => ({ ...f, stock_envases: String(Math.max(0, (Number(f.stock_envases) || 0) - 1)) }))}
-                disabled={(Number(form.stock_envases) || 0) <= 0}
-                aria-label="Disminuir envases"
-                className="flex-shrink-0 w-14 py-3.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-xl font-semibold hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-              >
-                −
-              </button>
-              <button
-                type="button"
-                onClick={() => setForm(f => ({ ...f, stock_envases: String((Number(f.stock_envases) || 0) + 1) }))}
-                aria-label="Aumentar envases"
-                className="flex-shrink-0 w-14 py-3.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-xl font-semibold hover:bg-gray-50 transition-colors"
-              >
-                +
-              </button>
-            </div>
-            {tapasEfectivas > 0 && Number(form.stock_envases) > 0 && (
-              <p className="mt-2 text-xs text-gray-500">
-                = {Math.round(Number(form.stock_envases) * tapasEfectivas)} tapas en total
-              </p>
+          {/* Volúmenes */}
+          <div className="space-y-3">
+            {esGranel && (
+              <div>
+                <p className="text-sm font-medium text-gray-700 mb-1.5">
+                  ¿Cuánto trae el bidón? <span className="text-red-500">*</span>
+                </p>
+                <div className="flex gap-2">
+                  <input
+                    type="number" name="bidon_valor" min="0" step="any" required
+                    value={form.bidon_valor} onChange={handleChange} placeholder="Ej. 20"
+                    className={`${NUM_CLS} flex-1 min-w-0`}
+                  />
+                  <select
+                    name="bidon_unidad" value={form.bidon_unidad} onChange={handleChange}
+                    className="w-28 flex-shrink-0 px-3 py-3.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent transition"
+                  >
+                    {UNIDADES_VOLUMEN.map(u => <option key={u} value={u}>{u}</option>)}
+                  </select>
+                </div>
+              </div>
             )}
+            <div>
+              <p className="text-sm font-medium text-gray-700 mb-1.5">
+                ¿De qué tamaño es la botella? (mL) <span className="text-red-500">*</span>
+              </p>
+              <input
+                type="number" name="botella_ml" min="1" step="any" required
+                value={form.botella_ml} onChange={handleChange} placeholder="Ej. 800"
+                className={NUM_CLS}
+              />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-gray-700 mb-1.5">
+                ¿De qué tamaño es la tapa/medida? (mL) <span className="text-red-500">*</span>
+              </p>
+              <input
+                type="number" name="tapa_ml" min="1" step="any" required
+                value={form.tapa_ml} onChange={handleChange} placeholder="Ej. 200"
+                className={NUM_CLS}
+              />
+            </div>
+            {/* Rendimiento calculado */}
+            <div className={`rounded-lg px-4 py-3 text-sm ${tapasBotella > 0 ? 'bg-green-50 text-green-800' : 'bg-gray-50 text-gray-500'}`}>
+              {tapasBotella > 0 ? (
+                <>
+                  Rinde <span className="font-bold">{tapasBotella} tapas</span> por botella
+                  {esGranel && botellasBidon > 0 && <> · <span className="font-bold">{botellasBidon} botellas</span> por bidón</>}.
+                </>
+              ) : 'Captura los tamaños de botella y tapa para calcular el rendimiento.'}
+            </div>
           </div>
 
-          {!soloStock && (
-          <>
-          {/* Precio por tapa */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              Precio por tapa ($) <span className="text-red-500">*</span>
-            </label>
-            <div className="flex items-center gap-2">
-              <div className="relative flex-1">
-                <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 text-base">$</span>
+          {/* Precios */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                Precio por tapa ($)
+              </label>
+              <div className="relative">
+                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-base">$</span>
                 <input
-                  type="number" name="precio_unitario" min="0" step="any" required
-                  value={form.precio_unitario} onChange={handleChange}
-                  placeholder="0.00"
-                  className={`${INPUT_CLS} pl-8 text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`}
+                  type="number" name="precio_tapa" min="0" step="any"
+                  value={form.precio_tapa} onChange={handleChange} placeholder="0.00"
+                  className={`${NUM_CLS} pl-7`}
                 />
               </div>
-              <button
-                type="button"
-                onClick={() => setForm(f => ({ ...f, precio_unitario: String(Math.max(0, (Number(f.precio_unitario) || 0) - 10)) }))}
-                disabled={(Number(form.precio_unitario) || 0) <= 0}
-                aria-label="Disminuir precio"
-                className="flex-shrink-0 w-14 py-3.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-xl font-semibold hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-              >
-                −
-              </button>
-              <button
-                type="button"
-                onClick={() => setForm(f => ({ ...f, precio_unitario: String((Number(f.precio_unitario) || 0) + 10) }))}
-                aria-label="Aumentar precio"
-                className="flex-shrink-0 w-14 py-3.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-xl font-semibold hover:bg-gray-50 transition-colors"
-              >
-                +
-              </button>
+              <p className="text-[11px] text-gray-400 mt-1">Por Encargo</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                Precio por botella ($)
+              </label>
+              <div className="relative">
+                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-base">$</span>
+                <input
+                  type="number" name="precio_botella" min="0" step="any"
+                  value={form.precio_botella} onChange={handleChange} placeholder="0.00"
+                  className={`${NUM_CLS} pl-7`}
+                />
+              </div>
+              <p className="text-[11px] text-gray-400 mt-1">Autoservicio</p>
             </div>
           </div>
+
+          {/* Existencias iniciales (solo al crear) */}
+          {!esEdicion && (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Botellas rellenadas
+                </label>
+                <input
+                  type="number" name="stock_botellas" min="0" step="1"
+                  value={form.stock_botellas} onChange={handleChange}
+                  className={NUM_CLS}
+                />
+              </div>
+              {esGranel && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    Bidones a granel
+                  </label>
+                  <input
+                    type="number" name="stock_bidones" min="0" step="1"
+                    value={form.stock_bidones} onChange={handleChange}
+                    className={NUM_CLS}
+                  />
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Alerta de stock bajo */}
           <div>
@@ -374,18 +372,13 @@ function ModalProducto({ producto, esAdmin, onClose, onGuardado, marcas = [], en
             </label>
             <input
               type="number" name="stock_minimo" min="0" step="1"
-              value={form.stock_minimo} onChange={handleChange}
-              placeholder="Ej. 20"
-              className={`${INPUT_CLS} text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`}
+              value={form.stock_minimo} onChange={handleChange} placeholder="Ej. 20"
+              className={NUM_CLS}
             />
           </div>
-          </>
-          )}
 
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">
-              {error}
-            </div>
+            <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">{error}</div>
           )}
 
           <div className="flex gap-3 pt-1">
@@ -444,6 +437,263 @@ function ModalProducto({ producto, esAdmin, onClose, onGuardado, marcas = [], en
   );
 }
 
+// ── Modal Entrada / Salida ──────────────────────────────────────
+function ModalMovimiento({ producto, tipo, onClose, onDone }) {
+  const esGranel = producto.tipo_liquido === 'granel';
+  const [destino, setDestino] = useState('botellas');
+  const [unidad,  setUnidad]  = useState('botella');
+  const [cantidad, setCantidad] = useState('1');
+  const [motivo, setMotivo]   = useState('');
+  const [error, setError]     = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const esEntrada = tipo === 'entrada';
+  const unidadesDisponibles = destino === 'granel' ? ['bidon', 'botella', 'tapa'] : ['botella', 'tapa'];
+  const unidadLabel = { bidon: 'Bidones', botella: 'Botellas', tapa: 'Tapas' };
+
+  const cambiarDestino = (d) => {
+    setDestino(d);
+    setUnidad(d === 'granel' ? 'bidon' : 'botella');
+  };
+
+  const enviar = async () => {
+    setError('');
+    setLoading(true);
+    try {
+      const resp = await api.post(`/productos/${producto.id}/movimiento`, {
+        tipo, destino, unidad, cantidad: Number(cantidad), motivo: motivo.trim() || null,
+      });
+      onDone(resp);
+    } catch (err) {
+      setError(err.message);
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[55] flex items-center justify-center p-4 bg-black/40">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+        <div>
+          <h3 className="text-base font-semibold text-gray-900">
+            {esEntrada ? 'Registrar entrada' : 'Registrar salida'}
+          </h3>
+          <p className="text-sm text-gray-500 mt-0.5">{producto.nombre}</p>
+        </div>
+
+        {/* Destino (solo granel puede elegir) */}
+        {esGranel && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">¿A qué existencia?</label>
+            <div className="flex gap-2">
+              {[['botellas', 'Botellas rellenadas'], ['granel', 'A granel (bidón)']].map(([val, label]) => (
+                <button
+                  key={val} type="button" onClick={() => cambiarDestino(val)}
+                  className={`flex-1 py-2.5 px-2 rounded-lg border text-sm font-medium transition-colors ${
+                    destino === val ? 'border-blue bg-light-blue text-blue' : 'border-gray-300 bg-white text-gray-600 hover:bg-gray-50'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="flex gap-2">
+          <div className="flex-1">
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Cantidad</label>
+            <input
+              type="number" min="0" step="any" value={cantidad}
+              onChange={(e) => setCantidad(e.target.value)} className={NUM_CLS}
+            />
+          </div>
+          <div className="w-32">
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Unidad</label>
+            <select
+              value={unidad} onChange={(e) => setUnidad(e.target.value)}
+              className="w-full px-3 py-3.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent transition"
+            >
+              {unidadesDisponibles.map(u => <option key={u} value={u}>{unidadLabel[u]}</option>)}
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">Motivo (opcional)</label>
+          <input
+            type="text" value={motivo} onChange={(e) => setMotivo(e.target.value)}
+            placeholder={esEntrada ? 'Ej. Compra' : 'Ej. Derrame'} className={INPUT_CLS}
+          />
+        </div>
+
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">{error}</div>
+        )}
+
+        <div className="flex gap-3">
+          <button
+            type="button" onClick={onClose} disabled={loading}
+            className="flex-1 border border-gray-300 text-gray-700 font-medium py-3.5 rounded-lg text-base hover:bg-gray-50 transition-colors disabled:opacity-60"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button" onClick={enviar} disabled={loading || !(Number(cantidad) > 0)}
+            className={`flex-1 text-white font-medium py-3.5 rounded-lg text-base transition-colors disabled:opacity-60 ${
+              esEntrada ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'
+            }`}
+          >
+            {loading ? 'Guardando...' : esEntrada ? 'Registrar entrada' : 'Registrar salida'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Modal Rellenar ──────────────────────────────────────────────
+function ModalRellenar({ producto, onClose, onDone }) {
+  const tpb = tapasPorBotella(producto);
+  const maxBotellas = tpb > 0 ? Math.floor(Number(producto.stock_granel_tapas) / tpb) : 0;
+  const [botellas, setBotellas] = useState(String(Math.min(maxBotellas, botellasPorBidon(producto) || maxBotellas)));
+  const [error, setError]   = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const n = Number(botellas);
+  const invalido = !Number.isInteger(n) || n <= 0 || n > maxBotellas;
+
+  const enviar = async () => {
+    setError('');
+    setLoading(true);
+    try {
+      const resp = await api.post(`/productos/${producto.id}/rellenar`, { botellas: n });
+      onDone(resp);
+    } catch (err) {
+      setError(err.message);
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[55] flex items-center justify-center p-4 bg-black/40">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-4">
+        <div>
+          <h3 className="text-base font-semibold text-gray-900">Rellenar botellas</h3>
+          <p className="text-sm text-gray-500 mt-0.5">{producto.nombre}</p>
+        </div>
+
+        <div className="bg-gray-50 rounded-lg px-4 py-3 text-sm text-gray-600">
+          A granel disponible: <span className="font-semibold text-gray-800">{textoGranel(producto)}</span>
+          <br />Alcanza para <span className="font-semibold text-gray-800">{maxBotellas} botella(s)</span>.
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">
+            ¿Cuántas botellas rellenaste?
+          </label>
+          <input
+            type="number" min="1" max={maxBotellas} step="1" value={botellas}
+            onChange={(e) => setBotellas(e.target.value)} className={NUM_CLS}
+          />
+          {n > 0 && !invalido && (
+            <p className="text-xs text-gray-500 mt-1">
+              Quedarán {maxBotellas - n} botella(s) de líquido en el bidón.
+            </p>
+          )}
+        </div>
+
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">{error}</div>
+        )}
+
+        <div className="flex gap-3">
+          <button
+            type="button" onClick={onClose} disabled={loading}
+            className="flex-1 border border-gray-300 text-gray-700 font-medium py-3.5 rounded-lg text-base hover:bg-gray-50 transition-colors disabled:opacity-60"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button" onClick={enviar} disabled={loading || invalido}
+            className="flex-1 bg-blue hover:opacity-90 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
+          >
+            {loading ? 'Rellenando...' : 'Rellenar'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Modal Historial ─────────────────────────────────────────────
+const MOV_LABEL = {
+  entrada: 'Entrada', salida: 'Salida', rellenar: 'Rellenado',
+  venta: 'Venta', reserva: 'Reserva', liberacion: 'Liberación', ajuste: 'Ajuste',
+};
+const MOV_COLOR = {
+  entrada: 'text-green-700 bg-green-50', rellenar: 'text-blue bg-light-blue',
+  salida: 'text-red-700 bg-red-50', venta: 'text-red-700 bg-red-50',
+  reserva: 'text-amber-700 bg-amber-50', liberacion: 'text-gray-600 bg-gray-100',
+  ajuste: 'text-gray-600 bg-gray-100',
+};
+function ModalHistorial({ producto, onClose }) {
+  const [movs, setMovs] = useState(null);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let activo = true;
+    api.get(`/productos/${producto.id}/movimientos`)
+      .then(data => { if (activo) setMovs(data); })
+      .catch(err => { if (activo) setError(err.message); });
+    return () => { activo = false; };
+  }, [producto.id]);
+
+  return (
+    <div className="fixed inset-0 z-[55] flex items-center justify-center p-4 bg-black/40">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 flex-shrink-0">
+          <div>
+            <h2 className="text-base font-semibold text-gray-900">Historial de movimientos</h2>
+            <p className="text-sm text-gray-500">{producto.nombre}</p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <div className="p-5 overflow-y-auto">
+          {error && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">{error}</div>}
+          {!error && movs === null && <p className="text-sm text-gray-400 py-4 text-center">Cargando…</p>}
+          {!error && movs?.length === 0 && <p className="text-sm text-gray-400 italic py-4 text-center">Sin movimientos todavía.</p>}
+          {!error && movs?.length > 0 && (
+            <ul className="divide-y divide-gray-50">
+              {movs.map(m => (
+                <li key={m.id} className="py-3 flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${MOV_COLOR[m.tipo] ?? 'text-gray-600 bg-gray-100'}`}>
+                        {MOV_LABEL[m.tipo] ?? m.tipo}
+                      </span>
+                      <span className="text-sm font-medium text-gray-800">{m.descripcion ?? `${m.cantidad_tapas} tapas`}</span>
+                    </div>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      {m.destino === 'granel' ? 'A granel' : 'Botellas'}
+                      {m.motivo ? ` · ${m.motivo}` : ''}
+                      {m.usuario_nombre ? ` · ${m.usuario_nombre}` : ''}
+                    </p>
+                  </div>
+                  <span className="text-xs text-gray-400 flex-shrink-0 whitespace-nowrap">{fechaHoraCorta(m.created_at)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Modal confirmar eliminación ─────────────────────────────────
 function ModalEliminar({ producto, onClose, onConfirmar }) {
   const [loading, setLoading] = useState(false);
@@ -479,9 +729,7 @@ function ModalEliminar({ producto, onClose, onConfirmar }) {
         </div>
 
         {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">
-            {error}
-          </div>
+          <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">{error}</div>
         )}
 
         <div className="flex gap-3">
@@ -539,9 +787,7 @@ function ModalArchivar({ producto, onClose, onConfirmar }) {
         </div>
 
         {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">
-            {error}
-          </div>
+          <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">{error}</div>
         )}
 
         <div className="flex gap-3">
@@ -572,7 +818,6 @@ function IconoLapiz() {
     </svg>
   );
 }
-
 function IconoBasura() {
   return (
     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -581,7 +826,6 @@ function IconoBasura() {
     </svg>
   );
 }
-
 function IconoArchivar() {
   return (
     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -590,7 +834,14 @@ function IconoArchivar() {
     </svg>
   );
 }
-
+function IconoHistorial() {
+  return (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+        d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  );
+}
 function IconoAdvertencia({ severity }) {
   const cls = severity === 'agotado' ? 'text-red-600' : 'text-amber-500';
   return (
@@ -598,6 +849,21 @@ function IconoAdvertencia({ severity }) {
       <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
     </svg>
   );
+}
+
+// Chip de tipo de producto (granel / marca).
+function ChipTipo({ tipo }) {
+  if (tipo !== 'granel' && tipo !== 'marca') return null;
+  const cfg = tipo === 'granel'
+    ? { label: 'Granel', cls: 'bg-light-blue text-blue' }
+    : { label: 'Marca', cls: 'bg-purple-100 text-purple-700' };
+  return <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${cfg.cls}`}>{cfg.label}</span>;
+}
+
+function BadgeEstado({ estado }) {
+  if (estado === 'agotado') return <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700">Agotado</span>;
+  if (estado === 'por_agotarse') return <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Por agotarse</span>;
+  return <span className="w-2 h-2 rounded-full bg-green-500 inline-block" />;
 }
 
 // ── Página principal ────────────────────────────────────────────
@@ -612,6 +878,9 @@ export default function Inventario() {
   const [prodAEliminar,   setProdAEliminar]   = useState(null);
   const [prodAArchivar,   setProdAArchivar]   = useState(null);
   const [infoProducto,    setInfoProducto]    = useState(null);  // info modal (mobile)
+  const [modalMovimiento, setModalMovimiento] = useState(null);  // { producto, tipo }
+  const [modalRellenar,   setModalRellenar]   = useState(null);  // producto
+  const [modalHistorial,  setModalHistorial]  = useState(null);  // producto
 
   // Archivados: se cargan bajo demanda al abrir el panel "Ver archivados".
   const [verArchivados,   setVerArchivados]   = useState(false);
@@ -622,7 +891,7 @@ export default function Inventario() {
   // Selección múltiple (admin, desktop) para borrado en lote.
   const [seleccionados,   setSeleccionados]   = useState(() => new Set());
   const [bulkOpen,        setBulkOpen]        = useState(false);
-  const [bulkInfo,        setBulkInfo]        = useState(null); // { bloqueados, eliminables }
+  const [bulkInfo,        setBulkInfo]        = useState(null);
   const [bulkLoading,     setBulkLoading]     = useState(false);
   const [bulkDeleting,    setBulkDeleting]    = useState(false);
   const [bulkError,       setBulkError]       = useState('');
@@ -673,9 +942,15 @@ export default function Inventario() {
 
   const stockBajo = productos.filter(p => p.estado_stock !== 'ok');
 
+  // Reemplaza un producto en la lista (tras editar / movimiento / rellenar).
+  const reemplazarProducto = (prod) => {
+    setProductos(prev => prev.map(p => (p.id === prod.id ? prod : p)));
+    setInfoProducto(prev => (prev && prev.id === prod.id ? prod : prev));
+  };
+
   const handleGuardado = (resultado, esEdicion) => {
     if (esEdicion) {
-      setProductos(prev => prev.map(p => p.id === resultado.id ? resultado : p));
+      reemplazarProducto(resultado);
     } else {
       setProductos(prev => [...prev, resultado].sort((a, b) => a.nombre.localeCompare(b.nombre)));
     }
@@ -740,17 +1015,13 @@ export default function Inventario() {
   };
   const limpiarSeleccion = () => setSeleccionados(new Set());
 
-  // Abre el modal de borrado múltiple: primero verifica (dry-run) cuáles tienen
-  // ventas registradas para advertirlo antes de borrar.
   const abrirBulk = async () => {
     setBulkError('');
     setBulkInfo(null);
     setBulkLoading(true);
     setBulkOpen(true);
     try {
-      const info = await api.post('/productos/eliminar-multiples', {
-        ids: [...seleccionados], confirmar: false,
-      });
+      const info = await api.post('/productos/eliminar-multiples', { ids: [...seleccionados], confirmar: false });
       setBulkInfo(info);
     } catch (err) {
       setBulkError(err.message);
@@ -763,9 +1034,7 @@ export default function Inventario() {
     setBulkError('');
     setBulkDeleting(true);
     try {
-      const res = await api.post('/productos/eliminar-multiples', {
-        ids: [...seleccionados], confirmar: true,
-      });
+      const res = await api.post('/productos/eliminar-multiples', { ids: [...seleccionados], confirmar: true });
       const eliminados = new Set(res.eliminados ?? []);
       setProductos(prev => prev.filter(p => !eliminados.has(p.id)));
       setSeleccionados(new Set());
@@ -776,6 +1045,44 @@ export default function Inventario() {
       setBulkDeleting(false);
     }
   };
+
+  // Acciones de stock disponibles para todos (operativas).
+  const accionesStock = (p, { compact = false } = {}) => (
+    <>
+      <button
+        onClick={(e) => { e.stopPropagation(); setModalMovimiento({ producto: p, tipo: 'entrada' }); }}
+        className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+        title="Entrada"
+      >
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+      </button>
+      <button
+        onClick={(e) => { e.stopPropagation(); setModalMovimiento({ producto: p, tipo: 'salida' }); }}
+        className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+        title="Salida"
+      >
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" /></svg>
+      </button>
+      {p.tipo_liquido === 'granel' && (
+        <button
+          onClick={(e) => { e.stopPropagation(); setModalRellenar(p); }}
+          className="p-1.5 text-gray-400 hover:text-blue hover:bg-light-blue rounded-lg transition-colors"
+          title="Rellenar botellas desde el bidón"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+        </button>
+      )}
+      {!compact && (
+        <button
+          onClick={(e) => { e.stopPropagation(); setModalHistorial(p); }}
+          className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+          title="Ver historial"
+        >
+          <IconoHistorial />
+        </button>
+      )}
+    </>
+  );
 
   return (
     <div className="min-h-full bg-slate-100">
@@ -794,8 +1101,7 @@ export default function Inventario() {
             className="w-11 h-11 rounded-full bg-blue hover:opacity-90 text-white flex items-center justify-center transition-colors flex-shrink-0"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5}
-                d="M12 4v16m8-8H4" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
             </svg>
           </button>
         )}
@@ -821,8 +1127,16 @@ export default function Inventario() {
           </div>
           <div className="flex flex-wrap gap-1.5">
             {stockBajo.map(p => (
-              <span key={p.id} className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium">
+              <span key={p.id} className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium inline-flex items-center gap-1.5">
                 {p.nombre}
+                {p.tipo_liquido === 'granel' && Number(p.stock_granel_tapas) >= tapasPorBotella(p) && tapasPorBotella(p) > 0 && (
+                  <button
+                    onClick={() => setModalRellenar(p)}
+                    className="underline hover:no-underline font-semibold"
+                  >
+                    Rellenar
+                  </button>
+                )}
               </span>
             ))}
           </div>
@@ -888,10 +1202,9 @@ export default function Inventario() {
                       </th>
                     )}
                     <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Producto</th>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Marca</th>
-                    <th className="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Precio unit.</th>
-                    <th className="text-center px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Stock actual</th>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Unidad</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Precios</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Botellas rellenadas</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">A granel</th>
                     <th className="px-4 py-3" />
                   </tr>
                 </thead>
@@ -912,44 +1225,37 @@ export default function Inventario() {
                           <div className="flex items-center gap-2">
                             {es !== 'ok' && <IconoAdvertencia severity={es} />}
                             <span className="font-medium text-gray-800">{p.nombre}</span>
+                            <ChipTipo tipo={p.tipo_liquido} />
                           </div>
+                          {p.marca && <p className="text-xs text-gray-400 mt-0.5">{p.marca}</p>}
                         </td>
-                        <td className="px-4 py-3 text-gray-500 text-xs">
-                          {p.marca ?? '—'}
+                        <td className="px-4 py-3 text-gray-600 text-xs">
+                          <div>Tapa: <span className="font-medium text-gray-700">{precioTxt(p.precio_unitario)}</span></div>
+                          <div>Botella: <span className="font-medium text-gray-700">{precioTxt(p.precio_botella)}</span></div>
                         </td>
-                        <td className="px-4 py-3 text-right text-gray-600">
-                          {p.precio_unitario != null ? `$${Number(p.precio_unitario).toFixed(2)}` : '—'}
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          <div className="flex flex-col items-center gap-0.5">
-                            <span className="font-mono font-semibold text-sm text-gray-800">
-                              {Math.round(Number(p.stock_actual))}
-                            </span>
-                            {es === 'agotado' && (
-                              <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700">Agotado</span>
-                            )}
-                            {es === 'por_agotarse' && (
-                              <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Por agotarse</span>
-                            )}
-                            {es === 'ok' && (
-                              <span className="w-2 h-2 rounded-full bg-green-500 inline-block" />
-                            )}
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-medium text-gray-800">{textoRellenadas(p)}</span>
+                            <BadgeEstado estado={es} />
                           </div>
                         </td>
                         <td className="px-4 py-3 text-gray-600">
-                          {p.es_por_tapa
-                            ? <>Tapas {formatoStock(p).equivalencia && <span className="text-gray-400">{formatoStock(p).equivalencia}</span>}</>
-                            : pluralizarUnidad(p.stock_actual, p.unidad)}
+                          {p.tipo_liquido === 'granel'
+                            ? textoGranel(p)
+                            : <span className="text-gray-300">—</span>}
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex items-center justify-end gap-1">
-                            <button
-                              onClick={() => setModalProducto(p)}
-                              className="p-1.5 text-gray-400 hover:text-blue hover:bg-light-blue rounded-lg transition-colors"
-                              title="Editar"
-                            >
-                              <IconoLapiz />
-                            </button>
+                            {accionesStock(p)}
+                            {esAdmin && (
+                              <button
+                                onClick={() => setModalProducto(p)}
+                                className="p-1.5 text-gray-400 hover:text-blue hover:bg-light-blue rounded-lg transition-colors"
+                                title="Editar"
+                              >
+                                <IconoLapiz />
+                              </button>
+                            )}
                             {esAdmin && (
                               <button
                                 onClick={() => setProdAArchivar(p)}
@@ -994,31 +1300,15 @@ export default function Inventario() {
                   <div className="flex items-center gap-2">
                     {es !== 'ok' && <IconoAdvertencia severity={es} />}
                     <p className="font-medium text-gray-800 text-sm">{p.nombre}</p>
+                    <ChipTipo tipo={p.tipo_liquido} />
                   </div>
-                  {p.marca && (
-                    <p className="text-xs text-gray-400 mt-0.5">{p.marca}</p>
-                  )}
+                  {p.marca && <p className="text-xs text-gray-400 mt-0.5">{p.marca}</p>}
                   <div className="flex items-center gap-2 mt-1 flex-wrap">
-                    <span className="text-sm font-mono font-semibold text-gray-700">
-                      {formatoStock(p).cantidad}
-                    </span>
-                    {p.es_por_tapa && formatoStock(p).equivalencia && (
-                      <span className="text-xs text-gray-400">{formatoStock(p).equivalencia}</span>
-                    )}
-                    {es === 'agotado' && (
-                      <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700">Agotado</span>
-                    )}
-                    {es === 'por_agotarse' && (
-                      <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Por agotarse</span>
-                    )}
-                    {p.precio_unitario != null && (
-                      <span className="text-xs text-gray-500">
-                        ${Number(p.precio_unitario).toFixed(2)}{p.es_por_tapa ? '/tapa' : ''}
-                      </span>
-                    )}
+                    <span className="text-sm font-medium text-gray-700">{textoRellenadas(p)}</span>
+                    <BadgeEstado estado={es} />
                   </div>
-                  {!p.es_por_tapa && p.unidad && (
-                    <p className="text-xs text-gray-500 mt-0.5">Unidad: {p.unidad}</p>
+                  {p.tipo_liquido === 'granel' && (
+                    <p className="text-xs text-gray-500 mt-0.5">A granel: {textoGranel(p)}</p>
                   )}
                 </button>
               );
@@ -1092,58 +1382,80 @@ export default function Inventario() {
               </div>
               <div className="p-5 space-y-5 overflow-y-auto">
                 <div>
-                  <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Nombre</p>
-                  <p className="text-base font-medium text-gray-900">{p.nombre}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-base font-medium text-gray-900">{p.nombre}</p>
+                    <ChipTipo tipo={p.tipo_liquido} />
+                  </div>
+                  {p.marca && <p className="text-sm text-gray-500 mt-0.5">{p.marca}</p>}
                 </div>
-                <div>
-                  <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Marca</p>
-                  <p className="text-base text-gray-700">{p.marca ?? <span className="text-gray-400 italic">Sin marca</span>}</p>
-                </div>
-                <div>
-                  <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">
-                    {p.es_por_tapa ? 'Precio por tapa' : 'Precio unitario'}
-                  </p>
-                  <p className="text-base text-gray-700">
-                    {p.precio_unitario != null ? `$${Number(p.precio_unitario).toFixed(2)}` : '—'}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Stock actual</p>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-base font-mono font-semibold text-gray-800">
-                      {formatoStock(p).cantidad}
-                    </span>
-                    {p.es_por_tapa && formatoStock(p).equivalencia && (
-                      <span className="text-sm text-gray-400">{formatoStock(p).equivalencia}</span>
-                    )}
-                    {es === 'agotado' && (
-                      <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700">Agotado</span>
-                    )}
-                    {es === 'por_agotarse' && (
-                      <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Por agotarse</span>
-                    )}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Precio por tapa</p>
+                    <p className="text-base text-gray-700">{precioTxt(p.precio_unitario)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Precio por botella</p>
+                    <p className="text-base text-gray-700">{precioTxt(p.precio_botella)}</p>
                   </div>
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">
-                    {p.es_por_tapa ? 'Envase' : 'Unidad'}
-                  </p>
-                  <p className="text-base text-gray-700">
-                    {p.es_por_tapa
-                      ? (p.envase ? `${p.envase} · rinde ${p.tapas_por_envase} tapas` : `Rinde ${p.tapas_por_envase} tapas`)
-                      : (p.unidad ?? <span className="text-gray-400 italic">—</span>)}
-                  </p>
+                  <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Botellas rellenadas</p>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-base font-medium text-gray-800">{textoRellenadas(p)}</span>
+                    <BadgeEstado estado={es} />
+                  </div>
                 </div>
+                {p.tipo_liquido === 'granel' && (
+                  <div>
+                    <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">A granel (bidón)</p>
+                    <p className="text-base text-gray-700">{textoGranel(p)}</p>
+                  </div>
+                )}
 
                 <div className="space-y-2 pt-1">
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => { setModalMovimiento({ producto: p, tipo: 'entrada' }); }}
+                      className="flex-1 flex items-center justify-center gap-2 py-3 border border-green-300 text-green-700 hover:bg-green-50 font-medium rounded-lg text-sm transition-colors"
+                    >
+                      + Entrada
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setModalMovimiento({ producto: p, tipo: 'salida' }); }}
+                      className="flex-1 flex items-center justify-center gap-2 py-3 border border-red-300 text-red-700 hover:bg-red-50 font-medium rounded-lg text-sm transition-colors"
+                    >
+                      − Salida
+                    </button>
+                  </div>
+                  {p.tipo_liquido === 'granel' && (
+                    <button
+                      type="button"
+                      onClick={() => { setModalRellenar(p); }}
+                      className="w-full flex items-center justify-center gap-2 py-3 bg-blue hover:opacity-90 text-white font-medium rounded-lg text-sm transition-colors"
+                    >
+                      Rellenar botellas
+                    </button>
+                  )}
                   <button
                     type="button"
-                    onClick={() => { setInfoProducto(null); setModalProducto(p); }}
-                    className="w-full flex items-center justify-center gap-2 py-3 bg-blue hover:opacity-90 text-white font-medium rounded-lg text-sm transition-colors"
+                    onClick={() => { setModalHistorial(p); }}
+                    className="w-full flex items-center justify-center gap-2 py-3 border border-gray-300 text-gray-700 hover:bg-gray-50 font-medium rounded-lg text-sm transition-colors"
                   >
-                    <IconoLapiz />
-                    Editar
+                    <IconoHistorial />
+                    Ver historial
                   </button>
+                  {esAdmin && (
+                    <button
+                      type="button"
+                      onClick={() => { setInfoProducto(null); setModalProducto(p); }}
+                      className="w-full flex items-center justify-center gap-2 py-3 border border-gray-300 text-gray-700 hover:bg-gray-50 font-medium rounded-lg text-sm transition-colors"
+                    >
+                      <IconoLapiz />
+                      Editar
+                    </button>
+                  )}
                   {esAdmin && (
                     <button
                       type="button"
@@ -1175,12 +1487,35 @@ export default function Inventario() {
       {modalProducto && (
         <ModalProducto
           producto={modalProducto === 'nuevo' ? null : modalProducto}
-          esAdmin={esAdmin}
           marcas={marcas}
           envases={envases}
           onClose={() => setModalProducto(null)}
           onGuardado={handleGuardado}
         />
+      )}
+
+      {/* Modal entrada / salida */}
+      {modalMovimiento && (
+        <ModalMovimiento
+          producto={modalMovimiento.producto}
+          tipo={modalMovimiento.tipo}
+          onClose={() => setModalMovimiento(null)}
+          onDone={(prod) => { reemplazarProducto(prod); setModalMovimiento(null); }}
+        />
+      )}
+
+      {/* Modal rellenar */}
+      {modalRellenar && (
+        <ModalRellenar
+          producto={modalRellenar}
+          onClose={() => setModalRellenar(null)}
+          onDone={(prod) => { reemplazarProducto(prod); setModalRellenar(null); }}
+        />
+      )}
+
+      {/* Modal historial */}
+      {modalHistorial && (
+        <ModalHistorial producto={modalHistorial} onClose={() => setModalHistorial(null)} />
       )}
 
       {/* Modal confirmar eliminar */}
