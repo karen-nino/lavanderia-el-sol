@@ -69,6 +69,19 @@ function textoGranel(p) {
 function precioTxt(v) {
   return v != null && v !== '' ? `$${Number(v).toFixed(2)}` : '—';
 }
+// Mensajes de aviso (estilo "Se acabaron … — hay N actualmente").
+function mensajeAvisoBotellas(p) {
+  const { botellas } = desglosarBotellas(p.stock_actual, p);
+  return p.estado_stock === 'agotado'
+    ? 'Se acabaron las botellas — hay 0 actualmente'
+    : `Quedan pocas botellas — hay ${botellas} actualmente`;
+}
+function mensajeAvisoGranel(p) {
+  const { bidones } = desglosarBidones(p.stock_granel_tapas, p);
+  return p.estado_granel === 'agotado'
+    ? 'Se acabaron los bidones — hay 0 actualmente'
+    : `Quedan pocos bidones — hay ${bidones} actualmente`;
+}
 function fechaHoraCorta(iso) {
   try {
     const d = new Date(iso);
@@ -471,8 +484,8 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [] }) {
 // ── Modal Entrada / Salida ──────────────────────────────────────
 function ModalMovimiento({ producto, tipo, onClose, onDone }) {
   const esGranel = producto.tipo_liquido === 'granel';
-  const [destino, setDestino] = useState('botellas');
-  const [unidad,  setUnidad]  = useState('botella');
+  const [destino, setDestino] = useState(esGranel ? 'granel' : 'botellas');
+  const [unidad,  setUnidad]  = useState(esGranel ? 'bidon' : 'botella');
   const [cantidad, setCantidad] = useState('1');
   const [error, setError]     = useState('');
   const [loading, setLoading] = useState(false);
@@ -515,7 +528,7 @@ function ModalMovimiento({ producto, tipo, onClose, onDone }) {
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">¿A qué existencia?</label>
             <div className="flex gap-2">
-              {[['botellas', 'Botellas'], ['granel', 'Bidones']].map(([val, label]) => (
+              {[['granel', 'Bidones'], ['botellas', 'Botellas']].map(([val, label]) => (
                 <button
                   key={val} type="button" onClick={() => cambiarDestino(val)}
                   className={`flex-1 py-2.5 px-2 rounded-lg border text-sm font-medium transition-colors ${
@@ -894,7 +907,7 @@ function BadgeEstado({ estado }) {
 
 // Badge del granel (bidón). Solo se dibuja algo cuando está por acabarse o agotado.
 function BadgeGranel({ estado }) {
-  if (estado === 'agotado') return <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700">Sin granel</span>;
+  if (estado === 'agotado') return <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700">Sin bidones</span>;
   if (estado === 'por_agotarse') return <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-orange-100 text-orange-700">Por acabarse</span>;
   return null;
 }
@@ -1178,29 +1191,26 @@ export default function Inventario() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
-          <div className="flex items-center gap-2 mb-2 pr-6">
-            <svg className="w-4 h-4 text-amber-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="flex items-start gap-2 pr-6">
+            <svg className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                 d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
             </svg>
-            <p className="text-sm font-semibold text-amber-800">
-              Stock bajo en {stockBajo.length} producto(s)
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {stockBajo.map(p => (
-              <span key={p.id} className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium inline-flex items-center gap-1.5">
-                {p.nombre}
-                {p.tipo_liquido === 'granel' && Number(p.stock_granel_tapas) >= tapasPorBotella(p) && tapasPorBotella(p) > 0 && (
-                  <button
-                    onClick={() => setModalRellenar(p)}
-                    className="underline hover:no-underline font-semibold"
-                  >
-                    Rellenar
-                  </button>
-                )}
-              </span>
-            ))}
+            <div className="space-y-1">
+              {stockBajo.map(p => (
+                <p key={p.id} className="text-sm text-amber-800">
+                  <span className="font-semibold">{p.nombre}:</span> {mensajeAvisoBotellas(p)}
+                  {p.tipo_liquido === 'granel' && Number(p.stock_granel_tapas) >= tapasPorBotella(p) && tapasPorBotella(p) > 0 && (
+                    <button
+                      onClick={() => setModalRellenar(p)}
+                      className="ml-1.5 underline hover:no-underline font-semibold text-amber-900"
+                    >
+                      Rellenar
+                    </button>
+                  )}
+                </p>
+              ))}
+            </div>
           </div>
         </div>
       )}
@@ -1217,21 +1227,18 @@ export default function Inventario() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
-          <div className="flex items-center gap-2 mb-2 pr-6">
-            <svg className="w-4 h-4 text-orange-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="flex items-start gap-2 pr-6">
+            <svg className="w-4 h-4 text-orange-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                 d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
             </svg>
-            <p className="text-sm font-semibold text-orange-800">
-              Granel por acabarse en {granelBajo.length} producto(s) — hay que comprar más bidones
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {granelBajo.map(p => (
-              <span key={p.id} className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-medium">
-                {p.nombre}{p.estado_granel === 'agotado' ? ' (sin granel)' : ''}
-              </span>
-            ))}
+            <div className="space-y-1">
+              {granelBajo.map(p => (
+                <p key={p.id} className="text-sm text-orange-800">
+                  <span className="font-semibold">{p.nombre}:</span> {mensajeAvisoGranel(p)}
+                </p>
+              ))}
+            </div>
           </div>
         </div>
       )}
