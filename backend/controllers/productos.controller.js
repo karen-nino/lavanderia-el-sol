@@ -72,13 +72,13 @@ function tapasDeUnidad(unidad, p) {
 // Inserta una fila en el historial de movimientos de stock.
 async function registrarMovimiento(client, {
   productoId, sucursal, usuarioId, tipo, destino, cantidadTapas,
-  descripcion = null, motivo = null, notaId = null,
+  descripcion = null, notaId = null,
 }) {
   await client.query(
     `INSERT INTO producto_movimientos
-       (producto_id, sucursal, usuario_id, tipo, destino, cantidad_tapas, descripcion, motivo, nota_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-    [productoId, sucursal, usuarioId ?? null, tipo, destino, cantidadTapas, descripcion, motivo, notaId]
+       (producto_id, sucursal, usuario_id, tipo, destino, cantidad_tapas, descripcion, nota_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+    [productoId, sucursal, usuarioId ?? null, tipo, destino, cantidadTapas, descripcion, notaId]
   );
 }
 
@@ -181,14 +181,14 @@ export const createProducto = async (req, res) => {
       await registrarMovimiento(client, {
         productoId: prod.id, sucursal: req.sucursal, usuarioId: req.user?.id,
         tipo: 'entrada', destino: 'granel', cantidadTapas: stockGranel,
-        descripcion: `${Number(stock_bidones)} bidón(es) inicial(es)`, motivo: 'Existencia inicial',
+        descripcion: `${Number(stock_bidones)} bidón(es) inicial(es)`,
       });
     }
     if (stockActual > 0) {
       await registrarMovimiento(client, {
         productoId: prod.id, sucursal: req.sucursal, usuarioId: req.user?.id,
         tipo: 'entrada', destino: 'botellas', cantidadTapas: stockActual,
-        descripcion: `${Number(stock_botellas)} botella(s) inicial(es)`, motivo: 'Existencia inicial',
+        descripcion: `${Number(stock_botellas)} botella(s) inicial(es)`,
       });
     }
     await client.query('COMMIT');
@@ -313,7 +313,7 @@ export const rellenarBotellas = async (req, res) => {
     await registrarMovimiento(client, {
       productoId: p.id, sucursal: req.sucursal, usuarioId: req.user?.id,
       tipo: 'rellenar', destino: 'botellas', cantidadTapas: tapas,
-      descripcion: `${botellas} botella(s)`, motivo: 'Rellenado desde bidón',
+      descripcion: `${botellas} botella(s)`,
     });
     await client.query('COMMIT');
     res.json(upd[0]);
@@ -331,7 +331,7 @@ export const rellenarBotellas = async (req, res) => {
 // unidad: 'bidon' | 'botella' | 'tapa' (se convierte a tapas).
 export const crearMovimiento = async (req, res) => {
   const { id } = req.params;
-  const { tipo, destino, cantidad, unidad, motivo } = req.body;
+  const { tipo, destino, cantidad, unidad } = req.body;
 
   if (!['entrada', 'salida'].includes(tipo)) {
     return res.status(400).json({ message: 'Tipo de movimiento inválido.' });
@@ -394,7 +394,7 @@ export const crearMovimiento = async (req, res) => {
     await registrarMovimiento(client, {
       productoId: p.id, sucursal: req.sucursal, usuarioId: req.user?.id,
       tipo, destino, cantidadTapas: tapas,
-      descripcion: `${cant} ${unidadTxt}`, motivo: motivo?.trim() || null,
+      descripcion: `${cant} ${unidadTxt}`,
     });
     await client.query('COMMIT');
     res.json(upd[0]);

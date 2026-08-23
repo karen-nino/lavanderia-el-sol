@@ -54,13 +54,13 @@ function textoRellenadas(p) {
   if (tapas > 0) partes.push(plural(tapas, 'tapa', 'tapas'));
   return partes.join(' y ');
 }
-// Texto del líquido a granel (bidones + botellas equivalentes).
+// Texto del líquido a granel: se expresa en bidones (con las botellas sueltas
+// como remanente si las hay).
 function textoGranel(p) {
   if (p.tipo_liquido !== 'granel') return '';
   const { bidones, botellas } = desglosarBidones(p.stock_granel_tapas, p);
-  const partes = [];
-  if (bidones > 0) partes.push(plural(bidones, 'bidón', 'bidones'));
-  partes.push(plural(botellas, 'botella', 'botellas'));
+  const partes = [plural(bidones, 'bidón', 'bidones')];
+  if (botellas > 0) partes.push(plural(botellas, 'botella', 'botellas'));
   return partes.join(' y ');
 }
 function precioTxt(v) {
@@ -445,7 +445,6 @@ function ModalMovimiento({ producto, tipo, onClose, onDone }) {
   const [destino, setDestino] = useState('botellas');
   const [unidad,  setUnidad]  = useState('botella');
   const [cantidad, setCantidad] = useState('1');
-  const [motivo, setMotivo]   = useState('');
   const [error, setError]     = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -463,7 +462,7 @@ function ModalMovimiento({ producto, tipo, onClose, onDone }) {
     setLoading(true);
     try {
       const resp = await api.post(`/productos/${producto.id}/movimiento`, {
-        tipo, destino, unidad, cantidad: Number(cantidad), motivo: motivo.trim() || null,
+        tipo, destino, unidad, cantidad: Number(cantidad),
       });
       onDone(resp);
     } catch (err) {
@@ -487,7 +486,7 @@ function ModalMovimiento({ producto, tipo, onClose, onDone }) {
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">¿A qué existencia?</label>
             <div className="flex gap-2">
-              {[['botellas', 'Botellas rellenadas'], ['granel', 'A granel (bidón)']].map(([val, label]) => (
+              {[['botellas', 'Botellas'], ['granel', 'Bidones']].map(([val, label]) => (
                 <button
                   key={val} type="button" onClick={() => cambiarDestino(val)}
                   className={`flex-1 py-2.5 px-2 rounded-lg border text-sm font-medium transition-colors ${
@@ -518,14 +517,6 @@ function ModalMovimiento({ producto, tipo, onClose, onDone }) {
               {unidadesDisponibles.map(u => <option key={u} value={u}>{unidadLabel[u]}</option>)}
             </select>
           </div>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">Motivo (opcional)</label>
-          <input
-            type="text" value={motivo} onChange={(e) => setMotivo(e.target.value)}
-            placeholder={esEntrada ? 'Ej. Compra' : 'Ej. Derrame'} className={INPUT_CLS}
-          />
         </div>
 
         {error && (
@@ -681,7 +672,6 @@ function ModalHistorial({ producto, onClose }) {
                     </div>
                     <p className="text-xs text-gray-400 mt-0.5">
                       {m.destino === 'granel' ? 'A granel' : 'Botellas'}
-                      {m.motivo ? ` · ${m.motivo}` : ''}
                       {m.usuario_nombre ? ` · ${m.usuario_nombre}` : ''}
                     </p>
                   </div>
@@ -1277,7 +1267,7 @@ export default function Inventario() {
                     )}
                     <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Producto</th>
                     <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Precios</th>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Botellas rellenadas</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Botellas</th>
                     <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">A granel</th>
                     <th className="px-4 py-3" />
                   </tr>
@@ -1484,7 +1474,7 @@ export default function Inventario() {
                   </div>
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Botellas rellenadas</p>
+                  <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Botellas</p>
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-base font-medium text-gray-800">{textoRellenadas(p)}</span>
                     <BadgeEstado estado={es} />
@@ -1492,7 +1482,7 @@ export default function Inventario() {
                 </div>
                 {p.tipo_liquido === 'granel' && (
                   <div>
-                    <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">A granel (bidón)</p>
+                    <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Bidones (a granel)</p>
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-base text-gray-700">{textoGranel(p)}</span>
                       <BadgeGranel estado={recienCreados.has(p.id) ? 'ok' : p.estado_granel} />
