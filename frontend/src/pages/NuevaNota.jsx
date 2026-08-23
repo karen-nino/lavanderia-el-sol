@@ -1658,7 +1658,7 @@ export default function NuevaNota() {
                     <div className="flex items-end justify-between gap-3">
                       <div>
                         <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
-                          {unidadVentaNota(prod)}
+                          {prod ? unidadVentaNota(prod) : 'Cantidad'}
                         </p>
                         <div className="flex items-center gap-2">
                           <button
