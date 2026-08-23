@@ -33,8 +33,7 @@ const ESTADO_GRANEL_SQL = `
   CASE WHEN tipo_liquido = 'granel' THEN
     CASE
       WHEN stock_granel_tapas <= 0 THEN 'agotado'
-      WHEN volumen_envase_ml > 0 AND tapa_ml > 0
-           AND stock_granel_tapas < floor(volumen_envase_ml::numeric / tapa_ml) THEN 'por_agotarse'
+      WHEN stock_minimo_granel > 0 AND stock_granel_tapas <= stock_minimo_granel THEN 'por_agotarse'
       ELSE 'ok'
     END
   END AS estado_granel
@@ -127,7 +126,7 @@ export const archivarProducto = async (req, res) => {
 export const createProducto = async (req, res) => {
   const {
     nombre, descripcion, unidad = 'Tapas', precio_unitario, marca,
-    tipo_liquido = 'granel', envase, stock_minimo = 0,
+    tipo_liquido = 'granel', envase, stock_minimo = 0, stock_minimo_granel = 0,
     volumen_envase_ml, botella_ml, tapa_ml, tapas_por_botella, precio_botella,
     // Existencias iniciales: botellas rellenadas y (granel) bidones a granel.
     stock_botellas = 0, stock_bidones = 0,
@@ -168,12 +167,14 @@ export const createProducto = async (req, res) => {
       `INSERT INTO productos
          (nombre, descripcion, unidad, precio_unitario, precio_botella, stock_actual,
           stock_granel_tapas, marca, sucursal, tipo_liquido, es_por_tapa, tapas_por_envase,
-          envase, stock_minimo, volumen_envase_ml, botella_ml, tapa_ml)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, true, $11, $12, $13, $14, $15, $16)
+          envase, stock_minimo, stock_minimo_granel, volumen_envase_ml, botella_ml, tapa_ml)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, true, $11, $12, $13, $14, $15, $16, $17)
        RETURNING ${SELECT_PRODUCTO}`,
       [nombre, descripcion || null, unidad, precio_unitario ?? null, precio_botella ?? null,
        stockActual, stockGranel, marca || null, req.sucursal, tipo_liquido, tapasPorEnvase,
-       envase || null, Number(stock_minimo) || 0, bidonMl, botellaMl, tapaMl]
+       envase || null, Number(stock_minimo) || 0,
+       tipo_liquido === 'granel' ? (Number(stock_minimo_granel) || 0) : 0,
+       bidonMl, botellaMl, tapaMl]
     );
     const prod = rows[0];
     // Semilla del historial: registra las existencias iniciales como entradas.
@@ -213,7 +214,7 @@ export const updateProducto = async (req, res) => {
 
   const {
     nombre, descripcion, unidad = 'Tapas', precio_unitario, marca,
-    tipo_liquido = 'granel', envase, stock_minimo = 0,
+    tipo_liquido = 'granel', envase, stock_minimo = 0, stock_minimo_granel = 0,
     volumen_envase_ml, botella_ml, tapa_ml, tapas_por_botella, precio_botella,
   } = req.body;
 
@@ -245,12 +246,13 @@ export const updateProducto = async (req, res) => {
       `UPDATE productos
          SET nombre = $1, descripcion = $2, unidad = $3, precio_unitario = $4,
              precio_botella = $5, marca = $6, tipo_liquido = $7, tapas_por_envase = $8,
-             envase = $9, stock_minimo = $10, volumen_envase_ml = $11, botella_ml = $12,
-             tapa_ml = $13, es_por_tapa = true, updated_at = NOW()
-       WHERE id = $14 AND sucursal = $15
+             envase = $9, stock_minimo = $10, stock_minimo_granel = $11, volumen_envase_ml = $12,
+             botella_ml = $13, tapa_ml = $14, es_por_tapa = true, updated_at = NOW()
+       WHERE id = $15 AND sucursal = $16
        RETURNING ${SELECT_PRODUCTO}`,
       [nombre, descripcion || null, unidad, precio_unitario ?? null, precio_botella ?? null,
        marca || null, tipo_liquido, tapasPorEnvase, envase || null, Number(stock_minimo) || 0,
+       tipo_liquido === 'granel' ? (Number(stock_minimo_granel) || 0) : 0,
        bidonMl, botellaMl, tapaMl, id, req.sucursal]
     );
     if (rows.length === 0) {

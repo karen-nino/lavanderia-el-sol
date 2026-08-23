@@ -29,6 +29,9 @@ function botellasPorBidon(p) {
     || (Number(p.volumen_envase_ml) && Number(p.botella_ml) ? Math.floor(Number(p.volumen_envase_ml) / Number(p.botella_ml)) : 0);
   return b > 0 ? b : 0;
 }
+function tapasPorBidon(p) {
+  return tapasPorBotella(p) * botellasPorBidon(p);
+}
 // Descompone unas tapas en "X botellas y Y tapas".
 function desglosarBotellas(tapas, p) {
   const tpb = tapasPorBotella(p);
@@ -91,6 +94,7 @@ const FORM_VACIO = {
   precio_tapa:          '',
   precio_botella:       '',
   stock_minimo_botellas: '0',   // el aviso se captura en botellas; se guarda en tapas
+  stock_minimo_bidones:  '0',   // aviso del granel, en bidones; se guarda en tapas
 };
 
 // ── Modal crear / editar ────────────────────────────────────────
@@ -116,6 +120,10 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [] }) {
         stock_minimo_botellas: tapasPorBotella(producto) > 0
           ? String(Math.round(Number(producto.stock_minimo ?? 0) / tapasPorBotella(producto)))
           : String(producto.stock_minimo ?? 0),
+        // El mínimo del granel se guarda en tapas; se muestra en bidones.
+        stock_minimo_bidones: tapasPorBidon(producto) > 0
+          ? String(Math.round(Number(producto.stock_minimo_granel ?? 0) / tapasPorBidon(producto)))
+          : '0',
       }
     : FORM_VACIO
   );
@@ -134,6 +142,7 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [] }) {
     ? (tapaMl > 0 ? Math.floor(botellaMl / tapaMl) : 0)
     : (Number(form.tapas_por_botella) || 0);
   const botellasBidon = botellaMl > 0 ? Math.floor(bidonMl / botellaMl) : 0;
+  const tapasBidon = botellasBidon * tapasBotella;
 
   const marcaOptions = form.marca && !marcas.includes(form.marca) ? [form.marca, ...marcas] : marcas;
 
@@ -169,6 +178,12 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [] }) {
       stock_minimo:      tapasBotella > 0
         ? Math.round((Number(form.stock_minimo_botellas) || 0) * tapasBotella)
         : (Number(form.stock_minimo_botellas) || 0),
+      // El aviso del granel se captura en bidones y se guarda en tapas.
+      stock_minimo_granel: esGranel
+        ? (tapasBidon > 0
+            ? Math.round((Number(form.stock_minimo_bidones) || 0) * tapasBidon)
+            : (Number(form.stock_minimo_bidones) || 0))
+        : 0,
     };
 
     try {
@@ -367,7 +382,7 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [] }) {
           {/* Las existencias (botellas rellenadas / bidones) se cargan con una
               Entrada, no al dar de alta el producto. */}
 
-          {/* Alerta de stock bajo */}
+          {/* Alerta de stock bajo (botellas) */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">
               Avisar cuando queden (botellas)
@@ -378,6 +393,20 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [] }) {
               className={NUM_CLS}
             />
           </div>
+
+          {/* Alerta de granel bajo (bidones) */}
+          {esGranel && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                Avisar cuando queden (bidones)
+              </label>
+              <input
+                type="number" name="stock_minimo_bidones" min="0" step="1"
+                value={form.stock_minimo_bidones} onChange={handleChange} placeholder="Ej. 1"
+                className={NUM_CLS}
+              />
+            </div>
+          )}
 
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">{error}</div>
