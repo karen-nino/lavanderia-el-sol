@@ -395,7 +395,11 @@ export const crearMovimiento = async (req, res) => {
         RETURNING ${SELECT_PRODUCTO}`,
       [delta, id, req.sucursal]
     );
-    const unidadTxt = unidad === 'bidon' ? 'bidón(es)' : unidad === 'botella' ? 'botella(s)' : 'tapa(s)';
+    const unidadTxt = unidad === 'bidon'
+      ? 'bidón(es)'
+      : unidad === 'botella'
+        ? (p.tipo_liquido === 'marca' ? 'unidad(es)' : 'botella(s)')
+        : 'tapa(s)';
     await registrarMovimiento(client, {
       productoId: p.id, sucursal: req.sucursal, usuarioId: req.user?.id,
       tipo, destino, cantidadTapas: tapas,

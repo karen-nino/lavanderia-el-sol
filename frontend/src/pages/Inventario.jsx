@@ -50,10 +50,16 @@ function desglosarBidones(tapasGranel, p) {
 function plural(n, sing, plur) {
   return `${n} ${n === 1 ? sing : plur}`;
 }
+// Palabra para la existencia según el tipo: granel se cuenta en botellas; marca
+// en unidades.
+function unidadVenta(p, n = 2) {
+  if (p.tipo_liquido === 'marca') return n === 1 ? 'unidad' : 'unidades';
+  return n === 1 ? 'botella' : 'botellas';
+}
 // Texto de las botellas rellenadas (con las tapas sueltas si las hay).
 function textoRellenadas(p) {
   const { botellas, tapas } = desglosarBotellas(p.stock_actual, p);
-  const partes = [plural(botellas, 'botella', 'botellas')];
+  const partes = [`${botellas} ${unidadVenta(p, botellas)}`];
   if (tapas > 0) partes.push(plural(tapas, 'tapa', 'tapas'));
   return partes.join(' y ');
 }
@@ -405,7 +411,7 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [] }) {
             )}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                Precio por botella ($)
+                {esGranel ? 'Precio por botella ($)' : 'Precio por unidad ($)'}
               </label>
               <div className="relative">
                 <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-base">$</span>
@@ -425,7 +431,7 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [] }) {
           {/* Alerta de stock bajo (botellas) */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              Avisar cuando queden (botellas)
+              Avisar cuando queden ({esGranel ? 'botellas' : 'unidades'})
             </label>
             <input
               type="number" name="stock_minimo_botellas" min="0" step="1"
@@ -517,9 +523,10 @@ function ModalMovimiento({ producto, tipo, onClose, onDone }) {
   const [loading, setLoading] = useState(false);
 
   const esEntrada = tipo === 'entrada';
-  // La unidad se deduce del destino: a granel = bidones, botellas = botellas.
+  // La unidad se deduce del destino: a granel = bidones; si no, botellas
+  // (granel) o unidades (marca).
   const unidad = destino === 'granel' ? 'bidon' : 'botella';
-  const unidadTxt = destino === 'granel' ? 'bidones' : 'botellas';
+  const unidadTxt = destino === 'granel' ? 'bidones' : unidadVenta(producto);
 
   const enviar = async () => {
     setError('');
@@ -1314,7 +1321,7 @@ export default function Inventario() {
                     )}
                     <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Producto</th>
                     <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Precios</th>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Botellas</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Existencia</th>
                     <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">A granel</th>
                     <th className="px-4 py-3" />
                   </tr>
@@ -1345,7 +1352,7 @@ export default function Inventario() {
                           {p.tipo_liquido === 'granel' && (
                             <div>Tapa: <span className="font-medium text-gray-700">{precioTxt(p.precio_unitario)}</span></div>
                           )}
-                          <div>Botella: <span className="font-medium text-gray-700">{precioTxt(p.precio_botella)}</span></div>
+                          <div>{p.tipo_liquido === 'marca' ? 'Unidad' : 'Botella'}: <span className="font-medium text-gray-700">{precioTxt(p.precio_botella)}</span></div>
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2 flex-wrap">
@@ -1521,12 +1528,12 @@ export default function Inventario() {
                     </div>
                   )}
                   <div>
-                    <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Precio por botella</p>
+                    <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">{p.tipo_liquido === 'marca' ? 'Precio por unidad' : 'Precio por botella'}</p>
                     <p className="text-base text-gray-700">{precioTxt(p.precio_botella)}</p>
                   </div>
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Botellas</p>
+                  <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">{p.tipo_liquido === 'marca' ? 'Unidades' : 'Botellas'}</p>
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-base font-medium text-gray-800">{textoRellenadas(p)}</span>
                     <BadgeEstado estado={es} />

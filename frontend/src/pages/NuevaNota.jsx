@@ -192,6 +192,11 @@ export default function NuevaNota() {
     const disp = Number(prod.stock_disponible ?? prod.stock_actual) || 0;
     return tpb > 0 ? Math.floor(disp / tpb) : disp;
   };
+  // Palabra de la unidad vendida en Autoservicio: botella (granel) o unidad (marca).
+  const unidadVentaNota = (prod, n = 2) => {
+    if (prod?.tipo_liquido === 'marca') return n === 1 ? 'unidad' : 'unidades';
+    return n === 1 ? 'botella' : 'botellas';
+  };
   const subtotalCargas = cargasAuto.reduce((s, c) => s + subtotalDeCarga(c), 0);
   // Autoservicio: los productos a nivel nota se cobran por botella.
   const subtotalProductos = productosLista.reduce((sum, p) => {
@@ -1634,7 +1639,7 @@ export default function NuevaNota() {
                         <option value="">Selecciona un producto…</option>
                         {productosCatalogo.map(p => (
                           <option key={p.id} value={p.id}>
-                            {p.nombre}{p.marca ? ` · ${p.marca}` : ''}{p.precio_botella ? ` — $${Number(p.precio_botella).toFixed(2)}/botella` : ''} ({botellasDisponibles(p)} botellas)
+                            {p.nombre}{p.marca ? ` · ${p.marca}` : ''}{p.precio_botella ? ` — $${Number(p.precio_botella).toFixed(2)}/${unidadVentaNota(p, 1)}` : ''} ({botellasDisponibles(p)} {unidadVentaNota(p, botellasDisponibles(p))})
                           </option>
                         ))}
                       </select>
@@ -1653,7 +1658,7 @@ export default function NuevaNota() {
                     <div className="flex items-end justify-between gap-3">
                       <div>
                         <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
-                          Botellas
+                          {unidadVentaNota(prod)}
                         </p>
                         <div className="flex items-center gap-2">
                           <button

@@ -9,7 +9,10 @@ import { formatHora12, formatFechaHora12 } from '../lib/fecha';
 // Unidad de venta de un producto de la nota, en texto ("2 botellas" / "3 tapas").
 function unidadProdTxt(p) {
   const n = Number(p.cantidad);
-  if (p.unidad === 'botella') return n === 1 ? 'botella' : 'botellas';
+  if (p.unidad === 'botella') {
+    if (p.tipo_liquido === 'marca') return n === 1 ? 'unidad' : 'unidades';
+    return n === 1 ? 'botella' : 'botellas';
+  }
   return n === 1 ? 'tapa' : 'tapas';
 }
 
