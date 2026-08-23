@@ -334,9 +334,12 @@ async function registrarMovimientosProductosNota(client, notaId, sucursal, usuar
     `INSERT INTO producto_movimientos
        (producto_id, sucursal, usuario_id, tipo, destino, cantidad_tapas, descripcion, nota_id)
      SELECT np.producto_id, $2, $3, $4, 'botellas', np.cantidad_tapas,
-            np.cantidad || (CASE WHEN np.unidad = 'botella' THEN ' botella(s)' ELSE ' tapa(s)' END),
+            np.cantidad || (CASE WHEN np.unidad = 'botella'
+                                 THEN (CASE WHEN a.tipo_liquido = 'marca' THEN ' unidad(es)' ELSE ' botella(s)' END)
+                                 ELSE ' tapa(s)' END),
             np.nota_id
        FROM nota_productos np
+       JOIN productos a ON a.id = np.producto_id
       WHERE np.nota_id = $1`,
     [notaId, sucursal, usuarioId ?? null, tipo]
   );
