@@ -1087,9 +1087,10 @@ export default function NuevaNota() {
                                   className={`flex-1 ${INPUT_CLS}`}
                                 >
                                   <option value="">Selecciona un producto…</option>
-                                  {productosCatalogo.map(p => (
+                                  {/* Por Encargo es por tapa: solo productos de granel (marca es solo botella). */}
+                                  {productosCatalogo.filter(p => p.tipo_liquido === 'granel').map(p => (
                                     <option key={p.id} value={p.id}>
-                                      {p.nombre}{p.marca ? ` · ${p.marca}` : ''}{p.precio_unitario ? ` — $${Number(p.precio_unitario).toFixed(2)}/tapa` : ''} ({Number(p.stock_disponible ?? p.stock_actual)} tapas)
+                                      {p.nombre}{p.precio_unitario ? ` — $${Number(p.precio_unitario).toFixed(2)}/tapa` : ''} ({Number(p.stock_disponible ?? p.stock_actual)} tapas)
                                     </option>
                                   ))}
                                 </select>

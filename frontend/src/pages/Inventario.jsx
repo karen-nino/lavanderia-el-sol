@@ -186,13 +186,17 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [] }) {
       tipo_liquido:      form.tipo_liquido,
       unidad:            'Tapas',
       envase:            esGranel ? 'Bidón' : null,
-      precio_unitario:   form.precio_tapa !== '' ? Number(form.precio_tapa) : null,
+      // El precio por tapa (Por Encargo) solo aplica a granel.
+      precio_unitario:   esGranel && form.precio_tapa !== '' ? Number(form.precio_tapa) : null,
       precio_botella:    form.precio_botella !== '' ? Number(form.precio_botella) : null,
       volumen_envase_ml: esGranel && bidonMl > 0 ? bidonMl : null,
-      botella_ml:        botellaMl > 0 ? botellaMl : null,
-      // La tapa va por tamaño (mL) o por tapas por botella (el backend deriva el mL).
-      tapa_ml:           form.metodo_tapa === 'ml' && tapaMl > 0 ? tapaMl : null,
-      tapas_por_botella: form.metodo_tapa === 'tapas' ? (Number(form.tapas_por_botella) || null) : null,
+      // Marca: se vende solo por botella (sin mL). Internamente 1 botella = 1
+      // unidad, así que botella_ml = tapa_ml = 1 (el stock queda en botellas).
+      botella_ml:        esGranel ? (botellaMl > 0 ? botellaMl : null) : 1,
+      tapa_ml:           esGranel
+        ? (form.metodo_tapa === 'ml' && tapaMl > 0 ? tapaMl : null)
+        : 1,
+      tapas_por_botella: esGranel && form.metodo_tapa === 'tapas' ? (Number(form.tapas_por_botella) || null) : null,
       // El aviso se captura en botellas y se guarda en tapas.
       stock_minimo:      tapasBotella > 0
         ? Math.round((Number(form.stock_minimo_botellas) || 0) * tapasBotella)
@@ -302,86 +306,96 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [] }) {
                 </div>
               </div>
             )}
-            <div>
-              <p className="text-sm font-medium text-gray-700 mb-1.5">
-                ¿De qué tamaño es la botella? (mL) <span className="text-red-500">*</span>
-              </p>
-              <input
-                type="number" name="botella_ml" min="1" step="any" required
-                value={form.botella_ml} onChange={handleChange} placeholder="Ej. 800"
-                className={NUM_CLS}
-              />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-gray-700 mb-1.5">
-                Rendimiento de la tapa/medida <span className="text-red-500">*</span>
-              </p>
-              <div className="flex gap-2 mb-2">
-                <button
-                  type="button"
-                  onClick={() => setForm(f => ({ ...f, metodo_tapa: 'ml' }))}
-                  className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-colors ${
-                    form.metodo_tapa === 'ml' ? 'border-blue bg-light-blue text-blue' : 'border-gray-300 bg-white text-gray-600 hover:bg-gray-50'
-                  }`}
-                >
-                  Tamaño de tapa (mL)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setForm(f => ({ ...f, metodo_tapa: 'tapas' }))}
-                  className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-colors ${
-                    form.metodo_tapa === 'tapas' ? 'border-blue bg-light-blue text-blue' : 'border-gray-300 bg-white text-gray-600 hover:bg-gray-50'
-                  }`}
-                >
-                  Tapas por botella
-                </button>
-              </div>
-              {form.metodo_tapa === 'ml' ? (
+            {esGranel && (
+              <div>
+                <p className="text-sm font-medium text-gray-700 mb-1.5">
+                  ¿De qué tamaño es la botella? (mL) <span className="text-red-500">*</span>
+                </p>
                 <input
-                  type="number" name="tapa_ml" min="1" step="any" required
-                  value={form.tapa_ml} onChange={handleChange} placeholder="Ej. 200 mL"
+                  type="number" name="botella_ml" min="1" step="any" required
+                  value={form.botella_ml} onChange={handleChange} placeholder="Ej. 800"
                   className={NUM_CLS}
                 />
-              ) : (
-                <>
-                  <input
-                    type="number" name="tapas_por_botella" min="1" step="1" required
-                    value={form.tapas_por_botella} onChange={handleChange} placeholder="Ej. 4 tapas por botella"
-                    className={NUM_CLS}
-                  />
-                  <p className="text-[11px] text-gray-400 mt-1">
-                    Aproximado: cuántas tapas/medidas salen de una botella.
+              </div>
+            )}
+            {/* El rendimiento por tapa solo aplica a granel; el de marca se
+                vende solo por botella. */}
+            {esGranel && (
+              <>
+                <div>
+                  <p className="text-sm font-medium text-gray-700 mb-1.5">
+                    Rendimiento de la tapa/medida <span className="text-red-500">*</span>
                   </p>
-                </>
-              )}
-            </div>
-            {/* Rendimiento calculado */}
-            <div className={`rounded-lg px-4 py-3 text-sm ${tapasBotella > 0 ? 'bg-green-50 text-green-800' : 'bg-gray-50 text-gray-500'}`}>
-              {tapasBotella > 0 ? (
-                <>
-                  Rinde <span className="font-bold">{tapasBotella} tapas</span> por botella
-                  {esGranel && botellasBidon > 0 && <> · <span className="font-bold">{botellasBidon} botellas</span> por bidón</>}.
-                </>
-              ) : 'Captura los tamaños de botella y tapa para calcular el rendimiento.'}
-            </div>
+                  <div className="flex gap-2 mb-2">
+                    <button
+                      type="button"
+                      onClick={() => setForm(f => ({ ...f, metodo_tapa: 'ml' }))}
+                      className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                        form.metodo_tapa === 'ml' ? 'border-blue bg-light-blue text-blue' : 'border-gray-300 bg-white text-gray-600 hover:bg-gray-50'
+                      }`}
+                    >
+                      Tamaño de tapa (mL)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setForm(f => ({ ...f, metodo_tapa: 'tapas' }))}
+                      className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                        form.metodo_tapa === 'tapas' ? 'border-blue bg-light-blue text-blue' : 'border-gray-300 bg-white text-gray-600 hover:bg-gray-50'
+                      }`}
+                    >
+                      Tapas por botella
+                    </button>
+                  </div>
+                  {form.metodo_tapa === 'ml' ? (
+                    <input
+                      type="number" name="tapa_ml" min="1" step="any" required
+                      value={form.tapa_ml} onChange={handleChange} placeholder="Ej. 200 mL"
+                      className={NUM_CLS}
+                    />
+                  ) : (
+                    <>
+                      <input
+                        type="number" name="tapas_por_botella" min="1" step="1" required
+                        value={form.tapas_por_botella} onChange={handleChange} placeholder="Ej. 4 tapas por botella"
+                        className={NUM_CLS}
+                      />
+                      <p className="text-[11px] text-gray-400 mt-1">
+                        Aproximado: cuántas tapas/medidas salen de una botella.
+                      </p>
+                    </>
+                  )}
+                </div>
+                {/* Rendimiento calculado */}
+                <div className={`rounded-lg px-4 py-3 text-sm ${tapasBotella > 0 ? 'bg-green-50 text-green-800' : 'bg-gray-50 text-gray-500'}`}>
+                  {tapasBotella > 0 ? (
+                    <>
+                      Rinde <span className="font-bold">{tapasBotella} tapas</span> por botella
+                      {botellasBidon > 0 && <> · <span className="font-bold">{botellasBidon} botellas</span> por bidón</>}.
+                    </>
+                  ) : 'Captura los tamaños de botella y tapa para calcular el rendimiento.'}
+                </div>
+              </>
+            )}
           </div>
 
-          {/* Precios */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                Precio por tapa ($)
-              </label>
-              <div className="relative">
-                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-base">$</span>
-                <input
-                  type="number" name="precio_tapa" min="0" step="any"
-                  value={form.precio_tapa} onChange={handleChange} placeholder="0.00"
-                  className={`${NUM_CLS} pl-7`}
-                />
+          {/* Precios. El precio por tapa (Por Encargo) solo aplica a granel. */}
+          <div className={esGranel ? 'grid grid-cols-2 gap-3' : ''}>
+            {esGranel && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Precio por tapa ($)
+                </label>
+                <div className="relative">
+                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-base">$</span>
+                  <input
+                    type="number" name="precio_tapa" min="0" step="any"
+                    value={form.precio_tapa} onChange={handleChange} placeholder="0.00"
+                    className={`${NUM_CLS} pl-7`}
+                  />
+                </div>
+                <p className="text-[11px] text-gray-400 mt-1">Por Encargo</p>
               </div>
-              <p className="text-[11px] text-gray-400 mt-1">Por Encargo</p>
-            </div>
+            )}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">
                 Precio por botella ($)
