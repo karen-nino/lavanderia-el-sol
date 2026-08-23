@@ -505,19 +505,14 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [] }) {
 function ModalMovimiento({ producto, tipo, onClose, onDone }) {
   const esGranel = producto.tipo_liquido === 'granel';
   const [destino, setDestino] = useState(esGranel ? 'granel' : 'botellas');
-  const [unidad,  setUnidad]  = useState(esGranel ? 'bidon' : 'botella');
   const [cantidad, setCantidad] = useState('1');
   const [error, setError]     = useState('');
   const [loading, setLoading] = useState(false);
 
   const esEntrada = tipo === 'entrada';
-  const unidadesDisponibles = destino === 'granel' ? ['bidon', 'botella', 'tapa'] : ['botella', 'tapa'];
-  const unidadLabel = { bidon: 'Bidones', botella: 'Botellas', tapa: 'Tapas' };
-
-  const cambiarDestino = (d) => {
-    setDestino(d);
-    setUnidad(d === 'granel' ? 'bidon' : 'botella');
-  };
+  // La unidad se deduce del destino: a granel = bidones, botellas = botellas.
+  const unidad = destino === 'granel' ? 'bidon' : 'botella';
+  const unidadTxt = destino === 'granel' ? 'bidones' : 'botellas';
 
   const enviar = async () => {
     setError('');
@@ -543,14 +538,14 @@ function ModalMovimiento({ producto, tipo, onClose, onDone }) {
           <p className="text-sm text-gray-500 mt-0.5">{producto.nombre}</p>
         </div>
 
-        {/* Destino (solo granel puede elegir) */}
+        {/* Destino (solo granel puede elegir entre bidones y botellas) */}
         {esGranel && (
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">¿A qué existencia?</label>
             <div className="flex gap-2">
               {[['granel', 'Bidones'], ['botellas', 'Botellas']].map(([val, label]) => (
                 <button
-                  key={val} type="button" onClick={() => cambiarDestino(val)}
+                  key={val} type="button" onClick={() => setDestino(val)}
                   className={`flex-1 py-2.5 px-2 rounded-lg border text-sm font-medium transition-colors ${
                     destino === val ? 'border-blue bg-light-blue text-blue' : 'border-gray-300 bg-white text-gray-600 hover:bg-gray-50'
                   }`}
@@ -562,23 +557,12 @@ function ModalMovimiento({ producto, tipo, onClose, onDone }) {
           </div>
         )}
 
-        <div className="flex gap-2">
-          <div className="flex-1">
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">Cantidad</label>
-            <input
-              type="number" min="0" step="any" value={cantidad}
-              onChange={(e) => setCantidad(e.target.value)} className={NUM_CLS}
-            />
-          </div>
-          <div className="w-32">
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">Unidad</label>
-            <select
-              value={unidad} onChange={(e) => setUnidad(e.target.value)}
-              className="w-full px-3 py-3.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent transition"
-            >
-              {unidadesDisponibles.map(u => <option key={u} value={u}>{unidadLabel[u]}</option>)}
-            </select>
-          </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">Cantidad ({unidadTxt})</label>
+          <input
+            type="number" min="0" step="any" value={cantidad}
+            onChange={(e) => setCantidad(e.target.value)} className={NUM_CLS}
+          />
         </div>
 
         {error && (
@@ -1351,7 +1335,9 @@ export default function Inventario() {
                           {subtituloProd(p) && <p className="text-xs text-gray-400 mt-0.5">{subtituloProd(p)}</p>}
                         </td>
                         <td className="px-4 py-3 text-gray-600 text-xs">
-                          <div>Tapa: <span className="font-medium text-gray-700">{precioTxt(p.precio_unitario)}</span></div>
+                          {p.tipo_liquido === 'granel' && (
+                            <div>Tapa: <span className="font-medium text-gray-700">{precioTxt(p.precio_unitario)}</span></div>
+                          )}
                           <div>Botella: <span className="font-medium text-gray-700">{precioTxt(p.precio_botella)}</span></div>
                         </td>
                         <td className="px-4 py-3">
@@ -1519,11 +1505,14 @@ export default function Inventario() {
                   </div>
                   {subtituloProd(p) && <p className="text-sm text-gray-500 mt-0.5">{subtituloProd(p)}</p>}
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Precio por tapa</p>
-                    <p className="text-base text-gray-700">{precioTxt(p.precio_unitario)}</p>
-                  </div>
+                {/* El precio por tapa (Por Encargo) solo aplica a granel. */}
+                <div className={p.tipo_liquido === 'granel' ? 'grid grid-cols-2 gap-4' : ''}>
+                  {p.tipo_liquido === 'granel' && (
+                    <div>
+                      <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Precio por tapa</p>
+                      <p className="text-base text-gray-700">{precioTxt(p.precio_unitario)}</p>
+                    </div>
+                  )}
                   <div>
                     <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Precio por botella</p>
                     <p className="text-base text-gray-700">{precioTxt(p.precio_botella)}</p>
