@@ -867,6 +867,11 @@ function IconoAdvertencia({ severity }) {
   );
 }
 
+// Etiqueta para productos recién dados de alta (sin existencia todavía).
+function ChipNuevo() {
+  return <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-700">Nuevo</span>;
+}
+
 // Chip de tipo de producto (granel / marca).
 function ChipTipo({ tipo }) {
   if (tipo !== 'granel' && tipo !== 'marca') return null;
@@ -1313,6 +1318,7 @@ export default function Inventario() {
                             {es !== 'ok' && <IconoAdvertencia severity={es} />}
                             <span className="font-medium text-gray-800">{p.nombre}</span>
                             <ChipTipo tipo={p.tipo_liquido} />
+                            {recienCreados.has(p.id) && <ChipNuevo />}
                           </div>
                           {p.marca && <p className="text-xs text-gray-400 mt-0.5">{p.marca}</p>}
                         </td>
@@ -1393,6 +1399,7 @@ export default function Inventario() {
                     {es !== 'ok' && <IconoAdvertencia severity={es} />}
                     <p className="font-medium text-gray-800 text-sm">{p.nombre}</p>
                     <ChipTipo tipo={p.tipo_liquido} />
+                            {recienCreados.has(p.id) && <ChipNuevo />}
                   </div>
                   {p.marca && <p className="text-xs text-gray-400 mt-0.5">{p.marca}</p>}
                   <div className="flex items-center gap-2 mt-1 flex-wrap">
@@ -1480,6 +1487,7 @@ export default function Inventario() {
                   <div className="flex items-center gap-2">
                     <p className="text-base font-medium text-gray-900">{p.nombre}</p>
                     <ChipTipo tipo={p.tipo_liquido} />
+                            {recienCreados.has(p.id) && <ChipNuevo />}
                   </div>
                   {p.marca && <p className="text-sm text-gray-500 mt-0.5">{p.marca}</p>}
                 </div>
