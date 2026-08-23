@@ -1639,7 +1639,7 @@ export default function NuevaNota() {
                         <option value="">Selecciona un producto…</option>
                         {productosCatalogo.map(p => (
                           <option key={p.id} value={p.id}>
-                            {p.tipo_liquido === 'marca' && p.marca ? `${p.marca} · ${p.nombre}` : p.nombre}{p.precio_botella ? ` — $${Number(p.precio_botella).toFixed(2)}/${unidadVentaNota(p, 1)}` : ''} ({botellasDisponibles(p)} {unidadVentaNota(p, botellasDisponibles(p))})
+                            {p.tipo_liquido === 'marca' && p.marca ? `${p.marca} · ${p.nombre}` : p.nombre}{p.precio_botella ? ` — $${Number(p.precio_botella).toFixed(2)}` : ''}
                           </option>
                         ))}
                       </select>
