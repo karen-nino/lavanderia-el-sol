@@ -83,7 +83,8 @@ function armarTextoTicket(nota) {
     maquinasDeCarga(cg).forEach(m => {
       L.push(`  • ${m.nombre} (${m.tipo}) — ${fmtMonto(m.precio)}`);
     });
-    (cg.productos ?? []).forEach(p => {
+    // Las tapas son información interna: no se listan en el ticket.
+    (cg.productos ?? []).filter(p => p.unidad !== 'tapa').forEach(p => {
       const monto = p.es_por_tapa && Number(p.subtotal) === 0 ? 'Incluido' : fmtMonto(p.subtotal);
       L.push(`  • ${p.nombre} x${p.cantidad} ${unidadProdTxt(p)} — ${monto}`);
     });
@@ -105,7 +106,7 @@ function armarTextoTicket(nota) {
     adicionales.forEach(volcarCarga);
   }
 
-  const productos = nota.productos ?? [];
+  const productos = (nota.productos ?? []).filter(p => p.unidad !== 'tapa');
   if (productos.length > 0) {
     L.push('', '*Productos*');
     productos.forEach(p => {
@@ -221,7 +222,8 @@ export default function TicketNota() {
               <span className="text-sm text-gray-600">{fmtMonto(m.precio)}</span>
             </div>
           ))}
-          {prods.map(p => (
+          {/* Las tapas son información interna: no se muestran en el ticket. */}
+          {prods.filter(p => p.unidad !== 'tapa').map(p => (
             <div key={p.id} className="flex items-baseline justify-between gap-3">
               <span className="text-sm text-gray-700">{p.nombre} <span className="text-xs text-gray-400">×{p.cantidad} {unidadProdTxt(p)}</span></span>
               {p.es_por_tapa && Number(p.subtotal) === 0
@@ -299,12 +301,13 @@ export default function TicketNota() {
             </div>
           )}
 
-          {/* Productos de la nota (nivel nota, sin carga) */}
-          {productos.length > 0 && (
+          {/* Productos de la nota (nivel nota, sin carga). Las tapas son
+              información interna y no se muestran. */}
+          {productos.filter(p => p.unidad !== 'tapa').length > 0 && (
             <div className="px-5 py-3 border-b border-dashed border-gray-200">
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Productos</p>
               <div className="space-y-0.5">
-                {productos.map(p => (
+                {productos.filter(p => p.unidad !== 'tapa').map(p => (
                   <div key={p.id} className="flex items-baseline justify-between gap-3">
                     <span className="text-sm text-gray-700">{p.nombre} <span className="text-xs text-gray-400">×{p.cantidad} {unidadProdTxt(p)}</span></span>
                     {p.es_por_tapa && Number(p.subtotal) === 0
