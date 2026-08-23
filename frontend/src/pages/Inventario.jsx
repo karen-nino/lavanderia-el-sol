@@ -69,6 +69,14 @@ function textoGranel(p) {
 function precioTxt(v) {
   return v != null && v !== '' ? `$${Number(v).toFixed(2)}` : '—';
 }
+// En los productos de marca el título es la MARCA y el subtítulo el nombre;
+// en los de granel (sin marca) el título es el nombre.
+function tituloProd(p) {
+  return p.tipo_liquido === 'marca' && p.marca ? p.marca : p.nombre;
+}
+function subtituloProd(p) {
+  return p.tipo_liquido === 'marca' && p.marca ? p.nombre : null;
+}
 // Mensajes de aviso (estilo "Se acabaron … — hay N actualmente").
 function mensajeAvisoBotellas(p) {
   if (p.estado_stock === 'agotado') return 'Se acabaron las botellas';
@@ -1197,7 +1205,7 @@ export default function Inventario() {
             <div className="space-y-1">
               {stockBajo.map(p => (
                 <p key={p.id} className="text-sm text-amber-800">
-                  <span className="font-semibold">{p.nombre}:</span> {mensajeAvisoBotellas(p)}
+                  <span className="font-semibold">{tituloProd(p)}:</span> {mensajeAvisoBotellas(p)}
                   {p.tipo_liquido === 'granel' && Number(p.stock_granel_tapas) >= tapasPorBotella(p) && tapasPorBotella(p) > 0 && (
                     <button
                       onClick={() => setModalRellenar(p)}
@@ -1233,7 +1241,7 @@ export default function Inventario() {
             <div className="space-y-1">
               {granelBajo.map(p => (
                 <p key={p.id} className="text-sm text-orange-800">
-                  <span className="font-semibold">{p.nombre}:</span> {mensajeAvisoGranel(p)}
+                  <span className="font-semibold">{tituloProd(p)}:</span> {mensajeAvisoGranel(p)}
                 </p>
               ))}
             </div>
@@ -1322,11 +1330,11 @@ export default function Inventario() {
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2">
                             {es !== 'ok' && <IconoAdvertencia severity={es} />}
-                            <span className="font-medium text-gray-800">{p.nombre}</span>
+                            <span className="font-medium text-gray-800">{tituloProd(p)}</span>
                             <ChipTipo tipo={p.tipo_liquido} />
                             {recienCreados.has(p.id) && <ChipNuevo />}
                           </div>
-                          {p.marca && <p className="text-xs text-gray-400 mt-0.5">{p.marca}</p>}
+                          {subtituloProd(p) && <p className="text-xs text-gray-400 mt-0.5">{subtituloProd(p)}</p>}
                         </td>
                         <td className="px-4 py-3 text-gray-600 text-xs">
                           <div>Tapa: <span className="font-medium text-gray-700">{precioTxt(p.precio_unitario)}</span></div>
@@ -1403,11 +1411,11 @@ export default function Inventario() {
                 >
                   <div className="flex items-center gap-2">
                     {es !== 'ok' && <IconoAdvertencia severity={es} />}
-                    <p className="font-medium text-gray-800 text-sm">{p.nombre}</p>
+                    <p className="font-medium text-gray-800 text-sm">{tituloProd(p)}</p>
                     <ChipTipo tipo={p.tipo_liquido} />
                             {recienCreados.has(p.id) && <ChipNuevo />}
                   </div>
-                  {p.marca && <p className="text-xs text-gray-400 mt-0.5">{p.marca}</p>}
+                  {subtituloProd(p) && <p className="text-xs text-gray-400 mt-0.5">{subtituloProd(p)}</p>}
                   <div className="flex items-center gap-2 mt-1 flex-wrap">
                     <span className="text-sm font-medium text-gray-700">{textoRellenadas(p)}</span>
                     <BadgeEstado estado={es} />
@@ -1452,8 +1460,8 @@ export default function Inventario() {
                   {archivados.map(p => (
                     <div key={p.id} className="px-4 py-3 flex items-center justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="text-sm font-medium text-gray-700 truncate">{p.nombre}</p>
-                        {p.marca && <p className="text-xs text-gray-400">{p.marca}</p>}
+                        <p className="text-sm font-medium text-gray-700 truncate">{tituloProd(p)}</p>
+                        {subtituloProd(p) && <p className="text-xs text-gray-400">{subtituloProd(p)}</p>}
                       </div>
                       <button
                         type="button"
@@ -1491,11 +1499,11 @@ export default function Inventario() {
               <div className="p-5 space-y-5 overflow-y-auto">
                 <div>
                   <div className="flex items-center gap-2">
-                    <p className="text-base font-medium text-gray-900">{p.nombre}</p>
+                    <p className="text-base font-medium text-gray-900">{tituloProd(p)}</p>
                     <ChipTipo tipo={p.tipo_liquido} />
                             {recienCreados.has(p.id) && <ChipNuevo />}
                   </div>
-                  {p.marca && <p className="text-sm text-gray-500 mt-0.5">{p.marca}</p>}
+                  {subtituloProd(p) && <p className="text-sm text-gray-500 mt-0.5">{subtituloProd(p)}</p>}
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
