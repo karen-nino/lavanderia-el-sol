@@ -78,19 +78,19 @@ function fechaHoraCorta(iso) {
 }
 
 const FORM_VACIO = {
-  nombre:         '',
-  marca:          '',
-  tipo_liquido:   'granel',
-  envase:         'Bidón',
-  bidon_valor:    '',
-  bidon_unidad:   'Litros',
-  botella_ml:     '',
-  tapa_ml:        '',
-  precio_tapa:    '',
-  precio_botella: '',
-  stock_botellas: '0',
-  stock_bidones:  '0',
-  stock_minimo:   '0',
+  nombre:            '',
+  marca:             '',
+  tipo_liquido:      'granel',
+  envase:            'Bidón',
+  bidon_valor:       '',
+  bidon_unidad:      'Litros',
+  botella_ml:        '',
+  metodo_tapa:       'ml',   // 'ml' (tamaño de la tapa) | 'tapas' (tapas por botella)
+  tapa_ml:           '',
+  tapas_por_botella: '',
+  precio_tapa:       '',
+  precio_botella:    '',
+  stock_minimo:      '0',
 };
 
 // ── Modal crear / editar ────────────────────────────────────────
@@ -106,13 +106,13 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], envases = [
           ? (producto.volumen_envase_ml % 1000 === 0 ? String(producto.volumen_envase_ml / 1000) : String(producto.volumen_envase_ml))
           : '',
         bidon_unidad:   producto.volumen_envase_ml && producto.volumen_envase_ml % 1000 !== 0 ? 'Mililitros' : 'Litros',
-        botella_ml:     producto.botella_ml ?? '',
-        tapa_ml:        producto.tapa_ml ?? '',
-        precio_tapa:    producto.precio_unitario ?? '',
-        precio_botella: producto.precio_botella ?? '',
-        stock_botellas: '0',
-        stock_bidones:  '0',
-        stock_minimo:   producto.stock_minimo ?? '0',
+        botella_ml:        producto.botella_ml ?? '',
+        metodo_tapa:       'ml',
+        tapa_ml:           producto.tapa_ml ?? '',
+        tapas_por_botella: '',
+        precio_tapa:       producto.precio_unitario ?? '',
+        precio_botella:    producto.precio_botella ?? '',
+        stock_minimo:      producto.stock_minimo ?? '0',
       }
     : FORM_VACIO
   );
@@ -124,9 +124,12 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], envases = [
 
   // Cálculos en vivo para mostrar el rendimiento.
   const botellaMl = Number(form.botella_ml) || 0;
-  const tapaMl    = Number(form.tapa_ml) || 0;
   const bidonMl   = aMl(form.bidon_valor, form.bidon_unidad);
-  const tapasBotella = tapaMl > 0 ? Math.floor(botellaMl / tapaMl) : 0;
+  const tapaMl    = Number(form.tapa_ml) || 0;
+  // Rendimiento: por tamaño de tapa (mL) o por tapas por botella (directo).
+  const tapasBotella = form.metodo_tapa === 'ml'
+    ? (tapaMl > 0 ? Math.floor(botellaMl / tapaMl) : 0)
+    : (Number(form.tapas_por_botella) || 0);
   const botellasBidon = botellaMl > 0 ? Math.floor(bidonMl / botellaMl) : 0;
 
   const marcaOptions = form.marca && !marcas.includes(form.marca) ? [form.marca, ...marcas] : marcas;
@@ -149,7 +152,7 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], envases = [
 
     const body = {
       nombre:            form.nombre.trim(),
-      marca:             form.marca || null,
+      marca:             esGranel ? null : (form.marca || null),
       tipo_liquido:      form.tipo_liquido,
       unidad:            'Tapas',
       envase:            esGranel ? (form.envase || null) : null,
@@ -157,14 +160,11 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], envases = [
       precio_botella:    form.precio_botella !== '' ? Number(form.precio_botella) : null,
       volumen_envase_ml: esGranel && bidonMl > 0 ? bidonMl : null,
       botella_ml:        botellaMl > 0 ? botellaMl : null,
-      tapa_ml:           tapaMl > 0 ? tapaMl : null,
+      // La tapa va por tamaño (mL) o por tapas por botella (el backend deriva el mL).
+      tapa_ml:           form.metodo_tapa === 'ml' && tapaMl > 0 ? tapaMl : null,
+      tapas_por_botella: form.metodo_tapa === 'tapas' ? (Number(form.tapas_por_botella) || null) : null,
       stock_minimo:      Number(form.stock_minimo) || 0,
     };
-    // Existencias iniciales solo al crear.
-    if (!esEdicion) {
-      body.stock_botellas = Number(form.stock_botellas) || 0;
-      body.stock_bidones  = esGranel ? (Number(form.stock_bidones) || 0) : 0;
-    }
 
     try {
       const resultado = esEdicion
@@ -201,7 +201,7 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], envases = [
               Tipo de producto <span className="text-red-500">*</span>
             </label>
             <div className="flex gap-2">
-              {[['granel', 'Granel', 'Se rellena desde un bidón'], ['marca', 'De marca', 'Se compra embotellado']].map(([val, label, hint]) => (
+              {[['granel', 'Granel', 'Se rellena desde un envase'], ['marca', 'De marca', 'Se compra embotellado']].map(([val, label, hint]) => (
                 <button
                   key={val} type="button"
                   onClick={() => setForm(f => ({ ...f, tipo_liquido: val }))}
@@ -228,16 +228,18 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], envases = [
             />
           </div>
 
-          {/* Marca */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              Marca <span className="text-red-500">*</span>
-            </label>
-            <select name="marca" required value={form.marca} onChange={handleChange} className={INPUT_CLS}>
-              <option value="">Seleccionar...</option>
-              {marcaOptions.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
-          </div>
+          {/* Marca (solo productos de marca) */}
+          {!esGranel && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                Marca <span className="text-red-500">*</span>
+              </label>
+              <select name="marca" required value={form.marca} onChange={handleChange} className={INPUT_CLS}>
+                <option value="">Seleccionar...</option>
+                {marcaOptions.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+          )}
 
           {/* Envase (solo granel) */}
           {esGranel && (
@@ -286,13 +288,46 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], envases = [
             </div>
             <div>
               <p className="text-sm font-medium text-gray-700 mb-1.5">
-                ¿De qué tamaño es la tapa/medida? (mL) <span className="text-red-500">*</span>
+                Rendimiento de la tapa/medida <span className="text-red-500">*</span>
               </p>
-              <input
-                type="number" name="tapa_ml" min="1" step="any" required
-                value={form.tapa_ml} onChange={handleChange} placeholder="Ej. 200"
-                className={NUM_CLS}
-              />
+              <div className="flex gap-2 mb-2">
+                <button
+                  type="button"
+                  onClick={() => setForm(f => ({ ...f, metodo_tapa: 'ml' }))}
+                  className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                    form.metodo_tapa === 'ml' ? 'border-blue bg-light-blue text-blue' : 'border-gray-300 bg-white text-gray-600 hover:bg-gray-50'
+                  }`}
+                >
+                  Tamaño de tapa (mL)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setForm(f => ({ ...f, metodo_tapa: 'tapas' }))}
+                  className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                    form.metodo_tapa === 'tapas' ? 'border-blue bg-light-blue text-blue' : 'border-gray-300 bg-white text-gray-600 hover:bg-gray-50'
+                  }`}
+                >
+                  Tapas por botella
+                </button>
+              </div>
+              {form.metodo_tapa === 'ml' ? (
+                <input
+                  type="number" name="tapa_ml" min="1" step="any" required
+                  value={form.tapa_ml} onChange={handleChange} placeholder="Ej. 200 mL"
+                  className={NUM_CLS}
+                />
+              ) : (
+                <>
+                  <input
+                    type="number" name="tapas_por_botella" min="1" step="1" required
+                    value={form.tapas_por_botella} onChange={handleChange} placeholder="Ej. 4 tapas por botella"
+                    className={NUM_CLS}
+                  />
+                  <p className="text-[11px] text-gray-400 mt-1">
+                    Aproximado: cuántas tapas/medidas salen de una botella.
+                  </p>
+                </>
+              )}
             </div>
             {/* Rendimiento calculado */}
             <div className={`rounded-lg px-4 py-3 text-sm ${tapasBotella > 0 ? 'bg-green-50 text-green-800' : 'bg-gray-50 text-gray-500'}`}>
@@ -337,33 +372,8 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], envases = [
             </div>
           </div>
 
-          {/* Existencias iniciales (solo al crear) */}
-          {!esEdicion && (
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                  Botellas rellenadas
-                </label>
-                <input
-                  type="number" name="stock_botellas" min="0" step="1"
-                  value={form.stock_botellas} onChange={handleChange}
-                  className={NUM_CLS}
-                />
-              </div>
-              {esGranel && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    Bidones a granel
-                  </label>
-                  <input
-                    type="number" name="stock_bidones" min="0" step="1"
-                    value={form.stock_bidones} onChange={handleChange}
-                    className={NUM_CLS}
-                  />
-                </div>
-              )}
-            </div>
-          )}
+          {/* Las existencias (botellas rellenadas / bidones) se cargan con una
+              Entrada, no al dar de alta el producto. */}
 
           {/* Alerta de stock bajo */}
           <div>

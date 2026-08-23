@@ -44,6 +44,19 @@ describe('POST /api/productos — validaciones', () => {
     expect(Number(res.body.stock_granel_tapas)).toBe(0);
   });
 
+  it('acepta tapas por botella y deriva el tamaño de la tapa', async () => {
+    const res = await request(app).post('/api/productos').set(auth(admin.token))
+      .send({
+        nombre: 'Cloro', tipo_liquido: 'granel', precio_unitario: 4, precio_botella: 30,
+        volumen_envase_ml: 20000, botella_ml: 800, tapas_por_botella: 4, // sin tapa_ml
+        stock_botellas: 5,
+      });
+    expect(res.status).toBe(201);
+    expect(Number(res.body.tapa_ml)).toBe(200);            // 800 / 4
+    expect(Number(res.body.tapas_por_botella)).toBe(4);
+    expect(Number(res.body.stock_actual)).toBe(20);        // 5 × 4
+  });
+
   it('sin nombre → 400', async () => {
     const res = await request(app).post('/api/productos').set(auth(admin.token))
       .send({ precio_unitario: 30 });

@@ -33,6 +33,16 @@ const SELECT_PRODUCTO = `*,
               ${DERIVADOS_SQL},
               ${ESTADO_STOCK_SQL}`;
 
+// Resuelve el tamaño de la tapa (mL). Si no se dio explícito, se deriva de
+// "cuántas tapas salen de una botella" (aprox): tapa_ml = floor(botella_ml / N).
+function resolverTapaMl(tapaMl, tapasPorBotella, botellaMl) {
+  const explicito = Number(tapaMl) || 0;
+  if (explicito > 0) return explicito;
+  const n = Number(tapasPorBotella) || 0;
+  if (n > 0 && botellaMl > 0) return Math.max(1, Math.floor(botellaMl / n));
+  return 0;
+}
+
 // Tapas que representa una unidad dada, según los volúmenes del producto.
 //   tapa → 1 · botella → tapas_por_botella · bidon → tapas del bidón completo.
 function tapasDeUnidad(unidad, p) {
@@ -104,7 +114,7 @@ export const createProducto = async (req, res) => {
   const {
     nombre, descripcion, unidad = 'Tapas', precio_unitario, marca,
     tipo_liquido = 'granel', envase, stock_minimo = 0,
-    volumen_envase_ml, botella_ml, tapa_ml, precio_botella,
+    volumen_envase_ml, botella_ml, tapa_ml, tapas_por_botella, precio_botella,
     // Existencias iniciales: botellas rellenadas y (granel) bidones a granel.
     stock_botellas = 0, stock_bidones = 0,
   } = req.body;
@@ -115,15 +125,19 @@ export const createProducto = async (req, res) => {
   if (!['granel', 'marca'].includes(tipo_liquido)) {
     return res.status(400).json({ message: 'Tipo de líquido inválido.' });
   }
-  if (!botella_ml || Number(botella_ml) <= 0 || !tapa_ml || Number(tapa_ml) <= 0) {
-    return res.status(400).json({ message: 'Indica el tamaño de la botella y de la tapa (mL).' });
+  const botellaMl = Number(botella_ml);
+  if (!(botellaMl > 0)) {
+    return res.status(400).json({ message: 'Indica el tamaño de la botella (mL).' });
+  }
+  // La tapa se puede dar por tamaño (mL) o por cuántas tapas rinde una botella.
+  const tapaMl = resolverTapaMl(tapa_ml, tapas_por_botella, botellaMl);
+  if (!(tapaMl > 0)) {
+    return res.status(400).json({ message: 'Indica el tamaño de la tapa (mL) o cuántas tapas salen de una botella.' });
   }
   if (tipo_liquido === 'granel' && (!volumen_envase_ml || Number(volumen_envase_ml) <= 0)) {
     return res.status(400).json({ message: 'Indica el volumen del bidón (mL).' });
   }
 
-  const tapaMl    = Number(tapa_ml);
-  const botellaMl = Number(botella_ml);
   const bidonMl   = tipo_liquido === 'granel' ? Number(volumen_envase_ml) : null;
   const tapasPorBotella = Math.floor(botellaMl / tapaMl);
   const tapasPorBidon   = bidonMl ? Math.floor(bidonMl / tapaMl) : 0;
@@ -186,7 +200,7 @@ export const updateProducto = async (req, res) => {
   const {
     nombre, descripcion, unidad = 'Tapas', precio_unitario, marca,
     tipo_liquido = 'granel', envase, stock_minimo = 0,
-    volumen_envase_ml, botella_ml, tapa_ml, precio_botella,
+    volumen_envase_ml, botella_ml, tapa_ml, tapas_por_botella, precio_botella,
   } = req.body;
 
   if (!nombre) {
@@ -195,15 +209,18 @@ export const updateProducto = async (req, res) => {
   if (!['granel', 'marca'].includes(tipo_liquido)) {
     return res.status(400).json({ message: 'Tipo de líquido inválido.' });
   }
-  if (!botella_ml || Number(botella_ml) <= 0 || !tapa_ml || Number(tapa_ml) <= 0) {
-    return res.status(400).json({ message: 'Indica el tamaño de la botella y de la tapa (mL).' });
+  const botellaMl = Number(botella_ml);
+  if (!(botellaMl > 0)) {
+    return res.status(400).json({ message: 'Indica el tamaño de la botella (mL).' });
+  }
+  const tapaMl = resolverTapaMl(tapa_ml, tapas_por_botella, botellaMl);
+  if (!(tapaMl > 0)) {
+    return res.status(400).json({ message: 'Indica el tamaño de la tapa (mL) o cuántas tapas salen de una botella.' });
   }
   if (tipo_liquido === 'granel' && (!volumen_envase_ml || Number(volumen_envase_ml) <= 0)) {
     return res.status(400).json({ message: 'Indica el volumen del bidón (mL).' });
   }
 
-  const tapaMl    = Number(tapa_ml);
-  const botellaMl = Number(botella_ml);
   const bidonMl   = tipo_liquido === 'granel' ? Number(volumen_envase_ml) : null;
   const tapasPorEnvase = tipo_liquido === 'granel'
     ? Math.floor(bidonMl / tapaMl)
