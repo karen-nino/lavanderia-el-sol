@@ -904,6 +904,8 @@ export default function Inventario() {
   const [modalMovimiento, setModalMovimiento] = useState(null);  // { producto, tipo }
   const [modalRellenar,   setModalRellenar]   = useState(null);  // producto
   const [modalHistorial,  setModalHistorial]  = useState(null);  // producto
+  const [stockOcultoSig,  setStockOcultoSig]  = useState(null);  // firma del aviso de stock bajo descartado
+  const [granelOcultoSig, setGranelOcultoSig] = useState(null);  // firma del aviso de granel descartado
 
   // Archivados: se cargan bajo demanda al abrir el panel "Ver archivados".
   const [verArchivados,   setVerArchivados]   = useState(false);
@@ -964,8 +966,16 @@ export default function Inventario() {
   }, [searchParams, productos, loading, setSearchParams]);
 
   const stockBajo = productos.filter(p => p.estado_stock !== 'ok');
+  // El aviso de stock bajo también se puede ocultar en la sesión (firma con el
+  // stock, así reaparece si cambia).
+  const stockSig = stockBajo.map(p => `${p.id}:${p.stock_actual}`).join(',');
+  const mostrarStockBajo = stockBajo.length > 0 && stockSig !== stockOcultoSig;
   // Granel por acabarse o agotado (solo productos granel).
   const granelBajo = productos.filter(p => p.tipo_liquido === 'granel' && p.estado_granel && p.estado_granel !== 'ok');
+  // El aviso de granel se puede ocultar en la sesión; su firma incluye el stock,
+  // así que reaparece si el granel cambia o entra otro producto a la lista.
+  const granelSig = granelBajo.map(p => `${p.id}:${p.stock_granel_tapas}`).join(',');
+  const mostrarGranel = granelBajo.length > 0 && granelSig !== granelOcultoSig;
 
   // Reemplaza un producto en la lista (tras editar / movimiento / rellenar).
   const reemplazarProducto = (prod) => {
@@ -1139,9 +1149,18 @@ export default function Inventario() {
       <div className="max-w-7xl mx-auto px-6 md:px-8 py-4 space-y-4">
 
       {/* Alerta stock bajo */}
-      {stockBajo.length > 0 && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
-          <div className="flex items-center gap-2 mb-2">
+      {mostrarStockBajo && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 relative">
+          <button
+            onClick={() => setStockOcultoSig(stockSig)}
+            aria-label="Descartar aviso"
+            className="absolute top-3 right-3 text-amber-400 hover:text-amber-600 p-0.5"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+          <div className="flex items-center gap-2 mb-2 pr-6">
             <svg className="w-4 h-4 text-amber-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                 d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
@@ -1169,9 +1188,18 @@ export default function Inventario() {
       )}
 
       {/* Alerta de granel por acabarse / agotado */}
-      {granelBajo.length > 0 && (
-        <div className="bg-orange-50 border border-orange-200 rounded-xl p-4">
-          <div className="flex items-center gap-2 mb-2">
+      {mostrarGranel && (
+        <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 relative">
+          <button
+            onClick={() => setGranelOcultoSig(granelSig)}
+            aria-label="Descartar aviso"
+            className="absolute top-3 right-3 text-orange-400 hover:text-orange-600 p-0.5"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+          <div className="flex items-center gap-2 mb-2 pr-6">
             <svg className="w-4 h-4 text-orange-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                 d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
