@@ -823,10 +823,10 @@ function ModalArchivar({ producto, onClose, onConfirmar }) {
             </svg>
           </div>
           <div>
-            <h3 className="text-base font-semibold text-gray-900">Archivar producto</h3>
+            <h3 className="text-base font-semibold text-gray-900">Desactivar producto</h3>
             <p className="text-sm text-gray-500 mt-0.5">
               <span className="font-medium text-gray-700">{producto.nombre}</span> se ocultará del inventario y de Nueva Nota.
-              Las notas anteriores no se ven afectadas y puedes restaurarlo cuando quieras.
+              Las notas anteriores no se ven afectadas y puedes reactivarlo cuando quieras.
             </p>
           </div>
         </div>
@@ -846,7 +846,7 @@ function ModalArchivar({ producto, onClose, onConfirmar }) {
             onClick={handleArchivar} disabled={loading}
             className="flex-1 bg-amber-600 hover:bg-amber-700 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
           >
-            {loading ? 'Archivando...' : 'Archivar'}
+            {loading ? 'Desactivando...' : 'Desactivar'}
           </button>
         </div>
       </div>
@@ -1379,7 +1379,7 @@ export default function Inventario() {
                               <button
                                 onClick={() => setProdAArchivar(p)}
                                 className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
-                                title="Archivar (ocultar del inventario)"
+                                title="Desactivar (ocultar del inventario)"
                               >
                                 <IconoArchivar />
                               </button>
@@ -1451,7 +1451,7 @@ export default function Inventario() {
             <svg className={`w-4 h-4 transition-transform ${verArchivados ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
-            {verArchivados ? 'Ocultar archivados' : 'Ver productos archivados'}
+            {verArchivados ? 'Ocultar desactivados' : 'Ver productos desactivados'}
           </button>
 
           {verArchivados && (
@@ -1461,7 +1461,7 @@ export default function Inventario() {
               ) : archError ? (
                 <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">{archError}</div>
               ) : archivados.length === 0 ? (
-                <p className="text-sm text-gray-400 italic py-2">No hay productos archivados.</p>
+                <p className="text-sm text-gray-400 italic py-2">No hay productos desactivados.</p>
               ) : (
                 <div className="bg-white rounded-xl shadow-sm border border-gray-100 divide-y divide-gray-50">
                   {archivados.map(p => (
@@ -1475,7 +1475,7 @@ export default function Inventario() {
                         onClick={() => restaurarProducto(p)}
                         className="flex-shrink-0 text-sm font-medium text-blue hover:text-blue-800 border border-blue/30 hover:bg-light-blue rounded-lg px-3 py-1.5 transition-colors"
                       >
-                        Restaurar
+                        Reactivar
                       </button>
                     </div>
                   ))}
@@ -1593,7 +1593,7 @@ export default function Inventario() {
                       className="w-full flex items-center justify-center gap-2 py-3 border border-amber-300 text-amber-700 hover:bg-amber-50 font-medium rounded-lg text-sm transition-colors"
                     >
                       <IconoArchivar />
-                      Archivar
+                      Desactivar
                     </button>
                   )}
                   {esAdmin && (
