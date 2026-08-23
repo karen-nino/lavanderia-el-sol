@@ -906,6 +906,9 @@ export default function Inventario() {
   const [modalHistorial,  setModalHistorial]  = useState(null);  // producto
   const [stockOcultoSig,  setStockOcultoSig]  = useState(null);  // firma del aviso de stock bajo descartado
   const [granelOcultoSig, setGranelOcultoSig] = useState(null);  // firma del aviso de granel descartado
+  // Productos recién creados en esta sesión: no disparan advertencias (nacen en
+  // cero) hasta que se les cargue existencia con una entrada.
+  const [recienCreados,   setRecienCreados]   = useState(() => new Set());
 
   // Archivados: se cargan bajo demanda al abrir el panel "Ver archivados".
   const [verArchivados,   setVerArchivados]   = useState(false);
@@ -965,22 +968,29 @@ export default function Inventario() {
     setSearchParams(next, { replace: true });
   }, [searchParams, productos, loading, setSearchParams]);
 
-  const stockBajo = productos.filter(p => p.estado_stock !== 'ok');
+  const stockBajo = productos.filter(p => p.estado_stock !== 'ok' && !recienCreados.has(p.id));
   // El aviso de stock bajo también se puede ocultar en la sesión (firma con el
   // stock, así reaparece si cambia).
   const stockSig = stockBajo.map(p => `${p.id}:${p.stock_actual}`).join(',');
   const mostrarStockBajo = stockBajo.length > 0 && stockSig !== stockOcultoSig;
   // Granel por acabarse o agotado (solo productos granel).
-  const granelBajo = productos.filter(p => p.tipo_liquido === 'granel' && p.estado_granel && p.estado_granel !== 'ok');
+  const granelBajo = productos.filter(p => p.tipo_liquido === 'granel' && p.estado_granel && p.estado_granel !== 'ok' && !recienCreados.has(p.id));
   // El aviso de granel se puede ocultar en la sesión; su firma incluye el stock,
   // así que reaparece si el granel cambia o entra otro producto a la lista.
   const granelSig = granelBajo.map(p => `${p.id}:${p.stock_granel_tapas}`).join(',');
   const mostrarGranel = granelBajo.length > 0 && granelSig !== granelOcultoSig;
 
-  // Reemplaza un producto en la lista (tras editar / movimiento / rellenar).
+  // Reemplaza un producto en la lista (tras editar / movimiento / rellenar). Si
+  // ya tiene existencia, deja de considerarse "recién creado" (vuelve a avisar).
   const reemplazarProducto = (prod) => {
     setProductos(prev => prev.map(p => (p.id === prod.id ? prod : p)));
     setInfoProducto(prev => (prev && prev.id === prod.id ? prod : prev));
+    if (Number(prod.stock_actual) > 0 || Number(prod.stock_granel_tapas) > 0) {
+      setRecienCreados(prev => {
+        if (!prev.has(prod.id)) return prev;
+        const next = new Set(prev); next.delete(prod.id); return next;
+      });
+    }
   };
 
   const handleGuardado = (resultado, esEdicion) => {
@@ -988,6 +998,8 @@ export default function Inventario() {
       reemplazarProducto(resultado);
     } else {
       setProductos(prev => [...prev, resultado].sort((a, b) => a.nombre.localeCompare(b.nombre)));
+      // Nace en cero: no dispares advertencias hasta que se le cargue existencia.
+      setRecienCreados(prev => new Set(prev).add(resultado.id));
     }
     setModalProducto(null);
   };
@@ -1285,7 +1297,7 @@ export default function Inventario() {
                 </thead>
                 <tbody className="divide-y divide-gray-50">
                   {productos.map(p => {
-                    const es = p.estado_stock ?? 'ok';
+                    const es = recienCreados.has(p.id) ? 'ok' : (p.estado_stock ?? 'ok');
                     const rowCls = es === 'agotado' ? 'bg-red-50/40' : es === 'por_agotarse' ? 'bg-amber-50/40' : '';
                     return (
                       <tr key={p.id} data-producto-id={p.id} className={`transition-colors ${seleccionados.has(p.id) ? 'bg-light-blue/40' : `hover:bg-gray-50 ${rowCls}`}`}>
@@ -1319,7 +1331,7 @@ export default function Inventario() {
                             ? (
                               <div className="flex items-center gap-2 flex-wrap">
                                 <span>{textoGranel(p)}</span>
-                                <BadgeGranel estado={p.estado_granel} />
+                                <BadgeGranel estado={recienCreados.has(p.id) ? 'ok' : p.estado_granel} />
                               </div>
                             )
                             : <span className="text-gray-300">—</span>}
@@ -1367,7 +1379,7 @@ export default function Inventario() {
           {/* Cards — mobile */}
           <div className="md:hidden space-y-3">
             {productos.map(p => {
-              const es = p.estado_stock ?? 'ok';
+              const es = recienCreados.has(p.id) ? 'ok' : (p.estado_stock ?? 'ok');
               const rowCls = es === 'agotado' ? 'bg-red-50/40' : es === 'por_agotarse' ? 'bg-amber-50/40' : 'bg-white';
               return (
                 <button
@@ -1390,7 +1402,7 @@ export default function Inventario() {
                   {p.tipo_liquido === 'granel' && (
                     <p className="text-xs text-gray-500 mt-0.5 inline-flex items-center gap-1.5">
                       <span>A granel: {textoGranel(p)}</span>
-                      <BadgeGranel estado={p.estado_granel} />
+                      <BadgeGranel estado={recienCreados.has(p.id) ? 'ok' : p.estado_granel} />
                     </p>
                   )}
                 </button>
@@ -1451,7 +1463,7 @@ export default function Inventario() {
       {/* Modal info producto (mobile) */}
       {infoProducto && (() => {
         const p = infoProducto;
-        const es = p.estado_stock ?? 'ok';
+        const es = recienCreados.has(p.id) ? 'ok' : (p.estado_stock ?? 'ok');
         return (
           <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4 md:hidden">
             <div className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] flex flex-col">
@@ -1493,7 +1505,7 @@ export default function Inventario() {
                     <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">A granel (bidón)</p>
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-base text-gray-700">{textoGranel(p)}</span>
-                      <BadgeGranel estado={p.estado_granel} />
+                      <BadgeGranel estado={recienCreados.has(p.id) ? 'ok' : p.estado_granel} />
                     </div>
                   </div>
                 )}
