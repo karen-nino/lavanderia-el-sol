@@ -94,7 +94,7 @@ const FORM_VACIO = {
 };
 
 // ── Modal crear / editar ────────────────────────────────────────
-function ModalProducto({ producto, onClose, onGuardado, marcas = [], envases = [] }) {
+function ModalProducto({ producto, onClose, onGuardado, marcas = [] }) {
   const esEdicion = Boolean(producto);
   const [form, setForm] = useState(producto
     ? {
@@ -136,7 +136,6 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], envases = [
   const botellasBidon = botellaMl > 0 ? Math.floor(bidonMl / botellaMl) : 0;
 
   const marcaOptions = form.marca && !marcas.includes(form.marca) ? [form.marca, ...marcas] : marcas;
-  const envOptions   = form.envase && !envases.includes(form.envase) ? [form.envase, ...envases] : envases;
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -158,7 +157,7 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], envases = [
       marca:             esGranel ? null : (form.marca || null),
       tipo_liquido:      form.tipo_liquido,
       unidad:            'Tapas',
-      envase:            esGranel ? (form.envase || null) : null,
+      envase:            esGranel ? 'Bidón' : null,
       precio_unitario:   form.precio_tapa !== '' ? Number(form.precio_tapa) : null,
       precio_botella:    form.precio_botella !== '' ? Number(form.precio_botella) : null,
       volumen_envase_ml: esGranel && bidonMl > 0 ? bidonMl : null,
@@ -243,19 +242,6 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], envases = [
               <select name="marca" required value={form.marca} onChange={handleChange} className={INPUT_CLS}>
                 <option value="">Seleccionar...</option>
                 {marcaOptions.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
-            </div>
-          )}
-
-          {/* Envase (solo granel) */}
-          {esGranel && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                Envase a granel <span className="text-red-500">*</span>
-              </label>
-              <select name="envase" required value={form.envase} onChange={handleChange} className={INPUT_CLS}>
-                <option value="">Seleccionar...</option>
-                {envOptions.map(e => <option key={e} value={e}>{e}</option>)}
               </select>
             </div>
           )}
@@ -931,17 +917,13 @@ export default function Inventario() {
   const [searchParams, setSearchParams] = useSearchParams();
   const highlightAplicadoRef = useRef(null);
 
-  // Catálogos editables (Ajustes → Inventario). Solo los activos se ofrecen.
-  const [marcas,  setMarcas]  = useState([]);
-  const [envases, setEnvases] = useState([]);
+  // Catálogo editable de marcas (Ajustes → Inventario). Solo las activas.
+  const [marcas, setMarcas] = useState([]);
 
   useEffect(() => {
     let activo = true;
     api.get('/etiquetas/marcas-producto')
       .then(data => { if (activo) setMarcas((data ?? []).filter(x => x.activo).map(x => x.nombre)); })
-      .catch(() => {});
-    api.get('/etiquetas/envases-producto')
-      .then(data => { if (activo) setEnvases((data ?? []).filter(x => x.activo).map(x => x.nombre)); })
       .catch(() => {});
     return () => { activo = false; };
   }, []);
@@ -1594,7 +1576,6 @@ export default function Inventario() {
         <ModalProducto
           producto={modalProducto === 'nuevo' ? null : modalProducto}
           marcas={marcas}
-          envases={envases}
           onClose={() => setModalProducto(null)}
           onGuardado={handleGuardado}
         />
