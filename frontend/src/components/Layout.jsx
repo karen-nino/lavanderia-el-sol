@@ -703,6 +703,26 @@ export default function Layout() {
           ],
         };
       });
+    // Alertas del líquido a granel (bidón) por acabarse o agotado.
+    const granel = productos
+      .filter(p => p.tipo_liquido === 'granel' && p.estado_granel && p.estado_granel !== 'ok')
+      .filter(p => !stockOcultas.has(`granel-${p.id}:${p.stock_granel_tapas}`))
+      .sort((a, b) => (orden[a.estado_granel] ?? 99) - (orden[b.estado_granel] ?? 99))
+      .map(p => ({
+        key:         `granel-${p.id}`,
+        dismissKey:  `granel-${p.id}:${p.stock_granel_tapas}`,
+        dismissable: true,
+        title:       `${p.nombre} — granel`,
+        description: p.estado_granel === 'agotado' ? 'Sin líquido a granel' : 'Granel por acabarse',
+        severity:    p.estado_granel,
+        to:          `/inventario?highlight=${p.id}`,
+        accionLabel: 'Ver en inventario',
+        detalles: [
+          { label: 'Producto', value: p.nombre },
+          { label: 'Estado',   value: p.estado_granel === 'agotado' ? 'Sin granel' : 'Granel por acabarse' },
+        ],
+      }));
+
     const notifs = notificaciones.map(n => {
       const fechaHora = formatFechaHora12(n.created_at);
       // Cada tipo de notificación tiene su título, color, destino y detalles.
@@ -741,7 +761,7 @@ export default function Layout() {
         ...cfg,
       };
     });
-    return [...stock, ...notifs];
+    return [...stock, ...granel, ...notifs];
   }, [productos, notificaciones, stockOcultas]);
 
   const handleDismissAlerta = async (a) => {

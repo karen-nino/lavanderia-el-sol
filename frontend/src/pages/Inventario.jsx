@@ -88,9 +88,9 @@ const FORM_VACIO = {
   metodo_tapa:       'ml',   // 'ml' (tamaño de la tapa) | 'tapas' (tapas por botella)
   tapa_ml:           '',
   tapas_por_botella: '',
-  precio_tapa:       '',
-  precio_botella:    '',
-  stock_minimo:      '0',
+  precio_tapa:          '',
+  precio_botella:       '',
+  stock_minimo_botellas: '0',   // el aviso se captura en botellas; se guarda en tapas
 };
 
 // ── Modal crear / editar ────────────────────────────────────────
@@ -112,7 +112,10 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], envases = [
         tapas_por_botella: '',
         precio_tapa:       producto.precio_unitario ?? '',
         precio_botella:    producto.precio_botella ?? '',
-        stock_minimo:      producto.stock_minimo ?? '0',
+        // El mínimo se guarda en tapas; en el formulario se muestra en botellas.
+        stock_minimo_botellas: tapasPorBotella(producto) > 0
+          ? String(Math.round(Number(producto.stock_minimo ?? 0) / tapasPorBotella(producto)))
+          : String(producto.stock_minimo ?? 0),
       }
     : FORM_VACIO
   );
@@ -163,7 +166,10 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], envases = [
       // La tapa va por tamaño (mL) o por tapas por botella (el backend deriva el mL).
       tapa_ml:           form.metodo_tapa === 'ml' && tapaMl > 0 ? tapaMl : null,
       tapas_por_botella: form.metodo_tapa === 'tapas' ? (Number(form.tapas_por_botella) || null) : null,
-      stock_minimo:      Number(form.stock_minimo) || 0,
+      // El aviso se captura en botellas y se guarda en tapas.
+      stock_minimo:      tapasBotella > 0
+        ? Math.round((Number(form.stock_minimo_botellas) || 0) * tapasBotella)
+        : (Number(form.stock_minimo_botellas) || 0),
     };
 
     try {
@@ -378,11 +384,11 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], envases = [
           {/* Alerta de stock bajo */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              Avisar cuando queden (tapas)
+              Avisar cuando queden (botellas)
             </label>
             <input
-              type="number" name="stock_minimo" min="0" step="1"
-              value={form.stock_minimo} onChange={handleChange} placeholder="Ej. 20"
+              type="number" name="stock_minimo_botellas" min="0" step="1"
+              value={form.stock_minimo_botellas} onChange={handleChange} placeholder="Ej. 5"
               className={NUM_CLS}
             />
           </div>
@@ -876,6 +882,13 @@ function BadgeEstado({ estado }) {
   return <span className="w-2 h-2 rounded-full bg-green-500 inline-block" />;
 }
 
+// Badge del granel (bidón). Solo se dibuja algo cuando está por acabarse o agotado.
+function BadgeGranel({ estado }) {
+  if (estado === 'agotado') return <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700">Sin granel</span>;
+  if (estado === 'por_agotarse') return <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-orange-100 text-orange-700">Por acabarse</span>;
+  return null;
+}
+
 // ── Página principal ────────────────────────────────────────────
 export default function Inventario() {
   const { usuario } = useAuth();
@@ -951,6 +964,8 @@ export default function Inventario() {
   }, [searchParams, productos, loading, setSearchParams]);
 
   const stockBajo = productos.filter(p => p.estado_stock !== 'ok');
+  // Granel por acabarse o agotado (solo productos granel).
+  const granelBajo = productos.filter(p => p.tipo_liquido === 'granel' && p.estado_granel && p.estado_granel !== 'ok');
 
   // Reemplaza un producto en la lista (tras editar / movimiento / rellenar).
   const reemplazarProducto = (prod) => {
@@ -1153,6 +1168,28 @@ export default function Inventario() {
         </div>
       )}
 
+      {/* Alerta de granel por acabarse / agotado */}
+      {granelBajo.length > 0 && (
+        <div className="bg-orange-50 border border-orange-200 rounded-xl p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <svg className="w-4 h-4 text-orange-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <p className="text-sm font-semibold text-orange-800">
+              Granel por acabarse en {granelBajo.length} producto(s) — hay que comprar más bidones
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {granelBajo.map(p => (
+              <span key={p.id} className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-medium">
+                {p.nombre}{p.estado_granel === 'agotado' ? ' (sin granel)' : ''}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
       {loading && (
         <div className="flex justify-center py-12">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue" />
@@ -1251,7 +1288,12 @@ export default function Inventario() {
                         </td>
                         <td className="px-4 py-3 text-gray-600">
                           {p.tipo_liquido === 'granel'
-                            ? textoGranel(p)
+                            ? (
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span>{textoGranel(p)}</span>
+                                <BadgeGranel estado={p.estado_granel} />
+                              </div>
+                            )
                             : <span className="text-gray-300">—</span>}
                         </td>
                         <td className="px-4 py-3">
@@ -1318,7 +1360,10 @@ export default function Inventario() {
                     <BadgeEstado estado={es} />
                   </div>
                   {p.tipo_liquido === 'granel' && (
-                    <p className="text-xs text-gray-500 mt-0.5">A granel: {textoGranel(p)}</p>
+                    <p className="text-xs text-gray-500 mt-0.5 inline-flex items-center gap-1.5">
+                      <span>A granel: {textoGranel(p)}</span>
+                      <BadgeGranel estado={p.estado_granel} />
+                    </p>
                   )}
                 </button>
               );
@@ -1418,7 +1463,10 @@ export default function Inventario() {
                 {p.tipo_liquido === 'granel' && (
                   <div>
                     <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">A granel (bidón)</p>
-                    <p className="text-base text-gray-700">{textoGranel(p)}</p>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-base text-gray-700">{textoGranel(p)}</span>
+                      <BadgeGranel estado={p.estado_granel} />
+                    </div>
                   </div>
                 )}
 

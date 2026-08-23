@@ -27,11 +27,25 @@ const DERIVADOS_SQL = `
        THEN floor(volumen_envase_ml::numeric / botella_ml) END AS botellas_por_bidon
 `.trim();
 
+// Estado del líquido a granel (bidón): agotado cuando no queda nada, por
+// agotarse cuando queda menos de un bidón lleno. Solo aplica a productos granel.
+const ESTADO_GRANEL_SQL = `
+  CASE WHEN tipo_liquido = 'granel' THEN
+    CASE
+      WHEN stock_granel_tapas <= 0 THEN 'agotado'
+      WHEN volumen_envase_ml > 0 AND tapa_ml > 0
+           AND stock_granel_tapas < floor(volumen_envase_ml::numeric / tapa_ml) THEN 'por_agotarse'
+      ELSE 'ok'
+    END
+  END AS estado_granel
+`.trim();
+
 // SELECT estándar de un producto con sus campos calculados.
 const SELECT_PRODUCTO = `*,
               (stock_actual - stock_reservado) AS stock_disponible,
               ${DERIVADOS_SQL},
-              ${ESTADO_STOCK_SQL}`;
+              ${ESTADO_STOCK_SQL},
+              ${ESTADO_GRANEL_SQL}`;
 
 // Resuelve el tamaño de la tapa (mL). Si no se dio explícito, se deriva de
 // "cuántas tapas salen de una botella" (aprox): tapa_ml = floor(botella_ml / N).
