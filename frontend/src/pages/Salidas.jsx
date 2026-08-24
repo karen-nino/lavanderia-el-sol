@@ -438,13 +438,12 @@ export default function Salidas() {
   // Slots de Por Encargo con TIPO elegido pero sin máquina física: se asignan
   // eligiendo una máquina disponible del tipo correspondiente.
   const TIPO_MAQ_LABEL = { mediana: 'Mediana', jumbo: 'Jumbo', edredon: 'Edredón' };
+  // Solo se asigna la LAVADORA aquí; la secadora se elige después, al terminar
+  // el lavado (así no se aparta la secadora desde el inicio).
   const slotsPorAsignar = notaCerrada ? [] : cargasNota.flatMap(c => {
     const out = [];
     if (c.lavadora_tipo_previsto && !c.lavadora_id && !c.lavadora_usada_id) {
       out.push({ carga: c, slot: 'lavadora', tipo: c.lavadora_tipo_previsto });
-    }
-    if (c.secadora_tipo_previsto && !c.secadora_id && !c.secadora_usada_id) {
-      out.push({ carga: c, slot: 'secadora', tipo: c.secadora_tipo_previsto });
     }
     return out;
   });
@@ -516,9 +515,9 @@ export default function Salidas() {
           <h2 className="text-sm font-semibold text-gray-700">
             {maquinasAsignadas.length > 1 ? 'Máquinas asignadas' : 'Máquina asignada'}
           </h2>
-          {/* Asignar una máquina extra: solo si ya hay alguna asignada (si no,
-              se usa el botón de abajo). Disponible salvo en notas cerradas. */}
-          {nota && maquinasAsignadas.length > 0 && !['FINALIZADA', 'CANCELADA'].includes(nota.estado) && (
+          {/* Asignar una máquina extra: disponible desde el inicio, salvo en
+              notas cerradas. */}
+          {nota && !['FINALIZADA', 'CANCELADA'].includes(nota.estado) && (
             <button
               onClick={() => iniciarAsignar()}
               disabled={loadingMaquina}
@@ -663,20 +662,7 @@ export default function Salidas() {
             </div>
           ))}
 
-          {/* En Espera sin ninguna máquina asignada ni carga pendiente: abrir
-              selector para elegirlas. Con máquinas asignadas, cada una se
-              arranca con su propio botón "Iniciar Lavado" de arriba. */}
-          {maquinasAsignadas.length === 0 && cargasVacias.length === 0 && slotsPorAsignar.length === 0 && nota && !['FINALIZADA', 'CANCELADA'].includes(nota.estado) && (
-            <div className="flex justify-end gap-2 pt-1">
-              <button
-                onClick={() => iniciarAsignar()}
-                disabled={loadingMaquina}
-                className="px-4 py-2 bg-blue hover:opacity-90 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
-              >
-                {loadingMaquina ? 'Asignando...' : 'Asignar Máquina'}
-              </button>
-            </div>
-          )}
+          {/* El botón "+ Asignar máquina" del encabezado cubre este caso. */}
         </div>
       </div>
 

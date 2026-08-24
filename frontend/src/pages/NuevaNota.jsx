@@ -969,6 +969,8 @@ export default function NuevaNota() {
                                 // y se ocultan las opciones de edredón.
                                 cambios.tipo_prenda = 'ROPA';
                                 cambios.tamano_edredon = '';
+                                // Chico/Grande no usan lavadora jumbo: si venía elegida, se limpia.
+                                if (c.lavadora_tipo === 'jumbo') cambios.lavadora_tipo = '';
                               } else {
                                 // Jumbo: el edredón es el caso principal, queda por
                                 // defecto. Una lavadora no-jumbo ya no sirve.
@@ -1695,8 +1697,17 @@ export default function NuevaNota() {
                       className={`${INPUT_CLS} bg-white`}
                     >
                       <option value="">Sin lavado</option>
-                      <option value="mediana">Mediana — ${precioLavadoTipo('mediana', c.tipo_prenda).toFixed(2)}</option>
-                      <option value="jumbo">Jumbo — ${precioLavadoTipo('jumbo', c.tipo_prenda).toFixed(2)}</option>
+                      {/* Edredón va en jumbo; para ropa, la jumbo solo aparece en carga jumbo. */}
+                      {c.tipo_prenda === 'EDREDON' ? (
+                        <option value="jumbo">Jumbo — ${precioLavadoTipo('jumbo', c.tipo_prenda).toFixed(2)}</option>
+                      ) : (
+                        <>
+                          <option value="mediana">Mediana — ${precioLavadoTipo('mediana', c.tipo_prenda).toFixed(2)}</option>
+                          {c.tamano === 'jumbo' && (
+                            <option value="jumbo">Jumbo — ${precioLavadoTipo('jumbo', c.tipo_prenda).toFixed(2)}</option>
+                          )}
+                        </>
+                      )}
                     </select>
                   </div>
                   <div>
