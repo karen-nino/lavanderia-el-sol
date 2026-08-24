@@ -217,7 +217,7 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [] }) {
     if (esBolsa) {
       const bodyBolsa = {
         clase:            'bolsa',
-        nombre:           form.nombre.trim(),
+        nombre:           'Bolsa',
         tamano_bolsa:     form.tamano_bolsa,
         bolsas_por_rollo: Number(form.bolsas_por_rollo) || null,
         precio_unitario:  form.precio_botella !== '' ? Number(form.precio_botella) : null,
@@ -317,17 +317,19 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [] }) {
             </div>
           </div>
 
-          {/* Nombre */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              Nombre <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text" name="nombre" required
-              value={form.nombre} onChange={handleChange}
-              placeholder="Ej. Suavizante" className={INPUT_CLS}
-            />
-          </div>
+          {/* Nombre (las bolsas siempre se llaman "Bolsa"; se distinguen por tamaño) */}
+          {!esBolsa && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                Nombre <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text" name="nombre" required
+                value={form.nombre} onChange={handleChange}
+                placeholder="Ej. Suavizante" className={INPUT_CLS}
+              />
+            </div>
+          )}
 
           {/* Marca (solo productos de marca) */}
           {esMarca && (
