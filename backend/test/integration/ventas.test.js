@@ -100,15 +100,19 @@ describe('GET /api/ventas/resumen — tarjetas y período', () => {
     expect(res.body.tarjetas.total_cobrado).toBe(105);
   });
 
-  it('una nota cancelada no cuenta en ningún lado', async () => {
+  it('una nota cancelada no cuenta en los totales, pero sí aparece en la lista', async () => {
     const creada = await crearNota(admin.token, { nombreMaquina: 'L1', estado_pago: 'PAGADO' });
     await request(app).patch(`/api/notas/${creada.body.id}/estado`)
       .set(auth(admin.token)).send({ estado: 'CANCELADA' }).expect(200);
 
     const res = await request(app).get('/api/ventas/resumen?periodo=hoy').set(auth(admin.token));
+    // No cuenta en los totales…
     expect(res.body.tarjetas.total_cobrado).toBe(0);
     expect(res.body.tarjetas.notas_pagadas).toBe(0);
-    expect(res.body.lista_notas).toHaveLength(0);
+    expect(res.body.corte.total_general).toBe(0);
+    // …pero sí se muestra en la lista, con su estado.
+    expect(res.body.lista_notas).toHaveLength(1);
+    expect(res.body.lista_notas[0].estado).toBe('CANCELADA');
   });
 
   it('aísla por sucursal', async () => {

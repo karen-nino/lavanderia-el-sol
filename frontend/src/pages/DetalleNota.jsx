@@ -199,6 +199,8 @@ export default function DetalleNota() {
   const [loadingAccion,    setLoadingAccion]    = useState(false);
   const [errorAccion,      setErrorAccion]      = useState('');
   const [confirmCancelar,  setConfirmCancelar]  = useState(false);
+  const [motivoCancelarOpen, setMotivoCancelarOpen] = useState(false);
+  const [motivoCancelar,   setMotivoCancelar]   = useState('');
   const [confirmFinalizar,  setConfirmFinalizar]  = useState(false);
   const [confirmLiquidar,  setConfirmLiquidar]  = useState(false);
   const [confirmEliminar,  setConfirmEliminar]  = useState(false);
@@ -216,12 +218,16 @@ export default function DetalleNota() {
     setLoadingAccion(true);
     setErrorAccion('');
     try {
-      const updated = await api.patch(`/notas/${id}/estado`, { estado: 'CANCELADA' });
-      setNota(prev => ({ ...prev, estado: updated.estado }));
-      setConfirmCancelar(false);
+      const updated = await api.patch(`/notas/${id}/estado`, {
+        estado: 'CANCELADA',
+        motivo: motivoCancelar.trim() || undefined,
+      });
+      setNota(prev => ({ ...prev, estado: updated.estado, motivo_cancelacion: updated.motivo_cancelacion }));
+      setMotivoCancelarOpen(false);
+      setMotivoCancelar('');
     } catch (err) {
       setErrorAccion(err.message);
-      setConfirmCancelar(false);
+      setMotivoCancelarOpen(false);
     } finally {
       setLoadingAccion(false);
     }
@@ -685,7 +691,9 @@ export default function DetalleNota() {
               </span>
               <div>
                 <p className="text-sm font-semibold text-gray-900">Cancelada</p>
-                <p className="text-xs text-gray-400">Esta nota fue cancelada</p>
+                <p className="text-xs text-gray-400">
+                  {nota.motivo_cancelacion ? `Motivo: ${nota.motivo_cancelacion}` : 'Esta nota fue cancelada'}
+                </p>
               </div>
             </div>
           ) : (
@@ -800,16 +808,56 @@ export default function DetalleNota() {
       </div>
       </div>
 
-      {/* Modal confirmar cancelación */}
+      {/* Modal confirmar cancelación → abre el modal del motivo */}
       {confirmCancelar && (
         <ModalConfirmar
           titulo="Cancelar nota"
           mensaje={`¿Cancelar la nota ${nota.folio ?? `#${nota.id}`}? Esta acción liberará el stock reservado y no se puede deshacer.`}
           onCancelar={() => setConfirmCancelar(false)}
-          onConfirmar={cancelarNota}
-          loading={loadingAccion}
+          onConfirmar={() => { setConfirmCancelar(false); setMotivoCancelar(''); setMotivoCancelarOpen(true); }}
+          loading={false}
           colorBtn="bg-orange-500 hover:bg-orange-600"
         />
+      )}
+
+      {/* Modal del motivo de cancelación */}
+      {motivoCancelarOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-4">
+            <div>
+              <h3 className="text-base font-semibold text-gray-900">Motivo de cancelación</h3>
+              <p className="text-sm text-gray-500 mt-0.5">Anota por qué se cancela la nota (opcional).</p>
+            </div>
+            <textarea
+              value={motivoCancelar}
+              onChange={e => setMotivoCancelar(e.target.value)}
+              rows={3}
+              placeholder="Ej. El cliente ya no quiere el servicio"
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent transition resize-none"
+            />
+            {errorAccion && (
+              <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">{errorAccion}</div>
+            )}
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => { setMotivoCancelarOpen(false); setErrorAccion(''); }}
+                disabled={loadingAccion}
+                className="flex-1 border border-gray-300 text-gray-700 font-medium py-3.5 rounded-lg text-base hover:bg-gray-50 transition-colors disabled:opacity-60"
+              >
+                Atrás
+              </button>
+              <button
+                type="button"
+                onClick={cancelarNota}
+                disabled={loadingAccion}
+                className="flex-1 bg-orange-500 hover:bg-orange-600 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
+              >
+                {loadingAccion ? 'Cancelando...' : 'Cancelar nota'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Modal confirmar liquidación (cobro) */}

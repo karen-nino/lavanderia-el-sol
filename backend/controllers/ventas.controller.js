@@ -53,8 +53,9 @@ export async function getResumen(req, res) {
   const sucIdx = periodParams.length + 1;
   const params = [...periodParams, req.sucursal];
   const whereBase = `o.estado_pago = 'PAGADO' AND o.estado != 'CANCELADA' AND o.sucursal = $${sucIdx} AND ${periodSQL}`;
-  // Lista: todas las notas no canceladas del período (pagadas o no).
-  const whereLista = `o.estado != 'CANCELADA' AND o.sucursal = $${sucIdx} AND ${periodListSQL}`;
+  // Lista: TODAS las notas del período (pagadas, pendientes y canceladas). Las
+  // canceladas se muestran con su estado, pero no cuentan en los totales.
+  const whereLista = `o.sucursal = $${sucIdx} AND ${periodListSQL}`;
 
   try {
     const [tarjetasRes, pendientesRes, graficaRes, listaRes, corteRes] = await Promise.all([

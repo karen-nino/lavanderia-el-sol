@@ -918,3 +918,18 @@ describe('producto de carga sin existencia → 400 claro (no 500)', () => {
     expect(res.body.message).toMatch(/Bolsa chica/i);
   });
 });
+
+describe('motivo de cancelación', () => {
+  it('guarda el motivo al cancelar la nota', async () => {
+    const clienteId = await seedCliente();
+    const creada = await request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'POR_ENCARGO', cliente_id: clienteId, tipo_prenda: 'ROPA',
+      estado_pago: 'PENDIENTE', cargas: [{ tamano: 'chico', lavadora_tipo: 'mediana' }],
+    });
+    const res = await request(app).patch(`/api/notas/${creada.body.id}/estado`)
+      .set(auth(admin.token)).send({ estado: 'CANCELADA', motivo: 'El cliente ya no lo quiere' });
+    expect(res.status).toBe(200);
+    expect(res.body.estado).toBe('CANCELADA');
+    expect(res.body.motivo_cancelacion).toBe('El cliente ya no lo quiere');
+  });
+});

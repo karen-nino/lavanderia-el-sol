@@ -566,14 +566,15 @@ async function registrarReversionPago(client, nota, usuarioId, sucursal) {
 // Deja rastro en la campana del Dashboard cuando se cancela una nota: es una
 // acción fuerte (libera stock y máquinas), así que siempre queda registrado
 // quién la canceló y qué nota fue.
-async function registrarCancelacionNota(client, nota, usuarioId, sucursal) {
+async function registrarCancelacionNota(client, nota, usuarioId, sucursal, motivo = null) {
   const { rows } = await client.query("SELECT TRIM(nombre || ' ' || COALESCE(apellido, '')) AS nombre FROM usuarios WHERE id = $1", [usuarioId]);
   const quien = rows[0]?.nombre ?? 'un empleado';
   const folio = nota.folio ?? `#${nota.id}`;
+  const mensaje = `Nota ${folio} cancelada por ${quien}${motivo ? `: ${motivo}` : ''}`;
   await client.query(
     `INSERT INTO notificaciones (tipo, mensaje, nota_folio, usuario_id, sucursal)
      VALUES ('nota_cancelada', $1, $2, $3, $4)`,
-    [`Nota ${folio} cancelada por ${quien}`, folio, usuarioId, sucursal]
+    [mensaje, folio, usuarioId, sucursal]
   );
 }
 
@@ -1396,9 +1397,13 @@ export const cambiarEstadoNota = async (req, res) => {
       );
     }
 
+    // Al cancelar se guarda el motivo (opcional) capturado por el empleado.
+    const motivoCancel = estado === 'CANCELADA'
+      ? (typeof req.body?.motivo === 'string' ? req.body.motivo.trim() || null : null)
+      : null;
     const { rows } = await client.query(
-      'UPDATE notas SET estado = $1 WHERE id = $2 RETURNING *',
-      [estado, id]
+      `UPDATE notas SET estado = $1${estado === 'CANCELADA' ? ', motivo_cancelacion = $3' : ''} WHERE id = $2 RETURNING *`,
+      estado === 'CANCELADA' ? [estado, id, motivoCancel] : [estado, id]
     );
 
     // Al terminar el ciclo (Por Entregar) o cancelar, la nota suelta todas
@@ -1410,7 +1415,7 @@ export const cambiarEstadoNota = async (req, res) => {
 
     // Alerta en la campana del Dashboard cuando se cancela una nota.
     if (estado === 'CANCELADA') {
-      await registrarCancelacionNota(client, rows[0], req.user.id, req.sucursal);
+      await registrarCancelacionNota(client, rows[0], req.user.id, req.sucursal, motivoCancel);
     }
 
     await client.query('COMMIT');
