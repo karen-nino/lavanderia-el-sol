@@ -569,9 +569,10 @@ export default function NuevaNota() {
     const idxExcedida = encargoCargas.findIndex(c => excesoDeCarga(c) > 0);
     if (idxExcedida >= 0) {
       const c = encargoCargas[idxExcedida];
+      const exceso = usadoContraTope(c) - Number(topeDeCarga(c));
       setError(`La carga ${idxExcedida + 1} rebasa el tope de $${topeDeCarga(c).toFixed(2)} `
-        + `(máquinas + productos suman $${usadoContraTope(c).toFixed(2)}). `
-        + `Quita productos para continuar.`);
+        + `(máquinas + productos, bolsa y empaquetado suman $${usadoContraTope(c).toFixed(2)}). `
+        + `Baja $${exceso.toFixed(2)}: quita algún producto, la bolsa o el empaquetado.`);
       return;
     }
     setEncargoLoading(true);

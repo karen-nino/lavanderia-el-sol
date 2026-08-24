@@ -914,6 +914,7 @@ describe('producto de carga sin existencia → 400 claro (no 500)', () => {
       cargas: [{ tamano: 'chico', lavadora_tipo: 'mediana', productos: [{ producto_id: bolsa.body.id, cantidad: 1 }] }],
     });
     expect(res.status).toBe(400);
-    expect(res.body.message).toMatch(/insuficiente/i);
+    expect(res.body.message).toMatch(/suficiente existencia/i);
+    expect(res.body.message).toMatch(/Bolsa chica/i);
   });
 });

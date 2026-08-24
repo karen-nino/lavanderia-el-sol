@@ -441,7 +441,7 @@ export const crearMovimiento = async (req, res) => {
     const tapasPorUnidad = tapasDeUnidad(unidad, p);
     if (tapasPorUnidad <= 0) {
       await client.query('ROLLBACK');
-      return res.status(400).json({ message: 'No se puede convertir la unidad; revisa los tamaños del producto.' });
+      return res.status(400).json({ message: 'Faltan datos del producto (tamaños o bolsas por rollo) para registrar el movimiento. Revísalos en su edición.' });
     }
     const tapas = Math.round(cant * tapasPorUnidad);
     const columna = destino === 'granel' ? 'stock_granel_tapas' : 'stock_actual';
@@ -455,7 +455,11 @@ export const crearMovimiento = async (req, res) => {
         : Number(p.stock_actual) - Number(p.stock_reservado);
       if (tapas > disponible) {
         await client.query('ROLLBACK');
-        return res.status(400).json({ message: 'No hay suficiente existencia para esa salida.' });
+        // Muestra lo disponible en la unidad que el empleado eligió.
+        const dispUnidad = Math.floor(disponible / tapasPorUnidad);
+        const uni = unidad === 'bidon' ? 'bidón(es)' : unidad === 'rollo' ? 'rollo(s)'
+          : unidad === 'pieza' ? 'bolsa(s)' : unidad === 'botella' ? 'botella(s)' : 'tapa(s)';
+        return res.status(400).json({ message: `No hay suficiente existencia para esa salida: quedan ${dispUnidad} ${uni} disponibles.` });
       }
     }
 

@@ -274,9 +274,10 @@ async function validarTopesCargas(client, notaId) {
     const total = Number(r.maquinas) + Number(r.productos) + Number(r.empaquetado);
     if (total > Number(r.tope) + 1e-9) {
       const etiqueta = r.es_edredon ? 'edredón' : r.tamano;
+      const parteEmp = Number(r.empaquetado) > 0 ? ` + empaquetado ${fmt(r.empaquetado)}` : '';
       return `La carga ${r.orden} (${etiqueta}) rebasa el tope de ${fmt(r.tope)}: ` +
-             `máquinas ${fmt(r.maquinas)} + productos ${fmt(r.productos)} + empaquetado ${fmt(r.empaquetado)} = ${fmt(total)}. ` +
-             `Quita productos o el empaquetado para continuar.`;
+             `máquinas ${fmt(r.maquinas)} + productos y bolsa ${fmt(r.productos)}${parteEmp} = ${fmt(total)}. ` +
+             `Baja $${(total - Number(r.tope)).toFixed(2)}: quita algún producto, la bolsa o el empaquetado.`;
     }
   }
   return null;
@@ -304,7 +305,10 @@ async function reservarProducto(client, notaId, cargaId, productoId, cantidad, s
   const disponibleTapas = Number(art.stock_actual) - Number(art.stock_reservado);
   if (disponibleTapas < cantidadTapas) {
     const dispUnidad = unidad === 'botella' ? Math.floor(disponibleTapas / tpu) : disponibleTapas;
-    throw new Error(`Stock insuficiente para "${art.nombre}". Disponible: ${dispUnidad}, solicitado: ${cantidad}.`);
+    // Nombre y unidad legibles para el aviso (la bolsa incluye su tamaño).
+    const nombreArt = esBolsa && art.tamano_bolsa ? `Bolsa ${art.tamano_bolsa}` : art.nombre;
+    const uni = esBolsa ? 'bolsa(s)' : unidad === 'botella' ? 'botella(s)' : 'tapa(s)';
+    throw new Error(`No hay suficiente existencia de "${nombreArt}": quedan ${dispUnidad} ${uni} y se necesitan ${cantidad}. Carga más en Inventario o quítalo de la nota.`);
   }
   const { rows: npRows } = await client.query(
     `INSERT INTO nota_productos (nota_id, carga_id, producto_id, cantidad, unidad, precio_unitario, cantidad_tapas)
