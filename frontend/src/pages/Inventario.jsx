@@ -99,13 +99,22 @@ function ordenProd(a, b) {
   const r = rank(a) - rank(b);
   return r !== 0 ? r : a.nombre.localeCompare(b.nombre);
 }
+// Palabra de la existencia para los avisos. Las bolsas incluyen su tamaño
+// ("bolsas chicas"); los líquidos usan botellas/unidades.
+function unidadAviso(p) {
+  if (p.clase === 'bolsa') {
+    const t = { chica: 'chicas', grande: 'grandes', jumbo: 'jumbo' }[p.tamano_bolsa] ?? '';
+    return `bolsas ${t}`.trim();
+  }
+  return unidadVenta(p);
+}
 // Mensajes de aviso (estilo "Se acabaron … — hay N actualmente").
 function mensajeAvisoBotellas(p) {
-  if (p.estado_stock === 'agotado') return `Se acabaron las ${unidadVenta(p)}`;
+  if (p.estado_stock === 'agotado') return `Se acabaron las ${unidadAviso(p)}`;
   const n = p.clase === 'bolsa'
     ? Math.round(Number(p.stock_actual) || 0)
     : desglosarBotellas(p.stock_actual, p).botellas;
-  return `Están por acabarse las ${unidadVenta(p)} — hay ${n} actualmente`;
+  return `Están por acabarse las ${unidadAviso(p)} — hay ${n} actualmente`;
 }
 function mensajeAvisoGranel(p) {
   if (p.estado_granel === 'agotado') return 'Se acabaron los bidones';
