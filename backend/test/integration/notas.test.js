@@ -841,3 +841,39 @@ describe('bolsas en Por Encargo', () => {
     expect(Number(linea.precio_unitario)).toBe(5);
   });
 });
+
+describe('empaquetado (Por Encargo)', () => {
+  it('se incluye por defecto y cuenta dentro del tope', async () => {
+    await seedAjustes({ precio_carga_mediana: 70, tope_carga_chico: 100, costo_empaquetado: 8 });
+    const clienteId = await seedCliente();
+    const res = await request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'POR_ENCARGO', cliente_id: clienteId, tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE',
+      cargas: [{ tamano: 'chico', lavadora_tipo: 'mediana' }], // empaquetado por defecto
+    });
+    expect(res.status).toBe(201);
+    expect(Number(res.body.cargas[0].empaquetado)).toBe(8);
+    // 70 + 8 = 78 ≤ tope 100 → se cobra el tope (dentro del tope, no encima).
+    expect(Number(res.body.precio_total)).toBe(100);
+  });
+
+  it('sin tope, el empaquetado suma al total', async () => {
+    await seedAjustes({ precio_carga_mediana: 70, costo_empaquetado: 8 });
+    const clienteId = await seedCliente();
+    const res = await request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'POR_ENCARGO', cliente_id: clienteId, tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE',
+      cargas: [{ tamano: 'chico', lavadora_tipo: 'mediana' }],
+    });
+    expect(Number(res.body.precio_total)).toBe(78); // 70 + 8
+  });
+
+  it('se puede quitar (empaquetado=false)', async () => {
+    await seedAjustes({ precio_carga_mediana: 70, costo_empaquetado: 8 });
+    const clienteId = await seedCliente();
+    const res = await request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'POR_ENCARGO', cliente_id: clienteId, tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE',
+      cargas: [{ tamano: 'chico', lavadora_tipo: 'mediana', empaquetado: false }],
+    });
+    expect(Number(res.body.cargas[0].empaquetado)).toBe(0);
+    expect(Number(res.body.precio_total)).toBe(70);
+  });
+});

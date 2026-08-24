@@ -95,6 +95,9 @@ function armarTextoTicket(nota) {
       const monto = p.es_por_tapa && Number(p.subtotal) === 0 ? 'Incluido' : fmtMonto(p.subtotal);
       L.push(`  • ${nombreProd(p)} x${p.cantidad} ${unidadProdTxt(p)} — ${monto}`);
     });
+    if (Number(cg.empaquetado) > 0) {
+      L.push(`  • Empaquetado — ${fmtMonto(cg.empaquetado)}`);
+    }
     if (Number(cg.ajuste)) {
       L.push(`  • Ajuste: ${Number(cg.ajuste) > 0 ? '+' : ''}${fmtMonto(cg.ajuste)}`);
     }
@@ -215,7 +218,7 @@ export default function TicketNota() {
     const prods      = cg.productos ?? [];
     const totalProds = prods.reduce((s, p) => s + Number(p.subtotal ?? 0), 0);
     const totalCarga = Number(cg.precio_lavadora) + Number(cg.precio_secadora)
-      + Number(cg.ajuste ?? 0) + totalProds;
+      + Number(cg.ajuste ?? 0) + totalProds + Number(cg.empaquetado ?? 0);
     return (
       <div key={cg.id}>
         <div className="flex items-baseline justify-between">
@@ -238,6 +241,12 @@ export default function TicketNota() {
                 : <span className="text-sm text-gray-600">{fmtMonto(p.subtotal)}</span>}
             </div>
           ))}
+          {Number(cg.empaquetado) > 0 && (
+            <div className="flex items-baseline justify-between gap-3">
+              <span className="text-sm text-gray-700">Empaquetado</span>
+              <span className="text-sm text-gray-600">{fmtMonto(cg.empaquetado)}</span>
+            </div>
+          )}
           {Number(cg.ajuste) !== 0 && (
             <div className="flex items-baseline justify-between gap-3">
               <span className="text-sm text-gray-700">Ajuste</span>

@@ -570,7 +570,7 @@ export default function DetalleNota() {
                   const prods = cg.productos ?? [];
                   const totalProds = prods.reduce((s, p) => s + Number(p.subtotal ?? 0), 0);
                   const totalCarga = Number(cg.precio_lavadora) + Number(cg.precio_secadora)
-                    + Number(cg.ajuste ?? 0) + totalProds;
+                    + Number(cg.ajuste ?? 0) + totalProds + Number(cg.empaquetado ?? 0);
                   // Autoservicio no maneja prenda/tela/tamaño: se omite esa línea.
                   const atributos = nota.tipo_servicio === 'AUTOSERVICIO' ? [] : [
                     PRENDA_LABEL[cg.tipo_prenda],
@@ -635,6 +635,9 @@ export default function DetalleNota() {
                             : <>{nombreProd(p)} · {p.cantidad} {unidadProdTxt(p)} × {fmtMonto(p.precio_unitario)} = {fmtMonto(p.subtotal)}</>}
                         </p>
                       ))}
+                      {Number(cg.empaquetado) > 0 && (
+                        <p className="text-xs text-gray-500">Empaquetado · {fmtMonto(cg.empaquetado)}</p>
+                      )}
                       {Number(cg.ajuste) !== 0 && (
                         <p className="text-xs text-gray-500">
                           Ajuste: {Number(cg.ajuste) > 0 ? '+' : ''}{fmtMonto(cg.ajuste)}

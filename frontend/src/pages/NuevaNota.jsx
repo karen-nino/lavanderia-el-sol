@@ -78,6 +78,7 @@ const CARGA_ENCARGO_INIT = {
   ajuste:                 '0',
   productos:              [],
   sin_bolsa:              false,   // la bolsa se agrega sola por el tamaño; se puede quitar
+  empaquetado:            true,    // el empaquetado se incluye por defecto; se puede quitar
 };
 
 const TIEMPOS_ENTREGA = [
@@ -121,6 +122,7 @@ export default function NuevaNota() {
   // Tope de precio por carga (Ajustes); null = sin tope. `edredon` es un tope
   // por prenda que manda sobre el del tamaño para las cargas de edredón.
   const [topes,             setTopes]             = useState({ chico: null, grande: null, jumbo: null, edredon: null });
+  const [costoEmpaquetado,  setCostoEmpaquetado]  = useState(0);
   const [loadingData,       setLoadingData]       = useState(true);
   const [form,              setForm]              = useState(FORM_INIT);
   const [productosLista,    setProductosLista]    = useState([]);
@@ -266,6 +268,7 @@ export default function NuevaNota() {
             jumbo:   cfg.tope_carga_jumbo   != null ? Number(cfg.tope_carga_jumbo)   : null,
             edredon: cfg.tope_carga_edredon != null ? Number(cfg.tope_carga_edredon) : null,
           });
+          setCostoEmpaquetado(cfg.costo_empaquetado != null ? Number(cfg.costo_empaquetado) : 0);
         }
         setClientes(cli);
 
@@ -312,6 +315,7 @@ export default function NuevaNota() {
                 .filter(p => p.clase !== 'bolsa')
                 .map(p => ({ producto_id: String(p.producto_id), cantidad: String(p.cantidad) })),
               sin_bolsa:              !(c.productos ?? []).some(p => p.clase === 'bolsa'),
+              empaquetado:            Number(c.empaquetado) > 0,
             }));
             setEncargoCargas(cargasNota.length > 0 ? cargasNota : [{
               ...CARGA_ENCARGO_INIT,
@@ -478,6 +482,9 @@ export default function NuevaNota() {
   // La bolsa aplica si hay una para el tamaño y no se quitó.
   const bolsaAplicada = (c) => (c.sin_bolsa ? null : bolsaDeCarga(c));
   const costoBolsaCarga = (c) => Number(bolsaAplicada(c)?.precio_unitario) || 0;
+  // Empaquetado (Ajustes): incluido por defecto salvo que se quite en la carga.
+  const empaquetadoAplica = (c) => costoEmpaquetado > 0 && c.empaquetado !== false;
+  const costoEmpaquetadoCarga = (c) => (empaquetadoAplica(c) ? costoEmpaquetado : 0);
 
   // Tope de la carga (Ajustes). Prenda edredón usa su tope dedicado (manda
   // sobre el del tamaño). NULL = sin tope configurado.
@@ -492,7 +499,8 @@ export default function NuevaNota() {
     precioLavadoTipo(c.lavadora_tipo, c.tipo_prenda)
     + precioSecadoTipo(c.secadora_tipo, c.tipo_prenda)
     + subtotalProductosLista(c.productos)
-    + costoBolsaCarga(c);
+    + costoBolsaCarga(c)
+    + costoEmpaquetadoCarga(c);
 
   // Precio cobrado por una carga de encargo. Con tope configurado el precio ES
   // el tope (precio fijo de la carga, aunque el costo interno sea menor); sin
@@ -570,6 +578,7 @@ export default function NuevaNota() {
         secadora_tipo:  c.secadora_tipo || null,
         activar:        false,
         ajuste:         Number(c.ajuste) || 0,
+        empaquetado:    c.empaquetado !== false,
         productos:      [
           ...(c.productos ?? [])
             .filter(p => p.producto_id && p.cantidad)
@@ -1145,6 +1154,40 @@ export default function NuevaNota() {
                     </div>
                   )}
 
+                  {/* Empaquetado (Ajustes), incluido por defecto y editable */}
+                  {costoEmpaquetado > 0 && (
+                    <div className="rounded-xl border border-gray-200 p-4 bg-amber-50/40">
+                      {c.empaquetado !== false ? (
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-gray-800">
+                              Empaquetado
+                              <span className="text-xs text-green-700 font-medium"> · Incluido</span>
+                            </p>
+                            <p className="text-xs text-gray-500 mt-0.5">
+                              Se cobra ${costoEmpaquetado.toFixed(2)} en la nota
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => actualizarCargaEncargo(idx, { empaquetado: false })}
+                            className="flex-shrink-0 text-xs text-gray-400 hover:text-red-600 underline"
+                          >
+                            Quitar
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => actualizarCargaEncargo(idx, { empaquetado: true })}
+                          className="text-sm text-blue hover:text-blue-800 font-medium"
+                        >
+                          + Agregar empaquetado
+                        </button>
+                      )}
+                    </div>
+                  )}
+
                   {/* Productos de la carga */}
                   <div>
                     <div className="flex items-center justify-between mb-3">
@@ -1495,6 +1538,12 @@ export default function NuevaNota() {
                             <li className="flex justify-between gap-2">
                               <span>· Bolsa {bolsaAplicada(c).tamano_bolsa} × 1</span>
                               <span>${(Number(bolsaAplicada(c).precio_unitario) || 0).toFixed(2)}</span>
+                            </li>
+                          )}
+                          {empaquetadoAplica(c) && (
+                            <li className="flex justify-between gap-2">
+                              <span>· Empaquetado</span>
+                              <span>${costoEmpaquetado.toFixed(2)}</span>
                             </li>
                           )}
                         </ul>
