@@ -1059,12 +1059,15 @@ export default function Ajustes() {
         Límite del precio de una carga (máquinas + productos) según su tamaño. El ajuste manual
         no cuenta contra el tope. Aplica a las cargas Por Encargo (que capturan tamaño).
       </p>
-      {campoTope('tope_carga_chico',  'Carga Chica',  'chica')}
-      {campoTope('tope_carga_grande', 'Carga Grande', 'grande')}
-      {campoTope('tope_carga_jumbo',  'Carga Jumbo',  'jumbo')}
-      {campoTope('tope_carga_edredon', 'Carga Edredón', 'de edredón')}
+      <div className="space-y-8">
+        {campoTope('tope_carga_chico',  'Carga Chica',  'chica')}
+        {campoTope('tope_carga_grande', 'Carga Grande', 'grande')}
+        {campoTope('tope_carga_jumbo',  'Carga Jumbo',  'jumbo')}
+        {campoTope('tope_carga_edredon', 'Carga Edredón', 'de edredón')}
+      </div>
     </Section>
 
+    <div className="mt-10">
     <Section titulo="Empaquetado">
       <p className="text-sm text-gray-500 -mt-1">
         Costo del empaquetado de la ropa. Se incluye por defecto en cada carga Por Encargo
@@ -1080,6 +1083,7 @@ export default function Ajustes() {
         </div>
       </Field>
     </Section>
+    </div>
     </>
   );
 
@@ -1633,14 +1637,14 @@ export default function Ajustes() {
         Límite del precio de una carga (máquinas + productos) según su tamaño. El ajuste manual
         no cuenta contra el tope. Aplica a las cargas Por Encargo (que capturan tamaño).
       </p>
-      <div className="space-y-5">
+      <div className="space-y-12">
         {campoTopeM('tope_carga_chico',  'Carga Chica',  'chica')}
         {campoTopeM('tope_carga_grande', 'Carga Grande', 'grande')}
         {campoTopeM('tope_carga_jumbo',  'Carga Jumbo',  'jumbo')}
         {campoTopeM('tope_carga_edredon', 'Carga Edredón', 'de edredón')}
       </div>
 
-      <div className="pt-2">
+      <div className="pt-8 mt-6 border-t border-gray-100">
         <p className="text-base font-semibold text-gray-900 mb-1">Empaquetado</p>
         <p className="text-sm text-grey mb-4">
           Costo del empaquetado de la ropa. Se incluye por defecto en cada carga Por Encargo
