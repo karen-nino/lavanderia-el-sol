@@ -1095,12 +1095,15 @@ export default function NuevaNota() {
                         className={`${INPUT_CLS} bg-white`}
                       >
                         <option value="">Sin lavado</option>
+                        {/* Edredón va en jumbo; para ropa, la jumbo solo en carga jumbo (chico/grande solo mediana). */}
                         {c.tipo_prenda === 'EDREDON' ? (
                           <option value="jumbo">Jumbo — ${precioLavadoTipo('jumbo', c.tipo_prenda).toFixed(2)}</option>
                         ) : (
                           <>
                             <option value="mediana">Mediana — ${precioLavadoTipo('mediana', c.tipo_prenda).toFixed(2)}</option>
-                            <option value="jumbo">Jumbo — ${precioLavadoTipo('jumbo', c.tipo_prenda).toFixed(2)}</option>
+                            {c.tamano === 'jumbo' && (
+                              <option value="jumbo">Jumbo — ${precioLavadoTipo('jumbo', c.tipo_prenda).toFixed(2)}</option>
+                            )}
                           </>
                         )}
                       </select>
@@ -1697,17 +1700,8 @@ export default function NuevaNota() {
                       className={`${INPUT_CLS} bg-white`}
                     >
                       <option value="">Sin lavado</option>
-                      {/* Edredón va en jumbo; para ropa, la jumbo solo aparece en carga jumbo. */}
-                      {c.tipo_prenda === 'EDREDON' ? (
-                        <option value="jumbo">Jumbo — ${precioLavadoTipo('jumbo', c.tipo_prenda).toFixed(2)}</option>
-                      ) : (
-                        <>
-                          <option value="mediana">Mediana — ${precioLavadoTipo('mediana', c.tipo_prenda).toFixed(2)}</option>
-                          {c.tamano === 'jumbo' && (
-                            <option value="jumbo">Jumbo — ${precioLavadoTipo('jumbo', c.tipo_prenda).toFixed(2)}</option>
-                          )}
-                        </>
-                      )}
+                      <option value="mediana">Mediana — ${precioLavadoTipo('mediana', c.tipo_prenda).toFixed(2)}</option>
+                      <option value="jumbo">Jumbo — ${precioLavadoTipo('jumbo', c.tipo_prenda).toFixed(2)}</option>
                     </select>
                   </div>
                   <div>
