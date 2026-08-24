@@ -206,6 +206,11 @@ export default function NuevaNota() {
     p.clase === 'bolsa' ? `Bolsa ${p.tamano_bolsa}`
       : (p.tipo_liquido === 'marca' && p.marca ? `${p.marca} · ${p.nombre}` : p.nombre)
   );
+  // Producto por defecto de una carga Por Encargo: el jabón (granel). Se usa el
+  // que se llame "jabón"; si no, el primer granel disponible.
+  const jabonDefault = productosCatalogo.find(p => p.tipo_liquido === 'granel' && /jab[oó]n/i.test(p.nombre || ''))
+    ?? productosCatalogo.find(p => p.tipo_liquido === 'granel');
+  const defaultProductosCarga = () => (jabonDefault ? [{ producto_id: String(jabonDefault.id), cantidad: '1' }] : []);
   const subtotalCargas = cargasAuto.reduce((s, c) => s + subtotalDeCarga(c), 0);
   // Autoservicio: los productos a nivel nota se cobran por botella.
   const subtotalProductos = productosLista.reduce((sum, p) => {
@@ -343,6 +348,15 @@ export default function NuevaNota() {
       .finally(() => setLoadingData(false));
   }, [id, esEdicion]);
 
+  // Al crear (no editar), la carga trae por defecto el jabón (1 tapa) en cuanto
+  // el catálogo cargó. Se hace una sola vez: si el empleado lo quita, no vuelve.
+  const jabonSeededRef = useRef(false);
+  useEffect(() => {
+    if (esEdicion || jabonSeededRef.current || !jabonDefault) return;
+    jabonSeededRef.current = true;
+    setEncargoCargas(prev => prev.map(c => (c.productos?.length ? c : { ...c, productos: defaultProductosCarga() })));
+  }, [jabonDefault, esEdicion]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setForm(f => ({ ...f, [name]: value }));
@@ -387,7 +401,7 @@ export default function NuevaNota() {
     setEncargoCargas(prev => {
       if (objetivo === prev.length) return prev;
       if (objetivo < prev.length)  return prev.slice(0, objetivo);
-      return [...prev, ...Array.from({ length: objetivo - prev.length }, () => ({ ...CARGA_ENCARGO_INIT, productos: [] }))];
+      return [...prev, ...Array.from({ length: objetivo - prev.length }, () => ({ ...CARGA_ENCARGO_INIT, productos: defaultProductosCarga() }))];
     });
   };
 
