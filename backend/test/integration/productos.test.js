@@ -139,6 +139,39 @@ describe('movimientos de stock (rellenar / entrada / salida / historial)', () =>
   });
 });
 
+describe('bolsas (clase = bolsa)', () => {
+  it('crea una bolsa; entrada por rollo suma piezas y salida por pieza descuenta', async () => {
+    const res = await request(app).post('/api/productos').set(auth(admin.token)).send({
+      clase: 'bolsa', nombre: 'Bolsa chica', tamano_bolsa: 'chica',
+      bolsas_por_rollo: 100, precio_unitario: 3, stock_minimo: 20,
+    });
+    expect(res.status).toBe(201);
+    expect(res.body.clase).toBe('bolsa');
+    expect(res.body.tamano_bolsa).toBe('chica');
+    expect(Number(res.body.bolsas_por_rollo)).toBe(100);
+    expect(Number(res.body.stock_actual)).toBe(0); // nace vacía
+
+    const entrada = await request(app).post(`/api/productos/${res.body.id}/movimiento`).set(auth(admin.token))
+      .send({ tipo: 'entrada', destino: 'piezas', unidad: 'rollo', cantidad: 2 });
+    expect(entrada.status).toBe(200);
+    expect(Number(entrada.body.stock_actual)).toBe(200); // 2 rollos × 100
+
+    const salida = await request(app).post(`/api/productos/${res.body.id}/movimiento`).set(auth(admin.token))
+      .send({ tipo: 'salida', destino: 'piezas', unidad: 'pieza', cantidad: 5 });
+    expect(salida.status).toBe(200);
+    expect(Number(salida.body.stock_actual)).toBe(195);
+    expect(salida.body.estado_stock).toBe('ok'); // 195 > 20
+  });
+
+  it('tamaño de bolsa inválido → 400', async () => {
+    const res = await request(app).post('/api/productos').set(auth(admin.token)).send({
+      clase: 'bolsa', nombre: 'Bolsa', tamano_bolsa: 'mediana', bolsas_por_rollo: 100,
+    });
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/tamaño de bolsa/i);
+  });
+});
+
 describe('GET /api/productos — aislamiento y archivados', () => {
   it('solo lista los activos de la sucursal activa', async () => {
     await seedSucursal('norte', 'Norte');

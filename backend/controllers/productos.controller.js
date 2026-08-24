@@ -8,7 +8,7 @@ const ESTADO_STOCK_SQL = `
     WHEN (stock_actual - stock_reservado) = 0
       THEN 'agotado'
     WHEN (stock_actual - stock_reservado) <= (
-           CASE WHEN es_por_tapa
+           CASE WHEN es_por_tapa OR clase = 'bolsa'
                 THEN stock_minimo
                 ELSE (SELECT stock_minimo_global FROM ajustes WHERE id = 1)
            END)
@@ -56,9 +56,12 @@ function resolverTapaMl(tapaMl, tapasPorBotella, botellaMl) {
   return 0;
 }
 
-// Tapas que representa una unidad dada, según los volúmenes del producto.
-//   tapa → 1 · botella → tapas_por_botella · bidon → tapas del bidón completo.
+// Cuántas unidades de stock representa una "unidad" dada.
+//   Líquidos (stock en tapas): tapa → 1 · botella → tapas/botella · bidon → tapas/bidón.
+//   Bolsas (stock en piezas):  pieza → 1 · rollo → bolsas por rollo.
 function tapasDeUnidad(unidad, p) {
+  if (unidad === 'pieza') return 1;
+  if (unidad === 'rollo') return Number(p.bolsas_por_rollo) || 0;
   const tapaMl    = Number(p.tapa_ml) || 0;
   const botellaMl = Number(p.botella_ml) || 0;
   const bidonMl   = Number(p.volumen_envase_ml) || 0;
@@ -126,11 +129,40 @@ export const archivarProducto = async (req, res) => {
   }
 };
 
+// Crea una bolsa: producto (clase='bolsa') contado en piezas. Nace en 0; la
+// existencia se carga con una entrada (por rollo o por pieza).
+async function crearBolsa(req, res, { nombre, descripcion, marca, tamano_bolsa, bolsas_por_rollo, precio_unitario, stock_minimo }) {
+  if (!['chica', 'grande', 'jumbo'].includes(tamano_bolsa)) {
+    return res.status(400).json({ message: 'Tamaño de bolsa inválido (chica, grande o jumbo).' });
+  }
+  const porRollo = Number(bolsas_por_rollo);
+  if (!(porRollo > 0)) {
+    return res.status(400).json({ message: 'Indica cuántas bolsas trae un rollo.' });
+  }
+  try {
+    const { rows } = await pool.query(
+      `INSERT INTO productos
+         (nombre, descripcion, unidad, precio_unitario, stock_actual, marca, sucursal,
+          clase, tamano_bolsa, bolsas_por_rollo, es_por_tapa, stock_minimo)
+       VALUES ($1, $2, 'pieza', $3, 0, $4, $5, 'bolsa', $6, $7, false, $8)
+       RETURNING ${SELECT_PRODUCTO}`,
+      [nombre, descripcion || null, precio_unitario ?? null, marca || null, req.sucursal,
+       tamano_bolsa, Math.round(porRollo), Number(stock_minimo) || 0]
+    );
+    res.status(201).json(rows[0]);
+  } catch (err) {
+    console.error('crearBolsa error:', err);
+    res.status(500).json({ message: 'Error interno del servidor.' });
+  }
+}
+
 export const createProducto = async (req, res) => {
   const {
     nombre, descripcion, unidad = 'Tapas', precio_unitario, marca,
-    tipo_liquido = 'granel', envase, stock_minimo = 0, stock_minimo_granel = 0,
+    clase = 'liquido', tipo_liquido = 'granel', envase, stock_minimo = 0, stock_minimo_granel = 0,
     volumen_envase_ml, botella_ml, tapa_ml, tapas_por_botella, precio_botella,
+    // Bolsas:
+    tamano_bolsa, bolsas_por_rollo,
     // Existencias iniciales: botellas rellenadas y (granel) bidones a granel.
     stock_botellas = 0, stock_bidones = 0,
   } = req.body;
@@ -138,6 +170,15 @@ export const createProducto = async (req, res) => {
   if (!nombre) {
     return res.status(400).json({ message: 'Nombre es requerido.' });
   }
+
+  // ── Bolsa: producto simple contado en piezas, comprado por rollo ──
+  if (clase === 'bolsa') {
+    return crearBolsa(req, res, {
+      nombre, descripcion, marca, tamano_bolsa, bolsas_por_rollo,
+      precio_unitario, stock_minimo,
+    });
+  }
+
   if (!['granel', 'marca'].includes(tipo_liquido)) {
     return res.status(400).json({ message: 'Tipo de líquido inválido.' });
   }
@@ -217,13 +258,42 @@ export const updateProducto = async (req, res) => {
 
   const {
     nombre, descripcion, unidad = 'Tapas', precio_unitario, marca,
-    tipo_liquido = 'granel', envase, stock_minimo = 0, stock_minimo_granel = 0,
+    clase = 'liquido', tipo_liquido = 'granel', envase, stock_minimo = 0, stock_minimo_granel = 0,
     volumen_envase_ml, botella_ml, tapa_ml, tapas_por_botella, precio_botella,
+    tamano_bolsa, bolsas_por_rollo,
   } = req.body;
 
   if (!nombre) {
     return res.status(400).json({ message: 'Nombre es requerido.' });
   }
+
+  // ── Bolsa: solo atributos (tamaño, bolsas por rollo, precio por pieza) ──
+  if (clase === 'bolsa') {
+    if (!['chica', 'grande', 'jumbo'].includes(tamano_bolsa)) {
+      return res.status(400).json({ message: 'Tamaño de bolsa inválido (chica, grande o jumbo).' });
+    }
+    const porRollo = Number(bolsas_por_rollo);
+    if (!(porRollo > 0)) {
+      return res.status(400).json({ message: 'Indica cuántas bolsas trae un rollo.' });
+    }
+    try {
+      const { rows } = await pool.query(
+        `UPDATE productos
+           SET nombre = $1, descripcion = $2, precio_unitario = $3, marca = $4,
+               tamano_bolsa = $5, bolsas_por_rollo = $6, stock_minimo = $7, updated_at = NOW()
+         WHERE id = $8 AND sucursal = $9
+         RETURNING ${SELECT_PRODUCTO}`,
+        [nombre, descripcion || null, precio_unitario ?? null, marca || null,
+         tamano_bolsa, Math.round(porRollo), Number(stock_minimo) || 0, id, req.sucursal]
+      );
+      if (rows.length === 0) return res.status(404).json({ message: 'Producto no encontrado.' });
+      return res.json(rows[0]);
+    } catch (err) {
+      console.error('updateProducto (bolsa) error:', err);
+      return res.status(500).json({ message: 'Error interno del servidor.' });
+    }
+  }
+
   if (!['granel', 'marca'].includes(tipo_liquido)) {
     return res.status(400).json({ message: 'Tipo de líquido inválido.' });
   }
@@ -341,10 +411,10 @@ export const crearMovimiento = async (req, res) => {
   if (!['entrada', 'salida'].includes(tipo)) {
     return res.status(400).json({ message: 'Tipo de movimiento inválido.' });
   }
-  if (!['granel', 'botellas'].includes(destino)) {
+  if (!['granel', 'botellas', 'piezas'].includes(destino)) {
     return res.status(400).json({ message: 'Destino inválido.' });
   }
-  if (!['bidon', 'botella', 'tapa'].includes(unidad)) {
+  if (!['bidon', 'botella', 'tapa', 'rollo', 'pieza'].includes(unidad)) {
     return res.status(400).json({ message: 'Unidad inválida.' });
   }
   const cant = Number(cantidad);
@@ -397,9 +467,13 @@ export const crearMovimiento = async (req, res) => {
     );
     const unidadTxt = unidad === 'bidon'
       ? 'bidón(es)'
-      : unidad === 'botella'
-        ? (p.tipo_liquido === 'marca' ? 'unidad(es)' : 'botella(s)')
-        : 'tapa(s)';
+      : unidad === 'rollo'
+        ? 'rollo(s)'
+        : unidad === 'pieza'
+          ? 'bolsa(s)'
+          : unidad === 'botella'
+            ? (p.tipo_liquido === 'marca' ? 'unidad(es)' : 'botella(s)')
+            : 'tapa(s)';
     await registrarMovimiento(client, {
       productoId: p.id, sucursal: req.sucursal, usuarioId: req.user?.id,
       tipo, destino, cantidadTapas: tapas,
