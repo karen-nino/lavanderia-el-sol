@@ -65,14 +65,18 @@ const ESTADO_BADGE = {
   CANCELADA:  { label: 'Cancelada',    cls: 'bg-red-100 text-red-700'       },
 };
 
-function EstadoBadge({ estado }) {
+function EstadoBadge({ estado, onClick }) {
   const b = ESTADO_BADGE[estado];
   if (!b) return <span className="text-gray-400">—</span>;
-  return (
-    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${b.cls}`}>
-      {b.label}
-    </span>
-  );
+  const cls = `text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${b.cls}`;
+  if (onClick) {
+    return (
+      <button type="button" onClick={onClick} className={`${cls} hover:opacity-80 underline decoration-dotted underline-offset-2`}>
+        {b.label}
+      </button>
+    );
+  }
+  return <span className={cls}>{b.label}</span>;
 }
 
 const PERIODOS = [
@@ -131,6 +135,7 @@ export default function Ventas() {
   const [paginaNotas, setPaginaNotas] = useState(1);
   // Nota cuyas máquinas se ven completas en el modal (cuando son demasiadas).
   const [maquinasModal, setMaquinasModal] = useState(null); // { folio, maquinas }
+  const [motivoModal,   setMotivoModal]   = useState(null); // { folio, motivo }
   // En pantallas angostas (mobile) los nombres de los días se abrevian para que
   // los 7 quepan sin encimarse en el eje X de la gráfica semanal.
   const [esAngosto, setEsAngosto] = useState(
@@ -617,7 +622,14 @@ export default function Ventas() {
                           {periodo === 'semana' && <td className="px-4 py-3 text-gray-600">{fmtDiaSemana(nota.fecha)}</td>}
                           {periodo !== 'hoy' && <td className="px-4 py-3 text-gray-600">{fmtFecha(nota.fecha)}</td>}
                           {periodo === 'hoy' && <td className="px-4 py-3 text-gray-600">{fmtHora(nota.creado_en)}</td>}
-                          <td className="px-4 py-3"><EstadoBadge estado={nota.estado} /></td>
+                          <td className="px-4 py-3">
+                            <EstadoBadge
+                              estado={nota.estado}
+                              onClick={nota.estado === 'CANCELADA'
+                                ? () => setMotivoModal({ folio: nota.folio, motivo: nota.motivo_cancelacion })
+                                : undefined}
+                            />
+                          </td>
                           <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
                             {(nota.maquinas?.length ?? 0) === 0 ? (
                               <span className="text-gray-400">N/A</span>
@@ -708,6 +720,42 @@ export default function Ventas() {
                 </li>
               ))}
             </ul>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: motivo de cancelación de una nota */}
+      {motivoModal && (
+        <div
+          className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
+          onClick={() => setMotivoModal(null)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-xl w-full max-w-sm"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-gray-100">
+              <h3 className="text-base font-semibold text-gray-900">
+                Nota cancelada · <span className="font-mono text-sm text-gray-500">{motivoModal.folio}</span>
+              </h3>
+              <button
+                onClick={() => setMotivoModal(null)}
+                aria-label="Cerrar"
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="p-5">
+              <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Motivo de cancelación</p>
+              <p className="text-sm text-gray-700">
+                {motivoModal.motivo?.trim()
+                  ? motivoModal.motivo
+                  : <span className="text-gray-400 italic">No se registró un motivo.</span>}
+              </p>
+            </div>
           </div>
         </div>
       )}

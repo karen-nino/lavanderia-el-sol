@@ -103,6 +103,7 @@ export async function getResumen(req, res) {
           o.estado,
           o.estado_pago,
           o.forma_pago,
+          o.motivo_cancelacion,
           -- Máquina(s) de la nota con su número de cargas: [{ nombre, cargas }].
           -- Cuenta las cargas (nota_cargas) donde aparece cada máquina,
           -- incluidas las ya desvinculadas (*_usada_id).
@@ -187,6 +188,7 @@ export async function getResumen(req, res) {
         estado:          r.estado,
         estado_pago:     r.estado_pago,
         forma_pago:      r.forma_pago,
+        motivo_cancelacion: r.motivo_cancelacion,
         maquinas:        r.maquinas ?? [],
         atendio:         r.atendio,
         cargas:          parseInt(r.cargas, 10),
