@@ -843,8 +843,16 @@ export const createNota = async (req, res) => {
     await client.query('UPDATE notas SET folio = $1 WHERE id = $2', [folio, nota.id]);
     nota.folio = folio;
 
-    // Insertar las cargas y tomar las máquinas de las cargas activadas.
-    const cargasInsertadas = await insertarCargas(client, nota.id, filasCargas, req.sucursal, tipo_servicio);
+    // Insertar las cargas y tomar las máquinas de las cargas activadas. Reservar
+    // los productos de una carga puede fallar (p. ej. sin existencia de una bolsa):
+    // se responde con el mensaje claro (400), no un 500.
+    let cargasInsertadas;
+    try {
+      cargasInsertadas = await insertarCargas(client, nota.id, filasCargas, req.sucursal, tipo_servicio);
+    } catch (e) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: e.message });
+    }
     if (idsActivar.length > 0) {
       const { rows: maqs } = await client.query(
         'SELECT id, nombre, estado FROM maquinas WHERE id = ANY($1) FOR UPDATE',
@@ -1057,7 +1065,12 @@ export const updateNota = async (req, res) => {
         [id]
       );
       await client.query('DELETE FROM nota_cargas WHERE nota_id = $1', [id]);
-      cargasNota = await insertarCargas(client, id, filasCargas, req.sucursal, actual.tipo_servicio);
+      try {
+        cargasNota = await insertarCargas(client, id, filasCargas, req.sucursal, actual.tipo_servicio);
+      } catch (e) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ message: e.message });
+      }
 
       if (['LAVANDO', 'SECANDO'].includes(actual.estado)) {
         const despues = new Set(

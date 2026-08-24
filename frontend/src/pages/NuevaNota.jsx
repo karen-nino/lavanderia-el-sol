@@ -210,8 +210,9 @@ export default function NuevaNota() {
   );
   // Producto por defecto de una carga Por Encargo: el jabón (granel). Se usa el
   // que se llame "jabón"; si no, el primer granel disponible.
-  const jabonDefault = productosCatalogo.find(p => p.tipo_liquido === 'granel' && /jab[oó]n/i.test(p.nombre || ''))
-    ?? productosCatalogo.find(p => p.tipo_liquido === 'granel');
+  const conStock = (p) => Number(p.stock_disponible ?? p.stock_actual) > 0;
+  const jabonDefault = productosCatalogo.find(p => p.tipo_liquido === 'granel' && conStock(p) && /jab[oó]n/i.test(p.nombre || ''))
+    ?? productosCatalogo.find(p => p.tipo_liquido === 'granel' && conStock(p));
   const defaultProductosCarga = () => (jabonDefault ? [{ producto_id: String(jabonDefault.id), cantidad: '1' }] : []);
   const subtotalCargas = cargasAuto.reduce((s, c) => s + subtotalDeCarga(c), 0);
   // Autoservicio: los productos a nivel nota se cobran por botella.
@@ -479,8 +480,15 @@ export default function NuevaNota() {
     const t = bolsaTamanoParaCarga(c);
     return t ? (bolsasCatalogo.find(b => b.tamano_bolsa === t) ?? null) : null;
   };
-  // La bolsa aplica si hay una para el tamaño y no se quitó.
-  const bolsaAplicada = (c) => (c.sin_bolsa ? null : bolsaDeCarga(c));
+  // Existencia disponible de una bolsa (piezas). Sin existencia no se incluye
+  // (para no bloquear la nota) y se avisa en la carga.
+  const bolsaTieneStock = (b) => b && Number(b.stock_disponible ?? b.stock_actual) > 0;
+  // La bolsa aplica si hay una para el tamaño, con existencia y no se quitó.
+  const bolsaAplicada = (c) => {
+    if (c.sin_bolsa) return null;
+    const b = bolsaDeCarga(c);
+    return bolsaTieneStock(b) ? b : null;
+  };
   const costoBolsaCarga = (c) => Number(bolsaAplicada(c)?.precio_unitario) || 0;
   // Empaquetado (Ajustes): incluido por defecto salvo que se quite en la carga.
   const empaquetadoAplica = (c) => costoEmpaquetado > 0 && c.empaquetado !== false;
@@ -1123,7 +1131,11 @@ export default function NuevaNota() {
                   {/* Bolsa incluida según el tamaño de la carga (editable) */}
                   {bolsaDeCarga(c) && (
                     <div className="rounded-xl border border-gray-200 p-4 bg-amber-50/40">
-                      {!c.sin_bolsa ? (
+                      {!bolsaTieneStock(bolsaDeCarga(c)) ? (
+                        <p className="text-sm text-gray-500">
+                          No hay bolsas {bolsaDeCarga(c).tamano_bolsa} en existencia — no se incluye ninguna.
+                        </p>
+                      ) : !c.sin_bolsa ? (
                         <div className="flex items-center justify-between gap-3">
                           <div className="min-w-0">
                             <p className="text-sm font-medium text-gray-800">
