@@ -77,6 +77,7 @@ const CARGA_ENCARGO_INIT = {
   secadora_tipo:          '',
   ajuste:                 '0',
   productos:              [],
+  sin_bolsa:              false,   // la bolsa se agrega sola por el tamaño; se puede quitar
 };
 
 const TIEMPOS_ENTREGA = [
@@ -181,6 +182,7 @@ export default function NuevaNota() {
   // vende por BOTELLA (precio_botella); en Por Encargo por TAPA (precio_unitario).
   const precioProducto = (prod, unidad = 'tapa') => {
     if (!prod) return 0;
+    if (prod.clase === 'bolsa') return Number(prod.precio_unitario) || 0; // por pieza
     return unidad === 'botella'
       ? (Number(prod.precio_botella) || 0)
       : (Number(prod.precio_unitario) || 0);
@@ -192,11 +194,18 @@ export default function NuevaNota() {
     const disp = Number(prod.stock_disponible ?? prod.stock_actual) || 0;
     return tpb > 0 ? Math.floor(disp / tpb) : disp;
   };
-  // Palabra de la unidad vendida en Autoservicio: botella (granel) o unidad (marca).
+  // Palabra de la unidad vendida en Autoservicio: botella (granel), unidad
+  // (marca) o bolsa (bolsa, por pieza).
   const unidadVentaNota = (prod, n = 2) => {
+    if (prod?.clase === 'bolsa') return n === 1 ? 'bolsa' : 'bolsas';
     if (prod?.tipo_liquido === 'marca') return n === 1 ? 'unidad' : 'unidades';
     return n === 1 ? 'botella' : 'botellas';
   };
+  // Etiqueta del producto en el selector: las bolsas muestran su tamaño.
+  const etiquetaProd = (p) => (
+    p.clase === 'bolsa' ? `Bolsa ${p.tamano_bolsa}`
+      : (p.tipo_liquido === 'marca' && p.marca ? `${p.marca} · ${p.nombre}` : p.nombre)
+  );
   const subtotalCargas = cargasAuto.reduce((s, c) => s + subtotalDeCarga(c), 0);
   // Autoservicio: los productos a nivel nota se cobran por botella.
   const subtotalProductos = productosLista.reduce((sum, p) => {
@@ -292,9 +301,12 @@ export default function NuevaNota() {
               lavadora_tipo:          c.lavadora_tipo ?? '',
               secadora_tipo:          c.secadora_tipo ?? '',
               ajuste:                 c.ajuste != null ? String(c.ajuste) : '0',
-              productos:              (c.productos ?? []).map(p => ({
-                producto_id: String(p.producto_id), cantidad: String(p.cantidad),
-              })),
+              // La bolsa se maneja aparte (auto por tamaño): se saca de la lista
+              // de productos y se recuerda si estaba puesta o no.
+              productos:              (c.productos ?? [])
+                .filter(p => p.clase !== 'bolsa')
+                .map(p => ({ producto_id: String(p.producto_id), cantidad: String(p.cantidad) })),
+              sin_bolsa:              !(c.productos ?? []).some(p => p.clase === 'bolsa'),
             }));
             setEncargoCargas(cargasNota.length > 0 ? cargasNota : [{
               ...CARGA_ENCARGO_INIT,
@@ -435,6 +447,24 @@ export default function NuevaNota() {
     return sum + precioProducto(prod) * (Number(p.cantidad) || 0);
   }, 0);
 
+  // ── Bolsas (Por Encargo): según el tamaño de la carga se incluye 1 bolsa ──
+  const bolsasCatalogo = productosCatalogo.filter(p => p.clase === 'bolsa');
+  // Mapa carga → tamaño de bolsa: chico→chica, grande→grande, jumbo→jumbo, edredón→jumbo.
+  const bolsaTamanoParaCarga = (c) => {
+    if (String(c?.tipo_prenda).toUpperCase() === 'EDREDON') return 'jumbo';
+    if (c?.tamano === 'chico')  return 'chica';
+    if (c?.tamano === 'grande') return 'grande';
+    if (c?.tamano === 'jumbo')  return 'jumbo';
+    return null;
+  };
+  const bolsaDeCarga = (c) => {
+    const t = bolsaTamanoParaCarga(c);
+    return t ? (bolsasCatalogo.find(b => b.tamano_bolsa === t) ?? null) : null;
+  };
+  // La bolsa aplica si hay una para el tamaño y no se quitó.
+  const bolsaAplicada = (c) => (c.sin_bolsa ? null : bolsaDeCarga(c));
+  const costoBolsaCarga = (c) => Number(bolsaAplicada(c)?.precio_unitario) || 0;
+
   // Tope de la carga (Ajustes). Prenda edredón usa su tope dedicado (manda
   // sobre el del tamaño). NULL = sin tope configurado.
   const topeDeCarga  = (c) => {
@@ -447,7 +477,8 @@ export default function NuevaNota() {
   const usadoContraTope = (c) =>
     precioLavadoTipo(c.lavadora_tipo, c.tipo_prenda)
     + precioSecadoTipo(c.secadora_tipo, c.tipo_prenda)
-    + subtotalProductosLista(c.productos);
+    + subtotalProductosLista(c.productos)
+    + costoBolsaCarga(c);
 
   // Precio cobrado por una carga de encargo. Con tope configurado el precio ES
   // el tope (precio fijo de la carga, aunque el costo interno sea menor); sin
@@ -525,9 +556,13 @@ export default function NuevaNota() {
         secadora_tipo:  c.secadora_tipo || null,
         activar:        false,
         ajuste:         Number(c.ajuste) || 0,
-        productos:      (c.productos ?? [])
-          .filter(p => p.producto_id && p.cantidad)
-          .map(p => ({ producto_id: Number(p.producto_id), cantidad: Number(p.cantidad) })),
+        productos:      [
+          ...(c.productos ?? [])
+            .filter(p => p.producto_id && p.cantidad)
+            .map(p => ({ producto_id: Number(p.producto_id), cantidad: Number(p.cantidad) })),
+          // La bolsa del tamaño de la carga (si aplica y no se quitó): 1 pieza.
+          ...(bolsaAplicada(c) ? [{ producto_id: Number(bolsaAplicada(c).id), cantidad: 1 }] : []),
+        ],
       }));
       const payload = {
         tipo_servicio:      'POR_ENCARGO',
@@ -1058,6 +1093,40 @@ export default function NuevaNota() {
                   {c.tamano && c.tipo_prenda && (
                   <>
                   <div className="py-1"><div className="border-t border-gray-200" /></div>
+                  {/* Bolsa incluida según el tamaño de la carga (editable) */}
+                  {bolsaDeCarga(c) && (
+                    <div className="rounded-xl border border-gray-200 p-4 bg-amber-50/40">
+                      {!c.sin_bolsa ? (
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-gray-800">
+                              Bolsa {bolsaDeCarga(c).tamano_bolsa}
+                              <span className="text-xs text-green-700 font-medium"> · Incluida</span>
+                            </p>
+                            <p className="text-xs text-gray-500 mt-0.5">
+                              Se cobra ${(Number(bolsaDeCarga(c).precio_unitario) || 0).toFixed(2)} en la nota
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => actualizarCargaEncargo(idx, { sin_bolsa: true })}
+                            className="flex-shrink-0 text-xs text-gray-400 hover:text-red-600 underline"
+                          >
+                            Quitar
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => actualizarCargaEncargo(idx, { sin_bolsa: false })}
+                          className="text-sm text-blue hover:text-blue-800 font-medium"
+                        >
+                          + Agregar bolsa {bolsaDeCarga(c).tamano_bolsa}
+                        </button>
+                      )}
+                    </div>
+                  )}
+
                   {/* Productos de la carga */}
                   <div>
                     <div className="flex items-center justify-between mb-3">
@@ -1404,6 +1473,12 @@ export default function NuevaNota() {
                               </li>
                             );
                           })}
+                          {bolsaAplicada(c) && (
+                            <li className="flex justify-between gap-2">
+                              <span>· Bolsa {bolsaAplicada(c).tamano_bolsa} × 1</span>
+                              <span>${(Number(bolsaAplicada(c).precio_unitario) || 0).toFixed(2)}</span>
+                            </li>
+                          )}
                         </ul>
                         {/* Subtotal (costo real), ajuste y total de la carga */}
                         <div className="mt-3 space-y-2">
@@ -1639,7 +1714,7 @@ export default function NuevaNota() {
                         <option value="">Selecciona un producto…</option>
                         {productosCatalogo.map(p => (
                           <option key={p.id} value={p.id}>
-                            {p.tipo_liquido === 'marca' && p.marca ? `${p.marca} · ${p.nombre}` : p.nombre}{p.precio_botella ? ` — $${Number(p.precio_botella).toFixed(2)}` : ''}
+                            {etiquetaProd(p)}{precioProducto(p, 'botella') ? ` — $${precioProducto(p, 'botella').toFixed(2)}` : ''}
                           </option>
                         ))}
                       </select>

@@ -293,9 +293,12 @@ async function reservarProducto(client, notaId, cargaId, productoId, cantidad, s
     throw new Error(`Producto ${productoId} no encontrado.`);
   }
   const art = artRows[0];
-  // La unidad la define el servicio: botella (Autoservicio) o tapa (Por Encargo).
-  const unidad = unidadDeServicio(tipo_servicio);
-  const tpu = tapasPorUnidad(art, unidad);
+  // Bolsas: por pieza (precio por pieza). Líquidos: la unidad la define el
+  // servicio — botella (Autoservicio) o tapa (Por Encargo).
+  const esBolsa = art.clase === 'bolsa';
+  const unidad = esBolsa ? 'pieza' : unidadDeServicio(tipo_servicio);
+  const tpu = esBolsa ? 1 : tapasPorUnidad(art, unidad);
+  const precioUnit = esBolsa ? (Number(art.precio_unitario) || 0) : precioProductoEnNota(art, tipo_servicio);
   const cantidadTapas = Number(cantidad) * tpu;
   const disponibleTapas = Number(art.stock_actual) - Number(art.stock_reservado);
   if (disponibleTapas < cantidadTapas) {
@@ -305,7 +308,7 @@ async function reservarProducto(client, notaId, cargaId, productoId, cantidad, s
   const { rows: npRows } = await client.query(
     `INSERT INTO nota_productos (nota_id, carga_id, producto_id, cantidad, unidad, precio_unitario, cantidad_tapas)
      VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-    [notaId, cargaId, productoId, cantidad, unidad, precioProductoEnNota(art, tipo_servicio), cantidadTapas]
+    [notaId, cargaId, productoId, cantidad, unidad, precioUnit, cantidadTapas]
   );
   await client.query(
     'UPDATE productos SET stock_reservado = stock_reservado + $1 WHERE id = $2',
@@ -333,10 +336,14 @@ async function registrarMovimientosProductosNota(client, notaId, sucursal, usuar
   await client.query(
     `INSERT INTO producto_movimientos
        (producto_id, sucursal, usuario_id, tipo, destino, cantidad_tapas, descripcion, nota_id)
-     SELECT np.producto_id, $2, $3, $4, 'botellas', np.cantidad_tapas,
-            np.cantidad || (CASE WHEN np.unidad = 'botella'
-                                 THEN (CASE WHEN a.tipo_liquido = 'marca' THEN ' unidad(es)' ELSE ' botella(s)' END)
-                                 ELSE ' tapa(s)' END),
+     SELECT np.producto_id, $2, $3, $4,
+            (CASE WHEN a.clase = 'bolsa' THEN 'piezas' ELSE 'botellas' END),
+            np.cantidad_tapas,
+            np.cantidad || (CASE
+                              WHEN np.unidad = 'pieza' THEN ' bolsa(s)'
+                              WHEN np.unidad = 'botella'
+                                THEN (CASE WHEN a.tipo_liquido = 'marca' THEN ' unidad(es)' ELSE ' botella(s)' END)
+                              ELSE ' tapa(s)' END),
             np.nota_id
        FROM nota_productos np
        JOIN productos a ON a.id = np.producto_id
@@ -512,7 +519,7 @@ async function cargasDeNota(client, notaId) {
   );
   const { rows: prods } = await client.query(
     `SELECT np.id, np.carga_id, np.producto_id, a.nombre, np.cantidad, np.unidad, np.precio_unitario,
-            a.es_por_tapa, a.tipo_liquido,
+            a.es_por_tapa, a.tipo_liquido, a.clase, a.tamano_bolsa,
             (np.cantidad * np.precio_unitario) AS subtotal
        FROM nota_productos np
        JOIN productos a ON a.id = np.producto_id
@@ -660,7 +667,7 @@ export const getNotaById = async (req, res) => {
 
     const { rows: productos } = await pool.query(
       `SELECT np.id, np.producto_id, a.nombre, np.cantidad, np.unidad, np.precio_unitario,
-              a.es_por_tapa, a.tipo_liquido,
+              a.es_por_tapa, a.tipo_liquido, a.clase, a.tamano_bolsa,
               (np.cantidad * np.precio_unitario) AS subtotal
        FROM nota_productos np
        JOIN productos a ON a.id = np.producto_id

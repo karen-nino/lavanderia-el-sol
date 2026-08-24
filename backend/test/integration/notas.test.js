@@ -812,3 +812,32 @@ describe('aislamiento por sucursal', () => {
     expect(res.status).toBe(404);
   });
 });
+
+describe('bolsas en Por Encargo', () => {
+  it('la bolsa (por pieza) se reserva y cuenta dentro del tope de la carga', async () => {
+    await seedAjustes({ precio_carga_mediana: 70, tope_carga_chico: 100 });
+    const clienteId = await seedCliente();
+    // Bolsa chica: se crea y se le carga existencia con una entrada por rollo.
+    const bolsa = await request(app).post('/api/productos').set(auth(admin.token)).send({
+      clase: 'bolsa', nombre: 'Bolsa', tamano_bolsa: 'chica', bolsas_por_rollo: 100, precio_unitario: 5,
+    });
+    await request(app).post(`/api/productos/${bolsa.body.id}/movimiento`).set(auth(admin.token))
+      .send({ tipo: 'entrada', destino: 'piezas', unidad: 'rollo', cantidad: 1 }).expect(200); // 100 piezas
+
+    const res = await request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'POR_ENCARGO', cliente_id: clienteId, tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE',
+      cargas: [{ tamano: 'chico', lavadora_tipo: 'mediana', productos: [{ producto_id: bolsa.body.id, cantidad: 1 }] }],
+    });
+    expect(res.status).toBe(201);
+    // Costo real 70 lavado + 5 bolsa = 75 ≤ tope 100 → se cobra el tope (100),
+    // la bolsa cuenta DENTRO del tope (no suma encima).
+    expect(Number(res.body.precio_total)).toBe(100);
+
+    // Se reservó 1 pieza y la línea va por pieza a su precio.
+    const { rows } = await pool.query('SELECT stock_reservado FROM productos WHERE id = $1', [bolsa.body.id]);
+    expect(Number(rows[0].stock_reservado)).toBe(1);
+    const linea = res.body.cargas[0].productos.find(p => p.producto_id === bolsa.body.id);
+    expect(linea.unidad).toBe('pieza');
+    expect(Number(linea.precio_unitario)).toBe(5);
+  });
+});

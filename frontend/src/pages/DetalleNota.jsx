@@ -9,11 +9,16 @@ import { formatHora12, formatFechaHora12 } from '../lib/fecha';
 // Unidad de venta de un producto de la nota, en texto ("2 botellas" / "3 tapas").
 function unidadProdTxt(p) {
   const n = Number(p.cantidad);
+  if (p.unidad === 'pieza') return n === 1 ? 'pieza' : 'piezas';
   if (p.unidad === 'botella') {
     if (p.tipo_liquido === 'marca') return n === 1 ? 'unidad' : 'unidades';
     return n === 1 ? 'botella' : 'botellas';
   }
   return n === 1 ? 'tapa' : 'tapas';
+}
+// Nombre a mostrar de un producto de la nota. Las bolsas muestran su tamaño.
+function nombreProd(p) {
+  return p.clase === 'bolsa' && p.tamano_bolsa ? `Bolsa ${p.tamano_bolsa}` : p.nombre;
 }
 
 const BADGE_ESTADO = {
@@ -626,8 +631,8 @@ export default function DetalleNota() {
                       {prods.map(p => (
                         <p key={p.id} className="text-xs text-gray-500">
                           {p.es_por_tapa && Number(p.subtotal) === 0
-                            ? <>{p.nombre} · {p.cantidad} {unidadProdTxt(p)} · <span className="text-green-700 font-medium">Incluido</span></>
-                            : <>{p.nombre} · {p.cantidad} {unidadProdTxt(p)} × {fmtMonto(p.precio_unitario)} = {fmtMonto(p.subtotal)}</>}
+                            ? <>{nombreProd(p)} · {p.cantidad} {unidadProdTxt(p)} · <span className="text-green-700 font-medium">Incluido</span></>
+                            : <>{nombreProd(p)} · {p.cantidad} {unidadProdTxt(p)} × {fmtMonto(p.precio_unitario)} = {fmtMonto(p.subtotal)}</>}
                         </p>
                       ))}
                       {Number(cg.ajuste) !== 0 && (
@@ -768,7 +773,7 @@ export default function DetalleNota() {
               return (
               <div key={p.id} className="px-4 py-3 flex items-center justify-between gap-3">
                 <div>
-                  <p className="text-sm font-medium text-gray-800">{p.nombre}</p>
+                  <p className="text-sm font-medium text-gray-800">{nombreProd(p)}</p>
                   <p className="text-xs text-gray-400">
                     {incluido
                       ? `${p.cantidad} ${unidadProdTxt(p)}`

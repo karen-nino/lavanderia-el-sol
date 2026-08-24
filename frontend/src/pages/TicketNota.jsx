@@ -22,11 +22,15 @@ function fmtMonto(n) {
 // Unidad de venta de un producto en texto ("2 botellas" / "3 tapas").
 function unidadProdTxt(p) {
   const n = Number(p.cantidad);
+  if (p.unidad === 'pieza') return n === 1 ? 'pieza' : 'piezas';
   if (p.unidad === 'botella') {
     if (p.tipo_liquido === 'marca') return n === 1 ? 'unidad' : 'unidades';
     return n === 1 ? 'botella' : 'botellas';
   }
   return n === 1 ? 'tapa' : 'tapas';
+}
+function nombreProd(p) {
+  return p.clase === 'bolsa' && p.tamano_bolsa ? `Bolsa ${p.tamano_bolsa}` : p.nombre;
 }
 
 function fmtFecha(iso) {
@@ -89,7 +93,7 @@ function armarTextoTicket(nota) {
     // Las tapas son información interna: no se listan en el ticket.
     (cg.productos ?? []).filter(p => p.unidad !== 'tapa').forEach(p => {
       const monto = p.es_por_tapa && Number(p.subtotal) === 0 ? 'Incluido' : fmtMonto(p.subtotal);
-      L.push(`  • ${p.nombre} x${p.cantidad} ${unidadProdTxt(p)} — ${monto}`);
+      L.push(`  • ${nombreProd(p)} x${p.cantidad} ${unidadProdTxt(p)} — ${monto}`);
     });
     if (Number(cg.ajuste)) {
       L.push(`  • Ajuste: ${Number(cg.ajuste) > 0 ? '+' : ''}${fmtMonto(cg.ajuste)}`);
@@ -114,7 +118,7 @@ function armarTextoTicket(nota) {
     L.push('', '*Productos*');
     productos.forEach(p => {
       const monto = p.es_por_tapa && Number(p.subtotal) === 0 ? 'Incluido' : fmtMonto(p.subtotal);
-      L.push(`  • ${p.nombre} x${p.cantidad} ${unidadProdTxt(p)} — ${monto}`);
+      L.push(`  • ${nombreProd(p)} x${p.cantidad} ${unidadProdTxt(p)} — ${monto}`);
     });
   }
 
@@ -228,7 +232,7 @@ export default function TicketNota() {
           {/* Las tapas son información interna: no se muestran en el ticket. */}
           {prods.filter(p => p.unidad !== 'tapa').map(p => (
             <div key={p.id} className="flex items-baseline justify-between gap-3">
-              <span className="text-sm text-gray-700">{p.nombre} <span className="text-xs text-gray-400">×{p.cantidad} {unidadProdTxt(p)}</span></span>
+              <span className="text-sm text-gray-700">{nombreProd(p)} <span className="text-xs text-gray-400">×{p.cantidad} {unidadProdTxt(p)}</span></span>
               {p.es_por_tapa && Number(p.subtotal) === 0
                 ? <span className="text-sm text-green-700">Incluido</span>
                 : <span className="text-sm text-gray-600">{fmtMonto(p.subtotal)}</span>}
@@ -312,7 +316,7 @@ export default function TicketNota() {
               <div className="space-y-0.5">
                 {productos.filter(p => p.unidad !== 'tapa').map(p => (
                   <div key={p.id} className="flex items-baseline justify-between gap-3">
-                    <span className="text-sm text-gray-700">{p.nombre} <span className="text-xs text-gray-400">×{p.cantidad} {unidadProdTxt(p)}</span></span>
+                    <span className="text-sm text-gray-700">{nombreProd(p)} <span className="text-xs text-gray-400">×{p.cantidad} {unidadProdTxt(p)}</span></span>
                     {p.es_por_tapa && Number(p.subtotal) === 0
                       ? <span className="text-sm text-green-700">Incluido</span>
                       : <span className="text-sm text-gray-600">{fmtMonto(p.subtotal)}</span>}
