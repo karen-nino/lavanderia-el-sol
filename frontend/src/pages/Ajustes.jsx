@@ -1053,6 +1053,7 @@ export default function Ajustes() {
   );
 
   const seccionCargasPreciosDesktop = (
+    <>
     <Section titulo="Tope de precio por carga">
       <p className="text-sm text-gray-500 -mt-1">
         Límite del precio de una carga (máquinas + productos) según su tamaño. El ajuste manual
@@ -1062,10 +1063,14 @@ export default function Ajustes() {
       {campoTope('tope_carga_grande', 'Carga Grande', 'grande')}
       {campoTope('tope_carga_jumbo',  'Carga Jumbo',  'jumbo')}
       {campoTope('tope_carga_edredon', 'Carga Edredón', 'de edredón')}
+    </Section>
 
-      <div className="border-t border-gray-100" />
-
-      <Field label="Empaquetado" hint="Costo del empaquetado, incluido por defecto en cada carga Por Encargo (dentro del tope). El empleado puede quitarlo por carga.">
+    <Section titulo="Empaquetado">
+      <p className="text-sm text-gray-500 -mt-1">
+        Costo del empaquetado de la ropa. Se incluye por defecto en cada carga Por Encargo
+        (dentro del tope) y el empleado puede quitarlo por carga. Vacío o 0 = sin empaquetado.
+      </p>
+      <Field label="Costo del empaquetado">
         <div className="flex items-center gap-2">
           <span className="text-sm text-gray-500 flex-shrink-0">$</span>
           <input type="number" name="costo_empaquetado" min="0" step="0.01"
@@ -1075,6 +1080,7 @@ export default function Ajustes() {
         </div>
       </Field>
     </Section>
+    </>
   );
 
   const seccionSucursalesDesktop = (
@@ -1632,7 +1638,15 @@ export default function Ajustes() {
         {campoTopeM('tope_carga_grande', 'Carga Grande', 'grande')}
         {campoTopeM('tope_carga_jumbo',  'Carga Jumbo',  'jumbo')}
         {campoTopeM('tope_carga_edredon', 'Carga Edredón', 'de edredón')}
-        <MobileField label="Empaquetado" hint="Costo del empaquetado, incluido por defecto en cada carga Por Encargo (dentro del tope). El empleado puede quitarlo por carga.">
+      </div>
+
+      <div className="pt-2">
+        <p className="text-base font-semibold text-gray-900 mb-1">Empaquetado</p>
+        <p className="text-sm text-grey mb-4">
+          Costo del empaquetado de la ropa. Se incluye por defecto en cada carga Por Encargo
+          (dentro del tope) y el empleado puede quitarlo por carga. Vacío o 0 = sin empaquetado.
+        </p>
+        <MobileField label="Costo del empaquetado">
           <div className="flex items-center gap-2">
             <span className="text-base text-grey flex-shrink-0">$</span>
             <input type="number" name="costo_empaquetado" min="0" step="0.01"
