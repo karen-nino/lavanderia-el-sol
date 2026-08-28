@@ -141,8 +141,11 @@ export async function getResumen(req, res) {
           COALESCE(SUM(nc_t.total_cargas), 0)                              AS total_cargas,
           COALESCE(SUM(np_t.total_art), 0)                                  AS total_productos,
           COALESCE(SUM(o.ajuste), 0)                                        AS total_ajustes,
-          COALESCE(SUM(CASE WHEN o.forma_pago = 'EFECTIVO'      THEN o.precio_total ELSE 0 END), 0) AS total_efectivo,
-          COALESCE(SUM(CASE WHEN o.forma_pago = 'TRANSFERENCIA' THEN o.precio_total ELSE 0 END), 0) AS total_transferencia
+          -- Las notas viejas sin forma_pago cuentan como efectivo (mig. 090),
+          -- así que los tres totales suman siempre el total cobrado.
+          COALESCE(SUM(CASE WHEN COALESCE(o.forma_pago, 'EFECTIVO') = 'EFECTIVO' THEN o.precio_total ELSE 0 END), 0) AS total_efectivo,
+          COALESCE(SUM(CASE WHEN o.forma_pago = 'TRANSFERENCIA' THEN o.precio_total ELSE 0 END), 0) AS total_transferencia,
+          COALESCE(SUM(CASE WHEN o.forma_pago = 'TARJETA'       THEN o.precio_total ELSE 0 END), 0) AS total_tarjeta
         FROM notas o
         LEFT JOIN (
           SELECT nota_id, SUM(precio_lavadora + precio_secadora + empaquetado) AS total_cargas
@@ -168,6 +171,7 @@ export async function getResumen(req, res) {
     const total_ajustes   = parseFloat(corte.total_ajustes);
     const total_efectivo      = parseFloat(corte.total_efectivo);
     const total_transferencia = parseFloat(corte.total_transferencia);
+    const total_tarjeta       = parseFloat(corte.total_tarjeta);
 
     res.json({
       tarjetas: {
@@ -202,6 +206,7 @@ export async function getResumen(req, res) {
         total_general: total_cargas + total_productos + total_ajustes,
         total_efectivo,
         total_transferencia,
+        total_tarjeta,
       },
     });
   } catch (err) {

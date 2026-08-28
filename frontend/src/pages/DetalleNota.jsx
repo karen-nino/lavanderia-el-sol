@@ -4,6 +4,7 @@ import Barcode from 'react-barcode';
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { esAdmin as esAdminFn } from '../lib/roles';
+import { FORMAS_PAGO, formaPagoLabel } from '../lib/formasPago';
 import { formatHora12, formatFechaHora12 } from '../lib/fecha';
 
 // Unidad de venta de un producto de la nota, en texto ("2 botellas" / "3 tapas").
@@ -187,6 +188,61 @@ function ModalConfirmar({ titulo, mensaje, onCancelar, onConfirmar, loading, col
   );
 }
 
+// Modal de cobro: pide la forma de pago además de confirmar. Sin este dato el
+// corte de caja no distingue el dinero del cajón de transferencias y tarjetas.
+function ModalLiquidar({ monto, folio, formaPago, onFormaPago, onCancelar, onConfirmar, loading }) {
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+        <h3 className="text-base font-bold text-gray-900">Liquidar nota</h3>
+        <p className="text-sm text-gray-500">
+          ¿Marcar la nota {folio} como pagada ({monto})? Después podrás finalizarla.
+        </p>
+
+        <div className="space-y-2">
+          <p className="text-sm font-semibold text-gray-900">¿Cómo pagó?</p>
+          <div className="grid grid-cols-3 gap-2">
+            {FORMAS_PAGO.map(opt => {
+              const selected = formaPago === opt.v;
+              return (
+                <button
+                  key={opt.v}
+                  type="button"
+                  onClick={() => onFormaPago(opt.v)}
+                  className={`py-3 border-2 rounded-xl font-semibold text-sm transition-colors ${
+                    selected
+                      ? 'border-blue bg-light-blue text-blue-700'
+                      : 'border-gray-300 bg-white text-gray-700 hover:border-blue-300'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="flex gap-3">
+          <button
+            onClick={onCancelar}
+            disabled={loading}
+            className="flex-1 border border-gray-300 text-gray-700 font-medium py-3.5 rounded-lg text-base hover:bg-gray-50 transition-colors disabled:opacity-60"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={onConfirmar}
+            disabled={loading || !formaPago}
+            className="flex-1 bg-blue hover:opacity-90 text-white font-medium py-3.5 rounded-lg text-base transition-colors disabled:opacity-60"
+          >
+            {loading ? 'Procesando...' : 'Confirmar'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function DetalleNota() {
   const { id }   = useParams();
   const navigate = useNavigate();
@@ -203,6 +259,7 @@ export default function DetalleNota() {
   const [motivoCancelar,   setMotivoCancelar]   = useState('');
   const [confirmFinalizar,  setConfirmFinalizar]  = useState(false);
   const [confirmLiquidar,  setConfirmLiquidar]  = useState(false);
+  const [formaPagoSel,     setFormaPagoSel]     = useState('');
   const [confirmEliminar,  setConfirmEliminar]  = useState(false);
 
   useEffect(() => {
@@ -268,8 +325,11 @@ export default function DetalleNota() {
     setLoadingAccion(true);
     setErrorAccion('');
     try {
-      const updated = await api.patch(`/notas/${id}/estado-pago`, { estado_pago: 'PAGADO' });
-      setNota(prev => ({ ...prev, estado_pago: updated.estado_pago }));
+      const updated = await api.patch(`/notas/${id}/estado-pago`, {
+        estado_pago: 'PAGADO',
+        forma_pago: formaPagoSel,
+      });
+      setNota(prev => ({ ...prev, estado_pago: updated.estado_pago, forma_pago: updated.forma_pago }));
       setConfirmLiquidar(false);
     } catch (err) {
       setErrorAccion(err.message);
@@ -530,7 +590,7 @@ export default function DetalleNota() {
           </FilaDetalle>
           {nota.forma_pago && (
             <FilaDetalle label="Forma de pago">
-              <span className="text-gray-700">{nota.forma_pago === 'EFECTIVO' ? 'Efectivo' : 'Transferencia'}</span>
+              <span className="text-gray-700">{formaPagoLabel(nota.forma_pago)}</span>
             </FilaDetalle>
           )}
           {(nota.cargas ?? []).length > 0 && (
@@ -862,13 +922,14 @@ export default function DetalleNota() {
 
       {/* Modal confirmar liquidación (cobro) */}
       {confirmLiquidar && (
-        <ModalConfirmar
-          titulo="Liquidar nota"
-          mensaje={`¿Marcar la nota ${nota.folio ?? `#${nota.id}`} como pagada (${fmtMonto(nota.precio_total)})? Después podrás finalizarla.`}
-          onCancelar={() => setConfirmLiquidar(false)}
+        <ModalLiquidar
+          folio={nota.folio ?? `#${nota.id}`}
+          monto={fmtMonto(nota.precio_total)}
+          formaPago={formaPagoSel}
+          onFormaPago={setFormaPagoSel}
+          onCancelar={() => { setConfirmLiquidar(false); setFormaPagoSel(''); }}
           onConfirmar={liquidarNota}
           loading={loadingAccion}
-          colorBtn="bg-blue hover:opacity-90"
         />
       )}
 

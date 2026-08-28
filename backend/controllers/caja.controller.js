@@ -1,11 +1,22 @@
 import pool from '../db/pool.js';
 
-// Suma de ventas cobradas durante la ventana de la sesión de caja,
-// atribuidas al momento del cobro (pagado_en, migración 037): una nota
-// creada ayer y cobrada hoy cuenta en el corte de hoy.
+// Ventas cobradas durante la ventana de la sesión de caja, atribuidas al
+// momento del cobro (pagado_en, migración 037): una nota creada ayer y cobrada
+// hoy cuenta en el corte de hoy.
+//
+// Se devuelven desglosadas por forma de pago porque SOLO el efectivo entra al
+// cajón: sumar transferencias y tarjetas al esperado hacía que el corte
+// marcara un faltante que nadie se robó. Las notas viejas sin forma_pago se
+// cuentan como efectivo (mig. 090 ya las rellenó; el COALESCE cubre cualquier
+// fila que se cuele después).
 async function ventasDeSesion(client, abiertaAt, cerradaAt, sucursal) {
   const { rows } = await client.query(
-    `SELECT COALESCE(SUM(precio_total), 0) AS ventas
+    `SELECT
+        COALESCE(SUM(precio_total), 0) AS total,
+        COALESCE(SUM(precio_total) FILTER (
+          WHERE COALESCE(forma_pago, 'EFECTIVO') = 'EFECTIVO'), 0) AS efectivo,
+        COALESCE(SUM(precio_total) FILTER (WHERE forma_pago = 'TRANSFERENCIA'), 0) AS transferencia,
+        COALESCE(SUM(precio_total) FILTER (WHERE forma_pago = 'TARJETA'), 0) AS tarjeta
        FROM notas
       WHERE estado_pago = 'PAGADO'
         AND sucursal = $3
@@ -13,7 +24,13 @@ async function ventasDeSesion(client, abiertaAt, cerradaAt, sucursal) {
         AND pagado_en <= COALESCE($2, NOW())`,
     [abiertaAt, cerradaAt, sucursal]
   );
-  return parseFloat(rows[0].ventas);
+  const r = rows[0];
+  return {
+    total:         parseFloat(r.total),
+    efectivo:      parseFloat(r.efectivo),
+    transferencia: parseFloat(r.transferencia),
+    tarjeta:       parseFloat(r.tarjeta),
+  };
 }
 
 // Totales de movimientos (entradas/salidas) de una caja.
@@ -62,7 +79,9 @@ export async function getCajaActual(req, res) {
     const ventas = await ventasDeSesion(client, caja.abierta_at, null, req.sucursal);
     const { entradas, salidas } = await totalesMovimientos(client, caja.id);
     const monto_inicial = parseFloat(caja.monto_inicial);
-    const esperado = monto_inicial + ventas + entradas - salidas;
+    // El esperado en el cajón solo cuenta el efectivo; transferencias y
+    // tarjetas se informan aparte para cuadrar el total del día.
+    const esperado = monto_inicial + ventas.efectivo + entradas - salidas;
 
     res.json({
       abierta: true,
@@ -74,7 +93,7 @@ export async function getCajaActual(req, res) {
         notas_apertura:   caja.notas_apertura,
         abierta_at:       caja.abierta_at,
       },
-      totales: { ventas, entradas, salidas, esperado },
+      totales: { ventas: ventas.total, ventas_desglose: ventas, entradas, salidas, esperado },
       movimientos: movsRes.rows.map((m) => ({
         id:         m.id,
         tipo:       m.tipo,
@@ -182,7 +201,9 @@ export async function cerrarCaja(req, res) {
     const ventas = await ventasDeSesion(client, caja.abierta_at, null, req.sucursal);
     const { entradas, salidas } = await totalesMovimientos(client, caja.id);
     const monto_inicial = parseFloat(caja.monto_inicial);
-    const esperado = monto_inicial + ventas + entradas - salidas;
+    // El esperado en el cajón solo cuenta el efectivo; transferencias y
+    // tarjetas se informan aparte para cuadrar el total del día.
+    const esperado = monto_inicial + ventas.efectivo + entradas - salidas;
     const diferencia = contado - esperado;
 
     const upd = await client.query(
@@ -206,7 +227,8 @@ export async function cerrarCaja(req, res) {
       id: caja.id,
       resumen: {
         monto_inicial,
-        ventas,
+        ventas: ventas.total,
+        ventas_desglose: ventas,
         entradas,
         salidas,
         esperado,
@@ -236,6 +258,8 @@ export async function getHistorial(req, res) {
           c.cerrada_at,
           TRIM(ua.nombre || ' ' || COALESCE(ua.apellido, '')) AS usuario_apertura,
           TRIM(uc.nombre || ' ' || COALESCE(uc.apellido, '')) AS usuario_cierre,
+          -- Mismo desglose que ventasDeSesion(): el esperado del cajón solo
+          -- cuenta el efectivo; lo demás se informa aparte.
           COALESCE((
             SELECT SUM(precio_total) FROM notas
              WHERE estado_pago = 'PAGADO'
@@ -243,6 +267,30 @@ export async function getHistorial(req, res) {
                AND pagado_en >= c.abierta_at
                AND pagado_en <= c.cerrada_at
           ), 0) AS ventas,
+          COALESCE((
+            SELECT SUM(precio_total) FROM notas
+             WHERE estado_pago = 'PAGADO'
+               AND COALESCE(forma_pago, 'EFECTIVO') = 'EFECTIVO'
+               AND sucursal = c.sucursal
+               AND pagado_en >= c.abierta_at
+               AND pagado_en <= c.cerrada_at
+          ), 0) AS ventas_efectivo,
+          COALESCE((
+            SELECT SUM(precio_total) FROM notas
+             WHERE estado_pago = 'PAGADO'
+               AND forma_pago = 'TRANSFERENCIA'
+               AND sucursal = c.sucursal
+               AND pagado_en >= c.abierta_at
+               AND pagado_en <= c.cerrada_at
+          ), 0) AS ventas_transferencia,
+          COALESCE((
+            SELECT SUM(precio_total) FROM notas
+             WHERE estado_pago = 'PAGADO'
+               AND forma_pago = 'TARJETA'
+               AND sucursal = c.sucursal
+               AND pagado_en >= c.abierta_at
+               AND pagado_en <= c.cerrada_at
+          ), 0) AS ventas_tarjeta,
           COALESCE((
             SELECT SUM(monto) FROM movimientos_caja
              WHERE caja_id = c.id AND tipo = 'entrada'
@@ -263,9 +311,15 @@ export async function getHistorial(req, res) {
       rows.map((r) => {
         const monto_inicial = parseFloat(r.monto_inicial);
         const ventas        = parseFloat(r.ventas);
+        const ventas_desglose = {
+          total:         ventas,
+          efectivo:      parseFloat(r.ventas_efectivo),
+          transferencia: parseFloat(r.ventas_transferencia),
+          tarjeta:       parseFloat(r.ventas_tarjeta),
+        };
         const entradas      = parseFloat(r.entradas);
         const salidas       = parseFloat(r.salidas);
-        const esperado      = monto_inicial + ventas + entradas - salidas;
+        const esperado      = monto_inicial + ventas_desglose.efectivo + entradas - salidas;
         const contado       = r.monto_contado != null ? parseFloat(r.monto_contado) : null;
         return {
           id:               r.id,
@@ -277,6 +331,7 @@ export async function getHistorial(req, res) {
           notas_cierre:     r.notas_cierre,
           monto_inicial,
           ventas,
+          ventas_desglose,
           entradas,
           salidas,
           esperado,

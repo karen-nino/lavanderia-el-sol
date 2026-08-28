@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
+import { formaPagoLabel } from '../lib/formasPago';
 import { formatHora12 } from '../lib/fecha';
 import { imprimirVentas, descargarVentasCSV } from '../lib/exportVentas';
 import SucursalBar from '../components/SucursalBar';
@@ -629,6 +630,10 @@ export default function Ventas() {
                 <span>Total en transferencia</span>
                 <span>{fmt(data.corte.total_transferencia)}</span>
               </div>
+              <div className="flex justify-between px-4 py-3 text-sm text-gray-600">
+                <span>Total con tarjeta</span>
+                <span>{fmt(data.corte.total_tarjeta)}</span>
+              </div>
               <div className="flex justify-between px-4 py-4 text-base font-bold text-gray-900 bg-gray-50">
                 <span>TOTAL GENERAL</span>
                 <span className="text-lg">{fmt(data.corte.total_general)}</span>
@@ -704,9 +709,7 @@ export default function Ventas() {
                           </td>
                           <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{nota.atendio ?? <span className="text-gray-400">—</span>}</td>
                           <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
-                            {nota.forma_pago === 'EFECTIVO' ? 'Efectivo'
-                              : nota.forma_pago === 'TRANSFERENCIA' ? 'Transferencia'
-                              : <span className="text-gray-400">—</span>}
+                            {formaPagoLabel(nota.forma_pago) || <span className="text-gray-400">—</span>}
                           </td>
                           <td className="px-4 py-3 text-right text-gray-600">{fmt(nota.total_productos)}</td>
                           <td className="px-4 py-3 text-right font-semibold text-gray-800">{fmt(nota.total)}</td>

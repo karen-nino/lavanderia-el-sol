@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { api } from '../lib/api';
 import { capitalizarNombre } from '../lib/texto';
+import { FORMAS_PAGO } from '../lib/formasPago';
 
 const INPUT_CLS =
   'w-full px-4 py-3.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent transition';
@@ -1401,8 +1402,8 @@ export default function NuevaNota() {
                 {encargoForm.pago_anticipado === 'SI' && (
                   <div className="space-y-3 pt-2">
                     <h2 className="text-base font-semibold text-gray-900">Forma de pago</h2>
-                    <div className="grid grid-cols-2 gap-3">
-                      {[{ v: 'EFECTIVO', label: 'Efectivo' }, { v: 'TRANSFERENCIA', label: 'Transferencia' }].map(opt => {
+                    <div className="grid grid-cols-3 gap-3">
+                      {FORMAS_PAGO.map(opt => {
                         const selected = encargoForm.forma_pago === opt.v;
                         return (
                           <button
@@ -1922,8 +1923,8 @@ export default function NuevaNota() {
         {/* Forma de pago — al final: Autoservicio se cobra al momento. */}
         <div>
           <label className={LABEL_CLS}>Forma de pago</label>
-          <div className="grid grid-cols-2 gap-3">
-            {[{ v: 'EFECTIVO', label: 'Efectivo' }, { v: 'TRANSFERENCIA', label: 'Transferencia' }].map(opt => {
+          <div className="grid grid-cols-3 gap-3">
+            {FORMAS_PAGO.map(opt => {
               const selected = form.forma_pago === opt.v;
               return (
                 <button

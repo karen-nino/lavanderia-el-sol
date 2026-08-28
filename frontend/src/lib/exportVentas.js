@@ -4,11 +4,12 @@
 // Recibe el objeto que devuelve GET /ventas/resumen:
 //   { tarjetas: { total_cobrado, notas_pagadas, productos_consumidos, notas_pendientes },
 //     corte:    { total_cargas, total_productos, total_ajustes,
-//                 total_efectivo, total_transferencia, total_general },
+//                 total_efectivo, total_transferencia, total_tarjeta, total_general },
 //     lista_notas: [{ folio, fecha, creado_en, estado, maquinas:[{nombre,cargas}],
 //                     atendio, forma_pago, total_productos, total }] }
 
 import { formatHora12 } from './fecha';
+import { formaPagoLabel } from './formasPago';
 import {
   fmtMoneda, num, fechaLarga, slug, esc,
   descargarCSV, imprimirDocumento,
@@ -26,8 +27,6 @@ const ESTADO_LABEL = {
 };
 const estadoLabel = (e) => ESTADO_LABEL[e] ?? (e ?? '');
 
-const formaPagoLabel = (fp) =>
-  fp === 'EFECTIVO' ? 'Efectivo' : fp === 'TRANSFERENCIA' ? 'Transferencia' : '';
 
 // Máquinas de una nota como texto: "Lavadora 1 (2 cargas), Secadora 3 (1 carga)".
 const maquinasTexto = (maquinas) =>
@@ -96,6 +95,7 @@ const bloqueCorte = (c) => `
       ${filaCorte('Total ajustes', c?.total_ajustes)}
       ${filaCorte('Total en efectivo', c?.total_efectivo)}
       ${filaCorte('Total en transferencia', c?.total_transferencia)}
+      ${filaCorte('Total con tarjeta', c?.total_tarjeta)}
       ${filaCorte('Total general', c?.total_general, true)}
     </tbody>
   </table>`;

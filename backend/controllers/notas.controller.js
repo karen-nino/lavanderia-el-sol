@@ -7,6 +7,16 @@ const ESTADOS_VALIDOS     = ['EN_ESPERA', 'LAVANDO', 'SECANDO', 'LISTA', 'PAGADA
 const ESTADOS_INICIALES   = ['EN_ESPERA', 'LAVANDO', 'SECANDO'];
 const TIPOS_SERVICIO_VALIDOS = ['AUTOSERVICIO', 'EDREDON', 'POR_ENCARGO'];
 const ESTADOS_PAGO_VALIDOS = ['PENDIENTE', 'PAGADO'];
+// Formas de pago (mig. 078/090). Para el corte de caja solo EFECTIVO es dinero
+// en el cajón; transferencia y tarjeta son cobros reales que no lo engrosan.
+const FORMAS_PAGO_VALIDAS = ['EFECTIVO', 'TRANSFERENCIA', 'TARJETA'];
+
+// Normaliza la forma de pago recibida; devuelve null si no es una válida.
+const normalizarFormaPago = (v) => {
+  if (v == null) return null;
+  const s = String(v).trim().toUpperCase();
+  return FORMAS_PAGO_VALIDAS.includes(s) ? s : null;
+};
 const TAMANOS_VALIDOS     = ['chico', 'grande', 'jumbo'];
 const TIPOS_PRENDA_VALIDOS = ['ROPA', 'EDREDON'];
 // Tipo de máquina previsto por carga en Por Encargo (define el precio; la
@@ -838,8 +848,7 @@ export const createNota = async (req, res) => {
         tamano_edredon ? String(tamano_edredon).trim() : null,
         ajusteNum,
         // Forma de pago solo con pago anticipado (PAGADO); si no, null.
-        (estado_pago === 'PAGADO' && ['EFECTIVO', 'TRANSFERENCIA'].includes(String(forma_pago).toUpperCase()))
-          ? String(forma_pago).toUpperCase() : null,
+        estado_pago === 'PAGADO' ? normalizarFormaPago(forma_pago) : null,
       ]
     );
     const nota = notaRows[0];
@@ -956,6 +965,7 @@ export const updateNota = async (req, res) => {
   const {
     cliente_id,
     estado_pago,
+    forma_pago,
     fecha_entrega,
     tiempo_entrega,
     instrucciones,
@@ -1031,6 +1041,18 @@ export const updateNota = async (req, res) => {
     if (esReversionPago && !esAdmin(req.user.rol)) {
       await client.query('ROLLBACK');
       return res.status(403).json({ message: 'Solo un administrador puede revertir un pago.' });
+    }
+
+    // Cobrar desde la edición exige la forma de pago igual que el endpoint
+    // dedicado; si no, la nota quedaría cobrada sin saber si el dinero entró
+    // al cajón. Editar una nota YA pagada sin mandarla conserva la que tenía.
+    const esCobroNuevo = estado_pago === 'PAGADO' && actual.estado_pago !== 'PAGADO';
+    const formaPagoNueva = normalizarFormaPago(forma_pago);
+    if (esCobroNuevo && !formaPagoNueva) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        message: `Indica la forma de pago. Valores permitidos: ${FORMAS_PAGO_VALIDAS.join(', ')}.`,
+      });
     }
 
     // Cargas (autoservicio): la lista enviada reemplaza todas las de la nota,
@@ -1182,7 +1204,8 @@ export const updateNota = async (req, res) => {
          tipo_tela       = $9,
          tamano_edredon  = $10,
          ajuste          = $11,
-         precio_total    = $12
+         precio_total    = $12,
+         forma_pago      = $13
        WHERE id = $1
        RETURNING *`,
       [
@@ -1198,6 +1221,9 @@ export const updateNota = async (req, res) => {
         tiene('tamano_edredon') ? (tamano_edredon ? String(tamano_edredon).trim() : null) : actual.tamano_edredon,
         ajusteNum,
         precioFinal,
+        // Cobro nuevo → la forma recibida. Reversión → se limpia. En cualquier
+        // otro caso se conserva la que ya tenía la nota.
+        esCobroNuevo ? formaPagoNueva : (esReversionPago ? null : actual.forma_pago),
       ]
     );
 
@@ -2506,11 +2532,21 @@ export const terminarLavadoFinal = async (req, res) => {
 // ── PATCH /notas/:id/estado-pago ────────────────────────────
 export const cambiarEstadoPago = async (req, res) => {
   const { id } = req.params;
-  const { estado_pago } = req.body;
+  const { estado_pago, forma_pago } = req.body;
 
   if (!estado_pago || !ESTADOS_PAGO_VALIDOS.includes(estado_pago)) {
     return res.status(400).json({
       message: `Estado de pago inválido. Valores permitidos: ${ESTADOS_PAGO_VALIDOS.join(', ')}.`,
+    });
+  }
+
+  // Cobrar exige saber CÓMO se pagó: sin este dato el corte de caja no puede
+  // distinguir el dinero del cajón de las transferencias y tarjetas, y el
+  // faltante aparente sale a costa del empleado en turno.
+  const formaPago = normalizarFormaPago(forma_pago);
+  if (estado_pago === 'PAGADO' && !formaPago) {
+    return res.status(400).json({
+      message: `Indica la forma de pago. Valores permitidos: ${FORMAS_PAGO_VALIDAS.join(', ')}.`,
     });
   }
 
@@ -2539,9 +2575,11 @@ export const cambiarEstadoPago = async (req, res) => {
       return res.status(403).json({ message: 'Solo un administrador puede revertir un pago.' });
     }
 
+    // Al revertir un pago la forma deja de aplicar y se limpia, para que no
+    // quede una nota PENDIENTE marcada como pagada en efectivo.
     const { rows } = await client.query(
-      'UPDATE notas SET estado_pago = $1 WHERE id = $2 RETURNING *',
-      [estado_pago, id]
+      'UPDATE notas SET estado_pago = $1, forma_pago = $2 WHERE id = $3 RETURNING *',
+      [estado_pago, estado_pago === 'PAGADO' ? formaPago : null, id]
     );
     if (esReversion) {
       await registrarReversionPago(client, actual, req.user.id, req.sucursal);

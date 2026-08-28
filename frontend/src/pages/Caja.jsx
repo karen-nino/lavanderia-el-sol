@@ -390,11 +390,19 @@ function Corte({ data, onCerrar }) {
     }
   };
 
+  // Solo el efectivo entra al cajón. Transferencias y tarjetas se cobran de
+  // verdad, pero contarlas aquí haría que el conteo físico saliera con un
+  // faltante que nadie se llevó, así que se informan por separado.
+  const desglose = totales.ventas_desglose ?? {
+    total: totales.ventas, efectivo: totales.ventas, transferencia: 0, tarjeta: 0,
+  };
+  const noEnCajon = desglose.transferencia + desglose.tarjeta;
+
   const rows = [
-    { label: 'Fondo inicial',   value: caja.monto_inicial, sign: '' },
-    { label: 'Ventas cobradas', value: totales.ventas,     sign: '+' },
-    { label: 'Entradas',        value: totales.entradas,   sign: '+' },
-    { label: 'Salidas',         value: totales.salidas,    sign: '−' },
+    { label: 'Fondo inicial',      value: caja.monto_inicial, sign: '' },
+    { label: 'Ventas en efectivo', value: desglose.efectivo,  sign: '+' },
+    { label: 'Entradas',           value: totales.entradas,   sign: '+' },
+    { label: 'Salidas',            value: totales.salidas,    sign: '−' },
   ];
 
   return (
@@ -416,6 +424,32 @@ function Corte({ data, onCerrar }) {
           </div>
         </div>
       </div>
+
+      {noEnCajon > 0 && (
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div className="px-4 py-3 border-b border-gray-200">
+            <h2 className="text-sm font-semibold text-gray-700">Cobrado fuera del cajón</h2>
+            <p className="mt-0.5 text-xs text-gray-500">
+              Se cobró, pero no es dinero que debas contar.
+            </p>
+          </div>
+          <div className="divide-y divide-gray-100">
+            {desglose.transferencia > 0 && (
+              <div className="flex justify-between px-4 py-3 text-sm text-gray-600">
+                <span>Transferencia</span><span>{fmt(desglose.transferencia)}</span>
+              </div>
+            )}
+            {desglose.tarjeta > 0 && (
+              <div className="flex justify-between px-4 py-3 text-sm text-gray-600">
+                <span>Tarjeta</span><span>{fmt(desglose.tarjeta)}</span>
+              </div>
+            )}
+            <div className="flex justify-between px-4 py-3 text-sm font-medium text-gray-800 bg-gray-50">
+              <span>Total cobrado en el turno</span><span>{fmt(desglose.total)}</span>
+            </div>
+          </div>
+        </div>
+      )}
 
       <form onSubmit={submit} className="space-y-4">
         <ErrorBox message={error} />
@@ -715,7 +749,19 @@ function Historial({ onFiltroLabel }) {
     <>
       <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-base">
         <span className="text-gray-500">Fondo</span><span className="text-right text-gray-700">{fmt(c.monto_inicial)}</span>
-        <span className="text-gray-500">Ventas</span><span className="text-right text-gray-700">{fmt(c.ventas)}</span>
+        <span className="text-gray-500">Ventas en efectivo</span><span className="text-right text-gray-700">{fmt(c.ventas_desglose?.efectivo ?? c.ventas)}</span>
+        {(c.ventas_desglose?.transferencia ?? 0) > 0 && (
+          <>
+            <span className="text-gray-500">Transferencia</span>
+            <span className="text-right text-gray-500">{fmt(c.ventas_desglose.transferencia)}</span>
+          </>
+        )}
+        {(c.ventas_desglose?.tarjeta ?? 0) > 0 && (
+          <>
+            <span className="text-gray-500">Tarjeta</span>
+            <span className="text-right text-gray-500">{fmt(c.ventas_desglose.tarjeta)}</span>
+          </>
+        )}
         <span className="text-gray-500">Entradas</span><span className="text-right text-gray-700">{fmt(c.entradas)}</span>
         <span className="text-gray-500">Salidas</span><span className="text-right text-gray-700">{fmt(c.salidas)}</span>
         <span className="text-gray-500 font-medium">Esperado</span><span className="text-right font-medium text-gray-800">{fmt(c.esperado)}</span>

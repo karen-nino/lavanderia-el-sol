@@ -21,7 +21,7 @@ const estadoCorte = (c) => {
 
 // ── CSV ─────────────────────────────────────────────────────
 const ENCABEZADOS_CSV = [
-  'Fecha', 'Hora', 'Abrió', 'Cerró', 'Fondo inicial', 'Ventas',
+  'Fecha', 'Hora', 'Abrió', 'Cerró', 'Fondo inicial', 'Ventas', 'Ventas efectivo', 'Transferencia', 'Tarjeta',
   'Entradas', 'Salidas', 'Esperado', 'Contado', 'Diferencia',
   'Estado', 'Nota apertura', 'Nota cierre',
 ];
@@ -33,6 +33,9 @@ const filaCSV = (c) => [
   c.usuario_cierre ?? '',
   num(c.monto_inicial),
   num(c.ventas),
+  num(c.ventas_desglose?.efectivo ?? c.ventas),
+  num(c.ventas_desglose?.transferencia ?? 0),
+  num(c.ventas_desglose?.tarjeta ?? 0),
   num(c.entradas),
   num(c.salidas),
   num(c.esperado),
@@ -74,7 +77,13 @@ const bloqueDetalle = (c) => `
     <table class="desglose">
       <tbody>
         <tr><td>Fondo inicial</td><td class="r">${fmtMoneda(c.monto_inicial)}</td></tr>
-        <tr><td>Ventas cobradas</td><td class="r">${fmtMoneda(c.ventas)}</td></tr>
+        <tr><td>Ventas en efectivo</td><td class="r">${fmtMoneda(c.ventas_desglose?.efectivo ?? c.ventas)}</td></tr>
+        ${(c.ventas_desglose?.transferencia ?? 0) > 0
+          ? `<tr><td>Cobrado por transferencia (fuera del cajón)</td><td class="r">${fmtMoneda(c.ventas_desglose.transferencia)}</td></tr>`
+          : ''}
+        ${(c.ventas_desglose?.tarjeta ?? 0) > 0
+          ? `<tr><td>Cobrado con tarjeta (fuera del cajón)</td><td class="r">${fmtMoneda(c.ventas_desglose.tarjeta)}</td></tr>`
+          : ''}
         <tr><td>Entradas</td><td class="r">${fmtMoneda(c.entradas)}</td></tr>
         <tr><td>Salidas</td><td class="r">${fmtMoneda(c.salidas)}</td></tr>
         <tr class="tot"><td>Esperado en caja</td><td class="r">${fmtMoneda(c.esperado)}</td></tr>
