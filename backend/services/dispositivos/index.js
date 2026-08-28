@@ -31,6 +31,12 @@ const SIN_ENLAZAR = { ok: false, estado: null, motivo: 'sin_enlazar' };
 
 export const nombreDriver = () => NOMBRE_DRIVER === 'ewelink' ? 'ewelink' : 'null';
 
+// ¿Estamos simulando? Con el driver 'null' toda operación responde ok sin tocar
+// hardware, así que un resultado exitoso NO significa que el Sonoff exista ni
+// responda. Quien guarde o muestre "enlazada" debe consultarlo antes: marcar el
+// enlace como confirmado en simulación sería mentirle a quien instala.
+export const esSimulacion = () => nombreDriver() !== 'ewelink';
+
 export async function encender(maquina) {
   if (!tieneDispositivo(maquina)) return SIN_ENLAZAR;
   return driver.encender(maquina);

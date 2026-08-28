@@ -21,6 +21,46 @@ const normalizarDeviceCanal = (v) => {
   return Number.isInteger(n) && n >= 0 ? n : null;
 };
 
+// Un mismo relé físico no puede estar enlazado a dos máquinas: un device_id
+// copiado por error haría que la app apague la máquina equivocada (con ropa
+// dentro). Se busca en TODAS las sucursales porque el Sonoff es un aparato
+// físico único, no un dato por sucursal. Un mismo device_id con canales
+// distintos sí es válido (Sonoff multi-relé).
+// Devuelve el nombre de la máquina que ya lo usa, o null si está libre.
+const buscarMaquinaConMismoDevice = async (deviceId, deviceCanal, excluirId = null) => {
+  if (!deviceId) return null;
+  const { rows } = await pool.query(
+    `SELECT nombre FROM maquinas
+      WHERE device_id = $1
+        AND device_canal IS NOT DISTINCT FROM $2
+        AND ($3::int IS NULL OR id <> $3::int)
+      LIMIT 1`,
+    [deviceId, deviceCanal, excluirId]
+  );
+  return rows[0]?.nombre ?? null;
+};
+
+// El driver 'null' simula todo en memoria: responde ok a cualquier device_id,
+// sin tocar hardware. Mientras esté activo, las pruebas de enlace no prueban
+// nada y hay que decirlo en pantalla en vez de pintar una palomita verde.
+const simulacionActiva = () => dispositivos.esSimulacion();
+
+const MSG_SIMULACION =
+  'Modo simulación: el sistema no está conectado a los Sonoff reales, así que ' +
+  'esta prueba no comprueba nada. Falta configurar las credenciales de eWeLink ' +
+  'en el servidor (DISPOSITIVOS_DRIVER=ewelink).';
+
+// Duración del pulso de la prueba física: suficiente para ver/oír arrancar la
+// máquina, corto para no iniciar un ciclo de verdad.
+const SEGUNDOS_PRUEBA_FISICA = 5;
+
+const esperar = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+const mensajeDeviceDuplicado = (nombre, deviceCanal) =>
+  `Ese ID de Sonoff ya está asignado a "${nombre}"` +
+  (deviceCanal != null ? ` (canal ${deviceCanal})` : '') +
+  '. Usa un ID distinto o, si es un dispositivo multi-relé, indica otro canal.';
+
 export const getMaquinas = async (req, res) => {
   try {
     // "reservada": la máquina está libre (estado disponible) pero ya la tiene
@@ -231,6 +271,11 @@ export const createMaquina = async (req, res) => {
   const sonoffEstado = deviceId ? 'error' : 'sin_enlazar';
 
   try {
+    const yaUsado = await buscarMaquinaConMismoDevice(deviceId, deviceCanal);
+    if (yaUsado) {
+      return res.status(409).json({ message: mensajeDeviceDuplicado(yaUsado, deviceCanal) });
+    }
+
     const { rows } = await pool.query(
       `INSERT INTO maquinas (nombre, tipo, tamano, modelo, capacidad, numero_serie, fecha_adquisicion, sucursal, notas, device_id, device_canal, sonoff_estado)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
@@ -271,6 +316,11 @@ export const updateMaquina = async (req, res) => {
   const deviceCanal = normalizarDeviceCanal(device_canal);
 
   try {
+    const yaUsado = await buscarMaquinaConMismoDevice(deviceId, deviceCanal, id);
+    if (yaUsado) {
+      return res.status(409).json({ message: mensajeDeviceDuplicado(yaUsado, deviceCanal) });
+    }
+
     // estado es opcional: si llega null se conserva el actual. Al cambiarlo se
     // mantiene en_uso_desde coherente, igual que en cambiarEstadoMaquina.
     //
@@ -287,15 +337,18 @@ export const updateMaquina = async (req, res) => {
                WHEN $9::estado_maquina = 'en_uso'::estado_maquina THEN NOW()
                ELSE NULL
              END,
-             device_id = $12,
+             device_id = $12::varchar,
              device_canal = $13,
+             -- $12 va casteado en TODOS sus usos: sin el cast, Postgres lo
+             -- deduce como varchar en la asignación y como text dentro del
+             -- CASE, y rechaza la consulta ("inconsistent types deduced").
              sonoff_estado = CASE
-               WHEN $12 IS NULL THEN 'sin_enlazar'
-               WHEN device_id IS DISTINCT FROM $12 THEN 'error'
+               WHEN $12::varchar IS NULL THEN 'sin_enlazar'
+               WHEN device_id IS DISTINCT FROM $12::varchar THEN 'error'
                ELSE sonoff_estado
              END,
              sonoff_sync_at = CASE
-               WHEN device_id IS DISTINCT FROM $12 THEN NULL
+               WHEN device_id IS DISTINCT FROM $12::varchar THEN NULL
                ELSE sonoff_sync_at
              END
        WHERE id = $10 AND sucursal = $11
@@ -448,7 +501,7 @@ export const probarSonoff = async (req, res) => {
   const { id } = req.params;
   try {
     const { rows } = await pool.query(
-      'SELECT id, device_id, device_canal FROM maquinas WHERE id = $1 AND sucursal = $2',
+      'SELECT * FROM maquinas WHERE id = $1 AND sucursal = $2',
       [id, req.sucursal]
     );
     if (rows.length === 0) {
@@ -463,6 +516,18 @@ export const probarSonoff = async (req, res) => {
         [id]
       );
       return res.status(400).json({ message: 'La máquina no tiene un Sonoff enlazado.', maquina: upd[0] });
+    }
+
+    // Con el driver de simulación CUALQUIER device_id responde ok, así que una
+    // prueba "exitosa" no significa nada: no se guarda el resultado (marcar
+    // 'enlazada' sería mentir en la tarjeta) y se avisa a quien la ejecutó.
+    if (simulacionActiva()) {
+      return res.json({
+        simulado: true,
+        driver: dispositivos.nombreDriver(),
+        message: MSG_SIMULACION,
+        maquina: maq,
+      });
     }
 
     const resultado = await dispositivos.estado(maq);
@@ -482,6 +547,82 @@ export const probarSonoff = async (req, res) => {
     res.json({ message: 'Sonoff enlazado correctamente.', estado: resultado.estado, maquina: upd[0] });
   } catch (err) {
     console.error('probarSonoff error:', err);
+    res.status(500).json({ message: 'Error interno del servidor.' });
+  }
+};
+
+// Prueba FÍSICA del relé: enciende la máquina unos segundos y la vuelve a
+// apagar, para confirmar en la instalación que el Sonoff mueve el equipo de
+// verdad (probarSonoff solo lee el estado del dispositivo, que responde igual
+// aunque esté conectado a nada).
+//
+// No cambia el estado operativo de la máquina en la BD: es un pulso al relé.
+// Se bloquea si la máquina está en uso — encender un equipo con ropa dentro,
+// o interrumpir un ciclo, es peor que no poder probar.
+export const pruebaFisicaSonoff = async (req, res) => {
+  const { id } = req.params;
+  try {
+    const { rows } = await pool.query(
+      'SELECT * FROM maquinas WHERE id = $1 AND sucursal = $2',
+      [id, req.sucursal]
+    );
+    if (rows.length === 0) {
+      return res.status(404).json({ message: 'Máquina no encontrada.' });
+    }
+    const maq = rows[0];
+
+    if (!dispositivos.tieneDispositivo(maq)) {
+      return res.status(400).json({ message: 'La máquina no tiene un Sonoff enlazado.' });
+    }
+    if (maq.estado === 'en_uso') {
+      return res.status(409).json({
+        message: 'La máquina está en uso. Espera a que termine el ciclo para hacer la prueba física.',
+      });
+    }
+    if (simulacionActiva()) {
+      return res.json({ simulado: true, driver: dispositivos.nombreDriver(), message: MSG_SIMULACION, maquina: maq });
+    }
+
+    const encendido = await dispositivos.encender(maq);
+    if (!encendido.ok) {
+      const { rows: upd } = await pool.query(
+        `UPDATE maquinas SET sonoff_estado = 'error', sonoff_sync_at = NOW() WHERE id = $1 RETURNING *`,
+        [id]
+      );
+      return res.status(502).json({
+        message: `No se pudo encender (${encendido.motivo ?? 'sin detalle'}).`,
+        maquina: upd[0],
+      });
+    }
+
+    // Pase lo que pase después de encender hay que intentar apagar: dejar una
+    // máquina prendida por un error de red sería peor que fallar la prueba.
+    let apagado;
+    try {
+      await esperar(SEGUNDOS_PRUEBA_FISICA * 1000);
+    } finally {
+      apagado = await dispositivos.apagar(maq);
+    }
+
+    if (!apagado.ok) {
+      return res.status(502).json({
+        message: `Encendió, pero NO se pudo apagar (${apagado.motivo ?? 'sin detalle'}). ` +
+                 'Revisa la máquina y apágala manualmente.',
+        maquina: maq,
+      });
+    }
+
+    const { rows: upd } = await pool.query(
+      `UPDATE maquinas SET sonoff_estado = 'enlazada', sonoff_sync_at = NOW() WHERE id = $1 RETURNING *`,
+      [id]
+    );
+    res.json({
+      message: `Listo: la máquina encendió ${SEGUNDOS_PRUEBA_FISICA} segundos y se apagó.`,
+      segundos: SEGUNDOS_PRUEBA_FISICA,
+      maquina: upd[0],
+    });
+  } catch (err) {
+    console.error('pruebaFisicaSonoff error:', err);
     res.status(500).json({ message: 'Error interno del servidor.' });
   }
 };

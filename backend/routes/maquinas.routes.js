@@ -11,6 +11,7 @@ import {
   cambiarEstadoMaquina,
   detenerCiclo,
   probarSonoff,
+  pruebaFisicaSonoff,
 } from '../controllers/maquinas.controller.js';
 
 const router = Router();
@@ -25,5 +26,6 @@ router.delete('/:id', requireAdmin, deleteMaquina);
 router.patch('/:id/estado', cambiarEstadoMaquina);
 router.patch('/:id/detener-ciclo', detenerCiclo);
 router.post('/:id/probar-sonoff', requireAdmin, probarSonoff);
+router.post('/:id/prueba-fisica', requireAdmin, pruebaFisicaSonoff);
 
 export default router;

@@ -14,6 +14,7 @@
 //   sin device_id           → 'sin_enlazar'
 //   driver confirmó (ok)    → 'enlazada'
 //   driver no pudo (!ok)    → 'error'
+// Excepción: con el driver de simulación no se marca 'enlazada' (ver abajo).
 
 import pool from '../db/pool.js';
 import * as dispositivos from './dispositivos/index.js';
@@ -48,6 +49,11 @@ export async function sincronizarSonoff(maquinaId) {
     const res = deseado === 'on'
       ? await dispositivos.encender(maq)
       : await dispositivos.apagar(maq);
+
+    // En simulación el driver siempre responde ok: marcar 'enlazada' pintaría
+    // el indicador en verde sin que exista ningún Sonoff detrás. Se deja el
+    // estado como estaba (la operación simulada ya quedó en el log).
+    if (dispositivos.esSimulacion()) return maq;
 
     return marcar(maq.id, res.ok ? 'enlazada' : 'error');
   } catch (err) {

@@ -17,6 +17,15 @@ const ESTADO_CFG = {
 // Estado a mostrar: una máquina disponible pero apartada se muestra como Reservada.
 const estadoVisual = (m) => (m.reservada ? 'reservada' : m.estado);
 
+// Enlace con el Sonoff, para la pastilla de la tarjeta. Se muestra en Gestión
+// (y no solo en Máquinas en uso) porque es aquí donde se asignan los Device ID:
+// sin esto habría que abrir el modal de cada máquina para saber cuáles faltan.
+const SONOFF_CFG = {
+  enlazada:    { label: 'Sonoff OK',   cls: 'bg-green-50 text-green-700 border-green-200', dot: 'bg-green-500' },
+  error:       { label: 'Sin conexión', cls: 'bg-red-50 text-red-700 border-red-200',      dot: 'bg-red-500'   },
+  sin_enlazar: { label: 'Sin Sonoff',  cls: 'bg-gray-50 text-gray-500 border-gray-200',    dot: 'bg-gray-400'  },
+};
+
 const INPUT_CLS =
   'w-full px-4 py-3.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent transition';
 
@@ -78,7 +87,8 @@ export default function GestionMaquinas() {
   const [formError, setFormError] = useState('');
   const [eliminando, setEliminando] = useState(null);
   const [probando, setProbando] = useState(false);
-  const [probarMsg, setProbarMsg] = useState(null); // { ok, texto }
+  const [probandoFisica, setProbandoFisica] = useState(false);
+  const [probarMsg, setProbarMsg] = useState(null); // { tipo: 'ok'|'error'|'sim', texto }
   const [filtro, setFiltro] = useState('todos');
   const [accionesMenuId, setAccionesMenuId] = useState(null);
   const accionesMenuRef = useRef(null);
@@ -129,19 +139,47 @@ export default function GestionMaquinas() {
   const cerrarModal = () => setModalOpen(false);
 
   // Prueba el enlace con el Sonoff guardado (no cambia el estado operativo).
-  // Requiere que la máquina ya exista con su device_id guardado.
-  const handleProbar = async () => {
-    if (editandoId == null) return;
+  // Requiere que la máquina ya exista con su device_id guardado. `id` explícito
+  // para poder probar justo después de guardar, cuando el estado aún no se
+  // refrescó.
+  const handleProbar = async (id = editandoId) => {
+    if (id == null) return;
     setProbando(true);
     setProbarMsg(null);
     try {
-      const r = await api.post(`/maquinas/${editandoId}/probar-sonoff`, {});
-      if (r?.maquina) setMaquinas(prev => prev.map(m => m.id === editandoId ? r.maquina : m));
-      setProbarMsg({ ok: true, texto: r?.message ?? 'Sonoff enlazado correctamente.' });
+      const r = await api.post(`/maquinas/${id}/probar-sonoff`, {});
+      if (r?.maquina) setMaquinas(prev => prev.map(m => m.id === id ? r.maquina : m));
+      // El servidor avisa cuando corre en simulación: ahí un "ok" no prueba nada.
+      setProbarMsg(r?.simulado
+        ? { tipo: 'sim', texto: r.message }
+        : { tipo: 'ok', texto: r?.message ?? 'Sonoff enlazado correctamente.' });
     } catch (err) {
-      setProbarMsg({ ok: false, texto: err.message });
+      setProbarMsg({ tipo: 'error', texto: err.message });
     } finally {
       setProbando(false);
+    }
+  };
+
+  // Prueba física: enciende la máquina unos segundos para confirmar que el relé
+  // realmente la mueve. Se pide confirmación porque el equipo va a arrancar.
+  const handleProbarFisica = async () => {
+    if (editandoId == null) return;
+    const maq = maquinas.find(m => m.id === editandoId);
+    const nombre = maq?.nombre ?? 'la máquina';
+    if (!confirm(`Se va a ENCENDER "${nombre}" unos segundos y luego se apagará.\n\nAsegúrate de que esté vacía y de que nadie la esté usando. ¿Continuar?`)) return;
+
+    setProbandoFisica(true);
+    setProbarMsg(null);
+    try {
+      const r = await api.post(`/maquinas/${editandoId}/prueba-fisica`, {});
+      if (r?.maquina) setMaquinas(prev => prev.map(m => m.id === editandoId ? r.maquina : m));
+      setProbarMsg(r?.simulado
+        ? { tipo: 'sim', texto: r.message }
+        : { tipo: 'ok', texto: r?.message ?? 'Prueba física completada.' });
+    } catch (err) {
+      setProbarMsg({ tipo: 'error', texto: err.message });
+    } finally {
+      setProbandoFisica(false);
     }
   };
 
@@ -161,6 +199,10 @@ export default function GestionMaquinas() {
         // secadoras es la única forma de guardarlo.
         tamano,
       };
+      const deviceIdNuevo = (rest.device_id ?? '').trim();
+      let idResultante = editandoId;
+      let hayDeviceIdNuevo = false;
+
       if (editandoId != null) {
         // Solo tocamos el estado cuando el toggle de mantenimiento implica un
         // cambio; así no interrumpimos una máquina que esté en uso.
@@ -170,13 +212,25 @@ export default function GestionMaquinas() {
         } else if (original?.estado === 'mantenimiento') {
           payload.estado = 'disponible';
         }
+        hayDeviceIdNuevo = deviceIdNuevo !== '' && deviceIdNuevo !== (original?.device_id ?? '');
         const actualizada = await api.put(`/maquinas/${editandoId}`, payload);
         setMaquinas(prev => prev.map(m => m.id === editandoId ? actualizada : m));
       } else {
         const nueva = await api.post('/maquinas', payload);
         setMaquinas(prev => [...prev, nueva]);
+        idResultante = nueva.id;
+        hayDeviceIdNuevo = deviceIdNuevo !== '';
       }
-      cerrarModal();
+
+      // Si se acaba de asignar (o cambiar) el Sonoff, se prueba solo y el modal
+      // sigue abierto con el resultado: antes había que guardar, cerrar y volver
+      // a entrar para poder probar.
+      if (hayDeviceIdNuevo) {
+        setEditandoId(idResultante);
+        await handleProbar(idResultante);
+      } else {
+        cerrarModal();
+      }
     } catch (err) {
       setFormError(err.message);
     } finally {
@@ -208,6 +262,13 @@ export default function GestionMaquinas() {
     ? maquinas
     : maquinas.filter(m => estadoVisual(m) === filtro);
 
+  // Avance del enlace con los Sonoff: al configurarlos por primera vez es fácil
+  // saltarse una máquina, y sin este conteo no hay forma de notarlo.
+  const conDeviceId  = maquinas.filter(m => m.device_id).length;
+  const confirmadas  = maquinas.filter(m => m.sonoff_estado === 'enlazada').length;
+
+  const maquinaEditada = editandoId != null ? maquinas.find(m => m.id === editandoId) : null;
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -224,6 +285,12 @@ export default function GestionMaquinas() {
         <div>
           <h1 className="text-xl font-bold text-gray-900">Gestión de máquinas</h1>
           <p className="text-sm text-gray-500">{maquinas.length} equipo(s) registrado(s)</p>
+          {esAdmin && maquinas.length > 0 && (
+            <p className="text-xs text-gray-400 mt-0.5">
+              Sonoff: {conDeviceId} de {maquinas.length} con ID asignado
+              {conDeviceId > 0 && ` · ${confirmadas} con enlace confirmado`}
+            </p>
+          )}
         </div>
         {esAdmin && (
           <button
@@ -313,6 +380,12 @@ export default function GestionMaquinas() {
               ? (tamanoVal === 'jumbo' ? 'Jumbo' : 'Mediana')
               : null;
             const borrando = eliminando === m.id;
+            // La pastilla de Sonoff solo aparece si la lavandería ya empezó a
+            // usarlos; si ninguna máquina tiene ID, marcarlas todas como "Sin
+            // Sonoff" sería ruido permanente.
+            const sonoffCfg = conDeviceId > 0
+              ? SONOFF_CFG[m.device_id ? (m.sonoff_estado ?? 'error') : 'sin_enlazar']
+              : null;
 
             // Toda la tarjeta abre la información de uso de la máquina (igual que
             // la tarjeta de empleados abre su desempeño). Solo Admin, y con
@@ -414,6 +487,15 @@ export default function GestionMaquinas() {
                         </button>
                       ) : m.reservada_folio}
                     </p>
+                  )}
+                  {esAdmin && sonoffCfg && (
+                    <span
+                      title={m.device_id ? `Sonoff ${m.device_id}` : 'Sin Sonoff asignado'}
+                      className={`mt-2 inline-flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-full border ${sonoffCfg.cls}`}
+                    >
+                      <span className={`w-1.5 h-1.5 rounded-full ${sonoffCfg.dot}`} />
+                      {sonoffCfg.label}
+                    </span>
                   )}
                 </div>
               </div>
@@ -518,18 +600,35 @@ export default function GestionMaquinas() {
 
                 {editandoId != null && form.device_id.trim() !== '' && (
                   <div className="mt-2">
-                    <button
-                      type="button" onClick={handleProbar} disabled={probando}
-                      className="text-sm font-medium text-blue border border-blue/40 rounded-lg px-4 py-2 hover:bg-blue/5 disabled:opacity-60 transition-colors"
-                    >
-                      {probando ? 'Probando…' : 'Probar enlace'}
-                    </button>
-                    <p className="mt-1 text-xs text-gray-400">
-                      Prueba el ID ya guardado; si lo cambiaste, guarda primero.
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button" onClick={() => handleProbar()} disabled={probando || probandoFisica}
+                        className="text-sm font-medium text-blue border border-blue/40 rounded-lg px-4 py-2 hover:bg-blue/5 disabled:opacity-60 transition-colors"
+                      >
+                        {probando ? 'Probando…' : 'Probar enlace'}
+                      </button>
+                      {/* Prueba física: la única que confirma que el relé mueve
+                          el equipo. No tiene sentido con la máquina en uso. */}
+                      {maquinaEditada?.estado !== 'en_uso' && (
+                        <button
+                          type="button" onClick={handleProbarFisica} disabled={probando || probandoFisica}
+                          className="text-sm font-medium text-amber-700 border border-amber-300 rounded-lg px-4 py-2 hover:bg-amber-50 disabled:opacity-60 transition-colors"
+                        >
+                          {probandoFisica ? 'Encendiendo…' : 'Encender 5 segundos'}
+                        </button>
+                      )}
+                    </div>
+                    <p className="mt-1.5 text-xs text-gray-400">
+                      "Probar enlace" solo consulta el dispositivo. "Encender 5 segundos"
+                      arranca la máquina de verdad: úsalo con el equipo vacío.
                     </p>
                     {probarMsg && (
-                      <p className={`mt-1.5 text-sm font-medium ${probarMsg.ok ? 'text-green-600' : 'text-red-600'}`}>
-                        {probarMsg.ok ? '✓ ' : '✗ '}{probarMsg.texto}
+                      <p className={`mt-1.5 text-sm font-medium ${
+                        probarMsg.tipo === 'ok'  ? 'text-green-600'
+                        : probarMsg.tipo === 'sim' ? 'text-amber-700'
+                        : 'text-red-600'
+                      }`}>
+                        {probarMsg.tipo === 'ok' ? '✓ ' : probarMsg.tipo === 'sim' ? '⚠ ' : '✗ '}{probarMsg.texto}
                       </p>
                     )}
                   </div>
