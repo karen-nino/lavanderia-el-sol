@@ -5,7 +5,7 @@ import { requireAdmin } from '../middleware/roles.js';
 import {
   getProductos, createProducto, updateProducto, deleteProducto,
   deleteProductosMultiples, archivarProducto,
-  rellenarBotellas, crearMovimiento, getMovimientos,
+  rellenarBotellas, crearMovimiento, getMovimientos, getReporteDiario,
 } from '../controllers/productos.controller.js';
 
 const router = Router();
@@ -13,6 +13,8 @@ const router = Router();
 router.use(verifyToken, sucursalActiva);
 
 router.get('/',        getProductos);
+// Reporte diario (salidas y existencia al cierre del día): solo admin.
+router.get('/reporte-diario', requireAdmin, getReporteDiario);
 router.post('/',       createProducto);
 router.post('/eliminar-multiples', requireAdmin, deleteProductosMultiples);
 router.patch('/:id/archivar', requireAdmin, archivarProducto);

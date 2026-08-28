@@ -515,6 +515,94 @@ export const getMovimientos = async (req, res) => {
   }
 };
 
+// ── GET /productos/reporte-diario?fecha=YYYY-MM-DD ──────────────
+// Reporte para el admin: por producto líquido (granel/marca), cuánto SALIÓ ese
+// día (ventas/consumo en notas) y cuánto QUEDA al cierre del día.
+//
+// El stock se lleva en TAPAS. La existencia al cierre de un día se reconstruye
+// desde la existencia actual (exacta) restando los movimientos posteriores al
+// cierre — no se necesita una "foto" diaria. Efecto de cada movimiento sobre
+// cada existencia (botellas rellenadas = stock_actual, bidón = stock_granel):
+//   entrada  → + en su destino;   salida → − en su destino;
+//   rellenar → + botellas y − granel (transferencia bidón→botellas);
+//   venta    → − botellas;        liberacion → + botellas (devolución al anular).
+// El día se acota en hora local (America/Mexico_City), no en UTC del servidor.
+export const getReporteDiario = async (req, res) => {
+  const hoyMx = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Mexico_City' });
+  const fecha = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.fecha ?? '')) ? req.query.fecha : hoyMx;
+
+  try {
+    const { rows } = await pool.query(
+      `WITH bounds AS (
+         SELECT ($2::date)::timestamp        AT TIME ZONE 'America/Mexico_City' AS inicio,
+                (($2::date + 1))::timestamp   AT TIME ZONE 'America/Mexico_City' AS cierre
+       )
+       SELECT
+         p.id, p.nombre, p.marca, p.tipo_liquido,
+         CASE WHEN p.botella_ml > 0 AND p.tapa_ml > 0
+              THEN floor(p.botella_ml::numeric / p.tapa_ml) END        AS tapas_por_botella,
+         CASE WHEN p.volumen_envase_ml > 0 AND p.tapa_ml > 0
+              THEN floor(p.volumen_envase_ml::numeric / p.tapa_ml) END AS tapas_por_bidon,
+         p.stock_actual,
+         p.stock_granel_tapas,
+         -- Vendido/consumido en notas ese día (siempre sale de las botellas).
+         COALESCE((
+           SELECT SUM(m.cantidad_tapas) FROM producto_movimientos m, bounds
+            WHERE m.producto_id = p.id AND m.tipo = 'venta'
+              AND m.created_at >= bounds.inicio AND m.created_at < bounds.cierre
+         ), 0) AS vendido_tapas,
+         -- Efecto sobre botellas de lo ocurrido DESPUÉS del cierre (para revertir).
+         COALESCE((
+           SELECT SUM(CASE
+             WHEN m.tipo = 'entrada'    AND m.destino = 'botellas' THEN  m.cantidad_tapas
+             WHEN m.tipo = 'salida'     AND m.destino = 'botellas' THEN -m.cantidad_tapas
+             WHEN m.tipo = 'rellenar'                              THEN  m.cantidad_tapas
+             WHEN m.tipo = 'venta'      AND m.destino = 'botellas' THEN -m.cantidad_tapas
+             WHEN m.tipo = 'liberacion' AND m.destino = 'botellas' THEN  m.cantidad_tapas
+             ELSE 0 END)
+            FROM producto_movimientos m, bounds
+            WHERE m.producto_id = p.id AND m.created_at >= bounds.cierre
+         ), 0) AS efecto_botellas_post,
+         -- Efecto sobre el bidón (granel) posterior al cierre.
+         COALESCE((
+           SELECT SUM(CASE
+             WHEN m.tipo = 'entrada' AND m.destino = 'granel' THEN  m.cantidad_tapas
+             WHEN m.tipo = 'salida'  AND m.destino = 'granel' THEN -m.cantidad_tapas
+             WHEN m.tipo = 'rellenar'                         THEN -m.cantidad_tapas
+             ELSE 0 END)
+            FROM producto_movimientos m, bounds
+            WHERE m.producto_id = p.id AND m.created_at >= bounds.cierre
+         ), 0) AS efecto_granel_post
+       FROM productos p
+       WHERE p.sucursal = $1 AND p.archivado = false
+         AND p.tipo_liquido IN ('granel', 'marca')
+       ORDER BY (CASE WHEN p.tipo_liquido = 'granel' THEN 0 ELSE 1 END),
+                p.marca NULLS LAST, p.nombre ASC`,
+      [req.sucursal, fecha]
+    );
+
+    const int = (v) => parseInt(v, 10) || 0;
+    res.json({
+      fecha,
+      productos: rows.map((r) => ({
+        id:                r.id,
+        nombre:            r.nombre,
+        marca:             r.marca,
+        tipo_liquido:      r.tipo_liquido,
+        tapas_por_botella: r.tapas_por_botella != null ? int(r.tapas_por_botella) : null,
+        tapas_por_bidon:   r.tapas_por_bidon != null ? int(r.tapas_por_bidon) : null,
+        vendido_tapas:     int(r.vendido_tapas),
+        // La existencia no puede ser negativa; se acota a 0 por si hay datos raros.
+        fin_botellas_tapas: Math.max(0, int(r.stock_actual) - int(r.efecto_botellas_post)),
+        fin_granel_tapas:   Math.max(0, int(r.stock_granel_tapas) - int(r.efecto_granel_post)),
+      })),
+    });
+  } catch (err) {
+    console.error('getReporteDiario error:', err);
+    res.status(500).json({ message: 'Error interno del servidor.' });
+  }
+};
+
 // Borrado múltiple (solo admin). Igual que en clientes, con dos modos según
 // `confirmar`:
 //   • confirmar = false → verificación (dry-run): no borra; devuelve los

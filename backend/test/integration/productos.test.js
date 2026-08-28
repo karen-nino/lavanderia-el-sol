@@ -275,3 +275,85 @@ describe('DELETE múltiple /api/productos/eliminar-multiples', () => {
     expect(res.status).toBe(403);
   });
 });
+
+describe('GET /api/productos/reporte-diario', () => {
+  // Inserta un movimiento con fecha controlada (hora local MX) para probar la
+  // reconstrucción de la existencia al cierre de un día.
+  async function insertarMov(productoId, { tipo, destino = 'botellas', tapas, fecha }) {
+    await pool.query(
+      `INSERT INTO producto_movimientos
+         (producto_id, sucursal, usuario_id, tipo, destino, cantidad_tapas, descripcion, created_at)
+       VALUES ($1, 'centro', $2, $3, $4, $5, 'test', $6)`,
+      [productoId, admin.id, tipo, destino, tapas, fecha]
+    );
+  }
+
+  async function crearGranel() {
+    const res = await request(app).post('/api/productos').set(auth(admin.token))
+      .send({
+        nombre: 'Suavizante', tipo_liquido: 'granel', precio_unitario: 5, precio_botella: 40,
+        volumen_envase_ml: 20000, botella_ml: 800, tapa_ml: 200,
+        stock_bidones: 1, stock_botellas: 12, // 12×4 = 48 tapas rellenadas; 1 bidón = 100 a granel
+      });
+    expect(res.status).toBe(201);
+    return res.body.id;
+  }
+
+  it('reconstruye la existencia al cierre de cualquier día y cuenta lo vendido', async () => {
+    const id = await crearGranel();
+    // Se controla toda la historia: se limpia el movimiento inicial que crea el
+    // alta y se arma una línea de tiempo propia, fijando la existencia actual.
+    //   20/ago: entran 60 tapas → cierre 60
+    //   21/ago: se venden 12    → cierre 48
+    //   22/ago: entran 20 tapas → cierre 68  (= existencia actual)
+    await pool.query('DELETE FROM producto_movimientos WHERE producto_id = $1', [id]);
+    await insertarMov(id, { tipo: 'entrada', tapas: 60, fecha: '2026-08-20 10:00:00-06' });
+    await insertarMov(id, { tipo: 'venta',   tapas: 12, fecha: '2026-08-21 12:00:00-06' });
+    await insertarMov(id, { tipo: 'entrada', tapas: 20, fecha: '2026-08-22 12:00:00-06' });
+    await pool.query('UPDATE productos SET stock_actual = 68, stock_granel_tapas = 100 WHERE id = $1', [id]);
+
+    const dia = async (fecha) => {
+      const r = await request(app).get(`/api/productos/reporte-diario?fecha=${fecha}`).set(auth(admin.token));
+      expect(r.status).toBe(200);
+      return r.body.productos.find((p) => p.id === id);
+    };
+
+    const d20 = await dia('2026-08-20');
+    expect(d20.tapas_por_botella).toBe(4);
+    expect(d20.tapas_por_bidon).toBe(100);
+    expect(d20.vendido_tapas).toBe(0);
+    expect(d20.fin_botellas_tapas).toBe(60); // 68 − (−12 + 20)
+    expect(d20.fin_granel_tapas).toBe(100);
+
+    const d21 = await dia('2026-08-21');
+    expect(d21.vendido_tapas).toBe(12);      // 3 botellas
+    expect(d21.fin_botellas_tapas).toBe(48); // 68 − 20
+
+    const d22 = await dia('2026-08-22');
+    expect(d22.vendido_tapas).toBe(0);
+    expect(d22.fin_botellas_tapas).toBe(68); // sin movimientos posteriores
+  });
+
+  it('sin fecha usa el día de hoy (200)', async () => {
+    await crearGranel();
+    const res = await request(app).get('/api/productos/reporte-diario').set(auth(admin.token));
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty('fecha');
+    expect(Array.isArray(res.body.productos)).toBe(true);
+  });
+
+  it('excluye bolsas y archivados; solo líquidos marca/granel', async () => {
+    await crearGranel();
+    await request(app).post('/api/productos').set(auth(admin.token))
+      .send({ nombre: 'Bolsa', clase: 'bolsa', tamano_bolsa: 'chica', bolsas_por_rollo: 100, precio_unitario: 2 });
+    const res = await request(app).get('/api/productos/reporte-diario').set(auth(admin.token));
+    expect(res.status).toBe(200);
+    expect(res.body.productos.every((p) => ['granel', 'marca'].includes(p.tipo_liquido))).toBe(true);
+  });
+
+  it('solo admin (un empleado recibe 403)', async () => {
+    const empleado = await seedUsuario({ rol: 'operador', sucursal: 'centro', nombre: 'Empleado' });
+    const res = await request(app).get('/api/productos/reporte-diario').set(auth(empleado.token));
+    expect(res.status).toBe(403);
+  });
+});
