@@ -145,7 +145,11 @@ export async function getResumen(req, res) {
           -- así que los tres totales suman siempre el total cobrado.
           COALESCE(SUM(CASE WHEN COALESCE(o.forma_pago, 'EFECTIVO') = 'EFECTIVO' THEN o.precio_total ELSE 0 END), 0) AS total_efectivo,
           COALESCE(SUM(CASE WHEN o.forma_pago = 'TRANSFERENCIA' THEN o.precio_total ELSE 0 END), 0) AS total_transferencia,
-          COALESCE(SUM(CASE WHEN o.forma_pago = 'TARJETA'       THEN o.precio_total ELSE 0 END), 0) AS total_tarjeta
+          COALESCE(SUM(CASE WHEN o.forma_pago = 'TARJETA'       THEN o.precio_total ELSE 0 END), 0) AS total_tarjeta,
+          -- Lo realmente cobrado. No tiene por qué coincidir con la suma de
+          -- conceptos: en Por Encargo el tope fija el precio de la carga, así
+          -- que precio_total puede quedar por encima o por debajo del desglose.
+          COALESCE(SUM(o.precio_total), 0) AS total_cobrado
         FROM notas o
         LEFT JOIN (
           SELECT nota_id, SUM(precio_lavadora + precio_secadora + empaquetado) AS total_cargas
@@ -172,6 +176,7 @@ export async function getResumen(req, res) {
     const total_efectivo      = parseFloat(corte.total_efectivo);
     const total_transferencia = parseFloat(corte.total_transferencia);
     const total_tarjeta       = parseFloat(corte.total_tarjeta);
+    const total_cobrado       = parseFloat(corte.total_cobrado);
 
     res.json({
       tarjetas: {
@@ -203,10 +208,14 @@ export async function getResumen(req, res) {
         total_cargas,
         total_productos,
         total_ajustes,
+        // Suma de los conceptos facturados; se conserva el nombre histórico.
         total_general: total_cargas + total_productos + total_ajustes,
         total_efectivo,
         total_transferencia,
         total_tarjeta,
+        // Dinero que realmente entró (suma de precio_total de las notas
+        // cobradas). Es el número que cuadra con el corte de caja.
+        total_cobrado,
       },
     });
   } catch (err) {

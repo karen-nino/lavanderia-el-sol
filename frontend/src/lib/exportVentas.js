@@ -4,7 +4,8 @@
 // Recibe el objeto que devuelve GET /ventas/resumen:
 //   { tarjetas: { total_cobrado, notas_pagadas, productos_consumidos, notas_pendientes },
 //     corte:    { total_cargas, total_productos, total_ajustes,
-//                 total_efectivo, total_transferencia, total_tarjeta, total_general },
+//                 total_efectivo, total_transferencia, total_tarjeta,
+//                 total_general (suma de conceptos), total_cobrado },
 //     lista_notas: [{ folio, fecha, creado_en, estado, maquinas:[{nombre,cargas}],
 //                     atendio, forma_pago, total_productos, total }] }
 
@@ -90,13 +91,19 @@ const bloqueCorte = (c) => `
   <div class="seccion">Corte de caja</div>
   <table class="desglose">
     <tbody>
-      ${filaCorte('Total por cargas de lavado', c?.total_cargas)}
-      ${filaCorte('Total por artículos vendidos', c?.total_productos)}
-      ${filaCorte('Total ajustes', c?.total_ajustes)}
-      ${filaCorte('Total en efectivo', c?.total_efectivo)}
-      ${filaCorte('Total en transferencia', c?.total_transferencia)}
-      ${filaCorte('Total con tarjeta', c?.total_tarjeta)}
-      ${filaCorte('Total general', c?.total_general, true)}
+      <tr class="sub"><td colspan="2">Por concepto</td></tr>
+      ${filaCorte('Cargas de lavado', c?.total_cargas)}
+      ${filaCorte('Artículos vendidos', c?.total_productos)}
+      ${filaCorte('Ajustes', c?.total_ajustes)}
+      ${filaCorte('Suma de conceptos', c?.total_general)}
+      <tr class="sub"><td colspan="2">Cómo se cobró</td></tr>
+      ${filaCorte('Efectivo', c?.total_efectivo)}
+      ${filaCorte('Transferencia', c?.total_transferencia)}
+      ${filaCorte('Tarjeta', c?.total_tarjeta)}
+      ${filaCorte('Total cobrado', c?.total_cobrado, true)}
+      ${Math.abs((c?.total_cobrado ?? 0) - (c?.total_general ?? 0)) >= 0.005
+        ? `<tr class="nota"><td colspan="2">La diferencia entre ambos totales viene del precio fijo por carga en Por Encargo: se cobra el precio topado, no la suma de los conceptos.</td></tr>`
+        : ''}
     </tbody>
   </table>`;
 

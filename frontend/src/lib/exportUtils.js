@@ -96,6 +96,11 @@ const ESTILOS = `
   .desglose td { padding: 8px 4px; border-bottom: 1px solid #f3f4f6; }
   .desglose .tot td { font-weight: 700; border-top: 1px solid #d1d5db; }
   .desglose .dif td { font-weight: 700; }
+  /* Encabezado de subgrupo dentro de un desglose (p. ej. "Por concepto"). */
+  .desglose .sub td { padding-top: 14px; font-size: 11px; text-transform: uppercase;
+                      letter-spacing: .04em; color: #9ca3af; border-bottom: none; }
+  .desglose .nota td { padding-top: 6px; font-size: 11px; color: #6b7280;
+                       border-bottom: none; }
   .firmas { display: flex; gap: 32px; margin-top: 16px; font-size: 13px; }
   .firmas .lbl { display: block; text-transform: uppercase; font-size: 11px; letter-spacing: .04em; color: #9ca3af; }
   .firmas .nota { margin: 6px 0 0; color: #6b7280; border-left: 2px solid #e5e7eb; padding-left: 8px; }

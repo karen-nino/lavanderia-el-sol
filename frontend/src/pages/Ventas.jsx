@@ -610,34 +610,58 @@ export default function Ventas() {
               <h2 className="text-sm font-semibold text-gray-700">Corte de caja</h2>
             </div>
             <div className="divide-y divide-gray-100">
-              <div className="flex justify-between px-4 py-3 text-sm text-gray-600">
-                <span>Total por cargas de lavado</span>
+              {/* Qué se facturó, por concepto. */}
+              <div className="px-4 pt-3 pb-1">
+                <p className="text-xs font-medium uppercase tracking-wide text-gray-400">Por concepto</p>
+              </div>
+              <div className="flex justify-between px-4 py-3 text-sm text-gray-600 border-t-0">
+                <span>Cargas de lavado</span>
                 <span>{fmt(data.corte.total_cargas)}</span>
               </div>
               <div className="flex justify-between px-4 py-3 text-sm text-gray-600">
-                <span>Total por artículos vendidos</span>
+                <span>Artículos vendidos</span>
                 <span>{fmt(data.corte.total_productos)}</span>
               </div>
               <div className="flex justify-between px-4 py-3 text-sm text-gray-600">
-                <span>Total ajustes</span>
+                <span>Ajustes</span>
                 <span>{fmt(data.corte.total_ajustes)}</span>
               </div>
+              <div className="flex justify-between px-4 py-3 text-sm font-medium text-gray-800">
+                <span>Suma de conceptos</span>
+                <span>{fmt(data.corte.total_general)}</span>
+              </div>
+
+              {/* Cómo entró el dinero. Puede no coincidir con lo de arriba. */}
+              <div className="px-4 pt-3 pb-1 bg-gray-50/60">
+                <p className="text-xs font-medium uppercase tracking-wide text-gray-400">Cómo se cobró</p>
+              </div>
               <div className="flex justify-between px-4 py-3 text-sm text-gray-600">
-                <span>Total en efectivo</span>
+                <span>Efectivo</span>
                 <span>{fmt(data.corte.total_efectivo)}</span>
               </div>
               <div className="flex justify-between px-4 py-3 text-sm text-gray-600">
-                <span>Total en transferencia</span>
+                <span>Transferencia</span>
                 <span>{fmt(data.corte.total_transferencia)}</span>
               </div>
               <div className="flex justify-between px-4 py-3 text-sm text-gray-600">
-                <span>Total con tarjeta</span>
+                <span>Tarjeta</span>
                 <span>{fmt(data.corte.total_tarjeta)}</span>
               </div>
               <div className="flex justify-between px-4 py-4 text-base font-bold text-gray-900 bg-gray-50">
-                <span>TOTAL GENERAL</span>
-                <span className="text-lg">{fmt(data.corte.total_general)}</span>
+                <span>TOTAL COBRADO</span>
+                <span className="text-lg">{fmt(data.corte.total_cobrado)}</span>
               </div>
+              {/* Los dos totales difieren cuando el tope fija el precio de la
+                  carga en Por Encargo: sin esta nota parecería un descuadre. */}
+              {Math.abs((data.corte.total_cobrado ?? 0) - data.corte.total_general) >= 0.005 && (
+                <div className="px-4 py-3 bg-amber-50">
+                  <p className="text-xs text-amber-800">
+                    La diferencia de {fmt(Math.abs(data.corte.total_cobrado - data.corte.total_general))} entre
+                    ambos totales viene del precio fijo por carga en Por Encargo: se cobra el precio topado,
+                    no la suma de los conceptos.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
 
