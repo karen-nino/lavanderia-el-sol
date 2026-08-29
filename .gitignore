@@ -39,6 +39,10 @@ Thumbs.db
 .claude/skills/
 skills-lock.json
 
+# Worktrees de Claude Code: son repos dentro del repo. Sin esto, un `git add .`
+# los registra como submódulo (mode 160000) en vez de ignorarlos.
+.claude/worktrees/
+
 # Coverage
 coverage/
 
