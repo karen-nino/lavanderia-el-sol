@@ -1703,92 +1703,96 @@ export default function NuevaNota() {
             que dejaba el resumen más pegado que el resto. */}
         <div className="space-y-14">
 
-          {/* Cantidad de cargas */}
-          <div>
-            <label className={LABEL_CLS}>
-              Cantidad de cargas <span className="text-red-500">*</span>
-            </label>
-            <div className="flex items-center gap-2">
-              <input
-                type="number" min="1" max={MAX_CARGAS} step="1"
-                value={cargasAuto.length}
-                onChange={e => setCantidadCargas(Number(e.target.value) || 1)}
-                className={`${INPUT_CLS} text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`}
-              />
-              <button
-                type="button"
-                onClick={() => setCantidadCargas(cargasAuto.length - 1)}
-                disabled={cargasAuto.length <= 1}
-                aria-label="Disminuir cargas"
-                className="flex-shrink-0 w-14 py-3.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-xl font-semibold hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-              >
-                −
-              </button>
-              <button
-                type="button"
-                onClick={() => setCantidadCargas(cargasAuto.length + 1)}
-                disabled={cargasAuto.length >= MAX_CARGAS}
-                aria-label="Aumentar cargas"
-                className="flex-shrink-0 w-14 py-3.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-xl font-semibold hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-              >
-                +
-              </button>
-            </div>
-            <p className="text-xs text-gray-400 mt-1.5">Cada carga usa una máquina: lavadora o secadora</p>
-          </div>
-
-          {/* Máquinas por carga */}
+          {/* Cuántas cargas y las cargas en sí son lo mismo: se agrupan
+              para que el aire de sección no las separe. */}
           <div className="space-y-3">
-            {cargasAuto.map((c, i) => {
-              const set = (cambios) => actualizarCargaObj(i, cambios);
-              return (
-                <div key={i} className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm font-semibold text-gray-900">Carga {i + 1}</p>
-                    <span className="text-sm font-medium text-blue">${subtotalDeCarga(c).toFixed(2)}</span>
+            {/* Cantidad de cargas */}
+            <div>
+              <label className={LABEL_CLS}>
+                Cantidad de cargas <span className="text-red-500">*</span>
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number" min="1" max={MAX_CARGAS} step="1"
+                  value={cargasAuto.length}
+                  onChange={e => setCantidadCargas(Number(e.target.value) || 1)}
+                  className={`${INPUT_CLS} text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`}
+                />
+                <button
+                  type="button"
+                  onClick={() => setCantidadCargas(cargasAuto.length - 1)}
+                  disabled={cargasAuto.length <= 1}
+                  aria-label="Disminuir cargas"
+                  className="flex-shrink-0 w-14 py-3.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-xl font-semibold hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  −
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCantidadCargas(cargasAuto.length + 1)}
+                  disabled={cargasAuto.length >= MAX_CARGAS}
+                  aria-label="Aumentar cargas"
+                  className="flex-shrink-0 w-14 py-3.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-xl font-semibold hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  +
+                </button>
+              </div>
+              <p className="text-xs text-gray-400 mt-1.5">Cada carga usa una máquina: lavadora o secadora</p>
+            </div>
+
+            {/* Máquinas por carga */}
+            <div className="space-y-3">
+              {cargasAuto.map((c, i) => {
+                const set = (cambios) => actualizarCargaObj(i, cambios);
+                return (
+                  <div key={i} className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-semibold text-gray-900">Carga {i + 1}</p>
+                      <span className="text-sm font-medium text-blue">${subtotalDeCarga(c).toFixed(2)}</span>
+                    </div>
+                    {/* Autoservicio: se elige el TIPO de lavado y/o secado; la
+                        máquina física se asigna después en Salidas. */}
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1.5">Lavado</label>
+                      <select
+                        value={c.lavadora_tipo}
+                        onChange={e => {
+                          const v = e.target.value;
+                          // Al elegir un lavado se marca también el secado (el empleado lo quita si no lo quieren).
+                          set(v ? { lavadora_tipo: v, secadora_tipo: 'mediana' } : { lavadora_tipo: v });
+                        }}
+                        className={`${INPUT_CLS} bg-white`}
+                      >
+                        <option value="">Sin lavado</option>
+                        <option value="mediana">Mediana — ${precioLavadoTipo('mediana', c.tipo_prenda).toFixed(2)}</option>
+                        <option value="jumbo">Jumbo — ${precioLavadoTipo('jumbo', c.tipo_prenda).toFixed(2)}</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1.5">Secado</label>
+                      <select
+                        value={c.secadora_tipo}
+                        onChange={e => set({ secadora_tipo: e.target.value })}
+                        className={`${INPUT_CLS} bg-white`}
+                      >
+                        <option value="">Sin secado</option>
+                        <option value="mediana">Con secado — ${precioSecadoTipo('mediana', c.tipo_prenda).toFixed(2)}</option>
+                      </select>
+                    </div>
+                    {!c.lavadora_tipo && !c.secadora_tipo && (
+                      <p className="text-sm text-red-600">Elige al menos un tipo de lavado o secado.</p>
+                    )}
+                    <p className="text-xs text-gray-400">La máquina física se asigna después en Salidas de la nota.</p>
                   </div>
-                  {/* Autoservicio: se elige el TIPO de lavado y/o secado; la
-                      máquina física se asigna después en Salidas. */}
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1.5">Lavado</label>
-                    <select
-                      value={c.lavadora_tipo}
-                      onChange={e => {
-                        const v = e.target.value;
-                        // Al elegir un lavado se marca también el secado (el empleado lo quita si no lo quieren).
-                        set(v ? { lavadora_tipo: v, secadora_tipo: 'mediana' } : { lavadora_tipo: v });
-                      }}
-                      className={`${INPUT_CLS} bg-white`}
-                    >
-                      <option value="">Sin lavado</option>
-                      <option value="mediana">Mediana — ${precioLavadoTipo('mediana', c.tipo_prenda).toFixed(2)}</option>
-                      <option value="jumbo">Jumbo — ${precioLavadoTipo('jumbo', c.tipo_prenda).toFixed(2)}</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1.5">Secado</label>
-                    <select
-                      value={c.secadora_tipo}
-                      onChange={e => set({ secadora_tipo: e.target.value })}
-                      className={`${INPUT_CLS} bg-white`}
-                    >
-                      <option value="">Sin secado</option>
-                      <option value="mediana">Con secado — ${precioSecadoTipo('mediana', c.tipo_prenda).toFixed(2)}</option>
-                    </select>
-                  </div>
-                  {!c.lavadora_tipo && !c.secadora_tipo && (
-                    <p className="text-sm text-red-600">Elige al menos un tipo de lavado o secado.</p>
-                  )}
-                  <p className="text-xs text-gray-400">La máquina física se asigna después en Salidas de la nota.</p>
-                </div>
-              );
-            })}
-            <p className="text-xs text-blue font-medium">
-              Subtotal cargas: ${subtotalCargas.toFixed(2)}
-            </p>
-            {maquinas.length === 0 && (
-              <p className="text-xs text-red-600">No hay máquinas disponibles en este momento.</p>
-            )}
+                );
+              })}
+              <p className="text-xs text-blue font-medium">
+                Subtotal cargas: ${subtotalCargas.toFixed(2)}
+              </p>
+              {maquinas.length === 0 && (
+                <p className="text-xs text-red-600">No hay máquinas disponibles en este momento.</p>
+              )}
+            </div>
           </div>
 
           {/* Ajuste */}
@@ -1940,10 +1944,9 @@ export default function NuevaNota() {
         {/* ── Precio Total ─────────────────────────────────── */}
         {(() => {
           return (
+            <div>
+            <h2 className={LABEL_CLS}>Resumen</h2>
             <div className="bg-light-blue border border-blue-200 rounded-xl p-4">
-              <p className="text-xs font-medium text-blue uppercase tracking-wide mb-2">
-                Resumen
-              </p>
               <div className="space-y-1 mb-3 text-sm text-blue-700">
                 <div className="flex justify-between">
                   <span>Servicio</span>
@@ -1980,6 +1983,7 @@ export default function NuevaNota() {
               <p className="text-3xl font-bold text-blue-700 border-t border-blue-200 pt-2">
                 ${precioTotal.toFixed(2)}
               </p>
+            </div>
             </div>
           );
         })()}
