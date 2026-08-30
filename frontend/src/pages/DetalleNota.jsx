@@ -209,7 +209,7 @@ function ModalLiquidar({ monto, folio, formaPago, onFormaPago, onCancelar, onCon
                   key={opt.v}
                   type="button"
                   onClick={() => onFormaPago(opt.v)}
-                  className={`py-3 border-2 rounded-xl font-semibold text-sm transition-colors ${
+                  className={`py-3 px-2 border-2 rounded-xl font-semibold text-sm truncate transition-colors ${
                     selected
                       ? 'border-blue bg-light-blue text-blue-700'
                       : 'border-gray-300 bg-white text-gray-700 hover:border-blue-300'

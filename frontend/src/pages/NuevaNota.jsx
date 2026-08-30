@@ -1028,7 +1028,7 @@ export default function NuevaNota() {
                               }
                               set(cambios);
                             }}
-                            className={`py-6 border-2 rounded-xl font-semibold text-lg transition-colors ${
+                            className={`py-6 px-2 border-2 rounded-xl font-semibold text-lg truncate transition-colors ${
                               selected ? 'border-blue bg-light-blue text-blue-700' : 'border-gray-300 bg-white text-gray-700 hover:border-blue-300'
                             }`}
                           >
@@ -1061,7 +1061,7 @@ export default function NuevaNota() {
                               }
                               set(cambios);
                             }}
-                            className={`py-6 border-2 rounded-xl font-semibold text-lg transition-colors ${
+                            className={`py-6 px-2 border-2 rounded-xl font-semibold text-lg truncate transition-colors ${
                               selected ? 'border-blue bg-light-blue text-blue-700' : 'border-gray-300 bg-white text-gray-700 hover:border-blue-300'
                             }`}
                           >
@@ -1109,7 +1109,7 @@ export default function NuevaNota() {
                                 key={opt.id}
                                 type="button"
                                 onClick={() => set({ tamano_edredon: selected ? '' : opt.nombre })}
-                                className={`py-6 border-2 rounded-xl font-semibold text-lg transition-colors ${
+                                className={`py-6 px-2 border-2 rounded-xl font-semibold text-lg truncate transition-colors ${
                                   selected ? 'border-blue bg-light-blue text-blue-700' : 'border-gray-300 bg-white text-gray-700 hover:border-blue-300'
                                 }`}
                               >
@@ -1444,7 +1444,7 @@ export default function NuevaNota() {
                         key={opt.v}
                         type="button"
                         onClick={() => setEncargoForm(f => ({ ...f, pago_anticipado: opt.v, forma_pago: opt.v === 'SI' ? f.forma_pago : '' }))}
-                        className={`py-8 border-2 rounded-xl font-semibold text-lg transition-colors ${
+                        className={`py-8 px-2 border-2 rounded-xl font-semibold text-lg truncate transition-colors ${
                           selected ? 'border-blue bg-light-blue text-blue-700' : 'border-gray-300 bg-white text-gray-700 hover:border-blue-300'
                         }`}
                       >
@@ -1467,7 +1467,7 @@ export default function NuevaNota() {
                             key={opt.v}
                             type="button"
                             onClick={() => setEncargoForm(f => ({ ...f, forma_pago: opt.v }))}
-                            className={`py-6 border-2 rounded-xl font-semibold text-base transition-colors ${
+                            className={`py-6 px-2 border-2 rounded-xl font-semibold text-base truncate transition-colors ${
                               selected ? 'border-blue bg-light-blue text-blue-700' : 'border-gray-300 bg-white text-gray-700 hover:border-blue-300'
                             }`}
                           >
@@ -1516,7 +1516,7 @@ export default function NuevaNota() {
                           key={t.v}
                           type="button"
                           onClick={() => setEncargoForm(f => ({ ...f, tiempo_entrega: f.tiempo_entrega === t.v ? '' : t.v }))}
-                          className={`py-4 border-2 rounded-xl font-semibold text-base transition-colors ${
+                          className={`py-4 px-2 border-2 rounded-xl font-semibold text-base truncate transition-colors ${
                             selected ? 'border-blue bg-light-blue text-blue-700' : 'border-gray-300 bg-white text-gray-700 hover:border-blue-300'
                           }`}
                         >
@@ -1992,7 +1992,7 @@ export default function NuevaNota() {
                   key={opt.v}
                   type="button"
                   onClick={() => setForm(f => ({ ...f, forma_pago: opt.v }))}
-                  className={`py-4 border-2 rounded-xl font-semibold text-base transition-colors ${
+                  className={`py-4 px-2 border-2 rounded-xl font-semibold text-base truncate transition-colors ${
                     selected ? 'border-blue bg-light-blue text-blue-700' : 'border-gray-300 bg-white text-gray-700 hover:border-blue-300'
                   }`}
                 >
