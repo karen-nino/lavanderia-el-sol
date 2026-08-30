@@ -1255,19 +1255,31 @@ export default function NuevaNota() {
 
                   {/* Productos de la carga */}
                   <div>
-                    <div className="flex items-center justify-between mb-3">
-                      <h3 className="text-sm font-semibold text-gray-900">Productos</h3>
-                      {(c.productos ?? []).length > 0 && (
-                        <span className="text-xs text-gray-500">{c.productos.length} {c.productos.length === 1 ? 'producto' : 'productos'}</span>
-                      )}
+                    {/* Agregar vive solo en el encabezado: así no cambia de sitio
+                        conforme crece la lista. */}
+                    <div className="flex items-center justify-between gap-3 mb-3">
+                      <div className="flex items-baseline gap-2 min-w-0">
+                        <h3 className="text-sm font-semibold text-gray-900">Productos</h3>
+                        {(c.productos ?? []).length > 0 && (
+                          <span className="text-xs text-gray-500">{c.productos.length} {c.productos.length === 1 ? 'producto' : 'productos'}</span>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setSelectorProducto({ ambito: 'carga', carga: idx, item: null })}
+                        className="flex-shrink-0 flex items-center gap-1.5 border-[1.5px] border-blue text-blue rounded-pill pl-2.5 pr-3.5 py-2 text-xs font-bold hover:bg-light-blue transition-colors"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+                        </svg>
+                        Agregar
+                      </button>
                     </div>
 
-                    {/* Una fila por producto; "Agregar producto" es el último
-                        renglón de la misma tarjeta para que se lea como la
-                        continuación de la lista y no como un hueco por llenar. */}
+                    {/* Una fila por producto. */}
                     <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
                       {(c.productos ?? []).length === 0 ? (
-                        <p className="px-4 pt-4 pb-1 text-sm text-gray-500">Esta carga no lleva productos.</p>
+                        <p className="px-4 py-5 text-sm text-gray-500">Esta carga no lleva productos. Tócale a «Agregar» para poner uno.</p>
                       ) : (
                         c.productos.map((item, j) => {
                           const prod  = productosCatalogo.find(x => String(x.id) === String(item.producto_id));
@@ -1342,19 +1354,6 @@ export default function NuevaNota() {
                           );
                         })
                       )}
-
-                      <button
-                        type="button"
-                        onClick={() => setSelectorProducto({ ambito: 'carga', carga: idx, item: null })}
-                        className="w-full flex items-center gap-3 px-3 py-3 border-t border-gray-100 text-sm font-semibold text-blue hover:bg-light-blue/40 transition-colors"
-                      >
-                        <span className="w-8 h-8 flex-shrink-0 rounded-full bg-blue text-white flex items-center justify-center">
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
-                          </svg>
-                        </span>
-                        Agregar producto
-                      </button>
 
                       {(c.productos ?? []).length > 0 && (
                         <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 bg-gray-50">
@@ -1825,20 +1824,34 @@ export default function NuevaNota() {
         {/* ── Productos ────────────────────────────────────── */}
 
         <div>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className={LABEL_CLS + ' mb-0'}>Productos</h2>
-            {productosLista.length > 0 && (
-              <span className="text-xs text-gray-500">
-                {productosLista.length} {productosLista.length === 1 ? 'producto' : 'productos'}
-              </span>
-            )}
+          {/* Agregar vive solo en el encabezado: así no cambia de sitio conforme
+              crece la lista. */}
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <div className="flex items-baseline gap-2 min-w-0">
+              <h2 className={LABEL_CLS + ' mb-0'}>Productos</h2>
+              {productosLista.length > 0 && (
+                <span className="text-xs text-gray-500">
+                  {productosLista.length} {productosLista.length === 1 ? 'producto' : 'productos'}
+                </span>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => setSelectorProducto({ ambito: 'nota', item: null })}
+              className="flex-shrink-0 flex items-center gap-1.5 border-[1.5px] border-blue text-blue rounded-pill pl-2.5 pr-3.5 py-2 text-xs font-bold hover:bg-light-blue transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+              </svg>
+              Agregar
+            </button>
           </div>
 
           {/* Misma fila compacta que en Por Encargo. La diferencia es la unidad:
               aquí se vende la pieza completa (botella, unidad o bolsa). */}
           <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
             {productosLista.length === 0 ? (
-              <p className="px-4 pt-4 pb-1 text-sm text-gray-500">Esta nota no lleva productos.</p>
+              <p className="px-4 py-5 text-sm text-gray-500">Esta nota no lleva productos. Tócale a «Agregar» para poner uno.</p>
             ) : (
               productosLista.map((item, i) => {
                 const prod = productosCatalogo.find(x => String(x.id) === String(item.producto_id));
@@ -1907,19 +1920,6 @@ export default function NuevaNota() {
                 );
               })
             )}
-
-            <button
-              type="button"
-              onClick={() => setSelectorProducto({ ambito: 'nota', item: null })}
-              className="w-full flex items-center gap-3 px-3 py-3 border-t border-gray-100 text-sm font-semibold text-blue hover:bg-light-blue/40 transition-colors"
-            >
-              <span className="w-8 h-8 flex-shrink-0 rounded-full bg-blue text-white flex items-center justify-center">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
-                </svg>
-              </span>
-              Agregar producto
-            </button>
 
             {productosLista.length > 0 && (
               <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 bg-gray-50">
