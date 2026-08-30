@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../lib/api';
+import { APP_VERSION } from '../lib/version';
 
 const INPUT_CLS =
   'w-full px-4 py-3.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent transition';
@@ -232,6 +233,11 @@ export default function Login() {
             </button>
           </form>
         </div>
+
+        {/* Versión de la app */}
+        <p className="text-center text-xs text-slate-400 mt-6">
+          Versión {APP_VERSION}
+        </p>
       </div>
     </div>
   );
