@@ -1131,7 +1131,7 @@ export default function NuevaNota() {
                   <div className="space-y-3">
                     <h3 className="text-sm font-semibold text-gray-900">Tipo de máquina</h3>
                     <div>
-                      <label className="block text-xs font-medium text-gray-500 mb-1">Lavado</label>
+                      <label className="block text-xs font-medium text-gray-500 mb-1.5">Lavado</label>
                       <select
                         value={c.lavadora_tipo}
                         onChange={e => {
@@ -1156,7 +1156,7 @@ export default function NuevaNota() {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-gray-500 mb-1">Secado</label>
+                      <label className="block text-xs font-medium text-gray-500 mb-1.5">Secado</label>
                       <select
                         value={c.secadora_tipo}
                         onChange={e => set({ secadora_tipo: e.target.value })}
@@ -1697,8 +1697,11 @@ export default function NuevaNota() {
         )}
 
         {tipoServicio === 'AUTOSERVICIO' && (
-        <>
-        <div className='space-y-8'>
+        <div className="space-y-14">
+        {/* 56 px entre todas las secciones de Autoservicio, de la captura al
+            cobro. El contenedor propio evita depender del space-y del <form>,
+            que dejaba el resumen más pegado que el resto. */}
+        <div className="space-y-14">
 
           {/* Cantidad de cargas */}
           <div>
@@ -1731,7 +1734,7 @@ export default function NuevaNota() {
                 +
               </button>
             </div>
-            <p className="text-xs text-gray-400 mt-1">Cada carga usa una máquina: lavadora o secadora</p>
+            <p className="text-xs text-gray-400 mt-1.5">Cada carga usa una máquina: lavadora o secadora</p>
           </div>
 
           {/* Máquinas por carga */}
@@ -1747,7 +1750,7 @@ export default function NuevaNota() {
                   {/* Autoservicio: se elige el TIPO de lavado y/o secado; la
                       máquina física se asigna después en Salidas. */}
                   <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1">Lavado</label>
+                    <label className="block text-xs font-medium text-gray-500 mb-1.5">Lavado</label>
                     <select
                       value={c.lavadora_tipo}
                       onChange={e => {
@@ -1763,7 +1766,7 @@ export default function NuevaNota() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1">Secado</label>
+                    <label className="block text-xs font-medium text-gray-500 mb-1.5">Secado</label>
                     <select
                       value={c.secadora_tipo}
                       onChange={e => set({ secadora_tipo: e.target.value })}
@@ -1780,7 +1783,7 @@ export default function NuevaNota() {
                 </div>
               );
             })}
-            <p className="text-xs text-blue mt-1 font-medium">
+            <p className="text-xs text-blue font-medium">
               Subtotal cargas: ${subtotalCargas.toFixed(2)}
             </p>
             {maquinas.length === 0 && (
@@ -1818,119 +1821,119 @@ export default function NuevaNota() {
                 +
               </button>
             </div>
-            <p className="text-xs text-gray-400 mt-1">Descuento (negativo) o cargo extra (positivo)</p>
+            <p className="text-xs text-gray-400 mt-1.5">Descuento (negativo) o cargo extra (positivo)</p>
           </div>
 
-        {/* ── Productos ────────────────────────────────────── */}
+          {/* ── Productos ────────────────────────────────────── */}
 
-        <div>
-          {/* Agregar vive solo en el encabezado: así no cambia de sitio conforme
-              crece la lista. */}
-          <div className="flex items-center justify-between gap-3 mb-3">
-            <div className="flex items-baseline gap-2 min-w-0">
-              <h2 className={LABEL_CLS + ' mb-0'}>Productos</h2>
-              {productosLista.length > 0 && (
-                <span className="text-xs text-gray-500">
-                  {productosLista.length} {productosLista.length === 1 ? 'producto' : 'productos'}
-                </span>
-              )}
+          <div>
+            {/* Agregar vive solo en el encabezado: así no cambia de sitio conforme
+                crece la lista. */}
+            <div className="flex items-center justify-between gap-3 mb-3">
+              <div className="flex items-baseline gap-2 min-w-0">
+                <h2 className={LABEL_CLS + ' mb-0'}>Productos</h2>
+                {productosLista.length > 0 && (
+                  <span className="text-xs text-gray-500">
+                    {productosLista.length} {productosLista.length === 1 ? 'producto' : 'productos'}
+                  </span>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectorProducto({ ambito: 'nota', item: null })}
+                className="flex-shrink-0 flex items-center gap-1.5 border-[1.5px] border-blue text-blue rounded-pill pl-2.5 pr-3.5 py-2 text-xs font-bold hover:bg-light-blue transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+                </svg>
+                Agregar
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={() => setSelectorProducto({ ambito: 'nota', item: null })}
-              className="flex-shrink-0 flex items-center gap-1.5 border-[1.5px] border-blue text-blue rounded-pill pl-2.5 pr-3.5 py-2 text-xs font-bold hover:bg-light-blue transition-colors"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
-              </svg>
-              Agregar
-            </button>
-          </div>
 
-          {/* Misma fila compacta que en Por Encargo. La diferencia es la unidad:
-              aquí se vende la pieza completa (botella, unidad o bolsa). */}
-          <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-            {productosLista.length === 0 ? (
-              <p className="px-4 py-5 text-sm text-gray-500">Esta nota no lleva productos. Tócale a «Agregar» para poner uno.</p>
-            ) : (
-              productosLista.map((item, i) => {
-                const prod = productosCatalogo.find(x => String(x.id) === String(item.producto_id));
-                const cant = Number(item.cantidad) || 0;
-                const subtotal = precioProducto(prod, 'botella') * cant;
-                return (
-                  <div key={i} className={`flex flex-wrap items-center gap-x-2 gap-y-2 px-3 py-2.5 ${i > 0 ? 'border-t border-gray-100' : ''}`}>
-                    <button
-                      type="button"
-                      onClick={() => setSelectorProducto({ ambito: 'nota', item: i })}
-                      className="flex-1 min-w-[10rem] text-left rounded-lg px-1 -mx-1 hover:bg-gray-50 transition-colors"
-                    >
-                      <span className="flex items-center gap-1">
-                        <span className={`text-sm font-semibold ${prod ? 'text-gray-900' : 'text-gray-400'}`}>
-                          {prod ? etiquetaProd(prod) : 'Elige un producto'}
-                        </span>
-                        <svg className="w-4 h-4 flex-shrink-0 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                        </svg>
-                      </span>
-                      <span className="block text-xs text-gray-500 tabular-nums">
-                        {prod ? detalleProducto(prod, 'nota') : 'Toca para elegir'}
-                      </span>
-                    </button>
-
-                    {/* Cantidad, importe y borrar viajan juntos: si no caben
-                        junto al nombre, bajan al siguiente renglón. */}
-                    <div className="flex items-center gap-2 ml-auto flex-shrink-0">
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => actualizarProducto(i, 'cantidad', String(Math.max(1, cant - 1)))}
-                          disabled={cant <= 1}
-                          aria-label="Disminuir cantidad"
-                          className="w-9 h-9 flex items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-700 text-base font-semibold hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                        >
-                          −
-                        </button>
-                        <span className="w-7 text-center text-sm font-semibold text-gray-900 tabular-nums">{cant}</span>
-                        <button
-                          type="button"
-                          onClick={() => actualizarProducto(i, 'cantidad', String(cant + 1))}
-                          aria-label="Aumentar cantidad"
-                          className="w-9 h-9 flex items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-700 text-base font-semibold hover:bg-gray-50 transition-colors"
-                        >
-                          +
-                        </button>
-                      </div>
-
-                      <span className="w-16 text-right text-base font-bold text-blue-700 tabular-nums">
-                        ${subtotal.toFixed(2)}
-                      </span>
-
+            {/* Misma fila compacta que en Por Encargo. La diferencia es la unidad:
+                aquí se vende la pieza completa (botella, unidad o bolsa). */}
+            <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+              {productosLista.length === 0 ? (
+                <p className="px-4 py-5 text-sm text-gray-500">Esta nota no lleva productos. Tócale a «Agregar» para poner uno.</p>
+              ) : (
+                productosLista.map((item, i) => {
+                  const prod = productosCatalogo.find(x => String(x.id) === String(item.producto_id));
+                  const cant = Number(item.cantidad) || 0;
+                  const subtotal = precioProducto(prod, 'botella') * cant;
+                  return (
+                    <div key={i} className={`flex flex-wrap items-center gap-x-2 gap-y-2 px-3 py-2.5 ${i > 0 ? 'border-t border-gray-100' : ''}`}>
                       <button
                         type="button"
-                        onClick={() => eliminarProducto(i)}
-                        aria-label="Eliminar producto"
-                        className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                        onClick={() => setSelectorProducto({ ambito: 'nota', item: i })}
+                        className="flex-1 min-w-[10rem] text-left rounded-lg px-1 -mx-1 hover:bg-gray-50 transition-colors"
                       >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
+                        <span className="flex items-center gap-1">
+                          <span className={`text-sm font-semibold ${prod ? 'text-gray-900' : 'text-gray-400'}`}>
+                            {prod ? etiquetaProd(prod) : 'Elige un producto'}
+                          </span>
+                          <svg className="w-4 h-4 flex-shrink-0 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </span>
+                        <span className="block text-xs text-gray-500 tabular-nums">
+                          {prod ? detalleProducto(prod, 'nota') : 'Toca para elegir'}
+                        </span>
                       </button>
-                    </div>
-                  </div>
-                );
-              })
-            )}
 
-            {productosLista.length > 0 && (
-              <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 bg-gray-50">
-                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Total productos</span>
-                <span className="text-base font-bold text-dark-blue tabular-nums">
-                  ${subtotalProductos.toFixed(2)}
-                </span>
-              </div>
-            )}
+                      {/* Cantidad, importe y borrar viajan juntos: si no caben
+                          junto al nombre, bajan al siguiente renglón. */}
+                      <div className="flex items-center gap-2 ml-auto flex-shrink-0">
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => actualizarProducto(i, 'cantidad', String(Math.max(1, cant - 1)))}
+                            disabled={cant <= 1}
+                            aria-label="Disminuir cantidad"
+                            className="w-9 h-9 flex items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-700 text-base font-semibold hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                          >
+                            −
+                          </button>
+                          <span className="w-7 text-center text-sm font-semibold text-gray-900 tabular-nums">{cant}</span>
+                          <button
+                            type="button"
+                            onClick={() => actualizarProducto(i, 'cantidad', String(cant + 1))}
+                            aria-label="Aumentar cantidad"
+                            className="w-9 h-9 flex items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-700 text-base font-semibold hover:bg-gray-50 transition-colors"
+                          >
+                            +
+                          </button>
+                        </div>
+
+                        <span className="w-16 text-right text-base font-bold text-blue-700 tabular-nums">
+                          ${subtotal.toFixed(2)}
+                        </span>
+
+                        <button
+                          type="button"
+                          onClick={() => eliminarProducto(i)}
+                          aria-label="Eliminar producto"
+                          className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+
+              {productosLista.length > 0 && (
+                <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 bg-gray-50">
+                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Total productos</span>
+                  <span className="text-base font-bold text-dark-blue tabular-nums">
+                    ${subtotalProductos.toFixed(2)}
+                  </span>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
 
         </div>
 
@@ -2025,7 +2028,7 @@ export default function NuevaNota() {
               : (esEdicion ? 'Guardar cambios' : 'Crear nota')}
           </button>
         </div>
-        </>
+        </div>
         )}
       </form>
 
