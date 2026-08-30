@@ -139,6 +139,11 @@ export default function NuevaNota() {
   const [clientes,          setClientes]          = useState([]);
   const [clienteSearch,     setClienteSearch]     = useState('');
   const [nuevoClienteOpen,  setNuevoClienteOpen]  = useState(false);
+  // Selector de producto. `ambito` distingue los productos de la nota
+  // (Autoservicio, por botella) de los de una carga (Por Encargo, por tapa);
+  // `carga` solo aplica al segundo. Con `item` en null se agrega uno nuevo, y
+  // con un índice se cambia el producto de ese renglón.
+  const [selectorProducto,  setSelectorProducto]  = useState(null);
   const [nuevoCliente,      setNuevoCliente]      = useState({ nombre: '', apellido: '', telefono: '' });
   const [creandoCliente,    setCreandoCliente]    = useState(false);
   const [folio,             setFolio]             = useState('');
@@ -368,8 +373,8 @@ export default function NuevaNota() {
     setForm(f => ({ ...f, [name]: value }));
   };
 
-  const agregarProducto = () =>
-    setProductosLista(prev => [...prev, { producto_id: '', cantidad: '1' }]);
+  const agregarProducto = (productoId = '') =>
+    setProductosLista(prev => [...prev, { producto_id: String(productoId), cantidad: '1' }]);
 
   const actualizarProducto = (i, field, value) =>
     setProductosLista(prev =>
@@ -415,8 +420,8 @@ export default function NuevaNota() {
     setEncargoCargas(prev => prev.map((c, idx) => (idx === i ? { ...c, ...cambios } : c)));
 
   // Productos por carga
-  const agregarProductoCarga = (i) =>
-    actualizarCargaEncargo(i, { productos: [...(encargoCargas[i].productos ?? []), { producto_id: '', cantidad: '1' }] });
+  const agregarProductoCarga = (i, productoId = '') =>
+    actualizarCargaEncargo(i, { productos: [...(encargoCargas[i].productos ?? []), { producto_id: String(productoId), cantidad: '1' }] });
 
   const actualizarProductoCarga = (i, j, field, value) =>
     setEncargoCargas(prev => prev.map((c, idx) =>
@@ -424,6 +429,47 @@ export default function NuevaNota() {
         ? { ...c, productos: c.productos.map((p, k) => (k === j ? { ...p, [field]: value } : p)) }
         : c
     ));
+
+  // Diferencias entre los dos ámbitos, en un solo lugar: Por Encargo cobra por
+  // tapa y solo admite granel; Autoservicio cobra por botella (o pieza) y admite
+  // todo el catálogo.
+  const esCarga        = (ambito) => ambito === 'carga';
+  const catalogoDe     = (ambito) => (esCarga(ambito)
+    ? productosCatalogo.filter(p => p.tipo_liquido === 'granel')
+    : productosCatalogo);
+  const precioEnAmbito = (prod, ambito) => precioProducto(prod, esCarga(ambito) ? 'tapa' : 'botella');
+  const unidadEnAmbito = (prod, ambito, n = 2) => (esCarga(ambito)
+    ? (n === 1 ? 'tapa' : 'tapas')
+    : unidadVentaNota(prod, n));
+  // Cuántas piezas se pueden vender: en tapas para Por Encargo, en botellas
+  // (o unidades sueltas) para Autoservicio.
+  const disponiblesDe  = (prod, ambito) => {
+    if (!prod) return 0;
+    return esCarga(ambito)
+      ? Number(prod.stock_disponible ?? prod.stock_actual) || 0
+      : botellasDisponibles(prod);
+  };
+  // Texto de apoyo del renglón: "$5.00/tapa · 140 tapas".
+  const detalleProducto = (prod, ambito) => {
+    const disp = disponiblesDe(prod, ambito);
+    return `$${precioEnAmbito(prod, ambito).toFixed(2)}/${unidadEnAmbito(prod, ambito, 1)}`
+      + ` · ${disp} ${unidadEnAmbito(prod, ambito, disp)}`;
+  };
+
+  // Aplica lo elegido en el modal: alta si se abrió desde "Agregar producto",
+  // cambio si se abrió tocando un producto ya puesto.
+  const elegirProducto = (productoId) => {
+    if (!selectorProducto) return;
+    const { ambito, carga, item } = selectorProducto;
+    if (esCarga(ambito)) {
+      if (item === null) agregarProductoCarga(carga, productoId);
+      else               actualizarProductoCarga(carga, item, 'producto_id', String(productoId));
+    } else {
+      if (item === null) agregarProducto(productoId);
+      else               actualizarProducto(item, 'producto_id', String(productoId));
+    }
+    setSelectorProducto(null);
+  };
 
   const eliminarProductoCarga = (i, j) =>
     setEncargoCargas(prev => prev.map((c, idx) =>
@@ -1226,42 +1272,32 @@ export default function NuevaNota() {
                         c.productos.map((item, j) => {
                           const prod  = productosCatalogo.find(x => String(x.id) === String(item.producto_id));
                           const cant  = Number(item.cantidad) || 0;
-                          const stock = prod ? Number(prod.stock_disponible ?? prod.stock_actual) || 0 : 0;
                           const subtotal = precioProducto(prod) * cant;
                           return (
                             <div key={j} className={`flex flex-wrap items-center gap-x-2 gap-y-2 px-3 py-2.5 ${j > 0 ? 'border-t border-gray-100' : ''}`}>
                               {/* El producto se muestra como texto (así caben el
                                   nombre completo, el precio y el stock) con el
                                   select nativo encima para poder cambiarlo. */}
-                              <div className="relative flex-1 min-w-[10rem] rounded-lg focus-within:ring-2 focus-within:ring-blue focus-within:ring-offset-1">
-                                <div className="flex items-center gap-1 min-w-0">
+                              {/* El producto se muestra como texto (así caben el
+                                  nombre completo, el precio y el stock); al tocarlo
+                                  se abre el selector para cambiarlo. */}
+                              <button
+                                type="button"
+                                onClick={() => setSelectorProducto({ ambito: 'carga', carga: idx, item: j })}
+                                className="flex-1 min-w-[10rem] text-left rounded-lg px-1 -mx-1 hover:bg-gray-50 transition-colors"
+                              >
+                                <span className="flex items-center gap-1">
                                   <span className={`text-sm font-semibold ${prod ? 'text-gray-900' : 'text-gray-400'}`}>
-                                    {prod ? etiquetaProd(prod) : 'Selecciona un producto…'}
+                                    {prod ? etiquetaProd(prod) : 'Elige un producto'}
                                   </span>
                                   <svg className="w-4 h-4 flex-shrink-0 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                                   </svg>
-                                </div>
-                                <p className="text-xs text-gray-500 tabular-nums">
-                                  {prod
-                                    ? `$${precioProducto(prod).toFixed(2)}/tapa · ${stock} tapas`
-                                    : 'Toca para elegir'}
-                                </p>
-                                <select
-                                  value={item.producto_id}
-                                  onChange={e => actualizarProductoCarga(idx, j, 'producto_id', e.target.value)}
-                                  aria-label="Producto"
-                                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                                >
-                                  <option value="">Selecciona un producto…</option>
-                                  {/* Por Encargo es por tapa: solo productos de granel (marca es solo botella). */}
-                                  {productosCatalogo.filter(p => p.tipo_liquido === 'granel').map(p => (
-                                    <option key={p.id} value={p.id}>
-                                      {etiquetaProd(p)}{p.precio_unitario ? ` — $${Number(p.precio_unitario).toFixed(2)}/tapa` : ''} ({Number(p.stock_disponible ?? p.stock_actual)} tapas)
-                                    </option>
-                                  ))}
-                                </select>
-                              </div>
+                                </span>
+                                <span className="block text-xs text-gray-500 tabular-nums">
+                                  {prod ? detalleProducto(prod, 'carga') : 'Toca para elegir'}
+                                </span>
+                              </button>
 
                               {/* Cantidad, importe y borrar viajan juntos: si no
                                   caben junto al nombre, bajan al siguiente renglón. */}
@@ -1309,7 +1345,7 @@ export default function NuevaNota() {
 
                       <button
                         type="button"
-                        onClick={() => agregarProductoCarga(idx)}
+                        onClick={() => setSelectorProducto({ ambito: 'carga', carga: idx, item: null })}
                         className="w-full flex items-center gap-3 px-3 py-3 border-t border-gray-100 text-sm font-semibold text-blue hover:bg-light-blue/40 transition-colors"
                       >
                         <span className="w-8 h-8 flex-shrink-0 rounded-full bg-blue text-white flex items-center justify-center">
@@ -1798,99 +1834,102 @@ export default function NuevaNota() {
             )}
           </div>
 
-          {productosLista.length === 0 ? (
-            <button
-              type="button"
-              onClick={agregarProducto}
-              className="w-full py-8 border-2 border-dashed border-gray-300 rounded-xl text-gray-500 hover:text-blue hover:border-blue-400 hover:bg-light-blue/40 transition-colors flex flex-col items-center justify-center gap-2"
-            >
-              <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v16m8-8H4" />
-              </svg>
-              <span className="text-sm font-medium">Agregar producto</span>
-            </button>
-          ) : (
-            <div className="space-y-3">
-              {productosLista.map((item, i) => {
+          {/* Misma fila compacta que en Por Encargo. La diferencia es la unidad:
+              aquí se vende la pieza completa (botella, unidad o bolsa). */}
+          <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+            {productosLista.length === 0 ? (
+              <p className="px-4 pt-4 pb-1 text-sm text-gray-500">Esta nota no lleva productos.</p>
+            ) : (
+              productosLista.map((item, i) => {
                 const prod = productosCatalogo.find(x => String(x.id) === String(item.producto_id));
                 const cant = Number(item.cantidad) || 0;
                 const subtotal = precioProducto(prod, 'botella') * cant;
                 return (
-                  <div key={i} className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
-                    <div className="flex items-center gap-2">
-                      <select
-                        value={item.producto_id}
-                        onChange={e => actualizarProducto(i, 'producto_id', e.target.value)}
-                        className={`flex-1 ${INPUT_CLS}`}
-                      >
-                        <option value="">Selecciona un producto…</option>
-                        {productosCatalogo.map(p => (
-                          <option key={p.id} value={p.id}>
-                            {etiquetaProd(p)}{precioProducto(p, 'botella') ? ` — $${precioProducto(p, 'botella').toFixed(2)}` : ''}
-                          </option>
-                        ))}
-                      </select>
+                  <div key={i} className={`flex flex-wrap items-center gap-x-2 gap-y-2 px-3 py-2.5 ${i > 0 ? 'border-t border-gray-100' : ''}`}>
+                    <button
+                      type="button"
+                      onClick={() => setSelectorProducto({ ambito: 'nota', item: i })}
+                      className="flex-1 min-w-[10rem] text-left rounded-lg px-1 -mx-1 hover:bg-gray-50 transition-colors"
+                    >
+                      <span className="flex items-center gap-1">
+                        <span className={`text-sm font-semibold ${prod ? 'text-gray-900' : 'text-gray-400'}`}>
+                          {prod ? etiquetaProd(prod) : 'Elige un producto'}
+                        </span>
+                        <svg className="w-4 h-4 flex-shrink-0 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </span>
+                      <span className="block text-xs text-gray-500 tabular-nums">
+                        {prod ? detalleProducto(prod, 'nota') : 'Toca para elegir'}
+                      </span>
+                    </button>
+
+                    {/* Cantidad, importe y borrar viajan juntos: si no caben
+                        junto al nombre, bajan al siguiente renglón. */}
+                    <div className="flex items-center gap-2 ml-auto flex-shrink-0">
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => actualizarProducto(i, 'cantidad', String(Math.max(1, cant - 1)))}
+                          disabled={cant <= 1}
+                          aria-label="Disminuir cantidad"
+                          className="w-9 h-9 flex items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-700 text-base font-semibold hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                        >
+                          −
+                        </button>
+                        <span className="w-7 text-center text-sm font-semibold text-gray-900 tabular-nums">{cant}</span>
+                        <button
+                          type="button"
+                          onClick={() => actualizarProducto(i, 'cantidad', String(cant + 1))}
+                          aria-label="Aumentar cantidad"
+                          className="w-9 h-9 flex items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-700 text-base font-semibold hover:bg-gray-50 transition-colors"
+                        >
+                          +
+                        </button>
+                      </div>
+
+                      <span className="w-16 text-right text-base font-bold text-blue-700 tabular-nums">
+                        ${subtotal.toFixed(2)}
+                      </span>
+
                       <button
                         type="button"
                         onClick={() => eliminarProducto(i)}
                         aria-label="Eliminar producto"
-                        className="flex-shrink-0 px-3 py-3.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                        className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
                       >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                         </svg>
                       </button>
                     </div>
-
-                    <div className="flex items-end justify-between gap-3">
-                      <div>
-                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
-                          {prod ? unidadVentaNota(prod) : 'Cantidad'}
-                        </p>
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => actualizarProducto(i, 'cantidad', String(Math.max(1, cant - 1)))}
-                            disabled={cant <= 1}
-                            aria-label="Disminuir cantidad"
-                            className="w-10 h-10 flex items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-700 text-lg font-semibold hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                          >
-                            −
-                          </button>
-                          <span className="w-10 text-center text-base font-medium text-gray-900">{cant}</span>
-                          <button
-                            type="button"
-                            onClick={() => actualizarProducto(i, 'cantidad', String(cant + 1))}
-                            aria-label="Aumentar cantidad"
-                            className="w-10 h-10 flex items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-700 text-lg font-semibold hover:bg-gray-50 transition-colors"
-                          >
-                            +
-                          </button>
-                        </div>
-                      </div>
-                      {subtotal > 0 && (
-                        <div className="text-right">
-                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Subtotal</p>
-                          <p className="text-lg font-bold text-blue-700">${subtotal.toFixed(2)}</p>
-                        </div>
-                      )}
-                    </div>
                   </div>
                 );
-              })}
+              })
+            )}
 
-              <button
-                type="button"
-                onClick={agregarProducto}
-                className="w-full py-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-600 hover:text-blue hover:border-blue-400 hover:bg-light-blue/40 transition-colors flex items-center justify-center gap-2 text-sm font-medium"
-              >
+            <button
+              type="button"
+              onClick={() => setSelectorProducto({ ambito: 'nota', item: null })}
+              className="w-full flex items-center gap-3 px-3 py-3 border-t border-gray-100 text-sm font-semibold text-blue hover:bg-light-blue/40 transition-colors"
+            >
+              <span className="w-8 h-8 flex-shrink-0 rounded-full bg-blue text-white flex items-center justify-center">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
                 </svg>
-                Agregar otro producto
-              </button>
-            </div>
-          )}
+              </span>
+              Agregar producto
+            </button>
+
+            {productosLista.length > 0 && (
+              <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 bg-gray-50">
+                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Total productos</span>
+                <span className="text-base font-bold text-dark-blue tabular-nums">
+                  ${subtotalProductos.toFixed(2)}
+                </span>
+              </div>
+            )}
+          </div>
         </div>
 
         </div>
@@ -1989,6 +2028,125 @@ export default function NuevaNota() {
         </>
         )}
       </form>
+
+      {/* Modal — elegir producto de una carga Por Encargo */}
+      {selectorProducto && (
+        <div
+          className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
+          onClick={() => setSelectorProducto(null)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[85vh] flex flex-col"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-gray-100 flex-shrink-0">
+              <div>
+                <h2 className="text-base font-semibold text-gray-900">
+                  {selectorProducto.item === null ? 'Agregar producto' : 'Cambiar producto'}
+                </h2>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {esCarga(selectorProducto.ambito)
+                    ? `Carga ${selectorProducto.carga + 1} · se cobra por tapa`
+                    : 'Se cobra por pieza completa'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectorProducto(null)}
+                aria-label="Cerrar"
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="p-3 overflow-y-auto">
+              {(() => {
+                const { ambito, item } = selectorProducto;
+                const lista = catalogoDe(ambito);
+                if (lista.length === 0) {
+                  return (
+                    <p className="px-2 py-6 text-center text-sm text-gray-500">
+                      {esCarga(ambito) ? 'No hay productos a granel dados de alta.' : 'No hay productos dados de alta.'}
+                    </p>
+                  );
+                }
+                // Los ya puestos no se ofrecen otra vez: para llevar más se sube
+                // la cantidad del renglón que ya existe.
+                const enUso = esCarga(ambito)
+                  ? (encargoCargas[selectorProducto.carga]?.productos ?? [])
+                  : productosLista;
+                const puestos = enUso
+                  .filter((_, k) => k !== item)
+                  .map(p => String(p.producto_id));
+                const disponibles = lista.filter(p =>
+                  !puestos.includes(String(p.id)) && disponiblesDe(p, ambito) > 0);
+                return (
+                  <div className="space-y-1.5">
+                    {disponibles.length === 0 && (
+                      <p className="px-3 py-3 mb-1 text-sm text-bronce bg-light-bronce border border-bronce/30 rounded-xl">
+                        {esCarga(ambito)
+                          ? 'Esta carga ya lleva todos los productos disponibles. Para llevar más de alguno, sube sus tapas en la lista.'
+                          : 'La nota ya lleva todos los productos disponibles. Para llevar más de alguno, sube su cantidad en la lista.'}
+                      </p>
+                    )}
+                    {lista.map(p => {
+                      const yaEsta   = puestos.includes(String(p.id));
+                      const sinStock = disponiblesDe(p, ambito) <= 0;
+                      const bloqueado = yaEsta || sinStock;
+                      return (
+                        <button
+                          key={p.id}
+                          type="button"
+                          disabled={bloqueado}
+                          onClick={() => elegirProducto(p.id)}
+                          className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl border text-left transition-colors ${
+                            bloqueado
+                              ? 'border-gray-100 bg-gray-50 cursor-not-allowed'
+                              : 'border-gray-200 hover:border-blue hover:bg-light-blue/40'
+                          }`}
+                        >
+                          <div className="flex-1 min-w-0">
+                            <p className={`text-base font-semibold ${bloqueado ? 'text-gray-400' : 'text-gray-900'}`}>
+                              {etiquetaProd(p)}
+                            </p>
+                            <p className="text-xs text-gray-500 tabular-nums">{detalleProducto(p, ambito)}</p>
+                          </div>
+                          {yaEsta ? (
+                            <span className="flex-shrink-0 text-xs font-semibold text-gray-500 bg-gray-200 rounded-pill px-2.5 py-1">
+                              Ya está en la carga
+                            </span>
+                          ) : sinStock ? (
+                            <span className="flex-shrink-0 text-xs font-semibold text-red bg-light-red rounded-pill px-2.5 py-1">
+                              Sin existencias
+                            </span>
+                          ) : (
+                            <svg className="w-5 h-5 flex-shrink-0 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                            </svg>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </div>
+
+            <div className="px-5 py-4 border-t border-gray-100 flex-shrink-0">
+              <button
+                type="button"
+                onClick={() => setSelectorProducto(null)}
+                className="w-full border border-gray-300 text-gray-700 font-medium py-3.5 rounded-lg text-base hover:bg-gray-50 transition-colors"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal — crear nuevo cliente */}
       {nuevoClienteOpen && (
