@@ -172,10 +172,42 @@ function SidebarItem({ to, label, short, icon, end }) {
   );
 }
 
-// Sidebar de escritorio: muestra los ítems de navegación que quepan y el resto
-// pasa al botón Menú (fijo al fondo), que abre el modal con esos accesos más
-// Ajustes y Cerrar sesión. Reporta al padre los ítems que no caben.
-function DesktopSidebar({ items, onMenu, onOverflowChange }) {
+// Botón del pie del sidebar (Menú, Ajustes, Cerrar sesión).
+function SidebarPieBoton({ icon, label, onClick, peligro = false }) {
+  return (
+    <button
+      onClick={onClick}
+      className="group flex flex-col items-center gap-1.5 py-1 w-full"
+    >
+      <span
+        className={`w-12 h-12 rounded-card-sm flex items-center justify-center text-dark-blue transition-colors ${
+          peligro ? 'group-hover:bg-red/10 group-hover:text-red' : 'group-hover:bg-light-blue/60'
+        }`}
+      >
+        {icon}
+      </span>
+      <span className={`text-[11px] font-medium leading-tight text-center ${peligro ? 'text-dark-blue group-hover:text-red' : 'text-dark-blue'}`}>
+        {label}
+      </span>
+    </button>
+  );
+}
+
+// Hueco del alto de un botón del pie: reserva el espacio sin mostrar nada.
+const RanuraVacia = () => (
+  <div className="invisible" aria-hidden="true">
+    <SidebarPieBoton icon={Icon.menu} label="—" />
+  </div>
+);
+
+// Sidebar de escritorio: muestra los ítems de navegación que quepan; los que no,
+// pasan al botón Menú, que abre el modal con esos accesos. Reporta al padre los
+// ítems que no caben.
+//
+// El pie tiene SIEMPRE dos ranuras: si cambiara de alto según lo que muestre,
+// cambiaría el espacio medido para los íconos y la capacidad oscilaría (con dos
+// botones cabe menos → aparece overflow → vuelve un botón → cabe más…).
+function DesktopSidebar({ items, onMenu, onOverflowChange, onSettings, onLogout }) {
   const slotRef = useRef(null);
   const [capacity, setCapacity] = useState(items.length);
 
@@ -218,15 +250,21 @@ function DesktopSidebar({ items, onMenu, onOverflowChange }) {
         ))}
       </div>
 
-      <button
-        onClick={onMenu}
-        className="group flex flex-col items-center gap-1.5 py-1 flex-shrink-0 mt-3"
-      >
-        <span className="w-12 h-12 rounded-card-sm flex items-center justify-center text-dark-blue group-hover:bg-light-blue/60 transition-colors">
-          {Icon.menu}
-        </span>
-        <span className="text-[11px] font-medium text-dark-blue">Menú</span>
-      </button>
+      {/* Ranura de arriba: Ajustes solo cuando cabe todo y el usuario es admin.
+          Ranura de abajo (la de siempre): Menú si algo no cupo, Salir si no.
+          Las ranuras sin botón se dejan invisibles pero ocupando su lugar. */}
+      <div className="flex-shrink-0 mt-3 flex flex-col gap-2">
+        {overflow.length === 0 && onSettings ? (
+          <SidebarPieBoton icon={Icon.ajustes} label="Ajustes" onClick={onSettings} />
+        ) : (
+          <RanuraVacia />
+        )}
+        {overflow.length > 0 ? (
+          <SidebarPieBoton icon={Icon.menu} label="Menú" onClick={onMenu} />
+        ) : (
+          <SidebarPieBoton icon={Icon.logout} label="Salir" onClick={onLogout} peligro />
+        )}
+      </div>
     </aside>
   );
 }
@@ -858,6 +896,8 @@ export default function Layout() {
         items={desktopNav}
         onMenu={() => setMenuOpen(true)}
         onOverflowChange={setDesktopOverflow}
+        onSettings={isAdmin ? handleSettings : undefined}
+        onLogout={handleLogout}
       />
 
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
