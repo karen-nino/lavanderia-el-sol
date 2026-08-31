@@ -352,7 +352,7 @@ export default function Salidas() {
   }
 
   // La cantidad arranca en 0 (nada elegido) y no pasa del stock disponible.
-  const cantidadDe = (p) => Math.min(Number(cantidades[p.id]) || 0, p.stock_disponible);
+  const cantidadDe = (p) => Math.min(Number(cantidades[p.id]) || 0, disponibleDe(p));
   const setCantidad = (productoId, valor) =>
     setCantidades(prev => ({ ...prev, [productoId]: String(Math.max(0, valor)) }));
 
@@ -487,9 +487,29 @@ export default function Salidas() {
   const productosNota  = nota?.productos || [];
   const productosIdsEnNota = new Set(productosNota.map(p => p.producto_id));
 
-  // Solo productos disponibles (stock_disponible > 0) que no estén ya en la nota
+  // El backend cobra según el servicio de la nota: Autoservicio vende la BOTELLA
+  // entera y Por Encargo cobra por TAPA (utils/calculosNotas.js). La lista tiene
+  // que mostrar esa misma unidad y ese mismo precio; si no, enseña el precio por
+  // tapa y cobra el de botella.
+  const porBotella = nota?.tipo_servicio === 'AUTOSERVICIO';
+  const esBolsa    = (p) => p.clase === 'bolsa';
+
+  const unidadDe = (p, n = 2) => {
+    if (esBolsa(p))  return n === 1 ? 'bolsa' : 'bolsas';
+    if (!porBotella) return n === 1 ? 'tapa'  : 'tapas';
+    return p.tipo_liquido === 'marca'
+      ? (n === 1 ? 'unidad'  : 'unidades')
+      : (n === 1 ? 'botella' : 'botellas');
+  };
+  // El stock vive en tapas: una botella son varias.
+  const tapasPorUnidadDe = (p) =>
+    (esBolsa(p) || !porBotella) ? 1 : (Number(p.tapas_por_botella) || 1);
+  const precioDe = (p) => Number(esBolsa(p) || !porBotella ? p.precio_unitario : p.precio_botella) || 0;
+  const disponibleDe = (p) => Math.floor(Number(p.stock_disponible) / tapasPorUnidadDe(p));
+
+  // Solo productos con al menos una unidad vendible que no estén ya en la nota.
   const productosDisponibles = productos.filter(
-    p => Number(p.stock_disponible) > 0 && !productosIdsEnNota.has(p.id)
+    p => disponibleDe(p) > 0 && !productosIdsEnNota.has(p.id)
   );
 
   return (
@@ -738,9 +758,9 @@ export default function Salidas() {
                 <div className="flex-1 min-w-[9rem]">
                   <p className="text-sm font-medium text-gray-800 truncate">{etiquetaProducto(p)}</p>
                   <p className="text-xs text-gray-400">
-                    Disponible: {p.stock_disponible} {p.unidad} ·{' '}
-                    {Number(p.precio_unitario) > 0
-                      ? fmtMonto(p.precio_unitario)
+                    Disponible: {disponibleDe(p)} {unidadDe(p, disponibleDe(p))} ·{' '}
+                    {precioDe(p) > 0
+                      ? `${fmtMonto(precioDe(p))}/${unidadDe(p, 1)}`
                       : <span className="text-bronce font-medium">sin precio</span>}
                   </p>
                 </div>
@@ -762,7 +782,7 @@ export default function Salidas() {
                     <button
                       type="button"
                       onClick={() => setCantidad(p.id, cantidadDe(p) + 1)}
-                      disabled={cantidadDe(p) >= p.stock_disponible}
+                      disabled={cantidadDe(p) >= disponibleDe(p)}
                       aria-label="Aumentar cantidad"
                       className="w-9 h-9 flex items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-700 text-base font-semibold hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                     >
@@ -802,7 +822,7 @@ export default function Salidas() {
               <p className="text-sm text-gray-500">
                 Se agregarán{' '}
                 <span className="font-semibold text-gray-800">
-                  {confirmProducto.cantidad} {confirmProducto.unidad}
+                  {confirmProducto.cantidad} {unidadDe(confirmProducto, confirmProducto.cantidad)}
                 </span>{' '}
                 de <span className="font-semibold text-gray-800">{etiquetaProducto(confirmProducto)}</span> a
                 esta nota.
@@ -811,13 +831,14 @@ export default function Salidas() {
                 <div className="flex justify-between px-3 py-2">
                   <span className="text-gray-500">Se cobra al cliente</span>
                   <span className="font-semibold text-gray-900">
-                    {fmtMonto(confirmProducto.precio_unitario * confirmProducto.cantidad)}
+                    {fmtMonto(precioDe(confirmProducto) * confirmProducto.cantidad)}
                   </span>
                 </div>
                 <div className="flex justify-between px-3 py-2">
                   <span className="text-gray-500">Queda en inventario</span>
                   <span className="font-semibold text-gray-900">
-                    {confirmProducto.stock_disponible - confirmProducto.cantidad} {confirmProducto.unidad}
+                    {disponibleDe(confirmProducto) - confirmProducto.cantidad}{' '}
+                    {unidadDe(confirmProducto, disponibleDe(confirmProducto) - confirmProducto.cantidad)}
                   </span>
                 </div>
               </div>
