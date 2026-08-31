@@ -1152,7 +1152,7 @@ export default function Ajustes() {
       </div>
 
       {/* Gestión de sucursales */}
-      <div className="border-t border-gray-100 pt-4 space-y-4">
+      <div className="border-t border-gray-100 pt-8 mt-4 space-y-6">
         <div className="flex items-center justify-between">
           <TituloGrupo>Sucursales</TituloGrupo>
           <button
@@ -1393,9 +1393,9 @@ export default function Ajustes() {
   );
 
   const seccionSucursalesMobile = (
-    <div className="space-y-6">
+    <div className="space-y-14">
       {/* Datos globales del negocio (marca compartida) */}
-      <div className="space-y-5">
+      <div className="space-y-8">
         <TituloGrupoMobile>Negocio (global)</TituloGrupoMobile>
         <MobileField label="Nombre del Negocio">
           <input
@@ -1440,7 +1440,7 @@ export default function Ajustes() {
       </div>
 
       {/* Gestión de sucursales */}
-      <div className="space-y-5 border-t border-light-blue/60 pt-5">
+      <div className="space-y-8 border-t border-light-blue/60 pt-10">
         <div className="flex items-center justify-between">
           <TituloGrupoMobile>Sucursales</TituloGrupoMobile>
           <button
@@ -1843,7 +1843,7 @@ export default function Ajustes() {
             {mobileSectionContent[activeSection.id]}
 
             {activeSection.id !== 'etiquetas' && activeSection.id !== 'inventario' && (
-            <div className="grid grid-cols-2 gap-3 pt-2">
+            <div className="grid grid-cols-2 gap-3 pt-8">
               <button
                 type="button"
                 onClick={() => setMobileSection(null)}
