@@ -454,11 +454,14 @@ export default function NuevaNota() {
       ? Number(prod.stock_disponible ?? prod.stock_actual) || 0
       : botellasDisponibles(prod);
   };
-  // Texto de apoyo del renglón: "$5.00/tapa · 140 tapas".
+  // Precio con su unidad: "$5.00/tapa".
+  const precioProductoTexto = (prod, ambito) =>
+    `$${precioEnAmbito(prod, ambito).toFixed(2)}/${unidadEnAmbito(prod, ambito, 1)}`;
+  // Lo anterior más las existencias: "$5.00/tapa · 140 tapas". Solo en el
+  // selector, que es donde sirven para decidir.
   const detalleProducto = (prod, ambito) => {
     const disp = disponiblesDe(prod, ambito);
-    return `$${precioEnAmbito(prod, ambito).toFixed(2)}/${unidadEnAmbito(prod, ambito, 1)}`
-      + ` · ${disp} ${unidadEnAmbito(prod, ambito, disp)}`;
+    return `${precioProductoTexto(prod, ambito)} · ${disp} ${unidadEnAmbito(prod, ambito, disp)}`;
   };
 
   // Agrega a la nota o a la carga el producto elegido en el modal.
@@ -1223,7 +1226,7 @@ export default function NuevaNota() {
                                   {prod ? etiquetaProd(prod) : 'Producto no disponible'}
                                 </p>
                                 <p className="text-xs text-gray-500 tabular-nums">
-                                  {prod ? detalleProducto(prod, 'carga') : '—'}
+                                  {prod ? precioProductoTexto(prod, 'carga') : '—'}
                                 </p>
                               </div>
 
@@ -1872,7 +1875,7 @@ export default function NuevaNota() {
                           {prod ? etiquetaProd(prod) : 'Producto no disponible'}
                         </p>
                         <p className="text-xs text-gray-500 tabular-nums">
-                          {prod ? detalleProducto(prod, 'nota') : '—'}
+                          {prod ? precioProductoTexto(prod, 'nota') : '—'}
                         </p>
                       </div>
 
