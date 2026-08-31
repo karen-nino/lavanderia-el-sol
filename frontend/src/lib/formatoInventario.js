@@ -50,3 +50,23 @@ export function etiquetaProducto(p) {
   if (p.tipo_liquido === 'marca' && p.marca) return `${p.marca} · ${p.nombre}`;
   return p.nombre ?? '';
 }
+
+// Para listas de dos líneas: la marca manda como título y el nombre baja al
+// subtítulo (Ensueño / Suavizante), que es donde también se marca el granel.
+export function tituloProducto(p) {
+  if (!p) return '';
+  if (p.clase === 'bolsa') {
+    return p.tamano_bolsa ? `Bolsa ${p.tamano_bolsa}` : (p.nombre || 'Bolsa');
+  }
+  if (p.tipo_liquido === 'marca' && p.marca) return p.marca;
+  return p.nombre ?? '';
+}
+
+// Lo que acompaña al título: el nombre en los de marca, "Granel" en el bidón.
+// Las bolsas no llevan (su tamaño ya va en el título).
+export function subtituloProducto(p) {
+  if (!p || p.clase === 'bolsa') return '';
+  if (p.tipo_liquido === 'marca' && p.marca) return p.nombre ?? '';
+  if (p.tipo_liquido === 'granel') return 'Granel';
+  return '';
+}

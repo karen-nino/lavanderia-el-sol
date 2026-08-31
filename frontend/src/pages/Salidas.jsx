@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
-import { etiquetaProducto } from '../lib/formatoInventario';
+import { etiquetaProducto, tituloProducto, subtituloProducto } from '../lib/formatoInventario';
 import { useAuth } from '../context/AuthContext';
 import { esAdmin as esAdminFn } from '../lib/roles';
 import MaquinaCicloOverlay from '../components/MaquinaCicloOverlay';
@@ -759,18 +759,22 @@ export default function Salidas() {
               <div key={p.id} className="px-4 py-3 flex flex-wrap items-center gap-x-3 gap-y-3">
                 <div className="flex-1 min-w-[9rem]">
                   <p className="text-sm font-medium text-gray-800 truncate">
-                    {etiquetaProducto(p)}
+                    {tituloProducto(p)}
                     {enNotaDe(p) && (
                       <span className="ml-2 text-xs font-semibold text-blue bg-light-blue rounded-pill px-2 py-0.5 align-middle">
-                        {enNotaDe(p).cantidad} en la nota
+                        en la nota
                       </span>
                     )}
                   </p>
-                  <p className="text-xs text-gray-400">
-                    Disponible: {disponibleDe(p)} {unidadDe(p, disponibleDe(p))} ·{' '}
+                  {/* "Granel" distingue el bidón de los productos de marca, que
+                      se llaman igual (Suavizante vs. Ensueño · Suavizante). */}
+                  {subtituloProducto(p) && (
+                    <p className="text-xs text-gray-400">{subtituloProducto(p)}</p>
+                  )}
+                  <p className="text-xs font-medium text-gray-500">
                     {precioDe(p) > 0
                       ? `${fmtMonto(precioDe(p))}/${unidadDe(p, 1)}`
-                      : <span className="text-bronce font-medium">sin precio</span>}
+                      : <span className="text-bronce">sin precio</span>}
                   </p>
                 </div>
                 <div className="flex items-center gap-3 ml-auto flex-shrink-0">
