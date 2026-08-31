@@ -1946,42 +1946,97 @@ export default function NuevaNota() {
             <div>
             <h2 className={LABEL_CLS}>Resumen</h2>
             <div className="bg-light-blue border border-blue-200 rounded-xl p-4">
-              <div className="space-y-1 mb-3 text-sm text-blue-700">
+              <div className="space-y-2.5 mb-3 text-sm text-blue-700">
                 <div className="flex justify-between">
                   <span>Servicio</span>
                   <span className="font-medium">{TIPO_LABEL[tipoServicio]}</span>
                 </div>
+                <div className="flex justify-between">
+                  <span>Cargas</span>
+                  <span className="font-medium">{cargasAuto.length}</span>
+                </div>
               </div>
-              <div className="space-y-1 mb-2 text-sm text-blue border-t border-blue-200 pt-3">
+
+              {/* Cada carga con lo que se le cobra. La máquina física no va
+                  aquí: en Autoservicio se elige el tipo y se asigna en Salidas. */}
+              <div className="space-y-3 mb-3 text-sm text-blue border-t border-blue-200 pt-3">
                 {cargasAuto.map((c, i) => {
-                  const lav = maquinas.find(m => String(m.id) === String(c.lavadora_id));
-                  const sec = maquinas.find(m => String(m.id) === String(c.secadora_id));
-                  const partes = [lav?.nombre, sec?.nombre].filter(Boolean);
+                  const lavado = precioLavadoTipo(c.lavadora_tipo, c.tipo_prenda);
+                  const secado = precioSecadoTipo(c.secadora_tipo, c.tipo_prenda);
                   return (
-                    <div key={i} className="flex justify-between">
-                      <span>
-                        Carga {i + 1}{partes.length > 0 ? ` (${partes.join(' + ')})` : ' · sin máquinas'}
-                      </span>
-                      <span>${subtotalDeCarga(c).toFixed(2)}</span>
+                    <div key={i}>
+                      <div className="flex justify-between font-medium">
+                        <span>Carga {i + 1}</span>
+                        <span>${subtotalDeCarga(c).toFixed(2)}</span>
+                      </div>
+                      <div className="pl-3 mt-1.5 space-y-1.5 text-xs text-blue-700/80">
+                        {c.lavadora_tipo ? (
+                          <div className="flex justify-between">
+                            <span>Lavado {c.lavadora_tipo}</span>
+                            <span>${lavado.toFixed(2)}</span>
+                          </div>
+                        ) : (
+                          <div>Sin lavado</div>
+                        )}
+                        {c.secadora_tipo ? (
+                          <div className="flex justify-between">
+                            <span>Secado</span>
+                            <span>${secado.toFixed(2)}</span>
+                          </div>
+                        ) : (
+                          <div>Sin secado</div>
+                        )}
+                      </div>
                     </div>
                   );
                 })}
-                {ajusteNum !== 0 && (
-                  <div className="flex justify-between">
-                    <span>Ajuste</span>
-                    <span>{ajusteNum > 0 ? '+' : ''}${ajusteNum.toFixed(2)}</span>
-                  </div>
-                )}
-                {subtotalProductos > 0 && (
-                  <div className="flex justify-between">
+              </div>
+
+              {productosLista.length > 0 && (
+                <div className="space-y-2 mb-3 text-sm text-blue border-t border-blue-200 pt-3">
+                  <div className="flex justify-between font-medium">
                     <span>Productos</span>
                     <span>${subtotalProductos.toFixed(2)}</span>
                   </div>
-                )}
+                  <div className="pl-3 mt-1.5 space-y-1.5 text-xs text-blue-700/80">
+                    {productosLista.map((item, i) => {
+                      const prod = productosCatalogo.find(x => String(x.id) === String(item.producto_id));
+                      const cant = Number(item.cantidad) || 0;
+                      if (!prod) return null;
+                      return (
+                        <div key={i} className="flex justify-between">
+                          <span>{etiquetaProd(prod)} × {cant} {unidadVentaNota(prod, cant)}</span>
+                          <span>${(precioProducto(prod, 'botella') * cant).toFixed(2)}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {(ajusteNum !== 0 || form.forma_pago) && (
+                <div className="space-y-2 mb-2 text-sm text-blue border-t border-blue-200 pt-3">
+                  {ajusteNum !== 0 && (
+                    <div className="flex justify-between">
+                      <span>Ajuste</span>
+                      <span>{ajusteNum > 0 ? '+' : ''}${ajusteNum.toFixed(2)}</span>
+                    </div>
+                  )}
+                  {form.forma_pago && (
+                    <div className="flex justify-between">
+                      <span>Forma de pago</span>
+                      <span className="font-medium">
+                        {FORMAS_PAGO.find(f => f.v === form.forma_pago)?.label}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+              {/* Mismo remate que el resumen de Por Encargo. */}
+              <div className="flex items-baseline justify-between border-t border-blue-200 pt-3">
+                <span className="text-sm font-medium text-blue">Total</span>
+                <span className="text-3xl font-bold text-blue-700">${precioTotal.toFixed(2)}</span>
               </div>
-              <p className="text-3xl font-bold text-blue-700 border-t border-blue-200 pt-2">
-                ${precioTotal.toFixed(2)}
-              </p>
             </div>
             </div>
           );
