@@ -1221,7 +1221,7 @@ export default function NuevaNota() {
                           const cant  = Number(item.cantidad) || 0;
                           const subtotal = precioProducto(prod) * cant;
                           return (
-                            <div key={j} className={`flex flex-wrap items-center gap-x-2 gap-y-2 px-3 py-2.5 ${j > 0 ? 'border-t border-gray-100' : ''}`}>
+                            <div key={j} className={`flex flex-wrap items-center gap-x-2 gap-y-4 px-3 py-4 ${j > 0 ? 'border-t border-gray-100' : ''}`}>
                               {/* El producto se muestra como texto (así caben el
                                   nombre completo, el precio y el stock) con el
                                   select nativo encima para poder cambiarlo. */}
@@ -1883,7 +1883,7 @@ export default function NuevaNota() {
                   const cant = Number(item.cantidad) || 0;
                   const subtotal = precioProducto(prod, 'botella') * cant;
                   return (
-                    <div key={i} className={`flex flex-wrap items-center gap-x-2 gap-y-2 px-3 py-2.5 ${i > 0 ? 'border-t border-gray-100' : ''}`}>
+                    <div key={i} className={`flex flex-wrap items-center gap-x-2 gap-y-4 px-3 py-4 ${i > 0 ? 'border-t border-gray-100' : ''}`}>
                       <button
                         type="button"
                         onClick={() => setSelectorProducto({ ambito: 'nota', item: i })}
