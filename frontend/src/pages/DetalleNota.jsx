@@ -736,6 +736,47 @@ export default function DetalleNota() {
         </div>
       </div>
 
+      {/* Productos */}
+      <div className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
+        <div className="px-4 py-3 border-b border-gray-50 flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-gray-700">Productos</h2>
+          {(nota.productos || []).length > 0 && (
+            <span className="text-xs text-gray-400">{(nota.productos || []).length} ítem(s)</span>
+          )}
+        </div>
+        {(nota.productos || []).length === 0 ? (
+          <p className="text-sm text-gray-400 italic px-4 py-4">Sin productos agregados</p>
+        ) : (
+          <div className="divide-y divide-gray-50">
+            {(nota.productos || []).map(p => {
+              const incluido = p.es_por_tapa && Number(p.subtotal) === 0;
+              return (
+              <div key={p.id} className="px-4 py-3 flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium text-gray-800">{nombreProd(p)}</p>
+                  <p className="text-xs text-gray-400">
+                    {incluido
+                      ? `${p.cantidad} ${unidadProdTxt(p)}`
+                      : `${p.cantidad} ${unidadProdTxt(p)} × ${fmtMonto(p.precio_unitario)}`}
+                  </p>
+                </div>
+                <span className="text-sm font-semibold flex-shrink-0">
+                  {incluido
+                    ? <span className="text-green-700">Incluido</span>
+                    : <span className="text-gray-700">{fmtMonto(p.subtotal)}</span>}
+                </span>
+              </div>
+              );
+            })}
+            <div className="px-4 py-3 flex justify-between bg-gray-50">
+              <span className="text-sm font-semibold text-gray-700">Total productos</span>
+              <span className="text-sm font-bold text-gray-900">{fmtMonto(totalProductos)}</span>
+            </div>
+          </div>
+        )}
+      </div>
+      </div>
+
       {/* Estado */}
       <div className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
         <div className="px-4 py-3 border-b border-gray-50">
@@ -825,47 +866,6 @@ export default function DetalleNota() {
             </ol>
           )}
         </div>
-      </div>
-
-      {/* Productos */}
-      <div className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
-        <div className="px-4 py-3 border-b border-gray-50 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-gray-700">Productos</h2>
-          {(nota.productos || []).length > 0 && (
-            <span className="text-xs text-gray-400">{(nota.productos || []).length} ítem(s)</span>
-          )}
-        </div>
-        {(nota.productos || []).length === 0 ? (
-          <p className="text-sm text-gray-400 italic px-4 py-4">Sin productos agregados</p>
-        ) : (
-          <div className="divide-y divide-gray-50">
-            {(nota.productos || []).map(p => {
-              const incluido = p.es_por_tapa && Number(p.subtotal) === 0;
-              return (
-              <div key={p.id} className="px-4 py-3 flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-medium text-gray-800">{nombreProd(p)}</p>
-                  <p className="text-xs text-gray-400">
-                    {incluido
-                      ? `${p.cantidad} ${unidadProdTxt(p)}`
-                      : `${p.cantidad} ${unidadProdTxt(p)} × ${fmtMonto(p.precio_unitario)}`}
-                  </p>
-                </div>
-                <span className="text-sm font-semibold flex-shrink-0">
-                  {incluido
-                    ? <span className="text-green-700">Incluido</span>
-                    : <span className="text-gray-700">{fmtMonto(p.subtotal)}</span>}
-                </span>
-              </div>
-              );
-            })}
-            <div className="px-4 py-3 flex justify-between bg-gray-50">
-              <span className="text-sm font-semibold text-gray-700">Total productos</span>
-              <span className="text-sm font-bold text-gray-900">{fmtMonto(totalProductos)}</span>
-            </div>
-          </div>
-        )}
-      </div>
       </div>
 
       {/* Modal confirmar cancelación → abre el modal del motivo */}
