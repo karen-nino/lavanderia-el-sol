@@ -144,10 +144,10 @@ export default function NuevaNota() {
   const [clientes,          setClientes]          = useState([]);
   const [clienteSearch,     setClienteSearch]     = useState('');
   const [nuevoClienteOpen,  setNuevoClienteOpen]  = useState(false);
-  // Selector de producto. `ambito` distingue los productos de la nota
-  // (Autoservicio, por botella) de los de una carga (Por Encargo, por tapa);
-  // `carga` solo aplica al segundo. Con `item` en null se agrega uno nuevo, y
-  // con un índice se cambia el producto de ese renglón.
+  // Selector para agregar un producto. `ambito` distingue los productos de la
+  // nota (Autoservicio, por botella) de los de una carga (Por Encargo, por
+  // tapa); `carga` solo aplica al segundo. Un producto puesto no se cambia: se
+  // borra y se agrega el correcto.
   const [selectorProducto,  setSelectorProducto]  = useState(null);
   const [nuevoCliente,      setNuevoCliente]      = useState({ nombre: '', apellido: '', telefono: '' });
   const [creandoCliente,    setCreandoCliente]    = useState(false);
@@ -461,18 +461,12 @@ export default function NuevaNota() {
       + ` · ${disp} ${unidadEnAmbito(prod, ambito, disp)}`;
   };
 
-  // Aplica lo elegido en el modal: alta si se abrió desde "Agregar producto",
-  // cambio si se abrió tocando un producto ya puesto.
+  // Agrega a la nota o a la carga el producto elegido en el modal.
   const elegirProducto = (productoId) => {
     if (!selectorProducto) return;
-    const { ambito, carga, item } = selectorProducto;
-    if (esCarga(ambito)) {
-      if (item === null) agregarProductoCarga(carga, productoId);
-      else               actualizarProductoCarga(carga, item, 'producto_id', String(productoId));
-    } else {
-      if (item === null) agregarProducto(productoId);
-      else               actualizarProducto(item, 'producto_id', String(productoId));
-    }
+    const { ambito, carga } = selectorProducto;
+    if (esCarga(ambito)) agregarProductoCarga(carga, productoId);
+    else                 agregarProducto(productoId);
     setSelectorProducto(null);
   };
 
@@ -1201,7 +1195,7 @@ export default function NuevaNota() {
                       </div>
                       <button
                         type="button"
-                        onClick={() => setSelectorProducto({ ambito: 'carga', carga: idx, item: null })}
+                        onClick={() => setSelectorProducto({ ambito: 'carga', carga: idx })}
                         className="flex-shrink-0 flex items-center gap-1.5 border-[1.5px] border-blue bg-white text-blue rounded-pill pl-2.5 pr-3.5 py-2 text-xs font-bold hover:bg-light-blue transition-colors"
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1222,29 +1216,16 @@ export default function NuevaNota() {
                           const subtotal = precioProducto(prod) * cant;
                           return (
                             <div key={j} className={`flex flex-wrap items-center gap-x-2 gap-y-4 px-3 py-4 ${j > 0 ? 'border-t border-gray-100' : ''}`}>
-                              {/* El producto se muestra como texto (así caben el
-                                  nombre completo, el precio y el stock) con el
-                                  select nativo encima para poder cambiarlo. */}
-                              {/* El producto se muestra como texto (así caben el
-                                  nombre completo, el precio y el stock); al tocarlo
-                                  se abre el selector para cambiarlo. */}
-                              <button
-                                type="button"
-                                onClick={() => setSelectorProducto({ ambito: 'carga', carga: idx, item: j })}
-                                className="flex-1 min-w-[10rem] text-left rounded-lg px-1 -mx-1 hover:bg-gray-50 transition-colors"
-                              >
-                                <span className="flex items-center gap-1">
-                                  <span className={`text-sm font-semibold ${prod ? 'text-gray-900' : 'text-gray-400'}`}>
-                                    {prod ? etiquetaProd(prod) : 'Elige un producto'}
-                                  </span>
-                                  <svg className="w-4 h-4 flex-shrink-0 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                  </svg>
-                                </span>
-                                <span className="block text-xs text-gray-500 tabular-nums">
-                                  {prod ? detalleProducto(prod, 'carga') : 'Toca para elegir'}
-                                </span>
-                              </button>
+                              {/* Solo texto: el producto no se cambia, se borra el renglón y se
+                                  agrega el correcto. */}
+                              <div className="flex-1 min-w-[10rem]">
+                                <p className={`text-sm font-semibold ${prod ? 'text-gray-900' : 'text-gray-400'}`}>
+                                  {prod ? etiquetaProd(prod) : 'Producto no disponible'}
+                                </p>
+                                <p className="text-xs text-gray-500 tabular-nums">
+                                  {prod ? detalleProducto(prod, 'carga') : '—'}
+                                </p>
+                              </div>
 
                               {/* Cantidad, importe y borrar viajan juntos: si no
                                   caben junto al nombre, bajan al siguiente renglón. */}
@@ -1281,8 +1262,8 @@ export default function NuevaNota() {
                                     aria-label="Eliminar producto"
                                     className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
                                   >
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                     </svg>
                                   </button>
                                 </div>
@@ -1862,7 +1843,7 @@ export default function NuevaNota() {
               </div>
               <button
                 type="button"
-                onClick={() => setSelectorProducto({ ambito: 'nota', item: null })}
+                onClick={() => setSelectorProducto({ ambito: 'nota' })}
                 className="flex-shrink-0 flex items-center gap-1.5 border-[1.5px] border-blue bg-white text-blue rounded-pill pl-2.5 pr-3.5 py-2 text-xs font-bold hover:bg-light-blue transition-colors"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1884,23 +1865,16 @@ export default function NuevaNota() {
                   const subtotal = precioProducto(prod, 'botella') * cant;
                   return (
                     <div key={i} className={`flex flex-wrap items-center gap-x-2 gap-y-4 px-3 py-4 ${i > 0 ? 'border-t border-gray-100' : ''}`}>
-                      <button
-                        type="button"
-                        onClick={() => setSelectorProducto({ ambito: 'nota', item: i })}
-                        className="flex-1 min-w-[10rem] text-left rounded-lg px-1 -mx-1 hover:bg-gray-50 transition-colors"
-                      >
-                        <span className="flex items-center gap-1">
-                          <span className={`text-sm font-semibold ${prod ? 'text-gray-900' : 'text-gray-400'}`}>
-                            {prod ? etiquetaProd(prod) : 'Elige un producto'}
-                          </span>
-                          <svg className="w-4 h-4 flex-shrink-0 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                          </svg>
-                        </span>
-                        <span className="block text-xs text-gray-500 tabular-nums">
-                          {prod ? detalleProducto(prod, 'nota') : 'Toca para elegir'}
-                        </span>
-                      </button>
+                      {/* Solo texto: el producto no se cambia, se borra el renglón y se
+                          agrega el correcto. */}
+                      <div className="flex-1 min-w-[10rem]">
+                        <p className={`text-sm font-semibold ${prod ? 'text-gray-900' : 'text-gray-400'}`}>
+                          {prod ? etiquetaProd(prod) : 'Producto no disponible'}
+                        </p>
+                        <p className="text-xs text-gray-500 tabular-nums">
+                          {prod ? detalleProducto(prod, 'nota') : '—'}
+                        </p>
+                      </div>
 
                       {/* Cantidad, importe y borrar viajan juntos: si no caben
                           junto al nombre, bajan al siguiente renglón. */}
@@ -1937,8 +1911,8 @@ export default function NuevaNota() {
                             aria-label="Eliminar producto"
                             className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
                           >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                             </svg>
                           </button>
                         </div>
@@ -2073,7 +2047,7 @@ export default function NuevaNota() {
             <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-gray-100 flex-shrink-0">
               <div>
                 <h2 className="text-base font-semibold text-gray-900">
-                  {selectorProducto.item === null ? 'Agregar producto' : 'Cambiar producto'}
+                  Agregar producto
                 </h2>
                 <p className="text-xs text-gray-500 mt-0.5">
                   {esCarga(selectorProducto.ambito)
@@ -2095,7 +2069,7 @@ export default function NuevaNota() {
 
             <div className="p-3 overflow-y-auto">
               {(() => {
-                const { ambito, item } = selectorProducto;
+                const { ambito } = selectorProducto;
                 const lista = catalogoDe(ambito);
                 if (lista.length === 0) {
                   return (
@@ -2109,9 +2083,7 @@ export default function NuevaNota() {
                 const enUso = esCarga(ambito)
                   ? (encargoCargas[selectorProducto.carga]?.productos ?? [])
                   : productosLista;
-                const puestos = enUso
-                  .filter((_, k) => k !== item)
-                  .map(p => String(p.producto_id));
+                const puestos = enUso.map(p => String(p.producto_id));
                 const disponibles = lista.filter(p =>
                   !puestos.includes(String(p.id)) && disponiblesDe(p, ambito) > 0);
                 return (
