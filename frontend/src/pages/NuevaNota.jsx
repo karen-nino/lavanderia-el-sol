@@ -572,9 +572,6 @@ export default function NuevaNota() {
     return base + (Number(c.ajuste) || 0);
   };
   const encargoPrecioTotal  = encargoCargas.reduce((s, c) => s + subtotalCargaEncargo(c), 0);
-  // Subtotal real de la nota: suma del costo real (máquinas + productos) de
-  // todas las cargas. Informativo para el empleado; el cliente paga el total.
-  const encargoSubtotalReal = encargoCargas.reduce((s, c) => s + usadoContraTope(c), 0);
 
   const excesoDeCarga = (c) => {
     const tope = topeDeCarga(c);
@@ -1593,7 +1590,11 @@ export default function NuevaNota() {
                 <div className="space-y-5 mb-2 text-sm text-blue border-t border-blue-200 pt-4">
                   {encargoCargas.map((c, i) => {
                     const tipoLabel = t => t === 'jumbo' ? 'Jumbo' : t === 'mediana' ? 'Mediana' : t === 'edredon' ? 'Edredón' : '';
-                    const detalle = [PRENDA_LABEL[c.tipo_prenda], c.tamano ? TAMANO_LABEL[c.tamano] : null].filter(Boolean).join(', ');
+                    const detalle = [
+                      PRENDA_LABEL[c.tipo_prenda],
+                      c.tipo_tela || null,
+                      c.tamano ? TAMANO_LABEL[c.tamano] : null,
+                    ].filter(Boolean).join(', ');
                     const productosCarga = (c.productos ?? []).filter(p => p.producto_id && Number(p.cantidad) > 0);
                     const lavPrecio = precioLavadoTipo(c.lavadora_tipo, c.tipo_prenda);
                     const secPrecio = precioSecadoTipo(c.secadora_tipo, c.tipo_prenda);
@@ -1654,12 +1655,7 @@ export default function NuevaNota() {
                     );
                   })}
                 </div>
-                {/* Subtotal de la nota (costo real, informativo) y total a pagar */}
-                <div className="flex justify-between text-sm text-blue border-t border-blue-200 pt-4">
-                  <span>Subtotal (costo real)</span>
-                  <span>${encargoSubtotalReal.toFixed(2)}</span>
-                </div>
-                <div className="flex items-baseline justify-between pt-3">
+                <div className="flex items-baseline justify-between border-t border-blue-200 pt-4">
                   <span className="text-sm font-medium text-blue">Total de la nota</span>
                   <span className="text-3xl font-bold text-blue-700">${encargoPrecioTotal.toFixed(2)}</span>
                 </div>
