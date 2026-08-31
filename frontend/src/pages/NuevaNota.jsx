@@ -453,6 +453,11 @@ export default function NuevaNota() {
       ? Number(prod.stock_disponible ?? prod.stock_actual) || 0
       : botellasDisponibles(prod);
   };
+  // Orden de presentación de los productos: primero el granel, luego los de
+  // marca y al final las bolsas (igual que ordena el catálogo el backend).
+  const ordenProducto = (p) =>
+    p?.tipo_liquido === 'granel' ? 0 : p?.tipo_liquido === 'marca' ? 1 : 2;
+
   // Precio con su unidad: "$5.00/tapa".
   const precioProductoTexto = (prod, ambito) =>
     `$${precioEnAmbito(prod, ambito).toFixed(2)}/${unidadEnAmbito(prod, ambito, 1)}`;
@@ -1991,7 +1996,7 @@ export default function NuevaNota() {
                       <div className="pl-3 mt-1.5 space-y-1.5 text-xs text-blue-700/80">
                         {c.lavadora_tipo ? (
                           <div className="flex justify-between">
-                            <span>Lavado {c.lavadora_tipo}</span>
+                            <span>Lavado · {c.lavadora_tipo.charAt(0).toUpperCase() + c.lavadora_tipo.slice(1)}</span>
                             <span>${lavado.toFixed(2)}</span>
                           </div>
                         ) : (
@@ -2018,14 +2023,24 @@ export default function NuevaNota() {
                     <span>${subtotalProductos.toFixed(2)}</span>
                   </div>
                   <div className="pl-3 mt-1.5 space-y-1.5 text-xs text-blue-700/80">
-                    {productosLista.map((item, i) => {
-                      const prod = productosCatalogo.find(x => String(x.id) === String(item.producto_id));
+                    {productosLista
+                      .map(item => ({
+                        item,
+                        prod: productosCatalogo.find(x => String(x.id) === String(item.producto_id)),
+                      }))
+                      .filter(x => x.prod)
+                      .sort((a, b) => ordenProducto(a.prod) - ordenProducto(b.prod))
+                      .map(({ item, prod }, i) => {
                       const cant = Number(item.cantidad) || 0;
-                      if (!prod) return null;
                       return (
-                        <div key={i} className="flex justify-between">
-                          <span>{etiquetaProducto(prod)} × {cant} {unidadVentaNota(prod, cant)}</span>
-                          <span>${(precioProducto(prod, 'botella') * cant).toFixed(2)}</span>
+                        <div key={i} className="flex justify-between gap-2">
+                          {/* "· Granel" distingue el bidón del producto de marca
+                              que se llama igual (Suavizante vs. Ensueño). */}
+                          <span>
+                            {etiquetaProducto(prod)}{prod.tipo_liquido === 'granel' ? ' · Granel' : ''}
+                            {' × '}{cant} {unidadVentaNota(prod, cant)}
+                          </span>
+                          <span className="flex-shrink-0">${(precioProducto(prod, 'botella') * cant).toFixed(2)}</span>
                         </div>
                       );
                     })}
