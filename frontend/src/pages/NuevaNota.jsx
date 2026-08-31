@@ -2047,7 +2047,7 @@ export default function NuevaNota() {
         {/* Forma de pago — al final: Autoservicio se cobra al momento. */}
         <div>
           <label className={LABEL_CLS}>Forma de pago</label>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-3 gap-3 pb-8">
             {FORMAS_PAGO.map(opt => {
               const selected = form.forma_pago === opt.v;
               return (
