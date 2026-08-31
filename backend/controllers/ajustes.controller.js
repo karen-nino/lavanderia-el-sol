@@ -71,7 +71,6 @@ export const updateAjustes = async (req, res) => {
     tiempo_secadora_edredon,
     nombre_negocio,
     rfc,
-    curp,
     direccion,
     telefono,
     stock_minimo_global,
@@ -113,20 +112,10 @@ export const updateAjustes = async (req, res) => {
     return res.status(400).json({ message: 'stock_minimo_global debe ser un entero mayor o igual a 0.' });
   }
 
-  // CURP del negocio: opcional, se guarda en mayúsculas y sin espacios.
-  const normalizarClave = (v) => {
-    const limpio = String(v ?? '').replace(/\s/g, '').toUpperCase();
-    return limpio === '' ? null : limpio;
-  };
-  if (curp !== undefined && normalizarClave(curp) !== null &&
-      !/^[A-Z][AEIOUX][A-Z]{2}\d{6}[HM][A-Z]{5}[A-Z0-9]\d$/.test(normalizarClave(curp))) {
-    return res.status(400).json({ message: 'La CURP no tiene un formato válido (18 caracteres).' });
-  }
-
-  // R.F.C.: texto libre (palabras, números y espacios, sin límite de largo).
-  // Se guarda tal cual, solo sin espacios sobrantes en las orillas; vacío lo borra.
+  // R.F.C.: texto libre (palabras, números y espacios, sin límite de largo),
+  // siempre en MAYÚSCULAS y sin espacios sobrantes; vacío lo borra.
   const rfcLibre = (v) => {
-    const limpio = String(v ?? '').trim();
+    const limpio = String(v ?? '').trim().toUpperCase();
     return limpio === '' ? null : limpio;
   };
 
@@ -153,7 +142,6 @@ export const updateAjustes = async (req, res) => {
   if (tiempo_secadora_edredon !== undefined) { updates.push(`tiempo_secadora_edredon = $${i++}`); values.push(tiempo_secadora_edredon); }
   if (nombre_negocio        !== undefined) { updates.push(`nombre_negocio = $${i++}`);        values.push(nombre_negocio); }
   if (rfc                   !== undefined) { updates.push(`rfc = $${i++}`);                   values.push(rfcLibre(rfc)); }
-  if (curp                  !== undefined) { updates.push(`curp = $${i++}`);                  values.push(normalizarClave(curp)); }
   if (direccion             !== undefined) { updates.push(`direccion = $${i++}`);              values.push(direccion); }
   if (telefono              !== undefined) { updates.push(`telefono = $${i++}`);               values.push(telefono); }
   if (stock_minimo_global   !== undefined) { updates.push(`stock_minimo_global = $${i++}`);   values.push(stock_minimo_global); }

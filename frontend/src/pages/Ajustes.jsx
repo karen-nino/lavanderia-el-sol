@@ -726,9 +726,9 @@ export default function Ajustes() {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    // La CURP se captura en mayúsculas y sin espacios; el R.F.C. es texto libre.
+    // El R.F.C. es texto libre (admite espacios y palabras), todo en mayúsculas.
     const next = name === 'telefono' ? formatTelefono(value)
-      : name === 'curp' ? value.replace(/\s/g, '').toUpperCase()
+      : name === 'rfc' ? value.toUpperCase()
       : value;
     setConfig(prev => ({ ...prev, [name]: next }));
   };
@@ -851,8 +851,7 @@ export default function Ajustes() {
     tiempo_secadora_jumbo:   Number(config.tiempo_secadora_jumbo),
     tiempo_secadora_edredon: Number(config.tiempo_secadora_edredon),
     nombre_negocio:        config.nombre_negocio,
-    rfc:                   config.rfc  ?? '',
-    curp:                  config.curp ?? '',
+    rfc:                   config.rfc ?? '',
     stock_minimo_global:   Number(config.stock_minimo_global),
     alerta_ciclo_detenido: !!config.alerta_ciclo_detenido,
   });
@@ -1134,7 +1133,7 @@ export default function Ajustes() {
         />
       </Field>
 
-      {/* Datos fiscales del negocio: opcionales */}
+      {/* R.F.C. del negocio: opcional */}
       <Field label="R.F.C.">
         <input
           type="text"
@@ -1143,18 +1142,6 @@ export default function Ajustes() {
           onChange={handleChange}
           placeholder="Opcional"
           className={INPUT_CLS}
-        />
-      </Field>
-
-      <Field label="CURP">
-        <input
-          type="text"
-          name="curp"
-          value={config.curp ?? ''}
-          onChange={handleChange}
-          maxLength={18}
-          placeholder="Opcional"
-          className={`${INPUT_CLS} uppercase placeholder:normal-case`}
         />
       </Field>
 
@@ -1465,7 +1452,7 @@ export default function Ajustes() {
           />
         </MobileField>
 
-        {/* Datos fiscales del negocio: opcionales */}
+        {/* R.F.C. del negocio: opcional */}
         <MobileField label="R.F.C.">
           <input
             type="text"
@@ -1474,18 +1461,6 @@ export default function Ajustes() {
             onChange={handleChange}
             placeholder="Opcional"
             className={MOBILE_INPUT_CLS}
-          />
-        </MobileField>
-
-        <MobileField label="CURP">
-          <input
-            type="text"
-            name="curp"
-            value={config.curp ?? ''}
-            onChange={handleChange}
-            maxLength={18}
-            placeholder="Opcional"
-            className={`${MOBILE_INPUT_CLS} uppercase placeholder:normal-case`}
           />
         </MobileField>
 
