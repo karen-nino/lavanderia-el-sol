@@ -1604,9 +1604,8 @@ export default function NuevaNota() {
                         <p className="font-medium">
                           Carga {i + 1}{detalle ? ` — ${detalle}` : ''}
                         </p>
-                        {/* Costo real: desglose de máquinas y productos */}
-                        <p className="mt-2.5 text-xs font-semibold text-blue-700/70 uppercase tracking-wide">Costo real</p>
-                        <ul className="mt-1.5 ml-3 space-y-2 text-xs text-blue-700/80">
+                        {/* Desglose de máquinas y productos de la carga */}
+                        <ul className="mt-2.5 ml-3 space-y-2 text-xs text-blue-700/80">
                           {c.lavadora_tipo && (
                             <li className="flex justify-between gap-2"><span>· Lavadora · {tipoLabel(c.lavadora_tipo)}</span><span>${lavPrecio.toFixed(2)}</span></li>
                           )}
