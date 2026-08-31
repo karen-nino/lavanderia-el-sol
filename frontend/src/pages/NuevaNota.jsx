@@ -9,6 +9,11 @@ const INPUT_CLS =
 
 const LABEL_CLS = 'block text-sm font-semibold text-gray-900 mb-2';
 
+// Línea divisoria entre secciones de una misma pantalla.
+const Separador = () => (
+  <div className="py-1"><div className="border-t border-gray-200" /></div>
+);
+
 const INPUT_DISABLED_CLS =
   'w-full px-4 py-3.5 border border-gray-300 rounded-lg text-base bg-gray-50 text-gray-400 cursor-not-allowed placeholder:text-gray-400';
 
@@ -995,8 +1000,10 @@ export default function NuevaNota() {
               const idx = cargaActivaIdx;
               const c = encargoCargas[idx];
               const set = (cambios) => actualizarCargaEncargo(idx, cambios);
+              // 32 px entre las secciones de la carga: algo más de aire que el
+              // resto del wizard, porque aquí caben varias en una pantalla.
               return (
-                <div className="space-y-6">
+                <div className="space-y-8">
                   <h2 className="text-base font-semibold text-gray-900">Carga {idx + 1} de {nCargas}</h2>
 
                   {/* Tamaño de carga */}
@@ -1127,7 +1134,7 @@ export default function NuevaNota() {
                       tamaño de carga. */}
                   {c.tamano && c.tipo_prenda && (
                   <>
-                  <div className="py-1"><div className="border-t border-gray-200" /></div>
+                  <Separador />
                   <div className="space-y-3">
                     <h3 className="text-sm font-semibold text-gray-900">Tipo de máquina</h3>
                     <div>
@@ -1180,79 +1187,7 @@ export default function NuevaNota() {
 
                   {c.tamano && c.tipo_prenda && (
                   <>
-                  <div className="py-1"><div className="border-t border-gray-200" /></div>
-                  {/* Bolsa incluida según el tamaño de la carga (editable) */}
-                  {bolsaDeCarga(c) && (
-                    <div className="rounded-xl border border-gray-200 p-4 bg-amber-50/40">
-                      {!bolsaTieneStock(bolsaDeCarga(c)) ? (
-                        <p className="text-sm text-gray-500">
-                          No hay bolsas {bolsaDeCarga(c).tamano_bolsa} en existencia — no se incluye ninguna.
-                        </p>
-                      ) : !c.sin_bolsa ? (
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium text-gray-800">
-                              Bolsa {bolsaDeCarga(c).tamano_bolsa}
-                              <span className="text-xs text-green-700 font-medium"> · Incluida</span>
-                            </p>
-                            <p className="text-xs text-gray-500 mt-0.5">
-                              Se cobra ${(Number(bolsaDeCarga(c).precio_unitario) || 0).toFixed(2)} en la nota
-                            </p>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => actualizarCargaEncargo(idx, { sin_bolsa: true })}
-                            className="flex-shrink-0 text-xs text-gray-400 hover:text-red-600 underline"
-                          >
-                            Quitar
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => actualizarCargaEncargo(idx, { sin_bolsa: false })}
-                          className="text-sm text-blue hover:text-blue-800 font-medium"
-                        >
-                          + Agregar bolsa {bolsaDeCarga(c).tamano_bolsa}
-                        </button>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Empaquetado (Ajustes), incluido por defecto y editable */}
-                  {costoEmpaquetado > 0 && (
-                    <div className="rounded-xl border border-gray-200 p-4 bg-amber-50/40">
-                      {c.empaquetado !== false ? (
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium text-gray-800">
-                              Empaquetado
-                              <span className="text-xs text-green-700 font-medium"> · Incluido</span>
-                            </p>
-                            <p className="text-xs text-gray-500 mt-0.5">
-                              Se cobra ${costoEmpaquetado.toFixed(2)} en la nota
-                            </p>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => actualizarCargaEncargo(idx, { empaquetado: false })}
-                            className="flex-shrink-0 text-xs text-gray-400 hover:text-red-600 underline"
-                          >
-                            Quitar
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => actualizarCargaEncargo(idx, { empaquetado: true })}
-                          className="text-sm text-blue hover:text-blue-800 font-medium"
-                        >
-                          + Agregar empaquetado
-                        </button>
-                      )}
-                    </div>
-                  )}
-
+                  <Separador />
                   {/* Productos de la carga */}
                   <div>
                     {/* Agregar vive solo en el encabezado: así no cambia de sitio
@@ -1365,6 +1300,82 @@ export default function NuevaNota() {
                       )}
                     </div>
                   </div>
+
+                  {/* Bolsa incluida según el tamaño de la carga (editable) */}
+                  {bolsaDeCarga(c) && (
+                    <div className="rounded-xl border border-gray-200 p-4 bg-amber-50/40">
+                      {!bolsaTieneStock(bolsaDeCarga(c)) ? (
+                        <p className="text-sm text-gray-500">
+                          No hay bolsas {bolsaDeCarga(c).tamano_bolsa} en existencia — no se incluye ninguna.
+                        </p>
+                      ) : !c.sin_bolsa ? (
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-gray-800">
+                              Bolsa {bolsaDeCarga(c).tamano_bolsa}
+                              <span className="text-xs text-green-700 font-medium"> · Incluida</span>
+                            </p>
+                            <p className="text-xs text-gray-500 mt-0.5">
+                              Se cobra ${(Number(bolsaDeCarga(c).precio_unitario) || 0).toFixed(2)} en la nota
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => actualizarCargaEncargo(idx, { sin_bolsa: true })}
+                            className="flex-shrink-0 text-xs text-gray-400 hover:text-red-600 underline"
+                          >
+                            Quitar
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => actualizarCargaEncargo(idx, { sin_bolsa: false })}
+                          className="text-sm text-blue hover:text-blue-800 font-medium"
+                        >
+                          + Agregar bolsa {bolsaDeCarga(c).tamano_bolsa}
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Empaquetado (Ajustes), incluido por defecto y editable */}
+                  {costoEmpaquetado > 0 && (
+                    <div className="rounded-xl border border-gray-200 p-4 bg-amber-50/40">
+                      {c.empaquetado !== false ? (
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-gray-800">
+                              Empaquetado
+                              <span className="text-xs text-green-700 font-medium"> · Incluido</span>
+                            </p>
+                            <p className="text-xs text-gray-500 mt-0.5">
+                              Se cobra ${costoEmpaquetado.toFixed(2)} en la nota
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => actualizarCargaEncargo(idx, { empaquetado: false })}
+                            className="flex-shrink-0 text-xs text-gray-400 hover:text-red-600 underline"
+                          >
+                            Quitar
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => actualizarCargaEncargo(idx, { empaquetado: true })}
+                          className="text-sm text-blue hover:text-blue-800 font-medium"
+                        >
+                          + Agregar empaquetado
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {/* El ajuste es su propia sección: la línea lo separa de lo
+                      que se cobra por la carga (productos, bolsa, empaquetado). */}
+                  <Separador />
 
                   {/* Ajuste de la carga */}
                   <div>
@@ -1697,11 +1708,12 @@ export default function NuevaNota() {
         )}
 
         {tipoServicio === 'AUTOSERVICIO' && (
-        <div className="space-y-14">
-        {/* 56 px entre todas las secciones de Autoservicio, de la captura al
-            cobro. El contenedor propio evita depender del space-y del <form>,
-            que dejaba el resumen más pegado que el resto. */}
-        <div className="space-y-14">
+        <div className="space-y-8">
+        {/* 32 px entre todas las secciones, de la captura al cobro: el mismo
+            aire que el paso de carga de Por Encargo, ahora que las líneas
+            marcan la separación. El contenedor propio evita depender del
+            space-y del <form>, que dejaba el resumen más pegado que el resto. */}
+        <div className="space-y-8">
 
           {/* Cuántas cargas y las cargas en sí son lo mismo: se agrupan
               para que el aire de sección no las separe. */}
@@ -1795,6 +1807,8 @@ export default function NuevaNota() {
             </div>
           </div>
 
+          <Separador />
+
           {/* Ajuste */}
           <div>
             <label className={LABEL_CLS}>Ajuste ($)</label>
@@ -1827,6 +1841,8 @@ export default function NuevaNota() {
             </div>
             <p className="text-xs text-gray-400 mt-1.5">Descuento (negativo) o cargo extra (positivo)</p>
           </div>
+
+          <Separador />
 
           {/* ── Productos ────────────────────────────────────── */}
 
@@ -1941,6 +1957,8 @@ export default function NuevaNota() {
 
         </div>
 
+        <Separador />
+
         {/* ── Precio Total ─────────────────────────────────── */}
         {(() => {
           return (
@@ -1987,6 +2005,8 @@ export default function NuevaNota() {
             </div>
           );
         })()}
+
+        <Separador />
 
         {/* Forma de pago — al final: Autoservicio se cobra al momento. */}
         <div>
