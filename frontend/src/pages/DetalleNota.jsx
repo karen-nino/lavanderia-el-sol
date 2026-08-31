@@ -775,7 +775,6 @@ export default function DetalleNota() {
           </div>
         )}
       </div>
-      </div>
 
       {/* Estado */}
       <div className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
@@ -866,6 +865,7 @@ export default function DetalleNota() {
             </ol>
           )}
         </div>
+      </div>
       </div>
 
       {/* Modal confirmar cancelación → abre el modal del motivo */}
