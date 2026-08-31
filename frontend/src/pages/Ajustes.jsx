@@ -110,7 +110,7 @@ const SectionIcon = {
 
 const MOBILE_SECTIONS = [
   { id: 'perfil',  label: 'Mi Perfil',                 subtitle: 'Información de perfil',    icon: SectionIcon.perfil  },
-  { id: 'negocio', label: 'Sucursales',                subtitle: 'Información de sucursales', icon: SectionIcon.negocio },
+  { id: 'negocio', label: 'Negocio y Sucursales',      subtitle: 'Información de sucursales', icon: SectionIcon.negocio },
   { id: 'maquinas', label: 'Máquinas',                  subtitle: 'Detalles de máquinas',      icon: SectionIcon.maquinas },
   { id: 'cargas',   label: 'Cargas y Precios',          subtitle: 'Topes de precio por carga', icon: SectionIcon.cargas },
   { id: 'alertas', label: 'Alertas y Notificaciones',  subtitle: 'Ajustes de alertas', icon: SectionIcon.alertas },
