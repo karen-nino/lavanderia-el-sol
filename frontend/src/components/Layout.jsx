@@ -179,14 +179,17 @@ function SidebarPieBoton({ icon, label, onClick, peligro = false }) {
       onClick={onClick}
       className="group flex flex-col items-center gap-1.5 py-1 w-full"
     >
+      {/* En rojo, igual que Cerrar sesión dentro del menú. */}
       <span
-        className={`w-12 h-12 rounded-card-sm flex items-center justify-center text-dark-blue transition-colors ${
-          peligro ? 'group-hover:bg-red/10 group-hover:text-red' : 'group-hover:bg-light-blue/60'
+        className={`w-12 h-12 rounded-card-sm flex items-center justify-center transition-colors ${
+          peligro
+            ? 'bg-red/10 text-red group-hover:bg-red/20'
+            : 'text-dark-blue group-hover:bg-light-blue/60'
         }`}
       >
         {icon}
       </span>
-      <span className={`text-[11px] font-medium leading-tight text-center ${peligro ? 'text-dark-blue group-hover:text-red' : 'text-dark-blue'}`}>
+      <span className={`text-[11px] font-medium leading-tight text-center ${peligro ? 'text-red' : 'text-dark-blue'}`}>
         {label}
       </span>
     </button>
