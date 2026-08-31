@@ -708,7 +708,7 @@ export const getNotaById = async (req, res) => {
 
     const { rows: productos } = await pool.query(
       `SELECT np.id, np.producto_id, a.nombre, np.cantidad, np.unidad, np.precio_unitario,
-              a.es_por_tapa, a.tipo_liquido, a.clase, a.tamano_bolsa,
+              a.es_por_tapa, a.tipo_liquido, a.clase, a.tamano_bolsa, a.marca,
               (np.cantidad * np.precio_unitario) AS subtotal
        FROM nota_productos np
        JOIN productos a ON a.id = np.producto_id
@@ -2645,6 +2645,7 @@ export const getNotaProductos = async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT np.id, np.producto_id, a.nombre, np.cantidad, np.precio_unitario,
+              a.tipo_liquido, a.clase, a.tamano_bolsa, a.marca,
               (np.cantidad * np.precio_unitario) AS subtotal
        FROM nota_productos np
        JOIN productos a ON a.id = np.producto_id

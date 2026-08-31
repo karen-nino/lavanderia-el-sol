@@ -513,6 +513,7 @@ export default function Salidas() {
   // la nota: agregarlo otra vez le suma cantidad a su renglón.
   const productosDisponibles = productos.filter(p => disponibleDe(p) > 0);
   const enNotaDe = (p) => productosNota.find(x => String(x.producto_id) === String(p.id));
+  const totalProductosNota = productosNota.reduce((a, x) => a + Number(x.subtotal || 0), 0);
 
   return (
     <div className="pt-10 pb-16 px-6 md:p-6 max-w-2xl mx-auto space-y-6">
@@ -714,8 +715,11 @@ export default function Salidas() {
           <div className="divide-y divide-gray-50">
             {productosNota.map(p => (
               <div key={p.producto_id} className="px-4 py-3 flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-medium text-gray-800">{p.nombre}</p>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-gray-800 truncate">{tituloProducto(p)}</p>
+                  {subtituloProducto(p) && (
+                    <p className="text-xs text-gray-400">{subtituloProducto(p)}</p>
+                  )}
                   <p className="text-xs text-gray-400">
                     Cant. {p.cantidad} × {fmtMonto(p.precio_unitario)} = {fmtMonto(p.subtotal)}
                   </p>
@@ -733,9 +737,11 @@ export default function Salidas() {
                 </button>
               </div>
             ))}
+            {/* Suma de los productos. El total de la nota (máquinas, ajuste y
+                todo lo demás) vive en el detalle, no en esta tarjeta. */}
             <div className="px-4 py-3 bg-gray-50 flex justify-between">
-              <span className="text-sm font-semibold text-gray-700">Total</span>
-              <span className="text-sm font-bold text-gray-900">{fmtMonto(nota?.precio_total)}</span>
+              <span className="text-sm font-semibold text-gray-700">Total productos</span>
+              <span className="text-sm font-bold text-gray-900">{fmtMonto(totalProductosNota)}</span>
             </div>
           </div>
         )}
