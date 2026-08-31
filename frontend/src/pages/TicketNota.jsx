@@ -16,8 +16,37 @@ const MAQUINA_TIPO_LABEL = {
   secadora:         'Secadora',
 };
 
+// Tamaño de la carga tal como se nombra al cliente.
+const TAMANO_CARGA_LABEL = { chico: 'Chica', grande: 'Grande', jumbo: 'Jumbo' };
+
 function fmtMonto(n) {
   return n != null ? `$${Number(n).toFixed(2)}` : '—';
+}
+
+// Lo único que el cliente ve de una carga Por Encargo: su tamaño ("Chica").
+// En edredones no hay tamaño de carga, se usa el del edredón.
+function tamanoCargaTxt(cg) {
+  if (String(cg.tipo_prenda ?? '').toUpperCase() === 'EDREDON') {
+    return cg.tamano_edredon ? `Edredón · ${cg.tamano_edredon}` : 'Edredón';
+  }
+  return TAMANO_CARGA_LABEL[cg.tamano] ?? null;
+}
+
+// Costo real de la carga: máquinas + productos + empaquetado + ajuste.
+function costoDeCarga(cg) {
+  const prods = (cg.productos ?? []).reduce((s, p) => s + Number(p.subtotal ?? 0), 0);
+  return Number(cg.precio_lavadora) + Number(cg.precio_secadora)
+    + Number(cg.ajuste ?? 0) + prods + Number(cg.empaquetado ?? 0);
+}
+
+// Lo que el cliente paga por la carga. En Por Encargo con tope el precio ES el
+// tope del tamaño (lo de adentro va incluido); el ajuste manual va aparte. Sin
+// tope, y en los demás tipos de servicio, se cobra el costo real.
+function precioDeCarga(cg, esEncargo) {
+  if (esEncargo && cg.tope_carga != null) {
+    return Number(cg.tope_carga) + Number(cg.ajuste ?? 0);
+  }
+  return costoDeCarga(cg);
 }
 
 // Unidad de venta de un producto en texto ("2 botellas" / "3 tapas").
@@ -94,7 +123,12 @@ function armarTextoTicket(nota) {
     const apellido = nota.cliente_apellido ? ` ${nota.cliente_apellido}` : '';
     L.push(`Cliente: ${nota.cliente_nombre}${apellido}`);
   }
-  L.push(`Tipo: ${BADGE_TIPO_SERVICIO[nota.tipo_servicio] ?? nota.tipo_servicio}`);
+  // Por Encargo se cobra la carga completa: el cliente solo ve tamaño y costo.
+  // El tipo no se repite arriba: cada línea del desglose ya lo nombra.
+  const esEncargo = nota.tipo_servicio === 'POR_ENCARGO';
+  if (!esEncargo) {
+    L.push(`Tipo: ${BADGE_TIPO_SERVICIO[nota.tipo_servicio] ?? nota.tipo_servicio}`);
+  }
 
   // Vuelca las líneas de una carga (máquinas, productos, ajuste) al arreglo L.
   const volcarCarga = cg => {
@@ -120,13 +154,27 @@ function armarTextoTicket(nota) {
   const originales  = cargas.filter(cg => !cg.es_adicional);
   const adicionales = cargas.filter(cg => cg.es_adicional);
 
+  // En Por Encargo el bloque es la lista de servicios cobrados (una línea por
+  // carga); en los demás tipos, el desglose carga por carga.
+  const volcarBloque = lista => {
+    if (esEncargo) {
+      lista.forEach(cg => {
+        const tam = tamanoCargaTxt(cg);
+        L.push(`1 x Servicio por encargo${tam ? ` · ${tam}` : ''}`
+             + ` — ${fmtMonto(precioDeCarga(cg, true))}`);
+      });
+      return;
+    }
+    lista.forEach(volcarCarga);
+  };
+
   if (originales.length > 0) {
     L.push('', '*Desglose*');
-    originales.forEach(volcarCarga);
+    volcarBloque(originales);
   }
   if (adicionales.length > 0) {
     L.push('', '*Adicional*');
-    adicionales.forEach(volcarCarga);
+    volcarBloque(adicionales);
   }
 
   const productos = (nota.productos ?? []).filter(p => p.unidad !== 'tapa')
@@ -224,15 +272,35 @@ export default function TicketNota() {
   // después (adicionales), para mostrarlas en bloques separados.
   const originales  = cargas.filter(cg => !cg.es_adicional);
   const adicionales = cargas.filter(cg => cg.es_adicional);
+  const esEncargo   = nota.tipo_servicio === 'POR_ENCARGO';
+
+  // Bloque de cargas. Por Encargo se cobra la carga completa (máquinas,
+  // productos y empaquetado van dentro del precio): al cliente solo se le
+  // muestra el servicio con su tamaño y su costo, una línea por carga.
+  const renderBloqueCargas = lista => (
+    esEncargo
+      ? lista.map(cg => {
+          const tam = tamanoCargaTxt(cg);
+          return (
+            <div key={cg.id} className="flex items-baseline justify-between gap-3">
+              <span className="text-sm text-gray-700">
+                1 × Servicio por encargo
+                {tam && <span className="text-xs text-gray-400"> · {tam}</span>}
+              </span>
+              <span className="text-sm text-gray-600">{fmtMonto(precioDeCarga(cg, true))}</span>
+            </div>
+          );
+        })
+      : lista.map(renderCarga)
+  );
 
   // Render de una carga del recibo: encabezado con su total y el detalle de
   // máquinas, productos y ajuste. Se reusa para el bloque original y el adicional.
   const renderCarga = cg => {
     const maquinas   = maquinasDeCarga(cg);
     const prods      = [...(cg.productos ?? [])].sort((a, b) => ordenProducto(a) - ordenProducto(b));
-    const totalProds = prods.reduce((s, p) => s + Number(p.subtotal ?? 0), 0);
-    const totalCarga = Number(cg.precio_lavadora) + Number(cg.precio_secadora)
-      + Number(cg.ajuste ?? 0) + totalProds + Number(cg.empaquetado ?? 0);
+    const totalCarga = costoDeCarga(cg);
+
     return (
       <div key={cg.id}>
         <div className="flex items-baseline justify-between">
@@ -313,13 +381,15 @@ export default function TicketNota() {
                 : 'Anónimo'}
             />
             {nota.cliente_telefono && <Linea label="Teléfono" value={nota.cliente_telefono} />}
-            <Linea label="Tipo" value={BADGE_TIPO_SERVICIO[nota.tipo_servicio] ?? nota.tipo_servicio} />
+            {!esEncargo && (
+              <Linea label="Tipo" value={BADGE_TIPO_SERVICIO[nota.tipo_servicio] ?? nota.tipo_servicio} />
+            )}
           </div>
 
           {/* Desglose por cargas (originales) */}
           {originales.length > 0 && (
             <div className="px-5 py-3 border-b border-dashed border-gray-200 space-y-3">
-              {originales.map(renderCarga)}
+              {renderBloqueCargas(originales)}
             </div>
           )}
 
@@ -327,7 +397,7 @@ export default function TicketNota() {
           {adicionales.length > 0 && (
             <div className="px-5 py-3 border-b border-dashed border-gray-200 space-y-3">
               <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">Adicional</p>
-              {adicionales.map(renderCarga)}
+              {renderBloqueCargas(adicionales)}
             </div>
           )}
 

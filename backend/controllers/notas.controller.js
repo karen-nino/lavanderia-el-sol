@@ -547,8 +547,17 @@ async function cargasDeNota(client, notaId) {
             nc.lavadora_removida, nc.secadora_removida,
             mlu.nombre AS lavadora_usada_nombre, mlu.tipo AS lavadora_usada_tipo,
             msu.nombre AS secadora_usada_nombre, msu.tipo AS secadora_usada_tipo,
-            msu.tamano AS secadora_usada_tamano
+            msu.tamano AS secadora_usada_tamano,
+            -- Tope vigente de la carga (Ajustes). En Por Encargo el tope ES el
+            -- precio que se cobra por la carga; NULL = sin tope configurado.
+            CASE
+              WHEN UPPER(COALESCE(nc.tipo_prenda, '')) = 'EDREDON' THEN a.tope_carga_edredon
+              WHEN nc.tamano = 'chico'  THEN a.tope_carga_chico
+              WHEN nc.tamano = 'grande' THEN a.tope_carga_grande
+              WHEN nc.tamano = 'jumbo'  THEN a.tope_carga_jumbo
+            END AS tope_carga
        FROM nota_cargas nc
+       LEFT JOIN ajustes  a   ON a.id   = 1
        LEFT JOIN maquinas ml  ON ml.id  = nc.lavadora_id
        LEFT JOIN maquinas ms  ON ms.id  = nc.secadora_id
        LEFT JOIN maquinas mlu ON mlu.id = nc.lavadora_usada_id
