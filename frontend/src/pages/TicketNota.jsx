@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { toBlob } from 'html-to-image';
 import { etiquetaProducto, ordenProducto } from '../lib/formatoInventario';
 import { api } from '../lib/api';
 import { formatFechaHora12 } from '../lib/fecha';
@@ -107,7 +108,7 @@ function Linea({ label, value, fuerte }) {
   return (
     <div className="flex items-baseline justify-between gap-3 py-1">
       <span className="text-xs text-gray-500">{label}</span>
-      <span className={`text-sm text-right ${fuerte ? 'font-bold text-gray-900' : 'font-medium text-gray-800'}`}>
+      <span className={`text-sm text-right whitespace-nowrap ${fuerte ? 'font-bold text-gray-900' : 'font-medium text-gray-800'}`}>
         {value}
       </span>
     </div>
@@ -209,6 +210,10 @@ export default function TicketNota() {
   // Autoservicio es anónimo (sin cliente): el empleado captura aquí el teléfono
   // para enviar el ticket por WhatsApp.
   const [telefonoManual, setTelefonoManual] = useState('');
+  // El recibo que se convierte en imagen para mandar por WhatsApp.
+  const reciboRef = useRef(null);
+  const [enviando, setEnviando] = useState(false);
+  const [avisoEnvio, setAvisoEnvio] = useState('');
 
   useEffect(() => {
     let activo = true;
@@ -240,12 +245,54 @@ export default function TicketNota() {
   const telefonoDigits  = String(telefonoDestino || '').replace(/\D/g, '');
   const puedeEnviar     = telefonoDigits.length >= 10;
 
-  function enviarPorWhatsapp() {
-    if (!puedeEnviar) return;
+  // Convierte el recibo de la pantalla en un PNG (x2 para que se lea bien al
+  // ampliarlo en el celular).
+  async function ticketComoPng() {
+    const nodo = reciboRef.current;
+    if (!nodo) return null;
+    // skipFonts: la hoja de Google Fonts es de otro origen y no se puede leer
+    // para embeberla (SecurityError). El texto sale con la fuente ya cargada.
+    const blob = await toBlob(nodo, {
+      pixelRatio: 2, backgroundColor: '#ffffff', cacheBust: true, skipFonts: true,
+    });
+    if (!blob) return null;
+    return new File([blob], `ticket-${nota.folio ?? nota.id}.png`, { type: 'image/png' });
+  }
+
+  // Manda el ticket como imagen. En celular se abre la hoja de compartir con el
+  // PNG ya adjunto y el empleado elige el chat del cliente en WhatsApp (mandar
+  // una imagen a un número por wa.me no es posible: ese enlace solo lleva
+  // texto). En escritorio, donde no hay hoja de compartir, se descarga el PNG
+  // para adjuntarlo a mano y se abre el chat del cliente con el ticket en texto.
+  async function enviarPorWhatsapp() {
+    if (!puedeEnviar || enviando) return;
+    setEnviando(true);
+    setAvisoEnvio('');
     guardarTelefonoEnNota(); // best-effort, no bloquea el envío
-    const phone = telefonoDigits.startsWith('52') ? telefonoDigits : `52${telefonoDigits}`;
-    const texto = encodeURIComponent(armarTextoTicket(nota));
-    window.open(`https://wa.me/${phone}?text=${texto}`, '_blank', 'noopener,noreferrer');
+    try {
+      const archivo = await ticketComoPng();
+      if (archivo && navigator.canShare?.({ files: [archivo] })) {
+        await navigator.share({ files: [archivo], title: `Ticket ${nota.folio ?? `#${nota.id}`}` });
+        return;
+      }
+      if (archivo) {
+        const url = URL.createObjectURL(archivo);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = archivo.name;
+        a.click();
+        URL.revokeObjectURL(url);
+        setAvisoEnvio('Se descargó el ticket en imagen: adjúntalo en el chat que se abrió.');
+      }
+      const phone = telefonoDigits.startsWith('52') ? telefonoDigits : `52${telefonoDigits}`;
+      const texto = encodeURIComponent(armarTextoTicket(nota));
+      window.open(`https://wa.me/${phone}?text=${texto}`, '_blank', 'noopener,noreferrer');
+    } catch (err) {
+      // Cancelar la hoja de compartir no es un error que reportar.
+      if (err?.name !== 'AbortError') setAvisoEnvio('No se pudo generar la imagen del ticket.');
+    } finally {
+      setEnviando(false);
+    }
   }
 
   if (loading) {
@@ -287,7 +334,7 @@ export default function TicketNota() {
                 1 × Servicio por encargo
                 {tam && <span className="text-xs text-gray-400"> · {tam}</span>}
               </span>
-              <span className="text-sm text-gray-600">{fmtMonto(precioDeCarga(cg, true))}</span>
+              <span className="text-sm text-gray-600 whitespace-nowrap">{fmtMonto(precioDeCarga(cg, true))}</span>
             </div>
           );
         })
@@ -304,14 +351,14 @@ export default function TicketNota() {
     return (
       <div key={cg.id}>
         <div className="flex items-baseline justify-between">
-          <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Carga {cg.orden}</span>
-          <span className="text-sm font-semibold text-gray-700">{fmtMonto(totalCarga)}</span>
+          <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">Carga {cg.orden}</span>
+          <span className="text-sm font-semibold text-gray-700 whitespace-nowrap">{fmtMonto(totalCarga)}</span>
         </div>
         <div className="mt-2 space-y-2">
           {maquinas.map((m, i) => (
             <div key={i} className="flex items-baseline justify-between gap-3">
               <span className="text-sm text-gray-700">{m.nombre}{m.tipo && <span className="text-xs text-gray-400"> · {m.tipo}</span>}</span>
-              <span className="text-sm text-gray-600">{fmtMonto(m.precio)}</span>
+              <span className="text-sm text-gray-600 whitespace-nowrap">{fmtMonto(m.precio)}</span>
             </div>
           ))}
           {/* Las tapas son información interna: no se muestran en el ticket. */}
@@ -320,13 +367,13 @@ export default function TicketNota() {
               <span className="text-sm text-gray-700">{nombreProd(p)} <span className="text-xs text-gray-400">×{p.cantidad} {unidadProdTxt(p)}</span></span>
               {p.es_por_tapa && Number(p.subtotal) === 0
                 ? <span className="text-sm text-green-700">Incluido</span>
-                : <span className="text-sm text-gray-600">{fmtMonto(p.subtotal)}</span>}
+                : <span className="text-sm text-gray-600 whitespace-nowrap">{fmtMonto(p.subtotal)}</span>}
             </div>
           ))}
           {Number(cg.empaquetado) > 0 && (
             <div className="flex items-baseline justify-between gap-3">
               <span className="text-sm text-gray-700">Empaquetado</span>
-              <span className="text-sm text-gray-600">{fmtMonto(cg.empaquetado)}</span>
+              <span className="text-sm text-gray-600 whitespace-nowrap">{fmtMonto(cg.empaquetado)}</span>
             </div>
           )}
           {Number(cg.ajuste) !== 0 && (
@@ -362,8 +409,8 @@ export default function TicketNota() {
       {/* Contenido */}
       <div className="max-w-2xl mx-auto px-6 py-6 space-y-6">
 
-        {/* Recibo */}
-        <div className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
+        {/* Recibo (es lo que se manda por WhatsApp como imagen) */}
+        <div ref={reciboRef} className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
 
           {/* Encabezado del recibo */}
           <div className="px-5 py-5 text-center border-b border-dashed border-gray-200">
@@ -412,7 +459,7 @@ export default function TicketNota() {
                     <span className="text-sm text-gray-700">{nombreProd(p)} <span className="text-xs text-gray-400">×{p.cantidad} {unidadProdTxt(p)}</span></span>
                     {p.es_por_tapa && Number(p.subtotal) === 0
                       ? <span className="text-sm text-green-700">Incluido</span>
-                      : <span className="text-sm text-gray-600">{fmtMonto(p.subtotal)}</span>}
+                      : <span className="text-sm text-gray-600 whitespace-nowrap">{fmtMonto(p.subtotal)}</span>}
                   </div>
                 ))}
               </div>
@@ -453,15 +500,19 @@ export default function TicketNota() {
         {/* Enviar por WhatsApp */}
         <button
           onClick={enviarPorWhatsapp}
-          disabled={!puedeEnviar}
-          title={puedeEnviar ? 'Abrir WhatsApp con el ticket' : 'Escribe un teléfono válido (10 dígitos)'}
+          disabled={!puedeEnviar || enviando}
+          title={puedeEnviar ? 'Mandar el ticket en imagen' : 'Escribe un teléfono válido (10 dígitos)'}
           className="w-full flex items-center justify-center gap-2 bg-[#27A910] hover:bg-[#218f0d] disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium py-3.5 rounded-lg text-base transition-colors"
         >
           <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 19 19">
             <path d="M16.2312 2.76454C15.3557 1.88495 14.313 1.18752 13.164 0.712894C12.0149 0.238271 10.7823 -0.00405 9.53819 5.12002e-05C4.32513 5.12002e-05 0.0763821 4.22754 0.0763821 9.41453C0.0763821 11.077 0.515578 12.692 1.33668 14.117L0 19L5.01256 17.689C6.39698 18.4395 7.95327 18.8385 9.53819 18.8385C14.7513 18.8385 19 14.611 19 9.42403C19 6.90653 18.0166 4.54104 16.2312 2.76454ZM9.53819 17.2425C8.12512 17.2425 6.7407 16.8625 5.52814 16.15L5.24171 15.979L2.26281 16.758L3.05528 13.87L2.86432 13.5755C2.07907 12.3282 1.66219 10.8863 1.66131 9.41453C1.66131 5.10154 5.19397 1.58655 9.52864 1.58655C11.6291 1.58655 13.6055 2.40354 15.0854 3.88554C15.8183 4.61121 16.3991 5.47445 16.7941 6.4252C17.1891 7.37594 17.3904 8.39526 17.3864 9.42403C17.4055 13.737 13.8729 17.2425 9.53819 17.2425ZM13.8538 11.3905C13.6151 11.2765 12.4503 10.7065 12.2402 10.621C12.0206 10.545 11.8678 10.507 11.7055 10.735C11.5432 10.9725 11.0945 11.5045 10.9608 11.6565C10.8271 11.818 10.6839 11.837 10.4452 11.7135C10.2065 11.5995 9.44271 11.343 8.54523 10.545C7.83869 9.91803 7.37085 9.14853 7.22764 8.91103C7.09397 8.67353 7.20854 8.55003 7.33266 8.42653C7.43769 8.32203 7.57136 8.15103 7.68593 8.01803C7.8005 7.88503 7.84824 7.78053 7.92462 7.62853C8.001 7.46703 7.96281 7.33403 7.90553 7.22003C7.84824 7.10603 7.37085 5.94704 7.1799 5.47204C6.98894 5.01604 6.78844 5.07304 6.64523 5.06354H6.18693C6.02462 5.06354 5.77638 5.12054 5.55678 5.35804C5.34673 5.59554 4.73568 6.16554 4.73568 7.32453C4.73568 8.48353 5.58543 9.60453 5.7 9.75653C5.81457 9.91803 7.37085 12.293 9.73869 13.3095C10.302 13.5565 10.7412 13.699 11.0849 13.8035C11.6482 13.984 12.1638 13.9555 12.5744 13.8985C13.0327 13.832 13.9779 13.3285 14.1688 12.7775C14.3693 12.2265 14.3693 11.761 14.3025 11.6565C14.2357 11.552 14.0925 11.5045 13.8538 11.3905Z" />
           </svg>
-          Enviar por WhatsApp
+          {enviando ? 'Preparando el ticket…' : 'Enviar por WhatsApp'}
         </button>
+
+        {avisoEnvio && (
+          <p className="text-xs text-gray-500 text-center -mt-3">{avisoEnvio}</p>
+        )}
       </div>
     </div>
   );
