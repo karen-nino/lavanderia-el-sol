@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { api } from '../lib/api';
-import { etiquetaProducto } from '../lib/formatoInventario';
+import { etiquetaProducto, ordenProducto } from '../lib/formatoInventario';
 import { capitalizarNombre } from '../lib/texto';
 import { FORMAS_PAGO } from '../lib/formasPago';
 
@@ -453,11 +453,6 @@ export default function NuevaNota() {
       ? Number(prod.stock_disponible ?? prod.stock_actual) || 0
       : botellasDisponibles(prod);
   };
-  // Orden de presentación de los productos: primero el granel, luego los de
-  // marca y al final las bolsas (igual que ordena el catálogo el backend).
-  const ordenProducto = (p) =>
-    p?.tipo_liquido === 'granel' ? 0 : p?.tipo_liquido === 'marca' ? 1 : 2;
-
   // Precio con su unidad: "$5.00/tapa".
   const precioProductoTexto = (prod, ambito) =>
     `$${precioEnAmbito(prod, ambito).toFixed(2)}/${unidadEnAmbito(prod, ambito, 1)}`;

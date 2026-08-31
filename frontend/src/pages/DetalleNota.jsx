@@ -4,6 +4,7 @@ import Barcode from 'react-barcode';
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { esAdmin as esAdminFn } from '../lib/roles';
+import { etiquetaProducto, tituloProducto, subtituloProducto, ordenProducto } from '../lib/formatoInventario';
 import { FORMAS_PAGO, formaPagoLabel } from '../lib/formasPago';
 import { formatHora12, formatFechaHora12 } from '../lib/fecha';
 
@@ -17,11 +18,6 @@ function unidadProdTxt(p) {
   }
   return n === 1 ? 'tapa' : 'tapas';
 }
-// Nombre a mostrar de un producto de la nota. Las bolsas muestran su tamaño.
-function nombreProd(p) {
-  return p.clase === 'bolsa' && p.tamano_bolsa ? `Bolsa ${p.tamano_bolsa}` : p.nombre;
-}
-
 const BADGE_ESTADO = {
   EN_ESPERA:  { label: 'En Espera',   cls: 'bg-gray-100 text-gray-600'        },
   LAVANDO:    { label: 'Lavando',     cls: 'bg-blue-100 text-blue-800'        },
@@ -697,8 +693,8 @@ export default function DetalleNota() {
                       {prods.map(p => (
                         <p key={p.id} className="text-xs text-gray-500">
                           {p.es_por_tapa && Number(p.subtotal) === 0
-                            ? <>{nombreProd(p)} · {p.cantidad} {unidadProdTxt(p)} · <span className="text-green-700 font-medium">Incluido</span></>
-                            : <>{nombreProd(p)} · {p.cantidad} {unidadProdTxt(p)} × {fmtMonto(p.precio_unitario)} = {fmtMonto(p.subtotal)}</>}
+                            ? <>{etiquetaProducto(p)} · {p.cantidad} {unidadProdTxt(p)} · <span className="text-green-700 font-medium">Incluido</span></>
+                            : <>{etiquetaProducto(p)} · {p.cantidad} {unidadProdTxt(p)} × {fmtMonto(p.precio_unitario)} = {fmtMonto(p.subtotal)}</>}
                         </p>
                       ))}
                       {Number(cg.empaquetado) > 0 && (
@@ -748,13 +744,14 @@ export default function DetalleNota() {
           <p className="text-sm text-gray-400 italic px-4 py-4">Sin productos agregados</p>
         ) : (
           <div className="divide-y divide-gray-50">
-            {(nota.productos || []).map(p => {
+            {[...(nota.productos || [])].sort((a, b) => ordenProducto(a) - ordenProducto(b)).map(p => {
               const incluido = p.es_por_tapa && Number(p.subtotal) === 0;
               return (
               <div key={p.id} className="px-4 py-3 flex items-center justify-between gap-3">
                 <div>
-                  <p className="text-sm font-medium text-gray-800">{nombreProd(p)}</p>
+                  <p className="text-sm font-medium text-gray-800">{tituloProducto(p)}</p>
                   <p className="text-xs text-gray-400">
+                    {subtituloProducto(p) && `${subtituloProducto(p)} · `}
                     {incluido
                       ? `${p.cantidad} ${unidadProdTxt(p)}`
                       : `${p.cantidad} ${unidadProdTxt(p)} × ${fmtMonto(p.precio_unitario)}`}

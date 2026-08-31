@@ -70,3 +70,11 @@ export function subtituloProducto(p) {
   if (p.tipo_liquido === 'granel') return 'Granel';
   return '';
 }
+
+// Orden de presentación: primero el granel, luego los de marca y al final las
+// bolsas — el mismo criterio con el que el backend ordena el catálogo.
+export function ordenProducto(p) {
+  if (p?.tipo_liquido === 'granel') return 0;
+  if (p?.tipo_liquido === 'marca')  return 1;
+  return 2;
+}
