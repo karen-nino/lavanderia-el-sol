@@ -47,7 +47,11 @@ describe('POST /api/caja/abrir', () => {
     expect(actual.status).toBe(200);
     expect(actual.body.abierta).toBe(true);
     expect(actual.body.caja.monto_inicial).toBe(500);
-    expect(actual.body.totales).toEqual({ ventas: 0, entradas: 0, salidas: 0, esperado: 500 });
+    // Desde la mig. 090 el corte separa el efectivo de transferencias y tarjetas.
+    expect(actual.body.totales).toEqual({
+      ventas: 0, entradas: 0, salidas: 0, esperado: 500,
+      ventas_desglose: { efectivo: 0, transferencia: 0, tarjeta: 0, total: 0 },
+    });
   });
 
   it('rechaza un monto inicial inválido con 400', async () => {

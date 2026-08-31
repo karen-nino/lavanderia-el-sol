@@ -355,7 +355,7 @@ describe('handlers de máquina — ciclo de vida', () => {
 
     // Liquidar y finalizar.
     await request(app).patch(`/api/notas/${notaId}/estado-pago`)
-      .set(auth(admin.token)).send({ estado_pago: 'PAGADO' }).expect(200);
+      .set(auth(admin.token)).send({ estado_pago: 'PAGADO', forma_pago: 'EFECTIVO' }).expect(200);
     const ok = await request(app).patch(`/api/notas/${notaId}/estado`)
       .set(auth(admin.token)).send({ estado: 'FINALIZADA' });
     expect(ok.status).toBe(200);
@@ -754,7 +754,8 @@ describe('productos por tapa', () => {
     await request(app).patch(`/api/notas/${notaId}/activar-pendientes`)
       .set(auth(admin.token)).send({ maquina_id: lavadoraId }).expect(200);
     await request(app).patch(`/api/notas/${notaId}/estado`).set(auth(admin.token)).send({ estado: 'LISTA' }).expect(200);
-    await request(app).patch(`/api/notas/${notaId}/estado-pago`).set(auth(admin.token)).send({ estado_pago: 'PAGADO' }).expect(200);
+    await request(app).patch(`/api/notas/${notaId}/estado-pago`).set(auth(admin.token))
+      .send({ estado_pago: 'PAGADO', forma_pago: 'EFECTIVO' }).expect(200);
     await request(app).patch(`/api/notas/${notaId}/estado`).set(auth(admin.token)).send({ estado: 'FINALIZADA' }).expect(200);
 
     // El stock se consumió (40 - 3 = 37) y se soltó la reserva.

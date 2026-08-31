@@ -17,24 +17,23 @@ describe('tarifaSecadora', () => {
 });
 
 describe('precioProductoEnNota', () => {
-  const porTapa = { es_por_tapa: true, precio_unitario: 15 };
-  const normal  = { es_por_tapa: false, precio_unitario: 40 };
+  // La unidad de venta la manda el servicio: Por Encargo cobra por TAPA
+  // (precio_unitario) y Autoservicio vende la BOTELLA entera (precio_botella).
+  const producto = { precio_unitario: 15, precio_botella: 120 };
 
-  it('producto por tapa se cobra su precio en Por Encargo (cuenta contra el tope)', () => {
-    expect(precioProductoEnNota(porTapa, 'POR_ENCARGO')).toBe(15);
+  it('Por Encargo cobra el precio por tapa (cuenta contra el tope)', () => {
+    expect(precioProductoEnNota(producto, 'POR_ENCARGO')).toBe(15);
   });
 
-  it('producto por tapa se cobra en Autoservicio', () => {
-    expect(precioProductoEnNota(porTapa, 'AUTOSERVICIO')).toBe(15);
+  it('Autoservicio cobra el precio por botella', () => {
+    expect(precioProductoEnNota(producto, 'AUTOSERVICIO')).toBe(120);
   });
 
-  it('producto normal cobra su precio en cualquier tipo de servicio', () => {
-    expect(precioProductoEnNota(normal, 'POR_ENCARGO')).toBe(40);
-    expect(precioProductoEnNota(normal, 'AUTOSERVICIO')).toBe(40);
-  });
-
-  it('sin precio_unitario devuelve 0', () => {
-    expect(precioProductoEnNota({ es_por_tapa: false }, 'AUTOSERVICIO')).toBe(0);
+  it('sin precio en la unidad que toca devuelve 0', () => {
+    // Producto de marca que solo se vende por botella: por tapa no tiene precio.
+    expect(precioProductoEnNota({ precio_botella: 120 }, 'POR_ENCARGO')).toBe(0);
+    expect(precioProductoEnNota({ precio_unitario: 15 }, 'AUTOSERVICIO')).toBe(0);
+    expect(precioProductoEnNota({}, 'AUTOSERVICIO')).toBe(0);
   });
 });
 
