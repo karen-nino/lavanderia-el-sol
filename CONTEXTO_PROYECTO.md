@@ -1,7 +1,7 @@
 # Contexto técnico — Lavandería El Sol
 
 > Documento para pegar al inicio de una conversación nueva con Claude. Técnico y directo.
-> Última actualización: 2026-08-28.
+> Última actualización: 2026-08-31.
 
 ---
 
@@ -58,6 +58,15 @@ Dos entornos que conviven: **(1) local** — desarrollo contra Postgres local; *
 - Como se congela al compilar, el número **solo cambia cuando se vuelve a desplegar el frontend en Netlify**.
 - **No confundir con el "release vNN" de Fly.io** (v25, v26, …): ese lo numera Fly solo, por cada deploy del backend, y no tiene relación con la versión que ve el cliente.
 - **Arrancamos en `1.0.0` = la versión que se le entrega al cliente.** De aquí en adelante el número se sube en cada entrega, con criterio semver simple: **parche** (1.0.1) para correcciones, **menor** (1.1.0) cuando se agrega funcionalidad, **mayor** (2.0.0) para un cambio grande de cómo se usa el sistema. Mientras la app no esté entregada, el número se queda en 1.0.0.
+
+### Nombres de producto, unidades y orden (compartido)
+- `frontend/src/lib/formatoInventario.js` concentra cómo se nombra y ordena un producto en **todas** las listas: `etiquetaProducto` (una línea: "Ensueño · Suavizante"), `tituloProducto`/`subtituloProducto` (dos líneas: marca arriba, nombre o "Granel" abajo) y `ordenProducto` (**granel → marca → bolsas**, el mismo criterio con que el backend ordena el catálogo).
+- Existe porque dos productos pueden llamarse igual (el Suavizante a granel y el "Ensueño · Suavizante"): sin la marca o el "Granel" se ven idénticos en la nota, en Salidas y en el ticket.
+- **La unidad y el precio dependen del servicio** (`utils/calculosNotas.js`): Autoservicio vende la **botella** entera (`precio_botella`) y Por Encargo cobra por **tapa** (`precio_unitario`). Las pantallas que ofrecen productos tienen que convertir el stock (que vive en tapas) a esa unidad, o enseñan un número y cobran otro.
+
+### Utilería de desarrollo
+- **Skill `/run-lavanderia-el-sol`** (`.claude/skills/run-lavanderia-el-sol/`) — levanta la app y la recorre en un Chrome headless con Playwright, dejando una captura por pantalla; falla si hay errores de consola. Documenta los tropiezos del entorno (el prefijo `***` del login, el `sid` del JWT, `sucursalActiva` en `localStorage`, el salto de Vite al 5174).
+- `backend/scripts/sesion-driver.mjs` — firma un JWT con el `JWT_SECRET` local para entrar sin contraseña; sirve también para probar la API con `curl`.
 
 ### Estructura del repo (resumen)
 ```
@@ -124,6 +133,9 @@ info/                     # referencias de diseño (Figma export, docx) — no e
 - **Notificaciones** (mig. 040/041/058) — alertas descartables con folio y limpieza periódica.
 - **Cierre del día** — job que a la hora local configurada libera máquinas, pasa sus notas a `LISTA` y cierra sesiones de empleados.
 
+- **Captura de notas (repaso de UI, 2026-08-31)** — Autoservicio y Por Encargo comparten la sección de **Productos**: fila compacta que se acomoda en pantalla angosta, alta desde un **modal con el catálogo** (con "Sin existencias" y "Ya está en la carga/nota"), sin opción de *cambiar* producto (se borra y se agrega el correcto) y total de productos al pie. En Autoservicio el pie es **"Aceptar" → modal de cobro** con la forma de pago y el botón de crear, y las cargas se pueden **quitar desde su tarjeta** (de la 2 en adelante, renumerando).
+- **Salidas — agregar productos a una nota en curso** — control de cantidad igual al de los formularios (arranca en 0, topa en lo disponible), **advertencia antes de agregar y antes de quitar** con lo que se cobra y lo que queda en inventario, y **suma sobre el renglón existente** si el producto ya está en la nota (`reservarProducto`, en vez de abrir un segundo renglón igual).
+
 ### En proceso / pendiente de cerrar
 - **Sonoff, primera prueba real** — el código está desplegado y activo con credenciales reales. Falta **capturar el Device ID de cada Sonoff** en Gestión de Máquinas (app eWeLink → dispositivo → engrane → *Device ID*) y verificar con **"Probar enlace"** y **"Encender 5 segundos"** sobre un equipo físico.
 
@@ -173,10 +185,10 @@ info/                     # referencias de diseño (Figma export, docx) — no e
 - **Credencial de eWeLink a nombre de la desarrolladora, no del cliente**: la aplicación se creó con la cuenta personal. Migrarla al cliente después es barato (cambiar `EWELINK_APP_ID`/`SECRET` en Fly; los Device IDs viven en la BD y no se tocan), pero implica repetir la aprobación de 1-2 días.
 - **La credencial gratuita vence al año** (creada el 2026-08-28 → vence alrededor del **2027-08-28**) y **no está documentado si la renovación sigue siendo gratis** (la página de precios de CoolKit dice "gratis por ahora" y no habla de renovación; el contacto para preguntar es `bd@coolkit.cn`). Si dejara de ser gratis, la lavandería **no se queda parada**: `sincronizarSonoff` nunca lanza, así que un fallo solo marca la máquina "Sin conexión" y se vuelve al manejo manual.
 - **La contraseña de eWeLink del cliente está guardada como secreto en Fly** (lo exige el login de la API v2). Si el cliente la cambia, el control de máquinas se cae hasta actualizar `EWELINK_PASSWORD`. Conviene avisarle.
-- **2 pruebas unit en rojo** (`utils/calculosNotas.test.js` → `precioProductoEnNota`): las fixtures se escribieron antes de la venta por botella/tapa y no tienen `precio_botella`, así que esperan 15 y 40 donde la función devuelve 0 en AUTOSERVICIO. **Es la prueba la que quedó obsoleta, no el código de producción** — hay que actualizar las fixtures. *(reconfirmado el 2026-08-28: 2 failed | 22 passed)*
 - **Enum legacy `EDREDON` en `tipo_servicio`**: sigue existiendo por compatibilidad; la prenda Edredón va en `tipo_prenda`.
 - **Bundle único grande** (~1.16 MB, ~308 KB gzip): Vite avisa del tamaño; sin code-splitting todavía. No es urgente.
-- **Pruebas de frontend incompletas**: hay helpers, componentes con lógica y la página **Login** (56 casos, todos en verde). **Faltan las páginas restantes**, la prioritaria es **`NuevaNota`** (formulario complejo de cargas/productos con tarifas y topes); luego `Empleados`, `Ventas`, `Notas`, `Caja`, `Inventario`. El backend sí está cubierto por completo.
+- **Base de desarrollo vaciada (2026-08-31)**: la base local `lavanderia_el_sol` se dejó **sin notas, inventario, cajas ni check-ins** para empezar de cero, y se eliminaron **6 productos duplicados** que venían de un sembrado doble. Se conservan usuarios, sucursales, clientes, máquinas, ajustes y catálogos. **Producción (Supabase) no se tocó.**
+- **Pruebas de frontend incompletas**: hay helpers, componentes con lógica y la página **Login** (56 casos, todos en verde). **Faltan las páginas restantes**, la prioritaria es **`NuevaNota`** (formulario complejo de cargas/productos con tarifas y topes); luego `Empleados`, `Ventas`, `Notas`, `Caja`, `Inventario`. El backend sí está cubierto por completo (**23 unit + 203 de integración, todas en verde**).
 
 ---
 
@@ -188,8 +200,14 @@ info/                     # referencias de diseño (Figma export, docx) — no e
 4. **Capturar el resto de las máquinas** solo cuando la primera funcione.
 5. **Entregar el sistema al cliente** para que empiece el uso real, avisándole que si cambia su contraseña de eWeLink hay que actualizar el secreto en Fly.
 
-**Pendiente de pruebas (para retomar):** arreglar las 2 fixtures obsoletas de `calculosNotas.test.js` y cubrir las **páginas del frontend**, empezando por **`NuevaNota`** (patrón ya validado en `Login` y en los modales).
+**Pendiente de pruebas (para retomar):** cubrir las **páginas del frontend**, empezando por **`NuevaNota`** (patrón ya validado en `Login` y en los modales). Las fixtures obsoletas de `calculosNotas.test.js` ya se arreglaron.
 
-**Trabajo más reciente (2026-08-30):** se agregó la **versión de la app al pie de la pantalla de login** (ver §2 → *Versión de la app*), atada a `frontend/package.json`, que subió de `0.0.0` a **`1.0.0`**. Queda acordado que **el número se empezará a subir en cada entrega una vez que la app esté en manos del cliente**.
+**Trabajo más reciente (2026-08-30/31):** repaso largo de la **interfaz de captura y cobro**, con tres arreglos de fondo que salieron por el camino:
+
+- **Salidas mostraba un precio y cobraba otro.** El panel de agregar productos leía siempre `precio_unitario` y el stock en tapas, sin mirar el servicio de la nota; en Autoservicio el backend descuenta una **botella** y cobra `precio_botella`. Ahora la pantalla usa la misma regla que el cobro (unidad, stock convertido y precio), y por eso un producto de marca sin precio por tapa ya no aparece como "sin precio".
+- **El resumen de Autoservicio decía "sin máquinas"** aunque la carga tuviera lavado y secado: leía la máquina física, que en ese servicio se asigna después en Salidas. Ahora desglosa el tipo elegido con su tarifa, y lo mismo se corrigió en el **ticket**.
+- **Agregar dos veces el mismo producto abría dos renglones.** `reservarProducto` ahora suma sobre el existente, con una prueba de integración nueva (`test/integration/notaProductosSuma.test.js`) que también cubre el tope de stock.
+
+Además: **productos nombrados igual en toda la app** (marca y "Granel" para distinguir dos que se llaman igual, orden granel → marca → bolsas), **cobro de Autoservicio en un modal** al pulsar "Aceptar", cargas que se pueden **quitar desde su tarjeta**, jerarquía tipográfica y aire revisados en **Ajustes** (encabezados de grupo por encima de las etiquetas de campo, tarjetas en móvil), **Ajustes y Salir al pie del sidebar** cuando todos los iconos caben, nomenclatura **Lavadora/Secadora** y tamaño **"Chica"**, y un **punto azul en el login** que marca versión nueva hasta el siguiente cierre del día. Se arreglaron las **5 pruebas en rojo** que arrastraba el proyecto (3 de integración por el contrato de cobro con forma de pago, 2 unitarias por el modelo de precio por unidad) y se añadió la **skill `/run-lavanderia-el-sol`** para levantar y revisar la app.
 
 **Trabajo anterior (2026-08-28):** se **puso en marcha el control Sonoff en producción**. Se creó la aplicación en el portal de eWeLink (OAuth2.0 / Standard Role), se cargaron los 7 secretos en Fly con `fly secrets import --stage` y se desplegó el **release v25**, que aplicó las migraciones 074-090 pendientes en prod. Los logs de arranque confirmaron `Listener Sonoff activo (LISTEN maquina_sync).` y `Reconciliador Sonoff activo (cada 3 min).`, lo que **cierra el riesgo abierto de si `LISTEN/NOTIFY` funcionaba sobre el session pooler de Supabase** — sí funciona. No hubo cambios de código en este paso: fue configuración y despliegue. Antes de eso (2026-08-27): forma de pago obligatoria en todo cobro, con **tarjeta** como opción nueva (mig. 090), y corte de caja que **ya no cuenta transferencias ni tarjetas como efectivo** (commit `9bea213`); reporte de Ventas con **la suma de conceptos y el total cobrado por separado**; mejoras a Gestión de Máquinas para la puesta en marcha del Sonoff, incluida la corrección de un **500 que rompía el guardado de cualquier máquina**.
