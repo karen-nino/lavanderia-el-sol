@@ -1248,7 +1248,7 @@ export default function NuevaNota() {
 
                               {/* Cantidad, importe y borrar viajan juntos: si no
                                   caben junto al nombre, bajan al siguiente renglón. */}
-                              <div className="flex items-center gap-2 ml-auto flex-shrink-0">
+                              <div className="flex flex-1 items-center justify-between gap-2">
                                 <div className="flex items-center gap-1.5">
                                   <button
                                     type="button"
@@ -1270,20 +1270,22 @@ export default function NuevaNota() {
                                   </button>
                                 </div>
 
-                                <span className="w-16 text-right text-base font-bold text-blue-700 tabular-nums">
-                                  ${subtotal.toFixed(2)}
-                                </span>
+                                <div className="flex items-center gap-2">
+                                  <span className="w-16 text-right text-base font-bold text-blue-700 tabular-nums">
+                                    ${subtotal.toFixed(2)}
+                                  </span>
 
-                                <button
-                                  type="button"
-                                  onClick={() => eliminarProductoCarga(idx, j)}
-                                  aria-label="Eliminar producto"
-                                  className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                                >
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                  </svg>
-                                </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => eliminarProductoCarga(idx, j)}
+                                    aria-label="Eliminar producto"
+                                    className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                                  >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                  </button>
+                                </div>
                               </div>
                             </div>
                           );
@@ -1902,7 +1904,7 @@ export default function NuevaNota() {
 
                       {/* Cantidad, importe y borrar viajan juntos: si no caben
                           junto al nombre, bajan al siguiente renglón. */}
-                      <div className="flex items-center gap-2 ml-auto flex-shrink-0">
+                      <div className="flex flex-1 items-center justify-between gap-2">
                         <div className="flex items-center gap-1.5">
                           <button
                             type="button"
@@ -1924,20 +1926,22 @@ export default function NuevaNota() {
                           </button>
                         </div>
 
-                        <span className="w-16 text-right text-base font-bold text-blue-700 tabular-nums">
-                          ${subtotal.toFixed(2)}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="w-16 text-right text-base font-bold text-blue-700 tabular-nums">
+                            ${subtotal.toFixed(2)}
+                          </span>
 
-                        <button
-                          type="button"
-                          onClick={() => eliminarProducto(i)}
-                          aria-label="Eliminar producto"
-                          className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                          </svg>
-                        </button>
+                          <button
+                            type="button"
+                            onClick={() => eliminarProducto(i)}
+                            aria-label="Eliminar producto"
+                            className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </div>
                       </div>
                     </div>
                   );
