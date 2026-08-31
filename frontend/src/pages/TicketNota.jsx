@@ -117,8 +117,11 @@ function Linea({ label, value, fuerte }) {
 
 // Construye el texto plano del ticket que se envía por WhatsApp. Refleja el
 // mismo desglose que se ve en pantalla (cargas, máquinas, productos).
-function armarTextoTicket(nota) {
-  const L = ['*Lavandería El Sol*', `Nota: ${nota.folio ?? `#${nota.id}`}`];
+function armarTextoTicket(nota, rfc) {
+  const L = ['*Lavandería El Sol*'];
+  // El R.F.C. sale tal cual se capturó en Ajustes (es texto libre).
+  if (rfc) L.push(rfc);
+  L.push(`Nota: ${nota.folio ?? `#${nota.id}`}`);
 
   if (nota.cliente_nombre) {
     const apellido = nota.cliente_apellido ? ` ${nota.cliente_apellido}` : '';
@@ -205,6 +208,8 @@ export default function TicketNota() {
   const navigate = useNavigate();
 
   const [nota, setNota]       = useState(null);
+  // R.F.C. del negocio (Ajustes): se imprime en el ticket si está capturado.
+  const [rfcNegocio, setRfcNegocio] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState('');
   // Autoservicio es anónimo (sin cliente): el empleado captura aquí el teléfono
@@ -217,6 +222,10 @@ export default function TicketNota() {
 
   useEffect(() => {
     let activo = true;
+    // Los ajustes son secundarios: si fallan, el ticket se muestra igual.
+    api.get('/ajustes')
+      .then(cfg => { if (activo) setRfcNegocio(cfg?.rfc ?? ''); })
+      .catch(() => {});
     api.get(`/notas/${id}`)
       .then(data => {
         if (!activo) return;
@@ -285,7 +294,7 @@ export default function TicketNota() {
         setAvisoEnvio('Se descargó el ticket en imagen: adjúntalo en el chat que se abrió.');
       }
       const phone = telefonoDigits.startsWith('52') ? telefonoDigits : `52${telefonoDigits}`;
-      const texto = encodeURIComponent(armarTextoTicket(nota));
+      const texto = encodeURIComponent(armarTextoTicket(nota, rfcNegocio));
       window.open(`https://wa.me/${phone}?text=${texto}`, '_blank', 'noopener,noreferrer');
     } catch (err) {
       // Cancelar la hoja de compartir no es un error que reportar.
@@ -415,6 +424,10 @@ export default function TicketNota() {
           {/* Encabezado del recibo */}
           <div className="px-5 py-5 text-center border-b border-dashed border-gray-200">
             <h2 className="text-lg font-bold text-gray-900">Lavandería El Sol</h2>
+            {/* El R.F.C. sale tal cual se capturó en Ajustes (es texto libre). */}
+            {rfcNegocio && (
+              <p className="text-xs text-gray-400 mt-0.5">{rfcNegocio}</p>
+            )}
             <p className="text-sm text-gray-500 mt-0.5">Nota {nota.folio ?? `#${nota.id}`}</p>
             <p className="text-xs text-gray-400 mt-0.5">{fmtFechaHora(nota.created_at)}</p>
           </div>

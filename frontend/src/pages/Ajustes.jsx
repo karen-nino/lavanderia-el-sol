@@ -726,7 +726,10 @@ export default function Ajustes() {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    const next = name === 'telefono' ? formatTelefono(value) : value;
+    // La CURP se captura en mayúsculas y sin espacios; el R.F.C. es texto libre.
+    const next = name === 'telefono' ? formatTelefono(value)
+      : name === 'curp' ? value.replace(/\s/g, '').toUpperCase()
+      : value;
     setConfig(prev => ({ ...prev, [name]: next }));
   };
 
@@ -848,6 +851,8 @@ export default function Ajustes() {
     tiempo_secadora_jumbo:   Number(config.tiempo_secadora_jumbo),
     tiempo_secadora_edredon: Number(config.tiempo_secadora_edredon),
     nombre_negocio:        config.nombre_negocio,
+    rfc:                   config.rfc  ?? '',
+    curp:                  config.curp ?? '',
     stock_minimo_global:   Number(config.stock_minimo_global),
     alerta_ciclo_detenido: !!config.alerta_ciclo_detenido,
   });
@@ -1126,6 +1131,30 @@ export default function Ajustes() {
           value={config.nombre_negocio ?? ''}
           onChange={handleChange}
           className={INPUT_CLS}
+        />
+      </Field>
+
+      {/* Datos fiscales del negocio: opcionales */}
+      <Field label="R.F.C.">
+        <input
+          type="text"
+          name="rfc"
+          value={config.rfc ?? ''}
+          onChange={handleChange}
+          placeholder="Opcional"
+          className={INPUT_CLS}
+        />
+      </Field>
+
+      <Field label="CURP">
+        <input
+          type="text"
+          name="curp"
+          value={config.curp ?? ''}
+          onChange={handleChange}
+          maxLength={18}
+          placeholder="Opcional"
+          className={`${INPUT_CLS} uppercase placeholder:normal-case`}
         />
       </Field>
 
@@ -1433,6 +1462,30 @@ export default function Ajustes() {
             value={config.nombre_negocio ?? ''}
             onChange={handleChange}
             className={MOBILE_INPUT_CLS}
+          />
+        </MobileField>
+
+        {/* Datos fiscales del negocio: opcionales */}
+        <MobileField label="R.F.C.">
+          <input
+            type="text"
+            name="rfc"
+            value={config.rfc ?? ''}
+            onChange={handleChange}
+            placeholder="Opcional"
+            className={MOBILE_INPUT_CLS}
+          />
+        </MobileField>
+
+        <MobileField label="CURP">
+          <input
+            type="text"
+            name="curp"
+            value={config.curp ?? ''}
+            onChange={handleChange}
+            maxLength={18}
+            placeholder="Opcional"
+            className={`${MOBILE_INPUT_CLS} uppercase placeholder:normal-case`}
           />
         </MobileField>
 
