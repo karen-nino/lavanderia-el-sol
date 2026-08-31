@@ -54,7 +54,7 @@ const CARGA_INIT  = { lavadora_tipo: '', secadora_tipo: '', tipo_prenda: 'ROPA',
 const MAX_CARGAS  = 20;
 
 const TAMANOS = [
-  { v: 'chico',  label: 'Chico'  },
+  { v: 'chico',  label: 'Chica'  },
   { v: 'grande', label: 'Grande' },
   { v: 'jumbo',  label: 'Jumbo'  },
 ];
@@ -1593,10 +1593,6 @@ export default function NuevaNota() {
                 <div className="space-y-5 mb-2 text-sm text-blue border-t border-blue-200 pt-4">
                   {encargoCargas.map((c, i) => {
                     const tipoLabel = t => t === 'jumbo' ? 'Jumbo' : t === 'mediana' ? 'Mediana' : t === 'edredon' ? 'Edredón' : '';
-                    const partes = [
-                      c.lavadora_tipo && `Lavadora ${tipoLabel(c.lavadora_tipo)}`,
-                      c.secadora_tipo && `Secadora`,
-                    ].filter(Boolean);
                     const detalle = [PRENDA_LABEL[c.tipo_prenda], c.tamano ? TAMANO_LABEL[c.tamano] : null].filter(Boolean).join(', ');
                     const productosCarga = (c.productos ?? []).filter(p => p.producto_id && Number(p.cantidad) > 0);
                     const lavPrecio = precioLavadoTipo(c.lavadora_tipo, c.tipo_prenda);
@@ -1605,16 +1601,16 @@ export default function NuevaNota() {
                     return (
                       <div key={i} className="pb-4 border-b border-blue-200/60 last:border-0 last:pb-0">
                         <p className="font-medium">
-                          Carga {i + 1}{detalle ? ` — ${detalle}` : ''}{partes.length > 0 ? ` (${partes.join(' + ')})` : ''}
+                          Carga {i + 1}{detalle ? ` — ${detalle}` : ''}
                         </p>
                         {/* Costo real: desglose de máquinas y productos */}
                         <p className="mt-2.5 text-xs font-semibold text-blue-700/70 uppercase tracking-wide">Costo real</p>
                         <ul className="mt-1.5 ml-3 space-y-2 text-xs text-blue-700/80">
                           {c.lavadora_tipo && (
-                            <li className="flex justify-between gap-2"><span>· Lavado {tipoLabel(c.lavadora_tipo)}</span><span>${lavPrecio.toFixed(2)}</span></li>
+                            <li className="flex justify-between gap-2"><span>· Lavadora · {tipoLabel(c.lavadora_tipo)}</span><span>${lavPrecio.toFixed(2)}</span></li>
                           )}
                           {c.secadora_tipo && (
-                            <li className="flex justify-between gap-2"><span>· Secado</span><span>${secPrecio.toFixed(2)}</span></li>
+                            <li className="flex justify-between gap-2"><span>· Secadora</span><span>${secPrecio.toFixed(2)}</span></li>
                           )}
                           {productosCarga.map((p, j) => {
                             const prod = productosCatalogo.find(x => String(x.id) === String(p.producto_id));
