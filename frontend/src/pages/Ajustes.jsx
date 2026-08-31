@@ -65,6 +65,14 @@ const SectionIcon = {
         d="m15 5 6.3 6.3a2.4 2.4 0 0 1 0 3.4L17 19" />
     </svg>
   ),
+  // Recibo con la esquina recortada (Lucide "receipt").
+  ticket: (
+    <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+        d="M4 2v20l2.5-1.5L9 22l2.5-1.5L14 22l2.5-1.5L19 22V2l-2.5 1.5L14 2l-2.5 1.5L9 2 6.5 3.5 4 2Z" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 8h8M8 12h8M8 16h5" />
+    </svg>
+  ),
   // Caja de inventario (Lucide "package").
   inventario: (
     <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -116,6 +124,7 @@ const MOBILE_SECTIONS = [
   { id: 'alertas', label: 'Alertas y Notificaciones',  subtitle: 'Ajustes de alertas', icon: SectionIcon.alertas },
   { id: 'etiquetas', label: 'Etiquetas de encargo',    subtitle: 'Tipos de tela y tamaños de edredón', icon: SectionIcon.etiquetas },
   { id: 'inventario', label: 'Inventario',              subtitle: 'Marcas y envases de productos', icon: SectionIcon.inventario },
+  { id: 'ticket',   label: 'Ticket',                   subtitle: 'Nota al pie del ticket', icon: SectionIcon.ticket },
 ];
 
 // Encabezado de un grupo de campos dentro de una sección. Va por encima de las
@@ -852,6 +861,7 @@ export default function Ajustes() {
     tiempo_secadora_edredon: Number(config.tiempo_secadora_edredon),
     nombre_negocio:        config.nombre_negocio,
     rfc:                   config.rfc ?? '',
+    ticket_nota:           config.ticket_nota ?? '',
     stock_minimo_global:   Number(config.stock_minimo_global),
     alerta_ciclo_detenido: !!config.alerta_ciclo_detenido,
   });
@@ -1381,6 +1391,24 @@ export default function Ajustes() {
     </Section>
   );
 
+  const seccionTicketDesktop = (
+    <Section titulo="Ticket">
+      <Field
+        label="Nota"
+        hint="Se imprime en letra chica al final del ticket que se manda al cliente."
+      >
+        <textarea
+          name="ticket_nota"
+          rows={5}
+          value={config.ticket_nota ?? ''}
+          onChange={handleChange}
+          placeholder="Opcional"
+          className={`${INPUT_CLS} resize-y leading-relaxed`}
+        />
+      </Field>
+    </Section>
+  );
+
   // ── Mobile: contenido por sección ──
   const seccionPerfilMobile = (
     <div className="space-y-5">
@@ -1813,6 +1841,24 @@ export default function Ajustes() {
     </div>
   );
 
+  const seccionTicketMobile = (
+    <div className="space-y-6">
+      <MobileField
+        label="Nota"
+        hint="Se imprime en letra chica al final del ticket que se manda al cliente."
+      >
+        <textarea
+          name="ticket_nota"
+          rows={6}
+          value={config.ticket_nota ?? ''}
+          onChange={handleChange}
+          placeholder="Opcional"
+          className={`${MOBILE_INPUT_CLS} resize-y leading-relaxed`}
+        />
+      </MobileField>
+    </div>
+  );
+
   const mobileSectionContent = {
     perfil:  seccionPerfilMobile,
     negocio: seccionSucursalesMobile,
@@ -1821,6 +1867,7 @@ export default function Ajustes() {
     alertas: seccionAlertasMobile,
     etiquetas: seccionEtiquetasMobile,
     inventario: seccionInventarioMobile,
+    ticket: seccionTicketMobile,
   };
 
   // Éxitos: banner verde en línea. Errores: modal (igual que autoservicio).
@@ -1967,6 +2014,7 @@ export default function Ajustes() {
           {seccionAlertasDesktop}
           {seccionEtiquetasDesktop}
           {seccionInventarioDesktop}
+          {seccionTicketDesktop}
         </div>
 
         <div className="space-y-3">

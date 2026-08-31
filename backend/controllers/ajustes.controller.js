@@ -71,6 +71,7 @@ export const updateAjustes = async (req, res) => {
     tiempo_secadora_edredon,
     nombre_negocio,
     rfc,
+    ticket_nota,
     direccion,
     telefono,
     stock_minimo_global,
@@ -119,6 +120,13 @@ export const updateAjustes = async (req, res) => {
     return limpio === '' ? null : limpio;
   };
 
+  // Nota al pie del ticket: texto libre tal cual lo escribe el negocio (respeta
+  // renglones y mayúsculas); vacía la borra.
+  const textoONull = (v) => {
+    const limpio = String(v ?? '').trim();
+    return limpio === '' ? null : limpio;
+  };
+
   const updates = [];
   const values  = [];
   let i = 1;
@@ -142,6 +150,7 @@ export const updateAjustes = async (req, res) => {
   if (tiempo_secadora_edredon !== undefined) { updates.push(`tiempo_secadora_edredon = $${i++}`); values.push(tiempo_secadora_edredon); }
   if (nombre_negocio        !== undefined) { updates.push(`nombre_negocio = $${i++}`);        values.push(nombre_negocio); }
   if (rfc                   !== undefined) { updates.push(`rfc = $${i++}`);                   values.push(rfcLibre(rfc)); }
+  if (ticket_nota           !== undefined) { updates.push(`ticket_nota = $${i++}`);           values.push(textoONull(ticket_nota)); }
   if (direccion             !== undefined) { updates.push(`direccion = $${i++}`);              values.push(direccion); }
   if (telefono              !== undefined) { updates.push(`telefono = $${i++}`);               values.push(telefono); }
   if (stock_minimo_global   !== undefined) { updates.push(`stock_minimo_global = $${i++}`);   values.push(stock_minimo_global); }

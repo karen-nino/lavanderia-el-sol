@@ -117,7 +117,7 @@ function Linea({ label, value, fuerte }) {
 
 // Construye el texto plano del ticket que se envía por WhatsApp. Refleja el
 // mismo desglose que se ve en pantalla (cargas, máquinas, productos).
-function armarTextoTicket(nota, rfc) {
+function armarTextoTicket(nota, rfc, notaPie) {
   const L = ['*Lavandería El Sol*'];
   // El R.F.C. sale tal cual se capturó en Ajustes (es texto libre).
   if (rfc) L.push(rfc);
@@ -200,6 +200,7 @@ function armarTextoTicket(nota, rfc) {
     L.push(`Entrega: ${fmtFecha(nota.fecha_entrega)}`);
   }
   L.push('', '¡Gracias por su preferencia!');
+  if (notaPie) L.push('', notaPie);
   return L.join('\n');
 }
 
@@ -208,8 +209,10 @@ export default function TicketNota() {
   const navigate = useNavigate();
 
   const [nota, setNota]       = useState(null);
-  // R.F.C. del negocio (Ajustes): se imprime en el ticket si está capturado.
+  // Datos del negocio que se imprimen en el ticket (Ajustes): el R.F.C. en el
+  // encabezado y la nota en letra chica al pie. Vacíos, no se muestran.
   const [rfcNegocio, setRfcNegocio] = useState('');
+  const [notaPie, setNotaPie]       = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState('');
   // Autoservicio es anónimo (sin cliente): el empleado captura aquí el teléfono
@@ -224,7 +227,11 @@ export default function TicketNota() {
     let activo = true;
     // Los ajustes son secundarios: si fallan, el ticket se muestra igual.
     api.get('/ajustes')
-      .then(cfg => { if (activo) setRfcNegocio(cfg?.rfc ?? ''); })
+      .then(cfg => {
+        if (!activo) return;
+        setRfcNegocio(cfg?.rfc ?? '');
+        setNotaPie(cfg?.ticket_nota ?? '');
+      })
       .catch(() => {});
     api.get(`/notas/${id}`)
       .then(data => {
@@ -294,7 +301,7 @@ export default function TicketNota() {
         setAvisoEnvio('Se descargó el ticket en imagen: adjúntalo en el chat que se abrió.');
       }
       const phone = telefonoDigits.startsWith('52') ? telefonoDigits : `52${telefonoDigits}`;
-      const texto = encodeURIComponent(armarTextoTicket(nota, rfcNegocio));
+      const texto = encodeURIComponent(armarTextoTicket(nota, rfcNegocio, notaPie));
       window.open(`https://wa.me/${phone}?text=${texto}`, '_blank', 'noopener,noreferrer');
     } catch (err) {
       // Cancelar la hoja de compartir no es un error que reportar.
@@ -490,6 +497,13 @@ export default function TicketNota() {
 
           {/* Pie */}
           <p className="px-5 py-4 text-center text-xs text-gray-400">¡Gracias por su preferencia!</p>
+
+          {/* Nota del negocio (Ajustes → Ticket): la letra chica del recibo */}
+          {notaPie && (
+            <p className="px-5 pb-4 text-center text-[10px] leading-relaxed text-gray-400 whitespace-pre-line border-t border-dashed border-gray-200 pt-3">
+              {notaPie}
+            </p>
+          )}
         </div>
 
         {/* Teléfono para WhatsApp: si la nota no tiene cliente (Autoservicio
