@@ -1214,7 +1214,7 @@ export default function NuevaNota() {
                     {/* Una fila por producto. */}
                     <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
                       {(c.productos ?? []).length === 0 ? (
-                        <p className="px-4 py-5 text-sm text-gray-500">Esta carga no lleva productos. Tócale a «Agregar» para poner uno.</p>
+                        <p className="px-4 py-5 text-sm text-gray-500">No hay productos en esta carga.</p>
                       ) : (
                         c.productos.map((item, j) => {
                           const prod  = productosCatalogo.find(x => String(x.id) === String(item.producto_id));
@@ -1876,7 +1876,7 @@ export default function NuevaNota() {
                 aquí se vende la pieza completa (botella, unidad o bolsa). */}
             <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
               {productosLista.length === 0 ? (
-                <p className="px-4 py-5 text-sm text-gray-500">Esta nota no lleva productos. Tócale a «Agregar» para poner uno.</p>
+                <p className="px-4 py-5 text-sm text-gray-500">No hay productos en esta nota.</p>
               ) : (
                 productosLista.map((item, i) => {
                   const prod = productosCatalogo.find(x => String(x.id) === String(item.producto_id));
