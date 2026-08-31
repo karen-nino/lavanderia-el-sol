@@ -66,6 +66,8 @@ export default function Salidas() {
   const [loadingProducto,  setLoadingProducto]  = useState(null); // id del producto en proceso
   // Producto pendiente de confirmar antes de agregarlo a la nota.
   const [confirmProducto,  setConfirmProducto]  = useState(null);
+  // Producto de la nota pendiente de confirmar antes de quitarlo.
+  const [confirmQuitarProd, setConfirmQuitarProd] = useState(null);
   const [errorAccion,      setErrorAccion]      = useState('');
   const [confirmDetener,   setConfirmDetener]   = useState(null); // máquina a detener
   const [confirmIniciar,   setConfirmIniciar]   = useState(null); // máquina a iniciar
@@ -378,6 +380,7 @@ export default function Salidas() {
     setErrorAccion('');
     try {
       await api.delete(`/notas/${id}/productos/${productoId}`);
+      setConfirmQuitarProd(null);
       await cargarDatos();
     } catch (err) {
       setErrorAccion(err.message);
@@ -718,7 +721,7 @@ export default function Salidas() {
                   </p>
                 </div>
                 <button
-                  onClick={() => eliminarProducto(p.producto_id)}
+                  onClick={() => setConfirmQuitarProd(p)}
                   disabled={loadingProducto === p.producto_id}
                   className="text-red-400 hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50 transition-colors disabled:opacity-40"
                   title="Eliminar"
@@ -809,6 +812,73 @@ export default function Salidas() {
           </div>
         )}
       </div>
+
+      {/* Advertencia antes de quitar un producto de la nota */}
+      {confirmQuitarProd && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-7 space-y-6">
+            <div className="flex items-center gap-3">
+              <span className="flex-shrink-0 w-9 h-9 rounded-full bg-red/10 text-red flex items-center justify-center">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round"
+                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </span>
+              <h3 className="text-base font-bold text-gray-900">Quitar producto</h3>
+            </div>
+
+            <div className="space-y-3">
+              <p className="text-sm text-gray-500">
+                Se quitará{' '}
+                <span className="font-semibold text-gray-800">
+                  {confirmQuitarProd.cantidad} × {confirmQuitarProd.nombre}
+                </span>{' '}
+                de esta nota.
+              </p>
+              <div className="rounded-lg border border-gray-200 divide-y divide-gray-100 text-sm">
+                <div className="flex justify-between px-3 py-2">
+                  <span className="text-gray-500">Deja de cobrarse</span>
+                  <span className="font-semibold text-gray-900">{fmtMonto(confirmQuitarProd.subtotal)}</span>
+                </div>
+                <div className="flex justify-between px-3 py-2">
+                  <span className="text-gray-500">Nuevo total de la nota</span>
+                  <span className="font-semibold text-gray-900">
+                    {fmtMonto(Number(nota?.precio_total || 0) - Number(confirmQuitarProd.subtotal || 0))}
+                  </span>
+                </div>
+              </div>
+              <p className="text-xs text-gray-400">
+                El producto vuelve al inventario. Si lo necesitas de nuevo, agrégalo abajo.
+              </p>
+            </div>
+
+            {errorAccion && (
+              <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">
+                {errorAccion}
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setConfirmQuitarProd(null)}
+                disabled={loadingProducto === confirmQuitarProd.producto_id}
+                className="flex-1 border border-gray-300 text-gray-700 font-medium py-3 rounded-lg text-base hover:bg-gray-50 disabled:opacity-60 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => eliminarProducto(confirmQuitarProd.producto_id)}
+                disabled={loadingProducto === confirmQuitarProd.producto_id}
+                className="flex-1 bg-red hover:opacity-90 disabled:opacity-60 text-white font-medium py-3 rounded-lg text-base transition-colors"
+              >
+                {loadingProducto === confirmQuitarProd.producto_id ? 'Quitando...' : 'Quitar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Advertencia antes de agregar un producto a la nota */}
       {confirmProducto && (
