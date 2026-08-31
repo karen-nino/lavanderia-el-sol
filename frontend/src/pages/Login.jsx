@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../lib/api';
-import { APP_VERSION } from '../lib/version';
+import { APP_VERSION, versionEsNueva } from '../lib/version';
 
 const INPUT_CLS =
   'w-full px-4 py-3.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent transition';
@@ -26,6 +26,9 @@ export default function Login() {
     if (aviso) sessionStorage.removeItem('authAviso');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Se resuelve una sola vez al montar: la marca no debe apagarse por recargar.
+  const [versionNueva] = useState(versionEsNueva);
 
   const { login } = useAuth();
   const navigate = useNavigate();
@@ -234,8 +237,15 @@ export default function Login() {
           </form>
         </div>
 
-        {/* Versión de la app */}
-        <p className="text-center text-xs text-slate-400 mt-6">
+        {/* Versión de la app. El punto marca que se estrena versión y se apaga
+            en el siguiente cierre del día. */}
+        <p className="flex items-center justify-center gap-1.5 text-xs text-slate-400 mt-6">
+          {versionNueva && (
+            <>
+              <span className="w-1.5 h-1.5 rounded-full bg-blue-400" aria-hidden="true" />
+              <span className="sr-only">Versión nueva:</span>
+            </>
+          )}
           Versión {APP_VERSION}
         </p>
       </div>
