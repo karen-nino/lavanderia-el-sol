@@ -1202,7 +1202,7 @@ export default function NuevaNota() {
                       <button
                         type="button"
                         onClick={() => setSelectorProducto({ ambito: 'carga', carga: idx, item: null })}
-                        className="flex-shrink-0 flex items-center gap-1.5 border-[1.5px] border-blue text-blue rounded-pill pl-2.5 pr-3.5 py-2 text-xs font-bold hover:bg-light-blue transition-colors"
+                        className="flex-shrink-0 flex items-center gap-1.5 border-[1.5px] border-blue bg-white text-blue rounded-pill pl-2.5 pr-3.5 py-2 text-xs font-bold hover:bg-light-blue transition-colors"
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
@@ -1863,7 +1863,7 @@ export default function NuevaNota() {
               <button
                 type="button"
                 onClick={() => setSelectorProducto({ ambito: 'nota', item: null })}
-                className="flex-shrink-0 flex items-center gap-1.5 border-[1.5px] border-blue text-blue rounded-pill pl-2.5 pr-3.5 py-2 text-xs font-bold hover:bg-light-blue transition-colors"
+                className="flex-shrink-0 flex items-center gap-1.5 border-[1.5px] border-blue bg-white text-blue rounded-pill pl-2.5 pr-3.5 py-2 text-xs font-bold hover:bg-light-blue transition-colors"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
