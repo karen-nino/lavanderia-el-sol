@@ -320,11 +320,31 @@ async function reservarProducto(client, notaId, cargaId, productoId, cantidad, s
     const uni = esBolsa ? 'bolsa(s)' : unidad === 'botella' ? 'botella(s)' : 'tapa(s)';
     throw new Error(`No hay suficiente existencia de "${nombreArt}": quedan ${dispUnidad} ${uni} y se necesitan ${cantidad}. Carga más en Inventario o quítalo de la nota.`);
   }
+  // Si el producto ya está en esta nota (y en la misma carga, si aplica) se le
+  // suma la cantidad en vez de abrir otro renglón igual: así se puede pedir más
+  // de lo mismo desde Salidas sin que la nota muestre el producto dos veces.
   const { rows: npRows } = await client.query(
     `INSERT INTO nota_productos (nota_id, carga_id, producto_id, cantidad, unidad, precio_unitario, cantidad_tapas)
-     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+          SELECT $1, $2, $3, $4, $5, $6, $7
+           WHERE NOT EXISTS (
+                 SELECT 1 FROM nota_productos
+                  WHERE nota_id = $1 AND producto_id = $3
+                    AND carga_id IS NOT DISTINCT FROM $2)
+     RETURNING *`,
     [notaId, cargaId, productoId, cantidad, unidad, precioUnit, cantidadTapas]
   );
+  if (npRows.length === 0) {
+    const { rows } = await client.query(
+      `UPDATE nota_productos
+          SET cantidad       = cantidad + $4,
+              cantidad_tapas = cantidad_tapas + $5,
+              precio_unitario = $6
+        WHERE nota_id = $1 AND producto_id = $3 AND carga_id IS NOT DISTINCT FROM $2
+     RETURNING *`,
+      [notaId, cargaId, productoId, cantidad, cantidadTapas, precioUnit]
+    );
+    npRows.push(rows[0]);
+  }
   await client.query(
     'UPDATE productos SET stock_reservado = stock_reservado + $1 WHERE id = $2',
     [cantidadTapas, productoId]

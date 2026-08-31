@@ -485,7 +485,6 @@ export default function Salidas() {
   const otrasEnUso = (maq) => maquinasAsignadas.some(m => String(m.id) !== String(maq.id) && m.estado === 'en_uso');
 
   const productosNota  = nota?.productos || [];
-  const productosIdsEnNota = new Set(productosNota.map(p => p.producto_id));
 
   // El backend cobra según el servicio de la nota: Autoservicio vende la BOTELLA
   // entera y Por Encargo cobra por TAPA (utils/calculosNotas.js). La lista tiene
@@ -507,10 +506,10 @@ export default function Salidas() {
   const precioDe = (p) => Number(esBolsa(p) || !porBotella ? p.precio_unitario : p.precio_botella) || 0;
   const disponibleDe = (p) => Math.floor(Number(p.stock_disponible) / tapasPorUnidadDe(p));
 
-  // Solo productos con al menos una unidad vendible que no estén ya en la nota.
-  const productosDisponibles = productos.filter(
-    p => disponibleDe(p) > 0 && !productosIdsEnNota.has(p.id)
-  );
+  // Todo lo que tenga al menos una unidad vendible, incluido lo que ya está en
+  // la nota: agregarlo otra vez le suma cantidad a su renglón.
+  const productosDisponibles = productos.filter(p => disponibleDe(p) > 0);
+  const enNotaDe = (p) => productosNota.find(x => String(x.producto_id) === String(p.id));
 
   return (
     <div className="pt-10 pb-16 px-6 md:p-6 max-w-2xl mx-auto space-y-6">
@@ -749,14 +748,21 @@ export default function Salidas() {
           <p className="px-4 py-4 text-sm text-gray-400 italic">
             {productos.length === 0
               ? 'No hay productos registrados'
-              : 'Sin stock disponible o todos ya están en la nota'}
+              : 'Sin existencias disponibles'}
           </p>
         ) : (
           <div className="divide-y divide-gray-50">
             {productosDisponibles.map(p => (
               <div key={p.id} className="px-4 py-3 flex flex-wrap items-center gap-x-3 gap-y-3">
                 <div className="flex-1 min-w-[9rem]">
-                  <p className="text-sm font-medium text-gray-800 truncate">{etiquetaProducto(p)}</p>
+                  <p className="text-sm font-medium text-gray-800 truncate">
+                    {etiquetaProducto(p)}
+                    {enNotaDe(p) && (
+                      <span className="ml-2 text-xs font-semibold text-blue bg-light-blue rounded-pill px-2 py-0.5 align-middle">
+                        {enNotaDe(p).cantidad} en la nota
+                      </span>
+                    )}
+                  </p>
                   <p className="text-xs text-gray-400">
                     Disponible: {disponibleDe(p)} {unidadDe(p, disponibleDe(p))} ·{' '}
                     {precioDe(p) > 0
@@ -815,7 +821,9 @@ export default function Salidas() {
                     d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
                 </svg>
               </span>
-              <h3 className="text-base font-bold text-gray-900">Agregar producto</h3>
+              <h3 className="text-base font-bold text-gray-900">
+                {enNotaDe(confirmProducto) ? 'Agregar más producto' : 'Agregar producto'}
+              </h3>
             </div>
 
             <div className="space-y-3">
@@ -824,8 +832,10 @@ export default function Salidas() {
                 <span className="font-semibold text-gray-800">
                   {confirmProducto.cantidad} {unidadDe(confirmProducto, confirmProducto.cantidad)}
                 </span>{' '}
-                de <span className="font-semibold text-gray-800">{etiquetaProducto(confirmProducto)}</span> a
-                esta nota.
+                de <span className="font-semibold text-gray-800">{etiquetaProducto(confirmProducto)}</span>
+                {enNotaDe(confirmProducto)
+                  ? ` a las ${enNotaDe(confirmProducto).cantidad} que ya lleva esta nota.`
+                  : ' a esta nota.'}
               </p>
               <div className="rounded-lg border border-gray-200 divide-y divide-gray-100 text-sm">
                 <div className="flex justify-between px-3 py-2">
