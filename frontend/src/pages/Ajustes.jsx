@@ -1635,8 +1635,9 @@ export default function Ajustes() {
   );
   const seccionPreciosMobile = (
     <div className="space-y-10">
-      <div className="space-y-4">
+      <div className="space-y-6">
         <TituloGrupoMobile>Lavadora</TituloGrupoMobile>
+        <div className="space-y-4">
         <TarjetaMobile titulo="Mediana">
           {campoPrecioM('precio_carga_mediana', 'Aplica a lavadoras medianas (autoservicio y por encargo).')}
           {campoTiempoM('tiempo_carga_mediana', 'Duración del ciclo de lavado en una máquina mediana.')}
@@ -1649,9 +1650,10 @@ export default function Ajustes() {
           {campoPrecioM('precio_edredon_jumbo', 'Tarifa fija por edredón lavado en máquina jumbo.')}
           {campoTiempoM('tiempo_edredon_jumbo', 'Duración del lavado de un edredón en máquina jumbo.')}
         </TarjetaMobile>
+        </div>
       </div>
 
-      <div className="space-y-4">
+      <div className="border-t border-light-blue/60 pt-8 space-y-6">
         <TituloGrupoMobile>Secadora</TituloGrupoMobile>
         <TarjetaMobile>
           {campoPrecioM('precio_carga_secadora', 'Precio del secado de una carga.')}
@@ -1674,33 +1676,42 @@ export default function Ajustes() {
   );
 
   const seccionCargasPreciosMobile = (
-    <div className="space-y-6">
-      <p className="text-sm text-grey">
-        Límite del precio de una carga (máquinas + productos) según su tamaño. El ajuste manual
-        no cuenta contra el tope. Aplica a las cargas Por Encargo (que capturan tamaño).
-      </p>
-      <div className="space-y-12">
-        {campoTopeM('tope_carga_chico',  'Carga Chica',  'chica')}
-        {campoTopeM('tope_carga_grande', 'Carga Grande', 'grande')}
-        {campoTopeM('tope_carga_jumbo',  'Carga Jumbo',  'jumbo')}
-        {campoTopeM('tope_carga_edredon', 'Carga Edredón', 'de edredón')}
+    <div className="space-y-10">
+      <div className="space-y-6">
+        <div className="space-y-1.5">
+          <TituloGrupoMobile>Tope de precio por carga</TituloGrupoMobile>
+          <p className="text-sm text-grey">
+            Límite del precio de una carga (máquinas + productos) según su tamaño. El ajuste manual
+            no cuenta contra el tope. Aplica a las cargas Por Encargo (que capturan tamaño).
+          </p>
+        </div>
+        <TarjetaMobile>
+          {campoTopeM('tope_carga_chico',  'Carga Chica',  'chica')}
+          {campoTopeM('tope_carga_grande', 'Carga Grande', 'grande')}
+          {campoTopeM('tope_carga_jumbo',  'Carga Jumbo',  'jumbo')}
+          {campoTopeM('tope_carga_edredon', 'Carga Edredón', 'de edredón')}
+        </TarjetaMobile>
       </div>
 
-      <div className="pt-8 mt-6 border-t border-gray-100">
-        <p className="text-base font-semibold text-gray-900 mb-1">Empaquetado</p>
-        <p className="text-sm text-grey mb-4">
-          Costo del empaquetado de la ropa. Se incluye por defecto en cada carga Por Encargo
-          (dentro del tope) y el empleado puede quitarlo por carga. Vacío o 0 = sin empaquetado.
-        </p>
-        <MobileField label="Costo del empaquetado">
-          <div className="flex items-center gap-2">
-            <span className="text-base text-grey flex-shrink-0">$</span>
-            <input type="number" name="costo_empaquetado" min="0" step="0.01"
-              value={config.costo_empaquetado ?? ''} onChange={handleChange} className={MOBILE_INPUT_CLS} />
-            <span className="text-base text-grey flex-shrink-0">MXN</span>
-            {stepBtns('costo_empaquetado', 5, 0, true)}
-          </div>
-        </MobileField>
+      <div className="border-t border-light-blue/60 pt-8 space-y-6">
+        <div className="space-y-1.5">
+          <TituloGrupoMobile>Empaquetado</TituloGrupoMobile>
+          <p className="text-sm text-grey">
+            Costo del empaquetado de la ropa. Se incluye por defecto en cada carga Por Encargo
+            (dentro del tope) y el empleado puede quitarlo por carga. Vacío o 0 = sin empaquetado.
+          </p>
+        </div>
+        <TarjetaMobile>
+          <MobileField label="Costo del empaquetado">
+            <div className="flex items-center gap-2">
+              <span className="text-base text-grey flex-shrink-0">$</span>
+              <input type="number" name="costo_empaquetado" min="0" step="0.01"
+                value={config.costo_empaquetado ?? ''} onChange={handleChange} className={MOBILE_INPUT_CLS} />
+              <span className="text-base text-grey flex-shrink-0">MXN</span>
+              {stepBtns('costo_empaquetado', 5, 0, true)}
+            </div>
+          </MobileField>
+        </TarjetaMobile>
       </div>
     </div>
   );
