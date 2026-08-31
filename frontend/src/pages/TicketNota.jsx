@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { etiquetaProducto, ordenProducto } from '../lib/formatoInventario';
 import { api } from '../lib/api';
 import { formatFechaHora12 } from '../lib/fecha';
 
@@ -30,7 +31,7 @@ function unidadProdTxt(p) {
   return n === 1 ? 'tapa' : 'tapas';
 }
 function nombreProd(p) {
-  return p.clase === 'bolsa' && p.tamano_bolsa ? `Bolsa ${p.tamano_bolsa}` : p.nombre;
+  return etiquetaProducto(p) + (p.tipo_liquido === 'granel' ? ' · Granel' : '');
 }
 
 function fmtFecha(iso) {
@@ -91,7 +92,8 @@ function armarTextoTicket(nota) {
       L.push(`  • ${m.nombre} (${m.tipo}) — ${fmtMonto(m.precio)}`);
     });
     // Las tapas son información interna: no se listan en el ticket.
-    (cg.productos ?? []).filter(p => p.unidad !== 'tapa').forEach(p => {
+    (cg.productos ?? []).filter(p => p.unidad !== 'tapa')
+      .sort((a, b) => ordenProducto(a) - ordenProducto(b)).forEach(p => {
       const monto = p.es_por_tapa && Number(p.subtotal) === 0 ? 'Incluido' : fmtMonto(p.subtotal);
       L.push(`  • ${nombreProd(p)} x${p.cantidad} ${unidadProdTxt(p)} — ${monto}`);
     });
@@ -116,7 +118,8 @@ function armarTextoTicket(nota) {
     adicionales.forEach(volcarCarga);
   }
 
-  const productos = (nota.productos ?? []).filter(p => p.unidad !== 'tapa');
+  const productos = (nota.productos ?? []).filter(p => p.unidad !== 'tapa')
+    .sort((a, b) => ordenProducto(a) - ordenProducto(b));
   if (productos.length > 0) {
     L.push('', '*Productos*');
     productos.forEach(p => {
@@ -205,7 +208,7 @@ export default function TicketNota() {
   if (!nota) return null;
 
   const cargas      = nota.cargas ?? [];
-  const productos   = nota.productos ?? [];
+  const productos   = [...(nota.productos ?? [])].sort((a, b) => ordenProducto(a) - ordenProducto(b));
   // Cargas creadas al dar de alta la nota (originales) vs. las agregadas
   // después (adicionales), para mostrarlas en bloques separados.
   const originales  = cargas.filter(cg => !cg.es_adicional);
@@ -215,7 +218,7 @@ export default function TicketNota() {
   // máquinas, productos y ajuste. Se reusa para el bloque original y el adicional.
   const renderCarga = cg => {
     const maquinas   = maquinasDeCarga(cg);
-    const prods      = cg.productos ?? [];
+    const prods      = [...(cg.productos ?? [])].sort((a, b) => ordenProducto(a) - ordenProducto(b));
     const totalProds = prods.reduce((s, p) => s + Number(p.subtotal ?? 0), 0);
     const totalCarga = Number(cg.precio_lavadora) + Number(cg.precio_secadora)
       + Number(cg.ajuste ?? 0) + totalProds + Number(cg.empaquetado ?? 0);

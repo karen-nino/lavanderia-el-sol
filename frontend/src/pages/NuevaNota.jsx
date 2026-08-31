@@ -388,6 +388,11 @@ export default function NuevaNota() {
   const eliminarProducto = (i) =>
     setProductosLista(prev => prev.filter((_, idx) => idx !== i));
 
+  // Quita una carga de Autoservicio. La numeración sale del índice, así que las
+  // siguientes se recorren solas. La carga 1 no se puede quitar.
+  const eliminarCargaAuto = (i) =>
+    setCargasAuto(prev => (prev.length > 1 ? prev.filter((_, idx) => idx !== i) : prev));
+
   // Ajusta el número de cargas conservando las selecciones existentes.
   const setCantidadCargas = (n) => {
     const objetivo = Math.max(1, Math.min(MAX_CARGAS, n));
@@ -1154,7 +1159,7 @@ export default function NuevaNota() {
                   <div className="space-y-3">
                     <h3 className="text-sm font-semibold text-gray-900">Tipo de máquina</h3>
                     <div>
-                      <label className="block text-xs font-medium text-gray-500 mb-1.5">Lavado</label>
+                      <label className="block text-xs font-medium text-gray-500 mb-1.5">Lavadora</label>
                       <select
                         value={c.lavadora_tipo}
                         onChange={e => {
@@ -1179,7 +1184,7 @@ export default function NuevaNota() {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-gray-500 mb-1.5">Secado</label>
+                      <label className="block text-xs font-medium text-gray-500 mb-1.5">Secadora</label>
                       <select
                         value={c.secadora_tipo}
                         onChange={e => set({ secadora_tipo: e.target.value })}
@@ -1194,9 +1199,6 @@ export default function NuevaNota() {
                         Elige al menos un tipo de lavado o secado para continuar.
                       </p>
                     )}
-                    <p className="text-xs text-gray-400">
-                      La máquina física se asigna después en Salidas de la nota.
-                    </p>
                   </div>
                   </>
                   )}
@@ -1763,14 +1765,28 @@ export default function NuevaNota() {
                 const set = (cambios) => actualizarCargaObj(i, cambios);
                 return (
                   <div key={i} className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between gap-2">
                       <p className="text-sm font-semibold text-gray-900">Carga {i + 1}</p>
-                      <span className="text-sm font-medium text-blue">${subtotalDeCarga(c).toFixed(2)}</span>
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        <span className="text-sm font-medium text-blue">${subtotalDeCarga(c).toFixed(2)}</span>
+                        {i > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => eliminarCargaAuto(i)}
+                            aria-label={`Quitar carga ${i + 1}`}
+                            className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        )}
+                      </div>
                     </div>
                     {/* Autoservicio: se elige el TIPO de lavado y/o secado; la
                         máquina física se asigna después en Salidas. */}
                     <div>
-                      <label className="block text-xs font-medium text-gray-500 mb-1.5">Lavado</label>
+                      <label className="block text-xs font-medium text-gray-500 mb-1.5">Lavadora</label>
                       <select
                         value={c.lavadora_tipo}
                         onChange={e => {
@@ -1786,7 +1802,7 @@ export default function NuevaNota() {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-gray-500 mb-1.5">Secado</label>
+                      <label className="block text-xs font-medium text-gray-500 mb-1.5">Secadora</label>
                       <select
                         value={c.secadora_tipo}
                         onChange={e => set({ secadora_tipo: e.target.value })}
@@ -1799,11 +1815,10 @@ export default function NuevaNota() {
                     {!c.lavadora_tipo && !c.secadora_tipo && (
                       <p className="text-sm text-red-600">Elige al menos un tipo de lavado o secado.</p>
                     )}
-                    <p className="text-xs text-gray-400">La máquina física se asigna después en Salidas de la nota.</p>
                   </div>
                 );
               })}
-              <p className="text-xs text-blue font-medium">
+              <p className="text-xs text-blue font-medium text-right">
                 Subtotal cargas: ${subtotalCargas.toFixed(2)}
               </p>
               {maquinas.length === 0 && (
