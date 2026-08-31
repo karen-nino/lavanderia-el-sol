@@ -1193,18 +1193,18 @@ export default function NuevaNota() {
                       <div className="flex items-baseline gap-2 min-w-0">
                         <h3 className="text-sm font-semibold text-gray-900">Productos</h3>
                         {(c.productos ?? []).length > 0 && (
-                          <span className="text-xs text-gray-500">{c.productos.length} {c.productos.length === 1 ? 'producto' : 'productos'}</span>
+                          <span className="text-xs text-gray-500 truncate">{c.productos.length} {c.productos.length === 1 ? 'producto' : 'productos'}</span>
                         )}
                       </div>
                       <button
                         type="button"
                         onClick={() => setSelectorProducto({ ambito: 'carga', carga: idx })}
-                        className="flex-shrink-0 flex items-center gap-1.5 border-[1.5px] border-blue bg-white text-blue rounded-pill pl-2.5 pr-3.5 py-2 text-xs font-bold hover:bg-light-blue transition-colors"
+                        className="flex-shrink-0 flex items-center gap-1.5 bg-blue text-white rounded-pill pl-3 pr-4 py-2.5 text-xs font-bold hover:opacity-90 transition-opacity"
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
                         </svg>
-                        Agregar
+                        Agregar producto
                       </button>
                     </div>
 
@@ -1839,7 +1839,7 @@ export default function NuevaNota() {
               <div className="flex items-baseline gap-2 min-w-0">
                 <h2 className={LABEL_CLS + ' mb-0'}>Productos</h2>
                 {productosLista.length > 0 && (
-                  <span className="text-xs text-gray-500">
+                  <span className="text-xs text-gray-500 truncate">
                     {productosLista.length} {productosLista.length === 1 ? 'producto' : 'productos'}
                   </span>
                 )}
@@ -1847,12 +1847,12 @@ export default function NuevaNota() {
               <button
                 type="button"
                 onClick={() => setSelectorProducto({ ambito: 'nota' })}
-                className="flex-shrink-0 flex items-center gap-1.5 border-[1.5px] border-blue bg-white text-blue rounded-pill pl-2.5 pr-3.5 py-2 text-xs font-bold hover:bg-light-blue transition-colors"
+                className="flex-shrink-0 flex items-center gap-1.5 bg-blue text-white rounded-pill pl-3 pr-4 py-2.5 text-xs font-bold hover:opacity-90 transition-opacity"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
                 </svg>
-                Agregar
+                Agregar producto
               </button>
             </div>
 
