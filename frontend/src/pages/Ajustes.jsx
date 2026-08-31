@@ -118,6 +118,19 @@ const MOBILE_SECTIONS = [
   { id: 'inventario', label: 'Inventario',              subtitle: 'Marcas y envases de productos', icon: SectionIcon.inventario },
 ];
 
+// Encabezado de un grupo de campos dentro de una sección. Va por encima de las
+// etiquetas de campo (que son bold), porque antes se perdía entre ellas: iba en
+// 12 px gris mientras cada campo pesaba más que el título de su propio grupo.
+function TituloGrupo({ children }) {
+  return <p className="text-sm font-bold text-dark-blue">{children}</p>;
+}
+
+// La escala de móvil es mayor (título de pantalla 20 px, etiqueta 16 px bold),
+// así que ahí el encabezado de grupo va en 18 px.
+function TituloGrupoMobile({ children }) {
+  return <p className="text-lg font-bold text-dark-blue">{children}</p>;
+}
+
 function Section({ titulo, children }) {
   return (
     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
@@ -1008,9 +1021,7 @@ export default function Ajustes() {
       </div>
     </Field>
   );
-  const subTitulo = (txt) => (
-    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{txt}</p>
-  );
+  const subTitulo = (txt) => <TituloGrupo>{txt}</TituloGrupo>;
 
   const seccionPreciosDesktop = (
     <>
@@ -1090,7 +1101,7 @@ export default function Ajustes() {
   const seccionSucursalesDesktop = (
     <Section titulo="Información de sucursales">
       {/* Datos globales del negocio (marca compartida) */}
-      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Negocio (global)</p>
+      <TituloGrupo>Negocio (global)</TituloGrupo>
       <Field label="Nombre del negocio">
         <input
           type="text"
@@ -1143,7 +1154,7 @@ export default function Ajustes() {
       {/* Gestión de sucursales */}
       <div className="border-t border-gray-100 pt-4 space-y-4">
         <div className="flex items-center justify-between">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Sucursales</p>
+          <TituloGrupo>Sucursales</TituloGrupo>
           <button
             type="button"
             onClick={() => { setAgregando(a => !a); setMensaje(null); }}
@@ -1385,7 +1396,7 @@ export default function Ajustes() {
     <div className="space-y-6">
       {/* Datos globales del negocio (marca compartida) */}
       <div className="space-y-5">
-        <p className="text-xs font-semibold text-grey uppercase tracking-wide">Negocio (global)</p>
+        <TituloGrupoMobile>Negocio (global)</TituloGrupoMobile>
         <MobileField label="Nombre del Negocio">
           <input
             type="text"
@@ -1431,7 +1442,7 @@ export default function Ajustes() {
       {/* Gestión de sucursales */}
       <div className="space-y-5 border-t border-light-blue/60 pt-5">
         <div className="flex items-center justify-between">
-          <p className="text-xs font-semibold text-grey uppercase tracking-wide">Sucursales</p>
+          <TituloGrupoMobile>Sucursales</TituloGrupoMobile>
           <button
             type="button"
             onClick={() => { setAgregando(a => !a); setMensaje(null); }}
@@ -1583,7 +1594,7 @@ export default function Ajustes() {
     </MobileField>
   );
   const subTituloM = (txt) => (
-    <p className="text-xs font-semibold text-grey uppercase tracking-wide">{txt}</p>
+    <TituloGrupoMobile>{txt}</TituloGrupoMobile>
   );
 
   const seccionPreciosMobile = (
