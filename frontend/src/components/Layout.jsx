@@ -173,23 +173,30 @@ function SidebarItem({ to, label, short, icon, end }) {
 }
 
 // Botón del pie del sidebar (Menú, Ajustes, Cerrar sesión).
-function SidebarPieBoton({ icon, label, onClick, peligro = false }) {
+function SidebarPieBoton({ icon, label, onClick, peligro = false, activo = false }) {
   return (
     <button
       onClick={onClick}
       className="group flex flex-col items-center gap-1.5 py-1 w-full"
     >
-      {/* En rojo, igual que Cerrar sesión dentro del menú. */}
+      {/* Activo: igual que un ítem de navegación. En rojo (peligro): igual que
+          Cerrar sesión dentro del menú. */}
       <span
         className={`w-12 h-12 rounded-card-sm flex items-center justify-center transition-colors ${
-          peligro
-            ? 'bg-red/10 text-red group-hover:bg-red/20'
-            : 'text-dark-blue group-hover:bg-light-blue/60'
+          activo
+            ? 'bg-blue text-white'
+            : peligro
+              ? 'bg-red/10 text-red group-hover:bg-red/20'
+              : 'text-dark-blue group-hover:bg-light-blue/60'
         }`}
       >
         {icon}
       </span>
-      <span className={`text-[11px] font-medium leading-tight text-center ${peligro ? 'text-red' : 'text-dark-blue'}`}>
+      <span
+        className={`text-[11px] font-medium leading-tight text-center ${
+          activo ? 'text-blue' : peligro ? 'text-red' : 'text-dark-blue'
+        }`}
+      >
         {label}
       </span>
     </button>
@@ -211,6 +218,7 @@ const RanuraVacia = () => (
 // cambiaría el espacio medido para los íconos y la capacidad oscilaría (con dos
 // botones cabe menos → aparece overflow → vuelve un botón → cabe más…).
 function DesktopSidebar({ items, onMenu, onOverflowChange, onSettings, onLogout }) {
+  const { pathname } = useLocation();
   const slotRef = useRef(null);
   const [capacity, setCapacity] = useState(items.length);
 
@@ -258,7 +266,12 @@ function DesktopSidebar({ items, onMenu, onOverflowChange, onSettings, onLogout 
           Las ranuras sin botón se dejan invisibles pero ocupando su lugar. */}
       <div className="flex-shrink-0 mt-3 flex flex-col gap-2">
         {overflow.length === 0 && onSettings ? (
-          <SidebarPieBoton icon={Icon.ajustes} label="Ajustes" onClick={onSettings} />
+          <SidebarPieBoton
+            icon={Icon.ajustes}
+            label="Ajustes"
+            onClick={onSettings}
+            activo={pathname.startsWith('/ajustes')}
+          />
         ) : (
           <RanuraVacia />
         )}
