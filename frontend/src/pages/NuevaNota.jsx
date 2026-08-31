@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { api } from '../lib/api';
+import { etiquetaProducto } from '../lib/formatoInventario';
 import { capitalizarNombre } from '../lib/texto';
 import { FORMAS_PAGO } from '../lib/formasPago';
 
@@ -217,11 +218,6 @@ export default function NuevaNota() {
     if (prod?.tipo_liquido === 'marca') return n === 1 ? 'unidad' : 'unidades';
     return n === 1 ? 'botella' : 'botellas';
   };
-  // Etiqueta del producto en el selector: las bolsas muestran su tamaño.
-  const etiquetaProd = (p) => (
-    p.clase === 'bolsa' ? `Bolsa ${p.tamano_bolsa}`
-      : (p.tipo_liquido === 'marca' && p.marca ? `${p.marca} · ${p.nombre}` : p.nombre)
-  );
   // Producto por defecto de una carga Por Encargo: el jabón (granel). Se usa el
   // que se llame "jabón"; si no, el primer granel disponible.
   const conStock = (p) => Number(p.stock_disponible ?? p.stock_actual) > 0;
@@ -1246,7 +1242,7 @@ export default function NuevaNota() {
                                   agrega el correcto. */}
                               <div className="flex-1 min-w-[10rem]">
                                 <p className={`text-sm font-semibold ${prod ? 'text-gray-900' : 'text-gray-400'}`}>
-                                  {prod ? etiquetaProd(prod) : 'Producto no disponible'}
+                                  {prod ? etiquetaProducto(prod) : 'Producto no disponible'}
                                 </p>
                                 <p className="text-xs text-gray-500 tabular-nums">
                                   {prod ? precioProductoTexto(prod, 'carga') : '—'}
@@ -1895,7 +1891,7 @@ export default function NuevaNota() {
                           agrega el correcto. */}
                       <div className="flex-1 min-w-[10rem]">
                         <p className={`text-sm font-semibold ${prod ? 'text-gray-900' : 'text-gray-400'}`}>
-                          {prod ? etiquetaProd(prod) : 'Producto no disponible'}
+                          {prod ? etiquetaProducto(prod) : 'Producto no disponible'}
                         </p>
                         <p className="text-xs text-gray-500 tabular-nums">
                           {prod ? precioProductoTexto(prod, 'nota') : '—'}
@@ -2028,7 +2024,7 @@ export default function NuevaNota() {
                       if (!prod) return null;
                       return (
                         <div key={i} className="flex justify-between">
-                          <span>{etiquetaProd(prod)} × {cant} {unidadVentaNota(prod, cant)}</span>
+                          <span>{etiquetaProducto(prod)} × {cant} {unidadVentaNota(prod, cant)}</span>
                           <span>${(precioProducto(prod, 'botella') * cant).toFixed(2)}</span>
                         </div>
                       );
@@ -2251,7 +2247,7 @@ export default function NuevaNota() {
                         >
                           <div className="flex-1 min-w-0">
                             <p className={`text-base font-semibold ${bloqueado ? 'text-gray-400' : 'text-gray-900'}`}>
-                              {etiquetaProd(p)}
+                              {etiquetaProducto(p)}
                             </p>
                             <p className="text-xs text-gray-500 tabular-nums">{detalleProducto(p, ambito)}</p>
                           </div>

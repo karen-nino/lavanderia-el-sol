@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
+import { etiquetaProducto } from '../lib/formatoInventario';
 import { useAuth } from '../context/AuthContext';
 import { esAdmin as esAdminFn } from '../lib/roles';
 import MaquinaCicloOverlay from '../components/MaquinaCicloOverlay';
@@ -63,6 +64,8 @@ export default function Salidas() {
   const [error,            setError]            = useState('');
   const [loadingMaquina,   setLoadingMaquina]   = useState(false);
   const [loadingProducto,  setLoadingProducto]  = useState(null); // id del producto en proceso
+  // Producto pendiente de confirmar antes de agregarlo a la nota.
+  const [confirmProducto,  setConfirmProducto]  = useState(null);
   const [errorAccion,      setErrorAccion]      = useState('');
   const [confirmDetener,   setConfirmDetener]   = useState(null); // máquina a detener
   const [confirmIniciar,   setConfirmIniciar]   = useState(null); // máquina a iniciar
@@ -348,6 +351,11 @@ export default function Salidas() {
     }
   }
 
+  // La cantidad arranca en 0 (nada elegido) y no pasa del stock disponible.
+  const cantidadDe = (p) => Math.min(Number(cantidades[p.id]) || 0, p.stock_disponible);
+  const setCantidad = (productoId, valor) =>
+    setCantidades(prev => ({ ...prev, [productoId]: String(Math.max(0, valor)) }));
+
   async function agregarProducto(productoId) {
     const cantidad = Number(cantidades[productoId]);
     if (!cantidad || cantidad <= 0) return;
@@ -356,6 +364,7 @@ export default function Salidas() {
     try {
       await api.post(`/notas/${id}/productos`, { producto_id: productoId, cantidad });
       setCantidades(prev => ({ ...prev, [productoId]: '' }));
+      setConfirmProducto(null);
       await cargarDatos();
     } catch (err) {
       setErrorAccion(err.message);
@@ -725,34 +734,126 @@ export default function Salidas() {
         ) : (
           <div className="divide-y divide-gray-50">
             {productosDisponibles.map(p => (
-              <div key={p.id} className="px-4 py-3 flex items-center gap-3">
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-800 truncate">{p.nombre}</p>
+              <div key={p.id} className="px-4 py-3 flex flex-wrap items-center gap-x-3 gap-y-3">
+                <div className="flex-1 min-w-[9rem]">
+                  <p className="text-sm font-medium text-gray-800 truncate">{etiquetaProducto(p)}</p>
                   <p className="text-xs text-gray-400">
-                    Disponible: {p.stock_disponible} {p.unidad} · {fmtMonto(p.precio_unitario)}
+                    Disponible: {p.stock_disponible} {p.unidad} ·{' '}
+                    {Number(p.precio_unitario) > 0
+                      ? fmtMonto(p.precio_unitario)
+                      : <span className="text-bronce font-medium">sin precio</span>}
                   </p>
                 </div>
-                <input
-                  type="number"
-                  min="1"
-                  max={p.stock_disponible}
-                  value={cantidades[p.id] ?? ''}
-                  onChange={e => setCantidades(prev => ({ ...prev, [p.id]: e.target.value }))}
-                  placeholder="Cant."
-                  className="w-20 border border-gray-200 rounded-lg px-2 py-1.5 text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue"
-                />
-                <button
-                  onClick={() => agregarProducto(p.id)}
-                  disabled={!cantidades[p.id] || loadingProducto === p.id}
-                  className="px-3 py-1.5 bg-blue hover:opacity-90 disabled:opacity-40 text-white text-xs font-medium rounded-lg transition-colors flex-shrink-0"
-                >
-                  {loadingProducto === p.id ? '...' : 'Agregar'}
-                </button>
+                <div className="flex items-center gap-3 ml-auto flex-shrink-0">
+                  {/* Mismo control de cantidad que en los formularios de nota. */}
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setCantidad(p.id, cantidadDe(p) - 1)}
+                      disabled={cantidadDe(p) <= 0}
+                      aria-label="Disminuir cantidad"
+                      className="w-9 h-9 flex items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-700 text-base font-semibold hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    >
+                      −
+                    </button>
+                    <span className="w-7 text-center text-sm font-semibold text-gray-900 tabular-nums">
+                      {cantidadDe(p)}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setCantidad(p.id, cantidadDe(p) + 1)}
+                      disabled={cantidadDe(p) >= p.stock_disponible}
+                      aria-label="Aumentar cantidad"
+                      className="w-9 h-9 flex items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-700 text-base font-semibold hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    >
+                      +
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmProducto({ ...p, cantidad: cantidadDe(p) })}
+                    disabled={cantidadDe(p) <= 0 || loadingProducto === p.id}
+                    className="px-3 py-2 bg-blue hover:opacity-90 disabled:opacity-40 text-white text-xs font-bold rounded-lg transition-colors flex-shrink-0"
+                  >
+                    {loadingProducto === p.id ? '...' : 'Agregar'}
+                  </button>
+                </div>
               </div>
             ))}
           </div>
         )}
       </div>
+
+      {/* Advertencia antes de agregar un producto a la nota */}
+      {confirmProducto && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-7 space-y-6">
+            <div className="flex items-center gap-3">
+              <span className="flex-shrink-0 w-9 h-9 rounded-full bg-bronce/15 text-bronce flex items-center justify-center">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round"
+                    d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                </svg>
+              </span>
+              <h3 className="text-base font-bold text-gray-900">Agregar producto</h3>
+            </div>
+
+            <div className="space-y-3">
+              <p className="text-sm text-gray-500">
+                Se agregarán{' '}
+                <span className="font-semibold text-gray-800">
+                  {confirmProducto.cantidad} {confirmProducto.unidad}
+                </span>{' '}
+                de <span className="font-semibold text-gray-800">{etiquetaProducto(confirmProducto)}</span> a
+                esta nota.
+              </p>
+              <div className="rounded-lg border border-gray-200 divide-y divide-gray-100 text-sm">
+                <div className="flex justify-between px-3 py-2">
+                  <span className="text-gray-500">Se cobra al cliente</span>
+                  <span className="font-semibold text-gray-900">
+                    {fmtMonto(confirmProducto.precio_unitario * confirmProducto.cantidad)}
+                  </span>
+                </div>
+                <div className="flex justify-between px-3 py-2">
+                  <span className="text-gray-500">Queda en inventario</span>
+                  <span className="font-semibold text-gray-900">
+                    {confirmProducto.stock_disponible - confirmProducto.cantidad} {confirmProducto.unidad}
+                  </span>
+                </div>
+              </div>
+              <p className="text-xs text-gray-400">
+                Sale del inventario al confirmar. Si te equivocas, quita el producto de la nota para
+                devolverlo.
+              </p>
+            </div>
+
+            {errorAccion && (
+              <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">
+                {errorAccion}
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setConfirmProducto(null)}
+                disabled={loadingProducto === confirmProducto.id}
+                className="flex-1 border border-gray-300 text-gray-700 font-medium py-3 rounded-lg text-base hover:bg-gray-50 disabled:opacity-60 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => agregarProducto(confirmProducto.id)}
+                disabled={loadingProducto === confirmProducto.id}
+                className="flex-1 bg-blue hover:opacity-90 disabled:opacity-60 text-white font-medium py-3 rounded-lg text-base transition-colors"
+              >
+                {loadingProducto === confirmProducto.id ? 'Agregando...' : 'Agregar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal advertencia iniciar lavado/secado */}
       {iniciando && <MaquinaCicloOverlay modo="iniciar" tipo={iniciando.tipo} nombre={iniciando.nombre} />}

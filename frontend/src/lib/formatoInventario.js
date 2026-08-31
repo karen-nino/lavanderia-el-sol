@@ -38,3 +38,15 @@ export function textoGranel(tapasGranel, tapasPorBidon, tapasPorBotella) {
   if (botellas > 0) partes.push(plural(botellas, 'botella', 'botellas'));
   return partes.join(' y ');
 }
+
+// Nombre del producto con lo que lo distingue de otro que se llame igual: el
+// tamaño en las bolsas y la marca en los productos de marca. Sin esto, tres
+// bolsas o dos suavizantes de distinta marca se ven idénticos en las listas.
+export function etiquetaProducto(p) {
+  if (!p) return '';
+  if (p.clase === 'bolsa') {
+    return p.tamano_bolsa ? `Bolsa ${p.tamano_bolsa}` : (p.nombre || 'Bolsa');
+  }
+  if (p.tipo_liquido === 'marca' && p.marca) return `${p.marca} · ${p.nombre}`;
+  return p.nombre ?? '';
+}
