@@ -423,6 +423,15 @@ export default function DetalleNota() {
       {/* Botones de acción */}
       {!terminal && (
         <div className="flex flex-wrap gap-2">
+          {puedeCancelar && (
+            <button
+              onClick={() => setConfirmCancelar(true)}
+              disabled={loadingAccion}
+              className="flex items-center gap-1.5 px-4 py-2 bg-orange-500 hover:bg-orange-600 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
+            >
+              Cancelar nota
+            </button>
+          )}
           {puedeEditar && (esAdmin || nota.estado === 'EN_ESPERA') && (
             <button
               onClick={() => navigate(`/notas/${id}/editar`)}
@@ -456,15 +465,6 @@ export default function DetalleNota() {
                 Finalizar
               </button>
             )
-          )}
-          {puedeCancelar && (
-            <button
-              onClick={() => setConfirmCancelar(true)}
-              disabled={loadingAccion}
-              className="flex items-center gap-1.5 px-4 py-2 bg-orange-500 hover:bg-orange-600 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
-            >
-              Cancelar nota
-            </button>
           )}
           {esAdmin && (
             <button
