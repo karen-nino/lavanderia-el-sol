@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
-import { etiquetaProducto, tituloProducto, subtituloProducto } from '../lib/formatoInventario';
+import { etiquetaProducto, tituloProducto, subtituloProducto, ordenProducto } from '../lib/formatoInventario';
 import { useAuth } from '../context/AuthContext';
 import { esAdmin as esAdminFn } from '../lib/roles';
 import MaquinaCicloOverlay from '../components/MaquinaCicloOverlay';
@@ -487,7 +487,7 @@ export default function Salidas() {
   // ¿Otras máquinas de la nota siguen en uso además de esta?
   const otrasEnUso = (maq) => maquinasAsignadas.some(m => String(m.id) !== String(maq.id) && m.estado === 'en_uso');
 
-  const productosNota  = nota?.productos || [];
+  const productosNota  = [...(nota?.productos || [])].sort((a, b) => ordenProducto(a) - ordenProducto(b));
 
   // El backend cobra según el servicio de la nota: Autoservicio vende la BOTELLA
   // entera y Por Encargo cobra por TAPA (utils/calculosNotas.js). La lista tiene
@@ -511,7 +511,9 @@ export default function Salidas() {
 
   // Todo lo que tenga al menos una unidad vendible, incluido lo que ya está en
   // la nota: agregarlo otra vez le suma cantidad a su renglón.
-  const productosDisponibles = productos.filter(p => disponibleDe(p) > 0);
+  const productosDisponibles = productos
+    .filter(p => disponibleDe(p) > 0)
+    .sort((a, b) => ordenProducto(a) - ordenProducto(b));
   const enNotaDe = (p) => productosNota.find(x => String(x.producto_id) === String(p.id));
   const totalProductosNota = productosNota.reduce((a, x) => a + Number(x.subtotal || 0), 0);
 
