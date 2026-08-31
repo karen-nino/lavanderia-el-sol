@@ -149,6 +149,9 @@ export default function NuevaNota() {
   // tapa); `carga` solo aplica al segundo. Un producto puesto no se cambia: se
   // borra y se agrega el correcto.
   const [selectorProducto,  setSelectorProducto]  = useState(null);
+  // Autoservicio se cobra al momento: "Aceptar" abre este modal, donde se elige
+  // la forma de pago y se confirma la creación de la nota.
+  const [cobroOpen,         setCobroOpen]         = useState(false);
   const [nuevoCliente,      setNuevoCliente]      = useState({ nombre: '', apellido: '', telefono: '' });
   const [creandoCliente,    setCreandoCliente]    = useState(false);
   const [folio,             setFolio]             = useState('');
@@ -674,19 +677,37 @@ export default function NuevaNota() {
     }
   };
 
+  // Lo que hay que tener listo antes de pasar al cobro. Devuelve el problema o
+  // null si todo está en orden.
+  const problemaAutoservicio = () => {
+    if (!cargasAuto.every(c => c.lavadora_tipo || c.secadora_tipo)) {
+      return 'Cada carga necesita al menos un tipo de lavado o secado.';
+    }
+    return null;
+  };
+
+  // "Aceptar": valida la nota y abre el cobro. La nota se crea desde el modal.
+  const abrirCobro = () => {
+    const problema = problemaAutoservicio();
+    setError(problema ?? '');
+    if (!problema) setCobroOpen(true);
+  };
+
+  // Se llama desde el modal (sin evento) y como submit del formulario.
   const handleSubmit = async (e) => {
-    e.preventDefault();
+    e?.preventDefault();
     if (tipoServicio !== 'AUTOSERVICIO') return;
     setError('');
 
-    // Cada carga necesita al menos un tipo de lavado o secado.
-    if (!cargasAuto.every(c => c.lavadora_tipo || c.secadora_tipo)) {
-      setError('Cada carga necesita al menos un tipo de lavado o secado.');
+    const problema = problemaAutoservicio();
+    if (problema) {
+      setError(problema);
+      setCobroOpen(false);
       return;
     }
     // Autoservicio se cobra al momento: hay que elegir la forma de pago.
     if (!form.forma_pago) {
-      setError('Elige la forma de pago (Efectivo o Transferencia).');
+      setError('Elige la forma de pago.');
       return;
     }
 
@@ -723,9 +744,11 @@ export default function NuevaNota() {
     try {
       if (esEdicion) {
         await api.patch(`/notas/${id}`, payload);
+        setCobroOpen(false);
         navigate(`/notas/${id}`);
       } else {
         const creada = await api.post('/notas', payload);
+        setCobroOpen(false);
         setNotaCreada(creada);
       }
     } catch (err) {
@@ -1795,41 +1818,6 @@ export default function NuevaNota() {
 
           <Separador />
 
-          {/* Ajuste */}
-          <div>
-            <label className={LABEL_CLS}>Ajuste ($)</label>
-            <div className="flex items-center gap-2">
-              <div className="relative flex-1">
-                <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 text-base">$</span>
-                <input
-                  type="number" name="ajuste" step="any"
-                  value={form.ajuste} onChange={handleChange}
-                  placeholder="Ej. -10 para descuento, 20 para cargo extra"
-                  className={`${INPUT_CLS} pl-8 text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`}
-                />
-              </div>
-              <button
-                type="button"
-                onClick={() => setForm(f => ({ ...f, ajuste: String((Number(f.ajuste) || 0) - 10) }))}
-                aria-label="Disminuir ajuste"
-                className="flex-shrink-0 w-14 py-3.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-xl font-semibold hover:bg-gray-50 transition-colors"
-              >
-                −
-              </button>
-              <button
-                type="button"
-                onClick={() => setForm(f => ({ ...f, ajuste: String((Number(f.ajuste) || 0) + 10) }))}
-                aria-label="Aumentar ajuste"
-                className="flex-shrink-0 w-14 py-3.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-xl font-semibold hover:bg-gray-50 transition-colors"
-              >
-                +
-              </button>
-            </div>
-            <p className="text-xs text-gray-400 mt-1.5">Descuento (negativo) o cargo extra (positivo)</p>
-          </div>
-
-          <Separador />
-
           {/* ── Productos ────────────────────────────────────── */}
 
           <div>
@@ -1934,6 +1922,41 @@ export default function NuevaNota() {
                 </div>
               )}
             </div>
+          </div>
+
+          <Separador />
+
+          {/* Ajuste */}
+          <div>
+            <label className={LABEL_CLS}>Ajuste ($)</label>
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 text-base">$</span>
+                <input
+                  type="number" name="ajuste" step="any"
+                  value={form.ajuste} onChange={handleChange}
+                  placeholder="Ej. -10 para descuento, 20 para cargo extra"
+                  className={`${INPUT_CLS} pl-8 text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`}
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => setForm(f => ({ ...f, ajuste: String((Number(f.ajuste) || 0) - 10) }))}
+                aria-label="Disminuir ajuste"
+                className="flex-shrink-0 w-14 py-3.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-xl font-semibold hover:bg-gray-50 transition-colors"
+              >
+                −
+              </button>
+              <button
+                type="button"
+                onClick={() => setForm(f => ({ ...f, ajuste: String((Number(f.ajuste) || 0) + 10) }))}
+                aria-label="Aumentar ajuste"
+                className="flex-shrink-0 w-14 py-3.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-xl font-semibold hover:bg-gray-50 transition-colors"
+              >
+                +
+              </button>
+            </div>
+            <p className="text-xs text-gray-400 mt-1.5">Descuento (negativo) o cargo extra (positivo)</p>
           </div>
 
         </div>
@@ -2042,30 +2065,6 @@ export default function NuevaNota() {
           );
         })()}
 
-        <Separador />
-
-        {/* Forma de pago — al final: Autoservicio se cobra al momento. */}
-        <div>
-          <label className={LABEL_CLS}>Forma de pago</label>
-          <div className="grid grid-cols-3 gap-3 pb-8">
-            {FORMAS_PAGO.map(opt => {
-              const selected = form.forma_pago === opt.v;
-              return (
-                <button
-                  key={opt.v}
-                  type="button"
-                  onClick={() => setForm(f => ({ ...f, forma_pago: opt.v }))}
-                  className={`py-4 px-2 border-2 rounded-xl font-semibold text-base truncate transition-colors ${
-                    selected ? 'border-blue bg-light-blue text-blue-700' : 'border-gray-300 bg-white text-gray-700 hover:border-blue-300'
-                  }`}
-                >
-                  {opt.label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">
             {error}
@@ -2080,17 +2079,98 @@ export default function NuevaNota() {
             Cancelar
           </button>
           <button
-            type="submit" disabled={loading}
+            type="button" onClick={abrirCobro} disabled={loading}
             className="flex-1 bg-blue hover:opacity-90 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
           >
-            {loading
-              ? (esEdicion ? 'Guardando...' : 'Creando...')
-              : (esEdicion ? 'Guardar cambios' : 'Crear nota')}
+            Aceptar
           </button>
         </div>
         </div>
         )}
       </form>
+
+      {/* Modal — cobro de Autoservicio: forma de pago y confirmación */}
+      {cobroOpen && (
+        <div
+          className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
+          onClick={() => !loading && setCobroOpen(false)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[85vh] flex flex-col"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-gray-100 flex-shrink-0">
+              <div>
+                <h2 className="text-base font-semibold text-gray-900">Forma de pago</h2>
+                <p className="text-xs text-gray-500 mt-0.5">Se cobra al momento</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCobroOpen(false)}
+                disabled={loading}
+                aria-label="Cerrar"
+                className="text-gray-400 hover:text-gray-600 disabled:opacity-40"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 overflow-y-auto">
+              <div className="flex items-baseline justify-between bg-light-blue border border-blue-200 rounded-xl px-4 py-3">
+                <span className="text-sm font-medium text-blue">Total a cobrar</span>
+                <span className="text-2xl font-bold text-blue-700 tabular-nums">${precioTotal.toFixed(2)}</span>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                {FORMAS_PAGO.map(opt => {
+                  const selected = form.forma_pago === opt.v;
+                  return (
+                    <button
+                      key={opt.v}
+                      type="button"
+                      onClick={() => { setForm(f => ({ ...f, forma_pago: opt.v })); setError(''); }}
+                      className={`py-4 px-2 border-2 rounded-xl font-semibold text-base truncate transition-colors ${
+                        selected ? 'border-blue bg-light-blue text-blue-700' : 'border-gray-300 bg-white text-gray-700 hover:border-blue-300'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {error && (
+                <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">
+                  {error}
+                </div>
+              )}
+            </div>
+
+            <div className="px-5 py-4 border-t border-gray-100 flex-shrink-0 flex gap-3">
+              <button
+                type="button"
+                onClick={() => setCobroOpen(false)}
+                disabled={loading}
+                className="flex-1 border border-gray-300 text-gray-700 font-medium py-3.5 rounded-lg text-base hover:bg-gray-50 disabled:opacity-60 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSubmit()}
+                disabled={loading || !form.forma_pago}
+                className="flex-1 bg-blue hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed text-white font-medium py-3.5 rounded-lg text-base transition-colors"
+              >
+                {loading
+                  ? (esEdicion ? 'Guardando...' : 'Creando...')
+                  : (esEdicion ? 'Guardar cambios' : 'Crear nota')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal — elegir producto de una carga Por Encargo */}
       {selectorProducto && (
