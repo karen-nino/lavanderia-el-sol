@@ -131,11 +131,27 @@ function TituloGrupoMobile({ children }) {
   return <p className="text-lg font-bold text-dark-blue">{children}</p>;
 }
 
+// Tarjeta de móvil equivalente a Section: el encabezado con fondo separa el
+// grupo de sus campos por estructura, no por tamaño de letra (las etiquetas de
+// campo en móvil ya son de 16 px bold).
+function TarjetaMobile({ titulo, children }) {
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
+      {titulo && (
+        <div className="px-4 py-3 border-b border-gray-100 bg-gray-50">
+          <p className="text-base font-bold text-dark-blue">{titulo}</p>
+        </div>
+      )}
+      <div className="px-4 py-5 space-y-5">{children}</div>
+    </div>
+  );
+}
+
 function Section({ titulo, children }) {
   return (
     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
       <div className="px-5 py-4 border-b border-gray-100">
-        <h2 className="text-sm font-semibold text-gray-800">{titulo}</h2>
+        <h2 className="text-base font-bold text-dark-blue">{titulo}</h2>
       </div>
       <div className="px-5 py-5 space-y-4">{children}</div>
     </div>
@@ -1158,9 +1174,21 @@ export default function Ajustes() {
           <button
             type="button"
             onClick={() => { setAgregando(a => !a); setMensaje(null); }}
-            className="text-sm font-medium text-blue hover:opacity-80"
+            className={`flex-shrink-0 flex items-center gap-1.5 rounded-pill border-[1.5px] bg-white pl-2.5 pr-3.5 py-2 text-sm font-bold transition-colors ${
+              agregando
+                ? 'border-gray-300 text-gray-600 hover:bg-gray-50'
+                : 'border-blue text-blue hover:bg-light-blue'
+            }`}
           >
-            {agregando ? 'Cancelar' : '+ Agregar sucursal'}
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2.5}
+                d={agregando ? 'M6 18L18 6M6 6l12 12' : 'M12 4v16m8-8H4'}
+              />
+            </svg>
+            {agregando ? 'Cancelar' : 'Agregar sucursal'}
           </button>
         </div>
 
@@ -1208,10 +1236,6 @@ export default function Ajustes() {
             </div>
           </div>
         )}
-
-        <Field label="Orden de las sucursales" hint="Arrastra para cambiar cómo aparecen en el selector.">
-          <SucursalesOrden sucursales={sucursales} setSucursales={setSucursales} onMensaje={setMensaje} />
-        </Field>
 
         <Field label="Sucursal a editar">
           <select
@@ -1278,6 +1302,10 @@ export default function Ajustes() {
             )}
           </>
         )}
+
+        <Field label="Orden de las sucursales" hint="Arrastra para cambiar cómo aparecen en el selector.">
+          <SucursalesOrden sucursales={sucursales} setSucursales={setSucursales} onMensaje={setMensaje} />
+        </Field>
       </div>
     </Section>
   );
@@ -1446,9 +1474,21 @@ export default function Ajustes() {
           <button
             type="button"
             onClick={() => { setAgregando(a => !a); setMensaje(null); }}
-            className="text-sm font-medium text-blue"
+            className={`flex-shrink-0 flex items-center gap-1.5 rounded-pill border-[1.5px] bg-white pl-2.5 pr-3.5 py-2 text-sm font-bold transition-colors ${
+              agregando
+                ? 'border-gray-300 text-gray-600 hover:bg-gray-50'
+                : 'border-blue text-blue hover:bg-light-blue'
+            }`}
           >
-            {agregando ? 'Cancelar' : '+ Agregar'}
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2.5}
+                d={agregando ? 'M6 18L18 6M6 6l12 12' : 'M12 4v16m8-8H4'}
+              />
+            </svg>
+            {agregando ? 'Cancelar' : 'Agregar'}
           </button>
         </div>
 
@@ -1494,10 +1534,6 @@ export default function Ajustes() {
             </button>
           </div>
         )}
-
-        <MobileField label="Orden de las sucursales" hint="Arrastra para cambiar cómo aparecen en el selector.">
-          <SucursalesOrden sucursales={sucursales} setSucursales={setSucursales} onMensaje={setMensaje} />
-        </MobileField>
 
         <MobileField label="Sucursal a editar">
           <select
@@ -1563,6 +1599,10 @@ export default function Ajustes() {
             )}
           </>
         )}
+
+        <MobileField label="Orden de las sucursales" hint="Arrastra para cambiar cómo aparecen en el selector.">
+          <SucursalesOrden sucursales={sucursales} setSucursales={setSucursales} onMensaje={setMensaje} />
+        </MobileField>
       </div>
     </div>
   );
@@ -1593,39 +1633,30 @@ export default function Ajustes() {
       </div>
     </MobileField>
   );
-  const subTituloM = (txt) => (
-    <TituloGrupoMobile>{txt}</TituloGrupoMobile>
-  );
-
   const seccionPreciosMobile = (
-    <div className="space-y-6">
-      <p className="text-sm font-bold text-gray-900">Lavadora</p>
-      <div className="space-y-5">
-        {subTituloM('Mediana')}
-        {campoPrecioM('precio_carga_mediana', 'Aplica a lavadoras medianas (autoservicio y por encargo).')}
-        {campoTiempoM('tiempo_carga_mediana', 'Duración del ciclo de lavado en una máquina mediana.')}
+    <div className="space-y-10">
+      <div className="space-y-4">
+        <TituloGrupoMobile>Lavadora</TituloGrupoMobile>
+        <TarjetaMobile titulo="Mediana">
+          {campoPrecioM('precio_carga_mediana', 'Aplica a lavadoras medianas (autoservicio y por encargo).')}
+          {campoTiempoM('tiempo_carga_mediana', 'Duración del ciclo de lavado en una máquina mediana.')}
+        </TarjetaMobile>
+        <TarjetaMobile titulo="Jumbo">
+          {campoPrecioM('precio_carga_jumbo', 'Aplica a lavadoras jumbo (autoservicio y por encargo).')}
+          {campoTiempoM('tiempo_carga_jumbo', 'Duración del ciclo de lavado en una máquina jumbo.')}
+        </TarjetaMobile>
+        <TarjetaMobile titulo="Edredón">
+          {campoPrecioM('precio_edredon_jumbo', 'Tarifa fija por edredón lavado en máquina jumbo.')}
+          {campoTiempoM('tiempo_edredon_jumbo', 'Duración del lavado de un edredón en máquina jumbo.')}
+        </TarjetaMobile>
       </div>
 
-      <div className="border-t border-light-blue/60" />
-
-      <div className="space-y-5">
-        {subTituloM('Jumbo')}
-        {campoPrecioM('precio_carga_jumbo', 'Aplica a lavadoras jumbo (autoservicio y por encargo).')}
-        {campoTiempoM('tiempo_carga_jumbo', 'Duración del ciclo de lavado en una máquina jumbo.')}
-      </div>
-
-      <div className="border-t border-light-blue/60" />
-
-      <div className="space-y-5">
-        {subTituloM('Edredón')}
-        {campoPrecioM('precio_edredon_jumbo', 'Tarifa fija por edredón lavado en máquina jumbo.')}
-        {campoTiempoM('tiempo_edredon_jumbo', 'Duración del lavado de un edredón en máquina jumbo.')}
-      </div>
-
-      <p className="text-sm font-bold text-gray-900 pt-20">Secadora</p>
-      <div className="space-y-5">
-        {campoPrecioM('precio_carga_secadora', 'Precio del secado de una carga.')}
-        {campoTiempoM('tiempo_carga_secadora', 'Duración del secado de una carga.')}
+      <div className="space-y-4">
+        <TituloGrupoMobile>Secadora</TituloGrupoMobile>
+        <TarjetaMobile>
+          {campoPrecioM('precio_carga_secadora', 'Precio del secado de una carga.')}
+          {campoTiempoM('tiempo_carga_secadora', 'Duración del secado de una carga.')}
+        </TarjetaMobile>
       </div>
     </div>
   );
