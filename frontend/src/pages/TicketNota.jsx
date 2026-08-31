@@ -44,22 +44,33 @@ function fmtFechaHora(iso) {
   return formatFechaHora12(iso);
 }
 
-// Máquinas efectivamente usadas por una carga (persisten aunque el ciclo ya
-// haya terminado). Se ignoran las eliminadas (removidas), que no deben cobrarse.
+// Lo que la carga cobra por máquina. Si ya se asignó una física se nombra con
+// ella ("L1 · Mediana"); mientras tanto se muestra el tipo elegido al crear la
+// nota ("Lavadora · Mediana"), que es lo que se está cobrando. Las máquinas
+// removidas no se cobran, así que no aparecen.
 function maquinasDeCarga(cg) {
-  return [
-    cg.lavadora_usada_id && !cg.lavadora_removida && {
-      nombre: cg.lavadora_usada_nombre,
-      tipo: MAQUINA_TIPO_LABEL[cg.lavadora_usada_tipo] ?? 'Lavadora',
-      precio: Number(cg.precio_lavadora),
-    },
-    cg.secadora_usada_id && !cg.secadora_removida && {
-      nombre: cg.secadora_usada_nombre,
-      // La secadora es de un solo tamaño: sin tamaño, solo "Secadora".
-      tipo: MAQUINA_TIPO_LABEL[cg.secadora_usada_tipo] ?? 'Secadora',
-      precio: Number(cg.precio_secadora),
-    },
-  ].filter(Boolean);
+  const capitalizar = (t) => (t ? t.charAt(0).toUpperCase() + t.slice(1) : '');
+
+  const lavadora = cg.lavadora_removida ? null
+    : cg.lavadora_usada_id
+      ? { nombre: cg.lavadora_usada_nombre,
+          tipo: MAQUINA_TIPO_LABEL[cg.lavadora_usada_tipo] ?? '',
+          precio: Number(cg.precio_lavadora) }
+      : cg.lavadora_tipo_previsto
+        ? { nombre: 'Lavadora',
+            tipo: capitalizar(cg.lavadora_tipo_previsto),
+            precio: Number(cg.precio_lavadora) }
+        : null;
+
+  // La secadora es de un solo tamaño: no lleva calificativo.
+  const secadora = cg.secadora_removida ? null
+    : cg.secadora_usada_id
+      ? { nombre: cg.secadora_usada_nombre, tipo: '', precio: Number(cg.precio_secadora) }
+      : cg.secadora_tipo_previsto
+        ? { nombre: 'Secadora', tipo: '', precio: Number(cg.precio_secadora) }
+        : null;
+
+  return [lavadora, secadora].filter(Boolean);
 }
 
 // Fila del ticket: etiqueta a la izquierda, valor a la derecha. Estilo recibo.
@@ -89,7 +100,7 @@ function armarTextoTicket(nota) {
   const volcarCarga = cg => {
     L.push(`Carga ${cg.orden}:`);
     maquinasDeCarga(cg).forEach(m => {
-      L.push(`  • ${m.nombre} (${m.tipo}) — ${fmtMonto(m.precio)}`);
+      L.push(`  • ${m.nombre}${m.tipo ? ` (${m.tipo})` : ''} — ${fmtMonto(m.precio)}`);
     });
     // Las tapas son información interna: no se listan en el ticket.
     (cg.productos ?? []).filter(p => p.unidad !== 'tapa')
@@ -228,10 +239,10 @@ export default function TicketNota() {
           <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Carga {cg.orden}</span>
           <span className="text-sm font-semibold text-gray-700">{fmtMonto(totalCarga)}</span>
         </div>
-        <div className="mt-1 space-y-0.5">
+        <div className="mt-2 space-y-2">
           {maquinas.map((m, i) => (
             <div key={i} className="flex items-baseline justify-between gap-3">
-              <span className="text-sm text-gray-700">{m.nombre} <span className="text-xs text-gray-400">· {m.tipo}</span></span>
+              <span className="text-sm text-gray-700">{m.nombre}{m.tipo && <span className="text-xs text-gray-400"> · {m.tipo}</span>}</span>
               <span className="text-sm text-gray-600">{fmtMonto(m.precio)}</span>
             </div>
           ))}
@@ -324,8 +335,8 @@ export default function TicketNota() {
               información interna y no se muestran. */}
           {productos.filter(p => p.unidad !== 'tapa').length > 0 && (
             <div className="px-5 py-3 border-b border-dashed border-gray-200">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Productos</p>
-              <div className="space-y-0.5">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Productos</p>
+              <div className="space-y-2">
                 {productos.filter(p => p.unidad !== 'tapa').map(p => (
                   <div key={p.id} className="flex items-baseline justify-between gap-3">
                     <span className="text-sm text-gray-700">{nombreProd(p)} <span className="text-xs text-gray-400">×{p.cantidad} {unidadProdTxt(p)}</span></span>
