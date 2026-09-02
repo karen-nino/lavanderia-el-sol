@@ -223,10 +223,10 @@ describe('POST /api/notas — Por Encargo', () => {
   });
 });
 
-// Una máquina física es una sola: no puede quedar apartada por dos notas.
-// "Disponible" no basta como criterio, porque una máquina asignada pero sin
-// iniciar sigue disponible hasta que alguien la arranca.
-describe('una máquina no puede quedar en dos notas', () => {
+// Asignar una máquina NO la aparta: mientras nadie la arranque, varias notas
+// pueden tenerla asignada. La primera que le da a "Iniciar" se la queda; las
+// demás reciben un aviso para cambiarla por otra.
+describe('quién se queda con la máquina: la primera que inicia', () => {
   const crearConTipo = () => request(app).post('/api/notas').set(auth(admin.token)).send({
     tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE',
     cargas: [{ lavadora_tipo: 'mediana' }],
@@ -234,35 +234,58 @@ describe('una máquina no puede quedar en dos notas', () => {
   const asignarACarga = (notaId, cargaId, maquinaId) =>
     request(app).patch(`/api/notas/${notaId}/asignar-carga-maquina`).set(auth(admin.token))
       .send({ carga_id: cargaId, slot: 'lavadora', maquina_id: maquinaId });
-  const usosVivos = async (maqId) => {
-    const { rows } = await pool.query(
-      `SELECT COUNT(*)::int n FROM nota_cargas nc JOIN notas n ON n.id = nc.nota_id
-        WHERE nc.lavadora_id = $1 AND n.estado NOT IN ('CANCELADA','FINALIZADA')`, [maqId]);
-    return rows[0].n;
-  };
+  const iniciar = (notaId, maquinaId) =>
+    request(app).patch(`/api/notas/${notaId}/activar-pendientes`).set(auth(admin.token))
+      .send({ maquina_id: maquinaId });
 
-  it('asignar a una carga rechaza la máquina que ya apartó otra nota', async () => {
-    const lav = await seedMaquina({ nombre: 'L-dup', tipo: 'lavadora_mediana' });
+  it('dos notas pueden tener asignada la misma lavadora mientras esté libre', async () => {
+    const lav = await seedMaquina({ nombre: 'L-compartida', tipo: 'lavadora_mediana' });
     const a = (await crearConTipo()).body;
     const b = (await crearConTipo()).body;
     await asignarACarga(a.id, a.cargas[0].id, lav).expect(200);
-
-    const segunda = await asignarACarga(b.id, b.cargas[0].id, lav);
-    expect(segunda.status).toBe(400);
-    expect(segunda.body.message).toMatch(/reservada por otra nota/i);
-    expect(await usosVivos(lav)).toBe(1);
+    await asignarACarga(b.id, b.cargas[0].id, lav).expect(200);
   });
 
-  it('dos peticiones simultáneas: solo una se queda con la máquina', async () => {
+  it('la primera en iniciar se la queda; la otra recibe 409 con el folio', async () => {
+    const lav = await seedMaquina({ nombre: 'L1', tipo: 'lavadora_mediana' });
+    const a = (await crearConTipo()).body;
+    const b = (await crearConTipo()).body;
+    await asignarACarga(a.id, a.cargas[0].id, lav).expect(200);
+    await asignarACarga(b.id, b.cargas[0].id, lav).expect(200);
+
+    await iniciar(a.id, lav).expect(200);           // A llegó primero
+
+    const res = await iniciar(b.id, lav);           // B llega tarde
+    expect(res.status).toBe(409);
+    expect(res.body.message).toMatch(/ya la está usando la nota/i);
+    expect(res.body.message).toMatch(new RegExp(a.folio));   // dice quién la tiene
+    expect(res.body.message).toMatch(/cámbiala/i);           // y qué hacer
+  });
+
+  it('dos "Iniciar" simultáneos: solo uno arranca', async () => {
     const lav = await seedMaquina({ nombre: 'L-race', tipo: 'lavadora_mediana' });
     const a = (await crearConTipo()).body;
     const b = (await crearConTipo()).body;
-    const res = await Promise.all([
-      asignarACarga(a.id, a.cargas[0].id, lav),
-      asignarACarga(b.id, b.cargas[0].id, lav),
-    ]);
+    await asignarACarga(a.id, a.cargas[0].id, lav).expect(200);
+    await asignarACarga(b.id, b.cargas[0].id, lav).expect(200);
+
+    const res = await Promise.all([iniciar(a.id, lav), iniciar(b.id, lav)]);
     expect(res.filter(r => r.status === 200)).toHaveLength(1);
-    expect(await usosVivos(lav)).toBe(1);
+    expect(res.filter(r => r.status === 409)).toHaveLength(1);
+  });
+
+  it('la nota que perdió puede cambiar a otra lavadora y arrancarla', async () => {
+    const lav = await seedMaquina({ nombre: 'L-ocupada', tipo: 'lavadora_mediana' });
+    const otra = await seedMaquina({ nombre: 'L-libre', tipo: 'lavadora_mediana' });
+    const a = (await crearConTipo()).body;
+    const b = (await crearConTipo()).body;
+    await asignarACarga(a.id, a.cargas[0].id, lav).expect(200);
+    await asignarACarga(b.id, b.cargas[0].id, lav).expect(200);
+    await iniciar(a.id, lav).expect(200);
+
+    await request(app).patch(`/api/notas/${b.id}/cambiar-maquina`).set(auth(admin.token))
+      .send({ maquina_actual_id: lav, maquina_nueva_id: otra }).expect(200);
+    await iniciar(b.id, otra).expect(200);
   });
 });
 

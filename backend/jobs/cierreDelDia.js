@@ -14,9 +14,12 @@ const INTERVALO_MS = 5 * 60 * 1000; // revisar cada 5 minutos
 const fmtHora  = new Intl.DateTimeFormat('en-US', { timeZone: TZ, hour: '2-digit', hourCycle: 'h23' });
 const fmtFecha = new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit' });
 
-// Libera todas las máquinas que quedaron en uso y cierra sus notas en proceso
-// como LISTA (mismo efecto que el "Procesar carga" manual). Idempotente: si no
-// hay nada en proceso no cambia nada. Devuelve los conteos afectados.
+// Barrido de fin de día. Hace dos cosas:
+//   1. Libera las máquinas que quedaron EN USO y cierra sus notas como LISTA
+//      (mismo efecto que el "Procesar carga" manual).
+//   2. Suelta las máquinas que se asignaron pero nunca se arrancaron: esas
+//      notas quedaban En Espera reteniendo su lavadora indefinidamente.
+// Idempotente: si no hay nada pendiente no cambia nada. Devuelve los conteos.
 export async function liberarMaquinasCierreDelDia() {
   const client = await pool.connect();
   try {
@@ -50,8 +53,35 @@ export async function liberarMaquinasCierreDelDia() {
       `UPDATE maquinas SET estado = 'disponible', en_uso_desde = NULL
          WHERE estado = 'en_uso'`
     );
+
+    // Máquinas que se asignaron a una nota y nunca se arrancaron: la nota se
+    // quedó En Espera y arrastraba su lavadora un día tras otro. Al cerrar el
+    // día se sueltan (la carga vuelve a "sin asignar") y la nota sigue viva:
+    // cuando el cliente vuelva se le asigna la máquina que esté libre. No se
+    // guardan como "usadas" porque nunca lavaron nada.
+    const { rows: [{ sueltas }] } = await client.query(
+      `WITH liberadas AS (
+         UPDATE nota_cargas nc
+            SET lavadora_id = NULL, secadora_id = NULL,
+                lavadora_usada_id = CASE WHEN nc.lavadora_usada_id = nc.lavadora_id
+                                         THEN NULL ELSE nc.lavadora_usada_id END,
+                secadora_usada_id = CASE WHEN nc.secadora_usada_id = nc.secadora_id
+                                         THEN NULL ELSE nc.secadora_usada_id END
+          FROM notas n
+          WHERE n.id = nc.nota_id
+            AND n.estado = 'EN_ESPERA'
+            AND (nc.lavadora_id IS NOT NULL OR nc.secadora_id IS NOT NULL)
+          RETURNING nc.id
+       )
+       SELECT COUNT(*)::int AS sueltas FROM liberadas`
+    );
+
     await client.query('COMMIT');
-    return { maquinasLiberadas: maquinas.rowCount, notasListas: notas.rowCount };
+    return {
+      maquinasLiberadas: maquinas.rowCount,
+      notasListas: notas.rowCount,
+      cargasSueltas: sueltas,
+    };
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;
@@ -88,8 +118,9 @@ export function iniciarCierreDelDia() {
     ultimaFecha = fecha;
     try {
       const r = await liberarMaquinasCierreDelDia();
-      if (r.maquinasLiberadas > 0) {
-        console.log(`[cierre] ${fecha}: ${r.maquinasLiberadas} máquina(s) liberada(s), ${r.notasListas} nota(s) a LISTA`);
+      if (r.maquinasLiberadas > 0 || r.cargasSueltas > 0) {
+        console.log(`[cierre] ${fecha}: ${r.maquinasLiberadas} máquina(s) liberada(s), ${r.notasListas} nota(s) a LISTA, ` +
+                    `${r.cargasSueltas} carga(s) sin arrancar liberada(s)`);
       }
     } catch (err) {
       console.error('[cierre] error al liberar máquinas:', err.message);

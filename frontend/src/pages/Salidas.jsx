@@ -452,6 +452,14 @@ export default function Salidas() {
   // desvinculadas (usada): la que sigue viva muestra su estado (En espera / En
   // uso); la que ya cumplió su parte se queda como "terminado" (verde), sin botones.
   const cargasMaquinas = (() => {
+    // Asignar no aparta: varias notas pueden tener la misma máquina asignada y
+    // se la queda la primera que le da a Iniciar. Si otra se adelantó, aquí se
+    // detecta para avisar y ofrecer el cambio en vez del botón de arranque.
+    const usadaPorOtra = (maquinaId) => {
+      const m = todasMaquinas.find(x => String(x.id) === String(maquinaId));
+      if (!m || m.estado !== 'en_uso' || !m.en_uso_nota_id) return null;
+      return String(m.en_uso_nota_id) === String(id) ? null : (m.en_uso_folio ?? 'otra nota');
+    };
     return cargasNota
       .map(c => ({
         orden: c.orden,
@@ -463,6 +471,7 @@ export default function Salidas() {
             // Desvinculada y removida → eliminada (tachada); si no → terminó.
             estado: c.lavadora_id ? c.lavadora_estado : (c.lavadora_removida ? 'removida' : 'terminado'),
             en_uso_desde: c.lavadora_en_uso_desde,
+            tomadaPor: c.lavadora_id ? usadaPorOtra(c.lavadora_id) : null,
           },
           (c.secadora_id || c.secadora_usada_id) && {
             id: c.secadora_id || c.secadora_usada_id,
@@ -471,6 +480,7 @@ export default function Salidas() {
             tamano: c.secadora_id ? c.secadora_tamano : c.secadora_usada_tamano,
             estado: c.secadora_id ? c.secadora_estado : (c.secadora_removida ? 'removida' : 'terminado'),
             en_uso_desde: c.secadora_en_uso_desde,
+            tomadaPor: c.secadora_id ? usadaPorOtra(c.secadora_id) : null,
           },
         ].filter(Boolean),
       }))
@@ -530,10 +540,9 @@ export default function Salidas() {
     return out;
   });
   // Máquinas disponibles que coinciden con un slot (lavadora/secadora) y su tipo.
-  // "Disponible" no basta: una máquina apartada por otra nota abierta (o por
-  // otra carga de esta) sigue disponible hasta que la inician. El backend la
-  // marca como `reservada` y rechaza asignarla; aquí se muestra deshabilitada
-  // con su folio, para no ofrecer algo que va a fallar.
+  // Se ofrecen todas las máquinas libres del tipo. Que otra nota ya tenga
+  // asignada una de ellas no la descarta: asignar no aparta, se la queda quien
+  // le dé a Iniciar primero. Eso sí, se avisa en la propia opción.
   const maquinasParaSlot = (slot, tipo) => todasMaquinas.filter(m => {
     if (m.estado !== 'disponible') return false;
     if (slot === 'lavadora') {
@@ -671,7 +680,23 @@ export default function Salidas() {
                         {tipoLabel && (
                           <span className="text-xs text-gray-500">— {tipoLabel}</span>
                         )}
+                        {m.tomadaPor && (
+                          <span className="text-xs font-medium text-amber-700 basis-full">
+                            La está usando la nota {m.tomadaPor}. Cámbiala por otra para poder iniciar.
+                          </span>
+                        )}
                       </div>
+                      {/* Otra nota se la ganó al iniciar: aquí no hay nada que
+                          arrancar ni detener, solo cambiarla por una libre. */}
+                      {m.tomadaPor ? (
+                        <button
+                          onClick={() => iniciarCambiar(m)}
+                          disabled={loadingMaquina}
+                          className="px-4 py-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
+                        >
+                          Cambiar máquina
+                        </button>
+                      ) : (<>
                       {/* Acción por máquina: iniciar (cambiar/eliminar viven en el modal) */}
                       {m.estado === 'disponible' && (
                         <button
@@ -711,6 +736,7 @@ export default function Salidas() {
                       )}
                       {/* estado "terminado": ya cumplió su parte, sin acciones
                           (solo el punto verde a la izquierda lo indica). */}
+                      </>)}
                     </div>
                   );
                 })}
@@ -724,10 +750,6 @@ export default function Salidas() {
               asigna eligiendo una máquina disponible del tipo correspondiente. */}
           {slotsPorAsignar.map(({ carga, slot, tipo }) => {
             const opciones = maquinasParaSlot(slot, tipo);
-            // Las reservadas por otra nota se muestran, pero no se pueden
-            // elegir: si no queda ninguna libre, el desplegable no sirve de
-            // nada y es mejor decir qué está pasando.
-            const libres = opciones.filter(m => !m.reservada);
             const queFalta = slot === 'lavadora'
               ? `lavadoras ${TIPO_MAQ_LABEL[tipo] ?? tipo}`
               : 'secadoras';
@@ -741,13 +763,6 @@ export default function Salidas() {
                   </span>
                   {opciones.length === 0 ? (
                     <span className="text-sm text-red-600">No hay {queFalta} disponibles</span>
-                  ) : libres.length === 0 ? (
-                    // Hay máquinas del tipo, pero todas apartadas por otras notas.
-                    <span className="text-sm text-amber-700">
-                      {opciones.length === 1
-                        ? <>La única {slot === 'lavadora' ? 'lavadora' : 'secadora'} está reservada{opciones[0].reservada_folio ? ` (${opciones[0].reservada_folio})` : ''}</>
-                        : <>Todas las {queFalta} están reservadas por otras notas</>}
-                    </span>
                   ) : (
                     <select
                       defaultValue=""
@@ -757,9 +772,9 @@ export default function Salidas() {
                     >
                       <option value="" disabled>Asignar máquina…</option>
                       {opciones.map(m => (
-                        <option key={m.id} value={m.id} disabled={Boolean(m.reservada)}>
+                        <option key={m.id} value={m.id}>
                           {m.nombre}
-                          {m.reservada ? ` — Reservada${m.reservada_folio ? ` (${m.reservada_folio})` : ''}` : ''}
+                          {m.reservada ? ` — también en ${m.reservada_folio ?? 'otra nota'}` : ''}
                         </option>
                       ))}
                     </select>
@@ -1454,18 +1469,18 @@ export default function Salidas() {
                   ) : (
                     lavadorasDisp.map(m => {
                       const selected = asignarMaqSel.includes(String(m.id));
-                      // Reservada por otra nota abierta: se muestra pero no se elige.
+                      // Otra nota ya la tiene asignada: se puede elegir igual
+                      // (se la queda quien inicie primero), pero se avisa.
                       const reservada = Boolean(m.reservada);
                       return (
                         <button
                           key={m.id}
                           type="button"
-                          disabled={reservada}
                           onClick={() => toggleAsignarMaq(m.id)}
                           className={`w-full flex items-center justify-between gap-2 px-4 py-3 border-2 rounded-xl text-left transition-colors ${
-                            reservada
-                              ? 'border-gray-200 bg-gray-50 opacity-60 cursor-not-allowed'
-                              : selected ? 'border-blue bg-light-blue' : 'border-gray-200 bg-white hover:border-blue-300'
+                            selected ? 'border-blue bg-light-blue'
+                              : reservada ? 'border-amber-300 bg-amber-50 hover:border-amber-400'
+                              : 'border-gray-200 bg-white hover:border-blue-300'
                           }`}
                         >
                           <span className="flex items-center gap-2 min-w-0">
@@ -1473,7 +1488,11 @@ export default function Salidas() {
                             <span className="font-medium text-gray-800 truncate">{m.nombre}</span>
                           </span>
                           <span className="flex items-center gap-2 flex-shrink-0">
-                            {reservada && <span className="text-xs font-medium text-amber-600">Reservada{m.reservada_folio ? ` (${m.reservada_folio})` : ''}</span>}
+                            {reservada && (
+                              <span className="text-xs font-medium text-amber-600">
+                                También en {m.reservada_folio ?? 'otra nota'}
+                              </span>
+                            )}
                             {labelTamano(m) && (
                               <span className="text-xs text-gray-500">{labelTamano(m)}</span>
                             )}
@@ -1494,18 +1513,18 @@ export default function Salidas() {
                   ) : (
                     secadorasDisp.map(m => {
                       const selected = asignarMaqSel.includes(String(m.id));
-                      // Reservada por otra nota abierta: se muestra pero no se elige.
+                      // Otra nota ya la tiene asignada: se puede elegir igual
+                      // (se la queda quien inicie primero), pero se avisa.
                       const reservada = Boolean(m.reservada);
                       return (
                         <button
                           key={m.id}
                           type="button"
-                          disabled={reservada}
                           onClick={() => toggleAsignarMaq(m.id)}
                           className={`w-full flex items-center justify-between gap-2 px-4 py-3 border-2 rounded-xl text-left transition-colors ${
-                            reservada
-                              ? 'border-gray-200 bg-gray-50 opacity-60 cursor-not-allowed'
-                              : selected ? 'border-blue bg-light-blue' : 'border-gray-200 bg-white hover:border-blue-300'
+                            selected ? 'border-blue bg-light-blue'
+                              : reservada ? 'border-amber-300 bg-amber-50 hover:border-amber-400'
+                              : 'border-gray-200 bg-white hover:border-blue-300'
                           }`}
                         >
                           <span className="flex items-center gap-2 min-w-0">
@@ -1513,7 +1532,11 @@ export default function Salidas() {
                             <span className="font-medium text-gray-800 truncate">{m.nombre}</span>
                           </span>
                           <span className="flex items-center gap-2 flex-shrink-0">
-                            {reservada && <span className="text-xs font-medium text-amber-600">Reservada{m.reservada_folio ? ` (${m.reservada_folio})` : ''}</span>}
+                            {reservada && (
+                              <span className="text-xs font-medium text-amber-600">
+                                También en {m.reservada_folio ?? 'otra nota'}
+                              </span>
+                            )}
                             {labelTamano(m) && (
                               <span className="text-xs text-gray-500">{labelTamano(m)}</span>
                             )}

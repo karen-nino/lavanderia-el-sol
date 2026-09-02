@@ -79,25 +79,27 @@ async function maquinasDeNota(client, notaId) {
 // (edición/asignar). Se espera haber bloqueado antes las filas de maquinas
 // (FOR UPDATE) para que dos asignaciones simultáneas de la misma máquina no se
 // pisen.
-async function maquinasApartadasPorOtras(client, ids, notaIdExcluir = null) {
-  if (!ids || ids.length === 0) return [];
+// Nota que tiene una máquina EN USO ahora mismo, si no es la que se indica.
+// Asignar una máquina no la aparta: varias notas pueden tenerla asignada
+// mientras nadie la arranque. La primera que le da a "Iniciar" se la queda, y
+// a partir de ahí las demás tienen que cambiarla. Sirve para decir en el aviso
+// quién la está usando.
+async function notaQueUsaMaquina(client, maquinaId, notaIdExcluir = null) {
   const { rows } = await client.query(
-    `SELECT m.id, m.nombre
-       FROM maquinas m
-      WHERE m.id = ANY($1)
+    `SELECT n.id, n.folio
+       FROM notas n
+      WHERE n.estado IN ('LAVANDO', 'SECANDO')
+        AND ($2::int IS NULL OR n.id <> $2)
         AND EXISTS (
-          SELECT 1 FROM notas n
-           WHERE n.estado IN ('EN_ESPERA', 'LAVANDO', 'SECANDO')
-             AND ($2::int IS NULL OR n.id <> $2)
-             AND EXISTS (
-               SELECT 1 FROM nota_cargas nc
-                WHERE nc.nota_id = n.id
-                  AND (nc.lavadora_id = m.id OR nc.secadora_id = m.id)
-             )
-        )`,
-    [ids, notaIdExcluir]
+          SELECT 1 FROM nota_cargas nc
+           WHERE nc.nota_id = n.id
+             AND (nc.lavadora_id = $1 OR nc.secadora_id = $1)
+        )
+      ORDER BY n.created_at ASC
+      LIMIT 1`,
+    [maquinaId, notaIdExcluir]
   );
-  return rows;
+  return rows[0] ?? null;
 }
 
 // Libera (pasa a disponible) las máquinas de la nota que sigan en uso.
@@ -889,14 +891,6 @@ export const createNota = async (req, res) => {
     // (aunque nazca En Espera). Se bloquean las filas y se valida para que dos
     // notas no tomen la misma máquina.
     const idsMaquinasNota = [...new Set(filasCargas.flatMap(f => [f.lavadora_id, f.secadora_id]).filter(Boolean))];
-    if (idsMaquinasNota.length > 0) {
-      await client.query('SELECT id FROM maquinas WHERE id = ANY($1) FOR UPDATE', [idsMaquinasNota]);
-      const apartadas = await maquinasApartadasPorOtras(client, idsMaquinasNota);
-      if (apartadas.length > 0) {
-        await client.query('ROLLBACK');
-        return res.status(400).json({ message: `La máquina ${apartadas[0].nombre} ya está reservada por otra nota.` });
-      }
-    }
 
     // Máquinas a tomar al crear: solo las de las cargas que se activan. Si
     // ninguna se activa, la nota nace En Espera (las máquinas quedan asignadas
@@ -1151,18 +1145,6 @@ export const updateNota = async (req, res) => {
       } catch (e) {
         await client.query('ROLLBACK');
         return res.status(400).json({ message: e.message });
-      }
-      // Ninguna máquina nueva puede estar apartada por OTRA nota abierta.
-      const idsMaquinasNota = [...new Set(
-        filasCargas.flatMap(f => [f.lavadora_id, f.secadora_id]).filter(Boolean)
-      )];
-      if (idsMaquinasNota.length > 0) {
-        await client.query('SELECT id FROM maquinas WHERE id = ANY($1) FOR UPDATE', [idsMaquinasNota]);
-        const apartadas = await maquinasApartadasPorOtras(client, idsMaquinasNota, Number(id));
-        if (apartadas.length > 0) {
-          await client.query('ROLLBACK');
-          return res.status(400).json({ message: `La máquina ${apartadas[0].nombre} ya está reservada por otra nota.` });
-        }
       }
       // Liberar el stock reservado de los productos de las cargas viejas antes
       // de borrarlas (el ON DELETE CASCADE elimina las filas pero no revierte
@@ -1589,19 +1571,36 @@ export const activarMaquinasPendientes = async (req, res) => {
       [ids, req.sucursal]
     );
     let libres = maqs.filter(m => m.estado === 'disponible').map(m => m.id);
+
+    // Con maquina_id se activa solo esa (botón por máquina); debe estar
+    // asignada a la nota y libre. Aquí es donde se decide quién se queda con
+    // una máquina que varias notas tienen asignada: la primera en iniciar. El
+    // FOR UPDATE de arriba serializa a dos empleados que le den a la vez.
+    if (maquina_id != null) {
+      if (!libres.some(x => String(x) === String(maquina_id))) {
+        const asignada = maqs.some(m => String(m.id) === String(maquina_id));
+        const ocupada = maqs.find(m => String(m.id) === String(maquina_id) && m.estado === 'en_uso');
+        let mensaje = 'La máquina no está asignada a la nota o no está disponible.';
+        if (ocupada) {
+          // La tomó alguien más: hay que cambiarla por otra en esta carga.
+          const duena = await notaQueUsaMaquina(client, Number(maquina_id), Number(id));
+          const { rows: nomRows } = await client.query('SELECT nombre FROM maquinas WHERE id = $1', [maquina_id]);
+          const nombre = nomRows[0]?.nombre ?? 'La máquina';
+          mensaje = duena
+            ? `${nombre} ya la está usando la nota ${duena.folio ?? `#${duena.id}`}. Cámbiala por otra en esta carga.`
+            : `${nombre} ya está en uso. Cámbiala por otra en esta carga.`;
+        } else if (!asignada) {
+          mensaje = 'La máquina no está asignada a esta nota.';
+        }
+        await client.query('ROLLBACK');
+        return res.status(409).json({ message: mensaje });
+      }
+      libres = [Number(maquina_id)];
+    }
+
     if (libres.length === 0) {
       await client.query('ROLLBACK');
       return res.status(400).json({ message: 'No hay máquinas pendientes por activar.' });
-    }
-
-    // Con maquina_id se activa solo esa (botón por máquina); debe estar
-    // asignada a la nota y disponible.
-    if (maquina_id != null) {
-      if (!libres.some(x => String(x) === String(maquina_id))) {
-        await client.query('ROLLBACK');
-        return res.status(400).json({ message: 'La máquina no está asignada a la nota o no está disponible.' });
-      }
-      libres = [Number(maquina_id)];
     }
 
     // Al iniciar el secado de una carga cuya lavadora seguía lavando (en uso),
@@ -1724,16 +1723,6 @@ export const asignarCargaMaquina = async (req, res) => {
       await client.query('ROLLBACK');
       return res.status(400).json({ message: `La máquina ${maq.nombre} no está disponible.` });
     }
-    // "Disponible" no basta: una máquina ya asignada a OTRA nota abierta sigue
-    // disponible hasta que la inician, así que sin esto la misma lavadora se
-    // podía repartir entre dos notas. El FOR UPDATE de arriba serializa a dos
-    // empleados que la pidan a la vez. (Es la misma regla de asignarMaquina.)
-    const apartadas = await maquinasApartadasPorOtras(client, [Number(maquina_id)], Number(id));
-    if (apartadas.length > 0) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ message: `La máquina ${apartadas[0].nombre} ya está reservada por otra nota.` });
-    }
-
     // El tipo de la máquina debe coincidir con el previsto de la carga.
     if (slot === 'lavadora') {
       if (maq.tipo === 'secadora') {
@@ -1842,12 +1831,6 @@ export const asignarSecadora = async (req, res) => {
     if (maqRows[0].estado !== 'disponible') {
       await client.query('ROLLBACK');
       return res.status(400).json({ message: 'La secadora seleccionada no está disponible.' });
-    }
-    // Ni apartada por OTRA nota abierta (aunque esté disponible).
-    const apartadasSec = await maquinasApartadasPorOtras(client, [Number(secadora_id)], Number(id));
-    if (apartadasSec.length > 0) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ message: 'La secadora seleccionada ya está reservada por otra nota.' });
     }
     const secadoraTamano = maqRows[0].tamano;
 
@@ -1958,12 +1941,6 @@ export const asignarMaquina = async (req, res) => {
     if (noDisp) {
       await client.query('ROLLBACK');
       return res.status(400).json({ message: `La máquina ${noDisp.nombre} no está disponible.` });
-    }
-    // Ni apartada por OTRA nota abierta (aunque esté disponible).
-    const apartadas = await maquinasApartadasPorOtras(client, ids, Number(id));
-    if (apartadas.length > 0) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ message: `La máquina ${apartadas[0].nombre} ya está reservada por otra nota.` });
     }
 
     // La(s) carga(s) nueva(s) heredan la prenda de la nota para tarifar con su
@@ -2161,9 +2138,15 @@ export const cambiarMaquina = async (req, res) => {
       await client.query('ROLLBACK');
       return res.status(400).json({ message: 'La máquina actual no existe.' });
     }
+    // Si la máquina está en uso puede ser por ESTA nota (hay que detenerla
+    // antes) o por OTRA que se le adelantó al iniciar: en ese caso justamente
+    // hay que poder cambiarla, que es lo que pide el aviso de Salidas.
     if (actRows[0].estado !== 'disponible') {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ message: 'Solo puedes cambiar una máquina que aún no ha iniciado. Detén su ciclo primero.' });
+      const otra = await notaQueUsaMaquina(client, Number(maquina_actual_id), Number(id));
+      if (!otra) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ message: 'Solo puedes cambiar una máquina que aún no ha iniciado. Detén su ciclo primero.' });
+      }
     }
     const esSecadora = actRows[0].tipo === 'secadora';
     const cargaCol   = esSecadora ? 'secadora_id'        : 'lavadora_id';
@@ -2194,12 +2177,6 @@ export const cambiarMaquina = async (req, res) => {
     if (nueva.estado !== 'disponible') {
       await client.query('ROLLBACK');
       return res.status(400).json({ message: `La máquina ${nueva.nombre} no está disponible.` });
-    }
-    // Ni apartada por OTRA nota abierta.
-    const apartadasCambio = await maquinasApartadasPorOtras(client, [Number(maquina_nueva_id)], Number(id));
-    if (apartadasCambio.length > 0) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ message: `La máquina ${nueva.nombre} ya está reservada por otra nota.` });
     }
     if ((nueva.tipo === 'secadora') !== esSecadora) {
       await client.query('ROLLBACK');
@@ -2401,12 +2378,6 @@ export const terminarLavado = async (req, res) => {
     if (maqRows[0].estado !== 'disponible') {
       await client.query('ROLLBACK');
       return res.status(400).json({ message: 'La secadora seleccionada no está disponible.' });
-    }
-    // Ni apartada por OTRA nota abierta (aunque esté disponible).
-    const apartadasSec = await maquinasApartadasPorOtras(client, [Number(secadora_id)], Number(id));
-    if (apartadasSec.length > 0) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ message: 'La secadora seleccionada ya está reservada por otra nota.' });
     }
     const secadoraTamano = maqRows[0].tamano;
 

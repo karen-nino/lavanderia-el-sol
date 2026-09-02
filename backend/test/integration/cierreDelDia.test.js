@@ -27,7 +27,7 @@ describe('liberarMaquinasCierreDelDia', () => {
     expect(arranque.body.estado).toBe('LAVANDO');
 
     const r = await liberarMaquinasCierreDelDia();
-    expect(r).toEqual({ maquinasLiberadas: 1, notasListas: 1 });
+    expect(r).toEqual({ maquinasLiberadas: 1, notasListas: 1, cargasSueltas: 0 });
 
     // La nota quedó LISTA y la máquina disponible.
     const { rows: nota } = await pool.query('SELECT estado FROM notas WHERE id = $1', [creada.body.id]);
@@ -43,9 +43,42 @@ describe('liberarMaquinasCierreDelDia', () => {
     expect(carga[0].lavadora_usada_id).toBe(lavadoraId);
   });
 
+  // Una máquina asignada que nadie arrancó dejaba la nota En Espera con su
+  // lavadora colgada un día tras otro. El barrido la suelta y la nota sigue
+  // viva, lista para que le asignen máquina cuando el cliente vuelva.
+  it('suelta las máquinas asignadas que nunca se arrancaron y deja viva la nota', async () => {
+    const lavadoraId = await seedMaquina({ nombre: 'L-sin-arrancar', tipo: 'lavadora_mediana' });
+    const creada = await request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE',
+      cargas: [{ lavadora_tipo: 'mediana' }],
+    });
+    expect(creada.status).toBe(201);
+    await request(app).patch(`/api/notas/${creada.body.id}/asignar-carga-maquina`).set(auth(admin.token))
+      .send({ carga_id: creada.body.cargas[0].id, slot: 'lavadora', maquina_id: lavadoraId }).expect(200);
+
+    const r = await liberarMaquinasCierreDelDia();
+    expect(r.cargasSueltas).toBe(1);
+
+    // La nota sigue En Espera, pero su carga ya no retiene la lavadora…
+    const { rows: nota } = await pool.query('SELECT estado FROM notas WHERE id = $1', [creada.body.id]);
+    expect(nota[0].estado).toBe('EN_ESPERA');
+    const { rows: carga } = await pool.query(
+      'SELECT lavadora_id, lavadora_usada_id, lavadora_tipo FROM nota_cargas WHERE nota_id = $1', [creada.body.id]
+    );
+    expect(carga[0].lavadora_id).toBeNull();
+    expect(carga[0].lavadora_usada_id).toBeNull();   // nunca lavó: no es historial
+    expect(carga[0].lavadora_tipo).toBe('mediana');  // conserva el tipo para reasignarla
+
+    // …y la máquina vuelve a ofrecerse sin marca de reservada.
+    const lista = await request(app).get('/api/maquinas').set(auth(admin.token));
+    const m = lista.body.find(x => x.id === lavadoraId);
+    expect(m.estado).toBe('disponible');
+    expect(m.reservada).toBe(false);
+  });
+
   it('es idempotente: sin notas en proceso no cambia nada', async () => {
     const r = await liberarMaquinasCierreDelDia();
-    expect(r).toEqual({ maquinasLiberadas: 0, notasListas: 0 });
+    expect(r).toEqual({ maquinasLiberadas: 0, notasListas: 0, cargasSueltas: 0 });
   });
 });
 
