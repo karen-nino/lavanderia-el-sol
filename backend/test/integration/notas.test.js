@@ -261,6 +261,40 @@ describe('topes de precio por carga (solo Por Encargo)', () => {
     expect(Number(prod[0].stock_reservado)).toBe(0);
   });
 
+  // Regresión: el tope se congela en la carga (mig. 096). Antes se leía el
+  // vigente en Ajustes en cada recálculo, así que subir los precios re-tarifaba
+  // notas viejas: una nota cobrada en $150 pasaba a $200 y seguía marcada como
+  // PAGADA, descuadrando el corte de caja.
+  it('cambiar el tope en Ajustes NO altera el precio de una nota ya cobrada', async () => {
+    await seedAjustes({ precio_carga_mediana: 70, tope_carga_grande: 150 });
+    const clienteId = await seedCliente();
+    const creada = await request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'POR_ENCARGO', tipo_prenda: 'ROPA', cliente_id: clienteId,
+      estado_pago: 'PAGADO', forma_pago: 'EFECTIVO',
+      cargas: [{ lavadora_tipo: 'mediana', tamano: 'grande' }],
+    });
+    expect(creada.status).toBe(201);
+    expect(Number(creada.body.precio_total)).toBe(150); // el tope ES el precio
+
+    // El negocio sube el precio de la carga grande.
+    await seedAjustes({ tope_carga_grande: 200 });
+
+    // Una acción normal de Salidas sobre la nota vieja dispara el recálculo.
+    const secadoraId = await seedMaquina({ nombre: 'S-tope', tipo: 'secadora' });
+    await request(app).patch(`/api/notas/${creada.body.id}/asignar-maquina`)
+      .set(auth(admin.token)).send({ maquina_ids: [secadoraId], cobrar: false }).expect(200);
+
+    const despues = await request(app).get(`/api/notas/${creada.body.id}`).set(auth(admin.token));
+    expect(Number(despues.body.precio_total)).toBe(150); // conserva lo cobrado
+    // Y una nota NUEVA sí toma el precio nuevo.
+    const nueva = await request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'POR_ENCARGO', tipo_prenda: 'ROPA', cliente_id: clienteId,
+      estado_pago: 'PENDIENTE',
+      cargas: [{ lavadora_tipo: 'mediana', tamano: 'grande' }],
+    });
+    expect(Number(nueva.body.precio_total)).toBe(200);
+  });
+
   it('el tope no aplica a Autoservicio (solo tipo, sin tamaño)', async () => {
     await seedAjustes({ precio_carga_mediana: 70, tope_carga_grande: 50 });
     const res = await request(app).post('/api/notas').set(auth(admin.token)).send({

@@ -137,17 +137,14 @@ async function recalcularPrecioTotal(client, notaId) {
               END
               + carga.ajuste)
             FROM (
-              SELECT nc.ajuste, nc.empaquetado,
+              -- El tope es el que se congeló en la carga (mig. 096), no el
+              -- vigente en Ajustes: cambiar los precios no re-tarifa notas
+              -- viejas ni descuadra lo que ya se cobró.
+              SELECT nc.ajuste, nc.empaquetado, nc.precio_tope AS tope,
                      nc.precio_lavadora + nc.precio_secadora AS maquinas,
                      COALESCE((SELECT SUM(np.cantidad * np.precio_unitario)
-                                 FROM nota_productos np WHERE np.carga_id = nc.id), 0) AS productos,
-                     CASE
-                       WHEN UPPER(COALESCE(nc.tipo_prenda, '')) = 'EDREDON' THEN a.tope_carga_edredon
-                       WHEN nc.tamano = 'chico'  THEN a.tope_carga_chico
-                       WHEN nc.tamano = 'grande' THEN a.tope_carga_grande
-                       WHEN nc.tamano = 'jumbo'  THEN a.tope_carga_jumbo
-                     END AS tope
-                FROM nota_cargas nc LEFT JOIN ajustes a ON a.id = 1
+                                 FROM nota_productos np WHERE np.carga_id = nc.id), 0) AS productos
+                FROM nota_cargas nc
                WHERE nc.nota_id = n.id
             ) carga
           ), 0)
@@ -167,7 +164,8 @@ async function tarifasCarga(client) {
   const { rows } = await client.query(
     `SELECT precio_carga_mediana, precio_carga_jumbo,
             precio_carga_secadora, precio_secadora_jumbo, precio_secadora_edredon,
-            precio_edredon_jumbo, costo_empaquetado
+            precio_edredon_jumbo, costo_empaquetado,
+            tope_carga_chico, tope_carga_grande, tope_carga_jumbo, tope_carga_edredon
        FROM ajustes WHERE id = 1`
   );
   const c = rows[0] ?? {};
@@ -180,7 +178,26 @@ async function tarifasCarga(client) {
     secadoraEdredon: c.precio_secadora_edredon != null ? Number(c.precio_secadora_edredon) : 45,
     edredonJumbo:    c.precio_edredon_jumbo    != null ? Number(c.precio_edredon_jumbo)    : 80,
     empaquetado:     c.costo_empaquetado       != null ? Number(c.costo_empaquetado)       : 0,
+    // Topes por tamaño de carga (Por Encargo). NULL = sin tope configurado.
+    topeChico:       c.tope_carga_chico   != null ? Number(c.tope_carga_chico)   : null,
+    topeGrande:      c.tope_carga_grande  != null ? Number(c.tope_carga_grande)  : null,
+    topeJumbo:       c.tope_carga_jumbo   != null ? Number(c.tope_carga_jumbo)   : null,
+    topeEdredon:     c.tope_carga_edredon != null ? Number(c.tope_carga_edredon) : null,
   };
+}
+
+// Tope vigente de una carga según su prenda y tamaño. En Por Encargo este tope
+// ES el precio de la carga, así que se congela en `nota_cargas.precio_tope` al
+// crearla (mig. 096): si el negocio cambia sus precios, las notas que ya
+// existen conservan el suyo. NULL = sin tope (se cobra la suma de lo que lleva).
+function topeDeCarga(prenda, tamano, t) {
+  if (String(prenda ?? '').toUpperCase() === 'EDREDON') return t.topeEdredon;
+  switch (tamano) {
+    case 'chico':  return t.topeChico;
+    case 'grande': return t.topeGrande;
+    case 'jumbo':  return t.topeJumbo;
+    default:       return null;
+  }
 }
 
 // Tiempos de ciclo (minutos). El secado también por categoría (Mediana =
@@ -260,21 +277,14 @@ async function validarTopesCargas(client, notaId) {
             UPPER(COALESCE(nc.tipo_prenda, '')) = 'EDREDON' AS es_edredon,
             nc.precio_lavadora + nc.precio_secadora AS maquinas,
             COALESCE(SUM(np.cantidad * np.precio_unitario), 0) AS productos,
-            -- Prenda edredón: tope dedicado, por encima del de su tamaño.
-            CASE
-              WHEN UPPER(COALESCE(nc.tipo_prenda, '')) = 'EDREDON' THEN a.tope_carga_edredon
-              WHEN nc.tamano = 'chico'  THEN a.tope_carga_chico
-              WHEN nc.tamano = 'grande' THEN a.tope_carga_grande
-              WHEN nc.tamano = 'jumbo'  THEN a.tope_carga_jumbo
-            END AS tope
+            -- El tope congelado en la carga (mig. 096), que es su precio.
+            nc.precio_tope AS tope
        FROM nota_cargas nc
        JOIN notas n ON n.id = nc.nota_id
-       CROSS JOIN ajustes a
        LEFT JOIN nota_productos np ON np.carga_id = nc.id
       WHERE nc.nota_id = $1 AND n.tipo_servicio = 'POR_ENCARGO'
         AND (nc.tamano IS NOT NULL OR UPPER(COALESCE(nc.tipo_prenda, '')) = 'EDREDON')
-        AND a.id = 1
-      GROUP BY nc.id, a.tope_carga_chico, a.tope_carga_grande, a.tope_carga_jumbo, a.tope_carga_edredon
+      GROUP BY nc.id
       ORDER BY nc.orden`,
     [notaId]
   );
@@ -495,6 +505,12 @@ async function prepararCargas(client, cargas, tipoPrendaNota, sucursal, tipo_ser
       tamano_edredon:  prendaCarga === 'EDREDON' && c.tamano_edredon ? String(c.tamano_edredon).trim() : null,
       tamano:          c.tamano ? String(c.tamano).toLowerCase() : null,
       ajuste:          ajusteCarga,
+      // Precio de la carga en Por Encargo: el tope vigente de su tamaño, que se
+      // congela aquí (mig. 096). Editar las cargas de una nota las vuelve a
+      // tarifar con los precios de hoy, igual que a sus máquinas.
+      precio_tope:     tipo_servicio === 'POR_ENCARGO'
+        ? topeDeCarga(prendaCarga, c.tamano ? String(c.tamano).toLowerCase() : null, t)
+        : null,
       // Empaquetado: solo Por Encargo, incluido por defecto (se puede quitar con
       // empaquetado=false). Se guarda el monto vigente en Ajustes.
       empaquetado:     (tipo_servicio === 'POR_ENCARGO' && c.empaquetado !== false)
@@ -515,11 +531,12 @@ async function insertarCargas(client, notaId, filas, sucursal, tipo_servicio) {
       `INSERT INTO nota_cargas
          (nota_id, orden, lavadora_id, secadora_id, lavadora_usada_id, secadora_usada_id,
           lavadora_tipo, secadora_tipo, precio_lavadora, precio_secadora,
-          tipo_prenda, tipo_tela, tamano_edredon, tamano, ajuste, empaquetado)
-       VALUES ($1, $2, $3, $4, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING *`,
+          tipo_prenda, tipo_tela, tamano_edredon, tamano, ajuste, empaquetado, precio_tope)
+       VALUES ($1, $2, $3, $4, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING *`,
       [notaId, f.orden, f.lavadora_id, f.secadora_id, f.lavadora_tipo, f.secadora_tipo,
        f.precio_lavadora, f.precio_secadora,
-       f.tipo_prenda, f.tipo_tela, f.tamano_edredon, f.tamano, f.ajuste, f.empaquetado ?? 0]
+       f.tipo_prenda, f.tipo_tela, f.tamano_edredon, f.tamano, f.ajuste, f.empaquetado ?? 0,
+       f.precio_tope ?? null]
     );
     const carga = rows[0];
     const productos = [];
@@ -548,16 +565,11 @@ async function cargasDeNota(client, notaId) {
             mlu.nombre AS lavadora_usada_nombre, mlu.tipo AS lavadora_usada_tipo,
             msu.nombre AS secadora_usada_nombre, msu.tipo AS secadora_usada_tipo,
             msu.tamano AS secadora_usada_tamano,
-            -- Tope vigente de la carga (Ajustes). En Por Encargo el tope ES el
-            -- precio que se cobra por la carga; NULL = sin tope configurado.
-            CASE
-              WHEN UPPER(COALESCE(nc.tipo_prenda, '')) = 'EDREDON' THEN a.tope_carga_edredon
-              WHEN nc.tamano = 'chico'  THEN a.tope_carga_chico
-              WHEN nc.tamano = 'grande' THEN a.tope_carga_grande
-              WHEN nc.tamano = 'jumbo'  THEN a.tope_carga_jumbo
-            END AS tope_carga
+            -- Tope CONGELADO de la carga (mig. 096). En Por Encargo el tope ES
+            -- el precio que se cobra por la carga, y es el que ve el ticket;
+            -- NULL = sin tope, la carga se cobra por lo que lleva dentro.
+            nc.precio_tope AS tope_carga
        FROM nota_cargas nc
-       LEFT JOIN ajustes  a   ON a.id   = 1
        LEFT JOIN maquinas ml  ON ml.id  = nc.lavadora_id
        LEFT JOIN maquinas ms  ON ms.id  = nc.secadora_id
        LEFT JOIN maquinas mlu ON mlu.id = nc.lavadora_usada_id
