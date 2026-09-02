@@ -124,7 +124,21 @@ async function liberarMaquinasDeNota(client, notaId) {
 //     de la carga.
 //   + el ajuste por carga (nota_cargas.ajuste), que va aparte del tope.
 // Más: productos a nivel nota (carga_id NULL, Autoservicio) + ajuste de nota.
-async function recalcularPrecioTotal(client, notaId) {
+// Con `desmarcarPagoSiCambia`, una nota que ya estaba PAGADA vuelve a
+// PENDIENTE si el cambio movió su total: lo que se cobró ya no corresponde a lo
+// que cuesta la nota, así que el cobro se rehace por el importe nuevo. El
+// trigger de la migración 037 limpia `pagado_en` al salir de PAGADO, con lo que
+// la venta también sale del corte de caja hasta que se vuelva a cobrar.
+// Si el total no se movió (por ejemplo, una máquina asignada "sin cobro"), el
+// pago se respeta tal cual.
+async function recalcularPrecioTotal(client, notaId, opciones = {}) {
+  const { desmarcarPagoSiCambia = false, usuarioId = null, sucursal = null } = opciones;
+  const { rows: previas } = desmarcarPagoSiCambia
+    ? await client.query(
+        'SELECT id, folio, precio_total, estado_pago FROM notas WHERE id = $1',
+        [notaId]
+      )
+    : { rows: [] };
   const { rows } = await client.query(
     `UPDATE notas n
         SET precio_total =
@@ -156,8 +170,36 @@ async function recalcularPrecioTotal(client, notaId) {
       RETURNING precio_total`,
     [notaId]
   );
-  return rows[0]?.precio_total ?? null;
+  const nuevo = rows[0]?.precio_total ?? null;
+
+  const antes = previas[0];
+  if (antes && antes.estado_pago === 'PAGADO' && Number(nuevo) !== Number(antes.precio_total)) {
+    await desmarcarPagoPorCambio(client, antes, Number(antes.precio_total), Number(nuevo), usuarioId, sucursal);
+  }
+  return nuevo;
 }
+
+// Devuelve la nota a PENDIENTE porque su costo cambió: lo cobrado ya no
+// corresponde. Limpia la forma de pago (el trigger de la mig. 037 limpia
+// `pagado_en`) y deja aviso en la campana con los dos importes, para que se vea
+// cuánto falta cobrar o devolver.
+async function desmarcarPagoPorCambio(client, nota, antes, ahora, usuarioId, sucursal) {
+  await client.query(
+    "UPDATE notas SET estado_pago = 'PENDIENTE', forma_pago = NULL WHERE id = $1",
+    [nota.id]
+  );
+  if (!sucursal) return;
+  const fmt = (n) => `$${Number(n).toFixed(2)}`;
+  const etiqueta = nota.folio ?? `#${nota.id}`;
+  const verbo = ahora > antes ? 'subió' : 'bajó';
+  await client.query(
+    `INSERT INTO notificaciones (tipo, mensaje, usuario_id, sucursal)
+     VALUES ('pago_desmarcado', $1, $2, $3)`,
+    [`La nota ${etiqueta} ${verbo} de ${fmt(antes)} a ${fmt(ahora)} tras un cambio: quedó PENDIENTE de cobro`,
+     usuarioId, sucursal]
+  );
+}
+
 
 // Tarifas por carga desde ajustes (con los defaults de siempre).
 async function tarifasCarga(client) {
@@ -1272,6 +1314,21 @@ export const updateNota = async (req, res) => {
     // Encargo). Sobrescribe el provisional de arriba.
     rows[0].precio_total = await recalcularPrecioTotal(client, id);
 
+    // Si la edición movió el total de una nota que ya estaba pagada, el cobro
+    // deja de corresponder y vuelve a PENDIENTE. Se compara contra el precio
+    // que tenía ANTES de editar (no contra el provisional). No aplica si en
+    // esta misma petición se está cobrando o revirtiendo el pago a mano.
+    if (actual.estado_pago === 'PAGADO' && !esCobroNuevo && !esReversionPago
+        && Number(rows[0].precio_total) !== Number(actual.precio_total)) {
+      await desmarcarPagoPorCambio(
+        client, actual, Number(actual.precio_total), Number(rows[0].precio_total),
+        req.user?.id, req.sucursal
+      );
+      rows[0].estado_pago = 'PENDIENTE';
+      rows[0].forma_pago  = null;
+      rows[0].pagado_en   = null;
+    }
+
     if (rows[0].precio_total != null && Number(rows[0].precio_total) < 0) {
       await client.query('ROLLBACK');
       return res.status(400).json({ message: 'El total de la nota no puede ser negativo. Revisa el ajuste.' });
@@ -1799,7 +1856,11 @@ export const asignarSecadora = async (req, res) => {
       );
     }
     await sellarCicloMaquinas(client, id);
-    await recalcularPrecioTotal(client, id);
+    // Si el cambio movió el total y la nota ya estaba pagada, el cobro deja de
+    // corresponder: vuelve a PENDIENTE para cobrarla por el importe nuevo.
+    await recalcularPrecioTotal(client, id, {
+      desmarcarPagoSiCambia: true, usuarioId: req.user?.id, sucursal: req.sucursal,
+    });
 
     const errTope = await validarTopesCargas(client, id);
     if (errTope) {
@@ -2012,7 +2073,11 @@ export const asignarMaquina = async (req, res) => {
     // iniciarla).
     const nuevoEstado = await faseProcesoDeNota(client, id);
     await client.query('UPDATE notas SET estado = $1 WHERE id = $2', [nuevoEstado, id]);
-    await recalcularPrecioTotal(client, id);
+    // Si el cambio movió el total y la nota ya estaba pagada, el cobro deja de
+    // corresponder: vuelve a PENDIENTE para cobrarla por el importe nuevo.
+    await recalcularPrecioTotal(client, id, {
+      desmarcarPagoSiCambia: true, usuarioId: req.user?.id, sucursal: req.sucursal,
+    });
 
     const errTope = await validarTopesCargas(client, id);
     if (errTope) {
@@ -2144,7 +2209,11 @@ export const cambiarMaquina = async (req, res) => {
       `UPDATE nota_cargas SET ${cargaCol} = $1, ${usadaCol} = $1, ${precioCol} = $2 WHERE id = $3`,
       [maquina_nueva_id, precio, carga.id]
     );
-    await recalcularPrecioTotal(client, id);
+    // Si el cambio movió el total y la nota ya estaba pagada, el cobro deja de
+    // corresponder: vuelve a PENDIENTE para cobrarla por el importe nuevo.
+    await recalcularPrecioTotal(client, id, {
+      desmarcarPagoSiCambia: true, usuarioId: req.user?.id, sucursal: req.sucursal,
+    });
 
     const errTope = await validarTopesCargas(client, id);
     if (errTope) {
@@ -2244,7 +2313,11 @@ export const quitarMaquina = async (req, res) => {
     // Estado según máquinas en uso (la quitada no contaba); total recalculado.
     const nuevoEstado = await faseProcesoDeNota(client, id);
     await client.query('UPDATE notas SET estado = $1 WHERE id = $2', [nuevoEstado, id]);
-    await recalcularPrecioTotal(client, id);
+    // Si el cambio movió el total y la nota ya estaba pagada, el cobro deja de
+    // corresponder: vuelve a PENDIENTE para cobrarla por el importe nuevo.
+    await recalcularPrecioTotal(client, id, {
+      desmarcarPagoSiCambia: true, usuarioId: req.user?.id, sucursal: req.sucursal,
+    });
 
     await client.query('COMMIT');
 
@@ -2735,7 +2808,11 @@ export const addProductoToNota = async (req, res) => {
       return res.status(400).json({ message: e.message });
     }
 
-    await recalcularPrecioTotal(client, id);
+    // Si el cambio movió el total y la nota ya estaba pagada, el cobro deja de
+    // corresponder: vuelve a PENDIENTE para cobrarla por el importe nuevo.
+    await recalcularPrecioTotal(client, id, {
+      desmarcarPagoSiCambia: true, usuarioId: req.user?.id, sucursal: req.sucursal,
+    });
 
     await client.query('COMMIT');
     res.status(201).json(fila);
@@ -2784,7 +2861,11 @@ export const removeProductoFromNota = async (req, res) => {
       [np.cantidad_tapas, productoId]
     );
 
-    await recalcularPrecioTotal(client, id);
+    // Si el cambio movió el total y la nota ya estaba pagada, el cobro deja de
+    // corresponder: vuelve a PENDIENTE para cobrarla por el importe nuevo.
+    await recalcularPrecioTotal(client, id, {
+      desmarcarPagoSiCambia: true, usuarioId: req.user?.id, sucursal: req.sucursal,
+    });
 
     await client.query('COMMIT');
     res.status(204).send();

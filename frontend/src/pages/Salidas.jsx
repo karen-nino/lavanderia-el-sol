@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import { etiquetaProducto, tituloProducto, subtituloProducto, ordenProducto } from '../lib/formatoInventario';
+import { guardarAvisoCobro } from '../lib/avisoCobro';
 import { useAuth } from '../context/AuthContext';
 import { esAdmin as esAdminFn } from '../lib/roles';
 import MaquinaCicloOverlay from '../components/MaquinaCicloOverlay';
@@ -107,6 +108,13 @@ export default function Salidas() {
   const [tiempos, setTiempos] = useState({ mediana: 30, jumbo: 45, secadora: 30 });
   const [now, setNow] = useState(() => Date.now());
 
+  // Un cambio que mueve el total de una nota ya cobrada la devuelve a PENDIENTE
+  // (el cobro anterior ya no corresponde). El aviso se muestra en el Detalle de
+  // la nota, que es donde se ve el estado de pago y se vuelve a cobrar: aquí
+  // solo se deja la señal con los dos importes. La nota previa va en una ref
+  // para comparar sin que cargarDatos dependa del estado.
+  const notaPrevia = useRef(null);
+
   const cargarDatos = useCallback(async () => {
     try {
       const [notaData, productosData, ajustes, maquinasData] = await Promise.all([
@@ -115,6 +123,14 @@ export default function Salidas() {
         api.get('/ajustes').catch(() => null),
         api.get('/maquinas').catch(() => []),
       ]);
+      const previa = notaPrevia.current;
+      notaPrevia.current = notaData;
+      if (previa?.estado_pago === 'PAGADO' && notaData?.estado_pago === 'PENDIENTE') {
+        guardarAvisoCobro(id, {
+          antes: Number(previa.precio_total),
+          ahora: Number(notaData.precio_total),
+        });
+      }
       setNota(notaData);
       setProductos(productosData);
       if (Array.isArray(maquinasData)) setTodasMaquinas(maquinasData);

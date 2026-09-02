@@ -7,6 +7,7 @@ import { esAdmin as esAdminFn } from '../lib/roles';
 import { etiquetaProducto, tituloProducto, subtituloProducto, ordenProducto } from '../lib/formatoInventario';
 import { FORMAS_PAGO, formaPagoLabel } from '../lib/formasPago';
 import { formatHora12, formatFechaHora12 } from '../lib/fecha';
+import { leerAvisoCobro, limpiarAvisoCobro } from '../lib/avisoCobro';
 
 // Unidad de venta de un producto de la nota, en texto ("2 botellas" / "3 tapas").
 function unidadProdTxt(p) {
@@ -257,11 +258,23 @@ export default function DetalleNota() {
   const [confirmLiquidar,  setConfirmLiquidar]  = useState(false);
   const [formaPagoSel,     setFormaPagoSel]     = useState('');
   const [confirmEliminar,  setConfirmEliminar]  = useState(false);
+  // Un cambio hecho en Salidas movió el total de esta nota y dejó sin efecto su
+  // cobro (el backend la devolvió a PENDIENTE). Aquí, junto al estado de pago y
+  // al botón de cobrar, se explica cuánto falta cobrar o devolver.
+  const [avisoCobro, setAvisoCobro] = useState(() => leerAvisoCobro(id));
 
   useEffect(() => {
     let activo = true;
     api.get(`/notas/${id}`)
-      .then(data => { if (activo) setNota(data); })
+      .then(data => {
+        if (!activo) return;
+        setNota(data);
+        // El aviso solo tiene sentido mientras la nota siga sin cobrarse.
+        if (data?.estado_pago !== 'PENDIENTE') {
+          limpiarAvisoCobro(id);
+          setAvisoCobro(null);
+        }
+      })
       .catch(err => { if (activo) setError(err.message); })
       .finally(() => { if (activo) setLoading(false); });
     return () => { activo = false; };
@@ -326,6 +339,9 @@ export default function DetalleNota() {
         forma_pago: formaPagoSel,
       });
       setNota(prev => ({ ...prev, estado_pago: updated.estado_pago, forma_pago: updated.forma_pago }));
+      // Ya se cobró por el importe nuevo: el aviso deja de aplicar.
+      limpiarAvisoCobro(id);
+      setAvisoCobro(null);
       setConfirmLiquidar(false);
     } catch (err) {
       setErrorAccion(err.message);
@@ -413,6 +429,39 @@ export default function DetalleNota() {
       {errorAccion && (
         <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">
           {errorAccion}
+        </div>
+      )}
+
+      {/* Un cambio hecho en Salidas movió el total y dejó sin efecto el cobro:
+          la nota volvió a Pendiente y hay que cobrarla por el importe nuevo. */}
+      {avisoCobro && nota.estado_pago === 'PENDIENTE' && (
+        <div className="bg-amber-50 border border-amber-300 rounded-xl p-4 flex items-start gap-3">
+          <svg className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold text-amber-900">Esta nota quedó pendiente de cobro</p>
+            <p className="text-sm text-amber-800 mt-0.5">
+              Cambió en Salidas y el total {avisoCobro.ahora > avisoCobro.antes ? 'subió' : 'bajó'} de{' '}
+              <span className="font-medium">{fmtMonto(avisoCobro.antes)}</span> a{' '}
+              <span className="font-medium">{fmtMonto(avisoCobro.ahora)}</span>, así que el pago
+              anterior ya no corresponde.{' '}
+              {avisoCobro.ahora > avisoCobro.antes
+                ? `Cobra la diferencia de ${fmtMonto(avisoCobro.ahora - avisoCobro.antes)} y vuelve a liquidarla.`
+                : `Devuelve ${fmtMonto(avisoCobro.antes - avisoCobro.ahora)} y vuelve a liquidarla.`}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => { limpiarAvisoCobro(id); setAvisoCobro(null); }}
+            aria-label="Cerrar aviso"
+            className="text-amber-600 hover:text-amber-800 flex-shrink-0"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
         </div>
       )}
 

@@ -222,6 +222,76 @@ describe('POST /api/notas — Por Encargo', () => {
   });
 });
 
+// Un cobro vale para el costo que tenía la nota en ese momento: si después se
+// le agrega (o se le quita) una máquina o un producto y el total se mueve, el
+// pago deja de corresponder y la nota vuelve a PENDIENTE para cobrarla por el
+// importe nuevo.
+describe('un cambio de costo desmarca el pago', () => {
+  it('agregar una máquina cobrada a una nota PAGADA la deja PENDIENTE', async () => {
+    const creada = await crearNotaAuto('L1', 'PAGADO');
+    expect(creada.body.estado_pago).toBe('PAGADO');
+    const total = Number(creada.body.precio_total);
+
+    const secadoraId = await seedMaquina({ nombre: 'S-cambio', tipo: 'secadora' });
+    const res = await request(app).patch(`/api/notas/${creada.body.id}/asignar-maquina`)
+      .set(auth(admin.token)).send({ maquina_ids: [secadoraId], cobrar: true });
+
+    expect(res.status).toBe(200);
+    expect(Number(res.body.precio_total)).toBeGreaterThan(total);
+    expect(res.body.estado_pago).toBe('PENDIENTE');
+    expect(res.body.forma_pago).toBeNull();
+    // Sale del corte de caja hasta que se vuelva a cobrar.
+    expect(res.body.pagado_en).toBeNull();
+  });
+
+  it('una máquina SIN cobro no mueve el total y respeta el pago', async () => {
+    const creada = await crearNotaAuto('L2', 'PAGADO');
+    const total = Number(creada.body.precio_total);
+
+    const secadoraId = await seedMaquina({ nombre: 'S-gratis', tipo: 'secadora' });
+    const res = await request(app).patch(`/api/notas/${creada.body.id}/asignar-maquina`)
+      .set(auth(admin.token)).send({ maquina_ids: [secadoraId], cobrar: false });
+
+    expect(res.status).toBe(200);
+    expect(Number(res.body.precio_total)).toBe(total);
+    expect(res.body.estado_pago).toBe('PAGADO');
+  });
+
+  it('una nota PENDIENTE sigue pendiente (no hay pago que deshacer)', async () => {
+    const creada = await crearNotaAuto('L3', 'PENDIENTE');
+    const secadoraId = await seedMaquina({ nombre: 'S-pend', tipo: 'secadora' });
+    const res = await request(app).patch(`/api/notas/${creada.body.id}/asignar-maquina`)
+      .set(auth(admin.token)).send({ maquina_ids: [secadoraId], cobrar: true });
+    expect(res.status).toBe(200);
+    expect(res.body.estado_pago).toBe('PENDIENTE');
+  });
+
+  it('deja aviso en la campana con los dos importes', async () => {
+    const creada = await crearNotaAuto('L4', 'PAGADO');
+    const secadoraId = await seedMaquina({ nombre: 'S-aviso', tipo: 'secadora' });
+    await request(app).patch(`/api/notas/${creada.body.id}/asignar-maquina`)
+      .set(auth(admin.token)).send({ maquina_ids: [secadoraId], cobrar: true }).expect(200);
+
+    const avisos = await request(app).get('/api/notificaciones').set(auth(admin.token));
+    const aviso = (avisos.body ?? []).find(n => n.tipo === 'pago_desmarcado');
+    expect(aviso).toBeTruthy();
+    expect(aviso.mensaje).toMatch(/PENDIENTE de cobro/);
+  });
+});
+
+// Nota de autoservicio con una lavadora mediana ya asignada (tarifa 70).
+async function crearNotaAuto(nombreMaquina, estado_pago) {
+  await seedAjustes({ precio_carga_mediana: 70, precio_carga_secadora: 45 });
+  const lavadoraId = await seedMaquina({ nombre: nombreMaquina, tipo: 'lavadora_mediana' });
+  const creada = await request(app).post('/api/notas').set(auth(admin.token)).send({
+    tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA',
+    estado_pago, ...(estado_pago === 'PAGADO' ? { forma_pago: 'EFECTIVO' } : {}),
+    cargas: [{ lavadora_id: lavadoraId, lavadora_tipo: 'mediana' }],
+  });
+  expect(creada.status).toBe(201);
+  return creada;
+}
+
 describe('topes de precio por carga (solo Por Encargo)', () => {
   // Tope de $100 para el tamaño "grande"; lavado mediana tarifa 70.
   async function armar() {
