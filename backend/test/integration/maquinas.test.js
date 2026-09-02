@@ -189,3 +189,31 @@ describe('el admin detiene una lavadora que arrancó un empleado', () => {
     expect((await estadoMaquina(lavadoraId)).estado).toBe('en_uso');
   });
 });
+
+// El reporte de uso mide lo que la máquina lavó de verdad. Como varias notas
+// pueden tenerla asignada a la vez, contar la asignación inflaba ciclos y
+// dinero atribuido a esa máquina.
+describe('GET /api/maquinas/:id/uso — solo cuenta el uso real', () => {
+  it('ignora las notas que la tenían asignada pero nunca la arrancaron', async () => {
+    await seedAjustes({ precio_carga_mediana: 70 });
+    const lav = await seedMaquina({ nombre: 'L-uso', tipo: 'lavadora_mediana' });
+    const crear = () => request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PAGADO', forma_pago: 'EFECTIVO',
+      cargas: [{ lavadora_tipo: 'mediana' }],
+    });
+    const notas = [(await crear()).body, (await crear()).body, (await crear()).body];
+    for (const n of notas) {
+      await request(app).patch(`/api/notas/${n.id}/asignar-carga-maquina`).set(auth(admin.token))
+        .send({ carga_id: n.cargas[0].id, slot: 'lavadora', maquina_id: lav }).expect(200);
+    }
+    // Solo la primera le da a Iniciar.
+    await request(app).patch(`/api/notas/${notas[0].id}/activar-pendientes`).set(auth(admin.token))
+      .send({ maquina_id: lav }).expect(200);
+
+    const uso = await request(app).get(`/api/maquinas/${lav}/uso`).set(auth(admin.token));
+    expect(uso.status).toBe(200);
+    expect(uso.body.resumen.usos).toBe(1);
+    expect(uso.body.resumen.cargas).toBe(1);
+    expect(uso.body.resumen.generado).toBe(70);   // no 210
+  });
+});

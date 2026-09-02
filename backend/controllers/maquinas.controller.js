@@ -117,7 +117,9 @@ export const getMaquinas = async (req, res) => {
 };
 
 // ── GET /maquinas/:id/uso ───────────────────────────────────
-// Uso diario de la máquina, derivado de las notas que la usaron.
+// Uso diario de la máquina, derivado de las notas que la usaron DE VERDAD:
+// tenerla asignada no cuenta (varias notas pueden tenerla; la usa la que le da
+// a Iniciar, y eso es lo que marca nota_cargas.*_iniciada_at, mig. 097).
 // "Generado" = dinero cobrado (notas PAGADAS), atribuido al día en que se
 // usó la máquina. Métricas por día: usos, cargas, generado, empleados que
 // la operaron y clientes atendidos (cada autoservicio cuenta como 1 cliente;
@@ -148,7 +150,9 @@ export const getUsoMaquina = async (req, res) => {
          LEFT JOIN clientes c ON c.id = n.cliente_id
         WHERE EXISTS (
                 SELECT 1 FROM nota_cargas nc
-                 WHERE nc.nota_id = n.id AND (nc.lavadora_id = $1 OR nc.secadora_id = $1)
+                 WHERE nc.nota_id = n.id
+                   AND ((nc.lavadora_id = $1 AND nc.lavadora_iniciada_at IS NOT NULL)
+                     OR (nc.secadora_id = $1 AND nc.secadora_iniciada_at IS NOT NULL))
               )
           AND n.estado <> 'CANCELADA'
         ORDER BY n.created_at DESC`,
@@ -165,7 +169,8 @@ export const getUsoMaquina = async (req, res) => {
          JOIN notas n ON n.id = nc.nota_id
          LEFT JOIN maquinas ml ON ml.id = nc.lavadora_id
          LEFT JOIN maquinas ms ON ms.id = nc.secadora_id
-        WHERE (nc.lavadora_id = $1 OR nc.secadora_id = $1)
+        WHERE ((nc.lavadora_id = $1 AND nc.lavadora_iniciada_at IS NOT NULL)
+            OR (nc.secadora_id = $1 AND nc.secadora_iniciada_at IS NOT NULL))
           AND n.estado <> 'CANCELADA'
         ORDER BY nc.nota_id, nc.orden`,
       [id]

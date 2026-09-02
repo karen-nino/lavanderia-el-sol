@@ -42,18 +42,20 @@ const SQL_MAQUINAS_DE_NOTA = `
 // Fase de proceso de una nota según las máquinas EN USO ahora mismo: LAVANDO si
 // alguna lavadora corre; si no, SECANDO si alguna secadora corre; y EN_ESPERA si
 // no hay ninguna máquina en uso (todas asignadas pero sin iniciar, o ya
-// detenidas). (terminar-lavado desvincula la lavadora al pasar a la secadora,
-// así que una lavadora vinculada y en uso implica lavado en curso.)
+// detenidas). Solo cuentan las máquinas que ESTA nota arrancó (mig. 097): otra
+// nota puede tener la misma asignada, y su ciclo no es el nuestro.
 async function faseProcesoDeNota(client, notaId) {
   const { rows } = await client.query(
     `SELECT
        EXISTS (
          SELECT 1 FROM nota_cargas nc JOIN maquinas m ON m.id = nc.lavadora_id
           WHERE nc.nota_id = $1 AND m.estado = 'en_uso'
+            AND nc.lavadora_iniciada_at IS NOT NULL
        ) AS lavando,
        EXISTS (
          SELECT 1 FROM nota_cargas nc JOIN maquinas m ON m.id = nc.secadora_id
           WHERE nc.nota_id = $1 AND m.estado = 'en_uso'
+            AND nc.secadora_iniciada_at IS NOT NULL
        ) AS secando`,
     [notaId]
   );
@@ -102,10 +104,38 @@ async function notaQueUsaMaquina(client, maquinaId, notaIdExcluir = null) {
   return rows[0] ?? null;
 }
 
-// Libera (pasa a disponible) las máquinas de la nota que sigan en uso.
-// Idempotente: las que ya están disponibles o en mantenimiento no se tocan.
+// Marca en la carga que SUS máquinas arrancaron de verdad (mig. 097). Tener
+// una máquina asignada ya no implica usarla: varias notas pueden tener la
+// misma y solo la que le da a Iniciar la usa. Esta marca es la que distingue
+// una cosa de la otra para liberar máquinas y para el reporte de uso.
+async function marcarMaquinasIniciadas(client, notaId, maquinaIds) {
+  if (!maquinaIds || maquinaIds.length === 0) return;
+  await client.query(
+    `UPDATE nota_cargas
+        SET lavadora_iniciada_at = CASE WHEN lavadora_id = ANY($2) AND lavadora_iniciada_at IS NULL
+                                        THEN NOW() ELSE lavadora_iniciada_at END,
+            secadora_iniciada_at = CASE WHEN secadora_id = ANY($2) AND secadora_iniciada_at IS NULL
+                                        THEN NOW() ELSE secadora_iniciada_at END
+      WHERE nota_id = $1`,
+    [notaId, maquinaIds.map(Number)]
+  );
+}
+
+// Libera (pasa a disponible) las máquinas que ESTA nota arrancó y siguen en
+// uso. Las que solo tiene asignadas no se tocan: pueden estar corriendo para
+// otra nota que se le adelantó al iniciar, y apagarlas la dejaría a medias.
 async function liberarMaquinasDeNota(client, notaId) {
-  const ids = await maquinasDeNota(client, notaId);
+  const { rows } = await client.query(
+    `SELECT DISTINCT mid FROM (
+       SELECT lavadora_id AS mid FROM nota_cargas
+        WHERE nota_id = $1 AND lavadora_iniciada_at IS NOT NULL
+       UNION
+       SELECT secadora_id FROM nota_cargas
+        WHERE nota_id = $1 AND secadora_iniciada_at IS NOT NULL
+     ) x WHERE mid IS NOT NULL`,
+    [notaId]
+  );
+  const ids = rows.map(r => r.mid);
   if (ids.length === 0) return;
   await client.query(
     `UPDATE maquinas SET estado = 'disponible', en_uso_desde = NULL
@@ -277,6 +307,9 @@ function tarifaLavadora(tipoMaquina, tipoPrenda, t) {
 //   Lavadora: prenda edredón (en jumbo) → edredonLavado; jumbo → jumbo; resto → mediana.
 //   Secadora: tiempo único (la secadora es de un solo tamaño).
 // Idempotente; se llama tras poner máquinas en uso en cualquier flujo.
+// Solo se sella el ciclo de las máquinas que ESTA nota arrancó: otra nota
+// puede tener la misma máquina asignada, y resellarle el ciclo le movería el
+// temporizador a media lavada (mig. 097).
 async function sellarCicloMaquinas(client, notaId) {
   const ti = await tiemposCarga(client);
   await client.query(
@@ -293,11 +326,13 @@ async function sellarCicloMaquinas(client, notaId) {
            FROM nota_cargas nc
            JOIN maquinas ml ON ml.id = nc.lavadora_id
           WHERE nc.nota_id = $1 AND nc.lavadora_id IS NOT NULL
+            AND nc.lavadora_iniciada_at IS NOT NULL
          UNION ALL
          -- Secadoras de la nota: tiempo de secado único (secadora sin tamaño).
          SELECT nc.secadora_id AS mid, $5::int AS minutos
            FROM nota_cargas nc
           WHERE nc.nota_id = $1 AND nc.secadora_id IS NOT NULL
+            AND nc.secadora_iniciada_at IS NOT NULL
        ) ciclos
       WHERE m.id = ciclos.mid AND m.estado = 'en_uso'`,
     [notaId, ti.edredonLavado, ti.jumbo, ti.mediana, ti.secMediana]
@@ -731,9 +766,11 @@ export const getNotas = async (req, res) => {
               -- asignada pero sin iniciar no cuenta). Con varias cargas puede
               -- tener ambas a la vez (una lavando, otra secando).
               EXISTS (SELECT 1 FROM nota_cargas nc JOIN maquinas ml ON ml.id = nc.lavadora_id
-                       WHERE nc.nota_id = n.id AND ml.estado = 'en_uso') AS hay_lavadora_activa,
+                       WHERE nc.nota_id = n.id AND ml.estado = 'en_uso'
+                         AND nc.lavadora_iniciada_at IS NOT NULL) AS hay_lavadora_activa,
               EXISTS (SELECT 1 FROM nota_cargas nc JOIN maquinas ms ON ms.id = nc.secadora_id
-                       WHERE nc.nota_id = n.id AND ms.estado = 'en_uso') AS hay_secadora_activa
+                       WHERE nc.nota_id = n.id AND ms.estado = 'en_uso'
+                         AND nc.secadora_iniciada_at IS NOT NULL) AS hay_secadora_activa
        FROM notas n
        LEFT JOIN clientes   c  ON c.id = n.cliente_id
        JOIN      usuarios   u  ON u.id = n.usuario_id
@@ -958,6 +995,7 @@ export const createNota = async (req, res) => {
         `UPDATE maquinas SET estado = 'en_uso', en_uso_desde = NOW() WHERE id = ANY($1)`,
         [idsActivar]
       );
+      await marcarMaquinasIniciadas(client, nota.id, idsActivar);
       await sellarCicloMaquinas(client, nota.id);
     }
 
@@ -1183,6 +1221,7 @@ export const updateNota = async (req, res) => {
               WHERE id = ANY($1) AND estado = 'disponible'`,
             [tomar]
           );
+          await marcarMaquinasIniciadas(client, id, tomar);
         }
         await sellarCicloMaquinas(client, id);
       }
@@ -1364,7 +1403,19 @@ export const eliminarNota = async (req, res) => {
     }
     const { estado: estadoNota } = notaRows[0];
     // Se recolectan antes del DELETE: el CASCADE borra nota_cargas.
-    const maquinasNota = await maquinasDeNota(client, id);
+    // Solo las que ESTA nota arrancó: las que únicamente tenía asignadas
+    // pueden estar corriendo para otra nota (mig. 097).
+    const { rows: iniciadasRows } = await client.query(
+      `SELECT DISTINCT mid FROM (
+         SELECT lavadora_id AS mid FROM nota_cargas
+          WHERE nota_id = $1 AND lavadora_iniciada_at IS NOT NULL
+         UNION
+         SELECT secadora_id FROM nota_cargas
+          WHERE nota_id = $1 AND secadora_iniciada_at IS NOT NULL
+       ) x WHERE mid IS NOT NULL`,
+      [id]
+    );
+    const maquinasNota = iniciadasRows.map(r => r.mid);
 
     // El efecto en stock depende del estado de la nota:
     //   - PAGADA: el pago ya consumió stock_actual y liberó la reserva;
@@ -1393,7 +1444,7 @@ export const eliminarNota = async (req, res) => {
 
     await client.query('DELETE FROM notas WHERE id = $1', [id]);
 
-    // Liberar las máquinas que estaban en uso por esta nota
+    // Liberar las máquinas que esta nota tenía corriendo
     if (maquinasNota.length > 0) {
       await client.query(
         `UPDATE maquinas
@@ -1611,7 +1662,8 @@ export const activarMaquinasPendientes = async (req, res) => {
       `SELECT nc.id AS carga_id, nc.lavadora_id
          FROM nota_cargas nc
          JOIN maquinas ml ON ml.id = nc.lavadora_id
-        WHERE nc.nota_id = $1 AND nc.secadora_id = ANY($2) AND ml.estado = 'en_uso'`,
+        WHERE nc.nota_id = $1 AND nc.secadora_id = ANY($2) AND ml.estado = 'en_uso'
+          AND nc.lavadora_iniciada_at IS NOT NULL`,
       [id, libres]
     );
 
@@ -1619,6 +1671,7 @@ export const activarMaquinasPendientes = async (req, res) => {
       `UPDATE maquinas SET estado = 'en_uso', en_uso_desde = NOW() WHERE id = ANY($1)`,
       [libres]
     );
+    await marcarMaquinasIniciadas(client, id, libres);
 
     if (lavASoltar.length > 0) {
       const lavIds   = lavASoltar.map(r => r.lavadora_id);
@@ -1840,6 +1893,7 @@ export const asignarSecadora = async (req, res) => {
       `UPDATE maquinas SET estado = 'en_uso', en_uso_desde = NOW() WHERE id = $1`,
       [secadora_id]
     );
+    await marcarMaquinasIniciadas(client, id, [secadora_id]);
     // Cada carga cobra el secado según el tamaño de la secadora (prenda edredón
     // manda sobre el tamaño).
     for (const c of objetivo) {
@@ -2429,6 +2483,7 @@ export const terminarLavado = async (req, res) => {
       `UPDATE maquinas SET estado = 'en_uso', en_uso_desde = NOW() WHERE id = $1`,
       [secadora_id]
     );
+    await marcarMaquinasIniciadas(client, id, [secadora_id]);
     await sellarCicloMaquinas(client, id);
     // Si era la última lavadora, la nota pasa a SECANDO; si otras cargas
     // siguen en lavadora, continúa LAVANDO.

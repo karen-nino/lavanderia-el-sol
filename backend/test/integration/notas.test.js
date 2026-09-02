@@ -274,6 +274,69 @@ describe('quién se queda con la máquina: la primera que inicia', () => {
     expect(res.filter(r => r.status === 409)).toHaveLength(1);
   });
 
+  // Tener la máquina asignada no es lo mismo que estarla usando: si no se
+  // distinguen, la nota que solo la tenía asignada apaga la lavadora de la que
+  // sí la está usando (con Sonoff, a media lavada).
+  it('cancelar la nota que NO la arrancó no apaga la lavadora de la que sí', async () => {
+    const lav = await seedMaquina({ nombre: 'L-cancel', tipo: 'lavadora_mediana' });
+    const a = (await crearConTipo()).body;
+    const b = (await crearConTipo()).body;
+    await asignarACarga(a.id, a.cargas[0].id, lav).expect(200);
+    await asignarACarga(b.id, b.cargas[0].id, lav).expect(200);
+    await iniciar(a.id, lav).expect(200);
+
+    await request(app).patch(`/api/notas/${b.id}/estado`).set(auth(admin.token))
+      .send({ estado: 'CANCELADA' }).expect(200);
+
+    const { rows } = await pool.query('SELECT estado FROM maquinas WHERE id = $1', [lav]);
+    expect(rows[0].estado).toBe('en_uso');   // A sigue lavando
+  });
+
+  it('eliminar la nota que NO la arrancó tampoco la apaga', async () => {
+    const lav = await seedMaquina({ nombre: 'L-borrar', tipo: 'lavadora_mediana' });
+    const a = (await crearConTipo()).body;
+    const b = (await crearConTipo()).body;
+    await asignarACarga(a.id, a.cargas[0].id, lav).expect(200);
+    await asignarACarga(b.id, b.cargas[0].id, lav).expect(200);
+    await iniciar(a.id, lav).expect(200);
+
+    await request(app).delete(`/api/notas/${b.id}`).set(auth(admin.token)).expect(204);
+
+    const { rows } = await pool.query('SELECT estado FROM maquinas WHERE id = $1', [lav]);
+    expect(rows[0].estado).toBe('en_uso');
+  });
+
+  // Al arrancar el secado, la lavadora de esa carga se da por terminada y se
+  // libera. Si la carga solo la tenía asignada y quien la está usando es otra
+  // nota, liberarla cortaba esa lavada a media (y con Sonoff, apagaba la
+  // máquina físicamente).
+  it('arrancar mi secadora no libera la lavadora que usa otra nota', async () => {
+    const lav = await seedMaquina({ nombre: 'L-ajena', tipo: 'lavadora_mediana' });
+    const sec = await seedMaquina({ nombre: 'S-propia', tipo: 'secadora' });
+
+    const a = (await crearConTipo()).body;   // la va a usar de verdad
+    // B tiene la misma lavadora asignada (aún libre) y además su secadora.
+    const b = (await request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE',
+      cargas: [{ lavadora_tipo: 'mediana', secadora_tipo: 'mediana' }],
+    })).body;
+    await asignarACarga(a.id, a.cargas[0].id, lav).expect(200);
+    await asignarACarga(b.id, b.cargas[0].id, lav).expect(200);
+    await request(app).patch(`/api/notas/${b.id}/asignar-carga-maquina`).set(auth(admin.token))
+      .send({ carga_id: b.cargas[0].id, slot: 'secadora', maquina_id: sec }).expect(200);
+
+    await iniciar(a.id, lav).expect(200);    // A se queda la lavadora
+    await iniciar(b.id, sec).expect(200);    // B arranca solo su secadora
+
+    const { rows } = await pool.query('SELECT estado FROM maquinas WHERE id = $1', [lav]);
+    expect(rows[0].estado).toBe('en_uso');   // la lavada de A sigue viva
+    const notaA = await pool.query('SELECT estado FROM notas WHERE id = $1', [a.id]);
+    expect(notaA.rows[0].estado).toBe('LAVANDO');
+    // Y B no se cuenta como lavando: solo tiene la lavadora asignada.
+    const notaB = await pool.query('SELECT estado FROM notas WHERE id = $1', [b.id]);
+    expect(notaB.rows[0].estado).toBe('SECANDO');
+  });
+
   it('la nota que perdió puede cambiar a otra lavadora y arrancarla', async () => {
     const lav = await seedMaquina({ nombre: 'L-ocupada', tipo: 'lavadora_mediana' });
     const otra = await seedMaquina({ nombre: 'L-libre', tipo: 'lavadora_mediana' });
