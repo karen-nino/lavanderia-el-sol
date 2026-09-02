@@ -106,14 +106,6 @@ const fechaHoyISO = () => {
 // Cliente, Cantidad de cargas, [Carga ×N], Pago, Entrega, Instrucciones, Resumen.
 const ENCARGO_STEPS_FIJOS = 5;
 
-const formatMaquina = (m) => {
-  if (!m) return '';
-  // El tamaño solo aplica a lavadoras; la secadora es de un solo tamaño.
-  if (m.tipo === 'lavadora_mediana') return `${m.nombre} — Mediana`;
-  if (m.tipo === 'lavadora_jumbo')   return `${m.nombre} — Jumbo`;
-  return m.nombre;
-};
-
 export default function NuevaNota() {
   const navigate = useNavigate();
   const { id } = useParams();
@@ -121,7 +113,6 @@ export default function NuevaNota() {
   const [maquinas,          setMaquinas]          = useState([]);
   // IDs de las máquinas que ya trae esta nota (en edición): nunca se muestran
   // como "Reservada", porque están apartadas por la propia nota.
-  const [maquinasNotaIds,   setMaquinasNotaIds]   = useState(() => new Set());
   const [productosCatalogo, setProductosCatalogo] = useState([]);
   const [telas,             setTelas]             = useState([]);
   const [tamanosEdredon,    setTamanosEdredon]    = useState([]);
@@ -178,7 +169,6 @@ export default function NuevaNota() {
   };
   // La secadora es de un solo tamaño: precio único (ignora tamaño y prenda).
   const precioSecado = () => precios.secadora;
-  const tamanoDe = (maquinaId) => maquinas.find(m => String(m.id) === String(maquinaId))?.tamano;
   // Precio por TIPO de máquina en Por Encargo (mediana/jumbo), independiente de
   // qué máquina física se asigne luego.
   const precioLavadoTipo = (tipo, prenda) =>
@@ -186,11 +176,6 @@ export default function NuevaNota() {
     : tipo === 'mediana' ? precioPorTipo('lavadora_mediana', prenda)
     : 0;
   const precioSecadoTipo = (tipo, prenda) => (tipo ? precioSecado(tipo, prenda) : 0);
-  // ¿La máquina está apartada por OTRA nota abierta? (las de esta nota no cuentan)
-  const esReservada = (m) => Boolean(m?.reservada) && !maquinasNotaIds.has(String(m.id));
-  // Sufijo " — Reservada (folio)" para las opciones del selector; vacío si no.
-  const sufijoReservada = (m) =>
-    esReservada(m) ? ` — Reservada${m.reservada_folio ? ` (${m.reservada_folio})` : ''}` : '';
   // Cada carga se cobra con la tarifa del TIPO de lavado más la del secado.
   const subtotalDeCarga = (c) =>
     precioLavadoTipo(c.lavadora_tipo, c.tipo_prenda) + precioSecadoTipo(c.secadora_tipo, c.tipo_prenda);
@@ -261,7 +246,6 @@ export default function NuevaNota() {
           maq => maq.estado === 'disponible' || idsActuales.includes(maq.id)
         );
         setMaquinas(maquinasFiltradas);
-        setMaquinasNotaIds(new Set(idsActuales.map(String)));
         setProductosCatalogo(prod);
         if (cfg) {
           setPrecios({
@@ -402,9 +386,6 @@ export default function NuevaNota() {
       return [...prev, ...Array.from({ length: objetivo - prev.length }, () => ({ ...CARGA_INIT }))];
     });
   };
-
-  const actualizarCarga = (i, campo, valor) =>
-    setCargasAuto(prev => prev.map((c, idx) => (idx === i ? { ...c, [campo]: valor } : c)));
 
   // Actualiza una carga de Autoservicio con un objeto de cambios parcial.
   const actualizarCargaObj = (i, cambios) =>
