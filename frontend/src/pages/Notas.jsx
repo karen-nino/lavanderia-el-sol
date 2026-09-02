@@ -57,6 +57,15 @@ const RANGOS_FECHA = [
   { value: 'ESTE_MES',  label: 'Este mes' },
 ];
 
+// Valores que puede tomar el filtro de fecha: los fijos del desplegable, TODAS
+// y los dinámicos que arma el modal (un mes o un año concretos).
+function rangoFechaValido(v) {
+  return v === 'TODAS'
+    || RANGOS_FECHA.some(r => r.value === v)
+    || /^MES:\d{4}-\d{2}$/.test(v)
+    || /^ANIO:\d{4}$/.test(v);
+}
+
 const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
                'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 
@@ -185,7 +194,7 @@ function fmtCliente(n) {
 
 export default function Notas() {
   const navigate                              = useNavigate();
-  const [searchParams]                        = useSearchParams();
+  const [searchParams, setSearchParams]       = useSearchParams();
   const { usuario }                           = useAuth();
   const esAdminMain                           = esAdminMainFn(usuario?.rol);
 
@@ -199,9 +208,14 @@ export default function Notas() {
   // Con un estado preseleccionado (desde un KPI del Dashboard) se arranca en
   // TODAS las fechas, igual que al elegir un estado en el desplegable; así no
   // se esconden notas de días anteriores. Sin estado, la vista default es HOY.
-  const [rangoFecha,        setRangoFecha]        = useState(
-    estadoInicial !== 'TODOS' ? 'TODAS' : 'HOY'
-  );
+  // Rango de fecha desde la URL (?fecha=TODAS, MES:2026-09, ANIO:2026…). Si no
+  // viene uno válido: con estado preseleccionado se arranca en TODAS y sin él,
+  // en HOY.
+  const fechaParam = searchParams.get('fecha') || '';
+  const rangoInicial = rangoFechaValido(fechaParam)
+    ? fechaParam
+    : (estadoInicial !== 'TODOS' ? 'TODAS' : 'HOY');
+  const [rangoFecha,        setRangoFecha]        = useState(rangoInicial);
   const [busqueda,          setBusqueda]          = useState('');
   const [loading,           setLoading]           = useState(true);
   const [error,             setError]             = useState('');
@@ -224,6 +238,16 @@ export default function Notas() {
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
   }, []);
+
+  // Los filtros elegidos viven en la URL (sustituyendo la entrada actual, sin
+  // llenar el historial). Así, al abrir una nota y volver con "atrás", la lista
+  // reaparece con el mismo filtro en vez de reiniciarse en "Hoy".
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (filtro !== 'TODOS') params.set('estado', filtro);
+    params.set('fecha', rangoFecha);
+    setSearchParams(params, { replace: true });
+  }, [filtro, rangoFecha, setSearchParams]);
 
   useEffect(() => {
     if (!mostrarEstado && !mostrarFecha) return;
