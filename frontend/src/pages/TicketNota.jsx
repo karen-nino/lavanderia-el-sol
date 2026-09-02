@@ -4,6 +4,7 @@ import { toBlob } from 'html-to-image';
 import { etiquetaProducto, ordenProducto } from '../lib/formatoInventario';
 import { api } from '../lib/api';
 import { formatFechaHora12 } from '../lib/fecha';
+import { maquinasDeCarga, cargaVisibleEnTicket } from '../lib/ticketCargas';
 
 const BADGE_TIPO_SERVICIO = {
   AUTOSERVICIO: 'Autoservicio',
@@ -11,11 +12,6 @@ const BADGE_TIPO_SERVICIO = {
   POR_ENCARGO:  'Por encargo',
 };
 
-const MAQUINA_TIPO_LABEL = {
-  lavadora_mediana: 'Mediana',
-  lavadora_jumbo:   'Jumbo',
-  secadora:         'Secadora',
-};
 
 // Tamaño de la carga tal como se nombra al cliente.
 const TAMANO_CARGA_LABEL = { chico: 'Chica', grande: 'Grande', jumbo: 'Jumbo' };
@@ -74,35 +70,6 @@ function fmtFechaHora(iso) {
   return formatFechaHora12(iso);
 }
 
-// Lo que la carga cobra por máquina. Si ya se asignó una física se nombra con
-// ella ("L1 · Mediana"); mientras tanto se muestra el tipo elegido al crear la
-// nota ("Lavadora · Mediana"), que es lo que se está cobrando. Las máquinas
-// removidas no se cobran, así que no aparecen.
-function maquinasDeCarga(cg) {
-  const capitalizar = (t) => (t ? t.charAt(0).toUpperCase() + t.slice(1) : '');
-
-  const lavadora = cg.lavadora_removida ? null
-    : cg.lavadora_usada_id
-      ? { nombre: cg.lavadora_usada_nombre,
-          tipo: MAQUINA_TIPO_LABEL[cg.lavadora_usada_tipo] ?? '',
-          precio: Number(cg.precio_lavadora) }
-      : cg.lavadora_tipo_previsto
-        ? { nombre: 'Lavadora',
-            tipo: capitalizar(cg.lavadora_tipo_previsto),
-            precio: Number(cg.precio_lavadora) }
-        : null;
-
-  // La secadora es de un solo tamaño: no lleva calificativo.
-  const secadora = cg.secadora_removida ? null
-    : cg.secadora_usada_id
-      ? { nombre: cg.secadora_usada_nombre, tipo: '', precio: Number(cg.precio_secadora) }
-      : cg.secadora_tipo_previsto
-        ? { nombre: 'Secadora', tipo: '', precio: Number(cg.precio_secadora) }
-        : null;
-
-  return [lavadora, secadora].filter(Boolean);
-}
-
 // Fila del ticket: etiqueta a la izquierda, valor a la derecha. Estilo recibo.
 function Linea({ label, value, fuerte }) {
   return (
@@ -154,7 +121,9 @@ function armarTextoTicket(nota, rfc, notaPie) {
     }
   };
 
-  const cargas      = nota.cargas ?? [];
+  // Mismo criterio que la vista: las cargas que se quedaron sin nada que cobrar
+  // no se listan.
+  const cargas      = (nota.cargas ?? []).filter(cargaVisibleEnTicket);
   const originales  = cargas.filter(cg => !cg.es_adicional);
   const adicionales = cargas.filter(cg => cg.es_adicional);
 
@@ -333,8 +302,9 @@ export default function TicketNota() {
   const productos   = [...(nota.productos ?? [])].sort((a, b) => ordenProducto(a) - ordenProducto(b));
   // Cargas creadas al dar de alta la nota (originales) vs. las agregadas
   // después (adicionales), para mostrarlas en bloques separados.
-  const originales  = cargas.filter(cg => !cg.es_adicional);
-  const adicionales = cargas.filter(cg => cg.es_adicional);
+  const visibles    = cargas.filter(cargaVisibleEnTicket);
+  const originales  = visibles.filter(cg => !cg.es_adicional);
+  const adicionales = visibles.filter(cg => cg.es_adicional);
   const esEncargo   = nota.tipo_servicio === 'POR_ENCARGO';
 
   // Bloque de cargas. Por Encargo se cobra la carga completa (máquinas,
