@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import request from 'supertest';
 import app from '../../app.js';
-import { limpiarBase, seedSucursal, seedUsuario, auth, tokenFor } from '../helpers.js';
+import { limpiarBase, seedSucursal, seedUsuario, seedMaquina, seedAjustes, auth, tokenFor } from '../helpers.js';
 
 // Estado por defecto: una sucursal y un admin en ella.
 let admin;
@@ -105,6 +105,28 @@ describe('POST /api/caja/movimientos', () => {
     // esperado = inicial 500 + ventas 0 + entradas 200 - salidas 50
     expect(actual.body.totales.esperado).toBe(650);
     expect(actual.body.movimientos).toHaveLength(2);
+  });
+
+  // Migración 090: al cajón solo entra el efectivo. Contar transferencias y
+  // tarjetas hacía que el corte marcara un faltante inexistente a costa del
+  // empleado en turno. El total del día sí las suma, pero aparte.
+  it('el esperado del cajón solo cuenta el efectivo, no transferencias ni tarjetas', async () => {
+    await seedAjustes({ precio_carga_mediana: 70 });
+    const cobrar = async (nombre, forma_pago) => {
+      const lavadoraId = await seedMaquina({ nombre, tipo: 'lavadora_mediana' });
+      await request(app).post('/api/notas').set(auth(admin.token)).send({
+        tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PAGADO', forma_pago,
+        cargas: [{ lavadora_id: lavadoraId, lavadora_tipo: 'mediana' }],
+      }).expect(201);
+    };
+    await cobrar('L-efec', 'EFECTIVO');
+    await cobrar('L-tran', 'TRANSFERENCIA');
+    await cobrar('L-tarj', 'TARJETA');
+
+    const { totales } = (await request(app).get('/api/caja/actual').set(auth(admin.token))).body;
+    expect(totales.ventas).toBe(210);                    // el día vendió 210…
+    expect(totales.ventas_desglose).toMatchObject({ efectivo: 70, transferencia: 70, tarjeta: 70 });
+    expect(totales.esperado).toBe(570);                  // …pero al cajón solo entraron 70 (500 + 70)
   });
 
   it('valida tipo, concepto y monto (400)', async () => {
