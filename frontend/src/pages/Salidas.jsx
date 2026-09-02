@@ -79,13 +79,14 @@ export default function Salidas() {
   // Máquinas disponibles para los modales de asignar/cambiar máquina.
   const [maquinasDisp,     setMaquinasDisp]     = useState([]);
   const [loadingMaquinas,  setLoadingMaquinas]  = useState(false);
-  // Todas las máquinas de la sucursal (para asignar por tipo en Por Encargo).
+  // Todas las máquinas de la sucursal: alimentan el selector de las cargas que
+  // eligieron TIPO al crear la nota y esperan su máquina física.
   const [todasMaquinas,    setTodasMaquinas]    = useState([]);
 
-  // Asignar máquinas extra (una o varias): crea carga(s) nueva(s). En Por
-  // Encargo el empleado elige si se cobra; en Autoservicio siempre se cobra.
-  // Se pueden elegir varias a la vez; una
-  // lavadora + una secadora se emparejan en una misma carga.
+  // Modal de "Asignar Máquina": se pueden elegir varias a la vez y una lavadora
+  // + una secadora se emparejan en la misma carga. El destino se elige en el
+  // propio modal: una carga nueva o una existente con hueco libre. En Por
+  // Encargo el empleado decide si se cobra; en Autoservicio siempre se cobra.
   const [asignarOpen,      setAsignarOpen]      = useState(false);
   const [asignarMaqSel,    setAsignarMaqSel]    = useState([]); // ids seleccionados
   const [asignarCobrar,    setAsignarCobrar]    = useState(null); // true | false | null
@@ -165,13 +166,12 @@ export default function Salidas() {
   // (a diferencia de Por Encargo, donde una carga puede ir sin cobro).
   const esAutoservicio = nota?.tipo_servicio === 'AUTOSERVICIO';
 
-  // Máquinas asignadas a la nota, sin repetir: las de sus cargas
-  // (autoservicio) o las columnas legadas maquina_id / secadora_id.
+  // Máquinas asignadas a la nota, sin repetir. Todas viven en sus cargas: la
+  // denormalización a nivel nota (maquina_id / secadora_id) se eliminó en la
+  // migración 073.
   const cargasNota = nota?.cargas ?? [];
   const maquinasNota = [...new Set(
-    cargasNota.length > 0
-      ? cargasNota.flatMap(c => [c.lavadora_id, c.secadora_id]).filter(Boolean)
-      : [nota?.maquina_id, nota?.secadora_id].filter(Boolean)
+    cargasNota.flatMap(c => [c.lavadora_id, c.secadora_id]).filter(Boolean)
   )];
 
   // Arranca UNA máquina asignada y libre (botón "Iniciar Lavado"/"Iniciar
@@ -1391,8 +1391,8 @@ export default function Salidas() {
               </div>
             )}
 
-            {/* Cobro de la carga nueva. Solo en Por Encargo: en Autoservicio
-                todas las cargas se cobran, así que no se pregunta. */}
+            {/* ¿Se cobra lo que se está asignando? Solo se pregunta en Por
+                Encargo: en Autoservicio todo se cobra. */}
             {!esAutoservicio && (
             <div className="space-y-2">
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Cobro</p>

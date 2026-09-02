@@ -3,8 +3,6 @@ import { esAdmin } from '../middleware/roles.js';
 import { tarifaSecadora, precioProductoEnNota, unidadDeServicio, tapasPorUnidad, generarFolio } from '../utils/calculosNotas.js';
 
 const ESTADOS_VALIDOS     = ['EN_ESPERA', 'LAVANDO', 'SECANDO', 'LISTA', 'PAGADA', 'FINALIZADA', 'CANCELADA'];
-// Estados con los que puede nacer una nota.
-const ESTADOS_INICIALES   = ['EN_ESPERA', 'LAVANDO', 'SECANDO'];
 const TIPOS_SERVICIO_VALIDOS = ['AUTOSERVICIO', 'EDREDON', 'POR_ENCARGO'];
 const ESTADOS_PAGO_VALIDOS = ['PENDIENTE', 'PAGADO'];
 // Formas de pago (mig. 078/090). Para el corte de caja solo EFECTIVO es dinero
@@ -516,7 +514,9 @@ async function prepararCargas(client, cargas, tipoPrendaNota, sucursal, tipo_ser
       }
       activar = false;
     } else {
-      // Autoservicio: máquina física específica al crear (como siempre).
+      // Servicio legado EDREDON: es el único que sigue eligiendo la máquina
+      // física al crear la nota (Autoservicio y Por Encargo eligen tipo y la
+      // asignan después en Salidas).
       lavadoraId = c.lavadora_id ? Number(c.lavadora_id) : null;
       secadoraId = c.secadora_id ? Number(c.secadora_id) : null;
       if (lavadoraId && tipoPorId.get(lavadoraId) === 'secadora') {
@@ -843,12 +843,12 @@ export const createNota = async (req, res) => {
     });
   }
   if (tipo_servicio === 'POR_ENCARGO' && !cliente_id) {
-    return res.status(400).json({ message: 'cliente_id es requerido para notas Por Encargo.' });
+    return res.status(400).json({ message: 'Elige el cliente: las notas Por Encargo llevan cliente.' });
   }
   // Modelo por cargas: toda nota trae sus cargas, cada una con sus máquinas y
   // —en encargo— su prenda, tela/tamaño, ajuste y productos.
   if (!Array.isArray(cargas) || cargas.length === 0) {
-    return res.status(400).json({ message: 'cargas debe ser una lista con al menos una carga.' });
+    return res.status(400).json({ message: 'La nota necesita al menos una carga.' });
   }
   if (tiempo_entrega && !TIEMPOS_ENTREGA_VALIDOS.includes(String(tiempo_entrega).toUpperCase())) {
     return res.status(400).json({
@@ -864,7 +864,7 @@ export const createNota = async (req, res) => {
   // El cliente referenciado debe pertenecer a la sucursal activa (las máquinas
   // se validan por carga en prepararCargas).
   if (cliente_id && !(await perteneceASucursal('clientes', cliente_id, req.sucursal))) {
-    return res.status(400).json({ message: 'cliente_id no existe.' });
+    return res.status(400).json({ message: 'El cliente seleccionado no existe en esta sucursal.' });
   }
 
   const ajusteNum = Number(ajuste) || 0;
@@ -977,11 +977,11 @@ export const createNota = async (req, res) => {
         );
         if (stockRows.length === 0) {
           await client.query('ROLLBACK');
-          return res.status(404).json({ message: `Insumo ${insumo_id} no encontrado.` });
+          return res.status(404).json({ message: 'El insumo seleccionado no existe en esta sucursal.' });
         }
         if (Number(stockRows[0].stock_actual) < cantidad) {
           await client.query('ROLLBACK');
-          return res.status(400).json({ message: `Stock insuficiente para insumo ${insumo_id}.` });
+          return res.status(400).json({ message: 'No hay existencia suficiente de ese insumo.' });
         }
 
         await client.query(
@@ -1034,7 +1034,7 @@ export const createNota = async (req, res) => {
     await client.query('ROLLBACK');
     console.error('createNota error:', err);
     if (err.code === '23503') {
-      return res.status(400).json({ message: 'cliente_id o maquina_id no existe.' });
+      return res.status(400).json({ message: 'El cliente o la máquina seleccionada no existe en esta sucursal.' });
     }
     res.status(500).json({ message: 'Error interno del servidor.' });
   } finally {
@@ -1065,7 +1065,7 @@ export const updateNota = async (req, res) => {
     return res.status(400).json({ message: 'productos debe ser una lista.' });
   }
   if (cargas !== undefined && (!Array.isArray(cargas) || cargas.length === 0)) {
-    return res.status(400).json({ message: 'cargas debe ser una lista con al menos una carga.' });
+    return res.status(400).json({ message: 'La nota necesita al menos una carga.' });
   }
   if (ajuste != null && ajuste !== '' && !Number.isFinite(Number(ajuste))) {
     return res.status(400).json({ message: 'ajuste debe ser numérico.' });
@@ -1094,7 +1094,7 @@ export const updateNota = async (req, res) => {
   // El cliente referenciado debe pertenecer a la sucursal activa (las máquinas
   // se validan por carga en prepararCargas).
   if (cliente_id && !(await perteneceASucursal('clientes', cliente_id, req.sucursal))) {
-    return res.status(400).json({ message: 'cliente_id no existe.' });
+    return res.status(400).json({ message: 'El cliente seleccionado no existe en esta sucursal.' });
   }
 
   const client = await pool.connect();
@@ -1354,7 +1354,7 @@ export const updateNota = async (req, res) => {
     await client.query('ROLLBACK');
     console.error('updateNota error:', err);
     if (err.code === '23503') {
-      return res.status(400).json({ message: 'cliente_id o maquina_id no existe.' });
+      return res.status(400).json({ message: 'El cliente o la máquina seleccionada no existe en esta sucursal.' });
     }
     res.status(500).json({ message: 'Error interno del servidor.' });
   } finally {

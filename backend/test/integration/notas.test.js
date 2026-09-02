@@ -35,7 +35,7 @@ describe('POST /api/notas — validaciones', () => {
     const res = await request(app).post('/api/notas').set(auth(admin.token))
       .send({ ...base, tipo_servicio: 'POR_ENCARGO' });
     expect(res.status).toBe(400);
-    expect(res.body.message).toMatch(/cliente_id/i);
+    expect(res.body.message).toMatch(/cliente/i);
   });
 
   it('cargas vacías → 400', async () => {
@@ -219,7 +219,7 @@ describe('POST /api/notas — Por Encargo', () => {
       estado_pago: 'PENDIENTE', cargas: [{ tamano: 'chico', lavadora_tipo: 'mediana' }],
     });
     expect(res.status).toBe(400);
-    expect(res.body.message).toMatch(/cliente_id/i);
+    expect(res.body.message).toMatch(/cliente/i);
   });
 });
 

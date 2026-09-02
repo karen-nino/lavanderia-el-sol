@@ -42,12 +42,6 @@ const FORM_INIT = {
   forma_pago:     '',
 };
 
-// Autoservicio: cada carga es UNA sola máquina. Primero se elige el tipo
-// (lavadora o secadora) y luego la máquina de ese tipo.
-const TIPOS_MAQUINA = [
-  { v: 'lavadora', label: 'Lavadora' },
-  { v: 'secadora', label: 'Secadora' },
-];
 // Autoservicio: la carga elige el TIPO de lavado y/o secado (no la máquina
 // física, que se asigna después en Salidas), igual que Por Encargo.
 const CARGA_INIT  = { lavadora_tipo: '', secadora_tipo: '', tipo_prenda: 'ROPA', tipo_tela: '', tamano_edredon: '' };
@@ -111,8 +105,6 @@ export default function NuevaNota() {
   const { id } = useParams();
   const esEdicion = Boolean(id);
   const [maquinas,          setMaquinas]          = useState([]);
-  // IDs de las máquinas que ya trae esta nota (en edición): nunca se muestran
-  // como "Reservada", porque están apartadas por la propia nota.
   const [productosCatalogo, setProductosCatalogo] = useState([]);
   const [telas,             setTelas]             = useState([]);
   const [tamanosEdredon,    setTamanosEdredon]    = useState([]);
@@ -239,9 +231,9 @@ export default function NuevaNota() {
         const idsActuales = esEdicion
           ? (nota?.cargas ?? []).flatMap(c => [c.lavadora_id, c.secadora_id]).filter(Boolean)
           : [];
-        // Se incluyen también las máquinas "reservada" (libres pero apartadas
-        // por otra nota abierta): no se ocultan, se muestran deshabilitadas como
-        // Reservada. Las de la propia nota (idsActuales) siempre quedan elegibles.
+        // Esta pantalla ya no asigna máquinas físicas (eso pasó a Salidas): la
+        // lista solo alimenta el aviso de "no hay máquinas disponibles" y, en
+        // edición, tiene que incluir las que la nota ya trae.
         const maquinasFiltradas = m.filter(
           maq => maq.estado === 'disponible' || idsActuales.includes(maq.id)
         );

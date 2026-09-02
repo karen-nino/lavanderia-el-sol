@@ -89,8 +89,10 @@ export default function Empleados() {
       // El admin_main se oculta de la lista, salvo el propio usuario (para
       // que siempre vea su tarjeta).
       if (e.rol === 'admin_main' && e.id !== usuario?.id) return false;
-      // Solo empleados (operadores) de la sucursal activa; los admins son
-      // globales y los usuarios de prueba se ven en cualquier sucursal.
+      // Solo empleados (operadores) de la sucursal activa. Los admins son
+      // globales (sin sucursal). Los usuarios de prueba viven en la sucursal
+      // oculta de pruebas (mig. 095), que nadie puede seleccionar: si se
+      // filtraran por sucursal, el admin_main no los vería nunca.
       if (!prueba && !esAdminFn(e.rol) && sucursalVista && e.sucursal !== sucursalVista) return false;
       if (filtroRol !== 'todos' && e.rol !== filtroRol) return false;
       const nombreCompleto = `${e.nombre} ${e.apellido ?? ''}`.toLowerCase();
