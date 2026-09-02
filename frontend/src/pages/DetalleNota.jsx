@@ -181,13 +181,20 @@ function ModalLiquidar({ monto, folio, formaPago, onFormaPago, onCancelar, onCon
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4 max-h-[90vh] overflow-y-auto">
-        <h3 className="text-base font-bold text-gray-900">Liquidar nota</h3>
-        <p className="text-sm text-gray-500">
-          ¿Marcar la nota {folio} como pagada ({monto})? Después podrás finalizarla.
-        </p>
+        <div>
+          <h3 className="text-base font-bold text-gray-900">Liquidar nota</h3>
+          <p className="text-sm text-gray-500">Nota {folio}</p>
+        </div>
+
+        {/* El monto es lo que el empleado tiene que cobrar: va en grande y
+            aparte, no escondido dentro del texto. */}
+        <div className="rounded-2xl bg-light-blue border-2 border-blue/30 px-5 py-4 text-center">
+          <p className="text-xs font-semibold text-blue-700 uppercase tracking-wide">Cobrar al cliente</p>
+          <p className="text-4xl font-bold text-dark-blue leading-tight mt-1">{monto}</p>
+        </div>
 
         <div className="space-y-2">
-          <p className="text-sm font-semibold text-gray-900">¿Cómo pagó?</p>
+          <p className="text-sm font-semibold text-gray-900">Método de pago:</p>
           <div className="grid grid-cols-3 gap-2">
             {FORMAS_PAGO.map(opt => {
               const selected = formaPago === opt.v;
@@ -524,6 +531,37 @@ export default function DetalleNota() {
             </button>
           )}
         </div>
+      )}
+
+      {/* Cuánto falta cobrar (o cuánto se cobró ya). Va arriba y en grande
+          porque es el dato que el empleado necesita al entregar la ropa; en el
+          bloque de Detalles el total quedaba como una fila más entre el ID y la
+          fecha. En notas canceladas no aplica: no hay nada que cobrar. */}
+      {nota.estado !== 'CANCELADA' && (
+        nota.estado_pago === 'PENDIENTE' ? (
+          <div className="rounded-xl border-2 border-amber-300 bg-amber-50 px-5 py-4 flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide">Pendiente de cobro</p>
+              <p className="text-3xl font-bold text-amber-900 leading-tight mt-0.5">{fmtMonto(nota.precio_total)}</p>
+            </div>
+            <svg className="w-8 h-8 text-amber-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 9v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+        ) : (
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-5 py-3 flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wide">
+                Cobrada{nota.forma_pago ? ` · ${formaPagoLabel(nota.forma_pago)}` : ''}
+              </p>
+              <p className="text-xl font-bold text-emerald-900 leading-tight mt-0.5">{fmtMonto(nota.precio_total)}</p>
+            </div>
+            <svg className="w-7 h-7 text-emerald-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+        )
       )}
 
       {/* Código de barras */}
