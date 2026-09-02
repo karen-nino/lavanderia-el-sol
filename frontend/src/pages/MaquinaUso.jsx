@@ -6,8 +6,10 @@ import SucursalBar from '../components/SucursalBar';
 const fmtMoneda = (n) =>
   '$' + Number(n ?? 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+// `fecha` llega como 'YYYY-MM-DD' (día local del negocio). Se le agrega la hora
+// para que se interprete en la zona local del navegador y no se corra un día.
 const fmtFecha = (iso) =>
-  new Date(iso).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
+  new Date(iso + 'T00:00:00').toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
 
 // Filtro de fecha por rangos, como en la página de Notas.
 const RANGOS_FECHA = [
@@ -217,7 +219,7 @@ export default function MaquinaUso() {
     const dias = data?.dias ?? [];
     if (!rango) return dias;
     return dias.filter(d => {
-      const f = new Date(d.fecha);
+      const f = new Date(d.fecha + 'T00:00:00');
       return f >= rango.desde && f < rango.hasta;
     });
   }, [data, rango]);

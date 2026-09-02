@@ -1,4 +1,16 @@
 import pool from '../db/pool.js';
+import { TZ_NEGOCIO } from '../utils/tz.js';
+
+// El "día" de un reporte es el día del NEGOCIO (America/Mexico_City), no el del
+// servidor: en producción Postgres corre en UTC, así que `DATE(pagado_en)` metía
+// todo lo cobrado después de las 18:00 locales en el día siguiente. Se
+// interpola como literal (no como parámetro) para no correr la numeración de
+// $1/$2 que ya usan los períodos; por eso se valida el formato del nombre.
+const TZ = /^[A-Za-z0-9/_+-]+$/.test(TZ_NEGOCIO) ? `'${TZ_NEGOCIO}'` : `'America/Mexico_City'`;
+// Fecha local del negocio de una columna timestamptz, como texto 'YYYY-MM-DD'.
+// Va como texto (y no como date) para que el JSON no la convierta en un
+// instante UTC que el navegador vuelva a correr un día.
+const fechaNegocio = (col) => `to_char(${col} AT TIME ZONE ${TZ}, 'YYYY-MM-DD')`;
 
 // El período se mide por pagado_en (día real del cobro), no por la fecha de
 // creación de la nota. whereBase filtra estado_pago = 'PAGADO', así que
@@ -12,13 +24,13 @@ function buildPeriodSQL(periodo, col = 'o.pagado_en', anioParam = false, mesPara
     case 'semana': return `${col} >= NOW() - INTERVAL '7 days'`;
     case 'mes':    return mesParam
       // Mes específico de un año dado (año en $1, mes 1-12 en $2).
-      ? `DATE_PART('year', ${col}) = $1 AND DATE_PART('month', ${col}) = $2`
-      : `${col} >= DATE_TRUNC('month', NOW())`;
+      ? `DATE_PART('year', ${col} AT TIME ZONE ${TZ}) = $1 AND DATE_PART('month', ${col} AT TIME ZONE ${TZ}) = $2`
+      : `${col} >= DATE_TRUNC('month', NOW() AT TIME ZONE ${TZ}) AT TIME ZONE ${TZ}`;
     case 'anio':   return anioParam
-      ? `DATE_PART('year', ${col}) = $1`
-      : `${col} >= DATE_TRUNC('year', NOW())`;
-    case 'custom': return `DATE(${col}) BETWEEN $1::date AND $2::date`; // params $1/$2 set by caller
-    default:       return `DATE(${col}) = CURRENT_DATE`;
+      ? `DATE_PART('year', ${col} AT TIME ZONE ${TZ}) = $1`
+      : `${col} >= DATE_TRUNC('year', NOW() AT TIME ZONE ${TZ}) AT TIME ZONE ${TZ}`;
+    case 'custom': return `(${col} AT TIME ZONE ${TZ})::date BETWEEN $1::date AND $2::date`; // params $1/$2 set by caller
+    default:       return `(${col} AT TIME ZONE ${TZ})::date = (NOW() AT TIME ZONE ${TZ})::date`;
   }
 }
 
@@ -85,10 +97,10 @@ export async function getResumen(req, res) {
 
       // Gráfica: por fecha
       pool.query(
-        `SELECT DATE(o.pagado_en) AS fecha, COALESCE(SUM(o.precio_total), 0) AS total
+        `SELECT ${fechaNegocio('o.pagado_en')} AS fecha, COALESCE(SUM(o.precio_total), 0) AS total
         FROM notas o
         WHERE ${whereBase}
-        GROUP BY DATE(o.pagado_en)
+        GROUP BY 1
         ORDER BY fecha ASC`,
         params
       ),
@@ -98,7 +110,7 @@ export async function getResumen(req, res) {
         `SELECT
           o.id,
           o.folio,
-          DATE(o.created_at)                          AS fecha,
+          ${fechaNegocio('o.created_at')}              AS fecha,
           o.created_at                                AS creado_en,
           o.estado,
           o.estado_pago,
@@ -229,7 +241,7 @@ export async function getResumen(req, res) {
 export async function getAnios(req, res) {
   try {
     const { rows } = await pool.query(
-      `SELECT DISTINCT DATE_PART('year', created_at)::int AS anio
+      `SELECT DISTINCT DATE_PART('year', created_at AT TIME ZONE ${TZ})::int AS anio
          FROM notas
         WHERE sucursal = $1 AND estado != 'CANCELADA'
         ORDER BY anio DESC`,

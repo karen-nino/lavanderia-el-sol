@@ -50,6 +50,12 @@ export async function bootstrapTestDb() {
     );
     await admin.query(`DROP DATABASE IF EXISTS ${TEST_DB_NAME}`);
     await admin.query(`CREATE DATABASE ${TEST_DB_NAME}`);
+    // La base de prueba corre en UTC, como la de producción (Supabase), y no en
+    // la zona del equipo de desarrollo (America/Mexico_City). Si no, los cortes
+    // por día que se apoyan en la zona del servidor pasan en local y fallan en
+    // producción: era el caso del reporte de Ventas, que metía todo lo cobrado
+    // después de las 18:00 locales en el día siguiente.
+    await admin.query(`ALTER DATABASE ${TEST_DB_NAME} SET timezone TO 'UTC'`);
   } finally {
     await admin.end();
   }

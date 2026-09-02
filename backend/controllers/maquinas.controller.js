@@ -1,4 +1,5 @@
 import pool from '../db/pool.js';
+import { TZ_NEGOCIO } from '../utils/tz.js';
 import * as dispositivos from '../services/dispositivos/index.js';
 import { esAdmin } from '../middleware/roles.js';
 
@@ -120,7 +121,8 @@ export const getUsoMaquina = async (req, res) => {
     // Una nota "usó" la máquina si la tiene en alguna de sus cargas
     // (tabla nota_cargas).
     const { rows: notas } = await pool.query(
-      `SELECT n.id, DATE(n.created_at) AS fecha, n.folio, n.tipo_servicio, n.estado,
+      `SELECT n.id, to_char(n.created_at AT TIME ZONE $2, 'YYYY-MM-DD') AS fecha,
+              n.folio, n.tipo_servicio, n.estado,
               n.precio_total, n.estado_pago, n.cliente_id,
               n.usuario_id, TRIM(u.nombre || ' ' || COALESCE(u.apellido, '')) AS empleado_nombre,
               c.nombre AS cliente_nombre, c.apellido AS cliente_apellido
@@ -133,7 +135,7 @@ export const getUsoMaquina = async (req, res) => {
               )
           AND n.estado <> 'CANCELADA'
         ORDER BY n.created_at DESC`,
-      [id]
+      [id, TZ_NEGOCIO]
     );
 
     // Cargas de esta máquina (autoservicio): cada fila es una carga. El precio
@@ -156,7 +158,7 @@ export const getUsoMaquina = async (req, res) => {
     const notaPorId = new Map(notas.map((n) => [n.id, n]));
     const buckets = new Map();
     const getBucket = (fecha) => {
-      const k = new Date(fecha).toISOString();
+      const k = fecha;
       if (!buckets.has(k)) {
         buckets.set(k, {
           fecha, generado: 0,

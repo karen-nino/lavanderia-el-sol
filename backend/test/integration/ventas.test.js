@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import request from 'supertest';
 import app from '../../app.js';
 import { limpiarBase, seedSucursal, seedUsuario, seedMaquina, seedCliente, seedProducto, auth } from '../helpers.js';
+import pool from '../../db/pool.js';
 
 // Ventas deriva las cargas y el total desde nota_cargas (ya no de las columnas
 // denormalizadas de la nota). Este smoke test ejerce ambas consultas (lista y
@@ -124,6 +125,30 @@ describe('GET /api/ventas/resumen — tarjetas y período', () => {
     const res = await request(app).get('/api/ventas/resumen?periodo=hoy').set(auth(admin.token, 'centro'));
     expect(res.body.tarjetas.total_cobrado).toBe(70); // solo centro
     expect(res.body.lista_notas).toHaveLength(1);
+  });
+
+  // Regresión: el "día" del reporte es el del NEGOCIO (America/Mexico_City), no
+  // el del servidor de base de datos, que en producción corre en UTC. Una nota
+  // cobrada hoy a las 23:30 hora de México ya es "mañana" en UTC, y el criterio
+  // viejo (DATE(pagado_en) = CURRENT_DATE) la dejaba fuera del reporte de hoy.
+  it('cuenta en HOY un cobro de la noche, aunque en UTC ya sea el día siguiente', async () => {
+    const creada = await crearNota(admin.token, { nombreMaquina: 'L1', estado_pago: 'PAGADO' });
+    // Mueve el cobro a las 23:30 de hoy, hora del negocio.
+    await pool.query(
+      `UPDATE notas
+          SET pagado_en = (date_trunc('day', NOW() AT TIME ZONE 'America/Mexico_City')
+                           + INTERVAL '23 hours 30 minutes') AT TIME ZONE 'America/Mexico_City'
+        WHERE id = $1`,
+      [creada.body.id]
+    );
+
+    const res = await request(app).get('/api/ventas/resumen?periodo=hoy').set(auth(admin.token));
+    expect(res.status).toBe(200);
+    expect(res.body.tarjetas.total_cobrado).toBe(70);
+    expect(res.body.tarjetas.notas_pagadas).toBe(1);
+    // La gráfica lo agrupa en el día local del negocio, como texto YYYY-MM-DD.
+    const hoyNegocio = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Mexico_City' }).format(new Date());
+    expect(res.body.grafica.map(g => g.fecha)).toContain(hoyNegocio);
   });
 
   it('período custom sin desde/hasta → 400', async () => {
