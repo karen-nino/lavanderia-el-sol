@@ -8,12 +8,20 @@ export const SUCURSAL_PRUEBAS = 'pruebas';
 // Catálogo de slugs elegibles (sucursales activas y NO ocultas), cacheado.
 // Se invalida con refrescarSlugsSucursales() al crear/activar/desactivar.
 let slugsCache = null;
-async function slugsValidos() {
-  if (!slugsCache) {
+async function slugsValidos({ recargar = false } = {}) {
+  if (!slugsCache || recargar) {
     const { rows } = await pool.query('SELECT slug FROM sucursales WHERE activa = TRUE AND oculta = FALSE');
     slugsCache = new Set(rows.map((r) => r.slug));
   }
   return slugsCache;
+}
+
+// ¿Es un slug elegible? Si el cache no lo conoce se recarga una vez antes de
+// decir que no: una sucursal recién creada (o creada por otra instancia) no
+// debe hacer que el admin caiga en silencio a otra sucursal.
+async function esSlugElegible(slug) {
+  if ((await slugsValidos()).has(slug)) return true;
+  return (await slugsValidos({ recargar: true })).has(slug);
 }
 
 // Fuerza recargar el cache en la próxima petición. Llamar tras mutar el
@@ -43,7 +51,7 @@ export const sucursalActiva = async (req, res, next) => {
 
     if (esAdmin(req.user?.rol)) {
       const pedida = req.headers['x-sucursal'] || req.query.sucursal;
-      if (pedida && (await slugsValidos()).has(pedida)) {
+      if (pedida && (await esSlugElegible(pedida))) {
         activa = pedida;
       }
     }

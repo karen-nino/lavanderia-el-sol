@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import request from 'supertest';
 import app from '../../app.js';
-import { pool, limpiarBase, seedSucursal, seedUsuario, seedMaquina, auth } from '../helpers.js';
+import { pool, limpiarBase, seedSucursal, seedUsuario, seedMaquina, seedCliente, seedAjustes, auth } from '../helpers.js';
 
 let admin;
 
@@ -122,5 +122,70 @@ describe('PATCH /api/maquinas/:id/detener-ciclo — permiso por tipo', () => {
     const lav = await seedMaquina({ nombre: 'L1', tipo: 'lavadora_mediana' });
     const res = await request(app).patch(`/api/maquinas/${lav}/detener-ciclo`).set(auth(admin.token));
     expect(res.status).toBe(200);
+  });
+});
+
+// Flujo de mostrador: el empleado levanta la nota y arranca la lavadora en
+// Salidas; si algo sale mal (carga mal puesta, cliente que se arrepiente), el
+// admin tiene que poder detenerla desde SU cuenta, sin depender del empleado.
+describe('el admin detiene una lavadora que arrancó un empleado', () => {
+  const estadoMaquina = async (id) =>
+    (await pool.query('SELECT estado, en_uso_desde FROM maquinas WHERE id = $1', [id])).rows[0];
+  const estadoNota = async (id) =>
+    (await pool.query('SELECT estado FROM notas WHERE id = $1', [id])).rows[0].estado;
+
+  // El empleado crea la nota, le asigna la lavadora (Salidas) y la arranca.
+  async function empleadoArranca(tipo_servicio, nombreMaquina) {
+    await seedAjustes({ precio_carga_mediana: 70, tope_carga_chico: 150 });
+    const empleado = await seedUsuario({ rol: 'operador', sucursal: 'centro', nombre: `Emp${nombreMaquina}` });
+    const lavadoraId = await seedMaquina({ nombre: nombreMaquina, tipo: 'lavadora_mediana' });
+    const cuerpo = {
+      tipo_servicio, tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE',
+      cargas: [tipo_servicio === 'POR_ENCARGO'
+        ? { lavadora_tipo: 'mediana', tamano: 'chico' }
+        : { lavadora_tipo: 'mediana' }],
+      ...(tipo_servicio === 'POR_ENCARGO' ? { cliente_id: await seedCliente() } : {}),
+    };
+    const creada = await request(app).post('/api/notas').set(auth(empleado.token)).send(cuerpo);
+    expect(creada.status).toBe(201);
+    await request(app).patch(`/api/notas/${creada.body.id}/asignar-carga-maquina`).set(auth(empleado.token))
+      .send({ carga_id: creada.body.cargas[0].id, slot: 'lavadora', maquina_id: lavadoraId }).expect(200);
+    await request(app).patch(`/api/notas/${creada.body.id}/activar-pendientes`).set(auth(empleado.token))
+      .send({ maquina_id: lavadoraId }).expect(200);
+    expect((await estadoMaquina(lavadoraId)).estado).toBe('en_uso');
+    return { notaId: creada.body.id, lavadoraId, empleado };
+  }
+
+  for (const servicio of ['AUTOSERVICIO', 'POR_ENCARGO']) {
+    it(`${servicio}: el admin la detiene y la nota vuelve a En Espera`, async () => {
+      const { notaId, lavadoraId } = await empleadoArranca(servicio, `L-${servicio}`);
+
+      await request(app).patch(`/api/maquinas/${lavadoraId}/detener-ciclo`)
+        .set(auth(admin.token)).expect(200);
+
+      const m = await estadoMaquina(lavadoraId);
+      expect(m.estado).toBe('disponible');
+      expect(m.en_uso_desde).toBeNull();   // el temporizador se reinicia
+      expect(await estadoNota(notaId)).toBe('EN_ESPERA');
+    });
+  }
+
+  it('tras detenerla, el empleado puede volver a arrancarla', async () => {
+    const { notaId, lavadoraId, empleado } = await empleadoArranca('AUTOSERVICIO', 'L-reinicio');
+    await request(app).patch(`/api/maquinas/${lavadoraId}/detener-ciclo`).set(auth(admin.token)).expect(200);
+
+    await request(app).patch(`/api/notas/${notaId}/activar-pendientes`).set(auth(empleado.token))
+      .send({ maquina_id: lavadoraId }).expect(200);
+    expect((await estadoMaquina(lavadoraId)).estado).toBe('en_uso');
+  });
+
+  it('un admin parado en otra sucursal no la toca (404) y la máquina sigue corriendo', async () => {
+    await seedSucursal('norte', 'Norte');
+    const { lavadoraId } = await empleadoArranca('AUTOSERVICIO', 'L-otra-suc');
+
+    const res = await request(app).patch(`/api/maquinas/${lavadoraId}/detener-ciclo`)
+      .set(auth(admin.token, 'norte'));
+    expect(res.status).toBe(404);
+    expect((await estadoMaquina(lavadoraId)).estado).toBe('en_uso');
   });
 });
