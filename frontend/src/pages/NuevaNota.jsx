@@ -1785,8 +1785,12 @@ export default function NuevaNota() {
               <p className="text-xs text-blue font-medium text-right">
                 Subtotal cargas: ${subtotalCargas.toFixed(2)}
               </p>
+              {/* Informativo, no bloquea: la nota se crea con el TIPO de máquina
+                  y la máquina física se asigna después en Salidas. */}
               {maquinas.length === 0 && (
-                <p className="text-xs text-red-600">No hay máquinas disponibles en este momento.</p>
+                <p className="text-xs text-amber-700">
+                  Ahora mismo no hay máquinas libres. Puedes crear la nota igual: la máquina se asigna en Salidas.
+                </p>
               )}
             </div>
           </div>

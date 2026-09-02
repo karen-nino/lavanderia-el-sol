@@ -1657,9 +1657,10 @@ export const activarMaquinasPendientes = async (req, res) => {
 };
 
 // ── PATCH /notas/:id/asignar-carga-maquina ──────────────────
-// Asigna una máquina física a una carga de Por Encargo que fue creada con TIPO
-// pero sin máquina. Valida que la máquina coincida con el tipo previsto del
-// slot. La máquina queda asignada En Espera (se arranca luego con "Iniciar").
+// Asigna una máquina física a una carga (de Autoservicio o Por Encargo) creada
+// con TIPO pero sin máquina. Valida que coincida con el tipo previsto del slot,
+// que esté disponible y que no la tenga apartada otra nota abierta. La máquina
+// queda asignada En Espera (se arranca luego con "Iniciar").
 // El precio ya está fijado por el tipo: NO se recalcula.
 export const asignarCargaMaquina = async (req, res) => {
   const { id } = req.params;

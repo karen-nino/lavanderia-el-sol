@@ -773,7 +773,8 @@ export default function Salidas() {
             </div>
           ))}
 
-          {/* El botón "+ Asignar máquina" del encabezado cubre este caso. */}
+          {/* Una nota sin ninguna carga no lista nada aquí: para darle su
+              primera máquina se usa "+ Asignar Máquina" del encabezado. */}
         </div>
       </div>
 
