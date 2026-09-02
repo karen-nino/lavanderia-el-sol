@@ -724,6 +724,13 @@ export default function Salidas() {
               asigna eligiendo una máquina disponible del tipo correspondiente. */}
           {slotsPorAsignar.map(({ carga, slot, tipo }) => {
             const opciones = maquinasParaSlot(slot, tipo);
+            // Las reservadas por otra nota se muestran, pero no se pueden
+            // elegir: si no queda ninguna libre, el desplegable no sirve de
+            // nada y es mejor decir qué está pasando.
+            const libres = opciones.filter(m => !m.reservada);
+            const queFalta = slot === 'lavadora'
+              ? `lavadoras ${TIPO_MAQ_LABEL[tipo] ?? tipo}`
+              : 'secadoras';
             return (
               <div key={`slot-${carga.id}-${slot}`} className="space-y-2 [&:not(:first-child)]:border-t [&:not(:first-child)]:border-gray-100 [&:not(:first-child)]:pt-4">
                 <p className="text-xs font-semibold text-gray-500">Carga {carga.orden}</p>
@@ -733,7 +740,14 @@ export default function Salidas() {
                     <span className="text-gray-400 italic"> — sin asignar</span>
                   </span>
                   {opciones.length === 0 ? (
-                    <span className="text-sm text-red-600">No hay {slot === 'lavadora' ? `lavadoras ${TIPO_MAQ_LABEL[tipo] ?? tipo}` : 'secadoras'} disponibles</span>
+                    <span className="text-sm text-red-600">No hay {queFalta} disponibles</span>
+                  ) : libres.length === 0 ? (
+                    // Hay máquinas del tipo, pero todas apartadas por otras notas.
+                    <span className="text-sm text-amber-700">
+                      {opciones.length === 1
+                        ? <>La única {slot === 'lavadora' ? 'lavadora' : 'secadora'} está reservada{opciones[0].reservada_folio ? ` (${opciones[0].reservada_folio})` : ''}</>
+                        : <>Todas las {queFalta} están reservadas por otras notas</>}
+                    </span>
                   ) : (
                     <select
                       defaultValue=""
