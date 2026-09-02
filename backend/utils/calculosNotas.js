@@ -1,6 +1,7 @@
 // Cálculos puros del dominio de notas (sin BD ni req): fáciles de probar en
 // aislamiento. La lógica de precios/secado/folio vive aquí para poder testearla
 // sin levantar Postgres; los controllers la importan.
+import { fechaLocal } from './tz.js';
 
 // Tarifa de secado: la secadora es de un solo tamaño, así que el precio es
 // único (Ajustes → Secadora = precio_carga_secadora). Los parámetros de tamaño
@@ -33,11 +34,13 @@ export function precioProductoEnNota(art, tipo_servicio) {
 }
 
 // Folio legible para el mostrador: SEQ-DDMMYY (id con padding a 4 + fecha).
+// La fecha es el día del NEGOCIO (America/Mexico_City), no el del servidor: en
+// producción Node corre en UTC, así que una nota hecha a las 19:00 locales se
+// sellaba con la fecha del día siguiente y el folio del ticket no coincidía
+// con el día en que el cliente dejó su ropa.
 export function generarFolio(id, fecha) {
-  const d = new Date(fecha);
-  const yy = String(d.getFullYear()).slice(-2);
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const dd = String(d.getDate()).padStart(2, '0');
+  const d = fecha instanceof Date ? fecha : new Date(fecha);
+  const [yyyy, mm, dd] = fechaLocal(d).split('-');
   const seq = String(id).padStart(4, '0');
-  return `${seq}-${dd}${mm}${yy}`;
+  return `${seq}-${dd}${mm}${yyyy.slice(-2)}`;
 }

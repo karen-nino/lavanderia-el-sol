@@ -1,5 +1,5 @@
 import pool from '../db/pool.js';
-import { TZ_NEGOCIO } from '../utils/tz.js';
+import { TZ_NEGOCIO, fechaLocal } from '../utils/tz.js';
 
 // El "día" de un reporte es el día del NEGOCIO (America/Mexico_City), no el del
 // servidor: en producción Postgres corre en UTC, así que `DATE(pagado_en)` metía
@@ -42,10 +42,13 @@ export async function getResumen(req, res) {
   // Año específico: solo aplica al período 'anio'.
   const anioSel = periodo === 'anio' && yearNum != null ? yearNum : null;
   // Mes específico (0-11, como JS): solo aplica al período 'mes'. Usa el año
-  // elegido (o el actual si no llega uno válido).
+  // elegido o, si no llega uno válido, el año en curso DEL NEGOCIO: el proceso
+  // corre en UTC, donde las últimas horas del 31 de diciembre ya son del año
+  // siguiente y el reporte saldría vacío.
   const mesRaw = Number(month);
   const mesSel = periodo === 'mes' && Number.isInteger(mesRaw) && mesRaw >= 0 && mesRaw <= 11 ? mesRaw : null;
-  const anioMes = mesSel != null ? (yearNum != null ? yearNum : new Date().getFullYear()) : null;
+  const anioNegocio = () => Number(fechaLocal().slice(0, 4));
+  const anioMes = mesSel != null ? (yearNum != null ? yearNum : anioNegocio()) : null;
 
   const periodSQL = buildPeriodSQL(periodo, 'o.pagado_en', anioSel != null, mesSel != null);
   const periodListSQL = buildPeriodSQL(periodo, 'o.created_at', anioSel != null, mesSel != null);

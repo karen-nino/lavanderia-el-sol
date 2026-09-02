@@ -44,6 +44,15 @@ describe('generarFolio', () => {
     expect(generarFolio(42, fecha)).toBe('0042-090726');
   });
 
+  // Regresión: el día del folio es el del negocio (America/Mexico_City), no el
+  // del servidor. En producción Node corre en UTC, así que una nota de las
+  // 19:30 locales se sellaba con la fecha del día siguiente.
+  it('usa el día del negocio aunque el servidor corra en UTC', () => {
+    // 2 de septiembre, 19:30 en México = 3 de septiembre, 01:30 UTC.
+    const fecha = new Date('2026-09-03T01:30:00Z');
+    expect(generarFolio(42, fecha)).toBe('0042-020926');
+  });
+
   it('ids de 4+ dígitos no se truncan', () => {
     const fecha = new Date(2026, 0, 1, 12, 0, 0);
     expect(generarFolio(12345, fecha)).toBe('12345-010126');
