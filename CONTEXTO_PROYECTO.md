@@ -1,7 +1,7 @@
 # Contexto técnico — Lavandería El Sol
 
 > Documento para pegar al inicio de una conversación nueva con Claude. Técnico y directo.
-> Última actualización: 2026-08-31.
+> Última actualización: 2026-09-01.
 
 ---
 
@@ -20,10 +20,11 @@ Dos entornos que conviven: **(1) local** — desarrollo contra Postgres local; *
 ### Frontend
 - **React 19** + **Vite 7** + **Tailwind CSS 3.4**. JSX puro, **sin TypeScript**.
 - **react-router-dom 7** (ruteo SPA).
-- Extras: **recharts 3** (gráficas en Ventas/Desempeño), **react-barcode** (folios).
+- Extras: **recharts 3** (gráficas en Ventas/Desempeño), **react-barcode** (folios), **html-to-image** (convierte el recibo en PNG para mandarlo por WhatsApp).
 - ESLint 9 (flat config). Gestor de paquetes: **pnpm**.
 - **Pruebas: Vitest 4 + Testing Library** (`environment: jsdom`, `setupFiles: src/test/setup.js`), `pnpm test` / `test:watch`. **56 casos en 15 archivos, todos en verde**: helpers puros de `lib/`, la página **Login**, y componentes con lógica (KpiCard, SalesCard, MachineCard, CircularTimer, EmpleadoDeleteModal, EmpleadoEditModal, CashCutCard, SucursalSelector). `api`/`useAuth`/`useNavigate` se mockean con `vi.mock`/`vi.hoisted`.
 - Sin librería de estado global (Redux/Zustand): estado local + un `AuthContext`. Cliente HTTP propio en `lib/api.js` (fetch envuelto), no axios.
+- **El ticket se manda como imagen, no como texto** (`TicketNota.jsx`): `html-to-image` rasteriza el nodo del recibo (`pixelRatio: 2`, `skipFonts: true`) y el PNG se entrega por **Web Share API** (`navigator.share` con `files`) en celular; en escritorio, donde no hay hoja de compartir, se descarga el PNG y se abre `wa.me` con el ticket en texto.
 - **Exportación a PDF y CSV sin dependencias** (`lib/exportUtils.js`): el CSV se descarga como `Blob`; el PDF se genera abriendo una ventana con HTML y disparando `window.print()` (`@media print`). Encima viven `exportCorte.js`, `exportVentas.js` y `exportReporteInventario.js`.
 
 ### Backend
@@ -43,7 +44,7 @@ Dos entornos que conviven: **(1) local** — desarrollo contra Postgres local; *
 
 ### Base de datos
 - PostgreSQL. **Local:** variables `DB_*`. **Prod:** Supabase vía **Session pooler (IPv4, 5432)** con SSL, usando `DATABASE_URL`. `db/pool.js` elige según exista `DATABASE_URL` y exporta `dbConfig` (lo usa el listener).
-- **Migraciones caseras**: archivos SQL numerados en `db/migrations/`, runner idempotente (`db/migrate.js`) que registra lo aplicado en `schema_migrations`. Bootstrap = `schema.sql` + migraciones en orden. Van por la **090** (84 archivos), **todas aplicadas en producción**. La tabla base histórica se llamaba `ordenes` y fue renombrada a `notas` (mig. 009); `schema.sql` conserva el nombre viejo solo como bootstrap.
+- **Migraciones caseras**: archivos SQL numerados en `db/migrations/`, runner idempotente (`db/migrate.js`) que registra lo aplicado en `schema_migrations`. Bootstrap = `schema.sql` + migraciones en orden. Van por la **094** (88 archivos). **Las 001-090 están aplicadas en producción; las 091-094 (R.F.C. del negocio y nota al pie del ticket) solo corrieron en local y quedan pendientes de desplegar.** La tabla base histórica se llamaba `ordenes` y fue renombrada a `notas` (mig. 009); `schema.sql` conserva el nombre viejo solo como bootstrap.
 
 ### Despliegue
 - **Frontend → Netlify** (`chic-banoffee-20c2e3.netlify.app`), base `frontend/`. Proxy `/api` y `/uploads` → Fly y fallback SPA en `frontend/public/_redirects` (en ese orden; **no** duplicar el catch-all en `netlify.toml`).
@@ -103,7 +104,7 @@ info/                     # referencias de diseño (Figma export, docx) — no e
 - **Sonoff: desplegado y activo, pero sin estrenar contra hardware.** El control por hardware dejó de ser "externo al sistema": la Fase 1 (encender/apagar por nube eWeLink) está implementada, commiteada **y corriendo en producción con credenciales reales**. Lo único que falta es capturar los **Device IDs** y la **primera prueba física**.
 - **Sin sincronización offline / PWA / service worker**: la app es **online-only** (fetch directo). No hay IndexedDB ni cache local. *(verificado por grep)*
 - **Sin websockets**: el "tiempo real" del Dashboard es **polling** (cada 15 s con `setInterval`, y al volver a la pestaña). *(verificado por grep)*
-- **Sin librerías de PDF/CSV**: la exportación se hace a mano con `Blob` y `window.print()`. *(verificado por grep: sin jsPDF, pdfmake, html2canvas ni papaparse)*
+- **Sin librerías de PDF/CSV**: la exportación se hace a mano con `Blob` y `window.print()`. *(verificado por grep: sin jsPDF, pdfmake, html2canvas ni papaparse)*. La única dependencia de render que entró es **html-to-image**, y solo para el PNG del ticket.
 - **Migraciones caseras en vez de herramienta de migración** (por simplicidad y control total del orden).
 
 ---
@@ -116,7 +117,8 @@ info/                     # referencias de diseño (Figma export, docx) — no e
 - **Auth y roles** — JWT; jerarquía `admin_main > admin > operador`. `AdminRoute` protege vistas de admin. `admin_main` inicia sesión tecleando prefijo `***` antes del nombre. **Sesión única** por cuenta (mig. 054). Rate-limit en login.
 - **Multisucursal** (mig. 038/039) — header `X-Sucursal` + middleware `sucursalActiva`; el admin es **global** (mig. 059) y cambia de sucursal (`SeleccionarSucursal`), al operador se le fuerza la suya. Sucursales con contacto editable y **orden manual** (mig. 077).
 - **Clientes** — CRUD, búsqueda sin acentos (`unaccent`), nombre + apellido + teléfono.
-- **Notas** — autoservicio y por encargo; folios; estados (`EN_ESPERA → LAVANDO → SECANDO → LISTA → PAGADA/FINALIZADA`, + `CANCELADA`; mig. 049) con historial (mig. 036) y `pagado` (mig. 037); productos e insumos asociados; edición y cancelación **con motivo** (mig. 089); **forma de pago** EFECTIVO/TRANSFERENCIA/TARJETA (mig. 078/090), obligatoria en todo cobro; **teléfono de contacto** por nota (mig. 079); ticket imprimible (`TicketNota`).
+- **Notas** — autoservicio y por encargo; folios; estados (`EN_ESPERA → LAVANDO → SECANDO → LISTA → PAGADA/FINALIZADA`, + `CANCELADA`; mig. 049) con historial (mig. 036) y `pagado` (mig. 037); productos e insumos asociados; edición y cancelación **con motivo** (mig. 089); **forma de pago** EFECTIVO/TRANSFERENCIA/TARJETA (mig. 078/090), obligatoria en todo cobro; **teléfono de contacto** por nota (mig. 079); ticket (`TicketNota`).
+- **Ticket para el cliente** (`TicketNota`) — se manda por WhatsApp **como PNG** del propio recibo. En **Por Encargo** cada carga es **una sola línea** ("1 × Servicio por encargo · Chica") con el **precio que se cobra** (el tope del tamaño + ajuste, no el costo interno) y sin el renglón "Tipo": el cliente no ve máquinas, productos ni empaquetado. Autoservicio y Edredón conservan su desglose completo. En el encabezado sale el **R.F.C.** del negocio y al pie la **nota en letra chica**, ambos capturados en Ajustes y omitidos si están vacíos.
 - **Modelo por cargas** (mig. 046-048/057) — cada nota se compone de **cargas** (`nota_cargas`) con su lavadora y secadora; en Por Encargo además prenda, tela/tamaño de edredón, tamaño de carga, ajuste y productos. **Es el único modelo:** la denormalización legada se eliminó (mig. 073).
 - **Máquinas y Salidas** — catálogo, estados, uso/liberación, tamaño (mediana/jumbo, mig. 055), tiempos por tipo, `MaquinaUso`, `GestionMaquinas` y `Salidas`. **Por Encargo elige TIPO de máquina al crear la nota** (sin reservar equipo); la máquina física se asigna en Salidas (mig. 076).
 - **Control Sonoff — Fase 1 (código + despliegue)** — enlace `device_id`/`device_canal` por máquina (mig. 074), trigger + listener (mig. 075), driver eWeLink real, reconciliador, indicador de 3 estados, **"Probar enlace"**, **prueba física "Encender 5 segundos"**, aviso de modo simulación y bloqueo de `device_id` duplicado. **Corriendo en producción desde 2026-08-28; falta capturar Device IDs y probar con hardware.**
@@ -129,7 +131,7 @@ info/                     # referencias de diseño (Figma export, docx) — no e
 - **Ventas / reportes** — resumen por periodo, gráficas (recharts), desempeño por empleado, **exportación a PDF y CSV**, desglose **por concepto y por forma de cobro** (con la diferencia explicada), y las notas **canceladas** se listan (sin contar en totales) con modal del motivo.
 - **Empleados** — alta con `nombre` + `apellido` (mig. 061), marca de **usuario de prueba** (mig. 060), **Desempeño por día** con filtro por rango/mes/año y modales de detalle.
 - **Check-in / salida de empleados** (mig. 062/070) — entrada = primer login del día (medianoche local); salida = cierre de sesión manual.
-- **Ajustes** — perfil, sucursales, precios/tiempos por tipo de máquina, topes por carga, **costo de empaquetado**, alertas, logo, y **catálogos editables** (telas, tamaños de edredón, marcas y envases). Se reordenan arrastrando (Pointer Events, mig. 069).
+- **Ajustes** — perfil, sucursales, precios/tiempos por tipo de máquina, topes por carga, **costo de empaquetado**, alertas, logo, y **catálogos editables** (telas, tamaños de edredón, marcas y envases). Se reordenan arrastrando (Pointer Events, mig. 069). Datos que salen impresos en el ticket: **R.F.C. del negocio** (mig. 091/092, texto libre en mayúsculas) y la sección **Ticket** con el campo **Nota** (mig. 094), la letra chica del pie.
 - **Notificaciones** (mig. 040/041/058) — alertas descartables con folio y limpieza periódica.
 - **Cierre del día** — job que a la hora local configurada libera máquinas, pasa sus notas a `LISTA` y cierra sesiones de empleados.
 
@@ -153,6 +155,10 @@ info/                     # referencias de diseño (Figma export, docx) — no e
 - **La simulación jamás se reporta como enlace confirmado**: con `DISPOSITIVOS_DRIVER` en `null`, cualquier `device_id` responde `ok`. Marcar `enlazada` en ese caso pintaría de verde una máquina sin hardware detrás, así que `esSimulacion()` corta tanto en `probarSonoff` como en `sincronizarSonoff` y la UI avisa en ámbar.
 - **Un `device_id`+canal no puede repetirse entre máquinas**: se valida en el controller (no con constraint, para dar un mensaje útil) y **entre todas las sucursales**, porque el Sonoff es un aparato físico único. Un mismo `device_id` con canal distinto sí es válido (multi-relé).
 - **Parámetros de Postgres casteados explícitamente**: el `UPDATE` de `updateMaquina` usaba `$12` como `varchar` en la asignación y como `text` dentro de un `CASE`, y Postgres rechazaba la consulta entera (`inconsistent types deduced`). Guardar cualquier máquina devolvía 500. Ahora `$12::varchar` en todos sus usos.
+- **El ticket viaja como imagen porque `wa.me` solo acepta texto**: no existe forma de adjuntar un archivo a un número por URL, así que el PNG se entrega por la **Web Share API**, que en celular abre la hoja de compartir con la imagen ya adjunta. El costo es que **no se puede prellenar el destinatario**: el empleado elige el chat. En escritorio se cae al camino viejo (descarga del PNG + `wa.me` con el texto), y por eso `armarTextoTicket` sigue vivo.
+- **En el ticket, la carga de Por Encargo se cobra al tope, no a la suma de lo que lleva dentro**: el desglose anterior mostraba el costo interno ($120) mientras el total decía el precio real ($150), porque el tope del tamaño *es* el precio de la carga. La línea del ticket usa `ajustes.tope_carga_*` (expuesto por carga como `tope_carga` en `GET /notas/:id`) + el ajuste manual, de modo que las líneas siempre suman el total.
+- **Los valores del recibo llevan `whitespace-nowrap`**: al rasterizar con `skipFonts` cambian las métricas de la fuente y montos, fechas y "CARGA 1" se partían en dos renglones dentro del PNG. `skipFonts` es necesario porque la hoja de Google Fonts es de otro origen y leerla para embeberla lanza `SecurityError`.
+- **El R.F.C. del negocio es texto libre en mayúsculas y se imprime tal cual**: sin validación de formato ni límite de largo (columna TEXT), porque la clienta quiere escribir ahí lo que necesite. El ticket no le antepone ninguna etiqueta: si quiere que diga "R.F.C. …", lo escribe dentro del campo. Se llegó a agregar también un campo **CURP**, descartado antes de desplegarlo (mig. 093 lo elimina).
 - **Exportación PDF/CSV sin librerías**: base compartida en `lib/exportUtils.js` (CSV como `Blob`, PDF por ventana + `window.print()`), reutilizada por Cortes, Ventas y Reporte diario. Evita sumar ~500 KB de jsPDF al bundle.
 - **Renombres de raíz aprovechando que no hay datos**: `productos.categoria` → **`marca`** (mig. 071) y `notas.modalidad` → **`tipo_servicio`** (mig. 072). Los **valores** no cambian; solo el nombre del campo.
 - **Convención de nombres**: columnas y llaves del wire en **snake_case**; variables locales de React en camelCase.
@@ -185,6 +191,8 @@ info/                     # referencias de diseño (Figma export, docx) — no e
 - **Credencial de eWeLink a nombre de la desarrolladora, no del cliente**: la aplicación se creó con la cuenta personal. Migrarla al cliente después es barato (cambiar `EWELINK_APP_ID`/`SECRET` en Fly; los Device IDs viven en la BD y no se tocan), pero implica repetir la aprobación de 1-2 días.
 - **La credencial gratuita vence al año** (creada el 2026-08-28 → vence alrededor del **2027-08-28**) y **no está documentado si la renovación sigue siendo gratis** (la página de precios de CoolKit dice "gratis por ahora" y no habla de renovación; el contacto para preguntar es `bd@coolkit.cn`). Si dejara de ser gratis, la lavandería **no se queda parada**: `sincronizarSonoff` nunca lanza, así que un fallo solo marca la máquina "Sin conexión" y se vuelve al manejo manual.
 - **La contraseña de eWeLink del cliente está guardada como secreto en Fly** (lo exige el login de la API v2). Si el cliente la cambia, el control de máquinas se cae hasta actualizar `EWELINK_PASSWORD`. Conviene avisarle.
+- **Migraciones 091-094 sin desplegar**: R.F.C. del negocio (091/092), baja de la CURP (093) y nota al pie del ticket (094) están aplicadas en local y **faltan en Supabase**. Como corren en el `release_command` de Fly, el próximo `fly deploy` las aplica solas; hasta entonces, guardar Ajustes en producción con esos campos fallaría.
+- **El envío del ticket ya no prellena el chat del cliente**: la hoja de compartir no admite destinatario. Es el precio de mandar imagen en vez de texto; si estorba en el uso real, la alternativa es volver al texto.
 - **Enum legacy `EDREDON` en `tipo_servicio`**: sigue existiendo por compatibilidad; la prenda Edredón va en `tipo_prenda`.
 - **Bundle único grande** (~1.16 MB, ~308 KB gzip): Vite avisa del tamaño; sin code-splitting todavía. No es urgente.
 - **Base de desarrollo vaciada (2026-08-31)**: la base local `lavanderia_el_sol` se dejó **sin notas, inventario, cajas ni check-ins** para empezar de cero, y se eliminaron **6 productos duplicados** que venían de un sembrado doble. Se conservan usuarios, sucursales, clientes, máquinas, ajustes y catálogos. **Producción (Supabase) no se tocó.**
@@ -194,15 +202,22 @@ info/                     # referencias de diseño (Figma export, docx) — no e
 
 ## 6. Próximo paso inmediato
 
-1. **Reunir los Device IDs**: en la app eWeLink del cliente, entrar a cada dispositivo → engrane → *Device ID*, anotando a qué máquina corresponde y, si es multi-relé, qué canal.
-2. **Enlazar una sola máquina primero**: capturar su Device ID en Gestión de Máquinas, darle **"Probar enlace"** y luego **"Encender 5 segundos"** con el equipo vacío y a la vista. Esta es la **primera prueba contra hardware real** de todo el camino de eWeLink.
-3. **Si falla**, revisar `fly logs -a lavanderia-el-sol-api`: los sospechosos son `EWELINK_COUNTRY_CODE`, `EWELINK_REGION` y la firma del login.
-4. **Capturar el resto de las máquinas** solo cuando la primera funcione.
-5. **Entregar el sistema al cliente** para que empiece el uso real, avisándole que si cambia su contraseña de eWeLink hay que actualizar el secreto en Fly.
+1. **Desplegar lo del ticket** (`git push` a Netlify + `fly deploy`): el backend arrastra las migraciones **091-094**, que hoy solo existen en local. Después, capturar en Ajustes el **R.F.C.** y la **nota al pie** que quiera el negocio.
+2. **Reunir los Device IDs**: en la app eWeLink del cliente, entrar a cada dispositivo → engrane → *Device ID*, anotando a qué máquina corresponde y, si es multi-relé, qué canal.
+3. **Enlazar una sola máquina primero**: capturar su Device ID en Gestión de Máquinas, darle **"Probar enlace"** y luego **"Encender 5 segundos"** con el equipo vacío y a la vista. Esta es la **primera prueba contra hardware real** de todo el camino de eWeLink.
+4. **Si falla**, revisar `fly logs -a lavanderia-el-sol-api`: los sospechosos son `EWELINK_COUNTRY_CODE`, `EWELINK_REGION` y la firma del login.
+5. **Capturar el resto de las máquinas** solo cuando la primera funcione.
+6. **Entregar el sistema al cliente** para que empiece el uso real, avisándole que si cambia su contraseña de eWeLink hay que actualizar el secreto en Fly.
 
 **Pendiente de pruebas (para retomar):** cubrir las **páginas del frontend**, empezando por **`NuevaNota`** (patrón ya validado en `Login` y en los modales). Las fixtures obsoletas de `calculosNotas.test.js` ya se arreglaron.
 
-**Trabajo más reciente (2026-08-30/31):** repaso largo de la **interfaz de captura y cobro**, con tres arreglos de fondo que salieron por el camino:
+**Trabajo más reciente (2026-08-31/09-01):** tanda completa sobre el **ticket que recibe el cliente**.
+
+- **Por Encargo dejó de enseñar las tripas de la carga.** Antes se listaban lavadora, secadora, bolsa, jabón y empaquetado; ahora es una línea, "1 × Servicio por encargo · Chica", con el tamaño y el precio. Al hacerlo salió un descuadre viejo: el desglose sumaba el **costo interno** ($120) mientras el total cobraba el **tope del tamaño** ($150). El ticket ahora cobra por tope (`tope_carga` viaja por carga en `GET /notas/:id`), así que las líneas cuadran con el total. También se quitó el renglón "Tipo", redundante con la nueva línea.
+- **El ticket se manda como PNG, no como texto.** `html-to-image` rasteriza el recibo y se entrega por la hoja de compartir del celular (Web Share API) con la imagen adjunta; en escritorio se descarga el PNG y se abre `wa.me` con el texto. Se descubrió y corrigió que al rasterizar se partían montos y fechas en dos renglones (`whitespace-nowrap`).
+- **Datos del negocio en el ticket** (mig. 091-094): **R.F.C.** —texto libre, en mayúsculas, impreso tal cual sin etiqueta— y una sección nueva de Ajustes llamada **Ticket** con el campo **Nota**, que se imprime en letra chica al pie del recibo. Se probó un campo **CURP** al lado y se descartó antes de desplegarlo (mig. 093 lo borra).
+
+**Trabajo anterior (2026-08-30/31):** repaso largo de la **interfaz de captura y cobro**, con tres arreglos de fondo que salieron por el camino:
 
 - **Salidas mostraba un precio y cobraba otro.** El panel de agregar productos leía siempre `precio_unitario` y el stock en tapas, sin mirar el servicio de la nota; en Autoservicio el backend descuenta una **botella** y cobra `precio_botella`. Ahora la pantalla usa la misma regla que el cobro (unidad, stock convertido y precio), y por eso un producto de marca sin precio por tapa ya no aparece como "sin precio".
 - **El resumen de Autoservicio decía "sin máquinas"** aunque la carga tuviera lavado y secado: leía la máquina física, que en ese servicio se asigna después en Salidas. Ahora desglosa el tipo elegido con su tarifa, y lo mismo se corrigió en el **ticket**.
