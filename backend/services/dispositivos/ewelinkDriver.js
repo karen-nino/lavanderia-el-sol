@@ -54,12 +54,16 @@ const nonce = () =>
 const firmar = (cuerpoStr) =>
   crypto.createHmac('sha256', cfg.appSecret).update(cuerpoStr).digest('base64');
 
+// OJO con el Content-Type: eWeLink valida la cadena EXACTA y solo acepta
+// "application/json" o "application/json; charset=utf-8". Cualquier otra forma
+// (p. ej. "application/json;charset=UTF-8", sin espacio) se rechaza con un
+// error 400 ANTES de mirar la firma o las credenciales.
 async function baseFetch(base, path, { method = 'GET', headers = {}, bodyStr, query } = {}) {
   let url = `${base}${path}`;
   if (query) url += `?${new URLSearchParams(query).toString()}`;
   const resp = await fetch(url, {
     method,
-    headers: { 'Content-Type': 'application/json;charset=UTF-8', 'X-CK-Appid': cfg.appId, ...headers },
+    headers: { 'Content-Type': 'application/json', 'X-CK-Appid': cfg.appId, ...headers },
     body: bodyStr,
   });
   return resp.json();
@@ -82,7 +86,11 @@ async function login() {
   }
 
   if (data?.error !== 0 || !data?.data?.at) {
-    throw new Error(`login eWeLink falló (error ${data?.error}: ${data?.msg || 'sin detalle'})`);
+    // El motivo viaja hasta la pantalla: un login roto (credencial, país, región)
+    // se veía igual que un Sonoff desconectado, y son arreglos muy distintos.
+    const err = new Error(`login eWeLink falló (error ${data?.error}: ${data?.msg || 'sin detalle'})`);
+    err.motivo = `login_fallido_${data?.error}`;
+    throw err;
   }
   sesion = { at: data.data.at, base };
   return sesion;
@@ -126,12 +134,12 @@ async function setSwitch(maquina, on) {
     });
     if (data?.error !== 0) {
       console.warn(`[dispositivos:ewelink] set switch device=${maquina.device_id} error ${data?.error}: ${data?.msg}`);
-      return ERROR_RED();
+      return ERROR_RED(`ewelink_${data?.error}`);
     }
     return { ok: true, estado: on ? 'on' : 'off' };
   } catch (err) {
     console.warn(`[dispositivos:ewelink] set switch device=${maquina.device_id} excepción:`, err.message);
-    return ERROR_RED();
+    return ERROR_RED(err.motivo);
   }
 }
 
@@ -153,7 +161,7 @@ export async function estado(maquina) {
     });
     if (data?.error !== 0) {
       console.warn(`[dispositivos:ewelink] get status device=${maquina.device_id} error ${data?.error}: ${data?.msg}`);
-      return ERROR_RED();
+      return ERROR_RED(`ewelink_${data?.error}`);
     }
     const p = data?.data?.params ?? {};
     let valor;
@@ -169,7 +177,7 @@ export async function estado(maquina) {
     return { ok: true, estado: valor };
   } catch (err) {
     console.warn(`[dispositivos:ewelink] get status device=${maquina.device_id} excepción:`, err.message);
-    return ERROR_RED();
+    return ERROR_RED(err.motivo);
   }
 }
 

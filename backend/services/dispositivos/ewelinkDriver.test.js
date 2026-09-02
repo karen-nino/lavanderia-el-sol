@@ -56,6 +56,9 @@ describe('ewelinkDriver — con configuración (fetch mockeado)', () => {
     expect(loginUrl).toBe('https://us-apia.coolkit.cc/v2/user/login');
     expect(loginOpts.headers['X-CK-Appid']).toBe('app123');
     expect(loginOpts.headers.Authorization).toMatch(/^Sign /);
+    // eWeLink rechaza con error 400 cualquier Content-Type que no sea uno de
+    // sus dos valores exactos; ya nos costó una prueba en vivo (2026-09-02).
+    expect(loginOpts.headers['Content-Type']).toBe('application/json');
 
     // Comando con Bearer y body correcto.
     const [cmdUrl, cmdOpts] = fetchMock.mock.calls[1];
@@ -110,6 +113,8 @@ describe('ewelinkDriver — con configuración (fetch mockeado)', () => {
     const driver = await cargarDriver();
     const r = await driver.encender({ device_id: 'd1' });
     expect(r.ok).toBe(false);
-    expect(r.motivo).toBe('error_red');
+    // El código que devolvió eWeLink viaja en el motivo: es la única pista que
+    // llega a la pantalla cuando falla la prueba de enlace.
+    expect(r.motivo).toBe('ewelink_40001');
   });
 });
