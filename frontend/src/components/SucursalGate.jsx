@@ -9,7 +9,8 @@ import SeleccionarSucursal from '../pages/SeleccionarSucursal';
 // se pide en cada inicio de sesión.
 export default function SucursalGate({ children }) {
   const { usuario, sucursalActiva } = useAuth();
-  const debeElegir = esAdmin(usuario?.rol) && !sucursalActiva;
+  // Los usuarios de prueba viven en su sucursal oculta: no eligen ninguna.
+  const debeElegir = esAdmin(usuario?.rol) && !usuario?.es_prueba && !sucursalActiva;
 
   if (debeElegir) return <SeleccionarSucursal />;
   return children;

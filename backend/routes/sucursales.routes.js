@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { verifyToken } from '../middleware/auth.js';
 import { requireAdmin, requireAdminMain } from '../middleware/roles.js';
+import { bloquearPruebaGlobal } from '../middleware/sucursalActiva.js';
 import {
   getSucursales,
   createSucursal,
@@ -14,10 +15,10 @@ const router = Router();
 router.use(verifyToken);
 
 router.get('/', getSucursales);
-router.post('/', requireAdmin, createSucursal);
+router.post('/', requireAdmin, bloquearPruebaGlobal, createSucursal);
 // Antes de /:slug para que "reordenar" no se interprete como un slug.
-router.patch('/reordenar', requireAdmin, reordenarSucursales);
-router.patch('/:slug', requireAdmin, updateSucursal);
-router.patch('/:slug/activa', requireAdminMain, setActivaSucursal);
+router.patch('/reordenar', requireAdmin, bloquearPruebaGlobal, reordenarSucursales);
+router.patch('/:slug', requireAdmin, bloquearPruebaGlobal, updateSucursal);
+router.patch('/:slug/activa', requireAdminMain, bloquearPruebaGlobal, setActivaSucursal);
 
 export default router;

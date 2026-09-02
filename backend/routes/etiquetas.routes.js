@@ -1,10 +1,17 @@
 import { Router } from 'express';
 import { verifyToken } from '../middleware/auth.js';
+import { bloquearPruebaGlobal } from '../middleware/sucursalActiva.js';
 import { tiposTela, tamanosEdredon, marcasProducto, envasesProducto } from '../controllers/etiquetas.controller.js';
 
 const router = Router();
 
 router.use(verifyToken);
+
+// Los catálogos de etiquetas son del negocio entero (no de una sucursal): los
+// usuarios de prueba los consultan, pero no los modifican.
+router.use((req, res, next) => (
+  req.method === 'GET' ? next() : bloquearPruebaGlobal(req, res, next)
+));
 
 // Tipos de tela (para Ropa)
 router.get('/tipos-tela',            tiposTela.getAll);

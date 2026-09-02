@@ -28,13 +28,13 @@ export default function SucursalSelector({ variant = 'header' }) {
   const ref = useRef(null);
 
   useEffect(() => {
-    if (!esAdmin(usuario?.rol)) return;
+    if (!esAdmin(usuario?.rol) || usuario?.es_prueba) return;
     let activo = true;
     api.get('/sucursales')
       .then((d) => { if (activo) setSucursales(d ?? []); })
       .catch(() => {});
     return () => { activo = false; };
-  }, [usuario?.rol]);
+  }, [usuario?.rol, usuario?.es_prueba]);
 
   useEffect(() => {
     if (!open) return;
@@ -45,7 +45,9 @@ export default function SucursalSelector({ variant = 'header' }) {
     return () => document.removeEventListener('mousedown', onClick);
   }, [open]);
 
-  if (!esAdmin(usuario?.rol)) return null;
+  // El usuario de prueba tiene una sola sucursal (la oculta) y no puede salir
+  // de ella: no se le muestra el selector.
+  if (!esAdmin(usuario?.rol) || usuario?.es_prueba) return null;
 
   const activa = sucursalActiva || usuario?.sucursal;
   const actual = sucursales.find((s) => s.slug === activa);

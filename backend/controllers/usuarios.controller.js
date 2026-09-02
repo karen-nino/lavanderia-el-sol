@@ -1,6 +1,7 @@
 import pool from '../db/pool.js';
 import bcrypt from 'bcrypt';
 import { esAdmin } from '../middleware/roles.js';
+import { SUCURSAL_PRUEBAS } from '../middleware/sucursalActiva.js';
 import { capitalizarNombre } from '../utils/nombres.js';
 import { TZ_NEGOCIO } from '../utils/tz.js';
 
@@ -9,8 +10,9 @@ const ROL_VALIDOS = ['admin_main', 'admin', 'operador'];
 export const getEmpleados = async (req, res) => {
   try {
     // Un admin ve los empleados de TODAS las sucursales (Empleados es
-    // admin-only). Si no es admin, se limita a la sucursal activa.
-    const sucursalFiltro = esAdmin(req.user?.rol) ? null : req.sucursal;
+    // admin-only). Si no es admin, se limita a la sucursal activa. Los usuarios
+    // de prueba nunca salen de la suya: no ven al personal real.
+    const sucursalFiltro = esAdmin(req.user?.rol) && !req.user?.es_prueba ? null : req.sucursal;
     const { rows } = await pool.query(
       `SELECT id, nombre, apellido, rol, sucursal, activo, es_prueba, created_at
          FROM usuarios
@@ -42,6 +44,10 @@ export const getDesempeno = async (req, res) => {
       [id]
     );
     if (emp.length === 0) return res.status(404).json({ message: 'Empleado no encontrado.' });
+    // Un usuario de prueba solo consulta el desempeño de su propio entorno.
+    if (req.user?.es_prueba && emp[0].sucursal !== req.sucursal) {
+      return res.status(404).json({ message: 'Empleado no encontrado.' });
+    }
 
     // Se traen las notas del empleado y, por separado, sus cargas y productos.
     // El desglose por día (con el detalle de cada métrica) se arma en JS para
@@ -229,6 +235,12 @@ export const createEmpleado = async (req, res) => {
     return res.status(403).json({ message: 'Solo el Admin Main puede asignar este rol.' });
   }
 
+  // La sucursal de pruebas es un entorno cerrado: sus únicos usuarios son los
+  // que crea seed_pruebas.js, no se da de alta personal ahí.
+  if (sucursal?.trim() === SUCURSAL_PRUEBAS) {
+    return res.status(400).json({ message: 'Sucursal inválida.' });
+  }
+
   // Un administrador es global: no se liga a ninguna sucursal (NULL). Para un
   // empleado (operador) se usa la sucursal del formulario o, si no llega, la
   // sucursal activa de quien lo crea.
@@ -293,14 +305,20 @@ export const updateEmpleado = async (req, res) => {
       }
       updates.push(`rol = $${i++}`); values.push(rol);
     }
-    // Un administrador y un usuario de prueba son globales (sucursal NULL); un
+    // Un administrador es global (sucursal NULL); un usuario de prueba vive
+    // siempre en la sucursal oculta de pruebas, aunque su rol sea admin; un
     // empleado normal requiere una. El rol resultante es el que venga en la
     // petición o, si no cambia, el actual.
     const rolResultante = rol !== undefined ? rol : target.rol;
-    if (esAdmin(rolResultante) || target.es_prueba) {
+    if (target.es_prueba) {
+      updates.push(`sucursal = $${i++}`); values.push(SUCURSAL_PRUEBAS);
+    } else if (esAdmin(rolResultante)) {
       updates.push(`sucursal = $${i++}`); values.push(null);
     } else if (sucursal !== undefined) {
       if (!sucursal?.trim()) return res.status(400).json({ message: 'La sucursal no puede estar vacía.' });
+      if (sucursal.trim() === SUCURSAL_PRUEBAS) {
+        return res.status(400).json({ message: 'Sucursal inválida.' });
+      }
       updates.push(`sucursal = $${i++}`); values.push(sucursal.trim());
     }
     if (password) {

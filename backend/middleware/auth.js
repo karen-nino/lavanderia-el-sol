@@ -19,7 +19,7 @@ export const verifyToken = async (req, res, next) => {
   // petición para que desactivar a alguien corte su sesión de inmediato.
   try {
     const { rows } = await pool.query(
-      'SELECT id, rol, sucursal, session_id FROM usuarios WHERE id = $1 AND activo = TRUE',
+      'SELECT id, rol, sucursal, es_prueba, session_id FROM usuarios WHERE id = $1 AND activo = TRUE',
       [decoded.id]
     );
     if (rows.length === 0) {

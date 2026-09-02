@@ -630,6 +630,11 @@ export default function Ajustes() {
   // Solo el Admin Main puede desactivar/reactivar sucursales.
   const esMain = esAdminMainFn(usuario?.rol);
 
+  // Los usuarios de prueba operan en una sucursal aislada, pero los ajustes son
+  // del negocio entero (tarifas, tiempos, sucursales, catálogos): el backend se
+  // los bloquea, así que aquí solo se les muestra su perfil.
+  const soloPerfil = usuario?.es_prueba === true;
+
   useEffect(() => {
     api.get('/ajustes')
       .then(data => {
@@ -866,6 +871,25 @@ export default function Ajustes() {
     alerta_ciclo_detenido: !!config.alerta_ciclo_detenido,
   });
 
+  // Guarda únicamente el perfil (nombre y contraseña), sin tocar la
+  // configuración del negocio. Es lo único que puede guardar un usuario de prueba.
+  const handleGuardarPerfilSolo = async () => {
+    setSaving(true);
+    setMensaje(null);
+    try {
+      const payload = { nombre: perfilForm.nombre.trim(), apellido: perfilForm.apellido.trim() };
+      if (perfilForm.password) payload.password = perfilForm.password;
+      const updated = await api.patch('/auth/me', payload);
+      updateUsuario({ nombre: updated.nombre, apellido: updated.apellido, rol: updated.rol });
+      setPerfilForm(f => ({ ...f, password: '' }));
+      marcarGuardado('todo');
+    } catch (err) {
+      setMensaje({ tipo: 'error', texto: err.message });
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleGuardarTodo = async () => {
     const nombreCompleto = `${perfilForm.nombre} ${perfilForm.apellido}`.trim();
     if (!nombreCompleto) {
@@ -874,6 +898,9 @@ export default function Ajustes() {
     if (perfilForm.password && perfilForm.password.length < 8) {
       return setMensaje({ tipo: 'error', texto: 'La contraseña debe tener al menos 8 caracteres.' });
     }
+    // Un usuario de prueba solo puede guardar su perfil: nada de lo global.
+    if (soloPerfil) return handleGuardarPerfilSolo();
+
     const sucursalActualEdit = sucursales.find(x => x.slug === sucursalSel);
     if (sucursalActualEdit && !String(sucursalActualEdit.nombre ?? '').trim()) {
       return setMensaje({ tipo: 'error', texto: 'El nombre de la sucursal no puede estar vacío.' });
@@ -1907,7 +1934,23 @@ export default function Ajustes() {
     </div>
   );
 
-  const activeSection = MOBILE_SECTIONS.find((s) => s.id === mobileSection);
+  // En el entorno de pruebas solo se ofrece "Mi Perfil": el resto es del negocio.
+  const seccionesMobile = soloPerfil
+    ? MOBILE_SECTIONS.filter((s) => s.id === 'perfil')
+    : MOBILE_SECTIONS;
+  const activeSection = seccionesMobile.find((s) => s.id === mobileSection);
+
+  // Aviso fijo del entorno de pruebas, arriba de la lista de ajustes.
+  const avisoPruebas = soloPerfil && (
+    <div className="bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-xl p-4">
+      <p className="font-semibold">Entorno de pruebas</p>
+      <p className="mt-1 text-amber-700">
+        Estás en la sucursal de pruebas: tus notas, caja e inventario son solo tuyos y no afectan al
+        negocio. La configuración (precios, tiempos, sucursales y catálogos) es la real, así que aquí
+        no se puede cambiar; solo tus datos de acceso.
+      </p>
+    </div>
+  );
 
   return (
     <>
@@ -1927,7 +1970,8 @@ export default function Ajustes() {
               </div>
             </div>
             <div className="px-6 py-6 space-y-3">
-              {MOBILE_SECTIONS.map((s) => (
+              {avisoPruebas}
+              {seccionesMobile.map((s) => (
                 <MobileSectionButton
                   key={s.id}
                   label={s.label}
@@ -2004,9 +2048,11 @@ export default function Ajustes() {
         <div className="max-w-2xl mx-auto p-6 space-y-6">
 
         <div className="space-y-6">
+          {avisoPruebas}
           {seccionPerfilDesktop}
         </div>
 
+        {!soloPerfil && (
         <div className="space-y-6">
           {seccionPreciosDesktop}
           {seccionCargasPreciosDesktop}
@@ -2016,6 +2062,7 @@ export default function Ajustes() {
           {seccionInventarioDesktop}
           {seccionTicketDesktop}
         </div>
+        )}
 
         <div className="space-y-3">
           {mensajeBanner}

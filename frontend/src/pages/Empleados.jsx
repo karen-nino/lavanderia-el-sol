@@ -23,7 +23,9 @@ const esUsuarioPrueba = (e) => e?.es_prueba === true;
 export default function Empleados() {
   const navigate = useNavigate();
   const { usuario, sucursalActiva } = useAuth();
-  const esAdmin     = esAdminFn(usuario?.rol);
+  // Un usuario de prueba no administra al personal real: ve su entorno, pero no
+  // da de alta ni edita empleados (el backend también se lo bloquea).
+  const esAdmin     = esAdminFn(usuario?.rol) && usuario?.es_prueba !== true;
   const esAdminMain = esAdminMainFn(usuario?.rol);
 
   const [sucursales, setSucursales]     = useState([]);

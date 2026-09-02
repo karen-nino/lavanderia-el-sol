@@ -1,5 +1,5 @@
 import pool from '../db/pool.js';
-import { refrescarSlugsSucursales } from '../middleware/sucursalActiva.js';
+import { refrescarSlugsSucursales, SUCURSAL_PRUEBAS } from '../middleware/sucursalActiva.js';
 
 // Convierte un nombre en un slug seguro: sin acentos, minúsculas y
 // separando con guión bajo. Ej: "Sucursal Centro Histórico" → "centro_historico".
@@ -15,14 +15,22 @@ function slugify(str) {
 // ── GET /sucursales ─────────────────────────────────────────
 // Por defecto solo activas (para el selector del header y el form de
 // empleados). Con ?todas=1 incluye las inactivas (gestión en Ajustes).
+// Las sucursales ocultas (la de pruebas) no se listan nunca: un usuario de
+// prueba solo ve la suya y nadie más la ve.
 export const getSucursales = async (req, res) => {
   const todas = req.query.todas === '1' || req.query.todas === 'true';
+  const esPrueba = req.user?.es_prueba === true;
   try {
+    const filtros = [
+      esPrueba ? 'slug = $1' : 'oculta = FALSE',
+      todas ? null : 'activa = TRUE',
+    ].filter(Boolean);
     const { rows } = await pool.query(
       `SELECT slug, nombre, direccion, telefono, activa, orden
          FROM sucursales
-        ${todas ? '' : 'WHERE activa = TRUE'}
-        ORDER BY activa DESC, orden ASC, nombre ASC`
+        WHERE ${filtros.join(' AND ')}
+        ORDER BY activa DESC, orden ASC, nombre ASC`,
+      esPrueba ? [SUCURSAL_PRUEBAS] : []
     );
     res.json(rows);
   } catch (err) {
@@ -54,6 +62,7 @@ export const reordenarSucursales = async (req, res) => {
     const { rows } = await client.query(
       `SELECT slug, nombre, direccion, telefono, activa, orden
          FROM sucursales
+        WHERE oculta = FALSE
         ORDER BY activa DESC, orden ASC, nombre ASC`
     );
     res.json(rows);
@@ -108,6 +117,12 @@ export const updateSucursal = async (req, res) => {
   const { slug } = req.params;
   const { nombre, direccion, telefono, orden } = req.body;
 
+  // La sucursal de pruebas no se administra desde la app: no existe para nadie
+  // más que sus usuarios.
+  if (slug === SUCURSAL_PRUEBAS) {
+    return res.status(404).json({ message: 'Sucursal no encontrada.' });
+  }
+
   if (nombre !== undefined && !String(nombre).trim()) {
     return res.status(400).json({ message: 'El nombre de la sucursal no puede estar vacío.' });
   }
@@ -158,6 +173,10 @@ export const setActivaSucursal = async (req, res) => {
     return res.status(400).json({ message: 'El campo "activa" (true/false) es requerido.' });
   }
 
+  if (slug === SUCURSAL_PRUEBAS) {
+    return res.status(404).json({ message: 'Sucursal no encontrada.' });
+  }
+
   try {
     const { rows: existe } = await pool.query('SELECT activa FROM sucursales WHERE slug = $1', [slug]);
     if (existe.length === 0) {
@@ -165,7 +184,9 @@ export const setActivaSucursal = async (req, res) => {
     }
 
     if (activa === false) {
-      const { rows: act } = await pool.query('SELECT COUNT(*)::int AS n FROM sucursales WHERE activa = TRUE');
+      // La de pruebas no cuenta: desactivar la última sucursal real dejaría al
+      // negocio sin dónde operar aunque el entorno de pruebas siga vivo.
+      const { rows: act } = await pool.query('SELECT COUNT(*)::int AS n FROM sucursales WHERE activa = TRUE AND oculta = FALSE');
       if (act[0].n <= 1) {
         return res.status(400).json({ message: 'No puedes desactivar la última sucursal activa.' });
       }
