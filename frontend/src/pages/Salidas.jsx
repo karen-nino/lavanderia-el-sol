@@ -81,8 +81,9 @@ export default function Salidas() {
   // Todas las máquinas de la sucursal (para asignar por tipo en Por Encargo).
   const [todasMaquinas,    setTodasMaquinas]    = useState([]);
 
-  // Asignar máquinas extra (una o varias): crea carga(s) nueva(s), por cobrar o
-  // sin cobro según elija el empleado. Se pueden elegir varias a la vez; una
+  // Asignar máquinas extra (una o varias): crea carga(s) nueva(s). En Por
+  // Encargo el empleado elige si se cobra; en Autoservicio siempre se cobra.
+  // Se pueden elegir varias a la vez; una
   // lavadora + una secadora se emparejan en una misma carga.
   const [asignarOpen,      setAsignarOpen]      = useState(false);
   const [asignarMaqSel,    setAsignarMaqSel]    = useState([]); // ids seleccionados
@@ -140,6 +141,10 @@ export default function Salidas() {
     cargarDatos().finally(() => { if (activo) setLoading(false); });
     return () => { activo = false; };
   }, [cargarDatos]);
+
+  // En Autoservicio TODO se cobra: no se pregunta el cobro al asignar máquina
+  // (a diferencia de Por Encargo, donde una carga puede ir sin cobro).
+  const esAutoservicio = nota?.tipo_servicio === 'AUTOSERVICIO';
 
   // Máquinas asignadas a la nota, sin repetir: las de sus cargas
   // (autoservicio) o las columnas legadas maquina_id / secadora_id.
@@ -249,7 +254,8 @@ export default function Salidas() {
   async function iniciarAsignar(carga = null) {
     setErrorAccion('');
     setAsignarMaqSel([]);
-    setAsignarCobrar(null);
+    // Autoservicio siempre cobra; Por Encargo lo elige el empleado.
+    setAsignarCobrar(esAutoservicio ? true : null);
     setAsignarCarga(carga);
     setAsignarOpen(true);
     setLoadingMaquinas(true);
@@ -276,13 +282,14 @@ export default function Salidas() {
   // Asigna las máquinas elegidas: el backend crea la(s) carga(s) nueva(s) (por
   // cobrar o sin cobro); las máquinas quedan asignadas (sin iniciar).
   async function confirmarAsignar() {
-    if (asignarMaqSel.length === 0 || asignarCobrar === null) return;
+    const cobrar = esAutoservicio ? true : asignarCobrar;
+    if (asignarMaqSel.length === 0 || cobrar === null) return;
     setLoadingMaquina(true);
     setErrorAccion('');
     try {
       await api.patch(`/notas/${id}/asignar-maquina`, {
         maquina_ids: asignarMaqSel.map(Number),
-        cobrar: asignarCobrar,
+        cobrar,
         ...(asignarCarga ? { carga_id: asignarCarga.id } : {}),
       });
       setAsignarOpen(false);
@@ -1254,7 +1261,7 @@ export default function Salidas() {
         </div>
       )}
 
-      {/* Modal asignar máquina extra — cobro (por cobrar / sin cobro) + máquina */}
+      {/* Modal asignar máquina extra — máquina y, solo en Por Encargo, el cobro */}
       {asignarOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4 max-h-[90vh] overflow-y-auto">
@@ -1275,7 +1282,9 @@ export default function Salidas() {
               </div>
             )}
 
-            {/* Cobro de la carga nueva */}
+            {/* Cobro de la carga nueva. Solo en Por Encargo: en Autoservicio
+                todas las cargas se cobran, así que no se pregunta. */}
+            {!esAutoservicio && (
             <div className="space-y-2">
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Cobro</p>
               <div className="grid grid-cols-2 gap-2">
@@ -1301,6 +1310,7 @@ export default function Salidas() {
                 </button>
               </div>
             </div>
+            )}
 
             {/* Máquina (lavadora o secadora) */}
             {loadingMaquinas ? (
@@ -1401,7 +1411,7 @@ export default function Salidas() {
               <button
                 type="button"
                 onClick={confirmarAsignar}
-                disabled={loadingMaquina || asignarMaqSel.length === 0 || asignarCobrar === null}
+                disabled={loadingMaquina || asignarMaqSel.length === 0 || (!esAutoservicio && asignarCobrar === null)}
                 className="flex-1 bg-blue hover:opacity-90 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
               >
                 {loadingMaquina
