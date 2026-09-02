@@ -1820,8 +1820,10 @@ export const asignarSecadora = async (req, res) => {
 };
 
 // ── PATCH /notas/:id/asignar-maquina ────────────────────────
-// Asigna una máquina extra (lavadora o secadora) a la nota creando una CARGA
-// NUEVA. La máquina queda ASIGNADA pero disponible (En Espera): NO arranca aquí,
+// Asigna una máquina extra (lavadora o secadora) a la nota. Sin `carga_id` se
+// crea una CARGA NUEVA; con `carga_id` la máquina se suma a esa carga, llenando
+// su hueco libre (p. ej. la secadora de una carga que solo tiene lavadora).
+// La máquina queda ASIGNADA pero disponible (En Espera): NO arranca aquí,
 // el empleado la inicia manualmente desde Salidas (igual que al crear la nota).
 // `cobrar` decide si la carga suma su tarifa al total (true) o va sin costo
 // (false, precio 0). Disponible mientras la nota no esté finalizada ni cancelada.
@@ -1902,9 +1904,12 @@ export const asignarMaquina = async (req, res) => {
     const precioLav = m => cobrar ? tarifaLavadora(m.tipo, tipoPrenda, t) : 0;
     const precioSec = m => cobrar ? tarifaSecadora(m.tamano, tipoPrenda, t) : 0;
 
-    // Si se indica carga_id, la primera pareja llena esa carga vacía (creada al
-    // hacer la nota pero sin máquina) en vez de crear una carga nueva; las
-    // parejas que sobren sí se agregan como cargas nuevas.
+    // Si se indica carga_id, la primera pareja se agrega a ESA carga en vez de
+    // crear una carga nueva; las parejas que sobren sí se agregan como cargas
+    // nuevas. La carga puede estar vacía (creada al hacer la nota sin máquina) o
+    // ya traer una máquina: p. ej. sumarle la secadora a una carga que solo
+    // tiene lavadora. Solo se puede llenar un hueco libre — una carga tiene a lo
+    // más una lavadora y una secadora, contando también las ya usadas.
     let cargaObjetivo = null;
     if (carga_id != null) {
       const { rows: cRows } = await client.query(
@@ -1918,9 +1923,15 @@ export const asignarMaquina = async (req, res) => {
         return res.status(400).json({ message: 'La carga indicada no existe en esta nota.' });
       }
       const c = cRows[0];
-      if (c.lavadora_id || c.secadora_id || c.lavadora_usada_id || c.secadora_usada_id) {
+      const cargaTieneLav = Boolean(c.lavadora_id || c.lavadora_usada_id);
+      const cargaTieneSec = Boolean(c.secadora_id || c.secadora_usada_id);
+      if (cargaTieneLav && lavadoras.length > 0) {
         await client.query('ROLLBACK');
-        return res.status(400).json({ message: 'La carga indicada ya tiene una máquina asignada.' });
+        return res.status(400).json({ message: `La carga ${c.orden} ya tiene lavadora.` });
+      }
+      if (cargaTieneSec && secadoras.length > 0) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ message: `La carga ${c.orden} ya tiene secadora.` });
       }
       cargaObjetivo = c;
     }
@@ -1946,11 +1957,16 @@ export const asignarMaquina = async (req, res) => {
           await client.query('ROLLBACK');
           return res.status(400).json({ message: 'Los edredones solo van en lavadora jumbo.' });
         }
+        // Solo se toca el hueco que se está llenando: si la carga ya traía la
+        // otra máquina (o su precio), se conserva tal cual.
         await client.query(
           `UPDATE nota_cargas
-              SET lavadora_id = $1, secadora_id = $2,
-                  lavadora_usada_id = $1, secadora_usada_id = $2,
-                  precio_lavadora = $3, precio_secadora = $4
+              SET lavadora_id       = COALESCE($1::int, lavadora_id),
+                  secadora_id       = COALESCE($2::int, secadora_id),
+                  lavadora_usada_id = COALESCE($1::int, lavadora_usada_id),
+                  secadora_usada_id = COALESCE($2::int, secadora_usada_id),
+                  precio_lavadora   = CASE WHEN $1::int IS NULL THEN precio_lavadora ELSE $3 END,
+                  precio_secadora   = CASE WHEN $2::int IS NULL THEN precio_secadora ELSE $4 END
             WHERE id = $5`,
           [
             lavadora ? lavadora.id : null,

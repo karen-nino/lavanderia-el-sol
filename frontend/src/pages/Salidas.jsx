@@ -88,9 +88,12 @@ export default function Salidas() {
   const [asignarOpen,      setAsignarOpen]      = useState(false);
   const [asignarMaqSel,    setAsignarMaqSel]    = useState([]); // ids seleccionados
   const [asignarCobrar,    setAsignarCobrar]    = useState(null); // true | false | null
-  // Carga vacía que se está llenando (creada al hacer la nota pero sin máquina).
-  // null = asignar una máquina extra en una carga nueva.
+  // Carga a la que se suma la máquina: una carga vacía, o una que ya tiene
+  // lavadora y a la que se le agrega la secadora. null = carga nueva.
   const [asignarCarga,     setAsignarCarga]     = useState(null);
+  // true cuando el modal se abrió desde una carga concreta: el destino ya está
+  // decidido y no se ofrece el selector "Carga nueva / Carga N".
+  const [asignarCargaFija, setAsignarCargaFija] = useState(false);
 
   // Cambiar una máquina asignada (sin iniciar) por otra del mismo tipo.
   const [cambiarMaq,       setCambiarMaq]       = useState(null); // máquina a cambiar
@@ -257,6 +260,7 @@ export default function Salidas() {
     // Autoservicio siempre cobra; Por Encargo lo elige el empleado.
     setAsignarCobrar(esAutoservicio ? true : null);
     setAsignarCarga(carga);
+    setAsignarCargaFija(Boolean(carga));
     setAsignarOpen(true);
     setLoadingMaquinas(true);
     try {
@@ -272,11 +276,25 @@ export default function Salidas() {
     }
   }
 
-  // Alterna una máquina en la selección múltiple del modal de asignar.
+  // Alterna una máquina en la selección del modal de asignar. Al agregar a una
+  // carga existente solo cabe una máquina por hueco, así que la nueva reemplaza
+  // a la que estuviera elegida del mismo tipo.
   function toggleAsignarMaq(maqId) {
     const s = String(maqId);
-    setAsignarMaqSel(prev =>
-      prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s]);
+    const esSec = (mid) => maquinasDisp.some(m => String(m.id) === String(mid) && m.tipo === 'secadora');
+    setAsignarMaqSel(prev => {
+      if (prev.includes(s)) return prev.filter(x => x !== s);
+      if (asignarCarga) return [...prev.filter(x => esSec(x) !== esSec(s)), s];
+      return [...prev, s];
+    });
+  }
+
+  // Cambia el destino de la asignación (carga nueva o una carga existente) y
+  // limpia la selección: los huecos disponibles cambian con el destino.
+  function elegirDestino(carga) {
+    setErrorAccion('');
+    setAsignarCarga(carga);
+    setAsignarMaqSel([]);
   }
 
   // Asigna las máquinas elegidas: el backend crea la(s) carga(s) nueva(s) (por
@@ -294,6 +312,7 @@ export default function Salidas() {
       });
       setAsignarOpen(false);
       setAsignarCarga(null);
+      setAsignarCargaFija(false);
       await cargarDatos();
     } catch (err) {
       setErrorAccion(err.message);
@@ -453,6 +472,34 @@ export default function Salidas() {
     // Las cargas de Por Encargo con TIPO previsto se asignan en su sección propia.
     && !c.lavadora_tipo_previsto && !c.secadora_tipo_previsto
   );
+
+  // Huecos de una carga: una carga admite a lo más una lavadora y una secadora
+  // (contando las que ya se usaron y se liberaron). El hueco de lavadora no se
+  // ofrece si la carga tiene un TIPO previsto pendiente: ese se asigna en su
+  // sección propia, con el tipo que se eligió al hacer la nota.
+  const cargaTieneLav = (c) => Boolean(c.lavadora_id || c.lavadora_usada_id);
+  const cargaTieneSec = (c) => Boolean(c.secadora_id || c.secadora_usada_id);
+  const huecosDeCarga = (c) => ({
+    lavadora: Boolean(c) && !cargaTieneLav(c) && !c.lavadora_tipo_previsto,
+    secadora: Boolean(c) && !cargaTieneSec(c),
+  });
+
+  // Cargas a las que se les puede sumar una máquina en vez de abrir una carga
+  // nueva (p. ej. la Carga 1 solo tiene lavadora y se le agrega la secadora).
+  const cargasDestino = notaCerrada ? [] : cargasNota.filter(c => {
+    const h = huecosDeCarga(c);
+    return h.lavadora || h.secadora;
+  });
+
+  // Carga destino del modal, siempre en su versión recién cargada.
+  const cargaDestino = asignarCarga
+    ? (cargasNota.find(c => String(c.id) === String(asignarCarga.id)) ?? asignarCarga)
+    : null;
+  // Sin carga destino (carga nueva) caben lavadora y secadora.
+  const huecosAsignar = cargaDestino ? huecosDeCarga(cargaDestino) : { lavadora: true, secadora: true };
+  // Solo se ofrecen las máquinas que caben en el destino elegido.
+  const lavadorasDisp = huecosAsignar.lavadora ? maquinasDisp.filter(m => m.tipo !== 'secadora') : [];
+  const secadorasDisp = huecosAsignar.secadora ? maquinasDisp.filter(m => m.tipo === 'secadora') : [];
 
   // Slots de Por Encargo con TIPO elegido pero sin máquina física: se asignan
   // eligiendo una máquina disponible del tipo correspondiente.
@@ -1267,18 +1314,57 @@ export default function Salidas() {
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4 max-h-[90vh] overflow-y-auto">
             <div>
               <h3 className="text-base font-bold text-gray-900">
-                {asignarCarga ? `Asignar máquina · Carga ${asignarCarga.orden}` : 'Asignar máquina'}
+                {cargaDestino ? `Asignar máquina · Carga ${cargaDestino.orden}` : 'Asignar máquina'}
               </h3>
               <p className="text-sm text-gray-500 mt-1">
-                {asignarCarga
-                  ? <>Elige la máquina para la <span className="font-medium text-gray-700">Carga {asignarCarga.orden}</span>. Una lavadora y una secadora se agrupan en la misma carga. Queda asignada; la inicias después con su botón.</>
-                  : <>Puedes elegir <span className="font-medium text-gray-700">varias</span>. Una lavadora y una secadora se agrupan en una misma carga. Quedan asignadas; las inicias después con su botón.</>}
+                {cargaDestino
+                  ? <>La máquina se suma a la <span className="font-medium text-gray-700">Carga {cargaDestino.orden}</span>. Queda asignada; la inicias después con su botón.</>
+                  : <>Se abre una <span className="font-medium text-gray-700">carga nueva</span>. Puedes elegir varias: una lavadora y una secadora se agrupan en una misma carga. Quedan asignadas; las inicias después con su botón.</>}
               </p>
             </div>
 
             {errorAccion && (
               <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">
                 {errorAccion}
+              </div>
+            )}
+
+            {/* ¿Carga nueva o se suma a una carga que ya existe? Solo se ofrece
+                cuando el modal se abre desde "Asignar Máquina" (sin destino
+                fijo) y hay alguna carga con hueco libre. */}
+            {!asignarCargaFija && cargasDestino.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Dónde va</p>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => elegirDestino(null)}
+                    className={`px-4 py-2.5 border-2 rounded-xl text-sm font-medium transition-colors ${
+                      cargaDestino === null ? 'border-blue bg-light-blue text-gray-800' : 'border-gray-200 bg-white text-gray-700 hover:border-blue-300'
+                    }`}
+                  >
+                    Carga nueva
+                  </button>
+                  {cargasDestino.map(c => {
+                    const h = huecosDeCarga(c);
+                    const falta = h.lavadora && h.secadora ? 'vacía'
+                                : h.lavadora ? 'falta lavadora' : 'falta secadora';
+                    const sel = cargaDestino != null && String(cargaDestino.id) === String(c.id);
+                    return (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => elegirDestino(c)}
+                        className={`flex flex-col items-start gap-0.5 px-4 py-2 border-2 rounded-xl text-left transition-colors ${
+                          sel ? 'border-blue bg-light-blue' : 'border-gray-200 bg-white hover:border-blue-300'
+                        }`}
+                      >
+                        <span className="text-sm font-medium text-gray-800">Carga {c.orden}</span>
+                        <span className="text-xs text-gray-500">{falta}</span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             )}
 
@@ -1317,17 +1403,18 @@ export default function Salidas() {
               <div className="flex justify-center py-6">
                 <div className="animate-spin rounded-full h-7 w-7 border-b-2 border-blue" />
               </div>
-            ) : maquinasDisp.length === 0 ? (
+            ) : lavadorasDisp.length === 0 && secadorasDisp.length === 0 ? (
               <p className="text-sm text-gray-400 text-center py-6">No hay máquinas disponibles.</p>
             ) : (
               <div className="space-y-4">
-                {/* Lavadoras */}
+                {/* Lavadoras — solo si el destino tiene hueco de lavadora */}
+                {huecosAsignar.lavadora && (
                 <div className="space-y-2">
                   <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Lavadoras</p>
-                  {maquinasDisp.filter(m => m.tipo !== 'secadora').length === 0 ? (
+                  {lavadorasDisp.length === 0 ? (
                     <p className="text-sm text-gray-400">No hay lavadoras disponibles.</p>
                   ) : (
-                    maquinasDisp.filter(m => m.tipo !== 'secadora').map(m => {
+                    lavadorasDisp.map(m => {
                       const selected = asignarMaqSel.includes(String(m.id));
                       // Reservada por otra nota abierta: se muestra pero no se elige.
                       const reservada = Boolean(m.reservada);
@@ -1358,14 +1445,16 @@ export default function Salidas() {
                     })
                   )}
                 </div>
+                )}
 
-                {/* Secadoras */}
+                {/* Secadoras — solo si el destino tiene hueco de secadora */}
+                {huecosAsignar.secadora && (
                 <div className="space-y-2">
                   <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Secadoras</p>
-                  {maquinasDisp.filter(m => m.tipo === 'secadora').length === 0 ? (
+                  {secadorasDisp.length === 0 ? (
                     <p className="text-sm text-gray-400">No hay secadoras disponibles.</p>
                   ) : (
-                    maquinasDisp.filter(m => m.tipo === 'secadora').map(m => {
+                    secadorasDisp.map(m => {
                       const selected = asignarMaqSel.includes(String(m.id));
                       // Reservada por otra nota abierta: se muestra pero no se elige.
                       const reservada = Boolean(m.reservada);
@@ -1396,13 +1485,14 @@ export default function Salidas() {
                     })
                   )}
                 </div>
+                )}
               </div>
             )}
 
             <div className="flex gap-3">
               <button
                 type="button"
-                onClick={() => { setAsignarOpen(false); setAsignarCarga(null); }}
+                onClick={() => { setAsignarOpen(false); setAsignarCarga(null); setAsignarCargaFija(false); }}
                 disabled={loadingMaquina}
                 className="flex-1 border border-gray-300 text-gray-700 font-medium py-3.5 rounded-lg text-base hover:bg-gray-50 disabled:opacity-60 transition-colors"
               >
