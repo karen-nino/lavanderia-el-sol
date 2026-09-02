@@ -1723,6 +1723,15 @@ export const asignarCargaMaquina = async (req, res) => {
       await client.query('ROLLBACK');
       return res.status(400).json({ message: `La máquina ${maq.nombre} no está disponible.` });
     }
+    // "Disponible" no basta: una máquina ya asignada a OTRA nota abierta sigue
+    // disponible hasta que la inician, así que sin esto la misma lavadora se
+    // podía repartir entre dos notas. El FOR UPDATE de arriba serializa a dos
+    // empleados que la pidan a la vez. (Es la misma regla de asignarMaquina.)
+    const apartadas = await maquinasApartadasPorOtras(client, [Number(maquina_id)], Number(id));
+    if (apartadas.length > 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: `La máquina ${apartadas[0].nombre} ya está reservada por otra nota.` });
+    }
 
     // El tipo de la máquina debe coincidir con el previsto de la carga.
     if (slot === 'lavadora') {

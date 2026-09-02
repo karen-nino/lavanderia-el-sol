@@ -530,6 +530,10 @@ export default function Salidas() {
     return out;
   });
   // Máquinas disponibles que coinciden con un slot (lavadora/secadora) y su tipo.
+  // "Disponible" no basta: una máquina apartada por otra nota abierta (o por
+  // otra carga de esta) sigue disponible hasta que la inician. El backend la
+  // marca como `reservada` y rechaza asignarla; aquí se muestra deshabilitada
+  // con su folio, para no ofrecer algo que va a fallar.
   const maquinasParaSlot = (slot, tipo) => todasMaquinas.filter(m => {
     if (m.estado !== 'disponible') return false;
     if (slot === 'lavadora') {
@@ -739,7 +743,10 @@ export default function Salidas() {
                     >
                       <option value="" disabled>Asignar máquina…</option>
                       {opciones.map(m => (
-                        <option key={m.id} value={m.id}>{m.nombre}</option>
+                        <option key={m.id} value={m.id} disabled={Boolean(m.reservada)}>
+                          {m.nombre}
+                          {m.reservada ? ` — Reservada${m.reservada_folio ? ` (${m.reservada_folio})` : ''}` : ''}
+                        </option>
                       ))}
                     </select>
                   )}
