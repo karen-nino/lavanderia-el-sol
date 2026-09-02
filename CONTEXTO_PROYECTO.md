@@ -1,7 +1,7 @@
 # Contexto técnico — Lavandería El Sol
 
 > Documento para pegar al inicio de una conversación nueva con Claude. Técnico y directo.
-> Última actualización: 2026-09-01.
+> Última actualización: 2026-09-02.
 
 ---
 
@@ -9,9 +9,11 @@
 
 Sistema web de gestión para una lavandería (**Lavandería El Sol**): clientes, notas (autoservicio y por encargo), máquinas, inventario (productos + insumos + bolsas), caja, empleados y ventas. Usuarios: administradores y empleados del negocio (uso interno, no cara al cliente final).
 
-**Estado de uso:** la infraestructura está desplegada en producción (Netlify + Fly.io + Supabase, desde 2026-06-22) y el sistema **todavía no está en uso real** en la lavandería. El **control de máquinas por Sonoff ya está activo en producción** (release **v25**, 2026-08-28): credencial de eWeLink aprobada, aplicación creada, los 7 secretos cargados en Fly y el driver real corriendo. Lo único que falta para estrenarlo es **capturar el Device ID de cada Sonoff** y hacer la **primera prueba contra hardware físico** — el camino completo de la API de eWeLink sigue sin ejercitarse contra la nube real. Como aún no hay datos reales, se pueden correr migraciones y renombres de raíz con libertad.
+**Estado de uso:** la infraestructura está desplegada en producción (Netlify + Fly.io + Supabase, desde 2026-06-22) y el sistema **todavía no está en uso real** en la lavandería. El **control de máquinas por Sonoff ya está activo en producción** (desde el release **v25**, 2026-08-28; el backend corre hoy en la **v27**): credencial de eWeLink aprobada, aplicación creada, los 7 secretos cargados en Fly y el driver real corriendo. Lo único que falta para estrenarlo es **capturar el Device ID de cada Sonoff** y hacer la **primera prueba contra hardware físico** — el camino completo de la API de eWeLink sigue sin ejercitarse contra la nube real. Como aún no hay datos reales, se pueden correr migraciones y renombres de raíz con libertad.
 
 Dos entornos que conviven: **(1) local** — desarrollo contra Postgres local; **(2) nube** — producción. Se desarrolla en local y se promueve a nube con `git push` / `fly deploy`.
+
+Dentro de la app hay además un **entorno de pruebas aislado**: la sucursal oculta `pruebas` (mig. 095), donde operan los dos usuarios `es_prueba`. Sus notas, caja e inventario no se mezclan con los datos reales y no pueden tocar la configuración global. Está **activo en local y en producción** desde el 2026-09-02.
 
 ---
 
@@ -32,7 +34,7 @@ Dos entornos que conviven: **(1) local** — desarrollo contra Postgres local; *
 - **PostgreSQL con `pg` (SQL crudo parametrizado), sin ORM** (nada de Prisma/Sequelize). Toda la lógica vive en controllers.
 - **JWT** (`jsonwebtoken`) + **bcrypt** para auth. **multer** para subir el logo. **dotenv**, **nodemon** en dev.
 - **Seguridad HTTP:** `helmet` (cabeceras) y `express-rate-limit` (limiters de login y de búsqueda) en middleware.
-- **Pruebas: Vitest.** Unit sin BD (`pnpm test`) e integración con `supertest` + Postgres desechable (`pnpm test:integration`, `test:all` corre ambas). **~200 casos** de integración en **14 archivos** que cubren **todos los controllers por HTTP** y el job de cierre del día. Para poder montar la app en tests, `app.js` exporta la app y `index.js` solo hace `listen` + jobs. Arnés en `test/` (bootstrap de la BD, seeds, tokens). Las funciones puras de precios/secado/folio viven en `utils/calculosNotas.js`. **Ojo:** 2 casos unit de `calculosNotas.test.js` están **en rojo** (ver §5).
+- **Pruebas: Vitest.** Unit sin BD (`pnpm test`) e integración con `supertest` + Postgres desechable (`pnpm test:integration`, `test:all` corre ambas). **203 casos** de integración en **15 archivos** que cubren **todos los controllers por HTTP** y el job de cierre del día. Para poder montar la app en tests, `app.js` exporta la app y `index.js` solo hace `listen` + jobs. Arnés en `test/` (bootstrap de la BD, seeds, tokens). Las funciones puras de precios/secado/folio viven en `utils/calculosNotas.js`. **Todo en verde** (23 unit + 203 de integración, verificado el 2026-09-02).
 - Jobs in-process con `setInterval` (no cron externo, no colas), más un **listener de Postgres** (`LISTEN/NOTIFY`) para Sonoff.
 
 ### Control de máquinas (Sonoff) — Fase 1 ACTIVA en producción
@@ -44,7 +46,7 @@ Dos entornos que conviven: **(1) local** — desarrollo contra Postgres local; *
 
 ### Base de datos
 - PostgreSQL. **Local:** variables `DB_*`. **Prod:** Supabase vía **Session pooler (IPv4, 5432)** con SSL, usando `DATABASE_URL`. `db/pool.js` elige según exista `DATABASE_URL` y exporta `dbConfig` (lo usa el listener).
-- **Migraciones caseras**: archivos SQL numerados en `db/migrations/`, runner idempotente (`db/migrate.js`) que registra lo aplicado en `schema_migrations`. Bootstrap = `schema.sql` + migraciones en orden. Van por la **094** (88 archivos). **Las 001-090 están aplicadas en producción; las 091-094 (R.F.C. del negocio y nota al pie del ticket) solo corrieron en local y quedan pendientes de desplegar.** La tabla base histórica se llamaba `ordenes` y fue renombrada a `notas` (mig. 009); `schema.sql` conserva el nombre viejo solo como bootstrap.
+- **Migraciones caseras**: archivos SQL numerados en `db/migrations/`, runner idempotente (`db/migrate.js`) que registra lo aplicado en `schema_migrations`. Bootstrap = `schema.sql` + migraciones en orden. Van por la **095** (89 archivos), **todas aplicadas en producción** (las 091-095 entraron con el release **v27**, 2026-09-02; verificado contra Supabase). La tabla base histórica se llamaba `ordenes` y fue renombrada a `notas` (mig. 009); `schema.sql` conserva el nombre viejo solo como bootstrap.
 
 ### Despliegue
 - **Frontend → Netlify** (`chic-banoffee-20c2e3.netlify.app`), base `frontend/`. Proxy `/api` y `/uploads` → Fly y fallback SPA en `frontend/public/_redirects` (en ese orden; **no** duplicar el catch-all en `netlify.toml`).
@@ -84,7 +86,8 @@ backend/
                           #   ewelinkDriver + *.test.js)
   utils/                  # calculosNotas (precios/secado/folio, puro), nombres, tz
   test/                   # integración: helpers/seeds + integration/*.test.js
-  db/                     # pool, schema.sql, migrations/, migrate.js, seed.js
+  db/                     # pool, schema.sql, migrations/, migrate.js, seed.js,
+                          #   seed_pruebas.js (entorno de pruebas)
 frontend/src/
   pages/                  # Dashboard, Notas, NuevaNota, DetalleNota, TicketNota,
                           #   Maquinas, MaquinaUso, GestionMaquinas, Salidas,
@@ -115,7 +118,8 @@ info/                     # referencias de diseño (Figma export, docx) — no e
 
 ### Completos
 - **Auth y roles** — JWT; jerarquía `admin_main > admin > operador`. `AdminRoute` protege vistas de admin. `admin_main` inicia sesión tecleando prefijo `***` antes del nombre. **Sesión única** por cuenta (mig. 054). Rate-limit en login.
-- **Multisucursal** (mig. 038/039) — header `X-Sucursal` + middleware `sucursalActiva`; el admin es **global** (mig. 059) y cambia de sucursal (`SeleccionarSucursal`), al operador se le fuerza la suya. Sucursales con contacto editable y **orden manual** (mig. 077).
+- **Multisucursal** (mig. 038/039) — header `X-Sucursal` + middleware `sucursalActiva`; el admin es **global** (mig. 059) y cambia de sucursal (`SeleccionarSucursal`), al operador se le fuerza la suya. Sucursales con contacto editable y **orden manual** (mig. 077) y, desde la mig. 095, **ocultas** (`sucursales.oculta`).
+- **Entorno de pruebas aislado** (mig. 095) — los usuarios `es_prueba` viven en la sucursal oculta `pruebas`: `sucursalActiva` les fuerza esa sucursal ignorando el header (aunque su rol sea admin) y las ocultas no son slugs elegibles para nadie más, ni para el `admin_main`. `bloquearPruebaGlobal` (403) les cierra las escrituras de lo que es del negocio entero: `/ajustes`, `/sucursales`, `/usuarios` y `/etiquetas`. En la UI no ven el selector de sucursal ni la gestión de personal, y Ajustes les muestra solo "Mi Perfil" con un aviso del entorno. `db/seed_pruebas.js` deja la sucursal lista (usuarios + 5 máquinas + 3 productos) y es idempotente.
 - **Clientes** — CRUD, búsqueda sin acentos (`unaccent`), nombre + apellido + teléfono.
 - **Notas** — autoservicio y por encargo; folios; estados (`EN_ESPERA → LAVANDO → SECANDO → LISTA → PAGADA/FINALIZADA`, + `CANCELADA`; mig. 049) con historial (mig. 036) y `pagado` (mig. 037); productos e insumos asociados; edición y cancelación **con motivo** (mig. 089); **forma de pago** EFECTIVO/TRANSFERENCIA/TARJETA (mig. 078/090), obligatoria en todo cobro; **teléfono de contacto** por nota (mig. 079); ticket (`TicketNota`).
 - **Ticket para el cliente** (`TicketNota`) — se manda por WhatsApp **como PNG** del propio recibo. En **Por Encargo** cada carga es **una sola línea** ("1 × Servicio por encargo · Chica") con el **precio que se cobra** (el tope del tamaño + ajuste, no el costo interno) y sin el renglón "Tipo": el cliente no ve máquinas, productos ni empaquetado. Autoservicio y Edredón conservan su desglose completo. En el encabezado sale el **R.F.C.** del negocio y al pie la **nota en letra chica**, ambos capturados en Ajustes y omitidos si están vacíos.
@@ -136,6 +140,7 @@ info/                     # referencias de diseño (Figma export, docx) — no e
 - **Cierre del día** — job que a la hora local configurada libera máquinas, pasa sus notas a `LISTA` y cierra sesiones de empleados.
 
 - **Captura de notas (repaso de UI, 2026-08-31)** — Autoservicio y Por Encargo comparten la sección de **Productos**: fila compacta que se acomoda en pantalla angosta, alta desde un **modal con el catálogo** (con "Sin existencias" y "Ya está en la carga/nota"), sin opción de *cambiar* producto (se borra y se agrega el correcto) y total de productos al pie. En Autoservicio el pie es **"Aceptar" → modal de cobro** con la forma de pago y el botón de crear, y las cargas se pueden **quitar desde su tarjeta** (de la 2 en adelante, renumerando).
+- **Salidas — asignar máquinas** — el modal de "Asignar Máquina" pregunta **dónde va** la máquina: *carga nueva* (lo de antes) o una **carga existente con hueco libre**, con la etiqueta de lo que le falta ("falta secadora"). Al elegir una carga se filtra la lista al hueco disponible y solo cabe una máquina por hueco. En **Autoservicio no se pregunta el cobro**: todas las cargas se cobran; la elección "Por cobrar / Sin cobro" sigue viva solo en Por Encargo.
 - **Salidas — agregar productos a una nota en curso** — control de cantidad igual al de los formularios (arranca en 0, topa en lo disponible), **advertencia antes de agregar y antes de quitar** con lo que se cobra y lo que queda en inventario, y **suma sobre el renglón existente** si el producto ya está en la nota (`reservarProducto`, en vez de abrir un segundo renglón igual).
 
 ### En proceso / pendiente de cerrar
@@ -161,6 +166,9 @@ info/                     # referencias de diseño (Figma export, docx) — no e
 - **El R.F.C. del negocio es texto libre en mayúsculas y se imprime tal cual**: sin validación de formato ni límite de largo (columna TEXT), porque la clienta quiere escribir ahí lo que necesite. El ticket no le antepone ninguna etiqueta: si quiere que diga "R.F.C. …", lo escribe dentro del campo. Se llegó a agregar también un campo **CURP**, descartado antes de desplegarlo (mig. 093 lo elimina).
 - **Exportación PDF/CSV sin librerías**: base compartida en `lib/exportUtils.js` (CSV como `Blob`, PDF por ventana + `window.print()`), reutilizada por Cortes, Ventas y Reporte diario. Evita sumar ~500 KB de jsPDF al bundle.
 - **Renombres de raíz aprovechando que no hay datos**: `productos.categoria` → **`marca`** (mig. 071) y `notas.modalidad` → **`tipo_servicio`** (mig. 072). Los **valores** no cambian; solo el nombre del campo.
+- **El entorno de pruebas es una sucursal, no un modo de la app**: todo el sistema ya filtraba por `req.sucursal`, así que aislar a los usuarios de prueba fue crear una sucursal oculta y atarlos a ella — cero cambios en los módulos. Antes tenían `sucursal = NULL` y el backend los mandaba a `lopez_cotilla`, o sea que **sus pruebas ensuciaban los datos reales**. Los ajustes sí son globales (una sola fila `ajustes`), y por eso hizo falta el bloqueo explícito `bloquearPruebaGlobal`: lo que no vive en una sucursal hay que protegerlo a mano.
+- **En Autoservicio toda carga se cobra**: la pregunta "Por cobrar / Sin cobro" al asignar una máquina extra solo tiene sentido en Por Encargo, donde una carga puede ir de cortesía. En Autoservicio era un paso de más y un riesgo de dejar dinero sin cobrar.
+- **Una carga admite a lo más una lavadora y una secadora** (contando las ya usadas y liberadas): por eso asignar a una carga existente llena un hueco, y el `UPDATE` usa `COALESCE` para no pisar la máquina ni el precio que la carga ya traía.
 - **Convención de nombres**: columnas y llaves del wire en **snake_case**; variables locales de React en camelCase.
 - **Modelo por cargas (`nota_cargas`)**: una nota es un conjunto de cargas y cada carga es autónoma. `createNota` exige `cargas`; máquinas y totales siempre salen de `nota_cargas`.
 - **Por Encargo reserva TIPO, no equipo** (mig. 076): al crear la nota se elige el tipo de máquina; la máquina física se asigna en Salidas. Evita apartar equipos que van a estar parados.
@@ -191,27 +199,33 @@ info/                     # referencias de diseño (Figma export, docx) — no e
 - **Credencial de eWeLink a nombre de la desarrolladora, no del cliente**: la aplicación se creó con la cuenta personal. Migrarla al cliente después es barato (cambiar `EWELINK_APP_ID`/`SECRET` en Fly; los Device IDs viven en la BD y no se tocan), pero implica repetir la aprobación de 1-2 días.
 - **La credencial gratuita vence al año** (creada el 2026-08-28 → vence alrededor del **2027-08-28**) y **no está documentado si la renovación sigue siendo gratis** (la página de precios de CoolKit dice "gratis por ahora" y no habla de renovación; el contacto para preguntar es `bd@coolkit.cn`). Si dejara de ser gratis, la lavandería **no se queda parada**: `sincronizarSonoff` nunca lanza, así que un fallo solo marca la máquina "Sin conexión" y se vuelve al manejo manual.
 - **La contraseña de eWeLink del cliente está guardada como secreto en Fly** (lo exige el login de la API v2). Si el cliente la cambia, el control de máquinas se cae hasta actualizar `EWELINK_PASSWORD`. Conviene avisarle.
-- **Migraciones 091-094 sin desplegar**: R.F.C. del negocio (091/092), baja de la CURP (093) y nota al pie del ticket (094) están aplicadas en local y **faltan en Supabase**. Como corren en el `release_command` de Fly, el próximo `fly deploy` las aplica solas; hasta entonces, guardar Ajustes en producción con esos campos fallaría.
+- **Los usuarios de prueba comparten contraseña entre local y producción** (`Prueba1234`, sembrada el 2026-09-02). La clienta quedó de cambiarla ella: `fly ssh console -a lavanderia-el-sol-api -C "node db/seed_pruebas.js <nueva>"` (mínimo 8 caracteres, aplica a los dos usuarios a la vez y no duplica máquinas ni productos).
 - **El envío del ticket ya no prellena el chat del cliente**: la hoja de compartir no admite destinatario. Es el precio de mandar imagen en vez de texto; si estorba en el uso real, la alternativa es volver al texto.
 - **Enum legacy `EDREDON` en `tipo_servicio`**: sigue existiendo por compatibilidad; la prenda Edredón va en `tipo_prenda`.
 - **Bundle único grande** (~1.16 MB, ~308 KB gzip): Vite avisa del tamaño; sin code-splitting todavía. No es urgente.
 - **Base de desarrollo vaciada (2026-08-31)**: la base local `lavanderia_el_sol` se dejó **sin notas, inventario, cajas ni check-ins** para empezar de cero, y se eliminaron **6 productos duplicados** que venían de un sembrado doble. Se conservan usuarios, sucursales, clientes, máquinas, ajustes y catálogos. **Producción (Supabase) no se tocó.**
-- **Pruebas de frontend incompletas**: hay helpers, componentes con lógica y la página **Login** (56 casos, todos en verde). **Faltan las páginas restantes**, la prioritaria es **`NuevaNota`** (formulario complejo de cargas/productos con tarifas y topes); luego `Empleados`, `Ventas`, `Notas`, `Caja`, `Inventario`. El backend sí está cubierto por completo (**23 unit + 203 de integración, todas en verde**).
+- **Pruebas de frontend incompletas**: hay helpers, componentes con lógica y la página **Login** (56 casos, todos en verde). **Faltan las páginas restantes**, la prioritaria es **`NuevaNota`** (formulario complejo de cargas/productos con tarifas y topes); luego `Empleados`, `Ventas`, `Notas`, `Caja`, `Inventario`. El backend sí está cubierto por completo (**23 unit + 203 de integración en 15 archivos, todas en verde el 2026-09-02**). Lo nuevo del entorno de pruebas y de la asignación de máquinas a una carga existente **no tiene pruebas propias todavía**: se verificó a mano contra la API (local y producción).
 
 ---
 
 ## 6. Próximo paso inmediato
 
-1. **Desplegar lo del ticket** (`git push` a Netlify + `fly deploy`): el backend arrastra las migraciones **091-094**, que hoy solo existen en local. Después, capturar en Ajustes el **R.F.C.** y la **nota al pie** que quiera el negocio.
+1. **Capturar en Ajustes** el **R.F.C.** y la **nota al pie** del ticket que quiera el negocio: las migraciones ya están en producción (release v27), los campos están vacíos.
 2. **Reunir los Device IDs**: en la app eWeLink del cliente, entrar a cada dispositivo → engrane → *Device ID*, anotando a qué máquina corresponde y, si es multi-relé, qué canal.
 3. **Enlazar una sola máquina primero**: capturar su Device ID en Gestión de Máquinas, darle **"Probar enlace"** y luego **"Encender 5 segundos"** con el equipo vacío y a la vista. Esta es la **primera prueba contra hardware real** de todo el camino de eWeLink.
 4. **Si falla**, revisar `fly logs -a lavanderia-el-sol-api`: los sospechosos son `EWELINK_COUNTRY_CODE`, `EWELINK_REGION` y la firma del login.
 5. **Capturar el resto de las máquinas** solo cuando la primera funcione.
-6. **Entregar el sistema al cliente** para que empiece el uso real, avisándole que si cambia su contraseña de eWeLink hay que actualizar el secreto en Fly.
+6. **Entregar el sistema al cliente** para que empiece el uso real, avisándole que si cambia su contraseña de eWeLink hay que actualizar el secreto en Fly. Antes de entregar, **subir la versión** en `frontend/package.json` (hoy 1.0.0) y **cambiar la contraseña de los usuarios de prueba**.
 
 **Pendiente de pruebas (para retomar):** cubrir las **páginas del frontend**, empezando por **`NuevaNota`** (patrón ya validado en `Login` y en los modales). Las fixtures obsoletas de `calculosNotas.test.js` ya se arreglaron.
 
-**Trabajo más reciente (2026-08-31/09-01):** tanda completa sobre el **ticket que recibe el cliente**.
+**Trabajo más reciente (2026-09-01/02):** **Salidas** y el **entorno de pruebas**.
+
+- **Autoservicio y Por Encargo dejaron de compartir el mismo modal de asignar máquina.** En Autoservicio desapareció la pregunta de Cobro (todo se cobra); en Por Encargo sigue igual.
+- **Asignar una máquina ya no obliga a abrir una carga nueva.** El modal pregunta dónde va: carga nueva o una carga existente con hueco (el caso que lo motivó: la Carga 1 tiene lavadora y hay que sumarle la secadora, que antes se iba a una Carga 2). En el backend, `carga_id` dejó de exigir que la carga esté vacía: llena el hueco libre con `COALESCE`, sin pisar la máquina ni el precio que ya traía, y rechaza el hueco ocupado con un mensaje por carga.
+- **Los usuarios de prueba quedaron aislados en una sucursal oculta** (mig. 095). Antes tenían `sucursal = NULL`, así que el backend los mandaba a `lopez_cotilla` y **escribían sobre los datos reales**. Ahora operan en `pruebas`, nadie más la ve (ni el `admin_main`), no pueden salir de ella ni cambiar ajustes, sucursales, personal ni catálogos. Desplegado y **verificado contra la API de producción** el mismo día (release v27 + `seed_pruebas.js` en Fly).
+
+**Trabajo anterior (2026-08-31/09-01):** tanda completa sobre el **ticket que recibe el cliente**.
 
 - **Por Encargo dejó de enseñar las tripas de la carga.** Antes se listaban lavadora, secadora, bolsa, jabón y empaquetado; ahora es una línea, "1 × Servicio por encargo · Chica", con el tamaño y el precio. Al hacerlo salió un descuadre viejo: el desglose sumaba el **costo interno** ($120) mientras el total cobraba el **tope del tamaño** ($150). El ticket ahora cobra por tope (`tope_carga` viaja por carga en `GET /notas/:id`), así que las líneas cuadran con el total. También se quitó el renglón "Tipo", redundante con la nueva línea.
 - **El ticket se manda como PNG, no como texto.** `html-to-image` rasteriza el recibo y se entrega por la hoja de compartir del celular (Web Share API) con la imagen adjunta; en escritorio se descarga el PNG y se abre `wa.me` con el texto. Se descubrió y corrigió que al rasterizar se partían montos y fechas en dos renglones (`whitespace-nowrap`).
