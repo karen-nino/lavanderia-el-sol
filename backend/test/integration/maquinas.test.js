@@ -217,3 +217,46 @@ describe('GET /api/maquinas/:id/uso — solo cuenta el uso real', () => {
     expect(uso.body.resumen.generado).toBe(70);   // no 210
   });
 });
+
+// La marca `reservada` del listado avisa que otra nota ya tiene apartada esa
+// máquina. No la bloquea (desde la mig. 097 se la queda quien arranque
+// primero), pero es lo que evita que dos empleados manden ropa a la misma.
+describe('GET /api/maquinas — marca de apartada', () => {
+  const crearNota = () =>
+    request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE',
+      cargas: [{ lavadora_tipo: 'mediana' }],
+    });
+
+  const marcaDe = async (id) => {
+    const res = await request(app).get('/api/maquinas').set(auth(admin.token));
+    return res.body.find((m) => m.id === id)?.reservada;
+  };
+
+  it('crear la nota (que solo elige TIPO de máquina) no aparta ninguna', async () => {
+    const lav = await seedMaquina({ nombre: 'L0', tipo: 'lavadora_mediana' });
+    await crearNota().expect(201);
+    expect(await marcaDe(lav)).toBe(false);
+  });
+
+  it('asignar la máquina a una carga la deja apartada aunque no haya arrancado', async () => {
+    const lav = await seedMaquina({ nombre: 'L1', tipo: 'lavadora_mediana' });
+    const nota = (await crearNota()).body;
+    await request(app).patch(`/api/notas/${nota.id}/asignar-carga-maquina`).set(auth(admin.token))
+      .send({ carga_id: nota.cargas[0].id, slot: 'lavadora', maquina_id: lav }).expect(200);
+
+    expect(await marcaDe(lav)).toBe(true);
+  });
+
+  it('cancelar la nota suelta la máquina que tenía apartada', async () => {
+    const lav = await seedMaquina({ nombre: 'L2', tipo: 'lavadora_mediana' });
+    const nota = (await crearNota()).body;
+    await request(app).patch(`/api/notas/${nota.id}/asignar-carga-maquina`).set(auth(admin.token))
+      .send({ carga_id: nota.cargas[0].id, slot: 'lavadora', maquina_id: lav }).expect(200);
+
+    await request(app).patch(`/api/notas/${nota.id}/estado`).set(auth(admin.token))
+      .send({ estado: 'CANCELADA' }).expect(200);
+
+    expect(await marcaDe(lav)).toBe(false);
+  });
+});
