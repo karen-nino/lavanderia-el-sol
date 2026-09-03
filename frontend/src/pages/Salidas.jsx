@@ -431,6 +431,23 @@ export default function Salidas() {
     }
   }
 
+  // Quita una carga que el cliente ya no va a usar (trajo menos ropa de la
+  // prevista). Solo se ofrece en las cargas sin máquina: las que ya lavaron son
+  // historial y el servidor las rechaza.
+  async function quitarCarga(carga) {
+    if (!confirm(`Se va a quitar la Carga ${carga.orden} de esta nota y dejará de cobrarse. ¿Continuar?`)) return;
+    setLoadingMaquina(true);
+    setErrorAccion('');
+    try {
+      await api.delete(`/notas/${id}/cargas/${carga.id}`);
+      await cargarDatos();
+    } catch (err) {
+      setErrorAccion(err.message);
+    } finally {
+      setLoadingMaquina(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex justify-center items-center py-24">
@@ -791,13 +808,22 @@ export default function Salidas() {
               <p className="text-xs font-semibold text-gray-500">Carga {c.orden}</p>
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="text-sm text-gray-400 italic">Sin máquina asignada</span>
-                <button
-                  onClick={() => iniciarAsignar(c)}
-                  disabled={loadingMaquina}
-                  className="px-4 py-2 bg-blue hover:opacity-90 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
-                >
-                  Asignar máquina
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => quitarCarga(c)}
+                    disabled={loadingMaquina}
+                    className="px-3 py-2 text-sm font-medium text-gray-500 hover:text-red-600 disabled:opacity-60 transition-colors"
+                  >
+                    Quitar carga
+                  </button>
+                  <button
+                    onClick={() => iniciarAsignar(c)}
+                    disabled={loadingMaquina}
+                    className="px-4 py-2 bg-blue hover:opacity-90 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
+                  >
+                    Asignar máquina
+                  </button>
+                </div>
               </div>
             </div>
           ))}

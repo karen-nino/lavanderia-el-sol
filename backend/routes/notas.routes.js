@@ -8,6 +8,7 @@ import {
   createNota,
   updateNota,
   eliminarNota,
+  quitarCarga,
   cambiarEstadoNota,
   activarMaquinasPendientes,
   asignarMaquina,
@@ -35,6 +36,7 @@ router.post('/',          createNota);
 router.get('/:id',        getNotaById);
 router.patch('/:id', updateNota);
 router.delete('/:id', eliminarNota);
+router.delete('/:id/cargas/:cargaId', quitarCarga);
 router.patch('/:id/estado',      cambiarEstadoNota);
 router.patch('/:id/activar-pendientes', activarMaquinasPendientes);
 router.patch('/:id/asignar-maquina', asignarMaquina);

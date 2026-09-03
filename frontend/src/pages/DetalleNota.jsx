@@ -368,7 +368,12 @@ export default function DetalleNota() {
 
   const terminal     = ['FINALIZADA', 'CANCELADA'].includes(nota.estado);
   const puedeEditar  = !['PAGADA', 'FINALIZADA', 'CANCELADA'].includes(nota.estado);
-  const puedeCancelar = !['CANCELADA'].includes(nota.estado);
+  // Cancelar: solo admin y solo mientras la nota NO esté cobrada. Después del
+  // cobro habría que devolver dinero, y eso descuadra el corte del día; para
+  // eso está la reversión de pago.
+  const puedeCancelar = esAdmin
+    && !['CANCELADA', 'PAGADA'].includes(nota.estado)
+    && nota.estado_pago !== 'PAGADO';
   const badgeTipoServicio    = BADGE_TIPO_SERVICIO[nota.tipo_servicio] ?? BADGE_TIPO_SERVICIO.AUTOSERVICIO;
   const badgePago     = BADGE_PAGO[nota.estado_pago];
   const barcodeValue  = nota.folio ?? String(nota.id);

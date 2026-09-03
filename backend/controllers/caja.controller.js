@@ -19,6 +19,10 @@ async function ventasDeSesion(client, abiertaAt, cerradaAt, sucursal) {
         COALESCE(SUM(precio_total) FILTER (WHERE forma_pago = 'TARJETA'), 0) AS tarjeta
        FROM notas
       WHERE estado_pago = 'PAGADO'
+        -- Una nota cancelada no es una venta: su dinero se devolvió. Ya no se
+        -- pueden cancelar notas cobradas, pero las que quedaron así de antes
+        -- harían que el corte esperara efectivo que no está en el cajón.
+        AND estado <> 'CANCELADA'
         AND sucursal = $3
         AND pagado_en >= $1
         AND pagado_en <= COALESCE($2, NOW())`,
@@ -264,6 +268,7 @@ export async function getHistorial(req, res) {
           COALESCE((
             SELECT SUM(precio_total) FROM notas
              WHERE estado_pago = 'PAGADO'
+               AND estado <> 'CANCELADA'
                AND sucursal = c.sucursal
                AND pagado_en >= c.abierta_at
                AND pagado_en <= c.cerrada_at
@@ -271,6 +276,7 @@ export async function getHistorial(req, res) {
           COALESCE((
             SELECT SUM(precio_total) FROM notas
              WHERE estado_pago = 'PAGADO'
+               AND estado <> 'CANCELADA'
                AND COALESCE(forma_pago, 'EFECTIVO') = 'EFECTIVO'
                AND sucursal = c.sucursal
                AND pagado_en >= c.abierta_at
@@ -279,6 +285,7 @@ export async function getHistorial(req, res) {
           COALESCE((
             SELECT SUM(precio_total) FROM notas
              WHERE estado_pago = 'PAGADO'
+               AND estado <> 'CANCELADA'
                AND forma_pago = 'TRANSFERENCIA'
                AND sucursal = c.sucursal
                AND pagado_en >= c.abierta_at
@@ -287,6 +294,7 @@ export async function getHistorial(req, res) {
           COALESCE((
             SELECT SUM(precio_total) FROM notas
              WHERE estado_pago = 'PAGADO'
+               AND estado <> 'CANCELADA'
                AND forma_pago = 'TARJETA'
                AND sucursal = c.sucursal
                AND pagado_en >= c.abierta_at

@@ -24,7 +24,12 @@ const TIEMPOS_ENTREGA_VALIDOS = ['MANANA', 'TARDE', 'NOCHE'];
 
 // Transiciones permitidas por estado actual
 const TRANSICIONES_VALIDAS = {
-  EN_ESPERA:  ['LAVANDO', 'SECANDO',          'CANCELADA'],
+  // EN_ESPERA → LISTA existe para poder cerrar a mano una nota cuyas cargas
+  // ya no se van a usar (el cliente trajo menos ropa de la prevista). Sin esa
+  // salida la nota se quedaba En Espera para siempre. Ojo: cierra la nota con
+  // las cargas tal como están, así que lo justo suele ser quitar antes la carga
+  // que no se usó, para no cobrarla.
+  EN_ESPERA:  ['LAVANDO', 'SECANDO', 'LISTA', 'CANCELADA'],
   LAVANDO:    ['SECANDO', 'LISTA',            'CANCELADA'],
   SECANDO:    ['LISTA',                       'CANCELADA'],
   LISTA:      ['PAGADA',  'FINALIZADA',       'CANCELADA'],
@@ -62,6 +67,35 @@ async function faseProcesoDeNota(client, notaId) {
   if (rows[0].lavando) return 'LAVANDO';
   if (rows[0].secando) return 'SECANDO';
   return 'EN_ESPERA';
+}
+
+// ¿A la nota le falta trabajo por hacer? Una carga cuenta como PENDIENTE si:
+//   · tiene una máquina asignada o corriendo, o
+//   · se pidió lavado (lavadora_tipo) que nunca arrancó, o
+//   · se pidió secado (secadora_tipo) que nunca arrancó.
+// Quitar la máquina a propósito (removida) o haberla usado ya no cuenta.
+//
+// Sin esto bastaba con que NINGUNA máquina estuviera en uso para dar la nota
+// por terminada, y una carga que todavía no arrancaba no tiene máquina en uso:
+// una nota de dos cargas pasaba a "Por entregar" —y se dejaba liquidar— con la
+// segunda carga sin lavar.
+async function hayCargasPendientes(client, notaId) {
+  const { rows } = await client.query(
+    `SELECT EXISTS (
+       SELECT 1 FROM nota_cargas nc
+        WHERE nc.nota_id = $1
+          AND (
+            nc.lavadora_id IS NOT NULL
+            OR nc.secadora_id IS NOT NULL
+            OR (nc.lavadora_tipo IS NOT NULL AND nc.lavadora_iniciada_at IS NULL
+                AND NOT nc.lavadora_removida AND nc.lavadora_usada_id IS NULL)
+            OR (nc.secadora_tipo IS NOT NULL AND nc.secadora_iniciada_at IS NULL
+                AND NOT nc.secadora_removida AND nc.secadora_usada_id IS NULL)
+          )
+     ) AS pendientes`,
+    [notaId]
+  );
+  return rows[0].pendientes;
 }
 
 // IDs (sin repetir) de todas las máquinas vinculadas a una nota.
@@ -1358,6 +1392,18 @@ export const updateNota = async (req, res) => {
       await registrarReversionPago(client, actual, req.user.id, req.sucursal);
     }
 
+    // Quitar la carga que ya no se va a usar puede dejar la nota terminada: sin
+    // esto se quedaba En Espera para siempre, esperando una carga que ya no
+    // existe. Solo aplica a notas en proceso; una PAGADA o FINALIZADA no se
+    // reabre por editarla.
+    if (['EN_ESPERA', 'LAVANDO', 'SECANDO'].includes(rows[0].estado)
+        && !(await hayCargasPendientes(client, id))) {
+      const { rows: cerrada } = await client.query(
+        `UPDATE notas SET estado = 'LISTA' WHERE id = $1 RETURNING estado`, [id]
+      );
+      rows[0].estado = cerrada[0].estado;
+    }
+
     if (cargasNota === null) {
       cargasNota = await cargasDeNota(client, id);
     }
@@ -1370,6 +1416,109 @@ export const updateNota = async (req, res) => {
     if (err.code === '23503') {
       return res.status(400).json({ message: 'El cliente o la máquina seleccionada no existe en esta sucursal.' });
     }
+    res.status(500).json({ message: 'Error interno del servidor.' });
+  } finally {
+    client.release();
+  }
+};
+
+// ── DELETE /notas/:id/cargas/:cargaId ───────────────────────
+// Quita UNA carga que ya no se va a usar (el cliente trajo menos ropa de la
+// prevista). Solo se puede quitar una carga que nunca arrancó: las que ya
+// lavaron o secaron son historial y se conservan.
+//
+// Es la salida al caso contrario del "no está lista hasta terminarlas todas":
+// sin esto, una carga que nadie va a usar dejaba la nota En Espera para
+// siempre. Al quitarla, la nota deja de cobrarla y, si con eso ya no le queda
+// nada pendiente, pasa sola a Por Entregar.
+export const quitarCarga = async (req, res) => {
+  const { id, cargaId } = req.params;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const { rows: notaRows } = await client.query(
+      'SELECT estado, estado_pago FROM notas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
+      [id, req.sucursal]
+    );
+    if (notaRows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: 'Nota no encontrada.' });
+    }
+    if (['FINALIZADA', 'CANCELADA'].includes(notaRows[0].estado)) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ message: `No se puede cambiar una nota ${notaRows[0].estado}.` });
+    }
+
+    const { rows: cargaRows } = await client.query(
+      `SELECT id, lavadora_id, secadora_id, lavadora_iniciada_at, secadora_iniciada_at
+         FROM nota_cargas WHERE id = $1 AND nota_id = $2 FOR UPDATE`,
+      [cargaId, id]
+    );
+    if (cargaRows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: 'Esa carga no es de esta nota.' });
+    }
+    const carga = cargaRows[0];
+
+    // Una carga que ya pasó por una máquina es historial: quitarla borraría el
+    // registro de un lavado que sí ocurrió (y de lo que se cobró por él).
+    if (carga.lavadora_iniciada_at || carga.secadora_iniciada_at) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({
+        message: 'Esa carga ya se procesó y no se puede quitar. Solo se quitan las que nunca arrancaron.',
+      });
+    }
+
+    const { rows: [{ total }] } = await client.query(
+      'SELECT COUNT(*)::int AS total FROM nota_cargas WHERE nota_id = $1', [id]
+    );
+    if (total <= 1) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({
+        message: 'La nota se quedaría sin cargas. Si ya no aplica, cancélala.',
+      });
+    }
+
+    // Devolver el stock que esta carga tenía reservado (el CASCADE borra las
+    // filas de nota_productos pero no revierte stock_reservado).
+    await client.query(
+      `UPDATE productos a
+          SET stock_reservado = stock_reservado - np.cantidad_tapas
+        FROM nota_productos np
+        WHERE np.carga_id = $1 AND np.producto_id = a.id`,
+      [cargaId]
+    );
+
+    // Si tenía máquinas apenas asignadas (nunca arrancadas), quedan libres.
+    const asignadas = [carga.lavadora_id, carga.secadora_id].filter(Boolean);
+    if (asignadas.length > 0) {
+      await client.query(
+        `UPDATE maquinas SET estado = 'disponible', en_uso_desde = NULL
+          WHERE id = ANY($1) AND estado = 'en_uso'`,
+        [asignadas]
+      );
+    }
+
+    await client.query('DELETE FROM nota_cargas WHERE id = $1', [cargaId]);
+
+    await recalcularPrecioTotal(client, id, {
+      desmarcarPagoSiCambia: true, usuarioId: req.user?.id, sucursal: req.sucursal,
+    });
+
+    // Quitar la última carga pendiente puede dejar la nota terminada.
+    if (['EN_ESPERA', 'LAVANDO', 'SECANDO'].includes(notaRows[0].estado)
+        && !(await hayCargasPendientes(client, id))) {
+      await client.query(`UPDATE notas SET estado = 'LISTA' WHERE id = $1`, [id]);
+    }
+
+    await client.query('COMMIT');
+
+    const { rows } = await pool.query('SELECT * FROM notas WHERE id = $1', [id]);
+    res.json({ ...rows[0], cargas: await cargasDeNota(pool, id) });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('quitarCarga error:', err);
     res.status(500).json({ message: 'Error interno del servidor.' });
   } finally {
     client.release();
@@ -1487,6 +1636,25 @@ export const cambiarEstadoNota = async (req, res) => {
     }
 
     const estadoActual = notaRows[0].estado;
+
+    // Cancelar borra una venta del día: queda en manos del administrador.
+    if (estado === 'CANCELADA' && !esAdmin(req.user?.rol)) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ message: 'Solo un administrador puede cancelar una nota.' });
+    }
+
+    // Una nota ya cobrada NO se cancela. Si se pudiera, el corte del día
+    // quedaría esperando un dinero que se devolvió (y si el cobro fue en otra
+    // sesión de caja, el descuadre caería en el día equivocado). Para deshacer
+    // un cobro está la reversión de pago, que sí deja rastro; una vez revertido,
+    // la nota se puede cancelar.
+    if (estado === 'CANCELADA'
+        && (notaRows[0].estado_pago === 'PAGADO' || estadoActual === 'PAGADA')) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({
+        message: 'La nota ya está pagada. Para cancelarla, primero revierte el pago.',
+      });
+    }
 
     if (['FINALIZADA', 'CANCELADA'].includes(estadoActual)) {
       await client.query('ROLLBACK');
@@ -2383,8 +2551,8 @@ export const quitarMaquina = async (req, res) => {
 // las cargas que lavó esa lavadora. Cada carga es independiente: las demás
 // lavadoras de la nota no se tocan. Cobra la tarifa de secado de esas cargas
 // (el secado es un cargo aparte del lavado), así que el total sube. Si era la
-// última lavadora la nota pasa a SECANDO, y a LISTA cuando su última secadora
-// termina (ver terminarSecado).
+// última lavadora la nota pasa a SECANDO, y a LISTA cuando termine la última
+// carga que le quede pendiente (ver terminarSecado).
 export const terminarLavado = async (req, res) => {
   const { id } = req.params;
   const { lavadora_id, secadora_id } = req.body;
@@ -2576,7 +2744,12 @@ export const terminarSecado = async (req, res) => {
           [restantes]
         );
     if (enUso === 0) {
-      await client.query(`UPDATE notas SET estado = 'LISTA' WHERE id = $1`, [id]);
+      // Sin máquinas corriendo la nota está lista SOLO si ya no le falta
+      // ninguna carga; si falta alguna, vuelve a su fase real (En Espera).
+      const estadoFinal = (await hayCargasPendientes(client, id))
+        ? await faseProcesoDeNota(client, id)
+        : 'LISTA';
+      await client.query(`UPDATE notas SET estado = $1 WHERE id = $2`, [estadoFinal, id]);
     }
 
     await client.query('COMMIT');
@@ -2606,8 +2779,9 @@ export const terminarSecado = async (req, res) => {
 // ── PATCH /notas/:id/terminar-lavado-final ──────────────────
 // Finaliza una carga de Autoservicio cuya máquina es una LAVADORA, SIN pasar a
 // secado (en Autoservicio cada carga es una sola máquina independiente). Libera
-// la lavadora y, si era la última máquina en uso, deja la nota LISTA; si quedan
-// otras, recalcula la fase. Espejo de terminarSecado pero para el slot lavadora.
+// la lavadora y, si con eso la nota ya no tiene NINGUNA carga pendiente, la
+// deja LISTA; si queda trabajo (otra máquina corriendo, o una carga que aún no
+// arranca), recalcula la fase. Espejo de terminarSecado para el slot lavadora.
 export const terminarLavadoFinal = async (req, res) => {
   const { id } = req.params;
   const { lavadora_id } = req.body;
@@ -2661,7 +2835,9 @@ export const terminarLavadoFinal = async (req, res) => {
           `SELECT id FROM maquinas WHERE id = ANY($1) AND estado = 'en_uso'`,
           [restantes]
         );
-    const nuevoEstado = enUso === 0 ? 'LISTA' : await faseProcesoDeNota(client, id);
+    const nuevoEstado = (enUso === 0 && !(await hayCargasPendientes(client, id)))
+      ? 'LISTA'
+      : await faseProcesoDeNota(client, id);
     await client.query(`UPDATE notas SET estado = $1 WHERE id = $2`, [nuevoEstado, id]);
 
     await client.query('COMMIT');
