@@ -90,6 +90,8 @@ export default function GestionMaquinas() {
   const [probandoFisica, setProbandoFisica] = useState(false);
   const [probarMsg, setProbarMsg] = useState(null); // { tipo: 'ok'|'error'|'sim', texto }
   const [filtro, setFiltro] = useState('todos');
+  const [cuentaSonoff, setCuentaSonoff] = useState(null);
+  const [conectando, setConectando] = useState(false);
   const [accionesMenuId, setAccionesMenuId] = useState(null);
   const accionesMenuRef = useRef(null);
 
@@ -99,6 +101,25 @@ export default function GestionMaquinas() {
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
   }, []);
+
+  // La cuenta de eWeLink es lo que hace que los Sonoff obedezcan: sin ella el
+  // enlace de cada máquina falla y desde la tarjeta no se ve por qué. Solo le
+  // sirve al admin, que es quien puede conectarla.
+  const cargarCuentaSonoff = () => {
+    if (!esAdmin) return;
+    api.get('/ewelink/estado').then(setCuentaSonoff).catch(() => setCuentaSonoff(null));
+  };
+
+  useEffect(() => { cargarCuentaSonoff(); }, [esAdmin]);
+
+  // Autorizar ocurre en otra pestaña (la de eWeLink), así que al regresar a
+  // esta se vuelve a preguntar en vez de obligar a recargar la página.
+  useEffect(() => {
+    if (!esAdmin) return;
+    const onFocus = () => cargarCuentaSonoff();
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [esAdmin]);
 
   useEffect(() => {
     if (accionesMenuId == null) return;
@@ -180,6 +201,31 @@ export default function GestionMaquinas() {
       setProbarMsg({ tipo: 'error', texto: err.message });
     } finally {
       setProbandoFisica(false);
+    }
+  };
+
+  // Conectar la cuenta: el servidor arma la URL firmada y se abre en otra
+  // pestaña. No se puede redirigir desde aquí porque la petición lleva nuestro
+  // token en un header y una navegación lo perdería.
+  const handleConectarSonoff = async () => {
+    setConectando(true);
+    try {
+      const r = await api.post('/ewelink/conectar', {});
+      window.open(r.url, '_blank', 'noopener');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setConectando(false);
+    }
+  };
+
+  const handleDesconectarSonoff = async () => {
+    if (!confirm('Se va a olvidar la cuenta de eWeLink y las máquinas dejarán de encender y apagar solas hasta que se conecte otra vez. ¿Continuar?')) return;
+    try {
+      await api.post('/ewelink/desconectar', {});
+      cargarCuentaSonoff();
+    } catch (err) {
+      setError(err.message);
     }
   };
 
@@ -311,6 +357,50 @@ export default function GestionMaquinas() {
 
       {/* Contenido */}
       <div className="max-w-7xl mx-auto px-6 md:px-8 py-4 space-y-4">
+
+      {/* Cuenta de eWeLink. Sin ella ningún Sonoff responde, y el error que se
+          ve al probar una máquina ("no respondió") no deja adivinar que lo que
+          falta es autorizar la cuenta. Se oculta en simulación, donde no hay
+          cuenta que conectar. */}
+      {esAdmin && cuentaSonoff && !cuentaSonoff.simulado && (
+        cuentaSonoff.conectada ? (
+          <div className="flex items-center justify-between gap-3 bg-white border border-gray-200 rounded-lg px-4 py-2.5">
+            <p className="text-sm text-gray-600">
+              <span className="text-green-600 font-medium">✓ Cuenta de eWeLink conectada</span>
+              {cuentaSonoff.cuenta && <span className="text-gray-400"> · {cuentaSonoff.cuenta}</span>}
+            </p>
+            <button
+              type="button" onClick={handleDesconectarSonoff}
+              className="text-sm font-medium text-gray-500 hover:text-red-600 transition-colors flex-shrink-0"
+            >
+              Desconectar
+            </button>
+          </div>
+        ) : (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
+            <p className="text-sm font-semibold text-amber-900">Falta conectar la cuenta de eWeLink</p>
+            <p className="mt-0.5 text-sm text-amber-800">
+              {cuentaSonoff.configurado
+                ? 'Mientras no se conecte, las máquinas con Sonoff no van a encender ni apagar.'
+                : 'Faltan las credenciales de eWeLink en el servidor (EWELINK_APP_ID y EWELINK_APP_SECRET).'}
+            </p>
+            {cuentaSonoff.configurado && (
+              <>
+                <button
+                  type="button" onClick={handleConectarSonoff} disabled={conectando}
+                  className="mt-2.5 text-sm font-medium text-amber-800 border border-amber-300 bg-white rounded-lg px-4 py-2 hover:bg-amber-100 disabled:opacity-60 transition-colors"
+                >
+                  {conectando ? 'Abriendo…' : 'Conectar cuenta de eWeLink'}
+                </button>
+                <p className="mt-1.5 text-xs text-amber-700">
+                  Se abre la página de eWeLink en otra pestaña. Inicia sesión con la cuenta
+                  donde están dados de alta los Sonoff y acepta el permiso.
+                </p>
+              </>
+            )}
+          </div>
+        )
+      )}
 
       {/* Filtros por estado */}
       {maquinas.length > 0 && (

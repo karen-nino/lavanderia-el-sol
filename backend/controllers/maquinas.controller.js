@@ -46,6 +46,19 @@ const buscarMaquinaConMismoDevice = async (deviceId, deviceCanal, excluirId = nu
 // nada y hay que decirlo en pantalla en vez de pintar una palomita verde.
 const simulacionActiva = () => dispositivos.esSimulacion();
 
+// Traduce el motivo técnico del driver a algo accionable. Los dos primeros no
+// son fallas del Sonoff sino de la conexión con eWeLink, y se arreglan en otra
+// parte de la pantalla: sin decirlo, se termina revisando el cableado de una
+// máquina que está bien.
+const MOTIVO_LEGIBLE = {
+  sin_cuenta_conectada: 'Falta conectar la cuenta de eWeLink (el aviso aparece arriba, en esta misma pantalla).',
+  sesion_expirada: 'La conexión con eWeLink venció. Hay que conectar la cuenta otra vez desde el aviso de arriba.',
+  ewelink_no_configurado: 'Faltan las credenciales de eWeLink en el servidor.',
+};
+
+const explicarFalla = (motivo, encabezado) =>
+  MOTIVO_LEGIBLE[motivo] ?? `${encabezado} (${motivo ?? 'sin detalle'}).`;
+
 const MSG_SIMULACION =
   'Modo simulación: el sistema no está conectado a los Sonoff reales, así que ' +
   'esta prueba no comprueba nada. Falta configurar las credenciales de eWeLink ' +
@@ -564,7 +577,7 @@ export const probarSonoff = async (req, res) => {
 
     if (!resultado.ok) {
       return res.status(502).json({
-        message: `El Sonoff no respondió (${resultado.motivo ?? 'sin detalle'}).`,
+        message: explicarFalla(resultado.motivo, 'El Sonoff no respondió'),
         maquina: upd[0],
       });
     }
@@ -614,7 +627,7 @@ export const pruebaFisicaSonoff = async (req, res) => {
         [id]
       );
       return res.status(502).json({
-        message: `No se pudo encender (${encendido.motivo ?? 'sin detalle'}).`,
+        message: explicarFalla(encendido.motivo, 'No se pudo encender'),
         maquina: upd[0],
       });
     }

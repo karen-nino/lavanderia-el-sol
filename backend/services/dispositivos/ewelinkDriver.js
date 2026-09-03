@@ -1,9 +1,9 @@
 // ewelinkDriver — control real de los Sonoff a través de la nube eWeLink (API v2).
 //
-// Autenticación: POST /v2/user/login firmado con HMAC-SHA256(appSecret) sobre el
-// cuerpo exacto (header "Authorization: Sign <base64>"). Devuelve un access
-// token (at) que se cachea en memoria y se reusa; si una llamada da error de
-// auth, se vuelve a iniciar sesión una vez.
+// Autenticación: el token sale de la sesión OAuth que guardó `ewelinkCuenta`
+// (ver `ewelinkOAuth.js` para el porqué de OAuth y no correo/contraseña). El
+// driver solo lo usa y lo renueva cuando está por vencer; conectar la cuenta la
+// primera vez es cosa del endpoint /api/ewelink/conectar.
 //
 // Control: POST /v2/device/thing/status con { type:1, id, params:{switch} }.
 // Lectura: GET /v2/device/thing/status?type=1&id=..&params=switch.
@@ -11,106 +11,96 @@
 //
 // Todas las funciones devuelven { ok, estado, motivo } y NUNCA lanzan: un fallo
 // de red/nube se refleja como ok:false para que sonoff_estado quede en 'error'.
-//
-// Config por variables de entorno:
-//   EWELINK_APP_ID, EWELINK_APP_SECRET   — credenciales de dev.ewelink.cc
-//   EWELINK_EMAIL o EWELINK_PHONE        — cuenta donde están los Sonoff
-//   EWELINK_PASSWORD
-//   EWELINK_COUNTRY_CODE                 — ej. "+52" (México). Default "+52".
-//   EWELINK_REGION                       — us | eu | as | cn. Default "us".
+// El motivo viaja hasta la pantalla, así que distingue los casos que se arreglan
+// distinto: 'sin_cuenta_conectada' (falta autorizar) no es lo mismo que
+// 'ewelink_<código>' (la nube rechazó la operación).
 
-import crypto from 'crypto';
-
-const BASES = {
-  cn: 'https://cn-apia.coolkit.cn',
-  as: 'https://as-apia.coolkit.cc',
-  us: 'https://us-apia.coolkit.cc',
-  eu: 'https://eu-apia.coolkit.cc',
-};
-
-const cfg = {
-  appId: process.env.EWELINK_APP_ID,
-  appSecret: process.env.EWELINK_APP_SECRET,
-  email: process.env.EWELINK_EMAIL,
-  phone: process.env.EWELINK_PHONE,
-  password: process.env.EWELINK_PASSWORD,
-  countryCode: process.env.EWELINK_COUNTRY_CODE || '+52',
-  region: (process.env.EWELINK_REGION || 'us').toLowerCase(),
-};
-
-function configCompleta() {
-  return Boolean(cfg.appId && cfg.appSecret && cfg.password && (cfg.email || cfg.phone));
-}
+import { apiFetch, baseDe, nonce, configCompleta, refrescarToken } from './ewelinkOAuth.js';
 
 const NO_CONFIGURADO = { ok: false, estado: null, motivo: 'ewelink_no_configurado' };
 const ERROR_RED = (motivo = 'error_red') => ({ ok: false, estado: null, motivo });
 
-// Token cacheado en memoria: { at, base }.
-let sesion = null;
+// Margen para renovar el access token antes de que caduque de verdad. Con 30
+// días de vida, renovar un día antes evita la carrera de que expire entre que
+// se lee y se usa.
+const MARGEN_RENOVACION_MS = 24 * 60 * 60 * 1000;
 
-const nonce = () =>
-  crypto.randomBytes(6).toString('base64').replace(/[^a-zA-Z0-9]/g, '').slice(0, 8).padEnd(8, '0');
-
-const firmar = (cuerpoStr) =>
-  crypto.createHmac('sha256', cfg.appSecret).update(cuerpoStr).digest('base64');
-
-// OJO con el Content-Type: eWeLink valida la cadena EXACTA y solo acepta
-// "application/json" o "application/json; charset=utf-8". Cualquier otra forma
-// (p. ej. "application/json;charset=UTF-8", sin espacio) se rechaza con un
-// error 400 ANTES de mirar la firma o las credenciales.
-async function baseFetch(base, path, { method = 'GET', headers = {}, bodyStr, query } = {}) {
-  let url = `${base}${path}`;
-  if (query) url += `?${new URLSearchParams(query).toString()}`;
-  const resp = await fetch(url, {
-    method,
-    headers: { 'Content-Type': 'application/json', 'X-CK-Appid': cfg.appId, ...headers },
-    body: bodyStr,
-  });
-  return resp.json();
+// De dónde se leen y guardan los tokens. Se carga tarde (y se puede sustituir)
+// para que las pruebas del driver no arrastren la conexión a la base.
+let store = null;
+export function _setStore(nuevo) {
+  store = nuevo;
+  sesion = null;
+}
+async function getStore() {
+  if (!store) store = await import('./ewelinkCuenta.js');
+  return store;
 }
 
-// Inicia sesión y cachea el token. Maneja el redirect de región (error 10004).
-async function login() {
-  const cuerpo = { password: cfg.password, countryCode: cfg.countryCode };
-  if (cfg.email) cuerpo.email = cfg.email; else cuerpo.phoneNumber = cfg.phone;
-  const cuerpoStr = JSON.stringify(cuerpo);
-  const headers = { Authorization: `Sign ${firmar(cuerpoStr)}`, 'X-CK-Nonce': nonce() };
+// Token en memoria para no ir a la base en cada encendido: { at, base }.
+let sesion = null;
 
-  let base = BASES[cfg.region] || BASES.us;
-  let data = await baseFetch(base, '/v2/user/login', { method: 'POST', headers, bodyStr: cuerpoStr });
+class SinCuenta extends Error {
+  constructor(motivo) {
+    super(motivo);
+    this.motivo = motivo;
+  }
+}
 
-  // Región equivocada: eWeLink devuelve la correcta; reintentar una vez.
-  if (data?.error === 10004 && data?.data?.region && BASES[data.data.region]) {
-    base = BASES[data.data.region];
-    data = await baseFetch(base, '/v2/user/login', { method: 'POST', headers, bodyStr: cuerpoStr });
+// Devuelve un token utilizable, renovándolo si hace falta.
+async function asegurarSesion() {
+  if (sesion?.at) return sesion;
+
+  const s = await getStore();
+  const cuenta = await s.leerCuenta();
+  if (!s.estaConectada(cuenta)) {
+    // Sin cuenta autorizada (o con el refresh token ya vencido) no hay nada que
+    // renovar: alguien tiene que volver a conectar la cuenta a mano.
+    throw new SinCuenta(cuenta?.access_token ? 'sesion_expirada' : 'sin_cuenta_conectada');
   }
 
-  if (data?.error !== 0 || !data?.data?.at) {
-    // El motivo viaja hasta la pantalla: un login roto (credencial, país, región)
-    // se veía igual que un Sonoff desconectado, y son arreglos muy distintos.
-    const err = new Error(`login eWeLink falló (error ${data?.error}: ${data?.msg || 'sin detalle'})`);
-    err.motivo = `login_fallido_${data?.error}`;
-    throw err;
+  const porVencer =
+    !cuenta.at_expira_at || new Date(cuenta.at_expira_at).getTime() - Date.now() < MARGEN_RENOVACION_MS;
+
+  if (porVencer) {
+    const tokens = await refrescarToken(cuenta.refresh_token, cuenta.region);
+    const guardada = await s.guardarTokens(tokens);
+    sesion = { at: guardada.access_token, base: baseDe(guardada.region) };
+    return sesion;
   }
-  sesion = { at: data.data.at, base };
+
+  sesion = { at: cuenta.access_token, base: baseDe(cuenta.region) };
   return sesion;
 }
 
-async function asegurarSesion() {
-  if (sesion?.at) return sesion;
-  return login();
+// Fuerza una renovación cuando la nube dice que el token no sirve, aunque
+// nuestras fechas digan que todavía estaba vigente (pasa si el cliente revoca
+// el permiso y lo vuelve a dar, o si eWeLink lo invalida antes de tiempo).
+async function renovarPorRechazo() {
+  const s = await getStore();
+  const cuenta = await s.leerCuenta();
+  if (!s.estaConectada(cuenta)) throw new SinCuenta('sin_cuenta_conectada');
+  const tokens = await refrescarToken(cuenta.refresh_token, cuenta.region);
+  const guardada = await s.guardarTokens(tokens);
+  sesion = { at: guardada.access_token, base: baseDe(guardada.region) };
+  return sesion;
 }
 
-// Llama a un endpoint autenticado; si da error de auth, re-login y reintenta 1 vez.
+// 401xx/402 = token inválido o expirado del lado de eWeLink.
+const esErrorDeAuth = (error) =>
+  error === 402 || error === 401 || String(error).startsWith('401');
+
+// Llama a un endpoint autenticado; si el token es rechazado, lo renueva y
+// reintenta una vez.
 async function llamarAuth(path, opts, reintento = true) {
   const s = await asegurarSesion();
-  const data = await baseFetch(s.base, path, {
+  const data = await apiFetch(s.base, path, {
     ...opts,
     headers: { Authorization: `Bearer ${s.at}`, 'X-CK-Nonce': nonce() },
   });
-  // 401xx = token inválido/expirado.
-  if (reintento && (data?.error === 401 || String(data?.error).startsWith('401'))) {
+  if (reintento && esErrorDeAuth(data?.error)) {
     sesion = null;
+    await renovarPorRechazo();
     return llamarAuth(path, opts, false);
   }
   return data;
