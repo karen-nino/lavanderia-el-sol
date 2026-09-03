@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import request from 'supertest';
 import app from '../../app.js';
 import { pool, limpiarBase, seedSucursal, seedUsuario, seedLogin, seedMaquina, auth } from '../helpers.js';
-import { liberarMaquinasCierreDelDia, cerrarSesionesEmpleados } from '../../jobs/cierreDelDia.js';
+import { liberarMaquinasCierreDelDia, cerrarSesionesEmpleados, cerrarCajasAbiertas } from '../../jobs/cierreDelDia.js';
 
 let admin;
 
@@ -103,5 +103,59 @@ describe('cerrarSesionesEmpleados', () => {
     // El del admin sigue vigente.
     const adminMe = await request(app).get('/api/auth/me').set(auth(adminSesion.body.token));
     expect(adminMe.status).toBe(200);
+  });
+});
+
+describe('cerrarCajasAbiertas', () => {
+  it('cierra la caja que nadie cerró, sin conteo y marcada como automática', async () => {
+    await request(app).post('/api/caja/abrir').set(auth(admin.token))
+      .send({ monto_inicial: 500, notas: 'fondo del día' });
+
+    const cerradas = await cerrarCajasAbiertas();
+    expect(cerradas).toHaveLength(1);
+
+    const { rows } = await pool.query('SELECT * FROM cajas WHERE id = $1', [cerradas[0].id]);
+    expect(rows[0].estado).toBe('cerrada');
+    expect(rows[0].cierre_automatico).toBe(true);
+    // Nadie contó el cajón: inventar un monto contado sería fabricar un corte.
+    expect(rows[0].monto_contado).toBeNull();
+    expect(rows[0].usuario_cierre_id).toBeNull();
+    expect(rows[0].cerrada_at).not.toBeNull();
+  });
+
+  it('deja abrir caja al día siguiente (era el bloqueo que causaba el problema)', async () => {
+    await request(app).post('/api/caja/abrir').set(auth(admin.token)).send({ monto_inicial: 500 });
+
+    // Con la caja de ayer todavía abierta, nadie puede abrir la de hoy.
+    const bloqueada = await request(app).post('/api/caja/abrir').set(auth(admin.token)).send({ monto_inicial: 300 });
+    expect(bloqueada.status).toBe(409);
+
+    await cerrarCajasAbiertas();
+
+    const nueva = await request(app).post('/api/caja/abrir').set(auth(admin.token)).send({ monto_inicial: 300 });
+    expect(nueva.status).toBe(201);
+  });
+
+  it('el corte automático aparece en el historial sin diferencia', async () => {
+    await request(app).post('/api/caja/abrir').set(auth(admin.token)).send({ monto_inicial: 500 });
+    await request(app).post('/api/caja/movimientos').set(auth(admin.token))
+      .send({ tipo: 'salida', concepto: 'compra de jabón', monto: 100 });
+
+    await cerrarCajasAbiertas();
+
+    const hist = await request(app).get('/api/caja/historial').set(auth(admin.token));
+    expect(hist.status).toBe(200);
+    expect(hist.body).toHaveLength(1);
+    const corte = hist.body[0];
+    expect(corte.cierre_automatico).toBe(true);
+    expect(corte.esperado).toBe(400);   // 500 de fondo - 100 de salida
+    expect(corte.contado).toBeNull();
+    // Sin conteo no hay faltante ni sobrante que reportar: inventar una
+    // diferencia contra un cajón que nadie contó es peor que no tener dato.
+    expect(corte.diferencia).toBeNull();
+  });
+
+  it('no hace nada si no hay cajas abiertas', async () => {
+    expect(await cerrarCajasAbiertas()).toEqual([]);
   });
 });

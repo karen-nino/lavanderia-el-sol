@@ -673,7 +673,11 @@ function Historial({ onFiltroLabel }) {
     const cuadra = c.diferencia != null && Math.abs(c.diferencia) < 0.005;
     return (
       <div className="flex items-center gap-2 flex-shrink-0">
-        {c.diferencia != null && (
+        {c.cierre_automatico ? (
+          <span className="text-sm font-semibold px-2.5 py-1 rounded-full bg-amber-50 text-amber-700">
+            Sin conteo
+          </span>
+        ) : c.diferencia != null && (
           <span className={`text-sm font-semibold px-2.5 py-1 rounded-full ${
             cuadra ? 'bg-blue-50 text-blue-700'
               : c.diferencia < 0 ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'
@@ -786,7 +790,9 @@ function Historial({ onFiltroLabel }) {
           <div className="flex items-center gap-2 text-sm">
             <IconSalida className="w-5 h-5 text-orange-500 flex-shrink-0" />
             <span className="font-medium text-orange-600 w-12">Cerró</span>
-            <span className="font-medium text-gray-700">{c.usuario_cierre ?? '—'}</span>
+            <span className={`font-medium ${c.cierre_automatico ? 'text-amber-700' : 'text-gray-700'}`}>
+              {c.cierre_automatico ? 'El sistema, al cerrar el día' : (c.usuario_cierre ?? '—')}
+            </span>
           </div>
           {c.notas_cierre && (
             <p className="mt-2 ml-7 pl-3 border-l-2 border-gray-100 text-sm text-gray-500">{c.notas_cierre}</p>

@@ -106,6 +106,37 @@ export async function cerrarSesionesEmpleados() {
   return rowCount;
 }
 
+// Cierra las cajas que quedaron abiertas al terminar el día.
+//
+// Un cierre automático NO es un corte: nadie contó el cajón, así que
+// `monto_contado` queda NULL (el historial ya lo muestra como "—" y sin
+// diferencia) y `usuario_cierre_id` también, porque ninguna persona lo hizo.
+// La bandera `cierre_automatico` (mig. 099) es lo que permite distinguirlo de
+// un corte real en el historial.
+//
+// Sin esto, la sesión seguía viva al día siguiente: nadie podía abrir caja, y
+// las ventas del día nuevo se sumaban a la sesión vieja hasta que alguien la
+// cerraba, momento en el que el esperado de dos días se comparaba contra el
+// efectivo de uno solo y aparecía un faltante inventado.
+//
+// Cierra las de TODAS las sucursales (el barrido es global). No lanza al
+// llamador: devuelve las cajas cerradas.
+export async function cerrarCajasAbiertas() {
+  const { rows } = await pool.query(
+    `UPDATE cajas
+        SET estado            = 'cerrada',
+            cerrada_at        = NOW(),
+            cierre_automatico = TRUE,
+            notas_cierre      = COALESCE(
+              notas_cierre,
+              'Cerrada automáticamente en el cierre del día. Nadie cerró la caja, así que no hubo conteo de efectivo.'
+            )
+      WHERE estado = 'abierta'
+      RETURNING id, sucursal`
+  );
+  return rows;
+}
+
 // Scheduler ligero (sin dependencias): revisa cada pocos minutos y ejecuta el
 // barrido una sola vez al llegar la hora de cierre, deduplicando por fecha local.
 export function iniciarCierreDelDia() {
@@ -125,6 +156,18 @@ export function iniciarCierreDelDia() {
     } catch (err) {
       console.error('[cierre] error al liberar máquinas:', err.message);
     }
+    // Cerrar las cajas que nadie cerró: si siguen abiertas mañana, el corte
+    // del día siguiente sale con las ventas de dos días.
+    try {
+      const cajas = await cerrarCajasAbiertas();
+      if (cajas.length > 0) {
+        console.log(`[cierre] ${fecha}: ${cajas.length} caja(s) cerrada(s) automáticamente sin conteo ` +
+                    `(sucursal: ${cajas.map(c => c.sucursal).join(', ')})`);
+      }
+    } catch (err) {
+      console.error('[cierre] error al cerrar cajas abiertas:', err.message);
+    }
+
     // Cerrar las sesiones de los empleados que no cerraron manualmente.
     try {
       const cerradas = await cerrarSesionesEmpleados();

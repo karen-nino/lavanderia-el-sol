@@ -256,6 +256,7 @@ export async function getHistorial(req, res) {
           c.notas_cierre,
           c.abierta_at,
           c.cerrada_at,
+          c.cierre_automatico,
           TRIM(ua.nombre || ' ' || COALESCE(ua.apellido, '')) AS usuario_apertura,
           TRIM(uc.nombre || ' ' || COALESCE(uc.apellido, '')) AS usuario_cierre,
           -- Mismo desglose que ventasDeSesion(): el esperado del cajón solo
@@ -325,8 +326,11 @@ export async function getHistorial(req, res) {
           id:               r.id,
           usuario_apertura: r.usuario_apertura,
           usuario_cierre:   r.usuario_cierre,
-          abierta_at:       r.abierta_at,
-          cerrada_at:       r.cerrada_at,
+          abierta_at:        r.abierta_at,
+          cerrada_at:        r.cerrada_at,
+          // Cerrada por el barrido de medianoche, sin que nadie contara el
+          // cajón: no es un corte, y la pantalla debe decirlo.
+          cierre_automatico: r.cierre_automatico,
           notas_apertura:   r.notas_apertura,
           notas_cierre:     r.notas_cierre,
           monto_inicial,
