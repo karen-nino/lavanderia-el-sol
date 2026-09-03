@@ -127,16 +127,33 @@ describe('lecturas del modelo por cargas (invariantes que deben sobrevivir el re
     expect(res.body.cargas).toHaveLength(1);
   });
 
-  it('PATCH reemplaza las cargas y retarifica', async () => {
-    const { notaId } = await crearAutoservicio();
-    const res = await request(app).patch(`/api/notas/${notaId}`).set(auth(admin.token))
+  it('PATCH reemplaza las cargas que no han arrancado y las retarifica', async () => {
+    // Nota recién creada: su carga todavía no pasa por ninguna máquina.
+    const crea = await request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE',
+      cargas: [{ lavadora_tipo: 'mediana' }],
+    });
+    const res = await request(app).patch(`/api/notas/${crea.body.id}`).set(auth(admin.token))
       .send({ cargas: [{ lavadora_tipo: 'jumbo' }] });
     expect(res.status).toBe(200);
     expect(res.body.cargas).toHaveLength(1);
-    expect(res.body.cargas[0].lavadora_tipo).toBe('jumbo');
-    // Al reemplazar las cargas se liberó la lavadora que estaba en uso.
+    // El PATCH ahora responde las cargas con el mismo formato que GET /notas/:id,
+    // donde el tipo elegido en la nota viaja como lavadora_tipo_previsto
+    // (lavadora_tipo es el de la máquina física, que aquí todavía no hay).
+    expect(res.body.cargas[0].lavadora_tipo_previsto).toBe('jumbo');
+  });
+
+  it('PATCH no borra una carga que está lavando ni suelta su máquina', async () => {
+    const { notaId } = await crearAutoservicio();
+    // Mandar la lista sin esa carga la borraría junto con su historial.
+    const res = await request(app).patch(`/api/notas/${notaId}`).set(auth(admin.token))
+      .send({ cargas: [{ lavadora_tipo: 'jumbo' }] });
+    expect(res.status).toBe(409);
+    expect(res.body.message).toMatch(/ya se procesó/i);
+
+    // La lavadora sigue girando: antes esta edición la dejaba libre.
     const { rows } = await pool.query('SELECT nombre, estado FROM maquinas ORDER BY id');
-    expect(rows.find(m => m.nombre === 'Lavadora 1').estado).toBe('disponible');
+    expect(rows.find(m => m.nombre === 'Lavadora 1').estado).toBe('en_uso');
   });
 });
 
@@ -1302,5 +1319,71 @@ describe('una nota no se queda atascada si sobra una carga', () => {
       .set(auth(admin.token)).send({ estado: 'LISTA' });
     expect(res.status).toBe(200);
     expect(res.body.estado).toBe('LISTA');
+  });
+});
+
+// Editar una nota borraba TODAS sus cargas y las recreaba: la carga ya lavada
+// perdía qué máquina la lavó y cuándo, y con eso el reporte de uso de máquinas.
+describe('editar una nota en proceso no borra lo que ya se lavó', () => {
+  async function notaConUnaCargaLavada() {
+    const lav = await seedMaquina({ nombre: 'Lavadora 1', tipo: 'lavadora_mediana' });
+    const crea = await request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE',
+      cargas: [{ lavadora_tipo: 'mediana' }, { lavadora_tipo: 'mediana' }],
+    });
+    const notaId = crea.body.id;
+    await request(app).patch(`/api/notas/${notaId}/asignar-carga-maquina`).set(auth(admin.token))
+      .send({ carga_id: crea.body.cargas[0].id, slot: 'lavadora', maquina_id: lav }).expect(200);
+    await request(app).patch(`/api/notas/${notaId}/activar-pendientes`).set(auth(admin.token))
+      .send({ maquina_id: lav }).expect(200);
+    await request(app).patch(`/api/notas/${notaId}/terminar-lavado-final`).set(auth(admin.token))
+      .send({ lavadora_id: lav }).expect(200);
+    return { notaId, lav, lavada: crea.body.cargas[0].id, pendiente: crea.body.cargas[1].id };
+  }
+
+  it('conserva la máquina usada y la hora de arranque de la carga ya lavada', async () => {
+    const { notaId, lav, lavada, pendiente } = await notaConUnaCargaLavada();
+
+    const res = await request(app).patch(`/api/notas/${notaId}`).set(auth(admin.token)).send({
+      cargas: [
+        { id: lavada, lavadora_tipo: 'mediana' },
+        { id: pendiente, lavadora_tipo: 'mediana' },
+      ],
+    });
+    expect(res.status).toBe(200);
+
+    const { rows } = await pool.query(
+      'SELECT id, lavadora_usada_id, lavadora_iniciada_at FROM nota_cargas WHERE id = $1', [lavada]
+    );
+    // La fila sobrevive con su historial intacto.
+    expect(rows).toHaveLength(1);
+    expect(rows[0].lavadora_usada_id).toBe(lav);
+    expect(rows[0].lavadora_iniciada_at).not.toBeNull();
+  });
+
+  it('rechaza quitar al editar una carga que ya se lavó', async () => {
+    const { notaId, pendiente } = await notaConUnaCargaLavada();
+
+    // Se manda solo la carga pendiente: la lavada desaparecería.
+    const res = await request(app).patch(`/api/notas/${notaId}`).set(auth(admin.token))
+      .send({ cargas: [{ id: pendiente, lavadora_tipo: 'mediana' }] });
+    expect(res.status).toBe(409);
+    expect(res.body.message).toMatch(/ya se procesó/i);
+  });
+
+  it('sí deja cambiar y agregar cargas que no han arrancado', async () => {
+    const { notaId, lavada, pendiente } = await notaConUnaCargaLavada();
+
+    const res = await request(app).patch(`/api/notas/${notaId}`).set(auth(admin.token)).send({
+      cargas: [
+        { id: lavada, lavadora_tipo: 'mediana' },
+        { id: pendiente, lavadora_tipo: 'mediana', secadora_tipo: 'mediana' },
+        { lavadora_tipo: 'mediana' },
+      ],
+    });
+    expect(res.status).toBe(200);
+    expect(res.body.cargas).toHaveLength(3);
+    // La lavada sigue siendo la primera y conserva su lugar.
+    expect(res.body.cargas[0].id).toBe(lavada);
   });
 });

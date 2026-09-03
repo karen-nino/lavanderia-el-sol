@@ -307,6 +307,9 @@ export default function NuevaNota() {
             // Cargas de la nota; si es una nota vieja sin cargas, se arma una
             // carga a partir de los campos legados a nivel nota.
             const cargasNota = (nota.cargas ?? []).map(c => ({
+              // El id viaja de vuelta al guardar: es lo que permite al servidor
+              // reconocer las cargas que ya se lavaron y no rehacerlas.
+              id:                     c.id,
               tipo_prenda:            c.tipo_prenda ?? prendaNota,
               tipo_tela:              c.tipo_tela      ?? '',
               tamano_edredon:         c.tamano_edredon ?? '',
@@ -342,6 +345,9 @@ export default function NuevaNota() {
             // Cada carga lleva su TIPO de lavado y/o secado (la máquina se asigna
             // en Salidas).
             const cargasNota = (nota.cargas ?? []).map(c => ({
+              // Igual que en Por Encargo: el id identifica las cargas que ya
+              // se lavaron para que el servidor no las rehaga.
+              id:             c.id,
               tipo_prenda:    (c.tipo_prenda ?? prendaNota) || 'ROPA',
               tipo_tela:      c.tipo_tela      ?? '',
               tamano_edredon: c.tamano_edredon ?? '',
@@ -615,6 +621,7 @@ export default function NuevaNota() {
     setEncargoLoading(true);
     try {
       const cargasPayload = encargoCargas.map(c => ({
+        id:             c.id ?? null,
         tipo_prenda:    c.tipo_prenda || 'ROPA',
         tipo_tela:      c.tipo_prenda === 'ROPA'    ? (c.tipo_tela || null) : null,
         tamano_edredon: c.tipo_prenda === 'EDREDON' ? (c.tamano_edredon || null) : null,
@@ -713,6 +720,7 @@ export default function NuevaNota() {
       tamano_edredon:  null,
       // La carga elige el TIPO de lavado/secado; la máquina se asigna en Salidas.
       cargas:          cargasAuto.map(c => ({
+        id:             c.id ?? null,
         lavadora_tipo:  c.lavadora_tipo || null,
         secadora_tipo:  c.secadora_tipo || null,
         tipo_prenda:    c.tipo_prenda || 'ROPA',

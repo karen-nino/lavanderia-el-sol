@@ -1197,42 +1197,96 @@ export const updateNota = async (req, res) => {
       });
     }
 
-    // Cargas (autoservicio): la lista enviada reemplaza todas las de la nota,
-    // igual que productos. Se retarifican en el servidor y, si la nota está
-    // activa, se liberan las máquinas que salieron y se toman las nuevas.
+    // Cargas: la lista enviada reemplaza a las de la nota... salvo las que YA
+    // PASARON POR UNA MÁQUINA, que son intocables.
+    //
+    // Antes se borraban todas y se recreaban desde cero. En una nota ya en
+    // proceso eso destruía el historial de la carga lavada —qué máquina la
+    // lavó (lavadora_usada_id) y cuándo arrancó (mig. 097)— y con él el reporte
+    // de uso de máquinas. Ahora esas cargas se conservan tal cual: ni se
+    // retarifan (lo ya cobrado no se reescribe) ni se pueden quitar por aquí;
+    // para eso está DELETE /notas/:id/cargas/:cargaId, que solo acepta las que
+    // nunca arrancaron.
     let filasCargas = null;
     let cargasNota  = null;
     if (cargas !== undefined) {
       const maquinasAntes = await maquinasDeNota(client, id);
       const prendaEfectiva = tipo_prenda ? String(tipo_prenda).toUpperCase() : actual.tipo_prenda;
-      try {
-        filasCargas = await prepararCargas(client, cargas, prendaEfectiva, req.sucursal, actual.tipo_servicio);
-      } catch (e) {
+
+      const { rows: existentes } = await client.query(
+        `SELECT id, orden, lavadora_id, secadora_id, lavadora_iniciada_at, secadora_iniciada_at
+           FROM nota_cargas WHERE nota_id = $1 ORDER BY orden`,
+        [id]
+      );
+      const yaProcesada = (c) => c.lavadora_iniciada_at != null || c.secadora_iniciada_at != null;
+      const conservadas = existentes.filter(yaProcesada);
+      const conservadasIds = conservadas.map((c) => c.id);
+
+      // Una carga ya procesada no puede desaparecer en una edición: se perdería
+      // el registro de un lavado que sí ocurrió.
+      const idsEnviados = new Set(
+        (Array.isArray(cargas) ? cargas : []).map((c) => Number(c?.id)).filter(Number.isInteger)
+      );
+      const perdidas = conservadas.filter((c) => !idsEnviados.has(c.id));
+      if (perdidas.length > 0) {
         await client.query('ROLLBACK');
-        return res.status(400).json({ message: e.message });
+        return res.status(409).json({
+          message: `La carga ${perdidas[0].orden} ya se procesó y no se puede quitar al editar. ` +
+                   'Quita solo las cargas que no hayan arrancado.',
+        });
       }
-      // Liberar el stock reservado de los productos de las cargas viejas antes
-      // de borrarlas (el ON DELETE CASCADE elimina las filas pero no revierte
+
+      // Solo se rehacen las cargas que no han arrancado.
+      const entrantes = (Array.isArray(cargas) ? cargas : [])
+        .filter((c) => !conservadasIds.includes(Number(c?.id)));
+
+      if (entrantes.length > 0) {
+        try {
+          filasCargas = await prepararCargas(client, entrantes, prendaEfectiva, req.sucursal, actual.tipo_servicio);
+        } catch (e) {
+          await client.query('ROLLBACK');
+          return res.status(400).json({ message: e.message });
+        }
+        // Las conservadas se quedan con su orden; las rehechas van después.
+        const ordenBase = conservadas.reduce((max, c) => Math.max(max, c.orden), 0);
+        filasCargas.forEach((f, i) => { f.orden = ordenBase + i + 1; });
+      } else {
+        filasCargas = [];
+      }
+
+      // Liberar el stock reservado de los productos de las cargas que SÍ se
+      // borran (el ON DELETE CASCADE elimina las filas pero no revierte
       // stock_reservado). Los nuevos productos se reservan en insertarCargas.
       await client.query(
         `UPDATE productos a
             SET stock_reservado = stock_reservado - np.cantidad_tapas
           FROM nota_productos np
-          WHERE np.nota_id = $1 AND np.carga_id IS NOT NULL AND np.producto_id = a.id`,
-        [id]
+          WHERE np.nota_id = $1 AND np.carga_id IS NOT NULL
+            AND NOT (np.carga_id = ANY($2::int[]))
+            AND np.producto_id = a.id`,
+        [id, conservadasIds]
       );
-      await client.query('DELETE FROM nota_cargas WHERE nota_id = $1', [id]);
-      try {
-        cargasNota = await insertarCargas(client, id, filasCargas, req.sucursal, actual.tipo_servicio);
-      } catch (e) {
-        await client.query('ROLLBACK');
-        return res.status(400).json({ message: e.message });
+      await client.query(
+        'DELETE FROM nota_cargas WHERE nota_id = $1 AND NOT (id = ANY($2::int[]))',
+        [id, conservadasIds]
+      );
+      if (filasCargas.length > 0) {
+        try {
+          await insertarCargas(client, id, filasCargas, req.sucursal, actual.tipo_servicio);
+        } catch (e) {
+          await client.query('ROLLBACK');
+          return res.status(400).json({ message: e.message });
+        }
       }
+      cargasNota = await cargasDeNota(client, id);
 
       if (['LAVANDO', 'SECANDO'].includes(actual.estado)) {
-        const despues = new Set(
-          filasCargas.flatMap(f => [f.lavadora_id, f.secadora_id]).filter(Boolean)
-        );
+        // Las máquinas de las cargas conservadas siguen ocupadas: si no se
+        // cuentan aquí, editar la nota liberaría una lavadora que está girando.
+        const despues = new Set([
+          ...filasCargas.flatMap(f => [f.lavadora_id, f.secadora_id]),
+          ...conservadas.flatMap(c => [c.lavadora_id, c.secadora_id]),
+        ].filter(Boolean));
         const liberar = maquinasAntes.filter(mid => !despues.has(mid));
         if (liberar.length > 0) {
           await client.query(
