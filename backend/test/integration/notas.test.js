@@ -1077,45 +1077,9 @@ describe('bolsas en Por Encargo', () => {
   });
 });
 
-describe('empaquetado (Por Encargo)', () => {
-  it('se incluye por defecto y cuenta dentro del tope', async () => {
-    await seedAjustes({ precio_carga_mediana: 70, tope_carga_chico: 100, costo_empaquetado: 8 });
-    const clienteId = await seedCliente();
-    const res = await request(app).post('/api/notas').set(auth(admin.token)).send({
-      tipo_servicio: 'POR_ENCARGO', cliente_id: clienteId, tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE',
-      cargas: [{ tamano: 'chico', lavadora_tipo: 'mediana' }], // empaquetado por defecto
-    });
-    expect(res.status).toBe(201);
-    expect(Number(res.body.cargas[0].empaquetado)).toBe(8);
-    // 70 + 8 = 78 ≤ tope 100 → se cobra el tope (dentro del tope, no encima).
-    expect(Number(res.body.precio_total)).toBe(100);
-  });
-
-  it('sin tope, el empaquetado suma al total', async () => {
-    await seedAjustes({ precio_carga_mediana: 70, costo_empaquetado: 8 });
-    const clienteId = await seedCliente();
-    const res = await request(app).post('/api/notas').set(auth(admin.token)).send({
-      tipo_servicio: 'POR_ENCARGO', cliente_id: clienteId, tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE',
-      cargas: [{ tamano: 'chico', lavadora_tipo: 'mediana' }],
-    });
-    expect(Number(res.body.precio_total)).toBe(78); // 70 + 8
-  });
-
-  it('se puede quitar (empaquetado=false)', async () => {
-    await seedAjustes({ precio_carga_mediana: 70, costo_empaquetado: 8 });
-    const clienteId = await seedCliente();
-    const res = await request(app).post('/api/notas').set(auth(admin.token)).send({
-      tipo_servicio: 'POR_ENCARGO', cliente_id: clienteId, tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE',
-      cargas: [{ tamano: 'chico', lavadora_tipo: 'mediana', empaquetado: false }],
-    });
-    expect(Number(res.body.cargas[0].empaquetado)).toBe(0);
-    expect(Number(res.body.precio_total)).toBe(70);
-  });
-});
-
 describe('escenario real de creación (repro del error)', () => {
-  it('Por Encargo con jabón (tapa), bolsa y empaquetado dentro del tope', async () => {
-    await seedAjustes({ precio_carga_mediana: 50, precio_carga_secadora: 45, tope_carga_chico: 150, costo_empaquetado: 15 });
+  it('Por Encargo con jabón (tapa) y bolsa dentro del tope', async () => {
+    await seedAjustes({ precio_carga_mediana: 50, precio_carga_secadora: 45, tope_carga_chico: 150 });
     const clienteId = await seedCliente();
     const jabon = await seedProducto({ nombre: 'Jabón', precio_unitario: 5, stock_actual: 100 });
     const bolsa = await request(app).post('/api/productos').set(auth(admin.token)).send({
@@ -1127,12 +1091,12 @@ describe('escenario real de creación (repro del error)', () => {
     const res = await request(app).post('/api/notas').set(auth(admin.token)).send({
       tipo_servicio: 'POR_ENCARGO', cliente_id: clienteId, tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE',
       cargas: [{
-        tamano: 'chico', lavadora_tipo: 'mediana', secadora_tipo: 'mediana', empaquetado: true,
+        tamano: 'chico', lavadora_tipo: 'mediana', secadora_tipo: 'mediana',
         productos: [{ producto_id: jabon, cantidad: 1 }, { producto_id: bolsa.body.id, cantidad: 1 }],
       }],
     });
     expect(res.status).toBe(201);
-    // real = 50 + 45 + 5(jabón) + 5(bolsa) + 15(emp) = 120 ≤ 150 → tope 150
+    // real = 50 + 45 + 5(jabón) + 5(bolsa) = 105 ≤ 150 → tope 150
     expect(Number(res.body.precio_total)).toBe(150);
   });
 });

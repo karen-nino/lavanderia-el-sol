@@ -853,7 +853,6 @@ export default function Ajustes() {
     precio_secadora_jumbo:   Number(config.precio_secadora_jumbo),
     precio_secadora_edredon: Number(config.precio_secadora_edredon),
     precio_edredon_jumbo:  Number(config.precio_edredon_jumbo),
-    costo_empaquetado:     Number(config.costo_empaquetado) || 0,
     tope_carga_chico:      topeONull(config.tope_carga_chico),
     tope_carga_grande:     topeONull(config.tope_carga_grande),
     tope_carga_jumbo:      topeONull(config.tope_carga_jumbo),
@@ -1135,23 +1134,6 @@ export default function Ajustes() {
       </div>
     </Section>
 
-    <div className="mt-10">
-    <Section titulo="Empaquetado">
-      <p className="text-sm text-gray-500 -mt-1">
-        Costo del empaquetado de la ropa. Se incluye por defecto en cada carga Por Encargo
-        (dentro del tope) y el empleado puede quitarlo por carga. Vacío o 0 = sin empaquetado.
-      </p>
-      <Field label="Costo del empaquetado">
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-500 flex-shrink-0">$</span>
-          <input type="number" name="costo_empaquetado" min="0" step="0.01"
-            value={config.costo_empaquetado ?? ''} onChange={handleChange} className={INPUT_CLS} />
-          <span className="text-sm text-gray-500 flex-shrink-0">MXN</span>
-          {stepBtns('costo_empaquetado', 5, 0)}
-        </div>
-      </Field>
-    </Section>
-    </div>
     </>
   );
 
@@ -1776,26 +1758,6 @@ export default function Ajustes() {
         </TarjetaMobile>
       </div>
 
-      <div className="border-t border-light-blue/60 pt-8 space-y-6">
-        <div className="space-y-1.5">
-          <TituloGrupoMobile>Empaquetado</TituloGrupoMobile>
-          <p className="text-sm text-grey">
-            Costo del empaquetado de la ropa. Se incluye por defecto en cada carga Por Encargo
-            (dentro del tope) y el empleado puede quitarlo por carga. Vacío o 0 = sin empaquetado.
-          </p>
-        </div>
-        <TarjetaMobile>
-          <MobileField label="Costo del empaquetado">
-            <div className="flex items-center gap-2">
-              <span className="text-base text-grey flex-shrink-0">$</span>
-              <input type="number" name="costo_empaquetado" min="0" step="0.01"
-                value={config.costo_empaquetado ?? ''} onChange={handleChange} className={MOBILE_INPUT_CLS} />
-              <span className="text-base text-grey flex-shrink-0">MXN</span>
-              {stepBtns('costo_empaquetado', 5, 0, true)}
-            </div>
-          </MobileField>
-        </TarjetaMobile>
-      </div>
     </div>
   );
 

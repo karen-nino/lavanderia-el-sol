@@ -58,7 +58,6 @@ export const updateAjustes = async (req, res) => {
     precio_secadora_jumbo,
     precio_secadora_edredon,
     precio_edredon_jumbo,
-    costo_empaquetado,
     tope_carga_chico,
     tope_carga_grande,
     tope_carga_jumbo,
@@ -83,8 +82,7 @@ export const updateAjustes = async (req, res) => {
   const esNumero = (v) => (typeof v === 'number' || (typeof v === 'string' && v.trim() !== '')) && Number.isFinite(Number(v));
 
   const precios = { precio_carga_mediana, precio_carga_jumbo, precio_carga_secadora,
-                    precio_secadora_jumbo, precio_secadora_edredon, precio_edredon_jumbo,
-                    costo_empaquetado };
+                    precio_secadora_jumbo, precio_secadora_edredon, precio_edredon_jumbo };
   for (const [campo, valor] of Object.entries(precios)) {
     if (valor !== undefined && (!esNumero(valor) || Number(valor) < 0)) {
       return res.status(400).json({ message: `${campo} debe ser un número mayor o igual a 0.` });
@@ -137,7 +135,6 @@ export const updateAjustes = async (req, res) => {
   if (precio_secadora_jumbo   !== undefined) { updates.push(`precio_secadora_jumbo = $${i++}`);   values.push(precio_secadora_jumbo); }
   if (precio_secadora_edredon !== undefined) { updates.push(`precio_secadora_edredon = $${i++}`); values.push(precio_secadora_edredon); }
   if (precio_edredon_jumbo  !== undefined) { updates.push(`precio_edredon_jumbo = $${i++}`);  values.push(precio_edredon_jumbo); }
-  if (costo_empaquetado     !== undefined) { updates.push(`costo_empaquetado = $${i++}`);     values.push(costo_empaquetado); }
   if (tope_carga_chico      !== undefined) { updates.push(`tope_carga_chico = $${i++}`);      values.push(topeONull(tope_carga_chico)); }
   if (tope_carga_grande     !== undefined) { updates.push(`tope_carga_grande = $${i++}`);     values.push(topeONull(tope_carga_grande)); }
   if (tope_carga_jumbo      !== undefined) { updates.push(`tope_carga_jumbo = $${i++}`);      values.push(topeONull(tope_carga_jumbo)); }

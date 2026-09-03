@@ -167,7 +167,7 @@ export async function getResumen(req, res) {
           COALESCE(SUM(o.precio_total), 0) AS total_cobrado
         FROM notas o
         LEFT JOIN (
-          SELECT nota_id, SUM(precio_lavadora + precio_secadora + empaquetado) AS total_cargas
+          SELECT nota_id, SUM(precio_lavadora + precio_secadora) AS total_cargas
           FROM nota_cargas
           GROUP BY nota_id
         ) nc_t ON nc_t.nota_id = o.id

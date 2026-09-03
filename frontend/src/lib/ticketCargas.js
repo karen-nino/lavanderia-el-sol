@@ -47,8 +47,7 @@ export function cargaVisibleEnTicket(cg) {
   const cobraAlgo      = Number(cg.precio_tope ?? 0) > 0
     || Number(cg.precio_lavadora ?? 0) > 0
     || Number(cg.precio_secadora ?? 0) > 0
-    || Number(cg.ajuste ?? 0) !== 0
-    || Number(cg.empaquetado ?? 0) > 0;
+    || Number(cg.ajuste ?? 0) !== 0;
   return tieneMaquinas || tieneProductos || cobraAlgo;
 }
 

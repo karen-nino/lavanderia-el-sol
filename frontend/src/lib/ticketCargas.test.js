@@ -5,7 +5,7 @@ import { cargaVisibleEnTicket, maquinasDeCarga } from './ticketCargas';
 // cobran. Una carga a la que se le quitó la máquina se queda sin nada (en
 // Salidas aparece tachada) y antes salía como "CARGA 2 · $0.00".
 const carga = (extra = {}) => ({
-  id: 1, orden: 1, precio_lavadora: 0, precio_secadora: 0, empaquetado: 0,
+  id: 1, orden: 1, precio_lavadora: 0, precio_secadora: 0,
   ajuste: 0, productos: [], ...extra,
 });
 

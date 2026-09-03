@@ -177,14 +177,14 @@ async function recalcularPrecioTotal(client, notaId, opciones = {}) {
               CASE
                 WHEN n.tipo_servicio = 'POR_ENCARGO' AND carga.tope IS NOT NULL
                   THEN carga.tope
-                ELSE carga.maquinas + carga.productos + carga.empaquetado
+                ELSE carga.maquinas + carga.productos
               END
               + carga.ajuste)
             FROM (
               -- El tope es el que se congeló en la carga (mig. 096), no el
               -- vigente en Ajustes: cambiar los precios no re-tarifa notas
               -- viejas ni descuadra lo que ya se cobró.
-              SELECT nc.ajuste, nc.empaquetado, nc.precio_tope AS tope,
+              SELECT nc.ajuste, nc.precio_tope AS tope,
                      nc.precio_lavadora + nc.precio_secadora AS maquinas,
                      COALESCE((SELECT SUM(np.cantidad * np.precio_unitario)
                                  FROM nota_productos np WHERE np.carga_id = nc.id), 0) AS productos
@@ -236,7 +236,7 @@ async function tarifasCarga(client) {
   const { rows } = await client.query(
     `SELECT precio_carga_mediana, precio_carga_jumbo,
             precio_carga_secadora, precio_secadora_jumbo, precio_secadora_edredon,
-            precio_edredon_jumbo, costo_empaquetado,
+            precio_edredon_jumbo,
             tope_carga_chico, tope_carga_grande, tope_carga_jumbo, tope_carga_edredon
        FROM ajustes WHERE id = 1`
   );
@@ -249,7 +249,6 @@ async function tarifasCarga(client) {
     secadoraJumbo:   c.precio_secadora_jumbo   != null ? Number(c.precio_secadora_jumbo)   : 45,
     secadoraEdredon: c.precio_secadora_edredon != null ? Number(c.precio_secadora_edredon) : 45,
     edredonJumbo:    c.precio_edredon_jumbo    != null ? Number(c.precio_edredon_jumbo)    : 80,
-    empaquetado:     c.costo_empaquetado       != null ? Number(c.costo_empaquetado)       : 0,
     // Topes por tamaño de carga (Por Encargo). NULL = sin tope configurado.
     topeChico:       c.tope_carga_chico   != null ? Number(c.tope_carga_chico)   : null,
     topeGrande:      c.tope_carga_grande  != null ? Number(c.tope_carga_grande)  : null,
@@ -350,7 +349,7 @@ async function sellarCicloMaquinas(client, notaId) {
 // Devuelve el mensaje de error o null si todas las cargas caben.
 async function validarTopesCargas(client, notaId) {
   const { rows } = await client.query(
-    `SELECT nc.orden, nc.tamano, nc.empaquetado,
+    `SELECT nc.orden, nc.tamano,
             UPPER(COALESCE(nc.tipo_prenda, '')) = 'EDREDON' AS es_edredon,
             nc.precio_lavadora + nc.precio_secadora AS maquinas,
             COALESCE(SUM(np.cantidad * np.precio_unitario), 0) AS productos,
@@ -368,13 +367,12 @@ async function validarTopesCargas(client, notaId) {
   const fmt = (n) => `$${Number(n).toFixed(2)}`;
   for (const r of rows) {
     if (r.tope == null) continue;
-    const total = Number(r.maquinas) + Number(r.productos) + Number(r.empaquetado);
+    const total = Number(r.maquinas) + Number(r.productos);
     if (total > Number(r.tope) + 1e-9) {
       const etiqueta = r.es_edredon ? 'edredón' : r.tamano;
-      const parteEmp = Number(r.empaquetado) > 0 ? ` + empaquetado ${fmt(r.empaquetado)}` : '';
       return `La carga ${r.orden} (${etiqueta}) rebasa el tope de ${fmt(r.tope)}: ` +
-             `máquinas ${fmt(r.maquinas)} + productos y bolsa ${fmt(r.productos)}${parteEmp} = ${fmt(total)}. ` +
-             `Baja $${(total - Number(r.tope)).toFixed(2)}: quita algún producto, la bolsa o el empaquetado.`;
+             `máquinas ${fmt(r.maquinas)} + productos y bolsa ${fmt(r.productos)} = ${fmt(total)}. ` +
+             `Baja $${(total - Number(r.tope)).toFixed(2)}: quita algún producto o la bolsa.`;
     }
   }
   return null;
@@ -590,11 +588,6 @@ async function prepararCargas(client, cargas, tipoPrendaNota, sucursal, tipo_ser
       precio_tope:     tipo_servicio === 'POR_ENCARGO'
         ? topeDeCarga(prendaCarga, c.tamano ? String(c.tamano).toLowerCase() : null, t)
         : null,
-      // Empaquetado: solo Por Encargo, incluido por defecto (se puede quitar con
-      // empaquetado=false). Se guarda el monto vigente en Ajustes.
-      empaquetado:     (tipo_servicio === 'POR_ENCARGO' && c.empaquetado !== false)
-        ? (Number(t.empaquetado) || 0)
-        : 0,
       activar,
       productos,
     };
@@ -610,11 +603,11 @@ async function insertarCargas(client, notaId, filas, sucursal, tipo_servicio) {
       `INSERT INTO nota_cargas
          (nota_id, orden, lavadora_id, secadora_id, lavadora_usada_id, secadora_usada_id,
           lavadora_tipo, secadora_tipo, precio_lavadora, precio_secadora,
-          tipo_prenda, tipo_tela, tamano_edredon, tamano, ajuste, empaquetado, precio_tope)
-       VALUES ($1, $2, $3, $4, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING *`,
+          tipo_prenda, tipo_tela, tamano_edredon, tamano, ajuste, precio_tope)
+       VALUES ($1, $2, $3, $4, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING *`,
       [notaId, f.orden, f.lavadora_id, f.secadora_id, f.lavadora_tipo, f.secadora_tipo,
        f.precio_lavadora, f.precio_secadora,
-       f.tipo_prenda, f.tipo_tela, f.tamano_edredon, f.tamano, f.ajuste, f.empaquetado ?? 0,
+       f.tipo_prenda, f.tipo_tela, f.tamano_edredon, f.tamano, f.ajuste,
        f.precio_tope ?? null]
     );
     const carga = rows[0];
@@ -632,7 +625,7 @@ async function cargasDeNota(client, notaId) {
   const { rows } = await client.query(
     `SELECT nc.id, nc.orden, nc.lavadora_id, nc.secadora_id,
             nc.precio_lavadora, nc.precio_secadora, nc.es_adicional,
-            nc.tipo_prenda, nc.tipo_tela, nc.tamano_edredon, nc.tamano, nc.ajuste, nc.empaquetado,
+            nc.tipo_prenda, nc.tipo_tela, nc.tamano_edredon, nc.tamano, nc.ajuste,
             nc.lavadora_tipo AS lavadora_tipo_previsto,
             nc.secadora_tipo AS secadora_tipo_previsto,
             ml.nombre AS lavadora_nombre, ml.tipo AS lavadora_tipo, ml.estado AS lavadora_estado,

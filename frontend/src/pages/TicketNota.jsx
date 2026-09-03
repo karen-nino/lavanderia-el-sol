@@ -29,11 +29,11 @@ function tamanoCargaTxt(cg) {
   return TAMANO_CARGA_LABEL[cg.tamano] ?? null;
 }
 
-// Costo real de la carga: máquinas + productos + empaquetado + ajuste.
+// Costo real de la carga: máquinas + productos + ajuste.
 function costoDeCarga(cg) {
   const prods = (cg.productos ?? []).reduce((s, p) => s + Number(p.subtotal ?? 0), 0);
   return Number(cg.precio_lavadora) + Number(cg.precio_secadora)
-    + Number(cg.ajuste ?? 0) + prods + Number(cg.empaquetado ?? 0);
+    + Number(cg.ajuste ?? 0) + prods;
 }
 
 // Lo que el cliente paga por la carga. En Por Encargo con tope el precio ES el
@@ -113,9 +113,6 @@ function armarTextoTicket(nota, rfc, notaPie) {
       const monto = p.es_por_tapa && Number(p.subtotal) === 0 ? 'Incluido' : fmtMonto(p.subtotal);
       L.push(`  • ${nombreProd(p)} x${p.cantidad} ${unidadProdTxt(p)} — ${monto}`);
     });
-    if (Number(cg.empaquetado) > 0) {
-      L.push(`  • Empaquetado — ${fmtMonto(cg.empaquetado)}`);
-    }
     if (Number(cg.ajuste)) {
       L.push(`  • Ajuste: ${Number(cg.ajuste) > 0 ? '+' : ''}${fmtMonto(cg.ajuste)}`);
     }
@@ -307,8 +304,8 @@ export default function TicketNota() {
   const adicionales = visibles.filter(cg => cg.es_adicional);
   const esEncargo   = nota.tipo_servicio === 'POR_ENCARGO';
 
-  // Bloque de cargas. Por Encargo se cobra la carga completa (máquinas,
-  // productos y empaquetado van dentro del precio): al cliente solo se le
+  // Bloque de cargas. Por Encargo se cobra la carga completa (máquinas y
+  // productos van dentro del precio): al cliente solo se le
   // muestra el servicio con su tamaño y su costo, una línea por carga.
   const renderBloqueCargas = lista => (
     esEncargo
@@ -356,12 +353,6 @@ export default function TicketNota() {
                 : <span className="text-sm text-gray-600 whitespace-nowrap">{fmtMonto(p.subtotal)}</span>}
             </div>
           ))}
-          {Number(cg.empaquetado) > 0 && (
-            <div className="flex items-baseline justify-between gap-3">
-              <span className="text-sm text-gray-700">Empaquetado</span>
-              <span className="text-sm text-gray-600 whitespace-nowrap">{fmtMonto(cg.empaquetado)}</span>
-            </div>
-          )}
           {Number(cg.ajuste) !== 0 && (
             <div className="flex items-baseline justify-between gap-3">
               <span className="text-sm text-gray-700">Ajuste</span>
