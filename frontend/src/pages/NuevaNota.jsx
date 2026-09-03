@@ -193,12 +193,33 @@ export default function NuevaNota() {
     if (prod?.tipo_liquido === 'marca') return n === 1 ? 'unidad' : 'unidades';
     return n === 1 ? 'botella' : 'botellas';
   };
-  // Producto por defecto de una carga Por Encargo: el jabón (granel). Se usa el
-  // que se llame "jabón"; si no, el primer granel disponible.
-  const conStock = (p) => Number(p.stock_disponible ?? p.stock_actual) > 0;
-  const jabonDefault = productosCatalogo.find(p => p.tipo_liquido === 'granel' && conStock(p) && /jab[oó]n/i.test(p.nombre || ''))
+  // Productos que trae puestos una carga Por Encargo: jabón y suavizante
+  // (granel), 2 tapas de cada uno. Se buscan por nombre; del jabón, si no hay
+  // ninguno que se llame así, se toma el primer granel disponible.
+  const TAPAS_PRECARGADAS = 2;
+  const tapasDisponibles = (p) => Number(p.stock_disponible ?? p.stock_actual) || 0;
+  const conStock = (p) => tapasDisponibles(p) > 0;
+  const granelLlamado = (re) =>
+    productosCatalogo.find(p => p.tipo_liquido === 'granel' && conStock(p) && re.test(p.nombre || ''));
+  const jabonDefault = granelLlamado(/jab[oó]n/i)
     ?? productosCatalogo.find(p => p.tipo_liquido === 'granel' && conStock(p));
-  const defaultProductosCarga = () => (jabonDefault ? [{ producto_id: String(jabonDefault.id), cantidad: '1' }] : []);
+  const suavizanteDefault = granelLlamado(/suavizante/i);
+  const defaultProductosCarga = () => {
+    const puestos = [];
+    for (const prod of [jabonDefault, suavizanteDefault]) {
+      if (!prod) continue;
+      // El jabón cae al "primer granel disponible" cuando no hay ninguno con
+      // ese nombre, y ese primero puede ser justamente el suavizante.
+      if (puestos.some(x => x.producto_id === String(prod.id))) continue;
+      // Si quedan menos tapas que las precargadas se pone lo que haya: dejar 2
+      // sin existencias haría fallar el guardado por un valor que nadie eligió.
+      puestos.push({
+        producto_id: String(prod.id),
+        cantidad: String(Math.min(TAPAS_PRECARGADAS, tapasDisponibles(prod))),
+      });
+    }
+    return puestos;
+  };
   const subtotalCargas = cargasAuto.reduce((s, c) => s + subtotalDeCarga(c), 0);
   // Autoservicio: los productos a nivel nota se cobran por botella.
   const subtotalProductos = productosLista.reduce((sum, p) => {
@@ -335,14 +356,15 @@ export default function NuevaNota() {
       .finally(() => setLoadingData(false));
   }, [id, esEdicion]);
 
-  // Al crear (no editar), la carga trae por defecto el jabón (1 tapa) en cuanto
-  // el catálogo cargó. Se hace una sola vez: si el empleado lo quita, no vuelve.
-  const jabonSeededRef = useRef(false);
+  // Al crear (no editar), la carga trae puestos el jabón y el suavizante en
+  // cuanto el catálogo cargó. Se hace una sola vez: si el empleado los quita,
+  // no vuelven.
+  const productosSeededRef = useRef(false);
   useEffect(() => {
-    if (esEdicion || jabonSeededRef.current || !jabonDefault) return;
-    jabonSeededRef.current = true;
+    if (esEdicion || productosSeededRef.current || (!jabonDefault && !suavizanteDefault)) return;
+    productosSeededRef.current = true;
     setEncargoCargas(prev => prev.map(c => (c.productos?.length ? c : { ...c, productos: defaultProductosCarga() })));
-  }, [jabonDefault, esEdicion]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [jabonDefault, suavizanteDefault, esEdicion]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleChange = (e) => {
     const { name, value } = e.target;
