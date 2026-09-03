@@ -38,20 +38,38 @@ const MAQUINAS_PRUEBA = [
   { nombre: 'S2', tipo: 'secadora',         tamano: 'jumbo',   capacidad: '35kg' },
 ];
 
-// Productos de arranque: un líquido por tapa (el caso con más reglas) y una
-// bolsa por rollo, para poder probar el cobro de productos en la nota.
+// Productos de arranque: una copia de lo que hay en la Sucursal Retiro
+// (tomada el 2026-09-03), para que el entorno controlado tenga el mismo
+// catálogo con el que se trabaja de verdad: jabón y suavizante a granel,
+// un suavizante de marca y las bolsas de los tres tamaños.
 const PRODUCTOS_PRUEBA = [
   {
-    nombre: 'Jabón', clase: 'liquido', unidad: 'Tapas', marca: 'Prueba',
-    es_por_tapa: true, tipo_liquido: 'marca', tapas_por_envase: 1,
-    botella_ml: 1, tapa_ml: 1, precio_botella: 28, precio_unitario: 5,
-    stock_actual: 10, stock_minimo: 2,
+    nombre: 'Jabón', clase: 'liquido', unidad: 'Tapas',
+    es_por_tapa: true, tipo_liquido: 'granel', tapas_por_envase: 100,
+    botella_ml: 800, tapa_ml: 200, precio_botella: 27, precio_unitario: 5,
+    stock_actual: 96, stock_minimo: 8,
   },
   {
-    nombre: 'Suavizante', clase: 'liquido', unidad: 'Tapas', marca: 'Prueba',
+    nombre: 'Suavizante', clase: 'liquido', unidad: 'Tapas',
+    es_por_tapa: true, tipo_liquido: 'granel', tapas_por_envase: 100,
+    botella_ml: 800, tapa_ml: 200, precio_botella: 27, precio_unitario: 5,
+    stock_actual: 96, stock_minimo: 4,
+  },
+  {
+    nombre: 'Suavizante', clase: 'liquido', unidad: 'Tapas', marca: 'Ensueño',
     es_por_tapa: true, tipo_liquido: 'marca', tapas_por_envase: 1,
-    botella_ml: 1, tapa_ml: 1, precio_botella: 28, precio_unitario: 5,
-    stock_actual: 10, stock_minimo: 2,
+    botella_ml: 1, tapa_ml: 1, precio_botella: 28,
+    stock_actual: 3, stock_minimo: 2,
+  },
+  {
+    nombre: 'Bolsa', clase: 'bolsa', unidad: 'pieza',
+    tamano_bolsa: 'chica', bolsas_por_rollo: 80,
+    precio_unitario: 5, stock_actual: 80, stock_minimo: 10,
+  },
+  {
+    nombre: 'Bolsa', clase: 'bolsa', unidad: 'pieza',
+    tamano_bolsa: 'grande', bolsas_por_rollo: 80,
+    precio_unitario: 5, stock_actual: 80, stock_minimo: 10,
   },
   {
     nombre: 'Bolsa', clase: 'bolsa', unidad: 'pieza',
@@ -59,6 +77,12 @@ const PRODUCTOS_PRUEBA = [
     precio_unitario: 5, stock_actual: 80, stock_minimo: 10,
   },
 ];
+
+// Nombre legible para el log, que distingue las variantes homónimas.
+function etiquetaProducto(p) {
+  const detalle = p.marca ?? p.tipo_liquido ?? p.tamano_bolsa;
+  return detalle ? `${p.nombre} (${detalle})` : p.nombre;
+}
 
 async function main() {
   const password = process.argv[2] || PRUEBA_PASSWORD_DEFECTO;
@@ -124,9 +148,16 @@ async function main() {
 
     // ── Productos ─────────────────────────────────────────────
     for (const p of PRODUCTOS_PRUEBA) {
+      // Hay productos que comparten nombre (suavizante granel y de marca, las
+      // tres bolsas), así que la variante se identifica por nombre + clase +
+      // marca/tipo de líquido + tamaño de bolsa.
       const { rowCount } = await client.query(
-        'SELECT 1 FROM productos WHERE sucursal = $1 AND nombre = $2 AND archivado = FALSE',
-        [SUCURSAL, p.nombre]
+        `SELECT 1 FROM productos
+          WHERE sucursal = $1 AND nombre = $2 AND clase = $3 AND archivado = FALSE
+            AND COALESCE(marca, '')        = COALESCE($4, '')
+            AND COALESCE(tipo_liquido, '') = COALESCE($5, '')
+            AND COALESCE(tamano_bolsa, '') = COALESCE($6, '')`,
+        [SUCURSAL, p.nombre, p.clase, p.marca ?? null, p.tipo_liquido ?? null, p.tamano_bolsa ?? null]
       );
       if (rowCount > 0) continue;
       await client.query(
@@ -143,8 +174,18 @@ async function main() {
           p.stock_actual ?? 0, p.stock_minimo ?? 0, SUCURSAL,
         ]
       );
-      console.log(`Producto:    ${p.nombre}`);
+      console.log(`Producto:    ${etiquetaProducto(p)}`);
     }
+
+    // Los seeds viejos creaban un jabón y un suavizante de marca inventada
+    // ('Prueba') que ya no forman parte del catálogo. Se archivan (no se
+    // borran, por si alguna nota los usó) para dejar solo la copia de Retiro.
+    const { rowCount: archivados } = await client.query(
+      `UPDATE productos SET archivado = TRUE
+        WHERE sucursal = $1 AND marca = 'Prueba' AND archivado = FALSE`,
+      [SUCURSAL]
+    );
+    if (archivados > 0) console.log(`Archivados:  ${archivados} producto(s) de la marca 'Prueba'`);
 
     console.log(`\nSucursal:            ${SUCURSAL} (oculta)`);
     console.log(`Contraseña de ambos: ${password}`);

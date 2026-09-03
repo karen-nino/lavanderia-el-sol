@@ -4,6 +4,7 @@ import { api } from '../lib/api';
 import { etiquetaProducto, ordenProducto } from '../lib/formatoInventario';
 import { capitalizarNombre } from '../lib/texto';
 import { FORMAS_PAGO } from '../lib/formasPago';
+import AbrirCajaModal from '../components/AbrirCajaModal';
 
 const INPUT_CLS =
   'w-full px-4 py-3.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent transition';
@@ -115,6 +116,7 @@ export default function NuevaNota() {
   // Caja del día: si nadie la abrió, los cobros de esta nota no entran en
   // ningún corte (van con caja_id nulo, mig. 101). Se avisa, no se bloquea.
   const [cajaAbierta, setCajaAbierta] = useState(null);
+  const [modalCajaOpen, setModalCajaOpen] = useState(false);
   const [form,              setForm]              = useState(FORM_INIT);
   const [productosLista,    setProductosLista]    = useState([]);
   const [error,             setError]             = useState('');
@@ -799,13 +801,19 @@ export default function NuevaNota() {
           </p>
           <button
             type="button"
-            onClick={() => navigate('/caja')}
+            onClick={() => setModalCajaOpen(true)}
             className="mt-2.5 text-sm font-medium text-amber-800 border border-amber-300 bg-white rounded-lg px-4 py-2 hover:bg-amber-100 transition-colors"
           >
             Abrir caja
           </button>
         </div>
       )}
+
+      <AbrirCajaModal
+        open={modalCajaOpen}
+        onClose={() => setModalCajaOpen(false)}
+        onAbierta={() => { setModalCajaOpen(false); setCajaAbierta(true); }} // el aviso desaparece
+      />
 
       <form onSubmit={handleSubmit} className="space-y-8">
 

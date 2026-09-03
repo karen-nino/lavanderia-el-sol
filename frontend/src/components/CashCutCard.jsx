@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../lib/api';
+import AbrirCajaModal from './AbrirCajaModal';
 
 // Tarjeta de Corte del Dashboard. El botón depende del estado de la caja:
 //   • Sin caja abierta → Abrir caja: abre un modal (fondo inicial + nota)
@@ -9,10 +10,6 @@ import { api } from '../lib/api';
 export default function CashCutCard() {
   const [abierta, setAbierta] = useState(null); // null = cargando
   const [modalOpen, setModalOpen] = useState(false);
-  const [monto, setMonto] = useState('');
-  const [notas, setNotas] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState(null);
 
   useEffect(() => {
     let activo = true;
@@ -21,34 +18,6 @@ export default function CashCutCard() {
       .catch(() => { if (activo) setAbierta(false); });
     return () => { activo = false; };
   }, []);
-
-  const abrirModal = () => {
-    setMonto('');
-    setNotas('');
-    setError(null);
-    setModalOpen(true);
-  };
-
-  const submitApertura = async (e) => {
-    e.preventDefault();
-    setSaving(true);
-    setError(null);
-    try {
-      await api.post('/caja/abrir', { monto_inicial: Number(monto), notas });
-      setModalOpen(false);
-      setAbierta(true); // el botón pasa a Realizar corte
-    } catch (err) {
-      // Si ya había una caja abierta (409), igual reflejamos ese estado.
-      if (/abierta/i.test(err.message)) {
-        setAbierta(true);
-        setModalOpen(false);
-      } else {
-        setError(err.message);
-      }
-    } finally {
-      setSaving(false);
-    }
-  };
 
   // Acento de color e ícono según el estado (verde = abrir, rojo = corte), en
   // línea con el resto de la app (verde = caja abierta, rojo = cerrar). Durante
@@ -92,7 +61,7 @@ export default function CashCutCard() {
       ) : (
         <button
           type="button"
-          onClick={abrirModal}
+          onClick={() => setModalOpen(true)}
           disabled={abierta === null}
           className={`w-1/2 text-center text-white text-section py-3 rounded-3xl transition-colors disabled:opacity-60 ${accent.btn}`}
         >
@@ -100,68 +69,11 @@ export default function CashCutCard() {
         </button>
       )}
 
-      {modalOpen && (
-        <div
-          className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
-          onClick={() => !saving && setModalOpen(false)}
-        >
-          <div
-            className="bg-white rounded-2xl shadow-xl w-full max-w-sm"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-gray-100">
-              <h2 className="text-base font-semibold text-gray-900">Abrir caja</h2>
-              <button
-                type="button"
-                onClick={() => setModalOpen(false)}
-                aria-label="Cerrar"
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            <form onSubmit={submitApertura} className="p-5 space-y-4">
-              {error && (
-                <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">{error}</div>
-              )}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Fondo inicial <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="number" min="0" step="0.01" required autoFocus
-                  value={monto} onChange={(e) => setMonto(e.target.value)}
-                  placeholder="0.00"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-base"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Nota (opcional)</label>
-                <textarea
-                  rows={4} value={notas} onChange={(e) => setNotas(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-base resize-y min-h-[6rem]"
-                />
-              </div>
-              <div className="flex gap-3 pt-1">
-                <button
-                  type="button" onClick={() => setModalOpen(false)}
-                  className="flex-1 border border-gray-300 text-gray-700 font-medium py-3 rounded-lg text-base hover:bg-gray-50 transition-colors"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit" disabled={saving}
-                  className="flex-1 bg-blue text-white font-medium py-3 rounded-lg text-base hover:opacity-90 transition-opacity disabled:opacity-60"
-                >
-                  {saving ? 'Abriendo…' : 'Abrir caja'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <AbrirCajaModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        onAbierta={() => { setModalOpen(false); setAbierta(true); }} // el botón pasa a Realizar corte
+      />
     </div>
   );
 }
