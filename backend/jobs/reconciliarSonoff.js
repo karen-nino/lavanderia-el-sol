@@ -23,7 +23,8 @@ export async function reconciliarSonoff() {
     'SELECT id FROM maquinas WHERE device_id IS NOT NULL ORDER BY id'
   );
   for (const { id } of rows) {
-    await sincronizarSonoff(id); // no lanza; best-effort máquina por máquina
+    // reconciliando: no reenciende lo que alguien apagó a mano (ver el servicio).
+    await sincronizarSonoff(id, { reconciliando: true }); // no lanza; best-effort
   }
   return rows.length;
 }
