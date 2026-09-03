@@ -408,7 +408,7 @@ export default function Empleados() {
                     )}
                   </button>
                 </div>
-                <p className="text-xs text-gray-500 mt-1">Mínimo 8 caracteres.</p>
+                <p className="text-xs text-gray-500 mt-1">Mínimo 6 caracteres.</p>
               </div>
               {formError && (
                 <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">{formError}</div>

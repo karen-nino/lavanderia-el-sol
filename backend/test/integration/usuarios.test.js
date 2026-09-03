@@ -34,11 +34,11 @@ describe('POST /api/usuarios — crear empleado', () => {
     expect(res.body.sucursal).toBe('centro');
   });
 
-  it('contraseña de menos de 8 caracteres → 400', async () => {
+  it('contraseña de menos de 6 caracteres → 400', async () => {
     const res = await request(app).post('/api/usuarios').set(auth(admin.token))
       .send({ nombre: 'Juan', password: 'corta', rol: 'operador' });
     expect(res.status).toBe(400);
-    expect(res.body.message).toMatch(/8 caracteres/i);
+    expect(res.body.message).toMatch(/6 caracteres/i);
   });
 
   it('nombre vacío → 400', async () => {

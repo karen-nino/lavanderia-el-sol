@@ -52,8 +52,8 @@ async function main() {
 
   const password = await preguntarPassword('Contraseña para admin: ');
 
-  if (password.length < 8) {
-    console.error('Error: la contraseña debe tener al menos 8 caracteres.');
+  if (password.length < 6) {
+    console.error('Error: la contraseña debe tener al menos 6 caracteres.');
     process.exit(1);
   }
 

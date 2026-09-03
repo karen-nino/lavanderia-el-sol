@@ -165,8 +165,8 @@ export const updateMe = async (req, res) => {
     updates.push(`apellido = $${i++}`); values.push(capitalizarNombre(apellido) || null);
   }
   if (password) {
-    if (password.length < 8) {
-      return res.status(400).json({ message: 'La contraseña debe tener al menos 8 caracteres.' });
+    if (password.length < 6) {
+      return res.status(400).json({ message: 'La contraseña debe tener al menos 6 caracteres.' });
     }
     const hashed = await bcrypt.hash(password, 10);
     updates.push(`password = $${i++}`); values.push(hashed);

@@ -226,8 +226,8 @@ export const createEmpleado = async (req, res) => {
   const { nombre, apellido, password, rol, sucursal } = req.body;
 
   if (!nombre?.trim()) return res.status(400).json({ message: 'El nombre es requerido.' });
-  if (!password || password.length < 8) {
-    return res.status(400).json({ message: 'La contraseña debe tener al menos 8 caracteres.' });
+  if (!password || password.length < 6) {
+    return res.status(400).json({ message: 'La contraseña debe tener al menos 6 caracteres.' });
   }
   const rolFinal = ROL_VALIDOS.includes(rol) ? rol : 'operador';
 
@@ -322,8 +322,8 @@ export const updateEmpleado = async (req, res) => {
       updates.push(`sucursal = $${i++}`); values.push(sucursal.trim());
     }
     if (password) {
-      if (password.length < 8) {
-        return res.status(400).json({ message: 'La contraseña debe tener al menos 8 caracteres.' });
+      if (password.length < 6) {
+        return res.status(400).json({ message: 'La contraseña debe tener al menos 6 caracteres.' });
       }
       const hashed = await bcrypt.hash(password, 10);
       updates.push(`password = $${i++}`); values.push(hashed);

@@ -62,8 +62,8 @@ const PRODUCTOS_PRUEBA = [
 
 async function main() {
   const password = process.argv[2] || PRUEBA_PASSWORD_DEFECTO;
-  if (password.length < 8) {
-    console.error('Error: la contraseña debe tener al menos 8 caracteres.');
+  if (password.length < 6) {
+    console.error('Error: la contraseña debe tener al menos 6 caracteres.');
     process.exit(1);
   }
 
