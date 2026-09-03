@@ -70,6 +70,23 @@ const SEGUNDOS_PRUEBA_FISICA = 5;
 
 const esperar = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
+// Apagar es la operación que NO puede quedarse a medias: si falla, una máquina
+// se queda andando sola. Se reintenta con una pausa corta antes de rendirse.
+const INTENTOS_APAGADO = 3;
+async function apagarConReintentos(maq) {
+  let ultimo;
+  for (let i = 1; i <= INTENTOS_APAGADO; i++) {
+    ultimo = await dispositivos.apagar(maq);
+    if (ultimo.ok) {
+      if (i > 1) console.log(`[maquinas] apagado de ${maq.nombre} logrado en el intento ${i}`);
+      return ultimo;
+    }
+    console.warn(`[maquinas] intento ${i}/${INTENTOS_APAGADO} de apagar ${maq.nombre} falló: ${ultimo.motivo}`);
+    if (i < INTENTOS_APAGADO) await esperar(1000);
+  }
+  return ultimo;
+}
+
 const mensajeDeviceDuplicado = (nombre, deviceCanal) =>
   `Ese ID de Sonoff ya está asignado a "${nombre}"` +
   (deviceCanal != null ? ` (canal ${deviceCanal})` : '') +
@@ -621,6 +638,7 @@ export const pruebaFisicaSonoff = async (req, res) => {
     }
 
     const encendido = await dispositivos.encender(maq);
+    console.log(`[maquinas] prueba física ${maq.nombre}: encender → ${encendido.ok ? 'ok' : `falló (${encendido.motivo})`}`);
     if (!encendido.ok) {
       const { rows: upd } = await pool.query(
         `UPDATE maquinas SET sonoff_estado = 'error', sonoff_sync_at = NOW() WHERE id = $1 RETURNING *`,
@@ -638,7 +656,8 @@ export const pruebaFisicaSonoff = async (req, res) => {
     try {
       await esperar(SEGUNDOS_PRUEBA_FISICA * 1000);
     } finally {
-      apagado = await dispositivos.apagar(maq);
+      apagado = await apagarConReintentos(maq);
+      console.log(`[maquinas] prueba física ${maq.nombre}: apagar → ${apagado.ok ? 'ok' : `falló (${apagado.motivo})`}`);
     }
 
     if (!apagado.ok) {
@@ -660,6 +679,56 @@ export const pruebaFisicaSonoff = async (req, res) => {
     });
   } catch (err) {
     console.error('pruebaFisicaSonoff error:', err);
+    res.status(500).json({ message: 'Error interno del servidor.' });
+  }
+};
+
+// Apagado de emergencia: corta el Sonoff ya, sin esperas ni condiciones.
+//
+// Existe porque una prueba física puede dejar la máquina andando (si el
+// apagado falla, o si el relé no obedece a la primera) y en ese momento lo
+// último que sirve es tener que ir a buscar el teléfono y abrir eWeLink.
+//
+// A diferencia de la prueba física, esto SÍ se permite con la máquina en uso:
+// justamente el caso urgente es "está encendida y no debería estarlo". No toca
+// el estado operativo en la BD; solo manda apagar el dispositivo.
+export const apagarSonoff = async (req, res) => {
+  const { id } = req.params;
+  try {
+    const { rows } = await pool.query(
+      'SELECT * FROM maquinas WHERE id = $1 AND sucursal = $2',
+      [id, req.sucursal]
+    );
+    if (rows.length === 0) {
+      return res.status(404).json({ message: 'Máquina no encontrada.' });
+    }
+    const maq = rows[0];
+
+    if (!dispositivos.tieneDispositivo(maq)) {
+      return res.status(400).json({ message: 'La máquina no tiene un Sonoff enlazado.' });
+    }
+    if (simulacionActiva()) {
+      return res.json({ simulado: true, driver: dispositivos.nombreDriver(), message: MSG_SIMULACION, maquina: maq });
+    }
+
+    const apagado = await apagarConReintentos(maq);
+    console.log(`[maquinas] apagado de emergencia ${maq.nombre}: ${apagado.ok ? 'ok' : `falló (${apagado.motivo})`}`);
+
+    const { rows: upd } = await pool.query(
+      `UPDATE maquinas SET sonoff_estado = $1, sonoff_sync_at = NOW() WHERE id = $2 RETURNING *`,
+      [apagado.ok ? 'enlazada' : 'error', id]
+    );
+
+    if (!apagado.ok) {
+      return res.status(502).json({
+        message: explicarFalla(apagado.motivo, 'No se pudo apagar') +
+                 ' Apágala desde la app eWeLink o con el interruptor de la máquina.',
+        maquina: upd[0],
+      });
+    }
+    res.json({ message: 'Orden de apagado enviada.', maquina: upd[0] });
+  } catch (err) {
+    console.error('apagarSonoff error:', err);
     res.status(500).json({ message: 'Error interno del servidor.' });
   }
 };

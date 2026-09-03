@@ -88,6 +88,7 @@ export default function GestionMaquinas() {
   const [eliminando, setEliminando] = useState(null);
   const [probando, setProbando] = useState(false);
   const [probandoFisica, setProbandoFisica] = useState(false);
+  const [apagando, setApagando] = useState(false);
   const [probarMsg, setProbarMsg] = useState(null); // { tipo: 'ok'|'error'|'sim', texto }
   const [filtro, setFiltro] = useState('todos');
   const [cuentaSonoff, setCuentaSonoff] = useState(null);
@@ -226,6 +227,26 @@ export default function GestionMaquinas() {
       cargarCuentaSonoff();
     } catch (err) {
       setError(err.message);
+    }
+  };
+
+  // Apagado de emergencia. Sin confirmación a propósito: se usa cuando la
+  // máquina está andando y no debería, y ahí un diálogo de más es tiempo
+  // perdido. Apagar de sobra no rompe nada; dejarla andando sí.
+  const handleApagarYa = async () => {
+    if (editandoId == null) return;
+    setApagando(true);
+    setProbarMsg(null);
+    try {
+      const r = await api.post(`/maquinas/${editandoId}/apagar-sonoff`, {});
+      if (r?.maquina) setMaquinas(prev => prev.map(m => m.id === editandoId ? r.maquina : m));
+      setProbarMsg(r?.simulado
+        ? { tipo: 'sim', texto: r.message }
+        : { tipo: 'ok', texto: r?.message ?? 'Orden de apagado enviada.' });
+    } catch (err) {
+      setProbarMsg({ tipo: 'error', texto: err.message });
+    } finally {
+      setApagando(false);
     }
   };
 
@@ -701,16 +722,26 @@ export default function GestionMaquinas() {
                           el equipo. No tiene sentido con la máquina en uso. */}
                       {maquinaEditada?.estado !== 'en_uso' && (
                         <button
-                          type="button" onClick={handleProbarFisica} disabled={probando || probandoFisica}
+                          type="button" onClick={handleProbarFisica} disabled={probando || probandoFisica || apagando}
                           className="text-sm font-medium text-amber-700 border border-amber-300 rounded-lg px-4 py-2 hover:bg-amber-50 disabled:opacity-60 transition-colors"
                         >
                           {probandoFisica ? 'Encendiendo…' : 'Encender 5 segundos'}
                         </button>
                       )}
+                      {/* Apagar SIEMPRE está disponible, incluso con la máquina
+                          en uso: es el botón al que se corre cuando algo quedó
+                          andando y no debería. */}
+                      <button
+                        type="button" onClick={handleApagarYa} disabled={apagando}
+                        className="text-sm font-semibold text-white bg-red-600 rounded-lg px-4 py-2 hover:bg-red-700 disabled:opacity-60 transition-colors"
+                      >
+                        {apagando ? 'Apagando…' : 'Apagar ahora'}
+                      </button>
                     </div>
                     <p className="mt-1.5 text-xs text-gray-400">
                       "Probar enlace" solo consulta el dispositivo. "Encender 5 segundos"
                       arranca la máquina de verdad: úsalo con el equipo vacío.
+                      "Apagar ahora" corta el Sonoff de inmediato.
                     </p>
                     {probarMsg && (
                       <p className={`mt-1.5 text-sm font-medium ${
