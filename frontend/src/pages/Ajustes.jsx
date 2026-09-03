@@ -1126,11 +1126,17 @@ export default function Ajustes() {
         Límite del precio de una carga (máquinas + productos) según su tamaño. El ajuste manual
         no cuenta contra el tope. Aplica a las cargas Por Encargo (que capturan tamaño).
       </p>
-      <div className="space-y-8">
-        {campoTope('tope_carga_chico',  'Carga Chica',  'chica')}
-        {campoTope('tope_carga_grande', 'Carga Grande', 'grande')}
-        {campoTope('tope_carga_jumbo',  'Carga Jumbo',  'jumbo')}
-        {campoTope('tope_carga_edredon', 'Carga Edredón', 'de edredón')}
+      <div className="space-y-4">
+        {[
+          ['tope_carga_chico',   'Carga Chica',   'chica'],
+          ['tope_carga_grande',  'Carga Grande',  'grande'],
+          ['tope_carga_jumbo',   'Carga Jumbo',   'jumbo'],
+          ['tope_carga_edredon', 'Carga Edredón', 'de edredón'],
+        ].map(([name, label, tamano]) => (
+          <div key={name} className="rounded-xl border border-gray-200 px-5 py-4">
+            {campoTope(name, label, tamano)}
+          </div>
+        ))}
       </div>
     </Section>
 
@@ -1750,12 +1756,14 @@ export default function Ajustes() {
             no cuenta contra el tope. Aplica a las cargas Por Encargo (que capturan tamaño).
           </p>
         </div>
-        <TarjetaMobile>
-          {campoTopeM('tope_carga_chico',  'Carga Chica',  'chica')}
-          {campoTopeM('tope_carga_grande', 'Carga Grande', 'grande')}
-          {campoTopeM('tope_carga_jumbo',  'Carga Jumbo',  'jumbo')}
-          {campoTopeM('tope_carga_edredon', 'Carga Edredón', 'de edredón')}
-        </TarjetaMobile>
+        {/* Una tarjeta por carga: son precios independientes entre sí y
+            apelotonarlos en un bloque los hacía leer como una lista. */}
+        <div className="space-y-4">
+          <TarjetaMobile>{campoTopeM('tope_carga_chico',   'Carga Chica',   'chica')}</TarjetaMobile>
+          <TarjetaMobile>{campoTopeM('tope_carga_grande',  'Carga Grande',  'grande')}</TarjetaMobile>
+          <TarjetaMobile>{campoTopeM('tope_carga_jumbo',   'Carga Jumbo',   'jumbo')}</TarjetaMobile>
+          <TarjetaMobile>{campoTopeM('tope_carga_edredon', 'Carga Edredón', 'de edredón')}</TarjetaMobile>
+        </div>
       </div>
 
     </div>

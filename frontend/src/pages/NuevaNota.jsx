@@ -112,6 +112,9 @@ export default function NuevaNota() {
   // por prenda que manda sobre el del tamaño para las cargas de edredón.
   const [topes,             setTopes]             = useState({ chico: null, grande: null, jumbo: null, edredon: null });
   const [loadingData,       setLoadingData]       = useState(true);
+  // Caja del día: si nadie la abrió, los cobros de esta nota no entran en
+  // ningún corte (van con caja_id nulo, mig. 101). Se avisa, no se bloquea.
+  const [cajaAbierta, setCajaAbierta] = useState(null);
   const [form,              setForm]              = useState(FORM_INIT);
   const [productosLista,    setProductosLista]    = useState([]);
   const [error,             setError]             = useState('');
@@ -227,6 +230,12 @@ export default function NuevaNota() {
     return sum + precioProducto(prod, 'botella') * (Number(p.cantidad) || 0);
   }, 0);
   const precioTotal = subtotalCargas + ajusteNum + subtotalProductos;
+
+  useEffect(() => {
+    api.get('/caja/actual')
+      .then(r => setCajaAbierta(Boolean(r?.abierta)))
+      .catch(() => setCajaAbierta(null)); // si falla la consulta, no se avisa nada
+  }, []);
 
   useEffect(() => {
     const promesas = [
@@ -779,6 +788,24 @@ export default function NuevaNota() {
           </p>
         </div>
       </div>
+
+      {/* Recordatorio de abrir caja: sin sesión abierta, lo que se cobre hoy
+          no queda en ningún corte. Solo al crear (al editar ya no aplica). */}
+      {!esEdicion && cajaAbierta === false && (
+        <div className="mb-6 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
+          <p className="text-sm font-semibold text-amber-900">La caja del día no está abierta</p>
+          <p className="mt-0.5 text-sm text-amber-800">
+            Puedes hacer la nota, pero lo que cobres no va a aparecer en el corte de hoy.
+          </p>
+          <button
+            type="button"
+            onClick={() => navigate('/caja')}
+            className="mt-2.5 text-sm font-medium text-amber-800 border border-amber-300 bg-white rounded-lg px-4 py-2 hover:bg-amber-100 transition-colors"
+          >
+            Abrir caja
+          </button>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-8">
 

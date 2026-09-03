@@ -1,15 +1,19 @@
 import pool from '../db/pool.js';
 
-// Ventas cobradas durante la ventana de la sesión de caja, atribuidas al
-// momento del cobro (pagado_en, migración 037): una nota creada ayer y cobrada
-// hoy cuenta en el corte de hoy.
+// Ventas cobradas DENTRO de una sesión de caja.
+//
+// Se suman por `notas.caja_id` (mig. 101), que el trigger del pago fija al
+// cobrar. Antes se preguntaba por ventana de tiempo ("¿qué notas pagadas caen
+// entre la apertura y el cierre?"), y eso hacía que un corte ya cerrado
+// cambiara solo cuando alguien revertía un pago viejo.
 //
 // Se devuelven desglosadas por forma de pago porque SOLO el efectivo entra al
 // cajón: sumar transferencias y tarjetas al esperado hacía que el corte
 // marcara un faltante que nadie se robó. Las notas viejas sin forma_pago se
 // cuentan como efectivo (mig. 090 ya las rellenó; el COALESCE cubre cualquier
-// fila que se cuele después).
-async function ventasDeSesion(client, abiertaAt, cerradaAt, sucursal) {
+// fila que se cuele después). Una nota cancelada no es una venta: su dinero se
+// devolvió.
+async function ventasDeSesion(client, cajaId) {
   const { rows } = await client.query(
     `SELECT
         COALESCE(SUM(precio_total), 0) AS total,
@@ -18,15 +22,10 @@ async function ventasDeSesion(client, abiertaAt, cerradaAt, sucursal) {
         COALESCE(SUM(precio_total) FILTER (WHERE forma_pago = 'TRANSFERENCIA'), 0) AS transferencia,
         COALESCE(SUM(precio_total) FILTER (WHERE forma_pago = 'TARJETA'), 0) AS tarjeta
        FROM notas
-      WHERE estado_pago = 'PAGADO'
-        -- Una nota cancelada no es una venta: su dinero se devolvió. Ya no se
-        -- pueden cancelar notas cobradas, pero las que quedaron así de antes
-        -- harían que el corte esperara efectivo que no está en el cajón.
-        AND estado <> 'CANCELADA'
-        AND sucursal = $3
-        AND pagado_en >= $1
-        AND pagado_en <= COALESCE($2, NOW())`,
-    [abiertaAt, cerradaAt, sucursal]
+      WHERE caja_id = $1
+        AND estado_pago = 'PAGADO'
+        AND estado <> 'CANCELADA'`,
+    [cajaId]
   );
   const r = rows[0];
   return {
@@ -80,7 +79,7 @@ export async function getCajaActual(req, res) {
       [caja.id]
     );
 
-    const ventas = await ventasDeSesion(client, caja.abierta_at, null, req.sucursal);
+    const ventas = await ventasDeSesion(client, caja.id);
     const { entradas, salidas } = await totalesMovimientos(client, caja.id);
     const monto_inicial = parseFloat(caja.monto_inicial);
     // El esperado en el cajón solo cuenta el efectivo; transferencias y
@@ -202,7 +201,7 @@ export async function cerrarCaja(req, res) {
     }
     const caja = cajaRes.rows[0];
 
-    const ventas = await ventasDeSesion(client, caja.abierta_at, null, req.sucursal);
+    const ventas = await ventasDeSesion(client, caja.id);
     const { entradas, salidas } = await totalesMovimientos(client, caja.id);
     const monto_inicial = parseFloat(caja.monto_inicial);
     // El esperado en el cajón solo cuenta el efectivo; transferencias y
@@ -210,15 +209,26 @@ export async function cerrarCaja(req, res) {
     const esperado = monto_inicial + ventas.efectivo + entradas - salidas;
     const diferencia = contado - esperado;
 
+    // Las cifras se COPIAN al corte (mig. 101). A partir de aquí el historial
+    // las lee tal cual: lo que pase después con esas notas —revertir un pago,
+    // editar un total— ya no puede reescribir un corte cerrado.
     const upd = await client.query(
       `UPDATE cajas
           SET estado = 'cerrada',
               usuario_cierre_id = $1,
               monto_contado = $2,
               notas_cierre = $3,
-              cerrada_at = NOW()
+              cerrada_at = NOW(),
+              ventas_total         = $5,
+              ventas_efectivo      = $6,
+              ventas_transferencia = $7,
+              ventas_tarjeta       = $8,
+              total_entradas       = $9,
+              total_salidas        = $10
         WHERE id = $4 AND estado = 'abierta'`,
-      [req.user.id, contado, notas_cierre?.trim() || null, caja.id]
+      [req.user.id, contado, notas_cierre?.trim() || null, caja.id,
+       ventas.total, ventas.efectivo, ventas.transferencia, ventas.tarjeta,
+       entradas, salidas]
     );
     if (upd.rowCount === 0) {
       await client.query('ROLLBACK');
@@ -263,51 +273,40 @@ export async function getHistorial(req, res) {
           c.cierre_automatico,
           TRIM(ua.nombre || ' ' || COALESCE(ua.apellido, '')) AS usuario_apertura,
           TRIM(uc.nombre || ' ' || COALESCE(uc.apellido, '')) AS usuario_cierre,
-          -- Mismo desglose que ventasDeSesion(): el esperado del cajón solo
-          -- cuenta el efectivo; lo demás se informa aparte.
-          COALESCE((
-            SELECT SUM(precio_total) FROM notas
-             WHERE estado_pago = 'PAGADO'
-               AND estado <> 'CANCELADA'
-               AND sucursal = c.sucursal
-               AND pagado_en >= c.abierta_at
-               AND pagado_en <= c.cerrada_at
-          ), 0) AS ventas,
-          COALESCE((
-            SELECT SUM(precio_total) FROM notas
-             WHERE estado_pago = 'PAGADO'
-               AND estado <> 'CANCELADA'
+          -- Cifras CONGELADAS al cerrar (mig. 101). Un corte cerrado ya no
+          -- se recalcula: revertir un pago o editar un total no puede
+          -- reescribir lo que se contó aquel día.
+          --
+          -- El COALESCE cubre los cortes anteriores a la migración, que no
+          -- tienen copia: esos se siguen sumando desde sus notas, ahora por
+          -- caja_id (el backfill de la 101 lo llenó) en vez de por ventana.
+          COALESCE(c.ventas_total, (
+            SELECT COALESCE(SUM(precio_total), 0) FROM notas
+             WHERE caja_id = c.id AND estado_pago = 'PAGADO' AND estado <> 'CANCELADA'
+          )) AS ventas,
+          COALESCE(c.ventas_efectivo, (
+            SELECT COALESCE(SUM(precio_total), 0) FROM notas
+             WHERE caja_id = c.id AND estado_pago = 'PAGADO' AND estado <> 'CANCELADA'
                AND COALESCE(forma_pago, 'EFECTIVO') = 'EFECTIVO'
-               AND sucursal = c.sucursal
-               AND pagado_en >= c.abierta_at
-               AND pagado_en <= c.cerrada_at
-          ), 0) AS ventas_efectivo,
-          COALESCE((
-            SELECT SUM(precio_total) FROM notas
-             WHERE estado_pago = 'PAGADO'
-               AND estado <> 'CANCELADA'
+          )) AS ventas_efectivo,
+          COALESCE(c.ventas_transferencia, (
+            SELECT COALESCE(SUM(precio_total), 0) FROM notas
+             WHERE caja_id = c.id AND estado_pago = 'PAGADO' AND estado <> 'CANCELADA'
                AND forma_pago = 'TRANSFERENCIA'
-               AND sucursal = c.sucursal
-               AND pagado_en >= c.abierta_at
-               AND pagado_en <= c.cerrada_at
-          ), 0) AS ventas_transferencia,
-          COALESCE((
-            SELECT SUM(precio_total) FROM notas
-             WHERE estado_pago = 'PAGADO'
-               AND estado <> 'CANCELADA'
+          )) AS ventas_transferencia,
+          COALESCE(c.ventas_tarjeta, (
+            SELECT COALESCE(SUM(precio_total), 0) FROM notas
+             WHERE caja_id = c.id AND estado_pago = 'PAGADO' AND estado <> 'CANCELADA'
                AND forma_pago = 'TARJETA'
-               AND sucursal = c.sucursal
-               AND pagado_en >= c.abierta_at
-               AND pagado_en <= c.cerrada_at
-          ), 0) AS ventas_tarjeta,
-          COALESCE((
-            SELECT SUM(monto) FROM movimientos_caja
+          )) AS ventas_tarjeta,
+          COALESCE(c.total_entradas, (
+            SELECT COALESCE(SUM(monto), 0) FROM movimientos_caja
              WHERE caja_id = c.id AND tipo = 'entrada'
-          ), 0) AS entradas,
-          COALESCE((
-            SELECT SUM(monto) FROM movimientos_caja
+          )) AS entradas,
+          COALESCE(c.total_salidas, (
+            SELECT COALESCE(SUM(monto), 0) FROM movimientos_caja
              WHERE caja_id = c.id AND tipo = 'salida'
-          ), 0) AS salidas
+          )) AS salidas
         FROM cajas c
         JOIN usuarios ua ON ua.id = c.usuario_apertura_id
         LEFT JOIN usuarios uc ON uc.id = c.usuario_cierre_id

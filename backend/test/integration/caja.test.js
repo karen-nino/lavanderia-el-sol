@@ -224,3 +224,57 @@ describe('DELETE /api/caja/historial/:id (eliminar corte)', () => {
     expect(historial.body.map((c) => c.id)).not.toContain(corteId);
   });
 });
+
+// El corte se calculaba cada vez preguntando "¿qué notas pagadas caen entre la
+// apertura y el cierre?". Revertir un pago viejo sacaba esa venta de la ventana
+// y un corte YA CERRADO aparecía con un faltante que nadie causó ese día.
+describe('un corte cerrado no cambia después (mig. 101)', () => {
+  async function cobrar(monto = 70) {
+    const nota = await request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA',
+      estado_pago: 'PAGADO', forma_pago: 'EFECTIVO',
+      cargas: [{ lavadora_tipo: 'mediana' }],
+    });
+    expect(nota.status).toBe(201);
+    expect(Number(nota.body.precio_total)).toBe(monto);
+    return nota.body.id;
+  }
+
+  it('revertir el pago de una nota vieja no toca el corte ya cerrado', async () => {
+    await request(app).post('/api/caja/abrir').set(auth(admin.token)).send({ monto_inicial: 0 }).expect(201);
+    const notaId = await cobrar();
+    const cierre = await request(app).post('/api/caja/cerrar').set(auth(admin.token))
+      .send({ monto_contado: 70 });
+    expect(cierre.body.resumen.diferencia).toBe(0); // cuadró aquel día
+
+    // Días después alguien revierte ese cobro.
+    await request(app).patch(`/api/notas/${notaId}/estado-pago`).set(auth(admin.token))
+      .send({ estado_pago: 'PENDIENTE' }).expect(200);
+
+    const hist = await request(app).get('/api/caja/historial').set(auth(admin.token));
+    const corte = hist.body[0];
+    expect(corte.ventas).toBe(70);      // sigue diciendo lo que se vendió ese día
+    expect(corte.esperado).toBe(70);
+    expect(corte.diferencia).toBe(0);   // y sigue cuadrando
+  });
+
+  it('cada cobro cuenta en SU sesión, no en la que esté abierta al mirarlo', async () => {
+    await request(app).post('/api/caja/abrir').set(auth(admin.token)).send({ monto_inicial: 0 }).expect(201);
+    await cobrar();
+    await request(app).post('/api/caja/cerrar').set(auth(admin.token)).send({ monto_contado: 70 }).expect(200);
+
+    // Segunda sesión con su propia venta.
+    await request(app).post('/api/caja/abrir').set(auth(admin.token)).send({ monto_inicial: 0 }).expect(201);
+    await cobrar();
+    const actual = await request(app).get('/api/caja/actual').set(auth(admin.token));
+    expect(actual.body.totales.ventas).toBe(70); // solo la suya, no 140
+  });
+
+  it('un cobro hecho sin caja abierta no se cuela en la siguiente sesión', async () => {
+    await cobrar(); // nadie abrió caja todavía
+
+    await request(app).post('/api/caja/abrir').set(auth(admin.token)).send({ monto_inicial: 0 }).expect(201);
+    const actual = await request(app).get('/api/caja/actual').set(auth(admin.token));
+    expect(actual.body.totales.ventas).toBe(0);
+  });
+});
