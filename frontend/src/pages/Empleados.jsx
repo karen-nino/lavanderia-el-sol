@@ -98,11 +98,16 @@ export default function Empleados() {
       const nombreCompleto = `${e.nombre} ${e.apellido ?? ''}`.toLowerCase();
       return nombreCompleto.includes(busqueda.toLowerCase());
     })
-    // Orden: el usuario actual hasta arriba, luego los usuarios de prueba y
-    // por último el resto (alfabético).
+    // Orden: el usuario actual hasta arriba (para que siempre encuentre su
+    // tarjeta), después TODOS los admin y al final los empleados. Dentro de
+    // cada grupo van primero los usuarios de prueba y luego el resto, en
+    // alfabético.
     .sort((a, b) => {
       if (a.id === usuario?.id) return -1;
       if (b.id === usuario?.id) return 1;
+      const adminA = esAdminFn(a.rol);
+      const adminB = esAdminFn(b.rol);
+      if (adminA !== adminB) return adminA ? -1 : 1;
       const pa = esUsuarioPrueba(a);
       const pb = esUsuarioPrueba(b);
       if (pa !== pb) return pa ? -1 : 1;
