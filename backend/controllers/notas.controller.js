@@ -887,9 +887,24 @@ export const getNotaById = async (req, res) => {
       [id]
     );
 
+    // Correcciones de forma de pago (mig. 102): es dinero que se movió entre
+    // columnas del corte, así que el detalle enseña quién y cuándo.
+    const { rows: historialPago } = await pool.query(
+      `SELECT h.forma_anterior, h.forma_nueva, h.created_at,
+              TRIM(u.nombre || ' ' || COALESCE(u.apellido, '')) AS usuario_nombre
+         FROM nota_forma_pago_historial h
+         LEFT JOIN usuarios u ON u.id = h.usuario_id
+        WHERE h.nota_id = $1
+        ORDER BY h.created_at ASC`,
+      [id]
+    );
+
     const cargas = await cargasDeNota(pool, id);
 
-    res.json({ ...rows[0], productos, cargas, insumos_consumidos: movs, historial_estados: historial });
+    res.json({
+      ...rows[0], productos, cargas, insumos_consumidos: movs,
+      historial_estados: historial, historial_forma_pago: historialPago,
+    });
   } catch (err) {
     console.error('getNotaById error:', err);
     res.status(500).json({ message: 'Error interno del servidor.' });
@@ -2964,15 +2979,32 @@ export const corregirFormaPago = async (req, res) => {
       return res.status(400).json({ message: `La nota ya está registrada como ${formaPago}.` });
     }
 
-    const { rows: upd } = await pool.query(
-      'UPDATE notas SET forma_pago = $1 WHERE id = $2 RETURNING *',
-      [formaPago, id]
-    );
-    console.log(
-      `[notas] forma de pago corregida en ${nota.folio}: ${nota.forma_pago} → ${formaPago} ` +
-      `(usuario ${req.user?.id ?? '?'})`
-    );
-    res.json(upd[0]);
+    // El cambio y su rastro van juntos: es dinero moviéndose entre columnas del
+    // corte, no puede quedar uno sin el otro (mig. 102).
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const { rows: upd } = await client.query(
+        'UPDATE notas SET forma_pago = $1 WHERE id = $2 RETURNING *',
+        [formaPago, id]
+      );
+      await client.query(
+        `INSERT INTO nota_forma_pago_historial (nota_id, forma_anterior, forma_nueva, usuario_id)
+         VALUES ($1, $2, $3, $4)`,
+        [id, nota.forma_pago, formaPago, req.user?.id ?? null]
+      );
+      await client.query('COMMIT');
+      console.log(
+        `[notas] forma de pago corregida en ${nota.folio}: ${nota.forma_pago} → ${formaPago} ` +
+        `(usuario ${req.user?.id ?? '?'})`
+      );
+      res.json(upd[0]);
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
   } catch (err) {
     console.error('corregirFormaPago error:', err);
     res.status(500).json({ message: 'Error interno del servidor.' });

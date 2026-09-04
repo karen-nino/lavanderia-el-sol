@@ -707,6 +707,24 @@ export default function DetalleNota() {
               <span className="text-gray-700">{formaPagoLabel(nota.forma_pago)}</span>
             </FilaDetalle>
           )}
+          {/* Rastro de las correcciones (mig. 102): es dinero que se movió de
+              columna en el corte, así que se deja a la vista quién lo cambió. */}
+          {(nota.historial_forma_pago ?? []).length > 0 && (
+            <FilaDetalle label="Correcciones de pago">
+              <div className="space-y-1.5">
+                {nota.historial_forma_pago.map((h, i) => (
+                  <div key={i} className="text-xs text-gray-500">
+                    <span className="font-medium text-gray-700">
+                      {formaPagoLabel(h.forma_anterior)} → {formaPagoLabel(h.forma_nueva)}
+                    </span>
+                    <span className="block">
+                      {h.usuario_nombre ?? 'Usuario eliminado'} · {formatFechaHora12(h.created_at)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </FilaDetalle>
+          )}
           {(nota.cargas ?? []).length > 0 && (
             <FilaDetalle label="Cargas">
               <div className="space-y-3">

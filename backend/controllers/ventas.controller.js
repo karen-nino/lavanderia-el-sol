@@ -52,6 +52,10 @@ export async function getResumen(req, res) {
 
   const periodSQL = buildPeriodSQL(periodo, 'o.pagado_en', anioSel != null, mesSel != null);
   const periodListSQL = buildPeriodSQL(periodo, 'o.created_at', anioSel != null, mesSel != null);
+  // Correcciones de forma de pago (mig. 102): se ubican por CUÁNDO se
+  // corrigieron, no por cuándo se cobró la nota, porque lo que se está
+  // reportando es la corrección en sí.
+  const periodCorrSQL = buildPeriodSQL(periodo, 'h.created_at', anioSel != null, mesSel != null);
 
   if (isCustom && (!desde || !hasta)) {
     return res.status(400).json({ message: 'Se requieren los parámetros desde y hasta para el período personalizado.' });
@@ -73,7 +77,7 @@ export async function getResumen(req, res) {
   const whereLista = `o.sucursal = $${sucIdx} AND ${periodListSQL}`;
 
   try {
-    const [tarjetasRes, pendientesRes, graficaRes, listaRes, corteRes] = await Promise.all([
+    const [tarjetasRes, pendientesRes, graficaRes, listaRes, corteRes, correccionesRes] = await Promise.all([
       // Tarjetas: total_cobrado, notas_pagadas, productos_consumidos
       pool.query(
         `SELECT
@@ -179,6 +183,19 @@ export async function getResumen(req, res) {
         WHERE ${whereBase}`,
         params
       ),
+      // Correcciones de forma de pago hechas en el período. Explican por qué el
+      // desglose por forma de cobro puede no cuadrar con lo que se recordaba.
+      pool.query(
+        `SELECT o.id AS nota_id, o.folio, o.precio_total,
+                h.forma_anterior, h.forma_nueva, h.created_at,
+                TRIM(u.nombre || ' ' || COALESCE(u.apellido, '')) AS usuario_nombre
+           FROM nota_forma_pago_historial h
+           JOIN notas o ON o.id = h.nota_id
+           LEFT JOIN usuarios u ON u.id = h.usuario_id
+          WHERE o.sucursal = $${sucIdx} AND ${periodCorrSQL}
+          ORDER BY h.created_at DESC`,
+        params
+      ),
     ]);
 
     const tarjetas = tarjetasRes.rows[0];
@@ -232,6 +249,15 @@ export async function getResumen(req, res) {
         // cobradas). Es el número que cuadra con el corte de caja.
         total_cobrado,
       },
+      correcciones_pago: correccionesRes.rows.map((r) => ({
+        nota_id:        r.nota_id,
+        folio:          r.folio,
+        total:          parseFloat(r.precio_total),
+        forma_anterior: r.forma_anterior,
+        forma_nueva:    r.forma_nueva,
+        usuario:        r.usuario_nombre,
+        fecha:          r.created_at,
+      })),
     });
   } catch (err) {
     console.error('Error en ventas/resumen:', err);

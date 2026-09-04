@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import { formaPagoLabel } from '../lib/formasPago';
-import { formatHora12 } from '../lib/fecha';
+import { formatHora12, formatFechaHora12 } from '../lib/fecha';
 import { imprimirVentas, descargarVentasCSV } from '../lib/exportVentas';
 import SucursalBar from '../components/SucursalBar';
 import {
@@ -660,6 +660,27 @@ export default function Ventas() {
                     ambos totales viene del precio fijo por carga en Por Encargo: se cobra el precio topado,
                     no la suma de los conceptos.
                   </p>
+                </div>
+              )}
+              {/* Correcciones de forma de pago del período (mig. 102). Van aquí
+                  porque explican por qué el desglose de arriba puede no cuadrar
+                  con lo que se recordaba: el dinero cambió de columna. */}
+              {(data.correcciones_pago ?? []).length > 0 && (
+                <div className="px-4 py-3 bg-amber-50 border-t border-amber-100">
+                  <p className="text-xs font-semibold text-amber-800 uppercase tracking-wide mb-2">
+                    Formas de pago corregidas ({data.correcciones_pago.length})
+                  </p>
+                  <ul className="space-y-1.5">
+                    {data.correcciones_pago.map((c, i) => (
+                      <li key={i} className="text-xs text-amber-800">
+                        <span className="font-semibold">{c.folio}</span> · {fmt(c.total)} ·{' '}
+                        {formaPagoLabel(c.forma_anterior)} → {formaPagoLabel(c.forma_nueva)}
+                        <span className="block text-amber-700">
+                          {c.usuario ?? 'Usuario eliminado'} · {formatFechaHora12(c.fecha)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               )}
             </div>
