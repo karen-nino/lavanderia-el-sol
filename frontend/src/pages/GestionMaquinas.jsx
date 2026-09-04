@@ -26,6 +26,13 @@ const SONOFF_CFG = {
   sin_enlazar: { label: 'Sin Sonoff',  cls: 'bg-gray-50 text-gray-500 border-gray-200',    dot: 'bg-gray-400'  },
 };
 
+// El apagado de emergencia queda oculto mientras el control de los Sonoff está
+// desactivado en producción (DISPOSITIVOS_DRIVER=null, ver CONTEXTO_PROYECTO):
+// hoy solo respondería "modo simulación", así que ofrecerlo engaña a quien lo
+// aprieta creyendo que cortó una máquina. Volver a poner en true cuando se
+// reactive el driver de eWeLink.
+const MOSTRAR_APAGADO_EMERGENCIA = false;
+
 const INPUT_CLS =
   'w-full px-4 py-3.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent transition';
 
@@ -88,7 +95,6 @@ export default function GestionMaquinas() {
   const [eliminando, setEliminando] = useState(null);
   const [encendiendo, setEncendiendo] = useState(null);
   const [probando, setProbando] = useState(false);
-  const [probandoFisica, setProbandoFisica] = useState(false);
   const [apagando, setApagando] = useState(false);
   const [probarMsg, setProbarMsg] = useState(null); // { tipo: 'ok'|'error'|'sim', texto }
   const [filtro, setFiltro] = useState('todos');
@@ -180,29 +186,6 @@ export default function GestionMaquinas() {
       setProbarMsg({ tipo: 'error', texto: err.message });
     } finally {
       setProbando(false);
-    }
-  };
-
-  // Prueba física: enciende la máquina unos segundos para confirmar que el relé
-  // realmente la mueve. Se pide confirmación porque el equipo va a arrancar.
-  const handleProbarFisica = async () => {
-    if (editandoId == null) return;
-    const maq = maquinas.find(m => m.id === editandoId);
-    const nombre = maq?.nombre ?? 'la máquina';
-    if (!confirm(`Se va a ENCENDER "${nombre}" unos segundos y luego se apagará.\n\nAsegúrate de que esté vacía y de que nadie la esté usando. ¿Continuar?`)) return;
-
-    setProbandoFisica(true);
-    setProbarMsg(null);
-    try {
-      const r = await api.post(`/maquinas/${editandoId}/prueba-fisica`, {});
-      if (r?.maquina) setMaquinas(prev => prev.map(m => m.id === editandoId ? r.maquina : m));
-      setProbarMsg(r?.simulado
-        ? { tipo: 'sim', texto: r.message }
-        : { tipo: 'ok', texto: r?.message ?? 'Prueba física completada.' });
-    } catch (err) {
-      setProbarMsg({ tipo: 'error', texto: err.message });
-    } finally {
-      setProbandoFisica(false);
     }
   };
 
@@ -355,8 +338,6 @@ export default function GestionMaquinas() {
   // saltarse una máquina, y sin este conteo no hay forma de notarlo.
   const conDeviceId  = maquinas.filter(m => m.device_id).length;
   const confirmadas  = maquinas.filter(m => m.sonoff_estado === 'enlazada').length;
-
-  const maquinaEditada = editandoId != null ? maquinas.find(m => m.id === editandoId) : null;
 
   if (loading) {
     return (
@@ -747,35 +728,26 @@ export default function GestionMaquinas() {
                   <div className="mt-2">
                     <div className="flex flex-wrap gap-2">
                       <button
-                        type="button" onClick={() => handleProbar()} disabled={probando || probandoFisica}
+                        type="button" onClick={() => handleProbar()} disabled={probando}
                         className="text-sm font-medium text-blue border border-blue/40 rounded-lg px-4 py-2 hover:bg-blue/5 disabled:opacity-60 transition-colors"
                       >
                         {probando ? 'Probando…' : 'Probar enlace'}
                       </button>
-                      {/* Prueba física: la única que confirma que el relé mueve
-                          el equipo. No tiene sentido con la máquina en uso. */}
-                      {maquinaEditada?.estado !== 'en_uso' && (
-                        <button
-                          type="button" onClick={handleProbarFisica} disabled={probando || probandoFisica || apagando}
-                          className="text-sm font-medium text-amber-700 border border-amber-300 rounded-lg px-4 py-2 hover:bg-amber-50 disabled:opacity-60 transition-colors"
-                        >
-                          {probandoFisica ? 'Encendiendo…' : 'Encender 5 segundos'}
-                        </button>
-                      )}
                       {/* Apagar SIEMPRE está disponible, incluso con la máquina
                           en uso: es el botón al que se corre cuando algo quedó
-                          andando y no debería. */}
-                      <button
-                        type="button" onClick={handleApagarYa} disabled={apagando}
-                        className="text-sm font-semibold text-white bg-red-600 rounded-lg px-4 py-2 hover:bg-red-700 disabled:opacity-60 transition-colors"
-                      >
-                        {apagando ? 'Apagando…' : 'Apagar ahora'}
-                      </button>
+                          andando y no debería. Oculto por ahora (ver la bandera). */}
+                      {MOSTRAR_APAGADO_EMERGENCIA && (
+                        <button
+                          type="button" onClick={handleApagarYa} disabled={apagando}
+                          className="text-sm font-semibold text-white bg-red-600 rounded-lg px-4 py-2 hover:bg-red-700 disabled:opacity-60 transition-colors"
+                        >
+                          {apagando ? 'Apagando…' : 'Apagar ahora'}
+                        </button>
+                      )}
                     </div>
                     <p className="mt-1.5 text-xs text-gray-400">
-                      "Probar enlace" solo consulta el dispositivo. "Encender 5 segundos"
-                      arranca la máquina de verdad: úsalo con el equipo vacío.
-                      "Apagar ahora" corta el Sonoff de inmediato.
+                      "Probar enlace" solo consulta el dispositivo; no mueve la máquina.
+                      {MOSTRAR_APAGADO_EMERGENCIA && ' "Apagar ahora" corta el Sonoff de inmediato.'}
                     </p>
                     {probarMsg && (
                       <p className={`mt-1.5 text-sm font-medium ${
