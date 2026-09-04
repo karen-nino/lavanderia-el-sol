@@ -495,12 +495,12 @@ export default function GestionMaquinas() {
               : null;
             const borrando = eliminando === m.id;
             const prendiendo = encendiendo === m.id;
-            // La pastilla de Sonoff solo aparece si la lavandería ya empezó a
-            // usarlos; si ninguna máquina tiene ID, marcarlas todas como "Sin
-            // Sonoff" sería ruido permanente.
-            const sonoffCfg = conDeviceId > 0
-              ? SONOFF_CFG[m.device_id ? (m.sonoff_estado ?? 'error') : 'sin_enlazar']
-              : null;
+            // La pastilla de Sonoff se muestra SIEMPRE: esta es la pantalla
+            // donde se enlazan, así que ver cuáles siguen sin Sonoff es la
+            // información útil, no ruido. (Antes se ocultaba mientras ninguna
+            // máquina tuviera ID; eso dejaba el dato invisible justo cuando
+            // faltaban todas, y ahora este es su único sitio en la app.)
+            const sonoffCfg = SONOFF_CFG[m.device_id ? (m.sonoff_estado ?? 'error') : 'sin_enlazar'];
 
             // Toda la tarjeta abre la información de uso de la máquina (igual que
             // la tarjeta de empleados abre su desempeño). Solo Admin, y con
