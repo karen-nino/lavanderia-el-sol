@@ -80,7 +80,6 @@ export default function Salidas() {
   const [errorAccion,      setErrorAccion]      = useState('');
   const [confirmDetener,   setConfirmDetener]   = useState(null); // máquina a detener
   const [confirmIniciar,   setConfirmIniciar]   = useState(null); // máquina a iniciar
-  const [confirmQuitar,    setConfirmQuitar]    = useState(null); // máquina a eliminar de la nota
   const [iniciando,        setIniciando]        = useState(null); // máquina arrancando (animación)
   const [deteniendo,       setDeteniendo]       = useState(null); // máquina deteniéndose (animación)
 
@@ -214,23 +213,6 @@ export default function Salidas() {
     const m = confirmIniciar;
     setConfirmIniciar(null);
     iniciarCambiar(m);
-  }
-
-  // Quita la máquina confirmada de la nota (desasignarla).
-  async function quitarMaquina() {
-    if (!confirmQuitar) return;
-    setLoadingMaquina(true);
-    setErrorAccion('');
-    try {
-      await api.patch(`/notas/${id}/quitar-maquina`, { maquina_id: confirmQuitar.id });
-      setConfirmQuitar(null);
-      await cargarDatos();
-    } catch (err) {
-      setErrorAccion(err.message);
-      setConfirmQuitar(null);
-    } finally {
-      setLoadingMaquina(false);
-    }
   }
 
   // Asigna una máquina física a una carga de Por Encargo creada con TIPO (la
@@ -1172,46 +1154,6 @@ export default function Salidas() {
                 className="w-full border border-gray-300 text-gray-700 font-medium py-3.5 rounded-lg text-base hover:bg-gray-50 disabled:opacity-60 transition-colors"
               >
                 Cancelar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal advertencia: eliminar máquina de la nota */}
-      {confirmQuitar && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
-            <div className="flex items-center gap-3">
-              <span className="flex-shrink-0 w-9 h-9 rounded-full bg-red-100 text-red-600 flex items-center justify-center">
-                {/* Ícono de advertencia */}
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                    d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
-                </svg>
-              </span>
-              <h3 className="text-base font-bold text-gray-900">Eliminar máquina</h3>
-            </div>
-            <p className="text-sm text-gray-500">
-              ¿Quitar <span className="font-semibold text-gray-800">{confirmQuitar.nombre}</span> de esta nota?
-              Dejará de estar asignada y su tarifa se descontará del total. Si su carga queda vacía, se elimina.
-            </p>
-            <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={() => setConfirmQuitar(null)}
-                disabled={loadingMaquina}
-                className="flex-1 border border-gray-300 text-gray-700 font-medium py-3.5 rounded-lg text-base hover:bg-gray-50 disabled:opacity-60 transition-colors"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={quitarMaquina}
-                disabled={loadingMaquina}
-                className="flex-1 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
-              >
-                {loadingMaquina ? 'Eliminando...' : 'Eliminar'}
               </button>
             </div>
           </div>

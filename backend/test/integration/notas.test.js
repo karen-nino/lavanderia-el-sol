@@ -701,35 +701,6 @@ describe('handlers de máquina — asignar / cambiar / quitar', () => {
     expect(res.status).toBe(400);
     expect(res.body.message).toMatch(/mismo tipo/i);
   });
-
-  it('quitar-maquina desasigna una lavadora sin iniciar y pone su precio en 0', async () => {
-    const { notaId, lavadoraId } = await porEncargoEnEspera();
-    const res = await request(app).patch(`/api/notas/${notaId}/quitar-maquina`)
-      .set(auth(admin.token)).send({ maquina_id: lavadoraId });
-    expect(res.status).toBe(200);
-    expect(res.body.cargas[0].lavadora_id).toBeNull();
-    expect(Number(res.body.cargas[0].precio_lavadora)).toBe(0);
-    expect(Number(res.body.precio_total)).toBe(0);
-    // La máquina liberada sigue disponible para otra nota.
-    const { rows } = await pool.query('SELECT estado FROM maquinas WHERE id = $1', [lavadoraId]);
-    expect(rows[0].estado).toBe('disponible');
-  });
-
-  it('no se puede quitar una máquina que ya arrancó (en uso)', async () => {
-    const lavadoraId = await seedMaquina({ nombre: 'Lavadora 1', tipo: 'lavadora_mediana' });
-    const creada = await request(app).post('/api/notas').set(auth(admin.token)).send({
-      tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE',
-      cargas: [{ lavadora_tipo: 'mediana' }],
-    });
-    await request(app).patch(`/api/notas/${creada.body.id}/asignar-carga-maquina`).set(auth(admin.token))
-      .send({ carga_id: creada.body.cargas[0].id, slot: 'lavadora', maquina_id: lavadoraId });
-    await request(app).patch(`/api/notas/${creada.body.id}/activar-pendientes`).set(auth(admin.token))
-      .send({ maquina_id: lavadoraId });
-    const res = await request(app).patch(`/api/notas/${creada.body.id}/quitar-maquina`)
-      .set(auth(admin.token)).send({ maquina_id: lavadoraId });
-    expect(res.status).toBe(400);
-    expect(res.body.message).toMatch(/no ha iniciado/i);
-  });
 });
 
 describe('PATCH /api/notas/:id — edición', () => {
