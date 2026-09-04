@@ -11,6 +11,14 @@ function fmtMonto(n) {
   return n != null ? `$${Number(n).toFixed(2)}` : '—';
 }
 
+// "Detener Lavado"/"Detener Secado" quedan ocultos mientras el control de los
+// Sonoff está desactivado en producción (DISPOSITIVOS_DRIVER=null, ver
+// CONTEXTO_PROYECTO): detener el ciclo libera la máquina en la BD y con eso
+// manda apagarla, pero hoy esa orden no llega al equipo — se quedaría girando
+// con la carga ya dada por terminada. Volver a poner en true cuando se reactive
+// el driver de eWeLink.
+const MOSTRAR_DETENER_CICLO = false;
+
 const BADGE_MAQUINA_ESTADO = {
   // "disponible" aquí = máquina asignada a la carga pero sin iniciar (En espera): gris.
   disponible:    { label: 'En espera',     cls: 'bg-gray-100 text-gray-600',   dot: 'bg-gray-400'  },
@@ -739,8 +747,9 @@ export default function Salidas() {
                           ) : null
                         ) : (
                           // Solo un admin puede detener una LAVADORA; la secadora
-                          // la puede detener cualquier usuario.
-                          (m.tipo === 'secadora' || esAdmin) && (
+                          // la puede detener cualquier usuario. Oculto por ahora
+                          // (ver la bandera arriba).
+                          MOSTRAR_DETENER_CICLO && (m.tipo === 'secadora' || esAdmin) && (
                             <button
                               onClick={() => setConfirmDetener(m)}
                               disabled={loadingMaquina}
