@@ -55,6 +55,35 @@ const TAMANOS = [
 ];
 const TAMANO_LABEL = Object.fromEntries(TAMANOS.map(t => [t.v, t.label]));
 
+// Lavadoras que caben en una carga de Por Encargo: el edredón solo entra en la
+// jumbo, y la ropa se lava en mediana salvo que la carga sea jumbo. La primera
+// es la que se precarga.
+const lavadorasPosibles = (tamano, tipoPrenda) =>
+  tipoPrenda === 'EDREDON' ? ['jumbo']
+  : tamano === 'jumbo' ? ['mediana', 'jumbo']
+  : ['mediana'];
+
+// Deja la carga con máquina lista al elegir tamaño o prenda:
+//   · Carga recién puesta (sin nada elegido) → lavadora y secado precargados,
+//     que es lo que se cobra casi siempre; el empleado quita lo que no aplique.
+//   · Carga ya configurada → solo se corrige la lavadora que dejó de caber
+//     (p. ej. venía jumbo y la carga pasó a Chica).
+// No repone un secado que alguien quitó a propósito: volvería a cobrarlo sin
+// avisar. Tampoco toca el "Sin lavado" de una carga que es solo secado.
+function conMaquinaPorDefecto(carga, cambios) {
+  const tamano = cambios.tamano ?? carga.tamano;
+  const prenda = cambios.tipo_prenda ?? carga.tipo_prenda;
+  const permitidas = lavadorasPosibles(tamano, prenda);
+
+  if (!carga.lavadora_tipo && !carga.secadora_tipo) {
+    return { ...cambios, lavadora_tipo: permitidas[0], secadora_tipo: 'mediana' };
+  }
+  if (carga.lavadora_tipo && !permitidas.includes(carga.lavadora_tipo)) {
+    return { ...cambios, lavadora_tipo: permitidas[0] };
+  }
+  return cambios;
+}
+
 // Datos a nivel nota. Prenda, tamaño, máquinas, ajuste y productos ahora
 // viven en cada carga (encargoCargas).
 const ENCARGO_INIT = {
@@ -1070,17 +1099,13 @@ export default function NuevaNota() {
                                 // y se ocultan las opciones de edredón.
                                 cambios.tipo_prenda = 'ROPA';
                                 cambios.tamano_edredon = '';
-                                // Chico/Grande no usan lavadora jumbo: si venía elegida, se limpia.
-                                if (c.lavadora_tipo === 'jumbo') cambios.lavadora_tipo = '';
                               } else {
                                 // Jumbo: el edredón es el caso principal, queda por
-                                // defecto. Una lavadora no-jumbo ya no sirve.
+                                // defecto.
                                 cambios.tipo_prenda = 'EDREDON';
                                 cambios.tipo_tela = '';
-                                // El edredón solo va en lavado Jumbo.
-                                if (c.lavadora_tipo && c.lavadora_tipo !== 'jumbo') cambios.lavadora_tipo = '';
                               }
-                              set(cambios);
+                              set(conMaquinaPorDefecto(c, cambios));
                             }}
                             className={`py-6 px-2 border-2 rounded-xl font-semibold text-lg truncate transition-colors ${
                               selected ? 'border-blue bg-light-blue text-blue-700' : 'border-gray-300 bg-white text-gray-700 hover:border-blue-300'
@@ -1109,11 +1134,7 @@ export default function NuevaNota() {
                               const cambios = { tipo_prenda: opt.v };
                               if (opt.v !== 'ROPA') cambios.tipo_tela = '';
                               if (opt.v !== 'EDREDON') cambios.tamano_edredon = '';
-                              if (opt.v === 'EDREDON') {
-                                // El edredón solo va en lavado Jumbo.
-                                if (c.lavadora_tipo && c.lavadora_tipo !== 'jumbo') cambios.lavadora_tipo = '';
-                              }
-                              set(cambios);
+                              set(conMaquinaPorDefecto(c, cambios));
                             }}
                             className={`py-6 px-2 border-2 rounded-xl font-semibold text-lg truncate transition-colors ${
                               selected ? 'border-blue bg-light-blue text-blue-700' : 'border-gray-300 bg-white text-gray-700 hover:border-blue-300'
