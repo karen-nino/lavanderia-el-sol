@@ -9,7 +9,7 @@
 
 Sistema web de gestión para una lavandería (**Lavandería El Sol**): clientes, notas (autoservicio y por encargo), máquinas, inventario (productos + insumos + bolsas), caja, empleados y ventas. Usuarios: administradores y empleados del negocio (uso interno, no cara al cliente final).
 
-**Estado de uso:** la infraestructura está desplegada en producción (Netlify + Fly.io + Supabase, desde 2026-06-22) y el sistema **todavía no está en uso real** en la lavandería. El backend corre hoy en la **v33** (solo config, sin cambio de código — ver abajo).
+**Estado de uso:** la infraestructura está desplegada en producción (Netlify + Fly.io + Supabase, desde 2026-06-22) y el sistema **todavía no está en uso real** en la lavandería. El backend corre hoy en la **v34** (2026-09-04).
 
 **El control por Sonoff se probó contra hardware real el 2026-09-03 y funcionó de punta a punta** (la máquina **L9 encendió y se apagó por orden de la app**), pero horas después, ya con el negocio operando las lavadoras a mano desde la **app de eWeLink**, se detectó que **se apagaban solas a los pocos minutos**. Causa: el reconciliador (`jobs/reconciliarSonoff.js`, corre cada 3 min) fuerza el estado de cada Sonoff enlazado a coincidir con `maquinas.estado` en la BD, y apaga sin condición cualquier máquina que la BD no vea como `en_uso` — que es lo que pasa siempre que alguien la enciende **fuera** de la app. Ese apagado automático llevaba semanas en el código pero nunca había tocado hardware real porque el login a eWeLink fallaba (407); al arreglarse el OAuth ese mismo día (mig. 098), empezó a apagar máquinas de verdad por primera vez. **Mitigación aplicada el mismo 2026-09-03**: `fly secrets set DISPOSITIVOS_DRIVER=null` — el backend deja de mandar comandos reales a cualquier Sonoff (release **v33**, solo config). Sonoff queda **desactivado en producción** hasta arreglar `sincronizarSonoff.js` para que no apague lo que alguien encendió a mano. Detalle en §5 y §6. Como aún no hay datos reales, se pueden correr migraciones y renombres de raíz con libertad.
 
@@ -62,7 +62,7 @@ Dentro de la app hay además un **entorno de pruebas aislado**: la sucursal ocul
 
 ### Base de datos
 - PostgreSQL. **Local:** variables `DB_*`. **Prod:** Supabase vía **Session pooler (IPv4, 5432)** con SSL, usando `DATABASE_URL`. `db/pool.js` elige según exista `DATABASE_URL` y exporta `dbConfig` (lo usa el listener).
-- **Migraciones caseras**: archivos SQL numerados en `db/migrations/`, runner idempotente (`db/migrate.js`) que registra lo aplicado en `schema_migrations`. Bootstrap = `schema.sql` + migraciones en orden. Van por la **102** (96 archivos). Hasta la **101** están aplicadas en producción (verificado en los logs del `release_command` en v32, 2026-09-03; v33 fue solo config). La **102** (historial de correcciones de forma de pago) está aplicada **solo en local**: falta desplegar. Las últimas: **098** sesión OAuth de eWeLink, **099** cierre automático de caja, **100** eliminación del empaquetado (borra columnas), **101** cobros atados a su caja + cifras del corte congeladas. La tabla base histórica se llamaba `ordenes` y fue renombrada a `notas` (mig. 009); `schema.sql` conserva el nombre viejo solo como bootstrap.
+- **Migraciones caseras**: archivos SQL numerados en `db/migrations/`, runner idempotente (`db/migrate.js`) que registra lo aplicado en `schema_migrations`. Bootstrap = `schema.sql` + migraciones en orden. Van por la **102** (96 archivos) y **todas están aplicadas en producción** — la 102 entró en el release **v34** (2026-09-04, verificado en los logs del `release_command`: `Aplicando 102_forma_pago_historial.sql ... OK`). Las últimas: **098** sesión OAuth de eWeLink, **099** cierre automático de caja, **100** eliminación del empaquetado (borra columnas), **101** cobros atados a su caja + cifras del corte congeladas. La tabla base histórica se llamaba `ordenes` y fue renombrada a `notas` (mig. 009); `schema.sql` conserva el nombre viejo solo como bootstrap.
 
 ### Despliegue
 - **Frontend → Netlify** (`chic-banoffee-20c2e3.netlify.app`), base `frontend/`. Proxy `/api` y `/uploads` → Fly y fallback SPA en `frontend/public/_redirects` (en ese orden; **no** duplicar el catch-all en `netlify.toml`).
@@ -268,25 +268,23 @@ info/                     # referencias de diseño (Figma export, docx) — no e
 - **Bundle único grande** (~1.16 MB, ~308 KB gzip): Vite avisa del tamaño; sin code-splitting todavía. No es urgente.
 - **Base de desarrollo vaciada (2026-08-31)**: la base local `lavanderia_el_sol` se dejó **sin notas, inventario, cajas ni check-ins** para empezar de cero, y se eliminaron **6 productos duplicados** que venían de un sembrado doble. Se conservan usuarios, sucursales, clientes, máquinas, ajustes y catálogos. **Producción (Supabase) no se tocó.**
 - **La corrección de forma de pago no tiene prueba de integración** (2026-09-04): se verificó a mano contra la API (403 al empleado, 409 con la caja cerrada, 400 si la forma es la misma o la nota no está cobrada, 404 si no existe) y en la UI, pero no quedó fijada en un test. Es el hueco más reciente del backend, que por lo demás está cubierto.
-- **La migración 102 está solo en local**: producción sigue en la 101. Todo el trabajo del 2026-09-04 está commiteado pero **sin desplegar** (ni `git push` ni `fly deploy`).
 - **Pruebas de frontend incompletas**: hay helpers, componentes con lógica y la página **Login** (67 casos, todos en verde). **Faltan las páginas restantes**, la prioritaria es **`NuevaNota`** (formulario complejo de cargas/productos con tarifas y topes); luego `Empleados`, `Ventas`, `Notas`, `Caja`, `Inventario`. El backend sí está cubierto por completo (**39 unit + 242 de integración en 15 archivos, todas en verde el 2026-09-04**), incluidas las regresiones del día: cortes por día del negocio, folio sellado con el día del negocio, tope congelado por carga, cobro que se desmarca al cambiar el costo, la carrera por una máquina y el ciclo de otra nota que no se debe cortar. Lo único sin prueba propia es el entorno de pruebas (sucursal oculta), verificado a mano contra la API en local y en producción.
 
 ---
 
 ## 6. Próximo paso inmediato
 
-1. **Desplegar el trabajo del 2026-09-04**: `git push` (Netlify) y `fly deploy` desde `backend/`, que aplicará la **migración 102** con el `release_command`. Hasta entonces producción no tiene nada de este día.
-2. **Arreglar que el reconciliador apague lo encendido a mano** antes de volver a poner `DISPOSITIVOS_DRIVER=ewelink` en producción (ver §1/§2/§5) — si no, cualquier lavadora encendida fuera de la app se vuelve a apagar sola en máximo 3 minutos, y el botón "Encender" tampoco sirve de nada.
-3. **Reactivar en orden** una vez arreglado lo anterior: secreto de Fly → las dos banderas de la tabla de §2 (`MOSTRAR_APAGADO_EMERGENCIA` y `MOSTRAR_DETENER_CICLO`).
-4. **Terminar el enlace de los Sonoff**: con el local con corriente, confirmar que los 5 dispositivos dejan de responder `4002` y darles **"Probar enlace"**. Si alguno sigue caído, revisar su **WiFi** antes que el código. (Requiere reactivar el driver real primero, o probar puntualmente esa máquina.)
-5. **Poner en OFF el "Power-on state"** de cada Sonoff en la app eWeLink, para que un apagón no arranque máquinas solas.
-6. **Borrar los secretos muertos** en Fly: `fly secrets unset EWELINK_EMAIL EWELINK_PASSWORD EWELINK_COUNTRY_CODE` (la autenticación ya es OAuth).
-7. **Cerrar la decisión del edredón** con el cliente (ver §5) y, según la respuesta, ajustar cómo se cobra esa carga.
-8. **Entregar el sistema al cliente** para que empiece el uso real. Antes de entregar: **subir la versión** en `frontend/package.json` (hoy 1.0.0) y **cambiar la contraseña de los usuarios de prueba**.
+1. **Arreglar que el reconciliador apague lo encendido a mano** antes de volver a poner `DISPOSITIVOS_DRIVER=ewelink` en producción (ver §1/§2/§5) — si no, cualquier lavadora encendida fuera de la app se vuelve a apagar sola en máximo 3 minutos, y el botón "Encender" tampoco sirve de nada.
+2. **Reactivar en orden** una vez arreglado lo anterior: secreto de Fly → las dos banderas de la tabla de §2 (`MOSTRAR_APAGADO_EMERGENCIA` y `MOSTRAR_DETENER_CICLO`).
+3. **Terminar el enlace de los Sonoff**: con el local con corriente, confirmar que los 5 dispositivos dejan de responder `4002` y darles **"Probar enlace"**. Si alguno sigue caído, revisar su **WiFi** antes que el código. (Requiere reactivar el driver real primero, o probar puntualmente esa máquina.)
+4. **Poner en OFF el "Power-on state"** de cada Sonoff en la app eWeLink, para que un apagón no arranque máquinas solas.
+5. **Borrar los secretos muertos** en Fly: `fly secrets unset EWELINK_EMAIL EWELINK_PASSWORD EWELINK_COUNTRY_CODE` (la autenticación ya es OAuth).
+6. **Cerrar la decisión del edredón** con el cliente (ver §5) y, según la respuesta, ajustar cómo se cobra esa carga.
+7. **Entregar el sistema al cliente** para que empiece el uso real. Antes de entregar: **subir la versión** en `frontend/package.json` (hoy 1.0.0) y **cambiar la contraseña de los usuarios de prueba**.
 
 **Pendiente de pruebas (para retomar):** cubrir las **páginas del frontend**, empezando por **`NuevaNota`** (patrón ya validado en `Login` y en los modales). Las fixtures obsoletas de `calculosNotas.test.js` ya se arreglaron.
 
-**Trabajo más reciente (2026-09-04, tarde):** repaso de **Salidas y Máquinas** y una función nueva de caja. Migración **102**; **nada desplegado todavía** (todo está commiteado en local).
+**Trabajo más reciente (2026-09-04, tarde):** repaso de **Salidas y Máquinas** y una función nueva de caja. Migración **102**, desplegada en el release **v34** junto con el frontend.
 
 - **Corregir la forma de pago de una nota ya cobrada** (lo pidió la usuaria para cuando el empleado la registra mal). Endpoint de admin, permitido **solo con la caja del cobro abierta**, con aviso antes de aplicar. No hubo que tocar caja ni Ventas: con la caja abierta ambos se recalculan solos (comprobado: una nota de $50 movió el efectivo del corte de $635 a $585 y el esperado de $685 a $635). Cada cambio queda en `nota_forma_pago_historial` (**mig. 102**) y se ve en Detalles Nota y en Ventas. Ver §4 para el porqué del límite.
 - **La secadora prevista ya se puede asignar en su misma carga** al terminar el lavado; antes la carga se quedaba sin salida.
