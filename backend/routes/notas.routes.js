@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { verifyToken } from '../middleware/auth.js';
 import { sucursalActiva } from '../middleware/sucursalActiva.js';
+import { requireAdmin } from '../middleware/roles.js';
 import {
   getNotas,
   getNotaById,
@@ -35,7 +36,8 @@ router.post('/',          createNota);
 router.get('/:id',        getNotaById);
 router.patch('/:id', updateNota);
 router.delete('/:id', eliminarNota);
-router.delete('/:id/cargas/:cargaId', quitarCarga);
+// Quitar una carga es de admin: deshace lo capturado y cambia el total.
+router.delete('/:id/cargas/:cargaId', requireAdmin, quitarCarga);
 router.patch('/:id/estado',      cambiarEstadoNota);
 router.patch('/:id/activar-pendientes', activarMaquinasPendientes);
 router.patch('/:id/asignar-maquina', asignarMaquina);

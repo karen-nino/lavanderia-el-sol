@@ -800,13 +800,16 @@ export default function Salidas() {
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="text-sm text-gray-400 italic">Sin máquina asignada</span>
                 <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => quitarCarga(c)}
-                    disabled={loadingMaquina}
-                    className="px-3 py-2 text-sm font-medium text-gray-500 hover:text-red-600 disabled:opacity-60 transition-colors"
-                  >
-                    Quitar carga
-                  </button>
+                  {/* Quitar carga es de admin: deshace lo capturado y baja el total. */}
+                  {esAdmin && (
+                    <button
+                      onClick={() => quitarCarga(c)}
+                      disabled={loadingMaquina}
+                      className="px-3 py-2 text-sm font-medium text-gray-500 hover:text-red-600 disabled:opacity-60 transition-colors"
+                    >
+                      Quitar carga
+                    </button>
+                  )}
                   <button
                     onClick={() => iniciarAsignar(c)}
                     disabled={loadingMaquina}
