@@ -86,6 +86,7 @@ export default function GestionMaquinas() {
   const [guardando, setGuardando] = useState(false);
   const [formError, setFormError] = useState('');
   const [eliminando, setEliminando] = useState(null);
+  const [encendiendo, setEncendiendo] = useState(null);
   const [probando, setProbando] = useState(false);
   const [probandoFisica, setProbandoFisica] = useState(false);
   const [apagando, setApagando] = useState(false);
@@ -305,6 +306,27 @@ export default function GestionMaquinas() {
     }
   };
 
+  // Encendido manual desde el menú de la tarjeta. Se avisa antes porque el
+  // equipo arranca de verdad y se queda andando: no es la prueba física, que
+  // apaga sola a los segundos.
+  const encenderMaquina = async (m) => {
+    if (!confirm(
+      `Se va a ENCENDER "${m.nombre}" y se quedará encendida hasta que la apagues.\n\n` +
+      'Asegúrate de que nadie la esté cargando ni tenga las manos dentro. ¿Continuar?'
+    )) return;
+
+    setEncendiendo(m.id);
+    try {
+      const r = await api.post(`/maquinas/${m.id}/encender-sonoff`, {});
+      if (r?.maquina) setMaquinas(prev => prev.map(x => x.id === m.id ? r.maquina : x));
+      alert(r?.message ?? 'Orden de encendido enviada.');
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setEncendiendo(null);
+    }
+  };
+
   const eliminarMaquina = async (m) => {
     if (!confirm(`¿Eliminar la máquina "${m.nombre}"?`)) return;
     setEliminando(m.id);
@@ -491,6 +513,7 @@ export default function GestionMaquinas() {
               ? (tamanoVal === 'jumbo' ? 'Jumbo' : 'Mediana')
               : null;
             const borrando = eliminando === m.id;
+            const prendiendo = encendiendo === m.id;
             // La pastilla de Sonoff solo aparece si la lavandería ya empezó a
             // usarlos; si ninguna máquina tiene ID, marcarlas todas como "Sin
             // Sonoff" sería ruido permanente.
@@ -548,6 +571,17 @@ export default function GestionMaquinas() {
                           <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                         </svg>
                         Editar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setAccionesMenuId(null); encenderMaquina(m); }}
+                        disabled={prendiendo}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v9m6.36-6.36a9 9 0 11-12.72 0" />
+                        </svg>
+                        {prendiendo ? 'Encendiendo…' : 'Encender'}
                       </button>
                       <button
                         type="button"

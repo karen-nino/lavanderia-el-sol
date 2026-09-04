@@ -732,3 +732,54 @@ export const apagarSonoff = async (req, res) => {
     res.status(500).json({ message: 'Error interno del servidor.' });
   }
 };
+
+// Encendido manual desde Gestión de Máquinas: cierra el relé y lo deja
+// cerrado, a diferencia de la prueba física (que apaga a los segundos).
+//
+// Sirve para arrancar una máquina sin pasar por una nota: reanudar un ciclo
+// que se cortó por un apagón, o dejarla andando mientras se revisa. Como el
+// equipo arranca de verdad, la UI pide confirmación antes de llamar aquí.
+//
+// No toca el estado operativo en la BD (igual que el apagado de emergencia):
+// solo manda la orden al dispositivo. OJO: mientras `maquinas.estado` no sea
+// 'en_uso', el reconciliador vuelve a apagarla en su siguiente pasada; ver el
+// comentario de jobs/reconciliarSonoff.js.
+export const encenderSonoff = async (req, res) => {
+  const { id } = req.params;
+  try {
+    const { rows } = await pool.query(
+      'SELECT * FROM maquinas WHERE id = $1 AND sucursal = $2',
+      [id, req.sucursal]
+    );
+    if (rows.length === 0) {
+      return res.status(404).json({ message: 'Máquina no encontrada.' });
+    }
+    const maq = rows[0];
+
+    if (!dispositivos.tieneDispositivo(maq)) {
+      return res.status(400).json({ message: 'La máquina no tiene un Sonoff enlazado.' });
+    }
+    if (simulacionActiva()) {
+      return res.json({ simulado: true, driver: dispositivos.nombreDriver(), message: MSG_SIMULACION, maquina: maq });
+    }
+
+    const encendido = await dispositivos.encender(maq);
+    console.log(`[maquinas] encendido manual ${maq.nombre}: ${encendido.ok ? 'ok' : `falló (${encendido.motivo})`}`);
+
+    const { rows: upd } = await pool.query(
+      `UPDATE maquinas SET sonoff_estado = $1, sonoff_sync_at = NOW() WHERE id = $2 RETURNING *`,
+      [encendido.ok ? 'enlazada' : 'error', id]
+    );
+
+    if (!encendido.ok) {
+      return res.status(502).json({
+        message: explicarFalla(encendido.motivo, 'No se pudo encender'),
+        maquina: upd[0],
+      });
+    }
+    res.json({ message: 'Orden de encendido enviada.', maquina: upd[0] });
+  } catch (err) {
+    console.error('encenderSonoff error:', err);
+    res.status(500).json({ message: 'Error interno del servidor.' });
+  }
+};
