@@ -174,11 +174,15 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
   // termina es el lavado: se exige elegir una secadora disponible para pasar
   // esa carga a secado. Si es una secadora, termina su secado; la nota pasa a
   // "Por Entregar" solo si era su última máquina en uso.
-  // En Autoservicio la lavadora NO pasa a secado: se finaliza la carga directo.
-  // Solo Por Encargo exige elegir secadora al terminar el lavado.
+  // Pasa a secado la lavadora cuya CARGA lleva secado pendiente, sea Por
+  // Encargo o Autoservicio (`lavadoras_con_secado_ids`, del servidor). La que no
+  // lo lleva finaliza su carga directo. Antes se decidía por tipo de servicio,
+  // y un Autoservicio con secadora se saltaba el secado.
   const terminaLavado = Boolean(
     confirmTerminar && confirmTerminar.tipo !== 'secadora' && notaParaTerminar
-    && notaParaTerminar.tipo_servicio !== 'AUTOSERVICIO'
+    && Array.isArray(notaParaTerminar.lavadoras_con_secado_ids)
+    && notaParaTerminar.lavadoras_con_secado_ids.some(
+         mid => String(mid) === String(confirmTerminar.id))
   );
   const secadorasDisponibles = maquinas.filter(m => m.tipo === 'secadora' && m.estado === 'disponible');
   // ¿La nota tiene otras máquinas en uso además de esta? (otras cargas

@@ -36,14 +36,45 @@ describe('MachineCard', () => {
     expect(screen.getByText('Autoservicio')).toBeInTheDocument();
   });
 
-  it('una lavadora que terminó el lavado ofrece iniciar el secado y avisa al hacer clic', async () => {
+  // Lo que decide el siguiente paso es si la CARGA lleva secado pendiente
+  // (`lavadoras_con_secado_ids`, del servidor), no el tipo de servicio.
+  const lavadoraTerminada = {
+    id: 7, nombre: 'L1', estado: 'en_uso', tipo: 'lavadora_mediana', necesita_terminar_ciclo: true,
+  };
+
+  it('una lavadora cuya carga aún debe secar ofrece iniciar el secado y avisa al hacer clic', async () => {
     const onTerminarCiclo = vi.fn();
-    const maquina = { nombre: 'L1', estado: 'en_uso', tipo: 'lavadora_mediana', necesita_terminar_ciclo: true };
-    render(<MachineCard maquina={maquina} onTerminarCiclo={onTerminarCiclo} />);
+    render(
+      <MachineCard
+        maquina={lavadoraTerminada}
+        nota={{ folio: '0123-080726', tipo_servicio: 'POR_ENCARGO', lavadoras_con_secado_ids: [7] }}
+        onTerminarCiclo={onTerminarCiclo}
+      />
+    );
 
     const boton = screen.getByRole('button', { name: 'INICIAR SECADO' });
     await userEvent.click(boton);
-    expect(onTerminarCiclo).toHaveBeenCalledWith(maquina);
+    expect(onTerminarCiclo).toHaveBeenCalledWith(lavadoraTerminada);
+  });
+
+  it('un AUTOSERVICIO con secadora también pasa a secado, no finaliza la carga', () => {
+    render(
+      <MachineCard
+        maquina={lavadoraTerminada}
+        nota={{ folio: '0200-080726', tipo_servicio: 'AUTOSERVICIO', lavadoras_con_secado_ids: [7] }}
+      />
+    );
+    expect(screen.getByRole('button', { name: 'INICIAR SECADO' })).toBeInTheDocument();
+  });
+
+  it('una lavadora cuya carga no lleva secado finaliza la carga', () => {
+    render(
+      <MachineCard
+        maquina={lavadoraTerminada}
+        nota={{ folio: '0200-080726', tipo_servicio: 'AUTOSERVICIO', lavadoras_con_secado_ids: [] }}
+      />
+    );
+    expect(screen.getByRole('button', { name: 'FINALIZAR CARGA' })).toBeInTheDocument();
   });
 
   it('con onClick es un botón accionable y no dispara el ciclo', async () => {

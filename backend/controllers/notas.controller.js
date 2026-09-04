@@ -797,7 +797,23 @@ export const getNotas = async (req, res) => {
                          AND nc.lavadora_iniciada_at IS NOT NULL) AS hay_lavadora_activa,
               EXISTS (SELECT 1 FROM nota_cargas nc JOIN maquinas ms ON ms.id = nc.secadora_id
                        WHERE nc.nota_id = n.id AND ms.estado = 'en_uso'
-                         AND nc.secadora_iniciada_at IS NOT NULL) AS hay_secadora_activa
+                         AND nc.secadora_iniciada_at IS NOT NULL) AS hay_secadora_activa,
+              -- Lavadoras cuya carga debe pasar a secado al terminar el lavado:
+              -- la carga lleva secado previsto (secadora_tipo) pero todavia no
+              -- tiene secadora física. Ese es justo el caso en que hay que elegir
+              -- una al terminar el lavado ("Iniciar secado").
+              -- Si la carga YA tiene secadora asignada no entra aquí: no hay nada
+              -- que elegir, la lavadora finaliza su carga y la secadora arranca
+              -- con su propio botón.
+              -- Lo decide la carga y no el tipo de servicio: un Autoservicio
+              -- creado con lavadora y secadora también pasa a secado.
+              (SELECT COALESCE(json_agg(nc.lavadora_id), '[]'::json)
+                 FROM nota_cargas nc
+                WHERE nc.nota_id = n.id
+                  AND nc.lavadora_id IS NOT NULL
+                  AND nc.secadora_tipo IS NOT NULL
+                  AND nc.secadora_id IS NULL
+              ) AS lavadoras_con_secado_ids
        FROM notas n
        LEFT JOIN clientes   c  ON c.id = n.cliente_id
        JOIN      usuarios   u  ON u.id = n.usuario_id

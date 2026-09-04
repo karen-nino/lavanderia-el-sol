@@ -105,12 +105,17 @@ export default function MachineCard({ maquina, nota, onTerminarCiclo, onClick })
   }
 
   if (maquina.necesita_terminar_ciclo) {
-    // Secadora que terminó, o lavadora de AUTOSERVICIO (que no pasa a secado):
-    // se finaliza la carga, en verde. Lavadora de Por Encargo: el siguiente paso
+    // Secadora que terminó, o lavadora cuya carga no lleva secado: se finaliza
+    // la carga, en verde. Lavadora cuya carga SÍ debe secar: el siguiente paso
     // es iniciar el secado (elegir secadora), en tonos rojos.
+    //
+    // Lo decide la carga, no el tipo de servicio: un Autoservicio creado con
+    // lavadora y secadora también pasa a secado (antes se daba por hecho que no
+    // y su lavadora ofrecía "Finalizar carga", saltándose el secado pagado).
     const esSecadora = maquina.tipo === 'secadora';
-    const esAutoservicio = nota?.tipo_servicio === 'AUTOSERVICIO';
-    const finalizaCarga = esSecadora || esAutoservicio;
+    const debeSecar = Array.isArray(nota?.lavadoras_con_secado_ids)
+      && nota.lavadoras_con_secado_ids.some(mid => String(mid) === String(maquina.id));
+    const finalizaCarga = esSecadora || !debeSecar;
     const tono = finalizaCarga
       ? { card: 'bg-light-green ring-green', header: 'bg-green', titulo: 'text-green', boton: 'bg-green ring ring-green-700' }
       : { card: 'bg-white ring-white',     header: 'bg-red',   titulo: 'text-red',   boton: 'bg-red-500 ring ring-red-700' };
