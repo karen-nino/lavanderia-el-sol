@@ -120,7 +120,7 @@ export default function Login() {
       <div className="w-full max-w-sm">
         {/* Brand */}
         <div className="text-center mb-8">
-          <LogoSol className="w-16 h-16 mx-auto mb-3 text-amber-400" />
+          <LogoSol className="w-16 h-16 mx-auto mb-3 text-white" />
           <h1 className="text-2xl font-bold text-white">Lavandería El Sol</h1>
           <p className="text-slate-400 text-sm mt-1">Panel de administración</p>
         </div>

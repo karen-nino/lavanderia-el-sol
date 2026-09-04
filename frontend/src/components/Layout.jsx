@@ -10,7 +10,7 @@ import LogoSol from './LogoSol';
 const navIconCls = 'w-6 h-6';
 
 const Icon = {
-  brand: <LogoSol className="w-7 h-7 text-amber-400" />,
+  brand: <LogoSol className="w-7 h-7 text-white" />,
   dashboard: (
     <svg width="24" height="24" className={navIconCls} fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <rect x="3"  y="3"  width="7" height="7" rx="1.5" strokeWidth={2} />
@@ -109,7 +109,7 @@ const Icon = {
 };
 
 const navItems = [
-  { to: '/',           label: 'Dashboard',  icon: Icon.dashboard,  end: true },
+  { to: '/',           label: 'Inicio',     icon: Icon.dashboard,  end: true },
   { to: '/maquinas',   label: 'Máquinas',   icon: Icon.maquinas },
   { to: '/notas',      label: 'Notas',      icon: Icon.notas },
   { to: '/clientes',   label: 'Clientes',   icon: Icon.clientes },
@@ -120,7 +120,7 @@ const navItems = [
 // muestra los que quepan verticalmente y el resto pasa al menú de overflow, sin
 // duplicar botones entre el sidebar y el modal.
 const buildDesktopNav = (isAdmin) => [
-  { to: '/',                 label: 'Dashboard',           icon: Icon.dashboard, end: true },
+  { to: '/',                 label: 'Inicio',              icon: Icon.dashboard, end: true },
   { to: '/maquinas',         label: 'Máquinas',            icon: Icon.maquinas },
   { to: '/notas',            label: 'Notas',               icon: Icon.notas },
   { to: '/clientes',         label: 'Clientes',            icon: Icon.clientes },
