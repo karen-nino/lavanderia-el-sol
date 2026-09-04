@@ -254,6 +254,8 @@ export default function DetalleNota() {
   const [confirmFinalizar,  setConfirmFinalizar]  = useState(false);
   const [confirmLiquidar,  setConfirmLiquidar]  = useState(false);
   const [formaPagoSel,     setFormaPagoSel]     = useState('');
+  const [corrigiendoPago,  setCorrigiendoPago]  = useState(false);
+  const [formaPagoNueva,   setFormaPagoNueva]   = useState('');
   const [confirmEliminar,  setConfirmEliminar]  = useState(false);
   // Un cambio hecho en Salidas movió el total de esta nota y dejó sin efecto su
   // cobro (el backend la devolvió a PENDIENTE). Aquí, junto al estado de pago y
@@ -320,6 +322,27 @@ export default function DetalleNota() {
     } catch (err) {
       setErrorAccion(err.message);
       setConfirmFinalizar(false);
+    } finally {
+      setLoadingAccion(false);
+    }
+  }
+
+  // Corrige la forma de pago de una nota YA cobrada (el empleado registró
+  // efectivo y el cliente pagó por transferencia). El servidor solo lo permite
+  // mientras la caja donde se cobró siga abierta; ahí el corte y Ventas se
+  // recalculan solos.
+  async function corregirFormaPago() {
+    if (!formaPagoNueva) return;
+    setLoadingAccion(true);
+    setErrorAccion('');
+    try {
+      const updated = await api.patch(`/notas/${id}/forma-pago`, { forma_pago: formaPagoNueva });
+      setNota(prev => ({ ...prev, forma_pago: updated.forma_pago }));
+      setCorrigiendoPago(false);
+      setFormaPagoNueva('');
+    } catch (err) {
+      setErrorAccion(err.message);
+      setCorrigiendoPago(false);
     } finally {
       setLoadingAccion(false);
     }
@@ -555,16 +578,29 @@ export default function DetalleNota() {
             </svg>
           </div>
         ) : (
-          <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-5 py-3 flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wide">
-                Cobrada{nota.forma_pago ? ` · ${formaPagoLabel(nota.forma_pago)}` : ''}
-              </p>
-              <p className="text-xl font-bold text-emerald-900 leading-tight mt-0.5">{fmtMonto(nota.precio_total)}</p>
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-5 py-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wide">
+                  Cobrada{nota.forma_pago ? ` · ${formaPagoLabel(nota.forma_pago)}` : ''}
+                </p>
+                <p className="text-xl font-bold text-emerald-900 leading-tight mt-0.5">{fmtMonto(nota.precio_total)}</p>
+              </div>
+              <svg className="w-7 h-7 text-emerald-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+              </svg>
             </div>
-            <svg className="w-7 h-7 text-emerald-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-            </svg>
+            {/* Corregir la forma de pago solo mientras la caja donde se cobró
+                siga abierta: el servidor manda ese permiso ya calculado. */}
+            {esAdmin && nota.forma_pago_editable && (
+              <button
+                type="button"
+                onClick={() => { setFormaPagoNueva(''); setCorrigiendoPago(true); }}
+                className="mt-2 text-xs font-semibold text-emerald-800 underline underline-offset-2 hover:text-emerald-900"
+              >
+                Corregir forma de pago
+              </button>
+            )}
           </div>
         )
       )}
@@ -1007,6 +1043,66 @@ export default function DetalleNota() {
           onConfirmar={liquidarNota}
           loading={loadingAccion}
         />
+      )}
+
+      {/* Modal corregir forma de pago (solo admin, caja aún abierta) */}
+      {corrigiendoPago && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <span className="flex-shrink-0 w-9 h-9 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                    d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                </svg>
+              </span>
+              <h3 className="text-base font-bold text-gray-900">Corregir forma de pago</h3>
+            </div>
+            <p className="text-sm text-gray-500">
+              Esta nota está cobrada como{' '}
+              <span className="font-semibold text-gray-800">{formaPagoLabel(nota.forma_pago)}</span>.
+              Cambiarla mueve el dinero en el <span className="font-semibold text-gray-800">corte de caja</span> de
+              hoy y en <span className="font-semibold text-gray-800">Ventas</span>: úsalo solo si se registró mal.
+            </p>
+            <div className="space-y-2">
+              <p className="text-sm font-semibold text-gray-900">Cambiar a:</p>
+              <div className="grid grid-cols-3 gap-2">
+                {FORMAS_PAGO.filter(opt => opt.v !== nota.forma_pago).map(opt => (
+                  <button
+                    key={opt.v}
+                    type="button"
+                    onClick={() => setFormaPagoNueva(opt.v)}
+                    className={`py-3 px-2 border-2 rounded-xl font-semibold text-sm truncate transition-colors ${
+                      formaPagoNueva === opt.v
+                        ? 'border-blue bg-light-blue text-blue-700'
+                        : 'border-gray-300 bg-white text-gray-700 hover:border-blue-300'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => { setCorrigiendoPago(false); setFormaPagoNueva(''); }}
+                disabled={loadingAccion}
+                className="flex-1 border border-gray-300 text-gray-700 font-medium py-3.5 rounded-lg text-base hover:bg-gray-50 disabled:opacity-60 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={corregirFormaPago}
+                disabled={loadingAccion || !formaPagoNueva}
+                className="flex-1 bg-blue hover:opacity-90 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
+              >
+                {loadingAccion ? 'Guardando…' : 'Corregir'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Modal confirmar entrega */}

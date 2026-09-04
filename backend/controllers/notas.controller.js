@@ -839,7 +839,15 @@ export const getNotaById = async (req, res) => {
               c.apellido AS cliente_apellido,
               c.telefono AS cliente_telefono,
               TRIM(u.nombre || ' ' || COALESCE(u.apellido, '')) AS usuario_nombre,
-              su.nombre  AS sucursal_nombre
+              su.nombre  AS sucursal_nombre,
+              -- ¿Todavía se puede corregir la forma de pago? Solo mientras la
+              -- caja donde se cobró siga ABIERTA: ahí el corte se calcula en
+              -- vivo y se corrige solo. Con la caja cerrada las cifras quedaron
+              -- congeladas (mig. 101) y cambiar la forma dejaría el corte y
+              -- Ventas diciendo cosas distintas, así que no se permite.
+              (n.estado_pago = 'PAGADO' AND n.estado <> 'CANCELADA' AND EXISTS (
+                 SELECT 1 FROM cajas cj WHERE cj.id = n.caja_id AND cj.estado = 'abierta'
+              )) AS forma_pago_editable
        FROM notas n
        LEFT JOIN clientes   c  ON c.id = n.cliente_id
        JOIN      usuarios   u  ON u.id = n.usuario_id
@@ -2900,6 +2908,74 @@ export const cambiarEstadoPago = async (req, res) => {
     res.status(500).json({ message: 'Error interno del servidor.' });
   } finally {
     client.release();
+  }
+};
+
+// ── PATCH /notas/:id/forma-pago ─────────────────────────────
+// Corrige la forma de pago de una nota YA COBRADA, para cuando el empleado se
+// equivocó al registrarla (marcó efectivo y el cliente pagó por transferencia).
+//
+// Solo se permite mientras la caja donde se cobró siga ABIERTA. Con la caja
+// abierta el corte se calcula en vivo desde `notas.caja_id` + `forma_pago`, así
+// que corregir aquí arregla el corte y Ventas sin tocar nada más. Con la caja
+// ya cerrada las cifras quedaron congeladas (mig. 101): cambiar la forma de
+// pago movería Ventas pero no el corte, y ambos dirían cosas distintas.
+//
+// No se usa "revertir el pago y volver a cobrar" para esto: al cobrar de nuevo,
+// el trigger ata la nota a la caja abierta HOY, y la venta se movería del día
+// en que se cobró al día de la corrección.
+export const corregirFormaPago = async (req, res) => {
+  const { id } = req.params;
+  const formaPago = normalizarFormaPago(req.body?.forma_pago);
+
+  if (!formaPago) {
+    return res.status(400).json({
+      message: `Indica la forma de pago. Valores permitidos: ${FORMAS_PAGO_VALIDAS.join(', ')}.`,
+    });
+  }
+
+  try {
+    const { rows } = await pool.query(
+      `SELECT n.id, n.folio, n.estado, n.estado_pago, n.forma_pago, n.caja_id,
+              cj.estado AS caja_estado
+         FROM notas n
+         LEFT JOIN cajas cj ON cj.id = n.caja_id
+        WHERE n.id = $1 AND n.sucursal = $2`,
+      [id, req.sucursal]
+    );
+    if (rows.length === 0) {
+      return res.status(404).json({ message: 'Nota no encontrada.' });
+    }
+    const nota = rows[0];
+
+    if (nota.estado === 'CANCELADA') {
+      return res.status(400).json({ message: 'No se puede cambiar el pago de una nota cancelada.' });
+    }
+    if (nota.estado_pago !== 'PAGADO') {
+      return res.status(400).json({ message: 'La nota todavía no está cobrada.' });
+    }
+    if (!nota.caja_id || nota.caja_estado !== 'abierta') {
+      return res.status(409).json({
+        message: 'El corte de caja de esta nota ya se cerró: la forma de pago solo se puede corregir '
+               + 'mientras esa caja siga abierta.',
+      });
+    }
+    if (nota.forma_pago === formaPago) {
+      return res.status(400).json({ message: `La nota ya está registrada como ${formaPago}.` });
+    }
+
+    const { rows: upd } = await pool.query(
+      'UPDATE notas SET forma_pago = $1 WHERE id = $2 RETURNING *',
+      [formaPago, id]
+    );
+    console.log(
+      `[notas] forma de pago corregida en ${nota.folio}: ${nota.forma_pago} → ${formaPago} ` +
+      `(usuario ${req.user?.id ?? '?'})`
+    );
+    res.json(upd[0]);
+  } catch (err) {
+    console.error('corregirFormaPago error:', err);
+    res.status(500).json({ message: 'Error interno del servidor.' });
   }
 };
 

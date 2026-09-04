@@ -20,6 +20,7 @@ import {
   terminarLavadoFinal,
   terminarSecado,
   cambiarEstadoPago,
+  corregirFormaPago,
   guardarTelefono,
   getNotaProductos,
   addProductoToNota,
@@ -48,6 +49,8 @@ router.patch('/:id/terminar-lavado', terminarLavado);
 router.patch('/:id/terminar-lavado-final', terminarLavadoFinal);
 router.patch('/:id/terminar-secado', terminarSecado);
 router.patch('/:id/estado-pago', cambiarEstadoPago);
+// Corregir la forma de pago de una nota ya cobrada es cosa de admin.
+router.patch('/:id/forma-pago', requireAdmin, corregirFormaPago);
 router.patch('/:id/telefono', guardarTelefono);
 router.get('/:id/productos',    getNotaProductos);
 router.post('/:id/productos',   addProductoToNota);
