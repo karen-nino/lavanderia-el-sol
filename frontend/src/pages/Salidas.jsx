@@ -542,12 +542,47 @@ export default function Salidas() {
   // Slots de Por Encargo con TIPO elegido pero sin máquina física: se asignan
   // eligiendo una máquina disponible del tipo correspondiente.
   const TIPO_MAQ_LABEL = { mediana: 'Mediana', jumbo: 'Jumbo', edredon: 'Edredón' };
-  // Solo se asigna la LAVADORA aquí; la secadora se elige después, al terminar
-  // el lavado (así no se aparta la secadora desde el inicio).
+  // ¿Esta máquina ya cumplió su tiempo de ciclo? Cada máquina es
+  // independiente (mismo cálculo que las tarjetas del dashboard): la
+  // lavadora terminada ofrece "Iniciar Secado" y la secadora terminada
+  // "Terminar Ciclo", aunque otras cargas de la nota sigan corriendo.
+  const cicloCumplido = (m) => {
+    if (m.estado !== 'en_uso' || !m.en_uso_desde) return false;
+    if (!['LAVANDO', 'SECANDO'].includes(nota?.estado)) return false;
+    // Ciclo sellado al arrancar (ciclo_minutos); fallback por tipo para
+    // máquinas en uso desde antes de la migración.
+    const minutos = m.ciclo_minutos != null ? m.ciclo_minutos
+                  : m.tipo === 'secadora'       ? tiempos.secadora
+                  : m.tipo === 'lavadora_jumbo' ? tiempos.jumbo
+                  : tiempos.mediana;
+    return now - new Date(m.en_uso_desde).getTime() >= Math.max(0, Number(minutos) || 0) * 60000;
+  };
+
+  // La lavadora se asigna desde el principio. La secadora NO: se ofrece solo
+  // cuando la carga ya no tiene lavado pendiente (o nunca llevó lavadora, o la
+  // suya ya cumplió su ciclo), para no apartar desde el inicio una secadora
+  // que va a estar parada mientras dura el lavado.
+  const lavadoPendiente = (c) => {
+    // Lavadora prevista a la que todavía no se le puso máquina física.
+    if (c.lavadora_tipo_previsto && !c.lavadora_id && !c.lavadora_usada_id) return true;
+    // Lavadora asignada: pendiente hasta que cumple su ciclo (si no arrancó,
+    // `cicloCumplido` es false, que es justo lo que queremos).
+    if (c.lavadora_id) {
+      return !cicloCumplido({
+        estado: c.lavadora_estado,
+        en_uso_desde: c.lavadora_en_uso_desde,
+        tipo: c.lavadora_tipo,
+      });
+    }
+    return false; // sin lavadora, o ya terminó y se liberó (lavadora_usada_id)
+  };
   const slotsPorAsignar = notaCerrada ? [] : cargasNota.flatMap(c => {
     const out = [];
     if (c.lavadora_tipo_previsto && !c.lavadora_id && !c.lavadora_usada_id) {
       out.push({ carga: c, slot: 'lavadora', tipo: c.lavadora_tipo_previsto });
+    }
+    if (c.secadora_tipo_previsto && !c.secadora_id && !c.secadora_usada_id && !lavadoPendiente(c)) {
+      out.push({ carga: c, slot: 'secadora', tipo: c.secadora_tipo_previsto });
     }
     return out;
   });
@@ -564,21 +599,6 @@ export default function Salidas() {
     return m.tipo === 'secadora';
   });
 
-  // ¿Esta máquina ya cumplió su tiempo de ciclo? Cada máquina es
-  // independiente (mismo cálculo que las tarjetas del dashboard): la
-  // lavadora terminada ofrece "Iniciar Secado" y la secadora terminada
-  // "Terminar Ciclo", aunque otras cargas de la nota sigan corriendo.
-  const cicloCumplido = (m) => {
-    if (m.estado !== 'en_uso' || !m.en_uso_desde) return false;
-    if (!['LAVANDO', 'SECANDO'].includes(nota?.estado)) return false;
-    // Ciclo sellado al arrancar (ciclo_minutos); fallback por tipo para
-    // máquinas en uso desde antes de la migración.
-    const minutos = m.ciclo_minutos != null ? m.ciclo_minutos
-                  : m.tipo === 'secadora'       ? tiempos.secadora
-                  : m.tipo === 'lavadora_jumbo' ? tiempos.jumbo
-                  : tiempos.mediana;
-    return now - new Date(m.en_uso_desde).getTime() >= Math.max(0, Number(minutos) || 0) * 60000;
-  };
   // ¿Otras máquinas de la nota siguen en uso además de esta?
   const otrasEnUso = (maq) => maquinasAsignadas.some(m => String(m.id) !== String(maq.id) && m.estado === 'en_uso');
 
