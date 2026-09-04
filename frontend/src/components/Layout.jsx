@@ -5,15 +5,12 @@ import { esAdmin, ROL_LABEL } from '../lib/roles';
 import { api } from '../lib/api';
 import { formatHora12, formatFechaHora12 } from '../lib/fecha';
 import SucursalSelector from './SucursalSelector';
+import LogoSol from './LogoSol';
 
 const navIconCls = 'w-6 h-6';
 
 const Icon = {
-  brand: (
-    <svg width="24" height="24" className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24">
-      <path d="M12 4a3 3 0 110 6 3 3 0 010-6zm-1 8h2v3l3 .5v6h-2v-5l-2-.3v5h-2v-5l-2 .3v5H8v-6l3-.5v-3z" />
-    </svg>
-  ),
+  brand: <LogoSol className="w-7 h-7 text-amber-400" />,
   dashboard: (
     <svg width="24" height="24" className={navIconCls} fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <rect x="3"  y="3"  width="7" height="7" rx="1.5" strokeWidth={2} />
