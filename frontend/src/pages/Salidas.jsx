@@ -265,7 +265,12 @@ export default function Salidas() {
     setAsignarMaqSel([]);
     // Autoservicio siempre cobra; Por Encargo lo elige el empleado.
     setAsignarCobrar(esAutoservicio ? true : null);
-    setAsignarCarga(carga);
+    // Sin destino fijo se precarga la primera carga con hueco: sumar la máquina
+    // a una carga que ya existe es lo habitual (la Carga 1 a la que le falta la
+    // secadora); abrir una carga nueva es la excepción, y queda al final.
+    // `asignarCargaFija` sigue mirando el parámetro, no el precargado: el
+    // selector solo se oculta si el modal se abrió desde una carga concreta.
+    setAsignarCarga(carga ?? cargasDestino[0] ?? null);
     setAsignarCargaFija(Boolean(carga));
     setAsignarOpen(true);
     setLoadingMaquinas(true);
@@ -1354,15 +1359,6 @@ export default function Salidas() {
               <div className="space-y-2">
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Dónde va</p>
                 <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => elegirDestino(null)}
-                    className={`px-4 py-2.5 border-2 rounded-xl text-sm font-medium transition-colors ${
-                      cargaDestino === null ? 'border-blue bg-light-blue text-gray-800' : 'border-gray-200 bg-white text-gray-700 hover:border-blue-300'
-                    }`}
-                  >
-                    Carga nueva
-                  </button>
                   {cargasDestino.map(c => {
                     const h = huecosDeCarga(c);
                     const falta = h.lavadora && h.secadora ? 'vacía'
@@ -1382,6 +1378,16 @@ export default function Salidas() {
                       </button>
                     );
                   })}
+                  {/* Al final: abrir una carga nueva es la opción menos común. */}
+                  <button
+                    type="button"
+                    onClick={() => elegirDestino(null)}
+                    className={`px-4 py-2.5 border-2 rounded-xl text-sm font-medium transition-colors ${
+                      cargaDestino === null ? 'border-blue bg-light-blue text-gray-800' : 'border-gray-200 bg-white text-gray-700 hover:border-blue-300'
+                    }`}
+                  >
+                    Nueva carga
+                  </button>
                 </div>
               </div>
             )}
