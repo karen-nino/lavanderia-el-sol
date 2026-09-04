@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../lib/api';
 import { APP_VERSION, versionEsNueva } from '../lib/version';
+import LogoSol from '../components/LogoSol';
 
 const INPUT_CLS =
   'w-full px-4 py-3.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent transition';
@@ -119,7 +120,7 @@ export default function Login() {
       <div className="w-full max-w-sm">
         {/* Brand */}
         <div className="text-center mb-8">
-          <div className="text-6xl mb-3 select-none">🫧</div>
+          <LogoSol className="w-16 h-16 mx-auto mb-3 text-amber-400" />
           <h1 className="text-2xl font-bold text-white">Lavandería El Sol</h1>
           <p className="text-slate-400 text-sm mt-1">Panel de administración</p>
         </div>
