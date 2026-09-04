@@ -66,7 +66,6 @@ const MSG_SIMULACION =
 
 // Duración del pulso de la prueba física: suficiente para ver/oír arrancar la
 // máquina, corto para no iniciar un ciclo de verdad.
-const SEGUNDOS_PRUEBA_FISICA = 5;
 
 const esperar = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -605,93 +604,15 @@ export const probarSonoff = async (req, res) => {
   }
 };
 
-// Prueba FÍSICA del relé: enciende la máquina unos segundos y la vuelve a
-// apagar, para confirmar en la instalación que el Sonoff mueve el equipo de
-// verdad (probarSonoff solo lee el estado del dispositivo, que responde igual
-// aunque esté conectado a nada).
-//
-// No cambia el estado operativo de la máquina en la BD: es un pulso al relé.
-// Se bloquea si la máquina está en uso — encender un equipo con ropa dentro,
-// o interrumpir un ciclo, es peor que no poder probar.
-export const pruebaFisicaSonoff = async (req, res) => {
-  const { id } = req.params;
-  try {
-    const { rows } = await pool.query(
-      'SELECT * FROM maquinas WHERE id = $1 AND sucursal = $2',
-      [id, req.sucursal]
-    );
-    if (rows.length === 0) {
-      return res.status(404).json({ message: 'Máquina no encontrada.' });
-    }
-    const maq = rows[0];
-
-    if (!dispositivos.tieneDispositivo(maq)) {
-      return res.status(400).json({ message: 'La máquina no tiene un Sonoff enlazado.' });
-    }
-    if (maq.estado === 'en_uso') {
-      return res.status(409).json({
-        message: 'La máquina está en uso. Espera a que termine el ciclo para hacer la prueba física.',
-      });
-    }
-    if (simulacionActiva()) {
-      return res.json({ simulado: true, driver: dispositivos.nombreDriver(), message: MSG_SIMULACION, maquina: maq });
-    }
-
-    const encendido = await dispositivos.encender(maq);
-    console.log(`[maquinas] prueba física ${maq.nombre}: encender → ${encendido.ok ? 'ok' : `falló (${encendido.motivo})`}`);
-    if (!encendido.ok) {
-      const { rows: upd } = await pool.query(
-        `UPDATE maquinas SET sonoff_estado = 'error', sonoff_sync_at = NOW() WHERE id = $1 RETURNING *`,
-        [id]
-      );
-      return res.status(502).json({
-        message: explicarFalla(encendido.motivo, 'No se pudo encender'),
-        maquina: upd[0],
-      });
-    }
-
-    // Pase lo que pase después de encender hay que intentar apagar: dejar una
-    // máquina prendida por un error de red sería peor que fallar la prueba.
-    let apagado;
-    try {
-      await esperar(SEGUNDOS_PRUEBA_FISICA * 1000);
-    } finally {
-      apagado = await apagarConReintentos(maq);
-      console.log(`[maquinas] prueba física ${maq.nombre}: apagar → ${apagado.ok ? 'ok' : `falló (${apagado.motivo})`}`);
-    }
-
-    if (!apagado.ok) {
-      return res.status(502).json({
-        message: `Encendió, pero NO se pudo apagar (${apagado.motivo ?? 'sin detalle'}). ` +
-                 'Revisa la máquina y apágala manualmente.',
-        maquina: maq,
-      });
-    }
-
-    const { rows: upd } = await pool.query(
-      `UPDATE maquinas SET sonoff_estado = 'enlazada', sonoff_sync_at = NOW() WHERE id = $1 RETURNING *`,
-      [id]
-    );
-    res.json({
-      message: `Listo: la máquina encendió ${SEGUNDOS_PRUEBA_FISICA} segundos y se apagó.`,
-      segundos: SEGUNDOS_PRUEBA_FISICA,
-      maquina: upd[0],
-    });
-  } catch (err) {
-    console.error('pruebaFisicaSonoff error:', err);
-    res.status(500).json({ message: 'Error interno del servidor.' });
-  }
-};
-
 // Apagado de emergencia: corta el Sonoff ya, sin esperas ni condiciones.
 //
-// Existe porque una prueba física puede dejar la máquina andando (si el
-// apagado falla, o si el relé no obedece a la primera) y en ese momento lo
-// último que sirve es tener que ir a buscar el teléfono y abrir eWeLink.
+// Existe porque una máquina puede quedar andando cuando no debería (un
+// encendido manual que nadie apagó, un ciclo que no cortó) y en ese momento lo
+// último que sirve es ir a buscar el teléfono y abrir eWeLink.
 //
-// A diferencia de la prueba física, esto SÍ se permite con la máquina en uso:
-// justamente el caso urgente es "está encendida y no debería estarlo". No toca
-// el estado operativo en la BD; solo manda apagar el dispositivo.
+// Se permite incluso con la máquina en uso: justamente el caso urgente es
+// "está encendida y no debería estarlo". No toca el estado operativo en la BD;
+// solo manda apagar el dispositivo.
 export const apagarSonoff = async (req, res) => {
   const { id } = req.params;
   try {
@@ -734,7 +655,7 @@ export const apagarSonoff = async (req, res) => {
 };
 
 // Encendido manual desde Gestión de Máquinas: cierra el relé y lo deja
-// cerrado, a diferencia de la prueba física (que apaga a los segundos).
+// cerrado, hasta que alguien lo apague.
 //
 // Sirve para arrancar una máquina sin pasar por una nota: reanudar un ciclo
 // que se cortó por un apagón, o dejarla andando mientras se revisa. Como el
