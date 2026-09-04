@@ -76,7 +76,7 @@ Dentro de la app hay además un **entorno de pruebas aislado**: la sucursal ocul
 - **Fuente única de la verdad: `frontend/package.json` → `"version"`.** `vite.config.js` la lee en tiempo de build y la inyecta como `__APP_VERSION__`; `src/lib/version.js` la expone como `APP_VERSION` (fallback `'dev'`), y `src/pages/Login.jsx` la pinta. **Para subir la versión se toca esa única línea de `package.json`.**
 - Como se congela al compilar, el número **solo cambia cuando se vuelve a desplegar el frontend en Netlify**.
 - **No confundir con el "release vNN" de Fly.io** (v25, v26, …): ese lo numera Fly solo, por cada deploy del backend, y no tiene relación con la versión que ve el cliente.
-- **Arrancamos en `1.0.0` = la versión que se le entrega al cliente.** De aquí en adelante el número se sube en cada entrega, con criterio semver simple: **parche** (1.0.1) para correcciones, **menor** (1.1.0) cuando se agrega funcionalidad, **mayor** (2.0.0) para un cambio grande de cómo se usa el sistema. Mientras la app no esté entregada, el número se queda en 1.0.0.
+- **Arrancamos en `1.0.0` = la versión que se le entrega al cliente.** El número **no se sube hasta que la usuaria lo diga**, y ella avisará **cuando quede resuelto lo de los Sonoff** (acuerdo del 2026-09-04): antes de eso no hay entrega que numerar, ni siquiera al desplegar. A partir de ese aviso se sube en cada entrega, con criterio semver simple: **parche** (1.0.1) para correcciones, **menor** (1.1.0) cuando se agrega funcionalidad, **mayor** (2.0.0) para un cambio grande de cómo se usa el sistema.
 
 ### Nombres de producto, unidades y orden (compartido)
 - `frontend/src/lib/formatoInventario.js` concentra cómo se nombra y ordena un producto en **todas** las listas: `etiquetaProducto` (una línea: "Ensueño · Suavizante"), `tituloProducto`/`subtituloProducto` (dos líneas: marca arriba, nombre o "Granel" abajo) y `ordenProducto` (**granel → marca → bolsas**, el mismo criterio con que el backend ordena el catálogo).
@@ -280,7 +280,7 @@ info/                     # referencias de diseño (Figma export, docx) — no e
 4. **Poner en OFF el "Power-on state"** de cada Sonoff en la app eWeLink, para que un apagón no arranque máquinas solas.
 5. **Borrar los secretos muertos** en Fly: `fly secrets unset EWELINK_EMAIL EWELINK_PASSWORD EWELINK_COUNTRY_CODE` (la autenticación ya es OAuth).
 6. **Cerrar la decisión del edredón** con el cliente (ver §5) y, según la respuesta, ajustar cómo se cobra esa carga.
-7. **Entregar el sistema al cliente** para que empiece el uso real. Antes de entregar: **subir la versión** en `frontend/package.json` (hoy 1.0.0) y **cambiar la contraseña de los usuarios de prueba**.
+7. **Entregar el sistema al cliente** para que empiece el uso real. Antes de entregar: **cambiar la contraseña de los usuarios de prueba** y **subir la versión** en `frontend/package.json` (hoy 1.0.0) — esto último **solo cuando la usuaria lo pida**, que será al cerrar el tema de los Sonoff.
 
 **Pendiente de pruebas (para retomar):** cubrir las **páginas del frontend**, empezando por **`NuevaNota`** (patrón ya validado en `Login` y en los modales). Las fixtures obsoletas de `calculosNotas.test.js` ya se arreglaron.
 
