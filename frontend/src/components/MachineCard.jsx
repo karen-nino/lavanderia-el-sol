@@ -105,38 +105,36 @@ export default function MachineCard({ maquina, nota, onTerminarCiclo, onClick })
   }
 
   if (maquina.necesita_terminar_ciclo) {
-    // Secadora que terminó, o lavadora cuya carga no lleva secado: se finaliza
-    // la carga, en verde. Lavadora cuya carga SÍ debe secar: el siguiente paso
-    // es iniciar el secado (elegir secadora), en tonos rojos.
+    // Máquina que cumplió su ciclo: SIEMPRE en verde, sea Autoservicio o Por
+    // Encargo. El verde comunica "esta máquina ya terminó", que es lo mismo en
+    // los dos casos; lo único que cambia es el siguiente paso, y eso lo dice el
+    // botón. Antes la lavadora que pasaba a secado se pintaba de rojo, y dos
+    // tarjetas en el mismo estado se veían como si una tuviera un problema.
     //
-    // Lo decide la carga, no el tipo de servicio: un Autoservicio creado con
-    // lavadora y secadora también pasa a secado (antes se daba por hecho que no
-    // y su lavadora ofrecía "Finalizar carga", saltándose el secado pagado).
+    // El siguiente paso lo decide la CARGA, no el tipo de servicio: un
+    // Autoservicio creado con lavadora y secadora también pasa a secado (antes
+    // se daba por hecho que no, y su lavadora ofrecía "Finalizar carga"
+    // saltándose el secado pagado).
     const esSecadora = maquina.tipo === 'secadora';
     const debeSecar = Array.isArray(nota?.lavadoras_con_secado_ids)
       && nota.lavadoras_con_secado_ids.some(mid => String(mid) === String(maquina.id));
     const finalizaCarga = esSecadora || !debeSecar;
-    const tono = finalizaCarga
-      ? { card: 'bg-light-green ring-green', header: 'bg-green', titulo: 'text-green', boton: 'bg-green ring ring-green-700' }
-      : { card: 'bg-white ring-white',     header: 'bg-red',   titulo: 'text-red',   boton: 'bg-red-500 ring ring-red-700' };
     return (
       <div
         {...containerProps}
-        className={`rounded-card ${tono.card} shadow-card overflow-hidden ring-2 ring-inset ${interactivoCls}`}
+        className={`rounded-card bg-light-green ring-green shadow-card overflow-hidden ring-2 ring-inset ${interactivoCls}`}
       >
-        <div className={`${headerCls} ${tono.header} text-white`}>
+        <div className={`${headerCls} bg-green text-white`}>
           <span className={nombreCls}>{maquina.nombre}</span>
         </div>
         <div className="px-card-pad pt-5 pb-6 flex flex-col items-center gap-3">
-          <p className={`text-card-title ${tono.titulo} text-center uppercase tracking-wide`}>
-            {finalizaCarga
-              ? (esSecadora ? <>Finalizó<br />secadora</> : <>Finalizó<br />lavadora</>)
-              : <>Iniciar<br />secadora</>}
+          <p className="text-card-title text-green text-center uppercase tracking-wide">
+            {esSecadora ? <>Finalizó<br />secadora</> : <>Finalizó<br />lavadora</>}
           </p>
           {infoNota}
           <button
             onClick={(e) => { e.stopPropagation(); onTerminarCiclo?.(maquina); }}
-            className={`w-full ${tono.boton} text-white text-section py-8 rounded-card-sm shadow-card hover:opacity-90 transition-opacity mt-1`}
+            className="w-full bg-green ring ring-green-700 text-white text-section py-8 rounded-card-sm shadow-card hover:opacity-90 transition-opacity mt-1"
           >
             {finalizaCarga ? 'FINALIZAR CARGA' : 'INICIAR SECADO'}
           </button>
