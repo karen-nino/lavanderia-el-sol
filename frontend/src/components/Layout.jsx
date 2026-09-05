@@ -649,7 +649,7 @@ function MenuModal({ open, onClose, mobileItems = [], desktopItems = [], onSetti
 
 function MobileBottomNav({ items, onMenu }) {
   return (
-    <nav className="md:hidden flex items-center justify-around bg-white shadow-bottom-nav py-2 flex-shrink-0">
+    <nav className="md:hidden flex items-center justify-around bg-white shadow-bottom-nav pt-2 pb-nav-safe flex-shrink-0">
       {items.map(({ to, label, icon, end }) => (
         <NavLink
           key={to}

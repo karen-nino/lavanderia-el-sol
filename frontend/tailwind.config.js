@@ -42,6 +42,12 @@ export default {
       spacing: {
         'card-pad':    '1.25rem',
         'section-gap': '1.5rem',
+        // Franja de gestos del iPhone (vale 0 en todo lo demás). 'nav-safe' es
+        // el relleno de abajo del menú inferior: su py-2 de siempre más esa
+        // franja. 'fab-safe' sube el botón flotante lo mismo, para que no se
+        // encime con el menú al crecer.
+        'nav-safe':    'calc(0.5rem + env(safe-area-inset-bottom))',
+        'fab-safe':    'calc(6rem + env(safe-area-inset-bottom))',
       },
       keyframes: {
         'pop-in': {
