@@ -158,4 +158,64 @@ describe('cerrarCajasAbiertas', () => {
   it('no hace nada si no hay cajas abiertas', async () => {
     expect(await cerrarCajasAbiertas()).toEqual([]);
   });
+
+  it('congela las cifras: revertir un pago no reescribe el corte ya cerrado', async () => {
+    // Es la misma garantía que da el cierre manual (mig. 101). El automático
+    // las dejaba en NULL y el historial las recalculaba en vivo, así que
+    // cualquier movimiento posterior cambiaba un corte de un día ya cerrado.
+    await request(app).post('/api/caja/abrir').set(auth(admin.token)).send({ monto_inicial: 100 });
+    const lavadoraId = await seedMaquina({ nombre: 'L9', tipo: 'lavadora_mediana' });
+    const nota = await request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PAGADO',
+      forma_pago: 'EFECTIVO',
+      cargas: [{ lavadora_tipo: 'mediana' }],
+    });
+    expect(nota.status).toBe(201);
+    const cobrado = Number(nota.body.precio_total);
+    expect(cobrado).toBeGreaterThan(0);
+
+    await cerrarCajasAbiertas();
+
+    const antes = await request(app).get('/api/caja/historial').set(auth(admin.token));
+    expect(antes.body[0].ventas).toBe(cobrado);
+
+    // Al día siguiente el admin revierte aquel pago.
+    const rev = await request(app).patch(`/api/notas/${nota.body.id}/estado-pago`)
+      .set(auth(admin.token)).send({ estado_pago: 'PENDIENTE' });
+    expect(rev.status).toBe(200);
+
+    const despues = await request(app).get('/api/caja/historial').set(auth(admin.token));
+    expect(despues.body[0].ventas).toBe(cobrado);        // el corte no se movió
+    expect(despues.body[0].esperado).toBe(100 + cobrado);
+    expect(lavadoraId).toBeDefined();
+  });
+});
+
+describe('el cierre del día apaga los encendidos manuales', () => {
+  it('borra la marca para que el reconciliador no deje la máquina prendida', async () => {
+    // Si solo se soltara el estado, la marca seguiría viva: la pantalla la
+    // mostraría libre mientras el Sonoff la mantiene andando (mig. 104).
+    const id = await seedMaquina({ nombre: 'L7', tipo: 'lavadora_mediana' });
+    await pool.query(
+      "UPDATE maquinas SET estado = 'en_uso', en_uso_desde = NOW(), encendida_manual_at = NOW() WHERE id = $1",
+      [id]
+    );
+
+    await liberarMaquinasCierreDelDia();
+
+    const { rows } = await pool.query('SELECT estado, encendida_manual_at FROM maquinas WHERE id = $1', [id]);
+    expect(rows[0].estado).toBe('disponible');
+    expect(rows[0].encendida_manual_at).toBeNull();
+  });
+
+  it('una máquina en mantenimiento sigue en mantenimiento', async () => {
+    const id = await seedMaquina({ nombre: 'L6', tipo: 'lavadora_mediana', estado: 'mantenimiento' });
+    await pool.query('UPDATE maquinas SET encendida_manual_at = NOW() WHERE id = $1', [id]);
+
+    await liberarMaquinasCierreDelDia();
+
+    const { rows } = await pool.query('SELECT estado, encendida_manual_at FROM maquinas WHERE id = $1', [id]);
+    expect(rows[0].estado).toBe('mantenimiento');
+    expect(rows[0].encendida_manual_at).toBeNull();
+  });
 });

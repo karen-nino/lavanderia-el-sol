@@ -49,9 +49,19 @@ export async function liberarMaquinasCierreDelDia() {
       );
     }
 
+    // También se cancela cualquier encendido manual (mig. 104): el día terminó
+    // y nada debe quedar prendido. Si solo se soltara el estado, la marca
+    // seguiría viva y el reconciliador mantendría la máquina encendida mientras
+    // la pantalla la muestra libre — lista para asignarse a una nota estando
+    // en marcha.
+    // El estado solo se toca si estaba 'en_uso': una máquina en mantenimiento
+    // sigue en mantenimiento aunque alguien la hubiera prendido para revisarla.
     const maquinas = await client.query(
-      `UPDATE maquinas SET estado = 'disponible', en_uso_desde = NULL
-         WHERE estado = 'en_uso'`
+      `UPDATE maquinas
+          SET estado       = CASE WHEN estado = 'en_uso' THEN 'disponible'::estado_maquina ELSE estado END,
+              en_uso_desde = CASE WHEN estado = 'en_uso' THEN NULL ELSE en_uso_desde END,
+              encendida_manual_at = NULL
+        WHERE estado = 'en_uso' OR encendida_manual_at IS NOT NULL`
     );
 
     // Máquinas que se asignaron a una nota y nunca se arrancaron: la nota se
@@ -114,6 +124,12 @@ export async function cerrarSesionesEmpleados() {
 // La bandera `cierre_automatico` (mig. 099) es lo que permite distinguirlo de
 // un corte real en el historial.
 //
+// Las cifras SÍ se congelan, igual que en el cierre manual (mig. 101). Sin
+// esto quedaban en NULL y el historial las recalculaba en vivo para siempre:
+// revertir un pago o corregir un total reescribía el corte de un día ya
+// cerrado, que es justo lo que la 101 vino a impedir. Y el cierre automático
+// no es un caso raro: es el de cualquier día en que nadie cierre la caja.
+//
 // Sin esto, la sesión seguía viva al día siguiente: nadie podía abrir caja, y
 // las ventas del día nuevo se sumaban a la sesión vieja hasta que alguien la
 // cerraba, momento en el que el esperado de dos días se comparaba contra el
@@ -123,16 +139,43 @@ export async function cerrarSesionesEmpleados() {
 // llamador: devuelve las cajas cerradas.
 export async function cerrarCajasAbiertas() {
   const { rows } = await pool.query(
-    `UPDATE cajas
+    `UPDATE cajas c
         SET estado            = 'cerrada',
             cerrada_at        = NOW(),
             cierre_automatico = TRUE,
             notas_cierre      = COALESCE(
               notas_cierre,
               'Cerrada automáticamente en el cierre del día. Nadie cerró la caja, así que no hubo conteo de efectivo.'
+            ),
+            ventas_total = (
+              SELECT COALESCE(SUM(precio_total), 0) FROM notas
+               WHERE caja_id = c.id AND estado_pago = 'PAGADO' AND estado <> 'CANCELADA'
+            ),
+            ventas_efectivo = (
+              SELECT COALESCE(SUM(precio_total), 0) FROM notas
+               WHERE caja_id = c.id AND estado_pago = 'PAGADO' AND estado <> 'CANCELADA'
+                 AND COALESCE(forma_pago, 'EFECTIVO') = 'EFECTIVO'
+            ),
+            ventas_transferencia = (
+              SELECT COALESCE(SUM(precio_total), 0) FROM notas
+               WHERE caja_id = c.id AND estado_pago = 'PAGADO' AND estado <> 'CANCELADA'
+                 AND forma_pago = 'TRANSFERENCIA'
+            ),
+            ventas_tarjeta = (
+              SELECT COALESCE(SUM(precio_total), 0) FROM notas
+               WHERE caja_id = c.id AND estado_pago = 'PAGADO' AND estado <> 'CANCELADA'
+                 AND forma_pago = 'TARJETA'
+            ),
+            total_entradas = (
+              SELECT COALESCE(SUM(monto), 0) FROM movimientos_caja
+               WHERE caja_id = c.id AND tipo = 'entrada'
+            ),
+            total_salidas = (
+              SELECT COALESCE(SUM(monto), 0) FROM movimientos_caja
+               WHERE caja_id = c.id AND tipo = 'salida'
             )
-      WHERE estado = 'abierta'
-      RETURNING id, sucursal`
+      WHERE c.estado = 'abierta'
+      RETURNING c.id, c.sucursal`
   );
   return rows;
 }
