@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Barcode from 'react-barcode';
 import { api } from '../lib/api';
+import { urlListaNotas } from '../lib/filtrosNotas';
 import { useAuth } from '../context/AuthContext';
 import { esAdmin as esAdminFn } from '../lib/roles';
 import { etiquetaProducto, tituloProducto, subtituloProducto, ordenProducto } from '../lib/formatoInventario';
@@ -303,7 +304,7 @@ export default function DetalleNota() {
     setErrorAccion('');
     try {
       await api.delete(`/notas/${id}`);
-      navigate('/notas');
+      navigate(urlListaNotas());
     } catch (err) {
       setErrorAccion(err.message);
       setConfirmEliminar(false);
@@ -417,7 +418,7 @@ export default function DetalleNota() {
         <div className="max-w-2xl mx-auto px-6 md:px-6 pt-10 md:pt-6 pb-4 flex items-center justify-between gap-4">
         <div className="flex items-center gap-2 min-w-0">
           <button
-            onClick={() => navigate('/notas')}
+            onClick={() => navigate(urlListaNotas())}
             aria-label="Volver"
             className="flex-shrink-0 w-11 h-11 rounded-full border border-gray-300 bg-white text-gray-800 hover:bg-gray-50 flex items-center justify-center transition duration-200 ease-out active:scale-[1.3] active:bg-white active:shadow-md"
           >

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../lib/api';
+import { recordarListaNotas } from '../lib/filtrosNotas';
 import { useAuth } from '../context/AuthContext';
 import { esAdminMain as esAdminMainFn } from '../lib/roles';
 import SucursalBar from '../components/SucursalBar';
@@ -247,6 +248,9 @@ export default function Notas() {
     if (filtro !== 'TODOS') params.set('estado', filtro);
     params.set('fecha', rangoFecha);
     setSearchParams(params, { replace: true });
+    // Y se apunta aparte, para que el botón "Volver" del detalle de una nota
+    // devuelva a la lista con estos mismos filtros.
+    recordarListaNotas(`/notas?${params}`);
   }, [filtro, rangoFecha, setSearchParams]);
 
   useEffect(() => {
