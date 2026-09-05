@@ -5,6 +5,7 @@ import { etiquetaProducto, ordenProducto } from '../lib/formatoInventario';
 import { api } from '../lib/api';
 import { formatFechaHora12 } from '../lib/fecha';
 import { maquinasDeCarga, cargaVisibleEnTicket } from '../lib/ticketCargas';
+import { notaAlPieDeTicket } from '../lib/ticketNotaPie';
 
 const BADGE_TIPO_SERVICIO = {
   AUTOSERVICIO: 'Autoservicio',
@@ -191,11 +192,7 @@ export default function TicketNota() {
   const [enviando, setEnviando] = useState(false);
   const [avisoEnvio, setAvisoEnvio] = useState('');
 
-  // El edredón lo lava y lo entrega el negocio, igual que un encargo: los dos
-  // llevan la misma nota. La de autoservicio es solo para quien lava él mismo.
-  const notaPie = nota?.tipo_servicio === 'AUTOSERVICIO'
-    ? notasPie.autoservicio
-    : notasPie.encargo;
+  const notaPie = notaAlPieDeTicket(nota?.tipo_servicio, notasPie);
 
   useEffect(() => {
     let activo = true;
