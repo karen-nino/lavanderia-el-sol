@@ -125,7 +125,7 @@ const MOBILE_SECTIONS = [
   { id: 'alertas', label: 'Alertas y Notificaciones',  subtitle: 'Ajustes de alertas', icon: SectionIcon.alertas },
   { id: 'etiquetas', label: 'Etiquetas de encargo',    subtitle: 'Tipos de tela y tamaños de edredón', icon: SectionIcon.etiquetas },
   { id: 'inventario', label: 'Inventario',              subtitle: 'Marcas y envases de productos', icon: SectionIcon.inventario },
-  { id: 'ticket',   label: 'Ticket',                   subtitle: 'Nota al pie del ticket', icon: SectionIcon.ticket },
+  { id: 'ticket',   label: 'Ticket',                   subtitle: 'Notas al pie del ticket', icon: SectionIcon.ticket },
 ];
 
 // Encabezado de un grupo de campos dentro de una sección. Va por encima de las
@@ -866,7 +866,8 @@ export default function Ajustes() {
     tiempo_secadora_edredon: Number(config.tiempo_secadora_edredon),
     nombre_negocio:        config.nombre_negocio,
     rfc:                   config.rfc ?? '',
-    ticket_nota:           config.ticket_nota ?? '',
+    ticket_nota_autoservicio: config.ticket_nota_autoservicio ?? '',
+    ticket_nota_encargo:      config.ticket_nota_encargo ?? '',
     stock_minimo_global:   Number(config.stock_minimo_global),
     alerta_ciclo_detenido: !!config.alerta_ciclo_detenido,
   });
@@ -1410,18 +1411,33 @@ export default function Ajustes() {
   const seccionTicketDesktop = (
     <Section titulo="Ticket">
       <Field
-        label="Nota"
+        label="Nota para Autoservicio"
         hint="Se imprime en letra chica al final del ticket que se manda al cliente."
       >
         <textarea
-          name="ticket_nota"
+          name="ticket_nota_autoservicio"
           rows={5}
-          value={config.ticket_nota ?? ''}
+          value={config.ticket_nota_autoservicio ?? ''}
           onChange={handleChange}
           placeholder="Opcional"
           className={`${INPUT_CLS} resize-y leading-relaxed`}
         />
       </Field>
+      <div className="border-t border-gray-100 pt-4">
+        <Field
+          label="Nota para Por Encargo y Edredón"
+          hint="Se imprime en letra chica al final del ticket que se manda al cliente."
+        >
+          <textarea
+            name="ticket_nota_encargo"
+            rows={5}
+            value={config.ticket_nota_encargo ?? ''}
+            onChange={handleChange}
+            placeholder="Opcional"
+            className={`${INPUT_CLS} resize-y leading-relaxed`}
+          />
+        </Field>
+      </div>
     </Section>
   );
 
@@ -1842,13 +1858,27 @@ export default function Ajustes() {
   const seccionTicketMobile = (
     <div className="space-y-6">
       <MobileField
-        label="Nota"
+        label="Nota para Autoservicio"
         hint="Se imprime en letra chica al final del ticket que se manda al cliente."
       >
         <textarea
-          name="ticket_nota"
+          name="ticket_nota_autoservicio"
           rows={6}
-          value={config.ticket_nota ?? ''}
+          value={config.ticket_nota_autoservicio ?? ''}
+          onChange={handleChange}
+          placeholder="Opcional"
+          className={`${MOBILE_INPUT_CLS} resize-y leading-relaxed`}
+        />
+      </MobileField>
+
+      <MobileField
+        label="Nota para Por Encargo y Edredón"
+        hint="Se imprime en letra chica al final del ticket que se manda al cliente."
+      >
+        <textarea
+          name="ticket_nota_encargo"
+          rows={6}
+          value={config.ticket_nota_encargo ?? ''}
           onChange={handleChange}
           placeholder="Opcional"
           className={`${MOBILE_INPUT_CLS} resize-y leading-relaxed`}

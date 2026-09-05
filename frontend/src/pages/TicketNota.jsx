@@ -178,7 +178,9 @@ export default function TicketNota() {
   // Datos del negocio que se imprimen en el ticket (Ajustes): el R.F.C. en el
   // encabezado y la nota en letra chica al pie. Vacíos, no se muestran.
   const [rfcNegocio, setRfcNegocio] = useState('');
-  const [notaPie, setNotaPie]       = useState('');
+  // Hay una nota por tipo de servicio: lo que le sirve al cliente que lava él
+  // mismo no es lo que le sirve al que deja su ropa a cargo del negocio.
+  const [notasPie, setNotasPie] = useState({ autoservicio: '', encargo: '' });
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState('');
   // Autoservicio es anónimo (sin cliente): el empleado captura aquí el teléfono
@@ -189,6 +191,12 @@ export default function TicketNota() {
   const [enviando, setEnviando] = useState(false);
   const [avisoEnvio, setAvisoEnvio] = useState('');
 
+  // El edredón lo lava y lo entrega el negocio, igual que un encargo: los dos
+  // llevan la misma nota. La de autoservicio es solo para quien lava él mismo.
+  const notaPie = nota?.tipo_servicio === 'AUTOSERVICIO'
+    ? notasPie.autoservicio
+    : notasPie.encargo;
+
   useEffect(() => {
     let activo = true;
     // Los ajustes son secundarios: si fallan, el ticket se muestra igual.
@@ -196,7 +204,10 @@ export default function TicketNota() {
       .then(cfg => {
         if (!activo) return;
         setRfcNegocio(cfg?.rfc ?? '');
-        setNotaPie(cfg?.ticket_nota ?? '');
+        setNotasPie({
+          autoservicio: cfg?.ticket_nota_autoservicio ?? '',
+          encargo:      cfg?.ticket_nota_encargo ?? '',
+        });
       })
       .catch(() => {});
     api.get(`/notas/${id}`)
