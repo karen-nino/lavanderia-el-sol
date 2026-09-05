@@ -17,19 +17,25 @@
 // Actualiza sonoff_estado según el resultado del driver:
 //   sin device_id           → 'sin_enlazar'
 //   driver confirmó (ok)    → 'enlazada'
-//   driver no pudo (!ok)    → 'error'
+//   driver no pudo (!ok)    → 'error' + sonoff_detalle con el porqué
 // Excepción: con el driver de simulación no se marca 'enlazada' (ver abajo).
 
 import pool from '../db/pool.js';
 import * as dispositivos from './dispositivos/index.js';
+import { resumirMotivo } from './dispositivos/mensajes.js';
 
 const estadoDeseado = (estadoMaquina) => (estadoMaquina === 'en_uso' ? 'on' : 'off');
 
-async function marcar(id, sonoffEstado) {
+// Junto al estado se guarda POR QUÉ falló (mig. 103). Este servicio corre solo
+// —en cada arranque/fin de carga y en el barrido periódico—, así que casi
+// siempre es él quien deja la tarjeta en rojo: sin el motivo, quien la mira al
+// rato solo ve "Sin conexión" y no sabe si el problema es la cuenta de eWeLink,
+// el internet o el Sonoff desenchufado.
+async function marcar(id, sonoffEstado, motivo = null) {
   const { rows } = await pool.query(
-    `UPDATE maquinas SET sonoff_estado = $1, sonoff_sync_at = NOW()
-      WHERE id = $2 RETURNING *`,
-    [sonoffEstado, id]
+    `UPDATE maquinas SET sonoff_estado = $1, sonoff_detalle = $2, sonoff_sync_at = NOW()
+      WHERE id = $3 RETURNING *`,
+    [sonoffEstado, sonoffEstado === 'error' ? resumirMotivo(motivo) : null, id]
   );
   return rows[0] ?? null;
 }
@@ -73,7 +79,7 @@ export async function sincronizarSonoff(maquinaId, { reconciliando = false } = {
         );
         return marcar(maq.id, 'enlazada');
       }
-      return marcar(maq.id, real.ok ? 'enlazada' : 'error');
+      return marcar(maq.id, real.ok ? 'enlazada' : 'error', real.motivo);
     }
 
     const res = deseado === 'on'
@@ -85,7 +91,7 @@ export async function sincronizarSonoff(maquinaId, { reconciliando = false } = {
     // estado como estaba (la operación simulada ya quedó en el log).
     if (dispositivos.esSimulacion()) return maq;
 
-    return marcar(maq.id, res.ok ? 'enlazada' : 'error');
+    return marcar(maq.id, res.ok ? 'enlazada' : 'error', res.motivo);
   } catch (err) {
     console.error(`sincronizarSonoff(${maquinaId}) error:`, err);
     return null;

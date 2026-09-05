@@ -55,7 +55,9 @@ export const conectar = async (req, res) => {
   try {
     if (!oauth.configCompleta()) {
       return res.status(400).json({
-        message: 'La conexión con eWeLink no está configurada en el servidor.',
+        message: 'Faltan las credenciales de eWeLink en el servidor, así que todavía no hay ' +
+                 'nada a qué conectarse. Eso lo configura quien administra el sistema; no se ' +
+                 'arregla desde la app.',
       });
     }
     const state = await cuentaStore.crearState();
@@ -83,7 +85,11 @@ export const callback = async (req, res) => {
     }
     if (!code) {
       return res.status(400).send(
-        paginaCallback('No se pudo conectar', 'eWeLink no devolvió el código de autorización.')
+        paginaCallback(
+          'No se pudo conectar',
+          'eWeLink no devolvió la autorización. Suele pasar cuando se cancela la pantalla de ' +
+          'permisos: vuelve a la aplicación, presiona "Conectar cuenta de eWeLink" y acepta el permiso.'
+        )
       );
     }
 
@@ -99,7 +105,15 @@ export const callback = async (req, res) => {
     );
   } catch (err) {
     console.error('ewelink callback error:', err);
-    res.status(502).send(paginaCallback('No se pudo conectar', err.message));
+    // err.message trae el código que devolvió eWeLink, que no le dice nada a
+    // quien está en la pantalla: va después de la explicación, no en su lugar.
+    res.status(502).send(
+      paginaCallback(
+        'No se pudo conectar',
+        'eWeLink no aceptó la autorización. Vuelve a la aplicación y presiona ' +
+        `"Conectar cuenta de eWeLink" otra vez; si vuelve a fallar, esto es lo que respondió: ${err.message}`
+      )
+    );
   }
 };
 

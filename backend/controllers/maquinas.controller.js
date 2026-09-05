@@ -1,6 +1,7 @@
 import pool from '../db/pool.js';
 import { TZ_NEGOCIO } from '../utils/tz.js';
 import * as dispositivos from '../services/dispositivos/index.js';
+import { explicarFalla, resumirMotivo } from '../services/dispositivos/mensajes.js';
 import { esAdmin } from '../middleware/roles.js';
 
 const ESTADOS_VALIDOS = ['disponible', 'en_uso', 'mantenimiento'];
@@ -54,23 +55,21 @@ const buscarMaquinaConMismoDevice = async (deviceId, deviceCanal, excluirId = nu
 // nada y hay que decirlo en pantalla en vez de pintar una palomita verde.
 const simulacionActiva = () => dispositivos.esSimulacion();
 
-// Traduce el motivo técnico del driver a algo accionable. Los dos primeros no
-// son fallas del Sonoff sino de la conexión con eWeLink, y se arreglan en otra
-// parte de la pantalla: sin decirlo, se termina revisando el cableado de una
-// máquina que está bien.
-const MOTIVO_LEGIBLE = {
-  sin_cuenta_conectada: 'Falta conectar la cuenta de eWeLink (el aviso aparece arriba, en esta misma pantalla).',
-  sesion_expirada: 'La conexión con eWeLink venció. Hay que conectar la cuenta otra vez desde el aviso de arriba.',
-  ewelink_no_configurado: 'Faltan las credenciales de eWeLink en el servidor.',
-};
-
-const explicarFalla = (motivo, encabezado) =>
-  MOTIVO_LEGIBLE[motivo] ?? `${encabezado} (${motivo ?? 'sin detalle'}).`;
-
 const MSG_SIMULACION =
-  'Modo simulación: el sistema no está conectado a los Sonoff reales, así que ' +
-  'esta prueba no comprueba nada. Falta configurar las credenciales de eWeLink ' +
-  'en el servidor (DISPOSITIVOS_DRIVER=ewelink).';
+  'Modo simulación: la app no está conectada a los Sonoff reales, así que esta ' +
+  'prueba no comprueba nada y las máquinas tampoco van a encender ni apagar solas. ' +
+  'Para activarlo hay que configurar eWeLink en el servidor (DISPOSITIVOS_DRIVER=ewelink).';
+
+// Guarda cómo quedó el enlace y, si falló, POR QUÉ: así la tarjeta explica el
+// problema sin que nadie tenga que apretar "Probar" para enterarse.
+const guardarEnlace = async (id, ok, motivo) => {
+  const { rows } = await pool.query(
+    `UPDATE maquinas SET sonoff_estado = $1, sonoff_detalle = $2, sonoff_sync_at = NOW()
+      WHERE id = $3 RETURNING *`,
+    [ok ? 'enlazada' : 'error', ok ? null : resumirMotivo(motivo), id]
+  );
+  return rows[0];
+};
 
 // Duración del pulso de la prueba física: suficiente para ver/oír arrancar la
 // máquina, corto para no iniciar un ciclo de verdad.
@@ -327,9 +326,10 @@ export const createMaquina = async (req, res) => {
   const deviceId = normalizarDeviceId(device_id);
   const deviceCanal = normalizarDeviceCanal(device_canal);
   // Sin dispositivo enlazado la máquina queda 'sin_enlazar'; con dispositivo
-  // arranca en 'error' (aún no confirmado) hasta que el reconciliador o el
-  // botón "Probar" verifiquen que responde y lo marquen 'enlazada'.
-  const sonoffEstado = deviceId ? 'error' : 'sin_enlazar';
+  // arranca en 'sin_probar' hasta que el reconciliador o el botón "Probar"
+  // verifiquen que responde y lo marquen 'enlazada'. No es 'error': todavía no
+  // ha fallado nada, solo falta comprobarlo (mig. 103).
+  const sonoffEstado = deviceId ? 'sin_probar' : 'sin_enlazar';
 
   try {
     const yaUsado = await buscarMaquinaConMismoDevice(deviceId, deviceCanal);
@@ -386,9 +386,11 @@ export const updateMaquina = async (req, res) => {
     // mantiene en_uso_desde coherente, igual que en cambiarEstadoMaquina.
     //
     // sonoff_estado/sonoff_sync_at se recalculan según el enlace: sin
-    // dispositivo → 'sin_enlazar'; si el device_id cambia → 'error' (aún sin
-    // confirmar) y se limpia sync_at para que el reconciliador/probar lo
-    // reverifiquen; si no cambia, se conserva el estado actual.
+    // dispositivo → 'sin_enlazar'; si el device_id cambia → 'sin_probar' (aún
+    // sin confirmar, pero sin fallas que reportar) y se limpia sync_at para que
+    // el reconciliador/probar lo reverifiquen; si no cambia, se conserva el
+    // estado actual. El detalle del último fallo se borra en ambos casos:
+    // hablaba del Sonoff anterior.
     const { rows } = await pool.query(
       `UPDATE maquinas
          SET nombre = $1, tipo = $2, tamano = $3, modelo = $4, capacidad = $5, numero_serie = $6, fecha_adquisicion = $7, notas = $8,
@@ -405,8 +407,13 @@ export const updateMaquina = async (req, res) => {
              -- CASE, y rechaza la consulta ("inconsistent types deduced").
              sonoff_estado = CASE
                WHEN $12::varchar IS NULL THEN 'sin_enlazar'
-               WHEN device_id IS DISTINCT FROM $12::varchar THEN 'error'
+               WHEN device_id IS DISTINCT FROM $12::varchar THEN 'sin_probar'
                ELSE sonoff_estado
+             END,
+             sonoff_detalle = CASE
+               WHEN $12::varchar IS NULL THEN NULL
+               WHEN device_id IS DISTINCT FROM $12::varchar THEN NULL
+               ELSE sonoff_detalle
              END,
              sonoff_sync_at = CASE
                WHEN device_id IS DISTINCT FROM $12::varchar THEN NULL
@@ -572,11 +579,14 @@ export const probarSonoff = async (req, res) => {
 
     if (!dispositivos.tieneDispositivo(maq)) {
       const { rows: upd } = await pool.query(
-        `UPDATE maquinas SET sonoff_estado = 'sin_enlazar', sonoff_sync_at = NOW()
+        `UPDATE maquinas SET sonoff_estado = 'sin_enlazar', sonoff_detalle = NULL, sonoff_sync_at = NOW()
           WHERE id = $1 RETURNING *`,
         [id]
       );
-      return res.status(400).json({ message: 'La máquina no tiene un Sonoff enlazado.', maquina: upd[0] });
+      return res.status(400).json({
+        message: explicarFalla('sin_enlazar', 'No se pudo probar el Sonoff'),
+        maquina: upd[0],
+      });
     }
 
     // Con el driver de simulación CUALQUIER device_id responde ok, así que una
@@ -592,20 +602,21 @@ export const probarSonoff = async (req, res) => {
     }
 
     const resultado = await dispositivos.estado(maq);
-    const nuevo = resultado.ok ? 'enlazada' : 'error';
-    const { rows: upd } = await pool.query(
-      `UPDATE maquinas SET sonoff_estado = $1, sonoff_sync_at = NOW()
-        WHERE id = $2 RETURNING *`,
-      [nuevo, id]
-    );
+    const actualizada = await guardarEnlace(id, resultado.ok, resultado.motivo);
 
     if (!resultado.ok) {
       return res.status(502).json({
-        message: explicarFalla(resultado.motivo, 'El Sonoff no respondió'),
-        maquina: upd[0],
+        message: explicarFalla(resultado.motivo, 'No se pudo probar el Sonoff'),
+        maquina: actualizada,
       });
     }
-    res.json({ message: 'Sonoff enlazado correctamente.', estado: resultado.estado, maquina: upd[0] });
+    // Decir en qué estado se encontró el relé ahorra el viaje a la máquina: si
+    // aparece encendida y nadie la está usando, ahí mismo se ve el problema.
+    res.json({
+      message: `Sonoff enlazado correctamente. Ahora mismo está ${resultado.estado === 'on' ? 'encendido' : 'apagado'}.`,
+      estado: resultado.estado,
+      maquina: actualizada,
+    });
   } catch (err) {
     console.error('probarSonoff error:', err);
     res.status(500).json({ message: 'No se pudo probar el enchufe de la máquina. Intenta de nuevo.' });
@@ -634,7 +645,9 @@ export const apagarSonoff = async (req, res) => {
     const maq = rows[0];
 
     if (!dispositivos.tieneDispositivo(maq)) {
-      return res.status(400).json({ message: 'La máquina no tiene un Sonoff enlazado.' });
+      return res.status(400).json({
+        message: explicarFalla('sin_enlazar', 'No se pudo apagar la máquina'),
+      });
     }
     if (simulacionActiva()) {
       return res.json({ simulado: true, driver: dispositivos.nombreDriver(), message: MSG_SIMULACION, maquina: maq });
@@ -643,19 +656,19 @@ export const apagarSonoff = async (req, res) => {
     const apagado = await apagarConReintentos(maq);
     console.log(`[maquinas] apagado de emergencia ${maq.nombre}: ${apagado.ok ? 'ok' : `falló (${apagado.motivo})`}`);
 
-    const { rows: upd } = await pool.query(
-      `UPDATE maquinas SET sonoff_estado = $1, sonoff_sync_at = NOW() WHERE id = $2 RETURNING *`,
-      [apagado.ok ? 'enlazada' : 'error', id]
-    );
+    const actualizada = await guardarEnlace(id, apagado.ok, apagado.motivo);
 
     if (!apagado.ok) {
+      // Aquí la máquina puede estar andando con ropa dentro, así que el mensaje
+      // termina siempre con la salida manual: no se queda esperando a que la
+      // app se recupere.
       return res.status(502).json({
-        message: explicarFalla(apagado.motivo, 'No se pudo apagar') +
-                 ' Apágala desde la app eWeLink o con el interruptor de la máquina.',
-        maquina: upd[0],
+        message: explicarFalla(apagado.motivo, `No se pudo apagar ${maq.nombre} después de ${INTENTOS_APAGADO} intentos`) +
+                 ' Apágala desde la app de eWeLink o con el interruptor de la máquina.',
+        maquina: actualizada,
       });
     }
-    res.json({ message: 'Orden de apagado enviada.', maquina: upd[0] });
+    res.json({ message: `Orden de apagado enviada a ${maq.nombre}.`, maquina: actualizada });
   } catch (err) {
     console.error('apagarSonoff error:', err);
     res.status(500).json({ message: 'No se pudo apagar la máquina. Intenta de nuevo.' });
@@ -686,7 +699,9 @@ export const encenderSonoff = async (req, res) => {
     const maq = rows[0];
 
     if (!dispositivos.tieneDispositivo(maq)) {
-      return res.status(400).json({ message: 'La máquina no tiene un Sonoff enlazado.' });
+      return res.status(400).json({
+        message: explicarFalla('sin_enlazar', 'No se pudo encender la máquina'),
+      });
     }
     if (simulacionActiva()) {
       return res.json({ simulado: true, driver: dispositivos.nombreDriver(), message: MSG_SIMULACION, maquina: maq });
@@ -695,18 +710,15 @@ export const encenderSonoff = async (req, res) => {
     const encendido = await dispositivos.encender(maq);
     console.log(`[maquinas] encendido manual ${maq.nombre}: ${encendido.ok ? 'ok' : `falló (${encendido.motivo})`}`);
 
-    const { rows: upd } = await pool.query(
-      `UPDATE maquinas SET sonoff_estado = $1, sonoff_sync_at = NOW() WHERE id = $2 RETURNING *`,
-      [encendido.ok ? 'enlazada' : 'error', id]
-    );
+    const actualizada = await guardarEnlace(id, encendido.ok, encendido.motivo);
 
     if (!encendido.ok) {
       return res.status(502).json({
-        message: explicarFalla(encendido.motivo, 'No se pudo encender'),
-        maquina: upd[0],
+        message: explicarFalla(encendido.motivo, `No se pudo encender ${maq.nombre}`),
+        maquina: actualizada,
       });
     }
-    res.json({ message: 'Orden de encendido enviada.', maquina: upd[0] });
+    res.json({ message: `Orden de encendido enviada a ${maq.nombre}.`, maquina: actualizada });
   } catch (err) {
     console.error('encenderSonoff error:', err);
     res.status(500).json({ message: 'No se pudo encender la máquina. Intenta de nuevo.' });

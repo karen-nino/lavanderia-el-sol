@@ -20,10 +20,28 @@ const estadoVisual = (m) => (m.reservada ? 'reservada' : m.estado);
 // Enlace con el Sonoff, para la pastilla de la tarjeta. Se muestra en Gestión
 // (y no solo en Máquinas en uso) porque es aquí donde se asignan los Device ID:
 // sin esto habría que abrir el modal de cada máquina para saber cuáles faltan.
+//
+// 'sin_probar' (mig. 103) es el enlace recién capturado que todavía nadie ha
+// verificado: antes se pintaba igual que un fallo, y eso mandaba a revisar el
+// cableado de una máquina a la que solo le faltaba apretar "Probar".
 const SONOFF_CFG = {
-  enlazada:    { label: 'Sonoff OK',   cls: 'bg-green-50 text-green-700 border-green-200', dot: 'bg-green-500' },
-  error:       { label: 'Sin conexión', cls: 'bg-red-50 text-red-700 border-red-200',      dot: 'bg-red-500'   },
-  sin_enlazar: { label: 'Sin Sonoff',  cls: 'bg-gray-50 text-gray-500 border-gray-200',    dot: 'bg-gray-400'  },
+  enlazada:    { label: 'Sonoff OK',    cls: 'bg-green-50 text-green-700 border-green-200', dot: 'bg-green-500' },
+  error:       { label: 'Sin conexión', cls: 'bg-red-50 text-red-700 border-red-200',       dot: 'bg-red-500'   },
+  sin_probar:  { label: 'Sin probar',   cls: 'bg-amber-50 text-amber-700 border-amber-200', dot: 'bg-amber-500' },
+  sin_enlazar: { label: 'Sin Sonoff',   cls: 'bg-gray-50 text-gray-500 border-gray-200',    dot: 'bg-gray-400'  },
+};
+
+// Qué decir bajo la pastilla. El backend guarda el motivo del último fallo en
+// sonoff_detalle (mig. 103); cuando no hay fallo, el texto explica igual qué
+// significa el estado, para que nadie tenga que adivinar ni apretar "Probar"
+// solo para enterarse.
+const sonoffExplicacion = (m) => {
+  if (!m.device_id) return 'Esta máquina no tiene un Sonoff asignado: no enciende ni apaga sola.';
+  if (m.sonoff_estado === 'error') {
+    return m.sonoff_detalle || 'La última orden al Sonoff no llegó. Prueba el enlace para ver por qué.';
+  }
+  if (m.sonoff_estado === 'sin_probar') return 'Falta probar el enlace con este Sonoff.';
+  return null;
 };
 
 // El apagado de emergencia queda oculto mientras el control de los Sonoff está
@@ -338,6 +356,9 @@ export default function GestionMaquinas() {
   // saltarse una máquina, y sin este conteo no hay forma de notarlo.
   const conDeviceId  = maquinas.filter(m => m.device_id).length;
   const confirmadas  = maquinas.filter(m => m.sonoff_estado === 'enlazada').length;
+  // Las que están fallando se cuentan aparte: es lo que hay que atender hoy,
+  // y en una lista larga se pierden entre las que sí responden.
+  const conFalla     = maquinas.filter(m => m.device_id && m.sonoff_estado === 'error').length;
 
   if (loading) {
     return (
@@ -359,6 +380,9 @@ export default function GestionMaquinas() {
             <p className="text-xs text-gray-400 mt-0.5">
               Sonoff: {conDeviceId} de {maquinas.length} con ID asignado
               {conDeviceId > 0 && ` · ${confirmadas} con enlace confirmado`}
+              {conFalla > 0 && (
+                <span className="text-red-600 font-medium"> · {conFalla} sin conexión</span>
+              )}
             </p>
           )}
         </div>
@@ -500,7 +524,7 @@ export default function GestionMaquinas() {
             // información útil, no ruido. (Antes se ocultaba mientras ninguna
             // máquina tuviera ID; eso dejaba el dato invisible justo cuando
             // faltaban todas, y ahora este es su único sitio en la app.)
-            const sonoffCfg = SONOFF_CFG[m.device_id ? (m.sonoff_estado ?? 'error') : 'sin_enlazar'];
+            const sonoffCfg = SONOFF_CFG[m.device_id ? (m.sonoff_estado ?? 'sin_probar') : 'sin_enlazar'];
 
             // Toda la tarjeta abre la información de uso de la máquina (igual que
             // la tarjeta de empleados abre su desempeño). Solo Admin, y con
@@ -615,13 +639,20 @@ export default function GestionMaquinas() {
                     </p>
                   )}
                   {esAdmin && sonoffCfg && (
-                    <span
-                      title={m.device_id ? `Sonoff ${m.device_id}` : 'Sin Sonoff asignado'}
-                      className={`mt-2 inline-flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-full border ${sonoffCfg.cls}`}
-                    >
-                      <span className={`w-1.5 h-1.5 rounded-full ${sonoffCfg.dot}`} />
-                      {sonoffCfg.label}
-                    </span>
+                    <div className="mt-2">
+                      <span
+                        title={m.device_id ? `Sonoff ${m.device_id}` : 'Sin Sonoff asignado'}
+                        className={`inline-flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-full border ${sonoffCfg.cls}`}
+                      >
+                        <span className={`w-1.5 h-1.5 rounded-full ${sonoffCfg.dot}`} />
+                        {sonoffCfg.label}
+                      </span>
+                      {/* El porqué, en texto: la pastilla sola no distingue una
+                          cuenta de eWeLink desconectada de un Sonoff sin luz. */}
+                      {sonoffExplicacion(m) && (
+                        <p className="mt-1 text-[11px] leading-snug text-gray-500">{sonoffExplicacion(m)}</p>
+                      )}
+                    </div>
                   )}
                 </div>
               </div>
