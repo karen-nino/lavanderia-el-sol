@@ -1,18 +1,40 @@
 {
+  "id": "/",
   "name": "Lavandería El Sol",
   "short_name": "El Sol",
-  "description": "Panel de administración - Lavandería El Sol",
+  "description": "Notas, máquinas, caja e inventario de Lavandería El Sol",
+  "lang": "es-MX",
+  "dir": "ltr",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "orientation": "portrait-primary",
   "background_color": "#f9fafb",
   "theme_color": "#1e293b",
   "icons": [
     {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
       "src": "/icon.svg",
       "sizes": "any",
       "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "purpose": "any"
     }
   ]
 }

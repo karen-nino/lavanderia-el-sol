@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { api, mensajeDeError } from '../lib/api';
+import InstalarApp from '../components/InstalarApp';
 import { formatTelefono } from '../lib/telefono';
 import { useAuth } from '../context/AuthContext';
 import { esAdminMain as esAdminMainFn } from '../lib/roles';
@@ -1949,6 +1950,10 @@ export default function Ajustes() {
                   onClick={() => setMobileSection(s.id)}
                 />
               ))}
+              {/* Instalar la app en este equipo. No es configuración del
+                  negocio: es una acción del teléfono que se está usando, por
+                  eso va aquí suelta y no como una sección más. */}
+              <InstalarApp variant="mobile" />
             </div>
           </>
         ) : (
@@ -2020,6 +2025,7 @@ export default function Ajustes() {
         <div className="space-y-6">
           {avisoPruebas}
           {seccionPerfilDesktop}
+          <InstalarApp />
         </div>
 
         {!soloPerfil && (
