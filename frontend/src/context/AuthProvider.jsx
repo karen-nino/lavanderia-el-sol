@@ -41,6 +41,10 @@ export function AuthProvider({ children }) {
     api.post('/auth/logout').catch(() => {});
     localStorage.removeItem('token');
     localStorage.removeItem('usuario');
+    // Rastros de navegación del turno que termina (hoy, el filtro con el que se
+    // dejó la lista de notas). Al entrar otro empleado en el mismo teléfono no
+    // debe encontrarse la pantalla como la dejó el anterior.
+    try { sessionStorage.clear(); } catch { /* ignore */ }
     persistSucursal(null);
     setToken(null);
     setUsuario(null);
