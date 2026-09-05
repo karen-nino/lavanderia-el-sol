@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api, mensajeDeError } from '../lib/api';
 import InstalarApp from '../components/InstalarApp';
 import { useInstalacion } from '../lib/useInstalacion';
@@ -75,6 +76,13 @@ const SectionIcon = {
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 8h8M8 12h8M8 16h5" />
     </svg>
   ),
+  manual: (
+    <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+        d="M12 6.5C10.5 5.2 8.6 4.7 6 4.8A1 1 0 005 5.8v11.4a1 1 0 001.06 1c2.5-.1 4.4.4 5.94 1.7 1.54-1.3 3.44-1.8 5.94-1.7a1 1 0 001.06-1V5.8a1 1 0 00-1-1c-2.6-.1-4.5.4-6 1.7z" />
+      <path strokeLinecap="round" strokeWidth={2} d="M12 6.5V19" />
+    </svg>
+  ),
   instalar: (
     <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -134,6 +142,14 @@ const MOBILE_SECTIONS = [
   { id: 'inventario', label: 'Inventario',              subtitle: 'Marcas y envases de productos', icon: SectionIcon.inventario },
   { id: 'ticket',   label: 'Ticket',                   subtitle: 'Notas al pie del ticket', icon: SectionIcon.ticket },
 ];
+
+// El manual no es configuración: abre su propia página (/manual). Se ofrece
+// aparte de MOBILE_SECTIONS porque no tiene formulario que guardar y porque en
+// escritorio no es una sección más, sino un botón que lleva a la página.
+const SECCION_MANUAL = {
+  id: 'manual', label: 'Manual de uso', subtitle: 'Cómo funciona la aplicación',
+  icon: SectionIcon.manual,
+};
 
 // Instalar la app no es configuración del negocio, sino una acción del equipo
 // que se está usando: se ofrece aparte de MOBILE_SECTIONS porque aparece
@@ -622,6 +638,7 @@ export default function Ajustes() {
   const [logoPreview,   setLogoPreview]   = useState(null);
   const [mensaje,       setMensaje]       = useState(null);
   const [mobileSection, setMobileSection] = useState(null);
+  const navigate = useNavigate();
   // Decide si el menú lleva la fila "Instalar la app": depende del equipo, no
   // de la configuración del negocio.
   const { sePuedeInstalar } = useInstalacion();
@@ -1962,6 +1979,7 @@ export default function Ajustes() {
 
   const seccionesMobile = [
     ...MOBILE_SECTIONS,
+    SECCION_MANUAL,
     ...(sePuedeInstalar ? [SECCION_INSTALAR] : []),
   ];
   const activeSection = seccionesMobile.find((s) => s.id === mobileSection);
@@ -2010,7 +2028,7 @@ export default function Ajustes() {
                   key={s.id}
                   label={s.label}
                   icon={s.icon}
-                  onClick={() => setMobileSection(s.id)}
+                  onClick={() => (s.id === 'manual' ? navigate('/manual') : setMobileSection(s.id))}
                 />
               ))}
             </div>
@@ -2103,9 +2121,35 @@ export default function Ajustes() {
           {seccionTicketDesktop}
         </div>
 
-        {/* Instalar la app va al final, después de toda la configuración: es
-            una acción del equipo que se está usando, no un ajuste del negocio.
-            Fuera del bloque de arriba porque también se ofrece en pruebas. */}
+        {/* El manual y la instalación van al final: son acciones, no ajustes
+            del negocio. Fuera del bloque de arriba porque también se ofrecen en
+            el entorno de pruebas. */}
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div className="px-5 py-4 border-b border-gray-100">
+            <h2 className="text-base font-bold text-dark-blue">Manual de uso</h2>
+          </div>
+          <div className="px-5 py-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <p className="text-sm text-gray-600 max-w-md">
+              Cómo funciona la aplicación, paso a paso, con buscador. Se abre en su
+              propia página.
+            </p>
+            <button
+              type="button"
+              onClick={() => navigate('/manual')}
+              className="flex items-center justify-center gap-2 w-full md:w-auto px-6 py-3.5 bg-blue hover:opacity-90 text-white text-base font-medium rounded-lg transition-colors whitespace-nowrap"
+            >
+              {/* El ícono de la sección es de 28 px: aquí va uno de 20, o el
+                  texto del botón se parte en dos renglones. */}
+              <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M12 6.5C10.5 5.2 8.6 4.7 6 4.8A1 1 0 005 5.8v11.4a1 1 0 001.06 1c2.5-.1 4.4.4 5.94 1.7 1.54-1.3 3.44-1.8 5.94-1.7a1 1 0 001.06-1V5.8a1 1 0 00-1-1c-2.6-.1-4.5.4-6 1.7z" />
+                <path strokeLinecap="round" strokeWidth={2} d="M12 6.5V19" />
+              </svg>
+              Abrir el manual
+            </button>
+          </div>
+        </div>
+
         <InstalarApp />
 
         <div className="space-y-3">

@@ -21,6 +21,7 @@ import Ventas from './pages/Ventas';
 import Empleados from './pages/Empleados';
 import EmpleadoDesempeno from './pages/EmpleadoDesempeno';
 import Ajustes from './pages/Ajustes';
+import Manual from './pages/Manual';
 
 export default function App() {
   return (
@@ -87,6 +88,17 @@ export default function App() {
               element={
                 <AdminRoute>
                   <Ajustes />
+                </AdminRoute>
+              }
+            />
+            {/* El manual se abre en su propia página (desde Ajustes), porque en
+                escritorio Ajustes es una sola columna larga y el manual no cabe
+                dentro sin estorbar. Va bajo AdminRoute como Ajustes. */}
+            <Route
+              path="manual"
+              element={
+                <AdminRoute>
+                  <Manual />
                 </AdminRoute>
               }
             />
