@@ -60,7 +60,7 @@ export const sucursalActiva = async (req, res, next) => {
     next();
   } catch (err) {
     console.error('sucursalActiva error:', err);
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudo identificar la sucursal. Intenta de nuevo.' });
   }
 };
 

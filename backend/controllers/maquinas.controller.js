@@ -8,6 +8,14 @@ const TIPOS_VALIDOS   = ['lavadora_mediana', 'lavadora_jumbo', 'secadora'];
 const CAPACIDADES_VALIDAS = ['20kg', '35kg'];
 const TAMANOS_VALIDOS = ['mediana', 'jumbo'];
 
+// Los valores válidos se enlistan como se leen, no como se guardan:
+// ['lavadora_mediana', 'secadora'] → "lavadora mediana o secadora".
+const enPalabras = (valores) => {
+  const legibles = valores.map((v) => v.replace(/_/g, ' '));
+  if (legibles.length <= 1) return legibles.join('');
+  return `${legibles.slice(0, -1).join(', ')} o ${legibles.at(-1)}`;
+};
+
 // device_id del Sonoff en eWeLink: cadena recortada, o null si viene vacío.
 const normalizarDeviceId = (v) => {
   if (v == null) return null;
@@ -141,7 +149,7 @@ export const getMaquinas = async (req, res) => {
     res.json(rows);
   } catch (err) {
     console.error('getMaquinas error:', err);
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudieron cargar las máquinas. Intenta de nuevo.' });
   }
 };
 
@@ -157,7 +165,7 @@ export const getMaquinas = async (req, res) => {
 // para que cada número y el contenido de su modal siempre coincidan.
 export const getUsoMaquina = async (req, res) => {
   const id = Number(req.params.id);
-  if (!id) return res.status(400).json({ message: 'Máquina inválida.' });
+  if (!id) return res.status(400).json({ message: 'No se reconoció la máquina.' });
 
   try {
     const { rows: maq } = await pool.query(
@@ -296,7 +304,7 @@ export const getUsoMaquina = async (req, res) => {
     res.json({ maquina: maq[0], resumen, dias: diasFmt });
   } catch (err) {
     console.error('getUsoMaquina error:', err);
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudo cargar el uso de la máquina. Intenta de nuevo.' });
   }
 };
 
@@ -304,16 +312,16 @@ export const createMaquina = async (req, res) => {
   const { nombre, tipo, tamano, modelo, capacidad, numero_serie, fecha_adquisicion, notas, device_id, device_canal } = req.body;
 
   if (!nombre || !tipo) {
-    return res.status(400).json({ message: 'Nombre y tipo son requeridos.' });
+    return res.status(400).json({ message: 'Escribe el nombre y elige el tipo de máquina.' });
   }
   if (!TIPOS_VALIDOS.includes(tipo)) {
-    return res.status(400).json({ message: `Tipo inválido. Valores permitidos: ${TIPOS_VALIDOS.join(', ')}.` });
+    return res.status(400).json({ message: `Elige un tipo de máquina válido: ${enPalabras(TIPOS_VALIDOS)}.` });
   }
   if (tamano != null && tamano !== '' && !TAMANOS_VALIDOS.includes(tamano)) {
-    return res.status(400).json({ message: `Tamaño inválido. Valores permitidos: ${TAMANOS_VALIDOS.join(', ')}.` });
+    return res.status(400).json({ message: `Elige un tamaño válido: ${enPalabras(TAMANOS_VALIDOS)}.` });
   }
   if (capacidad != null && !CAPACIDADES_VALIDAS.includes(capacidad)) {
-    return res.status(400).json({ message: `Capacidad inválida. Valores permitidos: ${CAPACIDADES_VALIDAS.join(', ')}.` });
+    return res.status(400).json({ message: `Elige una capacidad válida: ${enPalabras(CAPACIDADES_VALIDAS)}.` });
   }
 
   const deviceId = normalizarDeviceId(device_id);
@@ -339,9 +347,9 @@ export const createMaquina = async (req, res) => {
   } catch (err) {
     console.error('createMaquina error:', err);
     if (err.code === '22P02') {
-      return res.status(400).json({ message: 'Tipo de máquina inválido.' });
+      return res.status(400).json({ message: 'Ese tipo de máquina no es válido.' });
     }
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudo crear la máquina. Intenta de nuevo.' });
   }
 };
 
@@ -350,19 +358,19 @@ export const updateMaquina = async (req, res) => {
   const { nombre, tipo, tamano, modelo, capacidad, numero_serie, fecha_adquisicion, notas, estado, device_id, device_canal } = req.body;
 
   if (!nombre || !tipo) {
-    return res.status(400).json({ message: 'Nombre y tipo son requeridos.' });
+    return res.status(400).json({ message: 'Escribe el nombre y elige el tipo de máquina.' });
   }
   if (!TIPOS_VALIDOS.includes(tipo)) {
-    return res.status(400).json({ message: `Tipo inválido. Valores permitidos: ${TIPOS_VALIDOS.join(', ')}.` });
+    return res.status(400).json({ message: `Elige un tipo de máquina válido: ${enPalabras(TIPOS_VALIDOS)}.` });
   }
   if (tamano != null && tamano !== '' && !TAMANOS_VALIDOS.includes(tamano)) {
-    return res.status(400).json({ message: `Tamaño inválido. Valores permitidos: ${TAMANOS_VALIDOS.join(', ')}.` });
+    return res.status(400).json({ message: `Elige un tamaño válido: ${enPalabras(TAMANOS_VALIDOS)}.` });
   }
   if (capacidad != null && !CAPACIDADES_VALIDAS.includes(capacidad)) {
-    return res.status(400).json({ message: `Capacidad inválida. Valores permitidos: ${CAPACIDADES_VALIDAS.join(', ')}.` });
+    return res.status(400).json({ message: `Elige una capacidad válida: ${enPalabras(CAPACIDADES_VALIDAS)}.` });
   }
   if (estado != null && !ESTADOS_VALIDOS.includes(estado)) {
-    return res.status(400).json({ message: `Estado inválido. Valores permitidos: ${ESTADOS_VALIDOS.join(', ')}.` });
+    return res.status(400).json({ message: `Elige un estado válido: ${enPalabras(ESTADOS_VALIDOS)}.` });
   }
 
   const deviceId = normalizarDeviceId(device_id);
@@ -414,7 +422,7 @@ export const updateMaquina = async (req, res) => {
     res.json(rows[0]);
   } catch (err) {
     console.error('updateMaquina error:', err);
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudieron guardar los cambios de la máquina. Intenta de nuevo.' });
   }
 };
 
@@ -431,7 +439,7 @@ export const deleteMaquina = async (req, res) => {
     res.status(204).end();
   } catch (err) {
     console.error('deleteMaquina error:', err);
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudo eliminar la máquina. Intenta de nuevo.' });
   }
 };
 
@@ -504,7 +512,7 @@ export const detenerCiclo = async (req, res) => {
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('detenerCiclo error:', err);
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudo detener el ciclo. Intenta de nuevo.' });
   } finally {
     client.release();
   }
@@ -516,7 +524,7 @@ export const cambiarEstadoMaquina = async (req, res) => {
 
   if (!estado || !ESTADOS_VALIDOS.includes(estado)) {
     return res.status(400).json({
-      message: `Estado inválido. Valores permitidos: ${ESTADOS_VALIDOS.join(', ')}.`,
+      message: `Elige un estado válido: ${enPalabras(ESTADOS_VALIDOS)}.`,
     });
   }
 
@@ -541,7 +549,7 @@ export const cambiarEstadoMaquina = async (req, res) => {
     res.json(rows[0]);
   } catch (err) {
     console.error('cambiarEstadoMaquina error:', err);
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudo cambiar el estado de la máquina. Intenta de nuevo.' });
   }
 };
 
@@ -600,7 +608,7 @@ export const probarSonoff = async (req, res) => {
     res.json({ message: 'Sonoff enlazado correctamente.', estado: resultado.estado, maquina: upd[0] });
   } catch (err) {
     console.error('probarSonoff error:', err);
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudo probar el enchufe de la máquina. Intenta de nuevo.' });
   }
 };
 
@@ -650,7 +658,7 @@ export const apagarSonoff = async (req, res) => {
     res.json({ message: 'Orden de apagado enviada.', maquina: upd[0] });
   } catch (err) {
     console.error('apagarSonoff error:', err);
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudo apagar la máquina. Intenta de nuevo.' });
   }
 };
 
@@ -701,6 +709,6 @@ export const encenderSonoff = async (req, res) => {
     res.json({ message: 'Orden de encendido enviada.', maquina: upd[0] });
   } catch (err) {
     console.error('encenderSonoff error:', err);
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudo encender la máquina. Intenta de nuevo.' });
   }
 };

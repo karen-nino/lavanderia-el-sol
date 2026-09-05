@@ -48,7 +48,7 @@ describe('PATCH /api/ajustes', () => {
     const res = await request(app).patch('/api/ajustes').set(auth(admin.token))
       .send({ tiempo_carga_mediana: 0 });
     expect(res.status).toBe(400);
-    expect(res.body.message).toMatch(/entero mayor o igual a 1/i);
+    expect(res.body.message).toMatch(/entero de 1 minuto o más/i);
   });
 
   it('un tope vacío ("") lo quita (queda en null)', async () => {
@@ -62,6 +62,6 @@ describe('PATCH /api/ajustes', () => {
     const res = await request(app).patch('/api/ajustes').set(auth(admin.token))
       .send({});
     expect(res.status).toBe(400);
-    expect(res.body.message).toMatch(/no hay campos/i);
+    expect(res.body.message).toMatch(/no hay cambios/i);
   });
 });

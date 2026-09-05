@@ -35,7 +35,7 @@ export const getSucursales = async (req, res) => {
     res.json(rows);
   } catch (err) {
     console.error('getSucursales error:', err);
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudieron cargar las sucursales. Intenta de nuevo.' });
   }
 };
 
@@ -47,7 +47,7 @@ export const reordenarSucursales = async (req, res) => {
     ? req.body.slugs.map(String).filter(Boolean)
     : [];
   if (slugs.length === 0) {
-    return res.status(400).json({ message: 'Se requiere la lista de slugs en orden.' });
+    return res.status(400).json({ message: 'No llegó el nuevo orden de las sucursales. Intenta de nuevo.' });
   }
   const client = await pool.connect();
   try {
@@ -69,7 +69,7 @@ export const reordenarSucursales = async (req, res) => {
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('reordenarSucursales error:', err);
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudo guardar el nuevo orden de las sucursales. Intenta de nuevo.' });
   } finally {
     client.release();
   }
@@ -107,7 +107,7 @@ export const createSucursal = async (req, res) => {
     res.status(201).json(rows[0]);
   } catch (err) {
     console.error('createSucursal error:', err);
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudo crear la sucursal. Intenta de nuevo.' });
   }
 };
 
@@ -140,7 +140,7 @@ export const updateSucursal = async (req, res) => {
   if (orden     !== undefined) { updates.push(`orden = $${i++}`);     values.push(Number(orden)); }
 
   if (updates.length === 0) {
-    return res.status(400).json({ message: 'No hay campos para actualizar.' });
+    return res.status(400).json({ message: 'No hay cambios que guardar.' });
   }
   values.push(slug);
 
@@ -157,7 +157,7 @@ export const updateSucursal = async (req, res) => {
     res.json(rows[0]);
   } catch (err) {
     console.error('updateSucursal error:', err);
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudieron guardar los cambios de la sucursal. Intenta de nuevo.' });
   }
 };
 
@@ -170,7 +170,7 @@ export const setActivaSucursal = async (req, res) => {
   const { activa } = req.body;
 
   if (typeof activa !== 'boolean') {
-    return res.status(400).json({ message: 'El campo "activa" (true/false) es requerido.' });
+    return res.status(400).json({ message: 'Indica si la sucursal queda activa o inactiva.' });
   }
 
   if (slug === SUCURSAL_PRUEBAS) {
@@ -201,6 +201,6 @@ export const setActivaSucursal = async (req, res) => {
     res.json(rows[0]);
   } catch (err) {
     console.error('setActivaSucursal error:', err);
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudo cambiar el estado de la sucursal. Intenta de nuevo.' });
   }
 };

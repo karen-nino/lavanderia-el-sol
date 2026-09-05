@@ -22,7 +22,7 @@ describe('POST /api/notas — validaciones', () => {
     const res = await request(app).post('/api/notas').set(auth(admin.token))
       .send({ ...base, tipo_servicio: 'NOPE' });
     expect(res.status).toBe(400);
-    expect(res.body.message).toMatch(/Tipo de servicio inválido/i);
+    expect(res.body.message).toMatch(/tipo de servicio válido/i);
   });
 
   it('estado_pago inválido → 400', async () => {
@@ -225,7 +225,7 @@ describe('POST /api/notas — Por Encargo', () => {
       cargas: [{ tamano: 'chico', lavadora_tipo: 'mediana' }],
     });
     expect(res.status).toBe(400);
-    expect(res.body.message).toMatch(/tiempo_entrega/i);
+    expect(res.body.message).toMatch(/cuándo se entrega/i);
   });
 
   it('cliente de otra sucursal → 400', async () => {
@@ -618,7 +618,7 @@ describe('handlers de máquina — ciclo de vida', () => {
     const res = await request(app).patch(`/api/notas/${notaId}/estado`)
       .set(auth(admin.token)).send({ estado: 'FINALIZADA' }); // LAVANDO ↛ FINALIZADA
     expect(res.status).toBe(400);
-    expect(res.body.message).toMatch(/Transición no válida/i);
+    expect(res.body.message).toMatch(/no puede pasar a/i);
   });
 });
 
@@ -657,7 +657,7 @@ describe('handlers de máquina — asignar / cambiar / quitar', () => {
     const res = await request(app).patch(`/api/notas/${notaId}/asignar-maquina`)
       .set(auth(admin.token)).send({ maquina_id: otra });
     expect(res.status).toBe(400);
-    expect(res.body.message).toMatch(/cobrar/i);
+    expect(res.body.message).toMatch(/se cobra/i);
   });
 
   it('asignar-secadora agrega el secado a la carga y ocupa la secadora', async () => {

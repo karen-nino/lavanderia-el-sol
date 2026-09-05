@@ -102,7 +102,7 @@ export const getProductos = async (req, res) => {
     res.json(rows);
   } catch (err) {
     console.error('getProductos error:', err);
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudieron cargar los productos. Intenta de nuevo.' });
   }
 };
 
@@ -125,7 +125,7 @@ export const archivarProducto = async (req, res) => {
     res.json(rows[0]);
   } catch (err) {
     console.error('archivarProducto error:', err);
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudo archivar el producto. Intenta de nuevo.' });
   }
 };
 
@@ -133,7 +133,7 @@ export const archivarProducto = async (req, res) => {
 // existencia se carga con una entrada (por rollo o por pieza).
 async function crearBolsa(req, res, { nombre, descripcion, marca, tamano_bolsa, bolsas_por_rollo, precio_unitario, stock_minimo }) {
   if (!['chica', 'grande', 'jumbo'].includes(tamano_bolsa)) {
-    return res.status(400).json({ message: 'Tamaño de bolsa inválido (chica, grande o jumbo).' });
+    return res.status(400).json({ message: 'Elige el tamaño de la bolsa: chica, grande o jumbo.' });
   }
   const porRollo = Number(bolsas_por_rollo);
   if (!(porRollo > 0)) {
@@ -152,7 +152,7 @@ async function crearBolsa(req, res, { nombre, descripcion, marca, tamano_bolsa, 
     res.status(201).json(rows[0]);
   } catch (err) {
     console.error('crearBolsa error:', err);
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudieron guardar las bolsas. Intenta de nuevo.' });
   }
 }
 
@@ -168,7 +168,7 @@ export const createProducto = async (req, res) => {
   } = req.body;
 
   if (!nombre) {
-    return res.status(400).json({ message: 'Nombre es requerido.' });
+    return res.status(400).json({ message: 'Escribe el nombre del producto.' });
   }
 
   // ── Bolsa: producto simple contado en piezas, comprado por rollo ──
@@ -180,7 +180,7 @@ export const createProducto = async (req, res) => {
   }
 
   if (!['granel', 'marca'].includes(tipo_liquido)) {
-    return res.status(400).json({ message: 'Tipo de líquido inválido.' });
+    return res.status(400).json({ message: 'Indica si el producto es a granel o de marca.' });
   }
   const botellaMl = Number(botella_ml);
   if (!(botellaMl > 0)) {
@@ -241,7 +241,7 @@ export const createProducto = async (req, res) => {
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('createProducto error:', err);
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudo crear el producto. Intenta de nuevo.' });
   } finally {
     client.release();
   }
@@ -264,13 +264,13 @@ export const updateProducto = async (req, res) => {
   } = req.body;
 
   if (!nombre) {
-    return res.status(400).json({ message: 'Nombre es requerido.' });
+    return res.status(400).json({ message: 'Escribe el nombre del producto.' });
   }
 
   // ── Bolsa: solo atributos (tamaño, bolsas por rollo, precio por pieza) ──
   if (clase === 'bolsa') {
     if (!['chica', 'grande', 'jumbo'].includes(tamano_bolsa)) {
-      return res.status(400).json({ message: 'Tamaño de bolsa inválido (chica, grande o jumbo).' });
+      return res.status(400).json({ message: 'Elige el tamaño de la bolsa: chica, grande o jumbo.' });
     }
     const porRollo = Number(bolsas_por_rollo);
     if (!(porRollo > 0)) {
@@ -290,12 +290,12 @@ export const updateProducto = async (req, res) => {
       return res.json(rows[0]);
     } catch (err) {
       console.error('updateProducto (bolsa) error:', err);
-      return res.status(500).json({ message: 'Error interno del servidor.' });
+      return res.status(500).json({ message: 'No se pudieron guardar los cambios de la bolsa. Intenta de nuevo.' });
     }
   }
 
   if (!['granel', 'marca'].includes(tipo_liquido)) {
-    return res.status(400).json({ message: 'Tipo de líquido inválido.' });
+    return res.status(400).json({ message: 'Indica si el producto es a granel o de marca.' });
   }
   const botellaMl = Number(botella_ml);
   if (!(botellaMl > 0)) {
@@ -334,7 +334,7 @@ export const updateProducto = async (req, res) => {
     res.json(rows[0]);
   } catch (err) {
     console.error('updateProducto error:', err);
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudieron guardar los cambios del producto. Intenta de nuevo.' });
   }
 };
 
@@ -346,7 +346,7 @@ export const rellenarBotellas = async (req, res) => {
   const botellas = Number(req.body?.botellas);
 
   if (!Number.isInteger(botellas) || botellas <= 0) {
-    return res.status(400).json({ message: 'Indica cuántas botellas rellenaste (entero > 0).' });
+    return res.status(400).json({ message: 'Indica cuántas botellas rellenaste (un número entero mayor a 0).' });
   }
 
   const client = await pool.connect();
@@ -395,7 +395,7 @@ export const rellenarBotellas = async (req, res) => {
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('rellenarBotellas error:', err);
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudo registrar el rellenado. Intenta de nuevo.' });
   } finally {
     client.release();
   }
@@ -409,13 +409,13 @@ export const crearMovimiento = async (req, res) => {
   const { tipo, destino, cantidad, unidad } = req.body;
 
   if (!['entrada', 'salida'].includes(tipo)) {
-    return res.status(400).json({ message: 'Tipo de movimiento inválido.' });
+    return res.status(400).json({ message: 'El movimiento debe ser una entrada o una salida.' });
   }
   if (!['granel', 'botellas', 'piezas'].includes(destino)) {
-    return res.status(400).json({ message: 'Destino inválido.' });
+    return res.status(400).json({ message: 'Indica a dónde va el movimiento: granel, botellas o piezas.' });
   }
   if (!['bidon', 'botella', 'tapa', 'rollo', 'pieza'].includes(unidad)) {
-    return res.status(400).json({ message: 'Unidad inválida.' });
+    return res.status(400).json({ message: 'Elige una unidad válida: bidón, botella, tapa, rollo o pieza.' });
   }
   const cant = Number(cantidad);
   if (!(cant > 0)) {
@@ -488,7 +488,7 @@ export const crearMovimiento = async (req, res) => {
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('crearMovimiento error:', err);
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudo registrar el movimiento de inventario. Intenta de nuevo.' });
   } finally {
     client.release();
   }
@@ -511,7 +511,7 @@ export const getMovimientos = async (req, res) => {
     res.json(rows);
   } catch (err) {
     console.error('getMovimientos error:', err);
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudo cargar el historial del producto. Intenta de nuevo.' });
   }
 };
 
@@ -599,7 +599,7 @@ export const getReporteDiario = async (req, res) => {
     });
   } catch (err) {
     console.error('getReporteDiario error:', err);
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudo generar el reporte del día. Intenta de nuevo.' });
   }
 };
 
@@ -619,7 +619,7 @@ export const deleteProductosMultiples = async (req, res) => {
   }
   const idsNum = [...new Set(ids.map(Number).filter(Number.isInteger))];
   if (idsNum.length === 0) {
-    return res.status(400).json({ message: 'Productos inválidos.' });
+    return res.status(400).json({ message: 'No se entendió la lista de productos a eliminar.' });
   }
 
   const client = await pool.connect();
@@ -663,7 +663,7 @@ export const deleteProductosMultiples = async (req, res) => {
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('deleteProductosMultiples error:', err);
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudieron eliminar los productos. Intenta de nuevo.' });
   } finally {
     client.release();
   }
@@ -682,6 +682,6 @@ export const deleteProducto = async (req, res) => {
     res.status(204).send();
   } catch (err) {
     console.error('deleteProducto error:', err);
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudo eliminar el producto. Intenta de nuevo.' });
   }
 };

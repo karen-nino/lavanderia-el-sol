@@ -11,26 +11,28 @@ function getSucursal() {
   return localStorage.getItem('sucursalActiva');
 }
 
-// Explicación breve por código de estado, para cuando el backend no manda
-// un mensaje propio (o la respuesta ni siquiera es JSON, como los errores
-// del proxy de Netlify o del rate limiter).
+// Explicación por código de estado, para cuando el backend no manda un
+// mensaje propio (o la respuesta ni siquiera es JSON, como los errores del
+// proxy de Netlify o del rate limiter). Se escribe como se lo diríamos a
+// quien está en el mostrador; el número queda al final por si hay que
+// reportarlo, pero la frase se entiende sin él.
 const DESCRIPCION_ERROR = {
-  400: 'los datos enviados son inválidos o están incompletos',
-  403: 'no tienes permiso para realizar esta acción',
-  404: 'no se encontró la información solicitada',
-  409: 'la operación no es válida con el estado actual de los datos',
-  413: 'el archivo o los datos enviados son demasiado grandes',
-  429: 'demasiados intentos seguidos, espera un momento y vuelve a intentar',
-  500: 'ocurrió un problema interno en el servidor',
-  502: 'el servidor no está respondiendo',
-  503: 'el servidor no está disponible por el momento',
-  504: 'el servidor tardó demasiado en responder',
+  400: 'Revisa los datos: falta algo o quedó mal escrito.',
+  403: 'No tienes permiso para hacer esto.',
+  404: 'No se encontró la información que pediste.',
+  409: 'Esto ya no se puede hacer con el estado actual. Actualiza la pantalla e intenta de nuevo.',
+  413: 'El archivo pesa demasiado.',
+  429: 'Demasiados intentos seguidos. Espera un momento y vuelve a intentar.',
+  500: 'Algo falló en el servidor. Intenta de nuevo.',
+  502: 'El servidor no está respondiendo. Intenta de nuevo en un momento.',
+  503: 'El servidor no está disponible por ahora. Intenta de nuevo en un momento.',
+  504: 'El servidor tardó demasiado en responder. Intenta de nuevo.',
 };
 
 export function mensajeDeError(status, data) {
   if (data?.message) return data.message;
-  const detalle = DESCRIPCION_ERROR[status] || 'ocurrió un error en la solicitud';
-  return `Error ${status}: ${detalle}.`;
+  const detalle = DESCRIPCION_ERROR[status] || 'No se pudo completar la acción. Intenta de nuevo.';
+  return `${detalle} (error ${status})`;
 }
 
 async function request(path, options = {}) {

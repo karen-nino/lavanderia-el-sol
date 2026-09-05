@@ -63,7 +63,7 @@ describe('POST /api/insumos/:id/movimiento', () => {
     const res = await request(app).post(`/api/insumos/${id}/movimiento`).set(auth(admin.token))
       .send({ tipo: 'salida', cantidad: 5 });
     expect(res.status).toBe(400);
-    expect(res.body.message).toMatch(/stock insuficiente/i);
+    expect(res.body.message).toMatch(/suficiente existencia/i);
   });
 
   it('tipo inválido → 400', async () => {

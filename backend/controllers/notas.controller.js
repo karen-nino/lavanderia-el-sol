@@ -22,6 +22,26 @@ const TIPOS_PRENDA_VALIDOS = ['ROPA', 'EDREDON'];
 const TIPOS_MAQUINA_VALIDOS = ['mediana', 'jumbo', 'edredon'];
 const TIEMPOS_ENTREGA_VALIDOS = ['MANANA', 'TARDE', 'NOCHE'];
 
+// Los estados y catálogos se guardan en MAYÚSCULAS, pero nadie los lee así en
+// pantalla: los mensajes hablan de "por encargo" y "en espera", no de
+// POR_ENCARGO ni EN_ESPERA.
+const PALABRA = {
+  EN_ESPERA: 'en espera', LAVANDO: 'lavando', SECANDO: 'secando', LISTA: 'lista',
+  PAGADA: 'pagada', FINALIZADA: 'finalizada', CANCELADA: 'cancelada',
+  AUTOSERVICIO: 'autoservicio', EDREDON: 'edredón', POR_ENCARGO: 'por encargo',
+  PENDIENTE: 'pendiente', PAGADO: 'pagado',
+  EFECTIVO: 'efectivo', TRANSFERENCIA: 'transferencia', TARJETA: 'tarjeta',
+  ROPA: 'ropa', MANANA: 'mañana', TARDE: 'tarde', NOCHE: 'noche',
+};
+const palabra = (v) => PALABRA[v] ?? String(v ?? '').toLowerCase().replace(/_/g, ' ');
+
+// ['chico', 'grande', 'jumbo'] → "chico, grande o jumbo"
+const enPalabras = (valores) => {
+  const legibles = valores.map(palabra);
+  if (legibles.length <= 1) return legibles.join('');
+  return `${legibles.slice(0, -1).join(', ')} o ${legibles.at(-1)}`;
+};
+
 // Transiciones permitidas por estado actual
 const TRANSICIONES_VALIDAS = {
   // EN_ESPERA → LISTA existe para poder cerrar a mano una nota cuyas cargas
@@ -759,7 +779,7 @@ export const getNextFolio = async (req, res) => {
     res.json({ folio });
   } catch (err) {
     console.error('getNextFolio error:', err);
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudo obtener el siguiente folio. Intenta de nuevo.' });
   }
 };
 
@@ -825,7 +845,7 @@ export const getNotas = async (req, res) => {
     res.json(rows);
   } catch (err) {
     console.error('getNotas error:', err);
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudieron cargar las notas. Intenta de nuevo.' });
   }
 };
 
@@ -907,7 +927,7 @@ export const getNotaById = async (req, res) => {
     });
   } catch (err) {
     console.error('getNotaById error:', err);
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudo cargar la nota. Intenta de nuevo.' });
   }
 };
 
@@ -934,17 +954,17 @@ export const createNota = async (req, res) => {
 
   if (!TIPOS_SERVICIO_VALIDOS.includes(tipo_servicio)) {
     return res.status(400).json({
-      message: `Tipo de servicio inválido. Valores permitidos: ${TIPOS_SERVICIO_VALIDOS.join(', ')}.`,
+      message: `Elige un tipo de servicio válido: ${enPalabras(TIPOS_SERVICIO_VALIDOS)}.`,
     });
   }
   if (!TIPOS_PRENDA_VALIDOS.includes(String(tipo_prenda).toUpperCase())) {
     return res.status(400).json({
-      message: `tipo_prenda inválido. Valores permitidos: ${TIPOS_PRENDA_VALIDOS.join(', ')}.`,
+      message: `Elige qué se recibe: ${enPalabras(TIPOS_PRENDA_VALIDOS)}.`,
     });
   }
   if (!estado_pago || !ESTADOS_PAGO_VALIDOS.includes(estado_pago)) {
     return res.status(400).json({
-      message: `Estado de pago inválido. Valores permitidos: ${ESTADOS_PAGO_VALIDOS.join(', ')}.`,
+      message: `Indica si la nota queda ${enPalabras(ESTADOS_PAGO_VALIDOS)}.`,
     });
   }
   if (tipo_servicio === 'POR_ENCARGO' && !cliente_id) {
@@ -957,13 +977,13 @@ export const createNota = async (req, res) => {
   }
   if (tiempo_entrega && !TIEMPOS_ENTREGA_VALIDOS.includes(String(tiempo_entrega).toUpperCase())) {
     return res.status(400).json({
-      message: `tiempo_entrega inválido. Valores permitidos: ${TIEMPOS_ENTREGA_VALIDOS.join(', ')}.`,
+      message: `Elige cuándo se entrega: ${enPalabras(TIEMPOS_ENTREGA_VALIDOS)}.`,
     });
   }
   // El ajuste puede ser negativo (descuento); el total final de la nota no,
   // lo que se verifica antes del COMMIT ya con los productos sumados.
   if (ajuste != null && ajuste !== '' && !Number.isFinite(Number(ajuste))) {
-    return res.status(400).json({ message: 'ajuste debe ser numérico.' });
+    return res.status(400).json({ message: 'El ajuste debe ser un número.' });
   }
 
   // El cliente referenciado debe pertenecer a la sucursal activa (las máquinas
@@ -1134,7 +1154,7 @@ export const createNota = async (req, res) => {
     if (err.code === '23503') {
       return res.status(400).json({ message: 'El cliente o la máquina seleccionada no existe en esta sucursal.' });
     }
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudo crear la nota. Intenta de nuevo.' });
   } finally {
     client.release();
   }
@@ -1160,32 +1180,32 @@ export const updateNota = async (req, res) => {
   } = req.body;
 
   if (productos !== undefined && !Array.isArray(productos)) {
-    return res.status(400).json({ message: 'productos debe ser una lista.' });
+    return res.status(400).json({ message: 'No se recibieron bien los productos de la nota.' });
   }
   if (cargas !== undefined && (!Array.isArray(cargas) || cargas.length === 0)) {
     return res.status(400).json({ message: 'La nota necesita al menos una carga.' });
   }
   if (ajuste != null && ajuste !== '' && !Number.isFinite(Number(ajuste))) {
-    return res.status(400).json({ message: 'ajuste debe ser numérico.' });
+    return res.status(400).json({ message: 'El ajuste debe ser un número.' });
   }
   if (estado_pago && !ESTADOS_PAGO_VALIDOS.includes(estado_pago)) {
     return res.status(400).json({
-      message: `Estado de pago inválido. Valores permitidos: ${ESTADOS_PAGO_VALIDOS.join(', ')}.`,
+      message: `Indica si la nota queda ${enPalabras(ESTADOS_PAGO_VALIDOS)}.`,
     });
   }
   if (tamano && !TAMANOS_VALIDOS.includes(String(tamano).toLowerCase())) {
     return res.status(400).json({
-      message: `tamano inválido. Valores permitidos: ${TAMANOS_VALIDOS.join(', ')}.`,
+      message: `Elige un tamaño de carga válido: ${enPalabras(TAMANOS_VALIDOS)}.`,
     });
   }
   if (tipo_prenda && !TIPOS_PRENDA_VALIDOS.includes(String(tipo_prenda).toUpperCase())) {
     return res.status(400).json({
-      message: `tipo_prenda inválido. Valores permitidos: ${TIPOS_PRENDA_VALIDOS.join(', ')}.`,
+      message: `Elige qué se recibe: ${enPalabras(TIPOS_PRENDA_VALIDOS)}.`,
     });
   }
   if (tiempo_entrega && !TIEMPOS_ENTREGA_VALIDOS.includes(String(tiempo_entrega).toUpperCase())) {
     return res.status(400).json({
-      message: `tiempo_entrega inválido. Valores permitidos: ${TIEMPOS_ENTREGA_VALIDOS.join(', ')}.`,
+      message: `Elige cuándo se entrega: ${enPalabras(TIEMPOS_ENTREGA_VALIDOS)}.`,
     });
   }
 
@@ -1212,7 +1232,7 @@ export const updateNota = async (req, res) => {
     if (['PAGADA', 'FINALIZADA', 'CANCELADA'].includes(actual.estado)) {
       await client.query('ROLLBACK');
       return res.status(400).json({
-        message: `No se puede editar una nota en estado ${actual.estado}.`,
+        message: `No se puede editar una nota ${palabra(actual.estado)}.`,
       });
     }
 
@@ -1232,7 +1252,7 @@ export const updateNota = async (req, res) => {
     if (esCobroNuevo && !formaPagoNueva) {
       await client.query('ROLLBACK');
       return res.status(400).json({
-        message: `Indica la forma de pago. Valores permitidos: ${FORMAS_PAGO_VALIDAS.join(', ')}.`,
+        message: `Indica la forma de pago: ${enPalabras(FORMAS_PAGO_VALIDAS)}.`,
       });
     }
 
@@ -1509,7 +1529,7 @@ export const updateNota = async (req, res) => {
     if (err.code === '23503') {
       return res.status(400).json({ message: 'El cliente o la máquina seleccionada no existe en esta sucursal.' });
     }
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudieron guardar los cambios de la nota. Intenta de nuevo.' });
   } finally {
     client.release();
   }
@@ -1540,7 +1560,7 @@ export const quitarCarga = async (req, res) => {
     }
     if (['FINALIZADA', 'CANCELADA'].includes(notaRows[0].estado)) {
       await client.query('ROLLBACK');
-      return res.status(409).json({ message: `No se puede cambiar una nota ${notaRows[0].estado}.` });
+      return res.status(409).json({ message: `No se puede cambiar una nota ${palabra(notaRows[0].estado)}.` });
     }
 
     const { rows: cargaRows } = await client.query(
@@ -1612,7 +1632,7 @@ export const quitarCarga = async (req, res) => {
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('quitarCarga error:', err);
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudo quitar la carga. Intenta de nuevo.' });
   } finally {
     client.release();
   }
@@ -1698,7 +1718,7 @@ export const eliminarNota = async (req, res) => {
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('eliminarNota error:', err);
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudo eliminar la nota. Intenta de nuevo.' });
   } finally {
     client.release();
   }
@@ -1711,7 +1731,7 @@ export const cambiarEstadoNota = async (req, res) => {
 
   if (!estado || !ESTADOS_VALIDOS.includes(estado)) {
     return res.status(400).json({
-      message: `Estado inválido. Valores permitidos: ${ESTADOS_VALIDOS.join(', ')}.`,
+      message: `Ese estado no es válido. Los estados son: ${enPalabras(ESTADOS_VALIDOS)}.`,
     });
   }
 
@@ -1752,7 +1772,7 @@ export const cambiarEstadoNota = async (req, res) => {
     if (['FINALIZADA', 'CANCELADA'].includes(estadoActual)) {
       await client.query('ROLLBACK');
       return res.status(400).json({
-        message: `No se puede cambiar el estado de una nota ${estadoActual}.`,
+        message: `No se puede cambiar el estado de una nota ${palabra(estadoActual)}.`,
       });
     }
 
@@ -1760,7 +1780,7 @@ export const cambiarEstadoNota = async (req, res) => {
     if (!permitidos.includes(estado)) {
       await client.query('ROLLBACK');
       return res.status(400).json({
-        message: `Transición no válida: ${estadoActual} → ${estado}. Permitidas: ${permitidos.join(', ') || 'ninguna'}.`,
+        message: `Una nota ${palabra(estadoActual)} no puede pasar a ${palabra(estado)}. Desde aquí solo puede pasar a: ${permitidos.map(palabra).join(', ') || 'ningún otro estado'}.`,
       });
     }
 
@@ -1834,7 +1854,7 @@ export const cambiarEstadoNota = async (req, res) => {
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('cambiarEstadoNota error:', err);
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudo cambiar el estado de la nota. Intenta de nuevo.' });
   } finally {
     client.release();
   }
@@ -1863,7 +1883,7 @@ export const activarMaquinasPendientes = async (req, res) => {
     }
     if (['LISTA', 'PAGADA', 'FINALIZADA', 'CANCELADA'].includes(notaRows[0].estado)) {
       await client.query('ROLLBACK');
-      return res.status(400).json({ message: `No se pueden activar máquinas de una nota ${notaRows[0].estado}.` });
+      return res.status(400).json({ message: `No se pueden activar máquinas de una nota ${palabra(notaRows[0].estado)}.` });
     }
 
     const ids = await maquinasDeNota(client, id);
@@ -1956,7 +1976,7 @@ export const activarMaquinasPendientes = async (req, res) => {
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('activarMaquinasPendientes error:', err);
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudieron activar las máquinas. Intenta de nuevo.' });
   } finally {
     client.release();
   }
@@ -1976,7 +1996,7 @@ export const asignarCargaMaquina = async (req, res) => {
     return res.status(400).json({ message: "slot inválido: usa 'lavadora' o 'secadora'." });
   }
   if (!carga_id || !maquina_id) {
-    return res.status(400).json({ message: 'carga_id y maquina_id son requeridos.' });
+    return res.status(400).json({ message: 'Elige la carga y la máquina.' });
   }
 
   const client = await pool.connect();
@@ -2062,7 +2082,7 @@ export const asignarCargaMaquina = async (req, res) => {
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('asignarCargaMaquina error:', err);
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudo asignar la máquina a la carga. Intenta de nuevo.' });
   } finally {
     client.release();
   }
@@ -2077,11 +2097,11 @@ export const asignarSecadora = async (req, res) => {
   const { secadora_id, cantidad_cargas_secadora } = req.body;
 
   if (!secadora_id) {
-    return res.status(400).json({ message: 'secadora_id es requerido.' });
+    return res.status(400).json({ message: 'Elige la secadora.' });
   }
   if (cantidad_cargas_secadora != null && cantidad_cargas_secadora !== '' &&
       (!Number.isInteger(Number(cantidad_cargas_secadora)) || Number(cantidad_cargas_secadora) < 1)) {
-    return res.status(400).json({ message: 'cantidad_cargas_secadora debe ser un entero mayor o igual a 1.' });
+    return res.status(400).json({ message: 'La cantidad de cargas de secadora debe ser 1 o más.' });
   }
   const cargasPedidas = cantidad_cargas_secadora != null && cantidad_cargas_secadora !== ''
     ? Number(cantidad_cargas_secadora)
@@ -2187,7 +2207,7 @@ export const asignarSecadora = async (req, res) => {
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('asignarSecadora error:', err);
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudo asignar la secadora. Intenta de nuevo.' });
   } finally {
     client.release();
   }
@@ -2217,7 +2237,7 @@ export const asignarMaquina = async (req, res) => {
     return res.status(400).json({ message: 'Selecciona al menos una máquina.' });
   }
   if (typeof cobrar !== 'boolean') {
-    return res.status(400).json({ message: 'cobrar es requerido: true (carga por cobrar) o false (sin cobro).' });
+    return res.status(400).json({ message: 'Indica si la carga se cobra o va sin cobro.' });
   }
 
   const client = await pool.connect();
@@ -2398,7 +2418,7 @@ export const asignarMaquina = async (req, res) => {
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('asignarMaquina error:', err);
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudo asignar la máquina. Intenta de nuevo.' });
   } finally {
     client.release();
   }
@@ -2414,7 +2434,7 @@ export const cambiarMaquina = async (req, res) => {
   const { maquina_actual_id, maquina_nueva_id } = req.body;
 
   if (!maquina_actual_id || !maquina_nueva_id) {
-    return res.status(400).json({ message: 'maquina_actual_id y maquina_nueva_id son requeridos.' });
+    return res.status(400).json({ message: 'Elige la máquina actual y la máquina nueva.' });
   }
   if (String(maquina_actual_id) === String(maquina_nueva_id)) {
     return res.status(400).json({ message: 'Selecciona una máquina distinta.' });
@@ -2534,7 +2554,7 @@ export const cambiarMaquina = async (req, res) => {
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('cambiarMaquina error:', err);
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudo cambiar la máquina. Intenta de nuevo.' });
   } finally {
     client.release();
   }
@@ -2553,7 +2573,7 @@ export const terminarLavado = async (req, res) => {
   const { lavadora_id, secadora_id } = req.body;
 
   if (!lavadora_id || !secadora_id) {
-    return res.status(400).json({ message: 'lavadora_id y secadora_id son requeridos.' });
+    return res.status(400).json({ message: 'Elige la lavadora y la secadora.' });
   }
 
   const client = await pool.connect();
@@ -2673,7 +2693,7 @@ export const terminarLavado = async (req, res) => {
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('terminarLavado error:', err);
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudo terminar el lavado. Intenta de nuevo.' });
   } finally {
     client.release();
   }
@@ -2689,7 +2709,7 @@ export const terminarSecado = async (req, res) => {
   const { secadora_id } = req.body;
 
   if (!secadora_id) {
-    return res.status(400).json({ message: 'secadora_id es requerido.' });
+    return res.status(400).json({ message: 'Elige la secadora.' });
   }
 
   const client = await pool.connect();
@@ -2765,7 +2785,7 @@ export const terminarSecado = async (req, res) => {
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('terminarSecado error:', err);
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudo terminar el secado. Intenta de nuevo.' });
   } finally {
     client.release();
   }
@@ -2782,7 +2802,7 @@ export const terminarLavadoFinal = async (req, res) => {
   const { lavadora_id } = req.body;
 
   if (!lavadora_id) {
-    return res.status(400).json({ message: 'lavadora_id es requerido.' });
+    return res.status(400).json({ message: 'Elige la lavadora.' });
   }
 
   const client = await pool.connect();
@@ -2853,7 +2873,7 @@ export const terminarLavadoFinal = async (req, res) => {
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('terminarLavadoFinal error:', err);
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudo terminar el lavado. Intenta de nuevo.' });
   } finally {
     client.release();
   }
@@ -2866,7 +2886,7 @@ export const cambiarEstadoPago = async (req, res) => {
 
   if (!estado_pago || !ESTADOS_PAGO_VALIDOS.includes(estado_pago)) {
     return res.status(400).json({
-      message: `Estado de pago inválido. Valores permitidos: ${ESTADOS_PAGO_VALIDOS.join(', ')}.`,
+      message: `Indica si la nota queda ${enPalabras(ESTADOS_PAGO_VALIDOS)}.`,
     });
   }
 
@@ -2876,7 +2896,7 @@ export const cambiarEstadoPago = async (req, res) => {
   const formaPago = normalizarFormaPago(forma_pago);
   if (estado_pago === 'PAGADO' && !formaPago) {
     return res.status(400).json({
-      message: `Indica la forma de pago. Valores permitidos: ${FORMAS_PAGO_VALIDAS.join(', ')}.`,
+      message: `Indica la forma de pago: ${enPalabras(FORMAS_PAGO_VALIDAS)}.`,
     });
   }
 
@@ -2920,7 +2940,7 @@ export const cambiarEstadoPago = async (req, res) => {
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('cambiarEstadoPago error:', err);
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudo registrar el pago. Intenta de nuevo.' });
   } finally {
     client.release();
   }
@@ -2945,7 +2965,7 @@ export const corregirFormaPago = async (req, res) => {
 
   if (!formaPago) {
     return res.status(400).json({
-      message: `Indica la forma de pago. Valores permitidos: ${FORMAS_PAGO_VALIDAS.join(', ')}.`,
+      message: `Indica la forma de pago: ${enPalabras(FORMAS_PAGO_VALIDAS)}.`,
     });
   }
 
@@ -2976,7 +2996,7 @@ export const corregirFormaPago = async (req, res) => {
       });
     }
     if (nota.forma_pago === formaPago) {
-      return res.status(400).json({ message: `La nota ya está registrada como ${formaPago}.` });
+      return res.status(400).json({ message: `La nota ya está registrada como ${palabra(formaPago)}.` });
     }
 
     // El cambio y su rastro van juntos: es dinero moviéndose entre columnas del
@@ -3007,7 +3027,7 @@ export const corregirFormaPago = async (req, res) => {
     }
   } catch (err) {
     console.error('corregirFormaPago error:', err);
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudo corregir la forma de pago. Intenta de nuevo.' });
   }
 };
 
@@ -3030,7 +3050,7 @@ export const guardarTelefono = async (req, res) => {
     res.json(rows[0]);
   } catch (err) {
     console.error('guardarTelefono error:', err);
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudo guardar el teléfono. Intenta de nuevo.' });
   }
 };
 
@@ -3052,7 +3072,7 @@ export const getNotaProductos = async (req, res) => {
     res.json(rows);
   } catch (err) {
     console.error('getNotaProductos error:', err);
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudieron cargar los productos de la nota. Intenta de nuevo.' });
   }
 };
 
@@ -3062,7 +3082,7 @@ export const addProductoToNota = async (req, res) => {
   const { producto_id, cantidad } = req.body;
 
   if (!producto_id || !cantidad || Number(cantidad) <= 0) {
-    return res.status(400).json({ message: 'producto_id y cantidad (>0) son requeridos.' });
+    return res.status(400).json({ message: 'Elige el producto y una cantidad mayor a 0.' });
   }
 
   const client = await pool.connect();
@@ -3080,7 +3100,7 @@ export const addProductoToNota = async (req, res) => {
     if (['PAGADA', 'FINALIZADA', 'CANCELADA'].includes(notaRows[0].estado)) {
       await client.query('ROLLBACK');
       return res.status(400).json({
-        message: `No se pueden agregar productos a una nota ${notaRows[0].estado}.`,
+        message: `No se pueden agregar productos a una nota ${palabra(notaRows[0].estado)}.`,
       });
     }
 
@@ -3104,7 +3124,7 @@ export const addProductoToNota = async (req, res) => {
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('addProductoToNota error:', err);
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudo agregar el producto a la nota. Intenta de nuevo.' });
   } finally {
     client.release();
   }
@@ -3132,7 +3152,7 @@ export const removeProductoFromNota = async (req, res) => {
     if (['PAGADA', 'FINALIZADA', 'CANCELADA'].includes(np.nota_estado)) {
       await client.query('ROLLBACK');
       return res.status(400).json({
-        message: `No se pueden quitar productos de una nota ${np.nota_estado}.`,
+        message: `No se pueden quitar productos de una nota ${palabra(np.nota_estado)}.`,
       });
     }
 
@@ -3157,7 +3177,7 @@ export const removeProductoFromNota = async (req, res) => {
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('removeProductoFromNota error:', err);
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudo quitar el producto de la nota. Intenta de nuevo.' });
   } finally {
     client.release();
   }

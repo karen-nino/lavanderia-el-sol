@@ -44,14 +44,14 @@ describe('POST /api/maquinas — validaciones', () => {
     const res = await request(app).post('/api/maquinas').set(auth(admin.token))
       .send({ nombre: 'L9', tipo: 'planchadora' });
     expect(res.status).toBe(400);
-    expect(res.body.message).toMatch(/tipo inválido/i);
+    expect(res.body.message).toMatch(/tipo de máquina válido/i);
   });
 
   it('tamaño inválido → 400', async () => {
     const res = await request(app).post('/api/maquinas').set(auth(admin.token))
       .send({ nombre: 'L9', tipo: 'lavadora_mediana', tamano: 'gigante' });
     expect(res.status).toBe(400);
-    expect(res.body.message).toMatch(/tamaño inválido/i);
+    expect(res.body.message).toMatch(/tamaño válido/i);
   });
 });
 

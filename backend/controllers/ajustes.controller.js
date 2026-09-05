@@ -41,7 +41,7 @@ export const getAjustes = async (req, res) => {
     res.json(rows[0]);
   } catch (err) {
     console.error('getAjustes error:', err);
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudieron cargar los ajustes. Intenta de nuevo.' });
   }
 };
 
@@ -81,11 +81,33 @@ export const updateAjustes = async (req, res) => {
   // base (texto produce un 500 y un negativo descuadra todas las notas).
   const esNumero = (v) => (typeof v === 'number' || (typeof v === 'string' && v.trim() !== '')) && Number.isFinite(Number(v));
 
+  // Los mensajes nombran el ajuste como lo ve el usuario en la pantalla, no
+  // como se llama la columna en la base.
+  const ETIQUETA = {
+    precio_carga_mediana:    'El precio de la carga mediana',
+    precio_carga_jumbo:      'El precio de la carga jumbo',
+    precio_carga_secadora:   'El precio del secado',
+    precio_secadora_jumbo:   'El precio del secado jumbo',
+    precio_secadora_edredon: 'El precio del secado de edredón',
+    precio_edredon_jumbo:    'El precio del edredón en jumbo',
+    tope_carga_chico:        'El tope de la carga chica',
+    tope_carga_grande:       'El tope de la carga grande',
+    tope_carga_jumbo:        'El tope de la carga jumbo',
+    tope_carga_edredon:      'El tope de la carga de edredón',
+    tiempo_carga_mediana:    'El tiempo de la carga mediana',
+    tiempo_carga_jumbo:      'El tiempo de la carga jumbo',
+    tiempo_edredon_jumbo:    'El tiempo del edredón en jumbo',
+    tiempo_carga_secadora:   'El tiempo del secado',
+    tiempo_secadora_jumbo:   'El tiempo del secado jumbo',
+    tiempo_secadora_edredon: 'El tiempo del secado de edredón',
+  };
+  const nombreDe = (campo) => ETIQUETA[campo] ?? `El ajuste "${campo}"`;
+
   const precios = { precio_carga_mediana, precio_carga_jumbo, precio_carga_secadora,
                     precio_secadora_jumbo, precio_secadora_edredon, precio_edredon_jumbo };
   for (const [campo, valor] of Object.entries(precios)) {
     if (valor !== undefined && (!esNumero(valor) || Number(valor) < 0)) {
-      return res.status(400).json({ message: `${campo} debe ser un número mayor o igual a 0.` });
+      return res.status(400).json({ message: `${nombreDe(campo)} debe ser un número mayor o igual a 0.` });
     }
   }
   // Topes de precio por tamaño de carga: opcionales. null o '' los borra
@@ -94,7 +116,7 @@ export const updateAjustes = async (req, res) => {
   for (const [campo, valor] of Object.entries(topes)) {
     if (valor !== undefined && valor !== null && valor !== '' &&
         (!esNumero(valor) || Number(valor) < 0)) {
-      return res.status(400).json({ message: `${campo} debe ser un número mayor o igual a 0, o vacío para quitar el tope.` });
+      return res.status(400).json({ message: `${nombreDe(campo)} debe ser un número mayor o igual a 0. Déjalo vacío para quitar el tope.` });
     }
   }
   const topeONull = (v) => (v === null || v === '' ? null : v);
@@ -103,12 +125,12 @@ export const updateAjustes = async (req, res) => {
                     tiempo_carga_secadora, tiempo_secadora_jumbo, tiempo_secadora_edredon };
   for (const [campo, valor] of Object.entries(tiempos)) {
     if (valor !== undefined && (!esNumero(valor) || !Number.isInteger(Number(valor)) || Number(valor) < 1)) {
-      return res.status(400).json({ message: `${campo} debe ser un entero mayor o igual a 1 (minutos).` });
+      return res.status(400).json({ message: `${nombreDe(campo)} debe ser un número entero de 1 minuto o más.` });
     }
   }
   if (stock_minimo_global !== undefined &&
       (!esNumero(stock_minimo_global) || !Number.isInteger(Number(stock_minimo_global)) || Number(stock_minimo_global) < 0)) {
-    return res.status(400).json({ message: 'stock_minimo_global debe ser un entero mayor o igual a 0.' });
+    return res.status(400).json({ message: 'La existencia mínima debe ser un número entero de 0 o más.' });
   }
 
   // R.F.C.: texto libre (palabras, números y espacios, sin límite de largo),
@@ -154,7 +176,7 @@ export const updateAjustes = async (req, res) => {
   if (alerta_ciclo_detenido !== undefined) { updates.push(`alerta_ciclo_detenido = $${i++}`); values.push(Boolean(alerta_ciclo_detenido)); }
 
   if (updates.length === 0) {
-    return res.status(400).json({ message: 'No hay campos para actualizar.' });
+    return res.status(400).json({ message: 'No hay cambios que guardar.' });
   }
   updates.push('updated_at = NOW()');
 
@@ -166,7 +188,7 @@ export const updateAjustes = async (req, res) => {
     res.json(rows[0]);
   } catch (err) {
     console.error('updateAjustes error:', err);
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudieron guardar los ajustes. Intenta de nuevo.' });
   }
 };
 
@@ -189,6 +211,6 @@ export const uploadLogo = async (req, res) => {
     res.json({ logo_url });
   } catch (err) {
     console.error('uploadLogo error:', err);
-    res.status(500).json({ message: 'Error al guardar el logo.' });
+    res.status(500).json({ message: 'No se pudo guardar el logo. Intenta de nuevo.' });
   }
 };

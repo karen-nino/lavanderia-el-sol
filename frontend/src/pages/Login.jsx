@@ -109,7 +109,7 @@ export default function Login() {
       login(data.token, data.usuario);
       navigate('/');
     } catch (err) {
-      setError(err.message || 'Error al iniciar sesión.');
+      setError(err.message || 'No se pudo iniciar sesión. Intenta de nuevo.');
     } finally {
       setLoading(false);
     }

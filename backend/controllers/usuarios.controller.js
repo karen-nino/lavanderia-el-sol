@@ -24,7 +24,7 @@ export const getEmpleados = async (req, res) => {
     res.json(rows);
   } catch (err) {
     console.error('getEmpleados error:', err);
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudo cargar el personal. Intenta de nuevo.' });
   }
 };
 
@@ -36,7 +36,7 @@ export const getEmpleados = async (req, res) => {
 // autoservicio cuenta como 1 cliente; el resto, sus clientes distintos).
 export const getDesempeno = async (req, res) => {
   const id = Number(req.params.id);
-  if (!id) return res.status(400).json({ message: 'Empleado inválido.' });
+  if (!id) return res.status(400).json({ message: 'No se reconoció al empleado.' });
 
   try {
     const { rows: emp } = await pool.query(
@@ -218,7 +218,7 @@ export const getDesempeno = async (req, res) => {
     res.json({ empleado: emp[0], resumen, dias: diasFmt });
   } catch (err) {
     console.error('getDesempeno error:', err);
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudo cargar el desempeño del empleado. Intenta de nuevo.' });
   }
 };
 
@@ -238,7 +238,7 @@ export const createEmpleado = async (req, res) => {
   // La sucursal de pruebas es un entorno cerrado: sus únicos usuarios son los
   // que crea seed_pruebas.js, no se da de alta personal ahí.
   if (sucursal?.trim() === SUCURSAL_PRUEBAS) {
-    return res.status(400).json({ message: 'Sucursal inválida.' });
+    return res.status(400).json({ message: 'La sucursal seleccionada no existe.' });
   }
 
   // Un administrador es global: no se liga a ninguna sucursal (NULL). Para un
@@ -257,7 +257,7 @@ export const createEmpleado = async (req, res) => {
     res.status(201).json(rows[0]);
   } catch (err) {
     console.error('createEmpleado error:', err);
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudo crear el empleado. Intenta de nuevo.' });
   }
 };
 
@@ -295,7 +295,7 @@ export const updateEmpleado = async (req, res) => {
     }
     if (rol !== undefined) {
       if (!ROL_VALIDOS.includes(rol)) {
-        return res.status(400).json({ message: 'Rol inválido.' });
+        return res.status(400).json({ message: 'Ese rol no es válido.' });
       }
       if (targetId === req.user.id) {
         return res.status(400).json({ message: 'No puedes cambiar tu propio rol.' });
@@ -317,7 +317,7 @@ export const updateEmpleado = async (req, res) => {
     } else if (sucursal !== undefined) {
       if (!sucursal?.trim()) return res.status(400).json({ message: 'La sucursal no puede estar vacía.' });
       if (sucursal.trim() === SUCURSAL_PRUEBAS) {
-        return res.status(400).json({ message: 'Sucursal inválida.' });
+        return res.status(400).json({ message: 'La sucursal seleccionada no existe.' });
       }
       updates.push(`sucursal = $${i++}`); values.push(sucursal.trim());
     }
@@ -330,7 +330,7 @@ export const updateEmpleado = async (req, res) => {
     }
 
     if (updates.length === 0) {
-      return res.status(400).json({ message: 'No hay campos para actualizar.' });
+      return res.status(400).json({ message: 'No hay cambios que guardar.' });
     }
     values.push(targetId);
 
@@ -344,7 +344,7 @@ export const updateEmpleado = async (req, res) => {
     res.json(rows[0]);
   } catch (err) {
     console.error('updateEmpleado error:', err);
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudieron guardar los cambios del empleado. Intenta de nuevo.' });
   }
 };
 
@@ -378,6 +378,6 @@ export const deleteEmpleado = async (req, res) => {
     res.json({ message: 'Empleado eliminado.' });
   } catch (err) {
     console.error('deleteEmpleado error:', err);
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudo eliminar el empleado. Intenta de nuevo.' });
   }
 };

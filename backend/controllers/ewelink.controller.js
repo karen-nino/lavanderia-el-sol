@@ -44,7 +44,7 @@ export const getEstado = async (req, res) => {
     });
   } catch (err) {
     console.error('ewelink getEstado error:', err);
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudo consultar la conexión con eWeLink. Intenta de nuevo.' });
   }
 };
 
@@ -55,14 +55,14 @@ export const conectar = async (req, res) => {
   try {
     if (!oauth.configCompleta()) {
       return res.status(400).json({
-        message: 'Falta configurar EWELINK_APP_ID y EWELINK_APP_SECRET en el servidor.',
+        message: 'La conexión con eWeLink no está configurada en el servidor.',
       });
     }
     const state = await cuentaStore.crearState();
     res.json({ url: oauth.urlAutorizacion(state), redirectUrl: oauth.cfg.redirectUrl });
   } catch (err) {
     console.error('ewelink conectar error:', err);
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudo conectar la cuenta de eWeLink. Intenta de nuevo.' });
   }
 };
 
@@ -111,6 +111,6 @@ export const desconectar = async (req, res) => {
     res.json({ message: 'Cuenta de eWeLink desconectada.' });
   } catch (err) {
     console.error('ewelink desconectar error:', err);
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudo desconectar la cuenta de eWeLink. Intenta de nuevo.' });
   }
 };

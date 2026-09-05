@@ -7,13 +7,13 @@ describe('mensajeDeError', () => {
   });
 
   it('usa la descripción por código cuando no hay mensaje', () => {
-    expect(mensajeDeError(404, {})).toBe('Error 404: no se encontró la información solicitada.');
+    expect(mensajeDeError(404, {})).toBe('No se encontró la información que pediste. (error 404)');
     expect(mensajeDeError(429, null)).toBe(
-      'Error 429: demasiados intentos seguidos, espera un momento y vuelve a intentar.'
+      'Demasiados intentos seguidos. Espera un momento y vuelve a intentar. (error 429)'
     );
   });
 
   it('cae a un genérico para códigos desconocidos', () => {
-    expect(mensajeDeError(418, {})).toBe('Error 418: ocurrió un error en la solicitud.');
+    expect(mensajeDeError(418, {})).toBe('No se pudo completar la acción. Intenta de nuevo. (error 418)');
   });
 });

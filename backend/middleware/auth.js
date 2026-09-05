@@ -23,7 +23,7 @@ export const verifyToken = async (req, res, next) => {
       [decoded.id]
     );
     if (rows.length === 0) {
-      return res.status(401).json({ message: 'Sesión revocada. Inicia sesión de nuevo.' });
+      return res.status(401).json({ message: 'Tu sesión se cerró. Inicia sesión de nuevo.' });
     }
 
     // Sesión única por cuenta: si el id de sesión del token no coincide con el
@@ -38,6 +38,6 @@ export const verifyToken = async (req, res, next) => {
     next();
   } catch (err) {
     console.error('verifyToken error:', err);
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudo validar tu sesión. Vuelve a iniciar sesión.' });
   }
 };

@@ -108,7 +108,7 @@ export async function getCajaActual(req, res) {
     });
   } catch (err) {
     console.error('Error en caja/actual:', err);
-    res.status(500).json({ message: 'Error al obtener la caja actual.' });
+    res.status(500).json({ message: 'No se pudo cargar la caja. Intenta de nuevo.' });
   } finally {
     client.release();
   }
@@ -136,7 +136,7 @@ export async function abrirCaja(req, res) {
       return res.status(409).json({ message: 'Ya hay una caja abierta. Ciérrala antes de abrir otra.' });
     }
     console.error('Error en caja/abrir:', err);
-    res.status(500).json({ message: 'Error al abrir la caja.' });
+    res.status(500).json({ message: 'No se pudo abrir la caja. Intenta de nuevo.' });
   }
 }
 
@@ -145,7 +145,7 @@ export async function registrarMovimiento(req, res) {
   const cantidad = Number(monto);
 
   if (tipo !== 'entrada' && tipo !== 'salida') {
-    return res.status(400).json({ message: 'El tipo debe ser "entrada" o "salida".' });
+    return res.status(400).json({ message: 'El movimiento debe ser una entrada o una salida.' });
   }
   if (!concepto?.trim()) {
     return res.status(400).json({ message: 'El concepto es obligatorio.' });
@@ -173,7 +173,7 @@ export async function registrarMovimiento(req, res) {
     res.status(201).json({ id: rows[0].id });
   } catch (err) {
     console.error('Error en caja/movimientos:', err);
-    res.status(500).json({ message: 'Error al registrar el movimiento.' });
+    res.status(500).json({ message: 'No se pudo registrar el movimiento de caja. Intenta de nuevo.' });
   }
 }
 
@@ -253,7 +253,7 @@ export async function cerrarCaja(req, res) {
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('Error en caja/cerrar:', err);
-    res.status(500).json({ message: 'Error al cerrar la caja.' });
+    res.status(500).json({ message: 'No se pudo cerrar la caja. Intenta de nuevo.' });
   } finally {
     client.release();
   }
@@ -353,7 +353,7 @@ export async function getHistorial(req, res) {
     );
   } catch (err) {
     console.error('Error en caja/historial:', err);
-    res.status(500).json({ message: 'Error al obtener el historial de cortes.' });
+    res.status(500).json({ message: 'No se pudo cargar el historial de cortes. Intenta de nuevo.' });
   }
 }
 
@@ -362,7 +362,7 @@ export async function getHistorial(req, res) {
 // Los movimientos de esa sesión se borran en cascada (ON DELETE CASCADE).
 export async function eliminarCorte(req, res) {
   const id = Number(req.params.id);
-  if (!id) return res.status(400).json({ message: 'Corte inválido.' });
+  if (!id) return res.status(400).json({ message: 'No se reconoció el corte.' });
 
   try {
     const { rows } = await pool.query(
@@ -377,6 +377,6 @@ export async function eliminarCorte(req, res) {
     res.status(204).end();
   } catch (err) {
     console.error('Error al eliminar corte:', err);
-    res.status(500).json({ message: 'Error al eliminar el corte.' });
+    res.status(500).json({ message: 'No se pudo eliminar el corte. Intenta de nuevo.' });
   }
 }

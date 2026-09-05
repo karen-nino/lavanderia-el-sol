@@ -41,7 +41,7 @@ export const buscarUsuarios = async (req, res) => {
     res.json(rows);
   } catch (err) {
     console.error('buscarUsuarios error:', err);
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudo buscar el usuario. Intenta de nuevo.' });
   }
 };
 
@@ -50,7 +50,7 @@ export const login = async (req, res) => {
   const userId = Number(usuario_id);
 
   if (!userId || !password) {
-    return res.status(400).json({ message: 'Usuario y contraseña son requeridos.' });
+    return res.status(400).json({ message: 'Escribe tu usuario y tu contraseña.' });
   }
 
   try {
@@ -113,7 +113,7 @@ export const login = async (req, res) => {
     });
   } catch (err) {
     console.error('login error:', err);
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudo iniciar sesión. Intenta de nuevo.' });
   }
 };
 
@@ -146,7 +146,7 @@ export const getMe = async (req, res) => {
     res.json(rows[0]);
   } catch (err) {
     console.error('getMe error:', err);
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudo cargar tu perfil. Intenta de nuevo.' });
   }
 };
 
@@ -173,7 +173,7 @@ export const updateMe = async (req, res) => {
   }
 
   if (updates.length === 0) {
-    return res.status(400).json({ message: 'No hay campos para actualizar.' });
+    return res.status(400).json({ message: 'No hay cambios que guardar.' });
   }
   updates.push('updated_at = NOW()');
   values.push(req.user.id);
@@ -187,6 +187,6 @@ export const updateMe = async (req, res) => {
     res.json(rows[0]);
   } catch (err) {
     console.error('updateMe error:', err);
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudieron guardar los cambios de tu perfil. Intenta de nuevo.' });
   }
 };

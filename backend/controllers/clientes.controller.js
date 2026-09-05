@@ -18,7 +18,7 @@ export const getClientes = async (req, res) => {
     res.json(rows);
   } catch (err) {
     console.error('getClientes error:', err);
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudieron cargar los clientes. Intenta de nuevo.' });
   }
 };
 
@@ -35,7 +35,7 @@ export const getClienteById = async (req, res) => {
     res.json(rows[0]);
   } catch (err) {
     console.error('getClienteById error:', err);
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudo cargar el cliente. Intenta de nuevo.' });
   }
 };
 
@@ -65,7 +65,7 @@ export const createCliente = async (req, res) => {
     res.status(201).json(rows[0]);
   } catch (err) {
     console.error('createCliente error:', err);
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudo crear el cliente. Intenta de nuevo.' });
   }
 };
 
@@ -104,7 +104,7 @@ export const deleteCliente = async (req, res) => {
     res.json({ message: 'Cliente eliminado.' });
   } catch (err) {
     console.error('deleteCliente error:', err);
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudo eliminar el cliente. Intenta de nuevo.' });
   }
 };
 
@@ -123,7 +123,7 @@ export const deleteClientesMultiples = async (req, res) => {
   }
   const idsNum = [...new Set(ids.map(Number).filter(Number.isInteger))];
   if (idsNum.length === 0) {
-    return res.status(400).json({ message: 'Clientes inválidos.' });
+    return res.status(400).json({ message: 'No se entendió la lista de clientes a eliminar.' });
   }
 
   const client = await pool.connect();
@@ -171,7 +171,7 @@ export const deleteClientesMultiples = async (req, res) => {
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('deleteClientesMultiples error:', err);
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudieron eliminar los clientes. Intenta de nuevo.' });
   } finally {
     client.release();
   }
@@ -207,6 +207,6 @@ export const updateCliente = async (req, res) => {
     res.json(rows[0]);
   } catch (err) {
     console.error('updateCliente error:', err);
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudieron guardar los cambios del cliente. Intenta de nuevo.' });
   }
 };

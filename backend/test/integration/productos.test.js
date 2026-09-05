@@ -168,7 +168,7 @@ describe('bolsas (clase = bolsa)', () => {
       clase: 'bolsa', nombre: 'Bolsa', tamano_bolsa: 'mediana', bolsas_por_rollo: 100,
     });
     expect(res.status).toBe(400);
-    expect(res.body.message).toMatch(/tamaño de bolsa/i);
+    expect(res.body.message).toMatch(/tamaño de la bolsa/i);
   });
 });
 

@@ -24,7 +24,7 @@ export const getNotificaciones = async (req, res) => {
     res.json(rows);
   } catch (err) {
     console.error('getNotificaciones error:', err);
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudieron cargar los avisos. Intenta de nuevo.' });
   }
 };
 
@@ -33,7 +33,7 @@ export const getNotificaciones = async (req, res) => {
 // siguen viendo). La notificación no se borra; se registra el descarte.
 export const descartarNotificacion = async (req, res) => {
   const id = Number(req.params.id);
-  if (!id) return res.status(400).json({ message: 'Notificación inválida.' });
+  if (!id) return res.status(400).json({ message: 'No se reconoció el aviso.' });
   try {
     const { rowCount } = await pool.query(
       'SELECT 1 FROM notificaciones WHERE id = $1 AND sucursal = $2',
@@ -49,7 +49,7 @@ export const descartarNotificacion = async (req, res) => {
     res.status(204).send();
   } catch (err) {
     console.error('descartarNotificacion error:', err);
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudo descartar el aviso. Intenta de nuevo.' });
   }
 };
 
@@ -70,6 +70,6 @@ export const descartarTodas = async (req, res) => {
     res.status(204).send();
   } catch (err) {
     console.error('descartarTodas error:', err);
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudieron descartar los avisos. Intenta de nuevo.' });
   }
 };

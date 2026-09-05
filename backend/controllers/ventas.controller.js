@@ -58,7 +58,7 @@ export async function getResumen(req, res) {
   const periodCorrSQL = buildPeriodSQL(periodo, 'h.created_at', anioSel != null, mesSel != null);
 
   if (isCustom && (!desde || !hasta)) {
-    return res.status(400).json({ message: 'Se requieren los parámetros desde y hasta para el período personalizado.' });
+    return res.status(400).json({ message: 'Elige la fecha de inicio y la de fin del período.' });
   }
 
   const periodParams = isCustom
@@ -261,7 +261,7 @@ export async function getResumen(req, res) {
     });
   } catch (err) {
     console.error('Error en ventas/resumen:', err);
-    res.status(500).json({ message: 'Error al obtener el resumen de ventas.' });
+    res.status(500).json({ message: 'No se pudo cargar el resumen de ventas. Intenta de nuevo.' });
   }
 }
 
@@ -279,6 +279,6 @@ export async function getAnios(req, res) {
     res.json(rows.map((r) => r.anio));
   } catch (err) {
     console.error('Error en ventas/anios:', err);
-    res.status(500).json({ message: 'Error al obtener los años de ventas.' });
+    res.status(500).json({ message: 'No se pudieron cargar los años con ventas. Intenta de nuevo.' });
   }
 }

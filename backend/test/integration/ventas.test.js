@@ -158,7 +158,7 @@ describe('GET /api/ventas/resumen — tarjetas y período', () => {
   it('período custom sin desde/hasta → 400', async () => {
     const res = await request(app).get('/api/ventas/resumen?periodo=custom').set(auth(admin.token));
     expect(res.status).toBe(400);
-    expect(res.body.message).toMatch(/desde y hasta/i);
+    expect(res.body.message).toMatch(/fecha de inicio y la de fin/i);
   });
 });
 

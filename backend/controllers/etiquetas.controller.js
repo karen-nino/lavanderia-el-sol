@@ -5,7 +5,10 @@ import { esAdmin } from '../middleware/roles.js';
 // edredón). Son listas simples que el admin gestiona en Ajustes. Comparten
 // exactamente la misma forma (nombre + activo), así que se generan con esta
 // fábrica para no duplicar la lógica CRUD.
-function crearControladorEtiqueta(tabla) {
+//
+// `nombres` son las palabras con las que el usuario conoce el catálogo, para
+// que los mensajes hablen de "el tipo de tela" y no del nombre de la tabla.
+function crearControladorEtiqueta(tabla, nombres) {
   const getAll = async (req, res) => {
     try {
       const { rows } = await pool.query(
@@ -14,7 +17,7 @@ function crearControladorEtiqueta(tabla) {
       res.json(rows);
     } catch (err) {
       console.error(`get ${tabla} error:`, err);
-      res.status(500).json({ message: 'Error interno del servidor.' });
+      res.status(500).json({ message: `No se pudieron cargar ${nombres.plural}. Intenta de nuevo.` });
     }
   };
 
@@ -37,10 +40,10 @@ function crearControladorEtiqueta(tabla) {
       res.status(201).json(rows[0]);
     } catch (err) {
       if (err.code === '23505') {
-        return res.status(409).json({ message: 'Ya existe una etiqueta con ese nombre.' });
+        return res.status(409).json({ message: `Ya existe ${nombres.uno} con ese nombre.` });
       }
       console.error(`create ${tabla} error:`, err);
-      res.status(500).json({ message: 'Error interno del servidor.' });
+      res.status(500).json({ message: `No se pudo guardar ${nombres.singular}. Intenta de nuevo.` });
     }
   };
 
@@ -68,7 +71,7 @@ function crearControladorEtiqueta(tabla) {
       values.push(Boolean(activo));
     }
     if (updates.length === 0) {
-      return res.status(400).json({ message: 'No hay campos para actualizar.' });
+      return res.status(400).json({ message: 'No hay cambios que guardar.' });
     }
     updates.push('updated_at = NOW()');
     values.push(id);
@@ -79,15 +82,15 @@ function crearControladorEtiqueta(tabla) {
         values
       );
       if (rows.length === 0) {
-        return res.status(404).json({ message: 'Etiqueta no encontrada.' });
+        return res.status(404).json({ message: `No se encontró ${nombres.singular}.` });
       }
       res.json(rows[0]);
     } catch (err) {
       if (err.code === '23505') {
-        return res.status(409).json({ message: 'Ya existe una etiqueta con ese nombre.' });
+        return res.status(409).json({ message: `Ya existe ${nombres.uno} con ese nombre.` });
       }
       console.error(`update ${tabla} error:`, err);
-      res.status(500).json({ message: 'Error interno del servidor.' });
+      res.status(500).json({ message: `No se pudieron guardar los cambios de ${nombres.singular}. Intenta de nuevo.` });
     }
   };
 
@@ -99,7 +102,7 @@ function crearControladorEtiqueta(tabla) {
     }
     const ids = Array.isArray(req.body.ids) ? req.body.ids.map(Number).filter(Number.isInteger) : [];
     if (ids.length === 0) {
-      return res.status(400).json({ message: 'Se requiere la lista de ids en orden.' });
+      return res.status(400).json({ message: 'No llegó el nuevo orden de la lista. Intenta de nuevo.' });
     }
     const client = await pool.connect();
     try {
@@ -118,7 +121,7 @@ function crearControladorEtiqueta(tabla) {
     } catch (err) {
       await client.query('ROLLBACK');
       console.error(`reorder ${tabla} error:`, err);
-      res.status(500).json({ message: 'Error interno del servidor.' });
+      res.status(500).json({ message: `No se pudo guardar el nuevo orden de ${nombres.plural}. Intenta de nuevo.` });
     } finally {
       client.release();
     }
@@ -127,7 +130,15 @@ function crearControladorEtiqueta(tabla) {
   return { getAll, create, update, reorder };
 }
 
-export const tiposTela          = crearControladorEtiqueta('tipos_tela');
-export const tamanosEdredon     = crearControladorEtiqueta('tamanos_edredon');
-export const marcasProducto     = crearControladorEtiqueta('marcas_producto');
-export const envasesProducto    = crearControladorEtiqueta('envases_producto');
+export const tiposTela = crearControladorEtiqueta('tipos_tela', {
+  singular: 'el tipo de tela', plural: 'los tipos de tela', uno: 'un tipo de tela',
+});
+export const tamanosEdredon = crearControladorEtiqueta('tamanos_edredon', {
+  singular: 'el tamaño de edredón', plural: 'los tamaños de edredón', uno: 'un tamaño de edredón',
+});
+export const marcasProducto = crearControladorEtiqueta('marcas_producto', {
+  singular: 'la marca', plural: 'las marcas', uno: 'una marca',
+});
+export const envasesProducto = crearControladorEtiqueta('envases_producto', {
+  singular: 'el envase', plural: 'los envases', uno: 'un envase',
+});

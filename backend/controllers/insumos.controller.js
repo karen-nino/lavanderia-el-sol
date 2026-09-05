@@ -10,7 +10,7 @@ export const getInsumos = async (req, res) => {
     res.json(rows);
   } catch (err) {
     console.error('getInsumos error:', err);
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudieron cargar los artículos. Intenta de nuevo.' });
   }
 };
 
@@ -18,7 +18,7 @@ export const createInsumo = async (req, res) => {
   const { nombre, categoria, unidad, stock_actual, stock_minimo, precio_unitario } = req.body;
 
   if (!nombre || !unidad) {
-    return res.status(400).json({ message: 'Nombre y unidad son requeridos.' });
+    return res.status(400).json({ message: 'Escribe el nombre y la unidad del artículo.' });
   }
 
   try {
@@ -31,7 +31,7 @@ export const createInsumo = async (req, res) => {
     res.status(201).json(rows[0]);
   } catch (err) {
     console.error('createInsumo error:', err);
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudo crear el artículo. Intenta de nuevo.' });
   }
 };
 
@@ -57,7 +57,7 @@ export const updateInsumo = async (req, res) => {
     res.json(rows[0]);
   } catch (err) {
     console.error('updateInsumo error:', err);
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudieron guardar los cambios del artículo. Intenta de nuevo.' });
   }
 };
 
@@ -66,7 +66,7 @@ export const putInsumo = async (req, res) => {
   const { nombre, categoria, unidad, stock_actual, stock_minimo, precio_unitario } = req.body;
 
   if (!nombre || !unidad) {
-    return res.status(400).json({ message: 'Nombre y unidad son requeridos.' });
+    return res.status(400).json({ message: 'Escribe el nombre y la unidad del artículo.' });
   }
 
   try {
@@ -88,7 +88,7 @@ export const putInsumo = async (req, res) => {
     res.json(rows[0]);
   } catch (err) {
     console.error('putInsumo error:', err);
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudieron guardar los cambios del artículo. Intenta de nuevo.' });
   }
 };
 
@@ -111,7 +111,7 @@ export const eliminarInsumo = async (req, res) => {
     if (err.code === '23503') {
       return res.status(409).json({ message: 'No se puede eliminar: el artículo tiene movimientos registrados.' });
     }
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudo eliminar el artículo. Intenta de nuevo.' });
   }
 };
 
@@ -120,10 +120,10 @@ export const registrarMovimiento = async (req, res) => {
   const { tipo, cantidad, notas } = req.body;
 
   if (!tipo || !['entrada', 'salida'].includes(tipo)) {
-    return res.status(400).json({ message: 'tipo debe ser "entrada" o "salida".' });
+    return res.status(400).json({ message: 'El movimiento debe ser una entrada o una salida.' });
   }
   if (!cantidad || Number(cantidad) <= 0) {
-    return res.status(400).json({ message: 'cantidad debe ser un número positivo.' });
+    return res.status(400).json({ message: 'La cantidad debe ser un número mayor a 0.' });
   }
 
   const client = await pool.connect();
@@ -144,7 +144,7 @@ export const registrarMovimiento = async (req, res) => {
 
     if (tipo === 'salida' && stockActual < Number(cantidad)) {
       await client.query('ROLLBACK');
-      return res.status(400).json({ message: 'Stock insuficiente para registrar salida.' });
+      return res.status(400).json({ message: 'No hay suficiente existencia para registrar la salida.' });
     }
 
     // Registrar movimiento
@@ -166,7 +166,7 @@ export const registrarMovimiento = async (req, res) => {
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('registrarMovimiento error:', err);
-    res.status(500).json({ message: 'Error interno del servidor.' });
+    res.status(500).json({ message: 'No se pudo registrar el movimiento del artículo. Intenta de nuevo.' });
   } finally {
     client.release();
   }
