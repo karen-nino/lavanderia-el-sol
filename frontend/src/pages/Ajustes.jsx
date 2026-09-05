@@ -2074,7 +2074,6 @@ export default function Ajustes() {
         <div className="space-y-6">
           {avisoPruebas}
           {seccionPerfilDesktop}
-          <InstalarApp />
         </div>
 
         {!soloPerfil && (
@@ -2088,6 +2087,11 @@ export default function Ajustes() {
           {seccionTicketDesktop}
         </div>
         )}
+
+        {/* Instalar la app va al final, después de toda la configuración: es
+            una acción del equipo que se está usando, no un ajuste del negocio.
+            Fuera del bloque de arriba porque también se ofrece en pruebas. */}
+        <InstalarApp />
 
         <div className="space-y-3">
           {mensajeBanner}

@@ -118,6 +118,50 @@ async function hayCargasPendientes(client, notaId) {
   return rows[0].pendientes;
 }
 
+// Estado en el que queda una nota a la que ya no le falta ninguna carga.
+//
+// Autoservicio: el cliente está en el local y se lleva su ropa él mismo, así
+// que no hay nada "por entregar" — la nota se cierra sola. En Por Encargo y
+// Edredón sí pasa por Por Entregar: el negocio guarda la ropa hasta que la
+// recogen.
+//
+// La excepción es una nota de autoservicio que quedara a deber. El negocio cobra
+// por adelantado (no se arranca una carga sin pagar), pero si por lo que sea
+// llegara pendiente, se queda en Por Entregar: FINALIZADA es terminal y
+// cerrarla ahí dejaría el cobro sin registrar y sin forma de hacerlo desde la
+// nota.
+async function estadoAlTerminarCargas(client, notaId) {
+  const { rows } = await client.query(
+    'SELECT tipo_servicio, estado_pago FROM notas WHERE id = $1',
+    [notaId]
+  );
+  const nota = rows[0];
+  return (nota?.tipo_servicio === 'AUTOSERVICIO' && nota.estado_pago === 'PAGADO')
+    ? 'FINALIZADA'
+    : 'LISTA';
+}
+
+// Cierra la nota que ya no tiene cargas pendientes y devuelve el estado en que
+// quedó. Si se finaliza sola, consume el stock de sus productos igual que lo
+// haría el cierre a mano (cambiarEstadoNota): sin esto el producto se quedaría
+// reservado para siempre y el inventario descuadrado.
+async function cerrarNotaSinCargasPendientes(client, notaId, { sucursal, usuarioId }) {
+  const estado = await estadoAlTerminarCargas(client, notaId);
+  if (estado === 'FINALIZADA') {
+    await registrarMovimientosProductosNota(client, notaId, sucursal, usuarioId, 'venta');
+    await client.query(
+      `UPDATE productos a
+          SET stock_actual    = stock_actual    - np.cantidad_tapas,
+              stock_reservado = stock_reservado - np.cantidad_tapas
+        FROM nota_productos np
+        WHERE np.nota_id = $1 AND np.producto_id = a.id`,
+      [notaId]
+    );
+  }
+  await client.query('UPDATE notas SET estado = $1 WHERE id = $2', [estado, notaId]);
+  return estado;
+}
+
 // IDs (sin repetir) de todas las máquinas vinculadas a una nota.
 async function maquinasDeNota(client, notaId) {
   const { rows } = await client.query(
@@ -1511,10 +1555,9 @@ export const updateNota = async (req, res) => {
     // reabre por editarla.
     if (['EN_ESPERA', 'LAVANDO', 'SECANDO'].includes(rows[0].estado)
         && !(await hayCargasPendientes(client, id))) {
-      const { rows: cerrada } = await client.query(
-        `UPDATE notas SET estado = 'LISTA' WHERE id = $1 RETURNING estado`, [id]
-      );
-      rows[0].estado = cerrada[0].estado;
+      rows[0].estado = await cerrarNotaSinCargasPendientes(client, id, {
+        sucursal: req.sucursal, usuarioId: req.user?.id,
+      });
     }
 
     if (cargasNota === null) {
@@ -1622,7 +1665,9 @@ export const quitarCarga = async (req, res) => {
     // Quitar la última carga pendiente puede dejar la nota terminada.
     if (['EN_ESPERA', 'LAVANDO', 'SECANDO'].includes(notaRows[0].estado)
         && !(await hayCargasPendientes(client, id))) {
-      await client.query(`UPDATE notas SET estado = 'LISTA' WHERE id = $1`, [id]);
+      await cerrarNotaSinCargasPendientes(client, id, {
+        sucursal: req.sucursal, usuarioId: req.user?.id,
+      });
     }
 
     await client.query('COMMIT');
@@ -2759,12 +2804,16 @@ export const terminarSecado = async (req, res) => {
           [restantes]
         );
     if (enUso === 0) {
-      // Sin máquinas corriendo la nota está lista SOLO si ya no le falta
-      // ninguna carga; si falta alguna, vuelve a su fase real (En Espera).
-      const estadoFinal = (await hayCargasPendientes(client, id))
-        ? await faseProcesoDeNota(client, id)
-        : 'LISTA';
-      await client.query(`UPDATE notas SET estado = $1 WHERE id = $2`, [estadoFinal, id]);
+      // Sin máquinas corriendo la nota se cierra SOLO si ya no le falta ninguna
+      // carga; si falta alguna, vuelve a su fase real (En Espera).
+      if (await hayCargasPendientes(client, id)) {
+        const fase = await faseProcesoDeNota(client, id);
+        await client.query(`UPDATE notas SET estado = $1 WHERE id = $2`, [fase, id]);
+      } else {
+        await cerrarNotaSinCargasPendientes(client, id, {
+          sucursal: req.sucursal, usuarioId: req.user?.id,
+        });
+      }
     }
 
     await client.query('COMMIT');
@@ -2850,10 +2899,14 @@ export const terminarLavadoFinal = async (req, res) => {
           `SELECT id FROM maquinas WHERE id = ANY($1) AND estado = 'en_uso'`,
           [restantes]
         );
-    const nuevoEstado = (enUso === 0 && !(await hayCargasPendientes(client, id)))
-      ? 'LISTA'
-      : await faseProcesoDeNota(client, id);
-    await client.query(`UPDATE notas SET estado = $1 WHERE id = $2`, [nuevoEstado, id]);
+    if (enUso === 0 && !(await hayCargasPendientes(client, id))) {
+      await cerrarNotaSinCargasPendientes(client, id, {
+        sucursal: req.sucursal, usuarioId: req.user?.id,
+      });
+    } else {
+      const fase = await faseProcesoDeNota(client, id);
+      await client.query(`UPDATE notas SET estado = $1 WHERE id = $2`, [fase, id]);
+    }
 
     await client.query('COMMIT');
 

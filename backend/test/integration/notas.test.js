@@ -1179,6 +1179,54 @@ describe('nota con varias cargas: no está lista hasta terminarlas todas', () =>
   });
 });
 
+// En autoservicio el cliente está en el local y se lleva su ropa él mismo: no
+// hay nada "por entregar", así que la nota se cierra sola al terminar sus
+// cargas. Por Encargo y Edredón sí esperan en Por Entregar a que la recojan.
+describe('cierre automático de la nota al terminar sus cargas', () => {
+  const arrancar = async (notaId, cargaId, maquinaId) => {
+    await request(app).patch(`/api/notas/${notaId}/asignar-carga-maquina`).set(auth(admin.token))
+      .send({ carga_id: cargaId, slot: 'lavadora', maquina_id: maquinaId }).expect(200);
+    await request(app).patch(`/api/notas/${notaId}/activar-pendientes`).set(auth(admin.token))
+      .send({ maquina_id: maquinaId }).expect(200);
+  };
+
+  const terminarUnicaCarga = async (body) => {
+    const lav = await seedMaquina({ nombre: `Lavadora ${Date.now()}`, tipo: 'lavadora_mediana' });
+    const crea = await request(app).post('/api/notas').set(auth(admin.token))
+      .send({ tipo_prenda: 'ROPA', cargas: [{ lavadora_tipo: 'mediana' }], ...body });
+    expect(crea.status).toBe(201);
+    await arrancar(crea.body.id, crea.body.cargas[0].id, lav);
+    return request(app).patch(`/api/notas/${crea.body.id}/terminar-lavado-final`)
+      .set(auth(admin.token)).send({ lavadora_id: lav });
+  };
+
+  it('autoservicio pagado: queda FINALIZADA, sin pasar por Por Entregar', async () => {
+    const res = await terminarUnicaCarga({
+      tipo_servicio: 'AUTOSERVICIO', estado_pago: 'PAGADO', forma_pago: 'EFECTIVO',
+    });
+    expect(res.status).toBe(200);
+    expect(res.body.estado).toBe('FINALIZADA');
+  });
+
+  it('autoservicio que quedó a deber: se queda en Por Entregar para poder cobrarlo', async () => {
+    const res = await terminarUnicaCarga({
+      tipo_servicio: 'AUTOSERVICIO', estado_pago: 'PENDIENTE',
+    });
+    expect(res.status).toBe(200);
+    expect(res.body.estado).toBe('LISTA');
+  });
+
+  it('por encargo pagado: sigue esperando en Por Entregar a que lo recojan', async () => {
+    const clienteId = await seedCliente();
+    const res = await terminarUnicaCarga({
+      tipo_servicio: 'POR_ENCARGO', cliente_id: clienteId,
+      estado_pago: 'PAGADO', forma_pago: 'EFECTIVO',
+    });
+    expect(res.status).toBe(200);
+    expect(res.body.estado).toBe('LISTA');
+  });
+});
+
 describe('cancelar una nota es cosa de administradores', () => {
   it('un empleado no puede cancelar', async () => {
     const empleado = await seedUsuario({ rol: 'operador', sucursal: 'centro', nombre: 'Empleado' });
