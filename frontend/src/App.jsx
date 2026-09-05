@@ -93,7 +93,12 @@ export default function App() {
             />
             {/* El manual se abre en su propia página (desde Ajustes), porque en
                 escritorio Ajustes es una sola columna larga y el manual no cabe
-                dentro sin estorbar. Va bajo AdminRoute como Ajustes. */}
+                dentro sin estorbar.
+                POR AHORA va bajo AdminRoute, como Ajustes: es decisión de la
+                clienta mientras revisa que el contenido sea correcto (2026-09-05).
+                Cuando lo dé por bueno se abrirá a los empleados, que son su
+                público natural — y entonces hay que sacarlo de aquí y darle
+                entrada propia en el menú, porque a Ajustes ellos no entran. */}
             <Route
               path="manual"
               element={
