@@ -118,6 +118,17 @@ async function hayCargasPendientes(client, notaId) {
   return rows[0].pendientes;
 }
 
+// En autoservicio el cliente paga por adelantado: no se arranca una carga de una
+// nota que todavía debe. Es la contraparte del cierre automático de aquí abajo
+// — una nota que arranca pagada llega al final pagada, y puede finalizarse sola
+// sin dejar un cobro sin registrar. Devuelve el mensaje para el cliente, o null
+// si puede correr. Por Encargo y Edredón no aplican: ahí se cobra al entregar.
+function bloqueoPorPagoPendiente(nota) {
+  return (nota?.tipo_servicio === 'AUTOSERVICIO' && nota.estado_pago !== 'PAGADO')
+    ? 'En autoservicio la nota se cobra antes de iniciar la carga. Registra el pago para poder arrancar la máquina.'
+    : null;
+}
+
 // Estado en el que queda una nota a la que ya no le falta ninguna carga.
 //
 // Autoservicio: el cliente está en el local y se lleva su ropa él mismo, así
@@ -125,22 +136,10 @@ async function hayCargasPendientes(client, notaId) {
 // Edredón sí pasa por Por Entregar: el negocio guarda la ropa hasta que la
 // recogen.
 //
-// La excepción es una nota de autoservicio que quedara a deber. El negocio cobra
-// por adelantado (no se arranca una carga sin pagar), pero si por lo que sea
-// llegara pendiente, se queda en Por Entregar: FINALIZADA es terminal y
-// cerrarla ahí dejaría el cobro sin registrar y sin forma de hacerlo desde la
-// nota.
-// En autoservicio el cliente paga por adelantado: no se arranca una carga de una
-// nota que todavía debe. Es la contraparte del cierre automático — una nota que
-// arranca pagada llega al final pagada, y puede finalizarse sola sin dejar un
-// cobro sin registrar. Devuelve el mensaje para el cliente, o null si puede
-// correr. Por Encargo y Edredón no aplican: ahí se cobra al entregar.
-function bloqueoPorPagoPendiente(nota) {
-  return (nota?.tipo_servicio === 'AUTOSERVICIO' && nota.estado_pago !== 'PAGADO')
-    ? 'En autoservicio la nota se cobra antes de iniciar la carga. Registra el pago para poder arrancar la máquina.'
-    : null;
-}
-
+// La excepción es una nota de autoservicio que quedara a deber (hoy, solo si le
+// revirtieron el pago con la carga andando): se queda en Por Entregar, porque
+// FINALIZADA es terminal y cerrarla ahí dejaría el cobro sin registrar y sin
+// forma de hacerlo desde la nota.
 async function estadoAlTerminarCargas(client, notaId) {
   const { rows } = await client.query(
     'SELECT tipo_servicio, estado_pago FROM notas WHERE id = $1',

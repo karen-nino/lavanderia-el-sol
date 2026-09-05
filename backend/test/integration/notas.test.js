@@ -1253,6 +1253,48 @@ describe('cierre automático de la nota al terminar sus cargas', () => {
     expect(res.body.message).toMatch(/se cobra antes de iniciar/i);
   });
 
+  // El cierre a mano (cambiarEstadoNota) descuenta el producto del inventario al
+  // finalizar. Al cerrarse sola la nota no pasa por ahí, así que el descuento
+  // tiene que hacerlo el cierre automático: si no, el producto se queda
+  // reservado para siempre y el inventario descuadrado.
+  it('al cerrarse sola descuenta el producto del inventario, como el cierre a mano', async () => {
+    const prod = await seedProducto({
+      nombre: 'Detergente cierre', precio_botella: 30, stock_actual: 100,
+      tipo_liquido: 'marca', botella_ml: 800, tapa_ml: 200,
+    });
+    const lav = await seedMaquina({ nombre: 'Lavadora stock', tipo: 'lavadora_mediana' });
+    const crea = await request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA',
+      estado_pago: 'PAGADO', forma_pago: 'EFECTIVO',
+      cargas: [{ lavadora_tipo: 'mediana', productos: [{ producto_id: prod, cantidad: 1 }] }],
+    });
+    expect(crea.status).toBe(201);
+
+    // Recién creada: el producto está apartado, todavía no vendido.
+    const antes = await pool.query(
+      'SELECT stock_actual, stock_reservado FROM productos WHERE id = $1', [prod]);
+    expect(Number(antes.rows[0].stock_reservado)).toBeGreaterThan(0);
+    const reservado = Number(antes.rows[0].stock_reservado);
+    const stockInicial = Number(antes.rows[0].stock_actual);
+
+    await arrancar(crea.body.id, crea.body.cargas[0].id, lav);
+    const res = await request(app).patch(`/api/notas/${crea.body.id}/terminar-lavado-final`)
+      .set(auth(admin.token)).send({ lavadora_id: lav });
+    expect(res.body.estado).toBe('FINALIZADA');
+
+    // Ya vendido: sale del estante y deja de estar apartado.
+    const despues = await pool.query(
+      'SELECT stock_actual, stock_reservado FROM productos WHERE id = $1', [prod]);
+    expect(Number(despues.rows[0].stock_actual)).toBe(stockInicial - reservado);
+    expect(Number(despues.rows[0].stock_reservado)).toBe(0);
+
+    // Y queda en el historial de inventario como una venta, no como un ajuste.
+    const mov = await pool.query(
+      `SELECT tipo FROM producto_movimientos WHERE nota_id = $1 AND producto_id = $2`,
+      [crea.body.id, prod]);
+    expect(mov.rows.map(r => r.tipo)).toEqual(['venta']);
+  });
+
   it('por encargo sin pagar: sí arranca, ahí se cobra al entregar', async () => {
     const clienteId = await seedCliente();
     const res = await terminarUnicaCarga({
