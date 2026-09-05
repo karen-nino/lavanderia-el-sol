@@ -8,16 +8,17 @@ const MAQUINA_TIPO_LABEL = {
   secadora:         'Secadora',
 };
 
-// Lo que la carga cobra por máquina. Si ya se asignó una física se nombra con
-// ella ("L1 · Mediana"); mientras tanto se muestra el tipo elegido al crear la
-// nota ("Lavadora · Mediana"), que es lo que se está cobrando. Las máquinas
-// removidas no se cobran, así que no aparecen.
+// Lo que la carga cobra por máquina. Al cliente se le nombra siempre el tipo
+// de máquina ("Lavadora · Mediana"), no la máquina física que le tocó ("L1"):
+// el identificador es de uso interno y en el ticket no le dice nada. El tamaño
+// sale de la máquina asignada, o del tipo elegido al crear la nota mientras no
+// haya una. Las máquinas removidas no se cobran, así que no aparecen.
 export function maquinasDeCarga(cg) {
   const capitalizar = (t) => (t ? t.charAt(0).toUpperCase() + t.slice(1) : '');
 
   const lavadora = cg.lavadora_removida ? null
     : cg.lavadora_usada_id
-      ? { nombre: cg.lavadora_usada_nombre,
+      ? { nombre: 'Lavadora',
           tipo: MAQUINA_TIPO_LABEL[cg.lavadora_usada_tipo] ?? '',
           precio: Number(cg.precio_lavadora) }
       : cg.lavadora_tipo_previsto
@@ -28,11 +29,9 @@ export function maquinasDeCarga(cg) {
 
   // La secadora es de un solo tamaño: no lleva calificativo.
   const secadora = cg.secadora_removida ? null
-    : cg.secadora_usada_id
-      ? { nombre: cg.secadora_usada_nombre, tipo: '', precio: Number(cg.precio_secadora) }
-      : cg.secadora_tipo_previsto
-        ? { nombre: 'Secadora', tipo: '', precio: Number(cg.precio_secadora) }
-        : null;
+    : (cg.secadora_usada_id || cg.secadora_tipo_previsto)
+      ? { nombre: 'Secadora', tipo: '', precio: Number(cg.precio_secadora) }
+      : null;
 
   return [lavadora, secadora].filter(Boolean);
 }

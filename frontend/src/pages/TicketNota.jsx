@@ -105,7 +105,7 @@ function armarTextoTicket(nota, rfc, notaPie) {
   const volcarCarga = cg => {
     L.push(`Carga ${cg.orden}:`);
     maquinasDeCarga(cg).forEach(m => {
-      L.push(`  • ${m.nombre}${m.tipo ? ` (${m.tipo})` : ''} — ${fmtMonto(m.precio)}`);
+      L.push(`  • 1 x ${m.nombre}${m.tipo ? ` (${m.tipo})` : ''} — ${fmtMonto(m.precio)}`);
     });
     // Las tapas son información interna: no se listan en el ticket.
     (cg.productos ?? []).filter(p => p.unidad !== 'tapa')
@@ -340,7 +340,8 @@ export default function TicketNota() {
         <div className="mt-2 space-y-2">
           {maquinas.map((m, i) => (
             <div key={i} className="flex items-baseline justify-between gap-3">
-              <span className="text-sm text-gray-700">{m.nombre}{m.tipo && <span className="text-xs text-gray-400"> · {m.tipo}</span>}</span>
+              {/* Cada carga usa a lo más una lavadora y una secadora: de ahí el "1 x". */}
+              <span className="text-sm text-gray-700">1 x {m.nombre}{m.tipo && <span className="text-xs text-gray-400"> · {m.tipo}</span>}</span>
               <span className="text-sm text-gray-600 whitespace-nowrap">{fmtMonto(m.precio)}</span>
             </div>
           ))}
@@ -402,12 +403,14 @@ export default function TicketNota() {
 
           {/* Datos generales */}
           <div className="px-5 py-3 border-b border-dashed border-gray-200">
-            <Linea
-              label="Cliente"
-              value={nota.cliente_nombre
-                ? `${nota.cliente_nombre}${nota.cliente_apellido ? ' ' + nota.cliente_apellido : ''}`
-                : 'Anónimo'}
-            />
+            {/* Sin cliente no se imprime la línea: al que viene de paso no le
+                aporta nada leer "Anónimo". */}
+            {nota.cliente_nombre && (
+              <Linea
+                label="Cliente"
+                value={`${nota.cliente_nombre}${nota.cliente_apellido ? ' ' + nota.cliente_apellido : ''}`}
+              />
+            )}
             {nota.cliente_telefono && <Linea label="Teléfono" value={nota.cliente_telefono} />}
             {!esEncargo && (
               <Linea label="Tipo" value={BADGE_TIPO_SERVICIO[nota.tipo_servicio] ?? nota.tipo_servicio} />

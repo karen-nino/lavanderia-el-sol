@@ -46,12 +46,12 @@ describe('cargaVisibleEnTicket', () => {
 });
 
 describe('maquinasDeCarga', () => {
-  it('nombra la máquina física cuando ya se asignó', () => {
+  it('nombra el tipo de máquina, no la física, cuando ya se asignó', () => {
     const m = maquinasDeCarga(carga({
       lavadora_usada_id: 7, lavadora_usada_nombre: 'L1', lavadora_usada_tipo: 'lavadora_mediana',
       precio_lavadora: 50,
     }));
-    expect(m).toEqual([{ nombre: 'L1', tipo: 'Mediana', precio: 50 }]);
+    expect(m).toEqual([{ nombre: 'Lavadora', tipo: 'Mediana', precio: 50 }]);
   });
 
   it('usa el tipo elegido mientras no haya máquina física', () => {
@@ -63,6 +63,6 @@ describe('maquinasDeCarga', () => {
     expect(maquinasDeCarga(carga({
       lavadora_usada_id: 7, lavadora_usada_nombre: 'L1', lavadora_removida: true,
       secadora_usada_id: 9, secadora_usada_nombre: 'S1', precio_secadora: 45,
-    }))).toEqual([{ nombre: 'S1', tipo: '', precio: 45 }]);
+    }))).toEqual([{ nombre: 'Secadora', tipo: '', precio: 45 }]);
   });
 });
