@@ -51,6 +51,33 @@ describe('PATCH /api/ajustes', () => {
     expect(res.body.message).toMatch(/entero de 1 minuto o más/i);
   });
 
+  // Las dos notas al pie del ticket (mig. 105): una para el que lava él mismo y
+  // otra para el que deja su ropa a cargo del negocio.
+  it('guarda cada nota del ticket por separado', async () => {
+    const res = await request(app).patch('/api/ajustes').set(auth(admin.token)).send({
+      ticket_nota_autoservicio: 'Recoja sus prendas el mismo día.',
+      ticket_nota_encargo:      'Conserve esta nota para recoger.',
+    });
+    expect(res.status).toBe(200);
+    expect(res.body.ticket_nota_autoservicio).toBe('Recoja sus prendas el mismo día.');
+    expect(res.body.ticket_nota_encargo).toBe('Conserve esta nota para recoger.');
+
+    // Y tocar una no pisa la otra.
+    const soloEncargo = await request(app).patch('/api/ajustes').set(auth(admin.token))
+      .send({ ticket_nota_encargo: 'Otro aviso' });
+    expect(soloEncargo.body.ticket_nota_autoservicio).toBe('Recoja sus prendas el mismo día.');
+    expect(soloEncargo.body.ticket_nota_encargo).toBe('Otro aviso');
+  });
+
+  it('una nota del ticket vacía ("") la borra (queda en null)', async () => {
+    await request(app).patch('/api/ajustes').set(auth(admin.token))
+      .send({ ticket_nota_autoservicio: 'Algo' }).expect(200);
+    const res = await request(app).patch('/api/ajustes').set(auth(admin.token))
+      .send({ ticket_nota_autoservicio: '' });
+    expect(res.status).toBe(200);
+    expect(res.body.ticket_nota_autoservicio).toBeNull();
+  });
+
   it('un tope vacío ("") lo quita (queda en null)', async () => {
     const res = await request(app).patch('/api/ajustes').set(auth(admin.token))
       .send({ tope_carga_grande: '' });
