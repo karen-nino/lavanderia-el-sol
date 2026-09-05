@@ -653,9 +653,12 @@ export default function Ajustes() {
   const esMain = esAdminMainFn(usuario?.rol);
 
   // Los usuarios de prueba operan en una sucursal aislada, pero los ajustes son
-  // del negocio entero (tarifas, tiempos, sucursales, catálogos): el backend se
-  // los bloquea, así que aquí solo se les muestra su perfil.
-  const soloPerfil = usuario?.es_prueba === true;
+  // del negocio entero (tarifas, tiempos, sucursales, catálogos). VEN toda la
+  // configuración —para eso está el entorno: para conocer la app entera—, pero
+  // lo único que pueden guardar es su propio perfil. No es una cortesía del
+  // frontend: el backend rechaza el resto con 403 (bloquearPruebaGlobal), así
+  // que en vez de ofrecer un "Guardar" que va a fallar, no se ofrece.
+  const soloGuardaPerfil = usuario?.es_prueba === true;
 
   useEffect(() => {
     api.get('/ajustes')
@@ -921,7 +924,7 @@ export default function Ajustes() {
       return setMensaje({ tipo: 'error', texto: 'La contraseña debe tener al menos 6 caracteres.' });
     }
     // Un usuario de prueba solo puede guardar su perfil: nada de lo global.
-    if (soloPerfil) return handleGuardarPerfilSolo();
+    if (soloGuardaPerfil) return handleGuardarPerfilSolo();
 
     const sucursalActualEdit = sucursales.find(x => x.slug === sucursalSel);
     if (sucursalActualEdit && !String(sucursalActualEdit.nombre ?? '').trim()) {
@@ -1957,15 +1960,22 @@ export default function Ajustes() {
     </div>
   );
 
-  // En el entorno de pruebas solo se ofrece "Mi Perfil": el resto es del negocio.
   const seccionesMobile = [
-    ...(soloPerfil ? MOBILE_SECTIONS.filter((s) => s.id === 'perfil') : MOBILE_SECTIONS),
+    ...MOBILE_SECTIONS,
     ...(sePuedeInstalar ? [SECCION_INSTALAR] : []),
   ];
   const activeSection = seccionesMobile.find((s) => s.id === mobileSection);
 
+  // En pruebas, toda sección que no sea "Mi Perfil" es de consulta: se ve
+  // entera, pero sin el pie de Cancelar/Guardar. Un botón que el backend va a
+  // rechazar (o peor, que diga "¡Guardado!" sin haber guardado) engaña más de
+  // lo que ayuda.
+  const seccionDeConsulta = soloGuardaPerfil
+    && activeSection && activeSection.id !== 'perfil'
+    && !SECCIONES_SIN_GUARDAR.includes(activeSection.id);
+
   // Aviso fijo del entorno de pruebas, arriba de la lista de ajustes.
-  const avisoPruebas = soloPerfil && (
+  const avisoPruebas = soloGuardaPerfil && (
     <div className="bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-xl p-4">
       <p className="font-semibold">Entorno de pruebas</p>
       <p className="mt-1 text-amber-700">
@@ -2027,7 +2037,14 @@ export default function Ajustes() {
             <div className="px-6 py-6 space-y-6">
             {mobileSectionContent[activeSection.id]}
 
-            {!SECCIONES_SIN_GUARDAR.includes(activeSection.id) && (
+            {seccionDeConsulta && (
+              <p className="text-sm text-grey pt-4">
+                Solo de consulta: esta configuración es la del negocio real y no
+                se cambia desde el entorno de pruebas.
+              </p>
+            )}
+
+            {!seccionDeConsulta && !SECCIONES_SIN_GUARDAR.includes(activeSection.id) && (
             <div className="grid grid-cols-2 gap-3 pt-8">
               <button
                 type="button"
@@ -2076,7 +2093,6 @@ export default function Ajustes() {
           {seccionPerfilDesktop}
         </div>
 
-        {!soloPerfil && (
         <div className="space-y-6">
           {seccionPreciosDesktop}
           {seccionCargasPreciosDesktop}
@@ -2086,7 +2102,6 @@ export default function Ajustes() {
           {seccionInventarioDesktop}
           {seccionTicketDesktop}
         </div>
-        )}
 
         {/* Instalar la app va al final, después de toda la configuración: es
             una acción del equipo que se está usando, no un ajuste del negocio.
