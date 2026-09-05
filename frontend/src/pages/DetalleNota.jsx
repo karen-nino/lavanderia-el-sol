@@ -43,6 +43,11 @@ const BADGE_PAGO = {
   PAGADO: { label: 'Pagado', cls: 'bg-green-100 text-green-700'  },
 };
 
+// El código de barras del folio se apagó a petición de la clienta (2026-09-05),
+// pero el bloque se conserva porque puede volver a hacer falta para escanear
+// notas: basta poner esto en true para que reaparezca.
+const MOSTRAR_CODIGO_BARRAS = false;
+
 // Ciclo de vida de la nota completa. Los pasos "Lavando" y "Secando" se
 // expanden con el avance Lavado/Secado de cada carga (ver desglose en el
 // render), ya que con varias cargas cada una puede ir en una fase distinta.
@@ -620,26 +625,12 @@ export default function DetalleNota() {
         )
       )}
 
-      {/* Código de barras */}
-      <div className="bg-white border border-gray-100 rounded-xl p-4 flex justify-center shadow-sm">
-        <Barcode value={barcodeValue} height={50} fontSize={12} />
-      </div>
-
-      {/* Ticket */}
-      <div className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
-        <div className="px-4 py-3 border-b border-gray-50">
-          <h2 className="text-sm font-semibold text-gray-700">Ticket</h2>
+      {/* Código de barras: apagado, no borrado (ver MOSTRAR_CODIGO_BARRAS). */}
+      {MOSTRAR_CODIGO_BARRAS && (
+        <div className="bg-white border border-gray-100 rounded-xl p-4 flex justify-center shadow-sm">
+          <Barcode value={barcodeValue} height={50} fontSize={12} />
         </div>
-        <div className="px-4 py-4 flex items-center justify-between gap-3">
-          <p className="text-sm text-gray-500">Revisa el ticket que se enviará al cliente por WhatsApp.</p>
-          <button
-            onClick={() => navigate(`/notas/${id}/ticket`)}
-            className="flex-shrink-0 flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
-          >
-            Ver ticket
-          </button>
-        </div>
-      </div>
+      )}
 
       {/* Información de entrega (datos del paso de Entrega) — solo Por Encargo */}
       {nota.tipo_servicio !== 'AUTOSERVICIO' && (
