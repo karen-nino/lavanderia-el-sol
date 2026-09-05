@@ -439,7 +439,12 @@ export default function DetalleNota() {
             <h1 className="text-xl font-bold text-gray-900 leading-tight truncate">
               Detalles Nota
             </h1>
-            {/* <p className="text-xs text-gray-500">Nota #{nota.id}</p> */}
+            {/* El folio completo (0043-040926): su consecutivo y la fecha. En la
+                lista de notas solo se ve el consecutivo, así que este es el
+                único lugar de la app —fuera del ticket— donde se lee entero. */}
+            <p className="text-sm text-gray-500 leading-tight truncate">
+              {nota.folio ?? `#${nota.id}`}
+            </p>
           </div>
         </div>
         <div className="flex items-center gap-1 flex-shrink-0">
