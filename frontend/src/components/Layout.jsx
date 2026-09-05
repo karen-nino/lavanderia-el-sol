@@ -914,7 +914,7 @@ export default function Layout() {
       />
 
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
-        <main className="flex-1 overflow-y-auto">
+        <main className="flex-1 overflow-y-auto overscroll-contain">
           {isDashboard && (
             <>
               <MobileTopbar usuario={usuario} sucursalNombre={sucursalNombre} alertas={alertas} onAlerts={() => setAlertsOpen(true)} />

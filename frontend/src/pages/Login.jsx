@@ -116,8 +116,8 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-800 to-dark-blue flex items-center justify-center p-4">
-      <div className="w-full max-w-sm">
+    <div className="h-full overflow-y-auto overscroll-contain bg-gradient-to-br from-slate-800 to-dark-blue flex flex-col p-4">
+      <div className="w-full max-w-sm mx-auto my-auto flex-shrink-0">
         {/* Brand */}
         <div className="text-center mb-8">
           <LogoSol className="w-16 h-16 mx-auto mb-3 text-white" />

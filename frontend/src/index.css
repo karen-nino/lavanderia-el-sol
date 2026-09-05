@@ -16,6 +16,27 @@ body,
   padding: 0;
 }
 
+/* En móvil la barra de direcciones se esconde y aparece: con 100% la app queda
+   más alta que la pantalla y el navegador la deja arrastrar. dvh mide el alto
+   real disponible en cada momento. */
+@supports (height: 100dvh) {
+  html,
+  body,
+  #root {
+    height: 100dvh;
+  }
+}
+
+/* La página nunca hace scroll: el único que scrollea es el contenedor de
+   contenido (el <main> del Layout). Sin esto, al llegar al final de una lista
+   el gesto se propaga al documento y se mueve toda la pantalla (el rebote
+   elástico de iOS), arrastrando el menú de abajo. */
+html,
+body {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
 body {
   font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   background-color: #f9fafb;
