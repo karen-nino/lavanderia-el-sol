@@ -1,5 +1,5 @@
 import pool from '../db/pool.js';
-import { TZ_NEGOCIO, fechaLocal } from '../utils/tz.js';
+import { TZ_NEGOCIO, fechaLocal, esFechaISO } from '../utils/tz.js';
 
 // El "día" de un reporte es el día del NEGOCIO (America/Mexico_City), no el del
 // servidor: en producción Postgres corre en UTC, así que `DATE(pagado_en)` metía
@@ -59,6 +59,15 @@ export async function getResumen(req, res) {
 
   if (isCustom && (!desde || !hasta)) {
     return res.status(400).json({ message: 'Elige la fecha de inicio y la de fin del período.' });
+  }
+  // Las fechas entran a la consulta como ::date: una que no existe (o texto
+  // suelto) la hace fallar y el usuario recibe un 500 en lugar de saber que
+  // el rango está mal.
+  if (isCustom && (!esFechaISO(desde) || !esFechaISO(hasta))) {
+    return res.status(400).json({ message: 'Las fechas del período no son válidas.' });
+  }
+  if (isCustom && desde > hasta) {
+    return res.status(400).json({ message: 'La fecha de inicio no puede ser posterior a la de fin.' });
   }
 
   const periodParams = isCustom

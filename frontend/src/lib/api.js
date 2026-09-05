@@ -80,7 +80,15 @@ async function request(path, options = {}) {
   } catch {
     // Respuesta sin JSON (p. ej. página de error HTML del proxy).
   }
-  if (!res.ok) throw new Error(mensajeDeError(res.status, data));
+  if (!res.ok) {
+    // El cuerpo viaja con el error: varias respuestas de fallo traen datos
+    // útiles junto al mensaje (p. ej. la máquina ya actualizada con el motivo
+    // por el que su Sonoff no respondió), y sin esto se perdían.
+    const error = new Error(mensajeDeError(res.status, data));
+    error.status = res.status;
+    error.data = data;
+    throw error;
+  }
   return data;
 }
 

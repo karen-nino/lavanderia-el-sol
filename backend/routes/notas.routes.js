@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { verifyToken } from '../middleware/auth.js';
 import { sucursalActiva } from '../middleware/sucursalActiva.js';
 import { requireAdmin } from '../middleware/roles.js';
+import { validarId } from '../middleware/validarId.js';
 import {
   getNotas,
   getNotaById,
@@ -28,6 +29,12 @@ import {
 } from '../controllers/notas.controller.js';
 
 const router = Router();
+
+// Un id malformado (/notas/undefined y parecidos) se responde aquí: sin esto
+// llega a la consulta y Postgres lo convierte en un 500.
+router.param('id', validarId('la nota'));
+router.param('cargaId', validarId('la carga'));
+router.param('productoId', validarId('el producto'));
 
 router.use(verifyToken, sucursalActiva);
 

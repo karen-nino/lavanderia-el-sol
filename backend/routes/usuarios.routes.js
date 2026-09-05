@@ -9,8 +9,13 @@ import {
 import { verifyToken } from '../middleware/auth.js';
 import { sucursalActiva, bloquearPruebaGlobal } from '../middleware/sucursalActiva.js';
 import { requireAdmin } from '../middleware/roles.js';
+import { validarId } from '../middleware/validarId.js';
 
 const router = Router();
+
+// Un id malformado (/notas/undefined y parecidos) se responde aquí: sin esto
+// llega a la consulta y Postgres lo convierte en un 500.
+router.param('id', validarId('el empleado'));
 
 router.use(verifyToken, sucursalActiva);
 

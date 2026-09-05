@@ -29,6 +29,14 @@ describe('explicarMotivo', () => {
     expect(detalle).toMatch(/desconectado de la corriente o fuera de línea/i);
   });
 
+  it('no diagnostica nada cuando eWeLink no mandó código', () => {
+    // El driver arma el motivo como `ewelink_${data?.error}`: sin ese campo
+    // queda 'ewelink_undefined' y antes se reportaba "código undefined".
+    const detalle = explicarMotivo('ewelink_undefined');
+    expect(detalle).not.toMatch(/undefined/);
+    expect(detalle).toMatch(/no llegó ningún detalle/i);
+  });
+
   it('responde algo útil aunque no llegue motivo', () => {
     expect(explicarMotivo(undefined)).toMatch(/vuelve a intentar/i);
   });
@@ -42,8 +50,19 @@ describe('explicarFalla', () => {
 });
 
 describe('resumirMotivo', () => {
-  it('deja una sola frase, lista para la tarjeta', () => {
-    const resumen = resumirMotivo('sin_cuenta_conectada');
-    expect(resumen).toBe('La cuenta de eWeLink no está conectada, así que ningún Sonoff recibe órdenes.');
+  it('pone mayúscula inicial para la tarjeta', () => {
+    expect(resumirMotivo('sin_cuenta_conectada')).toMatch(/^La cuenta de eWeLink no está conectada/);
+  });
+
+  it('no destroza el nombre de eWeLink al capitalizar', () => {
+    expect(resumirMotivo('ewelink_402')).toMatch(/^eWeLink/);
+    expect(resumirMotivo('ewelink_402')).not.toMatch(/EWeLink/);
+  });
+
+  it('conserva la frase que dice qué hacer', () => {
+    // Recortar a la primera frase dejaba la tarjeta con el problema y sin la
+    // salida, que es justo lo que la columna venía a resolver.
+    expect(resumirMotivo('ewelink_402')).toMatch(/Conecta la cuenta otra vez/i);
+    expect(resumirMotivo('sin_cuenta_conectada')).toMatch(/Conéctala desde el aviso/i);
   });
 });

@@ -1,5 +1,6 @@
 import pool from '../db/pool.js';
 import { esAdmin } from '../middleware/roles.js';
+import { esFechaISO } from '../utils/tz.js';
 
 // Para productos por tapa/medida el mínimo se lleva por producto (en tapas);
 // para los demás se usa el mínimo global de Ajustes.
@@ -529,7 +530,9 @@ export const getMovimientos = async (req, res) => {
 // El día se acota en hora local (America/Mexico_City), no en UTC del servidor.
 export const getReporteDiario = async (req, res) => {
   const hoyMx = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Mexico_City' });
-  const fecha = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.fecha ?? '')) ? req.query.fecha : hoyMx;
+  // esFechaISO además de la forma comprueba que el día exista: '2026-99-99'
+  // pasaba el filtro anterior y reventaba al convertirlo a ::date.
+  const fecha = esFechaISO(req.query.fecha) ? req.query.fecha : hoyMx;
 
   try {
     const { rows } = await pool.query(

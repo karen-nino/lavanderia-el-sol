@@ -185,6 +185,14 @@ export default function GestionMaquinas() {
 
   const cerrarModal = () => setModalOpen(false);
 
+  // Cuando una acción de Sonoff falla, el backend responde con la máquina ya
+  // actualizada (sonoff_estado='error' y el motivo en sonoff_detalle). Si no se
+  // recoge aquí, la tarjeta se queda mostrando el estado viejo hasta recargar
+  // la página, que es justo lo que el detalle guardado venía a evitar.
+  const refrescarDesdeError = (err, id) => {
+    if (err?.data?.maquina) setMaquinas(prev => prev.map(m => m.id === id ? err.data.maquina : m));
+  };
+
   // Prueba el enlace con el Sonoff guardado (no cambia el estado operativo).
   // Requiere que la máquina ya exista con su device_id guardado. `id` explícito
   // para poder probar justo después de guardar, cuando el estado aún no se
@@ -201,6 +209,7 @@ export default function GestionMaquinas() {
         ? { tipo: 'sim', texto: r.message }
         : { tipo: 'ok', texto: r?.message ?? 'Sonoff enlazado correctamente.' });
     } catch (err) {
+      refrescarDesdeError(err, id);
       setProbarMsg({ tipo: 'error', texto: err.message });
     } finally {
       setProbando(false);
@@ -246,6 +255,7 @@ export default function GestionMaquinas() {
         ? { tipo: 'sim', texto: r.message }
         : { tipo: 'ok', texto: r?.message ?? 'Orden de apagado enviada.' });
     } catch (err) {
+      refrescarDesdeError(err, editandoId);
       setProbarMsg({ tipo: 'error', texto: err.message });
     } finally {
       setApagando(false);
@@ -322,6 +332,7 @@ export default function GestionMaquinas() {
       if (r?.maquina) setMaquinas(prev => prev.map(x => x.id === m.id ? r.maquina : x));
       alert(r?.message ?? 'Orden de encendido enviada.');
     } catch (err) {
+      refrescarDesdeError(err, m.id);
       alert(err.message);
     } finally {
       setEncendiendo(null);

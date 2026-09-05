@@ -405,18 +405,24 @@ export const updateMaquina = async (req, res) => {
              -- $12 va casteado en TODOS sus usos: sin el cast, Postgres lo
              -- deduce como varchar en la asignación y como text dentro del
              -- CASE, y rechaza la consulta ("inconsistent types deduced").
+             -- El canal cuenta igual que el device_id: en un Sonoff multi-relé
+             -- corregir el canal apunta a OTRO relé, y el enlace que se había
+             -- confirmado ya no dice nada del nuevo.
              sonoff_estado = CASE
                WHEN $12::varchar IS NULL THEN 'sin_enlazar'
-               WHEN device_id IS DISTINCT FROM $12::varchar THEN 'sin_probar'
+               WHEN device_id IS DISTINCT FROM $12::varchar
+                 OR device_canal IS DISTINCT FROM $13 THEN 'sin_probar'
                ELSE sonoff_estado
              END,
              sonoff_detalle = CASE
                WHEN $12::varchar IS NULL THEN NULL
-               WHEN device_id IS DISTINCT FROM $12::varchar THEN NULL
+               WHEN device_id IS DISTINCT FROM $12::varchar
+                 OR device_canal IS DISTINCT FROM $13 THEN NULL
                ELSE sonoff_detalle
              END,
              sonoff_sync_at = CASE
-               WHEN device_id IS DISTINCT FROM $12::varchar THEN NULL
+               WHEN device_id IS DISTINCT FROM $12::varchar
+                 OR device_canal IS DISTINCT FROM $13 THEN NULL
                ELSE sonoff_sync_at
              END
        WHERE id = $10 AND sucursal = $11

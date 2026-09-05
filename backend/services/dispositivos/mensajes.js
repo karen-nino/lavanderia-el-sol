@@ -34,6 +34,9 @@ const DETALLE_MOTIVO = {
     'o cuando el canal configurado no es el suyo; revísalo en la app de eWeLink.',
 };
 
+const SIN_DETALLE =
+  'no se pudo hablar con el Sonoff y no llegó ningún detalle. Vuelve a intentar en un momento.';
+
 // Los códigos de la nube de eWeLink llegan como 'ewelink_<código>'. Los de
 // autenticación (402 y la familia 401xx, ver ewelinkDriver) son los únicos que
 // sabemos leer con certeza; el resto se reporta con el código a la vista, sin
@@ -41,13 +44,15 @@ const DETALLE_MOTIVO = {
 const esCodigoDeAuth = (codigo) => codigo === '402' || codigo.startsWith('401');
 
 export function explicarMotivo(motivo) {
-  if (!motivo) {
-    return 'no se pudo hablar con el Sonoff y no llegó ningún detalle. Vuelve a intentar en un momento.';
-  }
+  if (!motivo) return SIN_DETALLE;
   if (DETALLE_MOTIVO[motivo]) return DETALLE_MOTIVO[motivo];
 
   if (motivo.startsWith('ewelink_')) {
     const codigo = motivo.slice('ewelink_'.length);
+    // El driver arma el motivo como `ewelink_${data?.error}`: si la nube
+    // responde sin ese campo queda 'ewelink_undefined'. Diagnosticar un Sonoff
+    // desenchufado a partir de eso sería inventar; mejor decir que no se sabe.
+    if (!/^\d+$/.test(codigo)) return SIN_DETALLE;
     if (esCodigoDeAuth(codigo)) {
       return 'eWeLink no aceptó el permiso de la app. Conecta la cuenta otra vez desde el aviso ' +
              'que aparece arriba, en esta misma pantalla.';
@@ -62,10 +67,19 @@ export function explicarMotivo(motivo) {
 // Mensaje completo para la pantalla: qué se intentaba hacer + por qué falló.
 export const explicarFalla = (motivo, encabezado) => `${encabezado}: ${explicarMotivo(motivo)}`;
 
-// Versión corta para guardar en maquinas.sonoff_detalle y pintarla en la
-// tarjeta: la primera frase del detalle, con mayúscula inicial.
+// Pone mayúscula inicial, salvo que la primera palabra ya venga con mayúsculas
+// propias: "eWeLink" no puede volverse "EWeLink" en la tarjeta.
+const capitalizar = (texto) => {
+  const primeraPalabra = texto.split(' ')[0];
+  if (/[A-ZÁÉÍÓÚÜÑ]/.test(primeraPalabra)) return texto;
+  return texto.charAt(0).toUpperCase() + texto.slice(1);
+};
+
+// Texto para guardar en maquinas.sonoff_detalle y pintarlo en la tarjeta.
+//
+// Va completo a propósito: la frase que dice QUÉ hacer casi siempre es la
+// segunda ("Conecta la cuenta otra vez..."), y recortarla dejaba la tarjeta
+// enunciando el problema sin la salida, que es justo para lo que existe.
 export function resumirMotivo(motivo) {
-  const detalle = explicarMotivo(motivo);
-  const primeraFrase = detalle.split('. ')[0];
-  return primeraFrase.charAt(0).toUpperCase() + primeraFrase.slice(1) + '.';
+  return capitalizar(explicarMotivo(motivo));
 }

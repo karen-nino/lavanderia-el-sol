@@ -52,6 +52,11 @@ function crearControladorEtiqueta(tabla, nombres) {
       return res.status(403).json({ message: 'Solo un administrador puede realizar esta acción.' });
     }
     const { id } = req.params;
+    // Un id que no es un número no puede existir: sin este corte entra a la
+    // consulta y Postgres responde con un 500 en vez de un "no se encontró".
+    if (!/^\d+$/.test(String(id))) {
+      return res.status(404).json({ message: `No se encontró ${nombres.singular}.` });
+    }
     const { nombre, activo } = req.body;
 
     const updates = [];
