@@ -54,14 +54,22 @@ const PASOS_ESTADO = [
   { key: 'FINALIZADA', label: 'Finalizada',   fechaKey: 'FINALIZADA' },
 ];
 
-// Índice del paso ACTUAL (0..4) según el estado de la nota.
-function progresoPasos(nota) {
-  if (nota.estado === 'EN_ESPERA') return 0;
-  if (nota.estado === 'LAVANDO') return 1;
-  if (nota.estado === 'SECANDO') return 2;
-  if (['LISTA', 'PAGADA'].includes(nota.estado)) return 3;
-  if (nota.estado === 'FINALIZADA') return 4;
-  return 0;
+// Pasos que se dibujan para esta nota. En autoservicio el cliente se lleva su
+// ropa él mismo: la nota se finaliza sola al terminar sus cargas y nunca pasa
+// por "Por Entregar", así que ese paso sobra. Se conserva en la única nota de
+// autoservicio que sí lo vive: la que quedó a deber y espera el cobro ahí.
+function pasosDeNota(nota) {
+  if (nota.tipo_servicio !== 'AUTOSERVICIO') return PASOS_ESTADO;
+  const estuvoPorEntregar = ['LISTA', 'PAGADA'].includes(nota.estado)
+    || (nota.historial_estados ?? []).some(h => h.estado === 'LISTA');
+  return estuvoPorEntregar ? PASOS_ESTADO : PASOS_ESTADO.filter(p => p.key !== 'LISTA');
+}
+
+// Índice del paso ACTUAL dentro de los pasos que se dibujan.
+function progresoPasos(nota, pasos) {
+  const clave = nota.estado === 'PAGADA' ? 'LISTA' : nota.estado;
+  const i = pasos.findIndex(p => p.key === clave);
+  return i === -1 ? 0 : i;
 }
 
 // Fase de una máquina dentro de su carga: en curso (asignada y EN USO), en
@@ -401,7 +409,8 @@ export default function DetalleNota() {
   const badgeTipoServicio    = BADGE_TIPO_SERVICIO[nota.tipo_servicio] ?? BADGE_TIPO_SERVICIO.AUTOSERVICIO;
   const badgePago     = BADGE_PAGO[nota.estado_pago];
   const barcodeValue  = nota.folio ?? String(nota.id);
-  const pasoActual    = progresoPasos(nota);
+  const pasos         = pasosDeNota(nota);
+  const pasoActual    = progresoPasos(nota, pasos);
   const fechaPorEstado = Object.fromEntries(
     (nota.historial_estados || []).map(h => [h.estado, h.created_at])
   );
@@ -929,10 +938,10 @@ export default function DetalleNota() {
             </div>
           ) : (
             <ol className="relative">
-              {PASOS_ESTADO.map((paso, i) => {
+              {pasos.map((paso, i) => {
                 const done    = i < pasoActual;
                 const current = i === pasoActual;
-                const isLast  = i === PASOS_ESTADO.length - 1;
+                const isLast  = i === pasos.length - 1;
                 // Cargas con su máquina EN USO en este paso. Se evalúa cada paso
                 // por separado: una carga con lavadora y secadora corriendo a la
                 // vez aparece bajo Lavando y bajo Secando.

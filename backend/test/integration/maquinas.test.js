@@ -140,7 +140,10 @@ describe('el admin detiene una lavadora que arrancó un empleado', () => {
     const empleado = await seedUsuario({ rol: 'operador', sucursal: 'centro', nombre: `Emp${nombreMaquina}` });
     const lavadoraId = await seedMaquina({ nombre: nombreMaquina, tipo: 'lavadora_mediana' });
     const cuerpo = {
-      tipo_servicio, tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE',
+      tipo_servicio, tipo_prenda: 'ROPA',
+      ...(tipo_servicio === 'AUTOSERVICIO'
+        ? { estado_pago: 'PAGADO', forma_pago: 'EFECTIVO' }
+        : { estado_pago: 'PENDIENTE' }),
       cargas: [tipo_servicio === 'POR_ENCARGO'
         ? { lavadora_tipo: 'mediana', tamano: 'chico' }
         : { lavadora_tipo: 'mediana' }],
@@ -222,6 +225,9 @@ describe('GET /api/maquinas/:id/uso — solo cuenta el uso real', () => {
 // máquina. No la bloquea (desde la mig. 097 se la queda quien arranque
 // primero), pero es lo que evita que dos empleados manden ropa a la misma.
 describe('GET /api/maquinas — marca de apartada', () => {
+  // Sin pagar: estas notas solo apartan la máquina y una llega a cancelarse
+  // (una nota ya cobrada no se cancela sin revertir el pago primero). Ninguna
+  // arranca, que es lo único que exige el cobro por adelantado.
   const crearNota = () =>
     request(app).post('/api/notas').set(auth(admin.token)).send({
       tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE',

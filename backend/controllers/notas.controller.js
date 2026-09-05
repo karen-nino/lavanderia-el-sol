@@ -130,6 +130,17 @@ async function hayCargasPendientes(client, notaId) {
 // llegara pendiente, se queda en Por Entregar: FINALIZADA es terminal y
 // cerrarla ahí dejaría el cobro sin registrar y sin forma de hacerlo desde la
 // nota.
+// En autoservicio el cliente paga por adelantado: no se arranca una carga de una
+// nota que todavía debe. Es la contraparte del cierre automático — una nota que
+// arranca pagada llega al final pagada, y puede finalizarse sola sin dejar un
+// cobro sin registrar. Devuelve el mensaje para el cliente, o null si puede
+// correr. Por Encargo y Edredón no aplican: ahí se cobra al entregar.
+function bloqueoPorPagoPendiente(nota) {
+  return (nota?.tipo_servicio === 'AUTOSERVICIO' && nota.estado_pago !== 'PAGADO')
+    ? 'En autoservicio la nota se cobra antes de iniciar la carga. Registra el pago para poder arrancar la máquina.'
+    : null;
+}
+
 async function estadoAlTerminarCargas(client, notaId) {
   const { rows } = await client.query(
     'SELECT tipo_servicio, estado_pago FROM notas WHERE id = $1',
@@ -1112,6 +1123,11 @@ export const createNota = async (req, res) => {
       return res.status(400).json({ message: e.message });
     }
     if (idsActivar.length > 0) {
+      const bloqueo = bloqueoPorPagoPendiente({ tipo_servicio, estado_pago });
+      if (bloqueo) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ message: bloqueo });
+      }
       const { rows: maqs } = await client.query(
         'SELECT id, nombre, estado FROM maquinas WHERE id = ANY($1) FOR UPDATE',
         [idsActivar]
@@ -1400,6 +1416,17 @@ export const updateNota = async (req, res) => {
         }
         const tomar = [...despues].filter(mid => !maquinasAntes.includes(mid));
         if (tomar.length > 0) {
+          // Editar la nota es otra puerta para arrancar una máquina. Cuenta el
+          // pago que deja esta misma edición: el empleado puede cobrar y
+          // asignar la máquina de una sola vez.
+          const bloqueo = bloqueoPorPagoPendiente({
+            tipo_servicio: actual.tipo_servicio,
+            estado_pago: estado_pago ?? actual.estado_pago,
+          });
+          if (bloqueo) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ message: bloqueo });
+          }
           await client.query(
             `UPDATE maquinas SET estado = 'en_uso', en_uso_desde = NOW()
               WHERE id = ANY($1) AND estado = 'disponible'`,
@@ -1919,7 +1946,7 @@ export const activarMaquinasPendientes = async (req, res) => {
     await client.query('BEGIN');
 
     const { rows: notaRows } = await client.query(
-      'SELECT estado FROM notas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
+      'SELECT estado, tipo_servicio, estado_pago FROM notas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
       [id, req.sucursal]
     );
     if (notaRows.length === 0) {
@@ -1929,6 +1956,11 @@ export const activarMaquinasPendientes = async (req, res) => {
     if (['LISTA', 'PAGADA', 'FINALIZADA', 'CANCELADA'].includes(notaRows[0].estado)) {
       await client.query('ROLLBACK');
       return res.status(400).json({ message: `No se pueden activar máquinas de una nota ${palabra(notaRows[0].estado)}.` });
+    }
+    const bloqueoPago = bloqueoPorPagoPendiente(notaRows[0]);
+    if (bloqueoPago) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: bloqueoPago });
     }
 
     const ids = await maquinasDeNota(client, id);

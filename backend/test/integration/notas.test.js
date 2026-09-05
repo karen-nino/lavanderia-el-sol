@@ -87,7 +87,7 @@ describe('lecturas del modelo por cargas (invariantes que deben sobrevivir el re
     const crea = await request(app).post('/api/notas').set(auth(admin.token)).send({
       tipo_servicio: 'AUTOSERVICIO',
       tipo_prenda: 'ROPA',
-      estado_pago: 'PENDIENTE',
+      estado_pago: 'PAGADO', forma_pago: 'EFECTIVO',
       cargas: [{ lavadora_tipo: 'mediana' }],
     });
     const cargaId = crea.body.cargas[0].id;
@@ -244,10 +244,15 @@ describe('POST /api/notas — Por Encargo', () => {
 // pueden tenerla asignada. La primera que le da a "Iniciar" se la queda; las
 // demás reciben un aviso para cambiarla por otra.
 describe('quién se queda con la máquina: la primera que inicia', () => {
-  const crearConTipo = () => request(app).post('/api/notas').set(auth(admin.token)).send({
-    tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE',
-    cargas: [{ lavadora_tipo: 'mediana' }],
-  });
+  // Pagada por omisión: en autoservicio no se arranca una carga sin cobrar.
+  // Las que solo apartan la máquina para cancelarse después van sin pagar,
+  // porque una nota ya cobrada no se cancela sin revertir el pago primero.
+  const crearConTipo = ({ pagada = true } = {}) =>
+    request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA',
+      ...(pagada ? { estado_pago: 'PAGADO', forma_pago: 'EFECTIVO' } : { estado_pago: 'PENDIENTE' }),
+      cargas: [{ lavadora_tipo: 'mediana' }],
+    });
   const asignarACarga = (notaId, cargaId, maquinaId) =>
     request(app).patch(`/api/notas/${notaId}/asignar-carga-maquina`).set(auth(admin.token))
       .send({ carga_id: cargaId, slot: 'lavadora', maquina_id: maquinaId });
@@ -297,7 +302,7 @@ describe('quién se queda con la máquina: la primera que inicia', () => {
   it('cancelar la nota que NO la arrancó no apaga la lavadora de la que sí', async () => {
     const lav = await seedMaquina({ nombre: 'L-cancel', tipo: 'lavadora_mediana' });
     const a = (await crearConTipo()).body;
-    const b = (await crearConTipo()).body;
+    const b = (await crearConTipo({ pagada: false })).body;   // se va a cancelar
     await asignarACarga(a.id, a.cargas[0].id, lav).expect(200);
     await asignarACarga(b.id, b.cargas[0].id, lav).expect(200);
     await iniciar(a.id, lav).expect(200);
@@ -334,7 +339,8 @@ describe('quién se queda con la máquina: la primera que inicia', () => {
     const a = (await crearConTipo()).body;   // la va a usar de verdad
     // B tiene la misma lavadora asignada (aún libre) y además su secadora.
     const b = (await request(app).post('/api/notas').set(auth(admin.token)).send({
-      tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE',
+      tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA',
+      estado_pago: 'PAGADO', forma_pago: 'EFECTIVO',
       cargas: [{ lavadora_tipo: 'mediana', secadora_tipo: 'mediana' }],
     })).body;
     await asignarACarga(a.id, a.cargas[0].id, lav).expect(200);
@@ -515,7 +521,7 @@ describe('topes de precio por carga (solo Por Encargo)', () => {
   it('el tope no aplica a Autoservicio (solo tipo, sin tamaño)', async () => {
     await seedAjustes({ precio_carga_mediana: 70, tope_carga_grande: 50 });
     const res = await request(app).post('/api/notas').set(auth(admin.token)).send({
-      tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE',
+      tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PAGADO', forma_pago: 'EFECTIVO',
       cargas: [{ lavadora_tipo: 'mediana' }],
     });
     expect(res.status).toBe(201); // 70 > 50 pero autoservicio no tiene tope
@@ -529,7 +535,7 @@ describe('handlers de máquina — ciclo de vida', () => {
     const secadoraId = await seedMaquina({ nombre: 'Secadora 1', tipo: 'secadora', tamano: 'mediana' });
     // Nuevo flujo: crea con TIPO, asigna la lavadora física y la arranca → LAVANDO.
     const crea = await request(app).post('/api/notas').set(auth(admin.token)).send({
-      tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE',
+      tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PAGADO', forma_pago: 'EFECTIVO',
       cargas: [{ lavadora_tipo: 'mediana' }],
     });
     const cargaId = crea.body.cargas[0].id;
@@ -554,19 +560,20 @@ describe('handlers de máquina — ciclo de vida', () => {
     expect(rows.find(m => m.id === secadoraId).estado).toBe('en_uso');
   });
 
-  it('terminar-lavado-final (Autoservicio) finaliza la carga sin secado y deja la nota Lista', async () => {
+  it('terminar-lavado-final (Autoservicio) finaliza la carga sin secado y cierra la nota', async () => {
     const { notaId, lavadoraId } = await autoservicioLavando();
 
     const res = await request(app).patch(`/api/notas/${notaId}/terminar-lavado-final`)
       .set(auth(admin.token)).send({ lavadora_id: lavadoraId });
     expect(res.status).toBe(200);
-    expect(res.body.estado).toBe('LISTA'); // era la única máquina en uso
+    // Era la única máquina en uso, y en autoservicio no hay nada por entregar.
+    expect(res.body.estado).toBe('FINALIZADA');
 
     const { rows } = await pool.query('SELECT estado FROM maquinas WHERE id = $1', [lavadoraId]);
     expect(rows[0].estado).toBe('disponible');
   });
 
-  it('terminar-secado deja la nota Lista y libera la secadora', async () => {
+  it('terminar-secado cierra la nota de autoservicio y libera la secadora', async () => {
     const { notaId, lavadoraId, secadoraId } = await autoservicioLavando();
     await request(app).patch(`/api/notas/${notaId}/terminar-lavado`)
       .set(auth(admin.token)).send({ lavadora_id: lavadoraId, secadora_id: secadoraId }).expect(200);
@@ -574,7 +581,7 @@ describe('handlers de máquina — ciclo de vida', () => {
     const res = await request(app).patch(`/api/notas/${notaId}/terminar-secado`)
       .set(auth(admin.token)).send({ secadora_id: secadoraId });
     expect(res.status).toBe(200);
-    expect(res.body.estado).toBe('LISTA');
+    expect(res.body.estado).toBe('FINALIZADA');
 
     const { rows } = await pool.query('SELECT estado FROM maquinas WHERE id = $1', [secadoraId]);
     expect(rows[0].estado).toBe('disponible');
@@ -664,7 +671,8 @@ describe('handlers de máquina — asignar / cambiar / quitar', () => {
     const lavadoraId = await seedMaquina({ nombre: 'Lavadora 1', tipo: 'lavadora_mediana' });
     const secadoraId = await seedMaquina({ nombre: 'Secadora 1', tipo: 'secadora', tamano: 'mediana' });
     const creada = await request(app).post('/api/notas').set(auth(admin.token)).send({
-      tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE',
+      tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA',
+      estado_pago: 'PAGADO', forma_pago: 'EFECTIVO',
       cargas: [{ lavadora_tipo: 'mediana' }],
     });
     await request(app).patch(`/api/notas/${creada.body.id}/asignar-carga-maquina`).set(auth(admin.token))
@@ -817,7 +825,7 @@ describe('permisos por rol', () => {
   it('un empleado no puede eliminar una nota (403); un admin sí (204)', async () => {
     const empleado = await seedUsuario({ rol: 'operador', sucursal: 'centro', nombre: 'Empleado' });
     const creada = await request(app).post('/api/notas').set(auth(admin.token)).send({
-      tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE',
+      tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PAGADO', forma_pago: 'EFECTIVO',
       cargas: [{ lavadora_tipo: 'mediana' }],
     });
     const notaId = creada.body.id;
@@ -832,7 +840,7 @@ describe('cargas múltiples', () => {
     const lav1 = await seedMaquina({ nombre: 'Lavadora 1', tipo: 'lavadora_mediana' });
     const lav2 = await seedMaquina({ nombre: 'Lavadora 2', tipo: 'lavadora_mediana' });
     const res = await request(app).post('/api/notas').set(auth(admin.token)).send({
-      tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE',
+      tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PAGADO', forma_pago: 'EFECTIVO',
       cargas: [
         { lavadora_tipo: 'mediana' },
         { lavadora_tipo: 'mediana' },
@@ -944,7 +952,7 @@ describe('productos por tapa', () => {
   it('en Autoservicio el producto se vende por botella (precio_botella)', async () => {
     const prod = await seedProducto({ nombre: 'Suavizante', precio_botella: 15 });
     const res = await request(app).post('/api/notas').set(auth(admin.token)).send({
-      tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE',
+      tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PAGADO', forma_pago: 'EFECTIVO',
       cargas: [{ lavadora_tipo: 'mediana' }],
       productos: [{ producto_id: prod, cantidad: 2 }],
     });
@@ -1129,7 +1137,7 @@ describe('nota con varias cargas: no está lista hasta terminarlas todas', () =>
     const lav1 = await seedMaquina({ nombre: 'Lavadora 1', tipo: 'lavadora_mediana' });
     const lav2 = await seedMaquina({ nombre: 'Lavadora 2', tipo: 'lavadora_mediana' });
     const crea = await request(app).post('/api/notas').set(auth(admin.token)).send({
-      tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE',
+      tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PAGADO', forma_pago: 'EFECTIVO',
       cargas: [{ lavadora_tipo: 'mediana' }, { lavadora_tipo: 'mediana' }],
     });
     return { notaId: crea.body.id, cargas: crea.body.cargas, lav1, lav2 };
@@ -1152,7 +1160,7 @@ describe('nota con varias cargas: no está lista hasta terminarlas todas', () =>
     expect(res.body.estado).not.toBe('LISTA');
   });
 
-  it('al terminar TODAS las cargas la nota queda lista', async () => {
+  it('al terminar TODAS las cargas la nota se cierra', async () => {
     const { notaId, cargas, lav1, lav2 } = await notaDeDosCargas();
 
     await asignarYArrancar(notaId, cargas[0].id, lav1);
@@ -1163,7 +1171,7 @@ describe('nota con varias cargas: no está lista hasta terminarlas todas', () =>
     const res = await request(app).patch(`/api/notas/${notaId}/terminar-lavado-final`)
       .set(auth(admin.token)).send({ lavadora_id: lav2 });
     expect(res.status).toBe(200);
-    expect(res.body.estado).toBe('LISTA');
+    expect(res.body.estado).toBe('FINALIZADA'); // autoservicio pagado
   });
 
   it('una carga apenas asignada (sin arrancar) también retiene la nota', async () => {
@@ -1208,9 +1216,47 @@ describe('cierre automático de la nota al terminar sus cargas', () => {
     expect(res.body.estado).toBe('FINALIZADA');
   });
 
-  it('autoservicio que quedó a deber: se queda en Por Entregar para poder cobrarlo', async () => {
+  // Ya no se puede arrancar un autoservicio sin pagar, así que a este estado
+  // solo se llega revirtiendo el pago con la carga andando. Aun así la nota no
+  // debe cerrarse: FINALIZADA es terminal y el cobro quedaría sin registrar.
+  it('autoservicio al que le revirtieron el pago: se queda en Por Entregar', async () => {
+    const lav = await seedMaquina({ nombre: 'Lavadora rev', tipo: 'lavadora_mediana' });
+    const crea = await request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA',
+      estado_pago: 'PAGADO', forma_pago: 'EFECTIVO',
+      cargas: [{ lavadora_tipo: 'mediana' }],
+    });
+    expect(crea.status).toBe(201);
+    await arrancar(crea.body.id, crea.body.cargas[0].id, lav);
+    await request(app).patch(`/api/notas/${crea.body.id}/estado-pago`)
+      .set(auth(admin.token)).send({ estado_pago: 'PENDIENTE' }).expect(200);
+
+    const res = await request(app).patch(`/api/notas/${crea.body.id}/terminar-lavado-final`)
+      .set(auth(admin.token)).send({ lavadora_id: lav });
+    expect(res.status).toBe(200);
+    expect(res.body.estado).toBe('LISTA');
+  });
+
+  it('autoservicio sin pagar: no deja arrancar la carga', async () => {
+    const lav = await seedMaquina({ nombre: 'Lavadora sin pago', tipo: 'lavadora_mediana' });
+    const crea = await request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE',
+      cargas: [{ lavadora_tipo: 'mediana' }],
+    });
+    expect(crea.status).toBe(201);
+    await request(app).patch(`/api/notas/${crea.body.id}/asignar-carga-maquina`).set(auth(admin.token))
+      .send({ carga_id: crea.body.cargas[0].id, slot: 'lavadora', maquina_id: lav }).expect(200);
+
+    const res = await request(app).patch(`/api/notas/${crea.body.id}/activar-pendientes`)
+      .set(auth(admin.token)).send({ maquina_id: lav });
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/se cobra antes de iniciar/i);
+  });
+
+  it('por encargo sin pagar: sí arranca, ahí se cobra al entregar', async () => {
+    const clienteId = await seedCliente();
     const res = await terminarUnicaCarga({
-      tipo_servicio: 'AUTOSERVICIO', estado_pago: 'PENDIENTE',
+      tipo_servicio: 'POR_ENCARGO', cliente_id: clienteId, estado_pago: 'PENDIENTE',
     });
     expect(res.status).toBe(200);
     expect(res.body.estado).toBe('LISTA');
@@ -1231,7 +1277,7 @@ describe('cancelar una nota es cosa de administradores', () => {
   it('un empleado no puede cancelar', async () => {
     const empleado = await seedUsuario({ rol: 'operador', sucursal: 'centro', nombre: 'Empleado' });
     const nota = await request(app).post('/api/notas').set(auth(admin.token)).send({
-      tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE',
+      tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PAGADO', forma_pago: 'EFECTIVO',
       cargas: [{ lavadora_tipo: 'mediana' }],
     });
 
@@ -1284,7 +1330,7 @@ describe('una nota no se queda atascada si sobra una carga', () => {
   async function notaConCargaTerminadaYOtraSinUsar() {
     const lav = await seedMaquina({ nombre: 'Lavadora 1', tipo: 'lavadora_mediana' });
     const crea = await request(app).post('/api/notas').set(auth(admin.token)).send({
-      tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE',
+      tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PAGADO', forma_pago: 'EFECTIVO',
       cargas: [{ lavadora_tipo: 'mediana' }, { lavadora_tipo: 'mediana' }],
     });
     const notaId = crea.body.id;
@@ -1322,7 +1368,7 @@ describe('una nota no se queda atascada si sobra una carga', () => {
   it('no deja a la nota sin ninguna carga', async () => {
     const lav = await seedMaquina({ nombre: 'Única', tipo: 'lavadora_mediana' });
     const crea = await request(app).post('/api/notas').set(auth(admin.token)).send({
-      tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE',
+      tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PAGADO', forma_pago: 'EFECTIVO',
       cargas: [{ lavadora_tipo: 'mediana' }],
     });
     const res = await request(app).delete(`/api/notas/${crea.body.id}/cargas/${crea.body.cargas[0].id}`)
@@ -1347,7 +1393,7 @@ describe('editar una nota en proceso no borra lo que ya se lavó', () => {
   async function notaConUnaCargaLavada() {
     const lav = await seedMaquina({ nombre: 'Lavadora 1', tipo: 'lavadora_mediana' });
     const crea = await request(app).post('/api/notas').set(auth(admin.token)).send({
-      tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE',
+      tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PAGADO', forma_pago: 'EFECTIVO',
       cargas: [{ lavadora_tipo: 'mediana' }, { lavadora_tipo: 'mediana' }],
     });
     const notaId = crea.body.id;
