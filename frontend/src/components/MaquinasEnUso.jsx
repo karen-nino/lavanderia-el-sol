@@ -278,10 +278,13 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
       .filter(n => notaUsaMaquina(n, m.id)
                 && ['LAVANDO', 'SECANDO'].includes(n.estado))
       .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
+    // Encendida a mano y sin nota (mig. 104): no hay ciclo que contar, así que
+    // el contador mentiría con el tiempo de una carga que nadie pidió.
+    const soloManual = Boolean(m.encendida_manual_at) && !notaRel;
     const maquinaAumentada = {
       ...m,
-      progreso,
-      tiempo_restante: inicio ? formatMMSS(restanteSeg) : '—:—',
+      progreso: soloManual ? 1 : progreso,
+      tiempo_restante: soloManual || !inicio ? '—:—' : formatMMSS(restanteSeg),
       necesita_terminar_ciclo: Boolean(notaRel) && inicio != null && restanteSeg <= 0,
     };
     return (

@@ -2,6 +2,7 @@ import pool from '../db/pool.js';
 import { TZ_NEGOCIO } from '../utils/tz.js';
 import * as dispositivos from '../services/dispositivos/index.js';
 import { explicarFalla, resumirMotivo } from '../services/dispositivos/mensajes.js';
+import { HORAS_ENCENDIDO_MANUAL } from '../services/sincronizarSonoff.js';
 import { esAdmin } from '../middleware/roles.js';
 
 const ESTADOS_VALIDOS = ['disponible', 'en_uso', 'mantenimiento'];
@@ -662,6 +663,30 @@ export const apagarSonoff = async (req, res) => {
     const apagado = await apagarConReintentos(maq);
     console.log(`[maquinas] apagado de emergencia ${maq.nombre}: ${apagado.ok ? 'ok' : `falló (${apagado.motivo})`}`);
 
+    // Apagar cancela el encendido manual: si no se borrara la marca, el
+    // reconciliador volvería a prender la máquina que se acaba de cortar.
+    // La máquina se libera solo si estaba ocupada por ese encendido, no por una
+    // nota: ahí el estado lo maneja el flujo de la nota.
+    if (apagado.ok && maq.encendida_manual_at) {
+      await pool.query(
+        `UPDATE maquinas
+            SET encendida_manual_at = NULL,
+                estado       = CASE WHEN estado = 'en_uso' THEN 'disponible'::estado_maquina ELSE estado END,
+                en_uso_desde = CASE WHEN estado = 'en_uso' THEN NULL ELSE en_uso_desde END
+          WHERE id = $1
+            AND NOT EXISTS (
+              SELECT 1 FROM notas n
+               WHERE n.estado IN ('EN_ESPERA', 'LAVANDO', 'SECANDO')
+                 AND EXISTS (
+                   SELECT 1 FROM nota_cargas nc
+                    WHERE nc.nota_id = n.id
+                      AND (nc.lavadora_id = $1 OR nc.secadora_id = $1)
+                 )
+            )`,
+        [id]
+      );
+    }
+
     const actualizada = await guardarEnlace(id, apagado.ok, apagado.motivo);
 
     if (!apagado.ok) {
@@ -688,10 +713,10 @@ export const apagarSonoff = async (req, res) => {
 // que se cortó por un apagón, o dejarla andando mientras se revisa. Como el
 // equipo arranca de verdad, la UI pide confirmación antes de llamar aquí.
 //
-// No toca el estado operativo en la BD (igual que el apagado de emergencia):
-// solo manda la orden al dispositivo. OJO: mientras `maquinas.estado` no sea
-// 'en_uso', el reconciliador vuelve a apagarla en su siguiente pasada; ver el
-// comentario de jobs/reconciliarSonoff.js.
+// La máquina queda marcada como encendida a mano (mig. 104) y pasa a 'en_uso':
+// el reconciliador la respeta y deja de ofrecerse al crear notas y en Salidas,
+// porque está ocupada de verdad. Antes de la 104 este botón prendía la máquina
+// y el barrido la apagaba a los tres minutos.
 export const encenderSonoff = async (req, res) => {
   const { id } = req.params;
   try {
@@ -716,15 +741,35 @@ export const encenderSonoff = async (req, res) => {
     const encendido = await dispositivos.encender(maq);
     console.log(`[maquinas] encendido manual ${maq.nombre}: ${encendido.ok ? 'ok' : `falló (${encendido.motivo})`}`);
 
-    const actualizada = await guardarEnlace(id, encendido.ok, encendido.motivo);
-
     if (!encendido.ok) {
       return res.status(502).json({
         message: explicarFalla(encendido.motivo, `No se pudo encender ${maq.nombre}`),
-        maquina: actualizada,
+        maquina: await guardarEnlace(id, false, encendido.motivo),
       });
     }
-    res.json({ message: `Orden de encendido enviada a ${maq.nombre}.`, maquina: actualizada });
+
+    // Queda marcada como encendida a mano (mig. 104). Sin esto el reconciliador
+    // la apagaba en su siguiente pasada, o sea que el botón prendía la máquina
+    // por tres minutos. La marca además la pone 'en_uso': está ocupada de
+    // verdad, y así no se ofrece al crear notas ni en Salidas.
+    const { rows: upd } = await pool.query(
+      `UPDATE maquinas
+          SET encendida_manual_at = NOW(),
+              estado       = CASE WHEN estado = 'disponible' THEN 'en_uso'::estado_maquina ELSE estado END,
+              en_uso_desde = CASE WHEN estado = 'disponible' THEN NOW() ELSE en_uso_desde END,
+              sonoff_estado = 'enlazada',
+              sonoff_detalle = NULL,
+              sonoff_sync_at = NOW()
+        WHERE id = $1
+        RETURNING *`,
+      [id]
+    );
+
+    res.json({
+      message: `${maq.nombre} encendida. Queda ocupada hasta que la apagues; ` +
+               `si nadie lo hace, se libera sola en ${HORAS_ENCENDIDO_MANUAL} h.`,
+      maquina: upd[0],
+    });
   } catch (err) {
     console.error('encenderSonoff error:', err);
     res.status(500).json({ message: 'No se pudo encender la máquina. Intenta de nuevo.' });

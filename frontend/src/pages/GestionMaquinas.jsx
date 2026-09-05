@@ -36,6 +36,11 @@ const SONOFF_CFG = {
 // significa el estado, para que nadie tenga que adivinar ni apretar "Probar"
 // solo para enterarse.
 const sonoffExplicacion = (m) => {
+  // Ocupada sin nota: alguien la prendió a mano, con el botón o desde eWeLink
+  // (mig. 104). Sin decirlo, la tarjeta muestra "En uso" y nadie sabe de quién.
+  if (m.encendida_manual_at && !m.en_uso_folio) {
+    return 'Encendida a mano, sin nota. Queda ocupada hasta que la apagues.';
+  }
   if (!m.device_id) return 'Esta máquina no tiene un Sonoff asignado: no enciende ni apaga sola.';
   if (m.sonoff_estado === 'error') {
     return m.sonoff_detalle || 'La última orden al Sonoff no llegó. Prueba el enlace para ver por qué.';
@@ -323,6 +328,7 @@ export default function GestionMaquinas() {
   const encenderMaquina = async (m) => {
     if (!confirm(
       `Se va a ENCENDER "${m.nombre}" y se quedará encendida hasta que la apagues.\n\n` +
+      'Mientras tanto queda marcada como ocupada, así que no se podrá usar en una nota.\n\n' +
       'Asegúrate de que nadie la esté cargando ni tenga las manos dentro. ¿Continuar?'
     )) return;
 

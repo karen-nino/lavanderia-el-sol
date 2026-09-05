@@ -22,6 +22,10 @@ export default function MachineCard({ maquina, nota, onTerminarCiclo, onClick })
   const clienteTxt  = nota?.tipo_servicio === 'AUTOSERVICIO'
     ? 'Autoservicio'
     : formatearCliente(nota?.cliente_nombre, nota?.cliente_apellido);
+  // Una máquina puede estar en uso sin nota: alguien la prendió a mano, con el
+  // botón de Gestión o desde eWeLink (mig. 104). Sin decirlo, la tarjeta sale
+  // en blanco y parece un error.
+  const encendidaAMano = Boolean(maquina.encendida_manual_at) && !nota;
   const infoNota = (folioTxt || clienteTxt) ? (
     <div className="w-full text-center">
       {folioTxt && (
@@ -30,6 +34,11 @@ export default function MachineCard({ maquina, nota, onTerminarCiclo, onClick })
       {clienteTxt && (
         <p className="text-kpi-label text-grey text-sm font-medium truncate">{clienteTxt}</p>
       )}
+    </div>
+  ) : encendidaAMano ? (
+    <div className="w-full text-center">
+      <p className="text-card-title text-dark-grey text-base font-bold">Encendida a mano</p>
+      <p className="text-kpi-label text-grey text-sm font-medium">Sin nota</p>
     </div>
   ) : null;
 

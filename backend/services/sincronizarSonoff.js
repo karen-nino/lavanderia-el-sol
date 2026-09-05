@@ -2,12 +2,17 @@
 //
 // Toma el ESTADO que la máquina tiene en la BD como fuente de verdad y ordena
 // al dispositivo físico que coincida:
-//   maquinas.estado = 'en_uso'  → encender el Sonoff.
-//   cualquier otro estado       → apagar el Sonoff.
+//   maquinas.estado = 'en_uso', o encendido manual vigente → encender.
+//   cualquier otro caso                                    → apagar.
 //
-// Con una excepción: el barrido periódico no reenciende una máquina que quedó
-// apagada después de que una orden nuestra sí funcionó (ver `reconciliando`).
-// Apagar de más nunca es peligroso; encender de más, sí.
+// Con dos excepciones, ambas del barrido periódico (`reconciliando`), y ambas
+// por lo mismo: si la última orden nuestra SÍ se aplicó y el relé cambió
+// después, fue una persona, y a las personas no se les lleva la contraria.
+//   · La encontró apagada y debería estar encendida → la apagaron a mano; no
+//     se reenciende (arrancaría un equipo que alguien detuvo, quizá con las
+//     manos dentro).
+//   · La encontró encendida y debería estar apagada → la prendieron a mano; no
+//     se apaga, se adopta como encendido manual (mig. 104).
 //
 // Es idempotente: llamarlo de más no hace daño (vuelve a afirmar el mismo
 // estado). Nunca lanza: al llamarse después de operaciones ya confirmadas, un
@@ -24,7 +29,43 @@ import pool from '../db/pool.js';
 import * as dispositivos from './dispositivos/index.js';
 import { resumirMotivo } from './dispositivos/mensajes.js';
 
-const estadoDeseado = (estadoMaquina) => (estadoMaquina === 'en_uso' ? 'on' : 'off');
+// Cuánto vale un encendido manual antes de caducar (mig. 104). Un ciclo largo
+// no pasa de una hora; el margen es para que nadie se quede sin máquina porque
+// alguien la prendió y se olvidó, sin apagarle el lavado a nadie a media carga.
+export const HORAS_ENCENDIDO_MANUAL = (() => {
+  const h = Number(process.env.SONOFF_ENCENDIDO_MANUAL_HORAS);
+  return Number.isFinite(h) && h > 0 ? h : 3;
+})();
+
+// ¿El encendido manual sigue vigente?
+export const manualVigente = (maq) => {
+  if (!maq?.encendida_manual_at) return false;
+  const desde = new Date(maq.encendida_manual_at).getTime();
+  return Number.isFinite(desde) && Date.now() - desde < HORAS_ENCENDIDO_MANUAL * 60 * 60 * 1000;
+};
+
+// Una máquina debe estar encendida si la está usando una nota O si alguien la
+// prendió a mano y esa marca no ha caducado (mig. 104).
+const estadoDeseado = (maq) =>
+  maq.estado === 'en_uso' || manualVigente(maq) ? 'on' : 'off';
+
+// ¿Hay una nota trabajando con esta máquina ahora mismo? Se pregunta antes de
+// soltar un encendido manual caducado: si en el camino una nota se adueñó de la
+// máquina, dejarla 'disponible' la ofrecería estando cargada.
+async function notaEnCurso(maquinaId) {
+  const { rows } = await pool.query(
+    `SELECT 1 FROM notas n
+      WHERE n.estado IN ('EN_ESPERA', 'LAVANDO', 'SECANDO')
+        AND EXISTS (
+          SELECT 1 FROM nota_cargas nc
+           WHERE nc.nota_id = n.id
+             AND (nc.lavadora_id = $1 OR nc.secadora_id = $1)
+        )
+      LIMIT 1`,
+    [maquinaId]
+  );
+  return rows.length > 0;
+}
 
 // Junto al estado se guarda POR QUÉ falló (mig. 103). Este servicio corre solo
 // —en cada arranque/fin de carga y en el barrido periódico—, así que casi
@@ -40,6 +81,43 @@ async function marcar(id, sonoffEstado, motivo = null) {
   return rows[0] ?? null;
 }
 
+// Registra que la máquina se prendió por fuera de la app y la deja ocupada:
+// mientras esté así no se ofrece al crear notas ni en Salidas, porque de verdad
+// lo está. Se avisa en la campana, que es la única forma de que alguien se
+// entere de que una máquina se apartó sola.
+async function adoptarEncendidoManual(maq) {
+  const { rows } = await pool.query(
+    `UPDATE maquinas
+        SET encendida_manual_at = COALESCE(encendida_manual_at, NOW()),
+            estado       = CASE WHEN estado = 'disponible' THEN 'en_uso'::estado_maquina ELSE estado END,
+            en_uso_desde = CASE WHEN estado = 'disponible' THEN NOW() ELSE en_uso_desde END,
+            sonoff_estado = 'enlazada',
+            sonoff_detalle = NULL,
+            sonoff_sync_at = NOW()
+      WHERE id = $1
+      RETURNING *`,
+    [maq.id]
+  );
+  const actualizada = rows[0] ?? maq;
+
+  // Solo la primera vez: el barrido pasa cada pocos minutos y llenaría la
+  // campana con el mismo aviso.
+  if (!maq.encendida_manual_at) {
+    console.warn(`[sonoff] ${maq.nombre ?? maq.id} apareció encendida sin nota: se prendió a mano. No se apaga.`);
+    try {
+      await pool.query(
+        `INSERT INTO notificaciones (tipo, mensaje, maquina_id, sucursal)
+         VALUES ('encendido_manual', $1, $2, $3)`,
+        [`${maq.nombre} se encendió a mano y quedó ocupada`, maq.id, maq.sucursal]
+      );
+    } catch (err) {
+      // El aviso es un extra: que falle no debe deshacer la adopción.
+      console.error('[sonoff] no se pudo avisar del encendido manual:', err.message);
+    }
+  }
+  return actualizada;
+}
+
 // Sincroniza UNA máquina (por id). Devuelve la fila actualizada, o null si no
 // existe. No lanza.
 //
@@ -49,17 +127,36 @@ async function marcar(id, sonoffEstado, motivo = null) {
 export async function sincronizarSonoff(maquinaId, { reconciliando = false } = {}) {
   try {
     const { rows } = await pool.query(
-      'SELECT id, nombre, estado, device_id, device_canal, sonoff_estado FROM maquinas WHERE id = $1',
+      `SELECT id, nombre, estado, sucursal, device_id, device_canal, sonoff_estado, encendida_manual_at
+         FROM maquinas WHERE id = $1`,
       [maquinaId]
     );
     if (rows.length === 0) return null;
-    const maq = rows[0];
+    let maq = rows[0];
 
     if (!dispositivos.tieneDispositivo(maq)) {
       return marcar(maq.id, 'sin_enlazar');
     }
 
-    const deseado = estadoDeseado(maq.estado);
+    // Encendido manual caducado: la máquina se suelta y sigue el camino normal,
+    // que ahora la quiere apagada. Solo si ninguna nota se la quedó mientras
+    // tanto.
+    let liberadaPorCaducidad = false;
+    if (maq.encendida_manual_at && !manualVigente(maq) && !(await notaEnCurso(maq.id))) {
+      const { rows: libre } = await pool.query(
+        `UPDATE maquinas
+            SET encendida_manual_at = NULL,
+                estado       = CASE WHEN estado = 'en_uso' THEN 'disponible'::estado_maquina ELSE estado END,
+                en_uso_desde = CASE WHEN estado = 'en_uso' THEN NULL ELSE en_uso_desde END
+          WHERE id = $1 RETURNING *`,
+        [maq.id]
+      );
+      console.log(`[sonoff] ${maq.nombre ?? maq.id}: el encendido manual caducó; queda libre y se apaga.`);
+      maq = libre[0] ?? maq;
+      liberadaPorCaducidad = true;
+    }
+
+    const deseado = estadoDeseado(maq);
 
     // El barrido NO vuelve a encender una máquina que quedó apagada si la
     // última orden que le mandamos sí se aplicó ('enlazada'): en ese caso el
@@ -78,6 +175,28 @@ export async function sincronizarSonoff(maquinaId, { reconciliando = false } = {
           'la apagaron a mano. No se reenciende.'
         );
         return marcar(maq.id, 'enlazada');
+      }
+      return marcar(maq.id, real.ok ? 'enlazada' : 'error', real.motivo);
+    }
+
+    // El espejo de la regla de arriba. El barrido tampoco APAGA una máquina que
+    // encontró andando cuando la última orden nuestra —un apagado— sí se
+    // aplicó: si el relé volvió a cerrarse después, fue una persona. Pasa con
+    // el botón "Encender" de Gestión y con quien la prende desde la app de
+    // eWeLink; hasta ahora el barrido la cortaba a los 3 minutos, con ropa
+    // dentro. Se adopta como encendido manual (mig. 104) en vez de apagarla.
+    //
+    // Si la última orden FALLÓ ('error'), el apagado nunca ocurrió y la máquina
+    // sigue andando por eso, no porque alguien la prendiera: ahí se reintenta.
+    // `liberadaPorCaducidad` excluye el caso que acabamos de resolver: la
+    // máquina sigue encendida justo porque se le venció el permiso, y volver a
+    // adoptarla aquí lo renovaría para siempre. La caducidad tiene que ganar:
+    // es la red que apaga lo que alguien prendió y olvidó.
+    if (deseado === 'off' && reconciliando && !liberadaPorCaducidad && maq.sonoff_estado === 'enlazada') {
+      const real = await dispositivos.estado(maq);
+      if (dispositivos.esSimulacion()) return maq;
+      if (real.ok && real.estado === 'on') {
+        return adoptarEncendidoManual(maq);
       }
       return marcar(maq.id, real.ok ? 'enlazada' : 'error', real.motivo);
     }
