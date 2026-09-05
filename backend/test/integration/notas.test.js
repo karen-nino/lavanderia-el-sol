@@ -1295,6 +1295,43 @@ describe('cierre automático de la nota al terminar sus cargas', () => {
     expect(mov.rows.map(r => r.tipo)).toEqual(['venta']);
   });
 
+  // Terminar dos veces la misma carga antes solo reescribía LISTA (inofensivo);
+  // ahora cierra la nota y descuenta inventario, así que repetirlo descuadraría
+  // el stock. Lo impide la guarda de estado bajo el FOR UPDATE de la nota.
+  it('terminar dos veces la misma carga no descuenta el producto dos veces', async () => {
+    const prod = await seedProducto({
+      nombre: 'Detergente doble', precio_botella: 30, stock_actual: 100,
+      tipo_liquido: 'marca', botella_ml: 800, tapa_ml: 200,
+    });
+    const lav = await seedMaquina({ nombre: 'Lavadora doble', tipo: 'lavadora_mediana' });
+    const crea = await request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA',
+      estado_pago: 'PAGADO', forma_pago: 'EFECTIVO',
+      cargas: [{ lavadora_tipo: 'mediana', productos: [{ producto_id: prod, cantidad: 1 }] }],
+    });
+    await arrancar(crea.body.id, crea.body.cargas[0].id, lav);
+
+    await request(app).patch(`/api/notas/${crea.body.id}/terminar-lavado-final`)
+      .set(auth(admin.token)).send({ lavadora_id: lav }).expect(200);
+    const trasPrimera = await pool.query(
+      'SELECT stock_actual FROM productos WHERE id = $1', [prod]);
+
+    // El segundo intento se rechaza: la nota ya no está en proceso.
+    const repetido = await request(app).patch(`/api/notas/${crea.body.id}/terminar-lavado-final`)
+      .set(auth(admin.token)).send({ lavadora_id: lav });
+    expect(repetido.status).toBe(400);
+
+    const trasSegunda = await pool.query(
+      'SELECT stock_actual FROM productos WHERE id = $1', [prod]);
+    expect(Number(trasSegunda.rows[0].stock_actual))
+      .toBe(Number(trasPrimera.rows[0].stock_actual));
+    // Y una sola venta en el historial de inventario.
+    const mov = await pool.query(
+      'SELECT tipo FROM producto_movimientos WHERE nota_id = $1 AND producto_id = $2',
+      [crea.body.id, prod]);
+    expect(mov.rows).toHaveLength(1);
+  });
+
   it('por encargo sin pagar: sí arranca, ahí se cobra al entregar', async () => {
     const clienteId = await seedCliente();
     const res = await terminarUnicaCarga({
