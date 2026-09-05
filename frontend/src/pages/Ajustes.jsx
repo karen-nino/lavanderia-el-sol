@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { api, mensajeDeError } from '../lib/api';
 import InstalarApp from '../components/InstalarApp';
+import { useInstalacion } from '../lib/useInstalacion';
 import { formatTelefono } from '../lib/telefono';
 import { useAuth } from '../context/AuthContext';
 import { esAdminMain as esAdminMainFn } from '../lib/roles';
@@ -74,6 +75,12 @@ const SectionIcon = {
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 8h8M8 12h8M8 16h5" />
     </svg>
   ),
+  instalar: (
+    <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+        d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" />
+    </svg>
+  ),
   // Caja de inventario (Lucide "package").
   inventario: (
     <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -127,6 +134,17 @@ const MOBILE_SECTIONS = [
   { id: 'inventario', label: 'Inventario',              subtitle: 'Marcas y envases de productos', icon: SectionIcon.inventario },
   { id: 'ticket',   label: 'Ticket',                   subtitle: 'Notas al pie del ticket', icon: SectionIcon.ticket },
 ];
+
+// Instalar la app no es configuración del negocio, sino una acción del equipo
+// que se está usando: se ofrece aparte de MOBILE_SECTIONS porque aparece
+// también en el entorno de pruebas, y solo si el navegador la admite.
+const SECCION_INSTALAR = {
+  id: 'instalar', label: 'Instalar la app', subtitle: 'Tenerla en la pantalla de inicio',
+  icon: SectionIcon.instalar,
+};
+
+// Secciones que no guardan nada: su contenido se administra solo.
+const SECCIONES_SIN_GUARDAR = ['etiquetas', 'inventario', 'instalar'];
 
 // Encabezado de un grupo de campos dentro de una sección. Va por encima de las
 // etiquetas de campo (que son bold), porque antes se perdía entre ellas: iba en
@@ -604,6 +622,9 @@ export default function Ajustes() {
   const [logoPreview,   setLogoPreview]   = useState(null);
   const [mensaje,       setMensaje]       = useState(null);
   const [mobileSection, setMobileSection] = useState(null);
+  // Decide si el menú lleva la fila "Instalar la app": depende del equipo, no
+  // de la configuración del negocio.
+  const { sePuedeInstalar } = useInstalacion();
   const [perfilForm,    setPerfilForm]    = useState(() => ({
     nombre: usuario?.nombre ?? '',
     apellido: usuario?.apellido ?? '',
@@ -1896,6 +1917,7 @@ export default function Ajustes() {
     etiquetas: seccionEtiquetasMobile,
     inventario: seccionInventarioMobile,
     ticket: seccionTicketMobile,
+    instalar: <InstalarApp variant="mobile" />,
   };
 
   // Éxitos: banner verde en línea. Errores: modal (igual que autoservicio).
@@ -1936,9 +1958,10 @@ export default function Ajustes() {
   );
 
   // En el entorno de pruebas solo se ofrece "Mi Perfil": el resto es del negocio.
-  const seccionesMobile = soloPerfil
-    ? MOBILE_SECTIONS.filter((s) => s.id === 'perfil')
-    : MOBILE_SECTIONS;
+  const seccionesMobile = [
+    ...(soloPerfil ? MOBILE_SECTIONS.filter((s) => s.id === 'perfil') : MOBILE_SECTIONS),
+    ...(sePuedeInstalar ? [SECCION_INSTALAR] : []),
+  ];
   const activeSection = seccionesMobile.find((s) => s.id === mobileSection);
 
   // Aviso fijo del entorno de pruebas, arriba de la lista de ajustes.
@@ -1980,10 +2003,6 @@ export default function Ajustes() {
                   onClick={() => setMobileSection(s.id)}
                 />
               ))}
-              {/* Instalar la app en este equipo. No es configuración del
-                  negocio: es una acción del teléfono que se está usando, por
-                  eso va aquí suelta y no como una sección más. */}
-              <InstalarApp variant="mobile" />
             </div>
           </>
         ) : (
@@ -2008,7 +2027,7 @@ export default function Ajustes() {
             <div className="px-6 py-6 space-y-6">
             {mobileSectionContent[activeSection.id]}
 
-            {activeSection.id !== 'etiquetas' && activeSection.id !== 'inventario' && (
+            {!SECCIONES_SIN_GUARDAR.includes(activeSection.id) && (
             <div className="grid grid-cols-2 gap-3 pt-8">
               <button
                 type="button"

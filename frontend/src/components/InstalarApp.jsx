@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
-import { leerEstadoInstalacion, suscribirse, lanzarInstalacion, estaInstalada } from '../lib/pwa';
+import { useState } from 'react';
+import { lanzarInstalacion } from '../lib/pwa';
+import { useInstalacion } from '../lib/useInstalacion';
 
 // Botón para instalar la app en el teléfono o la tablet, desde Ajustes.
 //
@@ -74,26 +75,18 @@ function AyudaIPhone({ onClose }) {
 }
 
 export default function InstalarApp({ variant = 'desktop' }) {
-  const [estado, setEstado] = useState(leerEstadoInstalacion);
+  const { comoInstalar, sePuedeInstalar, marcarInstalada } = useInstalacion();
   const [ayudaIOS, setAyudaIOS] = useState(false);
-  const [instalada, setInstalada] = useState(estaInstalada);
-
-  // El aviso de Chrome puede llegar después de pintar la pantalla, así que el
-  // botón aparece solo cuando llega.
-  useEffect(() => suscribirse(() => {
-    setEstado(leerEstadoInstalacion());
-    setInstalada(estaInstalada());
-  }), []);
 
   const handleInstalar = async () => {
-    if (estado.comoInstalar === 'ios') { setAyudaIOS(true); return; }
+    if (comoInstalar === 'ios') { setAyudaIOS(true); return; }
     const r = await lanzarInstalacion();
-    if (r === 'aceptada') setInstalada(true);
+    if (r === 'aceptada') marcarInstalada();
   };
 
-  if (instalada || !estado.disponible) return null;
+  if (!sePuedeInstalar) return null;
 
-  const descripcion = estado.comoInstalar === 'ios'
+  const descripcion = comoInstalar === 'ios'
     ? 'Queda con su ícono en la pantalla de inicio y se abre sin la barra del navegador. Te explicamos cómo.'
     : 'Queda con su ícono en la pantalla de inicio y se abre sin la barra del navegador, como cualquier app.';
 
@@ -104,22 +97,17 @@ export default function InstalarApp({ variant = 'desktop' }) {
       className="flex items-center justify-center gap-2 w-full md:w-auto px-6 py-3.5 bg-blue hover:opacity-90 text-white text-base font-medium rounded-lg transition-colors"
     >
       {IconoInstalar}
-      {estado.comoInstalar === 'ios' ? 'Cómo instalarla' : 'Instalar app'}
+      {comoInstalar === 'ios' ? 'Cómo instalarla' : 'Instalar app'}
     </button>
   );
 
-  // Móvil: una tarjeta más en la lista de Ajustes. Escritorio: dentro del
-  // marco de sección que usan las demás.
+  // Móvil: el contenido de su propia sección de Ajustes, que ya pone el título
+  // arriba. Escritorio: dentro del marco de sección que usan las demás.
   if (variant === 'mobile') {
     return (
       <>
-        <div className="bg-white rounded-card shadow-sm px-4 py-5 space-y-3">
-          <div>
-            <p className="text-base font-medium text-dark-blue">Instalar la app</p>
-            <p className="text-sm text-grey mt-1">{descripcion}</p>
-          </div>
-          {boton}
-        </div>
+        <p className="text-base text-grey leading-relaxed">{descripcion}</p>
+        {boton}
         {ayudaIOS && <AyudaIPhone onClose={() => setAyudaIOS(false)} />}
       </>
     );
