@@ -3,7 +3,6 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { toBlob } from 'html-to-image';
 import { etiquetaProducto, ordenProducto } from '../lib/formatoInventario';
 import { api } from '../lib/api';
-import { formatFechaHora12 } from '../lib/fecha';
 import { maquinasDeCarga, cargaVisibleEnTicket } from '../lib/ticketCargas';
 import { notaAlPieDeTicket } from '../lib/ticketNotaPie';
 
@@ -61,14 +60,24 @@ function nombreProd(p) {
   return etiquetaProducto(p) + (p.tipo_liquido === 'granel' ? ' · Granel' : '');
 }
 
+// En el ticket las fechas van como en un recibo impreso: 04/09/2026, y la hora
+// de 24 h (14:08). En el resto de la app se siguen viendo como siempre
+// ("04 sep 2026, 02:08 pm"); aquí manda el formato del papel.
 function fmtFecha(iso) {
   if (!iso) return '—';
-  return new Date(iso).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
+  return new Date(iso).toLocaleDateString('es-MX', {
+    day: '2-digit', month: '2-digit', year: 'numeric',
+  });
 }
 
 function fmtFechaHora(iso) {
   if (!iso) return '—';
-  return formatFechaHora12(iso);
+  // hourCycle 'h23' y no `hour12: false`: este último puede imprimir la
+  // medianoche como 24:00 en vez de 00:00.
+  const hora = new Date(iso).toLocaleTimeString('es-MX', {
+    hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  });
+  return `${fmtFecha(iso)} ${hora}`;
 }
 
 // Fila del ticket: etiqueta a la izquierda, valor a la derecha. Estilo recibo.
@@ -106,7 +115,9 @@ function Asteriscos() {
 // mismo desglose que se ve en pantalla (cargas, máquinas, productos).
 function armarTextoTicket(nota, rfc, notaPie) {
   const L = ['*Lavandería El Sol*'];
-  // El R.F.C. sale tal cual se capturó en Ajustes (es texto libre).
+  // Misma cabecera que el recibo impreso: dirección de la sucursal y luego el
+  // R.F.C. (que sale tal cual se capturó en Ajustes, es texto libre).
+  if (nota.sucursal_direccion) L.push(nota.sucursal_direccion);
   if (rfc) L.push(rfc);
   L.push(`Nota: ${nota.folio ?? `#${nota.id}`}`);
 
@@ -433,6 +444,12 @@ export default function TicketNota() {
           {/* Encabezado del negocio */}
           <div className="text-center">
             <p className="text-sm font-bold tracking-[0.15em]">LAVANDERÍA EL SOL</p>
+            {/* Dirección de la sucursal DONDE SE HIZO la nota (no la del
+                negocio): con varias sucursales, el ticket tiene que decir a
+                cuál volver. Se omite si esa sucursal no la tiene capturada. */}
+            {nota.sucursal_direccion && (
+              <p className="mt-1">{nota.sucursal_direccion.toUpperCase()}</p>
+            )}
             {/* El R.F.C. sale tal cual se capturó en Ajustes (es texto libre). */}
             {rfcNegocio && <p className="mt-1">R.F.C. {rfcNegocio}</p>}
             <p className="mt-1">NOTA {nota.folio ?? `#${nota.id}`}</p>

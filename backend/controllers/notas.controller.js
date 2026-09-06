@@ -847,6 +847,7 @@ export const getNotas = async (req, res) => {
               c.telefono AS cliente_telefono,
               TRIM(u.nombre || ' ' || COALESCE(u.apellido, '')) AS usuario_nombre,
               su.nombre  AS sucursal_nombre,
+              su.direccion AS sucursal_direccion,
               (SELECT COALESCE(json_agg(DISTINCT x.mid), '[]'::json)
                  FROM (${SQL_MAQUINAS_DE_NOTA}) x
                 WHERE x.mid IS NOT NULL) AS maquinas_ids,
@@ -914,6 +915,7 @@ export const getNotaById = async (req, res) => {
               c.telefono AS cliente_telefono,
               TRIM(u.nombre || ' ' || COALESCE(u.apellido, '')) AS usuario_nombre,
               su.nombre  AS sucursal_nombre,
+              su.direccion AS sucursal_direccion,
               -- ¿Todavía se puede corregir la forma de pago? Solo mientras la
               -- caja donde se cobró siga ABIERTA: ahí el corte se calcula en
               -- vivo y se corrige solo. Con la caja cerrada las cifras quedaron
