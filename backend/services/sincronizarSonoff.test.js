@@ -191,6 +191,38 @@ describe('el encendido manual caduca', () => {
     expect(driver.apagar).toHaveBeenCalledTimes(1);
   });
 
+  it('la apagaron a mano antes de caducar: se suelta en el acto', async () => {
+    // Prendieron la lavadora desde eWeLink (la app la adoptó y la dejó ocupada)
+    // y al rato la apagaron desde ahí mismo. Sin esto se quedaba apartada las
+    // 3 h del permiso: una lavadora libre que el mostrador no podía usar.
+    filas.maquina = {
+      ...maquinaEnUso('enlazada'), estado: 'en_uso', encendida_manual_at: haceHoras(1),
+    };
+    driver.estado.mockResolvedValueOnce({ ok: true, estado: 'off' });
+
+    const res = await sincronizarSonoff(1, { reconciliando: true });
+
+    expect(res.encendida_manual_at).toBeNull();
+    expect(res.estado).toBe('disponible');
+    expect(driver.encender).not.toHaveBeenCalled(); // no se le lleva la contraria
+  });
+
+  it('la apagaron a mano pero una nota la está usando: NO la suelta', async () => {
+    // Aquí el estado lo manda el flujo de la nota, no el relé: soltarla
+    // ofrecería una máquina cargada.
+    hayNotaEnCurso = true;
+    filas.maquina = {
+      ...maquinaEnUso('enlazada'), estado: 'en_uso', encendida_manual_at: haceHoras(1),
+    };
+    driver.estado.mockResolvedValueOnce({ ok: true, estado: 'off' });
+
+    const res = await sincronizarSonoff(1, { reconciliando: true });
+
+    expect(res.estado).toBe('en_uso');
+    expect(res.encendida_manual_at).toBeTruthy();
+    expect(driver.encender).not.toHaveBeenCalled();
+  });
+
   it('caducado pero con una nota usándola: NO la suelta', async () => {
     // Entre el encendido a mano y la caducidad, una nota se quedó la máquina.
     // Soltarla la ofrecería estando cargada.

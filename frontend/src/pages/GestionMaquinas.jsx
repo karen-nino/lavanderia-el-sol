@@ -49,13 +49,6 @@ const sonoffExplicacion = (m) => {
   return null;
 };
 
-// El apagado de emergencia queda oculto mientras el control de los Sonoff está
-// desactivado en producción (DISPOSITIVOS_DRIVER=null, ver CONTEXTO_PROYECTO):
-// hoy solo respondería "modo simulación", así que ofrecerlo engaña a quien lo
-// aprieta creyendo que cortó una máquina. Volver a poner en true cuando se
-// reactive el driver de eWeLink.
-const MOSTRAR_APAGADO_EMERGENCIA = false;
-
 const INPUT_CLS =
   'w-full px-4 py-3.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent transition';
 
@@ -142,6 +135,14 @@ export default function GestionMaquinas() {
   };
 
   useEffect(() => { cargarCuentaSonoff(); }, [esAdmin]);
+
+  // El apagado de emergencia solo se ofrece cuando el backend manda órdenes de
+  // verdad: en simulación respondería "modo simulación" y quien lo aprieta
+  // creería que cortó una máquina que sigue girando. Lo decide el servidor
+  // (`/ewelink/estado`) y no una bandera escrita a mano, para que el botón
+  // aparezca solo con reactivar el driver, sin depender de acordarse de venir
+  // a editar este archivo.
+  const mostrarApagadoEmergencia = Boolean(cuentaSonoff) && !cuentaSonoff.simulado;
 
   // Autorizar ocurre en otra pestaña (la de eWeLink), así que al regresar a
   // esta se vuelve a preguntar en vez de obligar a recargar la página.
@@ -783,8 +784,8 @@ export default function GestionMaquinas() {
                       </button>
                       {/* Apagar SIEMPRE está disponible, incluso con la máquina
                           en uso: es el botón al que se corre cuando algo quedó
-                          andando y no debería. Oculto por ahora (ver la bandera). */}
-                      {MOSTRAR_APAGADO_EMERGENCIA && (
+                          andando y no debería. */}
+                      {mostrarApagadoEmergencia && (
                         <button
                           type="button" onClick={handleApagarYa} disabled={apagando}
                           className="text-sm font-semibold text-white bg-red-600 rounded-lg px-4 py-2 hover:bg-red-700 disabled:opacity-60 transition-colors"
@@ -795,7 +796,7 @@ export default function GestionMaquinas() {
                     </div>
                     <p className="mt-1.5 text-xs text-gray-400">
                       "Probar enlace" solo consulta el dispositivo; no mueve la máquina.
-                      {MOSTRAR_APAGADO_EMERGENCIA && ' "Apagar ahora" corta el Sonoff de inmediato.'}
+                      {mostrarApagadoEmergencia && ' "Apagar ahora" corta el Sonoff de inmediato.'}
                     </p>
                     {probarMsg && (
                       <p className={`mt-1.5 text-sm font-medium ${

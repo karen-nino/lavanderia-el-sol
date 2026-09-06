@@ -118,6 +118,21 @@ async function adoptarEncendidoManual(maq) {
   return actualizada;
 }
 
+// Suelta un encendido manual: borra la marca y, si la máquina estaba ocupada
+// solo por ella, la devuelve a 'disponible'. Quien llama ya comprobó que
+// ninguna nota la esté usando.
+async function liberarEncendidoManual(id) {
+  const { rows } = await pool.query(
+    `UPDATE maquinas
+        SET encendida_manual_at = NULL,
+            estado       = CASE WHEN estado = 'en_uso' THEN 'disponible'::estado_maquina ELSE estado END,
+            en_uso_desde = CASE WHEN estado = 'en_uso' THEN NULL ELSE en_uso_desde END
+      WHERE id = $1 RETURNING *`,
+    [id]
+  );
+  return rows[0] ?? null;
+}
+
 // Sincroniza UNA máquina (por id). Devuelve la fila actualizada, o null si no
 // existe. No lanza.
 //
@@ -143,16 +158,8 @@ export async function sincronizarSonoff(maquinaId, { reconciliando = false } = {
     // tanto.
     let liberadaPorCaducidad = false;
     if (maq.encendida_manual_at && !manualVigente(maq) && !(await notaEnCurso(maq.id))) {
-      const { rows: libre } = await pool.query(
-        `UPDATE maquinas
-            SET encendida_manual_at = NULL,
-                estado       = CASE WHEN estado = 'en_uso' THEN 'disponible'::estado_maquina ELSE estado END,
-                en_uso_desde = CASE WHEN estado = 'en_uso' THEN NULL ELSE en_uso_desde END
-          WHERE id = $1 RETURNING *`,
-        [maq.id]
-      );
       console.log(`[sonoff] ${maq.nombre ?? maq.id}: el encendido manual caducó; queda libre y se apaga.`);
-      maq = libre[0] ?? maq;
+      maq = (await liberarEncendidoManual(maq.id)) ?? maq;
       liberadaPorCaducidad = true;
     }
 
@@ -170,6 +177,19 @@ export async function sincronizarSonoff(maquinaId, { reconciliando = false } = {
       const real = await dispositivos.estado(maq);
       if (dispositivos.esSimulacion()) return maq;
       if (real.ok && real.estado === 'off') {
+        // Si lo único que la tenía ocupada era un encendido manual y el relé ya
+        // está abierto, quien la prendió la apagó: se suelta en el acto. Sin
+        // esto la máquina se quedaba apartada hasta que caducara el permiso
+        // (3 h), y en el mostrador eso es una lavadora libre que la app no deja
+        // usar. Con una nota en curso no se toca: ese estado lo manda el flujo
+        // de la nota, no el relé.
+        if (maq.encendida_manual_at && !(await notaEnCurso(maq.id))) {
+          console.log(
+            `[sonoff] ${maq.nombre ?? maq.id}: la apagaron a mano; se suelta el encendido manual.`
+          );
+          await liberarEncendidoManual(maq.id);
+          return marcar(maq.id, 'enlazada');
+        }
         console.warn(
           `[sonoff] ${maq.nombre ?? maq.id} está apagada pero su nota sigue en uso: ` +
           'la apagaron a mano. No se reenciende.'

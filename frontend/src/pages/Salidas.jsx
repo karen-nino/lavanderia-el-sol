@@ -11,13 +11,14 @@ function fmtMonto(n) {
   return n != null ? `$${Number(n).toFixed(2)}` : '—';
 }
 
-// "Detener Lavado"/"Detener Secado" quedan ocultos mientras el control de los
-// Sonoff está desactivado en producción (DISPOSITIVOS_DRIVER=null, ver
-// CONTEXTO_PROYECTO): detener el ciclo libera la máquina en la BD y con eso
-// manda apagarla, pero hoy esa orden no llega al equipo — se quedaría girando
-// con la carga ya dada por terminada. Volver a poner en true cuando se reactive
-// el driver de eWeLink.
-const MOSTRAR_DETENER_CICLO = false;
+// "Detener Lavado"/"Detener Secado": detener el ciclo libera la máquina en la
+// BD y con eso manda apagarla. Estuvo oculto mientras el control de los Sonoff
+// estaba desactivado en producción, porque la orden no llegaba al equipo y la
+// máquina se quedaba girando con la carga ya dada por terminada. Se vuelve a
+// mostrar junto con la reactivación del driver de eWeLink (ver
+// CONTEXTO_PROYECTO); esta pantalla la usan también los empleados, que no
+// pueden consultar el estado del driver, así que aquí sí es una bandera.
+const MOSTRAR_DETENER_CICLO = true;
 
 const BADGE_MAQUINA_ESTADO = {
   // "disponible" aquí = máquina asignada a la carga pero sin iniciar (En espera): gris.
