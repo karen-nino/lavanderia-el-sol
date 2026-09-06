@@ -370,7 +370,7 @@ export default function TicketNota() {
     const totalCarga = costoDeCarga(cg);
 
     return (
-      <div key={cg.id}>
+      <div key={cg.id} className="space-y-1">
         <div className="flex items-baseline justify-between gap-2 font-bold">
           <span className="uppercase whitespace-nowrap">Carga {cg.orden}</span>
           <span className="whitespace-nowrap">{fmtMonto(totalCarga)}</span>
@@ -452,42 +452,42 @@ export default function TicketNota() {
             )}
             {/* El R.F.C. sale tal cual se capturó en Ajustes (es texto libre). */}
             {rfcNegocio && <p className="mt-1">R.F.C. {rfcNegocio}</p>}
-            <p className="mt-1">NOTA {nota.folio ?? `#${nota.id}`}</p>
-            <p>{fmtFechaHora(nota.created_at).toUpperCase()}</p>
+            <p className="mt-1">{fmtFechaHora(nota.created_at).toUpperCase()}</p>
           </div>
 
           <Corte />
 
-          {/* Datos generales. Sin cliente no se imprime la línea: al que viene
-              de paso no le aporta nada leer "Anónimo". */}
-          {(nota.cliente_nombre || nota.cliente_telefono || !esEncargo) && (
-            <>
-              {nota.cliente_nombre && (
-                <Linea
-                  label="Cliente"
-                  value={`${nota.cliente_nombre}${nota.cliente_apellido ? ' ' + nota.cliente_apellido : ''}`.toUpperCase()}
-                />
-              )}
-              {nota.cliente_telefono && <Linea label="Tel" value={nota.cliente_telefono} />}
-              {!esEncargo && (
-                <Linea
-                  label="Tipo"
-                  value={(BADGE_TIPO_SERVICIO[nota.tipo_servicio] ?? nota.tipo_servicio).toUpperCase()}
-                />
-              )}
-              <Corte />
-            </>
-          )}
+          {/* Datos generales. El número de nota encabeza el bloque: es el dato
+              con el que el cliente reclama su ropa. Sin cliente no se imprime
+              la línea: al que viene de paso no le aporta nada leer "Anónimo". */}
+          <div className="space-y-1">
+            <Linea label="Nota" value={nota.folio ?? `#${nota.id}`} fuerte />
+            {nota.cliente_nombre && (
+              <Linea
+                label="Cliente"
+                value={`${nota.cliente_nombre}${nota.cliente_apellido ? ' ' + nota.cliente_apellido : ''}`.toUpperCase()}
+              />
+            )}
+            {nota.cliente_telefono && <Linea label="Teléfono" value={nota.cliente_telefono} />}
+            {!esEncargo && (
+              <Linea
+                label="Tipo"
+                value={(BADGE_TIPO_SERVICIO[nota.tipo_servicio] ?? nota.tipo_servicio).toUpperCase()}
+              />
+            )}
+          </div>
+
+          <Corte />
 
           {/* Encabezado de columnas, como en el papel */}
-          <div className="flex items-baseline justify-between gap-2 font-bold">
+          <div className="mb-1 flex items-baseline justify-between gap-2 font-bold">
             <span className="flex-1"><span className="inline-block w-9">CANT</span>DESCRIPCION</span>
             <span>IMPORTE</span>
           </div>
 
           {/* Desglose por cargas (originales) */}
           {originales.length > 0 && (
-            <div className="mt-1 space-y-2">{renderBloqueCargas(originales)}</div>
+            <div className="mt-2 space-y-3">{renderBloqueCargas(originales)}</div>
           )}
 
           {/* Cargas adicionales (agregadas después de crear la nota) */}
@@ -495,14 +495,14 @@ export default function TicketNota() {
             <>
               <Corte />
               <p className="font-bold">ADICIONAL</p>
-              <div className="mt-1 space-y-2">{renderBloqueCargas(adicionales)}</div>
+              <div className="mt-2 space-y-3">{renderBloqueCargas(adicionales)}</div>
             </>
           )}
 
           {/* Productos de la nota (nivel nota, sin carga). Las tapas son
               información interna y no se muestran. */}
           {productos.filter(p => p.unidad !== 'tapa').length > 0 && (
-            <div className="mt-2 space-y-0.5">
+            <div className="mt-3 space-y-1">
               {productos.filter(p => p.unidad !== 'tapa').map(p => (
                 <div key={p.id} className="flex items-baseline justify-between gap-2">
                   <span className="flex-1">
