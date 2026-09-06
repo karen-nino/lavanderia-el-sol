@@ -5,6 +5,7 @@ import { etiquetaProducto, ordenProducto } from '../lib/formatoInventario';
 import { api } from '../lib/api';
 import { maquinasDeCarga, cargaVisibleEnTicket } from '../lib/ticketCargas';
 import { notaAlPieDeTicket } from '../lib/ticketNotaPie';
+import { formaPagoLabel } from '../lib/formasPago';
 
 const BADGE_TIPO_SERVICIO = {
   AUTOSERVICIO: 'Autoservicio',
@@ -131,6 +132,7 @@ function armarTextoTicket(nota, rfc, notaPie) {
   if (!esEncargo) {
     L.push(`Tipo: ${BADGE_TIPO_SERVICIO[nota.tipo_servicio] ?? nota.tipo_servicio}`);
   }
+  L.push(`Método de pago: ${formaPagoLabel(nota.forma_pago) || 'Pendiente'}`);
 
   // Vuelca las líneas de una carga (máquinas, productos, ajuste) al arreglo L.
   const volcarCarga = cg => {
@@ -335,6 +337,9 @@ export default function TicketNota() {
 
   const cargas      = nota.cargas ?? [];
   const productos   = [...(nota.productos ?? [])].sort((a, b) => ordenProducto(a) - ordenProducto(b));
+  // Los productos de la nota que sí se imprimen: las tapas son información
+  // interna y no salen en el ticket.
+  const prodsNota   = productos.filter(p => p.unidad !== 'tapa');
   // Cargas creadas al dar de alta la nota (originales) vs. las agregadas
   // después (adicionales), para mostrarlas en bloques separados.
   const visibles    = cargas.filter(cargaVisibleEnTicket);
@@ -442,7 +447,7 @@ export default function TicketNota() {
           className="w-full bg-white px-4 py-6 font-mono text-[11px] leading-relaxed text-black shadow-sm"
         >
           {/* Encabezado del negocio */}
-          <div className="text-center">
+          <div className="text-center mb-5">
             <p className="text-sm font-bold tracking-[0.15em]">LAVANDERÍA EL SOL</p>
             {/* Dirección de la sucursal DONDE SE HIZO la nota (no la del
                 negocio): con varias sucursales, el ticket tiene que decir a
@@ -460,8 +465,9 @@ export default function TicketNota() {
           {/* Datos generales. El número de nota encabeza el bloque: es el dato
               con el que el cliente reclama su ropa. Sin cliente no se imprime
               la línea: al que viene de paso no le aporta nada leer "Anónimo". */}
-          <div className="space-y-1">
+          <div className="space-y-1 py-1">
             <Linea label="Nota" value={nota.folio ?? `#${nota.id}`} fuerte />
+            {nota.fecha_entrega && <Linea label="Entrega" value={fmtFecha(nota.fecha_entrega).toUpperCase()} />}
             {nota.cliente_nombre && (
               <Linea
                 label="Cliente"
@@ -475,59 +481,75 @@ export default function TicketNota() {
                 value={(BADGE_TIPO_SERVICIO[nota.tipo_servicio] ?? nota.tipo_servicio).toUpperCase()}
               />
             )}
+            {/* Cierra el bloque: en Autoservicio va debajo de TIPO y en Por
+                Encargo debajo de TELÉFONO. La nota que todavía no se cobra
+                (pasa en Por Encargo) sale como PENDIENTE. */}
+            <Linea
+              label="Método de pago"
+              value={(formaPagoLabel(nota.forma_pago) || 'Pendiente').toUpperCase()}
+            />
           </div>
 
           <Corte />
 
-          {/* Encabezado de columnas, como en el papel */}
-          <div className="mb-1 flex items-baseline justify-between gap-2 font-bold">
-            <span className="flex-1"><span className="inline-block w-9">CANT</span>DESCRIPCION</span>
-            <span>IMPORTE</span>
-          </div>
-
-          {/* Desglose por cargas (originales) */}
-          {originales.length > 0 && (
-            <div className="mt-2 space-y-3">{renderBloqueCargas(originales)}</div>
-          )}
-
-          {/* Cargas adicionales (agregadas después de crear la nota) */}
-          {adicionales.length > 0 && (
-            <>
-              <Corte />
-              <p className="font-bold">ADICIONAL</p>
-              <div className="mt-2 space-y-3">{renderBloqueCargas(adicionales)}</div>
-            </>
-          )}
-
-          {/* Productos de la nota (nivel nota, sin carga). Las tapas son
-              información interna y no se muestran. */}
-          {productos.filter(p => p.unidad !== 'tapa').length > 0 && (
-            <div className="mt-3 space-y-1">
-              {productos.filter(p => p.unidad !== 'tapa').map(p => (
-                <div key={p.id} className="flex items-baseline justify-between gap-2">
-                  <span className="flex-1">
-                    <span className="inline-block w-9">{p.cantidad}</span>
-                    {nombreProd(p).toUpperCase()}
-                  </span>
-                  {p.es_por_tapa && Number(p.subtotal) === 0
-                    ? <span className="whitespace-nowrap">INCLUIDO</span>
-                    : <span className="whitespace-nowrap">{fmtMonto(p.subtotal)}</span>}
-                </div>
-              ))}
+          <div className="my-5 space-y-2">
+            {/* Encabezado de columnas, como en el papel */}
+            <div className="my-1 flex items-baseline justify-between gap-2 font-bold">
+              <span className="flex-1"><span className="inline-block w-9">CANT</span>DESCRIPCION</span>
+              <span>IMPORTE</span>
             </div>
-          )}
+
+            {/* Desglose por cargas (originales) */}
+            {originales.length > 0 && (
+              <div className="mt-2 pb-4 space-y-3">{renderBloqueCargas(originales)}</div>
+            )}
+
+            {/* Cargas adicionales (agregadas después de crear la nota) */}
+            {adicionales.length > 0 && (
+              <>
+                <Corte />
+                <p className="font-bold">ADICIONAL</p>
+                <div className=" space-y-3">{renderBloqueCargas(adicionales)}</div>
+              </>
+            )}
+
+            {/* Productos de la nota (nivel nota, sin carga), con su propio título
+                y su subtotal, igual que los bloques de carga. */}
+            {prodsNota.length > 0 && (
+              <div className="space-y-1">
+                <div className="flex items-baseline justify-between gap-2 font-bold">
+                  <span className="uppercase whitespace-nowrap">Productos</span>
+                  <span className="whitespace-nowrap">
+                    {fmtMonto(prodsNota.reduce((s, p) => s + Number(p.subtotal ?? 0), 0))}
+                  </span>
+                </div>
+                {prodsNota.map(p => (
+                  <div key={p.id} className="flex items-baseline justify-between gap-2">
+                    <span className="flex-1">
+                      <span className="inline-block w-9">{p.cantidad}</span>
+                      {nombreProd(p).toUpperCase()}
+                    </span>
+                    {p.es_por_tapa && Number(p.subtotal) === 0
+                      ? <span className="whitespace-nowrap">INCLUIDO</span>
+                      : <span className="whitespace-nowrap">{fmtMonto(p.subtotal)}</span>}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
 
           <Corte />
 
           {/* Totales */}
-          {Number(nota.ajuste) !== 0 && nota.ajuste != null && (
-            <Linea label="Ajuste" value={`${Number(nota.ajuste) > 0 ? '+' : ''}${fmtMonto(nota.ajuste)}`} />
-          )}
-          <div className="flex items-baseline justify-between gap-2 text-sm font-bold">
-            <span>TOTAL M.N.</span>
-            <span className="whitespace-nowrap">{fmtMonto(nota.precio_total)}</span>
+          <div className="mb-5">
+            {Number(nota.ajuste) !== 0 && nota.ajuste != null && (
+              <Linea label="Ajuste" value={`${Number(nota.ajuste) > 0 ? '+' : ''}${fmtMonto(nota.ajuste)}`} />
+            )}
+            <div className="flex items-baseline justify-between gap-2 text-sm font-bold">
+              <span>TOTAL M.N.</span>
+              <span className="whitespace-nowrap">{fmtMonto(nota.precio_total)}</span>
+            </div>
           </div>
-          {nota.fecha_entrega && <Linea label="Entrega" value={fmtFecha(nota.fecha_entrega).toUpperCase()} />}
 
           <Asteriscos />
 
