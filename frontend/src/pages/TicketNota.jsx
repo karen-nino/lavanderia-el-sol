@@ -72,14 +72,33 @@ function fmtFechaHora(iso) {
 }
 
 // Fila del ticket: etiqueta a la izquierda, valor a la derecha. Estilo recibo.
+// El recibo imita un ticket de caja impreso: monoespaciada, mayúsculas,
+// separadores de guiones y columnas alineadas. La fuente es la del sistema
+// (`font-mono`) a propósito: el PNG que se manda por WhatsApp se rasteriza con
+// `skipFonts: true`, así que una fuente web saldría cambiada en la imagen.
+
+// Renglón de dos columnas: rótulo a la izquierda, dato pegado a la derecha.
 function Linea({ label, value, fuerte }) {
   return (
-    <div className="flex items-baseline justify-between gap-3 py-1">
-      <span className="text-xs text-gray-500">{label}</span>
-      <span className={`text-sm text-right whitespace-nowrap ${fuerte ? 'font-bold text-gray-900' : 'font-medium text-gray-800'}`}>
-        {value}
-      </span>
+    <div className="flex items-baseline justify-between gap-3">
+      <span className="uppercase">{label}</span>
+      <span className={`text-right whitespace-nowrap ${fuerte ? 'font-bold' : ''}`}>{value}</span>
     </div>
+  );
+}
+
+// Corte de guiones entre bloques, como el del papel.
+function Corte() {
+  return <div className="my-2 border-t border-dashed border-black/70" />;
+}
+
+// La hilera de asteriscos que cierra el total en los tickets de tienda. Se
+// recorta al ancho del papel en vez de saltar de renglón.
+function Asteriscos() {
+  return (
+    <p className="my-2 overflow-hidden whitespace-nowrap text-center leading-none" aria-hidden="true">
+      {'*'.repeat(80)}
+    </p>
   );
 }
 
@@ -320,12 +339,12 @@ export default function TicketNota() {
       ? lista.map(cg => {
           const tam = tamanoCargaTxt(cg);
           return (
-            <div key={cg.id} className="flex items-baseline justify-between gap-3">
-              <span className="text-sm text-gray-700">
-                1 × Servicio por encargo
-                {tam && <span className="text-xs text-gray-400"> · {tam}</span>}
+            <div key={cg.id} className="flex items-baseline justify-between gap-2">
+              <span className="flex-1">
+                <span className="inline-block w-9">1</span>
+                SERVICIO POR ENCARGO{tam && ` ${tam.toUpperCase()}`}
               </span>
-              <span className="text-sm text-gray-600 whitespace-nowrap">{fmtMonto(precioDeCarga(cg, true))}</span>
+              <span className="whitespace-nowrap">{fmtMonto(precioDeCarga(cg, true))}</span>
             </div>
           );
         })
@@ -341,34 +360,38 @@ export default function TicketNota() {
 
     return (
       <div key={cg.id}>
-        <div className="flex items-baseline justify-between">
-          <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">Carga {cg.orden}</span>
-          <span className="text-sm font-semibold text-gray-700 whitespace-nowrap">{fmtMonto(totalCarga)}</span>
+        <div className="flex items-baseline justify-between gap-2 font-bold">
+          <span className="uppercase whitespace-nowrap">Carga {cg.orden}</span>
+          <span className="whitespace-nowrap">{fmtMonto(totalCarga)}</span>
         </div>
-        <div className="mt-2 space-y-2">
-          {maquinas.map((m, i) => (
-            <div key={i} className="flex items-baseline justify-between gap-3">
-              {/* Cada carga usa a lo más una lavadora y una secadora: de ahí el "1 x". */}
-              <span className="text-sm text-gray-700">1 x {m.nombre}{m.tipo && <span className="text-xs text-gray-400"> · {m.tipo}</span>}</span>
-              <span className="text-sm text-gray-600 whitespace-nowrap">{fmtMonto(m.precio)}</span>
-            </div>
-          ))}
-          {/* Las tapas son información interna: no se muestran en el ticket. */}
-          {prods.filter(p => p.unidad !== 'tapa').map(p => (
-            <div key={p.id} className="flex items-baseline justify-between gap-3">
-              <span className="text-sm text-gray-700">{nombreProd(p)} <span className="text-xs text-gray-400">×{p.cantidad} {unidadProdTxt(p)}</span></span>
-              {p.es_por_tapa && Number(p.subtotal) === 0
-                ? <span className="text-sm text-green-700">Incluido</span>
-                : <span className="text-sm text-gray-600 whitespace-nowrap">{fmtMonto(p.subtotal)}</span>}
-            </div>
-          ))}
-          {Number(cg.ajuste) !== 0 && (
-            <div className="flex items-baseline justify-between gap-3">
-              <span className="text-sm text-gray-700">Ajuste</span>
-              <span className="text-sm text-gray-600">{Number(cg.ajuste) > 0 ? '+' : ''}{fmtMonto(cg.ajuste)}</span>
-            </div>
-          )}
-        </div>
+        {maquinas.map((m, i) => (
+          <div key={i} className="flex items-baseline justify-between gap-2">
+            {/* Cada carga usa a lo más una lavadora y una secadora: de ahí el 1. */}
+            <span className="flex-1">
+              <span className="inline-block w-9">1</span>
+              {m.nombre.toUpperCase()}{m.tipo && ` ${m.tipo.toUpperCase()}`}
+            </span>
+            <span className="whitespace-nowrap">{fmtMonto(m.precio)}</span>
+          </div>
+        ))}
+        {/* Las tapas son información interna: no se muestran en el ticket. */}
+        {prods.filter(p => p.unidad !== 'tapa').map(p => (
+          <div key={p.id} className="flex items-baseline justify-between gap-2">
+            <span className="flex-1">
+              <span className="inline-block w-9">{p.cantidad}</span>
+              {nombreProd(p).toUpperCase()}
+            </span>
+            {p.es_por_tapa && Number(p.subtotal) === 0
+              ? <span className="whitespace-nowrap">INCLUIDO</span>
+              : <span className="whitespace-nowrap">{fmtMonto(p.subtotal)}</span>}
+          </div>
+        ))}
+        {Number(cg.ajuste) !== 0 && (
+          <div className="flex items-baseline justify-between gap-2">
+            <span className="flex-1"><span className="inline-block w-9" />AJUSTE</span>
+            <span className="whitespace-nowrap">{Number(cg.ajuste) > 0 ? '+' : ''}{fmtMonto(cg.ajuste)}</span>
+          </div>
+        )}
       </div>
     );
   };
@@ -396,94 +419,122 @@ export default function TicketNota() {
       <div className="max-w-2xl mx-auto px-6 py-6 space-y-6">
 
         {/* Recibo (es lo que se manda por WhatsApp como imagen) */}
-        <div ref={reciboRef} className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
-
-          {/* Encabezado del recibo */}
-          <div className="px-5 py-5 text-center border-b border-dashed border-gray-200">
-            <h2 className="text-lg font-bold text-gray-900">Lavandería El Sol</h2>
+        {/* El recibo: imita un ticket de caja impreso (ver los auxiliares de
+            arriba). Angosto como el papel térmico, y es este mismo nodo el que
+            se rasteriza para mandarlo por WhatsApp. */}
+        {/* El centrado va FUERA del nodo que se rasteriza: un `mx-auto` en el
+            propio recibo desplaza el contenido dentro del lienzo del PNG y el
+            ticket sale cortado por la derecha (sin los importes). */}
+        <div className="mx-auto w-full max-w-[20rem]">
+        <div
+          ref={reciboRef}
+          className="w-full bg-white px-4 py-6 font-mono text-[11px] leading-relaxed text-black shadow-sm"
+        >
+          {/* Encabezado del negocio */}
+          <div className="text-center">
+            <p className="text-sm font-bold tracking-[0.15em]">LAVANDERÍA EL SOL</p>
             {/* El R.F.C. sale tal cual se capturó en Ajustes (es texto libre). */}
-            {rfcNegocio && (
-              <p className="text-xs text-gray-400 mt-0.5">{rfcNegocio}</p>
-            )}
-            <p className="text-sm text-gray-500 mt-0.5">Nota {nota.folio ?? `#${nota.id}`}</p>
-            <p className="text-xs text-gray-400 mt-0.5">{fmtFechaHora(nota.created_at)}</p>
+            {rfcNegocio && <p className="mt-1">R.F.C. {rfcNegocio}</p>}
+            <p className="mt-1">NOTA {nota.folio ?? `#${nota.id}`}</p>
+            <p>{fmtFechaHora(nota.created_at).toUpperCase()}</p>
           </div>
 
-          {/* Datos generales */}
-          <div className="px-5 py-3 border-b border-dashed border-gray-200">
-            {/* Sin cliente no se imprime la línea: al que viene de paso no le
-                aporta nada leer "Anónimo". */}
-            {nota.cliente_nombre && (
-              <Linea
-                label="Cliente"
-                value={`${nota.cliente_nombre}${nota.cliente_apellido ? ' ' + nota.cliente_apellido : ''}`}
-              />
-            )}
-            {nota.cliente_telefono && <Linea label="Teléfono" value={nota.cliente_telefono} />}
-            {!esEncargo && (
-              <Linea label="Tipo" value={BADGE_TIPO_SERVICIO[nota.tipo_servicio] ?? nota.tipo_servicio} />
-            )}
+          <Corte />
+
+          {/* Datos generales. Sin cliente no se imprime la línea: al que viene
+              de paso no le aporta nada leer "Anónimo". */}
+          {(nota.cliente_nombre || nota.cliente_telefono || !esEncargo) && (
+            <>
+              {nota.cliente_nombre && (
+                <Linea
+                  label="Cliente"
+                  value={`${nota.cliente_nombre}${nota.cliente_apellido ? ' ' + nota.cliente_apellido : ''}`.toUpperCase()}
+                />
+              )}
+              {nota.cliente_telefono && <Linea label="Tel" value={nota.cliente_telefono} />}
+              {!esEncargo && (
+                <Linea
+                  label="Tipo"
+                  value={(BADGE_TIPO_SERVICIO[nota.tipo_servicio] ?? nota.tipo_servicio).toUpperCase()}
+                />
+              )}
+              <Corte />
+            </>
+          )}
+
+          {/* Encabezado de columnas, como en el papel */}
+          <div className="flex items-baseline justify-between gap-2 font-bold">
+            <span className="flex-1"><span className="inline-block w-9">CANT</span>DESCRIPCION</span>
+            <span>IMPORTE</span>
           </div>
 
           {/* Desglose por cargas (originales) */}
           {originales.length > 0 && (
-            <div className="px-5 py-3 border-b border-dashed border-gray-200 space-y-3">
-              {renderBloqueCargas(originales)}
-            </div>
+            <div className="mt-1 space-y-2">{renderBloqueCargas(originales)}</div>
           )}
 
           {/* Cargas adicionales (agregadas después de crear la nota) */}
           {adicionales.length > 0 && (
-            <div className="px-5 py-3 border-b border-dashed border-gray-200 space-y-3">
-              <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">Adicional</p>
-              {renderBloqueCargas(adicionales)}
-            </div>
+            <>
+              <Corte />
+              <p className="font-bold">ADICIONAL</p>
+              <div className="mt-1 space-y-2">{renderBloqueCargas(adicionales)}</div>
+            </>
           )}
 
           {/* Productos de la nota (nivel nota, sin carga). Las tapas son
               información interna y no se muestran. */}
           {productos.filter(p => p.unidad !== 'tapa').length > 0 && (
-            <div className="px-5 py-3 border-b border-dashed border-gray-200">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Productos</p>
-              <div className="space-y-2">
-                {productos.filter(p => p.unidad !== 'tapa').map(p => (
-                  <div key={p.id} className="flex items-baseline justify-between gap-3">
-                    <span className="text-sm text-gray-700">{nombreProd(p)} <span className="text-xs text-gray-400">×{p.cantidad} {unidadProdTxt(p)}</span></span>
-                    {p.es_por_tapa && Number(p.subtotal) === 0
-                      ? <span className="text-sm text-green-700">Incluido</span>
-                      : <span className="text-sm text-gray-600 whitespace-nowrap">{fmtMonto(p.subtotal)}</span>}
-                  </div>
-                ))}
-              </div>
+            <div className="mt-2 space-y-0.5">
+              {productos.filter(p => p.unidad !== 'tapa').map(p => (
+                <div key={p.id} className="flex items-baseline justify-between gap-2">
+                  <span className="flex-1">
+                    <span className="inline-block w-9">{p.cantidad}</span>
+                    {nombreProd(p).toUpperCase()}
+                  </span>
+                  {p.es_por_tapa && Number(p.subtotal) === 0
+                    ? <span className="whitespace-nowrap">INCLUIDO</span>
+                    : <span className="whitespace-nowrap">{fmtMonto(p.subtotal)}</span>}
+                </div>
+              ))}
             </div>
           )}
 
-          {/* Totales y estado */}
-          <div className="px-5 py-3 border-b border-dashed border-gray-200">
-            {Number(nota.ajuste) !== 0 && nota.ajuste != null && (
-              <Linea label="Ajuste" value={`${Number(nota.ajuste) > 0 ? '+' : ''}${fmtMonto(nota.ajuste)}`} />
-            )}
-            <Linea label="Total" value={fmtMonto(nota.precio_total)} fuerte />
-            {nota.fecha_entrega && <Linea label="Entrega" value={fmtFecha(nota.fecha_entrega)} />}
+          <Corte />
+
+          {/* Totales */}
+          {Number(nota.ajuste) !== 0 && nota.ajuste != null && (
+            <Linea label="Ajuste" value={`${Number(nota.ajuste) > 0 ? '+' : ''}${fmtMonto(nota.ajuste)}`} />
+          )}
+          <div className="flex items-baseline justify-between gap-2 text-sm font-bold">
+            <span>TOTAL M.N.</span>
+            <span className="whitespace-nowrap">{fmtMonto(nota.precio_total)}</span>
           </div>
+          {nota.fecha_entrega && <Linea label="Entrega" value={fmtFecha(nota.fecha_entrega).toUpperCase()} />}
+
+          <Asteriscos />
 
           {/* Pie */}
-          <p className="px-5 py-4 text-center text-xs text-gray-400">¡Gracias por su preferencia!</p>
+          <p className="text-center">¡GRACIAS POR SU PREFERENCIA!</p>
 
           {/* Nota del negocio (Ajustes → Ticket): la letra chica del recibo */}
           {notaPie && (
-            <p className="px-5 pb-4 text-center text-[10px] leading-relaxed text-gray-400 whitespace-pre-line border-t border-dashed border-gray-200 pt-3">
+            <p className="mt-3 whitespace-pre-line text-center text-[10px] leading-relaxed">
               {notaPie}
             </p>
           )}
+        </div>
         </div>
 
         {/* Teléfono para WhatsApp: si la nota no tiene cliente (Autoservicio
             anónimo), se captura a mano aquí. */}
         {!nota.cliente_telefono && (
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">Teléfono para enviar el ticket</label>
+            <label htmlFor="telefono-ticket" className="block text-sm font-medium text-gray-700 mb-1.5">
+              Teléfono para enviar el ticket
+            </label>
             <input
+              id="telefono-ticket"
               type="tel"
               inputMode="numeric"
               value={telefonoManual}
