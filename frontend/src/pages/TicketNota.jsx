@@ -477,7 +477,7 @@ export default function TicketNota() {
             {nota.cliente_telefono && <Linea label="Teléfono" value={nota.cliente_telefono} />}
             {!esEncargo && (
               <Linea
-                label="Tipo"
+                label="Tipo de servicio"
                 value={(BADGE_TIPO_SERVICIO[nota.tipo_servicio] ?? nota.tipo_servicio).toUpperCase()}
               />
             )}

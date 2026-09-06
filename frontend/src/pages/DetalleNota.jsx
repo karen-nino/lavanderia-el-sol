@@ -660,6 +660,12 @@ export default function DetalleNota() {
           <h2 className="text-sm font-semibold text-gray-700">Detalles</h2>
         </div>
         <div className="px-4">
+          <FilaDetalle label="Servicio">
+            <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${badgeTipoServicio.cls}`}>
+              {badgeTipoServicio.label}
+            </span>
+            {nota.tamano && <span className="ml-2 text-xs text-gray-500 capitalize">{nota.tamano}</span>}
+          </FilaDetalle>
           <FilaDetalle label="ID">
             <span className="text-sm font-medium text-gray-800">{nota.id}</span>
           </FilaDetalle>
@@ -682,12 +688,6 @@ export default function DetalleNota() {
               <span className="text-sm font-medium text-gray-800">{nota.sucursal_nombre}</span>
             </FilaDetalle>
           )}
-          <FilaDetalle label="Tipo">
-            <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${badgeTipoServicio.cls}`}>
-              {badgeTipoServicio.label}
-            </span>
-            {nota.tamano && <span className="ml-2 text-xs text-gray-500 capitalize">{nota.tamano}</span>}
-          </FilaDetalle>
           {(nota.cargas ?? []).length === 0 && nota.tipo_prenda && PRENDA_LABEL[nota.tipo_prenda] && (
             <FilaDetalle label="Prenda">
               <span className="text-sm font-medium text-gray-800">{PRENDA_LABEL[nota.tipo_prenda]}</span>
