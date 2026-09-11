@@ -2,10 +2,13 @@
 // "Prueba Admin") para que la pantalla de Ventas se vea llena en una captura.
 //
 //   node seed-demo-ventas.mjs            -> siembra ~90 días de notas
+//   node seed-demo-ventas.mjs --cuadrar  -> movimientos de inventario y cortes
+//                                           de caja para esas mismas notas
 //   node seed-demo-ventas.mjs --limpiar  -> borra TODO lo que sembró
 //
-// Lo sembrado se registra en .demo-ventas-ids.json (ids de notas y clientes),
-// así la limpieza no toca ni una fila que no haya creado este script.
+// Lo sembrado se registra en .demo-ventas-ids.json (notas, clientes, cajas,
+// movimientos de inventario y el stock que había antes), así la limpieza no
+// toca ni una fila que no haya creado este script y deja el stock como estaba.
 import pg from 'pg';
 import fs from 'fs';
 import path from 'path';
