@@ -14,6 +14,12 @@
 //   · La encontró encendida y debería estar apagada → la prendieron a mano; no
 //     se apaga, se adopta como encendido manual (mig. 104).
 //
+// Y una regla propia, que no depende del relé sino del reloj: una máquina cuyo
+// ciclo terminó hace más de MARGEN_CORTE_MINUTOS se APAGA aunque su nota siga
+// abierta. Sin eso el relé quedaba cerrado hasta que alguien marcara la carga
+// (o hasta el cierre del día) y en esa ventana se podía lavar otra carga sin
+// nota. La nota y el estado de la máquina no se tocan: solo se corta la luz.
+//
 // Es idempotente: llamarlo de más no hace daño (vuelve a afirmar el mismo
 // estado). Nunca lanza: al llamarse después de operaciones ya confirmadas, un
 // fallo del Sonoff no debe tumbar la respuesta al usuario; solo se refleja en
@@ -37,6 +43,30 @@ export const HORAS_ENCENDIDO_MANUAL = (() => {
   return Number.isFinite(h) && h > 0 ? h : 3;
 })();
 
+// Cuánto se le concede a una máquina DESPUÉS de que su ciclo terminó, antes de
+// cortarle la corriente.
+//
+// Existe porque nada apagaba una lavadora al terminar: el relé seguía cerrado
+// hasta que alguien marcaba la carga o hasta el cierre del día, y en esa
+// ventana se podía correr otra carga sin nota y sin cobro. El interruptor de la
+// lavadora funciona mientras haya corriente.
+//
+// El margen tiene que ser MENOR que el ciclo más corto (30 min, las secadoras):
+// así nunca alcanza para colar una carga completa —quien lo intente se queda a
+// medias— y al mismo tiempo le sobra tiempo a un cliente legítimo para apretar
+// el botón de arranque, que no es automático al dar corriente.
+export const MARGEN_CORTE_MINUTOS = (() => {
+  const m = Number(process.env.SONOFF_MARGEN_CORTE_MINUTOS);
+  return Number.isFinite(m) && m > 0 ? m : 20;
+})();
+
+// Interruptor propio del corte, aparte del general del driver. Esta es la única
+// regla que APAGA una máquina con una nota abierta, así que si en el mostrador
+// se comporta raro conviene poder desactivarla sola —con `SONOFF_CORTE_CICLO=off`,
+// solo config, sin build— y no tener que tumbar todo el control de Sonoff, que
+// dejaría también de encender las máquinas al cobrar una nota.
+export const CORTE_CICLO_ACTIVO = String(process.env.SONOFF_CORTE_CICLO ?? '').toLowerCase() !== 'off';
+
 // ¿El encendido manual sigue vigente?
 export const manualVigente = (maq) => {
   if (!maq?.encendida_manual_at) return false;
@@ -44,10 +74,32 @@ export const manualVigente = (maq) => {
   return Number.isFinite(desde) && Date.now() - desde < HORAS_ENCENDIDO_MANUAL * 60 * 60 * 1000;
 };
 
+// ¿Su ciclo ya terminó hace rato? Se mide desde que la máquina se puso en uso,
+// con los minutos que se le sellaron al arrancarla (ciclo_minutos, mig. 051:
+// salen de la marca de la máquina desde la 107). Sin ciclo sellado no se corta
+// nada: preferimos dejarla encendida a cortar a ciegas.
+//
+// Un encendido manual vigente no cuenta aquí: ese tiene su propia caducidad de
+// 3 h, y quien la prendió a mano decide cuánto la usa.
+export const cicloVencido = (maq) => {
+  if (!CORTE_CICLO_ACTIVO) return false;
+  if (!maq || maq.estado !== 'en_uso') return false;
+  if (!maq.en_uso_desde || !maq.ciclo_minutos) return false;
+  if (manualVigente(maq)) return false;
+  const desde = new Date(maq.en_uso_desde).getTime();
+  if (!Number.isFinite(desde)) return false;
+  const limiteMs = (Number(maq.ciclo_minutos) + MARGEN_CORTE_MINUTOS) * 60 * 1000;
+  return Date.now() - desde > limiteMs;
+};
+
 // Una máquina debe estar encendida si la está usando una nota O si alguien la
-// prendió a mano y esa marca no ha caducado (mig. 104).
+// prendió a mano y esa marca no ha caducado (mig. 104). Con una excepción: si
+// su ciclo terminó hace más del margen, se le corta la corriente aunque la nota
+// siga abierta. La nota NO se toca —sigue en Lavando hasta que alguien la
+// marque— porque decidir que una carga terminó, y a qué secadora pasa, le toca
+// a una persona: aquí solo se quita la corriente para que nadie meta otra carga.
 const estadoDeseado = (maq) =>
-  maq.estado === 'en_uso' || manualVigente(maq) ? 'on' : 'off';
+  (maq.estado === 'en_uso' && !cicloVencido(maq)) || manualVigente(maq) ? 'on' : 'off';
 
 // ¿Hay una nota trabajando con esta máquina ahora mismo? Se pregunta antes de
 // soltar un encendido manual caducado: si en el camino una nota se adueñó de la
@@ -142,7 +194,8 @@ async function liberarEncendidoManual(id) {
 export async function sincronizarSonoff(maquinaId, { reconciliando = false } = {}) {
   try {
     const { rows } = await pool.query(
-      `SELECT id, nombre, estado, sucursal, device_id, device_canal, sonoff_estado, encendida_manual_at
+      `SELECT id, nombre, estado, sucursal, device_id, device_canal, sonoff_estado,
+              encendida_manual_at, en_uso_desde, ciclo_minutos
          FROM maquinas WHERE id = $1`,
       [maquinaId]
     );
@@ -212,7 +265,13 @@ export async function sincronizarSonoff(maquinaId, { reconciliando = false } = {
     // máquina sigue encendida justo porque se le venció el permiso, y volver a
     // adoptarla aquí lo renovaría para siempre. La caducidad tiene que ganar:
     // es la red que apaga lo que alguien prendió y olvidó.
-    if (deseado === 'off' && reconciliando && !liberadaPorCaducidad && maq.sonoff_estado === 'enlazada') {
+    // `cicloVencido` excluye el corte por fin de ciclo, y por la misma razón que
+    // `liberadaPorCaducidad`: esa máquina está encendida porque NOSOTROS la
+    // encendimos para su carga, no porque alguien la prendiera. Sin esta
+    // salvedad el barrido la adoptaría como encendido manual en vez de
+    // apagarla, y el corte no ocurriría nunca.
+    if (deseado === 'off' && reconciliando && !liberadaPorCaducidad && !cicloVencido(maq)
+        && maq.sonoff_estado === 'enlazada') {
       const real = await dispositivos.estado(maq);
       if (dispositivos.esSimulacion()) return maq;
       if (real.ok && real.estado === 'on') {

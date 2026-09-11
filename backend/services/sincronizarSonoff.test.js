@@ -237,3 +237,95 @@ describe('el encendido manual caduca', () => {
     expect(driver.apagar).not.toHaveBeenCalled();
   });
 });
+
+describe('corte por fin de ciclo', () => {
+  // Una máquina que lleva `min` minutos en uso, con un ciclo sellado de
+  // `ciclo` minutos. El resto igual que cualquier máquina trabajando.
+  const enUsoDesdeHace = (min, ciclo, extra = {}) => ({
+    ...maquinaEnUso('enlazada'),
+    en_uso_desde: new Date(Date.now() - min * 60 * 1000).toISOString(),
+    ciclo_minutos: ciclo,
+    ...extra,
+  });
+
+  it('ciclo terminado hace más del margen → corta la corriente', async () => {
+    // Ciclo de 45 (una LG) + 20 de margen = 65. Lleva 70.
+    filas.maquina = enUsoDesdeHace(70, 45);
+
+    await sincronizarSonoff(1, { reconciliando: true });
+
+    expect(driver.apagar).toHaveBeenCalledTimes(1);
+    expect(driver.encender).not.toHaveBeenCalled();
+  });
+
+  it('dentro del margen NO la corta: el cliente puede tardar en arrancarla', async () => {
+    // La lavadora no arranca sola al recibir corriente: hay que apretar su
+    // botón, y eso puede pasar minutos después. A los 50 de 65 no se toca.
+    filas.maquina = enUsoDesdeHace(50, 45);
+
+    await sincronizarSonoff(1, { reconciliando: true });
+
+    expect(driver.apagar).not.toHaveBeenCalled();
+  });
+
+  it('la nota y el estado de la máquina NO se tocan: solo se va la luz', async () => {
+    filas.maquina = enUsoDesdeHace(70, 45);
+
+    await sincronizarSonoff(1, { reconciliando: true });
+
+    // Sigue en uso: cerrar la carga (y decidir a qué secadora pasa) le toca a
+    // una persona. Aquí solo se quita la corriente.
+    expect(filas.maquina.estado).toBe('en_uso');
+    const suelta = consultas.some(c => /encendida_manual_at = NULL/.test(c.sql));
+    expect(suelta).toBe(false);
+  });
+
+  it('no la adopta como encendido manual aunque el relé siga cerrado', async () => {
+    // Es el caso que rompería el corte: la máquina está encendida porque la
+    // encendimos nosotros, no porque alguien la prendiera.
+    filas.maquina = enUsoDesdeHace(70, 45);
+    driver.estado.mockResolvedValue({ ok: true, estado: 'on' });
+
+    await sincronizarSonoff(1, { reconciliando: true });
+
+    expect(driver.apagar).toHaveBeenCalledTimes(1);
+    expect(filas.maquina.encendida_manual_at).toBeNull();
+    expect(notificaciones).toHaveLength(0);
+  });
+
+  it('sin ciclo sellado no corta nada: mejor dejarla encendida que cortar a ciegas', async () => {
+    filas.maquina = enUsoDesdeHace(600, null);
+
+    await sincronizarSonoff(1, { reconciliando: true });
+
+    expect(driver.apagar).not.toHaveBeenCalled();
+  });
+
+  it('un encendido manual vigente manda sobre el ciclo: tiene su propia caducidad', async () => {
+    // La prendió una persona hace poco; que el ciclo de su nota anterior
+    // hubiera vencido no es razón para cortarle.
+    filas.maquina = enUsoDesdeHace(70, 45, { encendida_manual_at: haceHoras(1) });
+
+    await sincronizarSonoff(1, { reconciliando: true });
+
+    expect(driver.apagar).not.toHaveBeenCalled();
+  });
+
+  it('el corte también ocurre fuera del barrido, no solo en la pasada periódica', async () => {
+    filas.maquina = enUsoDesdeHace(70, 45);
+
+    await sincronizarSonoff(1);
+
+    expect(driver.apagar).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('interruptor del corte', () => {
+  it('CORTE_CICLO_ACTIVO refleja SONOFF_CORTE_CICLO y por defecto viene encendido', async () => {
+    // Se lee al importar el módulo, así que aquí solo se comprueba el valor por
+    // defecto; apagarlo en producción es `fly secrets set SONOFF_CORTE_CICLO=off`.
+    const { CORTE_CICLO_ACTIVO, MARGEN_CORTE_MINUTOS } = await import('./sincronizarSonoff.js');
+    expect(CORTE_CICLO_ACTIVO).toBe(true);
+    expect(MARGEN_CORTE_MINUTOS).toBe(20);
+  });
+});
