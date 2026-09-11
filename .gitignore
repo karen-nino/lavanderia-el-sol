@@ -48,3 +48,5 @@ coverage/
 
 # Info del proyecto
 info
+# Datos de demostración sembrados en local (ids para poder borrarlos)
+backend/scripts/.demo-ventas-ids.json
