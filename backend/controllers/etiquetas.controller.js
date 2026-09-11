@@ -147,3 +147,100 @@ export const marcasProducto = crearControladorEtiqueta('marcas_producto', {
 export const envasesProducto = crearControladorEtiqueta('envases_producto', {
   singular: 'el envase', plural: 'los envases', uno: 'un envase',
 });
+export const marcasMaquina = crearControladorEtiqueta('marcas_maquina', {
+  singular: 'la marca', plural: 'las marcas', uno: 'una marca',
+});
+
+// ── Tiempos de ciclo por marca y tamaño (mig. 107) ──────────────────────────
+//
+// La duración de un ciclo es de la MÁQUINA y no de la carga: una LG mediana
+// tarda 45 min y una Speed Queen jumbo 35, al revés de lo que suponía el eje
+// del tamaño. Aquí se configuran esas combinaciones; lo que no esté aquí cae
+// al tiempo por tamaño de Ajustes, que sigue existiendo como respaldo.
+
+const TIPOS_TIEMPO = ['lavadora', 'secadora'];
+const TAMANOS_TIEMPO = ['mediana', 'jumbo'];
+
+// Devuelve una fila por combinación marca+tipo+tamaño que tenga sentido
+// mostrar: las que existen en máquinas dadas de alta, más las que ya tengan un
+// tiempo configurado. Así la pantalla enseña la lavandería real y no una
+// matriz llena de campos vacíos (no hay ninguna LG jumbo, así que ese renglón
+// no aparece hasta que exista la máquina).
+export const getTiemposMarca = async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `WITH combos AS (
+         SELECT DISTINCT mm.id AS marca_id,
+                CASE WHEN m.tipo = 'secadora' THEN 'secadora' ELSE 'lavadora' END AS tipo,
+                m.tamano
+           FROM maquinas m
+           JOIN marcas_maquina mm ON mm.nombre = m.marca
+          WHERE m.tamano IS NOT NULL
+         UNION
+         SELECT tm.marca_id, tm.tipo, tm.tamano FROM tiempos_marca tm
+       )
+       SELECT c.marca_id, mm.nombre AS marca, c.tipo, c.tamano, tm.minutos
+         FROM combos c
+         JOIN marcas_maquina mm ON mm.id = c.marca_id
+         LEFT JOIN tiempos_marca tm
+                ON tm.marca_id = c.marca_id AND tm.tipo = c.tipo AND tm.tamano = c.tamano
+        WHERE mm.activo
+        ORDER BY c.tipo, CASE c.tamano WHEN 'mediana' THEN 0 ELSE 1 END, mm.orden NULLS LAST, mm.id`
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error('getTiemposMarca error:', err);
+    res.status(500).json({ message: 'No se pudieron cargar los tiempos por marca. Intenta de nuevo.' });
+  }
+};
+
+// Guarda (o borra) el tiempo de UNA combinación. `minutos` vacío o nulo borra
+// la fila: esa combinación vuelve a usar el tiempo por tamaño de Ajustes, que
+// es la forma de deshacer sin dejar un cero que pararía el temporizador.
+export const guardarTiempoMarca = async (req, res) => {
+  if (!esAdmin(req.user.rol)) {
+    return res.status(403).json({ message: 'Solo un administrador puede realizar esta acción.' });
+  }
+  const { marca_id, tipo, tamano, minutos } = req.body;
+
+  if (!/^\d+$/.test(String(marca_id))) {
+    return res.status(400).json({ message: 'Elige una marca válida.' });
+  }
+  if (!TIPOS_TIEMPO.includes(tipo)) {
+    return res.status(400).json({ message: 'El tipo de máquina debe ser lavadora o secadora.' });
+  }
+  if (!TAMANOS_TIEMPO.includes(tamano)) {
+    return res.status(400).json({ message: 'El tamaño debe ser mediana o jumbo.' });
+  }
+
+  const vacio = minutos === null || minutos === undefined || minutos === '';
+  const n = Number(minutos);
+  if (!vacio && (!Number.isInteger(n) || n <= 0)) {
+    return res.status(400).json({ message: 'El tiempo debe ser un número de minutos mayor que cero.' });
+  }
+
+  try {
+    if (vacio) {
+      await pool.query(
+        'DELETE FROM tiempos_marca WHERE marca_id = $1 AND tipo = $2 AND tamano = $3',
+        [marca_id, tipo, tamano]
+      );
+      return res.json({ marca_id: Number(marca_id), tipo, tamano, minutos: null });
+    }
+    const { rows } = await pool.query(
+      `INSERT INTO tiempos_marca (marca_id, tipo, tamano, minutos)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (marca_id, tipo, tamano)
+       DO UPDATE SET minutos = EXCLUDED.minutos, updated_at = now()
+       RETURNING marca_id, tipo, tamano, minutos`,
+      [marca_id, tipo, tamano, n]
+    );
+    res.json(rows[0]);
+  } catch (err) {
+    if (err.code === '23503') {
+      return res.status(404).json({ message: 'Esa marca ya no existe.' });
+    }
+    console.error('guardarTiempoMarca error:', err);
+    res.status(500).json({ message: 'No se pudo guardar el tiempo. Intenta de nuevo.' });
+  }
+};

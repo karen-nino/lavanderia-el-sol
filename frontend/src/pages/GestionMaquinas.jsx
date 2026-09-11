@@ -67,7 +67,11 @@ const CAPACIDADES = [
   { v: '35kg', label: '35kg' },
 ];
 
-const FORM_INIT = { nombre: '', tipo: 'lavadora', tamano: 'mediana', capacidad: '20kg', modelo: '', mantenimiento: false, notas: '', device_id: '', device_canal: '' };
+// Valor centinela del select de marca: no es una marca, es la orden de abrir
+// el campo para dar de alta una nueva sin salir del formulario.
+const MARCA_NUEVA = '__nueva__';
+
+const FORM_INIT = { nombre: '', tipo: 'lavadora', tamano: 'mediana', marca: '', capacidad: '20kg', modelo: '', mantenimiento: false, notas: '', device_id: '', device_canal: '' };
 
 const tipoCompuesto = (tipo, tamano) =>
   tipo === 'lavadora' ? `lavadora_${tamano}` : tipo;
@@ -118,12 +122,25 @@ export default function GestionMaquinas() {
   const [conectando, setConectando] = useState(false);
   const [accionesMenuId, setAccionesMenuId] = useState(null);
   const accionesMenuRef = useRef(null);
+  // Catálogo de marcas (mig. 106) y el alta rápida desde el propio formulario.
+  const [marcas, setMarcas] = useState([]);
+  const [agregandoMarca, setAgregandoMarca] = useState(false);
+  const [marcaNueva, setMarcaNueva] = useState('');
+  const [marcaError, setMarcaError] = useState('');
+  const [guardandoMarca, setGuardandoMarca] = useState(false);
 
   useEffect(() => {
     api.get('/maquinas')
       .then(setMaquinas)
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
+  }, []);
+
+  // El catálogo de marcas es del negocio entero, no de la sucursal. Si falla
+  // no se rompe nada: el select se queda sin opciones y la máquina se guarda
+  // sin marca, que es un dato opcional.
+  useEffect(() => {
+    api.get('/etiquetas/marcas-maquina').then(setMarcas).catch(() => setMarcas([]));
   }, []);
 
   // La cuenta de eWeLink es lo que hace que los Sonoff obedezcan: sin ella el
@@ -167,6 +184,7 @@ export default function GestionMaquinas() {
     setEditandoId(null);
     setFormError('');
     setProbarMsg(null);
+    cancelarMarcaNueva();
     setModalOpen(true);
   };
 
@@ -177,6 +195,7 @@ export default function GestionMaquinas() {
       tipo,
       tamano: m.tamano ?? tamano,
       capacidad: m.capacidad ?? '20kg',
+      marca:  m.marca  ?? '',
       modelo: m.modelo ?? '',
       mantenimiento: m.estado === 'mantenimiento',
       notas:  m.notas ?? '',
@@ -186,6 +205,7 @@ export default function GestionMaquinas() {
     setEditandoId(m.id);
     setFormError('');
     setProbarMsg(null);
+    cancelarMarcaNueva();
     setModalOpen(true);
   };
 
@@ -268,7 +288,54 @@ export default function GestionMaquinas() {
     }
   };
 
+  // Las marcas desactivadas no se ofrecen, pero la de la máquina que se edita
+  // se conserva aunque ya no esté en el catálogo (ver el select).
+  const marcasVisibles = marcas.filter(m => m.activo);
+  const marcaFueraDeLista = Boolean(form.marca) && !marcasVisibles.some(m => m.nombre === form.marca);
+
   const handleChange = e => setForm(f => ({ ...f, [e.target.name]: e.target.value }));
+
+  // El select de marca lleva una opción que no es una marca: "+ Agregar
+  // marca…". Elegirla no cambia el valor del formulario, abre el campo de
+  // alta. Así se da de alta una marca nueva sin perder lo que ya se escribió
+  // de la máquina ni tener que ir a Ajustes.
+  const handleMarcaChange = e => {
+    if (e.target.value === MARCA_NUEVA) {
+      setMarcaNueva('');
+      setMarcaError('');
+      setAgregandoMarca(true);
+      return;
+    }
+    handleChange(e);
+  };
+
+  const cancelarMarcaNueva = () => {
+    setAgregandoMarca(false);
+    setMarcaNueva('');
+    setMarcaError('');
+  };
+
+  // La marca se guarda en el catálogo (no en la máquina) y queda elegida. No
+  // se capitaliza: son nombres propios y "LG" no debe volverse "Lg".
+  const guardarMarcaNueva = async () => {
+    const nombre = marcaNueva.trim();
+    if (!nombre) {
+      setMarcaError('Escribe el nombre de la marca.');
+      return;
+    }
+    setGuardandoMarca(true);
+    setMarcaError('');
+    try {
+      const creada = await api.post('/etiquetas/marcas-maquina', { nombre });
+      setMarcas(prev => [...prev, creada]);
+      setForm(f => ({ ...f, marca: creada.nombre }));
+      cancelarMarcaNueva();
+    } catch (err) {
+      setMarcaError(err.message);
+    } finally {
+      setGuardandoMarca(false);
+    }
+  };
 
   const handleSubmit = async e => {
     e.preventDefault();
@@ -632,7 +699,9 @@ export default function GestionMaquinas() {
                 <p className="text-sm text-gray-500 mt-1">{tipoLabel}</p>
                 {tamanoLabel && <p className="text-sm text-gray-500">{tamanoLabel}</p>}
                 {m.capacidad && <p className="text-sm text-gray-500">{m.capacidad}</p>}
-                {m.modelo && <p className="text-sm text-gray-500">{m.modelo}</p>}
+                {(m.marca || m.modelo) && (
+                  <p className="text-sm text-gray-500">{[m.marca, m.modelo].filter(Boolean).join(' \u00b7 ')}</p>
+                )}
 
                 {/* Estado (informativo) */}
                 <div className="self-start mt-4">
@@ -747,11 +816,65 @@ export default function GestionMaquinas() {
                 </select>
               </div>
 
+              {/* Marca: catálogo elegible (mig. 106). Es el dato que se repite
+                  entre máquinas y sobre el que se puede razonar — entre otras
+                  cosas, cuánto dura de verdad un ciclo. El modelo de abajo
+                  sigue siendo texto libre porque es único de cada aparato. */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Marca</label>
+                {agregandoMarca ? (
+                  <div className="space-y-3">
+                    <input
+                      value={marcaNueva}
+                      onChange={e => { setMarcaError(''); setMarcaNueva(e.target.value); }}
+                      onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); guardarMarcaNueva(); } }}
+                      placeholder="Ej. Whirlpool"
+                      autoFocus
+                      className={INPUT_CLS}
+                    />
+                    {marcaError && <p className="text-sm text-red-600">{marcaError}</p>}
+                    {/* Deliberadamente más chicos que Guardar/Cancelar del
+                        formulario: con el mismo tamaño quedaban dos pares de
+                        botones idénticos a pocos centímetros y se aprieta el
+                        que no es. Esto es una acción de un campo, no del alta
+                        de la máquina. */}
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button" onClick={guardarMarcaNueva} disabled={guardandoMarca}
+                        className="bg-blue hover:opacity-90 disabled:opacity-60 text-white font-medium px-4 py-2 rounded-lg text-sm transition-colors"
+                      >
+                        {guardandoMarca ? 'Agregando...' : 'Agregar'}
+                      </button>
+                      <button
+                        type="button" onClick={cancelarMarcaNueva}
+                        className="text-gray-500 hover:text-gray-700 font-medium px-3 py-2 rounded-lg text-sm transition-colors"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <select name="marca" value={form.marca} onChange={handleMarcaChange} className={INPUT_CLS}>
+                    {/* Solo un admin puede tocar el catálogo: al empleado ni se
+                        le ofrece, para que no choque con un 403 al guardar. */}
+                    {esAdmin && <option value={MARCA_NUEVA}>+ Agregar marca...</option>}
+                    <option value="">Sin especificar</option>
+                    {/* Una marca desactivada o escrita antes del catálogo sigue
+                        apareciendo mientras sea la de esta máquina: si no,
+                        editarla por cualquier otra cosa se la borraría sin aviso. */}
+                    {marcaFueraDeLista && <option value={form.marca}>{form.marca}</option>}
+                    {marcasVisibles.map(m => (
+                      <option key={m.id} value={m.nombre}>{m.nombre}</option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">Modelo</label>
                 <input
                   name="modelo" value={form.modelo} onChange={handleChange}
-                  placeholder="Ej. LG FH4U2VHN2"
+                  placeholder="Ej. FH4U2VHN2"
                   className={INPUT_CLS}
                 />
               </div>

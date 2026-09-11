@@ -309,7 +309,7 @@ export const getUsoMaquina = async (req, res) => {
 };
 
 export const createMaquina = async (req, res) => {
-  const { nombre, tipo, tamano, modelo, capacidad, numero_serie, fecha_adquisicion, notas, device_id, device_canal } = req.body;
+  const { nombre, tipo, tamano, marca, modelo, capacidad, numero_serie, fecha_adquisicion, notas, device_id, device_canal } = req.body;
 
   if (!nombre || !tipo) {
     return res.status(400).json({ message: 'Escribe el nombre y elige el tipo de máquina.' });
@@ -339,10 +339,10 @@ export const createMaquina = async (req, res) => {
     }
 
     const { rows } = await pool.query(
-      `INSERT INTO maquinas (nombre, tipo, tamano, modelo, capacidad, numero_serie, fecha_adquisicion, sucursal, notas, device_id, device_canal, sonoff_estado)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      `INSERT INTO maquinas (nombre, tipo, tamano, marca, modelo, capacidad, numero_serie, fecha_adquisicion, sucursal, notas, device_id, device_canal, sonoff_estado)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
        RETURNING *`,
-      [nombre, tipo, tamano || null, modelo, capacidad, numero_serie, fecha_adquisicion, req.sucursal, notas, deviceId, deviceCanal, sonoffEstado]
+      [nombre, tipo, tamano || null, marca || null, modelo, capacidad, numero_serie, fecha_adquisicion, req.sucursal, notas, deviceId, deviceCanal, sonoffEstado]
     );
     res.status(201).json(rows[0]);
   } catch (err) {
@@ -356,7 +356,7 @@ export const createMaquina = async (req, res) => {
 
 export const updateMaquina = async (req, res) => {
   const { id } = req.params;
-  const { nombre, tipo, tamano, modelo, capacidad, numero_serie, fecha_adquisicion, notas, estado, device_id, device_canal } = req.body;
+  const { nombre, tipo, tamano, marca, modelo, capacidad, numero_serie, fecha_adquisicion, notas, estado, device_id, device_canal } = req.body;
 
   if (!nombre || !tipo) {
     return res.status(400).json({ message: 'Escribe el nombre y elige el tipo de máquina.' });
@@ -395,6 +395,7 @@ export const updateMaquina = async (req, res) => {
     const { rows } = await pool.query(
       `UPDATE maquinas
          SET nombre = $1, tipo = $2, tamano = $3, modelo = $4, capacidad = $5, numero_serie = $6, fecha_adquisicion = $7, notas = $8,
+             marca = $14,
              estado = COALESCE($9::estado_maquina, estado),
              en_uso_desde = CASE
                WHEN $9::estado_maquina IS NULL THEN en_uso_desde
@@ -428,7 +429,7 @@ export const updateMaquina = async (req, res) => {
              END
        WHERE id = $10 AND sucursal = $11
        RETURNING *`,
-      [nombre, tipo, tamano || null, modelo, capacidad, numero_serie, fecha_adquisicion, notas, estado ?? null, id, req.sucursal, deviceId, deviceCanal]
+      [nombre, tipo, tamano || null, modelo, capacidad, numero_serie, fecha_adquisicion, notas, estado ?? null, id, req.sucursal, deviceId, deviceCanal, marca || null]
     );
     if (rows.length === 0) {
       return res.status(404).json({ message: 'Máquina no encontrada.' });

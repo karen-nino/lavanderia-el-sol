@@ -64,10 +64,8 @@ export const updateAjustes = async (req, res) => {
     tope_carga_edredon,
     tiempo_carga_mediana,
     tiempo_carga_jumbo,
-    tiempo_edredon_jumbo,
     tiempo_carga_secadora,
     tiempo_secadora_jumbo,
-    tiempo_secadora_edredon,
     nombre_negocio,
     rfc,
     ticket_nota_autoservicio,
@@ -97,10 +95,8 @@ export const updateAjustes = async (req, res) => {
     tope_carga_edredon:      'El tope de la carga de edredón',
     tiempo_carga_mediana:    'El tiempo de la carga mediana',
     tiempo_carga_jumbo:      'El tiempo de la carga jumbo',
-    tiempo_edredon_jumbo:    'El tiempo del edredón en jumbo',
     tiempo_carga_secadora:   'El tiempo del secado',
     tiempo_secadora_jumbo:   'El tiempo del secado jumbo',
-    tiempo_secadora_edredon: 'El tiempo del secado de edredón',
   };
   const nombreDe = (campo) => ETIQUETA[campo] ?? `El ajuste "${campo}"`;
 
@@ -122,8 +118,10 @@ export const updateAjustes = async (req, res) => {
   }
   const topeONull = (v) => (v === null || v === '' ? null : v);
 
-  const tiempos = { tiempo_carga_mediana, tiempo_carga_jumbo, tiempo_edredon_jumbo,
-                    tiempo_carga_secadora, tiempo_secadora_jumbo, tiempo_secadora_edredon };
+  // El edredón ya no tiene tiempo propio (mig. 107): usa el de su tamaño. Su
+  // precio sí se conserva, que es lo que distingue el servicio.
+  const tiempos = { tiempo_carga_mediana, tiempo_carga_jumbo,
+                    tiempo_carga_secadora, tiempo_secadora_jumbo };
   for (const [campo, valor] of Object.entries(tiempos)) {
     if (valor !== undefined && (!esNumero(valor) || !Number.isInteger(Number(valor)) || Number(valor) < 1)) {
       return res.status(400).json({ message: `${nombreDe(campo)} debe ser un número entero de 1 minuto o más.` });
@@ -164,10 +162,8 @@ export const updateAjustes = async (req, res) => {
   if (tope_carga_edredon    !== undefined) { updates.push(`tope_carga_edredon = $${i++}`);    values.push(topeONull(tope_carga_edredon)); }
   if (tiempo_carga_mediana  !== undefined) { updates.push(`tiempo_carga_mediana = $${i++}`);  values.push(tiempo_carga_mediana); }
   if (tiempo_carga_jumbo    !== undefined) { updates.push(`tiempo_carga_jumbo = $${i++}`);    values.push(tiempo_carga_jumbo); }
-  if (tiempo_edredon_jumbo  !== undefined) { updates.push(`tiempo_edredon_jumbo = $${i++}`);  values.push(tiempo_edredon_jumbo); }
   if (tiempo_carga_secadora !== undefined) { updates.push(`tiempo_carga_secadora = $${i++}`); values.push(tiempo_carga_secadora); }
   if (tiempo_secadora_jumbo   !== undefined) { updates.push(`tiempo_secadora_jumbo = $${i++}`);   values.push(tiempo_secadora_jumbo); }
-  if (tiempo_secadora_edredon !== undefined) { updates.push(`tiempo_secadora_edredon = $${i++}`); values.push(tiempo_secadora_edredon); }
   if (nombre_negocio        !== undefined) { updates.push(`nombre_negocio = $${i++}`);        values.push(nombre_negocio); }
   if (rfc                   !== undefined) { updates.push(`rfc = $${i++}`);                   values.push(rfcLibre(rfc)); }
   if (ticket_nota_autoservicio !== undefined) { updates.push(`ticket_nota_autoservicio = $${i++}`); values.push(textoONull(ticket_nota_autoservicio)); }

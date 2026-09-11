@@ -379,24 +379,27 @@ function topeDeCarga(prenda, tamano, t) {
   }
 }
 
-// Tiempos de ciclo (minutos). El secado también por categoría (Mediana =
-// columna plana tiempo_carga_secadora). El lavado edredón usa el ciclo jumbo.
+// Tiempos de ciclo (minutos) de RESPALDO, por tamaño de carga.
+//
+// Desde la mig. 107 el tiempo bueno sale de la marca de la máquina (una LG
+// mediana tarda 45 y una Speed Queen jumbo 35, al revés de lo que suponía el
+// eje del tamaño). Estos números solo se usan cuando la máquina no tiene marca
+// o esa combinación marca+tamaño no está configurada, para que nada se quede
+// sin temporizador.
+//
+// El edredón ya no aparece: dejó de tener tiempo propio y usa el de su tamaño
+// (decisión del negocio, 2026-09-11). Conserva su precio, que es lo que
+// distingue el servicio.
 async function tiemposCarga(client) {
   const { rows } = await client.query(
-    `SELECT tiempo_carga_mediana, tiempo_carga_jumbo, tiempo_edredon_jumbo,
-            tiempo_carga_secadora, tiempo_secadora_jumbo, tiempo_secadora_edredon
+    `SELECT tiempo_carga_mediana, tiempo_carga_jumbo, tiempo_carga_secadora
        FROM ajustes WHERE id = 1`
   );
   const c = rows[0] ?? {};
   return {
-    mediana:         c.tiempo_carga_mediana    != null ? Number(c.tiempo_carga_mediana)    : 30,
-    jumbo:           c.tiempo_carga_jumbo      != null ? Number(c.tiempo_carga_jumbo)      : 45,
-    // Lavado de edredón (en lavadora jumbo); si no está, cae al tiempo del jumbo.
-    edredonLavado:   c.tiempo_edredon_jumbo    != null ? Number(c.tiempo_edredon_jumbo)
-                     : (c.tiempo_carga_jumbo   != null ? Number(c.tiempo_carga_jumbo) : 45),
-    secMediana:      c.tiempo_carga_secadora   != null ? Number(c.tiempo_carga_secadora)   : 30,
-    secJumbo:        c.tiempo_secadora_jumbo   != null ? Number(c.tiempo_secadora_jumbo)   : 30,
-    secEdredon:      c.tiempo_secadora_edredon != null ? Number(c.tiempo_secadora_edredon) : 30,
+    mediana:    c.tiempo_carga_mediana  != null ? Number(c.tiempo_carga_mediana)  : 30,
+    jumbo:      c.tiempo_carga_jumbo    != null ? Number(c.tiempo_carga_jumbo)    : 45,
+    secMediana: c.tiempo_carga_secadora != null ? Number(c.tiempo_carga_secadora) : 30,
   };
 }
 
@@ -408,11 +411,18 @@ function tarifaLavadora(tipoMaquina, tipoPrenda, t) {
 }
 
 // Sella maquinas.ciclo_minutos de TODAS las máquinas EN USO de la nota
-// (lavadoras y secadoras) según la categoría de su carga. Necesario porque
-// una misma máquina física (lavadora jumbo o cualquier secadora) puede tener
-// distinta duración según lo que procesa: edredón vs. ropa jumbo vs. mediana.
-//   Lavadora: prenda edredón (en jumbo) → edredonLavado; jumbo → jumbo; resto → mediana.
-//   Secadora: tiempo único (la secadora es de un solo tamaño).
+// (lavadoras y secadoras).
+//
+// La duración es de la MÁQUINA, no de la carga (mig. 107): sale de su marca y
+// su tamaño, porque una LG mediana tarda 45 min y una Speed Queen jumbo 35 —
+// al revés de lo que suponía el eje del tamaño, que daba por hecho que una
+// jumbo tarda más. Si la máquina no tiene marca, o esa combinación no está
+// configurada, cae al tiempo por tamaño de Ajustes: el comportamiento de
+// antes, para que ninguna máquina se quede sin temporizador.
+//
+// El edredón ya no se distingue: usa el tiempo de su tamaño como cualquier
+// otra carga de esa máquina.
+//
 // Idempotente; se llama tras poner máquinas en uso en cualquier flujo.
 // Solo se sella el ciclo de las máquinas que ESTA nota arrancó: otra nota
 // puede tener la misma máquina asignada, y resellarle el ciclo le movería el
@@ -425,24 +435,34 @@ async function sellarCicloMaquinas(client, notaId) {
        FROM (
          -- Lavadoras de la nota
          SELECT nc.lavadora_id AS mid,
-                CASE
-                  WHEN UPPER(COALESCE(nc.tipo_prenda, '')) = 'EDREDON' THEN $2::int
-                  WHEN ml.tipo = 'lavadora_jumbo' THEN $3::int
-                  ELSE $4::int
-                END AS minutos
+                COALESCE(
+                  tm.minutos,
+                  CASE WHEN ml.tipo = 'lavadora_jumbo' THEN $2::int ELSE $3::int END
+                ) AS minutos
            FROM nota_cargas nc
            JOIN maquinas ml ON ml.id = nc.lavadora_id
+           -- La máquina guarda el NOMBRE de la marca (mig. 106), así que el
+           -- catálogo se alcanza por nombre y no por id.
+           LEFT JOIN marcas_maquina mm ON mm.nombre = ml.marca
+           LEFT JOIN tiempos_marca tm
+                  ON tm.marca_id = mm.id AND tm.tipo = 'lavadora' AND tm.tamano = ml.tamano
           WHERE nc.nota_id = $1 AND nc.lavadora_id IS NOT NULL
             AND nc.lavadora_iniciada_at IS NOT NULL
          UNION ALL
-         -- Secadoras de la nota: tiempo de secado único (secadora sin tamaño).
-         SELECT nc.secadora_id AS mid, $5::int AS minutos
+         -- Secadoras de la nota. Mismo criterio; el respaldo sigue siendo un
+         -- tiempo único para todas, como hasta ahora.
+         SELECT nc.secadora_id AS mid,
+                COALESCE(tm.minutos, $4::int) AS minutos
            FROM nota_cargas nc
+           JOIN maquinas ms ON ms.id = nc.secadora_id
+           LEFT JOIN marcas_maquina mm ON mm.nombre = ms.marca
+           LEFT JOIN tiempos_marca tm
+                  ON tm.marca_id = mm.id AND tm.tipo = 'secadora' AND tm.tamano = ms.tamano
           WHERE nc.nota_id = $1 AND nc.secadora_id IS NOT NULL
             AND nc.secadora_iniciada_at IS NOT NULL
        ) ciclos
       WHERE m.id = ciclos.mid AND m.estado = 'en_uso'`,
-    [notaId, ti.edredonLavado, ti.jumbo, ti.mediana, ti.secMediana]
+    [notaId, ti.jumbo, ti.mediana, ti.secMediana]
   );
 }
 

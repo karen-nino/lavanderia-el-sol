@@ -677,6 +677,10 @@ export default function Ajustes() {
   // que en vez de ofrecer un "Guardar" que va a fallar, no se ofrece.
   const soloGuardaPerfil = usuario?.es_prueba === true;
 
+  const [tiemposMarca, setTiemposMarca] = useState([]);
+  // Lo que vino del servidor, para mandar solo lo que cambió al guardar.
+  const tiemposOrigRef = useRef([]);
+
   useEffect(() => {
     api.get('/ajustes')
       .then(data => {
@@ -685,6 +689,16 @@ export default function Ajustes() {
       })
       .catch(e => setMensaje({ tipo: 'error', texto: e.message }))
       .finally(() => setLoading(false));
+  }, []);
+
+  // Tiempos de ciclo por marca y tamaño (mig. 107). El backend solo devuelve
+  // las combinaciones que tienen sentido: las que existen en máquinas dadas de
+  // alta más las ya configuradas, así que la pantalla no se llena de campos
+  // vacíos por marcas que no están en ese tamaño.
+  useEffect(() => {
+    api.get('/etiquetas/tiempos-marca')
+      .then(d => { setTiemposMarca(d ?? []); tiemposOrigRef.current = d ?? []; })
+      .catch(() => { /* sin esto la pantalla sigue sirviendo: manda el respaldo */ });
   }, []);
 
   useEffect(() => {
@@ -813,6 +827,47 @@ export default function Ajustes() {
     );
   };
 
+  // ── Tiempos por marca (mig. 107) ──
+  const claveTiempo = (t) => `${t.marca_id}|${t.tipo}|${t.tamano}`;
+  const tiemposDe = (tipo, tamano) =>
+    tiemposMarca.filter(t => t.tipo === tipo && t.tamano === tamano);
+
+  const setMinutosMarca = (clave, valor) =>
+    setTiemposMarca(prev => prev.map(t => (claveTiempo(t) === clave ? { ...t, minutos: valor } : t)));
+
+  const stepMinutosMarca = (clave, paso) =>
+    setTiemposMarca(prev => prev.map(t => {
+      if (claveTiempo(t) !== clave) return t;
+      const actual = Number(t.minutos);
+      return { ...t, minutos: String(Math.max(1, (Number.isFinite(actual) ? actual : 0) + paso)) };
+    }));
+
+  const stepBtnsMarca = (clave, mobile = false) => {
+    const cls = mobile ? STEP_BTN_CLS_M : STEP_BTN_CLS;
+    return (
+      <>
+        <button type="button" aria-label="Disminuir" onClick={() => stepMinutosMarca(clave, -1)} className={cls}>−</button>
+        <button type="button" aria-label="Aumentar"  onClick={() => stepMinutosMarca(clave,  1)} className={cls}>+</button>
+      </>
+    );
+  };
+
+  // Solo se mandan las combinaciones que cambiaron, cada una a su endpoint.
+  // Vaciar el campo borra el tiempo de esa marca: vuelve a mandar el de su
+  // tamaño, que es la forma de deshacer sin dejar un cero que pararía el
+  // temporizador.
+  const guardarTiemposMarca = async () => {
+    const aNumero = (v) => (v === '' || v == null ? null : Number(v));
+    const antes = new Map(tiemposOrigRef.current.map(t => [claveTiempo(t), aNumero(t.minutos)]));
+    const cambiados = tiemposMarca.filter(t => antes.get(claveTiempo(t)) !== aNumero(t.minutos));
+    if (cambiados.length === 0) return;
+
+    await Promise.all(cambiados.map(t => api.put('/etiquetas/tiempos-marca', {
+      marca_id: t.marca_id, tipo: t.tipo, tamano: t.tamano, minutos: aNumero(t.minutos),
+    })));
+    tiemposOrigRef.current = tiemposMarca.map(t => ({ ...t, minutos: aNumero(t.minutos) }));
+  };
+
   const handlePerfilChange = (e) => {
     const { name, value } = e.target;
     if (name === 'password' && perfilForm.password === '' && value.length > 0) {
@@ -872,6 +927,7 @@ export default function Ajustes() {
       const [updatedConfig] = await Promise.all([
         api.patch('/ajustes', buildConfigPayload()),
         patchSucursalActual(),
+        guardarTiemposMarca(),
       ]);
       setConfig(updatedConfig);
       marcarGuardado('mobile');
@@ -899,12 +955,12 @@ export default function Ajustes() {
     tope_carga_grande:     topeONull(config.tope_carga_grande),
     tope_carga_jumbo:      topeONull(config.tope_carga_jumbo),
     tope_carga_edredon:    topeONull(config.tope_carga_edredon),
+    // El edredón conserva su precio pero ya no tiene tiempo propio (mig. 107):
+    // usa el de su tamaño, como cualquier otra carga de esa máquina.
     tiempo_carga_mediana:  Number(config.tiempo_carga_mediana),
     tiempo_carga_jumbo:    Number(config.tiempo_carga_jumbo),
-    tiempo_edredon_jumbo:  Number(config.tiempo_edredon_jumbo),
     tiempo_carga_secadora: Number(config.tiempo_carga_secadora),
-    tiempo_secadora_jumbo:   Number(config.tiempo_secadora_jumbo),
-    tiempo_secadora_edredon: Number(config.tiempo_secadora_edredon),
+    tiempo_secadora_jumbo: Number(config.tiempo_secadora_jumbo),
     nombre_negocio:        config.nombre_negocio,
     rfc:                   config.rfc ?? '',
     ticket_nota_autoservicio: config.ticket_nota_autoservicio ?? '',
@@ -957,6 +1013,7 @@ export default function Ajustes() {
       const [updatedPerfil, updatedConfig] = await Promise.all([
         api.patch('/auth/me', perfilPayload),
         api.patch('/ajustes', buildConfigPayload()),
+        guardarTiemposMarca(),
         // La sucursal seleccionada se guarda junto con el resto. patchSucursalActual
         // actualiza su estado por dentro; su resultado no se necesita aquí.
         patchSucursalActual(),
@@ -978,7 +1035,10 @@ export default function Ajustes() {
     setSaving(true);
     setMensaje(null);
     try {
-      const updated = await api.patch('/ajustes', buildConfigPayload());
+      const [updated] = await Promise.all([
+        api.patch('/ajustes', buildConfigPayload()),
+        guardarTiemposMarca(),
+      ]);
       setConfig(updated);
       marcarGuardado('mobile');
     } catch (err) {
@@ -1120,6 +1180,32 @@ export default function Ajustes() {
       </div>
     </Field>
   );
+  // Un renglón por marca que exista en ese tipo+tamaño. Va debajo del tiempo
+  // general, que se queda de respaldo para las máquinas sin marca: la duración
+  // es de la MÁQUINA (una LG mediana tarda 45 y una Speed Queen jumbo 35), pero
+  // no todas las máquinas tienen marca puesta.
+  const camposTiempoMarca = (tipo, tamano) => {
+    const lista = tiemposDe(tipo, tamano);
+    if (lista.length === 0) return null;
+    return lista.map(t => (
+      <Field
+        key={claveTiempo(t)}
+        label={t.marca}
+        hint={`Duración del ciclo en las máquinas ${t.marca} de este tamaño. Vacío = usa el tiempo de arriba.`}
+      >
+        <div className="flex items-center gap-2">
+          <input
+            type="number" min="1" step="1" value={t.minutos ?? ''}
+            onChange={e => setMinutosMarca(claveTiempo(t), e.target.value)}
+            className={INPUT_CLS}
+          />
+          <span className="text-sm text-gray-500 flex-shrink-0">min</span>
+          {stepBtnsMarca(claveTiempo(t))}
+        </div>
+      </Field>
+    ));
+  };
+
   const subTitulo = (txt) => <TituloGrupo>{txt}</TituloGrupo>;
 
   const seccionPreciosDesktop = (
@@ -1127,24 +1213,29 @@ export default function Ajustes() {
     <Section titulo="Lavadora">
       {subTitulo('Mediana')}
       {campoPrecio('precio_carga_mediana', 'Aplica a lavadoras medianas en autoservicio y por encargo.')}
-      {campoTiempo('tiempo_carga_mediana', 'Duración de un ciclo de lavado en una máquina mediana.')}
+      {campoTiempo('tiempo_carga_mediana', 'Se usa en las lavadoras medianas que no tengan tiempo por marca.')}
+      {camposTiempoMarca('lavadora', 'mediana')}
 
       <div className="border-t border-gray-100" />
 
       {subTitulo('Jumbo')}
       {campoPrecio('precio_carga_jumbo', 'Aplica a lavadoras jumbo en autoservicio y por encargo.')}
-      {campoTiempo('tiempo_carga_jumbo', 'Duración de un ciclo de lavado en una máquina jumbo.')}
+      {campoTiempo('tiempo_carga_jumbo', 'Se usa en las lavadoras jumbo que no tengan tiempo por marca.')}
+      {camposTiempoMarca('lavadora', 'jumbo')}
 
       <div className="border-t border-gray-100" />
 
+      {/* El edredón conserva su precio, pero ya no su tiempo: usa el de la
+          máquina donde se lava, como cualquier otra carga (mig. 107). */}
       {subTitulo('Edredón')}
       {campoPrecio('precio_edredon_jumbo', 'Tarifa fija por edredón lavado en máquina jumbo.')}
-      {campoTiempo('tiempo_edredon_jumbo', 'Duración del lavado de un edredón en máquina jumbo.')}
     </Section>
 
     <Section titulo="Secadora">
       {campoPrecio('precio_carga_secadora', 'Precio del secado de una carga.')}
-      {campoTiempo('tiempo_carga_secadora', 'Duración del secado de una carga.')}
+      {campoTiempo('tiempo_carga_secadora', 'Se usa en las secadoras que no tengan tiempo por marca.')}
+      {camposTiempoMarca('secadora', 'mediana')}
+      {camposTiempoMarca('secadora', 'jumbo')}
     </Section>
     </>
   );
@@ -1762,6 +1853,28 @@ export default function Ajustes() {
       </div>
     </MobileField>
   );
+  const camposTiempoMarcaM = (tipo, tamano) => {
+    const lista = tiemposDe(tipo, tamano);
+    if (lista.length === 0) return null;
+    return lista.map(t => (
+      <MobileField
+        key={claveTiempo(t)}
+        label={t.marca}
+        hint={`Duración del ciclo en las máquinas ${t.marca} de este tamaño. Vacío = usa el tiempo de arriba.`}
+      >
+        <div className="flex items-center gap-2">
+          <input
+            type="number" min="1" step="1" value={t.minutos ?? ''}
+            onChange={e => setMinutosMarca(claveTiempo(t), e.target.value)}
+            className={MOBILE_INPUT_CLS}
+          />
+          <span className="text-base text-grey flex-shrink-0">min</span>
+          {stepBtnsMarca(claveTiempo(t), true)}
+        </div>
+      </MobileField>
+    ));
+  };
+
   const seccionPreciosMobile = (
     <div className="space-y-10">
       <div className="space-y-6">
@@ -1769,15 +1882,18 @@ export default function Ajustes() {
         <div className="space-y-4">
         <TarjetaMobile titulo="Mediana">
           {campoPrecioM('precio_carga_mediana', 'Aplica a lavadoras medianas (autoservicio y por encargo).')}
-          {campoTiempoM('tiempo_carga_mediana', 'Duración del ciclo de lavado en una máquina mediana.')}
+          {campoTiempoM('tiempo_carga_mediana', 'Se usa en las lavadoras medianas que no tengan tiempo por marca.')}
+          {camposTiempoMarcaM('lavadora', 'mediana')}
         </TarjetaMobile>
         <TarjetaMobile titulo="Jumbo">
           {campoPrecioM('precio_carga_jumbo', 'Aplica a lavadoras jumbo (autoservicio y por encargo).')}
-          {campoTiempoM('tiempo_carga_jumbo', 'Duración del ciclo de lavado en una máquina jumbo.')}
+          {campoTiempoM('tiempo_carga_jumbo', 'Se usa en las lavadoras jumbo que no tengan tiempo por marca.')}
+          {camposTiempoMarcaM('lavadora', 'jumbo')}
         </TarjetaMobile>
+        {/* El edredón conserva su precio, pero ya no su tiempo: usa el de la
+            máquina donde se lava, como cualquier otra carga (mig. 107). */}
         <TarjetaMobile titulo="Edredón">
           {campoPrecioM('precio_edredon_jumbo', 'Tarifa fija por edredón lavado en máquina jumbo.')}
-          {campoTiempoM('tiempo_edredon_jumbo', 'Duración del lavado de un edredón en máquina jumbo.')}
         </TarjetaMobile>
         </div>
       </div>
@@ -1786,7 +1902,9 @@ export default function Ajustes() {
         <TituloGrupoMobile>Secadora</TituloGrupoMobile>
         <TarjetaMobile>
           {campoPrecioM('precio_carga_secadora', 'Precio del secado de una carga.')}
-          {campoTiempoM('tiempo_carga_secadora', 'Duración del secado de una carga.')}
+          {campoTiempoM('tiempo_carga_secadora', 'Se usa en las secadoras que no tengan tiempo por marca.')}
+          {camposTiempoMarcaM('secadora', 'mediana')}
+          {camposTiempoMarcaM('secadora', 'jumbo')}
         </TarjetaMobile>
       </div>
     </div>
