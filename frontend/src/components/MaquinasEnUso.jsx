@@ -1,8 +1,9 @@
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useState } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import MachineCard from './MachineCard';
 import MaquinaCicloOverlay from './MaquinaCicloOverlay';
+import { prepararAviso, reproducirAvisoCiclo } from '../lib/avisoSonoro';
 
 // Cada cuánto se re-consultan notas y máquinas en segundo plano.
 const REFRESCO_MS = 15000;
@@ -261,7 +262,7 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
   // ciclo y resuelve su nota relacionada. El botón de terminar es por máquina:
   // aparece cuando ESTA máquina cumple su tiempo, aunque otras cargas de la
   // nota sigan corriendo (cada carga es independiente).
-  const renderCard = (m) => {
+  const datosDeCiclo = (m) => {
     // El ciclo se sella al arrancar (ciclo_minutos): imprescindible para el
     // secado, cuya duración depende del tipo de carga, no del tipo de máquina.
     // Fallback por tipo para máquinas puestas en uso antes de la migración.
@@ -281,12 +282,19 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
     // Encendida a mano y sin nota (mig. 104): no hay ciclo que contar, así que
     // el contador mentiría con el tiempo de una carga que nadie pidió.
     const soloManual = Boolean(m.encendida_manual_at) && !notaRel;
-    const maquinaAumentada = {
-      ...m,
-      progreso: soloManual ? 1 : progreso,
-      tiempo_restante: soloManual || !inicio ? '—:—' : formatMMSS(restanteSeg),
-      necesita_terminar_ciclo: Boolean(notaRel) && inicio != null && restanteSeg <= 0,
+    return {
+      nota: notaRel,
+      maquina: {
+        ...m,
+        progreso: soloManual ? 1 : progreso,
+        tiempo_restante: soloManual || !inicio ? '—:—' : formatMMSS(restanteSeg),
+        necesita_terminar_ciclo: Boolean(notaRel) && inicio != null && restanteSeg <= 0,
+      },
     };
+  };
+
+  const renderCard = (m) => {
+    const { maquina: maquinaAumentada, nota: notaRel } = datosDeCiclo(m);
     return (
       <MachineCard
         key={m.id}
@@ -297,6 +305,28 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
       />
     );
   };
+
+  // Máquinas que ya terminaron su ciclo y están esperando a que alguien las
+  // atienda (la tarjeta verde con Iniciar Secado o Finalizar Carga).
+  const idsTerminadas = maquinasEnUso
+    .filter(m => datosDeCiclo(m).maquina.necesita_terminar_ciclo)
+    .map(m => String(m.id));
+  const claveTerminadas = idsTerminadas.join(',');
+  // `null` hasta la primera vuelta: al abrir la pantalla no suena por lo que ya
+  // estaba terminado, solo por lo que termina con la pantalla abierta.
+  const avisadasRef = useRef(null);
+
+  useEffect(() => { prepararAviso(); }, []);
+
+  useEffect(() => {
+    const previas = avisadasRef.current;
+    const actuales = new Set(idsTerminadas);
+    if (previas && idsTerminadas.some(id => !previas.has(id))) reproducirAvisoCiclo();
+    avisadasRef.current = actuales;
+    // `claveTerminadas` resume la lista: el efecto corre cuando cambia quién
+    // está terminado, no en cada tic del reloj.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [claveTerminadas]);
 
   // Un carrusel horizontal por tipo, con conteo "en uso/total" en el título.
   const renderCarrusel = (titulo, enUso, total) => (
