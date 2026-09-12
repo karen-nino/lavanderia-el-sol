@@ -223,6 +223,9 @@ export default function TicketNota() {
   const reciboRef = useRef(null);
   const [enviando, setEnviando] = useState(false);
   const [avisoEnvio, setAvisoEnvio] = useState('');
+  // Autoservicio: el teléfono se pide en un modal al apretar WhatsApp, no en
+  // un campo suelto de la pantalla.
+  const [pidiendoTelefono, setPidiendoTelefono] = useState(false);
 
   const notaPie = notaAlPieDeTicket(nota?.tipo_servicio, notasPie);
 
@@ -266,6 +269,17 @@ export default function TicketNota() {
   const telefonoDestino = nota?.cliente_telefono || telefonoManual;
   const telefonoDigits  = String(telefonoDestino || '').replace(/\D/g, '');
   const puedeEnviar     = telefonoDigits.length >= 10;
+  // Sin cliente (Autoservicio anónimo) no hay a quién mandarle: primero se
+  // pregunta el número.
+  const pideTelefono    = !nota?.cliente_telefono;
+
+  // Lo que hacen los dos botones de WhatsApp (el de la cabecera y el del
+  // final): en Por Encargo manda directo; en Autoservicio abre el modal.
+  function pedirEnvio() {
+    if (enviando) return;
+    if (pideTelefono) { setAvisoEnvio(''); setPidiendoTelefono(true); return; }
+    enviarPorWhatsapp();
+  }
 
   // Convierte el recibo de la pantalla en un PNG (x2 para que se lea bien al
   // ampliarlo en el celular).
@@ -288,6 +302,7 @@ export default function TicketNota() {
   // para adjuntarlo a mano y se abre el chat del cliente con el ticket en texto.
   async function enviarPorWhatsapp() {
     if (!puedeEnviar || enviando) return;
+    setPidiendoTelefono(false);
     setEnviando(true);
     setAvisoEnvio('');
     guardarTelefonoEnNota(); // best-effort, no bloquea el envío
@@ -417,17 +432,34 @@ export default function TicketNota() {
 
       {/* Cabecera */}
       <div className="bg-white border-b-2 border-gray-200">
-        <div className="max-w-2xl mx-auto px-6 pt-10 md:pt-6 pb-4 flex items-center gap-2">
-          <button
-            onClick={() => navigate(`/notas/${id}`)}
-            aria-label="Volver"
-            className="flex-shrink-0 w-11 h-11 rounded-full border border-gray-300 bg-white text-gray-800 hover:bg-gray-50 flex items-center justify-center transition duration-200 ease-out active:scale-[1.3] active:bg-white active:shadow-md"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
-            </svg>
-          </button>
-          <h1 className="text-xl font-bold text-gray-900 leading-tight">Ticket</h1>
+        <div className="max-w-2xl mx-auto px-6 pt-10 md:pt-6 pb-4 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2 min-w-0">
+            <button
+              onClick={() => navigate(`/notas/${id}`)}
+              aria-label="Volver"
+              className="flex-shrink-0 w-11 h-11 rounded-full border border-gray-300 bg-white text-gray-800 hover:bg-gray-50 flex items-center justify-center transition duration-200 ease-out active:scale-[1.3] active:bg-white active:shadow-md"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+            <h1 className="text-xl font-bold text-gray-900 leading-tight">Ticket</h1>
+          </div>
+          {/* Atajo arriba para mandar el ticket: hace lo mismo que el botón
+              grande del final de la pantalla, sin tener que bajar. */}
+          <div className="flex items-center gap-1 flex-shrink-0">
+            <button
+              onClick={pedirEnvio}
+              disabled={enviando || (!pideTelefono && !puedeEnviar)}
+              aria-label="Enviar por WhatsApp"
+              title="Mandar el ticket en imagen"
+              className={`w-11 h-11 hover:opacity-80 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center transition-opacity${enviando ? ' animate-pulse' : ''}`}
+            >
+              <svg className="w-6 h-6" fill="none" viewBox="0 0 19 19">
+                <path d="M16.2312 2.76454C15.3557 1.88495 14.313 1.18752 13.164 0.712894C12.0149 0.238271 10.7823 -0.00405 9.53819 5.12002e-05C4.32513 5.12002e-05 0.0763821 4.22754 0.0763821 9.41453C0.0763821 11.077 0.515578 12.692 1.33668 14.117L0 19L5.01256 17.689C6.39698 18.4395 7.95327 18.8385 9.53819 18.8385C14.7513 18.8385 19 14.611 19 9.42403C19 6.90653 18.0166 4.54104 16.2312 2.76454ZM9.53819 17.2425C8.12512 17.2425 6.7407 16.8625 5.52814 16.15L5.24171 15.979L2.26281 16.758L3.05528 13.87L2.86432 13.5755C2.07907 12.3282 1.66219 10.8863 1.66131 9.41453C1.66131 5.10154 5.19397 1.58655 9.52864 1.58655C11.6291 1.58655 13.6055 2.40354 15.0854 3.88554C15.8183 4.61121 16.3991 5.47445 16.7941 6.4252C17.1891 7.37594 17.3904 8.39526 17.3864 9.42403C17.4055 13.737 13.8729 17.2425 9.53819 17.2425ZM13.8538 11.3905C13.6151 11.2765 12.4503 10.7065 12.2402 10.621C12.0206 10.545 11.8678 10.507 11.7055 10.735C11.5432 10.9725 11.0945 11.5045 10.9608 11.6565C10.8271 11.818 10.6839 11.837 10.4452 11.7135C10.2065 11.5995 9.44271 11.343 8.54523 10.545C7.83869 9.91803 7.37085 9.14853 7.22764 8.91103C7.09397 8.67353 7.20854 8.55003 7.33266 8.42653C7.43769 8.32203 7.57136 8.15103 7.68593 8.01803C7.8005 7.88503 7.84824 7.78053 7.92462 7.62853C8.001 7.46703 7.96281 7.33403 7.90553 7.22003C7.84824 7.10603 7.37085 5.94704 7.1799 5.47204C6.98894 5.01604 6.78844 5.07304 6.64523 5.06354H6.18693C6.02462 5.06354 5.77638 5.12054 5.55678 5.35804C5.34673 5.59554 4.73568 6.16554 4.73568 7.32453C4.73568 8.48353 5.58543 9.60453 5.7 9.75653C5.81457 9.91803 7.37085 12.293 9.73869 13.3095C10.302 13.5565 10.7412 13.699 11.0849 13.8035C11.6482 13.984 12.1638 13.9555 12.5744 13.8985C13.0327 13.832 13.9779 13.3285 14.1688 12.7775C14.3693 12.2265 14.3693 11.761 14.3025 11.6565C14.2357 11.552 14.0925 11.5045 13.8538 11.3905Z" fill="#27A910" />
+              </svg>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -565,44 +597,75 @@ export default function TicketNota() {
         </div>
         </div>
 
-        {/* Teléfono para WhatsApp: si la nota no tiene cliente (Autoservicio
-            anónimo), se captura a mano aquí. */}
-        {!nota.cliente_telefono && (
-          <div>
-            <label htmlFor="telefono-ticket" className="block text-sm font-medium text-gray-700 mb-1.5">
-              Teléfono para enviar el ticket
-            </label>
-            <input
-              id="telefono-ticket"
-              type="tel"
-              inputMode="numeric"
-              value={telefonoManual}
-              onChange={(e) => setTelefonoManual(e.target.value)}
-              onBlur={guardarTelefonoEnNota}
-              placeholder="33-1234-5678"
-              maxLength={12}
-              className="w-full px-4 py-3.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent transition"
-            />
-          </div>
-        )}
-
-        {/* Enviar por WhatsApp */}
-        <button
-          onClick={enviarPorWhatsapp}
-          disabled={!puedeEnviar || enviando}
-          title={puedeEnviar ? 'Mandar el ticket en imagen' : 'Escribe un teléfono válido (10 dígitos)'}
-          className="w-full flex items-center justify-center gap-2 bg-[#27A910] hover:bg-[#218f0d] disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium py-3.5 rounded-lg text-base transition-colors"
-        >
-          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 19 19">
-            <path d="M16.2312 2.76454C15.3557 1.88495 14.313 1.18752 13.164 0.712894C12.0149 0.238271 10.7823 -0.00405 9.53819 5.12002e-05C4.32513 5.12002e-05 0.0763821 4.22754 0.0763821 9.41453C0.0763821 11.077 0.515578 12.692 1.33668 14.117L0 19L5.01256 17.689C6.39698 18.4395 7.95327 18.8385 9.53819 18.8385C14.7513 18.8385 19 14.611 19 9.42403C19 6.90653 18.0166 4.54104 16.2312 2.76454ZM9.53819 17.2425C8.12512 17.2425 6.7407 16.8625 5.52814 16.15L5.24171 15.979L2.26281 16.758L3.05528 13.87L2.86432 13.5755C2.07907 12.3282 1.66219 10.8863 1.66131 9.41453C1.66131 5.10154 5.19397 1.58655 9.52864 1.58655C11.6291 1.58655 13.6055 2.40354 15.0854 3.88554C15.8183 4.61121 16.3991 5.47445 16.7941 6.4252C17.1891 7.37594 17.3904 8.39526 17.3864 9.42403C17.4055 13.737 13.8729 17.2425 9.53819 17.2425ZM13.8538 11.3905C13.6151 11.2765 12.4503 10.7065 12.2402 10.621C12.0206 10.545 11.8678 10.507 11.7055 10.735C11.5432 10.9725 11.0945 11.5045 10.9608 11.6565C10.8271 11.818 10.6839 11.837 10.4452 11.7135C10.2065 11.5995 9.44271 11.343 8.54523 10.545C7.83869 9.91803 7.37085 9.14853 7.22764 8.91103C7.09397 8.67353 7.20854 8.55003 7.33266 8.42653C7.43769 8.32203 7.57136 8.15103 7.68593 8.01803C7.8005 7.88503 7.84824 7.78053 7.92462 7.62853C8.001 7.46703 7.96281 7.33403 7.90553 7.22003C7.84824 7.10603 7.37085 5.94704 7.1799 5.47204C6.98894 5.01604 6.78844 5.07304 6.64523 5.06354H6.18693C6.02462 5.06354 5.77638 5.12054 5.55678 5.35804C5.34673 5.59554 4.73568 6.16554 4.73568 7.32453C4.73568 8.48353 5.58543 9.60453 5.7 9.75653C5.81457 9.91803 7.37085 12.293 9.73869 13.3095C10.302 13.5565 10.7412 13.699 11.0849 13.8035C11.6482 13.984 12.1638 13.9555 12.5744 13.8985C13.0327 13.832 13.9779 13.3285 14.1688 12.7775C14.3693 12.2265 14.3693 11.761 14.3025 11.6565C14.2357 11.552 14.0925 11.5045 13.8538 11.3905Z" />
-          </svg>
-          {enviando ? 'Preparando el ticket…' : 'Enviar por WhatsApp'}
-        </button>
-
         {avisoEnvio && (
-          <p className="text-xs text-gray-500 text-center -mt-3">{avisoEnvio}</p>
+          <p className="text-xs text-gray-500 text-center">{avisoEnvio}</p>
         )}
       </div>
+
+      {/* Modal del teléfono (solo Autoservicio, que no trae cliente). */}
+      {pidiendoTelefono && (
+        <div
+          className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
+          onClick={() => setPidiendoTelefono(false)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-xl w-full max-w-sm"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-gray-100">
+              <h2 className="text-base font-semibold text-gray-900">Enviar por WhatsApp</h2>
+              <button
+                type="button"
+                onClick={() => setPidiendoTelefono(false)}
+                aria-label="Cerrar"
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <form
+              onSubmit={(e) => { e.preventDefault(); enviarPorWhatsapp(); }}
+              className="p-5 space-y-4"
+            >
+              <div>
+                <label htmlFor="telefono-ticket" className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Teléfono del cliente
+                </label>
+                <input
+                  id="telefono-ticket"
+                  type="tel"
+                  inputMode="numeric"
+                  autoFocus
+                  value={telefonoManual}
+                  onChange={(e) => setTelefonoManual(e.target.value)}
+                  placeholder="33-1234-5678"
+                  maxLength={12}
+                  className="w-full px-4 py-3.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent transition"
+                />
+                <p className="mt-1.5 text-xs text-gray-500">10 dígitos, sin lada internacional.</p>
+              </div>
+              <div className="flex gap-3 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setPidiendoTelefono(false)}
+                  className="flex-1 border border-gray-300 text-gray-700 font-medium py-3.5 rounded-lg text-base hover:bg-gray-50 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={!puedeEnviar || enviando}
+                  className="flex-1 bg-[#27A910] hover:bg-[#218f0d] disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium py-3.5 rounded-lg text-base transition-colors"
+                >
+                  {enviando ? 'Preparando…' : 'Enviar'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
