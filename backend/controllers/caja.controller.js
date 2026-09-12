@@ -1,4 +1,5 @@
 import pool from '../db/pool.js';
+import { esAdmin } from '../middleware/roles.js';
 
 // Ventas cobradas DENTRO de una sesión de caja.
 //
@@ -52,6 +53,64 @@ async function totalesMovimientos(client, cajaId) {
   };
 }
 
+// Con cuánto dinero debe abrirse la próxima caja de una sucursal: lo que quedó
+// en el cajón al cerrar la anterior. El fondo dejó de ser un número que cada
+// quien teclea — el efectivo no aparece ni desaparece de un día para otro.
+//
+// De un corte normal se arrastra lo CONTADO (el dinero que de verdad está en el
+// cajón, no el teórico). De un cierre automático nadie contó nada, así que se
+// arrastra lo esperado y se avisa en pantalla para que revisen el cajón.
+//
+// Devuelve null cuando la sucursal nunca ha cerrado una caja: ahí no hay nada
+// que arrastrar y el fondo lo captura un administrador.
+async function aperturaSugerida(client, sucursal) {
+  const { rows } = await client.query(
+    `SELECT c.id, c.monto_inicial, c.monto_contado, c.cerrada_at, c.cierre_automatico,
+            -- Igual que el historial: las cifras congeladas (mig. 101) y, para
+            -- los cortes anteriores a esa migración, el cálculo en vivo.
+            COALESCE(c.ventas_efectivo, (
+              SELECT COALESCE(SUM(precio_total), 0) FROM notas
+               WHERE caja_id = c.id AND estado_pago = 'PAGADO' AND estado <> 'CANCELADA'
+                 AND COALESCE(forma_pago, 'EFECTIVO') = 'EFECTIVO'
+            )) AS ventas_efectivo,
+            COALESCE(c.total_entradas, (
+              SELECT COALESCE(SUM(monto), 0) FROM movimientos_caja
+               WHERE caja_id = c.id AND tipo = 'entrada'
+            )) AS total_entradas,
+            COALESCE(c.total_salidas, (
+              SELECT COALESCE(SUM(monto), 0) FROM movimientos_caja
+               WHERE caja_id = c.id AND tipo = 'salida'
+            )) AS total_salidas
+       FROM cajas c
+      WHERE c.estado = 'cerrada' AND c.sucursal = $1
+      ORDER BY c.cerrada_at DESC
+      LIMIT 1`,
+    [sucursal]
+  );
+  if (rows.length === 0) return null;
+
+  const c = rows[0];
+  const esperado = parseFloat(c.monto_inicial)
+                 + parseFloat(c.ventas_efectivo)
+                 + parseFloat(c.total_entradas)
+                 - parseFloat(c.total_salidas);
+  const contado = c.monto_contado != null ? parseFloat(c.monto_contado) : null;
+  const sinConteo = contado == null;
+
+  return {
+    // Nunca negativo: un cierre con más salidas que efectivo dejaría el cajón
+    // en rojo, y un fondo negativo no existe.
+    monto:  Math.max(0, sinConteo ? esperado : contado),
+    origen: sinConteo ? 'cierre_automatico' : 'corte',
+    corte: {
+      id:            c.id,
+      cerrada_at:    c.cerrada_at,
+      monto_contado: contado,
+      esperado,
+    },
+  };
+}
+
 export async function getCajaActual(req, res) {
   const client = await pool.connect();
   try {
@@ -65,7 +124,8 @@ export async function getCajaActual(req, res) {
     );
 
     if (cajaRes.rowCount === 0) {
-      return res.json({ abierta: false });
+      // Sin caja abierta, lo que importa es con cuánto se abre la siguiente.
+      return res.json({ abierta: false, apertura_sugerida: await aperturaSugerida(client, req.sucursal) });
     }
 
     const caja = cajaRes.rows[0];
@@ -114,22 +174,64 @@ export async function getCajaActual(req, res) {
   }
 }
 
+// El fondo de apertura NO es libre: sale del corte anterior (ver
+// `aperturaSugerida`). Un empleado solo confirma ese monto; ajustarlo es cosa
+// de un administrador, que es quien responde por el dinero del cajón.
 export async function abrirCaja(req, res) {
   const { monto_inicial, notas } = req.body;
-  const monto = Number(monto_inicial);
 
-  if (!Number.isFinite(monto) || monto < 0) {
-    return res.status(400).json({ message: 'El monto inicial debe ser un número mayor o igual a 0.' });
-  }
-
+  const client = await pool.connect();
   try {
-    const { rows } = await pool.query(
+    // Ya hay una caja abierta: eso se responde antes que cualquier regla de
+    // rol, para que el mensaje diga lo que de verdad pasa.
+    const abierta = await client.query(
+      `SELECT 1 FROM cajas WHERE estado = 'abierta' AND sucursal = $1 LIMIT 1`,
+      [req.sucursal]
+    );
+    if (abierta.rowCount > 0) {
+      return res.status(409).json({ message: 'Ya hay una caja abierta. Ciérrala antes de abrir otra.' });
+    }
+
+    const sugerida = await aperturaSugerida(client, req.sucursal);
+    const admin = esAdmin(req.user?.rol);
+
+    let monto;
+    if (admin) {
+      // El admin puede ajustarlo; si no manda nada, va lo del corte anterior.
+      monto = monto_inicial === undefined || monto_inicial === null || monto_inicial === ''
+        ? sugerida?.monto
+        : Number(monto_inicial);
+      if (monto == null) {
+        return res.status(400).json({ message: 'Captura el fondo inicial para abrir la caja.' });
+      }
+    } else {
+      if (!sugerida) {
+        return res.status(403).json({
+          message: 'No hay un corte anterior del cual tomar el fondo. Pide a un administrador que abra la caja.',
+        });
+      }
+      // Llega un monto distinto al del corte: la pantalla lo tiene bloqueado,
+      // así que esto es alguien llamando a la API por su cuenta.
+      if (monto_inicial !== undefined && monto_inicial !== null && monto_inicial !== ''
+          && Number(monto_inicial) !== sugerida.monto) {
+        return res.status(403).json({
+          message: 'El fondo lo fija el corte anterior. Solo un administrador puede ajustarlo.',
+        });
+      }
+      monto = sugerida.monto;
+    }
+
+    if (!Number.isFinite(monto) || monto < 0) {
+      return res.status(400).json({ message: 'El monto inicial debe ser un número mayor o igual a 0.' });
+    }
+
+    const { rows } = await client.query(
       `INSERT INTO cajas (usuario_apertura_id, monto_inicial, notas_apertura, sucursal)
        VALUES ($1, $2, $3, $4)
        RETURNING id`,
       [req.user.id, monto, notas?.trim() || null, req.sucursal]
     );
-    res.status(201).json({ id: rows[0].id });
+    res.status(201).json({ id: rows[0].id, monto_inicial: monto });
   } catch (err) {
     // Índice único parcial: ya hay una caja abierta.
     if (err.code === '23505') {
@@ -137,6 +239,8 @@ export async function abrirCaja(req, res) {
     }
     console.error('Error en caja/abrir:', err);
     res.status(500).json({ message: 'No se pudo abrir la caja. Intenta de nuevo.' });
+  } finally {
+    client.release();
   }
 }
 

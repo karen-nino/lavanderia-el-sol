@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import request from 'supertest';
 import app from '../../app.js';
+import { cerrarCajasAbiertas } from '../../jobs/cierreDelDia.js';
 import { limpiarBase, seedSucursal, seedUsuario, seedMaquina, seedAjustes, auth, tokenFor } from '../helpers.js';
 
 // Estado por defecto: una sucursal y un admin en ella.
@@ -30,7 +31,7 @@ describe('GET /api/caja/actual', () => {
   it('sin caja abierta devuelve { abierta: false }', async () => {
     const res = await request(app).get('/api/caja/actual').set(auth(admin.token));
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ abierta: false });
+    expect(res.body).toEqual({ abierta: false, apertura_sugerida: null });
   });
 });
 
@@ -173,7 +174,11 @@ describe('POST /api/caja/cerrar', () => {
 
     // Tras cerrar, ya no hay caja abierta y aparece en el historial (admin).
     const actual = await request(app).get('/api/caja/actual').set(auth(admin.token));
-    expect(actual.body).toEqual({ abierta: false });
+    // Sin caja abierta, /actual dice con cuánto se abre la siguiente: lo que
+    // quedó contado en este corte (ver aperturaSugerida).
+    expect(actual.body.abierta).toBe(false);
+    expect(actual.body.apertura_sugerida.monto).toBe(590);
+    expect(actual.body.apertura_sugerida.origen).toBe('corte');
 
     const historial = await request(app).get('/api/caja/historial').set(auth(admin.token));
     expect(historial.status).toBe(200);
@@ -187,6 +192,80 @@ describe('POST /api/caja/cerrar', () => {
       .set(auth(admin.token))
       .send({ monto_contado: 100 });
     expect(res.status).toBe(409);
+  });
+});
+
+// El fondo de apertura sale del corte anterior: el efectivo no aparece ni
+// desaparece de un día para otro, y quien lo ajusta es un admin.
+describe('el fondo de apertura viene del corte anterior', () => {
+  // Deja un corte cerrado con `contado` en el cajón.
+  const cerrarCon = async (contado, inicial = 500) => {
+    await request(app).post('/api/caja/abrir').set(auth(admin.token)).send({ monto_inicial: inicial });
+    await request(app).post('/api/caja/cerrar').set(auth(admin.token)).send({ monto_contado: contado });
+  };
+
+  it('un empleado abre con lo contado en el corte anterior, sin capturarlo', async () => {
+    await cerrarCon(742.5);
+    const operador = await seedUsuario({ rol: 'operador', sucursal: 'centro', nombre: 'Empleado' });
+
+    const abrir = await request(app).post('/api/caja/abrir').set(auth(operador.token)).send({});
+    expect(abrir.status).toBe(201);
+    expect(abrir.body.monto_inicial).toBe(742.5);
+
+    const actual = await request(app).get('/api/caja/actual').set(auth(operador.token));
+    expect(actual.body.caja.monto_inicial).toBe(742.5);
+  });
+
+  it('un empleado no puede abrir con otro monto (403)', async () => {
+    await cerrarCon(742.5);
+    const operador = await seedUsuario({ rol: 'operador', sucursal: 'centro', nombre: 'Empleado' });
+
+    const res = await request(app).post('/api/caja/abrir').set(auth(operador.token))
+      .send({ monto_inicial: 2000 });
+    expect(res.status).toBe(403);
+
+    // Y la caja sigue sin abrirse.
+    const actual = await request(app).get('/api/caja/actual').set(auth(operador.token));
+    expect(actual.body.abierta).toBe(false);
+  });
+
+  it('sin corte anterior, un empleado no puede abrir la caja (403)', async () => {
+    const operador = await seedUsuario({ rol: 'operador', sucursal: 'centro', nombre: 'Empleado' });
+    const res = await request(app).post('/api/caja/abrir').set(auth(operador.token))
+      .send({ monto_inicial: 500 });
+    expect(res.status).toBe(403);
+  });
+
+  it('un admin sí puede ajustarlo', async () => {
+    await cerrarCon(742.5);
+    const res = await request(app).post('/api/caja/abrir').set(auth(admin.token))
+      .send({ monto_inicial: 800 });
+    expect(res.status).toBe(201);
+    expect(res.body.monto_inicial).toBe(800);
+  });
+
+  it('el corte de otra sucursal no se mezcla', async () => {
+    await seedSucursal('norte');
+    await cerrarCon(742.5); // corte de 'centro'
+    const otroAdmin = await seedUsuario({ rol: 'admin', sucursal: 'norte', nombre: 'Norte' });
+
+    // `auth` manda X-Sucursal (por defecto 'centro'): aquí hay que pedir la suya.
+    const actual = await request(app).get('/api/caja/actual').set(auth(otroAdmin.token, 'norte'));
+    expect(actual.body.apertura_sugerida).toBeNull();
+  });
+
+  it('si la caja se cerró sola, arrastra lo esperado y lo avisa', async () => {
+    await request(app).post('/api/caja/abrir').set(auth(admin.token)).send({ monto_inicial: 500 });
+    await request(app).post('/api/caja/movimientos').set(auth(admin.token))
+      .send({ tipo: 'entrada', concepto: 'Extra', monto: 100 });
+    await cerrarCajasAbiertas(); // el barrido de medianoche: nadie contó el cajón
+
+    const actual = await request(app).get('/api/caja/actual').set(auth(admin.token));
+    expect(actual.body.apertura_sugerida).toMatchObject({
+      monto: 600, // 500 de fondo + 100 de entrada, sin ventas
+      origen: 'cierre_automatico',
+    });
+    expect(actual.body.apertura_sugerida.corte.monto_contado).toBeNull();
   });
 });
 

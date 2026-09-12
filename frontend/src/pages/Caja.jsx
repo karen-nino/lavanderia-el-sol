@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { esAdmin as esAdminFn, esAdminMain as esAdminMainFn } from '../lib/roles';
+import FondoApertura from '../components/FondoApertura';
 import { formatHora12 } from '../lib/fecha';
 import { imprimirCortes, descargarCortesCSV } from '../lib/exportCorte';
 import SucursalBar from '../components/SucursalBar';
@@ -175,10 +176,19 @@ function EmptyState({ children }) {
 
 // ── Apertura ────────────────────────────────────────────────
 function Apertura({ data, onAbrir }) {
+  const { usuario } = useAuth();
+  const admin = esAdminFn(usuario?.rol);
+  const sugerida = data?.apertura_sugerida ?? null;
   const [monto, setMonto] = useState('');
   const [notas, setNotas] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
+
+  // El fondo lo trae el corte anterior: el campo arranca con ese monto y se
+  // vuelve a poner si el corte cambia (p. ej. después de recargar).
+  useEffect(() => {
+    if (sugerida) setMonto(String(sugerida.monto));
+  }, [sugerida?.monto, sugerida?.corte?.id]);
 
   if (data?.abierta) {
     const { caja, totales } = data;
@@ -216,7 +226,6 @@ function Apertura({ data, onAbrir }) {
     setError(null);
     try {
       await api.post('/caja/abrir', { monto_inicial: Number(monto), notas });
-      setMonto('');
       setNotas('');
       onAbrir();
     } catch (err) {
@@ -228,17 +237,9 @@ function Apertura({ data, onAbrir }) {
 
   return (
     <form onSubmit={submit} className="space-y-4 max-w-md mx-auto">
-      <p className="text-sm text-gray-500">No hay una caja abierta. Ingresa el fondo inicial para abrirla.</p>
+      <p className="text-sm text-gray-500">No hay una caja abierta.</p>
       <ErrorBox message={error} />
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Fondo inicial</label>
-        <input
-          type="number" min="0" step="0.01" required
-          value={monto} onChange={(e) => setMonto(e.target.value)}
-          placeholder="0.00"
-          className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-base"
-        />
-      </div>
+      <FondoApertura sugerida={sugerida} admin={admin} monto={monto} onMonto={setMonto} />
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">Nota (opcional)</label>
         <textarea
@@ -247,7 +248,7 @@ function Apertura({ data, onAbrir }) {
         />
       </div>
       <button
-        type="submit" disabled={saving}
+        type="submit" disabled={saving || (!sugerida && !admin)}
         className="w-full bg-blue hover:bg-blue/90 text-white font-medium py-3.5 rounded-lg text-base transition-colors disabled:opacity-60"
       >
         {saving ? 'Abriendo…' : 'Abrir caja'}
