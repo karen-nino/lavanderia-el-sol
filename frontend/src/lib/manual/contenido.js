@@ -133,7 +133,7 @@ Los filtros se quedan puestos: si entras a una nota y regresas con la flecha, la
         claves: ['salidas', 'poner lavadora', 'secadora', 'que maquina'],
         cuerpo: `Al crear la nota solo se elige el TIPO de máquina. La máquina física se asigna después, cuando vas a meter la ropa.
 
-Abre la nota y entra a Salidas (o entra desde la lista de máquinas). Toca Asignar máquina y la app te pregunta DÓNDE VA:
+Abre la nota y entra a Salidas (o entra desde la lista de máquinas). En Máquinas toca + Agregar y la app te pregunta DÓNDE VA:
 
 · A una carga que ya existe y tiene un hueco libre (lo normal: la Carga 1 ya tiene lavadora y le falta la secadora).
 · A una carga nueva.

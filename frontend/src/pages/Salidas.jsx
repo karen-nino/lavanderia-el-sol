@@ -699,9 +699,7 @@ export default function Salidas() {
       {/* Sección 1 — Máquinas */}
       <div className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
         <div className="px-4 py-3 border-b border-gray-50 flex items-center justify-between gap-2">
-          <h2 className="text-sm font-semibold text-gray-700">
-            {maquinasAsignadas.length > 1 ? 'Máquinas asignadas' : 'Máquina asignada'}
-          </h2>
+          <h2 className="text-sm font-semibold text-gray-700">Máquinas</h2>
           {/* Asignar una máquina extra: disponible desde el inicio, salvo en
               notas cerradas. */}
           {nota && !['FINALIZADA', 'CANCELADA'].includes(nota.estado) && (
@@ -713,7 +711,7 @@ export default function Salidas() {
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
               </svg>
-              Asignar Máquina
+              Agregar
             </button>
           )}
         </div>
@@ -830,19 +828,18 @@ export default function Salidas() {
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="text-sm text-gray-600">
                     {slot === 'lavadora' ? `Lavadora ${TIPO_MAQ_LABEL[tipo] ?? tipo}` : 'Secadora'}
-                    <span className="text-gray-400 italic"> — sin asignar</span>
                   </span>
                   {opciones.length === 0 ? (
                     <span className="text-sm text-red-600">No hay {queFalta} disponibles</span>
                   ) : (
-                    // Abre el mismo modal que "+ Asignar Máquina", ya fijado a
+                    // Abre el mismo modal que "+ Agregar", ya fijado a
                     // esta carga y a las máquinas del tipo que le toca.
                     <button
                       onClick={() => iniciarAsignarSlot(carga, slot, tipo)}
                       disabled={loadingMaquina}
                       className="px-4 py-2 bg-blue hover:opacity-90 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
                     >
-                      Asignar máquina
+                      Asignar
                     </button>
                   )}
                 </div>
@@ -881,7 +878,7 @@ export default function Salidas() {
           ))}
 
           {/* Una nota sin ninguna carga no lista nada aquí: para darle su
-              primera máquina se usa "+ Asignar Máquina" del encabezado. */}
+              primera máquina se usa "+ Agregar" del encabezado. */}
         </div>
       </div>
 
@@ -1390,7 +1387,9 @@ export default function Salidas() {
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4 max-h-[90vh] overflow-y-auto">
             <div>
               <h3 className="text-base font-bold text-gray-900">
-                {cargaDestino ? `Asignar máquina · Carga ${cargaDestino.orden}` : 'Asignar máquina'}
+                {/* Sin carga destino se abre una carga nueva: ahí se AGREGA
+                    una máquina a la nota, no se asigna a algo que ya existe. */}
+                {cargaDestino ? `Asignar máquina · Carga ${cargaDestino.orden}` : 'Agregar máquina'}
               </h3>
               <p className="text-sm text-gray-500 mt-1">
                 {asignarSlot
@@ -1412,7 +1411,7 @@ export default function Salidas() {
             )}
 
             {/* ¿Carga nueva o se suma a una carga que ya existe? Solo se ofrece
-                cuando el modal se abre desde "Asignar Máquina" (sin destino
+                cuando el modal se abre desde "+ Agregar" (sin destino
                 fijo) y hay alguna carga con hueco libre. */}
             {!asignarCargaFija && cargasDestino.length > 0 && (
               <div className="space-y-2">
