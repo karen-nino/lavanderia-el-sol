@@ -104,6 +104,10 @@ export default function Salidas() {
   // true cuando el modal se abrió desde una carga concreta: el destino ya está
   // decidido y no se ofrece el selector "Carga nueva / Carga N".
   const [asignarCargaFija, setAsignarCargaFija] = useState(false);
+  // Modo "slot": el modal se abrió desde una carga de Por Encargo a la que le
+  // falta la máquina física de un tipo ya elegido ({ carga, slot, tipo }). Ahí
+  // no se pregunta el cobro (la carga ya tiene su precio) ni el destino.
+  const [asignarSlot,      setAsignarSlot]      = useState(null);
 
   // Cambiar una máquina asignada (sin iniciar) por otra del mismo tipo.
   const [cambiarMaq,       setCambiarMaq]       = useState(null); // máquina a cambiar
@@ -226,12 +230,33 @@ export default function Salidas() {
       await api.patch(`/notas/${id}/asignar-carga-maquina`, {
         carga_id: cargaId, slot, maquina_id: Number(maquinaId),
       });
+      cerrarAsignar();
       await cargarDatos();
     } catch (err) {
       setErrorAccion(err.message);
     } finally {
       setLoadingMaquina(false);
     }
+  }
+
+  // Abre el mismo modal de asignar, pero para el hueco de una carga de Por
+  // Encargo que ya tiene TIPO elegido: solo se elige la máquina física.
+  function iniciarAsignarSlot(carga, slot, tipo) {
+    setErrorAccion('');
+    setAsignarMaqSel([]);
+    setAsignarCobrar(null);
+    setAsignarCarga(carga);
+    setAsignarCargaFija(true);
+    setAsignarSlot({ carga, slot, tipo });
+    setAsignarOpen(true);
+  }
+
+  // Cierra el modal de asignar y lo deja limpio para la próxima vez.
+  function cerrarAsignar() {
+    setAsignarOpen(false);
+    setAsignarCarga(null);
+    setAsignarCargaFija(false);
+    setAsignarSlot(null);
   }
 
   // Detiene el ciclo de UNA máquina (lavadora o secadora): pasa a disponible
@@ -273,6 +298,7 @@ export default function Salidas() {
     // selector solo se oculta si el modal se abrió desde una carga concreta.
     setAsignarCarga(carga ?? cargasDestino[0] ?? null);
     setAsignarCargaFija(Boolean(carga));
+    setAsignarSlot(null);
     setAsignarOpen(true);
     setLoadingMaquinas(true);
     try {
@@ -293,7 +319,7 @@ export default function Salidas() {
   // a la que estuviera elegida del mismo tipo.
   function toggleAsignarMaq(maqId) {
     const s = String(maqId);
-    const esSec = (mid) => maquinasDisp.some(m => String(m.id) === String(mid) && m.tipo === 'secadora');
+    const esSec = (mid) => maquinasModal.some(m => String(m.id) === String(mid) && m.tipo === 'secadora');
     setAsignarMaqSel(prev => {
       if (prev.includes(s)) return prev.filter(x => x !== s);
       if (asignarCarga) return [...prev.filter(x => esSec(x) !== esSec(s)), s];
@@ -312,8 +338,14 @@ export default function Salidas() {
   // Asigna las máquinas elegidas: el backend crea la(s) carga(s) nueva(s) (por
   // cobrar o sin cobro); las máquinas quedan asignadas (sin iniciar).
   async function confirmarAsignar() {
+    if (asignarMaqSel.length === 0) return;
+    // Modo slot: la carga ya existe y ya está cobrada; solo se le pone máquina.
+    if (asignarSlot) {
+      await asignarTipoCarga(asignarSlot.carga.id, asignarSlot.slot, asignarMaqSel[0]);
+      return;
+    }
     const cobrar = esAutoservicio ? true : asignarCobrar;
-    if (asignarMaqSel.length === 0 || cobrar === null) return;
+    if (cobrar === null) return;
     setLoadingMaquina(true);
     setErrorAccion('');
     try {
@@ -322,9 +354,7 @@ export default function Salidas() {
         cobrar,
         ...(asignarCarga ? { carga_id: asignarCarga.id } : {}),
       });
-      setAsignarOpen(false);
-      setAsignarCarga(null);
-      setAsignarCargaFija(false);
+      cerrarAsignar();
       await cargarDatos();
     } catch (err) {
       setErrorAccion(err.message);
@@ -534,12 +564,6 @@ export default function Salidas() {
   const cargaDestino = asignarCarga
     ? (cargasNota.find(c => String(c.id) === String(asignarCarga.id)) ?? asignarCarga)
     : null;
-  // Sin carga destino (carga nueva) caben lavadora y secadora.
-  const huecosAsignar = cargaDestino ? huecosDeCarga(cargaDestino) : { lavadora: true, secadora: true };
-  // Solo se ofrecen las máquinas que caben en el destino elegido.
-  const lavadorasDisp = huecosAsignar.lavadora ? maquinasDisp.filter(m => m.tipo !== 'secadora') : [];
-  const secadorasDisp = huecosAsignar.secadora ? maquinasDisp.filter(m => m.tipo === 'secadora') : [];
-
   // Slots de Por Encargo con TIPO elegido pero sin máquina física: se asignan
   // eligiendo una máquina disponible del tipo correspondiente.
   const TIPO_MAQ_LABEL = { mediana: 'Mediana', jumbo: 'Jumbo', edredon: 'Edredón' };
@@ -599,6 +623,19 @@ export default function Salidas() {
     // La secadora es de un solo tamaño: cualquier secadora disponible sirve.
     return m.tipo === 'secadora';
   });
+
+  // Qué ofrece el modal de asignar. En modo slot el hueco es el del slot que se
+  // vino a llenar y las máquinas son las del tipo que pide esa carga; si no,
+  // manda el destino elegido (carga nueva = caben las dos).
+  const huecosAsignar = asignarSlot
+    ? { lavadora: asignarSlot.slot === 'lavadora', secadora: asignarSlot.slot === 'secadora' }
+    : cargaDestino ? huecosDeCarga(cargaDestino) : { lavadora: true, secadora: true };
+  const maquinasModal = asignarSlot
+    ? maquinasParaSlot(asignarSlot.slot, asignarSlot.tipo)
+    : maquinasDisp;
+  // Solo se ofrecen las máquinas que caben en el destino elegido.
+  const lavadorasDisp = huecosAsignar.lavadora ? maquinasModal.filter(m => m.tipo !== 'secadora') : [];
+  const secadorasDisp = huecosAsignar.secadora ? maquinasModal.filter(m => m.tipo === 'secadora') : [];
 
   // ¿Otras máquinas de la nota siguen en uso además de esta?
   const otrasEnUso = (maq) => maquinasAsignadas.some(m => String(m.id) !== String(maq.id) && m.estado === 'en_uso');
@@ -798,20 +835,15 @@ export default function Salidas() {
                   {opciones.length === 0 ? (
                     <span className="text-sm text-red-600">No hay {queFalta} disponibles</span>
                   ) : (
-                    <select
-                      defaultValue=""
+                    // Abre el mismo modal que "+ Asignar Máquina", ya fijado a
+                    // esta carga y a las máquinas del tipo que le toca.
+                    <button
+                      onClick={() => iniciarAsignarSlot(carga, slot, tipo)}
                       disabled={loadingMaquina}
-                      onChange={e => asignarTipoCarga(carga.id, slot, e.target.value)}
-                      className="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white disabled:opacity-60"
+                      className="px-4 py-2 bg-blue hover:opacity-90 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
                     >
-                      <option value="" disabled>Asignar máquina…</option>
-                      {opciones.map(m => (
-                        <option key={m.id} value={m.id}>
-                          {m.nombre}
-                          {m.reservada ? ` — también en ${m.reservada_folio ?? 'otra nota'}` : ''}
-                        </option>
-                      ))}
-                    </select>
+                      Asignar máquina
+                    </button>
                   )}
                 </div>
               </div>
@@ -1361,7 +1393,13 @@ export default function Salidas() {
                 {cargaDestino ? `Asignar máquina · Carga ${cargaDestino.orden}` : 'Asignar máquina'}
               </h3>
               <p className="text-sm text-gray-500 mt-1">
-                {cargaDestino
+                {asignarSlot
+                  ? <>Elige la <span className="font-medium text-gray-700">
+                      {asignarSlot.slot === 'lavadora'
+                        ? `lavadora ${TIPO_MAQ_LABEL[asignarSlot.tipo] ?? asignarSlot.tipo}`
+                        : 'secadora'}
+                    </span> que le falta a la Carga {cargaDestino?.orden}. Queda asignada; la inicias después con su botón.</>
+                  : cargaDestino
                   ? <>La máquina se suma a la <span className="font-medium text-gray-700">Carga {cargaDestino.orden}</span>. Queda asignada; la inicias después con su botón.</>
                   : <>Se abre una <span className="font-medium text-gray-700">carga nueva</span>. Puedes elegir varias: una lavadora y una secadora se agrupan en una misma carga. Quedan asignadas; las inicias después con su botón.</>}
               </p>
@@ -1415,7 +1453,7 @@ export default function Salidas() {
 
             {/* ¿Se cobra lo que se está asignando? Solo se pregunta en Por
                 Encargo: en Autoservicio todo se cobra. */}
-            {!esAutoservicio && (
+            {!esAutoservicio && !asignarSlot && (
             <div className="space-y-2">
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Cobro</p>
               <div className="grid grid-cols-2 gap-2">
@@ -1545,7 +1583,7 @@ export default function Salidas() {
             <div className="flex gap-3">
               <button
                 type="button"
-                onClick={() => { setAsignarOpen(false); setAsignarCarga(null); setAsignarCargaFija(false); }}
+                onClick={cerrarAsignar}
                 disabled={loadingMaquina}
                 className="flex-1 border border-gray-300 text-gray-700 font-medium py-3.5 rounded-lg text-base hover:bg-gray-50 disabled:opacity-60 transition-colors"
               >
@@ -1554,7 +1592,7 @@ export default function Salidas() {
               <button
                 type="button"
                 onClick={confirmarAsignar}
-                disabled={loadingMaquina || asignarMaqSel.length === 0 || (!esAutoservicio && asignarCobrar === null)}
+                disabled={loadingMaquina || asignarMaqSel.length === 0 || (!esAutoservicio && !asignarSlot && asignarCobrar === null)}
                 className="flex-1 bg-blue hover:opacity-90 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
               >
                 {loadingMaquina
