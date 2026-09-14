@@ -527,7 +527,7 @@ export default function TicketNota() {
           <div className="my-5 space-y-2">
             {/* Encabezado de columnas, como en el papel */}
             <div className="my-1 flex items-baseline justify-between gap-2 font-bold">
-              <span className="flex-1"><span className="inline-block w-9">CANT</span>DESCRIPCION</span>
+              <span className="flex-1"><span className="inline-block w-9">CANT</span>DESCRIPCIÓN</span>
               <span>IMPORTE</span>
             </div>
 
