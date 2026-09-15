@@ -19,7 +19,10 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const BACKEND = '/Users/karen.nino/Desktop/lavanderia-el-sol/backend';
 dotenv.config({ path: path.join(BACKEND, '.env') });
 
-const REGISTRO = path.join(__dirname, '.demo-ventas-ids.json');
+const MODO_DEMO = process.argv.includes('--demo');
+// Un registro por entorno: si se mezclaran, limpiar en local intentaría borrar
+// ids que solo existen en la base de la demo.
+const REGISTRO = path.join(__dirname, MODO_DEMO ? '.demo-ventas-ids.demo.json' : '.demo-ventas-ids.json');
 const SUCURSAL = 'pruebas';
 const DIAS = 90;
 
@@ -28,21 +31,61 @@ const cfg = {
   password: process.env.DB_PASSWORD, database: process.env.DB_NAME,
 };
 
-// ── Candado: SOLO contra la base local ────────────────────────────────────
+// ── Candado: la base local, o la de la demo con --demo ────────────────────
 // Esto inventa cientos de notas cobradas. En la base del negocio sería un
-// destrozo, así que el script se niega a arrancar si huele a producción:
-// `DATABASE_URL` es la cadena de Supabase (db/pool.js la prefiere sobre las
-// DB_* en cuanto existe) y el host tiene que ser esta misma máquina.
-const LOCALES = ['localhost', '127.0.0.1', '::1', ''];
-if (process.env.DATABASE_URL) {
-  console.error('ABORTADO: hay DATABASE_URL definida (producción/Supabase).\n' +
-                'Este script solo siembra datos falsos en la base LOCAL.');
-  process.exit(1);
+// destrozo, así que por defecto solo acepta la base LOCAL: `DATABASE_URL` es
+// la cadena remota (db/pool.js la prefiere sobre las DB_* en cuanto existe) y
+// el host tiene que ser esta misma máquina.
+//
+// Con --demo apunta al Postgres de la demo pública, que también necesita datos
+// falsos. Esa puerta es estrecha a propósito: la cadena tiene que venir de
+// backend/.env.demo —nunca del .env normal, que es el que apunta a la base de
+// trabajo— y más abajo, ya conectados, se comprueba que la base no tenga
+// operación real antes de escribir nada.
+if (MODO_DEMO) {
+  const archivo = path.join(BACKEND, '.env.demo');
+  if (!fs.existsSync(archivo)) {
+    console.error('ABORTADO: falta backend/.env.demo con la DATABASE_URL de la demo.');
+    process.exit(1);
+  }
+  // override: en esta misma corrida ya se cargó el .env normal.
+  dotenv.config({ path: archivo, override: true });
+  if (!process.env.DATABASE_URL) {
+    console.error('ABORTADO: backend/.env.demo no define DATABASE_URL.');
+    process.exit(1);
+  }
+  cfg.connectionString = process.env.DATABASE_URL;
+  cfg.ssl = { rejectUnauthorized: false };
+  // Las DB_* del .env normal apuntan a la base local: si se quedan puestas,
+  // pg las mezcla con la cadena y se conecta a quién sabe dónde.
+  for (const k of ['host', 'port', 'user', 'password', 'database']) delete cfg[k];
+} else {
+  const LOCALES = ['localhost', '127.0.0.1', '::1', ''];
+  if (process.env.DATABASE_URL) {
+    console.error('ABORTADO: hay DATABASE_URL definida (producción).\n' +
+                  'Este script solo siembra datos falsos en la base LOCAL, o en la demo con --demo.');
+    process.exit(1);
+  }
+  if (!LOCALES.includes(String(cfg.host ?? '').trim())) {
+    console.error(`ABORTADO: DB_HOST es "${cfg.host}" y no una base local.\n` +
+                  'Este script solo siembra datos falsos en la base LOCAL, o en la demo con --demo.');
+    process.exit(1);
+  }
 }
-if (!LOCALES.includes(String(cfg.host ?? '').trim())) {
-  console.error(`ABORTADO: DB_HOST es "${cfg.host}" y no una base local.\n` +
-                'Este script solo siembra datos falsos en la base LOCAL.');
-  process.exit(1);
+
+// Segunda comprobación, ya conectados: una base con notas fuera de la sucursal
+// de pruebas es una base con operación real. Da igual qué diga la cadena de
+// conexión o el nombre del archivo; si hay trabajo de verdad ahí dentro, este
+// script no escribe.
+async function verificarBaseSinOperacionReal(db) {
+  const { rows } = await db.query(
+    'SELECT COUNT(*)::int AS n FROM notas WHERE sucursal <> $1', [SUCURSAL]
+  );
+  if (rows[0].n > 0) {
+    console.error(`ABORTADO: la base tiene ${rows[0].n} notas fuera de la sucursal "${SUCURSAL}".\n` +
+                  'Eso es operación real: este script solo siembra en bases de prueba o de demostración.');
+    process.exit(1);
+  }
 }
 
 // --- azar con semilla, para que dos corridas den lo mismo -------------------
@@ -498,6 +541,7 @@ async function cuadrar(db) {
 const db = new pg.Client(cfg);
 await db.connect();
 try {
+  if (MODO_DEMO) await verificarBaseSinOperacionReal(db);
   if (process.argv.includes('--limpiar')) await limpiar(db);
   else if (process.argv.includes('--cuadrar')) await cuadrar(db);
   else await sembrar(db);
