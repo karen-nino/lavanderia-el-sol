@@ -1,0 +1,45 @@
+# Devuelve la demo pública a su estado de exhibición, todas las noches.
+#
+# Quien entra a https://lavanderia-el-sol-demo.netlify.app lo hace como
+# administrador y puede borrar el inventario o poner cualquier cosa en el
+# nombre del negocio. Esto lo deshace y vuelve a sembrar los 90 días de datos.
+#
+# Necesita el secreto DEMO_DATABASE_URL (la cadena de Neon) en
+# Settings → Secrets and variables → Actions.
+name: Restaurar la demo
+
+on:
+  schedule:
+    # 09:00 UTC = 03:00 en México, que no tiene horario de verano desde 2022.
+    - cron: '0 9 * * *'
+  workflow_dispatch:        # para lanzarlo a mano desde la pestaña Actions
+
+jobs:
+  restaurar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Instalar pnpm
+        run: npm install -g pnpm@11
+
+      - name: Instalar dependencias del backend
+        working-directory: backend
+        run: pnpm install --frozen-lockfile
+
+      - name: Restaurar la demo
+        working-directory: backend
+        env:
+          DEMO_DATABASE_URL: ${{ secrets.DEMO_DATABASE_URL }}
+        run: |
+          if [ -z "$DEMO_DATABASE_URL" ]; then
+            echo "Falta el secreto DEMO_DATABASE_URL." >&2
+            exit 1
+          fi
+          # El script lee la conexión de .env.demo, nunca del .env normal.
+          printf 'DATABASE_URL=%s\n' "$DEMO_DATABASE_URL" > .env.demo
+          node scripts/reset-demo.mjs
