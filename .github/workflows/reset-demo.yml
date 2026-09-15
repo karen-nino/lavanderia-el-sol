@@ -35,6 +35,9 @@ jobs:
         working-directory: backend
         env:
           DEMO_DATABASE_URL: ${{ secrets.DEMO_DATABASE_URL }}
+          # El seeder fecha las notas con la zona del proceso, y el runner va en
+          # UTC: sin esto, el "hoy" de la demo no coincide con el del negocio.
+          TZ: America/Mexico_City
         run: |
           if [ -z "$DEMO_DATABASE_URL" ]; then
             echo "Falta el secreto DEMO_DATABASE_URL." >&2
