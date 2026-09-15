@@ -16,7 +16,9 @@ import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const BACKEND = '/Users/karen.nino/Desktop/lavanderia-el-sol/backend';
+// Relativo al propio archivo: con la ruta clavada, el script solo funcionaba
+// en la máquina donde se escribió (en el runner de CI no existía y abortaba).
+const BACKEND = path.resolve(__dirname, '..');
 dotenv.config({ path: path.join(BACKEND, '.env') });
 
 const MODO_DEMO = process.argv.includes('--demo');

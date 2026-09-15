@@ -113,9 +113,18 @@ try {
 const registro = path.join(__dirname, '.demo-ventas-ids.demo.json');
 if (fs.existsSync(registro)) fs.unlinkSync(registro);
 
-// Repone usuarios, máquinas, productos y el stock de granel; es idempotente.
-seed('db/seed_pruebas.js', [process.env.DEMO_PASSWORD || 'Demo1234']);
-seed('scripts/seed-demo-ventas.mjs', ['--demo']);
-seed('scripts/seed-demo-ventas.mjs', ['--demo', '--cuadrar']);
+// La limpieza ya está confirmada en la base, así que a partir de aquí un fallo
+// deja la demo a medio montar. Conviene que se lea como lo que es —y no como un
+// error suelto de un script— para que quien lo vea sepa que hay que relanzar.
+try {
+  // Repone usuarios, máquinas, productos y el stock de granel; es idempotente.
+  seed('db/seed_pruebas.js', [process.env.DEMO_PASSWORD || 'Demo1234']);
+  seed('scripts/seed-demo-ventas.mjs', ['--demo']);
+  seed('scripts/seed-demo-ventas.mjs', ['--demo', '--cuadrar']);
+} catch {
+  console.error('\nLA DEMO QUEDÓ VACÍA: se borró lo viejo pero falló al sembrar.\n' +
+                'Revisa el error de arriba y vuelve a lanzar este script.');
+  process.exit(1);
+}
 
 console.log('\nDemo restaurada.');
