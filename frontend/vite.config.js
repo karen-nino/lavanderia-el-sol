@@ -14,8 +14,11 @@ export default defineConfig({
   },
   server: {
     proxy: {
+      // API_ORIGIN permite levantar el front contra otro backend (p. ej. el de
+      // la demo en otro puerto) sin tocar este archivo. La misma variable
+      // decide el destino del proxy en el build (scripts/gen-redirects.mjs).
       '/api': {
-        target: 'http://localhost:4000',
+        target: process.env.API_ORIGIN || 'http://localhost:4000',
         changeOrigin: true,
       },
     },

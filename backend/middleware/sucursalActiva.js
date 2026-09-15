@@ -1,5 +1,6 @@
 import pool from '../db/pool.js';
 import { esAdmin } from './roles.js';
+import { ENTORNO_DEMO } from '../utils/entorno.js';
 
 // Sucursal oculta donde operan los usuarios de prueba (migración 095). Sus
 // notas, caja e inventario viven aquí y no se mezclan con los datos reales.
@@ -69,8 +70,11 @@ export const sucursalActiva = async (req, res, next) => {
 // tiempos, datos del ticket), catálogo de sucursales y alta/edición de
 // usuarios. Su entorno es de solo lectura hacia afuera: pueden operar todo lo
 // suyo, pero no cambiar lo que comparten todas las sucursales.
+// En la demo pública no hay negocio detrás: la configuración "global" es la de
+// una base de juguete, y dejarla bloqueada solo esconde dos módulos que quien
+// mira la demo querría ver. La bandera se valida al arrancar (utils/entorno.js).
 export const bloquearPruebaGlobal = (req, res, next) => {
-  if (req.user?.es_prueba) {
+  if (req.user?.es_prueba && !ENTORNO_DEMO) {
     return res.status(403).json({
       message: 'Los usuarios de prueba no pueden modificar la configuración del negocio.',
     });

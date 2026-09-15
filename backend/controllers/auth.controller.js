@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken';
 import { randomUUID } from 'crypto';
 import { capitalizarNombre } from '../utils/nombres.js';
 import { fechaLocal } from '../utils/tz.js';
+import { ENTORNO_DEMO } from '../utils/entorno.js';
 
 // ── GET /auth/buscar-usuarios?q=... ─────────────────────────
 // Endpoint público usado por la pantalla de login para autocompletar
@@ -133,6 +134,66 @@ export const login = async (req, res) => {
   } catch (err) {
     console.error('login error:', err);
     res.status(500).json({ message: 'No se pudo iniciar sesión. Intenta de nuevo.' });
+  }
+};
+
+// ── POST /auth/demo-login ────────────────────────────────────
+// Entra sin contraseña. Existe SOLO en la demo pública: la ruta ni siquiera se
+// monta si falta ENTORNO_DEMO (ver auth.routes.js), y al arrancar se comprueba
+// que la base no tenga operación real (utils/entorno.js).
+//
+// Tercera valla, la que de verdad acota el daño si las dos anteriores fallaran:
+// la consulta solo mira usuarios con es_prueba = TRUE. Aunque alguien activara
+// la bandera sobre una base con datos reales, por aquí no se entra a ninguna
+// cuenta del negocio, solo a las del entorno cerrado de pruebas.
+export const demoLogin = async (req, res) => {
+  if (!ENTORNO_DEMO) return res.status(404).json({ message: 'No encontrado.' });
+
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, nombre, apellido, rol, sucursal, es_prueba, session_id
+         FROM usuarios
+        WHERE es_prueba = TRUE AND activo = TRUE AND rol = 'admin'
+        ORDER BY id
+        LIMIT 1`
+    );
+
+    if (rows.length === 0) {
+      return res.status(503).json({ message: 'La demo no tiene usuario de demostración.' });
+    }
+
+    const usuario = rows[0];
+
+    // Aquí NO se rota la sesión, al revés que en el login normal. Todos los que
+    // abren la demo entran a la misma cuenta, y como verifyToken exige que el
+    // `sid` del token coincida con usuarios.session_id, rotarlo haría que cada
+    // visitante nuevo echara al anterior con "Se inició sesión en otro
+    // dispositivo". Compartiendo el sid conviven sin estorbarse.
+    const sessionId = usuario.session_id || randomUUID();
+    if (!usuario.session_id) {
+      await pool.query('UPDATE usuarios SET session_id = $1 WHERE id = $2', [sessionId, usuario.id]);
+    }
+
+    const token = jwt.sign(
+      { id: usuario.id, rol: usuario.rol, sucursal: usuario.sucursal, sid: sessionId },
+      process.env.JWT_SECRET,
+      { expiresIn: '30d' }
+    );
+
+    res.json({
+      token,
+      usuario: {
+        id: usuario.id,
+        nombre: usuario.nombre,
+        apellido: usuario.apellido,
+        rol: usuario.rol,
+        sucursal: usuario.sucursal,
+        es_prueba: usuario.es_prueba,
+      },
+    });
+  } catch (err) {
+    console.error('demoLogin error:', err);
+    res.status(500).json({ message: 'No se pudo entrar a la demo. Intenta de nuevo.' });
   }
 };
 

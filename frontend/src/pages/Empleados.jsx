@@ -7,6 +7,7 @@ import SucursalBar from '../components/SucursalBar';
 import EmpleadoEditModal from '../components/EmpleadoEditModal';
 import EmpleadoDeleteModal from '../components/EmpleadoDeleteModal';
 import NombreEmpleado from '../components/NombreEmpleado';
+import { ES_DEMO } from '../lib/entorno';
 
 const INPUT_CLS =
   'w-full px-4 py-3.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent transition';
@@ -25,7 +26,8 @@ export default function Empleados() {
   const { usuario, sucursalActiva } = useAuth();
   // Un usuario de prueba no administra al personal real: ve su entorno, pero no
   // da de alta ni edita empleados (el backend también se lo bloquea).
-  const esAdmin     = esAdminFn(usuario?.rol) && usuario?.es_prueba !== true;
+  // En la demo no hay personal real que administrar: se deja entrar al módulo.
+  const esAdmin     = esAdminFn(usuario?.rol) && (usuario?.es_prueba !== true || ES_DEMO);
   const esAdminMain = esAdminMainFn(usuario?.rol);
 
   const [sucursales, setSucursales]     = useState([]);

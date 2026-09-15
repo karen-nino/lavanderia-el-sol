@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { api } from '../lib/api';
 import { APP_VERSION, versionEsNueva } from '../lib/version';
 import LogoSol from '../components/LogoSol';
+import { ES_DEMO } from '../lib/entorno';
 
 const INPUT_CLS =
   'w-full px-4 py-3.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent transition';
@@ -101,6 +102,24 @@ export default function Login() {
     setError('');
   };
 
+  // En la demo pública no hay a quién identificar: todo el mundo entra a la
+  // misma cuenta de juguete. El backend solo expone /auth/demo-login si él
+  // también está en modo demo (ENTORNO_DEMO), así que aquí no hay credenciales
+  // que esconder ni una puerta que pueda quedarse abierta en producción.
+  const entrarDemo = async () => {
+    setError('');
+    setLoading(true);
+    try {
+      const data = await api.post('/auth/demo-login', {}, { skipAuthRedirect: true });
+      login(data.token, data.usuario);
+      navigate('/');
+    } catch (err) {
+      setError(err.message || 'No se pudo entrar a la demo. Intenta de nuevo.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!seleccionado) {
@@ -136,14 +155,43 @@ export default function Login() {
 
         {/* Card */}
         <div className="bg-white rounded-2xl shadow-2xl p-8">
-          <h2 className="text-base font-semibold text-gray-800 mb-6">Iniciar sesión</h2>
+          <h2 className="text-base font-semibold text-gray-800 mb-6">
+            {ES_DEMO ? 'Demostración' : 'Iniciar sesión'}
+          </h2>
 
-          {aviso && (
+          {ES_DEMO && (
+            <>
+              <p className="text-sm text-gray-600 leading-relaxed mb-5">
+                Esto es una copia del sistema con datos inventados, para
+                enseñarlo. Entras como administrador y puedes crear notas,
+                cobrar, mover inventario y cambiar la configuración: no hay
+                ningún negocio detrás.
+              </p>
+
+              {error && (
+                <div className="bg-red-50 border border-red-300 text-red-700 text-sm font-medium rounded-lg px-3 py-2.5 mb-4">
+                  {error}
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={entrarDemo}
+                disabled={loading}
+                className="w-full bg-blue hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed text-white font-medium py-3.5 rounded-lg text-base transition-colors"
+              >
+                {loading ? 'Entrando...' : 'Entrar'}
+              </button>
+            </>
+          )}
+
+          {aviso && !ES_DEMO && (
             <div className="bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-lg px-3 py-2.5 mb-4">
               {aviso}
             </div>
           )}
 
+          {!ES_DEMO && (
           <form onSubmit={handleSubmit} className="space-y-4">
             <div ref={containerRef} className="relative">
               <label className="block text-sm font-medium text-gray-700 mb-1.5">
@@ -249,6 +297,7 @@ export default function Login() {
               {loading ? 'Iniciando sesión...' : 'Iniciar sesión'}
             </button>
           </form>
+          )}
         </div>
 
         {/* Versión de la app. El punto marca que se estrena versión y se apaga

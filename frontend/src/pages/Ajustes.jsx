@@ -6,6 +6,7 @@ import { useInstalacion } from '../lib/useInstalacion';
 import { formatTelefono } from '../lib/telefono';
 import { useAuth } from '../context/AuthContext';
 import { esAdminMain as esAdminMainFn } from '../lib/roles';
+import { ES_DEMO } from '../lib/entorno';
 
 const INPUT_CLS =
   'w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent transition';
@@ -675,7 +676,8 @@ export default function Ajustes() {
   // lo único que pueden guardar es su propio perfil. No es una cortesía del
   // frontend: el backend rechaza el resto con 403 (bloquearPruebaGlobal), así
   // que en vez de ofrecer un "Guardar" que va a fallar, no se ofrece.
-  const soloGuardaPerfil = usuario?.es_prueba === true;
+  // En la demo la configuración es de juguete y se puede tocar entera.
+  const soloGuardaPerfil = usuario?.es_prueba === true && !ES_DEMO;
 
   const [tiemposMarca, setTiemposMarca] = useState([]);
   // Lo que vino del servidor, para mandar solo lo que cambió al guardar.
