@@ -50,3 +50,6 @@ coverage/
 info
 # Datos de demostración sembrados en local (ids para poder borrarlos)
 backend/scripts/.demo-ventas-ids.json
+
+# Generado en el build por frontend/scripts/gen-redirects.mjs (destino según API_ORIGIN)
+frontend/public/_redirects
