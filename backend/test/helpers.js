@@ -126,12 +126,12 @@ export async function seedInsumo({
 
 // Inserta un usuario con una contraseña real (hash bcrypt) para probar el
 // login de verdad. Devuelve { id, password, rol, sucursal }.
-export async function seedLogin({ rol = 'admin', sucursal = 'centro', nombre = 'Login', password = 'secret123' } = {}) {
+export async function seedLogin({ rol = 'admin', sucursal = 'centro', nombre = 'Login', apellido = null, password = 'secret123' } = {}) {
   const hash = await bcrypt.hash(password, 4); // costo bajo: tests rápidos
   const { rows } = await pool.query(
-    `INSERT INTO usuarios (nombre, password, rol, sucursal, activo)
-     VALUES ($1, $2, $3, $4, TRUE) RETURNING id`,
-    [nombre, hash, rol, sucursal]
+    `INSERT INTO usuarios (nombre, apellido, password, rol, sucursal, activo)
+     VALUES ($1, $2, $3, $4, $5, TRUE) RETURNING id`,
+    [nombre, apellido, hash, rol, sucursal]
   );
   return { id: rows[0].id, password, rol, sucursal };
 }

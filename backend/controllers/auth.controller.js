@@ -7,7 +7,18 @@ import { fechaLocal } from '../utils/tz.js';
 
 // ── GET /auth/buscar-usuarios?q=... ─────────────────────────
 // Endpoint público usado por la pantalla de login para autocompletar
-// el nombre del empleado. Devuelve solo id + nombre, máximo 8 resultados.
+// el nombre del empleado. Devuelve solo id + nombre, máximo 5 resultados.
+//
+// Al ser público, cualquiera que llegue a la URL de la app puede consultarlo,
+// así que está acotado para que no sirva de directorio de personal:
+//   · mínimo 3 caracteres (también después del prefijo ***);
+//   · coincide por INICIO de nombre o de apellido, nunca por un trozo suelto
+//     en medio, que es lo que permitiría barrer la plantilla con sílabas
+//     comunes ("an", "ar", "er"...);
+//   · los comodines de ILIKE se escapan, para que un `q` como "%a" no vuelva a
+//     abrir esa puerta;
+//   · dos limitadores por IP en la ruta: uno por minuto y otro por hora, este
+//     último contra el barrido lento y sostenido.
 export const buscarUsuarios = async (req, res) => {
   const raw = (req.query.q ?? '').trim();
   if (!raw) return res.json([]);
@@ -17,24 +28,32 @@ export const buscarUsuarios = async (req, res) => {
   const mostrarOcultos = raw.startsWith('***');
   const q = mostrarOcultos ? raw.slice(3).trim() : raw;
 
-  // Mínimo 2 caracteres (también tras el prefijo ***) para dificultar la
+  // Mínimo 3 caracteres (también tras el prefijo ***) para dificultar la
   // enumeración de empleados; con menos, no se listan resultados.
-  if (q.length < 2) return res.json([]);
+  if (q.length < 3) return res.json([]);
+
+  // `%`, `_` y `\` son comodines de ILIKE: sin escaparlos, un q = "%a" haría
+  // que el patrón de prefijo casara con cualquier nombre que lleve una "a".
+  const termino = q.replace(/[\\%_]/g, (c) => '\\' + c);
 
   // Nombre completo (nombre + apellido) para mostrar y para buscar.
   const nombreCompleto = "TRIM(nombre || ' ' || COALESCE(apellido, ''))";
+  // $1 = empieza el nombre; $2 = empieza cualquier palabra posterior (el
+  // apellido, o el segundo nombre), para que buscar por apellido siga sirviendo.
+  const coincide = `(unaccent(${nombreCompleto}) ILIKE unaccent($1)
+                  OR unaccent(${nombreCompleto}) ILIKE unaccent($2))`;
   const sql = mostrarOcultos
     ? `SELECT id, ${nombreCompleto} AS nombre FROM usuarios
         WHERE activo = TRUE AND (rol = 'admin_main' OR es_prueba = TRUE)
-          AND unaccent(${nombreCompleto}) ILIKE unaccent($1)
+          AND ${coincide}
         ORDER BY nombre ASC
-        LIMIT 8`
+        LIMIT 5`
     : `SELECT id, ${nombreCompleto} AS nombre FROM usuarios
         WHERE activo = TRUE AND rol <> 'admin_main' AND es_prueba = FALSE
-          AND unaccent(${nombreCompleto}) ILIKE unaccent($1)
+          AND ${coincide}
         ORDER BY nombre ASC
-        LIMIT 8`;
-  const params = [`%${q}%`];
+        LIMIT 5`;
+  const params = [`${termino}%`, `% ${termino}%`];
 
   try {
     const { rows } = await pool.query(sql, params);

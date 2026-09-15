@@ -22,3 +22,15 @@ export const busquedaLimiter = rateLimit({
   legacyHeaders: false,
   message: { message: 'Demasiadas búsquedas. Espera un momento.' },
 });
+
+// Segundo techo, de ventana larga: el de arriba frena la ráfaga, pero no a
+// quien enumera despacio (29 búsquedas por minuto durante horas). Un turno
+// entero de la lavandería no llega a 200 búsquedas —cada empleado gasta unas
+// pocas al entrar—, así que solo estorba al que barre nombres.
+export const busquedaLimiterHora = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 200,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: 'Demasiadas búsquedas. Espera un momento.' },
+});

@@ -22,7 +22,7 @@ beforeEach(() => {
 // Escribe el nombre, espera la sugerencia y la selecciona.
 async function seleccionarUsuario(user) {
   api.get.mockResolvedValue([{ id: 7, nombre: 'Juan Pérez' }]);
-  await user.type(screen.getByPlaceholderText('Escribe tu nombre...'), 'Ju');
+  await user.type(screen.getByPlaceholderText('Escribe tu nombre...'), 'Juan');
   const sugerencia = await screen.findByRole('button', { name: 'Juan Pérez' });
   await user.click(sugerencia);
 }
@@ -33,12 +33,22 @@ describe('Login', () => {
     api.get.mockResolvedValue([{ id: 7, nombre: 'Juan Pérez' }]);
     render(<Login />);
 
-    await user.type(screen.getByPlaceholderText('Escribe tu nombre...'), 'Ju');
+    await user.type(screen.getByPlaceholderText('Escribe tu nombre...'), 'Juan');
 
     expect(await screen.findByRole('button', { name: 'Juan Pérez' })).toBeInTheDocument();
     await waitFor(() =>
-      expect(api.get).toHaveBeenCalledWith(expect.stringContaining('/auth/buscar-usuarios?q=Ju'))
+      expect(api.get).toHaveBeenCalledWith(expect.stringContaining('/auth/buscar-usuarios?q=Juan'))
     );
+  });
+
+  it('no busca con menos de 3 letras y avisa cuántas faltan', async () => {
+    const user = userEvent.setup();
+    render(<Login />);
+
+    await user.type(screen.getByPlaceholderText('Escribe tu nombre...'), 'Ju');
+
+    expect(await screen.findByText('Escribe al menos 3 letras de tu nombre')).toBeInTheDocument();
+    expect(api.get).not.toHaveBeenCalled();
   });
 
   it('la contraseña está deshabilitada hasta elegir un usuario', async () => {

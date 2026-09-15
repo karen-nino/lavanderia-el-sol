@@ -76,15 +76,34 @@ describe('GET /api/auth/me', () => {
 });
 
 describe('GET /api/auth/buscar-usuarios', () => {
-  it('encuentra por nombre a un empleado normal, con mínimo 2 caracteres', async () => {
+  it('encuentra por nombre a un empleado normal, con mínimo 3 caracteres', async () => {
     await seedLogin({ nombre: 'Juan', rol: 'operador' });
 
-    const corto = await request(app).get('/api/auth/buscar-usuarios?q=J');
-    expect(corto.body).toEqual([]); // 1 carácter: no lista
+    const corto = await request(app).get('/api/auth/buscar-usuarios?q=Ju');
+    expect(corto.body).toEqual([]); // 2 caracteres: no lista
 
-    const res = await request(app).get('/api/auth/buscar-usuarios?q=Ju');
+    const res = await request(app).get('/api/auth/buscar-usuarios?q=Jua');
     expect(res.status).toBe(200);
     expect(res.body.map((r) => r.nombre)).toContain('Juan');
+  });
+
+  it('busca por el inicio del nombre o del apellido, no por un trozo de en medio', async () => {
+    await seedLogin({ nombre: 'Juan', apellido: 'Gutiérrez', rol: 'operador' });
+
+    const porApellido = await request(app).get('/api/auth/buscar-usuarios?q=Gut');
+    expect(porApellido.body.map((r) => r.nombre)).toContain('Juan Gutiérrez');
+
+    // Un trozo interno permitiría barrer la plantilla con sílabas comunes.
+    const enMedio = await request(app).get('/api/auth/buscar-usuarios?q=tie');
+    expect(enMedio.body).toEqual([]);
+  });
+
+  it('no deja que los comodines de ILIKE amplíen la búsqueda', async () => {
+    await seedLogin({ nombre: 'Juan', rol: 'operador' });
+
+    // Sin escapar, '%an' casaría con cualquier nombre que lleve "an".
+    const comodin = await request(app).get('/api/auth/buscar-usuarios?q=%25an');
+    expect(comodin.body).toEqual([]);
   });
 
   it('los usuarios ocultos (es_prueba) solo aparecen con el prefijo ***', async () => {

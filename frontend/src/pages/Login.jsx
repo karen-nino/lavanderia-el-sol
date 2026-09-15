@@ -36,16 +36,25 @@ export default function Login() {
   const containerRef = useRef(null);
   const passwordRef  = useRef(null);
 
+  // Lo que se busca de verdad: sin el prefijo *** de los usuarios ocultos.
+  const consulta = query.trim();
+  const termino = consulta.startsWith('***') ? consulta.slice(3).trim() : consulta;
+
   // Debounce de la búsqueda de sugerencias
   useEffect(() => {
     if (seleccionado) return;
-    const q = query.trim();
 
     const t = setTimeout(async () => {
-      if (!q) { setSugerencias([]); return; }
+      // El backend no responde con menos de 3 caracteres: esas peticiones solo
+      // gastarían el límite por IP, así que ni se mandan.
+      if (termino.length < 3) {
+        setSugerencias([]);
+        setMostrarLista(consulta.length > 0);  // para que se vea la pista de las 3 letras
+        return;
+      }
       setBuscando(true);
       try {
-        const data = await api.get(`/auth/buscar-usuarios?q=${encodeURIComponent(q)}`);
+        const data = await api.get(`/auth/buscar-usuarios?q=${encodeURIComponent(consulta)}`);
         setSugerencias(data ?? []);
         setMostrarLista(true);
       } catch {
@@ -55,7 +64,7 @@ export default function Login() {
       }
     }, 200);
     return () => clearTimeout(t);
-  }, [query, seleccionado]);
+  }, [consulta, termino, seleccionado]);
 
   // Cerrar dropdown al click fuera
   useEffect(() => {
@@ -163,7 +172,11 @@ export default function Login() {
 
               {mostrarLista && !seleccionado && query.trim() && (
                 <div className="absolute z-10 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-56 overflow-y-auto">
-                  {buscando ? (
+                  {termino.length < 3 ? (
+                    <div className="px-4 py-3.5 text-base text-gray-400">
+                      Escribe al menos 3 letras de tu nombre
+                    </div>
+                  ) : buscando ? (
                     <div className="px-4 py-3.5 text-base text-gray-400">Buscando...</div>
                   ) : sugerencias.length === 0 ? (
                     <div className="px-4 py-3.5 text-base text-gray-400">Sin coincidencias</div>
