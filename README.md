@@ -5,9 +5,21 @@ servicio, control de máquinas, inventario, caja y reportes. Está pensado para
 usarse en el mostrador desde el celular, así que toda la interfaz es *mobile
 first*.
 
-> **Sobre las capturas:** salen del entorno de pruebas del propio sistema, con
-> datos generados por un *seeder*. Clientes, notas, importes y teléfonos son
-> ficticios; no hay información de ningún negocio ni de ninguna persona real.
+## Probarlo
+
+**→ [lavanderia-el-sol-demo.netlify.app](https://lavanderia-el-sol-demo.netlify.app)**
+
+Se entra con un botón, sin credenciales. Es una copia completa del sistema sobre
+su propia base de datos, con notas, cortes de caja e inventario inventados por un
+*seeder*: se puede crear notas, cobrar, mover inventario y cambiar la
+configuración sin romper nada, y cada noche vuelve sola a su estado inicial.
+
+La instancia que usa el negocio no se comparte, porque trabaja con datos reales
+de sus clientes y de su personal. Las capturas de abajo también salen de datos
+ficticios.
+
+> La demo se apaga cuando nadie la usa, así que la primera carga puede tardar
+> unos segundos mientras despiertan el servidor y la base.
 
 ## Qué hace
 
