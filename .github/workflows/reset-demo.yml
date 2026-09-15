@@ -6,6 +6,11 @@
 #
 # Necesita el secreto DEMO_DATABASE_URL (la cadena de Neon) en
 # Settings → Secrets and variables → Actions.
+#
+# Si el job aborta con "la base tiene N notas fuera de pruebas", la base de la
+# demo se contaminó: se barre lanzando el script a mano con --forzar. Aquí no se
+# pasa la bandera a propósito, para que el trabajo automático nunca borre a
+# ciegas una base que no sea la de la demo.
 name: Restaurar la demo
 
 on:

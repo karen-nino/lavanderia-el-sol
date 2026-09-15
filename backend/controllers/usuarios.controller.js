@@ -2,6 +2,7 @@ import pool from '../db/pool.js';
 import bcrypt from 'bcrypt';
 import { esAdmin } from '../middleware/roles.js';
 import { SUCURSAL_PRUEBAS } from '../middleware/sucursalActiva.js';
+import { ENTORNO_DEMO } from '../utils/entorno.js';
 import { capitalizarNombre } from '../utils/nombres.js';
 import { TZ_NEGOCIO } from '../utils/tz.js';
 
@@ -235,24 +236,37 @@ export const createEmpleado = async (req, res) => {
     return res.status(403).json({ message: 'Solo el Admin Main puede asignar este rol.' });
   }
 
-  // La sucursal de pruebas es un entorno cerrado: sus únicos usuarios son los
-  // que crea seed_pruebas.js, no se da de alta personal ahí.
-  if (sucursal?.trim() === SUCURSAL_PRUEBAS) {
+  // En la DEMO pública quien da de alta personal es el usuario de prueba, y ese
+  // personal tiene que nacer DENTRO de su entorno cerrado. Si naciera fuera
+  // (es_prueba = FALSE y una sucursal real), podría iniciar sesión como un
+  // usuario normal y levantar notas en esa sucursal; entonces la comprobación
+  // de arranque vería operación real en la base de la demo y el backend se
+  // negaría a levantar (utils/entorno.js), sin que el reset nocturno pudiera
+  // deshacerlo. Mismo criterio que updateEmpleado, que ya fuerza la sucursal de
+  // pruebas a todo usuario con es_prueba.
+  const naceEnPruebas = ENTORNO_DEMO && req.user?.es_prueba === true;
+
+  // La sucursal de pruebas es un entorno cerrado: fuera de la demo sus únicos
+  // usuarios son los que crea seed_pruebas.js, no se da de alta personal ahí.
+  if (!naceEnPruebas && sucursal?.trim() === SUCURSAL_PRUEBAS) {
     return res.status(400).json({ message: 'La sucursal seleccionada no existe.' });
   }
 
   // Un administrador es global: no se liga a ninguna sucursal (NULL). Para un
   // empleado (operador) se usa la sucursal del formulario o, si no llega, la
   // sucursal activa de quien lo crea.
-  const sucursalFinal = esAdmin(rolFinal) ? null : (sucursal?.trim() || req.sucursal);
+  const sucursalFinal = naceEnPruebas
+    ? SUCURSAL_PRUEBAS
+    : (esAdmin(rolFinal) ? null : (sucursal?.trim() || req.sucursal));
 
   try {
     const hashed = await bcrypt.hash(password, 10);
     const { rows } = await pool.query(
-      `INSERT INTO usuarios (nombre, apellido, password, rol, sucursal)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO usuarios (nombre, apellido, password, rol, sucursal, es_prueba)
+       VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING id, nombre, apellido, rol, sucursal, activo, es_prueba, created_at`,
-      [capitalizarNombre(nombre), capitalizarNombre(apellido) || null, hashed, rolFinal, sucursalFinal]
+      [capitalizarNombre(nombre), capitalizarNombre(apellido) || null, hashed, rolFinal,
+       sucursalFinal, naceEnPruebas]
     );
     res.status(201).json(rows[0]);
   } catch (err) {

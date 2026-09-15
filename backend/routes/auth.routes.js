@@ -11,7 +11,10 @@ router.post('/login',          loginLimiter, login);
 // Solo en la demo pública: fuera de ella la ruta no existe (404 de Express).
 if (ENTORNO_DEMO) router.post('/demo-login', loginLimiter, demoLogin);
 
-router.get('/buscar-usuarios', busquedaLimiterHora, busquedaLimiter, buscarUsuarios);
+// El de minuto va PRIMERO: los dos cuentan la petición al entrar, así que en el
+// orden contrario una ráfaga ya rechazada por el de minuto seguía gastando el
+// cupo de la hora y acababa cerrando el autocompletado para todos.
+router.get('/buscar-usuarios', busquedaLimiter, busquedaLimiterHora, buscarUsuarios);
 router.post('/logout',         verifyToken, logout);
 router.get('/me',              verifyToken, getMe);
 router.patch('/me',            verifyToken, updateMe);

@@ -1,11 +1,11 @@
 // Devuelve la DEMO PÚBLICA a su estado de exhibición.
 //
-//   node scripts/reset-demo.mjs
+//   node scripts/reset-demo.mjs [--forzar]
 //
 // Quien entra a la demo entra como administrador y puede borrar el inventario,
 // cancelar notas o poner cualquier cosa en el nombre del negocio. Esto deshace
-// todo eso: limpia lo que hayan dejado los visitantes y vuelve a sembrar los
-// 90 días de notas, cortes e inventario cuadrado.
+// todo eso: borra la operación que dejaron los visitantes y vuelve a sembrar
+// los 90 días de notas, cortes e inventario cuadrado.
 //
 // Lo corre a diario .github/workflows/reset-demo.yml, y se puede lanzar a mano.
 //
@@ -17,14 +17,23 @@ import path from 'path';
 import { execFileSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
+import { limpiarOperacion, borrarUsuariosDeVisitantes, borrarCatalogos } from './lib/limpiarDemo.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const BACKEND = path.resolve(__dirname, '..');
 const SUCURSAL = 'pruebas';
 
-// Slugs y usuarios que existen de fábrica (migraciones + seed_pruebas). Todo lo
-// que no esté aquí lo creó un visitante y se va.
+// Slugs que existen de fábrica (migraciones + seed_pruebas). Todo lo que no
+// esté aquí lo creó un visitante y se va.
 const SUCURSALES_BASE = ['lopez_cotilla', 'retiro', 'pruebas'];
+
+// --forzar: limpiar aunque la base tenga notas FUERA de la sucursal de pruebas.
+// Sin la bandera eso aborta, porque es la señal de "esta base tiene operación
+// real". En la base de la demo no puede haberla de forma legítima, así que si
+// aparece es contaminación —un usuario dado de alta por un visitante que acabó
+// operando en una sucursal real— y hay que poder barrerla sin entrar a la base
+// a mano. El workflow nocturno NO pasa la bandera: se queda en el camino seguro.
+const FORZAR = process.argv.includes('--forzar');
 
 const archivoEnv = path.join(BACKEND, '.env.demo');
 if (!fs.existsSync(archivoEnv)) {
@@ -34,6 +43,14 @@ if (!fs.existsSync(archivoEnv)) {
 dotenv.config({ path: archivoEnv, override: true });
 if (!process.env.DATABASE_URL) {
   console.error('ABORTADO: backend/.env.demo no define DATABASE_URL.');
+  process.exit(1);
+}
+
+// Red de seguridad que no depende de lo que haya dentro de la base: producción
+// vive en Supabase, y este script borra la operación entera. Ninguna bandera
+// levanta este candado.
+if (/supabase/i.test(process.env.DATABASE_URL)) {
+  console.error('ABORTADO: la DATABASE_URL de .env.demo apunta a Supabase, que es producción.');
   process.exit(1);
 }
 
@@ -53,40 +70,47 @@ try {
     'SELECT COUNT(*)::int AS n FROM notas WHERE sucursal <> $1', [SUCURSAL]
   );
   if (reales[0].n > 0) {
-    console.error(`ABORTADO: la base tiene ${reales[0].n} notas fuera de "${SUCURSAL}".`);
-    process.exit(1);
+    if (!FORZAR) {
+      console.error(
+        `ABORTADO: la base tiene ${reales[0].n} nota(s) fuera de "${SUCURSAL}".\n` +
+        'Si es la base de la demo, eso es contaminación y se barre con --forzar.\n' +
+        'Si no lo es, revisa a dónde apunta backend/.env.demo antes de nada.'
+      );
+      process.exit(1);
+    }
+    console.warn(`--forzar: se borrarán también ${reales[0].n} nota(s) fuera de "${SUCURSAL}".`);
   }
 
   await db.query('BEGIN');
 
-  // Orden: primero lo que apunta a las notas, luego las notas.
-  await db.query('DELETE FROM producto_movimientos WHERE sucursal = $1', [SUCURSAL]);
-  await db.query('DELETE FROM notas WHERE sucursal = $1', [SUCURSAL]);
-  await db.query('DELETE FROM cajas WHERE sucursal = $1', [SUCURSAL]);
-  await db.query('DELETE FROM clientes WHERE sucursal = $1', [SUCURSAL]);
-  await db.query('DELETE FROM notificaciones WHERE sucursal = $1', [SUCURSAL]);
-  await db.query(
-    'DELETE FROM checkins WHERE usuario_id IN (SELECT id FROM usuarios WHERE es_prueba = TRUE)'
-  );
-
-  // Altas que haya hecho un visitante desde Empleados y Sucursales.
-  const { rowCount: usuariosBorrados } = await db.query(
-    `DELETE FROM usuarios WHERE es_prueba = FALSE AND rol <> 'admin_main'`
-  );
+  // La secuencia vive en scripts/lib/limpiarDemo.js: es lo único de aquí que
+  // las pruebas de integración pueden ejecutar tal cual contra una base real.
+  await limpiarOperacion(db);
+  const usuariosBorrados = await borrarUsuariosDeVisitantes(db);
+  await borrarCatalogos(db);
+  // Al final: las sucursales que un visitante creara solo se sueltan cuando ya
+  // no les cuelga nada (usuarios, productos, máquinas e insumos).
   const { rowCount: sucursalesBorradas } = await db.query(
     'DELETE FROM sucursales WHERE slug <> ALL($1)', [SUCURSALES_BASE]
-  );
-
-  // Máquinas: si alguien dejó un ciclo corriendo, vuelven a estar libres.
-  await db.query(
-    `UPDATE maquinas SET estado = 'disponible', en_uso_desde = NULL WHERE sucursal = $1`,
-    [SUCURSAL]
   );
 
   // Ajustes: son globales y en la demo cualquiera puede escribirlos, así que se
   // reponen desde la copia versionada del estado de exhibición.
   const base = JSON.parse(fs.readFileSync(path.join(__dirname, 'demo-ajustes-base.json'), 'utf8'));
   const columnas = Object.keys(base);
+
+  // El JSON lista las columnas a mano: cuando una migración añada una nueva,
+  // esto avisa en vez de dejar de restaurarla en silencio.
+  const { rows: cols } = await db.query(
+    `SELECT column_name FROM information_schema.columns
+      WHERE table_name = 'ajustes' AND column_name <> 'id'`
+  );
+  const faltan = cols.map((c) => c.column_name).filter((c) => !columnas.includes(c));
+  if (faltan.length > 0) {
+    console.warn(`AVISO: demo-ajustes-base.json no cubre ${faltan.join(', ')}; ` +
+                 'esas columnas se quedan como las dejó el último visitante.');
+  }
+
   await db.query(
     `UPDATE ajustes SET ${columnas.map((c, i) => `${c} = $${i + 1}`).join(', ')} WHERE id = 1`,
     columnas.map((c) => base[c])
@@ -99,7 +123,7 @@ try {
 
   await db.query('COMMIT');
   console.log(`Limpieza: ${usuariosBorrados} usuario(s) y ${sucursalesBorradas} sucursal(es) ` +
-              'de visitantes; notas, caja, clientes e inventario a cero.');
+              'de visitantes; notas, caja, clientes, inventario y máquinas a cero.');
 } catch (e) {
   await db.query('ROLLBACK').catch(() => {});
   console.error('Falló la limpieza:', e.message);
@@ -108,8 +132,8 @@ try {
   await db.end();
 }
 
-// El registro de lo sembrado sobra: acaba de borrarse todo por sucursal, no por
-// ids. Si se quedara, el seeder creería que ya hay una siembra viva.
+// El registro de lo sembrado sobra: acaba de borrarse la operación entera, no
+// unos ids sueltos. Si se quedara, el seeder creería que ya hay una siembra viva.
 const registro = path.join(__dirname, '.demo-ventas-ids.demo.json');
 if (fs.existsSync(registro)) fs.unlinkSync(registro);
 
