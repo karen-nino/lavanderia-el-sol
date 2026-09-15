@@ -20,10 +20,18 @@ const ca = fs.readFileSync(path.join(__dirname, 'supabase-ca.crt'), 'utf8');
 // En local se siguen usando las variables DB_* sueltas del .env.
 // Se exporta también la config para poder crear conexiones dedicadas fuera del
 // pool (p. ej. el listener LISTEN/NOTIFY, que necesita una conexión persistente).
+// La demo pública corre sobre Neon, que presenta un certificado de una CA
+// pública: con el raíz de Supabase clavado, la conexión ahí falla. Se mira el
+// host para elegir el ancla de confianza, y el caso por defecto sigue siendo
+// el de siempre —el CA de Supabase— para que producción no dependa de que
+// este patrón acierte. En ambos ramos se verifica el certificado del
+// servidor; lo que cambia es contra qué.
+const esNeon = /\.neon\.tech(:|\/|$)/.test(process.env.DATABASE_URL ?? '');
+
 export const dbConfig = process.env.DATABASE_URL
   ? {
       connectionString: process.env.DATABASE_URL,
-      ssl: { ca, rejectUnauthorized: true },
+      ssl: esNeon ? { rejectUnauthorized: true } : { ca, rejectUnauthorized: true },
     }
   : {
       host: process.env.DB_HOST,
