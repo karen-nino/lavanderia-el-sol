@@ -3,7 +3,7 @@ import { iniciarCierreDelDia } from './jobs/cierreDelDia.js';
 import { iniciarLimpiezaNotificaciones } from './jobs/limpiezaNotificaciones.js';
 import { iniciarListenerSonoff } from './jobs/listenerSonoff.js';
 import { iniciarReconciliadorSonoff } from './jobs/reconciliarSonoff.js';
-import { verificarEntornoDemo } from './utils/entorno.js';
+import { ENTORNO_DEMO, verificarEntornoDemo } from './utils/entorno.js';
 
 // Antes de escuchar: si ENTORNO_DEMO está encendido sobre una base con
 // operación real, el proceso no arranca.
@@ -17,7 +17,11 @@ app.listen(PORT, () => {
   iniciarCierreDelDia();
   iniciarLimpiezaNotificaciones();
   // Control Sonoff: listener por evento (enganche central) + reconciliador
-  // periódico de respaldo.
-  iniciarListenerSonoff();
-  iniciarReconciliadorSonoff();
+  // periódico de respaldo. En la demo no se arrancan: no hay interruptores que
+  // controlar, y el listener mantiene abierta una conexión permanente contra la
+  // base, lo que impediría que Neon se duerma y gastaría horas de cómputo.
+  if (!ENTORNO_DEMO) {
+    iniciarListenerSonoff();
+    iniciarReconciliadorSonoff();
+  }
 });

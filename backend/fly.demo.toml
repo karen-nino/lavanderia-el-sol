@@ -1,0 +1,41 @@
+# Backend de la DEMO pública. Se despliega aparte de producción:
+#
+#   fly deploy -c fly.demo.toml --ha=false
+#
+# Diferencias con fly.toml (la app real), todas a propósito:
+#   · la máquina se apaga sola cuando nadie la usa, así la demo no cuesta
+#     mientras duerme; el precio es un arranque en frío de unos segundos;
+#   · ENTORNO_DEMO=1 abre el acceso sin contraseña y quita los recortes del
+#     usuario de prueba (backend/utils/entorno.js), que también se niega a
+#     arrancar si la base tuviera operación real;
+#   · región Chicago, la más cercana al Postgres de Neon (Ohio);
+#   · sin volumen: el logo que suba un visitante se pierde en el siguiente
+#     despliegue, y en una demo eso da igual.
+app = "lavanderia-el-sol-demo"
+primary_region = "ord"
+
+[build]
+
+# Las migraciones corren antes de publicar, igual que en producción: la base de
+# la demo se crea y se actualiza sola.
+[deploy]
+  release_command = "node db/migrate.js"
+
+[env]
+  PORT = "4000"
+  CIERRE_HORA = "0"
+  TZ_NEGOCIO = "America/Mexico_City"
+  ENTORNO_DEMO = "1"
+
+[http_service]
+  internal_port = 4000
+  force_https = true
+  # Lo contrario que en producción: allí la máquina no puede dormirse porque el
+  # cierre del día corre dentro del proceso. La demo no tiene día que cerrar.
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
