@@ -1,0 +1,8 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "rewrites": [
+    { "source": "/api/:ruta*", "destination": "https://lavanderia-el-sol-demo.fly.dev/api/:ruta*" },
+    { "source": "/uploads/:ruta*", "destination": "https://lavanderia-el-sol-demo.fly.dev/uploads/:ruta*" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
