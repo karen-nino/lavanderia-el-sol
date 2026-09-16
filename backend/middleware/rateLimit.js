@@ -40,3 +40,20 @@ export const busquedaLimiterHora = rateLimit({
   legacyHeaders: false,
   message: { message: 'Demasiadas búsquedas. Espera un momento.' },
 });
+
+// Entrada a la demo pública. NO se usa loginLimiter aquí: ese cuenta solo los
+// intentos FALLIDOS, que es lo correcto contra quien adivina contraseñas, pero
+// en /demo-login no hay contraseña que adivinar. Lo único que conseguía era
+// poder cerrar la demo a todo el mundo: como el tráfico llega con la IP del
+// edge de Netlify, diez respuestas de error seguidas —una base recién
+// despertada, un reset a medias— dejaban a los siguientes visitantes con
+// "Demasiados intentos fallidos. Espera 15 minutos", que además no explica
+// nada. Este cuenta TODAS las peticiones, con un techo que solo estorba a
+// quien martillea.
+export const demoLoginLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: 'La demo está recibiendo muchas visitas. Espera un momento.' },
+});

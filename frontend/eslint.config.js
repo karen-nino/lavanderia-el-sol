@@ -26,4 +26,11 @@ export default defineConfig([
       'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]' }],
     },
   },
+  // Lo que corre en Node, no en el navegador: la config de Vite (que lee
+  // API_ORIGIN) y los scripts del build. Sin esto, `process` salía como
+  // variable no definida y el lint del proyecto no pasaba.
+  {
+    files: ['vite.config.js', 'scripts/**/*.{js,mjs}'],
+    languageOptions: { globals: globals.node },
+  },
 ])

@@ -7,6 +7,7 @@ import SucursalBar from '../components/SucursalBar';
 import EmpleadoEditModal from '../components/EmpleadoEditModal';
 import EmpleadoDeleteModal from '../components/EmpleadoDeleteModal';
 import NombreEmpleado from '../components/NombreEmpleado';
+import { empleadoVisible, marcarComoPrueba } from '../lib/empleados';
 import { ES_DEMO } from '../lib/entorno';
 
 const INPUT_CLS =
@@ -15,11 +16,6 @@ const INPUT_CLS =
 const FORM_INIT = { nombre: '', apellido: '', rol: 'operador', password: '', sucursal: '' };
 
 const ROL_LABEL = { admin_main: 'Admin Main', admin: 'Admin', operador: 'Empleado' };
-
-// Usuarios de prueba: no están ligados a una sucursal y en la lista de
-// Empleados solo los ve el admin_main. Se identifican con la bandera es_prueba
-// de la base (no por el nombre), así se pueden renombrar sin perder la marca.
-const esUsuarioPrueba = (e) => e?.es_prueba === true;
 
 export default function Empleados() {
   const navigate = useNavigate();
@@ -84,18 +80,7 @@ export default function Empleados() {
 
   const filtrados = empleados
     .filter(e => {
-      const prueba = esUsuarioPrueba(e);
-      // Los usuarios de prueba solo los ve el admin_main (y siempre, sin
-      // importar la sucursal activa).
-      if (prueba && !esAdminMain) return false;
-      // El admin_main se oculta de la lista, salvo el propio usuario (para
-      // que siempre vea su tarjeta).
-      if (e.rol === 'admin_main' && e.id !== usuario?.id) return false;
-      // Solo empleados (operadores) de la sucursal activa. Los admins son
-      // globales (sin sucursal). Los usuarios de prueba viven en la sucursal
-      // oculta de pruebas (mig. 095), que nadie puede seleccionar: si se
-      // filtraran por sucursal, el admin_main no los vería nunca.
-      if (!prueba && !esAdminFn(e.rol) && sucursalVista && e.sucursal !== sucursalVista) return false;
+      if (!empleadoVisible(e, { quienMira: usuario, sucursalVista, esAdminMain })) return false;
       if (filtroRol !== 'todos' && e.rol !== filtroRol) return false;
       const nombreCompleto = `${e.nombre} ${e.apellido ?? ''}`.toLowerCase();
       return nombreCompleto.includes(busqueda.toLowerCase());
@@ -110,8 +95,8 @@ export default function Empleados() {
       const adminA = esAdminFn(a.rol);
       const adminB = esAdminFn(b.rol);
       if (adminA !== adminB) return adminA ? -1 : 1;
-      const pa = esUsuarioPrueba(a);
-      const pb = esUsuarioPrueba(b);
+      const pa = marcarComoPrueba(a);
+      const pb = marcarComoPrueba(b);
       if (pa !== pb) return pa ? -1 : 1;
       return a.nombre.localeCompare(b.nombre);
     });
@@ -270,7 +255,7 @@ export default function Empleados() {
           {filtrados.map(emp => {
             const iniciales = `${emp.nombre?.[0] ?? ''}${emp.apellido?.[0] ?? ''}`.toUpperCase();
             const esMismoUsuario = usuario?.id === emp.id;
-            const esPrueba = esUsuarioPrueba(emp);
+            const esPrueba = marcarComoPrueba(emp);
 
             const cabecera = (
               <div className="flex items-start gap-3">

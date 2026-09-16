@@ -331,7 +331,9 @@ async function sembrar(db) {
 //     registrarMovimientosProductosNota) más los reabastos que harían falta
 //     para no quedarse sin stock, y el stock final ajustado al saldo resultante;
 //   · caja → una sesión por día, con sus notas atadas y las cifras congeladas
-//     al cerrar (mig. 101). La del día en curso se deja ABIERTA.
+//     al cerrar (mig. 101). Todas nacen CERRADAS, la del día en curso incluida:
+//     una abierta se quedaría apartando las notas que se creen después, y el
+//     cierre de medianoche acabaría cerrándola sola.
 async function cuadrar(db) {
   if (!fs.existsSync(REGISTRO)) {
     console.log('No hay siembra registrada. Corre primero el script sin banderas.');
