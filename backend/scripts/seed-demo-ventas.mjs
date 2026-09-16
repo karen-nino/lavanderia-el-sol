@@ -107,8 +107,8 @@ const APELLIDOS = ['Ramírez', 'Gutiérrez', 'Hernández', 'Torres', 'Vázquez',
 
 async function limpiar(db) {
   if (!fs.existsSync(REGISTRO)) { console.log('No hay nada registrado que limpiar.'); return; }
-  const { notas = [], clientes = [], movimientos = [], cajas = [], stockPrevio = [] } =
-    JSON.parse(fs.readFileSync(REGISTRO, 'utf8'));
+  const { notas = [], clientes = [], movimientos = [], cajas = [], stockPrevio = [],
+          checkins = [] } = JSON.parse(fs.readFileSync(REGISTRO, 'utf8'));
   await db.query('BEGIN');
   // Los movimientos de inventario van primero: borrar la nota no los borra
   // (producto_movimientos.nota_id es ON DELETE SET NULL) y quedarían sueltos
@@ -134,6 +134,7 @@ async function limpiar(db) {
   // Las cajas arrastran sus movimientos_caja por CASCADE.
   const k = await db.query('DELETE FROM cajas WHERE id = ANY($1) AND sucursal = $2', [cajas, SUCURSAL]);
   const c = await db.query('DELETE FROM clientes WHERE id = ANY($1) AND sucursal = $2', [clientes, SUCURSAL]);
+  await db.query('DELETE FROM checkins WHERE id = ANY($1)', [checkins]);
   await db.query('COMMIT');
   fs.unlinkSync(REGISTRO);
   console.log(`Borradas ${n.rowCount} notas, ${c.rowCount} clientes, ${k.rowCount} sesiones de caja ` +
@@ -190,7 +191,36 @@ async function sembrar(db) {
   let consecutivo = Number(maxFolio[0].n) + 1;
 
   const notasIds = [];
+  const checkinIds = [];
   const hoy = new Date();
+
+  // Fecha local en YYYY-MM-DD, que es como se guarda checkins.fecha (un DATE
+  // del día del negocio, no un instante).
+  const fechaISO = (f) =>
+    `${f.getFullYear()}-${String(f.getMonth() + 1).padStart(2, '0')}-${String(f.getDate()).padStart(2, '0')}`;
+
+  // Check-in del día (mig. 062 + 070): la entrada es el primer login y la
+  // salida, el cierre de sesión. Sin esto, el Desempeño de cada empleado sale
+  // con la columna de horarios vacía los 90 días.
+  const checarDia = async (usuarioId, dia, { conSalida }) => {
+    const fecha = fechaISO(dia);
+    const entrada = `${fecha} ${String(entre(7, 8)).padStart(2, '0')}:${String(entre(0, 59)).padStart(2, '0')}:00`;
+    // La salida se apunta al cerrar sesión, y eso a veces no se hace: una de
+    // cada seis se queda sin ella, como en el mostrador de verdad.
+    const salida = conSalida && rnd() < 0.85
+      ? `${fecha} ${String(entre(20, 21)).padStart(2, '0')}:${String(entre(0, 59)).padStart(2, '0')}:00`
+      : null;
+    const { rows } = await db.query(
+      `INSERT INTO checkins (usuario_id, fecha, created_at, salida)
+       VALUES ($1, $2::date,
+               $3::timestamp AT TIME ZONE 'America/Mexico_City',
+               CASE WHEN $4::text IS NULL THEN NULL
+                    ELSE $4::timestamp AT TIME ZONE 'America/Mexico_City' END)
+       ON CONFLICT (usuario_id, fecha) DO NOTHING
+       RETURNING id`,
+      [usuarioId, fecha, entrada, salida]);
+    if (rows.length > 0) checkinIds.push(rows[0].id);
+  };
 
   for (let d = DIAS - 1; d >= 0; d--) {
     const dia = new Date(hoy);
@@ -199,6 +229,11 @@ async function sembrar(db) {
     const esHoy = d === 0;
     // Sábado y domingo cargan más trabajo; hoy va lleno para la vista "Hoy".
     let cuantas = esHoy ? entre(10, 14) : (dow === 0 || dow === 6 ? entre(5, 8) : entre(2, 5));
+
+    // Quién abrió hoy. El día en curso se deja SIN salida: la jornada sigue, y
+    // apuntar que ya se fueron a las 21:00 sería un horario en el futuro.
+    await checarDia(admin, dia, { conSalida: !esHoy });
+    if (empleado !== admin && rnd() < 0.8) await checarDia(empleado, dia, { conSalida: !esHoy });
 
     for (let i = 0; i < cuantas; i++) {
       const hora = entre(8, 19), minuto = entre(0, 59);
@@ -312,7 +347,8 @@ async function sembrar(db) {
   }
 
   await db.query('COMMIT');
-  fs.writeFileSync(REGISTRO, JSON.stringify({ notas: notasIds, clientes: clientesIds }, null, 2));
+  fs.writeFileSync(REGISTRO, JSON.stringify(
+    { notas: notasIds, clientes: clientesIds, checkins: checkinIds }, null, 2));
 
   const { rows: resumen } = await db.query(
     `SELECT COUNT(*) FILTER (WHERE estado_pago = 'PAGADO' AND estado <> 'CANCELADA') AS pagadas,
