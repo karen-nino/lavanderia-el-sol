@@ -7,6 +7,7 @@ import { formatTelefono } from '../lib/telefono';
 import { useAuth } from '../context/AuthContext';
 import { esAdminMain as esAdminMainFn } from '../lib/roles';
 import { ES_DEMO } from '../lib/entorno';
+import { almacenSesion } from '../lib/sesion';
 
 // El nombre del negocio y el logo se quedan fuera de la DEMO: son de la
 // configuración global, los comparten todos los visitantes a la vez y se quedan
@@ -1074,7 +1075,7 @@ export default function Ajustes() {
     try {
       const formData = new FormData();
       formData.append('logo', file);
-      const token = localStorage.getItem('token');
+      const token = almacenSesion.getItem('token');
       const res = await fetch('/api/ajustes/logo', {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },

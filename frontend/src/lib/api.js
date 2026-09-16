@@ -1,14 +1,16 @@
+import { almacenSesion } from './sesion';
+
 const BASE = '/api';
 
 function getToken() {
-  return localStorage.getItem('token');
+  return almacenSesion.getItem('token');
 }
 
 // Sucursal activa: para un admin determina qué sucursal está administrando.
 // El backend la respeta vía el header X-Sucursal (a los empleados los fuerza
 // a la suya, ignorando este header).
 function getSucursal() {
-  return localStorage.getItem('sucursalActiva');
+  return almacenSesion.getItem('sucursalActiva');
 }
 
 // Explicación por código de estado, para cuando el backend no manda un
@@ -65,8 +67,8 @@ async function request(path, options = {}) {
     } catch {
       // Respuesta sin JSON: sin motivo específico.
     }
-    localStorage.removeItem('token');
-    localStorage.removeItem('usuario');
+    almacenSesion.removeItem('token');
+    almacenSesion.removeItem('usuario');
     if (motivo) sessionStorage.setItem('authAviso', motivo);
     window.location.href = '/login';
     return;

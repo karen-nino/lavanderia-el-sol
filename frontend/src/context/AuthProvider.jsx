@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { AuthContext } from './AuthContext';
 import { api } from '../lib/api';
+import { almacenSesion } from '../lib/sesion';
 
 export function AuthProvider({ children }) {
-  const [token, setToken] = useState(() => localStorage.getItem('token'));
+  const [token, setToken] = useState(() => almacenSesion.getItem('token'));
   const [usuario, setUsuario] = useState(() => {
     try {
-      const u = localStorage.getItem('usuario');
+      const u = almacenSesion.getItem('usuario');
       return u ? JSON.parse(u) : null;
     } catch {
       return null;
@@ -16,18 +17,18 @@ export function AuthProvider({ children }) {
   // un admin puede cambiarla con el selector. Se persiste para que api.js la
   // envíe en el header X-Sucursal en cada petición.
   const [sucursalActiva, setSucursalActivaState] = useState(
-    () => localStorage.getItem('sucursalActiva') || null
+    () => almacenSesion.getItem('sucursalActiva') || null
   );
 
   const persistSucursal = (slug) => {
-    if (slug) localStorage.setItem('sucursalActiva', slug);
-    else localStorage.removeItem('sucursalActiva');
+    if (slug) almacenSesion.setItem('sucursalActiva', slug);
+    else almacenSesion.removeItem('sucursalActiva');
     setSucursalActivaState(slug || null);
   };
 
   const login = (newToken, newUsuario) => {
-    localStorage.setItem('token', newToken);
-    localStorage.setItem('usuario', JSON.stringify(newUsuario));
+    almacenSesion.setItem('token', newToken);
+    almacenSesion.setItem('usuario', JSON.stringify(newUsuario));
     setToken(newToken);
     setUsuario(newUsuario);
     // Al iniciar sesión se arranca en la sucursal propia del usuario.
@@ -39,8 +40,8 @@ export function AuthProvider({ children }) {
     // Es "fire-and-forget": la petición ya lleva el token y no debe frenar el
     // cierre de sesión aunque falle.
     api.post('/auth/logout').catch(() => {});
-    localStorage.removeItem('token');
-    localStorage.removeItem('usuario');
+    almacenSesion.removeItem('token');
+    almacenSesion.removeItem('usuario');
     // Rastros de navegación del turno que termina (hoy, el filtro con el que se
     // dejó la lista de notas). Al entrar otro empleado en el mismo teléfono no
     // debe encontrarse la pantalla como la dejó el anterior.
@@ -53,7 +54,7 @@ export function AuthProvider({ children }) {
   const updateUsuario = (updates) => {
     setUsuario(prev => {
       const next = { ...prev, ...updates };
-      localStorage.setItem('usuario', JSON.stringify(next));
+      almacenSesion.setItem('usuario', JSON.stringify(next));
       return next;
     });
   };
