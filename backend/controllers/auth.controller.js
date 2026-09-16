@@ -174,10 +174,15 @@ export const demoLogin = async (req, res) => {
       await pool.query('UPDATE usuarios SET session_id = $1 WHERE id = $2', [sessionId, usuario.id]);
     }
 
+    // Una hora, no los 30 días del login normal. La sesión de la demo ya muere
+    // al cerrar la pestaña (el frontend la guarda en sessionStorage), pero eso
+    // solo vale para quien está delante: el token en sí seguiría sirviendo a
+    // quien lo copiara. Al caducar, el visitante vuelve a la pantalla de
+    // entrada y sigue con un clic, que en una demo sin nada que perder basta.
     const token = jwt.sign(
       { id: usuario.id, rol: usuario.rol, sucursal: usuario.sucursal, sid: sessionId },
       process.env.JWT_SECRET,
-      { expiresIn: '30d' }
+      { expiresIn: '1h' }
     );
 
     res.json({

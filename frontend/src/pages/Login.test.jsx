@@ -7,6 +7,11 @@ const { navigate, login } = vi.hoisted(() => ({ navigate: vi.fn(), login: vi.fn(
 vi.mock('react-router-dom', () => ({ useNavigate: () => navigate }));
 vi.mock('../context/AuthContext', () => ({ useAuth: () => ({ login }) }));
 vi.mock('../lib/api', () => ({ api: { get: vi.fn(), post: vi.fn() } }));
+// ES_DEMO se lee en cada render, así que el getter permite encender la demo
+// dentro de un test. Por defecto apagado: el resto del archivo prueba el login
+// normal.
+const entorno = vi.hoisted(() => ({ ES_DEMO: false }));
+vi.mock('../lib/entorno', () => ({ get ES_DEMO() { return entorno.ES_DEMO; } }));
 
 import { api } from '../lib/api';
 import Login from './Login';
@@ -17,6 +22,7 @@ beforeEach(() => {
   navigate.mockReset();
   login.mockReset();
   sessionStorage.clear();
+  entorno.ES_DEMO = false;
 });
 
 // Escribe el nombre, espera la sugerencia y la selecciona.
@@ -98,5 +104,30 @@ describe('Login', () => {
     expect(screen.getByText('Se inició sesión en otro dispositivo.')).toBeInTheDocument();
     // Se consume: no debe reaparecer.
     expect(sessionStorage.getItem('authAviso')).toBeNull();
+  });
+});
+
+// La pantalla de la DEMO pública: sin usuario ni contraseña, solo un botón.
+describe('Login en la demo', () => {
+  beforeEach(() => { entorno.ES_DEMO = true; });
+
+  it('entra con un solo botón, sin pedir credenciales', async () => {
+    const user = userEvent.setup();
+    api.post.mockResolvedValue({ token: 'tok', usuario: { id: 1, nombre: 'Prueba' } });
+    render(<Login />);
+
+    expect(screen.queryByPlaceholderText('Escribe tu nombre...')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Entrar' }));
+
+    await waitFor(() => expect(login).toHaveBeenCalledWith('tok', { id: 1, nombre: 'Prueba' }));
+  });
+
+  it('explica por qué se cerró la sesión anterior', async () => {
+    // El token de la demo caduca en una hora: al volver aquí, el visitante
+    // tiene que entender por qué, o parece que la app lo echó sin motivo.
+    sessionStorage.setItem('authAviso', 'Tu sesión expiró. Inicia sesión de nuevo.');
+    render(<Login />);
+
+    expect(await screen.findByText('Tu sesión expiró. Inicia sesión de nuevo.')).toBeInTheDocument();
   });
 });

@@ -159,6 +159,14 @@ export default function Login() {
             {ES_DEMO ? 'Demostración' : 'Iniciar sesión'}
           </h2>
 
+          {/* Por qué se cerró la sesión anterior. En la demo también: su token
+              caduca en una hora, y volver aquí sin explicación desconcierta. */}
+          {aviso && (
+            <div className="bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-lg px-3 py-2.5 mb-4">
+              {aviso}
+            </div>
+          )}
+
           {ES_DEMO && (
             <>
               <p className="text-sm text-gray-600 leading-relaxed mb-5">
@@ -183,12 +191,6 @@ export default function Login() {
                 {loading ? 'Entrando...' : 'Entrar'}
               </button>
             </>
-          )}
-
-          {aviso && !ES_DEMO && (
-            <div className="bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-lg px-3 py-2.5 mb-4">
-              {aviso}
-            </div>
           )}
 
           {!ES_DEMO && (

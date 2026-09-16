@@ -40,6 +40,19 @@ beforeEach(async () => {
   await seedSucursal('pruebas', 'Sucursal Pruebas');
 });
 
+describe('POST /api/auth/demo-login', () => {
+  it('firma un token que caduca en una hora, no en 30 días', async () => {
+    await seedVisitante();
+
+    const res = await request(app).post('/api/auth/demo-login').send({});
+    expect(res.status).toBe(200);
+
+    const [, payload] = res.body.token.split('.');
+    const { iat, exp } = JSON.parse(Buffer.from(payload, 'base64url').toString());
+    expect(exp - iat).toBe(3600);
+  });
+});
+
 describe('POST /api/usuarios con ENTORNO_DEMO', () => {
   it('el personal que da de alta un visitante nace dentro del entorno de pruebas', async () => {
     const visitante = await seedVisitante();
