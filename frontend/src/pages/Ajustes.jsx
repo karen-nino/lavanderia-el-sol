@@ -969,12 +969,15 @@ export default function Ajustes() {
     tiempo_carga_jumbo:    Number(config.tiempo_carga_jumbo),
     tiempo_carga_secadora: Number(config.tiempo_carga_secadora),
     tiempo_secadora_jumbo: Number(config.tiempo_secadora_jumbo),
-    // En la demo ni se manda: el backend lo ignora igualmente, pero así el
-    // payload dice lo mismo que la pantalla.
-    ...(ES_DEMO ? {} : { nombre_negocio: config.nombre_negocio }),
-    rfc:                   config.rfc ?? '',
-    ticket_nota_autoservicio: config.ticket_nota_autoservicio ?? '',
-    ticket_nota_encargo:      config.ticket_nota_encargo ?? '',
+    // Los textos con los que se identifica el negocio no se mandan en la demo:
+    // el backend los ignora igualmente, pero así el payload dice lo mismo que
+    // la pantalla, donde van deshabilitados.
+    ...(ES_DEMO ? {} : {
+      nombre_negocio:           config.nombre_negocio,
+      rfc:                      config.rfc ?? '',
+      ticket_nota_autoservicio: config.ticket_nota_autoservicio ?? '',
+      ticket_nota_encargo:      config.ticket_nota_encargo ?? '',
+    }),
     stock_minimo_global:   Number(config.stock_minimo_global),
     alerta_ciclo_detenido: !!config.alerta_ciclo_detenido,
   });
@@ -1312,7 +1315,8 @@ export default function Ajustes() {
           value={config.rfc ?? ''}
           onChange={handleChange}
           placeholder="Opcional"
-          className={INPUT_CLS}
+          disabled={ES_DEMO}
+          className={`${INPUT_CLS} disabled:bg-gray-50 disabled:text-gray-500 disabled:cursor-not-allowed`}
         />
       </Field>
 
@@ -1556,6 +1560,7 @@ export default function Ajustes() {
 
   const seccionTicketDesktop = (
     <Section titulo="Ticket">
+      {ES_DEMO && <p className="text-xs text-gray-400 -mt-2">{NOTA_DEMO}</p>}
       <Field
         label="Nota para Autoservicio"
         hint="Se imprime en letra chica al final del ticket que se manda al cliente."
@@ -1566,7 +1571,8 @@ export default function Ajustes() {
           value={config.ticket_nota_autoservicio ?? ''}
           onChange={handleChange}
           placeholder="Opcional"
-          className={`${INPUT_CLS} resize-y leading-relaxed`}
+          disabled={ES_DEMO}
+          className={`${INPUT_CLS} resize-y leading-relaxed disabled:bg-gray-50 disabled:text-gray-500 disabled:cursor-not-allowed`}
         />
       </Field>
       <div className="border-t border-gray-100 pt-4">
@@ -1580,7 +1586,8 @@ export default function Ajustes() {
             value={config.ticket_nota_encargo ?? ''}
             onChange={handleChange}
             placeholder="Opcional"
-            className={`${INPUT_CLS} resize-y leading-relaxed`}
+            disabled={ES_DEMO}
+            className={`${INPUT_CLS} resize-y leading-relaxed disabled:bg-gray-50 disabled:text-gray-500 disabled:cursor-not-allowed`}
           />
         </Field>
       </div>
@@ -1668,7 +1675,8 @@ export default function Ajustes() {
             value={config.rfc ?? ''}
             onChange={handleChange}
             placeholder="Opcional"
-            className={MOBILE_INPUT_CLS}
+            disabled={ES_DEMO}
+            className={`${MOBILE_INPUT_CLS} disabled:bg-gray-50 disabled:text-gray-500 disabled:cursor-not-allowed`}
           />
         </MobileField>
 
@@ -2034,6 +2042,7 @@ export default function Ajustes() {
 
   const seccionTicketMobile = (
     <div className="space-y-6">
+      {ES_DEMO && <p className="text-xs text-grey">{NOTA_DEMO}</p>}
       <MobileField
         label="Nota para Autoservicio"
         hint="Se imprime en letra chica al final del ticket que se manda al cliente."
@@ -2044,7 +2053,8 @@ export default function Ajustes() {
           value={config.ticket_nota_autoservicio ?? ''}
           onChange={handleChange}
           placeholder="Opcional"
-          className={`${MOBILE_INPUT_CLS} resize-y leading-relaxed`}
+          disabled={ES_DEMO}
+          className={`${MOBILE_INPUT_CLS} resize-y leading-relaxed disabled:bg-gray-50 disabled:text-gray-500 disabled:cursor-not-allowed`}
         />
       </MobileField>
 
@@ -2058,7 +2068,8 @@ export default function Ajustes() {
           value={config.ticket_nota_encargo ?? ''}
           onChange={handleChange}
           placeholder="Opcional"
-          className={`${MOBILE_INPUT_CLS} resize-y leading-relaxed`}
+          disabled={ES_DEMO}
+          className={`${MOBILE_INPUT_CLS} resize-y leading-relaxed disabled:bg-gray-50 disabled:text-gray-500 disabled:cursor-not-allowed`}
         />
       </MobileField>
     </div>

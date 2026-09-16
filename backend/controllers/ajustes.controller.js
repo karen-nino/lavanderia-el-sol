@@ -150,6 +150,23 @@ export const updateAjustes = async (req, res) => {
     return limpio === '' ? null : limpio;
   };
 
+  // Lo que la DEMO no deja tocar: los textos con los que el negocio se
+  // identifica. Son de la configuración global, los ven todos los visitantes a
+  // la vez y se quedan puestos hasta el reset de las 03:00, así que cualquiera
+  // podría dejar ahí lo que quisiera encima de una demo que sirve de carta de
+  // presentación. El nombre y las dos notas al pie, además, salen impresos en
+  // el ticket que se manda por WhatsApp.
+  //
+  // Se ignoran en silencio en vez de responder 403: la pantalla manda estos
+  // campos dentro del mismo guardado que las tarifas y los tiempos, y
+  // rechazarlos tumbaría también lo demás, que en la demo sí se puede cambiar.
+  const IDENTIDAD_DEL_NEGOCIO = [
+    'nombre_negocio', 'rfc', 'ticket_nota_autoservicio', 'ticket_nota_encargo',
+    'direccion', 'telefono',
+  ];
+  const editable = (campo, valor) =>
+    valor !== undefined && !(ENTORNO_DEMO && IDENTIDAD_DEL_NEGOCIO.includes(campo));
+
   const updates = [];
   const values  = [];
   let i = 1;
@@ -168,19 +185,12 @@ export const updateAjustes = async (req, res) => {
   if (tiempo_carga_jumbo    !== undefined) { updates.push(`tiempo_carga_jumbo = $${i++}`);    values.push(tiempo_carga_jumbo); }
   if (tiempo_carga_secadora !== undefined) { updates.push(`tiempo_carga_secadora = $${i++}`); values.push(tiempo_carga_secadora); }
   if (tiempo_secadora_jumbo   !== undefined) { updates.push(`tiempo_secadora_jumbo = $${i++}`);   values.push(tiempo_secadora_jumbo); }
-  // El nombre del negocio NO se cambia en la demo. Es un texto libre que ven
-  // todos los visitantes a la vez y que se queda puesto hasta el reset de las
-  // 03:00, así que cualquiera podría dejar ahí lo que quisiera encima de una
-  // demo que sirve de carta de presentación. Se ignora en silencio en vez de
-  // responder 403: la pantalla manda el campo dentro del mismo guardado que el
-  // resto de ajustes, y rechazarlo tumbaría también lo demás.
-  const nombreEditable = nombre_negocio !== undefined && !ENTORNO_DEMO;
-  if (nombreEditable)                      { updates.push(`nombre_negocio = $${i++}`);        values.push(nombre_negocio); }
-  if (rfc                   !== undefined) { updates.push(`rfc = $${i++}`);                   values.push(rfcLibre(rfc)); }
-  if (ticket_nota_autoservicio !== undefined) { updates.push(`ticket_nota_autoservicio = $${i++}`); values.push(textoONull(ticket_nota_autoservicio)); }
-  if (ticket_nota_encargo      !== undefined) { updates.push(`ticket_nota_encargo = $${i++}`);      values.push(textoONull(ticket_nota_encargo)); }
-  if (direccion             !== undefined) { updates.push(`direccion = $${i++}`);              values.push(direccion); }
-  if (telefono              !== undefined) { updates.push(`telefono = $${i++}`);               values.push(telefono); }
+  if (editable('nombre_negocio', nombre_negocio)) { updates.push(`nombre_negocio = $${i++}`); values.push(nombre_negocio); }
+  if (editable('rfc', rfc)) { updates.push(`rfc = $${i++}`); values.push(rfcLibre(rfc)); }
+  if (editable('ticket_nota_autoservicio', ticket_nota_autoservicio)) { updates.push(`ticket_nota_autoservicio = $${i++}`); values.push(textoONull(ticket_nota_autoservicio)); }
+  if (editable('ticket_nota_encargo', ticket_nota_encargo)) { updates.push(`ticket_nota_encargo = $${i++}`); values.push(textoONull(ticket_nota_encargo)); }
+  if (editable('direccion', direccion)) { updates.push(`direccion = $${i++}`); values.push(direccion); }
+  if (editable('telefono', telefono)) { updates.push(`telefono = $${i++}`); values.push(telefono); }
   if (stock_minimo_global   !== undefined) { updates.push(`stock_minimo_global = $${i++}`);   values.push(stock_minimo_global); }
   if (alerta_ciclo_detenido !== undefined) { updates.push(`alerta_ciclo_detenido = $${i++}`); values.push(Boolean(alerta_ciclo_detenido)); }
 

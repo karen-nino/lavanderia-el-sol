@@ -97,19 +97,33 @@ describe('POST /api/usuarios con ENTORNO_DEMO', () => {
 // visitantes a la vez hasta el reset de las 03:00. Dos cosas quedan fuera de su
 // alcance aunque el resto de Ajustes sea editable.
 describe('lo que la demo NO deja tocar', () => {
-  it('el nombre del negocio no se puede cambiar', async () => {
-    await seedAjustes({ nombre_negocio: 'Lavandería El Sol' });
+  // Los textos con los que el negocio se identifica. El nombre y las dos notas
+  // al pie salen impresos en el ticket que se manda por WhatsApp.
+  const IDENTIDAD = {
+    nombre_negocio: 'Lavandería El Sol',
+    rfc: 'XAXX010101000',
+    ticket_nota_autoservicio: 'Gracias por su preferencia',
+    ticket_nota_encargo: 'Conserve su ticket',
+    direccion: 'Calle Falsa 123',
+    telefono: '3312345678',
+  };
+
+  it('la identidad del negocio no se puede cambiar', async () => {
+    await seedAjustes(IDENTIDAD);
     const visitante = await seedVisitante();
 
+    const intento = Object.fromEntries(Object.keys(IDENTIDAD).map((c) => [c, 'LO QUE SEA']));
     const res = await request(app)
       .patch('/api/ajustes')
       .set(auth(visitante.token, 'pruebas'))
-      .send({ nombre_negocio: 'OTRA COSA', precio_carga_mediana: 80 });
+      .send({ ...intento, precio_carga_mediana: 80 });
 
     expect(res.status).toBe(200);
-    // El resto del guardado sí surte efecto: el nombre se ignora, no se rechaza
-    // la petición entera.
-    expect(res.body.nombre_negocio).toBe('Lavandería El Sol');
+    for (const [campo, valor] of Object.entries(IDENTIDAD)) {
+      expect({ [campo]: res.body[campo] }).toEqual({ [campo]: valor });
+    }
+    // El resto del guardado sí surte efecto: esos campos se ignoran, no se
+    // rechaza la petición entera.
     expect(Number(res.body.precio_carga_mediana)).toBe(80);
   });
 

@@ -37,6 +37,23 @@ describe('PATCH /api/ajustes', () => {
     expect(Number(res.body.precio_carga_mediana)).toBe(85);
   });
 
+  // Estos campos están cerrados en la DEMO pública (ver integration/demo.test.js).
+  // Aquí se fija lo contrario: en una instalación normal se guardan como siempre.
+  it('el admin edita los textos con los que se identifica el negocio', async () => {
+    const res = await request(app).patch('/api/ajustes').set(auth(admin.token))
+      .send({
+        nombre_negocio: 'Lavandería El Sol',
+        rfc: 'xaxx010101000',
+        ticket_nota_autoservicio: 'Gracias por su preferencia',
+        ticket_nota_encargo: 'Conserve su ticket',
+      });
+    expect(res.status).toBe(200);
+    expect(res.body.nombre_negocio).toBe('Lavandería El Sol');
+    expect(res.body.rfc).toBe('XAXX010101000');   // se guarda en mayúsculas
+    expect(res.body.ticket_nota_autoservicio).toBe('Gracias por su preferencia');
+    expect(res.body.ticket_nota_encargo).toBe('Conserve su ticket');
+  });
+
   it('rechaza un precio negativo → 400', async () => {
     const res = await request(app).patch('/api/ajustes').set(auth(admin.token))
       .send({ precio_carga_mediana: -1 });
