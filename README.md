@@ -7,7 +7,7 @@ first*.
 
 ## Probarlo
 
-**→ [lavanderia-el-sol-demo.netlify.app](https://lavanderia-el-sol-demo.netlify.app)**
+**→ [lavanderia-el-sol-demo.vercel.app](https://lavanderia-el-sol-demo.vercel.app)**
 
 Se entra con un botón, sin credenciales. Es una copia completa del sistema sobre
 su propia base de datos, con notas, cortes de caja e inventario inventados por un
