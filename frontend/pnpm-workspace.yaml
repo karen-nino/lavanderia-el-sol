@@ -1,2 +1,10 @@
+# Igual que en backend/: pnpm 11 falla el install si un paquete quiere correr su
+# script de instalación y no está aprobado. Aquí es esbuild, que entra con Vite.
+# El build de Netlify todavía usa una versión anterior y pasa, pero en cuanto
+# esa imagen actualice pnpm el sitio dejaría de construirse sin haber tocado
+# nada del código.
 allowBuilds:
   esbuild: true
+
+onlyBuiltDependencies:
+  - esbuild

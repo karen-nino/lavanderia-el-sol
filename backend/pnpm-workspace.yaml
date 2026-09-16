@@ -1,2 +1,17 @@
+# Dependencias a las que se permite ejecutar su script de instalación.
+#
+# Desde pnpm 10 esto dejó de leerse del campo "pnpm" de package.json, y pnpm 11
+# además convierte el aviso en ERROR: un install limpio termina en
+# ERR_PNPM_IGNORED_BUILDS con código 1. Eso tumbaba el paso "Instalar
+# dependencias del backend" del workflow que restaura la demo cada noche
+# (.github/workflows/reset-demo.yml instala con pnpm@11), así que el reset no
+# llegaba a correr nunca.
+#
+# Se escriben las dos claves a propósito: "allowBuilds" es la de pnpm 11 —la que
+# de verdad consulta— y "onlyBuiltDependencies" la de pnpm 10, por si el install
+# corre con esa versión.
 allowBuilds:
   bcrypt: true
+
+onlyBuiltDependencies:
+  - bcrypt
