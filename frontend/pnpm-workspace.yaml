@@ -3,6 +3,13 @@
 # El build de Netlify todavía usa una versión anterior y pasa, pero en cuanto
 # esa imagen actualice pnpm el sitio dejaría de construirse sin haber tocado
 # nada del código.
+# "packages" tiene que estar aunque aquí no haya workspace de verdad: pnpm 9
+# —la versión que fija el Dockerfile— aborta con "packages field missing or
+# empty" si encuentra este archivo sin ella, y eso rompería el build de la
+# imagen. Con el punto, el único paquete es este mismo directorio.
+packages:
+  - '.'
+
 allowBuilds:
   esbuild: true
 

@@ -10,6 +10,13 @@
 # Se escriben las dos claves a propósito: "allowBuilds" es la de pnpm 11 —la que
 # de verdad consulta— y "onlyBuiltDependencies" la de pnpm 10, por si el install
 # corre con esa versión.
+# "packages" tiene que estar aunque aquí no haya workspace de verdad: pnpm 9
+# —la versión que fija el Dockerfile— aborta con "packages field missing or
+# empty" si encuentra este archivo sin ella, y eso rompería el build de la
+# imagen. Con el punto, el único paquete es este mismo directorio.
+packages:
+  - '.'
+
 allowBuilds:
   bcrypt: true
 
