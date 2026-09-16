@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
@@ -146,12 +146,16 @@ export default function GestionMaquinas() {
   // La cuenta de eWeLink es lo que hace que los Sonoff obedezcan: sin ella el
   // enlace de cada máquina falla y desde la tarjeta no se ve por qué. Solo le
   // sirve al admin, que es quien puede conectarla.
-  const cargarCuentaSonoff = () => {
+  // useCallback para poder declararla como dependencia de los efectos que la
+  // usan: sin él se recreaba en cada render y había que omitirla de las listas,
+  // que es lo que avisaba react-hooks/exhaustive-deps. Solo cambia con esAdmin,
+  // así que los efectos se vuelven a ejecutar en los mismos casos que antes.
+  const cargarCuentaSonoff = useCallback(() => {
     if (!esAdmin) return;
     api.get('/ewelink/estado').then(setCuentaSonoff).catch(() => setCuentaSonoff(null));
-  };
+  }, [esAdmin]);
 
-  useEffect(() => { cargarCuentaSonoff(); }, [esAdmin]);
+  useEffect(() => { cargarCuentaSonoff(); }, [cargarCuentaSonoff]);
 
   // El apagado de emergencia solo se ofrece cuando el backend manda órdenes de
   // verdad: en simulación respondería "modo simulación" y quien lo aprieta
@@ -168,7 +172,7 @@ export default function GestionMaquinas() {
     const onFocus = () => cargarCuentaSonoff();
     window.addEventListener('focus', onFocus);
     return () => window.removeEventListener('focus', onFocus);
-  }, [esAdmin]);
+  }, [esAdmin, cargarCuentaSonoff]);
 
   useEffect(() => {
     if (accionesMenuId == null) return;
