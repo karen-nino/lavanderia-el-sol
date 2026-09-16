@@ -36,6 +36,13 @@ export default function Login() {
   const navigate = useNavigate();
   const containerRef = useRef(null);
   const passwordRef  = useRef(null);
+  // La lista la cerró el usuario a propósito (clic fuera), así que no debe
+  // reabrirse sola. Sin esto, cerrarla mientras había una búsqueda en marcha no
+  // servía de nada: 200 ms después saltaba el debounce —o llegaba la respuesta—
+  // y la volvía a abrir encima de lo que el usuario estuviera mirando. Es un
+  // ref y no un estado porque solo lo consulta el efecto; no hay que repintar
+  // cuando cambia.
+  const cerradaPorElUsuario = useRef(false);
 
   // Lo que se busca de verdad: sin el prefijo *** de los usuarios ocultos.
   const consulta = query.trim();
@@ -50,14 +57,18 @@ export default function Login() {
       // gastarían el límite por IP, así que ni se mandan.
       if (termino.length < 3) {
         setSugerencias([]);
-        setMostrarLista(consulta.length > 0);  // para que se vea la pista de las 3 letras
+        // Para que se vea la pista de las 3 letras, salvo que la lista esté
+        // cerrada porque el usuario la cerró.
+        setMostrarLista(!cerradaPorElUsuario.current && consulta.length > 0);
         return;
       }
       setBuscando(true);
       try {
         const data = await api.get(`/auth/buscar-usuarios?q=${encodeURIComponent(consulta)}`);
         setSugerencias(data ?? []);
-        setMostrarLista(true);
+        // Se vuelve a mirar aquí, no solo arriba: la respuesta tarda más que el
+        // debounce y el usuario puede haber cerrado la lista mientras llegaba.
+        if (!cerradaPorElUsuario.current) setMostrarLista(true);
       } catch {
         setSugerencias([]);
       } finally {
@@ -71,6 +82,7 @@ export default function Login() {
   useEffect(() => {
     const onClick = (e) => {
       if (containerRef.current && !containerRef.current.contains(e.target)) {
+        cerradaPorElUsuario.current = true;
         setMostrarLista(false);
       }
     };
@@ -81,6 +93,7 @@ export default function Login() {
   const elegirUsuario = (u) => {
     setSeleccionado(u);
     setQuery(u.nombre);
+    cerradaPorElUsuario.current = true;
     setMostrarLista(false);
     setError('');
     setTimeout(() => passwordRef.current?.focus(), 0);
@@ -94,6 +107,7 @@ export default function Login() {
   };
 
   const handleQueryChange = (e) => {
+    cerradaPorElUsuario.current = false;
     setQuery(e.target.value);
     if (seleccionado) {
       setSeleccionado(null);

@@ -57,6 +57,34 @@ describe('Login', () => {
     expect(api.get).not.toHaveBeenCalled();
   });
 
+  it('si cierras la lista con un clic fuera, no se reabre sola', async () => {
+    const user = userEvent.setup();
+    // La respuesta llega DESPUÉS del clic fuera, que es el caso que fallaba:
+    // el debounce y la petición seguían vivos y reabrían la lista encima.
+    api.get.mockResolvedValue([{ id: 7, nombre: 'Juan Pérez' }]);
+    render(<Login />);
+
+    await user.type(screen.getByPlaceholderText('Escribe tu nombre...'), 'Juan');
+    await user.click(document.body);          // clic fuera: el usuario la cierra
+
+    await waitFor(() => expect(api.get).toHaveBeenCalled());
+    await waitFor(() => expect(screen.queryByText('Buscando...')).not.toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: 'Juan Pérez' })).not.toBeInTheDocument();
+  });
+
+  it('vuelve a abrirse en cuanto el usuario sigue escribiendo', async () => {
+    const user = userEvent.setup();
+    api.get.mockResolvedValue([{ id: 7, nombre: 'Juan Pérez' }]);
+    render(<Login />);
+
+    const input = screen.getByPlaceholderText('Escribe tu nombre...');
+    await user.type(input, 'Juan');
+    await user.click(document.body);
+    await user.type(input, 'i');
+
+    expect(await screen.findByRole('button', { name: 'Juan Pérez' })).toBeInTheDocument();
+  });
+
   it('la contraseña está deshabilitada hasta elegir un usuario', async () => {
     const user = userEvent.setup();
     render(<Login />);
