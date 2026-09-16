@@ -186,9 +186,19 @@ function Apertura({ data, onAbrir }) {
 
   // El fondo lo trae el corte anterior: el campo arranca con ese monto y se
   // vuelve a poner si el corte cambia (p. ej. después de recargar).
-  useEffect(() => {
-    if (sugerida) setMonto(String(sugerida.monto));
-  }, [sugerida?.monto, sugerida?.corte?.id]);
+  //
+  // Se ajusta DURANTE el render, no en un efecto. Es el patrón que React
+  // recomienda para un campo que sigue a una prop: el efecto obligaba a pintar
+  // una vez con el valor viejo y a repintar enseguida con el bueno, que es lo
+  // que marcaba react-hooks/set-state-in-effect. La clave junta corte y monto
+  // para no repetir el ajuste mientras el corte sea el mismo, y así lo que
+  // escriba el usuario encima se respeta.
+  const claveSugerida = sugerida ? `${sugerida.corte?.id ?? ''}:${sugerida.monto}` : null;
+  const [claveAplicada, setClaveAplicada] = useState(null);
+  if (claveSugerida && claveSugerida !== claveAplicada) {
+    setClaveAplicada(claveSugerida);
+    setMonto(String(sugerida.monto));
+  }
 
   if (data?.abierta) {
     const { caja, totales } = data;

@@ -9,6 +9,8 @@
 // (utils/entorno.js), sin que el reset nocturno pudiera deshacerlo.
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import request from 'supertest';
+import fs from 'node:fs';
+import path from 'node:path';
 
 // ENTORNO_DEMO se lee UNA vez, al cargar utils/entorno.js. Hay que ponerla
 // antes de que se importe la app, y de ahí que todo lo demás entre por import
@@ -17,7 +19,7 @@ process.env.ENTORNO_DEMO = '1';
 
 const { default: app }  = await import('../../app.js');
 const helpers           = await import('../helpers.js');
-const { pool, limpiarBase, seedSucursal, tokenFor, auth } = helpers;
+const { pool, limpiarBase, seedSucursal, seedAjustes, tokenFor, auth } = helpers;
 
 // Se restaura para no contagiar a los demás archivos de prueba, que comparten
 // proceso aunque cada uno recargue sus módulos.
@@ -88,5 +90,58 @@ describe('POST /api/usuarios con ENTORNO_DEMO', () => {
       .send({ nombre: 'Cuela', password: 'secret123', rol: 'operador', sucursal: 'pruebas' });
 
     expect(res.status).toBe(400);
+  });
+});
+
+// La demo es pública y anónima, y su configuración la comparten todos los
+// visitantes a la vez hasta el reset de las 03:00. Dos cosas quedan fuera de su
+// alcance aunque el resto de Ajustes sea editable.
+describe('lo que la demo NO deja tocar', () => {
+  it('el nombre del negocio no se puede cambiar', async () => {
+    await seedAjustes({ nombre_negocio: 'Lavandería El Sol' });
+    const visitante = await seedVisitante();
+
+    const res = await request(app)
+      .patch('/api/ajustes')
+      .set(auth(visitante.token, 'pruebas'))
+      .send({ nombre_negocio: 'OTRA COSA', precio_carga_mediana: 80 });
+
+    expect(res.status).toBe(200);
+    // El resto del guardado sí surte efecto: el nombre se ignora, no se rechaza
+    // la petición entera.
+    expect(res.body.nombre_negocio).toBe('Lavandería El Sol');
+    expect(Number(res.body.precio_carga_mediana)).toBe(80);
+  });
+
+  it('el logo no se puede subir, y el archivo ni siquiera llega al disco', async () => {
+    await seedAjustes();
+    const visitante = await seedVisitante();
+
+    // Multer escribe mientras procesa la petición: si el rechazo llegara
+    // después, el archivo ya estaría en disco y la demo —que es pública— se
+    // podría llenar con subidas que no se aplican.
+    const dir = path.resolve('uploads/logo');
+    const antes = fs.existsSync(dir) ? fs.readdirSync(dir).length : 0;
+
+    const res = await request(app)
+      .post('/api/ajustes/logo')
+      .set(auth(visitante.token, 'pruebas'))
+      .attach('logo', Buffer.from('no importa'), 'logo.png');
+
+    expect(res.status).toBe(403);
+    const despues = fs.existsSync(dir) ? fs.readdirSync(dir).length : 0;
+    expect(despues).toBe(antes);
+  });
+
+  it('el logo no se enseña ni aunque quedara uno guardado de antes', async () => {
+    await seedAjustes({ logo_url: '/uploads/logo/logo-viejo.png' });
+    const visitante = await seedVisitante();
+
+    const res = await request(app)
+      .get('/api/ajustes')
+      .set(auth(visitante.token, 'pruebas'));
+
+    expect(res.status).toBe(200);
+    expect(res.body.logo_url).toBeNull();
   });
 });

@@ -11,7 +11,16 @@ import FondoApertura from './FondoApertura';
 //   • onClose   → cerrar sin abrir
 //   • onAbierta → se llama cuando la caja ya quedó abierta (también si el
 //                 servidor responde que ya lo estaba)
+// Solo decide si hay modal. El contenido va aparte para que se MONTE al abrir y
+// se DESMONTE al cerrar: así empieza en limpio por nacer de cero, en vez de que
+// un efecto vaya reseteando los campos cada vez que cambia `open` (eso obligaba
+// a un render extra en cascada, y es lo que marcaba react-hooks/set-state-in-effect).
 export default function AbrirCajaModal({ open, onClose, onAbierta }) {
+  if (!open) return null;
+  return <ContenidoAbrirCaja onClose={onClose} onAbierta={onAbierta} />;
+}
+
+function ContenidoAbrirCaja({ onClose, onAbierta }) {
   // `?? {}`: la tarjeta del Dashboard se renderiza en pruebas sin AuthProvider.
   const { usuario } = useAuth() ?? {};
   const admin = esAdminFn(usuario?.rol);
@@ -21,16 +30,10 @@ export default function AbrirCajaModal({ open, onClose, onAbierta }) {
   const [error, setError] = useState(null);
   // El fondo sale del corte anterior; se consulta al abrir el modal.
   const [sugerida, setSugerida] = useState(null);
-  const [cargando, setCargando] = useState(false);
+  const [cargando, setCargando] = useState(true);
 
-  // Cada vez que se abre, empieza en limpio y trae el fondo del corte anterior.
+  // Al montar: trae el fondo que sugiere el corte anterior.
   useEffect(() => {
-    if (!open) return;
-    setMonto('');
-    setNotas('');
-    setError(null);
-    setSugerida(null);
-    setCargando(true);
     let activo = true;
     api.get('/caja/actual')
       .then(data => {
@@ -42,9 +45,7 @@ export default function AbrirCajaModal({ open, onClose, onAbierta }) {
       .catch(err => { if (activo) setError(err.message); })
       .finally(() => { if (activo) setCargando(false); });
     return () => { activo = false; };
-  }, [open]);
-
-  if (!open) return null;
+  }, []);
 
   const cerrar = () => { if (!saving) onClose(); };
 

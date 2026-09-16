@@ -8,6 +8,12 @@ import { useAuth } from '../context/AuthContext';
 import { esAdminMain as esAdminMainFn } from '../lib/roles';
 import { ES_DEMO } from '../lib/entorno';
 
+// El nombre del negocio y el logo se quedan fuera de la DEMO: son de la
+// configuración global, los comparten todos los visitantes a la vez y se quedan
+// puestos hasta el reset de las 03:00. El backend los cierra por su cuenta
+// (controllers/ajustes.controller.js), esto es solo no ofrecerlos.
+const NOTA_DEMO = 'En la demostración este dato no se cambia.';
+
 const INPUT_CLS =
   'w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent transition';
 
@@ -963,7 +969,9 @@ export default function Ajustes() {
     tiempo_carga_jumbo:    Number(config.tiempo_carga_jumbo),
     tiempo_carga_secadora: Number(config.tiempo_carga_secadora),
     tiempo_secadora_jumbo: Number(config.tiempo_secadora_jumbo),
-    nombre_negocio:        config.nombre_negocio,
+    // En la demo ni se manda: el backend lo ignora igualmente, pero así el
+    // payload dice lo mismo que la pantalla.
+    ...(ES_DEMO ? {} : { nombre_negocio: config.nombre_negocio }),
     rfc:                   config.rfc ?? '',
     ticket_nota_autoservicio: config.ticket_nota_autoservicio ?? '',
     ticket_nota_encargo:      config.ticket_nota_encargo ?? '',
@@ -1290,8 +1298,10 @@ export default function Ajustes() {
           required
           value={config.nombre_negocio ?? ''}
           onChange={handleChange}
-          className={INPUT_CLS}
+          disabled={ES_DEMO}
+          className={`${INPUT_CLS} disabled:bg-gray-50 disabled:text-gray-500 disabled:cursor-not-allowed`}
         />
+        {ES_DEMO && <p className="text-xs text-gray-400 mt-1">{NOTA_DEMO}</p>}
       </Field>
 
       {/* R.F.C. del negocio: opcional */}
@@ -1306,6 +1316,7 @@ export default function Ajustes() {
         />
       </Field>
 
+      {!ES_DEMO && (
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">Logo</label>
         <div className="flex items-center gap-4">
@@ -1343,6 +1354,7 @@ export default function Ajustes() {
           </div>
         </div>
       </div>
+      )}
 
       {/* Gestión de sucursales */}
       <div className="border-t border-gray-100 pt-8 mt-4 space-y-6">
@@ -1642,8 +1654,10 @@ export default function Ajustes() {
             required
             value={config.nombre_negocio ?? ''}
             onChange={handleChange}
-            className={MOBILE_INPUT_CLS}
+            disabled={ES_DEMO}
+            className={`${MOBILE_INPUT_CLS} disabled:bg-gray-50 disabled:text-gray-500 disabled:cursor-not-allowed`}
           />
+          {ES_DEMO && <p className="text-xs text-grey mt-1">{NOTA_DEMO}</p>}
         </MobileField>
 
         {/* R.F.C. del negocio: opcional */}
@@ -1658,6 +1672,7 @@ export default function Ajustes() {
           />
         </MobileField>
 
+        {!ES_DEMO && (
         <MobileField label="Logo">
           <div className="border border-grey/30 rounded-lg p-4 flex items-center gap-4">
             <div className="w-20 h-20 rounded-lg border-2 border-dashed border-grey/40 bg-light-blue/20 flex items-center justify-center overflow-hidden flex-shrink-0">
@@ -1687,6 +1702,7 @@ export default function Ajustes() {
             </div>
           </div>
         </MobileField>
+        )}
       </div>
 
       {/* Gestión de sucursales */}

@@ -57,3 +57,6 @@ backend/scripts/.demo-ventas-ids*.json
 
 # Generado en el build por frontend/scripts/gen-redirects.mjs (destino según API_ORIGIN)
 frontend/public/_redirects
+
+# Logos subidos desde Ajustes (los crea el backend al arrancar)
+backend/uploads/

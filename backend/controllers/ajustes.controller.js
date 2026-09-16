@@ -3,6 +3,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { esAdmin } from '../middleware/roles.js';
+import { ENTORNO_DEMO } from '../utils/entorno.js';
 
 // Crear carpeta uploads/logo/ si no existe
 const uploadsDir = './uploads/logo';
@@ -38,7 +39,10 @@ export const upload = multer({
 export const getAjustes = async (req, res) => {
   try {
     const { rows } = await pool.query('SELECT * FROM ajustes WHERE id = 1');
-    res.json(rows[0]);
+    // En la DEMO el logo no se enseña nunca, ni aunque la columna traiga uno de
+    // antes: su archivo vive en un disco que se recicla cada vez que la máquina
+    // duerme, así que lo único que se vería es una imagen rota.
+    res.json(ENTORNO_DEMO ? { ...rows[0], logo_url: null } : rows[0]);
   } catch (err) {
     console.error('getAjustes error:', err);
     res.status(500).json({ message: 'No se pudieron cargar los ajustes. Intenta de nuevo.' });
@@ -164,7 +168,14 @@ export const updateAjustes = async (req, res) => {
   if (tiempo_carga_jumbo    !== undefined) { updates.push(`tiempo_carga_jumbo = $${i++}`);    values.push(tiempo_carga_jumbo); }
   if (tiempo_carga_secadora !== undefined) { updates.push(`tiempo_carga_secadora = $${i++}`); values.push(tiempo_carga_secadora); }
   if (tiempo_secadora_jumbo   !== undefined) { updates.push(`tiempo_secadora_jumbo = $${i++}`);   values.push(tiempo_secadora_jumbo); }
-  if (nombre_negocio        !== undefined) { updates.push(`nombre_negocio = $${i++}`);        values.push(nombre_negocio); }
+  // El nombre del negocio NO se cambia en la demo. Es un texto libre que ven
+  // todos los visitantes a la vez y que se queda puesto hasta el reset de las
+  // 03:00, así que cualquiera podría dejar ahí lo que quisiera encima de una
+  // demo que sirve de carta de presentación. Se ignora en silencio en vez de
+  // responder 403: la pantalla manda el campo dentro del mismo guardado que el
+  // resto de ajustes, y rechazarlo tumbaría también lo demás.
+  const nombreEditable = nombre_negocio !== undefined && !ENTORNO_DEMO;
+  if (nombreEditable)                      { updates.push(`nombre_negocio = $${i++}`);        values.push(nombre_negocio); }
   if (rfc                   !== undefined) { updates.push(`rfc = $${i++}`);                   values.push(rfcLibre(rfc)); }
   if (ticket_nota_autoservicio !== undefined) { updates.push(`ticket_nota_autoservicio = $${i++}`); values.push(textoONull(ticket_nota_autoservicio)); }
   if (ticket_nota_encargo      !== undefined) { updates.push(`ticket_nota_encargo = $${i++}`);      values.push(textoONull(ticket_nota_encargo)); }
@@ -191,6 +202,20 @@ export const updateAjustes = async (req, res) => {
 };
 
 // ── POST /ajustes/logo ────────────────────────────────────────
+// La DEMO es pública y anónima: el logo se queda fuera. El archivo no sobrevive
+// al reciclado de la máquina (no hay volumen montado), así que solo dejaría una
+// imagen rota hasta el reset, y las subidas se acumulan en el disco sin que
+// nadie las borre. La pantalla tampoco ofrece el botón.
+//
+// Se monta como middleware, delante de multer (ver ajustes.routes.js): si se
+// comprobara aquí dentro, el archivo ya estaría escrito en disco.
+export const bloquearLogoEnDemo = (req, res, next) => {
+  if (ENTORNO_DEMO) {
+    return res.status(403).json({ message: 'En la demostración no se puede cambiar el logo.' });
+  }
+  next();
+};
+
 export const uploadLogo = async (req, res) => {
   if (!esAdmin(req.user.rol)) {
     return res.status(403).json({ message: 'Solo administradores pueden modificar el logo.' });
