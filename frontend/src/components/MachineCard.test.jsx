@@ -57,6 +57,65 @@ describe('MachineCard', () => {
     expect(onTerminarCiclo).toHaveBeenCalledWith(lavadoraTerminada);
   });
 
+  // Segundo ciclo de la misma carga (mig. 108): una carga de ropa necesita dos
+  // ciclos de 15 min seguidos, y al terminar el primero la máquina se queda sin
+  // corriente hasta que alguien la re-arma.
+  const nota = { folio: '0123-080726', tipo_servicio: 'AUTOSERVICIO' };
+
+  it('ofrece otro ciclo cuando la carga todavía tiene ciclos disponibles', async () => {
+    const onOtroCiclo = vi.fn();
+    render(
+      <MachineCard
+        maquina={{ ...lavadoraTerminada, puede_otro_ciclo: true, espera_otro_ciclo: 0,
+                   ciclos_carga: 1, ciclos_max: 2 }}
+        nota={nota}
+        onOtroCiclo={onOtroCiclo}
+      />
+    );
+
+    expect(screen.getByText('Ciclo 1 de 2')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'OTRO CICLO' }));
+    expect(onOtroCiclo).toHaveBeenCalled();
+  });
+
+  it('durante la pausa sin corriente el botón cuenta atrás y no se puede pulsar', async () => {
+    const onOtroCiclo = vi.fn();
+    render(
+      <MachineCard
+        maquina={{ ...lavadoraTerminada, puede_otro_ciclo: true, espera_otro_ciclo: 7,
+                   ciclos_carga: 1, ciclos_max: 2 }}
+        nota={nota}
+        onOtroCiclo={onOtroCiclo}
+      />
+    );
+
+    const boton = screen.getByRole('button', { name: 'OTRO CICLO EN 7s' });
+    expect(boton).toBeDisabled();
+    await userEvent.click(boton);
+    expect(onOtroCiclo).not.toHaveBeenCalled();
+  });
+
+  it('sin ciclos disponibles no aparece el botón: solo queda finalizar', () => {
+    render(
+      <MachineCard maquina={{ ...lavadoraTerminada, puede_otro_ciclo: false }} nota={nota} />
+    );
+
+    expect(screen.queryByRole('button', { name: /OTRO CICLO/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'FINALIZAR CARGA' })).toBeInTheDocument();
+  });
+
+  it('muestra el error del servidor si el siguiente ciclo no se pudo iniciar', () => {
+    render(
+      <MachineCard
+        maquina={{ ...lavadoraTerminada, puede_otro_ciclo: true, espera_otro_ciclo: 0 }}
+        nota={nota}
+        errorOtroCiclo="Esta carga ya corrió sus 2 ciclos."
+      />
+    );
+
+    expect(screen.getByText('Esta carga ya corrió sus 2 ciclos.')).toBeInTheDocument();
+  });
+
   it('un AUTOSERVICIO con secadora también pasa a secado, no finaliza la carga', () => {
     render(
       <MachineCard

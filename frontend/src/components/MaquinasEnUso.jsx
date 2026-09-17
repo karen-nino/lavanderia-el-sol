@@ -59,6 +59,10 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
   const [terminando, setTerminando] = useState(false);
   const [errorTerminar, setErrorTerminar] = useState('');
   const [refrescando, setRefrescando] = useState(false);
+  // Máquina a la que se le está pidiendo otro ciclo, y el error si falló. El
+  // error se guarda por máquina para que el de una tarjeta no salga en otra.
+  const [otroCicloEnCurso, setOtroCicloEnCurso] = useState(null);
+  const [errorOtroCiclo, setErrorOtroCiclo] = useState(null);
 
   // Refresco silencioso de los datos que cambian en tiempo real. No toca
   // `loading` ni muestra errores: los fallos transitorios se ignoran y se
@@ -282,6 +286,11 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
     // Encendida a mano y sin nota (mig. 104): no hay ciclo que contar, así que
     // el contador mentiría con el tiempo de una carga que nadie pidió.
     const soloManual = Boolean(m.encendida_manual_at) && !notaRel;
+    // Segundo ciclo de la misma carga (mig. 108). `otro_ciclo_desde` lo calcula
+    // el backend —depende del margen de corte y de la pausa, que son
+    // configuración del servidor— y aquí solo se cuenta hacia atrás.
+    const habilitaEn = m.otro_ciclo_desde ? new Date(m.otro_ciclo_desde).getTime() : null;
+    const esperaSeg = habilitaEn ? Math.max(0, Math.ceil((habilitaEn - now) / 1000)) : 0;
     return {
       nota: notaRel,
       maquina: {
@@ -289,8 +298,31 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
         progreso: soloManual ? 1 : progreso,
         tiempo_restante: soloManual || !inicio ? '—:—' : formatMMSS(restanteSeg),
         necesita_terminar_ciclo: Boolean(notaRel) && inicio != null && restanteSeg <= 0,
+        puede_otro_ciclo: Boolean(notaRel) && habilitaEn != null,
+        espera_otro_ciclo: esperaSeg,
       },
     };
+  };
+
+  // Pide el siguiente ciclo de la carga. El backend revalida el tope y la
+  // pausa, así que aquí no hay confirmación: es una acción reversible (termina
+  // en el mismo botón de Finalizar que ya estaba) y el empleado la da con la
+  // máquina enfrente.
+  const pedirOtroCiclo = async (maquina) => {
+    setErrorOtroCiclo(null);
+    setOtroCicloEnCurso(String(maquina.id));
+    try {
+      const r = await api.patch(`/maquinas/${maquina.id}/otro-ciclo`, {});
+      // Sesión expirada: api redirige y devuelve undefined.
+      if (r) await refrescarDatos();
+    } catch (err) {
+      setErrorOtroCiclo({
+        id: String(maquina.id),
+        mensaje: err?.message || 'No se pudo iniciar el siguiente ciclo.',
+      });
+    } finally {
+      setOtroCicloEnCurso(null);
+    }
   };
 
   const renderCard = (m) => {
@@ -301,6 +333,9 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
         maquina={maquinaAumentada}
         nota={notaRel}
         onTerminarCiclo={() => { setSecadoraSel(''); setConfirmTerminar(maquinaAumentada); }}
+        onOtroCiclo={() => pedirOtroCiclo(maquinaAumentada)}
+        otroCicloEnCurso={otroCicloEnCurso === String(m.id)}
+        errorOtroCiclo={errorOtroCiclo?.id === String(m.id) ? errorOtroCiclo.mensaje : null}
         onClick={notaRel ? () => navigate(`/notas/${notaRel.id}`) : undefined}
       />
     );

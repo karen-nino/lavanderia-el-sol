@@ -324,8 +324,62 @@ describe('interruptor del corte', () => {
   it('CORTE_CICLO_ACTIVO refleja SONOFF_CORTE_CICLO y por defecto viene encendido', async () => {
     // Se lee al importar el módulo, así que aquí solo se comprueba el valor por
     // defecto; apagarlo en producción es `fly secrets set SONOFF_CORTE_CICLO=off`.
-    const { CORTE_CICLO_ACTIVO, MARGEN_CORTE_MINUTOS } = await import('./sincronizarSonoff.js');
+    const { CORTE_CICLO_ACTIVO, MARGEN_CORTE_SEGUNDOS } = await import('./sincronizarSonoff.js');
     expect(CORTE_CICLO_ACTIVO).toBe(true);
-    expect(MARGEN_CORTE_MINUTOS).toBe(20);
+    // El margen vive en segundos desde la mig. 108; el default sigue siendo los
+    // 20 min de antes.
+    expect(MARGEN_CORTE_SEGUNDOS).toBe(20 * 60);
+  });
+});
+
+describe('relojes del ciclo (mig. 108)', () => {
+  const maq = (minutosEnUso, ciclo, extra = {}) => ({
+    id: 1,
+    estado: 'en_uso',
+    en_uso_desde: new Date(Date.now() - minutosEnUso * 60 * 1000).toISOString(),
+    ciclo_minutos: ciclo,
+    ...extra,
+  });
+
+  it('finCiclo no mira el corte: es solo el reloj de la carga', async () => {
+    const { finCiclo } = await import('./sincronizarSonoff.js');
+    const m = maq(10, 15);
+    // Arrancó hace 10 min con ciclo de 15: le faltan 5.
+    expect(Math.round((finCiclo(m) - Date.now()) / 60000)).toBe(5);
+  });
+
+  it('finCiclo es null sin ciclo sellado o si la máquina no está en uso', async () => {
+    const { finCiclo } = await import('./sincronizarSonoff.js');
+    expect(finCiclo(maq(10, null))).toBeNull();
+    expect(finCiclo(maq(10, 15, { estado: 'disponible' }))).toBeNull();
+    expect(finCiclo(null)).toBeNull();
+  });
+
+  it('instanteCorte suma el margen al fin del ciclo', async () => {
+    const { instanteCorte, finCiclo, MARGEN_CORTE_SEGUNDOS } = await import('./sincronizarSonoff.js');
+    const m = maq(10, 15);
+    expect(instanteCorte(m) - finCiclo(m)).toBe(MARGEN_CORTE_SEGUNDOS * 1000);
+  });
+
+  it('un encendido manual vigente cancela el corte pero no el reloj', async () => {
+    const { instanteCorte, finCiclo } = await import('./sincronizarSonoff.js');
+    const m = maq(10, 15, { encendida_manual_at: new Date().toISOString() });
+    expect(instanteCorte(m)).toBeNull();
+    expect(finCiclo(m)).not.toBeNull();
+  });
+
+  it('instanteOtroCiclo espera el margen Y la pausa sin corriente', async () => {
+    const { instanteOtroCiclo, finCiclo, MARGEN_CORTE_SEGUNDOS, PAUSA_OTRO_CICLO_SEGUNDOS } =
+      await import('./sincronizarSonoff.js');
+    const m = maq(10, 15);
+    expect(instanteOtroCiclo(m) - finCiclo(m)).toBe(
+      (MARGEN_CORTE_SEGUNDOS + PAUSA_OTRO_CICLO_SEGUNDOS) * 1000
+    );
+  });
+
+  it('la pausa por defecto son 10 s y el tope, 2 ciclos', async () => {
+    const { PAUSA_OTRO_CICLO_SEGUNDOS, MAX_CICLOS_POR_CARGA } = await import('./sincronizarSonoff.js');
+    expect(PAUSA_OTRO_CICLO_SEGUNDOS).toBe(10);
+    expect(MAX_CICLOS_POR_CARGA).toBe(2);
   });
 });

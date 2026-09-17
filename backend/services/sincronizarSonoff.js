@@ -51,13 +51,46 @@ export const HORAS_ENCENDIDO_MANUAL = (() => {
 // ventana se podía correr otra carga sin nota y sin cobro. El interruptor de la
 // lavadora funciona mientras haya corriente.
 //
-// El margen tiene que ser MENOR que el ciclo más corto (30 min, las secadoras):
-// así nunca alcanza para colar una carga completa —quien lo intente se queda a
-// medias— y al mismo tiempo le sobra tiempo a un cliente legítimo para apretar
-// el botón de arranque, que no es automático al dar corriente.
-export const MARGEN_CORTE_MINUTOS = (() => {
+// El margen tiene que ser MENOR que el ciclo más corto que se cronometra: así
+// nunca alcanza para colar una carga completa —quien lo intente se queda a
+// medias— y al mismo tiempo le deja aire a quien tiene que apretar el botón de
+// arranque, que no es automático al dar corriente.
+//
+// Ese ciclo más corto NO es un número fijo del código: sale de `tiempos_marca`
+// (mig. 107) y lo edita el admin desde Ajustes. Cuando se escribió esto eran
+// los 30 min de las secadoras, de ahí el default de 20 min; hoy son los 15 min
+// de las LG, así que ese default ya no cumple la regla y producción lo
+// sobreescribe. Si vuelven a bajar un tiempo de ciclo, hay que revisar este
+// margen: nada lo valida automáticamente.
+//
+// Va en SEGUNDOS y no en minutos porque el flujo de dos ciclos (mig. 108) lo
+// necesita fino: el negocio quiere que la lavadora se apague a los pocos
+// segundos de terminar, no al minuto siguiente. SONOFF_MARGEN_CORTE_MINUTOS se
+// sigue leyendo para no romper una configuración existente. Cero es válido
+// —corte en el instante exacto en que se cumple el ciclo—, así que la
+// comprobación es >= 0 y no > 0: con la de antes, un 0 caía al default de 20.
+export const MARGEN_CORTE_SEGUNDOS = (() => {
+  const s = Number(process.env.SONOFF_MARGEN_CORTE_SEGUNDOS);
+  if (Number.isFinite(s) && s >= 0) return Math.round(s);
   const m = Number(process.env.SONOFF_MARGEN_CORTE_MINUTOS);
-  return Number.isFinite(m) && m > 0 ? m : 20;
+  if (Number.isFinite(m) && m >= 0) return Math.round(m * 60);
+  return 20 * 60;
+})();
+
+// Cuántos ciclos puede correr una misma carga en su máquina (mig. 108). El
+// flujo del negocio son dos ciclos de 15 min seguidos; el tope existe para que
+// re-armar no se convierta en lavar indefinidamente con una nota ya cobrada.
+export const MAX_CICLOS_POR_CARGA = (() => {
+  const n = Number(process.env.SONOFF_MAX_CICLOS_POR_CARGA);
+  return Number.isInteger(n) && n >= 1 ? n : 2;
+})();
+
+// Pausa obligatoria entre el corte y el siguiente ciclo. El negocio la pidió
+// explícita: la máquina se queda sin corriente un momento antes de volver a
+// arrancar. Va en segundos porque son 10, no minutos.
+export const PAUSA_OTRO_CICLO_SEGUNDOS = (() => {
+  const s = Number(process.env.SONOFF_PAUSA_OTRO_CICLO_SEGUNDOS);
+  return Number.isFinite(s) && s >= 0 ? Math.round(s) : 10;
 })();
 
 // Interruptor propio del corte, aparte del general del driver. Esta es la única
@@ -81,16 +114,85 @@ export const manualVigente = (maq) => {
 //
 // Un encendido manual vigente no cuenta aquí: ese tiene su propia caducidad de
 // 3 h, y quien la prendió a mano decide cuánto la usa.
-export const cicloVencido = (maq) => {
-  if (!CORTE_CICLO_ACTIVO) return false;
-  if (!maq || maq.estado !== 'en_uso') return false;
-  if (!maq.en_uso_desde || !maq.ciclo_minutos) return false;
-  if (manualVigente(maq)) return false;
+// Instante exacto (epoch ms) en que a esta máquina hay que cortarle la
+// corriente, o null si no hay corte que hacer. Separado de `cicloVencido`
+// porque el mismo cálculo sirve para dos cosas: decidir si YA venció y saber
+// CUÁNTO FALTA para programar el apagado al segundo.
+// Instante (epoch ms) en que se cumple el ciclo sellado, o null si la máquina
+// no está corriendo uno. Es solo el reloj: no mira el corte ni el encendido
+// manual, porque lo usan tanto el apagado como el botón de "otro ciclo", y ese
+// segundo tiene que funcionar aunque el corte esté desactivado.
+export const finCiclo = (maq) => {
+  if (!maq || maq.estado !== 'en_uso') return null;
+  if (!maq.en_uso_desde || !maq.ciclo_minutos) return null;
   const desde = new Date(maq.en_uso_desde).getTime();
-  if (!Number.isFinite(desde)) return false;
-  const limiteMs = (Number(maq.ciclo_minutos) + MARGEN_CORTE_MINUTOS) * 60 * 1000;
-  return Date.now() - desde > limiteMs;
+  if (!Number.isFinite(desde)) return null;
+  return desde + Number(maq.ciclo_minutos) * 60 * 1000;
 };
+
+export const instanteCorte = (maq) => {
+  if (!CORTE_CICLO_ACTIVO) return null;
+  if (manualVigente(maq)) return null;
+  const fin = finCiclo(maq);
+  return fin == null ? null : fin + MARGEN_CORTE_SEGUNDOS * 1000;
+};
+
+// Instante en que se habilita el siguiente ciclo: cuando terminó el anterior,
+// más el margen de corriente que se le concede, más la pausa en la que la
+// máquina tiene que quedarse sin luz. Si el corte está desactivado no hay
+// margen que esperar —nunca se apaga— y solo cuenta la pausa.
+export const instanteOtroCiclo = (maq) => {
+  const fin = finCiclo(maq);
+  if (fin == null) return null;
+  const margen = CORTE_CICLO_ACTIVO ? MARGEN_CORTE_SEGUNDOS : 0;
+  return fin + (margen + PAUSA_OTRO_CICLO_SEGUNDOS) * 1000;
+};
+
+export const cicloVencido = (maq) => {
+  const corte = instanteCorte(maq);
+  return corte != null && Date.now() >= corte;
+};
+
+// Apagado programado a la hora exacta.
+//
+// El corte es la única regla que no nace de un cambio en la base, así que el
+// trigger LISTEN/NOTIFY no lo puede disparar: hasta ahora solo lo veía el
+// barrido periódico, cada 3 min. Con un margen de segundos eso no sirve —el
+// negocio pide que la lavadora se apague a los 10 s de terminar y el barrido lo
+// convertía en cualquier cosa entre 10 s y 3 min—, así que al arrancar una
+// máquina se agenda su apagado al instante que le toca.
+//
+// El barrido sigue siendo la red de seguridad: si el proceso se reinicia se
+// pierden los temporizadores en memoria, y el corte llega tarde pero llega.
+// `unref` evita que un temporizador pendiente mantenga vivo el proceso.
+const cortesProgramados = new Map();
+
+export function programarCorte(maq) {
+  const id = maq?.id;
+  if (id == null) return;
+  const previo = cortesProgramados.get(id);
+  if (previo) clearTimeout(previo);
+  cortesProgramados.delete(id);
+
+  const corte = instanteCorte(maq);
+  if (corte == null) return;
+  const faltan = corte - Date.now();
+  if (faltan <= 0) return; // ya venció: lo resuelve esta misma pasada
+
+  const t = setTimeout(() => {
+    cortesProgramados.delete(id);
+    // Al dispararse, `cicloVencido` ya es true y la sincronización apaga.
+    sincronizarSonoff(id);
+  }, faltan);
+  t.unref?.();
+  cortesProgramados.set(id, t);
+}
+
+// Para pruebas y apagado limpio: deja la agenda vacía.
+export function cancelarCortesProgramados() {
+  for (const t of cortesProgramados.values()) clearTimeout(t);
+  cortesProgramados.clear();
+}
 
 // Una máquina debe estar encendida si la está usando una nota O si alguien la
 // prendió a mano y esa marca no ha caducado (mig. 104). Con una excepción: si
@@ -279,6 +381,12 @@ export async function sincronizarSonoff(maquinaId, { reconciliando = false } = {
       }
       return marcar(maq.id, real.ok ? 'enlazada' : 'error', real.motivo);
     }
+
+    // Si queda encendida, se agenda su apagado para el instante exacto en que
+    // se cumpla el ciclo. Idempotente: cada pasada reemplaza el temporizador
+    // anterior de esa máquina, así que re-armarla para otro ciclo mueve la cita
+    // en vez de dejar dos.
+    if (deseado === 'on') programarCorte(maq);
 
     const res = deseado === 'on'
       ? await dispositivos.encender(maq)

@@ -15,7 +15,15 @@ function formatearCliente(nombre, apellido) {
   return `${n} ${a[0].toUpperCase()}.`;
 }
 
-export default function MachineCard({ maquina, nota, onTerminarCiclo, onClick }) {
+export default function MachineCard({
+  maquina,
+  nota,
+  onTerminarCiclo,
+  onOtroCiclo,
+  otroCicloEnCurso = false,
+  errorOtroCiclo = null,
+  onClick,
+}) {
   const folioTxt    = nota?.folio
     ? `#${String(nota.folio).split('-')[0]}`
     : (nota?.id != null ? `#${nota.id}` : null);
@@ -125,6 +133,35 @@ export default function MachineCard({ maquina, nota, onTerminarCiclo, onClick })
           >
             {finalizaCarga ? 'FINALIZAR CARGA' : 'INICIAR SECADO'}
           </button>
+          {/* Segundo ciclo de la misma carga (mig. 108): una carga de ropa
+              necesita dos ciclos seguidos, y al terminar el primero la máquina
+              se quedó sin corriente. Va DEBAJO y en secundario porque cerrar la
+              carga sigue siendo el camino normal; este es el desvío. Mientras
+              corre la pausa sin corriente el botón muestra la cuenta atrás en
+              vez de desaparecer, para que no parezca que no existe. */}
+          {maquina.puede_otro_ciclo && (
+            <>
+              <button
+                onClick={(e) => { e.stopPropagation(); onOtroCiclo?.(maquina); }}
+                disabled={otroCicloEnCurso || maquina.espera_otro_ciclo > 0}
+                className="w-full bg-white ring-2 ring-green text-green text-section py-3.5 text-base rounded-card-sm hover:bg-light-green transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {otroCicloEnCurso
+                  ? 'INICIANDO…'
+                  : maquina.espera_otro_ciclo > 0
+                    ? `OTRO CICLO EN ${maquina.espera_otro_ciclo}s`
+                    : 'OTRO CICLO'}
+              </button>
+              {maquina.ciclos_carga != null && maquina.ciclos_max != null && (
+                <p className="text-kpi-label text-grey text-sm">
+                  Ciclo {maquina.ciclos_carga} de {maquina.ciclos_max}
+                </p>
+              )}
+            </>
+          )}
+          {errorOtroCiclo && (
+            <p className="text-kpi-label text-red text-sm text-center">{errorOtroCiclo}</p>
+          )}
         </div>
       </div>
     );

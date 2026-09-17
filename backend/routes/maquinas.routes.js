@@ -14,6 +14,7 @@ import {
   probarSonoff,
   apagarSonoff,
   encenderSonoff,
+  otroCiclo,
 } from '../controllers/maquinas.controller.js';
 
 const router = Router();
@@ -31,6 +32,9 @@ router.put('/:id', updateMaquina);
 router.delete('/:id', requireAdmin, deleteMaquina);
 router.patch('/:id/estado', cambiarEstadoMaquina);
 router.patch('/:id/detener-ciclo', detenerCiclo);
+// Sin requireAdmin a propósito: el segundo ciclo lo da quien está en el
+// mostrador cuando termina el primero, y ese es el empleado (mig. 108).
+router.patch('/:id/otro-ciclo', otroCiclo);
 router.post('/:id/probar-sonoff', requireAdmin, probarSonoff);
 router.post('/:id/apagar-sonoff', requireAdmin, apagarSonoff);
 router.post('/:id/encender-sonoff', requireAdmin, encenderSonoff);

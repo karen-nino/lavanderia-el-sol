@@ -2,7 +2,14 @@ import pool from '../db/pool.js';
 import { TZ_NEGOCIO } from '../utils/tz.js';
 import * as dispositivos from '../services/dispositivos/index.js';
 import { explicarFalla, resumirMotivo } from '../services/dispositivos/mensajes.js';
-import { HORAS_ENCENDIDO_MANUAL } from '../services/sincronizarSonoff.js';
+import {
+  HORAS_ENCENDIDO_MANUAL,
+  MAX_CICLOS_POR_CARGA,
+  PAUSA_OTRO_CICLO_SEGUNDOS,
+  instanteOtroCiclo,
+  finCiclo,
+  sincronizarSonoff,
+} from '../services/sincronizarSonoff.js';
 import { esAdmin } from '../middleware/roles.js';
 
 const ESTADOS_VALIDOS = ['disponible', 'en_uso', 'mantenimiento'];
@@ -99,6 +106,29 @@ const mensajeDeviceDuplicado = (nombre, deviceCanal) =>
   (deviceCanal != null ? ` (canal ${deviceCanal})` : '') +
   '. Usa un ID distinto o, si es un dispositivo multi-relé, indica otro canal.';
 
+// Agrega a la fila de la máquina lo que la tarjeta necesita para ofrecer otro
+// ciclo (mig. 108). Se calcula aquí y no en el frontend porque depende del
+// margen y de la pausa, que son configuración del servidor: mandarlos al
+// navegador para que allá se haga la resta sería duplicar la regla en dos
+// lugares que pueden desincronizarse.
+//
+//   ciclos_carga        → cuántos ciclos lleva (1 = va en el primero)
+//   ciclos_max          → el tope, para poder decir "ciclo 1 de 2"
+//   otro_ciclo_desde    → cuándo se habilita el botón (ISO), null si no aplica
+const conDatosDeOtroCiclo = (m) => {
+  const ciclos = m.ciclos_carga ?? null;
+  const desde = instanteOtroCiclo(m);
+  return {
+    ...m,
+    ciclos_carga: ciclos,
+    ciclos_max: MAX_CICLOS_POR_CARGA,
+    otro_ciclo_desde:
+      ciclos != null && ciclos < MAX_CICLOS_POR_CARGA && desde != null
+        ? new Date(desde).toISOString()
+        : null,
+  };
+};
+
 export const getMaquinas = async (req, res) => {
   try {
     // Dos datos que las pantallas de asignación necesitan, además del estado:
@@ -114,7 +144,8 @@ export const getMaquinas = async (req, res) => {
               r.folio               AS reservada_folio,
               r.id                  AS reservada_nota_id,
               u.folio               AS en_uso_folio,
-              u.id                  AS en_uso_nota_id
+              u.id                  AS en_uso_nota_id,
+              c.ciclos              AS ciclos_carga
          FROM maquinas m
          LEFT JOIN LATERAL (
            SELECT n.id, n.folio
@@ -142,11 +173,27 @@ export const getMaquinas = async (req, res) => {
             ORDER BY n.created_at ASC
             LIMIT 1
          ) u ON TRUE
+         -- Ciclos que lleva la carga que está corriendo en esta máquina
+         -- (mig. 108). Va aparte del lateral de arriba a propósito: aquel
+         -- responde "qué nota la tiene" y aquí hace falta la CARGA concreta,
+         -- que además tiene que haber arrancado de verdad (mig. 097).
+         LEFT JOIN LATERAL (
+           SELECT CASE WHEN nc.lavadora_id = m.id THEN nc.lavadora_ciclos
+                       ELSE nc.secadora_ciclos END AS ciclos
+             FROM nota_cargas nc
+             JOIN notas n ON n.id = nc.nota_id
+            WHERE m.estado = 'en_uso'
+              AND n.estado IN ('EN_ESPERA', 'LAVANDO', 'SECANDO')
+              AND ((nc.lavadora_id = m.id AND nc.lavadora_iniciada_at IS NOT NULL)
+                OR (nc.secadora_id = m.id AND nc.secadora_iniciada_at IS NOT NULL))
+            ORDER BY n.created_at ASC
+            LIMIT 1
+         ) c ON TRUE
         WHERE m.sucursal = $1
         ORDER BY m.tipo ASC, m.nombre ASC`,
       [req.sucursal]
     );
-    res.json(rows);
+    res.json(rows.map(conDatosDeOtroCiclo));
   } catch (err) {
     console.error('getMaquinas error:', err);
     res.status(500).json({ message: 'No se pudieron cargar las máquinas. Intenta de nuevo.' });
@@ -774,5 +821,140 @@ export const encenderSonoff = async (req, res) => {
   } catch (err) {
     console.error('encenderSonoff error:', err);
     res.status(500).json({ message: 'No se pudo encender la máquina. Intenta de nuevo.' });
+  }
+};
+
+// ── PATCH /maquinas/:id/otro-ciclo ──────────────────────────
+// Re-arma una máquina para el siguiente ciclo de la MISMA carga (mig. 108).
+//
+// El ciclo real de una LG son 15 min y una carga necesita dos seguidos. Al
+// cumplirse el primero la máquina se queda sin corriente (corte por fin de
+// ciclo) y su temporizador llega a cero: sin esto, el único modo de seguir era
+// el encendido manual de Gestión, que es de admin. Aquí lo puede hacer quien
+// esté en el mostrador.
+//
+// Lo que cambia es el reloj, no la nota: `en_uso_desde` vuelve a NOW() y el
+// contador de la carga sube. `ciclo_minutos` no se recalcula —es la misma
+// máquina y la misma marca, así que el ciclo dura lo mismo— y el precio
+// tampoco: los dos ciclos son una sola carga cobrada una vez.
+//
+// Tres candados, en este orden: que el ciclo anterior haya TERMINADO, que la
+// pausa sin corriente se haya cumplido, y que la carga no haya agotado su tope.
+export const otroCiclo = async (req, res) => {
+  const { id } = req.params;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const { rows } = await client.query(
+      'SELECT * FROM maquinas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
+      [id, req.sucursal]
+    );
+    if (rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: 'Máquina no encontrada.' });
+    }
+    const maq = rows[0];
+
+    if (maq.estado !== 'en_uso') {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: `${maq.nombre} no está corriendo ninguna carga.` });
+    }
+
+    // La carga que de verdad la arrancó (mig. 097). Se bloquea para que dos
+    // empleados no puedan re-armar el mismo ciclo a la vez y saltarse el tope.
+    const { rows: cargas } = await client.query(
+      `SELECT nc.id,
+              nc.nota_id,
+              (nc.lavadora_id = $1) AS es_lavadora,
+              CASE WHEN nc.lavadora_id = $1 THEN nc.lavadora_ciclos
+                   ELSE nc.secadora_ciclos END AS ciclos
+         FROM nota_cargas nc
+         JOIN notas n ON n.id = nc.nota_id
+        WHERE n.estado IN ('EN_ESPERA', 'LAVANDO', 'SECANDO')
+          AND ((nc.lavadora_id = $1 AND nc.lavadora_iniciada_at IS NOT NULL)
+            OR (nc.secadora_id = $1 AND nc.secadora_iniciada_at IS NOT NULL))
+        ORDER BY n.created_at ASC
+        LIMIT 1
+        FOR UPDATE OF nc`,
+      [maq.id]
+    );
+    const carga = cargas[0];
+    if (!carga) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        message: `${maq.nombre} no tiene una carga en curso. Si la prendiste a mano, apágala desde Gestión de Máquinas.`,
+      });
+    }
+
+    if (carga.ciclos >= MAX_CICLOS_POR_CARGA) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        message: `Esta carga ya corrió sus ${MAX_CICLOS_POR_CARGA} ciclos. Termínala para liberar ${maq.nombre}.`,
+      });
+    }
+
+    const fin = finCiclo(maq);
+    if (fin == null) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: `${maq.nombre} no tiene un ciclo cronometrado.` });
+    }
+    if (Date.now() < fin) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        message: `${maq.nombre} sigue en su ciclo. Espera a que termine para darle otro.`,
+      });
+    }
+
+    // La pausa sin corriente es parte del flujo pedido por el negocio, no un
+    // detalle de la UI: si se pudiera saltar desde la API, el botón de la
+    // tarjeta sería el único que la respeta.
+    const desde = instanteOtroCiclo(maq);
+    if (desde != null && Date.now() < desde) {
+      const faltan = Math.ceil((desde - Date.now()) / 1000);
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        message: `${maq.nombre} necesita ${PAUSA_OTRO_CICLO_SEGUNDOS} s sin corriente antes del siguiente ciclo. Espera ${faltan} s.`,
+      });
+    }
+
+    const columna = carga.es_lavadora ? 'lavadora_ciclos' : 'secadora_ciclos';
+    await client.query(
+      `UPDATE nota_cargas SET ${columna} = ${columna} + 1 WHERE id = $1`,
+      [carga.id]
+    );
+
+    // Reiniciar en_uso_desde es lo que vuelve a arrancar el temporizador y, de
+    // paso, lo que hace que la máquina deje de estar vencida: la sincronización
+    // de abajo la vuelve a encender.
+    const { rows: upd } = await client.query(
+      'UPDATE maquinas SET en_uso_desde = NOW() WHERE id = $1 RETURNING *',
+      [maq.id]
+    );
+
+    await client.query('COMMIT');
+
+    // Fuera de la transacción: el trigger de LISTEN/NOTIFY solo mira el estado
+    // y el enlace (mig. 075), y aquí ninguno cambió, así que el encendido hay
+    // que pedirlo a mano. Esto además reprograma el corte del nuevo ciclo.
+    await sincronizarSonoff(maq.id);
+
+    const { rows: fresca } = await pool.query('SELECT * FROM maquinas WHERE id = $1', [maq.id]);
+    const ciclo = carga.ciclos + 1;
+    res.json({
+      message: `${maq.nombre}: ciclo ${ciclo} de ${MAX_CICLOS_POR_CARGA} en marcha.`,
+      ciclo,
+      ciclos_max: MAX_CICLOS_POR_CARGA,
+      maquina: conDatosDeOtroCiclo({
+        ...(fresca[0] ?? upd[0]),
+        ciclos_carga: ciclo,
+      }),
+    });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('otroCiclo error:', err);
+    res.status(500).json({ message: 'No se pudo iniciar el siguiente ciclo. Intenta de nuevo.' });
+  } finally {
+    client.release();
   }
 };
