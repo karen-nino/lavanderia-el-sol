@@ -1,8 +1,20 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
+    {
+      "source": "/api/:ruta*",
+      "has": [{ "type": "host", "value": { "eq": "lavanderia-el-sol.vercel.app" } }],
+      "destination": "https://lavanderia-el-sol-api.fly.dev/api/:ruta*"
+    },
+    {
+      "source": "/uploads/:ruta*",
+      "has": [{ "type": "host", "value": { "eq": "lavanderia-el-sol.vercel.app" } }],
+      "destination": "https://lavanderia-el-sol-api.fly.dev/uploads/:ruta*"
+    },
+
     { "source": "/api/:ruta*", "destination": "https://lavanderia-el-sol-demo.fly.dev/api/:ruta*" },
     { "source": "/uploads/:ruta*", "destination": "https://lavanderia-el-sol-demo.fly.dev/uploads/:ruta*" },
+
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
