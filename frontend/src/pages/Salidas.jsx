@@ -82,6 +82,7 @@ export default function Salidas() {
   const [confirmDetener,   setConfirmDetener]   = useState(null); // máquina a detener
   const [confirmIniciar,   setConfirmIniciar]   = useState(null); // máquina a iniciar
   const [iniciando,        setIniciando]        = useState(null); // máquina arrancando (animación)
+  const [encendiendo,      setEncendiendo]      = useState(null); // máquina recibiendo corriente (mig. 110)
   const [deteniendo,       setDeteniendo]       = useState(null); // máquina deteniéndose (animación)
 
   // Máquinas disponibles para los modales de asignar/cambiar máquina.
@@ -189,6 +190,27 @@ export default function Salidas() {
   // Arranca UNA máquina asignada y libre (botón "Iniciar Lavado"/"Iniciar
   // Secado" por máquina): la pone en uso y la nota pasa a la fase que
   // corresponda. Las demás máquinas asignadas siguen en espera.
+  // Paso previo (mig. 110): le da corriente sin arrancar el cronómetro. No pide
+  // confirmación como "Iniciar": dar luz no pone a lavar nada —la máquina no
+  // arranca sola— y el empleado está justo delante de ella.
+  async function encenderMaquina(maq) {
+    setErrorAccion('');
+    setEncendiendo(maq); // arranca la animación de encendido
+    try {
+      // Igual que al iniciar: un mínimo para que la animación se vea aunque la
+      // API responda al instante.
+      await Promise.all([
+        api.patch(`/notas/${id}/encender-maquina`, { maquina_id: maq.id }),
+        new Promise((r) => setTimeout(r, 1800)),
+      ]);
+      await cargarDatos();
+    } catch (err) {
+      setErrorAccion(err.message);
+    } finally {
+      setEncendiendo(null);
+    }
+  }
+
   async function iniciarMaquina() {
     if (!confirmIniciar) return;
     const maq = confirmIniciar;
@@ -514,6 +536,7 @@ export default function Salidas() {
             // Desvinculada y removida → eliminada (tachada); si no → terminó.
             estado: c.lavadora_id ? c.lavadora_estado : (c.lavadora_removida ? 'removida' : 'terminado'),
             en_uso_desde: c.lavadora_en_uso_desde,
+            esperandoArranque: Boolean(c.lavadora_esperando_arranque),
             tomadaPor: c.lavadora_id ? usadaPorOtra(c.lavadora_id) : null,
           },
           (c.secadora_id || c.secadora_usada_id) && {
@@ -523,6 +546,7 @@ export default function Salidas() {
             tamano: c.secadora_id ? c.secadora_tamano : c.secadora_usada_tamano,
             estado: c.secadora_id ? c.secadora_estado : (c.secadora_removida ? 'removida' : 'terminado'),
             en_uso_desde: c.secadora_en_uso_desde,
+            esperandoArranque: Boolean(c.secadora_esperando_arranque),
             tomadaPor: c.secadora_id ? usadaPorOtra(c.secadora_id) : null,
           },
         ].filter(Boolean),
@@ -753,6 +777,11 @@ export default function Salidas() {
                             La está usando la nota {m.tomadaPor}. Cámbiala por otra para poder iniciar.
                           </span>
                         )}
+                        {m.esperandoArranque && (
+                          <span className="text-xs font-medium text-green-700 basis-full">
+                            Encendida. Carga la ropa, arráncala y dale a Iniciar.
+                          </span>
+                        )}
                       </div>
                       {/* Otra nota se la ganó al iniciar: aquí no hay nada que
                           arrancar ni detener, solo cambiarla por una libre. */}
@@ -765,8 +794,22 @@ export default function Salidas() {
                           Cambiar máquina
                         </button>
                       ) : (<>
-                      {/* Acción por máquina: iniciar (cambiar/eliminar viven en el modal) */}
+                      {/* Acción por máquina, en dos pasos (mig. 110). Primero
+                          "Encender máquina", que solo le da corriente para poder
+                          cargar la ropa y apretar su botón físico; después
+                          "Iniciar", que arranca el cronómetro cuando el lavado
+                          ya empezó de verdad. Cuando los dos eran uno, el rato
+                          de cargar se le descontaba al ciclo. */}
                       {m.estado === 'disponible' && (
+                        <button
+                          onClick={() => encenderMaquina(m)}
+                          disabled={loadingMaquina || Boolean(encendiendo)}
+                          className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
+                        >
+                          Encender máquina
+                        </button>
+                      )}
+                      {m.esperandoArranque && (
                         <button
                           onClick={() => setConfirmIniciar(m)}
                           disabled={loadingMaquina}
@@ -775,7 +818,7 @@ export default function Salidas() {
                           {m.tipo === 'secadora' ? 'Iniciar Secado' : 'Iniciar Lavado'}
                         </button>
                       )}
-                      {m.estado === 'en_uso' && (
+                      {m.estado === 'en_uso' && !m.esperandoArranque && (
                         cicloCumplido(m) ? (
                           // Secadora que terminó: finalizar la carga. Lavadora
                           // que terminó: sin botón (verde), el secado va aparte.
@@ -1151,6 +1194,7 @@ export default function Salidas() {
       )}
 
       {/* Modal advertencia iniciar lavado/secado */}
+      {encendiendo && <MaquinaCicloOverlay modo="encender" tipo={encendiendo.tipo} nombre={encendiendo.nombre} />}
       {iniciando && <MaquinaCicloOverlay modo="iniciar" tipo={iniciando.tipo} nombre={iniciando.nombre} />}
       {deteniendo && <MaquinaCicloOverlay modo="detener" tipo={deteniendo.tipo} nombre={deteniendo.nombre} />}
 
@@ -1170,8 +1214,9 @@ export default function Salidas() {
             </div>
             <p className="text-sm text-gray-500">
               ¿Iniciar el {confirmIniciar.tipo === 'secadora' ? 'secado' : 'lavado'} de{' '}
-              <span className="font-semibold text-gray-800">{confirmIniciar.nombre}</span>? La máquina
-              arrancará su ciclo y quedará en uso. Asegúrate de que la carga ya está dentro.
+              <span className="font-semibold text-gray-800">{confirmIniciar.nombre}</span>? Desde aquí
+              empieza a correr el tiempo del ciclo, así que hazlo cuando ya la hayas arrancado con su
+              botón: lo que tardes de más se le descuenta al lavado.
             </p>
 
             {errorAccion && (

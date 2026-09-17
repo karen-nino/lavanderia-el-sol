@@ -6,16 +6,23 @@
 //   - 'detener' (cualquier tipo):     tonos rojos, el tambor DESACELERA hasta
 //                frenar y un anillo de alerta pulsa.
 //
-//   modo:   'iniciar' | 'detener'
+//   - 'encender' (paso previo, mig. 110): verdes, el tambor quieto y un anillo
+//                de energía saliendo de la puerta. Es la máquina recibiendo
+//                corriente, todavía sin lavar: por eso no hay agua ni giro.
+//
+//   modo:   'iniciar' | 'detener' | 'encender'
 //   tipo:   'secadora' → "Secadora"; cualquier otro → "Lavadora".
 //   nombre: nombre de la máquina (L1, S1, …).
 export default function MaquinaCicloOverlay({ modo = 'iniciar', tipo, nombre }) {
-  const esDetener = modo === 'detener';
+  const esDetener  = modo === 'detener';
+  const esEncender = modo === 'encender';
   const esSecadora = tipo === 'secadora';
   const tipoLabel = esSecadora ? 'Secadora' : 'Lavadora';
-  const titulo = esDetener ? 'Deteniendo máquina…' : 'Iniciando máquina…';
+  const titulo = esDetener ? 'Deteniendo máquina…'
+               : esEncender ? 'Encendiendo máquina…'
+               : 'Iniciando máquina…';
 
-  const variant = esDetener ? 'detener' : esSecadora ? 'secar' : 'lavar';
+  const variant = esDetener ? 'detener' : esEncender ? 'encender' : esSecadora ? 'secar' : 'lavar';
   const CFG = {
     lavar: {
       glass: '#cfeaff', holes: '#9fccf3', rim: '#a9c8ea', ring: '#b7cbe8', aro: '#eef4fb',
@@ -29,6 +36,14 @@ export default function MaquinaCicloOverlay({ modo = 'iniciar', tipo, nombre }) 
       cloth2: '#f7a8a8', cloth3: '#ef7f7f',
       drum: { transformBox: 'view-box', transformOrigin: '60px 90px', animation: 'sol-drum 2.2s linear infinite' },
       tituloCls: 'text-gray-400', tipoCls: 'text-red-700', nombreCls: 'text-red-600',
+    },
+    encender: {
+      glass: '#e8f6ec', holes: '#9ac7a8', rim: '#a9d4b6', ring: '#b4dcc0', aro: '#eef8f1',
+      // Parpadeo rápido: es el indicador del panel encendiéndose.
+      light: '#22c55e', lightDur: '.6s', knob: '#16a34a', knob2: '#c7e9d2',
+      cloth2: '#cfe6d6', cloth3: '#b7dcc4', drum: undefined,
+      anillo: '#22c55e',
+      tituloCls: 'text-gray-400', tipoCls: 'text-green-700', nombreCls: 'text-green-600',
     },
     detener: {
       glass: '#fde3e3', holes: '#e08a8a', rim: '#e6a3a3', ring: '#eda3a3', aro: '#fbeaea',
@@ -57,11 +72,16 @@ export default function MaquinaCicloOverlay({ modo = 'iniciar', tipo, nombre }) 
             <animate attributeName="opacity" values="1;.35;1" dur={c.lightDur} repeatCount="indefinite" />
           </circle>
 
-          {/* Anillo de alerta (solo al detener) */}
-          {esDetener && (
+          {/* Anillo pulsante: alerta al detener, energía al encender. Misma
+              animación, distinto color y ritmo — lo que cambia es qué significa. */}
+          {(esDetener || esEncender) && (
             <circle
-              cx="60" cy="90" r="34" fill="none" stroke="#ef4444" strokeWidth="2.5"
-              style={{ transformBox: 'view-box', transformOrigin: '60px 90px', animation: 'sol-ring 1.2s ease-out infinite' }}
+              cx="60" cy="90" r="34" fill="none" stroke={c.anillo ?? '#ef4444'} strokeWidth="2.5"
+              style={{
+                transformBox: 'view-box',
+                transformOrigin: '60px 90px',
+                animation: `sol-ring ${esEncender ? '1s' : '1.2s'} ease-out infinite`,
+              }}
             />
           )}
 

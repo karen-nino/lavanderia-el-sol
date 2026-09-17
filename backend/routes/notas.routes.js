@@ -13,6 +13,7 @@ import {
   quitarCarga,
   cambiarEstadoNota,
   activarMaquinasPendientes,
+  encenderMaquinaDeNota,
   asignarMaquina,
   asignarCargaMaquina,
   cambiarMaquina,
@@ -47,6 +48,8 @@ router.delete('/:id', eliminarNota);
 // Quitar una carga es de admin: deshace lo capturado y cambia el total.
 router.delete('/:id/cargas/:cargaId', requireAdmin, quitarCarga);
 router.patch('/:id/estado',      cambiarEstadoNota);
+// Paso previo a activar: da corriente sin arrancar el cronómetro (mig. 110).
+router.patch('/:id/encender-maquina', encenderMaquinaDeNota);
 router.patch('/:id/activar-pendientes', activarMaquinasPendientes);
 router.patch('/:id/asignar-maquina', asignarMaquina);
 router.patch('/:id/asignar-carga-maquina', asignarCargaMaquina);

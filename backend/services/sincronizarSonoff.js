@@ -85,6 +85,20 @@ export const MAX_CICLOS_POR_CARGA = (() => {
   return Number.isInteger(n) && n >= 1 ? n : 2;
 })();
 
+// Cuánto aguanta encendida una máquina que espera su arranque (mig. 110).
+// "Encender máquina" le da corriente para que el empleado cargue la ropa y
+// apriete el botón físico; el cronómetro no corre hasta "Iniciar Lavado". Si
+// ese segundo paso no llega, la máquina se apaga y vuelve a quedar libre: un
+// descuido no debe dejar una lavadora prendida y apartada toda la tarde.
+//
+// OJO con bajarlo: si el empleado ya arrancó el lavado físicamente y se olvidó
+// de darle "Iniciar Lavado", esto le corta la luz a una carga en marcha. El
+// Sonoff no puede distinguirlo (BASIC R2, sin medición de consumo).
+export const ESPERA_ARRANQUE_MINUTOS = (() => {
+  const m = Number(process.env.SONOFF_ESPERA_ARRANQUE_MINUTOS);
+  return Number.isFinite(m) && m > 0 ? m : 5;
+})();
+
 // Pausa obligatoria entre el corte y el siguiente ciclo. El negocio la pidió
 // explícita: la máquina se queda sin corriente un momento antes de volver a
 // arrancar. Va en segundos porque son 10, no minutos.
@@ -105,6 +119,25 @@ export const manualVigente = (maq) => {
   if (!maq?.encendida_manual_at) return false;
   const desde = new Date(maq.encendida_manual_at).getTime();
   return Number.isFinite(desde) && Date.now() - desde < HORAS_ENCENDIDO_MANUAL * 60 * 60 * 1000;
+};
+
+// ¿Está encendida esperando que alguien arranque su lavado (mig. 110)?
+// Mientras lo esté, la máquina tiene corriente y NO tiene cronómetro: es el
+// estado que vive entre "Encender máquina" e "Iniciar Lavado".
+export const esperandoArranque = (maq) => {
+  if (!maq?.encendida_sin_iniciar_at) return false;
+  const desde = new Date(maq.encendida_sin_iniciar_at).getTime();
+  return Number.isFinite(desde) && Date.now() - desde < ESPERA_ARRANQUE_MINUTOS * 60 * 1000;
+};
+
+// Instante en que se le acaba la espera y hay que apagarla, o null si no está
+// esperando. Igual que el corte por fin de ciclo, se agenda al segundo en vez
+// de depender del barrido de 3 min.
+export const instanteFinEspera = (maq) => {
+  if (!maq?.encendida_sin_iniciar_at) return null;
+  const desde = new Date(maq.encendida_sin_iniciar_at).getTime();
+  if (!Number.isFinite(desde)) return null;
+  return desde + ESPERA_ARRANQUE_MINUTOS * 60 * 1000;
 };
 
 // ¿Su ciclo ya terminó hace rato? Se mide desde que la máquina se puso en uso,
@@ -174,8 +207,11 @@ export function programarCorte(maq) {
   if (previo) clearTimeout(previo);
   cortesProgramados.delete(id);
 
-  const corte = instanteCorte(maq);
-  if (corte == null) return;
+  // Dos relojes pueden apagar esta máquina: el fin de su ciclo y, si está
+  // esperando arranque (mig. 110), el fin de esa espera. Manda el más cercano.
+  const candidatos = [instanteCorte(maq), instanteFinEspera(maq)].filter((t) => t != null);
+  if (candidatos.length === 0) return;
+  const corte = Math.min(...candidatos);
   const faltan = corte - Date.now();
   if (faltan <= 0) return; // ya venció: lo resuelve esta misma pasada
 
@@ -194,12 +230,17 @@ export function cancelarCortesProgramados() {
   cortesProgramados.clear();
 }
 
-// Una máquina debe estar encendida si la está usando una nota O si alguien la
-// prendió a mano y esa marca no ha caducado (mig. 104). Con una excepción: si
-// su ciclo terminó hace más del margen, se le corta la corriente aunque la nota
-// siga abierta. La nota NO se toca —sigue en Lavando hasta que alguien la
-// marque— porque decidir que una carga terminó, y a qué secadora pasa, le toca
-// a una persona: aquí solo se quita la corriente para que nadie meta otra carga.
+// Una máquina debe estar encendida si la está usando una nota, si alguien la
+// prendió a mano y esa marca no ha caducado (mig. 104), o si está esperando que
+// arranquen su lavado (mig. 110). Con una excepción: si su ciclo terminó hace
+// más del margen, se le corta la corriente aunque la nota siga abierta. La nota
+// NO se toca —sigue en Lavando hasta que alguien la marque— porque decidir que
+// una carga terminó, y a qué secadora pasa, le toca a una persona: aquí solo se
+// quita la corriente para que nadie meta otra carga.
+//
+// La que espera arranque ya entra por la primera condición (queda 'en_uso' sin
+// `en_uso_desde`, así que no tiene ciclo que vencer). Lo que la apaga es la
+// caducidad de la espera, que la suelta a 'disponible' antes de llegar aquí.
 const estadoDeseado = (maq) =>
   (maq.estado === 'en_uso' && !cicloVencido(maq)) || manualVigente(maq) ? 'on' : 'off';
 
@@ -287,6 +328,23 @@ async function liberarEncendidoManual(id) {
   return rows[0] ?? null;
 }
 
+// Suelta una espera de arranque caducada (mig. 110): borra las marcas y, si la
+// máquina seguía apartada solo por eso, la devuelve a 'disponible'. El guardo
+// de `en_uso_desde IS NULL` es por si "Iniciar Lavado" entró mientras tanto:
+// esa máquina ya está lavando y soltarla la ofrecería con ropa dentro.
+async function liberarEsperaArranque(id) {
+  const { rows } = await pool.query(
+    `UPDATE maquinas
+        SET encendida_sin_iniciar_at = NULL,
+            encendida_para_nota_id   = NULL,
+            estado = CASE WHEN estado = 'en_uso' AND en_uso_desde IS NULL
+                          THEN 'disponible'::estado_maquina ELSE estado END
+      WHERE id = $1 RETURNING *`,
+    [id]
+  );
+  return rows[0] ?? null;
+}
+
 // Sincroniza UNA máquina (por id). Devuelve la fila actualizada, o null si no
 // existe. No lanza.
 //
@@ -297,7 +355,8 @@ export async function sincronizarSonoff(maquinaId, { reconciliando = false } = {
   try {
     const { rows } = await pool.query(
       `SELECT id, nombre, estado, sucursal, device_id, device_canal, sonoff_estado,
-              encendida_manual_at, en_uso_desde, ciclo_minutos
+              encendida_manual_at, en_uso_desde, ciclo_minutos,
+              encendida_sin_iniciar_at, encendida_para_nota_id
          FROM maquinas WHERE id = $1`,
       [maquinaId]
     );
@@ -316,6 +375,20 @@ export async function sincronizarSonoff(maquinaId, { reconciliando = false } = {
       console.log(`[sonoff] ${maq.nombre ?? maq.id}: el encendido manual caducó; queda libre y se apaga.`);
       maq = (await liberarEncendidoManual(maq.id)) ?? maq;
       liberadaPorCaducidad = true;
+    }
+
+    // Espera de arranque caducada (mig. 110): nadie inició el lavado, así que se
+    // apaga y vuelve a quedar libre. No se pregunta por `notaEnCurso` como en la
+    // caducidad de arriba: la nota que la tiene asignada es justo la que la
+    // encendió, y esperarla sería no caducar nunca.
+    let esperaCaducada = false;
+    if (maq.encendida_sin_iniciar_at && !esperandoArranque(maq)) {
+      console.log(
+        `[sonoff] ${maq.nombre ?? maq.id}: nadie inició el lavado en ` +
+        `${ESPERA_ARRANQUE_MINUTOS} min; se apaga y queda libre.`
+      );
+      maq = (await liberarEsperaArranque(maq.id)) ?? maq;
+      esperaCaducada = true;
     }
 
     const deseado = estadoDeseado(maq);
@@ -372,8 +445,8 @@ export async function sincronizarSonoff(maquinaId, { reconciliando = false } = {
     // encendimos para su carga, no porque alguien la prendiera. Sin esta
     // salvedad el barrido la adoptaría como encendido manual en vez de
     // apagarla, y el corte no ocurriría nunca.
-    if (deseado === 'off' && reconciliando && !liberadaPorCaducidad && !cicloVencido(maq)
-        && maq.sonoff_estado === 'enlazada') {
+    if (deseado === 'off' && reconciliando && !liberadaPorCaducidad && !esperaCaducada
+        && !cicloVencido(maq) && maq.sonoff_estado === 'enlazada') {
       const real = await dispositivos.estado(maq);
       if (dispositivos.esSimulacion()) return maq;
       if (real.ok && real.estado === 'on') {

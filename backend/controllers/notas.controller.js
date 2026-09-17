@@ -1,6 +1,11 @@
 import pool from '../db/pool.js';
 import { esAdmin } from '../middleware/roles.js';
 import { tarifaSecadora, precioProductoEnNota, unidadDeServicio, tapasPorUnidad, generarFolio } from '../utils/calculosNotas.js';
+// El resto del archivo se apoya en el trigger de LISTEN/NOTIFY (mig. 075) para
+// encender y apagar. Aquí se llama directo porque "Encender máquina" es la
+// acción que el empleado está mirando: no debe depender de que el listener esté
+// vivo. Es idempotente, así que el aviso del trigger llegando después no molesta.
+import { sincronizarSonoff } from '../services/sincronizarSonoff.js';
 
 const ESTADOS_VALIDOS     = ['EN_ESPERA', 'LAVANDO', 'SECANDO', 'LISTA', 'PAGADA', 'FINALIZADA', 'CANCELADA'];
 const TIPOS_SERVICIO_VALIDOS = ['AUTOSERVICIO', 'EDREDON', 'POR_ENCARGO'];
@@ -758,8 +763,14 @@ async function cargasDeNota(client, notaId) {
             nc.secadora_tipo AS secadora_tipo_previsto,
             ml.nombre AS lavadora_nombre, ml.tipo AS lavadora_tipo, ml.estado AS lavadora_estado,
             ml.en_uso_desde AS lavadora_en_uso_desde,
+            -- Encendida por ESTA nota y todavía sin arrancar (mig. 110): es lo
+            -- que hace que el botón diga "Iniciar" en vez de "Encender".
+            (ml.estado = 'en_uso' AND ml.en_uso_desde IS NULL
+             AND ml.encendida_para_nota_id = nc.nota_id) AS lavadora_esperando_arranque,
             ms.nombre AS secadora_nombre, ms.tipo AS secadora_tipo, ms.estado AS secadora_estado,
             ms.tamano AS secadora_tamano, ms.en_uso_desde AS secadora_en_uso_desde,
+            (ms.estado = 'en_uso' AND ms.en_uso_desde IS NULL
+             AND ms.encendida_para_nota_id = nc.nota_id) AS secadora_esperando_arranque,
             nc.lavadora_usada_id, nc.secadora_usada_id,
             nc.lavadora_removida, nc.secadora_removida,
             mlu.nombre AS lavadora_usada_nombre, mlu.tipo AS lavadora_usada_tipo,
@@ -1959,6 +1970,120 @@ export const cambiarEstadoNota = async (req, res) => {
 // el botón "Iniciar Lavado" por máquina en Salidas). Sirve para poner en marcha
 // las cargas que quedaron en espera, tanto en una nota En Espera como en una
 // ya En Proceso (caso mixto).
+// ── PATCH /notas/:id/encender-maquina ───────────────────────
+// Paso previo a "Iniciar Lavado" (mig. 110): le da CORRIENTE a la máquina sin
+// arrancar su cronómetro.
+//
+// La lavadora no arranca sola al recibir luz —hay que apretar su botón— y antes
+// de eso todavía hay que meter la ropa. Cuando los dos pasos eran uno, todo ese
+// rato se le descontaba al ciclo, y con el corte por fin de ciclo activo la
+// corriente se iba antes de que el lavado terminara.
+//
+// La máquina queda apartada ('en_uso', no se ofrece a otra nota) pero SIN
+// `en_uso_desde`: eso distingue "encendida esperando" de "lavando" y evita que
+// un `ciclo_minutos` viejo arme un corte que no toca. La espera caduca sola
+// (ESPERA_ARRANQUE_MINUTOS) para que un descuido no deje la máquina prendida.
+export const encenderMaquinaDeNota = async (req, res) => {
+  const { id } = req.params;
+  const { maquina_id } = req.body ?? {};
+  if (maquina_id == null) {
+    return res.status(400).json({ message: 'Falta indicar la máquina.' });
+  }
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const { rows: notaRows } = await client.query(
+      'SELECT estado, tipo_servicio, estado_pago FROM notas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
+      [id, req.sucursal]
+    );
+    if (notaRows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: 'Nota no encontrada.' });
+    }
+    if (['LISTA', 'PAGADA', 'FINALIZADA', 'CANCELADA'].includes(notaRows[0].estado)) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: `No se pueden encender máquinas de una nota ${palabra(notaRows[0].estado)}.` });
+    }
+    // El mismo candado que al iniciar: si el Autoservicio no está pagado, no se
+    // le da corriente. Encender ya es dar el servicio.
+    const bloqueoPago = bloqueoPorPagoPendiente(notaRows[0]);
+    if (bloqueoPago) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: bloqueoPago });
+    }
+
+    const ids = await maquinasDeNota(client, id);
+    if (!ids.some(x => String(x) === String(maquina_id))) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'La máquina no está asignada a esta nota.' });
+    }
+
+    // FOR UPDATE: dos empleados que le den a la vez a la misma máquina se
+    // serializan aquí, igual que al iniciar.
+    const { rows: maqRows } = await client.query(
+      `SELECT id, nombre, estado, en_uso_desde, encendida_para_nota_id
+         FROM maquinas WHERE id = $1 AND sucursal = $2 FOR UPDATE`,
+      [maquina_id, req.sucursal]
+    );
+    if (maqRows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: 'Máquina no encontrada.' });
+    }
+    const maq = maqRows[0];
+
+    // Ya encendida por esta misma nota: no es un error, es el botón pulsado dos
+    // veces. Se responde ok para que la pantalla quede en el estado correcto.
+    if (maq.estado === 'en_uso' && maq.en_uso_desde == null
+        && String(maq.encendida_para_nota_id) === String(id)) {
+      await client.query('ROLLBACK');
+      return res.json({ message: `${maq.nombre} ya está encendida.`, maquina: maq });
+    }
+    if (maq.estado !== 'disponible') {
+      const duena = maq.estado === 'en_uso'
+        ? await notaQueUsaMaquina(client, Number(maquina_id), Number(id))
+        : null;
+      await client.query('ROLLBACK');
+      return res.status(409).json({
+        message: duena
+          ? `${maq.nombre} ya la está usando la nota ${duena.folio ?? `#${duena.id}`}. Cámbiala por otra en esta carga.`
+          : `${maq.nombre} no está disponible.`,
+      });
+    }
+
+    const { rows: upd } = await client.query(
+      `UPDATE maquinas
+          SET estado = 'en_uso',
+              encendida_sin_iniciar_at = NOW(),
+              encendida_para_nota_id   = $2,
+              -- Sin cronómetro hasta que arranque el lavado. Se limpia el ciclo
+              -- viejo para que nada de la carga anterior arme un corte.
+              en_uso_desde  = NULL,
+              ciclo_minutos = NULL
+        WHERE id = $1 RETURNING *`,
+      [maquina_id, id]
+    );
+
+    await client.query('COMMIT');
+
+    // El trigger de la mig. 075 ya avisa al cambiar el estado, pero se pide
+    // explícito para no depender de que el listener esté vivo: encender es la
+    // acción que el empleado está mirando.
+    await sincronizarSonoff(Number(maquina_id));
+
+    res.json({
+      message: `${maq.nombre} encendida. Carga la ropa y arráncala; después dale a Iniciar.`,
+      maquina: upd[0],
+    });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('encenderMaquinaDeNota error:', err);
+    res.status(500).json({ message: 'No se pudo encender la máquina. Intenta de nuevo.' });
+  } finally {
+    client.release();
+  }
+};
+
 export const activarMaquinasPendientes = async (req, res) => {
   const { id } = req.params;
   const { maquina_id } = req.body ?? {};
@@ -1990,10 +2115,22 @@ export const activarMaquinasPendientes = async (req, res) => {
       return res.status(400).json({ message: 'La nota no tiene máquinas asignadas.' });
     }
     const { rows: maqs } = await client.query(
-      'SELECT id, estado FROM maquinas WHERE id = ANY($1) AND sucursal = $2 FOR UPDATE',
+      `SELECT id, estado, en_uso_desde, encendida_para_nota_id
+         FROM maquinas WHERE id = ANY($1) AND sucursal = $2 FOR UPDATE`,
       [ids, req.sucursal]
     );
-    let libres = maqs.filter(m => m.estado === 'disponible').map(m => m.id);
+    // Arrancable = libre, o ya encendida por ESTA nota esperando su arranque
+    // (mig. 110). Ese segundo caso es el paso previo "Encender máquina": la
+    // máquina está apartada y con corriente, pero sin cronómetro (`en_uso_desde`
+    // en NULL). Sin esto el segundo paso se rechazaba con un "ya está en uso",
+    // porque antes solo contaba 'disponible'.
+    const esperandoDeEstaNota = (m) =>
+      m.estado === 'en_uso'
+      && m.en_uso_desde == null
+      && String(m.encendida_para_nota_id) === String(id);
+    let libres = maqs
+      .filter(m => m.estado === 'disponible' || esperandoDeEstaNota(m))
+      .map(m => m.id);
 
     // Con maquina_id se activa solo esa (botón por máquina); debe estar
     // asignada a la nota y libre. Aquí es donde se decide quién se queda con
@@ -2002,7 +2139,8 @@ export const activarMaquinasPendientes = async (req, res) => {
     if (maquina_id != null) {
       if (!libres.some(x => String(x) === String(maquina_id))) {
         const asignada = maqs.some(m => String(m.id) === String(maquina_id));
-        const ocupada = maqs.find(m => String(m.id) === String(maquina_id) && m.estado === 'en_uso');
+        const ocupada = maqs.find(m => String(m.id) === String(maquina_id)
+                                       && m.estado === 'en_uso' && !esperandoDeEstaNota(m));
         let mensaje = 'La máquina no está asignada a la nota o no está disponible.';
         if (ocupada) {
           // La tomó alguien más: hay que cambiarla por otra en esta carga.
@@ -2040,7 +2178,13 @@ export const activarMaquinasPendientes = async (req, res) => {
     );
 
     await client.query(
-      `UPDATE maquinas SET estado = 'en_uso', en_uso_desde = NOW() WHERE id = ANY($1)`,
+      `UPDATE maquinas
+          SET estado = 'en_uso',
+              en_uso_desde = NOW(),
+              -- La espera terminó en el único final bueno: el lavado arrancó.
+              encendida_sin_iniciar_at = NULL,
+              encendida_para_nota_id   = NULL
+        WHERE id = ANY($1)`,
       [libres]
     );
     await marcarMaquinasIniciadas(client, id, libres);

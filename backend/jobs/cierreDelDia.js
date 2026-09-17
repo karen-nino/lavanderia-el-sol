@@ -60,8 +60,13 @@ export async function liberarMaquinasCierreDelDia() {
       `UPDATE maquinas
           SET estado       = CASE WHEN estado = 'en_uso' THEN 'disponible'::estado_maquina ELSE estado END,
               en_uso_desde = CASE WHEN estado = 'en_uso' THEN NULL ELSE en_uso_desde END,
-              encendida_manual_at = NULL
-        WHERE estado = 'en_uso' OR encendida_manual_at IS NOT NULL`
+              encendida_manual_at = NULL,
+              -- Y la espera de arranque (mig. 110), por lo mismo: el día
+              -- terminó y nada debe quedar prendido ni apartado.
+              encendida_sin_iniciar_at = NULL,
+              encendida_para_nota_id   = NULL
+        WHERE estado = 'en_uso' OR encendida_manual_at IS NOT NULL
+           OR encendida_sin_iniciar_at IS NOT NULL`
     );
 
     // Máquinas que se asignaron a una nota y nunca se arrancaron: la nota se
