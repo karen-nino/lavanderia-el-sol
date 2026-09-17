@@ -20,6 +20,7 @@ export default function MachineCard({
   nota,
   onTerminarCiclo,
   onOtroCiclo,
+  onEncender,
   otroCicloEnCurso = false,
   errorOtroCiclo = null,
   onClick,
@@ -122,9 +123,12 @@ export default function MachineCard({
     // terminaba un ciclo, y el 99% de las veces la respuesta es la misma.
     const ofreceOtroCiclo = Boolean(maquina.puede_otro_ciclo);
     const enPausa = ofreceOtroCiclo && maquina.espera_otro_ciclo > 0;
-    const etiquetaBoton = otroCicloEnCurso ? 'INICIANDO…'
-      : enPausa            ? `OTRO CICLO EN ${maquina.espera_otro_ciclo}s`
-      : ofreceOtroCiclo    ? 'OTRO CICLO'
+    // El siguiente ciclo empieza igual que el primero: la máquina se quedó sin
+    // corriente al terminar, así que primero hay que encenderla. "Otro ciclo"
+    // llega después, en la tarjeta ámbar, cuando ya está arrancada.
+    const etiquetaBoton = otroCicloEnCurso ? 'ENCENDIENDO…'
+      : enPausa            ? `ENCENDER EN ${maquina.espera_otro_ciclo}s`
+      : ofreceOtroCiclo    ? 'ENCENDER MÁQUINA'
       : finalizaCarga      ? 'FINALIZAR CARGA'
       : 'INICIAR SECADO';
     return (
@@ -146,13 +150,54 @@ export default function MachineCard({
           <button
             onClick={(e) => {
               e.stopPropagation();
-              if (ofreceOtroCiclo) onOtroCiclo?.(maquina);
+              if (ofreceOtroCiclo) onEncender?.(maquina);
               else onTerminarCiclo?.(maquina);
             }}
             disabled={otroCicloEnCurso || enPausa}
             className="w-full bg-green ring ring-green-700 text-white text-section py-8 rounded-card-sm shadow-card hover:opacity-90 transition-opacity mt-1 disabled:opacity-60 disabled:cursor-not-allowed"
           >
             {etiquetaBoton}
+          </button>
+          {maquina.ciclos_carga != null && maquina.ciclos_max != null && (
+            <p className="text-kpi-label text-grey text-sm">
+              Ciclo {maquina.ciclos_carga} de {maquina.ciclos_max}
+            </p>
+          )}
+          {errorOtroCiclo && (
+            <p className="text-kpi-label text-red text-sm text-center">{errorOtroCiclo}</p>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Encendida y esperando a que la arranquen (mig. 110). Es el paso intermedio
+  // del siguiente ciclo: ya tiene corriente pero nadie ha apretado su botón, así
+  // que no hay cronómetro que mostrar. Se pinta como aviso —ámbar— porque lo que
+  // comunica es que falta algo por hacer, no que esté trabajando.
+  if (maquina.esperando_arranque && nota) {
+    return (
+      <div
+        {...containerProps}
+        className={`rounded-card bg-amber-50 ring-amber-400 shadow-card overflow-hidden ring-2 ring-inset ${interactivoCls}`}
+      >
+        <div className={`${headerCls} bg-amber-500 text-white`}>
+          <span className={nombreCls}>{maquina.nombre}</span>
+        </div>
+        <div className="px-card-pad pt-5 pb-6 flex flex-col items-center gap-3">
+          <p className="text-card-title text-amber-700 text-center uppercase tracking-wide">
+            Encendida
+          </p>
+          <p className="text-kpi-label text-amber-800 text-sm text-center">
+            Arráncala con su botón y dale a Otro ciclo.
+          </p>
+          {infoNota}
+          <button
+            onClick={(e) => { e.stopPropagation(); onOtroCiclo?.(maquina); }}
+            disabled={otroCicloEnCurso}
+            className="w-full bg-amber-500 ring ring-amber-600 text-white text-section py-8 rounded-card-sm shadow-card hover:opacity-90 transition-opacity mt-1 disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {otroCicloEnCurso ? 'INICIANDO…' : 'OTRO CICLO'}
           </button>
           {maquina.ciclos_carga != null && maquina.ciclos_max != null && (
             <p className="text-kpi-label text-grey text-sm">

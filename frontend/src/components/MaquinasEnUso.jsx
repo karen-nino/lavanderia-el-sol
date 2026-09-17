@@ -63,6 +63,8 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
   // error se guarda por máquina para que el de una tarjeta no salga en otra.
   const [otroCicloEnCurso, setOtroCicloEnCurso] = useState(null);
   const [errorOtroCiclo, setErrorOtroCiclo] = useState(null);
+  // Máquina recibiendo corriente para el siguiente ciclo: pinta la animación.
+  const [encendiendoMaquina, setEncendiendoMaquina] = useState(null);
 
   // Refresco silencioso de los datos que cambian en tiempo real. No toca
   // `loading` ni muestra errores: los fallos transitorios se ignoran y se
@@ -325,6 +327,32 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
     }
   };
 
+  // Paso previo del siguiente ciclo: le devuelve la corriente sin arrancar el
+  // cronómetro. Va contra el endpoint de la nota, igual que "Encender máquina"
+  // en Salidas, porque es exactamente el mismo estado de la mig. 110.
+  const encenderParaOtroCiclo = async (maquina, notaRel) => {
+    if (!notaRel) return;
+    setErrorOtroCiclo(null);
+    setOtroCicloEnCurso(String(maquina.id));
+    setEncendiendoMaquina(maquina);
+    try {
+      const r = await Promise.all([
+        api.patch(`/notas/${notaRel.id}/encender-maquina`, { maquina_id: maquina.id }),
+        // Mínimo para que la animación de encendido se alcance a ver.
+        new Promise((res) => setTimeout(res, 1800)),
+      ]);
+      if (r[0]) await refrescarDatos();
+    } catch (err) {
+      setErrorOtroCiclo({
+        id: String(maquina.id),
+        mensaje: err?.message || 'No se pudo encender la máquina.',
+      });
+    } finally {
+      setOtroCicloEnCurso(null);
+      setEncendiendoMaquina(null);
+    }
+  };
+
   const renderCard = (m) => {
     const { maquina: maquinaAumentada, nota: notaRel } = datosDeCiclo(m);
     return (
@@ -334,6 +362,7 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
         nota={notaRel}
         onTerminarCiclo={() => { setSecadoraSel(''); setConfirmTerminar(maquinaAumentada); }}
         onOtroCiclo={() => pedirOtroCiclo(maquinaAumentada)}
+        onEncender={() => encenderParaOtroCiclo(maquinaAumentada, notaRel)}
         otroCicloEnCurso={otroCicloEnCurso === String(m.id)}
         errorOtroCiclo={errorOtroCiclo?.id === String(m.id) ? errorOtroCiclo.mensaje : null}
         onClick={notaRel ? () => navigate(`/notas/${notaRel.id}`) : undefined}
@@ -457,6 +486,12 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
             </div>
           )}
         </>
+      )}
+
+      {/* Corriente de vuelta para el siguiente ciclo: misma animación que el
+          "Encender máquina" de Salidas, porque es exactamente el mismo paso. */}
+      {encendiendoMaquina && (
+        <MaquinaCicloOverlay modo="encender" tipo={encendiendoMaquina.tipo} nombre={encendiendoMaquina.nombre} />
       )}
 
       {/* Animación de arranque de la secadora al terminar el lavado (como en Salidas) */}

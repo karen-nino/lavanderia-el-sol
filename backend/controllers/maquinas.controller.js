@@ -8,6 +8,7 @@ import {
   PAUSA_OTRO_CICLO_SEGUNDOS,
   instanteOtroCiclo,
   finCiclo,
+  esperandoArranque,
   sincronizarSonoff,
 } from '../services/sincronizarSonoff.js';
 import { esAdmin } from '../middleware/roles.js';
@@ -114,7 +115,12 @@ const mensajeDeviceDuplicado = (nombre, deviceCanal) =>
 //
 //   ciclos_carga        → cuántos ciclos lleva (1 = va en el primero)
 //   ciclos_max          → el tope, para poder decir "ciclo 1 de 2"
-//   otro_ciclo_desde    → cuándo se habilita el botón (ISO), null si no aplica
+//   otro_ciclo_desde    → cuándo se le puede devolver la corriente (ISO)
+//   esperando_arranque  → ya tiene corriente y falta que la arranquen (mig. 110)
+//
+// Los dos últimos son los que parten el botón en dos pasos: primero "Encender
+// máquina" —que no se habilita hasta pasada la pausa sin corriente— y después
+// "Otro ciclo", que arranca el cronómetro cuando el lavado ya empezó.
 const conDatosDeOtroCiclo = (m) => {
   const ciclos = m.ciclos_carga ?? null;
   const desde = instanteOtroCiclo(m);
@@ -122,6 +128,7 @@ const conDatosDeOtroCiclo = (m) => {
     ...m,
     ciclos_carga: ciclos,
     ciclos_max: MAX_CICLOS_POR_CARGA,
+    esperando_arranque: esperandoArranque(m),
     otro_ciclo_desde:
       ciclos != null && ciclos < MAX_CICLOS_POR_CARGA && desde != null
         ? new Date(desde).toISOString()
@@ -894,28 +901,38 @@ export const otroCiclo = async (req, res) => {
       });
     }
 
-    const fin = finCiclo(maq);
-    if (fin == null) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ message: `${maq.nombre} no tiene un ciclo cronometrado.` });
-    }
-    if (Date.now() < fin) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({
-        message: `${maq.nombre} sigue en su ciclo. Espera a que termine para darle otro.`,
-      });
-    }
+    // Si ya se le dio a "Encender máquina" para esta vuelta (mig. 110), la
+    // máquina está esperando arranque: sin cronómetro y con corriente. Los
+    // relojes de abajo ya se cumplieron ANTES de encenderla —es lo que dejó que
+    // el botón apareciera— y volver a exigirlos aquí bloquearía el segundo ciclo
+    // para siempre, porque al encender se borró el `en_uso_desde` que miden.
+    const esperandoArranqueDeEstaCarga =
+      maq.en_uso_desde == null && String(maq.encendida_para_nota_id) === String(carga.nota_id);
 
-    // La pausa sin corriente es parte del flujo pedido por el negocio, no un
-    // detalle de la UI: si se pudiera saltar desde la API, el botón de la
-    // tarjeta sería el único que la respeta.
-    const desde = instanteOtroCiclo(maq);
-    if (desde != null && Date.now() < desde) {
-      const faltan = Math.ceil((desde - Date.now()) / 1000);
-      await client.query('ROLLBACK');
-      return res.status(400).json({
-        message: `${maq.nombre} necesita ${PAUSA_OTRO_CICLO_SEGUNDOS} s sin corriente antes del siguiente ciclo. Espera ${faltan} s.`,
-      });
+    if (!esperandoArranqueDeEstaCarga) {
+      const fin = finCiclo(maq);
+      if (fin == null) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ message: `${maq.nombre} no tiene un ciclo cronometrado.` });
+      }
+      if (Date.now() < fin) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({
+          message: `${maq.nombre} sigue en su ciclo. Espera a que termine para darle otro.`,
+        });
+      }
+
+      // La pausa sin corriente es parte del flujo pedido por el negocio, no un
+      // detalle de la UI: si se pudiera saltar desde la API, el botón de la
+      // tarjeta sería el único que la respeta.
+      const desde = instanteOtroCiclo(maq);
+      if (desde != null && Date.now() < desde) {
+        const faltan = Math.ceil((desde - Date.now()) / 1000);
+        await client.query('ROLLBACK');
+        return res.status(400).json({
+          message: `${maq.nombre} necesita ${PAUSA_OTRO_CICLO_SEGUNDOS} s sin corriente antes del siguiente ciclo. Espera ${faltan} s.`,
+        });
+      }
     }
 
     const columna = carga.es_lavadora ? 'lavadora_ciclos' : 'secadora_ciclos';
@@ -927,8 +944,30 @@ export const otroCiclo = async (req, res) => {
     // Reiniciar en_uso_desde es lo que vuelve a arrancar el temporizador y, de
     // paso, lo que hace que la máquina deje de estar vencida: la sincronización
     // de abajo la vuelve a encender.
+    //
+    // El ciclo se vuelve a sellar porque "Encender máquina" lo dejó en NULL: una
+    // máquina esperando arranque no tiene cronómetro. Sale de su marca y su
+    // tamaño (mig. 107) con el mismo respaldo por tamaño de siempre, para que el
+    // segundo ciclo dure exactamente lo que duró el primero.
     const { rows: upd } = await client.query(
-      'UPDATE maquinas SET en_uso_desde = NOW() WHERE id = $1 RETURNING *',
+      `UPDATE maquinas m
+          SET en_uso_desde = NOW(),
+              encendida_sin_iniciar_at = NULL,
+              encendida_para_nota_id   = NULL,
+              ciclo_minutos = COALESCE(
+                m.ciclo_minutos,
+                (SELECT tm.minutos
+                   FROM marcas_maquina mm
+                   JOIN tiempos_marca tm ON tm.marca_id = mm.id
+                  WHERE mm.nombre = m.marca
+                    AND tm.tipo = CASE WHEN m.tipo = 'secadora' THEN 'secadora' ELSE 'lavadora' END
+                    AND tm.tamano = m.tamano),
+                (SELECT CASE WHEN m.tipo = 'secadora'       THEN a.tiempo_carga_secadora
+                             WHEN m.tipo = 'lavadora_jumbo' THEN a.tiempo_carga_jumbo
+                             ELSE a.tiempo_carga_mediana END
+                   FROM ajustes a WHERE a.id = 1)
+              )
+        WHERE m.id = $1 RETURNING *`,
       [maq.id]
     );
 

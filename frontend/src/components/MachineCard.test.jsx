@@ -62,37 +62,57 @@ describe('MachineCard', () => {
   // corriente hasta que alguien la re-arma.
   const nota = { folio: '0123-080726', tipo_servicio: 'AUTOSERVICIO' };
 
-  it('ofrece otro ciclo cuando la carga todavía tiene ciclos disponibles', async () => {
-    const onOtroCiclo = vi.fn();
+  // El siguiente ciclo repite los pasos del primero: la máquina se quedó sin
+  // corriente al terminar, así que primero se enciende y solo después se
+  // arranca el cronómetro. Por eso la tarjeta verde NO ofrece "Otro ciclo".
+  it('al terminar un ciclo con ciclos por correr, ofrece encender la máquina', async () => {
+    const onEncender = vi.fn();
     render(
       <MachineCard
         maquina={{ ...lavadoraTerminada, puede_otro_ciclo: true, espera_otro_ciclo: 0,
                    ciclos_carga: 1, ciclos_max: 2 }}
         nota={nota}
-        onOtroCiclo={onOtroCiclo}
+        onEncender={onEncender}
       />
     );
 
     expect(screen.getByText('Ciclo 1 de 2')).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'OTRO CICLO' }));
-    expect(onOtroCiclo).toHaveBeenCalled();
+    await userEvent.click(screen.getByRole('button', { name: 'ENCENDER MÁQUINA' }));
+    expect(onEncender).toHaveBeenCalled();
   });
 
-  it('durante la pausa sin corriente el botón cuenta atrás y no se puede pulsar', async () => {
+  it('ya encendida, el botón pasa a Otro ciclo y pide que la arranquen', async () => {
     const onOtroCiclo = vi.fn();
     render(
       <MachineCard
-        maquina={{ ...lavadoraTerminada, puede_otro_ciclo: true, espera_otro_ciclo: 7,
-                   ciclos_carga: 1, ciclos_max: 2 }}
+        maquina={{ id: 7, nombre: 'L1', estado: 'en_uso', tipo: 'lavadora_mediana',
+                   esperando_arranque: true, ciclos_carga: 1, ciclos_max: 2 }}
         nota={nota}
         onOtroCiclo={onOtroCiclo}
       />
     );
 
-    const boton = screen.getByRole('button', { name: 'OTRO CICLO EN 7s' });
+    expect(screen.getByText('Encendida')).toBeInTheDocument();
+    expect(screen.getByText(/Arráncala con su botón/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'OTRO CICLO' }));
+    expect(onOtroCiclo).toHaveBeenCalled();
+  });
+
+  it('durante la pausa sin corriente el botón cuenta atrás y no se puede pulsar', async () => {
+    const onEncender = vi.fn();
+    render(
+      <MachineCard
+        maquina={{ ...lavadoraTerminada, puede_otro_ciclo: true, espera_otro_ciclo: 7,
+                   ciclos_carga: 1, ciclos_max: 2 }}
+        nota={nota}
+        onEncender={onEncender}
+      />
+    );
+
+    const boton = screen.getByRole('button', { name: 'ENCENDER EN 7s' });
     expect(boton).toBeDisabled();
     await userEvent.click(boton);
-    expect(onOtroCiclo).not.toHaveBeenCalled();
+    expect(onEncender).not.toHaveBeenCalled();
   });
 
   it('agotados los ciclos, el MISMO botón pasa a finalizar: nunca hay dos', () => {
@@ -105,7 +125,7 @@ describe('MachineCard', () => {
     expect(screen.getByRole('button', { name: 'FINALIZAR CARGA' })).toBeInTheDocument();
   });
 
-  it('en el primer ciclo hay un solo botón, y es el de continuar', () => {
+  it('en el primer ciclo hay un solo botón, y es el de encender', () => {
     render(
       <MachineCard
         maquina={{ ...lavadoraTerminada, puede_otro_ciclo: true, espera_otro_ciclo: 0,
@@ -115,7 +135,7 @@ describe('MachineCard', () => {
     );
 
     expect(screen.getAllByRole('button')).toHaveLength(1);
-    expect(screen.getByRole('button', { name: 'OTRO CICLO' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'ENCENDER MÁQUINA' })).toBeInTheDocument();
   });
 
   // El secado es otro destino del mismo botón: una carga que aún debe secar no
@@ -141,7 +161,7 @@ describe('MachineCard', () => {
       />
     );
 
-    expect(screen.getByRole('button', { name: 'OTRO CICLO' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'ENCENDER MÁQUINA' })).toBeInTheDocument();
   });
 
   it('muestra el error del servidor si el siguiente ciclo no se pudo iniciar', () => {

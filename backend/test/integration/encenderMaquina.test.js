@@ -162,3 +162,74 @@ describe('la espera caduca', () => {
     expect(esperandoArranque(await maquina(id))).toBe(false);
   });
 });
+
+describe('el siguiente ciclo repite los mismos dos pasos', () => {
+  // Al terminar un ciclo la máquina se queda sin corriente, así que continuar
+  // la carga es exactamente el mismo trabajo que empezarla: encender, cargar,
+  // arrancar. "Otro ciclo" hace aquí de "Iniciar".
+  const envejecerCiclo = (maquinaId, segundos) =>
+    pool.query(
+      `UPDATE maquinas
+          SET en_uso_desde = NOW() - (ciclo_minutos * INTERVAL '1 minute') - ($2 * INTERVAL '1 second')
+        WHERE id = $1`,
+      [maquinaId, segundos]
+    );
+
+  async function arrancada(nombre) {
+    const id = await seedMaquina({ nombre, tipo: 'lavadora_mediana', tamano: 'mediana' });
+    const notaId = await notaConLavadora(id);
+    await iniciar(notaId, id).expect(200);
+    return { id, notaId };
+  }
+
+  it('encender devuelve la máquina al estado de espera, sin cronómetro', async () => {
+    const { id, notaId } = await arrancada('L10');
+    await envejecerCiclo(id, 600);
+
+    await encender(notaId, id).expect(200);
+
+    const m = await maquina(id);
+    expect(m.estado).toBe('en_uso');                    // sigue apartada
+    expect(m.encendida_sin_iniciar_at).not.toBeNull();  // con corriente otra vez
+    expect(m.en_uso_desde).toBeNull();                  // el cronómetro se fue
+    expect(m.ciclo_minutos).toBeNull();
+  });
+
+  it('otro ciclo arranca el cronómetro y vuelve a sellar el ciclo', async () => {
+    const { id, notaId } = await arrancada('L11');
+    await envejecerCiclo(id, 600);
+    await encender(notaId, id).expect(200);
+
+    const r = await request(app).patch(`/api/maquinas/${id}/otro-ciclo`).set(auth(admin.token));
+
+    expect(r.status).toBe(200);
+    expect(r.body.ciclo).toBe(2);
+    const m = await maquina(id);
+    expect(m.en_uso_desde).not.toBeNull();
+    expect(m.ciclo_minutos).toBe(15);                 // resellado desde el tamaño
+    expect(m.encendida_sin_iniciar_at).toBeNull();    // la espera terminó bien
+  });
+
+  it('tras encender NO se exige la pausa otra vez: ya se cumplió antes', async () => {
+    const { id, notaId } = await arrancada('L12');
+    await envejecerCiclo(id, 600);
+    await encender(notaId, id).expect(200);
+
+    // Sin envejecer nada más: el encendido acaba de ocurrir. Si "otro ciclo"
+    // volviera a medir la pausa desde ahora, esto daría 400.
+    await request(app).patch(`/api/maquinas/${id}/otro-ciclo`).set(auth(admin.token)).expect(200);
+  });
+
+  it('agotados los ciclos, encender ya no la prepara para otra vuelta', async () => {
+    const { id, notaId } = await arrancada('L13');
+    await envejecerCiclo(id, 600);
+    await encender(notaId, id).expect(200);
+    await request(app).patch(`/api/maquinas/${id}/otro-ciclo`).set(auth(admin.token)).expect(200);
+
+    // Segundo ciclo corrido y terminado: la carga ya agotó su tope.
+    await envejecerCiclo(id, 600);
+    const r = await encender(notaId, id);
+
+    expect(r.status).toBe(409);   // sigue en uso, y ya no hay ciclos que darle
+  });
+});

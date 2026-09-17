@@ -5,7 +5,7 @@ import { tarifaSecadora, precioProductoEnNota, unidadDeServicio, tapasPorUnidad,
 // encender y apagar. Aquí se llama directo porque "Encender máquina" es la
 // acción que el empleado está mirando: no debe depender de que el listener esté
 // vivo. Es idempotente, así que el aviso del trigger llegando después no molesta.
-import { sincronizarSonoff } from '../services/sincronizarSonoff.js';
+import { sincronizarSonoff, MAX_CICLOS_POR_CARGA } from '../services/sincronizarSonoff.js';
 
 const ESTADOS_VALIDOS     = ['EN_ESPERA', 'LAVANDO', 'SECANDO', 'LISTA', 'PAGADA', 'FINALIZADA', 'CANCELADA'];
 const TIPOS_SERVICIO_VALIDOS = ['AUTOSERVICIO', 'EDREDON', 'POR_ENCARGO'];
@@ -1970,6 +1970,23 @@ export const cambiarEstadoNota = async (req, res) => {
 // el botón "Iniciar Lavado" por máquina en Salidas). Sirve para poner en marcha
 // las cargas que quedaron en espera, tanto en una nota En Espera como en una
 // ya En Proceso (caso mixto).
+// ¿La carga que esta nota está corriendo en esta máquina todavía tiene ciclos
+// disponibles (mig. 108)? Es lo que distingue "hay que encenderla para otra
+// vuelta" de "esta carga ya terminó y toca cerrarla".
+async function cargaConCiclosDisponibles(client, notaId, maquinaId) {
+  const { rows } = await client.query(
+    `SELECT CASE WHEN nc.lavadora_id = $2 THEN nc.lavadora_ciclos
+                 ELSE nc.secadora_ciclos END AS ciclos
+       FROM nota_cargas nc
+      WHERE nc.nota_id = $1
+        AND ((nc.lavadora_id = $2 AND nc.lavadora_iniciada_at IS NOT NULL)
+          OR (nc.secadora_id = $2 AND nc.secadora_iniciada_at IS NOT NULL))
+      LIMIT 1`,
+    [notaId, maquinaId]
+  );
+  return rows.length > 0 && rows[0].ciclos < MAX_CICLOS_POR_CARGA;
+}
+
 // ── PATCH /notas/:id/encender-maquina ───────────────────────
 // Paso previo a "Iniciar Lavado" (mig. 110): le da CORRIENTE a la máquina sin
 // arrancar su cronómetro.
@@ -2039,6 +2056,35 @@ export const encenderMaquinaDeNota = async (req, res) => {
       await client.query('ROLLBACK');
       return res.json({ message: `${maq.nombre} ya está encendida.`, maquina: maq });
     }
+
+    // Segundo ciclo de la misma carga (mig. 108): la máquina sigue 'en_uso' con
+    // la nota abierta, pero su ciclo terminó y el corte ya le quitó la luz. Para
+    // el empleado es el mismo trabajo que la primera vez —encender, cargar,
+    // apretar el botón— así que se le da el mismo camino: vuelve al estado de
+    // espera y "Otro ciclo" hará luego de "Iniciar".
+    const listaParaOtroCiclo =
+      maq.estado === 'en_uso' && maq.en_uso_desde != null && await cargaConCiclosDisponibles(client, id, maq.id);
+
+    if (listaParaOtroCiclo) {
+      const { rows: reUpd } = await client.query(
+        `UPDATE maquinas
+            SET encendida_sin_iniciar_at = NOW(),
+                encendida_para_nota_id   = $2,
+                -- Se borra el ciclo anterior: hasta que arranque el siguiente no
+                -- hay cronómetro que contar ni corte que programar.
+                en_uso_desde  = NULL,
+                ciclo_minutos = NULL
+          WHERE id = $1 RETURNING *`,
+        [maquina_id, id]
+      );
+      await client.query('COMMIT');
+      await sincronizarSonoff(Number(maquina_id));
+      return res.json({
+        message: `${maq.nombre} encendida. Arráncala otra vez y dale a Otro ciclo.`,
+        maquina: reUpd[0],
+      });
+    }
+
     if (maq.estado !== 'disponible') {
       const duena = maq.estado === 'en_uso'
         ? await notaQueUsaMaquina(client, Number(maquina_id), Number(id))
