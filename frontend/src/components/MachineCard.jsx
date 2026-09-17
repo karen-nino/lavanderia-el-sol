@@ -114,6 +114,19 @@ export default function MachineCard({
     const debeSecar = Array.isArray(nota?.lavadoras_con_secado_ids)
       && nota.lavadoras_con_secado_ids.some(mid => String(mid) === String(maquina.id));
     const finalizaCarga = esSecadora || !debeSecar;
+
+    // Un solo botón para los dos momentos en que la tarjeta se pone verde
+    // (mig. 108). La primera vez ofrece el siguiente ciclo —una carga de ropa
+    // son dos ciclos seguidos—; la segunda ya lleva al paso de siempre. Tener
+    // dos botones a la vez hacía elegir entre continuar y cerrar cada vez que
+    // terminaba un ciclo, y el 99% de las veces la respuesta es la misma.
+    const ofreceOtroCiclo = Boolean(maquina.puede_otro_ciclo);
+    const enPausa = ofreceOtroCiclo && maquina.espera_otro_ciclo > 0;
+    const etiquetaBoton = otroCicloEnCurso ? 'INICIANDO…'
+      : enPausa            ? `OTRO CICLO EN ${maquina.espera_otro_ciclo}s`
+      : ofreceOtroCiclo    ? 'OTRO CICLO'
+      : finalizaCarga      ? 'FINALIZAR CARGA'
+      : 'INICIAR SECADO';
     return (
       <div
         {...containerProps}
@@ -127,37 +140,24 @@ export default function MachineCard({
             {esSecadora ? <>Finalizó<br />secadora</> : <>Finalizó<br />lavadora</>}
           </p>
           {infoNota}
+          {/* Mientras corre la pausa sin corriente el botón no desaparece: se
+              queda con la cuenta atrás, para que no parezca que no hay nada que
+              hacer. */}
           <button
-            onClick={(e) => { e.stopPropagation(); onTerminarCiclo?.(maquina); }}
-            className="w-full bg-green ring ring-green-700 text-white text-section py-8 rounded-card-sm shadow-card hover:opacity-90 transition-opacity mt-1"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (ofreceOtroCiclo) onOtroCiclo?.(maquina);
+              else onTerminarCiclo?.(maquina);
+            }}
+            disabled={otroCicloEnCurso || enPausa}
+            className="w-full bg-green ring ring-green-700 text-white text-section py-8 rounded-card-sm shadow-card hover:opacity-90 transition-opacity mt-1 disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            {finalizaCarga ? 'FINALIZAR CARGA' : 'INICIAR SECADO'}
+            {etiquetaBoton}
           </button>
-          {/* Segundo ciclo de la misma carga (mig. 108): una carga de ropa
-              necesita dos ciclos seguidos, y al terminar el primero la máquina
-              se quedó sin corriente. Va DEBAJO y en secundario porque cerrar la
-              carga sigue siendo el camino normal; este es el desvío. Mientras
-              corre la pausa sin corriente el botón muestra la cuenta atrás en
-              vez de desaparecer, para que no parezca que no existe. */}
-          {maquina.puede_otro_ciclo && (
-            <>
-              <button
-                onClick={(e) => { e.stopPropagation(); onOtroCiclo?.(maquina); }}
-                disabled={otroCicloEnCurso || maquina.espera_otro_ciclo > 0}
-                className="w-full bg-white ring-2 ring-green text-green text-section py-3.5 text-base rounded-card-sm hover:bg-light-green transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                {otroCicloEnCurso
-                  ? 'INICIANDO…'
-                  : maquina.espera_otro_ciclo > 0
-                    ? `OTRO CICLO EN ${maquina.espera_otro_ciclo}s`
-                    : 'OTRO CICLO'}
-              </button>
-              {maquina.ciclos_carga != null && maquina.ciclos_max != null && (
-                <p className="text-kpi-label text-grey text-sm">
-                  Ciclo {maquina.ciclos_carga} de {maquina.ciclos_max}
-                </p>
-              )}
-            </>
+          {maquina.ciclos_carga != null && maquina.ciclos_max != null && (
+            <p className="text-kpi-label text-grey text-sm">
+              Ciclo {maquina.ciclos_carga} de {maquina.ciclos_max}
+            </p>
           )}
           {errorOtroCiclo && (
             <p className="text-kpi-label text-red text-sm text-center">{errorOtroCiclo}</p>

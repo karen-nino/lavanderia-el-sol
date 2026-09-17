@@ -95,13 +95,53 @@ describe('MachineCard', () => {
     expect(onOtroCiclo).not.toHaveBeenCalled();
   });
 
-  it('sin ciclos disponibles no aparece el botón: solo queda finalizar', () => {
+  it('agotados los ciclos, el MISMO botón pasa a finalizar: nunca hay dos', () => {
     render(
       <MachineCard maquina={{ ...lavadoraTerminada, puede_otro_ciclo: false }} nota={nota} />
     );
 
+    expect(screen.getAllByRole('button')).toHaveLength(1);
     expect(screen.queryByRole('button', { name: /OTRO CICLO/ })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'FINALIZAR CARGA' })).toBeInTheDocument();
+  });
+
+  it('en el primer ciclo hay un solo botón, y es el de continuar', () => {
+    render(
+      <MachineCard
+        maquina={{ ...lavadoraTerminada, puede_otro_ciclo: true, espera_otro_ciclo: 0,
+                   ciclos_carga: 1, ciclos_max: 2 }}
+        nota={nota}
+      />
+    );
+
+    expect(screen.getAllByRole('button')).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'OTRO CICLO' })).toBeInTheDocument();
+  });
+
+  // El secado es otro destino del mismo botón: una carga que aún debe secar no
+  // se "finaliza", pasa a la secadora. Eso manda sobre el texto de cierre, pero
+  // NO sobre el de continuar: el segundo ciclo va antes que el secado.
+  it('con secado pendiente y ciclos agotados, el botón lleva al secado', () => {
+    render(
+      <MachineCard
+        maquina={{ ...lavadoraTerminada, puede_otro_ciclo: false }}
+        nota={{ ...nota, lavadoras_con_secado_ids: [7] }}
+      />
+    );
+
+    expect(screen.getByRole('button', { name: 'INICIAR SECADO' })).toBeInTheDocument();
+  });
+
+  it('con secado pendiente pero ciclos por correr, primero el segundo ciclo', () => {
+    render(
+      <MachineCard
+        maquina={{ ...lavadoraTerminada, puede_otro_ciclo: true, espera_otro_ciclo: 0,
+                   ciclos_carga: 1, ciclos_max: 2 }}
+        nota={{ ...nota, lavadoras_con_secado_ids: [7] }}
+      />
+    );
+
+    expect(screen.getByRole('button', { name: 'OTRO CICLO' })).toBeInTheDocument();
   });
 
   it('muestra el error del servidor si el siguiente ciclo no se pudo iniciar', () => {
