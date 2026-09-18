@@ -22,6 +22,9 @@ const INPUT_DISABLED_CLS =
 const TIPOS_SERVICIO = [
   { v: 'AUTOSERVICIO', label: 'Autoservicio' },
   { v: 'POR_ENCARGO',  label: 'Por Encargo'  },
+  // Venta de mostrador: productos sueltos, sin lavado ni secado. Se cobra al
+  // momento y la nota nace finalizada (mig. 112).
+  { v: 'PRODUCTOS',    label: 'Productos'    },
 ];
 const TIPO_LABEL = Object.fromEntries(TIPOS_SERVICIO.map(t => [t.v, t.label]));
 
@@ -151,6 +154,8 @@ export default function NuevaNota() {
   const [error,             setError]             = useState('');
   const [loading,           setLoading]           = useState(false);
   const [tipoServicio,      setTipoServicio]      = useState('');
+  // Venta de mostrador (mig. 112): sin cargas ni máquinas, se cobra al momento.
+  const esVenta = tipoServicio === 'PRODUCTOS';
   const [tipoOpen,          setTipoOpen]          = useState(false);
   const [cargasAuto,        setCargasAuto]        = useState([{ ...CARGA_INIT }]);
   const [encargoStep,       setEncargoStep]       = useState(1);
@@ -261,6 +266,8 @@ export default function NuevaNota() {
     return sum + precioProducto(prod, 'botella') * (Number(p.cantidad) || 0);
   }, 0);
   const precioTotal = subtotalCargas + ajusteNum + subtotalProductos;
+  // La venta de Productos no tiene cargas: su total son los productos y el ajuste.
+  const totalVenta  = subtotalProductos + ajusteNum;
 
   useEffect(() => {
     api.get('/caja/actual')
@@ -709,8 +716,14 @@ export default function NuevaNota() {
   };
 
   // Lo que hay que tener listo antes de pasar al cobro. Devuelve el problema o
-  // null si todo está en orden.
-  const problemaAutoservicio = () => {
+  // null si todo está en orden. Los dos servicios que se cobran al momento
+  // (Autoservicio y la venta de Productos) pasan por aquí.
+  const problemaAntesDeCobrar = () => {
+    if (esVenta) {
+      return productosLista.some(p => p.producto_id && Number(p.cantidad) > 0)
+        ? null
+        : 'Agrega al menos un producto: una venta sin productos no es nota.';
+    }
     if (!cargasAuto.every(c => c.lavadora_tipo || c.secadora_tipo)) {
       return 'Cada carga necesita al menos un tipo de lavado o secado.';
     }
@@ -719,7 +732,7 @@ export default function NuevaNota() {
 
   // "Aceptar": valida la nota y abre el cobro. La nota se crea desde el modal.
   const abrirCobro = () => {
-    const problema = problemaAutoservicio();
+    const problema = problemaAntesDeCobrar();
     setError(problema ?? '');
     if (!problema) setCobroOpen(true);
   };
@@ -727,16 +740,16 @@ export default function NuevaNota() {
   // Se llama desde el modal (sin evento) y como submit del formulario.
   const handleSubmit = async (e) => {
     e?.preventDefault();
-    if (tipoServicio !== 'AUTOSERVICIO') return;
+    if (tipoServicio !== 'AUTOSERVICIO' && !esVenta) return;
     setError('');
 
-    const problema = problemaAutoservicio();
+    const problema = problemaAntesDeCobrar();
     if (problema) {
       setError(problema);
       setCobroOpen(false);
       return;
     }
-    // Autoservicio se cobra al momento: hay que elegir la forma de pago.
+    // Los dos se cobran al momento: hay que elegir la forma de pago.
     if (!form.forma_pago) {
       setError('Elige la forma de pago.');
       return;
@@ -744,7 +757,22 @@ export default function NuevaNota() {
 
     setLoading(true);
 
-    const payload = {
+    // La venta de mostrador no lleva cargas ni máquinas: solo sus productos,
+    // el ajuste y —si se quiso dejar registro— el cliente. Nace pagada y
+    // finalizada; el backend descuenta el inventario en el acto.
+    const payloadVenta = {
+      tipo_servicio:  'PRODUCTOS',
+      tipo_prenda:    'ROPA',
+      cliente_id:     encargoForm.cliente_id ? Number(encargoForm.cliente_id) : null,
+      estado_pago:    'PAGADO',
+      forma_pago:     form.forma_pago || null,
+      ajuste:         ajusteNum,
+      productos:      productosLista
+        .filter(p => p.producto_id && p.cantidad)
+        .map(p => ({ producto_id: Number(p.producto_id), cantidad: Number(p.cantidad) })),
+    };
+
+    const payloadAutoservicio = {
       tipo_servicio:       'AUTOSERVICIO',
       // La prenda/tela ahora viven en cada carga; a nivel nota se guarda la de
       // la primera carga solo para la lista/badge.
@@ -773,6 +801,8 @@ export default function NuevaNota() {
         .map(p => ({ producto_id: Number(p.producto_id), cantidad: Number(p.cantidad) })),
     };
 
+    const payload = esVenta ? payloadVenta : payloadAutoservicio;
+
     try {
       if (esEdicion) {
         await api.patch(`/notas/${id}`, payload);
@@ -789,6 +819,257 @@ export default function NuevaNota() {
       setLoading(false);
     }
   };
+
+  // Buscador de cliente. Lo comparten Por Encargo (paso 1, obligatorio) y la
+  // venta de Productos (opcional, para dejar registro de a quién se le vendió):
+  // los dos escriben en encargoForm.cliente_id, que es de donde salen
+  // clienteSeleccionado y clientesFiltrados.
+  const bloqueCliente = (opcional = false) => (
+    <div className="space-y-4">
+      <h2 className="text-base font-semibold text-gray-900">
+        Cliente{opcional && <span className="font-normal text-gray-500"> (opcional)</span>}
+      </h2>
+      <div className="relative">
+        <svg
+          className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400"
+          fill="none" stroke="currentColor" viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+        </svg>
+        <input
+          type="text"
+          placeholder="Buscar por nombre o teléfono..."
+          value={clienteSearch}
+          onChange={e => setClienteSearch(e.target.value)}
+          className="w-full pl-11 pr-4 py-3.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent transition"
+        />
+      </div>
+
+      {clienteSeleccionado && !clienteSearchQ && (
+        <div className="flex items-center justify-between gap-3 bg-light-blue border border-blue-200 rounded-lg px-4 py-3">
+          <div>
+            <p className="text-xs font-medium text-blue uppercase tracking-wide">Cliente seleccionado</p>
+            <p className="font-medium text-gray-900">
+              {`${clienteSeleccionado.nombre}${clienteSeleccionado.apellido ? ' ' + clienteSeleccionado.apellido : ''}`}
+            </p>
+            {clienteSeleccionado.telefono && (
+              <p className="text-sm text-gray-500">{clienteSeleccionado.telefono}</p>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => setEncargoForm(f => ({ ...f, cliente_id: '' }))}
+            aria-label="Quitar cliente"
+            className="flex-shrink-0 px-3 py-1.5 text-sm text-blue-700 hover:bg-light-blue rounded-md transition-colors"
+          >
+            Cambiar
+          </button>
+        </div>
+      )}
+
+      {clienteSearchQ && (
+        <div className="border border-gray-200 rounded-lg bg-white max-h-72 overflow-y-auto divide-y divide-gray-100">
+          {clientesFiltrados.length === 0 ? (
+            <div className="px-4 py-8 text-center text-sm text-gray-400">
+              No se encontraron clientes
+            </div>
+          ) : (
+            clientesFiltrados.map(c => {
+              const selected = String(encargoForm.cliente_id) === String(c.id);
+              return (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => {
+                    setEncargoForm(f => ({ ...f, cliente_id: String(c.id) }));
+                    setClienteSearch('');
+                  }}
+                  className={`w-full px-4 py-3 flex items-center justify-between text-left transition-colors ${
+                    selected ? 'bg-light-blue' : 'hover:bg-gray-50'
+                  }`}
+                >
+                  <div>
+                    <p className="font-medium text-gray-900">
+                      {`${c.nombre}${c.apellido ? ' ' + c.apellido : ''}`}
+                    </p>
+                    {c.telefono && (
+                      <p className="text-sm text-gray-500">{c.telefono}</p>
+                    )}
+                  </div>
+                  <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
+                    selected ? 'border-blue bg-blue' : 'border-gray-300'
+                  }`}>
+                    {selected && (
+                      <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                    )}
+                  </span>
+                </button>
+              );
+            })
+          )}
+        </div>
+      )}
+
+      <button
+        type="button"
+        onClick={() => setNuevoClienteOpen(true)}
+        className="w-full py-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-600 hover:text-blue hover:border-blue-400 hover:bg-light-blue/40 transition-colors flex items-center justify-center gap-2 text-sm font-medium"
+      >
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+        </svg>
+        Crear nuevo cliente
+      </button>
+    </div>
+  );
+
+  // Lista de productos a nivel nota (se cobran por pieza: botella, unidad o
+  // bolsa). La comparten Autoservicio —donde acompañan al lavado— y la venta de
+  // Productos, donde son la nota entera.
+  const bloqueProductos = () => (
+    <div>
+      {/* Agregar vive solo en el encabezado: así no cambia de sitio conforme
+          crece la lista. */}
+      <div className="flex items-center justify-between gap-3 mb-3">
+        <div className="flex items-baseline gap-2 min-w-0">
+          <h2 className={LABEL_CLS + ' mb-0'}>Productos</h2>
+          {productosLista.length > 0 && (
+            <span className="text-xs text-gray-500 truncate">
+              {productosLista.length} {productosLista.length === 1 ? 'producto' : 'productos'}
+            </span>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={() => setSelectorProducto({ ambito: 'nota' })}
+          className="flex-shrink-0 flex items-center gap-1.5 bg-blue text-white rounded-pill pl-3 pr-4 py-2.5 text-xs font-bold hover:opacity-90 transition-opacity"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+          </svg>
+          Agregar producto
+        </button>
+      </div>
+
+      {/* Misma fila compacta que en Por Encargo. La diferencia es la unidad:
+          aquí se vende la pieza completa (botella, unidad o bolsa). */}
+      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+        {productosLista.length === 0 ? (
+          <p className="px-4 py-5 text-sm text-gray-500">No hay productos en esta nota.</p>
+        ) : (
+          productosLista.map((item, i) => {
+            const prod = productosCatalogo.find(x => String(x.id) === String(item.producto_id));
+            const cant = Number(item.cantidad) || 0;
+            const subtotal = precioProducto(prod, 'botella') * cant;
+            return (
+              <div key={i} className={`flex flex-wrap items-center gap-x-2 gap-y-4 px-3 py-4 ${i > 0 ? 'border-t border-gray-100' : ''}`}>
+                {/* Solo texto: el producto no se cambia, se borra el renglón y se
+                    agrega el correcto. */}
+                <div className="flex-1 min-w-[10rem]">
+                  <p className={`text-sm font-semibold ${prod ? 'text-gray-900' : 'text-gray-400'}`}>
+                    {prod ? etiquetaProducto(prod) : 'Producto no disponible'}
+                  </p>
+                  <p className="text-xs text-gray-500 tabular-nums">
+                    {prod ? precioProductoTexto(prod, 'nota') : '—'}
+                  </p>
+                </div>
+
+                {/* Cantidad, importe y borrar viajan juntos: si no caben
+                    junto al nombre, bajan al siguiente renglón. */}
+                <div className="flex flex-1 items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => actualizarProducto(i, 'cantidad', String(Math.max(1, cant - 1)))}
+                      disabled={cant <= 1}
+                      aria-label="Disminuir cantidad"
+                      className="w-9 h-9 flex items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-700 text-base font-semibold hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    >
+                      −
+                    </button>
+                    <span className="w-7 text-center text-sm font-semibold text-gray-900 tabular-nums">{cant}</span>
+                    <button
+                      type="button"
+                      onClick={() => actualizarProducto(i, 'cantidad', String(cant + 1))}
+                      aria-label="Aumentar cantidad"
+                      className="w-9 h-9 flex items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-700 text-base font-semibold hover:bg-gray-50 transition-colors"
+                    >
+                      +
+                    </button>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="w-16 text-right text-base font-bold text-blue-700 tabular-nums">
+                      ${subtotal.toFixed(2)}
+                    </span>
+
+                    <button
+                      type="button"
+                      onClick={() => eliminarProducto(i)}
+                      aria-label="Eliminar producto"
+                      className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })
+        )}
+
+        {productosLista.length > 0 && (
+          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 bg-gray-50">
+            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Total productos</span>
+            <span className="text-base font-bold text-dark-blue tabular-nums">
+              ${subtotalProductos.toFixed(2)}
+            </span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  // Ajuste manual de la nota: descuento (negativo) o cargo extra (positivo).
+  // Igual en Autoservicio y en la venta de Productos.
+  const bloqueAjuste = () => (
+    <div>
+      <label className={LABEL_CLS}>Ajuste ($)</label>
+      <div className="flex items-center gap-2">
+        <div className="relative flex-1">
+          <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 text-base">$</span>
+          <input
+            type="number" name="ajuste" step="any"
+            value={form.ajuste} onChange={handleChange}
+            placeholder="Ej. -10 para descuento, 20 para cargo extra"
+            className={`${INPUT_CLS} pl-8 text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`}
+          />
+        </div>
+        <button
+          type="button"
+          onClick={() => setForm(f => ({ ...f, ajuste: String((Number(f.ajuste) || 0) - 10) }))}
+          aria-label="Disminuir ajuste"
+          className="flex-shrink-0 w-14 py-3.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-xl font-semibold hover:bg-gray-50 transition-colors"
+        >
+          −
+        </button>
+        <button
+          type="button"
+          onClick={() => setForm(f => ({ ...f, ajuste: String((Number(f.ajuste) || 0) + 10) }))}
+          aria-label="Aumentar ajuste"
+          className="flex-shrink-0 w-14 py-3.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-xl font-semibold hover:bg-gray-50 transition-colors"
+        >
+          +
+        </button>
+      </div>
+      <p className="text-xs text-gray-400 mt-1.5">Descuento (negativo) o cargo extra (positivo)</p>
+    </div>
+  );
 
   if (loadingData) {
     return (
@@ -937,105 +1218,7 @@ export default function NuevaNota() {
             </div>
 
             {/* Paso 1 — Cliente */}
-            {encargoStep === 1 && (
-              <div className="space-y-4">
-                <h2 className="text-base font-semibold text-gray-900">Cliente</h2>
-                <div className="relative">
-                  <svg
-                    className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400"
-                    fill="none" stroke="currentColor" viewBox="0 0 24 24"
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                  </svg>
-                  <input
-                    type="text"
-                    placeholder="Buscar por nombre o teléfono..."
-                    value={clienteSearch}
-                    onChange={e => setClienteSearch(e.target.value)}
-                    className="w-full pl-11 pr-4 py-3.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent transition"
-                  />
-                </div>
-
-                {clienteSeleccionado && !clienteSearchQ && (
-                  <div className="flex items-center justify-between gap-3 bg-light-blue border border-blue-200 rounded-lg px-4 py-3">
-                    <div>
-                      <p className="text-xs font-medium text-blue uppercase tracking-wide">Cliente seleccionado</p>
-                      <p className="font-medium text-gray-900">
-                        {`${clienteSeleccionado.nombre}${clienteSeleccionado.apellido ? ' ' + clienteSeleccionado.apellido : ''}`}
-                      </p>
-                      {clienteSeleccionado.telefono && (
-                        <p className="text-sm text-gray-500">{clienteSeleccionado.telefono}</p>
-                      )}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setEncargoForm(f => ({ ...f, cliente_id: '' }))}
-                      aria-label="Quitar cliente"
-                      className="flex-shrink-0 px-3 py-1.5 text-sm text-blue-700 hover:bg-light-blue rounded-md transition-colors"
-                    >
-                      Cambiar
-                    </button>
-                  </div>
-                )}
-
-                {clienteSearchQ && (
-                  <div className="border border-gray-200 rounded-lg bg-white max-h-72 overflow-y-auto divide-y divide-gray-100">
-                    {clientesFiltrados.length === 0 ? (
-                      <div className="px-4 py-8 text-center text-sm text-gray-400">
-                        No se encontraron clientes
-                      </div>
-                    ) : (
-                      clientesFiltrados.map(c => {
-                        const selected = String(encargoForm.cliente_id) === String(c.id);
-                        return (
-                          <button
-                            key={c.id}
-                            type="button"
-                            onClick={() => {
-                              setEncargoForm(f => ({ ...f, cliente_id: String(c.id) }));
-                              setClienteSearch('');
-                            }}
-                            className={`w-full px-4 py-3 flex items-center justify-between text-left transition-colors ${
-                              selected ? 'bg-light-blue' : 'hover:bg-gray-50'
-                            }`}
-                          >
-                            <div>
-                              <p className="font-medium text-gray-900">
-                                {`${c.nombre}${c.apellido ? ' ' + c.apellido : ''}`}
-                              </p>
-                              {c.telefono && (
-                                <p className="text-sm text-gray-500">{c.telefono}</p>
-                              )}
-                            </div>
-                            <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
-                              selected ? 'border-blue bg-blue' : 'border-gray-300'
-                            }`}>
-                              {selected && (
-                                <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                                </svg>
-                              )}
-                            </span>
-                          </button>
-                        );
-                      })
-                    )}
-                  </div>
-                )}
-
-                <button
-                  type="button"
-                  onClick={() => setNuevoClienteOpen(true)}
-                  className="w-full py-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-600 hover:text-blue hover:border-blue-400 hover:bg-light-blue/40 transition-colors flex items-center justify-center gap-2 text-sm font-medium"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                  </svg>
-                  Crear nuevo cliente
-                </button>
-              </div>
-            )}
+            {encargoStep === 1 && bloqueCliente()}
 
             {/* Paso 2 — Cantidad de cargas */}
             {encargoStep === 2 && (
@@ -1834,145 +2017,12 @@ export default function NuevaNota() {
 
           {/* ── Productos ────────────────────────────────────── */}
 
-          <div>
-            {/* Agregar vive solo en el encabezado: así no cambia de sitio conforme
-                crece la lista. */}
-            <div className="flex items-center justify-between gap-3 mb-3">
-              <div className="flex items-baseline gap-2 min-w-0">
-                <h2 className={LABEL_CLS + ' mb-0'}>Productos</h2>
-                {productosLista.length > 0 && (
-                  <span className="text-xs text-gray-500 truncate">
-                    {productosLista.length} {productosLista.length === 1 ? 'producto' : 'productos'}
-                  </span>
-                )}
-              </div>
-              <button
-                type="button"
-                onClick={() => setSelectorProducto({ ambito: 'nota' })}
-                className="flex-shrink-0 flex items-center gap-1.5 bg-blue text-white rounded-pill pl-3 pr-4 py-2.5 text-xs font-bold hover:opacity-90 transition-opacity"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
-                </svg>
-                Agregar producto
-              </button>
-            </div>
-
-            {/* Misma fila compacta que en Por Encargo. La diferencia es la unidad:
-                aquí se vende la pieza completa (botella, unidad o bolsa). */}
-            <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-              {productosLista.length === 0 ? (
-                <p className="px-4 py-5 text-sm text-gray-500">No hay productos en esta nota.</p>
-              ) : (
-                productosLista.map((item, i) => {
-                  const prod = productosCatalogo.find(x => String(x.id) === String(item.producto_id));
-                  const cant = Number(item.cantidad) || 0;
-                  const subtotal = precioProducto(prod, 'botella') * cant;
-                  return (
-                    <div key={i} className={`flex flex-wrap items-center gap-x-2 gap-y-4 px-3 py-4 ${i > 0 ? 'border-t border-gray-100' : ''}`}>
-                      {/* Solo texto: el producto no se cambia, se borra el renglón y se
-                          agrega el correcto. */}
-                      <div className="flex-1 min-w-[10rem]">
-                        <p className={`text-sm font-semibold ${prod ? 'text-gray-900' : 'text-gray-400'}`}>
-                          {prod ? etiquetaProducto(prod) : 'Producto no disponible'}
-                        </p>
-                        <p className="text-xs text-gray-500 tabular-nums">
-                          {prod ? precioProductoTexto(prod, 'nota') : '—'}
-                        </p>
-                      </div>
-
-                      {/* Cantidad, importe y borrar viajan juntos: si no caben
-                          junto al nombre, bajan al siguiente renglón. */}
-                      <div className="flex flex-1 items-center justify-between gap-2">
-                        <div className="flex items-center gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => actualizarProducto(i, 'cantidad', String(Math.max(1, cant - 1)))}
-                            disabled={cant <= 1}
-                            aria-label="Disminuir cantidad"
-                            className="w-9 h-9 flex items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-700 text-base font-semibold hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                          >
-                            −
-                          </button>
-                          <span className="w-7 text-center text-sm font-semibold text-gray-900 tabular-nums">{cant}</span>
-                          <button
-                            type="button"
-                            onClick={() => actualizarProducto(i, 'cantidad', String(cant + 1))}
-                            aria-label="Aumentar cantidad"
-                            className="w-9 h-9 flex items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-700 text-base font-semibold hover:bg-gray-50 transition-colors"
-                          >
-                            +
-                          </button>
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                          <span className="w-16 text-right text-base font-bold text-blue-700 tabular-nums">
-                            ${subtotal.toFixed(2)}
-                          </span>
-
-                          <button
-                            type="button"
-                            onClick={() => eliminarProducto(i)}
-                            aria-label="Eliminar producto"
-                            className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                          >
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-
-              {productosLista.length > 0 && (
-                <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 bg-gray-50">
-                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Total productos</span>
-                  <span className="text-base font-bold text-dark-blue tabular-nums">
-                    ${subtotalProductos.toFixed(2)}
-                  </span>
-                </div>
-              )}
-            </div>
-          </div>
+          {bloqueProductos()}
 
           <Separador />
 
           {/* Ajuste */}
-          <div>
-            <label className={LABEL_CLS}>Ajuste ($)</label>
-            <div className="flex items-center gap-2">
-              <div className="relative flex-1">
-                <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 text-base">$</span>
-                <input
-                  type="number" name="ajuste" step="any"
-                  value={form.ajuste} onChange={handleChange}
-                  placeholder="Ej. -10 para descuento, 20 para cargo extra"
-                  className={`${INPUT_CLS} pl-8 text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`}
-                />
-              </div>
-              <button
-                type="button"
-                onClick={() => setForm(f => ({ ...f, ajuste: String((Number(f.ajuste) || 0) - 10) }))}
-                aria-label="Disminuir ajuste"
-                className="flex-shrink-0 w-14 py-3.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-xl font-semibold hover:bg-gray-50 transition-colors"
-              >
-                −
-              </button>
-              <button
-                type="button"
-                onClick={() => setForm(f => ({ ...f, ajuste: String((Number(f.ajuste) || 0) + 10) }))}
-                aria-label="Aumentar ajuste"
-                className="flex-shrink-0 w-14 py-3.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-xl font-semibold hover:bg-gray-50 transition-colors"
-              >
-                +
-              </button>
-            </div>
-            <p className="text-xs text-gray-400 mt-1.5">Descuento (negativo) o cargo extra (positivo)</p>
-          </div>
-
+          {bloqueAjuste()}
         </div>
 
         <Separador />
@@ -2111,9 +2161,127 @@ export default function NuevaNota() {
         </div>
         </div>
         )}
+        {/* ── Venta de Productos ──────────────────────────────
+            Mostrador puro: a quién se le vende (opcional), qué se lleva y
+            cuánto paga. Sin cargas, sin máquinas y sin nada que entregar
+            después: al aceptar se cobra y la nota queda finalizada. */}
+        {esVenta && (
+        <div className="space-y-8">
+
+          {bloqueCliente(true)}
+
+          <Separador />
+
+          {bloqueProductos()}
+
+          <Separador />
+
+          {bloqueAjuste()}
+
+          <Separador />
+
+          {/* ── Resumen ──────────────────────────────────────── */}
+          <div>
+            <h2 className={LABEL_CLS}>Resumen</h2>
+            <div className="bg-light-blue border border-blue-200 rounded-xl p-4">
+              <div className="space-y-2.5 mb-3 text-sm text-blue-700">
+                <div className="flex justify-between">
+                  <span>Servicio</span>
+                  <span className="font-medium">{TIPO_LABEL[tipoServicio]}</span>
+                </div>
+                {clienteSeleccionado && (
+                  <div className="flex justify-between gap-2">
+                    <span>Cliente</span>
+                    <span className="font-medium truncate">
+                      {`${clienteSeleccionado.nombre}${clienteSeleccionado.apellido ? ' ' + clienteSeleccionado.apellido : ''}`}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {productosLista.length > 0 && (
+                <div className="space-y-2 mb-3 text-sm text-blue border-t border-blue-200 pt-3">
+                  <div className="flex justify-between font-medium">
+                    <span>Productos</span>
+                    <span>${subtotalProductos.toFixed(2)}</span>
+                  </div>
+                  <div className="pl-3 mt-1.5 space-y-1.5 text-xs text-blue-700/80">
+                    {productosLista
+                      .map(item => ({
+                        item,
+                        prod: productosCatalogo.find(x => String(x.id) === String(item.producto_id)),
+                      }))
+                      .filter(x => x.prod)
+                      .sort((a, b) => ordenProducto(a.prod) - ordenProducto(b.prod))
+                      .map(({ item, prod }, i) => {
+                        const cant = Number(item.cantidad) || 0;
+                        return (
+                          <div key={i} className="flex justify-between gap-2">
+                            {/* "· Granel" distingue el bidón del producto de marca
+                                que se llama igual (Suavizante vs. Ensueño). */}
+                            <span>
+                              {etiquetaProducto(prod)}{prod.tipo_liquido === 'granel' ? ' · Granel' : ''}
+                              {' × '}{cant} {unidadVentaNota(prod, cant)}
+                            </span>
+                            <span className="flex-shrink-0">${(precioProducto(prod, 'botella') * cant).toFixed(2)}</span>
+                          </div>
+                        );
+                      })}
+                  </div>
+                </div>
+              )}
+
+              {(ajusteNum !== 0 || form.forma_pago) && (
+                <div className="space-y-2 mb-2 text-sm text-blue border-t border-blue-200 pt-3">
+                  {ajusteNum !== 0 && (
+                    <div className="flex justify-between">
+                      <span>Ajuste</span>
+                      <span>{ajusteNum > 0 ? '+' : ''}${ajusteNum.toFixed(2)}</span>
+                    </div>
+                  )}
+                  {form.forma_pago && (
+                    <div className="flex justify-between">
+                      <span>Forma de pago</span>
+                      <span className="font-medium">
+                        {FORMAS_PAGO.find(f => f.v === form.forma_pago)?.label}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="flex items-baseline justify-between border-t border-blue-200 pt-3">
+                <span className="text-sm font-medium text-blue">Total</span>
+                <span className="text-3xl font-bold text-blue-700">${totalVenta.toFixed(2)}</span>
+              </div>
+            </div>
+          </div>
+
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">
+              {error}
+            </div>
+          )}
+
+          <div className="flex gap-3 pb-4">
+            <button
+              type="button" onClick={() => navigate(-1)}
+              className="flex-1 border border-gray-300 text-gray-700 font-medium py-3.5 rounded-lg text-base hover:bg-gray-50 transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button" onClick={abrirCobro} disabled={loading}
+              className="flex-1 bg-blue hover:opacity-90 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
+            >
+              Aceptar
+            </button>
+          </div>
+        </div>
+        )}
       </form>
 
-      {/* Modal — cobro de Autoservicio: forma de pago y confirmación */}
+      {/* Modal — cobro al momento (Autoservicio y venta de Productos) */}
       {cobroOpen && (
         <div
           className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
@@ -2144,7 +2312,7 @@ export default function NuevaNota() {
             <div className="p-5 space-y-4 overflow-y-auto">
               <div className="flex items-baseline justify-between bg-light-blue border border-blue-200 rounded-xl px-4 py-3">
                 <span className="text-sm font-medium text-blue">Total a cobrar</span>
-                <span className="text-2xl font-bold text-blue-700 tabular-nums">${precioTotal.toFixed(2)}</span>
+                <span className="text-2xl font-bold text-blue-700 tabular-nums">${(esVenta ? totalVenta : precioTotal).toFixed(2)}</span>
               </div>
 
               <div className="grid grid-cols-3 gap-3">
@@ -2433,7 +2601,7 @@ export default function NuevaNota() {
               </svg>
             </div>
             <div className="space-y-1">
-              <h3 className="text-lg font-bold text-gray-900">¡Nota creada!</h3>
+              <h3 className="text-lg font-bold text-gray-900">{esVenta ? '¡Venta registrada!' : '¡Nota creada!'}</h3>
               {notaCreada.folio && (
                 <p className="text-sm text-gray-500">
                   Folio <span className="font-semibold text-gray-800">{notaCreada.folio}</span>

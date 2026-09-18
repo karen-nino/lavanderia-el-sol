@@ -136,6 +136,7 @@ const BADGE_TIPO_SERVICIO = {
   AUTOSERVICIO: { label: 'Autoservicio', cls: 'bg-light-blue text-blue-700' },
   EDREDON:      { label: 'Edredón',      cls: 'bg-sky-100 text-sky-700'       },
   POR_ENCARGO:  { label: 'Por Encargo',  cls: 'bg-amber-100 text-amber-700'   },
+  PRODUCTOS:    { label: 'Productos',    cls: 'bg-violet-100 text-violet-700'  },
 };
 
 const BADGE_PAGO = {

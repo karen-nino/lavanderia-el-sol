@@ -18,6 +18,12 @@ describe('notaAlPieDeTicket', () => {
     expect(notaAlPieDeTicket('EDREDON', NOTAS)).toBe('Aviso de encargo');
   });
 
+  // Decisión de la clienta: la venta de mostrador se lleva el producto en el
+  // acto, así que le toca el mismo pie que a quien lava él mismo.
+  it('PRODUCTOS lleva la de AUTOSERVICIO', () => {
+    expect(notaAlPieDeTicket('PRODUCTOS', NOTAS)).toBe('Aviso de autoservicio');
+  });
+
   it('un tipo de servicio nuevo hereda la del encargo', () => {
     expect(notaAlPieDeTicket('LO_QUE_SEA', NOTAS)).toBe('Aviso de encargo');
   });

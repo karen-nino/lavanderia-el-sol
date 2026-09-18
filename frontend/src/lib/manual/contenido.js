@@ -81,6 +81,23 @@ A diferencia de autoservicio, aquí SÍ se puede empezar sin cobrar: en el encar
 El precio de una carga por encargo lo manda el TOPE de su tamaño, que el administrador configura en Ajustes.`,
       },
       {
+        id: 'nota-productos',
+        titulo: 'Vender productos (sin lavado)',
+        claves: ['venta', 'productos', 'jabon', 'suavizante', 'bolsa', 'mostrador', 'sin lavar'],
+        cuerpo: `Cuando alguien solo viene a comprar: un suavizante, unas bolsas. Sin lavadora y sin secadora.
+
+1. Toca Nueva nota y elige Productos.
+2. Si quieres dejar registro de a quién le vendiste, elige el cliente. Es opcional: casi siempre es alguien de paso.
+3. Agrega lo que se lleva con el botón Agregar producto y ajusta las cantidades.
+4. Toca Aceptar, elige cómo pagó y confirma.
+
+LA VENTA SE COBRA AL MOMENTO. No se puede dejar a deber: la nota nace pagada y FINALIZADA en el mismo acto, porque el cliente se lleva lo que compró ahí mismo. No aparece en Salidas ni en Máquinas, y el producto sale del inventario de inmediato.
+
+Los líquidos se venden por BOTELLA entera (no por tapa, que es como se cobran dentro de un encargo) y las bolsas por pieza.
+
+Si te equivocaste, la venta no se edita ni se cancela: un administrador la ELIMINA desde la nota y el producto vuelve al inventario.`,
+      },
+      {
         id: 'cobrar-una-nota',
         titulo: 'Cobrar una nota (liquidar)',
         claves: ['cobrar', 'pagar', 'liquidar', 'efectivo', 'transferencia', 'tarjeta'],
@@ -104,7 +121,7 @@ SECANDO — ya no hay lavadoras corriendo, pero sí una secadora.
 
 POR ENTREGAR — todas las cargas terminaron y la ropa espera a que el cliente venga por ella. Solo aparece en Por Encargo y Edredón.
 
-FINALIZADA — se acabó. En AUTOSERVICIO la nota llega aquí SOLA en cuanto termina su última carga, sin pasar por Por Entregar: el cliente está en el local y se lleva su ropa él mismo, no hay nada que entregar después.
+FINALIZADA — se acabó. En AUTOSERVICIO la nota llega aquí SOLA en cuanto termina su última carga, sin pasar por Por Entregar: el cliente está en el local y se lleva su ropa él mismo, no hay nada que entregar después. Una venta de PRODUCTOS nace directamente aquí: no hay nada que lavar ni que esperar.
 
 CANCELADA — la nota se anuló. Solo un administrador puede cancelar, y solo si todavía no se ha cobrado.`,
       },

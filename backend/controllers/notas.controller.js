@@ -8,7 +8,13 @@ import { tarifaSecadora, precioProductoEnNota, unidadDeServicio, tapasPorUnidad,
 import { sincronizarSonoff, MAX_CICLOS_POR_CARGA } from '../services/sincronizarSonoff.js';
 
 const ESTADOS_VALIDOS     = ['EN_ESPERA', 'LAVANDO', 'SECANDO', 'LISTA', 'PAGADA', 'FINALIZADA', 'CANCELADA'];
-const TIPOS_SERVICIO_VALIDOS = ['AUTOSERVICIO', 'EDREDON', 'POR_ENCARGO'];
+// PRODUCTOS es la venta de mostrador (mig. 112): productos sueltos, sin lavado
+// ni secado. No lleva cargas, y por eso varias reglas de abajo la tratan aparte.
+const TIPOS_SERVICIO_VALIDOS = ['AUTOSERVICIO', 'EDREDON', 'POR_ENCARGO', 'PRODUCTOS'];
+
+// ¿Es una venta de mostrador? Se pregunta lo bastante seguido como para tener
+// nombre propio.
+const esVenta = (tipo_servicio) => tipo_servicio === 'PRODUCTOS';
 const ESTADOS_PAGO_VALIDOS = ['PENDIENTE', 'PAGADO'];
 // Formas de pago (mig. 078/090). Para el corte de caja solo EFECTIVO es dinero
 // en el cajón; transferencia y tarjeta son cobros reales que no lo engrosan.
@@ -34,6 +40,7 @@ const PALABRA = {
   EN_ESPERA: 'en espera', LAVANDO: 'lavando', SECANDO: 'secando', LISTA: 'lista',
   PAGADA: 'pagada', FINALIZADA: 'finalizada', CANCELADA: 'cancelada',
   AUTOSERVICIO: 'autoservicio', EDREDON: 'edredón', POR_ENCARGO: 'por encargo',
+  PRODUCTOS: 'productos',
   PENDIENTE: 'pendiente', PAGADO: 'pagado',
   EFECTIVO: 'efectivo', TRANSFERENCIA: 'transferencia', TARJETA: 'tarjeta',
   ROPA: 'ropa', MANANA: 'mañana', TARDE: 'tarde', NOCHE: 'noche',
@@ -1057,9 +1064,25 @@ export const createNota = async (req, res) => {
   if (tipo_servicio === 'POR_ENCARGO' && !cliente_id) {
     return res.status(400).json({ message: 'Elige el cliente: las notas Por Encargo llevan cliente.' });
   }
-  // Modelo por cargas: toda nota trae sus cargas, cada una con sus máquinas y
-  // —en encargo— su prenda, tela/tamaño, ajuste y productos.
-  if (!Array.isArray(cargas) || cargas.length === 0) {
+  // La venta de mostrador no lava nada: no lleva cargas y lo que la justifica
+  // son sus productos. El cliente es opcional (casi siempre es alguien de paso).
+  if (esVenta(tipo_servicio)) {
+    if (Array.isArray(cargas) && cargas.length > 0) {
+      return res.status(400).json({ message: 'Una venta de productos no lleva cargas: no hay lavado ni secado que cobrar.' });
+    }
+    if (!Array.isArray(productos) || productos.length === 0) {
+      return res.status(400).json({ message: 'Agrega al menos un producto: una venta sin productos no es nota.' });
+    }
+    // Se cobra en el acto, como en el mostrador de cualquier tienda: la nota
+    // nace pagada y finalizada, así que no hay un "después" donde cobrarla.
+    if (estado_pago !== 'PAGADO' || !normalizarFormaPago(forma_pago)) {
+      return res.status(400).json({
+        message: `La venta de productos se cobra al momento: indica la forma de pago (${enPalabras(FORMAS_PAGO_VALIDAS)}).`,
+      });
+    }
+  } else if (!Array.isArray(cargas) || cargas.length === 0) {
+    // Modelo por cargas: toda nota de lavado trae sus cargas, cada una con sus
+    // máquinas y —en encargo— su prenda, tela/tamaño, ajuste y productos.
     return res.status(400).json({ message: 'La nota necesita al menos una carga.' });
   }
   if (tiempo_entrega && !TIEMPOS_ENTREGA_VALIDOS.includes(String(tiempo_entrega).toUpperCase())) {
@@ -1085,10 +1108,13 @@ export const createNota = async (req, res) => {
   try {
     await client.query('BEGIN');
 
-    // Se validan y tarifican las cargas primero; de ellas sale el total.
+    // Se validan y tarifican las cargas primero; de ellas sale el total. La
+    // venta de mostrador no tiene: su total son solo los productos.
     let filasCargas;
     try {
-      filasCargas = await prepararCargas(client, cargas, tipo_prenda, req.sucursal, tipo_servicio);
+      filasCargas = esVenta(tipo_servicio)
+        ? []
+        : await prepararCargas(client, cargas, tipo_prenda, req.sucursal, tipo_servicio);
     } catch (e) {
       await client.query('ROLLBACK');
       return res.status(400).json({ message: e.message });
@@ -1106,9 +1132,13 @@ export const createNota = async (req, res) => {
     // ninguna se activa, la nota nace En Espera (las máquinas quedan asignadas
     // pero libres, para activarse luego desde Salidas).
     const idsActivar = [...new Set(filasCargas.filter(f => f.activar).flatMap(f => [f.lavadora_id, f.secadora_id]).filter(Boolean))];
-    const estadoNota = idsActivar.length > 0
-      ? (filasCargas.some(f => f.activar && f.lavadora_id) ? 'LAVANDO' : 'SECANDO')
-      : 'EN_ESPERA';
+    // La venta se entrega en el mostrador en el mismo acto en que se cobra: no
+    // hay nada que esperar ni que entregar después, así que nace FINALIZADA.
+    const estadoNota = esVenta(tipo_servicio)
+      ? 'FINALIZADA'
+      : idsActivar.length > 0
+        ? (filasCargas.some(f => f.activar && f.lavadora_id) ? 'LAVANDO' : 'SECANDO')
+        : 'EN_ESPERA';
 
     const { rows: notaRows } = await client.query(
       `INSERT INTO notas
@@ -1236,6 +1266,22 @@ export const createNota = async (req, res) => {
     if (errTope) {
       await client.query('ROLLBACK');
       return res.status(400).json({ message: errTope });
+    }
+
+    // La venta nace finalizada: el producto se lo lleva el cliente ahora mismo,
+    // así que sale del inventario aquí y no se queda reservado. Es lo mismo que
+    // hace cerrarNotaSinCargasPendientes cuando una nota de autoservicio se
+    // cierra sola, y lo que haría cambiarEstadoNota al cobrar.
+    if (esVenta(tipo_servicio)) {
+      await registrarMovimientosProductosNota(client, nota.id, req.sucursal, req.user.id, 'venta');
+      await client.query(
+        `UPDATE productos a
+            SET stock_actual    = stock_actual    - np.cantidad_tapas,
+                stock_reservado = stock_reservado - np.cantidad_tapas
+          FROM nota_productos np
+          WHERE np.nota_id = $1 AND np.producto_id = a.id`,
+        [nota.id]
+      );
     }
 
     await client.query('COMMIT');
@@ -1753,7 +1799,7 @@ export const eliminarNota = async (req, res) => {
     await client.query('BEGIN');
 
     const { rows: notaRows } = await client.query(
-      'SELECT estado, folio FROM notas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
+      'SELECT estado, tipo_servicio, folio FROM notas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
       [id, req.sucursal]
     );
     if (notaRows.length === 0) {
@@ -1782,7 +1828,11 @@ export const eliminarNota = async (req, res) => {
     //   - FINALIZADA / CANCELADA: el stock ya se consumió o la reserva ya
     //     se liberó; no hay nada que revertir.
     //   - Estados activos: solo liberar la reserva.
-    if (estadoNota === 'PAGADA') {
+    //   - Venta de productos: nace FINALIZADA, así que no se puede cancelar —
+    //     eliminarla es la ÚNICA forma de deshacerla. Si el borrado no
+    //     devolviera el producto al estante, un cobro mal capturado dejaría el
+    //     inventario corto sin manera de arreglarlo desde la nota.
+    if (estadoNota === 'PAGADA' || (esVenta(notaRows[0].tipo_servicio) && estadoNota === 'FINALIZADA')) {
       await registrarMovimientosProductosNota(client, id, req.sucursal, req.user.id, 'liberacion');
       await client.query(
         `UPDATE productos a

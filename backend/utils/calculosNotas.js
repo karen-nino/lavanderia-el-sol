@@ -10,10 +10,12 @@ export function tarifaSecadora(_secadoraTamano, _tipoPrenda, t) {
   return t.secadora;
 }
 
-// Unidad de venta del producto según el servicio: en Autoservicio se vende la
-// BOTELLA entera; en Por Encargo se cobra por TAPA/medida.
+// Unidad de venta del producto según el servicio: en Autoservicio y en la venta
+// de mostrador (PRODUCTOS) se vende la BOTELLA entera; en Por Encargo se cobra
+// por TAPA/medida, porque ahí el producto es un insumo del lavado que hace el
+// negocio, no algo que el cliente se lleve.
 export function unidadDeServicio(tipo_servicio) {
-  return tipo_servicio === 'AUTOSERVICIO' ? 'botella' : 'tapa';
+  return tipo_servicio === 'AUTOSERVICIO' || tipo_servicio === 'PRODUCTOS' ? 'botella' : 'tapa';
 }
 
 // Cuántas tapas equivale una unidad vendida (para el stock, que va en tapas).

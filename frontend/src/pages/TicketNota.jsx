@@ -11,6 +11,7 @@ const BADGE_TIPO_SERVICIO = {
   AUTOSERVICIO: 'Autoservicio',
   EDREDON:      'Edredón',
   POR_ENCARGO:  'Por encargo',
+  PRODUCTOS:    'Productos',
 };
 
 

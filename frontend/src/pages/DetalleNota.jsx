@@ -24,6 +24,7 @@ const BADGE_TIPO_SERVICIO = {
   AUTOSERVICIO: { label: 'Autoservicio', cls: 'bg-light-blue text-blue-700' },
   EDREDON:      { label: 'Edredón',      cls: 'bg-sky-100 text-sky-700'       },
   POR_ENCARGO:  { label: 'Por encargo',  cls: 'bg-amber-100 text-amber-700'   },
+  PRODUCTOS:    { label: 'Productos',    cls: 'bg-violet-100 text-violet-700'  },
 };
 
 const PRENDA_LABEL = {
@@ -64,6 +65,10 @@ const PASOS_ESTADO = [
 // por "Por Entregar", así que ese paso sobra. Se conserva en la única nota de
 // autoservicio que sí lo vive: la que quedó a deber y espera el cobro ahí.
 function pasosDeNota(nota) {
+  // La venta de Productos (mig. 112) nace finalizada: no hay lavado, ni secado,
+  // ni nada que entregar después. Su línea de tiempo es un solo punto; dibujar
+  // los cinco pasos contaría un proceso que esa nota nunca vivió.
+  if (nota.tipo_servicio === 'PRODUCTOS') return PASOS_ESTADO.filter(p => p.key === 'FINALIZADA');
   if (nota.tipo_servicio !== 'AUTOSERVICIO') return PASOS_ESTADO;
   const estuvoPorEntregar = ['LISTA', 'PAGADA'].includes(nota.estado)
     || (nota.historial_estados ?? []).some(h => h.estado === 'LISTA');
@@ -635,8 +640,10 @@ export default function DetalleNota() {
         </div>
       )}
 
-      {/* Información de entrega (datos del paso de Entrega) — solo Por Encargo */}
-      {nota.tipo_servicio !== 'AUTOSERVICIO' && (
+      {/* Información de entrega (datos del paso de Entrega) — solo Por Encargo.
+          Ni el autoservicio ni la venta de mostrador dejan nada a cargo del
+          negocio: el cliente se lo lleva en el momento. */}
+      {!['AUTOSERVICIO', 'PRODUCTOS'].includes(nota.tipo_servicio) && (
         <div className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
           <div className="px-4 py-3 border-b border-gray-50">
             <h2 className="text-sm font-semibold text-gray-700">Entrega</h2>
@@ -691,7 +698,10 @@ export default function DetalleNota() {
               <span className="text-sm font-medium text-gray-800">{nota.sucursal_nombre}</span>
             </FilaDetalle>
           )}
-          {(nota.cargas ?? []).length === 0 && nota.tipo_prenda && PRENDA_LABEL[nota.tipo_prenda] && (
+          {/* La venta de mostrador no recibe ropa: su tipo_prenda es solo el
+              valor por defecto de la columna, no un dato de la nota. */}
+          {(nota.cargas ?? []).length === 0 && nota.tipo_servicio !== 'PRODUCTOS'
+            && nota.tipo_prenda && PRENDA_LABEL[nota.tipo_prenda] && (
             <FilaDetalle label="Prenda">
               <span className="text-sm font-medium text-gray-800">{PRENDA_LABEL[nota.tipo_prenda]}</span>
             </FilaDetalle>

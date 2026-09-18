@@ -139,6 +139,7 @@ const METRICA_TITULO = {
 const TIPO_SERVICIO_LABEL = {
   AUTOSERVICIO: 'Autoservicio',
   POR_ENCARGO:  'Por encargo',
+  PRODUCTOS:    'Productos',
   EDREDON:      'Edredón',
 };
 

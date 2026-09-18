@@ -29,6 +29,12 @@ describe('precioProductoEnNota', () => {
     expect(precioProductoEnNota(producto, 'AUTOSERVICIO')).toBe(120);
   });
 
+  // La venta de mostrador (mig. 112) despacha piezas completas, como
+  // Autoservicio: si cayera del lado de la tapa se cobraría una fracción.
+  it('la venta de Productos cobra el precio por botella', () => {
+    expect(precioProductoEnNota(producto, 'PRODUCTOS')).toBe(120);
+  });
+
   it('sin precio en la unidad que toca devuelve 0', () => {
     // Producto de marca que solo se vende por botella: por tapa no tiene precio.
     expect(precioProductoEnNota({ precio_botella: 120 }, 'POR_ENCARGO')).toBe(0);
