@@ -1788,13 +1788,11 @@ export default function NuevaNota() {
                         máquina física se asigna después en Salidas. */}
                     <div>
                       <label className="block text-xs font-medium text-gray-500 mb-1.5">Lavadora</label>
+                      {/* El secado NO se precarga al elegir lavadora: se cobra aparte
+                          y no todas las cargas lo llevan. */}
                       <select
                         value={c.lavadora_tipo}
-                        onChange={e => {
-                          const v = e.target.value;
-                          // Al elegir un lavado se marca también el secado (el empleado lo quita si no lo quieren).
-                          set(v ? { lavadora_tipo: v, secadora_tipo: 'mediana' } : { lavadora_tipo: v });
-                        }}
+                        onChange={e => set({ lavadora_tipo: e.target.value })}
                         className={`${INPUT_CLS} bg-white`}
                       >
                         <option value="">Sin lavado</option>
