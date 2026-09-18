@@ -6,7 +6,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import request from 'supertest';
 import app from '../../app.js';
 import {
-  pool, limpiarBase, seedSucursal, seedUsuario, seedProducto, seedCliente, seedAjustes, auth,
+  pool, limpiarBase, seedSucursal, seedUsuario, seedProducto, seedAjustes, auth,
 } from '../helpers.js';
 
 let admin;
@@ -41,6 +41,7 @@ describe('POST /api/notas — venta de Productos', () => {
     expect(res.body.estado).toBe('FINALIZADA');
     expect(res.body.estado_pago).toBe('PAGADO');
     expect(res.body.forma_pago).toBe('EFECTIVO');
+    expect(res.body.cliente_id).toBeNull();   // anónima, como el autoservicio
     expect(res.body.cargas).toEqual([]);
     expect(Number(res.body.precio_total)).toBe(54); // 2 botellas × $27
     expect(res.body.folio).toBeTruthy();
@@ -76,21 +77,6 @@ describe('POST /api/notas — venta de Productos', () => {
     const res = await venta({ productos: [{ producto_id: jabon, cantidad: 2 }], ajuste: -4 });
     expect(res.status).toBe(201);
     expect(Number(res.body.precio_total)).toBe(50);
-  });
-
-  it('el cliente es opcional, pero se guarda si se manda', async () => {
-    const jabon = await seedJabon();
-    const cliente = await seedCliente({ nombre: 'Ana' });
-
-    const conCliente = await venta({
-      cliente_id: cliente, productos: [{ producto_id: jabon, cantidad: 1 }],
-    });
-    expect(conCliente.status).toBe(201);
-    expect(conCliente.body.cliente_id).toBe(cliente);
-
-    const sinCliente = await venta({ productos: [{ producto_id: jabon, cantidad: 1 }] });
-    expect(sinCliente.status).toBe(201);
-    expect(sinCliente.body.cliente_id).toBeNull();
   });
 
   it('sin productos no hay venta', async () => {

@@ -87,9 +87,10 @@ El precio de una carga por encargo lo manda el TOPE de su tamaño, que el admini
         cuerpo: `Cuando alguien solo viene a comprar: un suavizante, unas bolsas. Sin lavadora y sin secadora.
 
 1. Toca Nueva nota y elige Productos.
-2. Si quieres dejar registro de a quién le vendiste, elige el cliente. Es opcional: casi siempre es alguien de paso.
-3. Agrega lo que se lleva con el botón Agregar producto y ajusta las cantidades.
-4. Toca Aceptar, elige cómo pagó y confirma.
+2. Agrega lo que se lleva con el botón Agregar producto y ajusta las cantidades.
+3. Toca Aceptar, elige cómo pagó y confirma.
+
+La venta es ANÓNIMA, como el autoservicio: no se captura cliente. Si te piden el ticket, se manda por WhatsApp pidiendo el teléfono en esa pantalla.
 
 LA VENTA SE COBRA AL MOMENTO. No se puede dejar a deber: la nota nace pagada y FINALIZADA en el mismo acto, porque el cliente se lleva lo que compró ahí mismo. No aparece en Salidas ni en Máquinas, y el producto sale del inventario de inmediato.
 

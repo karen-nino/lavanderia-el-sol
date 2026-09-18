@@ -1065,7 +1065,8 @@ export const createNota = async (req, res) => {
     return res.status(400).json({ message: 'Elige el cliente: las notas Por Encargo llevan cliente.' });
   }
   // La venta de mostrador no lava nada: no lleva cargas y lo que la justifica
-  // son sus productos. El cliente es opcional (casi siempre es alguien de paso).
+  // son sus productos. Es anónima como el autoservicio —el que viene a comprar
+  // un jabón no se identifica—, así que tampoco lleva cliente.
   if (esVenta(tipo_servicio)) {
     if (Array.isArray(cargas) && cargas.length > 0) {
       return res.status(400).json({ message: 'Una venta de productos no lleva cargas: no hay lavado ni secado que cobrar.' });

@@ -757,13 +757,12 @@ export default function NuevaNota() {
 
     setLoading(true);
 
-    // La venta de mostrador no lleva cargas ni máquinas: solo sus productos,
-    // el ajuste y —si se quiso dejar registro— el cliente. Nace pagada y
-    // finalizada; el backend descuenta el inventario en el acto.
+    // La venta de mostrador no lleva cargas, ni máquinas, ni cliente: solo sus
+    // productos y el ajuste. Nace pagada y finalizada; el backend descuenta el
+    // inventario en el acto.
     const payloadVenta = {
       tipo_servicio:  'PRODUCTOS',
       tipo_prenda:    'ROPA',
-      cliente_id:     encargoForm.cliente_id ? Number(encargoForm.cliente_id) : null,
       estado_pago:    'PAGADO',
       forma_pago:     form.forma_pago || null,
       ajuste:         ajusteNum,
@@ -820,15 +819,12 @@ export default function NuevaNota() {
     }
   };
 
-  // Buscador de cliente. Lo comparten Por Encargo (paso 1, obligatorio) y la
-  // venta de Productos (opcional, para dejar registro de a quién se le vendió):
-  // los dos escriben en encargoForm.cliente_id, que es de donde salen
-  // clienteSeleccionado y clientesFiltrados.
-  const bloqueCliente = (opcional = false) => (
+  // Buscador de cliente del paso 1 de Por Encargo, el único servicio que lleva
+  // cliente: ahí la ropa es de alguien que va a volver por ella. Autoservicio y
+  // la venta de Productos son anónimos.
+  const bloqueCliente = () => (
     <div className="space-y-4">
-      <h2 className="text-base font-semibold text-gray-900">
-        Cliente{opcional && <span className="font-normal text-gray-500"> (opcional)</span>}
-      </h2>
+      <h2 className="text-base font-semibold text-gray-900">Cliente</h2>
       <div className="relative">
         <svg
           className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400"
@@ -2162,15 +2158,12 @@ export default function NuevaNota() {
         </div>
         )}
         {/* ── Venta de Productos ──────────────────────────────
-            Mostrador puro: a quién se le vende (opcional), qué se lleva y
-            cuánto paga. Sin cargas, sin máquinas y sin nada que entregar
-            después: al aceptar se cobra y la nota queda finalizada. */}
+            Mostrador puro: qué se lleva y cuánto paga. Anónima como el
+            autoservicio —el que viene a comprar un jabón no se identifica—, sin
+            cargas, sin máquinas y sin nada que entregar después: al aceptar se
+            cobra y la nota queda finalizada. */}
         {esVenta && (
         <div className="space-y-8">
-
-          {bloqueCliente(true)}
-
-          <Separador />
 
           {bloqueProductos()}
 
@@ -2189,14 +2182,6 @@ export default function NuevaNota() {
                   <span>Servicio</span>
                   <span className="font-medium">{TIPO_LABEL[tipoServicio]}</span>
                 </div>
-                {clienteSeleccionado && (
-                  <div className="flex justify-between gap-2">
-                    <span>Cliente</span>
-                    <span className="font-medium truncate">
-                      {`${clienteSeleccionado.nombre}${clienteSeleccionado.apellido ? ' ' + clienteSeleccionado.apellido : ''}`}
-                    </span>
-                  </div>
-                )}
               </div>
 
               {productosLista.length > 0 && (
