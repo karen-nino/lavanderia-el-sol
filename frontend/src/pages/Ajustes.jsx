@@ -978,6 +978,7 @@ export default function Ajustes() {
       rfc:                      config.rfc ?? '',
       ticket_nota_autoservicio: config.ticket_nota_autoservicio ?? '',
       ticket_nota_encargo:      config.ticket_nota_encargo ?? '',
+      ticket_nota_productos:    config.ticket_nota_productos ?? '',
     }),
     stock_minimo_global:   Number(config.stock_minimo_global),
     alerta_ciclo_detenido: !!config.alerta_ciclo_detenido,
@@ -1592,6 +1593,22 @@ export default function Ajustes() {
           />
         </Field>
       </div>
+      <div className="border-t border-gray-100 pt-4">
+        <Field
+          label="Nota para Productos"
+          hint="Solo para las ventas de productos, que no llevan lavado ni secado. Si se deja vacía, ese ticket termina sin nota."
+        >
+          <textarea
+            name="ticket_nota_productos"
+            rows={5}
+            value={config.ticket_nota_productos ?? ''}
+            onChange={handleChange}
+            placeholder="Opcional"
+            disabled={ES_DEMO}
+            className={`${INPUT_CLS} resize-y leading-relaxed disabled:bg-gray-50 disabled:text-gray-500 disabled:cursor-not-allowed`}
+          />
+        </Field>
+      </div>
     </Section>
   );
 
@@ -2067,6 +2084,21 @@ export default function Ajustes() {
           name="ticket_nota_encargo"
           rows={6}
           value={config.ticket_nota_encargo ?? ''}
+          onChange={handleChange}
+          placeholder="Opcional"
+          disabled={ES_DEMO}
+          className={`${MOBILE_INPUT_CLS} resize-y leading-relaxed disabled:bg-gray-50 disabled:text-gray-500 disabled:cursor-not-allowed`}
+        />
+      </MobileField>
+
+      <MobileField
+        label="Nota para Productos"
+        hint="Solo para las ventas de productos, que no llevan lavado ni secado. Si se deja vacía, ese ticket termina sin nota."
+      >
+        <textarea
+          name="ticket_nota_productos"
+          rows={6}
+          value={config.ticket_nota_productos ?? ''}
           onChange={handleChange}
           placeholder="Opcional"
           disabled={ES_DEMO}

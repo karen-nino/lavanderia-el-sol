@@ -214,7 +214,7 @@ export default function TicketNota() {
   const [rfcNegocio, setRfcNegocio] = useState('');
   // Hay una nota por tipo de servicio: lo que le sirve al cliente que lava él
   // mismo no es lo que le sirve al que deja su ropa a cargo del negocio.
-  const [notasPie, setNotasPie] = useState({ autoservicio: '', encargo: '' });
+  const [notasPie, setNotasPie] = useState({ autoservicio: '', encargo: '', productos: '' });
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState('');
   // Autoservicio es anónimo (sin cliente): el empleado captura aquí el teléfono
@@ -240,6 +240,7 @@ export default function TicketNota() {
         setNotasPie({
           autoservicio: cfg?.ticket_nota_autoservicio ?? '',
           encargo:      cfg?.ticket_nota_encargo ?? '',
+          productos:    cfg?.ticket_nota_productos ?? '',
         });
       })
       .catch(() => {});

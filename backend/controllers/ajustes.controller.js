@@ -74,6 +74,7 @@ export const updateAjustes = async (req, res) => {
     rfc,
     ticket_nota_autoservicio,
     ticket_nota_encargo,
+    ticket_nota_productos,
     direccion,
     telefono,
     stock_minimo_global,
@@ -154,7 +155,7 @@ export const updateAjustes = async (req, res) => {
   // identifica. Son de la configuración global, los ven todos los visitantes a
   // la vez y se quedan puestos hasta el reset de las 03:00, así que cualquiera
   // podría dejar ahí lo que quisiera encima de una demo que sirve de carta de
-  // presentación. El nombre y las dos notas al pie, además, salen impresos en
+  // presentación. El nombre y las notas al pie, además, salen impresos en
   // el ticket que se manda por WhatsApp.
   //
   // Se ignoran en silencio en vez de responder 403: la pantalla manda estos
@@ -162,7 +163,7 @@ export const updateAjustes = async (req, res) => {
   // rechazarlos tumbaría también lo demás, que en la demo sí se puede cambiar.
   const IDENTIDAD_DEL_NEGOCIO = [
     'nombre_negocio', 'rfc', 'ticket_nota_autoservicio', 'ticket_nota_encargo',
-    'direccion', 'telefono',
+    'ticket_nota_productos', 'direccion', 'telefono',
   ];
   const editable = (campo, valor) =>
     valor !== undefined && !(ENTORNO_DEMO && IDENTIDAD_DEL_NEGOCIO.includes(campo));
@@ -189,6 +190,7 @@ export const updateAjustes = async (req, res) => {
   if (editable('rfc', rfc)) { updates.push(`rfc = $${i++}`); values.push(rfcLibre(rfc)); }
   if (editable('ticket_nota_autoservicio', ticket_nota_autoservicio)) { updates.push(`ticket_nota_autoservicio = $${i++}`); values.push(textoONull(ticket_nota_autoservicio)); }
   if (editable('ticket_nota_encargo', ticket_nota_encargo)) { updates.push(`ticket_nota_encargo = $${i++}`); values.push(textoONull(ticket_nota_encargo)); }
+  if (editable('ticket_nota_productos', ticket_nota_productos)) { updates.push(`ticket_nota_productos = $${i++}`); values.push(textoONull(ticket_nota_productos)); }
   if (editable('direccion', direccion)) { updates.push(`direccion = $${i++}`); values.push(direccion); }
   if (editable('telefono', telefono)) { updates.push(`telefono = $${i++}`); values.push(telefono); }
   if (stock_minimo_global   !== undefined) { updates.push(`stock_minimo_global = $${i++}`);   values.push(stock_minimo_global); }

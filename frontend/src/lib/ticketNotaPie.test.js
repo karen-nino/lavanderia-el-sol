@@ -1,7 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { notaAlPieDeTicket } from './ticketNotaPie.js';
 
-const NOTAS = { autoservicio: 'Aviso de autoservicio', encargo: 'Aviso de encargo' };
+const NOTAS = {
+  autoservicio: 'Aviso de autoservicio',
+  encargo:      'Aviso de encargo',
+  productos:    'Aviso de productos',
+};
 
 describe('notaAlPieDeTicket', () => {
   it('autoservicio lleva la suya', () => {
@@ -18,10 +22,16 @@ describe('notaAlPieDeTicket', () => {
     expect(notaAlPieDeTicket('EDREDON', NOTAS)).toBe('Aviso de encargo');
   });
 
-  // Decisión de la clienta: la venta de mostrador se lleva el producto en el
-  // acto, así que le toca el mismo pie que a quien lava él mismo.
-  it('PRODUCTOS lleva la de AUTOSERVICIO', () => {
-    expect(notaAlPieDeTicket('PRODUCTOS', NOTAS)).toBe('Aviso de autoservicio');
+  // La venta de mostrador tiene la suya (mig. 113): la de autoservicio habla de
+  // lavadora y secadora, que es justo lo que esa nota no lleva.
+  it('PRODUCTOS lleva la suya, no la de autoservicio', () => {
+    expect(notaAlPieDeTicket('PRODUCTOS', NOTAS)).toBe('Aviso de productos');
+  });
+
+  // Sin fallback: si nadie la capturó, ese ticket sale sin nota en vez de
+  // heredar un texto que no le queda.
+  it('PRODUCTOS sin nota capturada sale vacío, no cae en la de autoservicio', () => {
+    expect(notaAlPieDeTicket('PRODUCTOS', { autoservicio: 'Aviso de autoservicio' })).toBe('');
   });
 
   it('un tipo de servicio nuevo hereda la del encargo', () => {

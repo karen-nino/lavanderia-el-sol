@@ -110,13 +110,14 @@ describe('POST /api/usuarios con ENTORNO_DEMO', () => {
 // visitantes a la vez hasta el reset de las 03:00. Dos cosas quedan fuera de su
 // alcance aunque el resto de Ajustes sea editable.
 describe('lo que la demo NO deja tocar', () => {
-  // Los textos con los que el negocio se identifica. El nombre y las dos notas
-  // al pie salen impresos en el ticket que se manda por WhatsApp.
+  // Los textos con los que el negocio se identifica. El nombre y las notas al
+  // pie salen impresos en el ticket que se manda por WhatsApp.
   const IDENTIDAD = {
     nombre_negocio: 'Lavandería El Sol',
     rfc: 'XAXX010101000',
     ticket_nota_autoservicio: 'Gracias por su preferencia',
     ticket_nota_encargo: 'Conserve su ticket',
+    ticket_nota_productos: 'Sin devolución',
     direccion: 'Calle Falsa 123',
     telefono: '3312345678',
   };

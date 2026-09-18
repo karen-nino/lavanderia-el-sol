@@ -221,7 +221,7 @@ Como es imagen, no se puede dejar el chat preseleccionado: hay que elegir el con
 
 Si la nota no tiene teléfono, la pantalla del ticket te deja capturarlo ahí mismo.
 
-Lo que sale impreso (el R.F.C. del negocio y la nota en letra chica del pie) lo configura el administrador en Ajustes → Ticket.`,
+Lo que sale impreso (el R.F.C. del negocio y la nota en letra chica del pie) lo configura el administrador en Ajustes → Ticket. Hay TRES notas al pie y cada ticket lleva la suya: una para Autoservicio, otra para Por Encargo y Edredón, y otra para las ventas de Productos. La que se deje vacía no se imprime.`,
       },
     ],
   },
