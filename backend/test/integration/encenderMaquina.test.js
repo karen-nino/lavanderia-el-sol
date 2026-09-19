@@ -233,3 +233,38 @@ describe('el siguiente ciclo repite los mismos dos pasos', () => {
     expect(r.status).toBe(409);   // sigue en uso, y ya no hay ciclos que darle
   });
 });
+
+// La nota es lo único que dice por qué ese relé está cerrado: al borrarla, la
+// máquina tiene que quedarse sin corriente y libre. Antes el borrado ni siquiera
+// llegaba a ocurrir — tronaba contra el CHECK de la 110 al quedar media marca.
+describe('eliminar una nota con su máquina encendida', () => {
+  it('la apaga, la suelta y borra la nota', async () => {
+    const id = await seedMaquina({ nombre: 'L20', tipo: 'lavadora_mediana', tamano: 'mediana' });
+    const notaId = await notaConLavadora(id);
+    await encender(notaId, id).expect(200);
+    expect(esperandoArranque(await maquina(id))).toBe(true);
+
+    await request(app).delete(`/api/notas/${notaId}`).set(auth(admin.token)).expect(204);
+
+    const m = await maquina(id);
+    expect(m.estado).toBe('disponible');           // vuelve a ofrecerse
+    expect(m.encendida_sin_iniciar_at).toBeNull(); // sin marcas a medias
+    expect(m.encendida_para_nota_id).toBeNull();
+    await request(app).get(`/api/notas/${notaId}`).set(auth(admin.token)).expect(404);
+  });
+
+  it('a la que YA está lavando no la toca este camino: la suelta el de siempre', async () => {
+    const id = await seedMaquina({ nombre: 'L21', tipo: 'lavadora_mediana', tamano: 'mediana' });
+    const notaId = await notaConLavadora(id);
+    await encender(notaId, id).expect(200);
+    await iniciar(notaId, id).expect(200);
+    const antes = await maquina(id);
+    expect(antes.en_uso_desde).not.toBeNull();     // ya tiene cronómetro
+
+    await request(app).delete(`/api/notas/${notaId}`).set(auth(admin.token)).expect(204);
+
+    const m = await maquina(id);
+    expect(m.estado).toBe('disponible');
+    expect(m.en_uso_desde).toBeNull();
+  });
+});

@@ -1808,6 +1808,29 @@ export const eliminarNota = async (req, res) => {
       return res.status(404).json({ message: 'Nota no encontrada.' });
     }
     const { estado: estadoNota } = notaRows[0];
+
+    // Máquinas ENCENDIDAS por esta nota y todavía sin arrancar (mig. 110):
+    // eliminar la nota las APAGA y las suelta. La nota es lo único que dice por
+    // qué ese relé está cerrado, así que dejarlas encendidas sin ella sería el
+    // agujero de "lavar sin nota" otra vez. Es lo mismo que la eliminación ya
+    // hacía con las máquinas que la nota tenía LAVANDO, que es el caso más
+    // comprometido de los dos.
+    //
+    // Y hay que hacerlo ANTES del DELETE: la referencia es ON DELETE SET NULL y
+    // la 110 obliga a que las dos marcas vayan juntas, así que borrar primero
+    // dejaba media marca y tronaba contra el CHECK con un "Intenta de nuevo"
+    // que nunca iba a funcionar. El guardo de `en_uso_desde IS NULL` es por si
+    // entretanto alguien inició el lavado: esa ya está lavando y la suelta el
+    // camino de siempre, unas líneas más abajo.
+    await client.query(
+      `UPDATE maquinas
+          SET encendida_sin_iniciar_at = NULL,
+              encendida_para_nota_id   = NULL,
+              estado = CASE WHEN estado = 'en_uso' AND en_uso_desde IS NULL
+                            THEN 'disponible'::estado_maquina ELSE estado END
+        WHERE encendida_para_nota_id = $1`,
+      [id]
+    );
     // Se recolectan antes del DELETE: el CASCADE borra nota_cargas.
     // Solo las que ESTA nota arrancó: las que únicamente tenía asignadas
     // pueden estar corriendo para otra nota (mig. 097).
