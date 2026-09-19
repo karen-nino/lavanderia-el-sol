@@ -253,18 +253,40 @@ describe('eliminar una nota con su máquina encendida', () => {
     await request(app).get(`/api/notas/${notaId}`).set(auth(admin.token)).expect(404);
   });
 
-  it('a la que YA está lavando no la toca este camino: la suelta el de siempre', async () => {
+  // Encendida es una cosa y lavando es otra: con el ciclo corriendo hay ropa
+  // dentro, y un borrado no interrumpe eso.
+  it('pero si ya está LAVANDO, la nota no se borra y el aviso dice cuál es', async () => {
     const id = await seedMaquina({ nombre: 'L21', tipo: 'lavadora_mediana', tamano: 'mediana' });
     const notaId = await notaConLavadora(id);
     await encender(notaId, id).expect(200);
     await iniciar(notaId, id).expect(200);
-    const antes = await maquina(id);
-    expect(antes.en_uso_desde).not.toBeNull();     // ya tiene cronómetro
+    expect((await maquina(id)).en_uso_desde).not.toBeNull();   // ya tiene cronómetro
 
-    await request(app).delete(`/api/notas/${notaId}`).set(auth(admin.token)).expect(204);
+    const res = await request(app).delete(`/api/notas/${notaId}`).set(auth(admin.token));
 
+    expect(res.status).toBe(409);
+    expect(res.body.message).toMatch(/L21/);
+    expect(res.body.message).toMatch(/lavando/i);
+
+    // Ni la nota ni el ciclo se tocaron.
+    await request(app).get(`/api/notas/${notaId}`).set(auth(admin.token)).expect(200);
     const m = await maquina(id);
-    expect(m.estado).toBe('disponible');
-    expect(m.en_uso_desde).toBeNull();
+    expect(m.estado).toBe('en_uso');
+    expect(m.en_uso_desde).not.toBeNull();
+  });
+
+  it('una secadora corriendo lo dice con su palabra', async () => {
+    const lav = await seedMaquina({ nombre: 'L22', tipo: 'lavadora_mediana', tamano: 'mediana' });
+    const sec = await seedMaquina({ nombre: 'S22', tipo: 'secadora', tamano: 'mediana' });
+    const notaId = await notaConLavadora(lav);
+    await iniciar(notaId, lav).expect(200);
+    // Terminar el lavado suelta la lavadora y deja SOLO la secadora corriendo.
+    await request(app).patch(`/api/notas/${notaId}/terminar-lavado`).set(auth(admin.token))
+      .send({ lavadora_id: lav, secadora_id: sec }).expect(200);
+
+    const res = await request(app).delete(`/api/notas/${notaId}`).set(auth(admin.token));
+    expect(res.status).toBe(409);
+    expect(res.body.message).toMatch(/S22/);
+    expect(res.body.message).toMatch(/secando/i);
   });
 });

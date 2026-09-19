@@ -47,6 +47,13 @@ const PALABRA = {
 };
 const palabra = (v) => PALABRA[v] ?? String(v ?? '').toLowerCase().replace(/_/g, ' ');
 
+// ['L1', 'S2'] → "L1 y S2". Hermano de enPalabras, pero para enumerar cosas
+// que pasan a la vez, no opciones entre las que se elige.
+const listaY = (valores) => {
+  if (valores.length <= 1) return valores.join('');
+  return `${valores.slice(0, -1).join(', ')} y ${valores.at(-1)}`;
+};
+
 // ['chico', 'grande', 'jumbo'] → "chico, grande o jumbo"
 const enPalabras = (valores) => {
   const legibles = valores.map(palabra);
@@ -1808,6 +1815,40 @@ export const eliminarNota = async (req, res) => {
       return res.status(404).json({ message: 'Nota no encontrada.' });
     }
     const { estado: estadoNota } = notaRows[0];
+
+    // Una máquina de esta nota CORRIENDO su ciclo (lavando o secando) no se
+    // interrumpe por un borrado: hay ropa dentro y el ciclo va a medias. Se mide
+    // por `en_uso_desde`, que es lo que separa "lavando" de "encendida
+    // esperando arranque" (mig. 110) — esa última sí se apaga y se suelta más
+    // abajo, porque ahí todavía no empezó nada.
+    const { rows: corriendo } = await client.query(
+      `SELECT DISTINCT m.nombre, m.tipo
+         FROM maquinas m
+         JOIN (
+           SELECT lavadora_id AS mid FROM nota_cargas
+            WHERE nota_id = $1 AND lavadora_iniciada_at IS NOT NULL
+           UNION
+           SELECT secadora_id FROM nota_cargas
+            WHERE nota_id = $1 AND secadora_iniciada_at IS NOT NULL
+         ) x ON x.mid = m.id
+        WHERE m.estado = 'en_uso' AND m.en_uso_desde IS NOT NULL
+        ORDER BY m.nombre`,
+      [id]
+    );
+    if (corriendo.length > 0) {
+      await client.query('ROLLBACK');
+      const nombres = listaY(corriendo.map(m => m.nombre));
+      const una = corriendo.length === 1;
+      // Con una sola máquina se dice qué está haciendo; con varias, "en uso",
+      // que es lo único cierto de todas a la vez.
+      const haciendo = una
+        ? (corriendo[0].tipo === 'secadora' ? 'está secando' : 'está lavando')
+        : 'siguen en uso';
+      return res.status(409).json({
+        message: `No se puede eliminar la nota: ${una ? 'la máquina' : 'las máquinas'} ${nombres} ${haciendo}. `
+               + `Termina o detén ${una ? 'su ciclo' : 'sus ciclos'} antes de eliminarla.`,
+      });
+    }
 
     // Máquinas ENCENDIDAS por esta nota y todavía sin arrancar (mig. 110):
     // eliminar la nota las APAGA y las suelta. La nota es lo único que dice por
