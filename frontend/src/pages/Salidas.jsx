@@ -80,7 +80,11 @@ export default function Salidas() {
   const [confirmQuitarProd, setConfirmQuitarProd] = useState(null);
   const [errorAccion,      setErrorAccion]      = useState('');
   const [confirmDetener,   setConfirmDetener]   = useState(null); // máquina a detener
-  const [confirmIniciar,   setConfirmIniciar]   = useState(null); // máquina a iniciar
+  // Máquina cuyo modal de arranque está abierto. Se guarda el ID y no el
+  // objeto: el modal lleva los dos pasos de la mig. 110 (encender y después
+  // iniciar) y el paso que toca sale del estado vivo de la máquina, que cambia
+  // al encenderla sin cerrar el modal.
+  const [maquinaModalId,   setMaquinaModalId]   = useState(null);
   const [iniciando,        setIniciando]        = useState(null); // máquina arrancando (animación)
   const [encendiendo,      setEncendiendo]      = useState(null); // máquina recibiendo corriente (mig. 110)
   const [deteniendo,       setDeteniendo]       = useState(null); // máquina deteniéndose (animación)
@@ -190,10 +194,11 @@ export default function Salidas() {
   // Arranca UNA máquina asignada y libre (botón "Iniciar Lavado"/"Iniciar
   // Secado" por máquina): la pone en uso y la nota pasa a la fase que
   // corresponda. Las demás máquinas asignadas siguen en espera.
-  // Paso previo (mig. 110): le da corriente sin arrancar el cronómetro. No pide
-  // confirmación como "Iniciar": dar luz no pone a lavar nada —la máquina no
-  // arranca sola— y el empleado está justo delante de ella.
+  // Paso previo (mig. 110): le da corriente sin arrancar el cronómetro. Se
+  // dispara desde el modal, que se queda abierto mientras corre la animación y
+  // vuelve convertido en el paso de iniciar.
   async function encenderMaquina(maq) {
+    if (!maq) return;
     setErrorAccion('');
     setEncendiendo(maq); // arranca la animación de encendido
     try {
@@ -212,8 +217,8 @@ export default function Salidas() {
   }
 
   async function iniciarMaquina() {
-    if (!confirmIniciar) return;
-    const maq = confirmIniciar;
+    const maq = maqModal;
+    if (!maq) return;
     setLoadingMaquina(true);
     setErrorAccion('');
     setIniciando(maq); // arranca la animación de lavadora
@@ -224,7 +229,7 @@ export default function Salidas() {
         api.patch(`/notas/${id}/activar-pendientes`, { maquina_id: maq.id }),
         new Promise((r) => setTimeout(r, 2500)),
       ]);
-      setConfirmIniciar(null);
+      setMaquinaModalId(null);
       await cargarDatos();
     } catch (err) {
       // El modal de confirmación sigue abierto detrás; ahí se muestra el error.
@@ -235,11 +240,17 @@ export default function Salidas() {
     }
   }
 
-  // Desde el modal de iniciar: abrir el selector para cambiar esta máquina.
+  // Desde el modal de arranque: abrir el selector para cambiar esta máquina.
   function cambiarDesdeModal() {
-    const m = confirmIniciar;
-    setConfirmIniciar(null);
+    const m = maqModal;
+    setMaquinaModalId(null);
     iniciarCambiar(m);
+  }
+
+  // Abre el modal de arranque de una máquina, sin arrastrar el error anterior.
+  function abrirModalMaquina(m) {
+    setErrorAccion('');
+    setMaquinaModalId(m.id);
   }
 
   // Asigna una máquina física a una carga de Por Encargo creada con TIPO (la
@@ -557,6 +568,14 @@ export default function Salidas() {
   // Lista plana (para conteo del encabezado y validaciones de acciones a nivel nota).
   const maquinasAsignadas = cargasMaquinas.flatMap(g => g.maquinas);
 
+  // Máquina del modal de arranque, tomada de la lista VIVA: por eso el modal
+  // pasa solo de "Encender máquina" a "Iniciar Lavado" en cuanto la máquina
+  // queda encendida, sin cerrarse ni volver a abrirse.
+  const maqModal = maquinaModalId == null
+    ? null
+    : maquinasAsignadas.find(x => String(x.id) === String(maquinaModalId)) ?? null;
+  const pasoModal = maqModal?.esperandoArranque ? 'iniciar' : 'encender';
+
   // Cargas que se eligieron al hacer la nota pero se quedaron sin máquina (ni
   // asignada ni ya usada). Se muestran para poder asignarles una rápidamente.
   const notaCerrada = ['FINALIZADA', 'CANCELADA'].includes(nota?.estado);
@@ -799,10 +818,13 @@ export default function Salidas() {
                           cargar la ropa y apretar su botón físico; después
                           "Iniciar", que arranca el cronómetro cuando el lavado
                           ya empezó de verdad. Cuando los dos eran uno, el rato
-                          de cargar se le descontaba al ciclo. */}
+                          de cargar se le descontaba al ciclo.
+                          Los dos botones abren el MISMO modal: el paso que
+                          muestra lo decide el estado de la máquina, así que la
+                          que ya está encendida entra directo al de iniciar. */}
                       {m.estado === 'disponible' && (
                         <button
-                          onClick={() => encenderMaquina(m)}
+                          onClick={() => abrirModalMaquina(m)}
                           disabled={loadingMaquina || Boolean(encendiendo)}
                           className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
                         >
@@ -811,7 +833,7 @@ export default function Salidas() {
                       )}
                       {m.esperandoArranque && (
                         <button
-                          onClick={() => setConfirmIniciar(m)}
+                          onClick={() => abrirModalMaquina(m)}
                           disabled={loadingMaquina}
                           className="px-4 py-2 bg-blue hover:opacity-90 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
                         >
@@ -1193,31 +1215,57 @@ export default function Salidas() {
         </div>
       )}
 
-      {/* Modal advertencia iniciar lavado/secado */}
+      {/* Animaciones de encender / iniciar / detener ciclo */}
       {encendiendo && <MaquinaCicloOverlay modo="encender" tipo={encendiendo.tipo} nombre={encendiendo.nombre} />}
       {iniciando && <MaquinaCicloOverlay modo="iniciar" tipo={iniciando.tipo} nombre={iniciando.nombre} />}
       {deteniendo && <MaquinaCicloOverlay modo="detener" tipo={deteniendo.tipo} nombre={deteniendo.nombre} />}
 
-      {confirmIniciar && (
+      {/* Modal de arranque de una máquina: los dos pasos de la mig. 110 en la
+          misma ventana. Se esconde mientras corre una animación para no taparla
+          (el overlay va antes en el DOM) y vuelve ya con el paso siguiente. */}
+      {maqModal && !encendiendo && !iniciando && (() => {
+        const esSecadora = maqModal.tipo === 'secadora';
+        const esIniciar  = pasoModal === 'iniciar';
+        const accion     = esSecadora ? 'secado' : 'lavado';
+        return (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-7 space-y-6">
             <div className="flex items-center gap-3">
               <span className="flex-shrink-0 w-9 h-9 rounded-full bg-green-100 text-green-600 flex items-center justify-center">
-                {/* Ícono de "play" (empezar) */}
-                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M8 5v14l11-7z" />
-                </svg>
+                {esIniciar ? (
+                  /* Ícono de "play" (empezar) */
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M8 5v14l11-7z" />
+                  </svg>
+                ) : (
+                  /* Ícono de rayo (corriente) */
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M13 2L4.5 13.5H11l-1 8.5 8.5-11.5H12l1-8.5z" />
+                  </svg>
+                )}
               </span>
               <h3 className="text-base font-bold text-gray-900">
-                {confirmIniciar.tipo === 'secadora' ? 'Iniciar secado' : 'Iniciar lavado'}
+                {esIniciar
+                  ? (esSecadora ? 'Iniciar secado' : 'Iniciar lavado')
+                  : 'Encender máquina'}
               </h3>
             </div>
-            <p className="text-sm text-gray-500">
-              ¿Iniciar el {confirmIniciar.tipo === 'secadora' ? 'secado' : 'lavado'} de{' '}
-              <span className="font-semibold text-gray-800">{confirmIniciar.nombre}</span>? Desde aquí
-              empieza a correr el tiempo del ciclo, así que hazlo cuando ya la hayas arrancado con su
-              botón: lo que tardes de más se le descuenta al lavado.
-            </p>
+
+            {esIniciar ? (
+              <p className="text-sm text-gray-500">
+                ¿Iniciar el {accion} de{' '}
+                <span className="font-semibold text-gray-800">{maqModal.nombre}</span>? Desde aquí
+                empieza a correr el tiempo del ciclo, así que hazlo cuando ya la hayas arrancado con su
+                botón: lo que tardes de más se le descuenta al {accion}.
+              </p>
+            ) : (
+              <p className="text-sm text-gray-500">
+                Se le da corriente a{' '}
+                <span className="font-semibold text-gray-800">{maqModal.nombre}</span> para que puedas
+                cargar la ropa y arrancarla con su botón. El tiempo del ciclo todavía NO empieza: eso
+                es el paso siguiente, aquí mismo.
+              </p>
+            )}
 
             {errorAccion && (
               <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">
@@ -1225,34 +1273,51 @@ export default function Salidas() {
               </div>
             )}
 
-            {/* Secundaria: cambiar esta máquina por otra */}
-            <button
-              type="button"
-              onClick={cambiarDesdeModal}
-              disabled={loadingMaquina}
-              aria-label="Cambiar máquina"
-              title="Cambiar máquina"
-              className="w-full flex items-center justify-center border border-gray-300 text-gray-700 py-2.5 rounded-lg hover:bg-gray-50 disabled:opacity-60 transition-colors"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                  d="M8 7h12m0 0l-4-4m4 4l-4 4M16 17H4m0 0l4 4m-4-4l4-4" />
-              </svg>
-            </button>
-
-            {/* Principales: iniciar (destacado) y cancelar, apiladas a ancho completo */}
-            <div className="space-y-2.5">
+            {/* Secundaria: cambiar esta máquina por otra. Solo en el primer
+                paso: una vez encendida ya tiene corriente y el cliente está
+                cargándole la ropa, así que cambiarla deja de tener sentido. */}
+            {!esIniciar && (
               <button
                 type="button"
-                onClick={iniciarMaquina}
+                onClick={cambiarDesdeModal}
                 disabled={loadingMaquina}
-                className="w-full bg-blue hover:opacity-90 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
+                aria-label="Cambiar máquina"
+                title="Cambiar máquina"
+                className="w-full flex items-center justify-center border border-gray-300 text-gray-700 py-2.5 rounded-lg hover:bg-gray-50 disabled:opacity-60 transition-colors"
               >
-                {loadingMaquina ? 'Iniciando...' : 'Iniciar'}
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                    d="M8 7h12m0 0l-4-4m4 4l-4 4M16 17H4m0 0l4 4m-4-4l4-4" />
+                </svg>
               </button>
+            )}
+
+            {/* Principales: la del paso (destacada) y cancelar, apiladas a ancho completo */}
+            <div className="space-y-2.5">
+              {esIniciar ? (
+                <button
+                  type="button"
+                  onClick={iniciarMaquina}
+                  disabled={loadingMaquina}
+                  className="w-full bg-blue hover:opacity-90 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
+                >
+                  {loadingMaquina
+                    ? 'Iniciando...'
+                    : (esSecadora ? 'Iniciar Secado' : 'Iniciar Lavado')}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => encenderMaquina(maqModal)}
+                  disabled={loadingMaquina}
+                  className="w-full bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
+                >
+                  Encender máquina
+                </button>
+              )}
               <button
                 type="button"
-                onClick={() => setConfirmIniciar(null)}
+                onClick={() => setMaquinaModalId(null)}
                 disabled={loadingMaquina}
                 className="w-full border border-gray-300 text-gray-700 font-medium py-3.5 rounded-lg text-base hover:bg-gray-50 disabled:opacity-60 transition-colors"
               >
@@ -1261,7 +1326,8 @@ export default function Salidas() {
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* Modal cambiar máquina — elegir otra del mismo tipo */}
       {cambiarMaq && (
