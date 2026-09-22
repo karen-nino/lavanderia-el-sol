@@ -4,6 +4,7 @@ import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { esAdmin as esAdminFn } from '../lib/roles';
 import SucursalBar from '../components/SucursalBar';
+import ConfirmacionModal from '../components/ConfirmacionModal';
 
 const ESTADO_CFG = {
   disponible:    { label: 'Disponible',    cls: 'bg-green-100 text-green-700', clsActive: 'bg-green-600 text-white', dot: 'bg-green-500' },
@@ -117,6 +118,8 @@ export default function GestionMaquinas() {
   const [probando, setProbando] = useState(false);
   const [apagando, setApagando] = useState(false);
   const [probarMsg, setProbarMsg] = useState(null); // { tipo: 'ok'|'error'|'sim', texto }
+  // Acción del menú esperando confirmación: { tipo: 'encender'|'eliminar', maquina }.
+  const [porConfirmar, setPorConfirmar] = useState(null);
   const [filtro, setFiltro] = useState('todos');
   const [cuentaSonoff, setCuentaSonoff] = useState(null);
   const [conectando, setConectando] = useState(false);
@@ -394,16 +397,10 @@ export default function GestionMaquinas() {
     }
   };
 
-  // Encendido manual desde el menú de la tarjeta. Se avisa antes porque el
-  // equipo arranca de verdad y se queda andando: no es la prueba física, que
-  // apaga sola a los segundos.
+  // Encendido manual desde el menú de la tarjeta. La advertencia la pone el
+  // modal: el equipo arranca de verdad y se queda andando, que no es lo que
+  // hace la prueba física (esa apaga sola a los segundos).
   const encenderMaquina = async (m) => {
-    if (!confirm(
-      `Se va a ENCENDER "${m.nombre}" y se quedará encendida hasta que la apagues.\n\n` +
-      'Mientras tanto queda marcada como ocupada, así que no se podrá usar en una nota.\n\n' +
-      'Asegúrate de que nadie la esté cargando ni tenga las manos dentro. ¿Continuar?'
-    )) return;
-
     setEncendiendo(m.id);
     try {
       const r = await api.post(`/maquinas/${m.id}/encender-sonoff`, {});
@@ -418,7 +415,6 @@ export default function GestionMaquinas() {
   };
 
   const eliminarMaquina = async (m) => {
-    if (!confirm(`¿Eliminar la máquina "${m.nombre}"?`)) return;
     setEliminando(m.id);
     try {
       await api.delete(`/maquinas/${m.id}`);
@@ -428,6 +424,34 @@ export default function GestionMaquinas() {
     } finally {
       setEliminando(null);
     }
+  };
+
+  // Qué dice la advertencia de cada acción. Vive aquí y no dentro del modal
+  // porque es de estas dos acciones, no del componente, y porque el texto
+  // depende de cómo esté la máquina ahora mismo.
+  const avisoDe = ({ tipo, maquina }) => tipo === 'encender' ? {
+    tono: 'aviso',
+    titulo: `Encender ${maquina.nombre}`,
+    mensaje: 'La máquina arranca de verdad y se queda encendida hasta que la apagues.',
+    puntos: [
+      'Mientras esté encendida queda ocupada: no se va a poder usar en una nota.',
+      'Asegúrate de que nadie la esté cargando ni tenga las manos dentro.',
+    ],
+    textoConfirmar: encendiendo === maquina.id ? 'Encendiendo…' : 'Encender',
+    procesando: encendiendo === maquina.id,
+  } : {
+    tono: 'peligro',
+    titulo: `Eliminar ${maquina.nombre}`,
+    mensaje: 'La máquina desaparece del sistema y esto no se puede deshacer.',
+    puntos: [
+      // No es una suposición: `nota_cargas` apunta a la máquina con ON DELETE
+      // SET NULL, así que al borrarla las cargas se quedan sin ella.
+      'Las notas que la usaron, incluso las ya cerradas, dejan de decir en qué máquina se lavó.',
+      maquina.estado === 'en_uso'
+        && 'Ahora mismo está en uso: la nota que la tiene se queda sin máquina asignada.',
+    ],
+    textoConfirmar: eliminando === maquina.id ? 'Eliminando…' : 'Eliminar',
+    procesando: eliminando === maquina.id,
   };
 
   const conteos = {
@@ -668,7 +692,7 @@ export default function GestionMaquinas() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => { setAccionesMenuId(null); encenderMaquina(m); }}
+                        onClick={() => { setAccionesMenuId(null); setPorConfirmar({ tipo: 'encender', maquina: m }); }}
                         disabled={prendiendo}
                         className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
                       >
@@ -679,7 +703,7 @@ export default function GestionMaquinas() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => { setAccionesMenuId(null); eliminarMaquina(m); }}
+                        onClick={() => { setAccionesMenuId(null); setPorConfirmar({ tipo: 'eliminar', maquina: m }); }}
                         disabled={borrando}
                         className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
                       >
@@ -756,6 +780,20 @@ export default function GestionMaquinas() {
       )}
 
       </div>
+
+      {/* Advertencia de encender y de eliminar */}
+      {porConfirmar && (
+        <ConfirmacionModal
+          {...avisoDe(porConfirmar)}
+          onClose={() => setPorConfirmar(null)}
+          onConfirm={async () => {
+            const { tipo, maquina } = porConfirmar;
+            if (tipo === 'encender') await encenderMaquina(maquina);
+            else await eliminarMaquina(maquina);
+            setPorConfirmar(null);
+          }}
+        />
+      )}
 
       {/* Modal agregar máquina */}
       {modalOpen && (
