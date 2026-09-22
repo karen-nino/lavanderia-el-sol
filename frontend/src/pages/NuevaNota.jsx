@@ -59,11 +59,13 @@ const TAMANOS = [
 const TAMANO_LABEL = Object.fromEntries(TAMANOS.map(t => [t.v, t.label]));
 
 // Lavadoras que caben en una carga de Por Encargo: el edredón solo entra en la
-// jumbo, y la ropa se lava en mediana salvo que la carga sea jumbo. La primera
-// es la que se precarga.
+// jumbo, y la ropa se lava en mediana salvo que la carga sea jumbo. **La
+// primera es la que se precarga**, y por eso una carga jumbo abre en jumbo: el
+// tamaño es el del bulto de ropa, así que una carga jumbo no cabe en la mediana
+// —se puede elegir igual, pero no es el punto de partida— (2026-09-22).
 const lavadorasPosibles = (tamano, tipoPrenda) =>
   tipoPrenda === 'EDREDON' ? ['jumbo']
-  : tamano === 'jumbo' ? ['mediana', 'jumbo']
+  : tamano === 'jumbo' ? ['jumbo', 'mediana']
   : ['mediana'];
 
 // Deja la carga con máquina lista al elegir tamaño o prenda:
@@ -1299,16 +1301,16 @@ export default function NuevaNota() {
                             type="button"
                             onClick={() => {
                               const cambios = { tamano: t.v };
-                              if (t.v !== 'jumbo') {
-                                // Chico/Grande son siempre Ropa: se fija la prenda
-                                // y se ocultan las opciones de edredón.
+                              // La prenda solo se toca si el tamaño CAMBIA: volver
+                              // a tocar el tamaño ya elegido no debe deshacer un
+                              // edredón puesto a mano (y con él, su precio).
+                              if (c.tamano !== t.v) {
+                                // Todas arrancan en Ropa (2026-09-22). En Chico y
+                                // Grande además es lo único posible, así que se
+                                // ocultan las opciones de edredón; en Jumbo se
+                                // puede cambiar a Edredón en el paso siguiente.
                                 cambios.tipo_prenda = 'ROPA';
                                 cambios.tamano_edredon = '';
-                              } else {
-                                // Jumbo: el edredón es el caso principal, queda por
-                                // defecto.
-                                cambios.tipo_prenda = 'EDREDON';
-                                cambios.tipo_tela = '';
                               }
                               set(conMaquinaPorDefecto(c, cambios));
                             }}
@@ -1328,8 +1330,10 @@ export default function NuevaNota() {
                   <div className="space-y-3">
                     <h3 className="text-sm font-semibold text-gray-900">Tipo de prenda</h3>
                     <div className="grid grid-cols-2 gap-3">
-                      {/* En Jumbo el edredón es el caso principal: va primero. */}
-                      {[...TIPOS_PRENDA].sort((a, b) => (a.v === 'EDREDON' ? -1 : b.v === 'EDREDON' ? 1 : 0)).map(opt => {
+                      {/* Ropa primero y edredón después, en el orden en que se
+                          leen (2026-09-22). Antes el edredón se adelantaba por
+                          ser el caso principal de la carga jumbo. */}
+                      {TIPOS_PRENDA.map(opt => {
                         const selected = c.tipo_prenda === opt.v;
                         return (
                           <button
