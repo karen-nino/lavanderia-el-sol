@@ -118,7 +118,8 @@ export default function GestionMaquinas() {
   const [probando, setProbando] = useState(false);
   const [apagando, setApagando] = useState(false);
   const [probarMsg, setProbarMsg] = useState(null); // { tipo: 'ok'|'error'|'sim', texto }
-  // Acción del menú esperando confirmación: { tipo: 'encender'|'eliminar', maquina }.
+  const [desconectando, setDesconectando] = useState(false);
+  // Acción esperando confirmación: { tipo: 'encender'|'eliminar'|'desconectar', maquina? }.
   const [porConfirmar, setPorConfirmar] = useState(null);
   const [filtro, setFiltro] = useState('todos');
   const [cuentaSonoff, setCuentaSonoff] = useState(null);
@@ -264,13 +265,16 @@ export default function GestionMaquinas() {
     }
   };
 
+  // La advertencia la pone el modal, igual que en encender y eliminar.
   const handleDesconectarSonoff = async () => {
-    if (!confirm('Se va a olvidar la cuenta de eWeLink y las máquinas dejarán de encender y apagar solas hasta que se conecte otra vez. ¿Continuar?')) return;
+    setDesconectando(true);
     try {
       await api.post('/ewelink/desconectar', {});
       cargarCuentaSonoff();
     } catch (err) {
       setError(err.message);
+    } finally {
+      setDesconectando(false);
     }
   };
 
@@ -429,7 +433,18 @@ export default function GestionMaquinas() {
   // Qué dice la advertencia de cada acción. Vive aquí y no dentro del modal
   // porque es de estas dos acciones, no del componente, y porque el texto
   // depende de cómo esté la máquina ahora mismo.
-  const avisoDe = ({ tipo, maquina }) => tipo === 'encender' ? {
+  const avisoDe = ({ tipo, maquina }) => tipo === 'desconectar' ? {
+    tono: 'peligro',
+    titulo: 'Olvidar la cuenta de eWeLink',
+    mensaje: 'Las máquinas dejan de encender y apagar solas hasta que se conecte otra vez.',
+    puntos: [
+      'Mientras tanto hay que prenderlas y apagarlas a mano: la app no va a mover los relés.',
+      'Las notas se cobran igual; lo que se pierde es el control de los Sonoff.',
+      'Para volver, hay que autorizar la cuenta otra vez desde este mismo botón.',
+    ],
+    textoConfirmar: desconectando ? 'Olvidando…' : 'Olvidar cuenta',
+    procesando: desconectando,
+  } : tipo === 'encender' ? {
     tono: 'aviso',
     titulo: `Encender ${maquina.nombre}`,
     mensaje: 'La máquina arranca de verdad y se queda encendida hasta que la apagues.',
@@ -531,10 +546,11 @@ export default function GestionMaquinas() {
               {cuentaSonoff.cuenta && <span className="text-gray-400"> · {cuentaSonoff.cuenta}</span>}
             </p>
             <button
-              type="button" onClick={handleDesconectarSonoff}
-              className="text-sm font-medium text-gray-500 hover:text-red-600 transition-colors flex-shrink-0"
+              type="button" onClick={() => setPorConfirmar({ tipo: 'desconectar' })}
+              disabled={desconectando}
+              className="text-sm font-medium text-gray-500 hover:text-red-600 disabled:opacity-60 transition-colors flex-shrink-0"
             >
-              Desconectar
+              {desconectando ? 'Desconectando…' : 'Desconectar'}
             </button>
           </div>
         ) : (
@@ -789,7 +805,8 @@ export default function GestionMaquinas() {
           onConfirm={async () => {
             const { tipo, maquina } = porConfirmar;
             if (tipo === 'encender') await encenderMaquina(maquina);
-            else await eliminarMaquina(maquina);
+            else if (tipo === 'eliminar') await eliminarMaquina(maquina);
+            else await handleDesconectarSonoff();
             setPorConfirmar(null);
           }}
         />
