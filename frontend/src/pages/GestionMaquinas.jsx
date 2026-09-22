@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { esAdmin as esAdminFn } from '../lib/roles';
+import { estadoVisual, contarPorEstado, filtrarPorEstado } from '../lib/estadoMaquina';
 import SucursalBar from '../components/SucursalBar';
 import ConfirmacionModal from '../components/ConfirmacionModal';
 
@@ -14,9 +15,6 @@ const ESTADO_CFG = {
   en_uso:        { label: 'En uso',        cls: 'bg-blue-100 text-blue-700',   clsActive: 'bg-blue-600 text-white',  dot: 'bg-blue-500'  },
   mantenimiento: { label: 'Mantenimiento', cls: 'bg-red-100 text-red-700',     clsActive: 'bg-red-600 text-white',   dot: 'bg-red-500'   },
 };
-
-// Estado a mostrar: una máquina disponible pero apartada se muestra como Reservada.
-const estadoVisual = (m) => (m.reservada ? 'reservada' : m.estado);
 
 // Enlace con el Sonoff, para la pastilla de la tarjeta. Se muestra en Gestión
 // (y no solo en Máquinas en uso) porque es aquí donde se asignan los Device ID:
@@ -471,14 +469,10 @@ export default function GestionMaquinas() {
 
   const conteos = {
     todos: maquinas.length,
-    ...Object.fromEntries(
-      Object.keys(ESTADO_CFG).map(e => [e, maquinas.filter(m => estadoVisual(m) === e).length])
-    ),
+    ...contarPorEstado(maquinas, Object.keys(ESTADO_CFG)),
   };
 
-  const filtradas = filtro === 'todos'
-    ? maquinas
-    : maquinas.filter(m => estadoVisual(m) === filtro);
+  const filtradas = filtrarPorEstado(maquinas, filtro);
 
   // Avance del enlace con los Sonoff: al configurarlos por primera vez es fácil
   // saltarse una máquina, y sin este conteo no hay forma de notarlo.
