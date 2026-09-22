@@ -242,11 +242,40 @@ describe('el siguiente ciclo repite los mismos dos pasos', () => {
 // La nota es lo único que dice por qué ese relé está cerrado: al borrarla, la
 // máquina tiene que quedarse sin corriente y libre. Antes el borrado ni siquiera
 // llegaba a ocurrir — tronaba contra el CHECK de la 110 al quedar media marca.
+// Desde el 2026-09-21 una nota solo se borra si ya está cerrada, así que estas
+// pruebas cancelan primero. Cancelar suelta las máquinas que la nota ARRANCÓ,
+// pero no toca la que solo está encendida esperando (mig. 110): esa la sigue
+// apagando el borrado, que es lo que se fija aquí.
+// Cerrar una nota de estas es de dos pasos: son Autoservicio pagadas —sin el
+// cobro no se les da corriente— y una nota cobrada no se cancela sin revertir
+// antes el pago, porque el corte del día no puede esperar dinero devuelto.
+const cancelar = async (notaId) => {
+  await request(app).patch(`/api/notas/${notaId}/estado-pago`).set(auth(admin.token))
+    .send({ estado_pago: 'PENDIENTE' }).expect(200);
+  return request(app).patch(`/api/notas/${notaId}/estado`).set(auth(admin.token))
+    .send({ estado: 'CANCELADA' });
+};
+
+// Deja la máquina como si su ciclo siguiera corriendo. Es un estado que el
+// flujo normal ya no produce en una nota cancelada, y precisamente por eso hay
+// que forzarlo: el candado de "no borres algo que está andando" es la última
+// red, y sin esto nadie lo probaría.
+const simularCicloEnMarcha = (maquinaId) =>
+  pool.query(
+    "UPDATE maquinas SET estado = 'en_uso', en_uso_desde = NOW() WHERE id = $1",
+    [maquinaId]
+  );
+
 describe('eliminar una nota con su máquina encendida', () => {
   it('la apaga, la suelta y borra la nota', async () => {
     const id = await seedMaquina({ nombre: 'L20', tipo: 'lavadora_mediana', tamano: 'mediana' });
     const notaId = await notaConLavadora(id);
     await encender(notaId, id).expect(200);
+    expect(esperandoArranque(await maquina(id))).toBe(true);
+
+    // Cancelar no la apaga: nunca arrancó, así que no cuenta como máquina de
+    // la nota para liberar.
+    expect((await cancelar(notaId)).status).toBe(200);
     expect(esperandoArranque(await maquina(id))).toBe(true);
 
     await request(app).delete(`/api/notas/${notaId}`).set(auth(admin.token)).expect(204);
@@ -260,7 +289,7 @@ describe('eliminar una nota con su máquina encendida', () => {
 
   // Encendida es una cosa y lavando es otra: con el ciclo corriendo hay ropa
   // dentro, y un borrado no interrumpe eso.
-  it('pero si ya está LAVANDO, la nota no se borra y el aviso dice cuál es', async () => {
+  it('lavando ni siquiera llega a ese candado: la nota sigue abierta', async () => {
     const id = await seedMaquina({ nombre: 'L21', tipo: 'lavadora_mediana', tamano: 'mediana' });
     const notaId = await notaConLavadora(id);
     await encender(notaId, id).expect(200);
@@ -270,14 +299,29 @@ describe('eliminar una nota con su máquina encendida', () => {
     const res = await request(app).delete(`/api/notas/${notaId}`).set(auth(admin.token));
 
     expect(res.status).toBe(409);
-    expect(res.body.message).toMatch(/L21/);
-    expect(res.body.message).toMatch(/lavando/i);
+    expect(res.body.message).toMatch(/sigue abierta/i);
 
     // Ni la nota ni el ciclo se tocaron.
     await request(app).get(`/api/notas/${notaId}`).set(auth(admin.token)).expect(200);
     const m = await maquina(id);
     expect(m.estado).toBe('en_uso');
     expect(m.en_uso_desde).not.toBeNull();
+  });
+
+  it('cancelada pero con su lavadora andando, tampoco se borra y dice cuál es', async () => {
+    const id = await seedMaquina({ nombre: 'L21', tipo: 'lavadora_mediana', tamano: 'mediana' });
+    const notaId = await notaConLavadora(id);
+    await encender(notaId, id).expect(200);
+    await iniciar(notaId, id).expect(200);
+    expect((await cancelar(notaId)).status).toBe(200);
+    await simularCicloEnMarcha(id);
+
+    const res = await request(app).delete(`/api/notas/${notaId}`).set(auth(admin.token));
+
+    expect(res.status).toBe(409);
+    expect(res.body.message).toMatch(/L21/);
+    expect(res.body.message).toMatch(/lavando/i);
+    await request(app).get(`/api/notas/${notaId}`).set(auth(admin.token)).expect(200);
   });
 
   it('una secadora corriendo lo dice con su palabra', async () => {
@@ -288,6 +332,8 @@ describe('eliminar una nota con su máquina encendida', () => {
     // Terminar el lavado suelta la lavadora y deja SOLO la secadora corriendo.
     await request(app).patch(`/api/notas/${notaId}/terminar-lavado`).set(auth(admin.token))
       .send({ lavadora_id: lav, secadora_id: sec }).expect(200);
+    expect((await cancelar(notaId)).status).toBe(200);
+    await simularCicloEnMarcha(sec);
 
     const res = await request(app).delete(`/api/notas/${notaId}`).set(auth(admin.token));
     expect(res.status).toBe(409);

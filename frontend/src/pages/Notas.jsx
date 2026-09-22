@@ -363,12 +363,17 @@ export default function Notas() {
     const ids = [...seleccion];
     const borradas = [];
     const fallidas = [];
+    // El porqué del primer fallo: el servidor solo borra notas cerradas, y
+    // "no se pudieron eliminar 3" sin más deja al admin sin saber qué hacer
+    // (cancelarlas). Basta con uno: cuando falla, casi siempre es lo mismo.
+    let motivo = '';
     for (const id of ids) {
       try {
         await api.delete(`/notas/${id}`);
         borradas.push(id);
-      } catch {
+      } catch (err) {
         fallidas.push(id);
+        if (!motivo && err?.message) motivo = err.message;
       }
     }
     if (borradas.length > 0) {
@@ -379,7 +384,8 @@ export default function Notas() {
     setBorrando(false);
     setConfirmarBorrado(false);
     if (fallidas.length > 0) {
-      setErrBorrado(`No se pudieron eliminar ${fallidas.length} nota(s).`);
+      setErrBorrado(`No se pudieron eliminar ${fallidas.length} nota(s).`
+        + (motivo ? ` ${motivo}` : ''));
     }
   };
 

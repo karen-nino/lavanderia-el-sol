@@ -322,6 +322,12 @@ describe('quién se queda con la máquina: la primera que inicia', () => {
     await asignarACarga(b.id, b.cargas[0].id, lav).expect(200);
     await iniciar(a.id, lav).expect(200);
 
+    // B nunca la arrancó: se cierra (una nota cobrada necesita que primero se
+    // revierta el pago) y se borra sin tocar la lavada de A.
+    await request(app).patch(`/api/notas/${b.id}/estado-pago`).set(auth(admin.token))
+      .send({ estado_pago: 'PENDIENTE' }).expect(200);
+    await request(app).patch(`/api/notas/${b.id}/estado`).set(auth(admin.token))
+      .send({ estado: 'CANCELADA' }).expect(200);
     await request(app).delete(`/api/notas/${b.id}`).set(auth(admin.token)).expect(204);
 
     const { rows } = await pool.query('SELECT estado FROM maquinas WHERE id = $1', [lav]);
@@ -830,7 +836,16 @@ describe('permisos por rol', () => {
     });
     const notaId = creada.body.id;
 
+    // El rol se revisa antes que el estado: al empleado se le niega aunque la
+    // nota todavía esté abierta.
     await request(app).delete(`/api/notas/${notaId}`).set(auth(empleado.token)).expect(403);
+    // Y al admin también, mientras siga abierta: primero hay que cerrarla
+    // (revertir el cobro y cancelar), y entonces sí se borra.
+    await request(app).delete(`/api/notas/${notaId}`).set(auth(admin.token)).expect(409);
+    await request(app).patch(`/api/notas/${notaId}/estado-pago`).set(auth(admin.token))
+      .send({ estado_pago: 'PENDIENTE' }).expect(200);
+    await request(app).patch(`/api/notas/${notaId}/estado`).set(auth(admin.token))
+      .send({ estado: 'CANCELADA' }).expect(200);
     await request(app).delete(`/api/notas/${notaId}`).set(auth(admin.token)).expect(204);
   });
 });
@@ -1529,5 +1544,66 @@ describe('editar una nota en proceso no borra lo que ya se lavó', () => {
     expect(res.body.cargas).toHaveLength(3);
     // La lavada sigue siendo la primera y conserva su lugar.
     expect(res.body.cargas[0].id).toBe(lavada);
+  });
+});
+
+// Borrar una nota es de admin y solo cuando ya está cerrada (2026-09-21). Antes
+// era solo una regla de pantalla: el detalle escondía el botón, pero el
+// endpoint aceptaba cualquier estado y la lista de notas borra por selección
+// múltiple sin mirarlo.
+describe('DELETE /api/notas/:id — solo notas cerradas', () => {
+  const crear = (estado_pago = 'PENDIENTE') =>
+    request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago,
+      ...(estado_pago === 'PAGADO' ? { forma_pago: 'EFECTIVO' } : {}),
+      cargas: [{ lavadora_tipo: 'mediana' }],
+    });
+
+  const borrar = (id) => request(app).delete(`/api/notas/${id}`).set(auth(admin.token));
+
+  const cambiarEstado = (id, estado) =>
+    request(app).patch(`/api/notas/${id}/estado`).set(auth(admin.token)).send({ estado });
+
+  it('una nota recién creada no se borra: dice que se cancele primero', async () => {
+    const nota = (await crear()).body;
+
+    const res = await borrar(nota.id);
+
+    expect(res.status).toBe(409);
+    expect(res.body.message).toMatch(/sigue abierta/i);
+    expect(res.body.message).toMatch(/cancélala/i);
+    await request(app).get(`/api/notas/${nota.id}`).set(auth(admin.token)).expect(200);
+  });
+
+  it('tampoco una que ya está lista para entregar', async () => {
+    const nota = (await crear()).body;
+    await cambiarEstado(nota.id, 'LISTA').expect(200);
+
+    expect((await borrar(nota.id)).status).toBe(409);
+  });
+
+  it('cancelada sí se borra', async () => {
+    const nota = (await crear()).body;
+    await cambiarEstado(nota.id, 'CANCELADA').expect(200);
+
+    await borrar(nota.id).expect(204);
+    await request(app).get(`/api/notas/${nota.id}`).set(auth(admin.token)).expect(404);
+  });
+
+  it('finalizada también: es el final normal de una nota', async () => {
+    const nota = (await crear('PAGADO')).body;
+    await cambiarEstado(nota.id, 'LISTA').expect(200);
+    await cambiarEstado(nota.id, 'FINALIZADA').expect(200);
+
+    await borrar(nota.id).expect(204);
+  });
+
+  it('el estado se revisa después del rol: al empleado se le niega igual', async () => {
+    const empleado = await seedUsuario({ rol: 'operador', sucursal: 'centro', nombre: 'Emp2' });
+    const nota = (await crear()).body;
+    await cambiarEstado(nota.id, 'CANCELADA').expect(200);
+
+    // Cancelada y todo: eliminar sigue siendo de admin.
+    await request(app).delete(`/api/notas/${nota.id}`).set(auth(empleado.token)).expect(403);
   });
 });
