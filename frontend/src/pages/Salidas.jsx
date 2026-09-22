@@ -837,32 +837,42 @@ export default function Salidas() {
           {gruposSlots.map(({ carga, slots }) => (
             <div key={`slots-${carga.id}`} className="space-y-2 [&:not(:first-child)]:border-t [&:not(:first-child)]:border-gray-100 [&:not(:first-child)]:pt-4">
               <p className="text-xs font-semibold text-gray-500">Carga {carga.orden}</p>
-              {slots.map(({ slot, tipo }) => {
-                const opciones = maquinasParaSlot(slot, tipo);
-                const queFalta = slot === 'lavadora'
-                  ? `lavadoras ${TIPO_MAQ_LABEL[tipo] ?? tipo}`
-                  : 'secadoras';
-                return (
-                  <div key={slot} className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="text-sm text-gray-600">
-                      {slot === 'lavadora' ? `Lavadora ${TIPO_MAQ_LABEL[tipo] ?? tipo}` : 'Secadora'}
-                    </span>
-                    {opciones.length === 0 ? (
-                      <span className="text-sm text-red-600">No hay {queFalta} disponibles</span>
-                    ) : (
-                      // Abre el mismo modal que "+ Agregar", ya fijado a
-                      // esta carga y a las máquinas del tipo que le toca.
-                      <button
-                        onClick={() => iniciarAsignarSlot(carga, slot, tipo)}
-                        disabled={loadingMaquina}
-                        className="px-4 py-2 bg-blue hover:opacity-90 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
-                      >
-                        Asignar
-                      </button>
-                    )}
-                  </div>
-                );
-              })}
+              {/* Lavadora y secadora son dos renglones casi idénticos con el
+                  mismo botón azul, y se pulsan con el dedo: separados por una
+                  línea, con aire entre ellos y con el botón diciendo QUÉ
+                  asigna, para no darle a la máquina equivocada. */}
+              <div className="divide-y divide-gray-100">
+                {slots.map(({ slot, tipo }) => {
+                  const opciones = maquinasParaSlot(slot, tipo);
+                  const queFalta = slot === 'lavadora'
+                    ? `lavadoras ${TIPO_MAQ_LABEL[tipo] ?? tipo}`
+                    : 'secadoras';
+                  const esLavadora = slot === 'lavadora';
+                  return (
+                    <div key={slot} className="flex flex-wrap items-center justify-between gap-4 py-5 first:pt-0 last:pb-0">
+                      <span className="text-sm font-medium text-gray-700">
+                        {esLavadora ? `Lavadora ${TIPO_MAQ_LABEL[tipo] ?? tipo}` : 'Secadora'}
+                      </span>
+                      {opciones.length === 0 ? (
+                        <span className="text-sm text-red-600">No hay {queFalta} disponibles</span>
+                      ) : (
+                        // Abre el mismo modal que "+ Agregar", ya fijado a
+                        // esta carga y a las máquinas del tipo que le toca. El
+                        // botón dice QUÉ asigna —abreviado, para que quepa
+                        // junto a su etiqueta hasta en pantallas de 320px— y
+                        // así no se confunde con el renglón de al lado.
+                        <button
+                          onClick={() => iniciarAsignarSlot(carga, slot, tipo)}
+                          disabled={loadingMaquina}
+                          className="w-full min-[360px]:w-auto px-4 py-3 bg-blue hover:opacity-90 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors whitespace-nowrap"
+                        >
+                          {esLavadora ? 'Asignar Lav.' : 'Asignar Sec.'}
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           ))}
 
