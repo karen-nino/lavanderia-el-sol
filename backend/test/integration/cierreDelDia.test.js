@@ -159,7 +159,7 @@ describe('cerrarCajasAbiertas', () => {
     expect(await cerrarCajasAbiertas()).toEqual([]);
   });
 
-  it('congela las cifras: revertir un pago no reescribe el corte ya cerrado', async () => {
+  it('congela las cifras: borrar una nota no reescribe el corte ya cerrado', async () => {
     // Es la misma garantía que da el cierre manual (mig. 101). El automático
     // las dejaba en NULL y el historial las recalculaba en vivo, así que
     // cualquier movimiento posterior cambiaba un corte de un día ya cerrado.
@@ -179,10 +179,12 @@ describe('cerrarCajasAbiertas', () => {
     const antes = await request(app).get('/api/caja/historial').set(auth(admin.token));
     expect(antes.body[0].ventas).toBe(cobrado);
 
-    // Al día siguiente el admin revierte aquel pago.
-    const rev = await request(app).patch(`/api/notas/${nota.body.id}/estado-pago`)
-      .set(auth(admin.token)).send({ estado_pago: 'PENDIENTE' });
-    expect(rev.status).toBe(200);
+    // Al día siguiente el admin borra aquella nota. Revertir el pago ya no es
+    // camino —con el corte cerrado el servidor lo rechaza—, pero eliminar sí
+    // la saca de la base, y el corte de aquel día tiene que quedarse igual.
+    const del = await request(app).delete(`/api/notas/${nota.body.id}`)
+      .set(auth(admin.token));
+    expect(del.status).toBe(204);
 
     const despues = await request(app).get('/api/caja/historial').set(auth(admin.token));
     expect(despues.body[0].ventas).toBe(cobrado);        // el corte no se movió

@@ -1229,7 +1229,7 @@ describe('cierre automático de la nota al terminar sus cargas', () => {
     expect(crea.status).toBe(201);
     await arrancar(crea.body.id, crea.body.cargas[0].id, lav);
     await request(app).patch(`/api/notas/${crea.body.id}/estado-pago`)
-      .set(auth(admin.token)).send({ estado_pago: 'PENDIENTE' }).expect(200);
+      .set(auth(admin.token)).send({ estado_pago: 'PENDIENTE', motivo: 'se cobró de más' }).expect(200);
 
     const res = await request(app).patch(`/api/notas/${crea.body.id}/terminar-lavado-final`)
       .set(auth(admin.token)).send({ lavadora_id: lav });
@@ -1383,7 +1383,7 @@ describe('cancelar una nota es cosa de administradores', () => {
 
     // Revertir el pago sí abre la puerta a cancelarla.
     await request(app).patch(`/api/notas/${nota.body.id}/estado-pago`)
-      .set(auth(admin.token)).send({ estado_pago: 'PENDIENTE' }).expect(200);
+      .set(auth(admin.token)).send({ estado_pago: 'PENDIENTE', motivo: 'ya no la quiso' }).expect(200);
     const segunda = await request(app).patch(`/api/notas/${nota.body.id}/estado`)
       .set(auth(admin.token)).send({ estado: 'CANCELADA', motivo: 'ya no la quiso' });
     expect(segunda.status).toBe(200);

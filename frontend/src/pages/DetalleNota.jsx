@@ -275,6 +275,10 @@ export default function DetalleNota() {
   const [confirmLiquidar,  setConfirmLiquidar]  = useState(false);
   const [formaPagoSel,     setFormaPagoSel]     = useState('');
   const [corrigiendoPago,  setCorrigiendoPago]  = useState(false);
+  // Reversión del cobro (solo admin, caja aún abierta): el motivo es
+  // obligatorio, así que el modal lleva su propio texto.
+  const [revirtiendoPago,  setRevirtiendoPago]  = useState(false);
+  const [motivoReversion,  setMotivoReversion]  = useState('');
   const [formaPagoNueva,   setFormaPagoNueva]   = useState('');
   const [confirmEliminar,  setConfirmEliminar]  = useState(false);
   // Un cambio hecho en Salidas movió el total de esta nota y dejó sin efecto su
@@ -342,6 +346,37 @@ export default function DetalleNota() {
     } catch (err) {
       setErrorAccion(err.message);
       setConfirmFinalizar(false);
+    } finally {
+      setLoadingAccion(false);
+    }
+  }
+
+  // Deshace el cobro de una nota (PAGADO → PENDIENTE) para poder cancelarla o
+  // volver a cobrarla bien. El servidor solo lo permite a un admin, con motivo
+  // y mientras la caja donde entró ese dinero siga abierta; además lo deja
+  // anotado en la campana del Dashboard.
+  async function revertirPago() {
+    const motivo = motivoReversion.trim();
+    if (!motivo) return;
+    setLoadingAccion(true);
+    setErrorAccion('');
+    try {
+      const updated = await api.patch(`/notas/${id}/estado-pago`, {
+        estado_pago: 'PENDIENTE',
+        motivo,
+      });
+      // `pago_reversible` lo calcula el servidor: ya sin cobro, deja de aplicar.
+      setNota(prev => ({
+        ...prev,
+        estado_pago: updated.estado_pago,
+        forma_pago: updated.forma_pago,
+        forma_pago_editable: false,
+        pago_reversible: false,
+      }));
+      setRevirtiendoPago(false);
+      setMotivoReversion('');
+    } catch (err) {
+      setErrorAccion(err.message);
     } finally {
       setLoadingAccion(false);
     }
@@ -630,15 +665,28 @@ export default function DetalleNota() {
             </div>
             {/* Corregir la forma de pago solo mientras la caja donde se cobró
                 siga abierta: el servidor manda ese permiso ya calculado. */}
-            {esAdmin && nota.forma_pago_editable && (
-              <button
-                type="button"
-                onClick={() => { setFormaPagoNueva(''); setCorrigiendoPago(true); }}
-                className="mt-2 text-xs font-semibold text-emerald-800 underline underline-offset-2 hover:text-emerald-900"
-              >
-                Corregir forma de pago
-              </button>
-            )}
+            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
+              {esAdmin && nota.forma_pago_editable && (
+                <button
+                  type="button"
+                  onClick={() => { setFormaPagoNueva(''); setCorrigiendoPago(true); }}
+                  className="text-xs font-semibold text-emerald-800 underline underline-offset-2 hover:text-emerald-900"
+                >
+                  Corregir forma de pago
+                </button>
+              )}
+              {/* Revertir deja la nota pendiente de cobro: desde ahí se puede
+                  cancelar o volver a cobrar con el importe correcto. */}
+              {esAdmin && nota.pago_reversible && !terminal && (
+                <button
+                  type="button"
+                  onClick={() => { setMotivoReversion(''); setErrorAccion(''); setRevirtiendoPago(true); }}
+                  className="text-xs font-semibold text-emerald-800 underline underline-offset-2 hover:text-emerald-900"
+                >
+                  Revertir pago
+                </button>
+              )}
+            </div>
           </div>
         )
       )}
@@ -1090,6 +1138,57 @@ export default function DetalleNota() {
           onConfirmar={liquidarNota}
           loading={loadingAccion}
         />
+      )}
+
+      {/* Modal revertir pago (solo admin, caja aún abierta). El motivo es
+          obligatorio: sin él el botón de confirmar queda apagado. */}
+      {revirtiendoPago && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-4">
+            <div>
+              <h3 className="text-base font-semibold text-gray-900">Revertir pago</h3>
+              <p className="text-sm text-gray-500 mt-0.5">
+                La nota vuelve a quedar pendiente de cobro por {fmtMonto(nota.precio_total)} y sale
+                del corte de la caja abierta. Queda anotado en el Dashboard.
+              </p>
+            </div>
+            <div>
+              <label htmlFor="motivo-reversion" className="block text-sm font-medium text-gray-700 mb-1">
+                Motivo
+              </label>
+              <textarea
+                id="motivo-reversion"
+                value={motivoReversion}
+                onChange={e => setMotivoReversion(e.target.value)}
+                rows={3}
+                maxLength={200}
+                placeholder="Ej. Se cobró la nota equivocada"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent transition resize-none"
+              />
+            </div>
+            {errorAccion && (
+              <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">{errorAccion}</div>
+            )}
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => { setRevirtiendoPago(false); setMotivoReversion(''); setErrorAccion(''); }}
+                disabled={loadingAccion}
+                className="flex-1 border border-gray-300 text-gray-700 font-medium py-3.5 rounded-lg text-base hover:bg-gray-50 transition-colors disabled:opacity-60"
+              >
+                Atrás
+              </button>
+              <button
+                type="button"
+                onClick={revertirPago}
+                disabled={loadingAccion || !motivoReversion.trim()}
+                className="flex-1 bg-orange-500 hover:bg-orange-600 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
+              >
+                {loadingAccion ? 'Revirtiendo...' : 'Revertir pago'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Modal corregir forma de pago (solo admin, caja aún abierta) */}

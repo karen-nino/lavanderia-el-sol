@@ -106,7 +106,7 @@ describe('GET /api/ventas/resumen — tarjetas y período', () => {
     // Una nota cobrada ya no se puede cancelar de frente: primero se revierte
     // el pago (así el dinero devuelto queda registrado) y luego se cancela.
     await request(app).patch(`/api/notas/${creada.body.id}/estado-pago`)
-      .set(auth(admin.token)).send({ estado_pago: 'PENDIENTE' }).expect(200);
+      .set(auth(admin.token)).send({ estado_pago: 'PENDIENTE', motivo: 'se le devolvió el dinero' }).expect(200);
     await request(app).patch(`/api/notas/${creada.body.id}/estado`)
       .set(auth(admin.token)).send({ estado: 'CANCELADA' }).expect(200);
 

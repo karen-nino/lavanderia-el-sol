@@ -830,13 +830,15 @@ async function perteneceASucursal(tabla, id, sucursal) {
 // Deja rastro en la campana del Dashboard cuando se revierte un pago
 // (PAGADO → PENDIENTE): es el vector directo para desaparecer una venta,
 // así que siempre queda registrado quién lo hizo y en qué nota.
-async function registrarReversionPago(client, nota, usuarioId, sucursal) {
+async function registrarReversionPago(client, nota, usuarioId, sucursal, motivo = null) {
   const { rows } = await client.query("SELECT TRIM(nombre || ' ' || COALESCE(apellido, '')) AS nombre FROM usuarios WHERE id = $1", [usuarioId]);
   const quien = rows[0]?.nombre ?? 'un administrador';
+  const mensaje = `Pago revertido en la nota ${nota.folio ?? `#${nota.id}`} por ${quien}`
+                + (motivo ? `: ${motivo}` : '');
   await client.query(
     `INSERT INTO notificaciones (tipo, mensaje, usuario_id, sucursal)
      VALUES ('pago_revertido', $1, $2, $3)`,
-    [`Pago revertido en la nota ${nota.folio ?? `#${nota.id}`} por ${quien}`, usuarioId, sucursal]
+    [mensaje, usuarioId, sucursal]
   );
 }
 
@@ -969,7 +971,18 @@ export const getNotaById = async (req, res) => {
               -- Ventas diciendo cosas distintas, así que no se permite.
               (n.estado_pago = 'PAGADO' AND n.estado <> 'CANCELADA' AND EXISTS (
                  SELECT 1 FROM cajas cj WHERE cj.id = n.caja_id AND cj.estado = 'abierta'
-              )) AS forma_pago_editable
+              )) AS forma_pago_editable,
+              -- ¿Se puede revertir el cobro? Mismo razonamiento, con una
+              -- excepción: un cobro hecho SIN caja abierta (caja_id NULL) no
+              -- entró en ningún corte, así que revertirlo no descuadra nada.
+              -- Lo que no se permite es revertir un cobro que ya quedó
+              -- congelado en un corte cerrado: ese corte seguiría contando la
+              -- venta y, al volver a cobrar la nota, el mismo dinero caería
+              -- también en la caja de hoy.
+              (n.estado_pago = 'PAGADO' AND n.estado <> 'CANCELADA' AND (
+                 n.caja_id IS NULL
+                 OR EXISTS (SELECT 1 FROM cajas cj WHERE cj.id = n.caja_id AND cj.estado = 'abierta')
+              )) AS pago_reversible
        FROM notas n
        LEFT JOIN clientes   c  ON c.id = n.cliente_id
        JOIN      usuarios   u  ON u.id = n.usuario_id
@@ -1384,11 +1397,27 @@ export const updateNota = async (req, res) => {
     }
 
     // Revertir un pago desde el formulario de edición tiene el mismo
-    // control que el endpoint de estado-pago: solo admin, y con rastro.
+    // control que el endpoint de estado-pago: solo admin, con rastro y solo
+    // mientras la caja donde entró ese dinero siga abierta. Si el corte ya se
+    // cerró, sus cifras quedaron congeladas (mig. 101): la venta seguiría
+    // contada ahí y volver a cobrar la nota la sumaría otra vez en la caja de
+    // hoy, el mismo dinero en dos cortes.
     const esReversionPago = estado_pago === 'PENDIENTE' && actual.estado_pago === 'PAGADO';
     if (esReversionPago && !esAdmin(req.user.rol)) {
       await client.query('ROLLBACK');
       return res.status(403).json({ message: 'Solo un administrador puede revertir un pago.' });
+    }
+    if (esReversionPago && actual.caja_id) {
+      const { rows: cajaRows } = await client.query(
+        'SELECT estado FROM cajas WHERE id = $1', [actual.caja_id]
+      );
+      if (cajaRows[0]?.estado !== 'abierta') {
+        await client.query('ROLLBACK');
+        return res.status(409).json({
+          message: 'El corte de caja de esta nota ya se cerró: el pago solo se puede revertir '
+                 + 'mientras esa caja siga abierta.',
+        });
+      }
     }
 
     // Cobrar desde la edición exige la forma de pago igual que el endpoint
@@ -3323,7 +3352,7 @@ export const cambiarEstadoPago = async (req, res) => {
     await client.query('BEGIN');
 
     const { rows: notaRows } = await client.query(
-      'SELECT id, folio, estado, estado_pago FROM notas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
+      'SELECT id, folio, estado, estado_pago, caja_id FROM notas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
       [id, req.sucursal]
     );
     if (notaRows.length === 0) {
@@ -3342,6 +3371,30 @@ export const cambiarEstadoPago = async (req, res) => {
       await client.query('ROLLBACK');
       return res.status(403).json({ message: 'Solo un administrador puede revertir un pago.' });
     }
+    // Deshacer un cobro es el vector directo para desaparecer una venta: el
+    // motivo es obligatorio y viaja al aviso de la campana, para que se pueda
+    // revisar después sin interrogar a nadie.
+    const motivoReversion = String(req.body?.motivo ?? '').trim().slice(0, 200);
+    if (esReversion && !motivoReversion) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'Escribe por qué se revierte el pago.' });
+    }
+    // Solo se revierte mientras el cobro siga en la caja abierta (o si entró
+    // sin caja: entonces no está en ningún corte). Con el corte ya cerrado las
+    // cifras quedaron congeladas (mig. 101): la venta seguiría contada ahí y
+    // volver a cobrar la nota la sumaría otra vez en la caja de hoy.
+    if (esReversion && actual.caja_id) {
+      const { rows: cajaRows } = await client.query(
+        'SELECT estado FROM cajas WHERE id = $1', [actual.caja_id]
+      );
+      if (cajaRows[0]?.estado !== 'abierta') {
+        await client.query('ROLLBACK');
+        return res.status(409).json({
+          message: 'El corte de caja de esta nota ya se cerró: el pago solo se puede revertir '
+                 + 'mientras esa caja siga abierta.',
+        });
+      }
+    }
 
     // Al revertir un pago la forma deja de aplicar y se limpia, para que no
     // quede una nota PENDIENTE marcada como pagada en efectivo.
@@ -3350,7 +3403,7 @@ export const cambiarEstadoPago = async (req, res) => {
       [estado_pago, estado_pago === 'PAGADO' ? formaPago : null, id]
     );
     if (esReversion) {
-      await registrarReversionPago(client, actual, req.user.id, req.sucursal);
+      await registrarReversionPago(client, actual, req.user.id, req.sucursal, motivoReversion);
     }
 
     await client.query('COMMIT');

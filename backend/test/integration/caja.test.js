@@ -319,22 +319,61 @@ describe('un corte cerrado no cambia después (mig. 101)', () => {
     return nota.body.id;
   }
 
-  it('revertir el pago de una nota vieja no toca el corte ya cerrado', async () => {
+  // El corte congelado ya no cambiaba solo, pero revertir un cobro viejo abría
+  // la otra mitad del problema: al volver a cobrar la nota, el mismo dinero
+  // entra también en la caja de hoy y queda contado en dos cortes. Por eso la
+  // reversión solo se permite mientras esa caja siga abierta.
+  it('el pago de una nota de un corte ya cerrado no se puede revertir', async () => {
     await request(app).post('/api/caja/abrir').set(auth(admin.token)).send({ monto_inicial: 0 }).expect(201);
     const notaId = await cobrar();
     const cierre = await request(app).post('/api/caja/cerrar').set(auth(admin.token))
       .send({ monto_contado: 70 });
     expect(cierre.body.resumen.diferencia).toBe(0); // cuadró aquel día
 
-    // Días después alguien revierte ese cobro.
-    await request(app).patch(`/api/notas/${notaId}/estado-pago`).set(auth(admin.token))
-      .send({ estado_pago: 'PENDIENTE' }).expect(200);
+    // Días después alguien intenta revertir ese cobro.
+    const rev = await request(app).patch(`/api/notas/${notaId}/estado-pago`).set(auth(admin.token))
+      .send({ estado_pago: 'PENDIENTE', motivo: 'se cobró de más' });
+    expect(rev.status).toBe(409);
+    expect(rev.body.message).toMatch(/ya se cerró/i);
 
     const hist = await request(app).get('/api/caja/historial').set(auth(admin.token));
     const corte = hist.body[0];
     expect(corte.ventas).toBe(70);      // sigue diciendo lo que se vendió ese día
     expect(corte.esperado).toBe(70);
     expect(corte.diferencia).toBe(0);   // y sigue cuadrando
+  });
+
+  // La edición de la nota es el otro camino para revertir un cobro (manda
+  // estado_pago: PENDIENTE); si solo se cerrara el endpoint dedicado, el
+  // candado sería de adorno.
+  it('tampoco se revierte desde la edición de la nota', async () => {
+    await request(app).post('/api/caja/abrir').set(auth(admin.token)).send({ monto_inicial: 0 }).expect(201);
+    const notaId = await cobrar();
+    await request(app).post('/api/caja/cerrar').set(auth(admin.token)).send({ monto_contado: 70 }).expect(200);
+
+    const res = await request(app).patch(`/api/notas/${notaId}`)
+      .set(auth(admin.token)).send({ estado_pago: 'PENDIENTE' });
+    expect(res.status).toBe(409);
+    expect(res.body.message).toMatch(/ya se cerró/i);
+  });
+
+  it('con la caja todavía abierta, el admin sí puede revertir el cobro', async () => {
+    await request(app).post('/api/caja/abrir').set(auth(admin.token)).send({ monto_inicial: 0 }).expect(201);
+    const notaId = await cobrar();
+
+    const sinMotivo = await request(app).patch(`/api/notas/${notaId}/estado-pago`)
+      .set(auth(admin.token)).send({ estado_pago: 'PENDIENTE' });
+    expect(sinMotivo.status).toBe(400); // el motivo es obligatorio
+
+    const rev = await request(app).patch(`/api/notas/${notaId}/estado-pago`)
+      .set(auth(admin.token)).send({ estado_pago: 'PENDIENTE', motivo: 'se cobró la nota equivocada' });
+    expect(rev.status).toBe(200);
+    expect(rev.body.estado_pago).toBe('PENDIENTE');
+    expect(rev.body.forma_pago).toBeNull();
+
+    // La venta sale del corte en vivo: ese dinero ya no se espera en el cajón.
+    const caja = await request(app).get('/api/caja/actual').set(auth(admin.token));
+    expect(caja.body.totales.ventas).toBe(0);
   });
 
   it('cada cobro cuenta en SU sesión, no en la que esté abierta al mirarlo', async () => {
