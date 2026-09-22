@@ -394,3 +394,34 @@ describe('relojes del ciclo (mig. 108)', () => {
     expect(MAX_CICLOS_POR_CARGA).toBe(2);
   });
 });
+
+describe('tope de ciclos por máquina', () => {
+  const cargar = () => import('./sincronizarSonoff.js');
+
+  it('una lavadora sin tiempo de marca corre un solo ciclo', async () => {
+    const { maxCiclosDeMaquina } = await cargar();
+    expect(maxCiclosDeMaquina({ tipo: 'lavadora_mediana', minutos_marca: null })).toBe(1);
+    expect(maxCiclosDeMaquina({ tipo: 'lavadora_jumbo', minutos_marca: null })).toBe(1);
+  });
+
+  it('con tiempo de marca vuelve al tope normal', async () => {
+    const { maxCiclosDeMaquina, MAX_CICLOS_POR_CARGA } = await cargar();
+    expect(maxCiclosDeMaquina({ tipo: 'lavadora_mediana', minutos_marca: 45 }))
+      .toBe(MAX_CICLOS_POR_CARGA);
+  });
+
+  it('las secadoras no entran en la regla: su respaldo SÍ es su tiempo real', async () => {
+    // `tiempos_marca` no siembra secadoras porque son 30 min para todas, que es
+    // justo lo que dice el respaldo por tamaño. Aplicarles la regla dejaría a
+    // todas sin segunda vuelta, y volver a secar ropa húmeda es un caso real.
+    const { maxCiclosDeMaquina, MAX_CICLOS_POR_CARGA } = await cargar();
+    expect(maxCiclosDeMaquina({ tipo: 'secadora', minutos_marca: null }))
+      .toBe(MAX_CICLOS_POR_CARGA);
+  });
+
+  it('sin fila no inventa ciclos de más', async () => {
+    const { maxCiclosDeMaquina } = await cargar();
+    expect(maxCiclosDeMaquina(null)).toBe(1);
+    expect(maxCiclosDeMaquina(undefined)).toBe(1);
+  });
+});

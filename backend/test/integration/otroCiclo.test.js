@@ -12,7 +12,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import request from 'supertest';
 import app from '../../app.js';
 import {
-  pool, limpiarBase, seedSucursal, seedUsuario, seedMaquina, seedAjustes, auth,
+  pool, limpiarBase, seedSucursal, seedUsuario, seedMaquina, seedMarca, seedAjustes, auth,
 } from '../helpers.js';
 import {
   MAX_CICLOS_POR_CARGA, MARGEN_CORTE_SEGUNDOS, PAUSA_OTRO_CICLO_SEGUNDOS,
@@ -35,6 +35,10 @@ beforeEach(async () => {
   admin = await seedUsuario({ rol: 'admin', sucursal: 'centro' });
   operador = await seedUsuario({ rol: 'operador', sucursal: 'centro', nombre: 'Operador' });
   await seedAjustes({ tiempo_carga_mediana: 15, tiempo_carga_jumbo: 45, tiempo_carga_secadora: 30 });
+  // Las lavadoras de estas pruebas son LG con su tiempo configurado: sin
+  // tiempo de marca la carga corre un solo ciclo y no habría segundo que
+  // probar (ver el describe del final).
+  await seedMarca({ nombre: 'LG', tipo: 'lavadora', tamano: 'mediana', minutos: 15 });
 });
 
 // Crea una nota de autoservicio pagada, le asigna la lavadora y la arranca.
@@ -75,7 +79,7 @@ const otroCiclo = (maquinaId, usuario) =>
 
 describe('otro ciclo — camino normal', () => {
   it('reinicia el reloj y sube el contador de la carga', async () => {
-    const id = await seedMaquina({ nombre: 'L1', tipo: 'lavadora_mediana', tamano: 'mediana' });
+    const id = await seedMaquina({ nombre: 'L1', tipo: 'lavadora_mediana', tamano: 'mediana', marca: 'LG' });
     const { cargaId } = await arrancar(id);
     expect(await ciclosDe(cargaId)).toBe(1);
 
@@ -96,7 +100,7 @@ describe('otro ciclo — camino normal', () => {
   });
 
   it('un operador puede darlo: es quien está en el mostrador', async () => {
-    const id = await seedMaquina({ nombre: 'L2', tipo: 'lavadora_mediana', tamano: 'mediana' });
+    const id = await seedMaquina({ nombre: 'L2', tipo: 'lavadora_mediana', tamano: 'mediana', marca: 'LG' });
     await arrancar(id);
     await envejecer(id, YA_SE_PUEDE);
 
@@ -104,7 +108,7 @@ describe('otro ciclo — camino normal', () => {
   });
 
   it('la nota sigue abierta y la máquina en uso: solo cambia el reloj', async () => {
-    const id = await seedMaquina({ nombre: 'L3', tipo: 'lavadora_mediana', tamano: 'mediana' });
+    const id = await seedMaquina({ nombre: 'L3', tipo: 'lavadora_mediana', tamano: 'mediana', marca: 'LG' });
     const { notaId } = await arrancar(id);
     await envejecer(id, YA_SE_PUEDE);
 
@@ -119,7 +123,7 @@ describe('otro ciclo — camino normal', () => {
 
 describe('otro ciclo — candados', () => {
   it('no se puede a mitad del ciclo', async () => {
-    const id = await seedMaquina({ nombre: 'L4', tipo: 'lavadora_mediana', tamano: 'mediana' });
+    const id = await seedMaquina({ nombre: 'L4', tipo: 'lavadora_mediana', tamano: 'mediana', marca: 'LG' });
     const { cargaId } = await arrancar(id);
 
     const r = await otroCiclo(id, admin);
@@ -130,7 +134,7 @@ describe('otro ciclo — candados', () => {
   });
 
   it('no se puede antes de que pase la pausa sin corriente', async () => {
-    const id = await seedMaquina({ nombre: 'L5', tipo: 'lavadora_mediana', tamano: 'mediana' });
+    const id = await seedMaquina({ nombre: 'L5', tipo: 'lavadora_mediana', tamano: 'mediana', marca: 'LG' });
     await arrancar(id);
     // El ciclo terminó y el margen también, pero la pausa no.
     await envejecer(id, FALTA_LA_PAUSA);
@@ -142,7 +146,7 @@ describe('otro ciclo — candados', () => {
   });
 
   it('se agota en el tope de ciclos de la carga', async () => {
-    const id = await seedMaquina({ nombre: 'L6', tipo: 'lavadora_mediana', tamano: 'mediana' });
+    const id = await seedMaquina({ nombre: 'L6', tipo: 'lavadora_mediana', tamano: 'mediana', marca: 'LG' });
     const { cargaId } = await arrancar(id);
 
     // Gasta todos los ciclos permitidos después del primero.
@@ -161,7 +165,7 @@ describe('otro ciclo — candados', () => {
   });
 
   it('una máquina disponible no acepta otro ciclo', async () => {
-    const id = await seedMaquina({ nombre: 'L7', tipo: 'lavadora_mediana', tamano: 'mediana' });
+    const id = await seedMaquina({ nombre: 'L7', tipo: 'lavadora_mediana', tamano: 'mediana', marca: 'LG' });
 
     const r = await otroCiclo(id, admin);
 
@@ -171,7 +175,7 @@ describe('otro ciclo — candados', () => {
 
   it('una máquina de otra sucursal no se encuentra', async () => {
     await seedSucursal('norte', 'Norte');
-    const id = await seedMaquina({ nombre: 'L8', tipo: 'lavadora_mediana', tamano: 'mediana', sucursal: 'norte' });
+    const id = await seedMaquina({ nombre: 'L8', tipo: 'lavadora_mediana', tamano: 'mediana', marca: 'LG', sucursal: 'norte' });
 
     const r = await otroCiclo(id, admin);
 
@@ -181,7 +185,7 @@ describe('otro ciclo — candados', () => {
 
 describe('otro ciclo — lo que expone la lista de máquinas', () => {
   it('trae los ciclos de la carga y cuándo se habilita el siguiente', async () => {
-    const id = await seedMaquina({ nombre: 'L9', tipo: 'lavadora_mediana', tamano: 'mediana' });
+    const id = await seedMaquina({ nombre: 'L9', tipo: 'lavadora_mediana', tamano: 'mediana', marca: 'LG' });
     await arrancar(id);
 
     const r = await request(app).get('/api/maquinas').set(auth(admin.token)).expect(200);
@@ -193,12 +197,89 @@ describe('otro ciclo — lo que expone la lista de máquinas', () => {
   });
 
   it('una máquina libre no ofrece otro ciclo', async () => {
-    const id = await seedMaquina({ nombre: 'L10', tipo: 'lavadora_mediana', tamano: 'mediana' });
+    const id = await seedMaquina({ nombre: 'L10', tipo: 'lavadora_mediana', tamano: 'mediana', marca: 'LG' });
 
     const r = await request(app).get('/api/maquinas').set(auth(admin.token)).expect(200);
     const m = r.body.find(x => String(x.id) === String(id));
 
     expect(m.ciclos_carga).toBeNull();
     expect(m.otro_ciclo_desde).toBeNull();
+  });
+});
+
+// Una lavadora sin tiempo de marca (mig. 107) se cronometra con el respaldo
+// por tamaño de Ajustes, que es un tiempo supuesto y no medido. Encadenarle
+// una segunda vuelta la deja corriendo el doble de lo que nadie comprobó, así
+// que esas cargas terminan en el primer ciclo (2026-09-21).
+describe('otro ciclo — lavadora sin tiempo de marca', () => {
+  it('el endpoint lo rechaza y dice dónde se configura', async () => {
+    const id = await seedMaquina({ nombre: 'S1', tipo: 'lavadora_mediana', tamano: 'mediana' });
+    const { cargaId } = await arrancar(id);
+    await envejecer(id, YA_SE_PUEDE);
+
+    const r = await otroCiclo(id, admin);
+
+    expect(r.status).toBe(400);
+    expect(r.body.message).toMatch(/un solo ciclo/i);
+    expect(r.body.message).toMatch(/Ajustes/);
+    expect(await ciclosDe(cargaId)).toBe(1);
+  });
+
+  it('una marca sin tiempo para ESE tamaño cuenta como sin configurar', async () => {
+    // La marca existe y hasta tiene tiempo de lavadora mediana, pero esta
+    // máquina es jumbo: la combinación marca+tipo+tamaño es la que manda.
+    await seedMarca({ nombre: 'Speed Queen', tipo: 'lavadora', tamano: 'mediana', minutos: 35 });
+    const id = await seedMaquina({
+      nombre: 'S2', tipo: 'lavadora_jumbo', tamano: 'jumbo', marca: 'Speed Queen',
+    });
+    const { rows } = await pool.query('SELECT 1 FROM maquinas WHERE id = $1', [id]);
+    expect(rows).toHaveLength(1);
+
+    const r = await request(app).get('/api/maquinas').set(auth(admin.token)).expect(200);
+    const m = r.body.find(x => String(x.id) === String(id));
+
+    expect(m.ciclos_max).toBe(1);
+  });
+
+  it('la tarjeta no ofrece el siguiente ciclo: ni tope ni instante', async () => {
+    const id = await seedMaquina({ nombre: 'S3', tipo: 'lavadora_mediana', tamano: 'mediana' });
+    await arrancar(id);
+    await envejecer(id, YA_SE_PUEDE);
+
+    const r = await request(app).get('/api/maquinas').set(auth(admin.token)).expect(200);
+    const m = r.body.find(x => String(x.id) === String(id));
+
+    expect(m.ciclos_carga).toBe(1);
+    expect(m.ciclos_max).toBe(1);
+    expect(m.otro_ciclo_desde).toBeNull();
+  });
+
+  it('"Encender máquina" tampoco la revive para otra vuelta', async () => {
+    // Es el otro camino al segundo ciclo (mig. 110): si este no respetara el
+    // tope, el botón encendería la lavadora igual y el candado del endpoint
+    // llegaría tarde, con la máquina ya con corriente.
+    const id = await seedMaquina({ nombre: 'S4', tipo: 'lavadora_mediana', tamano: 'mediana' });
+    const { notaId } = await arrancar(id);
+    await envejecer(id, YA_SE_PUEDE);
+
+    const r = await request(app).patch(`/api/notas/${notaId}/encender-maquina`)
+      .set(auth(admin.token)).send({ maquina_id: id });
+
+    expect(r.status).toBe(409);
+    const { rows } = await pool.query(
+      'SELECT en_uso_desde, encendida_sin_iniciar_at FROM maquinas WHERE id = $1', [id]
+    );
+    // Sigue con su ciclo viejo, no en el estado de "encendida esperando".
+    expect(rows[0].en_uso_desde).not.toBeNull();
+    expect(rows[0].encendida_sin_iniciar_at).toBeNull();
+  });
+
+  it('una secadora sin tiempo de marca SÍ puede repetir: el respaldo es su tiempo real', async () => {
+    const id = await seedMaquina({ nombre: 'SEC1', tipo: 'secadora', tamano: 'mediana' });
+
+    const r = await request(app).get('/api/maquinas').set(auth(admin.token)).expect(200);
+    const m = r.body.find(x => String(x.id) === String(id));
+
+    expect(m.ciclos_max).toBe(MAX_CICLOS_POR_CARGA);
   });
 });

@@ -5,7 +5,8 @@ import { tarifaSecadora, precioProductoEnNota, unidadDeServicio, tapasPorUnidad,
 // encender y apagar. Aquí se llama directo porque "Encender máquina" es la
 // acción que el empleado está mirando: no debe depender de que el listener esté
 // vivo. Es idempotente, así que el aviso del trigger llegando después no molesta.
-import { sincronizarSonoff, MAX_CICLOS_POR_CARGA } from '../services/sincronizarSonoff.js';
+import { sincronizarSonoff, maxCiclosDeMaquina } from '../services/sincronizarSonoff.js';
+import { MINUTOS_DE_MARCA } from '../db/sqlMaquina.js';
 
 const ESTADOS_VALIDOS     = ['EN_ESPERA', 'LAVANDO', 'SECANDO', 'LISTA', 'PAGADA', 'FINALIZADA', 'CANCELADA'];
 // PRODUCTOS es la venta de mostrador (mig. 112): productos sueltos, sin lavado
@@ -2091,15 +2092,21 @@ export const cambiarEstadoNota = async (req, res) => {
 async function cargaConCiclosDisponibles(client, notaId, maquinaId) {
   const { rows } = await client.query(
     `SELECT CASE WHEN nc.lavadora_id = $2 THEN nc.lavadora_ciclos
-                 ELSE nc.secadora_ciclos END AS ciclos
+                 ELSE nc.secadora_ciclos END AS ciclos,
+            m.tipo,
+            ${MINUTOS_DE_MARCA} AS minutos_marca
        FROM nota_cargas nc
+       -- La máquina entra por el tope de ciclos: una lavadora sin tiempo de
+       -- marca corre uno solo, así que aquí ya no hay "otra vuelta" que
+       -- encender y el botón tiene que llevar a Finalizar.
+       JOIN maquinas m ON m.id = $2
       WHERE nc.nota_id = $1
         AND ((nc.lavadora_id = $2 AND nc.lavadora_iniciada_at IS NOT NULL)
           OR (nc.secadora_id = $2 AND nc.secadora_iniciada_at IS NOT NULL))
       LIMIT 1`,
     [notaId, maquinaId]
   );
-  return rows.length > 0 && rows[0].ciclos < MAX_CICLOS_POR_CARGA;
+  return rows.length > 0 && rows[0].ciclos < maxCiclosDeMaquina(rows[0]);
 }
 
 // ── PATCH /notas/:id/encender-maquina ───────────────────────

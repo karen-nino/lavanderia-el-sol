@@ -158,7 +158,9 @@ export default function MachineCard({
           >
             {etiquetaBoton}
           </button>
-          {maquina.ciclos_carga != null && maquina.ciclos_max != null && (
+          {/* "Ciclo 1 de 1" no dice nada: una lavadora sin tiempo de marca
+              corre una sola vuelta y el contador sobra. */}
+          {maquina.ciclos_carga != null && maquina.ciclos_max > 1 && (
             <p className="text-kpi-label text-grey text-sm">
               Ciclo {maquina.ciclos_carga} de {maquina.ciclos_max}
             </p>
@@ -199,7 +201,9 @@ export default function MachineCard({
           >
             {otroCicloEnCurso ? 'INICIANDO…' : 'OTRO CICLO'}
           </button>
-          {maquina.ciclos_carga != null && maquina.ciclos_max != null && (
+          {/* "Ciclo 1 de 1" no dice nada: una lavadora sin tiempo de marca
+              corre una sola vuelta y el contador sobra. */}
+          {maquina.ciclos_carga != null && maquina.ciclos_max > 1 && (
             <p className="text-kpi-label text-grey text-sm">
               Ciclo {maquina.ciclos_carga} de {maquina.ciclos_max}
             </p>

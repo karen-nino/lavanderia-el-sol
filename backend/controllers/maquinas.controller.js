@@ -2,10 +2,11 @@ import pool from '../db/pool.js';
 import { TZ_NEGOCIO } from '../utils/tz.js';
 import * as dispositivos from '../services/dispositivos/index.js';
 import { explicarFalla, resumirMotivo } from '../services/dispositivos/mensajes.js';
+import { MINUTOS_DE_MARCA } from '../db/sqlMaquina.js';
 import {
   HORAS_ENCENDIDO_MANUAL,
-  MAX_CICLOS_POR_CARGA,
   PAUSA_OTRO_CICLO_SEGUNDOS,
+  maxCiclosDeMaquina,
   instanteOtroCiclo,
   finCiclo,
   esperandoArranque,
@@ -124,13 +125,17 @@ const mensajeDeviceDuplicado = (nombre, deviceCanal) =>
 const conDatosDeOtroCiclo = (m) => {
   const ciclos = m.ciclos_carga ?? null;
   const desde = instanteOtroCiclo(m);
+  // El tope no es el mismo para todas: una lavadora sin tiempo de marca corre
+  // un solo ciclo. Sale de la fila, así que la consulta tiene que traer
+  // `minutos_marca`.
+  const maxCiclos = maxCiclosDeMaquina(m);
   return {
     ...m,
     ciclos_carga: ciclos,
-    ciclos_max: MAX_CICLOS_POR_CARGA,
+    ciclos_max: maxCiclos,
     esperando_arranque: esperandoArranque(m),
     otro_ciclo_desde:
-      ciclos != null && ciclos < MAX_CICLOS_POR_CARGA && desde != null
+      ciclos != null && ciclos < maxCiclos && desde != null
         ? new Date(desde).toISOString()
         : null,
   };
@@ -147,6 +152,7 @@ export const getMaquinas = async (req, res) => {
     //   la quedó al darle a Iniciar; las demás tienen que cambiar de máquina.
     const { rows } = await pool.query(
       `SELECT m.*,
+              ${MINUTOS_DE_MARCA} AS minutos_marca,
               (r.folio IS NOT NULL) AS reservada,
               r.folio               AS reservada_folio,
               r.id                  AS reservada_nota_id,
@@ -854,7 +860,8 @@ export const otroCiclo = async (req, res) => {
     await client.query('BEGIN');
 
     const { rows } = await client.query(
-      'SELECT * FROM maquinas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
+      `SELECT m.*, ${MINUTOS_DE_MARCA} AS minutos_marca
+         FROM maquinas m WHERE m.id = $1 AND m.sucursal = $2 FOR UPDATE OF m`,
       [id, req.sucursal]
     );
     if (rows.length === 0) {
@@ -894,10 +901,17 @@ export const otroCiclo = async (req, res) => {
       });
     }
 
-    if (carga.ciclos >= MAX_CICLOS_POR_CARGA) {
+    // Una lavadora sin tiempo de marca corre un solo ciclo. Se revalida aquí y
+    // no solo en la tarjeta porque este endpoint es lo que de verdad alarga el
+    // lavado: el botón es únicamente quien lo pide.
+    const maxCiclos = maxCiclosDeMaquina(maq);
+    if (carga.ciclos >= maxCiclos) {
       await client.query('ROLLBACK');
       return res.status(400).json({
-        message: `Esta carga ya corrió sus ${MAX_CICLOS_POR_CARGA} ciclos. Termínala para liberar ${maq.nombre}.`,
+        message: maxCiclos === 1
+          ? `${maq.nombre} no tiene configurado el tiempo de su marca, así que su carga corre un solo ciclo. `
+            + 'Termínala, o configura el tiempo en Ajustes → Marcas y tiempos.'
+          : `Esta carga ya corrió sus ${maxCiclos} ciclos. Termínala para liberar ${maq.nombre}.`,
       });
     }
 
@@ -978,12 +992,15 @@ export const otroCiclo = async (req, res) => {
     // que pedirlo a mano. Esto además reprograma el corte del nuevo ciclo.
     await sincronizarSonoff(maq.id);
 
-    const { rows: fresca } = await pool.query('SELECT * FROM maquinas WHERE id = $1', [maq.id]);
+    const { rows: fresca } = await pool.query(
+      `SELECT m.*, ${MINUTOS_DE_MARCA} AS minutos_marca FROM maquinas m WHERE m.id = $1`,
+      [maq.id]
+    );
     const ciclo = carga.ciclos + 1;
     res.json({
-      message: `${maq.nombre}: ciclo ${ciclo} de ${MAX_CICLOS_POR_CARGA} en marcha.`,
+      message: `${maq.nombre}: ciclo ${ciclo} de ${maxCiclos} en marcha.`,
       ciclo,
-      ciclos_max: MAX_CICLOS_POR_CARGA,
+      ciclos_max: maxCiclos,
       maquina: conDatosDeOtroCiclo({
         ...(fresca[0] ?? upd[0]),
         ciclos_carga: ciclo,

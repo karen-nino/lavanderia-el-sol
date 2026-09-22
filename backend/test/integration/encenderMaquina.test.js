@@ -13,7 +13,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import request from 'supertest';
 import app from '../../app.js';
 import {
-  pool, limpiarBase, seedSucursal, seedUsuario, seedMaquina, seedAjustes, auth,
+  pool, limpiarBase, seedSucursal, seedUsuario, seedMaquina, seedMarca, seedAjustes, auth,
 } from '../helpers.js';
 import { esperandoArranque, ESPERA_ARRANQUE_MINUTOS } from '../../services/sincronizarSonoff.js';
 
@@ -175,8 +175,13 @@ describe('el siguiente ciclo repite los mismos dos pasos', () => {
       [maquinaId, segundos]
     );
 
+  // La lavadora va con marca y tiempo configurado: una lavadora sin tiempo de
+  // marca corre un solo ciclo, y este describe es justo el del segundo.
   async function arrancada(nombre) {
-    const id = await seedMaquina({ nombre, tipo: 'lavadora_mediana', tamano: 'mediana' });
+    await seedMarca({ nombre: 'LG', tipo: 'lavadora', tamano: 'mediana', minutos: 15 });
+    const id = await seedMaquina({
+      nombre, tipo: 'lavadora_mediana', tamano: 'mediana', marca: 'LG',
+    });
     const notaId = await notaConLavadora(id);
     await iniciar(notaId, id).expect(200);
     return { id, notaId };
@@ -206,7 +211,7 @@ describe('el siguiente ciclo repite los mismos dos pasos', () => {
     expect(r.body.ciclo).toBe(2);
     const m = await maquina(id);
     expect(m.en_uso_desde).not.toBeNull();
-    expect(m.ciclo_minutos).toBe(15);                 // resellado desde el tamaño
+    expect(m.ciclo_minutos).toBe(15);                 // resellado desde su marca
     expect(m.encendida_sin_iniciar_at).toBeNull();    // la espera terminó bien
   });
 

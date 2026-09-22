@@ -40,19 +40,50 @@ export async function seedUsuario({ rol = 'admin', sucursal = 'centro', nombre =
   return { id, sucursal, token: tokenFor(id) };
 }
 
+// Inserta una marca en el catálogo y, si se le dan minutos, su tiempo de ciclo
+// para ese tipo y tamaño (mig. 107). `limpiarBase` vacía también los catálogos,
+// así que la marca que sembró la migración no sobrevive al beforeEach.
+export async function seedMarca({
+  nombre = 'LG',
+  tipo = 'lavadora',
+  tamano = 'mediana',
+  minutos = null,
+} = {}) {
+  const { rows } = await pool.query(
+    `INSERT INTO marcas_maquina (nombre) VALUES ($1)
+       ON CONFLICT (nombre) DO UPDATE SET nombre = EXCLUDED.nombre
+     RETURNING id`,
+    [nombre]
+  );
+  if (minutos != null) {
+    await pool.query(
+      `INSERT INTO tiempos_marca (marca_id, tipo, tamano, minutos) VALUES ($1, $2, $3, $4)
+         ON CONFLICT (marca_id, tipo, tamano) DO UPDATE SET minutos = EXCLUDED.minutos`,
+      [rows[0].id, tipo, tamano, minutos]
+    );
+  }
+  return nombre;
+}
+
 // Inserta una máquina y devuelve su id. Por defecto una lavadora mediana
 // disponible en la sucursal dada.
+//
+// Sin `marca` la máquina queda como las que nadie ha terminado de configurar:
+// se cronometra con el respaldo por tamaño de Ajustes y su carga corre un solo
+// ciclo. Para probar el flujo de dos ciclos hay que sembrar antes la marca con
+// `seedMarca({ minutos })` y pasarla aquí.
 export async function seedMaquina({
   nombre = 'Lavadora 1',
   tipo = 'lavadora_mediana',
   tamano = 'mediana',
   estado = 'disponible',
   sucursal = 'centro',
+  marca = null,
 } = {}) {
   const { rows } = await pool.query(
-    `INSERT INTO maquinas (nombre, tipo, tamano, estado, sucursal)
-     VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-    [nombre, tipo, tamano, estado, sucursal]
+    `INSERT INTO maquinas (nombre, tipo, tamano, estado, sucursal, marca)
+     VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+    [nombre, tipo, tamano, estado, sucursal, marca]
   );
   return rows[0].id;
 }

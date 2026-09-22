@@ -95,6 +95,27 @@ export const MAX_CICLOS_POR_CARGA = (() => {
   return Number.isInteger(n) && n >= 1 ? n : 2;
 })();
 
+// Tope de ciclos de la carga que corre en ESTA máquina.
+//
+// El segundo ciclo se apoya en que el ciclo dura lo que dice la marca de la
+// máquina (mig. 107). Una lavadora sin tiempo de marca se cronometra con el
+// respaldo por tamaño de Ajustes, que es un "no se sabe qué máquina es, usa el
+// más largo plausible": encadenarle otra vuelta de un tiempo que nadie midió la
+// deja corriendo el doble de lo que debería, y con el corte por fin de ciclo
+// activo eso es corriente regalada. Esas cargas terminan en el primer ciclo
+// (2026-09-21).
+//
+// Las secadoras quedan fuera a propósito: `tiempos_marca` no las siembra —son
+// 30 min para todas, que es justo lo que ya dice el respaldo por tamaño— así
+// que con esta regla ninguna secadora podría repetir, y repetir un secado
+// porque la ropa salió húmeda es un caso real del mostrador.
+//
+// Espera la fila de `maquinas` con `minutos_marca` (ver MINUTOS_DE_MARCA en
+// db/sqlMaquina.js). Sin ese campo toda lavadora parecería no tener marca, así
+// que las consultas que deciden sobre ciclos tienen que traerlo.
+export const maxCiclosDeMaquina = (maq) =>
+  maq?.tipo !== 'secadora' && maq?.minutos_marca == null ? 1 : MAX_CICLOS_POR_CARGA;
+
 // Cuánto aguanta encendida una máquina que espera su arranque (mig. 110).
 // "Encender máquina" le da corriente para que el empleado cargue la ropa y
 // apriete el botón físico; el cronómetro no corre hasta "Iniciar Lavado". Si

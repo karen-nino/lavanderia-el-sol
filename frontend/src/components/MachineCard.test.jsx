@@ -115,6 +115,20 @@ describe('MachineCard', () => {
     expect(onEncender).not.toHaveBeenCalled();
   });
 
+  // Una lavadora sin tiempo de marca corre un solo ciclo (2026-09-21): el
+  // backend manda `ciclos_max: 1` y la tarjeta no tiene nada que contar.
+  it('con un único ciclo no enseña el contador: "Ciclo 1 de 1" no dice nada', () => {
+    render(
+      <MachineCard
+        maquina={{ ...lavadoraTerminada, puede_otro_ciclo: false, ciclos_carga: 1, ciclos_max: 1 }}
+        nota={nota}
+      />
+    );
+
+    expect(screen.queryByText(/^Ciclo /)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'FINALIZAR CARGA' })).toBeInTheDocument();
+  });
+
   it('agotados los ciclos, el MISMO botón pasa a finalizar: nunca hay dos', () => {
     render(
       <MachineCard maquina={{ ...lavadoraTerminada, puede_otro_ciclo: false }} nota={nota} />
