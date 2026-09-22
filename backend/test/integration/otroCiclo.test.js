@@ -21,10 +21,16 @@ import {
 // Cuánto hay que envejecer el arranque para que el siguiente ciclo esté
 // permitido: el ciclo entero, más el margen de corriente que se le concede,
 // más la pausa sin luz. Se calcula desde las constantes y no con un número
-// fijo porque el margen por defecto (20 min) no es el de producción.
+// fijo porque los dos valores se configuran por entorno.
 const YA_SE_PUEDE = MARGEN_CORTE_SEGUNDOS + PAUSA_OTRO_CICLO_SEGUNDOS + 5;
-// Ciclo y margen cumplidos, pero la pausa no.
-const FALTA_LA_PAUSA = MARGEN_CORTE_SEGUNDOS + 2;
+// El ciclo acaba de cumplirse: no ha pasado ni el margen ni la pausa.
+//
+// Antes esto envejecía hasta justo después del margen, para probar que la
+// pausa se exige aparte. Con margen y pausa en 5 s eso dejaba 3 s de holgura
+// para arrancar la app, sembrar y llamar al endpoint, y la prueba se volvía
+// intermitente. El candado que se comprueba es el mismo —`instanteOtroCiclo`
+// suma los dos relojes— y desde aquí quedan los 10 s enteros.
+const RECIEN_TERMINADO = 0;
 
 let admin;
 let operador;
@@ -136,8 +142,8 @@ describe('otro ciclo — candados', () => {
   it('no se puede antes de que pase la pausa sin corriente', async () => {
     const id = await seedMaquina({ nombre: 'L5', tipo: 'lavadora_mediana', tamano: 'mediana', marca: 'LG' });
     await arrancar(id);
-    // El ciclo terminó y el margen también, pero la pausa no.
-    await envejecer(id, FALTA_LA_PAUSA);
+    // El ciclo terminó, pero la máquina todavía no ha estado sin corriente.
+    await envejecer(id, RECIEN_TERMINADO);
 
     const r = await otroCiclo(id, admin);
 

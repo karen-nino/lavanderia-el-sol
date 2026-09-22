@@ -66,12 +66,13 @@ export const HORAS_ENCENDIDO_MANUAL = (() => {
 // venía a impedir— y el botón del siguiente ciclo (mig. 108) pedía esperar
 // 1210 s, porque la pausa sin corriente se cuenta a partir del corte.
 //
-// Ahora son 10 s, que es lo que el negocio pidió desde el principio: la máquina
+// Ahora son 5 s, que es lo que el negocio pidió desde el principio: la máquina
 // se apaga casi al terminar. OJO con subirlo, porque son dos cosas a la vez:
 // los segundos de corriente regalada al final de cada carga y la espera que se
-// come el empleado antes del segundo ciclo. Y al revés: si con 10 s el corte
-// llega a media carga real, lo que está mal son los minutos de esa marca en
-// Ajustes, no este margen.
+// come el empleado antes del segundo ciclo, donde se suman a la pausa: margen
+// y pausa son los 5 + 5 que la tarjeta enseña como "ENCENDER EN 10s". Y al
+// revés: si con 5 s el corte llega a media carga real, lo que está mal son los
+// minutos de esa marca en Ajustes, no este margen.
 //
 // Va en SEGUNDOS y no en minutos porque el flujo de dos ciclos (mig. 108) lo
 // necesita fino: el negocio quiere que la lavadora se apague a los pocos
@@ -84,7 +85,7 @@ export const MARGEN_CORTE_SEGUNDOS = (() => {
   if (Number.isFinite(s) && s >= 0) return Math.round(s);
   const m = Number(process.env.SONOFF_MARGEN_CORTE_MINUTOS);
   if (Number.isFinite(m) && m >= 0) return Math.round(m * 60);
-  return 10;
+  return 5;
 })();
 
 // Cuántos ciclos puede correr una misma carga en su máquina (mig. 108). El
@@ -129,10 +130,16 @@ export const ESPERA_ARRANQUE_MINUTOS = (() => {
 
 // Pausa obligatoria entre el corte y el siguiente ciclo. El negocio la pidió
 // explícita: la máquina se queda sin corriente un momento antes de volver a
-// arrancar. Va en segundos porque son 10, no minutos.
+// arrancar. Va en segundos porque son 5, no minutos.
+//
+// Con el margen de corte forma la cuenta atrás del botón "Encender máquina":
+// 5 + 5 = los 10 s que se ven en la tarjeta. Repartido así a propósito
+// (2026-09-21), porque los dos relojes hacen falta —uno da corriente de gracia
+// al final del ciclo, el otro obliga a que se vaya— y diez segundos era la
+// espera que el mostrador aguanta.
 export const PAUSA_OTRO_CICLO_SEGUNDOS = (() => {
   const s = Number(process.env.SONOFF_PAUSA_OTRO_CICLO_SEGUNDOS);
-  return Number.isFinite(s) && s >= 0 ? Math.round(s) : 10;
+  return Number.isFinite(s) && s >= 0 ? Math.round(s) : 5;
 })();
 
 // Interruptor propio del corte, aparte del general del driver. Esta es la única

@@ -269,9 +269,9 @@ describe('corte por fin de ciclo', () => {
 
   it('dentro del margen NO la corta: son unos segundos de gracia', async () => {
     // El margen existe porque `ciclo_minutos` es una estimación: la máquina
-    // física puede ir unos segundos por detrás. Ciclo de 45 + 10 s de margen =
-    // 45:10, y lleva 45:05, así que todavía no se toca.
-    filas.maquina = enUsoDesdeHaceSeg(45 * 60 + 5, 45);
+    // física puede ir unos segundos por detrás. Ciclo de 45 + 5 s de margen =
+    // 45:05, y lleva 45:02, así que todavía no se toca.
+    filas.maquina = enUsoDesdeHaceSeg(45 * 60 + 2, 45);
 
     await sincronizarSonoff(1, { reconciliando: true });
 
@@ -339,7 +339,7 @@ describe('interruptor del corte', () => {
     // El margen vive en segundos desde la mig. 108. El default eran 20 min y
     // nadie lo sobreescribía: la máquina se quedaba encendida veinte minutos
     // después de terminar y el botón del segundo ciclo pedía esperar 1210 s.
-    expect(MARGEN_CORTE_SEGUNDOS).toBe(10);
+    expect(MARGEN_CORTE_SEGUNDOS).toBe(5);
   });
 });
 
@@ -388,10 +388,18 @@ describe('relojes del ciclo (mig. 108)', () => {
     );
   });
 
-  it('la pausa por defecto son 10 s y el tope, 2 ciclos', async () => {
+  it('la pausa por defecto son 5 s y el tope, 2 ciclos', async () => {
     const { PAUSA_OTRO_CICLO_SEGUNDOS, MAX_CICLOS_POR_CARGA } = await import('./sincronizarSonoff.js');
-    expect(PAUSA_OTRO_CICLO_SEGUNDOS).toBe(10);
+    expect(PAUSA_OTRO_CICLO_SEGUNDOS).toBe(5);
     expect(MAX_CICLOS_POR_CARGA).toBe(2);
+  });
+
+  it('margen y pausa suman los 10 s de la cuenta atrás del botón', async () => {
+    // Es el número que se ve en la tarjeta: "ENCENDER EN 10s" al terminar el
+    // ciclo. Si alguno de los dos sube, sube la espera del mostrador.
+    const { instanteOtroCiclo, finCiclo } = await import('./sincronizarSonoff.js');
+    const m = maq(10, 15);
+    expect((instanteOtroCiclo(m) - finCiclo(m)) / 1000).toBe(10);
   });
 });
 
