@@ -135,6 +135,13 @@ export default function Salidas() {
   // para comparar sin que cargarDatos dependa del estado.
   const notaPrevia = useRef(null);
 
+  // Productos con los que la nota llegó a Salidas: no se pueden quitar desde
+  // aquí (son parte de lo que ya se capturó y cobró en la nota). Solo se puede
+  // deshacer lo que se agregue en esta misma pantalla. Se sella en la primera
+  // carga; al recargar la pantalla, lo agregado antes ya cuenta como propio de
+  // la nota.
+  const productosDeLaNota = useRef(null);
+
   const cargarDatos = useCallback(async () => {
     try {
       const [notaData, productosData, ajustes, maquinasData] = await Promise.all([
@@ -150,6 +157,11 @@ export default function Salidas() {
           antes: Number(previa.precio_total),
           ahora: Number(notaData.precio_total),
         });
+      }
+      if (productosDeLaNota.current === null && notaData) {
+        productosDeLaNota.current = new Set(
+          (notaData.productos || []).map(x => String(x.producto_id))
+        );
       }
       setNota(notaData);
       setProductos(productosData);
@@ -712,6 +724,10 @@ export default function Salidas() {
     .filter(p => disponibleDe(p) > 0)
     .sort((a, b) => ordenProducto(a) - ordenProducto(b));
   const enNotaDe = (p) => productosNota.find(x => String(x.producto_id) === String(p.id));
+  // Un renglón que ya venía con la nota no se quita desde Salidas. Ojo: agregar
+  // aquí un producto que ya estaba suma cantidad al mismo renglón, así que
+  // sigue protegido — quitarlo se llevaría también lo capturado en la nota.
+  const vieneDeLaNota = (p) => productosDeLaNota.current?.has(String(p.producto_id)) ?? false;
   const totalProductosNota = productosNota.reduce((a, x) => a + Number(x.subtotal || 0), 0);
 
   return (
@@ -950,14 +966,8 @@ export default function Salidas() {
 
       {/* Sección 2 — Productos en la nota */}
       <div className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
-        <div className="px-4 py-3 border-b border-gray-50 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-gray-700">Productos en esta nota</h2>
-          <button
-            onClick={cargarDatos}
-            className="text-xs text-blue hover:underline"
-          >
-            Actualizar
-          </button>
+        <div className="px-4 py-3 border-b border-gray-50">
+          <h2 className="text-sm font-semibold text-gray-700">Productos</h2>
         </div>
         {productosNota.length === 0 ? (
           <p className="px-4 py-4 text-sm text-gray-400 italic">Sin productos agregados</p>
@@ -974,17 +984,19 @@ export default function Salidas() {
                     Cant. {p.cantidad} × {fmtMonto(p.precio_unitario)} = {fmtMonto(p.subtotal)}
                   </p>
                 </div>
-                <button
-                  onClick={() => setConfirmQuitarProd(p)}
-                  disabled={loadingProducto === p.producto_id}
-                  className="text-red-400 hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50 transition-colors disabled:opacity-40"
-                  title="Eliminar"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                  </svg>
-                </button>
+                {!vieneDeLaNota(p) && (
+                  <button
+                    onClick={() => setConfirmQuitarProd(p)}
+                    disabled={loadingProducto === p.producto_id}
+                    className="text-red-400 hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50 transition-colors disabled:opacity-40"
+                    title="Eliminar"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  </button>
+                )}
               </div>
             ))}
             {/* Suma de los productos. El total de la nota (máquinas, ajuste y

@@ -2053,21 +2053,17 @@ export default function NuevaNota() {
                         <span>${subtotalDeCarga(c).toFixed(2)}</span>
                       </div>
                       <div className="pl-3 mt-1.5 space-y-1.5 text-xs text-blue-700/80">
-                        {c.lavadora_tipo ? (
+                        {c.lavadora_tipo && (
                           <div className="flex justify-between">
                             <span>Lavadora · {c.lavadora_tipo.charAt(0).toUpperCase() + c.lavadora_tipo.slice(1)}</span>
                             <span>${lavado.toFixed(2)}</span>
                           </div>
-                        ) : (
-                          <div>Sin lavadora</div>
                         )}
-                        {c.secadora_tipo ? (
+                        {c.secadora_tipo && (
                           <div className="flex justify-between">
                             <span>Secadora</span>
                             <span>${secado.toFixed(2)}</span>
                           </div>
-                        ) : (
-                          <div>Sin secadora</div>
                         )}
                       </div>
                     </div>
