@@ -838,10 +838,12 @@ export default function Salidas() {
             <div key={`slots-${carga.id}`} className="space-y-2 [&:not(:first-child)]:border-t [&:not(:first-child)]:border-gray-100 [&:not(:first-child)]:pt-4">
               <p className="text-xs font-semibold text-gray-500">Carga {carga.orden}</p>
               {/* Lavadora y secadora son dos renglones casi idénticos con el
-                  mismo botón azul, y se pulsan con el dedo: separados por una
-                  línea, con aire entre ellos y con el botón diciendo QUÉ
-                  asigna, para no darle a la máquina equivocada. */}
-              <div className="divide-y divide-gray-100">
+                  mismo botón azul, y se pulsan con el dedo: los separa el aire
+                  entre ellos y el botón diciendo QUÉ asigna, para no darle a la
+                  máquina equivocada. La línea se reserva para separar cargas
+                  (la pinta el contenedor de arriba), que es la división que
+                  cuenta. */}
+              <div>
                 {slots.map(({ slot, tipo }) => {
                   const opciones = maquinasParaSlot(slot, tipo);
                   const queFalta = slot === 'lavadora'
@@ -849,9 +851,13 @@ export default function Salidas() {
                     : 'secadoras';
                   const esLavadora = slot === 'lavadora';
                   return (
-                    <div key={slot} className="flex flex-wrap items-center justify-between gap-4 py-5 first:pt-0 last:pb-0">
+                    <div key={slot} className="flex flex-wrap items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
+                      {/* Solo "Lavadora": el tamaño no se dice aquí. Igual se
+                          respeta al asignar —el modal solo ofrece máquinas del
+                          tipo que la nota compró— y si no hay, el aviso de al
+                          lado sí lo nombra. */}
                       <span className="text-sm font-medium text-gray-700">
-                        {esLavadora ? `Lavadora ${TIPO_MAQ_LABEL[tipo] ?? tipo}` : 'Secadora'}
+                        {esLavadora ? 'Lavadora' : 'Secadora'}
                       </span>
                       {opciones.length === 0 ? (
                         <span className="text-sm text-red-600">No hay {queFalta} disponibles</span>
