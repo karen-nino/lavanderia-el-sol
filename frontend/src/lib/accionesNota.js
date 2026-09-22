@@ -26,10 +26,11 @@ export const puedeFinalizar = (nota) =>
 // que a veces solo es un error de captura).
 export const puedeEliminar = (nota, esAdmin) => Boolean(esAdmin);
 
-// …pero en el TELÉFONO, mientras la nota sigue viva, el botón no se enseña.
-// Ahí está pegado a Cancelar, en pantalla chica y con el dedo, y borrar no se
-// deshace: lo que se pierde es el rastro de que la nota existió. En el
-// mostrador el camino es cancelar; el borrado directo queda para el escritorio,
-// donde se administra con calma. Ya cerrada, el botón se ve en los dos
-// (2026-09-21).
+// …pero en TÁCTIL, mientras la nota sigue viva, el botón no se enseña. Ahí
+// está pegado a Cancelar, se pulsa con el dedo y borrar no se deshace: lo que
+// se pierde es el rastro de que la nota existió. En el mostrador el camino es
+// cancelar; el borrado directo queda para el escritorio, donde se administra
+// con calma. El corte lo pone la página en `xl` (1280px): con `md` la tablet
+// entraba como escritorio (2026-09-22). Ya cerrada, el botón se ve en todos
+// los tamaños (2026-09-21).
 export const eliminarSoloEnEscritorio = (nota) => !esTerminal(nota);
