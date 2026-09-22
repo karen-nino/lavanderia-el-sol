@@ -921,22 +921,42 @@ export const getNotas = async (req, res) => {
               EXISTS (SELECT 1 FROM nota_cargas nc JOIN maquinas ms ON ms.id = nc.secadora_id
                        WHERE nc.nota_id = n.id AND ms.estado = 'en_uso'
                          AND nc.secadora_iniciada_at IS NOT NULL) AS hay_secadora_activa,
-              -- Lavadoras cuya carga debe pasar a secado al terminar el lavado:
-              -- la carga lleva secado previsto (secadora_tipo) pero todavia no
-              -- tiene secadora física. Ese es justo el caso en que hay que elegir
-              -- una al terminar el lavado ("Iniciar secado").
-              -- Si la carga YA tiene secadora asignada no entra aquí: no hay nada
-              -- que elegir, la lavadora finaliza su carga y la secadora arranca
-              -- con su propio botón.
-              -- Lo decide la carga y no el tipo de servicio: un Autoservicio
-              -- creado con lavadora y secadora también pasa a secado.
+              -- Lavadoras que al terminar su lavado encadenan el secado: la
+              -- tarjeta pide elegir secadora ahí mismo ("Iniciar secado") en vez
+              -- de cerrar la carga. Solo pasa en AUTOSERVICIO, donde el cliente
+              -- está esperando su ropa y el encargado la pasa de una máquina a
+              -- la otra en el momento. En Por Encargo la ropa se queda en el
+              -- local: su lavadora termina la carga y la secadora se asigna y se
+              -- arranca aparte, desde Salidas, con su propio botón (2026-09-22).
+              -- Si la carga YA tiene secadora asignada tampoco entra aquí: no
+              -- hay nada que elegir.
               (SELECT COALESCE(json_agg(nc.lavadora_id), '[]'::json)
                  FROM nota_cargas nc
                 WHERE nc.nota_id = n.id
+                  AND n.tipo_servicio = 'AUTOSERVICIO'
                   AND nc.lavadora_id IS NOT NULL
                   AND nc.secadora_tipo IS NOT NULL
                   AND nc.secadora_id IS NULL
-              ) AS lavadoras_con_secado_ids
+              ) AS lavadoras_con_secado_ids,
+              -- ¿Le falta a la nota alguna máquina por asignar? Es la parte
+              -- de hayCargasPendientes que NO depende de lo que esté
+              -- corriendo: una carga que compró lavadora o secadora, no la ha
+              -- usado y todavía no tiene máquina puesta. Mientras haya una, la
+              -- nota no se cierra aunque termine la máquina que está corriendo
+              -- — el caso típico es la secadora de una carga de Por Encargo,
+              -- que se asigna aparte (2026-09-22).
+              EXISTS (
+                SELECT 1 FROM nota_cargas nc
+                 WHERE nc.nota_id = n.id
+                   AND (
+                     (nc.lavadora_tipo IS NOT NULL AND nc.lavadora_id IS NULL
+                      AND nc.lavadora_iniciada_at IS NULL
+                      AND NOT nc.lavadora_removida AND nc.lavadora_usada_id IS NULL)
+                     OR (nc.secadora_tipo IS NOT NULL AND nc.secadora_id IS NULL
+                         AND nc.secadora_iniciada_at IS NULL
+                         AND NOT nc.secadora_removida AND nc.secadora_usada_id IS NULL)
+                   )
+              ) AS faltan_maquinas_por_asignar
        FROM notas n
        LEFT JOIN clientes   c  ON c.id = n.cliente_id
        JOIN      usuarios   u  ON u.id = n.usuario_id

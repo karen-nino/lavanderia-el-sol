@@ -243,6 +243,40 @@ describe('POST /api/notas — Por Encargo', () => {
 // Asignar una máquina NO la aparta: mientras nadie la arranque, varias notas
 // pueden tenerla asignada. La primera que le da a "Iniciar" se la queda; las
 // demás reciben un aviso para cambiarla por otra.
+// La tarjeta de Máquinas usa este campo para decidir el botón de una lavadora
+// que terminó: con la lavadora marcada ofrece "Iniciar secado" (y pide elegir
+// secadora ahí mismo); sin marcar, "Finalizar carga".
+describe('encadenar el secado es cosa de Autoservicio', () => {
+  async function conLavadoraPuesta(tipo_servicio) {
+    const lavadoraId = await seedMaquina({ nombre: `L-${tipo_servicio}`, tipo: 'lavadora_mediana' });
+    const extra = tipo_servicio === 'POR_ENCARGO' ? { cliente_id: await seedCliente() } : {};
+    const nota = await request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio, tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE', ...extra,
+      cargas: [{ lavadora_tipo: 'mediana', secadora_tipo: 'mediana' }],
+    });
+    expect(nota.status).toBe(201);
+    await request(app).patch(`/api/notas/${nota.body.id}/asignar-carga-maquina`)
+      .set(auth(admin.token))
+      .send({ carga_id: nota.body.cargas[0].id, slot: 'lavadora', maquina_id: lavadoraId })
+      .expect(200);
+    const lista = await request(app).get('/api/notas').set(auth(admin.token));
+    const fila = lista.body.find(n => n.id === nota.body.id);
+    return { lavadoraId, marcadas: fila.lavadoras_con_secado_ids };
+  }
+
+  it('en Autoservicio la lavadora con secado pendiente queda marcada', async () => {
+    const { lavadoraId, marcadas } = await conLavadoraPuesta('AUTOSERVICIO');
+    expect(marcadas.map(Number)).toContain(lavadoraId);
+  });
+
+  // La ropa se queda en el local: la lavadora cierra su carga y la secadora se
+  // asigna y arranca aparte, desde Salidas.
+  it('en Por Encargo no se marca ninguna, aunque la carga lleve secado', async () => {
+    const { marcadas } = await conLavadoraPuesta('POR_ENCARGO');
+    expect(marcadas).toEqual([]);
+  });
+});
+
 describe('quién se queda con la máquina: la primera que inicia', () => {
   // Pagada por omisión: en autoservicio no se arranca una carga sin cobrar.
   // Las que solo apartan la máquina para cancelarse después van sin pagar,

@@ -120,10 +120,11 @@ export default function MachineCard({
     // botón. Antes la lavadora que pasaba a secado se pintaba de rojo, y dos
     // tarjetas en el mismo estado se veían como si una tuviera un problema.
     //
-    // El siguiente paso lo decide la CARGA, no el tipo de servicio: un
-    // Autoservicio creado con lavadora y secadora también pasa a secado (antes
-    // se daba por hecho que no, y su lavadora ofrecía "Finalizar carga"
-    // saltándose el secado pagado).
+    // El siguiente paso lo manda el servidor en `lavadoras_con_secado_ids`:
+    // son las lavadoras que encadenan el secado al terminar. Hoy solo las de
+    // Autoservicio, donde el cliente espera su ropa y se pasa de una máquina a
+    // la otra en el momento; en Por Encargo la lavadora finaliza su carga y la
+    // secadora se asigna y arranca aparte, desde Salidas (2026-09-22).
     const esSecadora = maquina.tipo === 'secadora';
     const debeSecar = Array.isArray(nota?.lavadoras_con_secado_ids)
       && nota.lavadoras_con_secado_ids.some(mid => String(mid) === String(maquina.id));

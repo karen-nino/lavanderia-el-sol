@@ -36,8 +36,9 @@ describe('MachineCard', () => {
     expect(screen.getByText('Autoservicio')).toBeInTheDocument();
   });
 
-  // Lo que decide el siguiente paso es si la CARGA lleva secado pendiente
-  // (`lavadoras_con_secado_ids`, del servidor), no el tipo de servicio.
+  // El siguiente paso lo marca el servidor en `lavadoras_con_secado_ids`: son
+  // las lavadoras que encadenan el secado. Hoy solo las de Autoservicio; una
+  // nota Por Encargo nunca las trae, su lavadora finaliza la carga.
   const lavadoraTerminada = {
     id: 7, nombre: 'L1', estado: 'en_uso', tipo: 'lavadora_mediana', necesita_terminar_ciclo: true,
   };
@@ -47,7 +48,7 @@ describe('MachineCard', () => {
     render(
       <MachineCard
         maquina={lavadoraTerminada}
-        nota={{ folio: '0123-080726', tipo_servicio: 'POR_ENCARGO', lavadoras_con_secado_ids: [7] }}
+        nota={{ folio: '0123-080726', tipo_servicio: 'AUTOSERVICIO', lavadoras_con_secado_ids: [7] }}
         onTerminarCiclo={onTerminarCiclo}
       />
     );
@@ -55,6 +56,20 @@ describe('MachineCard', () => {
     const boton = screen.getByRole('button', { name: 'INICIAR SECADO' });
     await userEvent.click(boton);
     expect(onTerminarCiclo).toHaveBeenCalledWith(lavadoraTerminada);
+  });
+
+  // Por Encargo: la ropa se queda en el local, así que la lavadora cierra su
+  // carga y la secadora se asigna y arranca aparte, desde Salidas. El servidor
+  // no marca sus lavadoras, y la tarjeta no ofrece pasar a secado.
+  it('una lavadora de Por Encargo finaliza la carga en vez de pasar a secado', () => {
+    render(
+      <MachineCard
+        maquina={lavadoraTerminada}
+        nota={{ folio: '0123-080726', tipo_servicio: 'POR_ENCARGO', lavadoras_con_secado_ids: [] }}
+      />
+    );
+    expect(screen.getByRole('button', { name: 'FINALIZAR CARGA' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'INICIAR SECADO' })).not.toBeInTheDocument();
   });
 
   // Segundo ciclo de la misma carga (mig. 108): una carga de ropa necesita dos
@@ -186,7 +201,7 @@ describe('MachineCard', () => {
     render(
       <MachineCard
         maquina={{ ...lavadoraTerminada, puede_otro_ciclo: false }}
-        nota={{ ...nota, lavadoras_con_secado_ids: [7] }}
+        nota={{ ...nota, tipo_servicio: 'AUTOSERVICIO', lavadoras_con_secado_ids: [7] }}
       />
     );
 

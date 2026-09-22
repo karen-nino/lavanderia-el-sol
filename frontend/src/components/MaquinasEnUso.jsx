@@ -206,10 +206,10 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
   // termina es el lavado: se exige elegir una secadora disponible para pasar
   // esa carga a secado. Si es una secadora, termina su secado; la nota pasa a
   // "Por Entregar" solo si era su última máquina en uso.
-  // Pasa a secado la lavadora cuya CARGA lleva secado pendiente, sea Por
-  // Encargo o Autoservicio (`lavadoras_con_secado_ids`, del servidor). La que no
-  // lo lleva finaliza su carga directo. Antes se decidía por tipo de servicio,
-  // y un Autoservicio con secadora se saltaba el secado.
+  // Encadena el secado la lavadora que el servidor marca en
+  // `lavadoras_con_secado_ids`: hoy solo las de Autoservicio, donde el cliente
+  // espera su ropa. La que no está marcada —toda Por Encargo— finaliza su carga
+  // directo, y su secadora se asigna y arranca aparte desde Salidas.
   const terminaLavado = Boolean(
     confirmTerminar && confirmTerminar.tipo !== 'secadora' && notaParaTerminar
     && Array.isArray(notaParaTerminar.lavadoras_con_secado_ids)
@@ -222,6 +222,10 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
   const otrasEnUso = Boolean(confirmTerminar && notaParaTerminar &&
     maquinas.some(m => String(m.id) !== String(confirmTerminar.id)
       && m.estado === 'en_uso' && notaUsaMaquina(notaParaTerminar, m.id)));
+  // A la nota le puede faltar trabajo que no está corriendo: la secadora de una
+  // carga de Por Encargo que todavía no se asigna. Entonces tampoco pasa a "Por
+  // Entregar" al cerrar esta máquina, y prometerlo confunde.
+  const sigueEnProceso = otrasEnUso || Boolean(notaParaTerminar?.faltan_maquinas_por_asignar);
 
   const confirmarTerminarCiclo = async () => {
     if (!confirmTerminar) return;
@@ -567,9 +571,12 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
                   ¿Confirmar que la carga de <span className="font-semibold text-gray-800">{confirmTerminar.nombre}</span> ya terminó? La máquina pasará a disponible.
                 </p>
                 {notaParaTerminar && (
-                  otrasEnUso ? (
+                  sigueEnProceso ? (
                     <p className="text-sm text-gray-500">
-                      Las demás cargas de la nota <span className="font-semibold text-gray-800">{notaParaTerminar.folio ?? `#${notaParaTerminar.id}`}</span> siguen en proceso; la nota aún no pasa a "Por Entregar".
+                      La nota <span className="font-semibold text-gray-800">{notaParaTerminar.folio ?? `#${notaParaTerminar.id}`}</span> sigue en proceso
+                      {otrasEnUso
+                        ? ': sus demás cargas todavía están en máquina.'
+                        : ': le falta asignar la máquina de otra carga.'} Aún no pasa a "Por Entregar".
                     </p>
                   ) : (
                     <p className="text-sm text-gray-500">
