@@ -683,9 +683,29 @@ export default function Salidas() {
   const maquinasModal = asignarSlot
     ? maquinasParaSlot(asignarSlot.slot, asignarSlot.tipo)
     : maquinasDisp;
+  // La que esta carga acabó de usar en ese hueco (mig. 114). Es la candidata
+  // natural para la vuelta siguiente —relavar, secar de más—: la ropa ya está
+  // adentro y la máquina acaba de quedar libre. Se sugiere de primera en la
+  // lista, no se preselecciona: asignar sale de un solo toque y no se deshace
+  // sin volver a Salidas.
+  const ultimaUsadaEnSlot = (slot) => {
+    const usadas = (cargaDestino?.maquinas_usadas ?? []).filter(u => u.slot === slot);
+    return usadas.length ? usadas[usadas.length - 1].maquina_id : null;
+  };
+  // Pone esa máquina al principio sin alterar el orden de las demás.
+  const sugiriendoPrimero = (lista, maquinaId) => {
+    if (!maquinaId) return lista;
+    const i = lista.findIndex(m => String(m.id) === String(maquinaId));
+    return i <= 0 ? lista : [lista[i], ...lista.slice(0, i), ...lista.slice(i + 1)];
+  };
+  const idUltimaLav = ultimaUsadaEnSlot('lavadora');
+  const idUltimaSec = ultimaUsadaEnSlot('secadora');
+
   // Solo se ofrecen las máquinas que caben en el destino elegido.
-  const lavadorasDisp = huecosAsignar.lavadora ? maquinasModal.filter(m => m.tipo !== 'secadora') : [];
-  const secadorasDisp = huecosAsignar.secadora ? maquinasModal.filter(m => m.tipo === 'secadora') : [];
+  const lavadorasDisp = huecosAsignar.lavadora
+    ? sugiriendoPrimero(maquinasModal.filter(m => m.tipo !== 'secadora'), idUltimaLav) : [];
+  const secadorasDisp = huecosAsignar.secadora
+    ? sugiriendoPrimero(maquinasModal.filter(m => m.tipo === 'secadora'), idUltimaSec) : [];
 
   // ¿Otras máquinas de la nota siguen en uso además de esta?
   const otrasEnUso = (maq) => maquinasAsignadas.some(m => String(m.id) !== String(maq.id) && m.estado === 'en_uso');
@@ -1412,6 +1432,8 @@ export default function Salidas() {
                       // Otra nota ya la tiene asignada: se puede elegir igual
                       // (se la queda quien inicie primero), pero se avisa.
                       const reservada = Boolean(m.reservada);
+                      // La que esta carga acaba de usar: va primera y lo dice.
+                      const sugerida = String(m.id) === String(idUltimaLav);
                       return (
                         <button
                           key={m.id}
@@ -1426,6 +1448,11 @@ export default function Salidas() {
                           <span className="flex items-center gap-2 min-w-0">
                             <SelCheck on={selected} />
                             <span className="font-medium text-gray-800 truncate">{m.nombre}</span>
+                            {sugerida && (
+                              <span className="text-xs font-medium text-blue bg-light-blue rounded-pill px-2 py-0.5 flex-shrink-0">
+                                acaba de terminar
+                              </span>
+                            )}
                           </span>
                           <span className="flex items-center gap-2 flex-shrink-0">
                             {reservada && (
@@ -1456,6 +1483,8 @@ export default function Salidas() {
                       // Otra nota ya la tiene asignada: se puede elegir igual
                       // (se la queda quien inicie primero), pero se avisa.
                       const reservada = Boolean(m.reservada);
+                      // La que esta carga acaba de usar: va primera y lo dice.
+                      const sugerida = String(m.id) === String(idUltimaSec);
                       return (
                         <button
                           key={m.id}
@@ -1470,6 +1499,11 @@ export default function Salidas() {
                           <span className="flex items-center gap-2 min-w-0">
                             <SelCheck on={selected} />
                             <span className="font-medium text-gray-800 truncate">{m.nombre}</span>
+                            {sugerida && (
+                              <span className="text-xs font-medium text-blue bg-light-blue rounded-pill px-2 py-0.5 flex-shrink-0">
+                                acaba de terminar
+                              </span>
+                            )}
                           </span>
                           <span className="flex items-center gap-2 flex-shrink-0">
                             {reservada && (
