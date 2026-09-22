@@ -748,6 +748,33 @@ describe('handlers de máquina — asignar / cambiar / quitar', () => {
     expect(usadas.map(u => u.actual)).toEqual([false, true]);
   });
 
+  // La vuelta extra va sin cobro sobre un lavado ya cobrado: darle dos ciclos
+  // sería regalar el doble de agua y luz (mig. 115).
+  it('la máquina agregada desde Salidas queda marcada de un solo ciclo', async () => {
+    const { notaId, lavadoraId } = await porEncargoEnEspera();
+    const nota = await request(app).get(`/api/notas/${notaId}`).set(auth(admin.token));
+    const cargaId = nota.body.cargas[0].id;
+
+    // El lavado que la nota compró no está marcado: corre lo que dé su marca.
+    const { rows: primera } = await pool.query(
+      'SELECT ciclo_unico FROM nota_carga_maquinas WHERE carga_id = $1 AND slot = $2', [cargaId, 'lavadora']
+    );
+    expect(primera[0].ciclo_unico).toBe(false);
+
+    // Se libera y se agrega otra vuelta desde Salidas.
+    await pool.query('UPDATE nota_cargas SET lavadora_id = NULL WHERE id = $1', [cargaId]);
+    await pool.query("UPDATE maquinas SET estado = 'disponible' WHERE id = $1", [lavadoraId]);
+    await request(app).patch(`/api/notas/${notaId}/asignar-maquina`)
+      .set(auth(admin.token)).send({ maquina_id: lavadoraId, cobrar: false, carga_id: cargaId })
+      .expect(200);
+
+    const { rows: pasadas } = await pool.query(
+      `SELECT ciclo_unico FROM nota_carga_maquinas
+        WHERE carga_id = $1 AND slot = $2 ORDER BY asignada_at, id`, [cargaId, 'lavadora']
+    );
+    expect(pasadas.map(x => x.ciclo_unico)).toEqual([false, true]);
+  });
+
   it('cambiar de máquina corrige la pasada en curso, no agrega otra', async () => {
     const { notaId, lavadoraId } = await porEncargoEnEspera();
     const otra = await seedMaquina({ nombre: 'Lavadora 2', tipo: 'lavadora_mediana' });

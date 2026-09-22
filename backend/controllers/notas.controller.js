@@ -757,7 +757,11 @@ async function prepararCargas(client, cargas, tipoPrendaNota, sucursal, tipo_ser
 //   modo 'pasada'   → una vuelta más de esta carga: fila nueva.
 //   modo 'reemplazo'→ corregir la máquina de la pasada en curso (cambiar
 //                     máquina): se pisa la última fila, no se agrega otra.
-async function registrarMaquinaEnCarga(client, cargaId, slot, maquinaId, modo = 'pasada') {
+//
+// `cicloUnico` (mig. 115) marca la vuelta que corre UN solo ciclo aunque la
+// marca de la máquina dé para dos: es la que se agrega desde Salidas, va sin
+// cobro y no debe encadenar otra vuelta encima.
+async function registrarMaquinaEnCarga(client, cargaId, slot, maquinaId, modo = 'pasada', cicloUnico = false) {
   if (!cargaId || !maquinaId) return;
   const { rows: maq } = await client.query(
     'SELECT id, nombre, tipo, tamano FROM maquinas WHERE id = $1', [maquinaId]
@@ -794,9 +798,9 @@ async function registrarMaquinaEnCarga(client, cargaId, slot, maquinaId, modo = 
 
   await client.query(
     `INSERT INTO nota_carga_maquinas
-       (carga_id, slot, maquina_id, maquina_nombre, maquina_tipo, maquina_tamano)
-     VALUES ($1, $2, $3, $4, $5, $6)`,
-    [cargaId, slot, m.id, m.nombre, m.tipo, m.tamano]
+       (carga_id, slot, maquina_id, maquina_nombre, maquina_tipo, maquina_tamano, ciclo_unico)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+    [cargaId, slot, m.id, m.nombre, m.tipo, m.tamano, cicloUnico]
   );
 }
 
@@ -2227,6 +2231,13 @@ async function cargaConCiclosDisponibles(client, notaId, maquinaId) {
     `SELECT CASE WHEN nc.lavadora_id = $2 THEN nc.lavadora_ciclos
                  ELSE nc.secadora_ciclos END AS ciclos,
             m.tipo,
+            -- La vuelta extra corre un solo ciclo (mig. 115).
+            COALESCE((
+              SELECT ncm.ciclo_unico FROM nota_carga_maquinas ncm
+               WHERE ncm.carga_id = nc.id
+                 AND ncm.slot = CASE WHEN nc.lavadora_id = $2 THEN 'lavadora' ELSE 'secadora' END
+               ORDER BY ncm.asignada_at DESC, ncm.id DESC LIMIT 1
+            ), FALSE) AS ciclo_unico,
             ${MINUTOS_DE_MARCA} AS minutos_marca
        FROM nota_cargas nc
        -- La máquina entra por el tope de ciclos: una lavadora sin tiempo de
@@ -2896,9 +2907,10 @@ export const asignarMaquina = async (req, res) => {
         // reescribe: lo que se cobró al hacer la nota sigue siendo lo cobrado,
         // y la máquina repetida va sin cobro. Sin esto, repetir con cobrar
         // false pondría el precio en 0 y bajaría el total de la nota.
-        // Cada hueco que se llena aquí es una pasada más de esa carga.
-        await registrarMaquinaEnCarga(client, cargaObjetivo.id, 'lavadora', lavadora ? lavadora.id : null);
-        await registrarMaquinaEnCarga(client, cargaObjetivo.id, 'secadora', secadora ? secadora.id : null);
+        // Cada hueco que se llena aquí es una pasada más de esa carga, y las
+        // que se agregan desde Salidas corren un solo ciclo (mig. 115).
+        await registrarMaquinaEnCarga(client, cargaObjetivo.id, 'lavadora', lavadora ? lavadora.id : null, 'pasada', true);
+        await registrarMaquinaEnCarga(client, cargaObjetivo.id, 'secadora', secadora ? secadora.id : null, 'pasada', true);
         await client.query(
           `UPDATE nota_cargas
               SET lavadora_id       = COALESCE($1::int, lavadora_id),
@@ -2938,8 +2950,8 @@ export const asignarMaquina = async (req, res) => {
           tipoPrenda,
         ]
       );
-      await registrarMaquinaEnCarga(client, nuevaCarga[0].id, 'lavadora', lavadora ? lavadora.id : null);
-      await registrarMaquinaEnCarga(client, nuevaCarga[0].id, 'secadora', secadora ? secadora.id : null);
+      await registrarMaquinaEnCarga(client, nuevaCarga[0].id, 'lavadora', lavadora ? lavadora.id : null, 'pasada', true);
+      await registrarMaquinaEnCarga(client, nuevaCarga[0].id, 'secadora', secadora ? secadora.id : null, 'pasada', true);
     }
 
     // Estado según las máquinas EN USO: las nuevas no cuentan (no se iniciaron).

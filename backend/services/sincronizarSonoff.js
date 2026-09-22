@@ -111,8 +111,12 @@ export const MAX_CICLOS_POR_CARGA = (() => {
 // Espera la fila de `maquinas` con `minutos_marca` (ver MINUTOS_DE_MARCA en
 // db/sqlMaquina.js). Sin ese campo toda lavadora parecería no tener marca, así
 // que las consultas que deciden sobre ciclos tienen que traerlo.
+// · **La vuelta EXTRA agregada desde Salidas** (mig. 115). Va sin cobro sobre
+//   un lavado ya cobrado; encadenarle otra sería regalar el doble.
+//   Lo dice la fila: `ciclo_unico` de la última pasada de esa carga.
 export const maxCiclosDeMaquina = (maq) =>
-  maq?.tipo === 'secadora' || maq?.minutos_marca == null ? 1 : MAX_CICLOS_POR_CARGA;
+  maq?.tipo === 'secadora' || maq?.minutos_marca == null || maq?.ciclo_unico
+    ? 1 : MAX_CICLOS_POR_CARGA;
 
 // Cuánto aguanta encendida una máquina que espera su arranque (mig. 110).
 // "Encender máquina" le da corriente para que el empleado cargue la ropa y

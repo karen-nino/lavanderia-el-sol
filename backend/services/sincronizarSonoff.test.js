@@ -418,6 +418,13 @@ describe('tope de ciclos por máquina', () => {
       .toBe(MAX_CICLOS_POR_CARGA);
   });
 
+  it('la vuelta extra corre un solo ciclo aunque la marca dé para dos', async () => {
+    const { maxCiclosDeMaquina } = await cargar();
+    // Misma lavadora, mismo tiempo de marca: lo que cambia es la pasada.
+    expect(maxCiclosDeMaquina({ tipo: 'lavadora_mediana', minutos_marca: 45, ciclo_unico: false })).toBe(2);
+    expect(maxCiclosDeMaquina({ tipo: 'lavadora_mediana', minutos_marca: 45, ciclo_unico: true })).toBe(1);
+  });
+
   it('una secadora corre un ciclo aunque tenga tiempo de marca', async () => {
     // Regla del negocio, no de la configuración: un secado es uno. Por eso el
     // tipo se mira antes que los minutos.

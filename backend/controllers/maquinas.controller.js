@@ -128,6 +128,8 @@ const conDatosDeOtroCiclo = (m) => {
   // El tope no es el mismo para todas: una lavadora sin tiempo de marca corre
   // un solo ciclo. Sale de la fila, así que la consulta tiene que traer
   // `minutos_marca`.
+  // `ciclo_unico` viene de la carga que corre ahora (lateral de getMaquinas),
+  // así que el tope se calcula con la fila completa.
   const maxCiclos = maxCiclosDeMaquina(m);
   return {
     ...m,
@@ -158,7 +160,8 @@ export const getMaquinas = async (req, res) => {
               r.id                  AS reservada_nota_id,
               u.folio               AS en_uso_folio,
               u.id                  AS en_uso_nota_id,
-              c.ciclos              AS ciclos_carga
+              c.ciclos              AS ciclos_carga,
+              c.ciclo_unico         AS ciclo_unico
          FROM maquinas m
          LEFT JOIN LATERAL (
            SELECT n.id, n.folio
@@ -192,7 +195,16 @@ export const getMaquinas = async (req, res) => {
          -- que además tiene que haber arrancado de verdad (mig. 097).
          LEFT JOIN LATERAL (
            SELECT CASE WHEN nc.lavadora_id = m.id THEN nc.lavadora_ciclos
-                       ELSE nc.secadora_ciclos END AS ciclos
+                       ELSE nc.secadora_ciclos END AS ciclos,
+                  -- ¿Esta vuelta es de un solo ciclo? (mig. 115) Es de la
+                  -- PASADA: la misma lavadora puede dar dos ciclos en el
+                  -- lavado de la nota y uno en el relavado de después.
+                  COALESCE((
+                    SELECT ncm.ciclo_unico FROM nota_carga_maquinas ncm
+                     WHERE ncm.carga_id = nc.id
+                       AND ncm.slot = CASE WHEN nc.lavadora_id = m.id THEN 'lavadora' ELSE 'secadora' END
+                     ORDER BY ncm.asignada_at DESC, ncm.id DESC LIMIT 1
+                  ), FALSE) AS ciclo_unico
              FROM nota_cargas nc
              JOIN notas n ON n.id = nc.nota_id
             WHERE m.estado = 'en_uso'
@@ -882,7 +894,13 @@ export const otroCiclo = async (req, res) => {
               nc.nota_id,
               (nc.lavadora_id = $1) AS es_lavadora,
               CASE WHEN nc.lavadora_id = $1 THEN nc.lavadora_ciclos
-                   ELSE nc.secadora_ciclos END AS ciclos
+                   ELSE nc.secadora_ciclos END AS ciclos,
+              COALESCE((
+                SELECT ncm.ciclo_unico FROM nota_carga_maquinas ncm
+                 WHERE ncm.carga_id = nc.id
+                   AND ncm.slot = CASE WHEN nc.lavadora_id = $1 THEN 'lavadora' ELSE 'secadora' END
+                 ORDER BY ncm.asignada_at DESC, ncm.id DESC LIMIT 1
+              ), FALSE) AS ciclo_unico
          FROM nota_cargas nc
          JOIN notas n ON n.id = nc.nota_id
         WHERE n.estado IN ('EN_ESPERA', 'LAVANDO', 'SECANDO')
@@ -901,17 +919,20 @@ export const otroCiclo = async (req, res) => {
       });
     }
 
-    // Una lavadora sin tiempo de marca corre un solo ciclo. Se revalida aquí y
-    // no solo en la tarjeta porque este endpoint es lo que de verdad alarga el
-    // lavado: el botón es únicamente quien lo pide.
-    const maxCiclos = maxCiclosDeMaquina(maq);
+    // Una lavadora sin tiempo de marca corre un solo ciclo, y la vuelta extra
+    // agregada desde Salidas también (mig. 115). Se revalida aquí y no solo en
+    // la tarjeta porque este endpoint es lo que de verdad alarga el lavado: el
+    // botón es únicamente quien lo pide.
+    const maxCiclos = maxCiclosDeMaquina({ ...maq, ciclo_unico: carga.ciclo_unico });
     if (carga.ciclos >= maxCiclos) {
       await client.query('ROLLBACK');
       return res.status(400).json({
-        message: maxCiclos === 1
-          ? `${maq.nombre} no tiene configurado el tiempo de su marca, así que su carga corre un solo ciclo. `
-            + 'Termínala, o configura el tiempo en Ajustes → Marcas y tiempos.'
-          : `Esta carga ya corrió sus ${maxCiclos} ciclos. Termínala para liberar ${maq.nombre}.`,
+        message: maxCiclos > 1
+          ? `Esta carga ya corrió sus ${maxCiclos} ciclos. Termínala para liberar ${maq.nombre}.`
+          : carga.ciclo_unico
+          ? `Esta vuelta se agregó sin cobro, así que corre un solo ciclo. Termínala para liberar ${maq.nombre}.`
+          : `${maq.nombre} no tiene configurado el tiempo de su marca, así que su carga corre un solo ciclo. `
+            + 'Termínala, o configura el tiempo en Ajustes → Marcas y tiempos.',
       });
     }
 
@@ -1004,6 +1025,9 @@ export const otroCiclo = async (req, res) => {
       maquina: conDatosDeOtroCiclo({
         ...(fresca[0] ?? upd[0]),
         ciclos_carga: ciclo,
+        // La consulta de arriba trae la máquina sola; el tope de ESTA vuelta
+        // lo decide la pasada, que ya se leyó con la carga.
+        ciclo_unico: carga.ciclo_unico,
       }),
     });
   } catch (err) {
