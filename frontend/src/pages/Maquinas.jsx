@@ -1,22 +1,13 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import MaquinasEnUso from '../components/MaquinasEnUso';
 import SucursalBar from '../components/SucursalBar';
-import { tiempoRelativo } from '../lib/fecha';
 
 export default function Maquinas() {
   const monitorRef = useRef(null);
   const [refrescando, setRefrescando] = useState(false);
   const [enUso, setEnUso] = useState(0);
-  // Estado del refresco que reporta el monitor: cuándo trajo datos por última
-  // vez y si la recarga manual falló.
-  const [estado, setEstado] = useState({ ultimaActualizacion: null, errorRefresco: '' });
-  // Reloj propio: la marca "Actualizado hace X" tiene que envejecer sola.
-  const [now, setNow] = useState(() => Date.now());
-
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(id);
-  }, []);
+  // Aviso que reporta el monitor cuando la recarga manual falla.
+  const [errorRefresco, setErrorRefresco] = useState('');
 
   const refrescar = async () => {
     setRefrescando(true);
@@ -35,13 +26,7 @@ export default function Maquinas() {
           <div>
             <h1 className="text-xl font-bold text-gray-900">Máquinas</h1>
             <p className="text-sm text-gray-500">Máquinas en uso ({enUso})</p>
-            {estado.errorRefresco ? (
-              <p className="text-sm text-red-600">{estado.errorRefresco}</p>
-            ) : estado.ultimaActualizacion && (
-              <p className="text-sm text-gray-400">
-                Actualizado {tiempoRelativo(estado.ultimaActualizacion, now)}
-              </p>
-            )}
+            {errorRefresco && <p className="text-sm text-red-600">{errorRefresco}</p>}
           </div>
           <button
             type="button"
@@ -71,7 +56,7 @@ export default function Maquinas() {
           ref={monitorRef}
           showHeader={false}
           onCountChange={setEnUso}
-          onEstadoRefresco={setEstado}
+          onErrorRefresco={setErrorRefresco}
         />
       </div>
     </div>

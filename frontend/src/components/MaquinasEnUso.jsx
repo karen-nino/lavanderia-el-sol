@@ -4,7 +4,6 @@ import { api } from '../lib/api';
 import MachineCard from './MachineCard';
 import MaquinaCicloOverlay from './MaquinaCicloOverlay';
 import { prepararAviso, reproducirAvisoCiclo } from '../lib/avisoSonoro';
-import { tiempoRelativo } from '../lib/fecha';
 
 // Cada cuánto se re-consultan notas y máquinas en segundo plano.
 const REFRESCO_MS = 15000;
@@ -46,13 +45,13 @@ function formatMMSS(totalSegundos) {
 //
 // `showHeader`: muestra el encabezado propio ("Máquinas en uso (n)" + botón de
 // recargar). La página Máquinas lo oculta y lleva el título/conteo al nav (vía
-// `onCountChange`), el estado del refresco (vía `onEstadoRefresco`) y el
+// `onCountChange`), el aviso de recarga fallida (vía `onErrorRefresco`) y el
 // refresco a su botón (vía el método `refrescar` expuesto por ref).
 //
 // `layout`: 'grid' (por defecto, página Máquinas) muestra todas las máquinas en
 // uso en una sola rejilla. 'carousel' (Dashboard) las agrupa en dos carruseles
 // horizontales — Lavadoras y Secadoras — cada uno con su conteo "en uso/total".
-const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onCountChange, onEstadoRefresco, layout = 'grid' }, ref) {
+const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onCountChange, onErrorRefresco, layout = 'grid' }, ref) {
   const navigate = useNavigate();
   const [notas, setNotas]       = useState([]);
   const [maquinas, setMaquinas] = useState([]);
@@ -66,9 +65,8 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
   const [terminando, setTerminando] = useState(false);
   const [errorTerminar, setErrorTerminar] = useState('');
   const [refrescando, setRefrescando] = useState(false);
-  // Marca de la última consulta que sí trajo datos, y el aviso de la recarga
-  // manual que falló (el refresco automático nunca escribe este error).
-  const [ultimaActualizacion, setUltimaActualizacion] = useState(null);
+  // Aviso de la recarga manual que falló (el refresco automático nunca
+  // escribe este error: se reintenta solo).
   const [errorRefresco, setErrorRefresco] = useState('');
   // Máquina a la que se le está pidiendo otro ciclo, y el error si falló. El
   // error se guarda por máquina para que el de una tarjeta no salga en otra.
@@ -80,8 +78,8 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
   // Refresco silencioso de los datos que cambian en tiempo real. No toca
   // `loading` ni muestra errores: los fallos transitorios se ignoran y se
   // reintenta en el siguiente ciclo. Devuelve si la consulta trajo datos, para
-  // que la recarga manual (la única que avisa) sepa si falló; un éxito sella
-  // la hora de actualización y borra un error anterior.
+  // que la recarga manual (la única que avisa) sepa si falló; un éxito borra
+  // un error anterior.
   const refrescarDatos = useCallback(async () => {
     try {
       const [n, m] = await Promise.all([
@@ -93,7 +91,6 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
       if (!Array.isArray(n) || !Array.isArray(m)) return false;
       setNotas(n);
       setMaquinas(m);
-      setUltimaActualizacion(Date.now());
       setErrorRefresco('');
       return true;
     } catch {
@@ -132,7 +129,6 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
         if (cancelado) return;
         if (Array.isArray(n)) setNotas(n);
         if (Array.isArray(m)) setMaquinas(m);
-        if (Array.isArray(n) && Array.isArray(m)) setUltimaActualizacion(Date.now());
         if (a) {
           setTiempos({
             mediana:  a.tiempo_carga_mediana  != null ? Number(a.tiempo_carga_mediana)  : 30,
@@ -187,11 +183,11 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
     onCountChange?.(maquinas.filter(m => m.estado === 'en_uso').length);
   }, [maquinas, onCountChange]);
 
-  // Reporta al contenedor cuándo se actualizó por última vez y si la recarga
-  // manual falló, para que pinte la marca donde tenga su propio botón.
+  // Reporta al contenedor si la recarga manual falló, para que pinte el aviso
+  // donde tenga su propio botón.
   useEffect(() => {
-    onEstadoRefresco?.({ ultimaActualizacion, errorRefresco });
-  }, [ultimaActualizacion, errorRefresco, onEstadoRefresco]);
+    onErrorRefresco?.(errorRefresco);
+  }, [errorRefresco, onErrorRefresco]);
 
   // Una nota está vinculada a la máquina si esta aparece en cualquiera de sus
   // cargas (maquinas_ids, calculado por el servidor).
@@ -466,11 +462,7 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
                 <h2 className="text-section text-dark-blue">
                   Máquinas en uso <span className="text-grey">({maquinasEnUso.length})</span>
                 </h2>
-                {errorRefresco ? (
-                  <p className="text-sm text-red-600">{errorRefresco}</p>
-                ) : ultimaActualizacion && (
-                  <p className="text-sm text-grey">Actualizado {tiempoRelativo(ultimaActualizacion, now)}</p>
-                )}
+                {errorRefresco && <p className="text-sm text-red-600">{errorRefresco}</p>}
               </div>
               <button
                 type="button"
