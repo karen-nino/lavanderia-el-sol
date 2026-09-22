@@ -4,9 +4,16 @@ import { api } from '../lib/api';
 import MachineCard from './MachineCard';
 import MaquinaCicloOverlay from './MaquinaCicloOverlay';
 import { prepararAviso, reproducirAvisoCiclo } from '../lib/avisoSonoro';
+import { tiempoRelativo } from '../lib/fecha';
 
 // Cada cuánto se re-consultan notas y máquinas en segundo plano.
 const REFRESCO_MS = 15000;
+
+// Duración mínima del giro en la recarga manual. Sin esto, con red rápida el
+// icono gira ~100 ms y el clic parece no haber hecho nada.
+const GIRO_MIN_MS = 400;
+
+const esperar = ms => new Promise(r => setTimeout(r, ms));
 
 // Acción que el operador intentó pero no se completó porque la sesión expiró
 // (la app redirige a /login). Se persiste para reabrir la confirmación al
@@ -39,13 +46,13 @@ function formatMMSS(totalSegundos) {
 //
 // `showHeader`: muestra el encabezado propio ("Máquinas en uso (n)" + botón de
 // recargar). La página Máquinas lo oculta y lleva el título/conteo al nav (vía
-// `onCountChange`) y el refresco a su botón (vía el método `refrescar` expuesto
-// por ref).
+// `onCountChange`), el estado del refresco (vía `onEstadoRefresco`) y el
+// refresco a su botón (vía el método `refrescar` expuesto por ref).
 //
 // `layout`: 'grid' (por defecto, página Máquinas) muestra todas las máquinas en
 // uso en una sola rejilla. 'carousel' (Dashboard) las agrupa en dos carruseles
 // horizontales — Lavadoras y Secadoras — cada uno con su conteo "en uso/total".
-const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onCountChange, layout = 'grid' }, ref) {
+const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onCountChange, onEstadoRefresco, layout = 'grid' }, ref) {
   const navigate = useNavigate();
   const [notas, setNotas]       = useState([]);
   const [maquinas, setMaquinas] = useState([]);
@@ -59,6 +66,10 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
   const [terminando, setTerminando] = useState(false);
   const [errorTerminar, setErrorTerminar] = useState('');
   const [refrescando, setRefrescando] = useState(false);
+  // Marca de la última consulta que sí trajo datos, y el aviso de la recarga
+  // manual que falló (el refresco automático nunca escribe este error).
+  const [ultimaActualizacion, setUltimaActualizacion] = useState(null);
+  const [errorRefresco, setErrorRefresco] = useState('');
   // Máquina a la que se le está pidiendo otro ciclo, y el error si falló. El
   // error se guarda por máquina para que el de una tarjeta no salga en otra.
   const [otroCicloEnCurso, setOtroCicloEnCurso] = useState(null);
@@ -68,34 +79,45 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
 
   // Refresco silencioso de los datos que cambian en tiempo real. No toca
   // `loading` ni muestra errores: los fallos transitorios se ignoran y se
-  // reintenta en el siguiente ciclo. Solo escribe si llegó un arreglo, para
-  // no romper el render si la sesión expiró (api redirige y devuelve undefined).
+  // reintenta en el siguiente ciclo. Devuelve si la consulta trajo datos, para
+  // que la recarga manual (la única que avisa) sepa si falló; un éxito sella
+  // la hora de actualización y borra un error anterior.
   const refrescarDatos = useCallback(async () => {
     try {
       const [n, m] = await Promise.all([
         api.get('/notas'),
         api.get('/maquinas'),
       ]);
-      if (Array.isArray(n)) setNotas(n);
-      if (Array.isArray(m)) setMaquinas(m);
+      // Si la sesión expiró, api redirige y devuelve undefined: no es una
+      // actualización válida aunque la promesa se haya resuelto.
+      if (!Array.isArray(n) || !Array.isArray(m)) return false;
+      setNotas(n);
+      setMaquinas(m);
+      setUltimaActualizacion(Date.now());
+      setErrorRefresco('');
+      return true;
     } catch {
       // ignorar: se reintenta en el siguiente ciclo de refresco
+      return false;
     }
   }, []);
 
-  // Recarga manual (botón): muestra el giro mientras consulta.
-  const refrescarManual = async () => {
+  // Recarga manual (botón): gira al menos GIRO_MIN_MS y avisa si falló.
+  const refrescarManual = useCallback(async () => {
     setRefrescando(true);
+    setErrorRefresco('');
     try {
-      await refrescarDatos();
+      const [ok] = await Promise.all([refrescarDatos(), esperar(GIRO_MIN_MS)]);
+      if (!ok) setErrorRefresco('No se pudo actualizar');
+      return ok;
     } finally {
       setRefrescando(false);
     }
-  };
+  }, [refrescarDatos]);
 
   // Permite que un contenedor (p. ej. el nav de la página Máquinas) dispare el
   // refresco. Devuelve la promesa para que pueda manejar su propio spinner.
-  useImperativeHandle(ref, () => ({ refrescar: refrescarDatos }), [refrescarDatos]);
+  useImperativeHandle(ref, () => ({ refrescar: refrescarManual }), [refrescarManual]);
 
   // Carga inicial. Los ajustes (tiempos de carga) solo se piden aquí: no
   // cambian en tiempo real, así que el refresco periódico no los reconsulta.
@@ -110,6 +132,7 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
         if (cancelado) return;
         if (Array.isArray(n)) setNotas(n);
         if (Array.isArray(m)) setMaquinas(m);
+        if (Array.isArray(n) && Array.isArray(m)) setUltimaActualizacion(Date.now());
         if (a) {
           setTiempos({
             mediana:  a.tiempo_carga_mediana  != null ? Number(a.tiempo_carga_mediana)  : 30,
@@ -163,6 +186,12 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
   useEffect(() => {
     onCountChange?.(maquinas.filter(m => m.estado === 'en_uso').length);
   }, [maquinas, onCountChange]);
+
+  // Reporta al contenedor cuándo se actualizó por última vez y si la recarga
+  // manual falló, para que pinte la marca donde tenga su propio botón.
+  useEffect(() => {
+    onEstadoRefresco?.({ ultimaActualizacion, errorRefresco });
+  }, [ultimaActualizacion, errorRefresco, onEstadoRefresco]);
 
   // Una nota está vinculada a la máquina si esta aparece en cualquiera de sus
   // cargas (maquinas_ids, calculado por el servidor).
@@ -433,9 +462,16 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
         <>
           {showHeader && (
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-section text-dark-blue">
-                Máquinas en uso <span className="text-grey">({maquinasEnUso.length})</span>
-              </h2>
+              <div>
+                <h2 className="text-section text-dark-blue">
+                  Máquinas en uso <span className="text-grey">({maquinasEnUso.length})</span>
+                </h2>
+                {errorRefresco ? (
+                  <p className="text-sm text-red-600">{errorRefresco}</p>
+                ) : ultimaActualizacion && (
+                  <p className="text-sm text-grey">Actualizado {tiempoRelativo(ultimaActualizacion, now)}</p>
+                )}
+              </div>
               <button
                 type="button"
                 onClick={refrescarManual}
