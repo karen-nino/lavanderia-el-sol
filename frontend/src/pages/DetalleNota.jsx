@@ -9,7 +9,7 @@ import { etiquetaProducto, tituloProducto, subtituloProducto, ordenProducto } fr
 import { FORMAS_PAGO, formaPagoLabel } from '../lib/formasPago';
 import { formatHora12, formatFechaHora12 } from '../lib/fecha';
 import { leerAvisoCobro, limpiarAvisoCobro } from '../lib/avisoCobro';
-import { esTerminal, puedeLiquidar, puedeFinalizar, puedeEliminar } from '../lib/accionesNota';
+import { esTerminal, puedeLiquidar, puedeFinalizar, puedeEliminar, eliminarSoloEnEscritorio } from '../lib/accionesNota';
 
 // Unidad de venta de un producto de la nota, en texto ("2 botellas" / "3 tapas").
 function unidadProdTxt(p) {
@@ -570,10 +570,21 @@ export default function DetalleNota() {
               Finalizar
             </button>
           )}
+          {/* Mientras la nota vive, Eliminar solo se ve en escritorio: en el
+              teléfono está pegado a Cancelar, se pulsa con el dedo y borrar no
+              se deshace. En el mostrador el camino es cancelar. */}
+          {puedeEliminar(nota, esAdmin) && (
+            <button
+              onClick={() => setConfirmEliminar(true)}
+              disabled={loadingAccion}
+              className={`${eliminarSoloEnEscritorio(nota) ? 'hidden md:flex' : 'flex'} items-center gap-1.5 px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors`}
+            >
+              Eliminar
+            </button>
+          )}
         </div>
       )}
-      {/* Eliminar solo cuando la nota ya está cerrada. Mientras sigue viva, lo
-          que corresponde es cancelarla: queda el registro de que existió. */}
+      {/* Ya cerrada, el botón se ve en los dos tamaños. */}
       {terminal && (
         <div className="flex flex-wrap gap-2">
           {puedeEliminar(nota, esAdmin) && (

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { esTerminal, puedeLiquidar, puedeFinalizar, puedeEliminar } from './accionesNota';
+import { esTerminal, puedeLiquidar, puedeFinalizar, puedeEliminar, eliminarSoloEnEscritorio } from './accionesNota';
 
 const nota = (estado, estado_pago) => ({ estado, estado_pago });
 
@@ -42,20 +42,29 @@ describe('acciones del detalle de una nota', () => {
     }
   });
 
-  it('una nota viva no se elimina, ni siendo admin: primero se cancela', () => {
-    for (const estado of ['EN_ESPERA', 'LAVANDO', 'SECANDO', 'LISTA']) {
-      expect(puedeEliminar(nota(estado, 'PENDIENTE'), true)).toBe(false);
-      expect(puedeEliminar(nota(estado, 'PAGADO'), true)).toBe(false);
+  it('el admin puede eliminar en cualquier estado', () => {
+    // Borrar una nota abierta sigue siendo posible: cancelar una ya cobrada
+    // exige revertir el pago antes, y eso son tres pasos para lo que a veces
+    // es un error de captura.
+    for (const estado of ['EN_ESPERA', 'LAVANDO', 'SECANDO', 'LISTA', 'CANCELADA', 'FINALIZADA']) {
+      expect(puedeEliminar(nota(estado, 'PENDIENTE'), true)).toBe(true);
     }
-  });
-
-  it('una vez cancelada o finalizada, el admin sí puede eliminarla', () => {
-    expect(puedeEliminar(nota('CANCELADA', 'PENDIENTE'), true)).toBe(true);
-    expect(puedeEliminar(nota('FINALIZADA', 'PAGADO'), true)).toBe(true);
   });
 
   it('un empleado no elimina nunca', () => {
     expect(puedeEliminar(nota('CANCELADA', 'PENDIENTE'), false)).toBe(false);
+    expect(puedeEliminar(nota('EN_ESPERA', 'PENDIENTE'), false)).toBe(false);
+  });
+
+  it('en el teléfono el botón se esconde mientras la nota siga viva', () => {
+    for (const estado of ['EN_ESPERA', 'LAVANDO', 'SECANDO', 'LISTA']) {
+      expect(eliminarSoloEnEscritorio(nota(estado, 'PENDIENTE'))).toBe(true);
+    }
+  });
+
+  it('ya cerrada, el botón se ve también en el teléfono', () => {
+    expect(eliminarSoloEnEscritorio(nota('CANCELADA', 'PENDIENTE'))).toBe(false);
+    expect(eliminarSoloEnEscritorio(nota('FINALIZADA', 'PAGADO'))).toBe(false);
   });
 
   it('esTerminal reconoce las notas cerradas', () => {

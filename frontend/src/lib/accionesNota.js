@@ -20,9 +20,16 @@ export const puedeLiquidar = (nota) =>
 export const puedeFinalizar = (nota) =>
   !esTerminal(nota) && nota?.estado === 'LISTA' && nota?.estado_pago !== 'PENDIENTE';
 
-// Borrar una nota es de admin y solo cuando ya está cerrada. Mientras la nota
-// vive —esperando, lavando, lista— el camino es cancelarla: eso deja registro
-// de que existió y por qué no siguió, y borrarla de golpe se llevaba por
-// delante ese rastro (2026-09-21). Una nota cancelada o finalizada ya no tiene
-// nada en marcha, así que ahí el botón sí aparece.
-export const puedeEliminar = (nota, esAdmin) => Boolean(esAdmin) && esTerminal(nota);
+// Borrar una nota es de admin, en cualquier estado: el servidor lo permite y
+// hay casos en los que hace falta sin pasar por cancelar (una nota cobrada no
+// se puede cancelar sin revertir antes el pago, y eso son tres pasos para algo
+// que a veces solo es un error de captura).
+export const puedeEliminar = (nota, esAdmin) => Boolean(esAdmin);
+
+// …pero en el TELÉFONO, mientras la nota sigue viva, el botón no se enseña.
+// Ahí está pegado a Cancelar, en pantalla chica y con el dedo, y borrar no se
+// deshace: lo que se pierde es el rastro de que la nota existió. En el
+// mostrador el camino es cancelar; el borrado directo queda para el escritorio,
+// donde se administra con calma. Ya cerrada, el botón se ve en los dos
+// (2026-09-21).
+export const eliminarSoloEnEscritorio = (nota) => !esTerminal(nota);

@@ -1817,25 +1817,6 @@ export const eliminarNota = async (req, res) => {
     }
     const { estado: estadoNota } = notaRows[0];
 
-    // Una nota viva no se borra: se cancela. Cancelar deja el registro de que
-    // existió y de que no siguió; borrarla se lleva por delante ese rastro y,
-    // si iba a medias, también lo que la nota estaba sujetando (máquinas
-    // apartadas, producto reservado). Hasta el 2026-09-21 esto era solo una
-    // regla de pantalla: el detalle escondía el botón, pero el endpoint
-    // aceptaba cualquier estado y la lista de notas borraba por selección
-    // múltiple sin mirarlo.
-    //
-    // FINALIZADA entra porque es el final normal de una nota, y porque la venta
-    // de mostrador nace FINALIZADA: eliminarla es la ÚNICA forma de deshacer un
-    // cobro mal capturado (ver el manejo de stock más abajo).
-    if (!['CANCELADA', 'FINALIZADA'].includes(estadoNota)) {
-      await client.query('ROLLBACK');
-      return res.status(409).json({
-        message: 'No se puede eliminar una nota que sigue abierta. '
-               + 'Cancélala primero y después elimínala.',
-      });
-    }
-
     // Una máquina de esta nota CORRIENDO su ciclo (lavando o secando) no se
     // interrumpe por un borrado: hay ropa dentro y el ciclo va a medias. Se mide
     // por `en_uso_desde`, que es lo que separa "lavando" de "encendida
