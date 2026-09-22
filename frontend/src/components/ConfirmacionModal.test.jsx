@@ -40,6 +40,26 @@ describe('ConfirmacionModal', () => {
     expect(screen.getAllByRole('listitem')).toHaveLength(1);
   });
 
+  it('enseña las filas de importe cuando la decisión es de dinero', () => {
+    render(
+      <ConfirmacionModal
+        titulo="Quitar la Carga 2"
+        mensaje="La carga sale de la nota y deja de cobrarse."
+        detalle={[
+          { etiqueta: 'Deja de cobrarse', valor: '$50.00' },
+          { etiqueta: 'Nuevo total de la nota', valor: '$120.00' },
+        ]}
+        textoConfirmar="Quitar carga"
+        onClose={() => {}}
+        onConfirm={() => {}}
+      />
+    );
+
+    expect(screen.getByText('Deja de cobrarse')).toBeInTheDocument();
+    expect(screen.getByText('$50.00')).toBeInTheDocument();
+    expect(screen.getByText('$120.00')).toBeInTheDocument();
+  });
+
   it('cancelar cierra sin ejecutar la acción', async () => {
     const onClose = vi.fn();
     const onConfirm = vi.fn();

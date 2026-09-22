@@ -6,6 +6,7 @@ import { guardarAvisoCobro } from '../lib/avisoCobro';
 import { useAuth } from '../context/AuthContext';
 import { esAdmin as esAdminFn } from '../lib/roles';
 import MaquinaCicloOverlay from '../components/MaquinaCicloOverlay';
+import ConfirmacionModal from '../components/ConfirmacionModal';
 
 function fmtMonto(n) {
   return n != null ? `$${Number(n).toFixed(2)}` : '—';
@@ -78,6 +79,7 @@ export default function Salidas() {
   const [confirmProducto,  setConfirmProducto]  = useState(null);
   // Producto de la nota pendiente de confirmar antes de quitarlo.
   const [confirmQuitarProd, setConfirmQuitarProd] = useState(null);
+  const [confirmQuitarCarga, setConfirmQuitarCarga] = useState(null);
   const [errorAccion,      setErrorAccion]      = useState('');
   const [confirmDetener,   setConfirmDetener]   = useState(null); // máquina a detener
   // Máquina cuyo modal de arranque está abierto. Se guarda el ID y no el
@@ -494,7 +496,6 @@ export default function Salidas() {
   // prevista). Solo se ofrece en las cargas sin máquina: las que ya lavaron son
   // historial y el servidor las rechaza.
   async function quitarCarga(carga) {
-    if (!confirm(`Se va a quitar la Carga ${carga.orden} de esta nota y dejará de cobrarse. ¿Continuar?`)) return;
     setLoadingMaquina(true);
     setErrorAccion('');
     try {
@@ -923,7 +924,7 @@ export default function Salidas() {
                   {/* Quitar carga es de admin: deshace lo capturado y baja el total. */}
                   {esAdmin && (
                     <button
-                      onClick={() => quitarCarga(c)}
+                      onClick={() => setConfirmQuitarCarga(c)}
                       disabled={loadingMaquina}
                       className="px-3 py-2 text-sm font-medium text-gray-500 hover:text-red-600 disabled:opacity-60 transition-colors"
                     >
@@ -1073,6 +1074,32 @@ export default function Salidas() {
       </div>
 
       {/* Advertencia antes de quitar un producto de la nota */}
+      {/* Quitar una carga: mismo peso que quitar un producto, porque también
+          baja el total de la nota. Antes era un confirm() del navegador, que
+          además no decía cuánto dejaba de cobrarse. */}
+      {confirmQuitarCarga && (() => {
+        const importe = Number(confirmQuitarCarga.precio_lavadora || 0)
+                      + Number(confirmQuitarCarga.precio_secadora || 0);
+        return (
+          <ConfirmacionModal
+            titulo={`Quitar la Carga ${confirmQuitarCarga.orden}`}
+            mensaje="La carga sale de la nota y deja de cobrarse."
+            detalle={[
+              { etiqueta: 'Deja de cobrarse', valor: fmtMonto(importe) },
+              { etiqueta: 'Nuevo total de la nota',
+                valor: fmtMonto(Number(nota?.precio_total || 0) - importe) },
+            ]}
+            textoConfirmar={loadingMaquina ? 'Quitando…' : 'Quitar carga'}
+            procesando={loadingMaquina}
+            onClose={() => setConfirmQuitarCarga(null)}
+            onConfirm={async () => {
+              await quitarCarga(confirmQuitarCarga);
+              setConfirmQuitarCarga(null);
+            }}
+          />
+        );
+      })()}
+
       {confirmQuitarProd && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-7 space-y-6">

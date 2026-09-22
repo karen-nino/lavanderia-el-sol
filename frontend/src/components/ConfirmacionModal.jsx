@@ -12,6 +12,9 @@
 //   mensaje:        la consecuencia principal, en una frase
 //   puntos:         consecuencias sueltas; las vacías se ignoran, así que se
 //                   pueden armar con condicionales sin filtrarlas antes
+//   detalle:        filas [{ etiqueta, valor }] para lo que hay que ver en
+//                   números —cuánto deja de cobrarse, cómo queda el total—
+//                   cuando decirlo en prosa no basta para decidir
 //   textoConfirmar: el verbo del botón, el mismo que se pulsó para llegar aquí
 //   procesando:     deshabilita los botones mientras la acción corre
 const TONOS = {
@@ -32,6 +35,7 @@ export default function ConfirmacionModal({
   titulo,
   mensaje,
   puntos = [],
+  detalle = [],
   textoConfirmar = 'Continuar',
   procesando = false,
   onClose,
@@ -63,6 +67,16 @@ export default function ConfirmacionModal({
                 </li>
               ))}
             </ul>
+          )}
+          {detalle.length > 0 && (
+            <div className="rounded-lg border border-gray-200 divide-y divide-gray-100 text-sm mb-4">
+              {detalle.map((d) => (
+                <div key={d.etiqueta} className="flex justify-between px-3 py-2">
+                  <span className="text-gray-500">{d.etiqueta}</span>
+                  <span className="font-semibold text-gray-900">{d.valor}</span>
+                </div>
+              ))}
+            </div>
           )}
           <div className="flex gap-3">
             <button type="button" onClick={onClose} disabled={procesando}
