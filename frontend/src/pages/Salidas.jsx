@@ -602,10 +602,11 @@ export default function Salidas() {
     return now - new Date(m.en_uso_desde).getTime() >= Math.max(0, Number(minutos) || 0) * 60000;
   };
 
-  // La lavadora se asigna desde el principio. La secadora NO: se ofrece solo
-  // cuando la carga ya no tiene lavado pendiente (o nunca llevó lavadora, o la
-  // suya ya cumplió su ciclo), para no apartar desde el inicio una secadora
-  // que va a estar parada mientras dura el lavado.
+  // La secadora SE LISTA desde el principio —la nota la compró, tiene que
+  // verse—, pero solo se puede ELEGIR cuando la carga ya no tiene lavado
+  // pendiente (o nunca llevó lavadora, o la suya ya cumplió su ciclo):
+  // escogerla antes es quedarse con una que va a estar parada todo el lavado,
+  // y para cuando toque secar puede que ya se la haya ganado otra nota.
   const lavadoPendiente = (c) => {
     // Lavadora prevista a la que todavía no se le puso máquina física.
     if (c.lavadora_tipo_previsto && !c.lavadora_id && !c.lavadora_usada_id) return true;
@@ -625,11 +626,21 @@ export default function Salidas() {
     if (c.lavadora_tipo_previsto && !c.lavadora_id && !c.lavadora_usada_id) {
       out.push({ carga: c, slot: 'lavadora', tipo: c.lavadora_tipo_previsto });
     }
-    if (c.secadora_tipo_previsto && !c.secadora_id && !c.secadora_usada_id && !lavadoPendiente(c)) {
-      out.push({ carga: c, slot: 'secadora', tipo: c.secadora_tipo_previsto });
+    if (c.secadora_tipo_previsto && !c.secadora_id && !c.secadora_usada_id) {
+      out.push({ carga: c, slot: 'secadora', tipo: c.secadora_tipo_previsto, esperaLavado: lavadoPendiente(c) });
     }
     return out;
   });
+  // Los huecos se pintan agrupados por carga: la carga es la unidad que el
+  // cliente entiende ("la Carga 1 lleva lavadora y secadora"), y así su título
+  // sale una sola vez aunque le falten las dos máquinas.
+  const gruposSlots = Object.values(
+    slotsPorAsignar.reduce((acc, s) => {
+      (acc[s.carga.id] ??= { carga: s.carga, slots: [] }).slots.push(s);
+      return acc;
+    }, {})
+  );
+
   // Máquinas disponibles que coinciden con un slot (lavadora/secadora) y su tipo.
   // Se ofrecen todas las máquinas libres del tipo. Que otra nota ya tenga
   // asignada una de ellas no la descarta: asignar no aparta, se la queda quien
@@ -829,41 +840,49 @@ export default function Salidas() {
                 })}
               </div>
             ))
-          ) : cargasVacias.length === 0 ? (
+          ) : cargasVacias.length === 0 && gruposSlots.length === 0 ? (
+            // Nada asignado y nada por asignar: ahí sí no hay máquinas. Con
+            // huecos pendientes el aviso sobraba, porque debajo se listan.
             <p className="text-sm text-gray-400 italic">Sin máquina asignada</p>
           ) : null}
 
           {/* Por Encargo: cargas con TIPO elegido, sin máquina física. Se
               asigna eligiendo una máquina disponible del tipo correspondiente. */}
-          {slotsPorAsignar.map(({ carga, slot, tipo }) => {
-            const opciones = maquinasParaSlot(slot, tipo);
-            const queFalta = slot === 'lavadora'
-              ? `lavadoras ${TIPO_MAQ_LABEL[tipo] ?? tipo}`
-              : 'secadoras';
-            return (
-              <div key={`slot-${carga.id}-${slot}`} className="space-y-2 [&:not(:first-child)]:border-t [&:not(:first-child)]:border-gray-100 [&:not(:first-child)]:pt-4">
-                <p className="text-xs font-semibold text-gray-500">Carga {carga.orden}</p>
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="text-sm text-gray-600">
-                    {slot === 'lavadora' ? `Lavadora ${TIPO_MAQ_LABEL[tipo] ?? tipo}` : 'Secadora'}
-                  </span>
-                  {opciones.length === 0 ? (
-                    <span className="text-sm text-red-600">No hay {queFalta} disponibles</span>
-                  ) : (
-                    // Abre el mismo modal que "+ Agregar", ya fijado a
-                    // esta carga y a las máquinas del tipo que le toca.
-                    <button
-                      onClick={() => iniciarAsignarSlot(carga, slot, tipo)}
-                      disabled={loadingMaquina}
-                      className="px-4 py-2 bg-blue hover:opacity-90 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
-                    >
-                      Asignar
-                    </button>
-                  )}
-                </div>
-              </div>
-            );
-          })}
+          {gruposSlots.map(({ carga, slots }) => (
+            <div key={`slots-${carga.id}`} className="space-y-2 [&:not(:first-child)]:border-t [&:not(:first-child)]:border-gray-100 [&:not(:first-child)]:pt-4">
+              <p className="text-xs font-semibold text-gray-500">Carga {carga.orden}</p>
+              {slots.map(({ slot, tipo, esperaLavado }) => {
+                const opciones = maquinasParaSlot(slot, tipo);
+                const queFalta = slot === 'lavadora'
+                  ? `lavadoras ${TIPO_MAQ_LABEL[tipo] ?? tipo}`
+                  : 'secadoras';
+                return (
+                  <div key={slot} className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-sm text-gray-600">
+                      {slot === 'lavadora' ? `Lavadora ${TIPO_MAQ_LABEL[tipo] ?? tipo}` : 'Secadora'}
+                    </span>
+                    {esperaLavado ? (
+                      // Se ve, pero todavía no se elige: primero tiene que
+                      // terminar el lavado de su carga.
+                      <span className="text-sm text-gray-400 italic">Al terminar el lavado</span>
+                    ) : opciones.length === 0 ? (
+                      <span className="text-sm text-red-600">No hay {queFalta} disponibles</span>
+                    ) : (
+                      // Abre el mismo modal que "+ Agregar", ya fijado a
+                      // esta carga y a las máquinas del tipo que le toca.
+                      <button
+                        onClick={() => iniciarAsignarSlot(carga, slot, tipo)}
+                        disabled={loadingMaquina}
+                        className="px-4 py-2 bg-blue hover:opacity-90 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
+                      >
+                        Asignar
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ))}
 
           {/* Cargas que se eligieron al hacer la nota pero se quedaron sin
               máquina: se muestran para asignarles una rápidamente. */}
