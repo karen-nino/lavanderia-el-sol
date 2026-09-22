@@ -9,6 +9,7 @@ import { etiquetaProducto, tituloProducto, subtituloProducto, ordenProducto } fr
 import { FORMAS_PAGO, formaPagoLabel } from '../lib/formasPago';
 import { formatHora12, formatFechaHora12 } from '../lib/fecha';
 import { leerAvisoCobro, limpiarAvisoCobro } from '../lib/avisoCobro';
+import { esTerminal, puedeLiquidar, puedeFinalizar } from '../lib/accionesNota';
 
 // Unidad de venta de un producto de la nota, en texto ("2 botellas" / "3 tapas").
 function unidadProdTxt(p) {
@@ -408,7 +409,7 @@ export default function DetalleNota() {
 
   if (!nota) return null;
 
-  const terminal     = ['FINALIZADA', 'CANCELADA'].includes(nota.estado);
+  const terminal     = esTerminal(nota);
   const puedeEditar  = !['PAGADA', 'FINALIZADA', 'CANCELADA'].includes(nota.estado);
   // Cancelar: solo admin y solo mientras la nota NO esté cobrada. Después del
   // cobro habría que devolver dinero, y eso descuadra el corte del día; para
@@ -544,25 +545,30 @@ export default function DetalleNota() {
           >
             Salidas
           </button>
-          {nota.estado === 'LISTA' && (
-            nota.estado_pago === 'PENDIENTE' ? (
-              // No se puede finalizar una nota pendiente: primero hay que cobrarla.
-              <button
-                onClick={() => setConfirmLiquidar(true)}
-                disabled={loadingAccion}
-                className="flex items-center gap-1.5 px-4 py-2 bg-blue hover:opacity-90 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
-              >
-                Liquidar
-              </button>
-            ) : (
-              <button
-                onClick={() => setConfirmFinalizar(true)}
-                disabled={loadingAccion}
-                className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
-              >
-                Finalizar
-              </button>
-            )
+          {/* Cobrar se puede desde que la nota existe, no solo cuando ya está
+              lista: en Por Encargo el cliente suele pagar al dejar la ropa, y
+              hasta ahora el botón no aparecía hasta el final, cuando ese dinero
+              ya se había cobrado en la vida real y no en el sistema. El
+              servidor lo permite en cualquier estado menos CANCELADA. */}
+          {puedeLiquidar(nota) && (
+            <button
+              onClick={() => setConfirmLiquidar(true)}
+              disabled={loadingAccion}
+              className="flex items-center gap-1.5 px-4 py-2 bg-blue hover:opacity-90 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
+            >
+              Liquidar
+            </button>
+          )}
+          {/* Finalizar sigue siendo el último paso y sigue exigiendo el cobro:
+              una nota pendiente no se puede dar por entregada. */}
+          {puedeFinalizar(nota) && (
+            <button
+              onClick={() => setConfirmFinalizar(true)}
+              disabled={loadingAccion}
+              className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
+            >
+              Finalizar
+            </button>
           )}
           {esAdmin && (
             <button
