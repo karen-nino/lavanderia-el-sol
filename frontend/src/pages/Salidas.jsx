@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
-import { etiquetaProducto, tituloProducto, subtituloProducto, ordenProducto } from '../lib/formatoInventario';
+import { tituloProducto, subtituloProducto, ordenProducto } from '../lib/formatoInventario';
 import { guardarAvisoCobro } from '../lib/avisoCobro';
 import { useAuth } from '../context/AuthContext';
 import { esAdmin as esAdminFn } from '../lib/roles';
@@ -69,16 +69,9 @@ export default function Salidas() {
   const esAdmin = esAdminFn(usuario?.rol);
 
   const [nota,            setNota]            = useState(null);
-  const [productos,        setProductos]        = useState([]);
-  const [cantidades,       setCantidades]       = useState({});
   const [loading,          setLoading]          = useState(true);
   const [error,            setError]            = useState('');
   const [loadingMaquina,   setLoadingMaquina]   = useState(false);
-  const [loadingProducto,  setLoadingProducto]  = useState(null); // id del producto en proceso
-  // Producto pendiente de confirmar antes de agregarlo a la nota.
-  const [confirmProducto,  setConfirmProducto]  = useState(null);
-  // Producto de la nota pendiente de confirmar antes de quitarlo.
-  const [confirmQuitarProd, setConfirmQuitarProd] = useState(null);
   const [confirmQuitarCarga, setConfirmQuitarCarga] = useState(null);
   const [errorAccion,      setErrorAccion]      = useState('');
   const [confirmDetener,   setConfirmDetener]   = useState(null); // máquina a detener
@@ -135,18 +128,10 @@ export default function Salidas() {
   // para comparar sin que cargarDatos dependa del estado.
   const notaPrevia = useRef(null);
 
-  // Productos con los que la nota llegó a Salidas: no se pueden quitar desde
-  // aquí (son parte de lo que ya se capturó y cobró en la nota). Solo se puede
-  // deshacer lo que se agregue en esta misma pantalla. Se sella en la primera
-  // carga; al recargar la pantalla, lo agregado antes ya cuenta como propio de
-  // la nota.
-  const productosDeLaNota = useRef(null);
-
   const cargarDatos = useCallback(async () => {
     try {
-      const [notaData, productosData, ajustes, maquinasData] = await Promise.all([
+      const [notaData, ajustes, maquinasData] = await Promise.all([
         api.get(`/notas/${id}`),
-        api.get('/productos'),
         api.get('/ajustes').catch(() => null),
         api.get('/maquinas').catch(() => []),
       ]);
@@ -158,13 +143,7 @@ export default function Salidas() {
           ahora: Number(notaData.precio_total),
         });
       }
-      if (productosDeLaNota.current === null && notaData) {
-        productosDeLaNota.current = new Set(
-          (notaData.productos || []).map(x => String(x.producto_id))
-        );
-      }
       setNota(notaData);
-      setProductos(productosData);
       if (Array.isArray(maquinasData)) setTodasMaquinas(maquinasData);
       if (ajustes) {
         setTiempos({
@@ -468,42 +447,6 @@ export default function Salidas() {
     }
   }
 
-  // La cantidad arranca en 0 (nada elegido) y no pasa del stock disponible.
-  const cantidadDe = (p) => Math.min(Number(cantidades[p.id]) || 0, disponibleDe(p));
-  const setCantidad = (productoId, valor) =>
-    setCantidades(prev => ({ ...prev, [productoId]: String(Math.max(0, valor)) }));
-
-  async function agregarProducto(productoId) {
-    const cantidad = Number(cantidades[productoId]);
-    if (!cantidad || cantidad <= 0) return;
-    setLoadingProducto(productoId);
-    setErrorAccion('');
-    try {
-      await api.post(`/notas/${id}/productos`, { producto_id: productoId, cantidad });
-      setCantidades(prev => ({ ...prev, [productoId]: '' }));
-      setConfirmProducto(null);
-      await cargarDatos();
-    } catch (err) {
-      setErrorAccion(err.message);
-    } finally {
-      setLoadingProducto(null);
-    }
-  }
-
-  async function eliminarProducto(productoId) {
-    setLoadingProducto(productoId);
-    setErrorAccion('');
-    try {
-      await api.delete(`/notas/${id}/productos/${productoId}`);
-      setConfirmQuitarProd(null);
-      await cargarDatos();
-    } catch (err) {
-      setErrorAccion(err.message);
-    } finally {
-      setLoadingProducto(null);
-    }
-  }
-
   // Quita una carga que el cliente ya no va a usar (trajo menos ropa de la
   // prevista). Solo se ofrece en las cargas sin máquina: las que ya lavaron son
   // historial y el servidor las rechaza.
@@ -697,37 +640,6 @@ export default function Salidas() {
   const otrasEnUso = (maq) => maquinasAsignadas.some(m => String(m.id) !== String(maq.id) && m.estado === 'en_uso');
 
   const productosNota  = [...(nota?.productos || [])].sort((a, b) => ordenProducto(a) - ordenProducto(b));
-
-  // El backend cobra según el servicio de la nota: Autoservicio vende la BOTELLA
-  // entera y Por Encargo cobra por TAPA (utils/calculosNotas.js). La lista tiene
-  // que mostrar esa misma unidad y ese mismo precio; si no, enseña el precio por
-  // tapa y cobra el de botella.
-  const porBotella = nota?.tipo_servicio === 'AUTOSERVICIO';
-  const esBolsa    = (p) => p.clase === 'bolsa';
-
-  const unidadDe = (p, n = 2) => {
-    if (esBolsa(p))  return n === 1 ? 'bolsa' : 'bolsas';
-    if (!porBotella) return n === 1 ? 'tapa'  : 'tapas';
-    return p.tipo_liquido === 'marca'
-      ? (n === 1 ? 'unidad'  : 'unidades')
-      : (n === 1 ? 'botella' : 'botellas');
-  };
-  // El stock vive en tapas: una botella son varias.
-  const tapasPorUnidadDe = (p) =>
-    (esBolsa(p) || !porBotella) ? 1 : (Number(p.tapas_por_botella) || 1);
-  const precioDe = (p) => Number(esBolsa(p) || !porBotella ? p.precio_unitario : p.precio_botella) || 0;
-  const disponibleDe = (p) => Math.floor(Number(p.stock_disponible) / tapasPorUnidadDe(p));
-
-  // Todo lo que tenga al menos una unidad vendible, incluido lo que ya está en
-  // la nota: agregarlo otra vez le suma cantidad a su renglón.
-  const productosDisponibles = productos
-    .filter(p => disponibleDe(p) > 0)
-    .sort((a, b) => ordenProducto(a) - ordenProducto(b));
-  const enNotaDe = (p) => productosNota.find(x => String(x.producto_id) === String(p.id));
-  // Un renglón que ya venía con la nota no se quita desde Salidas. Ojo: agregar
-  // aquí un producto que ya estaba suma cantidad al mismo renglón, así que
-  // sigue protegido — quitarlo se llevaría también lo capturado en la nota.
-  const vieneDeLaNota = (p) => productosDeLaNota.current?.has(String(p.producto_id)) ?? false;
   const totalProductosNota = productosNota.reduce((a, x) => a + Number(x.subtotal || 0), 0);
 
   return (
@@ -964,7 +876,9 @@ export default function Salidas() {
         </div>
       </div>
 
-      {/* Sección 2 — Productos en la nota */}
+      {/* Sección 2 — Productos de la nota. Solo de consulta: los productos se
+          capturan al crear la nota (o en una nota de servicio Productos), no
+          desde aquí. */}
       <div className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
         <div className="px-4 py-3 border-b border-gray-50">
           <h2 className="text-sm font-semibold text-gray-700">Productos</h2>
@@ -984,19 +898,6 @@ export default function Salidas() {
                     Cant. {p.cantidad} × {fmtMonto(p.precio_unitario)} = {fmtMonto(p.subtotal)}
                   </p>
                 </div>
-                {!vieneDeLaNota(p) && (
-                  <button
-                    onClick={() => setConfirmQuitarProd(p)}
-                    disabled={loadingProducto === p.producto_id}
-                    className="text-red-400 hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50 transition-colors disabled:opacity-40"
-                    title="Eliminar"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  </button>
-                )}
               </div>
             ))}
             {/* Suma de los productos. El total de la nota (máquinas, ajuste y
@@ -1009,83 +910,6 @@ export default function Salidas() {
         )}
       </div>
 
-      {/* Sección 3 — Agregar productos */}
-      <div className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
-        <div className="px-4 py-3 border-b border-gray-50">
-          <h2 className="text-sm font-semibold text-gray-700">Agregar productos</h2>
-          <p className="text-xs text-gray-400 mt-0.5">Solo productos con stock disponible</p>
-        </div>
-        {productosDisponibles.length === 0 ? (
-          <p className="px-4 py-4 text-sm text-gray-400 italic">
-            {productos.length === 0
-              ? 'No hay productos registrados'
-              : 'Sin existencias disponibles'}
-          </p>
-        ) : (
-          <div className="divide-y divide-gray-50">
-            {productosDisponibles.map(p => (
-              <div key={p.id} className="px-4 py-3 flex flex-wrap items-center gap-x-3 gap-y-3">
-                <div className="flex-1 min-w-[9rem]">
-                  <p className="text-sm font-medium text-gray-800 truncate">
-                    {tituloProducto(p)}
-                    {enNotaDe(p) && (
-                      <span className="ml-2 text-xs font-semibold text-blue bg-light-blue rounded-pill px-2 py-0.5 align-middle">
-                        en la nota
-                      </span>
-                    )}
-                  </p>
-                  {/* "Granel" distingue el bidón de los productos de marca, que
-                      se llaman igual (Suavizante vs. Ensueño · Suavizante). */}
-                  {subtituloProducto(p) && (
-                    <p className="text-xs text-gray-400">{subtituloProducto(p)}</p>
-                  )}
-                  <p className="text-xs font-medium text-gray-500">
-                    {precioDe(p) > 0
-                      ? `${fmtMonto(precioDe(p))}/${unidadDe(p, 1)}`
-                      : <span className="text-bronce">sin precio</span>}
-                  </p>
-                </div>
-                <div className="flex items-center gap-3 ml-auto flex-shrink-0">
-                  {/* Mismo control de cantidad que en los formularios de nota. */}
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => setCantidad(p.id, cantidadDe(p) - 1)}
-                      disabled={cantidadDe(p) <= 0}
-                      aria-label="Disminuir cantidad"
-                      className="w-9 h-9 flex items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-700 text-base font-semibold hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                    >
-                      −
-                    </button>
-                    <span className="w-7 text-center text-sm font-semibold text-gray-900 tabular-nums">
-                      {cantidadDe(p)}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setCantidad(p.id, cantidadDe(p) + 1)}
-                      disabled={cantidadDe(p) >= disponibleDe(p)}
-                      aria-label="Aumentar cantidad"
-                      className="w-9 h-9 flex items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-700 text-base font-semibold hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                    >
-                      +
-                    </button>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setConfirmProducto({ ...p, cantidad: cantidadDe(p) })}
-                    disabled={cantidadDe(p) <= 0 || loadingProducto === p.id}
-                    className="px-3 py-2 bg-blue hover:opacity-90 disabled:opacity-40 text-white text-xs font-bold rounded-lg transition-colors flex-shrink-0"
-                  >
-                    {loadingProducto === p.id ? '...' : 'Agregar'}
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Advertencia antes de quitar un producto de la nota */}
       {/* Quitar una carga: mismo peso que quitar un producto, porque también
           baja el total de la nota. Antes era un confirm() del navegador, que
           además no decía cuánto dejaba de cobrarse. */}
@@ -1111,148 +935,6 @@ export default function Salidas() {
           />
         );
       })()}
-
-      {confirmQuitarProd && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-7 space-y-6">
-            <div className="flex items-center gap-3">
-              <span className="flex-shrink-0 w-9 h-9 rounded-full bg-red/10 text-red flex items-center justify-center">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round"
-                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                </svg>
-              </span>
-              <h3 className="text-base font-bold text-gray-900">Quitar producto</h3>
-            </div>
-
-            <div className="space-y-3">
-              <p className="text-sm text-gray-500">
-                Se quitará{' '}
-                <span className="font-semibold text-gray-800">
-                  {confirmQuitarProd.cantidad} × {confirmQuitarProd.nombre}
-                </span>{' '}
-                de esta nota.
-              </p>
-              <div className="rounded-lg border border-gray-200 divide-y divide-gray-100 text-sm">
-                <div className="flex justify-between px-3 py-2">
-                  <span className="text-gray-500">Deja de cobrarse</span>
-                  <span className="font-semibold text-gray-900">{fmtMonto(confirmQuitarProd.subtotal)}</span>
-                </div>
-                <div className="flex justify-between px-3 py-2">
-                  <span className="text-gray-500">Nuevo total de la nota</span>
-                  <span className="font-semibold text-gray-900">
-                    {fmtMonto(Number(nota?.precio_total || 0) - Number(confirmQuitarProd.subtotal || 0))}
-                  </span>
-                </div>
-              </div>
-              <p className="text-xs text-gray-400">
-                El producto vuelve al inventario. Si lo necesitas de nuevo, agrégalo abajo.
-              </p>
-            </div>
-
-            {errorAccion && (
-              <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">
-                {errorAccion}
-              </div>
-            )}
-
-            <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={() => setConfirmQuitarProd(null)}
-                disabled={loadingProducto === confirmQuitarProd.producto_id}
-                className="flex-1 border border-gray-300 text-gray-700 font-medium py-3 rounded-lg text-base hover:bg-gray-50 disabled:opacity-60 transition-colors"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={() => eliminarProducto(confirmQuitarProd.producto_id)}
-                disabled={loadingProducto === confirmQuitarProd.producto_id}
-                className="flex-1 bg-red hover:opacity-90 disabled:opacity-60 text-white font-medium py-3 rounded-lg text-base transition-colors"
-              >
-                {loadingProducto === confirmQuitarProd.producto_id ? 'Quitando...' : 'Quitar'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Advertencia antes de agregar un producto a la nota */}
-      {confirmProducto && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-7 space-y-6">
-            <div className="flex items-center gap-3">
-              <span className="flex-shrink-0 w-9 h-9 rounded-full bg-bronce/15 text-bronce flex items-center justify-center">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round"
-                    d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
-                </svg>
-              </span>
-              <h3 className="text-base font-bold text-gray-900">
-                {enNotaDe(confirmProducto) ? 'Agregar más producto' : 'Agregar producto'}
-              </h3>
-            </div>
-
-            <div className="space-y-3">
-              <p className="text-sm text-gray-500">
-                Se agregarán{' '}
-                <span className="font-semibold text-gray-800">
-                  {confirmProducto.cantidad} {unidadDe(confirmProducto, confirmProducto.cantidad)}
-                </span>{' '}
-                de <span className="font-semibold text-gray-800">{etiquetaProducto(confirmProducto)}</span>
-                {enNotaDe(confirmProducto)
-                  ? ` a las ${enNotaDe(confirmProducto).cantidad} que ya lleva esta nota.`
-                  : ' a esta nota.'}
-              </p>
-              <div className="rounded-lg border border-gray-200 divide-y divide-gray-100 text-sm">
-                <div className="flex justify-between px-3 py-2">
-                  <span className="text-gray-500">Se cobra al cliente</span>
-                  <span className="font-semibold text-gray-900">
-                    {fmtMonto(precioDe(confirmProducto) * confirmProducto.cantidad)}
-                  </span>
-                </div>
-                <div className="flex justify-between px-3 py-2">
-                  <span className="text-gray-500">Queda en inventario</span>
-                  <span className="font-semibold text-gray-900">
-                    {disponibleDe(confirmProducto) - confirmProducto.cantidad}{' '}
-                    {unidadDe(confirmProducto, disponibleDe(confirmProducto) - confirmProducto.cantidad)}
-                  </span>
-                </div>
-              </div>
-              <p className="text-xs text-gray-400">
-                Sale del inventario al confirmar. Si te equivocas, quita el producto de la nota para
-                devolverlo.
-              </p>
-            </div>
-
-            {errorAccion && (
-              <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">
-                {errorAccion}
-              </div>
-            )}
-
-            <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={() => setConfirmProducto(null)}
-                disabled={loadingProducto === confirmProducto.id}
-                className="flex-1 border border-gray-300 text-gray-700 font-medium py-3 rounded-lg text-base hover:bg-gray-50 disabled:opacity-60 transition-colors"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={() => agregarProducto(confirmProducto.id)}
-                disabled={loadingProducto === confirmProducto.id}
-                className="flex-1 bg-blue hover:opacity-90 disabled:opacity-60 text-white font-medium py-3 rounded-lg text-base transition-colors"
-              >
-                {loadingProducto === confirmProducto.id ? 'Agregando...' : 'Agregar'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Animaciones de encender / iniciar / detener ciclo */}
       {encendiendo && <MaquinaCicloOverlay modo="encender" tipo={encendiendo.tipo} nombre={encendiendo.nombre} />}
