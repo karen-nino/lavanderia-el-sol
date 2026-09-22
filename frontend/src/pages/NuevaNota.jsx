@@ -71,15 +71,41 @@ const lavadorasPosibles = (tamano, tipoPrenda) =>
 //     que es lo que se cobra casi siempre; el empleado quita lo que no aplique.
 //   · Carga ya configurada → solo se corrige la lavadora que dejó de caber
 //     (p. ej. venía jumbo y la carga pasó a Chica).
+// El EDREDÓN es la excepción: nace SIN SECADO y, al elegirlo, se quita el
+// secado que venía precargado (2026-09-22). Secarlo es una decisión aparte —no
+// el caso de siempre como con la ropa—, y dejarlo marcado de fábrica lo cobraba
+// sin que nadie lo hubiera pedido.
 // No repone un secado que alguien quitó a propósito: volvería a cobrarlo sin
 // avisar. Tampoco toca el "Sin lavado" de una carga que es solo secado.
 function conMaquinaPorDefecto(carga, cambios) {
   const tamano = cambios.tamano ?? carga.tamano;
   const prenda = cambios.tipo_prenda ?? carga.tipo_prenda;
   const permitidas = lavadorasPosibles(tamano, prenda);
+  const esEdredon = prenda === 'EDREDON';
 
   if (!carga.lavadora_tipo && !carga.secadora_tipo) {
-    return { ...cambios, lavadora_tipo: permitidas[0], secadora_tipo: 'mediana' };
+    return { ...cambios, lavadora_tipo: permitidas[0], secadora_tipo: esEdredon ? '' : 'mediana' };
+  }
+  // Pasa a edredón una carga que ya venía armada: el secado que traía era el de
+  // la ropa, así que se quita. Si de verdad lo quieren, se elige a mano.
+  if (esEdredon && carga.tipo_prenda !== 'EDREDON') {
+    return {
+      ...cambios,
+      secadora_tipo: '',
+      ...(carga.lavadora_tipo && !permitidas.includes(carga.lavadora_tipo)
+        ? { lavadora_tipo: permitidas[0] } : {}),
+    };
+  }
+  // Y al revés: una carga de edredón que pasa a ropa recupera el secado, que en
+  // ropa sí es el caso de siempre. Su "sin secado" no lo quitó nadie, se lo
+  // pusimos nosotros por ser edredón.
+  if (!esEdredon && carga.tipo_prenda === 'EDREDON' && !carga.secadora_tipo) {
+    return {
+      ...cambios,
+      secadora_tipo: 'mediana',
+      ...(carga.lavadora_tipo && !permitidas.includes(carga.lavadora_tipo)
+        ? { lavadora_tipo: permitidas[0] } : {}),
+    };
   }
   if (carga.lavadora_tipo && !permitidas.includes(carga.lavadora_tipo)) {
     return { ...cambios, lavadora_tipo: permitidas[0] };
@@ -1390,8 +1416,12 @@ export default function NuevaNota() {
                         value={c.lavadora_tipo}
                         onChange={e => {
                           const v = e.target.value;
-                          // Al elegir un lavado se marca también el secado (el empleado lo quita si no lo quieren).
-                          set(v ? { lavadora_tipo: v, secadora_tipo: 'mediana' } : { lavadora_tipo: v });
+                          // Al elegir un lavado se marca también el secado (el
+                          // empleado lo quita si no lo quieren). En EDREDÓN no:
+                          // ahí secar es una decisión aparte y se elige a mano.
+                          set(v && c.tipo_prenda !== 'EDREDON'
+                            ? { lavadora_tipo: v, secadora_tipo: 'mediana' }
+                            : { lavadora_tipo: v });
                         }}
                         className={`${INPUT_CLS} bg-white`}
                       >
