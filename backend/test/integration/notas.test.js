@@ -723,6 +723,55 @@ describe('handlers de máquina — asignar / cambiar / quitar', () => {
     expect(Number(res.body.precio_total)).toBe(totalAntes);
   });
 
+  // El historial de la carga (mig. 114) guarda una fila POR PASADA, así que una
+  // carga que se relava en la misma lavadora la lista dos veces. Los campos
+  // viejos (lavadora_usada_id) solo saben de la última.
+  it('una carga que repite lavadora la lista dos veces en su historial', async () => {
+    const { notaId, lavadoraId } = await porEncargoEnEspera();
+    const nota = await request(app).get(`/api/notas/${notaId}`).set(auth(admin.token));
+    const carga = nota.body.cargas[0];
+    expect(carga.maquinas_usadas).toHaveLength(1);
+    expect(carga.maquinas_usadas[0]).toMatchObject({ slot: 'lavadora', nombre: 'Lavadora 1', actual: true });
+
+    // Termina el lavado (la lavadora se suelta) y se vuelve a poner la MISMA.
+    await pool.query('UPDATE nota_cargas SET lavadora_id = NULL WHERE id = $1', [carga.id]);
+    await pool.query("UPDATE maquinas SET estado = 'disponible' WHERE id = $1", [lavadoraId]);
+    const res = await request(app).patch(`/api/notas/${notaId}/asignar-maquina`)
+      .set(auth(admin.token)).send({ maquina_id: lavadoraId, cobrar: false, carga_id: carga.id });
+    expect(res.status).toBe(200);
+
+    const despues = await request(app).get(`/api/notas/${notaId}`).set(auth(admin.token));
+    const usadas = despues.body.cargas[0].maquinas_usadas;
+    expect(usadas).toHaveLength(2);
+    expect(usadas.map(u => u.nombre)).toEqual(['Lavadora 1', 'Lavadora 1']);
+    // Solo la última es la que el hueco tiene puesta ahora.
+    expect(usadas.map(u => u.actual)).toEqual([false, true]);
+  });
+
+  it('cambiar de máquina corrige la pasada en curso, no agrega otra', async () => {
+    const { notaId, lavadoraId } = await porEncargoEnEspera();
+    const otra = await seedMaquina({ nombre: 'Lavadora 2', tipo: 'lavadora_mediana' });
+    const res = await request(app).patch(`/api/notas/${notaId}/cambiar-maquina`)
+      .set(auth(admin.token)).send({ maquina_actual_id: lavadoraId, maquina_nueva_id: otra });
+    expect(res.status).toBe(200);
+
+    const nota = await request(app).get(`/api/notas/${notaId}`).set(auth(admin.token));
+    const usadas = nota.body.cargas[0].maquinas_usadas;
+    expect(usadas).toHaveLength(1);
+    expect(usadas[0]).toMatchObject({ nombre: 'Lavadora 2', actual: true });
+  });
+
+  it('el historial conserva el nombre de una máquina borrada', async () => {
+    const { notaId, lavadoraId } = await porEncargoEnEspera();
+    await pool.query('UPDATE nota_cargas SET lavadora_id = NULL WHERE nota_id = $1', [notaId]);
+    await pool.query('DELETE FROM maquinas WHERE id = $1', [lavadoraId]);
+
+    const nota = await request(app).get(`/api/notas/${notaId}`).set(auth(admin.token));
+    const usadas = nota.body.cargas[0].maquinas_usadas;
+    expect(usadas).toHaveLength(1);
+    expect(usadas[0]).toMatchObject({ nombre: 'Lavadora 1', maquina_id: null, actual: false });
+  });
+
   it('asignar-maquina exige el flag cobrar', async () => {
     const { notaId } = await porEncargoEnEspera();
     const otra = await seedMaquina({ nombre: 'Lavadora 2' });

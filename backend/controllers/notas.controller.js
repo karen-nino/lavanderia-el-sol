@@ -742,6 +742,64 @@ async function prepararCargas(client, cargas, tipoPrendaNota, sucursal, tipo_ser
   });
 }
 
+// Historial de máquinas de una carga (mig. 114): UNA FILA POR PASADA.
+//
+// `nota_cargas` solo guarda la máquina actual de cada hueco y la última usada,
+// así que una carga que repite —relavar, secar de más— perdía la pasada
+// anterior, y dos pasadas en la MISMA máquina eran indistinguibles de una. El
+// nombre y el tipo se copian: la máquina se puede renombrar o borrar, y una
+// nota vieja tiene que seguir diciendo en qué se lavó.
+//
+// Se llama SIEMPRE ANTES del UPDATE que pone la máquina en la carga: así el
+// hueco todavía tiene lo de antes y se puede distinguir una pasada nueva (el
+// hueco estaba libre) de volver a escribir lo mismo.
+//
+//   modo 'pasada'   → una vuelta más de esta carga: fila nueva.
+//   modo 'reemplazo'→ corregir la máquina de la pasada en curso (cambiar
+//                     máquina): se pisa la última fila, no se agrega otra.
+async function registrarMaquinaEnCarga(client, cargaId, slot, maquinaId, modo = 'pasada') {
+  if (!cargaId || !maquinaId) return;
+  const { rows: maq } = await client.query(
+    'SELECT id, nombre, tipo, tamano FROM maquinas WHERE id = $1', [maquinaId]
+  );
+  if (maq.length === 0) return;
+  const m = maq[0];
+
+  const { rows: ultimas } = await client.query(
+    `SELECT id, maquina_id FROM nota_carga_maquinas
+      WHERE carga_id = $1 AND slot = $2
+      ORDER BY asignada_at DESC, id DESC LIMIT 1`,
+    [cargaId, slot]
+  );
+  const ultima = ultimas[0];
+
+  if (modo === 'reemplazo' && ultima) {
+    await client.query(
+      `UPDATE nota_carga_maquinas
+          SET maquina_id = $1, maquina_nombre = $2, maquina_tipo = $3, maquina_tamano = $4
+        WHERE id = $5`,
+      [m.id, m.nombre, m.tipo, m.tamano, ultima.id]
+    );
+    return;
+  }
+
+  // Volver a escribir la misma máquina que el hueco ya tiene no es otra vuelta.
+  if (ultima && String(ultima.maquina_id) === String(m.id)) {
+    const { rows: c } = await client.query(
+      'SELECT lavadora_id, secadora_id FROM nota_cargas WHERE id = $1', [cargaId]
+    );
+    const enElHueco = slot === 'lavadora' ? c[0]?.lavadora_id : c[0]?.secadora_id;
+    if (String(enElHueco) === String(m.id)) return;
+  }
+
+  await client.query(
+    `INSERT INTO nota_carga_maquinas
+       (carga_id, slot, maquina_id, maquina_nombre, maquina_tipo, maquina_tamano)
+     VALUES ($1, $2, $3, $4, $5, $6)`,
+    [cargaId, slot, m.id, m.nombre, m.tipo, m.tamano]
+  );
+}
+
 // Inserta las filas de nota_cargas ya preparadas (con sus productos, que
 // reservan stock). Devuelve las cargas con sus productos.
 async function insertarCargas(client, notaId, filas, sucursal, tipo_servicio) {
@@ -759,6 +817,9 @@ async function insertarCargas(client, notaId, filas, sucursal, tipo_servicio) {
        f.precio_tope ?? null]
     );
     const carga = rows[0];
+    // Primera pasada de cada hueco que nació con máquina.
+    await registrarMaquinaEnCarga(client, carga.id, 'lavadora', f.lavadora_id);
+    await registrarMaquinaEnCarga(client, carga.id, 'secadora', f.secadora_id);
     const productos = [];
     for (const p of (f.productos ?? [])) {
       productos.push(await reservarProducto(client, notaId, carga.id, p.producto_id, p.cantidad, sucursal, tipo_servicio));
@@ -794,7 +855,30 @@ async function cargasDeNota(client, notaId) {
             -- Tope CONGELADO de la carga (mig. 096). En Por Encargo el tope ES
             -- el precio que se cobra por la carga, y es el que ve el ticket;
             -- NULL = sin tope, la carga se cobra por lo que lleva dentro.
-            nc.precio_tope AS tope_carga
+            nc.precio_tope AS tope_carga,
+            -- Historial de máquinas de la carga, en orden de uso (mig. 114):
+            -- una entrada por PASADA, así que la misma máquina puede aparecer
+            -- dos veces. La bandera actual marca la que el hueco tiene hoy —la
+            -- que se puede encender o terminar—; las demás ya pasaron.
+            (SELECT COALESCE(json_agg(x ORDER BY x.asignada_at, x.id), '[]'::json)
+               FROM (
+                 SELECT ncm.id, ncm.slot, ncm.maquina_id, ncm.asignada_at,
+                        ncm.maquina_nombre AS nombre, ncm.maquina_tipo AS tipo,
+                        ncm.maquina_tamano AS tamano,
+                        -- Actual = la ÚLTIMA pasada del hueco, y solo si esa
+                        -- máquina sigue puesta. Con la comparación a secas, una
+                        -- carga relavada en la misma lavadora marcaba las dos.
+                        (ncm.maquina_id IS NOT NULL
+                         AND ncm.maquina_id = CASE
+                           WHEN ncm.slot = 'lavadora' THEN nc.lavadora_id ELSE nc.secadora_id
+                         END
+                         AND ROW_NUMBER() OVER (
+                           PARTITION BY ncm.slot ORDER BY ncm.asignada_at DESC, ncm.id DESC
+                         ) = 1) AS actual
+                   FROM nota_carga_maquinas ncm
+                  WHERE ncm.carga_id = nc.id
+               ) x
+            ) AS maquinas_usadas
        FROM nota_cargas nc
        LEFT JOIN maquinas ml  ON ml.id  = nc.lavadora_id
        LEFT JOIN maquinas ms  ON ms.id  = nc.secadora_id
@@ -2530,6 +2614,7 @@ export const asignarCargaMaquina = async (req, res) => {
 
     const col = slot === 'lavadora' ? 'lavadora_id' : 'secadora_id';
     const colUsada = slot === 'lavadora' ? 'lavadora_usada_id' : 'secadora_usada_id';
+    await registrarMaquinaEnCarga(client, carga_id, slot, maquina_id);
     await client.query(
       `UPDATE nota_cargas SET ${col} = $1, ${colUsada} = $1 WHERE id = $2`,
       [maquina_id, carga_id]
@@ -2630,6 +2715,7 @@ export const asignarSecadora = async (req, res) => {
     // Cada carga cobra el secado según el tamaño de la secadora (prenda edredón
     // manda sobre el tamaño).
     for (const c of objetivo) {
+      await registrarMaquinaEnCarga(client, c.id, 'secadora', secadora_id);
       await client.query(
         `UPDATE nota_cargas SET secadora_id = $1, secadora_usada_id = $1, precio_secadora = $2 WHERE id = $3`,
         [secadora_id, tarifaSecadora(secadoraTamano, c.tipo_prenda, t), c.id]
@@ -2810,6 +2896,9 @@ export const asignarMaquina = async (req, res) => {
         // reescribe: lo que se cobró al hacer la nota sigue siendo lo cobrado,
         // y la máquina repetida va sin cobro. Sin esto, repetir con cobrar
         // false pondría el precio en 0 y bajaría el total de la nota.
+        // Cada hueco que se llena aquí es una pasada más de esa carga.
+        await registrarMaquinaEnCarga(client, cargaObjetivo.id, 'lavadora', lavadora ? lavadora.id : null);
+        await registrarMaquinaEnCarga(client, cargaObjetivo.id, 'secadora', secadora ? secadora.id : null);
         await client.query(
           `UPDATE nota_cargas
               SET lavadora_id       = COALESCE($1::int, lavadora_id),
@@ -2835,11 +2924,11 @@ export const asignarMaquina = async (req, res) => {
         continue;
       }
       nuevoOrden += 1;
-      await client.query(
+      const { rows: nuevaCarga } = await client.query(
         `INSERT INTO nota_cargas
            (nota_id, orden, lavadora_id, secadora_id, lavadora_usada_id, secadora_usada_id,
             precio_lavadora, precio_secadora, tipo_prenda, es_adicional)
-         VALUES ($1, $2, $3, $4, $3, $4, $5, $6, $7, TRUE)`,
+         VALUES ($1, $2, $3, $4, $3, $4, $5, $6, $7, TRUE) RETURNING id`,
         [
           id, nuevoOrden,
           lavadora ? lavadora.id : null,
@@ -2849,6 +2938,8 @@ export const asignarMaquina = async (req, res) => {
           tipoPrenda,
         ]
       );
+      await registrarMaquinaEnCarga(client, nuevaCarga[0].id, 'lavadora', lavadora ? lavadora.id : null);
+      await registrarMaquinaEnCarga(client, nuevaCarga[0].id, 'secadora', secadora ? secadora.id : null);
     }
 
     // Estado según las máquinas EN USO: las nuevas no cuentan (no se iniciaron).
@@ -2988,6 +3079,8 @@ export const cambiarMaquina = async (req, res) => {
       ? tarifaSecadora(nueva.tamano, carga.tipo_prenda, t)
       : tarifaLavadora(nueva.tipo, carga.tipo_prenda, t);
 
+    await registrarMaquinaEnCarga(client, carga.id, esSecadora ? 'secadora' : 'lavadora',
+      maquina_nueva_id, 'reemplazo');
     await client.query(
       `UPDATE nota_cargas SET ${cargaCol} = $1, ${usadaCol} = $1, ${precioCol} = $2 WHERE id = $3`,
       [maquina_nueva_id, precio, carga.id]
@@ -3102,6 +3195,7 @@ export const terminarLavado = async (req, res) => {
       [id, lavadora_id]
     );
     for (const c of cargasMover) {
+      await registrarMaquinaEnCarga(client, c.id, 'secadora', secadora_id);
       await client.query(
         `UPDATE nota_cargas SET secadora_id = $1, secadora_usada_id = $1, precio_secadora = $2 WHERE id = $3`,
         [secadora_id, tarifaSecadora(secadoraTamano, c.tipo_prenda, t), c.id]
