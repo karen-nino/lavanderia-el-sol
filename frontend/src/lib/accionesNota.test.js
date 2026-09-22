@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { esTerminal, puedeLiquidar, puedeFinalizar } from './accionesNota';
+import { esTerminal, puedeLiquidar, puedeFinalizar, puedeEliminar } from './accionesNota';
 
 const nota = (estado, estado_pago) => ({ estado, estado_pago });
 
@@ -40,6 +40,22 @@ describe('acciones del detalle de una nota', () => {
         expect(puedeLiquidar(n) && puedeFinalizar(n)).toBe(false);
       }
     }
+  });
+
+  it('una nota viva no se elimina, ni siendo admin: primero se cancela', () => {
+    for (const estado of ['EN_ESPERA', 'LAVANDO', 'SECANDO', 'LISTA']) {
+      expect(puedeEliminar(nota(estado, 'PENDIENTE'), true)).toBe(false);
+      expect(puedeEliminar(nota(estado, 'PAGADO'), true)).toBe(false);
+    }
+  });
+
+  it('una vez cancelada o finalizada, el admin sí puede eliminarla', () => {
+    expect(puedeEliminar(nota('CANCELADA', 'PENDIENTE'), true)).toBe(true);
+    expect(puedeEliminar(nota('FINALIZADA', 'PAGADO'), true)).toBe(true);
+  });
+
+  it('un empleado no elimina nunca', () => {
+    expect(puedeEliminar(nota('CANCELADA', 'PENDIENTE'), false)).toBe(false);
   });
 
   it('esTerminal reconoce las notas cerradas', () => {

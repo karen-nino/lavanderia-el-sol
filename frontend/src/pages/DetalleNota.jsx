@@ -9,7 +9,7 @@ import { etiquetaProducto, tituloProducto, subtituloProducto, ordenProducto } fr
 import { FORMAS_PAGO, formaPagoLabel } from '../lib/formasPago';
 import { formatHora12, formatFechaHora12 } from '../lib/fecha';
 import { leerAvisoCobro, limpiarAvisoCobro } from '../lib/avisoCobro';
-import { esTerminal, puedeLiquidar, puedeFinalizar } from '../lib/accionesNota';
+import { esTerminal, puedeLiquidar, puedeFinalizar, puedeEliminar } from '../lib/accionesNota';
 
 // Unidad de venta de un producto de la nota, en texto ("2 botellas" / "3 tapas").
 function unidadProdTxt(p) {
@@ -570,20 +570,13 @@ export default function DetalleNota() {
               Finalizar
             </button>
           )}
-          {esAdmin && (
-            <button
-              onClick={() => setConfirmEliminar(true)}
-              disabled={loadingAccion}
-              className="flex items-center gap-1.5 px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
-            >
-              Eliminar
-            </button>
-          )}
         </div>
       )}
+      {/* Eliminar solo cuando la nota ya está cerrada. Mientras sigue viva, lo
+          que corresponde es cancelarla: queda el registro de que existió. */}
       {terminal && (
         <div className="flex flex-wrap gap-2">
-          {esAdmin && (
+          {puedeEliminar(nota, esAdmin) && (
             <button
               onClick={() => setConfirmEliminar(true)}
               disabled={loadingAccion}

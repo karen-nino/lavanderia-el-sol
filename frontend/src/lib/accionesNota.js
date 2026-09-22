@@ -19,3 +19,10 @@ export const puedeLiquidar = (nota) =>
 // una nota pendiente no se puede dar por entregada.
 export const puedeFinalizar = (nota) =>
   !esTerminal(nota) && nota?.estado === 'LISTA' && nota?.estado_pago !== 'PENDIENTE';
+
+// Borrar una nota es de admin y solo cuando ya está cerrada. Mientras la nota
+// vive —esperando, lavando, lista— el camino es cancelarla: eso deja registro
+// de que existió y por qué no siguió, y borrarla de golpe se llevaba por
+// delante ese rastro (2026-09-21). Una nota cancelada o finalizada ya no tiene
+// nada en marcha, así que ahí el botón sí aparece.
+export const puedeEliminar = (nota, esAdmin) => Boolean(esAdmin) && esTerminal(nota);
