@@ -115,6 +115,33 @@ describe('MachineCard', () => {
     expect(onEncender).not.toHaveBeenCalled();
   });
 
+  // Con el ciclo en marcha el contador también se ve: saber si la máquina va a
+  // repetir sirve mientras lava, no solo cuando ya terminó.
+  it('la tarjeta con el temporizador en marcha dice en qué ciclo va', () => {
+    render(
+      <MachineCard
+        maquina={{ id: 7, nombre: 'L1', estado: 'en_uso', tipo: 'lavadora_mediana',
+                   progreso: 0.4, tiempo_restante: '07:12', ciclos_carga: 2, ciclos_max: 2 }}
+        nota={nota}
+      />
+    );
+
+    expect(screen.getByText('07:12')).toBeInTheDocument();
+    expect(screen.getByText('Ciclo 2 de 2')).toBeInTheDocument();
+  });
+
+  it('lavando con un único ciclo tampoco enseña el contador', () => {
+    render(
+      <MachineCard
+        maquina={{ id: 8, nombre: 'S1', estado: 'en_uso', tipo: 'secadora',
+                   progreso: 0.4, tiempo_restante: '07:12', ciclos_carga: 1, ciclos_max: 1 }}
+        nota={nota}
+      />
+    );
+
+    expect(screen.queryByText(/^Ciclo /)).not.toBeInTheDocument();
+  });
+
   // Una lavadora sin tiempo de marca corre un solo ciclo (2026-09-21): el
   // backend manda `ciclos_max: 1` y la tarjeta no tiene nada que contar.
   it('con un único ciclo no enseña el contador: "Ciclo 1 de 1" no dice nada', () => {

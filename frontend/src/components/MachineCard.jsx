@@ -51,6 +51,19 @@ export default function MachineCard({
     </div>
   ) : null;
 
+  // En qué ciclo va la carga. Va en las tres caras de la tarjeta —lavando,
+  // encendida esperando y terminada— porque la pregunta es la misma en todas:
+  // si a esta máquina le queda otra vuelta o ya va de salida. Antes solo
+  // aparecía al terminar, que es cuando ya no sirve para planear nada.
+  //
+  // "Ciclo 1 de 1" no dice nada: una secadora, o una lavadora sin tiempo de
+  // marca, corren una sola vuelta y el contador sobra.
+  const contadorCiclos = maquina.ciclos_carga != null && maquina.ciclos_max > 1 ? (
+    <p className="text-kpi-label text-grey text-sm">
+      Ciclo {maquina.ciclos_carga} de {maquina.ciclos_max}
+    </p>
+  ) : null;
+
   const header = HEADER_BY_ESTADO[maquina.estado] ?? HEADER_BY_ESTADO.disponible;
   const interactivoCls = onClick
     ? 'cursor-pointer hover:shadow-card-hover transition-shadow'
@@ -158,13 +171,7 @@ export default function MachineCard({
           >
             {etiquetaBoton}
           </button>
-          {/* "Ciclo 1 de 1" no dice nada: una lavadora sin tiempo de marca
-              corre una sola vuelta y el contador sobra. */}
-          {maquina.ciclos_carga != null && maquina.ciclos_max > 1 && (
-            <p className="text-kpi-label text-grey text-sm">
-              Ciclo {maquina.ciclos_carga} de {maquina.ciclos_max}
-            </p>
-          )}
+          {contadorCiclos}
           {errorOtroCiclo && (
             <p className="text-kpi-label text-red text-sm text-center">{errorOtroCiclo}</p>
           )}
@@ -201,13 +208,7 @@ export default function MachineCard({
           >
             {otroCicloEnCurso ? 'INICIANDO…' : 'OTRO CICLO'}
           </button>
-          {/* "Ciclo 1 de 1" no dice nada: una lavadora sin tiempo de marca
-              corre una sola vuelta y el contador sobra. */}
-          {maquina.ciclos_carga != null && maquina.ciclos_max > 1 && (
-            <p className="text-kpi-label text-grey text-sm">
-              Ciclo {maquina.ciclos_carga} de {maquina.ciclos_max}
-            </p>
-          )}
+          {contadorCiclos}
           {errorOtroCiclo && (
             <p className="text-kpi-label text-red text-sm text-center">{errorOtroCiclo}</p>
           )}
@@ -230,7 +231,12 @@ export default function MachineCard({
           label={maquina.tiempo_restante ?? '—:—'}
           color={esSecadora ? 'red' : 'blue'}
         />
-        {infoNota}
+        {/* Juntos y con poco aire: el ciclo se lee como parte del bloque de la
+            nota, no como un dato suelto al final de la tarjeta. */}
+        <div className="w-full flex flex-col items-center gap-1">
+          {infoNota}
+          {contadorCiclos}
+        </div>
       </div>
     </div>
   );
