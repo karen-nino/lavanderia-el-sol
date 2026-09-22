@@ -100,7 +100,6 @@ export default function Salidas() {
   // Encargo el empleado decide si se cobra; en Autoservicio siempre se cobra.
   const [asignarOpen,      setAsignarOpen]      = useState(false);
   const [asignarMaqSel,    setAsignarMaqSel]    = useState([]); // ids seleccionados
-  const [asignarCobrar,    setAsignarCobrar]    = useState(null); // true | false | null
   // Carga a la que se suma la máquina: una carga vacía, o una que ya tiene
   // lavadora y a la que se le agrega la secadora. null = carga nueva.
   const [asignarCarga,     setAsignarCarga]     = useState(null);
@@ -273,7 +272,6 @@ export default function Salidas() {
   function iniciarAsignarSlot(carga, slot, tipo) {
     setErrorAccion('');
     setAsignarMaqSel([]);
-    setAsignarCobrar(null);
     setAsignarCarga(carga);
     setAsignarCargaFija(true);
     setAsignarSlot({ carga, slot, tipo });
@@ -318,8 +316,6 @@ export default function Salidas() {
   async function iniciarAsignar(carga = null) {
     setErrorAccion('');
     setAsignarMaqSel([]);
-    // Autoservicio siempre cobra; Por Encargo lo elige el empleado.
-    setAsignarCobrar(esAutoservicio ? true : null);
     // Sin destino fijo se precarga la primera carga con hueco: sumar la máquina
     // a una carga que ya existe es lo habitual (la Carga 1 a la que le falta la
     // secadora); abrir una carga nueva es la excepción, y queda al final.
@@ -364,8 +360,11 @@ export default function Salidas() {
     setAsignarMaqSel([]);
   }
 
-  // Asigna las máquinas elegidas: el backend crea la(s) carga(s) nueva(s) (por
-  // cobrar o sin cobro); las máquinas quedan asignadas (sin iniciar).
+  // Asigna las máquinas elegidas: el backend crea la(s) carga(s) nueva(s) y las
+  // máquinas quedan asignadas (sin iniciar). Ya no se pregunta si se cobra: en
+  // Por Encargo la máquina extra SIEMPRE va sin cobro (lo que se cobra se
+  // capturó al hacer la nota) y en Autoservicio todo se cobra por adelantado,
+  // así que no hay nada que decidir aquí (2026-09-22).
   async function confirmarAsignar() {
     if (asignarMaqSel.length === 0) return;
     // Modo slot: la carga ya existe y ya está cobrada; solo se le pone máquina.
@@ -373,8 +372,7 @@ export default function Salidas() {
       await asignarTipoCarga(asignarSlot.carga.id, asignarSlot.slot, asignarMaqSel[0]);
       return;
     }
-    const cobrar = esAutoservicio ? true : asignarCobrar;
-    if (cobrar === null) return;
+    const cobrar = esAutoservicio;
     setLoadingMaquina(true);
     setErrorAccion('');
     try {
@@ -1285,7 +1283,7 @@ export default function Salidas() {
         </div>
       )}
 
-      {/* Modal asignar máquina extra — máquina y, solo en Por Encargo, el cobro */}
+      {/* Modal asignar máquina extra: elegir la máquina y a qué carga va */}
       {asignarOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4 max-h-[90vh] overflow-y-auto">
@@ -1303,8 +1301,8 @@ export default function Salidas() {
                         : 'secadora'}
                     </span> que le falta a la Carga {cargaDestino?.orden}. Queda asignada; la inicias después con su botón.</>
                   : cargaDestino
-                  ? <>La máquina se suma a la <span className="font-medium text-gray-700">Carga {cargaDestino.orden}</span>. Queda asignada; la inicias después con su botón.</>
-                  : <>Se abre una <span className="font-medium text-gray-700">carga nueva</span>. Puedes elegir varias: una lavadora y una secadora se agrupan en una misma carga. Quedan asignadas; las inicias después con su botón.</>}
+                  ? <>La máquina se suma a la <span className="font-medium text-gray-700">Carga {cargaDestino.orden}</span> <span className="font-medium text-gray-700">sin cobro</span>: no cambia el total de la nota. Queda asignada; la inicias después con su botón.</>
+                  : <>Se abre una <span className="font-medium text-gray-700">carga nueva</span> <span className="font-medium text-gray-700">sin cobro</span>: no cambia el total de la nota. Puedes elegir varias: una lavadora y una secadora se agrupan en una misma carga. Quedan asignadas; las inicias después con su botón.</>}
               </p>
             </div>
 
@@ -1352,36 +1350,6 @@ export default function Salidas() {
                   </button>
                 </div>
               </div>
-            )}
-
-            {/* ¿Se cobra lo que se está asignando? Solo se pregunta en Por
-                Encargo: en Autoservicio todo se cobra. */}
-            {!esAutoservicio && !asignarSlot && (
-            <div className="space-y-2">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Cobro</p>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setAsignarCobrar(true)}
-                  className={`flex flex-col items-start gap-0.5 px-4 py-3 border-2 rounded-xl text-left transition-colors ${
-                    asignarCobrar === true ? 'border-blue bg-light-blue' : 'border-gray-200 bg-white hover:border-blue-300'
-                  }`}
-                >
-                  <span className="text-sm font-medium text-gray-800">Por cobrar</span>
-                  <span className="text-xs text-gray-500">Suma la tarifa al total</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setAsignarCobrar(false)}
-                  className={`flex flex-col items-start gap-0.5 px-4 py-3 border-2 rounded-xl text-left transition-colors ${
-                    asignarCobrar === false ? 'border-blue bg-light-blue' : 'border-gray-200 bg-white hover:border-blue-300'
-                  }`}
-                >
-                  <span className="text-sm font-medium text-gray-800">Sin cobro</span>
-                  <span className="text-xs text-gray-500">La carga va en $0</span>
-                </button>
-              </div>
-            </div>
             )}
 
             {/* Máquina (lavadora o secadora) */}
@@ -1495,7 +1463,7 @@ export default function Salidas() {
               <button
                 type="button"
                 onClick={confirmarAsignar}
-                disabled={loadingMaquina || asignarMaqSel.length === 0 || (!esAutoservicio && !asignarSlot && asignarCobrar === null)}
+                disabled={loadingMaquina || asignarMaqSel.length === 0}
                 className="flex-1 bg-blue hover:opacity-90 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
               >
                 {loadingMaquina
