@@ -410,13 +410,12 @@ describe('tope de ciclos por máquina', () => {
       .toBe(MAX_CICLOS_POR_CARGA);
   });
 
-  it('las secadoras no entran en la regla: su respaldo SÍ es su tiempo real', async () => {
-    // `tiempos_marca` no siembra secadoras porque son 30 min para todas, que es
-    // justo lo que dice el respaldo por tamaño. Aplicarles la regla dejaría a
-    // todas sin segunda vuelta, y volver a secar ropa húmeda es un caso real.
-    const { maxCiclosDeMaquina, MAX_CICLOS_POR_CARGA } = await cargar();
-    expect(maxCiclosDeMaquina({ tipo: 'secadora', minutos_marca: null }))
-      .toBe(MAX_CICLOS_POR_CARGA);
+  it('una secadora corre un ciclo aunque tenga tiempo de marca', async () => {
+    // Regla del negocio, no de la configuración: un secado es uno. Por eso el
+    // tipo se mira antes que los minutos.
+    const { maxCiclosDeMaquina } = await cargar();
+    expect(maxCiclosDeMaquina({ tipo: 'secadora', minutos_marca: null })).toBe(1);
+    expect(maxCiclosDeMaquina({ tipo: 'secadora', minutos_marca: 30 })).toBe(1);
   });
 
   it('sin fila no inventa ciclos de más', async () => {

@@ -207,11 +207,11 @@ describe('otro ciclo — lo que expone la lista de máquinas', () => {
   });
 });
 
-// Una lavadora sin tiempo de marca (mig. 107) se cronometra con el respaldo
-// por tamaño de Ajustes, que es un tiempo supuesto y no medido. Encadenarle
-// una segunda vuelta la deja corriendo el doble de lo que nadie comprobó, así
-// que esas cargas terminan en el primer ciclo (2026-09-21).
-describe('otro ciclo — lavadora sin tiempo de marca', () => {
+// Cargas de un solo ciclo (2026-09-21): las secadoras siempre, y las lavadoras
+// sin tiempo de marca (mig. 107), que se cronometran con el respaldo por tamaño
+// de Ajustes —un tiempo supuesto, no medido— y encadenarles otra vuelta las
+// deja corriendo el doble de lo que nadie comprobó.
+describe('otro ciclo — cargas de un solo ciclo', () => {
   it('el endpoint lo rechaza y dice dónde se configura', async () => {
     const id = await seedMaquina({ nombre: 'S1', tipo: 'lavadora_mediana', tamano: 'mediana' });
     const { cargaId } = await arrancar(id);
@@ -274,12 +274,17 @@ describe('otro ciclo — lavadora sin tiempo de marca', () => {
     expect(rows[0].encendida_sin_iniciar_at).toBeNull();
   });
 
-  it('una secadora sin tiempo de marca SÍ puede repetir: el respaldo es su tiempo real', async () => {
-    const id = await seedMaquina({ nombre: 'SEC1', tipo: 'secadora', tamano: 'mediana' });
+  it('una secadora corre un ciclo aunque su marca tenga tiempo configurado', async () => {
+    // Un secado es uno: aquí no depende de la configuración, así que la marca
+    // con su tiempo no cambia nada.
+    await seedMarca({ nombre: 'Samsung', tipo: 'secadora', tamano: 'mediana', minutos: 30 });
+    const id = await seedMaquina({
+      nombre: 'SEC1', tipo: 'secadora', tamano: 'mediana', marca: 'Samsung',
+    });
 
     const r = await request(app).get('/api/maquinas').set(auth(admin.token)).expect(200);
     const m = r.body.find(x => String(x.id) === String(id));
 
-    expect(m.ciclos_max).toBe(MAX_CICLOS_POR_CARGA);
+    expect(m.ciclos_max).toBe(1);
   });
 });
