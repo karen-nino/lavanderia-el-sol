@@ -116,7 +116,7 @@ export default function Salidas() {
   const [cambiarSel,       setCambiarSel]       = useState('');
 
   // Terminar el secado de UNA secadora (si es la última, la nota pasa a Por Entregar)
-  const [confirmTerminarSec, setConfirmTerminarSec] = useState(null); // máquina secadora
+  const [confirmTerminarMaq, setConfirmTerminarMaq] = useState(null); // máquina por cerrar
 
   // Tiempos de ciclo por tipo de máquina (Ajustes) y reloj para calcular,
   // por máquina, si su ciclo ya se cumplió (igual que el dashboard).
@@ -432,19 +432,24 @@ export default function Salidas() {
     }
   }
 
-  // Terminar el secado de una secadora: el backend la libera y, si era la
-  // última máquina de la nota, la pasa a "Por Entregar".
-  async function terminarSecado() {
-    if (!confirmTerminarSec) return;
+  // Cierra la carga de una máquina que ya cumplió su ciclo: el backend la
+  // libera y, si a la nota no le queda nada, la pasa a "Por Entregar". La
+  // secadora termina su secado; la lavadora termina el lavado sin pasar a
+  // secado (en Por Encargo la secadora se asigna y arranca aparte).
+  async function terminarCicloMaquina() {
+    const maq = confirmTerminarMaq;
+    if (!maq) return;
     setLoadingMaquina(true);
     setErrorAccion('');
     try {
-      await api.patch(`/notas/${id}/terminar-secado`, { secadora_id: Number(confirmTerminarSec.id) });
-      setConfirmTerminarSec(null);
+      await (maq.tipo === 'secadora'
+        ? api.patch(`/notas/${id}/terminar-secado`, { secadora_id: Number(maq.id) })
+        : api.patch(`/notas/${id}/terminar-lavado-final`, { lavadora_id: Number(maq.id) }));
+      setConfirmTerminarMaq(null);
       await cargarDatos();
     } catch (err) {
       setErrorAccion(err.message);
-      setConfirmTerminarSec(null);
+      setConfirmTerminarMaq(null);
     } finally {
       setLoadingMaquina(false);
     }
@@ -525,6 +530,14 @@ export default function Salidas() {
             en_uso_desde: c.lavadora_en_uso_desde,
             esperandoArranque: Boolean(c.lavadora_esperando_arranque),
             tomadaPor: c.lavadora_id ? usadaPorOtra(c.lavadora_id) : null,
+            // En Autoservicio, una lavadora cuya carga todavía debe secar no
+            // cierra nada: el paso siguiente es pasar la ropa a la secadora, y
+            // eso se hace desde la tarjeta de Máquinas, que pide elegirla. En
+            // Por Encargo la secadora va aparte, así que la lavadora sí cierra
+            // su carga aquí (2026-09-22).
+            encadenaSecado: esAutoservicio
+              && Boolean(c.secadora_tipo_previsto)
+              && !c.secadora_id && !c.secadora_usada_id,
           },
           (c.secadora_id || c.secadora_usada_id) && {
             id: c.secadora_id || c.secadora_usada_id,
@@ -803,11 +816,13 @@ export default function Salidas() {
                       )}
                       {m.estado === 'en_uso' && !m.esperandoArranque && (
                         cicloCumplido(m) ? (
-                          // Secadora que terminó: finalizar la carga. Lavadora
-                          // que terminó: sin botón (verde), el secado va aparte.
-                          m.tipo === 'secadora' ? (
+                          // Ya cumplió su ciclo: cerrar la carga de esa máquina.
+                          // La única que no lo ofrece es la lavadora que encadena
+                          // secado (Autoservicio): ahí el paso es pasar la ropa a
+                          // la secadora, desde la tarjeta de Máquinas.
+                          !m.encadenaSecado ? (
                             <button
-                              onClick={() => setConfirmTerminarSec(m)}
+                              onClick={() => setConfirmTerminarMaq(m)}
                               disabled={loadingMaquina}
                               className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
                             >
@@ -1258,16 +1273,23 @@ export default function Salidas() {
       )}
 
       {/* Modal confirmar terminar ciclo de una secadora */}
-      {confirmTerminarSec && (
+      {confirmTerminarMaq && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
             <h3 className="text-base font-bold text-gray-900">Terminar ciclo</h3>
             <p className="text-sm text-gray-500">
-              ¿Confirmar que la carga de <span className="font-semibold text-gray-800">{confirmTerminarSec.nombre}</span> ya terminó? La secadora pasará a disponible.
+              ¿Confirmar que la carga de <span className="font-semibold text-gray-800">{confirmTerminarMaq.nombre}</span> ya terminó?{' '}
+              {confirmTerminarMaq.tipo === 'secadora' ? 'La secadora' : 'La lavadora'} pasará a disponible.
             </p>
-            {otrasEnUso(confirmTerminarSec) ? (
+            {/* A la nota le puede faltar trabajo que no está en ninguna máquina:
+                una carga que compró secadora y todavía no la tiene asignada.
+                Entonces tampoco pasa a "Por Entregar". */}
+            {otrasEnUso(confirmTerminarMaq) || slotsPorAsignar.length > 0 ? (
               <p className="text-sm text-gray-500">
-                Las demás cargas de la nota siguen en proceso; la nota aún no pasa a "Por Entregar".
+                La nota sigue en proceso
+                {otrasEnUso(confirmTerminarMaq)
+                  ? ': sus demás cargas todavía están en máquina.'
+                  : ': le falta asignar la máquina de otra carga.'} Aún no pasa a "Por Entregar".
               </p>
             ) : (
               <p className="text-sm text-gray-500">
@@ -1277,7 +1299,7 @@ export default function Salidas() {
             <div className="flex gap-3">
               <button
                 type="button"
-                onClick={() => setConfirmTerminarSec(null)}
+                onClick={() => setConfirmTerminarMaq(null)}
                 disabled={loadingMaquina}
                 className="flex-1 border border-gray-300 text-gray-700 font-medium py-3.5 rounded-lg text-base hover:bg-gray-50 disabled:opacity-60 transition-colors"
               >
@@ -1285,7 +1307,7 @@ export default function Salidas() {
               </button>
               <button
                 type="button"
-                onClick={terminarSecado}
+                onClick={terminarCicloMaquina}
                 disabled={loadingMaquina}
                 className="flex-1 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
               >
