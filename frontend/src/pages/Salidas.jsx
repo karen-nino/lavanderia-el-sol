@@ -517,39 +517,50 @@ export default function Salidas() {
       if (!m || m.estado !== 'en_uso' || !m.en_uso_nota_id) return null;
       return String(m.en_uso_nota_id) === String(id) ? null : (m.en_uso_folio ?? 'otra nota');
     };
+    // Una línea POR PASADA (mig. 114): la carga que se relavó lista su lavadora
+    // dos veces aunque sea la misma máquina. Solo la pasada marcada `actual`
+    // está viva —es la que puede encenderse, iniciarse o cerrarse—; las
+    // anteriores son historial y van sin botones.
     return cargasNota
       .map(c => ({
         orden: c.orden,
-        maquinas: [
-          (c.lavadora_id || c.lavadora_usada_id) && {
-            id: c.lavadora_id || c.lavadora_usada_id,
-            nombre: c.lavadora_id ? c.lavadora_nombre : c.lavadora_usada_nombre,
-            tipo:   c.lavadora_id ? c.lavadora_tipo   : c.lavadora_usada_tipo,
-            // Desvinculada y removida → eliminada (tachada); si no → terminó.
-            estado: c.lavadora_id ? c.lavadora_estado : (c.lavadora_removida ? 'removida' : 'terminado'),
-            en_uso_desde: c.lavadora_en_uso_desde,
-            esperandoArranque: Boolean(c.lavadora_esperando_arranque),
-            tomadaPor: c.lavadora_id ? usadaPorOtra(c.lavadora_id) : null,
+        maquinas: (c.maquinas_usadas ?? []).map(u => {
+          const esLav = u.slot === 'lavadora';
+          const removida = esLav ? c.lavadora_removida : c.secadora_removida;
+          const ultimaDelSlot = (c.maquinas_usadas ?? [])
+            .filter(x => x.slot === u.slot).slice(-1)[0];
+          const esUltima = ultimaDelSlot && ultimaDelSlot.id === u.id;
+          return {
+            // Sin `maquina_id` la máquina se borró del catálogo: queda el
+            // nombre congelado, pero ya no hay nada que accionar.
+            id: u.maquina_id,
+            // Identidad de la FILA, no de la máquina: con la misma lavadora dos
+            // veces, el id de máquina ya no distingue una pasada de la otra.
+            pasadaId: u.id,
+            actual: Boolean(u.actual),
+            nombre: u.nombre,
+            tipo: u.tipo,
+            ...(esLav ? {} : { tamano: u.tamano }),
+            // La pasada viva muestra el estado real de su máquina; una ya
+            // cerrada cumplió su parte (verde) y la que se quitó antes de
+            // arrancar va tachada.
+            estado: u.actual
+              ? (esLav ? c.lavadora_estado : c.secadora_estado)
+              : (esUltima && removida ? 'removida' : 'terminado'),
+            en_uso_desde: u.actual ? (esLav ? c.lavadora_en_uso_desde : c.secadora_en_uso_desde) : null,
+            esperandoArranque: Boolean(u.actual
+              && (esLav ? c.lavadora_esperando_arranque : c.secadora_esperando_arranque)),
+            tomadaPor: u.actual && u.maquina_id ? usadaPorOtra(u.maquina_id) : null,
             // En Autoservicio, una lavadora cuya carga todavía debe secar no
             // cierra nada: el paso siguiente es pasar la ropa a la secadora, y
             // eso se hace desde la tarjeta de Máquinas, que pide elegirla. En
             // Por Encargo la secadora va aparte, así que la lavadora sí cierra
             // su carga aquí (2026-09-22).
-            encadenaSecado: esAutoservicio
+            encadenaSecado: esLav && esAutoservicio
               && Boolean(c.secadora_tipo_previsto)
               && !c.secadora_id && !c.secadora_usada_id,
-          },
-          (c.secadora_id || c.secadora_usada_id) && {
-            id: c.secadora_id || c.secadora_usada_id,
-            nombre: c.secadora_id ? c.secadora_nombre : c.secadora_usada_nombre,
-            tipo:   c.secadora_id ? c.secadora_tipo   : c.secadora_usada_tipo,
-            tamano: c.secadora_id ? c.secadora_tamano : c.secadora_usada_tamano,
-            estado: c.secadora_id ? c.secadora_estado : (c.secadora_removida ? 'removida' : 'terminado'),
-            en_uso_desde: c.secadora_en_uso_desde,
-            esperandoArranque: Boolean(c.secadora_esperando_arranque),
-            tomadaPor: c.secadora_id ? usadaPorOtra(c.secadora_id) : null,
-          },
-        ].filter(Boolean),
+          };
+        }),
       }))
       .filter(g => g.maquinas.length > 0);
   })();
@@ -560,9 +571,11 @@ export default function Salidas() {
   // Máquina del modal de arranque, tomada de la lista VIVA: por eso el modal
   // pasa solo de "Encender máquina" a "Iniciar Lavado" en cuanto la máquina
   // queda encendida, sin cerrarse ni volver a abrirse.
+  // Se busca la pasada VIVA: si la carga repitió máquina, la lista trae la
+  // misma id dos veces y la primera es historial, sin nada que accionar.
   const maqModal = maquinaModalId == null
     ? null
-    : maquinasAsignadas.find(x => String(x.id) === String(maquinaModalId)) ?? null;
+    : maquinasAsignadas.find(x => x.actual && String(x.id) === String(maquinaModalId)) ?? null;
   const pasoModal = maqModal?.esperandoArranque ? 'iniciar' : 'encender';
 
   // Cargas que se eligieron al hacer la nota pero se quedaron sin máquina (ni
@@ -752,7 +765,7 @@ export default function Salidas() {
                   // Máquina eliminada: línea tachada y en gris (estuvo asignada).
                   const removida = m.estado === 'removida';
                   return (
-                    <div key={i} className="flex flex-wrap items-center justify-between gap-2">
+                    <div key={m.pasadaId ?? i} className="flex flex-wrap items-center justify-between gap-2">
                       <div className={`flex flex-wrap items-center gap-2 min-w-0 ${removida ? 'line-through text-gray-400' : ''}`}>
                         {/* Estado: solo el punto de color */}
                         {cfg && (

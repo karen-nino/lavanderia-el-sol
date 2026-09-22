@@ -817,28 +817,49 @@ export default function DetalleNota() {
                   // Si la máquina sigue vinculada (lavadora_id/secadora_id), su
                   // estado en vivo (En espera / En uso); si ya se desvinculó,
                   // cumplió su parte → "terminado" (verde).
-                  const maquinasCarga = [
-                    cg.lavadora_usada_id && {
-                      nombre: cg.lavadora_usada_nombre, tipo: cg.lavadora_usada_tipo,
-                      estado: cg.lavadora_id ? cg.lavadora_estado : (cg.lavadora_removida ? 'removida' : 'terminado'),
-                      precio: Number(cg.precio_lavadora),
-                    },
-                    cg.secadora_usada_id && {
-                      nombre: cg.secadora_usada_nombre, tipo: cg.secadora_usada_tipo,
-                      tamano: cg.secadora_usada_tamano,
-                      estado: cg.secadora_id ? cg.secadora_estado : (cg.secadora_removida ? 'removida' : 'terminado'),
-                      precio: Number(cg.precio_secadora),
-                    },
-                  ].filter(Boolean);
+                  // Una línea POR PASADA (mig. 114): una carga que se relavó
+                  // lista su lavadora dos veces, aunque sea la misma máquina.
+                  // El importe va en la PRIMERA pasada de cada hueco, que es la
+                  // que se cobró (`precio_lavadora` / `precio_secadora`); las
+                  // vueltas siguientes van sin cobro, así que van sin cifra.
+                  // Repetirlo haría parecer que se cobraron dos lavados.
+                  const usadas = cg.maquinas_usadas ?? [];
+                  const primeraDe = (slot) => usadas.find(u => u.slot === slot)?.id ?? null;
+                  const ultimaDe = (slot) => {
+                    const delSlot = usadas.filter(u => u.slot === slot);
+                    return delSlot.length ? delSlot[delSlot.length - 1].id : null;
+                  };
+                  const primeraLav = primeraDe('lavadora');
+                  const primeraSec = primeraDe('secadora');
+                  const ultimaLav = ultimaDe('lavadora');
+                  const ultimaSec = ultimaDe('secadora');
+                  const maquinasCarga = usadas.map(u => {
+                    const esLav = u.slot === 'lavadora';
+                    const esUltima = u.id === (esLav ? ultimaLav : ultimaSec);
+                    const esPrimera = u.id === (esLav ? primeraLav : primeraSec);
+                    const removida = esLav ? cg.lavadora_removida : cg.secadora_removida;
+                    const estadoVivo = esLav ? cg.lavadora_estado : cg.secadora_estado;
+                    return {
+                      nombre: u.nombre, tipo: u.tipo, tamano: esLav ? undefined : u.tamano,
+                      // La que sigue puesta muestra su estado en vivo; una pasada
+                      // ya cerrada cumplió su parte (verde), y la que se quitó
+                      // antes de arrancar va tachada.
+                      estado: u.actual ? estadoVivo : (esUltima && removida ? 'removida' : 'terminado'),
+                      precio: esPrimera
+                        ? Number(esLav ? cg.precio_lavadora : cg.precio_secadora)
+                        : null,
+                    };
+                  });
                   // Por Encargo: slots con TIPO elegido pero sin máquina física
                   // todavía (se asignan en Salidas). Se muestran como "sin asignar".
                   const TIPO_MAQ_LABEL = { mediana: 'Mediana', jumbo: 'Jumbo', edredon: 'Edredón' };
+                  const hayDelSlot = (slot) => usadas.some(u => u.slot === slot);
                   const slotsPrevistos = [
-                    !cg.lavadora_usada_id && cg.lavadora_tipo_previsto && {
+                    !hayDelSlot('lavadora') && cg.lavadora_tipo_previsto && {
                       label: `Lavadora ${TIPO_MAQ_LABEL[cg.lavadora_tipo_previsto] ?? cg.lavadora_tipo_previsto}`,
                       precio: Number(cg.precio_lavadora),
                     },
-                    !cg.secadora_usada_id && cg.secadora_tipo_previsto && {
+                    !hayDelSlot('secadora') && cg.secadora_tipo_previsto && {
                       label: `Secadora`,
                       precio: Number(cg.precio_secadora),
                     },
@@ -888,7 +909,11 @@ export default function DetalleNota() {
                                   <span className="text-xs text-gray-500">— {tipoLabel}</span>
                                 )}
                               </div>
-                              <span className="flex-shrink-0 text-sm text-gray-600">{fmtMonto(m.precio)}</span>
+                              {/* Sin importe: es una pasada anterior del mismo
+                                  hueco y no se cobró aparte. */}
+                              {m.precio != null && (
+                                <span className="flex-shrink-0 text-sm text-gray-600">{fmtMonto(m.precio)}</span>
+                              )}
                             </div>
                           );
                         })
