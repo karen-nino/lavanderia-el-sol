@@ -658,6 +658,37 @@ describe('handlers de máquina — asignar / cambiar / quitar', () => {
     expect(rows[0].estado).toBe('disponible');
   });
 
+  // Una carga que ya lavó puede volver a lavar (o secar de más) en la misma
+  // carga: el hueco lo ocupa la máquina PUESTA, no la que ya se usó. Y esa
+  // repetición va sin cobro, así que no puede reescribir lo ya cobrado.
+  it('una carga acepta otra lavadora cuando la suya ya se liberó, sin mover el total', async () => {
+    const { notaId, lavadoraId } = await porEncargoEnEspera();
+    const nota = await request(app).get(`/api/notas/${notaId}`).set(auth(admin.token));
+    const cargaId = nota.body.cargas[0].id;
+    const totalAntes = Number(nota.body.precio_total);
+    expect(totalAntes).toBeGreaterThan(0);
+
+    // Con la lavadora puesta, no cabe otra del mismo tipo a la vez.
+    const otra = await seedMaquina({ nombre: 'Lavadora 2', tipo: 'lavadora_mediana' });
+    const ocupada = await request(app).patch(`/api/notas/${notaId}/asignar-maquina`)
+      .set(auth(admin.token)).send({ maquina_id: otra, cobrar: false, carga_id: cargaId });
+    expect(ocupada.status).toBe(400);
+    expect(ocupada.body.message).toMatch(/ya tiene una lavadora/i);
+
+    // Se libera la lavadora (como al terminar su ciclo): queda el registro
+    // histórico en lavadora_usada_id y el hueco vuelve a estar libre.
+    await pool.query('UPDATE nota_cargas SET lavadora_id = NULL WHERE id = $1', [cargaId]);
+    await pool.query("UPDATE maquinas SET estado = 'disponible' WHERE id = $1", [lavadoraId]);
+
+    const res = await request(app).patch(`/api/notas/${notaId}/asignar-maquina`)
+      .set(auth(admin.token)).send({ maquina_id: otra, cobrar: false, carga_id: cargaId });
+    expect(res.status).toBe(200);
+    // Ni carga nueva ni cambio de total: la segunda lavada va en la misma carga
+    // y el lavado que sí se cobró sigue cobrado.
+    expect(res.body.cargas).toHaveLength(1);
+    expect(Number(res.body.precio_total)).toBe(totalAntes);
+  });
+
   it('asignar-maquina exige el flag cobrar', async () => {
     const { notaId } = await porEncargoEnEspera();
     const otra = await seedMaquina({ nombre: 'Lavadora 2' });

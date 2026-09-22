@@ -2735,8 +2735,10 @@ export const asignarMaquina = async (req, res) => {
     // crear una carga nueva; las parejas que sobren sí se agregan como cargas
     // nuevas. La carga puede estar vacía (creada al hacer la nota sin máquina) o
     // ya traer una máquina: p. ej. sumarle la secadora a una carga que solo
-    // tiene lavadora. Solo se puede llenar un hueco libre — una carga tiene a lo
-    // más una lavadora y una secadora, contando también las ya usadas.
+    // tiene lavadora. El hueco lo ocupa la máquina PUESTA, no la que ya se usó
+    // y se liberó: la misma ropa puede necesitar otro lavado o más secado, y
+    // eso va en su carga (2026-09-22). Lo que no cabe es una segunda máquina
+    // del mismo tipo a la vez: la carga guarda una lavadora y una secadora.
     let cargaObjetivo = null;
     if (carga_id != null) {
       const { rows: cRows } = await client.query(
@@ -2750,15 +2752,13 @@ export const asignarMaquina = async (req, res) => {
         return res.status(400).json({ message: 'La carga indicada no existe en esta nota.' });
       }
       const c = cRows[0];
-      const cargaTieneLav = Boolean(c.lavadora_id || c.lavadora_usada_id);
-      const cargaTieneSec = Boolean(c.secadora_id || c.secadora_usada_id);
-      if (cargaTieneLav && lavadoras.length > 0) {
+      if (c.lavadora_id && lavadoras.length > 0) {
         await client.query('ROLLBACK');
-        return res.status(400).json({ message: `La carga ${c.orden} ya tiene lavadora.` });
+        return res.status(400).json({ message: `La carga ${c.orden} ya tiene una lavadora puesta.` });
       }
-      if (cargaTieneSec && secadoras.length > 0) {
+      if (c.secadora_id && secadoras.length > 0) {
         await client.query('ROLLBACK');
-        return res.status(400).json({ message: `La carga ${c.orden} ya tiene secadora.` });
+        return res.status(400).json({ message: `La carga ${c.orden} ya tiene una secadora puesta.` });
       }
       cargaObjetivo = c;
     }
@@ -2785,21 +2785,30 @@ export const asignarMaquina = async (req, res) => {
           return res.status(400).json({ message: 'Los edredones solo van en lavadora jumbo.' });
         }
         // Solo se toca el hueco que se está llenando: si la carga ya traía la
-        // otra máquina (o su precio), se conserva tal cual.
+        // otra máquina (o su precio), se conserva tal cual. Y si ese hueco YA
+        // se había usado (segundo lavado, más secado), su precio tampoco se
+        // reescribe: lo que se cobró al hacer la nota sigue siendo lo cobrado,
+        // y la máquina repetida va sin cobro. Sin esto, repetir con cobrar
+        // false pondría el precio en 0 y bajaría el total de la nota.
         await client.query(
           `UPDATE nota_cargas
               SET lavadora_id       = COALESCE($1::int, lavadora_id),
                   secadora_id       = COALESCE($2::int, secadora_id),
                   lavadora_usada_id = COALESCE($1::int, lavadora_usada_id),
                   secadora_usada_id = COALESCE($2::int, secadora_usada_id),
-                  precio_lavadora   = CASE WHEN $1::int IS NULL THEN precio_lavadora ELSE $3 END,
-                  precio_secadora   = CASE WHEN $2::int IS NULL THEN precio_secadora ELSE $4 END
+                  precio_lavadora   = CASE WHEN $3::numeric IS NULL THEN precio_lavadora ELSE $3 END,
+                  precio_secadora   = CASE WHEN $4::numeric IS NULL THEN precio_secadora ELSE $4 END
             WHERE id = $5`,
           [
             lavadora ? lavadora.id : null,
             secadora ? secadora.id : null,
-            lavadora && cobrar ? tarifaLavadora(lavadora.tipo, prendaCarga, t) : 0,
-            secadora && cobrar ? tarifaSecadora(secadora.tamano, prendaCarga, t) : 0,
+            // null = conservar el precio que ya tenía el hueco.
+            !lavadora || cargaObjetivo.lavadora_usada_id
+              ? null
+              : (cobrar ? tarifaLavadora(lavadora.tipo, prendaCarga, t) : 0),
+            !secadora || cargaObjetivo.secadora_usada_id
+              ? null
+              : (cobrar ? tarifaSecadora(secadora.tamano, prendaCarga, t) : 0),
             cargaObjetivo.id,
           ]
         );

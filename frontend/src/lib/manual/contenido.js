@@ -153,14 +153,11 @@ Los filtros se quedan puestos: si entras a una nota y regresas con la flecha, la
         claves: ['salidas', 'poner lavadora', 'secadora', 'que maquina'],
         cuerpo: `Al crear la nota solo se elige el TIPO de máquina. La máquina física se asigna después, cuando vas a meter la ropa.
 
-Abre la nota y entra a Salidas (o entra desde la lista de máquinas). En Máquinas toca + Agregar y la app te pregunta DÓNDE VA:
+Abre la nota y entra a Salidas (o entra desde la lista de máquinas). Cada carga lista lo que la nota compró —Lavadora, Secadora— con su botón Asignar Lav. / Asignar Sec. Las dos se pueden asignar desde el principio, sin esperar a que termine el lavado.
 
-· A una carga que ya existe y tiene un hueco libre (lo normal: la Carga 1 ya tiene lavadora y le falta la secadora).
-· A una carga nueva.
+Si hace falta una máquina EXTRA (la ropa quedó húmeda y necesita más secado, o hay que volver a lavarla), usa + Agregar. Esa máquina va SIN COBRO: no cambia el total de la nota. Siempre se suma a una carga que ya existe, y una carga admite otra lavadora u otra secadora aunque ya haya pasado por una; lo único que no cabe es una segunda máquina del mismo tipo al mismo tiempo.
 
-Viene precargada la primera carga con hueco, que es el caso de siempre.
-
-La secadora de una carga se asigna cuando termina su lavado, no antes: así no apartas una secadora que estaría parada media hora.`,
+Si el cliente quiere más servicio que el que pagó, eso es una nota nueva, no una máquina agregada aquí.`,
       },
       {
         id: 'iniciar-y-terminar',

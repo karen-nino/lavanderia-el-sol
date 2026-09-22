@@ -352,8 +352,8 @@ export default function Salidas() {
     });
   }
 
-  // Cambia el destino de la asignación (carga nueva o una carga existente) y
-  // limpia la selección: los huecos disponibles cambian con el destino.
+  // Cambia la carga destino y limpia la selección: los huecos disponibles
+  // cambian con el destino.
   function elegirDestino(carga) {
     setErrorAccion('');
     setAsignarCarga(carga);
@@ -367,6 +367,8 @@ export default function Salidas() {
   // así que no hay nada que decidir aquí (2026-09-22).
   async function confirmarAsignar() {
     if (asignarMaqSel.length === 0) return;
+    // Desde Salidas siempre se suma a una carga que ya existe.
+    if (!asignarSlot && !asignarCarga) return;
     // Modo slot: la carga ya existe y ya está cobrada; solo se le pone máquina.
     if (asignarSlot) {
       await asignarTipoCarga(asignarSlot.carga.id, asignarSlot.slot, asignarMaqSel[0]);
@@ -379,7 +381,7 @@ export default function Salidas() {
       await api.patch(`/notas/${id}/asignar-maquina`, {
         maquina_ids: asignarMaqSel.map(Number),
         cobrar,
-        ...(asignarCarga ? { carga_id: asignarCarga.id } : {}),
+        carga_id: asignarCarga.id,
       });
       cerrarAsignar();
       await cargarDatos();
@@ -559,15 +561,23 @@ export default function Salidas() {
     && !c.lavadora_tipo_previsto && !c.secadora_tipo_previsto
   );
 
-  // Huecos de una carga: una carga admite a lo más una lavadora y una secadora
-  // (contando las que ya se usaron y se liberaron). El hueco de lavadora no se
-  // ofrece si la carga tiene un TIPO previsto pendiente: ese se asigna en su
-  // sección propia, con el tipo que se eligió al hacer la nota.
-  const cargaTieneLav = (c) => Boolean(c.lavadora_id || c.lavadora_usada_id);
-  const cargaTieneSec = (c) => Boolean(c.secadora_id || c.secadora_usada_id);
+  // Huecos de una carga: lo que tiene LIBRE ahora mismo. Haber pasado ya por
+  // una lavadora (o por una secadora) no cierra el hueco — la misma ropa puede
+  // necesitar otro lavado o más secado, y eso va en su carga, no en una nueva
+  // (2026-09-22). Lo único que ocupa el hueco es una máquina puesta y todavía
+  // sin liberar. El de lavadora tampoco se ofrece si la carga tiene un TIPO
+  // previsto pendiente: ese se asigna en su sección propia, con el tipo que se
+  // eligió al hacer la nota.
+  // Un TIPO previsto que todavía no se asignó tiene su propio renglón
+  // ("Asignar Lav."), así que ese hueco no se ofrece además en "+ Agregar".
+  // Una vez asignado —aunque la máquina ya se haya liberado— deja de estar
+  // pendiente y el hueco vuelve a quedar disponible aquí.
+  const previstoPendiente = (c, slot) => slot === 'lavadora'
+    ? Boolean(c.lavadora_tipo_previsto) && !c.lavadora_id && !c.lavadora_usada_id
+    : Boolean(c.secadora_tipo_previsto) && !c.secadora_id && !c.secadora_usada_id;
   const huecosDeCarga = (c) => ({
-    lavadora: Boolean(c) && !cargaTieneLav(c) && !c.lavadora_tipo_previsto,
-    secadora: Boolean(c) && !cargaTieneSec(c),
+    lavadora: Boolean(c) && !c.lavadora_id && !previstoPendiente(c, 'lavadora'),
+    secadora: Boolean(c) && !c.secadora_id && !previstoPendiente(c, 'secadora'),
   });
 
   // Cargas a las que se les puede sumar una máquina en vez de abrir una carga
@@ -688,12 +698,15 @@ export default function Salidas() {
         <div className="px-4 py-3 border-b border-gray-50 flex items-center justify-between gap-2">
           <h2 className="text-sm font-semibold text-gray-700">Máquinas</h2>
           {/* Asignar una máquina EXTRA (una que no se vendió en la nota):
-              disponible desde el inicio, salvo en notas cerradas. En
+              disponible desde el inicio, salvo en notas cerradas y salvo que no
+              haya ninguna carga con hueco libre — la máquina siempre va a una
+              carga que ya existe. En
               Autoservicio no se ofrece: ahí se cobra todo por adelantado, así
               que una máquina de más es una nota nueva, no un agregado a una
               nota que ya se pagó. Las máquinas que la nota SÍ compró se
               asignan con el botón "Asignar" de cada carga. */}
-          {nota && !esAutoservicio && !['FINALIZADA', 'CANCELADA'].includes(nota.estado) && (
+          {nota && !esAutoservicio && !['FINALIZADA', 'CANCELADA'].includes(nota.estado)
+            && cargasDestino.length > 0 && (
             <button
               onClick={() => iniciarAsignar()}
               disabled={loadingMaquina}
@@ -1300,9 +1313,7 @@ export default function Salidas() {
                         ? `lavadora ${TIPO_MAQ_LABEL[asignarSlot.tipo] ?? asignarSlot.tipo}`
                         : 'secadora'}
                     </span> que le falta a la Carga {cargaDestino?.orden}. Queda asignada; la inicias después con su botón.</>
-                  : cargaDestino
-                  ? <>La máquina se suma a la <span className="font-medium text-gray-700">Carga {cargaDestino.orden}</span> <span className="font-medium text-gray-700">sin cobro</span>: no cambia el total de la nota. Queda asignada; la inicias después con su botón.</>
-                  : <>Se abre una <span className="font-medium text-gray-700">carga nueva</span> <span className="font-medium text-gray-700">sin cobro</span>: no cambia el total de la nota. Puedes elegir varias: una lavadora y una secadora se agrupan en una misma carga. Quedan asignadas; las inicias después con su botón.</>}
+                  : <>La máquina se suma a la <span className="font-medium text-gray-700">Carga {cargaDestino?.orden}</span> <span className="font-medium text-gray-700">sin cobro</span>: no cambia el total de la nota. Queda asignada; la inicias después con su botón.</>}
               </p>
             </div>
 
@@ -1312,17 +1323,20 @@ export default function Salidas() {
               </div>
             )}
 
-            {/* ¿Carga nueva o se suma a una carga que ya existe? Solo se ofrece
-                cuando el modal se abre desde "+ Agregar" (sin destino
-                fijo) y hay alguna carga con hueco libre. */}
+            {/* A qué carga se suma. Siempre es una carga que ya existe: desde
+                Salidas no se abren cargas nuevas, para eso está una nota nueva
+                (2026-09-22). Solo se ofrece cuando el modal viene de
+                "+ Agregar" (sin destino fijo) y hay más de una candidata. */}
             {!asignarCargaFija && cargasDestino.length > 0 && (
               <div className="space-y-2">
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Dónde va</p>
                 <div className="flex flex-wrap gap-2">
                   {cargasDestino.map(c => {
                     const h = huecosDeCarga(c);
-                    const falta = h.lavadora && h.secadora ? 'vacía'
-                                : h.lavadora ? 'falta lavadora' : 'falta secadora';
+                    // Qué ADMITE, no qué le falta: una carga que ya lavó y secó
+                    // vuelve a admitir las dos, y decir "vacía" sería mentira.
+                    const admite = h.lavadora && h.secadora ? 'lavadora o secadora'
+                                 : h.lavadora ? 'solo lavadora' : 'solo secadora';
                     const sel = cargaDestino != null && String(cargaDestino.id) === String(c.id);
                     return (
                       <button
@@ -1334,20 +1348,10 @@ export default function Salidas() {
                         }`}
                       >
                         <span className="text-sm font-medium text-gray-800">Carga {c.orden}</span>
-                        <span className="text-xs text-gray-500">{falta}</span>
+                        <span className="text-xs text-gray-500">{admite}</span>
                       </button>
                     );
                   })}
-                  {/* Al final: abrir una carga nueva es la opción menos común. */}
-                  <button
-                    type="button"
-                    onClick={() => elegirDestino(null)}
-                    className={`px-4 py-2.5 border-2 rounded-xl text-sm font-medium transition-colors ${
-                      cargaDestino === null ? 'border-blue bg-light-blue text-gray-800' : 'border-gray-200 bg-white text-gray-700 hover:border-blue-300'
-                    }`}
-                  >
-                    Nueva carga
-                  </button>
                 </div>
               </div>
             )}
