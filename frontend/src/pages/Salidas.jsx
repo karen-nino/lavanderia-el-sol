@@ -602,32 +602,18 @@ export default function Salidas() {
     return now - new Date(m.en_uso_desde).getTime() >= Math.max(0, Number(minutos) || 0) * 60000;
   };
 
-  // La secadora SE LISTA desde el principio —la nota la compró, tiene que
-  // verse—, pero solo se puede ELEGIR cuando la carga ya no tiene lavado
-  // pendiente (o nunca llevó lavadora, o la suya ya cumplió su ciclo):
-  // escogerla antes es quedarse con una que va a estar parada todo el lavado,
-  // y para cuando toque secar puede que ya se la haya ganado otra nota.
-  const lavadoPendiente = (c) => {
-    // Lavadora prevista a la que todavía no se le puso máquina física.
-    if (c.lavadora_tipo_previsto && !c.lavadora_id && !c.lavadora_usada_id) return true;
-    // Lavadora asignada: pendiente hasta que cumple su ciclo (si no arrancó,
-    // `cicloCumplido` es false, que es justo lo que queremos).
-    if (c.lavadora_id) {
-      return !cicloCumplido({
-        estado: c.lavadora_estado,
-        en_uso_desde: c.lavadora_en_uso_desde,
-        tipo: c.lavadora_tipo,
-      });
-    }
-    return false; // sin lavadora, o ya terminó y se liberó (lavadora_usada_id)
-  };
+  // Lavadora y secadora se asignan igual: en cuanto la nota existe. La
+  // secadora esperaba a que terminara el lavado para no quedarse con una
+  // máquina parada, pero asignar no la aparta —se la queda quien le dé a
+  // Iniciar primero (ver maquinasParaSlot)—, así que la espera solo escondía
+  // trabajo que el mostrador quiere dejar listo de una vez (2026-09-22).
   const slotsPorAsignar = notaCerrada ? [] : cargasNota.flatMap(c => {
     const out = [];
     if (c.lavadora_tipo_previsto && !c.lavadora_id && !c.lavadora_usada_id) {
       out.push({ carga: c, slot: 'lavadora', tipo: c.lavadora_tipo_previsto });
     }
     if (c.secadora_tipo_previsto && !c.secadora_id && !c.secadora_usada_id) {
-      out.push({ carga: c, slot: 'secadora', tipo: c.secadora_tipo_previsto, esperaLavado: lavadoPendiente(c) });
+      out.push({ carga: c, slot: 'secadora', tipo: c.secadora_tipo_previsto });
     }
     return out;
   });
@@ -851,7 +837,7 @@ export default function Salidas() {
           {gruposSlots.map(({ carga, slots }) => (
             <div key={`slots-${carga.id}`} className="space-y-2 [&:not(:first-child)]:border-t [&:not(:first-child)]:border-gray-100 [&:not(:first-child)]:pt-4">
               <p className="text-xs font-semibold text-gray-500">Carga {carga.orden}</p>
-              {slots.map(({ slot, tipo, esperaLavado }) => {
+              {slots.map(({ slot, tipo }) => {
                 const opciones = maquinasParaSlot(slot, tipo);
                 const queFalta = slot === 'lavadora'
                   ? `lavadoras ${TIPO_MAQ_LABEL[tipo] ?? tipo}`
@@ -861,11 +847,7 @@ export default function Salidas() {
                     <span className="text-sm text-gray-600">
                       {slot === 'lavadora' ? `Lavadora ${TIPO_MAQ_LABEL[tipo] ?? tipo}` : 'Secadora'}
                     </span>
-                    {esperaLavado ? (
-                      // Se ve, pero todavía no se elige: primero tiene que
-                      // terminar el lavado de su carga.
-                      <span className="text-sm text-gray-400 italic">Al terminar el lavado</span>
-                    ) : opciones.length === 0 ? (
+                    {opciones.length === 0 ? (
                       <span className="text-sm text-red-600">No hay {queFalta} disponibles</span>
                     ) : (
                       // Abre el mismo modal que "+ Agregar", ya fijado a
