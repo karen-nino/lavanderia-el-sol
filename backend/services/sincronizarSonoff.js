@@ -57,24 +57,34 @@ export const HORAS_ENCENDIDO_MANUAL = (() => {
 // arranque, que no es automático al dar corriente.
 //
 // Ese ciclo más corto NO es un número fijo del código: sale de `tiempos_marca`
-// (mig. 107) y lo edita el admin desde Ajustes. Cuando se escribió esto eran
-// los 30 min de las secadoras, de ahí el default de 20 min; hoy son los 15 min
-// de las LG, así que ese default ya no cumple la regla y producción lo
-// sobreescribe. Si vuelven a bajar un tiempo de ciclo, hay que revisar este
-// margen: nada lo valida automáticamente.
+// (mig. 107) y lo edita el admin desde Ajustes, así que ningún default en
+// minutos puede cumplir la regla por sí solo. El default fue 20 min hasta el
+// 2026-09-21, dando por hecho que cada entorno lo sobreescribiría, y ninguno lo
+// hizo: ni el .env local ni Fly lo definían. Con esos 20 min la lavadora se
+// quedaba con corriente veinte minutos después de terminar —de sobra para
+// colar una carga sin nota en autoservicio, que es justo lo que este margen
+// venía a impedir— y el botón del siguiente ciclo (mig. 108) pedía esperar
+// 1210 s, porque la pausa sin corriente se cuenta a partir del corte.
+//
+// Ahora son 10 s, que es lo que el negocio pidió desde el principio: la máquina
+// se apaga casi al terminar. OJO con subirlo, porque son dos cosas a la vez:
+// los segundos de corriente regalada al final de cada carga y la espera que se
+// come el empleado antes del segundo ciclo. Y al revés: si con 10 s el corte
+// llega a media carga real, lo que está mal son los minutos de esa marca en
+// Ajustes, no este margen.
 //
 // Va en SEGUNDOS y no en minutos porque el flujo de dos ciclos (mig. 108) lo
 // necesita fino: el negocio quiere que la lavadora se apague a los pocos
 // segundos de terminar, no al minuto siguiente. SONOFF_MARGEN_CORTE_MINUTOS se
 // sigue leyendo para no romper una configuración existente. Cero es válido
 // —corte en el instante exacto en que se cumple el ciclo—, así que la
-// comprobación es >= 0 y no > 0: con la de antes, un 0 caía al default de 20.
+// comprobación es >= 0 y no > 0: con la de antes, un 0 caía al default.
 export const MARGEN_CORTE_SEGUNDOS = (() => {
   const s = Number(process.env.SONOFF_MARGEN_CORTE_SEGUNDOS);
   if (Number.isFinite(s) && s >= 0) return Math.round(s);
   const m = Number(process.env.SONOFF_MARGEN_CORTE_MINUTOS);
   if (Number.isFinite(m) && m >= 0) return Math.round(m * 60);
-  return 20 * 60;
+  return 10;
 })();
 
 // Cuántos ciclos puede correr una misma carga en su máquina (mig. 108). El

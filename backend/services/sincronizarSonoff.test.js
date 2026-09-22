@@ -248,8 +248,17 @@ describe('corte por fin de ciclo', () => {
     ...extra,
   });
 
+  // Igual, pero contando en segundos: el margen son 10 s, y "justo dentro" y
+  // "justo fuera" ya no se pueden expresar en minutos.
+  const enUsoDesdeHaceSeg = (seg, ciclo, extra = {}) => ({
+    ...maquinaEnUso('enlazada'),
+    en_uso_desde: new Date(Date.now() - seg * 1000).toISOString(),
+    ciclo_minutos: ciclo,
+    ...extra,
+  });
+
   it('ciclo terminado hace más del margen → corta la corriente', async () => {
-    // Ciclo de 45 (una LG) + 20 de margen = 65. Lleva 70.
+    // Ciclo de 45 (una LG) + 10 s de margen. Lleva 70 min: pasadísima.
     filas.maquina = enUsoDesdeHace(70, 45);
 
     await sincronizarSonoff(1, { reconciliando: true });
@@ -258,10 +267,11 @@ describe('corte por fin de ciclo', () => {
     expect(driver.encender).not.toHaveBeenCalled();
   });
 
-  it('dentro del margen NO la corta: el cliente puede tardar en arrancarla', async () => {
-    // La lavadora no arranca sola al recibir corriente: hay que apretar su
-    // botón, y eso puede pasar minutos después. A los 50 de 65 no se toca.
-    filas.maquina = enUsoDesdeHace(50, 45);
+  it('dentro del margen NO la corta: son unos segundos de gracia', async () => {
+    // El margen existe porque `ciclo_minutos` es una estimación: la máquina
+    // física puede ir unos segundos por detrás. Ciclo de 45 + 10 s de margen =
+    // 45:10, y lleva 45:05, así que todavía no se toca.
+    filas.maquina = enUsoDesdeHaceSeg(45 * 60 + 5, 45);
 
     await sincronizarSonoff(1, { reconciliando: true });
 
@@ -326,9 +336,10 @@ describe('interruptor del corte', () => {
     // defecto; apagarlo en producción es `fly secrets set SONOFF_CORTE_CICLO=off`.
     const { CORTE_CICLO_ACTIVO, MARGEN_CORTE_SEGUNDOS } = await import('./sincronizarSonoff.js');
     expect(CORTE_CICLO_ACTIVO).toBe(true);
-    // El margen vive en segundos desde la mig. 108; el default sigue siendo los
-    // 20 min de antes.
-    expect(MARGEN_CORTE_SEGUNDOS).toBe(20 * 60);
+    // El margen vive en segundos desde la mig. 108. El default eran 20 min y
+    // nadie lo sobreescribía: la máquina se quedaba encendida veinte minutos
+    // después de terminar y el botón del segundo ciclo pedía esperar 1210 s.
+    expect(MARGEN_CORTE_SEGUNDOS).toBe(10);
   });
 });
 
