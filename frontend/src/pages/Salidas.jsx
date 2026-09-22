@@ -72,6 +72,9 @@ export default function Salidas() {
   const [loading,          setLoading]          = useState(true);
   const [error,            setError]            = useState('');
   const [loadingMaquina,   setLoadingMaquina]   = useState(false);
+  const [loadingProducto,  setLoadingProducto]  = useState(null); // id del producto en proceso
+  // Producto de la nota pendiente de confirmar antes de quitarlo (solo admin).
+  const [confirmQuitarProd, setConfirmQuitarProd] = useState(null);
   const [confirmQuitarCarga, setConfirmQuitarCarga] = useState(null);
   const [errorAccion,      setErrorAccion]      = useState('');
   const [confirmDetener,   setConfirmDetener]   = useState(null); // máquina a detener
@@ -444,6 +447,23 @@ export default function Salidas() {
       setConfirmTerminarSec(null);
     } finally {
       setLoadingMaquina(false);
+    }
+  }
+
+  // Quita un producto mal capturado en la nota. Es de admin: desde Salidas ya
+  // no se agregan productos, así que esto solo deshace lo que se capturó al
+  // crear la nota. El producto vuelve al inventario y el total baja.
+  async function eliminarProducto(productoId) {
+    setLoadingProducto(productoId);
+    setErrorAccion('');
+    try {
+      await api.delete(`/notas/${id}/productos/${productoId}`);
+      setConfirmQuitarProd(null);
+      await cargarDatos();
+    } catch (err) {
+      setErrorAccion(err.message);
+    } finally {
+      setLoadingProducto(null);
     }
   }
 
@@ -876,9 +896,9 @@ export default function Salidas() {
         </div>
       </div>
 
-      {/* Sección 2 — Productos de la nota. Solo de consulta: los productos se
-          capturan al crear la nota (o en una nota de servicio Productos), no
-          desde aquí. */}
+      {/* Sección 2 — Productos de la nota. Aquí no se agregan: se capturan al
+          crear la nota (o en una nota de servicio Productos). El admin sí puede
+          quitar uno mal capturado. */}
       <div className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
         <div className="px-4 py-3 border-b border-gray-50">
           <h2 className="text-sm font-semibold text-gray-700">Productos</h2>
@@ -898,6 +918,20 @@ export default function Salidas() {
                     Cant. {p.cantidad} × {fmtMonto(p.precio_unitario)} = {fmtMonto(p.subtotal)}
                   </p>
                 </div>
+                {esAdmin && (
+                  <button
+                    onClick={() => setConfirmQuitarProd(p)}
+                    disabled={loadingProducto === p.producto_id}
+                    className="text-red-400 hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50 transition-colors disabled:opacity-40 flex-shrink-0"
+                    title="Quitar producto"
+                    aria-label={`Quitar ${tituloProducto(p)}`}
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  </button>
+                )}
               </div>
             ))}
             {/* Suma de los productos. El total de la nota (máquinas, ajuste y
@@ -909,6 +943,22 @@ export default function Salidas() {
           </div>
         )}
       </div>
+
+      {confirmQuitarProd && (
+        <ConfirmacionModal
+          titulo="Quitar producto"
+          mensaje={`Se quitará ${confirmQuitarProd.cantidad} × ${confirmQuitarProd.nombre} de esta nota y volverá al inventario.`}
+          detalle={[
+            { etiqueta: 'Deja de cobrarse', valor: fmtMonto(confirmQuitarProd.subtotal) },
+            { etiqueta: 'Nuevo total de la nota',
+              valor: fmtMonto(Number(nota?.precio_total || 0) - Number(confirmQuitarProd.subtotal || 0)) },
+          ]}
+          textoConfirmar={loadingProducto === confirmQuitarProd.producto_id ? 'Quitando…' : 'Quitar producto'}
+          procesando={loadingProducto === confirmQuitarProd.producto_id}
+          onClose={() => setConfirmQuitarProd(null)}
+          onConfirm={() => eliminarProducto(confirmQuitarProd.producto_id)}
+        />
+      )}
 
       {/* Quitar una carga: mismo peso que quitar un producto, porque también
           baja el total de la nota. Antes era un confirm() del navegador, que

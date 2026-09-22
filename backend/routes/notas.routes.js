@@ -64,6 +64,8 @@ router.patch('/:id/forma-pago', requireAdmin, corregirFormaPago);
 router.patch('/:id/telefono', guardarTelefono);
 router.get('/:id/productos',    getNotaProductos);
 router.post('/:id/productos',   addProductoToNota);
-router.delete('/:id/productos/:productoId', removeProductoFromNota);
+// Quitar un producto ya capturado en la nota es cosa de admin, igual que
+// quitar una carga: deshace lo cobrado y devuelve stock.
+router.delete('/:id/productos/:productoId', requireAdmin, removeProductoFromNota);
 
 export default router;
