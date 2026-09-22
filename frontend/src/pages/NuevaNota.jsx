@@ -58,15 +58,13 @@ const TAMANOS = [
 ];
 const TAMANO_LABEL = Object.fromEntries(TAMANOS.map(t => [t.v, t.label]));
 
-// Lavadoras que caben en una carga de Por Encargo: el edredón solo entra en la
-// jumbo, y la ropa se lava en mediana salvo que la carga sea jumbo. **La
-// primera es la que se precarga**, y por eso una carga jumbo abre en jumbo: el
-// tamaño es el del bulto de ropa, así que una carga jumbo no cabe en la mediana
-// —se puede elegir igual, pero no es el punto de partida— (2026-09-22).
+// Lavadoras que caben en una carga de Por Encargo: **la lavadora la decide el
+// TAMAÑO de la carga** — jumbo va en la jumbo y chica/grande en la mediana—, y
+// el edredón, que siempre es jumbo, no cambia nada. Una carga jumbo no cabe en
+// la mediana, así que la mediana ya ni se ofrece (2026-09-22). La primera es la
+// que se precarga; hoy es la única.
 const lavadorasPosibles = (tamano, tipoPrenda) =>
-  tipoPrenda === 'EDREDON' ? ['jumbo']
-  : tamano === 'jumbo' ? ['jumbo', 'mediana']
-  : ['mediana'];
+  tipoPrenda === 'EDREDON' || tamano === 'jumbo' ? ['jumbo'] : ['mediana'];
 
 // Deja la carga con máquina lista al elegir tamaño o prenda:
 //   · Carga recién puesta (sin nada elegido) → lavadora y secado precargados,
@@ -1430,17 +1428,15 @@ export default function NuevaNota() {
                         className={`${INPUT_CLS} bg-white`}
                       >
                         <option value="">Sin lavado</option>
-                        {/* Edredón va en jumbo; para ropa, la jumbo solo en carga jumbo (chico/grande solo mediana). */}
-                        {c.tipo_prenda === 'EDREDON' ? (
-                          <option value="jumbo">Jumbo — ${precioLavadoTipo('jumbo', c.tipo_prenda).toFixed(2)}</option>
-                        ) : (
-                          <>
-                            <option value="mediana">Mediana — ${precioLavadoTipo('mediana', c.tipo_prenda).toFixed(2)}</option>
-                            {c.tamano === 'jumbo' && (
-                              <option value="jumbo">Jumbo — ${precioLavadoTipo('jumbo', c.tipo_prenda).toFixed(2)}</option>
-                            )}
-                          </>
-                        )}
+                        {/* La lavadora la manda el tamaño de la carga: la jumbo
+                            para una carga jumbo (y para todo edredón), la
+                            mediana para chica y grande. No se ofrece la otra
+                            porque la ropa no cabría. */}
+                        {lavadorasPosibles(c.tamano, c.tipo_prenda).map(tipo => (
+                          <option key={tipo} value={tipo}>
+                            {tipo === 'jumbo' ? 'Jumbo' : 'Mediana'} — ${precioLavadoTipo(tipo, c.tipo_prenda).toFixed(2)}
+                          </option>
+                        ))}
                       </select>
                     </div>
                     <div>
