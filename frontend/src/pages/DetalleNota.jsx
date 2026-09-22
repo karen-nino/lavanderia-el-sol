@@ -605,15 +605,15 @@ export default function DetalleNota() {
               Finalizar
             </button>
           )}
-          {/* Mientras la nota vive, Eliminar solo se ve en escritorio (xl, desde
-              1280px): en el teléfono —y en la tablet del mostrador— está pegado
-              a Cancelar, se pulsa con el dedo y borrar no se deshace. Ahí el
-              camino es cancelar; borrar se administra con calma en la laptop. */}
+          {/* Mientras la nota vive, Eliminar solo se ve donde se apunta con mouse
+              o trackpad (`pointer: fine`). Con el dedo está pegado a Cancelar y
+              borrar no se deshace; por ancho no salía, porque una tablet grande
+              mide lo mismo que una laptop. En táctil el camino es cancelar. */}
           {puedeEliminar(nota, esAdmin) && (
             <button
               onClick={() => setConfirmEliminar(true)}
               disabled={loadingAccion}
-              className={`${eliminarSoloEnEscritorio(nota) ? 'hidden xl:flex' : 'flex'} items-center gap-1.5 px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors`}
+              className={`${eliminarSoloEnEscritorio(nota) ? 'hidden pointer-fine:flex' : 'flex'} items-center gap-1.5 px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors`}
             >
               Eliminar
             </button>

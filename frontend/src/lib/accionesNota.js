@@ -30,7 +30,7 @@ export const puedeEliminar = (nota, esAdmin) => Boolean(esAdmin);
 // está pegado a Cancelar, se pulsa con el dedo y borrar no se deshace: lo que
 // se pierde es el rastro de que la nota existió. En el mostrador el camino es
 // cancelar; el borrado directo queda para el escritorio, donde se administra
-// con calma. El corte lo pone la página en `xl` (1280px): con `md` la tablet
-// entraba como escritorio (2026-09-22). Ya cerrada, el botón se ve en todos
-// los tamaños (2026-09-21).
+// con calma. El corte lo pone la página con `pointer-fine` (mouse o trackpad)
+// y no por ancho: una tablet grande mide lo mismo que una laptop
+// (2026-09-22). Ya cerrada, el botón se ve en todas partes (2026-09-21).
 export const eliminarSoloEnEscritorio = (nota) => !esTerminal(nota);

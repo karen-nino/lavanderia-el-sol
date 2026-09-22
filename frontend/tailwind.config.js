@@ -1,4 +1,5 @@
 import colors from 'tailwindcss/colors'
+import plugin from 'tailwindcss/plugin'
 
 /** @type {import('tailwindcss').Config} */
 export default {
@@ -82,5 +83,14 @@ export default {
       },
     },
   },
-  plugins: [],
+  plugins: [
+    // Variante por TIPO DE PUNTERO, no por ancho. El ancho no separa una
+    // tablet grande de una laptop chica (un iPad Pro en horizontal mide
+    // 1366px), pero el puntero sí: `fine` es mouse o trackpad, `coarse` es
+    // dedo. Tailwind 4 la trae de fábrica; en la 3 se agrega a mano.
+    plugin(({ addVariant }) => {
+      addVariant('pointer-fine',   '@media (pointer: fine)')
+      addVariant('pointer-coarse', '@media (pointer: coarse)')
+    }),
+  ],
 }
