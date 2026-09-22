@@ -692,9 +692,13 @@ export default function Salidas() {
       <div className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
         <div className="px-4 py-3 border-b border-gray-50 flex items-center justify-between gap-2">
           <h2 className="text-sm font-semibold text-gray-700">Máquinas</h2>
-          {/* Asignar una máquina extra: disponible desde el inicio, salvo en
-              notas cerradas. */}
-          {nota && !['FINALIZADA', 'CANCELADA'].includes(nota.estado) && (
+          {/* Asignar una máquina EXTRA (una que no se vendió en la nota):
+              disponible desde el inicio, salvo en notas cerradas. En
+              Autoservicio no se ofrece: ahí se cobra todo por adelantado, así
+              que una máquina de más es una nota nueva, no un agregado a una
+              nota que ya se pagó. Las máquinas que la nota SÍ compró se
+              asignan con el botón "Asignar" de cada carga. */}
+          {nota && !esAutoservicio && !['FINALIZADA', 'CANCELADA'].includes(nota.estado) && (
             <button
               onClick={() => iniciarAsignar()}
               disabled={loadingMaquina}
@@ -891,8 +895,9 @@ export default function Salidas() {
             </div>
           ))}
 
-          {/* Una nota sin ninguna carga no lista nada aquí: para darle su
-              primera máquina se usa "+ Agregar" del encabezado. */}
+          {/* Una nota sin ninguna carga no lista nada aquí: en Por Encargo su
+              primera máquina se da con "+ Agregar" del encabezado. En
+              Autoservicio no puede pasar — la nota nace con sus cargas. */}
         </div>
       </div>
 
