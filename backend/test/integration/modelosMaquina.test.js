@@ -1,6 +1,8 @@
-// Modelos de máquina (mig. 117).
+// Modelos de máquina (migs. 117 y 118).
 //
-// Los modelos cuelgan de una marca y pueden traer su propio tiempo de ciclo.
+// Los modelos cuelgan de una marca, dicen qué máquina son (tipo y tamaño) y
+// pueden traer su propio tiempo de ciclo, que se escribe desde los bloques de
+// tiempos de Ajustes y no desde el catálogo.
 // Lo que se fija aquí es la cadena de resolución completa —modelo →
 // marca+tamaño (mig. 107) → tamaño (Ajustes)— porque es la que decide cuánto
 // corre el temporizador y, con el corte automático, cuándo se le va la luz a
@@ -46,7 +48,8 @@ const tiempoDeMarca = (marcaId, tipo, tamano, minutos) =>
   );
 
 const crearModelo = (token, body) =>
-  request(app).post('/api/etiquetas/modelos-maquina').set(auth(token)).send(body);
+  request(app).post('/api/etiquetas/modelos-maquina').set(auth(token))
+    .send({ tipo: 'lavadora', tamano: 'mediana', ...body });
 
 const cicloDe = async (maquinaId) => {
   const { rows } = await pool.query('SELECT ciclo_minutos FROM maquinas WHERE id = $1', [maquinaId]);
@@ -74,9 +77,26 @@ async function arrancar(lavadoraId) {
 describe('CRUD de modelos', () => {
   it('el admin crea un modelo de una marca', async () => {
     const lg = await seedMarca('LG');
-    const res = await crearModelo(admin.token, { marca_id: lg, nombre: 'WM3400', minutos: 45 });
+    const res = await crearModelo(admin.token, {
+      marca_id: lg, nombre: 'WM3400', tipo: 'lavadora', tamano: 'jumbo', minutos: 45,
+    });
     expect(res.status).toBe(201);
-    expect(res.body).toMatchObject({ marca_id: lg, nombre: 'WM3400', minutos: 45, activo: true });
+    expect(res.body).toMatchObject({
+      marca_id: lg, nombre: 'WM3400', tipo: 'lavadora', tamano: 'jumbo', minutos: 45, activo: true,
+    });
+  });
+
+  it('el tipo y el tamaño son obligatorios y cerrados', async () => {
+    const lg = await seedMarca('LG');
+    const sinTipo = await request(app).post('/api/etiquetas/modelos-maquina').set(auth(admin.token))
+      .send({ marca_id: lg, nombre: 'WM3400', tamano: 'mediana' });
+    expect(sinTipo.status).toBe(400);
+
+    const tipoRaro = await crearModelo(admin.token, { marca_id: lg, nombre: 'WM3400', tipo: 'planchadora' });
+    expect(tipoRaro.status).toBe(400);
+
+    const tamanoRaro = await crearModelo(admin.token, { marca_id: lg, nombre: 'WM3400', tamano: 'gigante' });
+    expect(tamanoRaro.status).toBe(400);
   });
 
   it('el modelo puede ir sin minutos: hereda los de su marca', async () => {
@@ -142,6 +162,20 @@ describe('CRUD de modelos', () => {
       .set(auth(admin.token)).send({ nombre: 'WM3400CW', activo: false, minutos: null });
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ nombre: 'WM3400CW', activo: false, minutos: null });
+  });
+
+  it('corrige el tipo y el tamaño de un modelo mal capturado', async () => {
+    const lg = await seedMarca('LG');
+    const { body } = await crearModelo(admin.token, { marca_id: lg, nombre: 'DLE7300' });
+
+    const res = await request(app).put(`/api/etiquetas/modelos-maquina/${body.id}`)
+      .set(auth(admin.token)).send({ tipo: 'secadora', tamano: 'jumbo' });
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ tipo: 'secadora', tamano: 'jumbo' });
+
+    const malo = await request(app).put(`/api/etiquetas/modelos-maquina/${body.id}`)
+      .set(auth(admin.token)).send({ tamano: 'gigante' });
+    expect(malo.status).toBe(400);
   });
 
   it('reordena los modelos de una marca sin tocar los de otra', async () => {
@@ -233,5 +267,80 @@ describe('sellado del ciclo — manda el modelo', () => {
     await arrancar(lavadoraId);
 
     expect(await cicloDe(lavadoraId)).toBe(RESPALDO_MEDIANA);
+  });
+});
+
+describe('GET/PUT /api/etiquetas/tiempos-marca — el renglón dice marca y modelo', () => {
+  it('el modelo aparece como renglón propio aunque ninguna máquina lo use', async () => {
+    const lg = await seedMarca('LG');
+    await crearModelo(admin.token, { marca_id: lg, nombre: 'WM22WV26SR' }).expect(201);
+
+    const { body } = await request(app).get('/api/etiquetas/tiempos-marca').set(auth(admin.token));
+    expect(body).toContainEqual(expect.objectContaining({
+      marca: 'LG', modelo: 'WM22WV26SR', tipo: 'lavadora', tamano: 'mediana', minutos: null,
+    }));
+  });
+
+  it('el modelo cae en el bloque de SU tipo y tamaño, no en el de su marca', async () => {
+    const lg = await seedMarca('LG');
+    await crearModelo(admin.token, { marca_id: lg, nombre: 'DLE7300', tipo: 'secadora', tamano: 'jumbo' })
+      .expect(201);
+
+    const { body } = await request(app).get('/api/etiquetas/tiempos-marca').set(auth(admin.token));
+    const fila = body.find(t => t.modelo === 'DLE7300');
+    expect(fila).toMatchObject({ tipo: 'secadora', tamano: 'jumbo' });
+  });
+
+  it('el tiempo se guarda por modelo_id y manda sobre el de su marca', async () => {
+    const lg = await seedMarca('LG');
+    await tiempoDeMarca(lg, 'lavadora', 'mediana', 45);
+    const modelo = (await crearModelo(admin.token, { marca_id: lg, nombre: 'WM22WV26SR' })).body;
+
+    await request(app).put('/api/etiquetas/tiempos-marca').set(auth(admin.token))
+      .send({ modelo_id: modelo.id, minutos: 15 }).expect(200);
+
+    const lavadoraId = await seedMaquina({
+      nombre: 'L1', tipo: 'lavadora_mediana', tamano: 'mediana', marca: 'LG', modelo: 'WM22WV26SR',
+    });
+    await arrancar(lavadoraId);
+    expect(await cicloDe(lavadoraId)).toBe(15);
+  });
+
+  it('vaciar el tiempo del modelo lo devuelve al de su marca', async () => {
+    const lg = await seedMarca('LG');
+    await tiempoDeMarca(lg, 'lavadora', 'mediana', 45);
+    const modelo = (await crearModelo(admin.token, { marca_id: lg, nombre: 'WM22WV26SR', minutos: 15 })).body;
+
+    await request(app).put('/api/etiquetas/tiempos-marca').set(auth(admin.token))
+      .send({ modelo_id: modelo.id, minutos: '' }).expect(200);
+
+    const lavadoraId = await seedMaquina({
+      nombre: 'L2', tipo: 'lavadora_mediana', tamano: 'mediana', marca: 'LG', modelo: 'WM22WV26SR',
+    });
+    await arrancar(lavadoraId);
+    expect(await cicloDe(lavadoraId)).toBe(45);
+  });
+
+  it('el renglón de la marca sigue estando para las máquinas sin modelo', async () => {
+    const lg = await seedMarca('LG');
+    const lavadoraId = await seedMaquina({
+      nombre: 'L3', tipo: 'lavadora_mediana', tamano: 'mediana', marca: 'LG',
+    });
+    expect(lavadoraId).toBeTruthy();
+
+    const { body } = await request(app).get('/api/etiquetas/tiempos-marca').set(auth(admin.token));
+    expect(body).toContainEqual(expect.objectContaining({
+      marca: 'LG', modelo: null, tipo: 'lavadora', tamano: 'mediana',
+    }));
+  });
+
+  it('un modelo inexistente → 404 y un minutos inválido → 400', async () => {
+    const lg = await seedMarca('LG');
+    const modelo = (await crearModelo(admin.token, { marca_id: lg, nombre: 'WM22WV26SR' })).body;
+
+    await request(app).put('/api/etiquetas/tiempos-marca').set(auth(admin.token))
+      .send({ modelo_id: 999999, minutos: 15 }).expect(404);
+    await request(app).put('/api/etiquetas/tiempos-marca').set(auth(admin.token))
+      .send({ modelo_id: modelo.id, minutos: 0 }).expect(400);
   });
 });

@@ -151,12 +151,21 @@ export const marcasMaquina = crearControladorEtiqueta('marcas_maquina', {
   singular: 'la marca', plural: 'las marcas', uno: 'una marca',
 });
 
-// ── Modelos de máquina (mig. 117) ───────────────────────────────────────────
+// Los dos ejes de una máquina, cerrados: los comparten el catálogo de modelos
+// (mig. 118) y los tiempos por marca (mig. 107).
+const TIPOS_TIEMPO = ['lavadora', 'secadora'];
+const TAMANOS_TIEMPO = ['mediana', 'jumbo'];
+
+// ── Modelos de máquina (migs. 117 y 118) ────────────────────────────────────
 //
 // Los modelos cuelgan de una marca, así que no encajan en la fábrica de
-// arriba: toda consulta se filtra por `marca_id` y cada modelo puede tener su
-// propio tiempo de ciclo. El resto se comporta igual que cualquier catálogo
-// (crear, renombrar, activar/desactivar, reordenar; solo admin).
+// arriba: toda consulta se filtra por `marca_id`. El resto se comporta igual
+// que cualquier catálogo (crear, renombrar, activar/desactivar, reordenar;
+// solo admin).
+//
+// Un modelo dice qué máquina es —tipo y tamaño (mig. 118)—, que es lo que lo
+// coloca en su bloque de Ajustes. Su tiempo de ciclo (`minutos`) NO se captura
+// aquí: se escribe desde ese bloque, junto a los demás tiempos.
 
 // Normaliza los minutos que llegan del formulario: vacío es un modelo sin
 // tiempo propio —cae al respaldo por marca—, y cualquier otra cosa tiene que
@@ -207,17 +216,24 @@ export const crearModeloMaquina = async (req, res) => {
   if (!nombre) {
     return res.status(400).json({ message: 'El nombre es requerido.' });
   }
+  const { tipo, tamano } = req.body;
+  if (!TIPOS_TIEMPO.includes(tipo)) {
+    return res.status(400).json({ message: 'El tipo de máquina debe ser lavadora o secadora.' });
+  }
+  if (!TAMANOS_TIEMPO.includes(tamano)) {
+    return res.status(400).json({ message: 'El tamaño debe ser mediana o jumbo.' });
+  }
   const minutos = leerMinutos(req.body.minutos);
   if (minutos.error) return res.status(400).json({ message: minutos.error });
 
   try {
     // El orden se cuenta dentro de la marca: cada marca tiene su propia lista.
     const { rows } = await pool.query(
-      `INSERT INTO modelos_maquina (marca_id, nombre, minutos, orden)
-       VALUES ($1, $2, $3,
+      `INSERT INTO modelos_maquina (marca_id, nombre, tipo, tamano, minutos, orden)
+       VALUES ($1, $2, $3, $4, $5,
                (SELECT COALESCE(MAX(orden), 0) + 1 FROM modelos_maquina WHERE marca_id = $1))
        RETURNING *`,
-      [marcaId, nombre, minutos.valor]
+      [marcaId, nombre, tipo, tamano, minutos.valor]
     );
     res.status(201).json(rows[0]);
   } catch (err) {
@@ -240,7 +256,7 @@ export const actualizarModeloMaquina = async (req, res) => {
   if (!/^\d+$/.test(String(id))) {
     return res.status(404).json({ message: 'No se encontró el modelo.' });
   }
-  const { nombre, activo, minutos } = req.body;
+  const { nombre, activo, tipo, tamano, minutos } = req.body;
 
   const updates = [];
   const values  = [];
@@ -257,6 +273,20 @@ export const actualizarModeloMaquina = async (req, res) => {
   if (activo !== undefined) {
     updates.push(`activo = $${i++}`);
     values.push(Boolean(activo));
+  }
+  if (tipo !== undefined) {
+    if (!TIPOS_TIEMPO.includes(tipo)) {
+      return res.status(400).json({ message: 'El tipo de máquina debe ser lavadora o secadora.' });
+    }
+    updates.push(`tipo = $${i++}`);
+    values.push(tipo);
+  }
+  if (tamano !== undefined) {
+    if (!TAMANOS_TIEMPO.includes(tamano)) {
+      return res.status(400).json({ message: 'El tamaño debe ser mediana o jumbo.' });
+    }
+    updates.push(`tamano = $${i++}`);
+    values.push(tamano);
   }
   // `minutos: null` es un cambio de verdad —quitarle el tiempo propio al
   // modelo—, así que se distingue de no mandar el campo.
@@ -333,15 +363,18 @@ export const reordenarModelosMaquina = async (req, res) => {
   }
 };
 
-// ── Tiempos de ciclo por marca y tamaño (mig. 107) ──────────────────────────
+// ── Tiempos de ciclo (migs. 107 y 118) ──────────────────────────────────────
 //
 // La duración de un ciclo es de la MÁQUINA y no de la carga: una LG mediana
 // tarda 45 min y una Speed Queen jumbo 35, al revés de lo que suponía el eje
-// del tamaño. Aquí se configuran esas combinaciones; lo que no esté aquí cae
-// al tiempo por tamaño de Ajustes, que sigue existiendo como respaldo.
-
-const TIPOS_TIEMPO = ['lavadora', 'secadora'];
-const TAMANOS_TIEMPO = ['mediana', 'jumbo'];
+// del tamaño. Aquí se configuran, en los dos escalones que existen:
+//
+//   · por MODELO  → "LG · WM22WV26SR", el dato fino (mig. 118);
+//   · por MARCA   → "LG", el respaldo de las máquinas de esa marca sin modelo
+//                   con tiempo propio (mig. 107).
+//
+// Lo que no esté aquí cae al tiempo por tamaño de Ajustes, que sigue existiendo
+// como último respaldo.
 
 // Devuelve una fila por combinación marca+tipo+tamaño que tenga sentido
 // mostrar: las que existen en máquinas dadas de alta, más las que ya tengan un
@@ -360,30 +393,76 @@ export const getTiemposMarca = async (req, res) => {
           WHERE m.tamano IS NOT NULL
          UNION
          SELECT tm.marca_id, tm.tipo, tm.tamano FROM tiempos_marca tm
+       ),
+       -- Renglón por MARCA: el respaldo de las máquinas de esa marca que no
+       -- tienen modelo, o cuyo modelo no tiene tiempo propio.
+       por_marca AS (
+         SELECT c.marca_id, mm.nombre AS marca,
+                NULL::int AS modelo_id, NULL::varchar AS modelo,
+                c.tipo, c.tamano, tm.minutos, mm.orden AS orden_marca, 0 AS orden_fila
+           FROM combos c
+           JOIN marcas_maquina mm ON mm.id = c.marca_id
+           LEFT JOIN tiempos_marca tm
+                  ON tm.marca_id = c.marca_id AND tm.tipo = c.tipo AND tm.tamano = c.tamano
+          WHERE mm.activo
+       ),
+       -- Renglón por MODELO: el modelo dice su tipo y su tamaño (mig. 118), así
+       -- que aparece aunque todavía no haya ninguna máquina con ese modelo.
+       por_modelo AS (
+         SELECT mo.marca_id, mm.nombre AS marca,
+                mo.id AS modelo_id, mo.nombre AS modelo,
+                mo.tipo, mo.tamano, mo.minutos, mm.orden AS orden_marca, 1 AS orden_fila
+           FROM modelos_maquina mo
+           JOIN marcas_maquina mm ON mm.id = mo.marca_id
+          WHERE mo.activo AND mm.activo
        )
-       SELECT c.marca_id, mm.nombre AS marca, c.tipo, c.tamano, tm.minutos
-         FROM combos c
-         JOIN marcas_maquina mm ON mm.id = c.marca_id
-         LEFT JOIN tiempos_marca tm
-                ON tm.marca_id = c.marca_id AND tm.tipo = c.tipo AND tm.tamano = c.tamano
-        WHERE mm.activo
-        ORDER BY c.tipo, CASE c.tamano WHEN 'mediana' THEN 0 ELSE 1 END, mm.orden NULLS LAST, mm.id`
+       SELECT marca_id, marca, modelo_id, modelo, tipo, tamano, minutos
+         FROM (SELECT * FROM por_marca UNION ALL SELECT * FROM por_modelo) t
+        ORDER BY tipo, CASE tamano WHEN 'mediana' THEN 0 ELSE 1 END,
+                 orden_marca NULLS LAST, marca_id, orden_fila, modelo`
     );
     res.json(rows);
   } catch (err) {
     console.error('getTiemposMarca error:', err);
-    res.status(500).json({ message: 'No se pudieron cargar los tiempos por marca. Intenta de nuevo.' });
+    res.status(500).json({ message: 'No se pudieron cargar los tiempos. Intenta de nuevo.' });
   }
 };
 
-// Guarda (o borra) el tiempo de UNA combinación. `minutos` vacío o nulo borra
-// la fila: esa combinación vuelve a usar el tiempo por tamaño de Ajustes, que
-// es la forma de deshacer sin dejar un cero que pararía el temporizador.
+// Guarda (o borra) el tiempo de UN renglón. `minutos` vacío o nulo lo borra:
+// ese renglón vuelve a usar el escalón de abajo —la marca, o el tamaño de
+// Ajustes—, que es la forma de deshacer sin dejar un cero que pararía el
+// temporizador.
+//
+// Con `modelo_id` el tiempo es del modelo y vive en su fila del catálogo
+// (mig. 118); sin él es el de la marca para ese tipo y tamaño (mig. 107).
 export const guardarTiempoMarca = async (req, res) => {
   if (!esAdmin(req.user.rol)) {
     return res.status(403).json({ message: 'Solo un administrador puede realizar esta acción.' });
   }
-  const { marca_id, tipo, tamano, minutos } = req.body;
+  const { marca_id, modelo_id, tipo, tamano, minutos } = req.body;
+
+  if (modelo_id !== undefined && modelo_id !== null) {
+    if (!/^\d+$/.test(String(modelo_id))) {
+      return res.status(400).json({ message: 'Elige un modelo válido.' });
+    }
+    const leido = leerMinutos(minutos);
+    if (leido.error) return res.status(400).json({ message: leido.error });
+    try {
+      const { rows } = await pool.query(
+        `UPDATE modelos_maquina SET minutos = $1, updated_at = NOW()
+          WHERE id = $2
+          RETURNING id AS modelo_id, marca_id, nombre AS modelo, tipo, tamano, minutos`,
+        [leido.valor, modelo_id]
+      );
+      if (rows.length === 0) {
+        return res.status(404).json({ message: 'No se encontró el modelo.' });
+      }
+      return res.json(rows[0]);
+    } catch (err) {
+      console.error('guardarTiempoMarca (modelo) error:', err);
+      return res.status(500).json({ message: 'No se pudo guardar el tiempo. Intenta de nuevo.' });
+    }
+  }
 
   if (!/^\d+$/.test(String(marca_id))) {
     return res.status(400).json({ message: 'Elige una marca válida.' });

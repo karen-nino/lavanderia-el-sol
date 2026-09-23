@@ -283,24 +283,33 @@ function MobileSectionButton({ label, icon, onClick }) {
 // `extra` son los campos fijos de un catálogo que cuelga de otro: los modelos
 // de máquina cuelgan de su marca (mig. 117), así que `{ marca_id }` filtra el
 // listado y viaja en el alta y en el reordenar.
-// `conMinutos` agrega a cada renglón su tiempo de ciclo propio, que puede ir
-// vacío: entonces el modelo usa el tiempo de su marca.
+// `extraCampos` son los desplegables que lleva cada renglón además del nombre
+// (el modelo dice si es lavadora o secadora y de qué tamaño): se describen
+// como { name, defecto, opciones: [{ v, label }] }.
 // `onCambio` avisa la lista fresca a quien envuelve el catálogo (lo usa el
 // desplegable de marcas, que tiene que enterarse de las que se agregan aquí).
 // Tiene que ser estable (useCallback): entra en las dependencias de la carga.
 function CatalogoEtiquetas({
   endpoint, singular, inputCls, onMensaje,
-  extra = null, conMinutos = false, vacioTexto = 'Aún no hay etiquetas.', onCambio,
+  extra = null, extraCampos = [], vacioTexto = 'Aún no hay etiquetas.', onCambio,
 }) {
   const [items,      setItems]      = useState([]);
   const [nuevo,      setNuevo]      = useState('');
-  const [nuevoMin,   setNuevoMin]   = useState('');
   const [saving,     setSaving]     = useState(false);
   const [confirmar,  setConfirmar]  = useState(false);
   const [editId,     setEditId]     = useState(null);
   const [editNombre, setEditNombre] = useState('');
-  const [editMin,    setEditMin]    = useState('');
   const [savedId,    setSavedId]    = useState(null);
+
+  // Los desplegables extra, tanto los del alta como los del renglón que se
+  // edita. Arrancan en su valor por defecto para que el alta nunca quede a
+  // medias: son datos obligatorios con un caso común claro.
+  const porDefecto = () => Object.fromEntries(extraCampos.map(c => [c.name, c.defecto]));
+  const [nuevoExtra, setNuevoExtra] = useState(porDefecto);
+  const [editExtra,  setEditExtra]  = useState({});
+
+  const etiquetaDe = (campo, valor) =>
+    campo.opciones.find(o => o.v === valor)?.label ?? valor;
 
   // Los campos fijos viajan como filtro en el listado y en el cuerpo del resto.
   const extraQs = extra ? `?${new URLSearchParams(extra)}` : '';
@@ -378,12 +387,10 @@ function CatalogoEtiquetas({
     if (!nombre) return;
     setSaving(true);
     try {
-      const creado = await api.post(endpoint, {
-        ...extra, nombre, ...(conMinutos && { minutos: nuevoMin.trim() }),
-      });
+      const creado = await api.post(endpoint, { ...extra, ...nuevoExtra, nombre });
       setItems(prev => { const lista = [...prev, creado]; onCambio?.(lista); return lista; });
       setNuevo('');
-      setNuevoMin('');
+      setNuevoExtra(porDefecto());
       setConfirmar(false);
       // Confirmación como animación (palomita) en la fila recién agregada.
       setSavedId(creado.id);
@@ -400,9 +407,7 @@ function CatalogoEtiquetas({
     const nombre = editNombre.trim();
     if (!nombre) return;
     try {
-      const upd = await api.put(`${endpoint}/${id}`, {
-        nombre, ...(conMinutos && { minutos: editMin.trim() }),
-      });
+      const upd = await api.put(`${endpoint}/${id}`, { ...editExtra, nombre });
       setItems(prev => { const lista = prev.map(x => (x.id === id ? upd : x)); onCambio?.(lista); return lista; });
       setEditId(null);
       // Confirmación como animación (palomita) en la fila, en vez de banner.
@@ -426,9 +431,11 @@ function CatalogoEtiquetas({
     <>
     <div className="space-y-3">
       {/* El ancho lo ponen los envoltorios: los inputs llevan w-full en su
-          clase y sin esto se apilan uno por renglón en móvil. */}
-      <div className="flex gap-2">
-        <div className="flex-1 min-w-0">
+          clase y sin esto se apilan uno por renglón en móvil. Con desplegables
+          el nombre se lleva el primer renglón (`basis-full`) y ellos bajan al
+          segundo junto al botón, que es lo que cabe en un teléfono. */}
+      <div className="flex flex-wrap gap-2">
+        <div className={`flex-1 min-w-0 ${extraCampos.length > 0 ? 'basis-full' : ''}`}>
           <input
             type="text"
             value={nuevo}
@@ -438,18 +445,17 @@ function CatalogoEtiquetas({
             className={inputCls}
           />
         </div>
-        {conMinutos && (
-          <div className="w-20 flex-shrink-0">
-            <input
-              type="number" min="1" step="1"
-              value={nuevoMin}
-              onChange={(e) => setNuevoMin(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); pedirAgregar(); } }}
-              placeholder="min"
-              className={`${inputCls} px-2 text-center`}
-            />
+        {extraCampos.map(campo => (
+          <div key={campo.name} className="flex-1 min-w-0">
+            <select
+              value={nuevoExtra[campo.name] ?? campo.defecto}
+              onChange={(e) => setNuevoExtra(prev => ({ ...prev, [campo.name]: e.target.value }))}
+              className={inputCls}
+            >
+              {campo.opciones.map(o => <option key={o.v} value={o.v}>{o.label}</option>)}
+            </select>
           </div>
-        )}
+        ))}
         <button
           type="button"
           onClick={pedirAgregar}
@@ -472,7 +478,7 @@ function CatalogoEtiquetas({
             >
               {editId === item.id ? (
                 <>
-                  <div className="flex-1 min-w-0">
+                  <div className={`flex-1 min-w-0 ${extraCampos.length > 0 ? 'basis-full' : ''}`}>
                     <input
                       type="text"
                       value={editNombre}
@@ -482,18 +488,17 @@ function CatalogoEtiquetas({
                       autoFocus
                     />
                   </div>
-                  {conMinutos && (
-                    <div className="w-20 flex-shrink-0">
-                      <input
-                        type="number" min="1" step="1"
-                        value={editMin}
-                        onChange={(e) => setEditMin(e.target.value)}
-                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); guardarNombre(item.id); } }}
-                        placeholder="min"
-                        className={`${inputCls} px-2 text-center`}
-                      />
+                  {extraCampos.map(campo => (
+                    <div key={campo.name} className="flex-1 min-w-0">
+                      <select
+                        value={editExtra[campo.name] ?? campo.defecto}
+                        onChange={(e) => setEditExtra(prev => ({ ...prev, [campo.name]: e.target.value }))}
+                        className={inputCls}
+                      >
+                        {campo.opciones.map(o => <option key={o.v} value={o.v}>{o.label}</option>)}
+                      </select>
                     </div>
-                  )}
+                  ))}
                   <button type="button" onClick={() => guardarNombre(item.id)}
                     className="text-sm font-medium text-blue px-2">Guardar</button>
                   <button type="button" onClick={() => setEditId(null)}
@@ -515,14 +520,19 @@ function CatalogoEtiquetas({
                       <path d="M7 4a1 1 0 100 2 1 1 0 000-2zM7 9a1 1 0 100 2 1 1 0 000-2zM7 14a1 1 0 100 2 1 1 0 000-2zM13 4a1 1 0 100 2 1 1 0 000-2zM13 9a1 1 0 100 2 1 1 0 000-2zM13 14a1 1 0 100 2 1 1 0 000-2z" />
                     </svg>
                   </span>
-                  <span className={`flex-1 text-sm ${item.activo ? 'text-gray-800' : 'text-gray-400 line-through'}`}>
-                    {item.nombre}
-                  </span>
-                  {conMinutos && (
-                    <span className="flex-shrink-0 text-xs text-gray-400">
-                      {item.minutos ? `${item.minutos} min` : 'sin tiempo'}
-                    </span>
-                  )}
+                  {/* El nombre y sus datos van en columna: los nombres de
+                      modelo son largos y en una sola línea el renglón se
+                      partía en dos en el teléfono. */}
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-sm truncate ${item.activo ? 'text-gray-800' : 'text-gray-400 line-through'}`}>
+                      {item.nombre}
+                    </p>
+                    {extraCampos.length > 0 && (
+                      <p className="text-xs text-gray-400 truncate">
+                        {extraCampos.map(c => etiquetaDe(c, item[c.name])).join(' · ')}
+                      </p>
+                    )}
+                  </div>
                   {savedId === item.id && (
                     <span className="flex items-center gap-1 text-green-600 text-xs font-medium animate-fade-in">
                       <IconoGuardado />
@@ -534,7 +544,9 @@ function CatalogoEtiquetas({
                     onClick={() => {
                       setEditId(item.id);
                       setEditNombre(item.nombre);
-                      setEditMin(item.minutos == null ? '' : String(item.minutos));
+                      setEditExtra(Object.fromEntries(
+                        extraCampos.map(c => [c.name, item[c.name] ?? c.defecto])
+                      ));
                     }}
                     className="text-sm text-gray-500 hover:text-blue px-2"
                   >
@@ -593,17 +605,32 @@ function CatalogoEtiquetas({
   );
 }
 
-// Marcas de máquina y, colgando de cada una, sus modelos (mig. 117).
+// Qué máquina es un modelo (mig. 118). Son los mismos dos ejes de la máquina y
+// de los tiempos; lo que hacen aquí es colocar al modelo en su bloque de
+// tiempos (Lavadora → Mediana, Secadora → Jumbo…).
+const CAMPOS_MODELO = [
+  { name: 'tipo', defecto: 'lavadora', opciones: [
+    { v: 'lavadora', label: 'Lavadora' },
+    { v: 'secadora', label: 'Secadora' },
+  ] },
+  { name: 'tamano', defecto: 'mediana', opciones: [
+    { v: 'mediana', label: 'Mediana' },
+    { v: 'jumbo',   label: 'Jumbo'   },
+  ] },
+];
+
+// Marcas de máquina y, colgando de cada una, sus modelos (migs. 117 y 118).
 //
 // Van juntas porque se administran juntas: se da de alta la marca y enseguida
 // sus modelos. El desplegable dice de qué marca es la lista de abajo, y el
 // catálogo de marcas avisa sus cambios para que una marca recién agregada
 // aparezca ahí sin recargar la pantalla.
 //
-// El tiempo del modelo es opcional: vacío significa que ese modelo se
-// cronometra con el tiempo de su marca, el de más arriba en esta misma
-// pantalla. En el desplegable salen también las marcas desactivadas, porque
-// sus máquinas siguen dadas de alta y sus modelos se tienen que poder corregir.
+// El modelo NO trae aquí su tiempo de ciclo: eso se escribe más arriba, en el
+// bloque de Lavadora o Secadora que le toca, junto a los demás tiempos. Lo que
+// se captura aquí es qué máquina es, que es justo lo que lo manda a ese bloque.
+// En el desplegable salen también las marcas desactivadas, porque sus máquinas
+// siguen dadas de alta y sus modelos se tienen que poder corregir.
 //
 // Las dos versiones de Ajustes (escritorio y móvil) pintan lo mismo y solo
 // cambian de estilo, así que `movil` elige el renglón y las clases en vez de
@@ -647,7 +674,7 @@ function MarcasYModelos({ movil = false, onMensaje }) {
       <div className={divisorCls}>
         <Campo
           label="Modelos"
-          hint="Los modelos de la marca elegida. El tiempo es opcional: vacío = el modelo usa el tiempo de su marca."
+          hint="Los modelos de la marca elegida. Su tiempo de ciclo se configura arriba, en el bloque de Lavadora o Secadora que les toque."
         >
           {marcas.length === 0 ? (
             <p className="text-sm text-gray-400">Primero agrega una marca.</p>
@@ -672,7 +699,7 @@ function MarcasYModelos({ movil = false, onMensaje }) {
                   endpoint="/etiquetas/modelos-maquina"
                   singular="Modelo"
                   extra={{ marca_id: marcaId }}
-                  conMinutos
+                  extraCampos={CAMPOS_MODELO}
                   vacioTexto="Esta marca todavía no tiene modelos."
                   inputCls={inputCls}
                   onMensaje={onMensaje}
@@ -992,8 +1019,19 @@ export default function Ajustes() {
     );
   };
 
-  // ── Tiempos por marca (mig. 107) ──
-  const claveTiempo = (t) => `${t.marca_id}|${t.tipo}|${t.tamano}`;
+  // ── Tiempos de ciclo (migs. 107 y 118) ──
+  // Hay dos clases de renglón: el del MODELO ("LG · WM22WV26SR") y el de la
+  // MARCA ("LG"), que es el respaldo de sus máquinas sin modelo. La clave los
+  // distingue porque conviven en el mismo bloque.
+  const claveTiempo = (t) => (
+    t.modelo_id != null ? `modelo|${t.modelo_id}` : `marca|${t.marca_id}|${t.tipo}|${t.tamano}`
+  );
+  const etiquetaTiempo = (t) => (t.modelo ? `${t.marca} · ${t.modelo}` : t.marca);
+  const ayudaTiempo = (t) => (
+    t.modelo
+      ? `Duración del ciclo de este modelo. Vacío = usa el tiempo de ${t.marca}.`
+      : `Duración del ciclo en las máquinas ${t.marca} de este tamaño que no tengan modelo con tiempo propio. Vacío = usa el tiempo de arriba.`
+  );
   const tiemposDe = (tipo, tamano) =>
     tiemposMarca.filter(t => t.tipo === tipo && t.tamano === tamano);
 
@@ -1027,9 +1065,10 @@ export default function Ajustes() {
     const cambiados = tiemposMarca.filter(t => antes.get(claveTiempo(t)) !== aNumero(t.minutos));
     if (cambiados.length === 0) return;
 
-    await Promise.all(cambiados.map(t => api.put('/etiquetas/tiempos-marca', {
-      marca_id: t.marca_id, tipo: t.tipo, tamano: t.tamano, minutos: aNumero(t.minutos),
-    })));
+    await Promise.all(cambiados.map(t => api.put('/etiquetas/tiempos-marca', t.modelo_id != null
+      ? { modelo_id: t.modelo_id, minutos: aNumero(t.minutos) }
+      : { marca_id: t.marca_id, tipo: t.tipo, tamano: t.tamano, minutos: aNumero(t.minutos) }
+    )));
     tiemposOrigRef.current = tiemposMarca.map(t => ({ ...t, minutos: aNumero(t.minutos) }));
   };
 
@@ -1351,18 +1390,18 @@ export default function Ajustes() {
       </div>
     </Field>
   );
-  // Un renglón por marca que exista en ese tipo+tamaño. Va debajo del tiempo
-  // general, que se queda de respaldo para las máquinas sin marca: la duración
-  // es de la MÁQUINA (una LG mediana tarda 45 y una Speed Queen jumbo 35), pero
-  // no todas las máquinas tienen marca puesta.
+  // Un renglón por modelo de ese tipo+tamaño, y uno por marca que exista ahí.
+  // Van debajo del tiempo general, que se queda de respaldo para las máquinas
+  // sin marca: la duración es de la MÁQUINA (una LG mediana tarda 45 y una
+  // Speed Queen jumbo 35), pero no todas las máquinas tienen marca ni modelo.
   const camposTiempoMarca = (tipo, tamano) => {
     const lista = tiemposDe(tipo, tamano);
     if (lista.length === 0) return null;
     return lista.map(t => (
       <Field
         key={claveTiempo(t)}
-        label={t.marca}
-        hint={`Duración del ciclo en las máquinas ${t.marca} de este tamaño. Vacío = usa el tiempo de arriba.`}
+        label={etiquetaTiempo(t)}
+        hint={ayudaTiempo(t)}
       >
         <div className="flex items-center gap-2">
           <input
@@ -2065,8 +2104,8 @@ export default function Ajustes() {
     return lista.map(t => (
       <MobileField
         key={claveTiempo(t)}
-        label={t.marca}
-        hint={`Duración del ciclo en las máquinas ${t.marca} de este tamaño. Vacío = usa el tiempo de arriba.`}
+        label={etiquetaTiempo(t)}
+        hint={ayudaTiempo(t)}
       >
         <div className="flex items-center gap-2">
           <input

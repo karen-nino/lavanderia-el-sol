@@ -298,11 +298,18 @@ export default function GestionMaquinas() {
   const marcasVisibles = marcas.filter(m => m.activo);
   const marcaFueraDeLista = Boolean(form.marca) && !marcasVisibles.some(m => m.nombre === form.marca);
 
-  // Los modelos de la marca elegida, con el mismo criterio: desactivado no se
-  // ofrece, pero el de esta máquina se conserva. La máquina guarda el NOMBRE
-  // del modelo (mig. 117), así que la lista se cruza por nombre.
+  // Los modelos que le quedan a esta máquina: los de su marca, y solo los de
+  // su mismo tipo y tamaño (mig. 118) — una secadora no se ofrece los modelos
+  // de lavadora. Mismo criterio que la marca: desactivado no se ofrece, pero el
+  // de esta máquina se conserva. La máquina guarda el NOMBRE del modelo, así
+  // que la lista se cruza por nombre.
   const modelosVisibles = form.marca
-    ? modelos.filter(mo => mo.marca === form.marca && mo.activo)
+    ? modelos.filter(mo => (
+        mo.marca === form.marca && mo.activo && mo.tipo === form.tipo
+        // La secadora no pregunta tamaño (es de un solo tamaño), así que sus
+        // modelos tampoco se filtran por él.
+        && (form.tipo === 'secadora' || mo.tamano === form.tamano)
+      ))
     : [];
   const modeloFueraDeLista = Boolean(form.modelo) && !modelosVisibles.some(mo => mo.nombre === form.modelo);
   // Sin nada que elegir el desplegable va apagado: o no hay marca, o la marca
@@ -312,9 +319,11 @@ export default function GestionMaquinas() {
 
   const handleChange = e => setForm(f => ({ ...f, [e.target.name]: e.target.value }));
 
-  // Cambiar de marca limpia el modelo: los modelos cuelgan de su marca, así
-  // que el que estaba elegido no existe en la nueva.
-  const handleMarcaChange = e => setForm(f => ({ ...f, marca: e.target.value, modelo: '' }));
+  // Cambiar de marca, de tipo o de tamaño limpia el modelo: un modelo es de
+  // una marca y de una máquina concreta, así que el que estaba elegido puede
+  // dejar de corresponder.
+  const handleCambioConModelo = e =>
+    setForm(f => ({ ...f, [e.target.name]: e.target.value, modelo: '' }));
 
   const handleSubmit = async e => {
     e.preventDefault();
@@ -807,7 +816,7 @@ export default function GestionMaquinas() {
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
                   Tipo <span className="text-red-500">*</span>
                 </label>
-                <select name="tipo" value={form.tipo} onChange={handleChange} className={INPUT_CLS}>
+                <select name="tipo" value={form.tipo} onChange={handleCambioConModelo} className={INPUT_CLS}>
                   {TIPOS.map(t => (
                     <option key={t.v} value={t.v}>{t.label}</option>
                   ))}
@@ -820,7 +829,7 @@ export default function GestionMaquinas() {
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
                   Tamaño <span className="text-red-500">*</span>
                 </label>
-                <select name="tamano" value={form.tamano} onChange={handleChange} className={INPUT_CLS}>
+                <select name="tamano" value={form.tamano} onChange={handleCambioConModelo} className={INPUT_CLS}>
                   {TAMANOS.map(t => (
                     <option key={t.v} value={t.v}>{t.label}</option>
                   ))}
@@ -845,7 +854,7 @@ export default function GestionMaquinas() {
                   entre otras cosas, cuánto dura de verdad un ciclo. */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">Marca</label>
-                <select name="marca" value={form.marca} onChange={handleMarcaChange} className={INPUT_CLS}>
+                <select name="marca" value={form.marca} onChange={handleCambioConModelo} className={INPUT_CLS}>
                   <option value="">Sin especificar</option>
                   {/* Una marca desactivada o escrita antes del catálogo sigue
                       apareciendo mientras sea la de esta máquina: si no,
@@ -874,7 +883,7 @@ export default function GestionMaquinas() {
                   {!form.marca
                     ? 'Elige primero la marca.'
                     : modelosVisibles.length === 0
-                      ? `${form.marca} todavía no tiene modelos. Se agregan en Ajustes → Máquinas.`
+                      ? `${form.marca} no tiene modelos de este tipo. Se agregan en Ajustes → Máquinas.`
                       : 'Los modelos se agregan en Ajustes → Máquinas.'}
                 </p>
               </div>
