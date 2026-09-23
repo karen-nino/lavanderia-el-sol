@@ -246,6 +246,54 @@ describe('POST /api/notas — Por Encargo', () => {
 // La tarjeta de Máquinas usa este campo para decidir el botón de una lavadora
 // que terminó: con la lavadora marcada ofrece "Iniciar secado" (y pide elegir
 // secadora ahí mismo); sin marcar, "Finalizar carga".
+// Lo cobrado en un corte CERRADO no se deshace por la puerta de atrás: cambiar
+// lo que cuesta la nota la devolvería a pendiente, y ese corte ya cuenta la
+// venta (mig. 101).
+describe('un cobro congelado en su corte no se deshace por un cambio', () => {
+  async function notaPagadaEnCorteCerrado() {
+    // Autoservicio cobra la BOTELLA, así que sin `precio_botella` el producto
+    // valdría 0 y quitarlo no movería el total (que es lo que se prueba).
+    const productoId = await seedProducto({ nombre: 'Jabón', stock_actual: 50, precio_botella: 30 });
+    const nota = await request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA',
+      estado_pago: 'PAGADO', forma_pago: 'EFECTIVO',
+      cargas: [{ lavadora_tipo: 'mediana' }],
+      productos: [{ producto_id: productoId, cantidad: 1 }],
+    });
+    expect(nota.status).toBe(201);
+    // Su cobro queda atado a una caja ya cerrada.
+    const { rows: caja } = await pool.query(
+      `INSERT INTO cajas (usuario_apertura_id, estado, monto_inicial, abierta_at, cerrada_at, sucursal)
+       VALUES ($1, 'cerrada', 0, NOW() - INTERVAL '1 day', NOW() - INTERVAL '12 hours', 'centro')
+       RETURNING id`, [admin.id]
+    );
+    await pool.query('UPDATE notas SET caja_id = $1 WHERE id = $2', [caja[0].id, nota.body.id]);
+    return { notaId: nota.body.id, productoId };
+  }
+
+  it('quitar un producto se rechaza con 409 y el pago no se mueve', async () => {
+    const { notaId, productoId } = await notaPagadaEnCorteCerrado();
+    const res = await request(app).delete(`/api/notas/${notaId}/productos/${productoId}`)
+      .set(auth(admin.token));
+    expect(res.status).toBe(409);
+    expect(res.body.message).toMatch(/corte que ya se cerró/i);
+
+    const { rows } = await pool.query('SELECT estado_pago, caja_id FROM notas WHERE id = $1', [notaId]);
+    expect(rows[0].estado_pago).toBe('PAGADO');
+    expect(rows[0].caja_id).not.toBeNull();
+  });
+
+  it('con la caja de ese cobro ABIERTA sí se puede', async () => {
+    const { notaId, productoId } = await notaPagadaEnCorteCerrado();
+    await pool.query("UPDATE cajas SET estado = 'abierta', cerrada_at = NULL WHERE id = (SELECT caja_id FROM notas WHERE id = $1)", [notaId]);
+    const res = await request(app).delete(`/api/notas/${notaId}/productos/${productoId}`)
+      .set(auth(admin.token));
+    expect(res.status).toBe(204);
+    const { rows } = await pool.query('SELECT estado_pago FROM notas WHERE id = $1', [notaId]);
+    expect(rows[0].estado_pago).toBe('PENDIENTE');
+  });
+});
+
 describe('encadenar el secado es cosa de Autoservicio', () => {
   async function conLavadoraPuesta(tipo_servicio) {
     const lavadoraId = await seedMaquina({ nombre: `L-${tipo_servicio}`, tipo: 'lavadora_mediana' });
@@ -773,6 +821,26 @@ describe('handlers de máquina — asignar / cambiar / quitar', () => {
         WHERE carga_id = $1 AND slot = $2 ORDER BY asignada_at, id`, [cargaId, 'lavadora']
     );
     expect(pasadas.map(x => x.ciclo_unico)).toEqual([false, true]);
+  });
+
+  // El ciclo único es de la vuelta EXTRA (sin cobro o repetida), no de haber
+  // entrado por este endpoint: un lavado que se cobra a tarifa completa vale lo
+  // que dé la marca de su máquina.
+  it('una carga nueva COBRADA no queda capada a un ciclo', async () => {
+    const { notaId } = await porEncargoEnEspera();
+    const otra = await seedMaquina({ nombre: 'Lavadora 2', tipo: 'lavadora_mediana' });
+    const res = await request(app).patch(`/api/notas/${notaId}/asignar-maquina`)
+      .set(auth(admin.token)).send({ maquina_id: otra, cobrar: true });
+    expect(res.status).toBe(200);
+
+    const { rows } = await pool.query(
+      `SELECT ncm.ciclo_unico, nc.precio_lavadora
+         FROM nota_carga_maquinas ncm JOIN nota_cargas nc ON nc.id = ncm.carga_id
+        WHERE nc.nota_id = $1 AND nc.es_adicional ORDER BY ncm.id`, [notaId]
+    );
+    expect(rows).toHaveLength(1);
+    expect(Number(rows[0].precio_lavadora)).toBeGreaterThan(0);
+    expect(rows[0].ciclo_unico).toBe(false);
   });
 
   it('cambiar de máquina corrige la pasada en curso, no agrega otra', async () => {

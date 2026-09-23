@@ -463,11 +463,14 @@ export default function Salidas() {
     setErrorAccion('');
     try {
       await api.delete(`/notas/${id}/productos/${productoId}`);
-      setConfirmQuitarProd(null);
       await cargarDatos();
     } catch (err) {
       setErrorAccion(err.message);
     } finally {
+      // El modal se cierra pase lo que pase: `ConfirmacionModal` no tiene dónde
+      // pintar un error y el aviso de la página queda debajo de su fondo, así
+      // que un rechazo (403, nota ya pagada) dejaba el modal abierto y mudo.
+      setConfirmQuitarProd(null);
       setLoadingProducto(null);
     }
   }
@@ -709,6 +712,13 @@ export default function Salidas() {
 
   // ¿Otras máquinas de la nota siguen en uso además de esta?
   const otrasEnUso = (maq) => maquinasAsignadas.some(m => String(m.id) !== String(maq.id) && m.estado === 'en_uso');
+  // Trabajo que le queda a la nota aparte de lo que está corriendo: máquinas
+  // que la carga compró y aún no tiene puestas, y máquinas ya puestas que nadie
+  // ha arrancado. Al cerrar `maq`, cualquiera de las dos deja la nota en
+  // proceso, así que el modal no puede prometer "Por Entregar".
+  const trabajoPendiente = (maq) => slotsPorAsignar.length > 0
+    || maquinasAsignadas.some(m => m.actual && String(m.id) !== String(maq.id)
+         && m.estado !== 'en_uso' && m.estado !== 'terminado' && m.estado !== 'removida');
 
   const productosNota  = [...(nota?.productos || [])].sort((a, b) => ordenProducto(a) - ordenProducto(b));
   const totalProductosNota = productosNota.reduce((a, x) => a + Number(x.subtotal || 0), 0);
@@ -1314,15 +1324,16 @@ export default function Salidas() {
               ¿Confirmar que la carga de <span className="font-semibold text-gray-800">{confirmTerminarMaq.nombre}</span> ya terminó?{' '}
               {confirmTerminarMaq.tipo === 'secadora' ? 'La secadora' : 'La lavadora'} pasará a disponible.
             </p>
-            {/* A la nota le puede faltar trabajo que no está en ninguna máquina:
-                una carga que compró secadora y todavía no la tiene asignada.
-                Entonces tampoco pasa a "Por Entregar". */}
-            {otrasEnUso(confirmTerminarMaq) || slotsPorAsignar.length > 0 ? (
+            {/* A la nota le puede quedar trabajo que no está corriendo: una
+                máquina sin asignar, o una ya asignada que nadie ha arrancado
+                —lo habitual desde que la secadora se pone desde el principio—.
+                En los dos casos la nota sigue en proceso. */}
+            {otrasEnUso(confirmTerminarMaq) || trabajoPendiente(confirmTerminarMaq) ? (
               <p className="text-sm text-gray-500">
                 La nota sigue en proceso
                 {otrasEnUso(confirmTerminarMaq)
                   ? ': sus demás cargas todavía están en máquina.'
-                  : ': le falta asignar la máquina de otra carga.'} Aún no pasa a "Por Entregar".
+                  : ': le queda otra máquina por asignar o por arrancar.'} Aún no pasa a "Por Entregar".
               </p>
             ) : (
               <p className="text-sm text-gray-500">

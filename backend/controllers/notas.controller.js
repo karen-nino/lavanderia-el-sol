@@ -282,6 +282,30 @@ async function liberarMaquinasDeNota(client, notaId) {
 //     de la carga.
 //   + el ajuste por carga (nota_cargas.ajuste), que va aparte del tope.
 // Más: productos a nivel nota (carga_id NULL, Autoservicio) + ajuste de nota.
+// Cambiar algo que mueve el total de una nota cobrada en un corte YA CERRADO
+// devolvería el pago a PENDIENTE, y eso descuadra: el corte cerrado tiene sus
+// cifras congeladas (mig. 101), así que seguiría contando esa venta y al volver
+// a cobrar la nota el mismo dinero entraría otra vez en la caja de hoy. Es el
+// mismo motivo por el que la reversión manual solo se permite con la caja
+// abierta; aquí lo tapa por el lado automático (2026-09-22).
+class CorteCerradoError extends Error {
+  constructor(folio) {
+    super(`La nota ${folio} se cobró en un corte que ya se cerró: cambiar lo que cuesta `
+        + 'la devolvería a pendiente y ese dinero ya está contado. Si hay que corregirla, '
+        + 'hazlo con la caja de ese cobro abierta.');
+    this.name = 'CorteCerradoError';
+  }
+}
+
+// Convierte ese tropiezo en un 409 con su motivo en vez del 500 genérico de
+// "intenta de nuevo": es una regla de negocio, no una falla, y reintentar no
+// la va a arreglar. Devuelve true si ya respondió.
+function respondioCorteCerrado(res, err) {
+  if (!(err instanceof CorteCerradoError)) return false;
+  res.status(409).json({ message: err.message });
+  return true;
+}
+
 // Con `desmarcarPagoSiCambia`, una nota que ya estaba PAGADA vuelve a
 // PENDIENTE si el cambio movió su total: lo que se cobró ya no corresponde a lo
 // que cuesta la nota, así que el cobro se rehace por el importe nuevo. El
@@ -293,7 +317,10 @@ async function recalcularPrecioTotal(client, notaId, opciones = {}) {
   const { desmarcarPagoSiCambia = false, usuarioId = null, sucursal = null } = opciones;
   const { rows: previas } = desmarcarPagoSiCambia
     ? await client.query(
-        'SELECT id, folio, precio_total, estado_pago FROM notas WHERE id = $1',
+        `SELECT n.id, n.folio, n.precio_total, n.estado_pago, n.caja_id,
+                cj.estado AS caja_estado
+           FROM notas n LEFT JOIN cajas cj ON cj.id = n.caja_id
+          WHERE n.id = $1`,
         [notaId]
       )
     : { rows: [] };
@@ -332,6 +359,11 @@ async function recalcularPrecioTotal(client, notaId, opciones = {}) {
 
   const antes = previas[0];
   if (antes && antes.estado_pago === 'PAGADO' && Number(nuevo) !== Number(antes.precio_total)) {
+    // Un cobro sin caja (caja_id NULL) no entró en ningún corte: ese sí se puede
+    // deshacer. Lo que no se toca es el que quedó congelado en un corte cerrado.
+    if (antes.caja_id && antes.caja_estado !== 'abierta') {
+      throw new CorteCerradoError(antes.folio ?? `#${antes.id}`);
+    }
     await desmarcarPagoPorCambio(client, antes, Number(antes.precio_total), Number(nuevo), usuarioId, sucursal);
   }
   return nuevo;
@@ -1026,13 +1058,17 @@ export const getNotas = async (req, res) => {
                   AND nc.secadora_tipo IS NOT NULL
                   AND nc.secadora_id IS NULL
               ) AS lavadoras_con_secado_ids,
-              -- ¿Le falta a la nota alguna máquina por asignar? Es la parte
-              -- de hayCargasPendientes que NO depende de lo que esté
-              -- corriendo: una carga que compró lavadora o secadora, no la ha
-              -- usado y todavía no tiene máquina puesta. Mientras haya una, la
-              -- nota no se cierra aunque termine la máquina que está corriendo
-              -- — el caso típico es la secadora de una carga de Por Encargo,
-              -- que se asigna aparte (2026-09-22).
+              -- ¿A la nota le queda trabajo que NO está corriendo ahora mismo?
+              -- Es la parte de hayCargasPendientes que sobrevive a cerrar la
+              -- máquina que está en marcha, y son dos casos:
+              --
+              --   · una máquina que la carga compró y todavía no tiene puesta;
+              --   · una máquina YA PUESTA que nadie ha arrancado — desde que
+              --     la secadora se asigna desde el principio (2026-09-22) este
+              --     es el caso normal, y mirarlo solo por "falta asignar"
+              --     prometía "Por Entregar" en notas que se quedaban En Espera.
+              --
+              -- La máquina que se está cerrando no cuenta: esa ya arrancó.
               EXISTS (
                 SELECT 1 FROM nota_cargas nc
                  WHERE nc.nota_id = n.id
@@ -1043,8 +1079,10 @@ export const getNotas = async (req, res) => {
                      OR (nc.secadora_tipo IS NOT NULL AND nc.secadora_id IS NULL
                          AND nc.secadora_iniciada_at IS NULL
                          AND NOT nc.secadora_removida AND nc.secadora_usada_id IS NULL)
+                     OR (nc.lavadora_id IS NOT NULL AND nc.lavadora_iniciada_at IS NULL)
+                     OR (nc.secadora_id IS NOT NULL AND nc.secadora_iniciada_at IS NULL)
                    )
-              ) AS faltan_maquinas_por_asignar
+              ) AS trabajo_pendiente
        FROM notas n
        LEFT JOIN clientes   c  ON c.id = n.cliente_id
        JOIN      usuarios   u  ON u.id = n.usuario_id
@@ -1776,6 +1814,15 @@ export const updateNota = async (req, res) => {
     // esta misma petición se está cobrando o revirtiendo el pago a mano.
     if (actual.estado_pago === 'PAGADO' && !esCobroNuevo && !esReversionPago
         && Number(rows[0].precio_total) !== Number(actual.precio_total)) {
+      // Séptima puerta al mismo sitio: si ese cobro ya quedó congelado en un
+      // corte cerrado, no se devuelve a pendiente (mismo motivo que arriba).
+      if (actual.caja_id) {
+        const { rows: cj } = await client.query('SELECT estado FROM cajas WHERE id = $1', [actual.caja_id]);
+        if (cj[0]?.estado !== 'abierta') {
+          await client.query('ROLLBACK');
+          return res.status(409).json({ message: new CorteCerradoError(actual.folio ?? `#${actual.id}`).message });
+        }
+      }
       await desmarcarPagoPorCambio(
         client, actual, Number(actual.precio_total), Number(rows[0].precio_total),
         req.user?.id, req.sucursal
@@ -1797,7 +1844,11 @@ export const updateNota = async (req, res) => {
     }
 
     if (esReversionPago) {
-      await registrarReversionPago(client, actual, req.user.id, req.sucursal);
+      // El formulario de edición no pide motivo (el botón del detalle sí), pero
+      // el aviso de la campana no puede quedar mudo: al menos dice de dónde
+      // vino, que es lo que permite rastrearlo después.
+      await registrarReversionPago(client, actual, req.user.id, req.sucursal,
+        'desde la edición de la nota');
     }
 
     // Quitar la carga que ya no se va a usar puede dejar la nota terminada: sin
@@ -1927,6 +1978,7 @@ export const quitarCarga = async (req, res) => {
     res.json({ ...rows[0], cargas: await cargasDeNota(pool, id) });
   } catch (err) {
     await client.query('ROLLBACK');
+    if (respondioCorteCerrado(res, err)) return;
     console.error('quitarCarga error:', err);
     res.status(500).json({ message: 'No se pudo quitar la carga. Intenta de nuevo.' });
   } finally {
@@ -2762,6 +2814,7 @@ export const asignarSecadora = async (req, res) => {
     res.json({ ...rows[0], cargas: await cargasDeNota(pool, id) });
   } catch (err) {
     await client.query('ROLLBACK');
+    if (respondioCorteCerrado(res, err)) return;
     console.error('asignarSecadora error:', err);
     res.status(500).json({ message: 'No se pudo asignar la secadora. Intenta de nuevo.' });
   } finally {
@@ -2907,10 +2960,18 @@ export const asignarMaquina = async (req, res) => {
         // reescribe: lo que se cobró al hacer la nota sigue siendo lo cobrado,
         // y la máquina repetida va sin cobro. Sin esto, repetir con cobrar
         // false pondría el precio en 0 y bajaría el total de la nota.
-        // Cada hueco que se llena aquí es una pasada más de esa carga, y las
-        // que se agregan desde Salidas corren un solo ciclo (mig. 115).
-        await registrarMaquinaEnCarga(client, cargaObjetivo.id, 'lavadora', lavadora ? lavadora.id : null, 'pasada', true);
-        await registrarMaquinaEnCarga(client, cargaObjetivo.id, 'secadora', secadora ? secadora.id : null, 'pasada', true);
+        // Cada hueco que se llena aquí es una pasada más de esa carga. Corre un
+        // solo ciclo (mig. 115) si es una REPETICIÓN de ese hueco o si va sin
+        // cobro; lo que NO puede pasar es capar un lavado que se está cobrando
+        // a tarifa completa — es el mismo criterio con el que se decide el
+        // precio tres líneas abajo, y hacerlo por el sitio de la llamada dejaba
+        // una carga de $50 sin su segundo ciclo.
+        const repiteLav = Boolean(cargaObjetivo.lavadora_usada_id);
+        const repiteSec = Boolean(cargaObjetivo.secadora_usada_id);
+        await registrarMaquinaEnCarga(client, cargaObjetivo.id, 'lavadora',
+          lavadora ? lavadora.id : null, 'pasada', repiteLav || !cobrar);
+        await registrarMaquinaEnCarga(client, cargaObjetivo.id, 'secadora',
+          secadora ? secadora.id : null, 'pasada', repiteSec || !cobrar);
         await client.query(
           `UPDATE nota_cargas
               SET lavadora_id       = COALESCE($1::int, lavadora_id),
@@ -2950,8 +3011,12 @@ export const asignarMaquina = async (req, res) => {
           tipoPrenda,
         ]
       );
-      await registrarMaquinaEnCarga(client, nuevaCarga[0].id, 'lavadora', lavadora ? lavadora.id : null, 'pasada', true);
-      await registrarMaquinaEnCarga(client, nuevaCarga[0].id, 'secadora', secadora ? secadora.id : null, 'pasada', true);
+      // Carga nueva: es un lavado de estreno, así que solo corre un ciclo si va
+      // sin cobro. Cobrada, vale lo que dé la marca de su máquina.
+      await registrarMaquinaEnCarga(client, nuevaCarga[0].id, 'lavadora',
+        lavadora ? lavadora.id : null, 'pasada', !cobrar);
+      await registrarMaquinaEnCarga(client, nuevaCarga[0].id, 'secadora',
+        secadora ? secadora.id : null, 'pasada', !cobrar);
     }
 
     // Estado según las máquinas EN USO: las nuevas no cuentan (no se iniciaron).
@@ -2988,6 +3053,7 @@ export const asignarMaquina = async (req, res) => {
     res.json({ ...rows[0], cargas: await cargasDeNota(pool, id) });
   } catch (err) {
     await client.query('ROLLBACK');
+    if (respondioCorteCerrado(res, err)) return;
     console.error('asignarMaquina error:', err);
     res.status(500).json({ message: 'No se pudo asignar la máquina. Intenta de nuevo.' });
   } finally {
@@ -3126,6 +3192,7 @@ export const cambiarMaquina = async (req, res) => {
     res.json({ ...rows[0], cargas: await cargasDeNota(pool, id) });
   } catch (err) {
     await client.query('ROLLBACK');
+    if (respondioCorteCerrado(res, err)) return;
     console.error('cambiarMaquina error:', err);
     res.status(500).json({ message: 'No se pudo cambiar la máquina. Intenta de nuevo.' });
   } finally {
@@ -3729,6 +3796,7 @@ export const addProductoToNota = async (req, res) => {
     res.status(201).json(fila);
   } catch (err) {
     await client.query('ROLLBACK');
+    if (respondioCorteCerrado(res, err)) return;
     console.error('addProductoToNota error:', err);
     res.status(500).json({ message: 'No se pudo agregar el producto a la nota. Intenta de nuevo.' });
   } finally {
@@ -3782,6 +3850,7 @@ export const removeProductoFromNota = async (req, res) => {
     res.status(204).send();
   } catch (err) {
     await client.query('ROLLBACK');
+    if (respondioCorteCerrado(res, err)) return;
     console.error('removeProductoFromNota error:', err);
     res.status(500).json({ message: 'No se pudo quitar el producto de la nota. Intenta de nuevo.' });
   } finally {

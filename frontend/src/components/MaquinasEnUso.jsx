@@ -222,10 +222,13 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
   const otrasEnUso = Boolean(confirmTerminar && notaParaTerminar &&
     maquinas.some(m => String(m.id) !== String(confirmTerminar.id)
       && m.estado === 'en_uso' && notaUsaMaquina(notaParaTerminar, m.id)));
-  // A la nota le puede faltar trabajo que no está corriendo: la secadora de una
-  // carga de Por Encargo que todavía no se asigna. Entonces tampoco pasa a "Por
-  // Entregar" al cerrar esta máquina, y prometerlo confunde.
-  const sigueEnProceso = otrasEnUso || Boolean(notaParaTerminar?.faltan_maquinas_por_asignar);
+  // A la nota le puede quedar trabajo que no está corriendo: una máquina que
+  // todavía no se asigna, o una ya asignada que nadie ha arrancado —que desde
+  // que la secadora se pone desde el principio es lo habitual—. En cualquiera
+  // de los dos casos la nota NO pasa a "Por Entregar" al cerrar esta máquina, y
+  // prometerlo confunde. Lo calcula el servidor con el mismo criterio con el
+  // que cierra la nota.
+  const sigueEnProceso = otrasEnUso || Boolean(notaParaTerminar?.trabajo_pendiente);
 
   const confirmarTerminarCiclo = async () => {
     if (!confirmTerminar) return;
@@ -576,7 +579,7 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
                       La nota <span className="font-semibold text-gray-800">{notaParaTerminar.folio ?? `#${notaParaTerminar.id}`}</span> sigue en proceso
                       {otrasEnUso
                         ? ': sus demás cargas todavía están en máquina.'
-                        : ': le falta asignar la máquina de otra carga.'} Aún no pasa a "Por Entregar".
+                        : ': le queda otra máquina por asignar o por arrancar.'} Aún no pasa a "Por Entregar".
                     </p>
                   ) : (
                     <p className="text-sm text-gray-500">

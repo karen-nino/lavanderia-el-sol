@@ -931,6 +931,10 @@ export const otroCiclo = async (req, res) => {
           ? `Esta carga ya corrió sus ${maxCiclos} ciclos. Termínala para liberar ${maq.nombre}.`
           : carga.ciclo_unico
           ? `Esta vuelta se agregó sin cobro, así que corre un solo ciclo. Termínala para liberar ${maq.nombre}.`
+          // Una secadora corre un ciclo por regla del negocio, tenga o no
+          // tiempo de marca: mandarla a configurarlo no arregla nada.
+          : maq.tipo === 'secadora'
+          ? `Un secado es un solo ciclo. Termínalo para liberar ${maq.nombre}.`
           : `${maq.nombre} no tiene configurado el tiempo de su marca, así que su carga corre un solo ciclo. `
             + 'Termínala, o configura el tiempo en Ajustes → Marcas y tiempos.',
       });
