@@ -207,13 +207,15 @@ function ModalLiquidar({ monto, folio, formaPago, onFormaPago, onCancelar, onCon
         {/* El monto es lo que el empleado tiene que cobrar: va en grande y
             aparte, no escondido dentro del texto. */}
         <div className="rounded-2xl bg-light-blue border-2 border-blue/30 px-5 py-4 text-center">
-          <p className="text-xs font-semibold text-blue-700 uppercase tracking-wide">Cobrar al cliente</p>
+          <p className="text-xs font-semibold text-blue-700 uppercase tracking-wide">Total</p>
           <p className="text-4xl font-bold text-dark-blue leading-tight mt-1">{monto}</p>
         </div>
 
+        {/* Mismos botones que el cobro de Nueva Nota: el empleado elige la
+            forma de pago en el mismo gesto en las dos pantallas. */}
         <div className="space-y-2">
           <p className="text-sm font-semibold text-gray-900">Método de pago:</p>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-3 gap-3">
             {FORMAS_PAGO.map(opt => {
               const selected = formaPago === opt.v;
               return (
@@ -221,7 +223,7 @@ function ModalLiquidar({ monto, folio, formaPago, onFormaPago, onCancelar, onCon
                   key={opt.v}
                   type="button"
                   onClick={() => onFormaPago(opt.v)}
-                  className={`py-3 px-2 border-2 rounded-xl font-semibold text-sm truncate transition-colors ${
+                  className={`py-4 px-2 border-2 rounded-xl font-semibold text-base truncate transition-colors ${
                     selected
                       ? 'border-blue bg-light-blue text-blue-700'
                       : 'border-gray-300 bg-white text-gray-700 hover:border-blue-300'
@@ -234,18 +236,18 @@ function ModalLiquidar({ monto, folio, formaPago, onFormaPago, onCancelar, onCon
           </div>
         </div>
 
-        <div className="flex gap-3">
+        <div className="flex gap-3 pt-4 border-t border-gray-100">
           <button
             onClick={onCancelar}
             disabled={loading}
-            className="flex-1 border border-gray-300 text-gray-700 font-medium py-3.5 rounded-lg text-base hover:bg-gray-50 transition-colors disabled:opacity-60"
+            className="flex-1 border border-gray-300 text-gray-700 font-medium py-3.5 rounded-lg text-base hover:bg-gray-50 disabled:opacity-60 transition-colors"
           >
             Cancelar
           </button>
           <button
             onClick={onConfirmar}
             disabled={loading || !formaPago}
-            className="flex-1 bg-blue hover:opacity-90 text-white font-medium py-3.5 rounded-lg text-base transition-colors disabled:opacity-60"
+            className="flex-1 bg-blue hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed text-white font-medium py-3.5 rounded-lg text-base transition-colors"
           >
             {loading ? 'Procesando...' : 'Confirmar'}
           </button>
