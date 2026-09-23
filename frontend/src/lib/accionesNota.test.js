@@ -20,10 +20,12 @@ describe('acciones del detalle de una nota', () => {
     expect(puedeLiquidar(nota('LISTA', 'PAGADO'))).toBe(false);
   });
 
-  it('una nota terminada no se cobra desde aquí', () => {
-    // Cancelada el servidor lo rechaza, y finalizada ya se cobró.
+  it('una cancelada no se cobra; una finalizada que debe, sí', () => {
+    // Cancelada el servidor lo rechaza. La finalizada que quedó debiendo —le
+    // revirtieron el pago— tiene que poder cobrarse: si no, el detalle se queda
+    // sin un solo botón y ese dinero no vuelve a la app.
     expect(puedeLiquidar(nota('CANCELADA', 'PENDIENTE'))).toBe(false);
-    expect(puedeLiquidar(nota('FINALIZADA', 'PENDIENTE'))).toBe(false);
+    expect(puedeLiquidar(nota('FINALIZADA', 'PENDIENTE'))).toBe(true);
   });
 
   it('finalizar sigue exigiendo que esté lista Y cobrada', () => {

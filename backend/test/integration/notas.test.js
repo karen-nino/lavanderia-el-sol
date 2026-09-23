@@ -1608,6 +1608,78 @@ describe('cierre automático de la nota al terminar sus cargas', () => {
     expect(Number(despues.rows[0].stock_reservado)).toBe(0);
   });
 
+  // El cobro se puede deshacer y rehacer: lo que no puede es descontar dos veces
+  // el mismo producto. La nota ya cerrada no vuelve a pasar por el cierre.
+  it('re-cobrar una nota ya cerrada no descuenta el inventario otra vez', async () => {
+    const prod = await seedProducto({
+      nombre: 'Detergente recobro', precio_botella: 30, stock_actual: 100,
+      tipo_liquido: 'marca', botella_ml: 800, tapa_ml: 200,
+    });
+    const lav = await seedMaquina({ nombre: 'Lavadora recobro', tipo: 'lavadora_mediana' });
+    const crea = await request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE',
+      cargas: [{ lavadora_tipo: 'mediana', productos: [{ producto_id: prod, cantidad: 1 }] }],
+    });
+    await arrancar(crea.body.id, crea.body.cargas[0].id, lav);
+    await request(app).patch(`/api/notas/${crea.body.id}/terminar-lavado-final`)
+      .set(auth(admin.token)).send({ lavadora_id: lav }).expect(200);
+
+    const pagar = () => request(app).patch(`/api/notas/${crea.body.id}/estado-pago`)
+      .set(auth(admin.token)).send({ estado_pago: 'PAGADO', forma_pago: 'EFECTIVO' });
+
+    const primera = await pagar();
+    expect(primera.body.estado).toBe('FINALIZADA');
+    const { rows: tras } = await pool.query(
+      'SELECT stock_actual, stock_reservado FROM productos WHERE id = $1', [prod]);
+    const consumido = Number(tras[0].stock_actual);
+    expect(consumido).toBeLessThan(100);
+    expect(Number(tras[0].stock_reservado)).toBe(0);
+
+    // Se revierte el cobro (la nota sigue FINALIZADA) y se vuelve a cobrar.
+    await request(app).patch(`/api/notas/${crea.body.id}/estado-pago`).set(auth(admin.token))
+      .send({ estado_pago: 'PENDIENTE', motivo: 'se cobró de más' }).expect(200);
+    const segunda = await pagar();
+    expect(segunda.status).toBe(200);
+    expect(segunda.body.estado).toBe('FINALIZADA');
+
+    const { rows: fin } = await pool.query(
+      'SELECT stock_actual, stock_reservado FROM productos WHERE id = $1', [prod]);
+    expect(Number(fin[0].stock_actual)).toBe(consumido);   // ni una tapa más
+    expect(Number(fin[0].stock_reservado)).toBe(0);
+  });
+
+  // Borrar la nota es deshacerla entera: si su producto ya salió del estante al
+  // cerrarse, tiene que volver. Antes solo volvía en la venta de mostrador, y
+  // el autoservicio finalizado dejaba el inventario corto sin manera de
+  // arreglarlo desde la nota.
+  it('borrar una nota ya finalizada devuelve su producto al estante', async () => {
+    const prod = await seedProducto({
+      nombre: 'Detergente borrado', precio_botella: 30, stock_actual: 100,
+      tipo_liquido: 'marca', botella_ml: 800, tapa_ml: 200,
+    });
+    const lav = await seedMaquina({ nombre: 'Lavadora borrado', tipo: 'lavadora_mediana' });
+    const crea = await request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE',
+      cargas: [{ lavadora_tipo: 'mediana', productos: [{ producto_id: prod, cantidad: 1 }] }],
+    });
+    await arrancar(crea.body.id, crea.body.cargas[0].id, lav);
+    await request(app).patch(`/api/notas/${crea.body.id}/terminar-lavado-final`)
+      .set(auth(admin.token)).send({ lavadora_id: lav }).expect(200);
+    const pago = await request(app).patch(`/api/notas/${crea.body.id}/estado-pago`)
+      .set(auth(admin.token)).send({ estado_pago: 'PAGADO', forma_pago: 'EFECTIVO' });
+    expect(pago.body.estado).toBe('FINALIZADA');
+    const { rows: vendido } = await pool.query(
+      'SELECT stock_actual FROM productos WHERE id = $1', [prod]);
+    expect(Number(vendido[0].stock_actual)).toBeLessThan(100);
+
+    await request(app).delete(`/api/notas/${crea.body.id}`).set(auth(admin.token)).expect(204);
+
+    const { rows: fin } = await pool.query(
+      'SELECT stock_actual, stock_reservado FROM productos WHERE id = $1', [prod]);
+    expect(Number(fin[0].stock_actual)).toBe(100);     // como si la nota nunca hubiera existido
+    expect(Number(fin[0].stock_reservado)).toBe(0);
+  });
+
   // Mientras le falte una carga, cobrarla NO la cierra: la ropa sigue adentro.
   it('cobrar un autoservicio que todavía tiene cargas pendientes no lo cierra', async () => {
     const crea = await request(app).post('/api/notas').set(auth(admin.token)).send({

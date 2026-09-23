@@ -2087,16 +2087,19 @@ export const eliminarNota = async (req, res) => {
     const maquinasNota = iniciadasRows.map(r => r.mid);
 
     // El efecto en stock depende del estado de la nota:
-    //   - PAGADA: el pago ya consumió stock_actual y liberó la reserva;
-    //     eliminar anula la venta y el producto vuelve al estante.
-    //   - FINALIZADA / CANCELADA: el stock ya se consumió o la reserva ya
-    //     se liberó; no hay nada que revertir.
+    //   - PAGADA o FINALIZADA: el producto YA salió del estante (lo consumió el
+    //     cobro o el cierre). Eliminar la nota anula esa venta, así que vuelve.
+    //   - CANCELADA: al cancelar ya se devolvió o se soltó la reserva; nada que
+    //     revertir.
     //   - Estados activos: solo liberar la reserva.
-    //   - Venta de productos: nace FINALIZADA, así que no se puede cancelar —
-    //     eliminarla es la ÚNICA forma de deshacerla. Si el borrado no
-    //     devolviera el producto al estante, un cobro mal capturado dejaría el
-    //     inventario corto sin manera de arreglarlo desde la nota.
-    if (estadoNota === 'PAGADA' || (esVenta(notaRows[0].tipo_servicio) && estadoNota === 'FINALIZADA')) {
+    //
+    // FINALIZADA se trataba antes como "nada que revertir", y solo la venta de
+    // mostrador era la excepción. Pero el razonamiento de esa excepción vale
+    // para todas: si el borrado no devuelve el producto, un cobro mal capturado
+    // deja el inventario corto sin forma de arreglarlo desde la nota. Y desde
+    // que el Autoservicio se cierra al liquidarlo (2026-09-23), FINALIZADA es
+    // el final normal de casi toda nota, no un caso raro.
+    if (['PAGADA', 'FINALIZADA'].includes(estadoNota)) {
       await registrarMovimientosProductosNota(client, id, req.sucursal, req.user.id, 'liberacion');
       await client.query(
         `UPDATE productos a

@@ -11,9 +11,14 @@ export const esTerminal = (nota) => ['FINALIZADA', 'CANCELADA'].includes(nota?.e
 // Cobrar se puede desde que la nota existe, no solo cuando la ropa está lista.
 // En Por Encargo el cliente suele pagar al dejar la ropa, y el botón tiene que
 // estar donde ocurre el cobro. El servidor lo permite en cualquier estado menos
-// CANCELADA.
+// CANCELADA, y aquí se sigue esa misma regla.
+//
+// FINALIZADA incluida: una nota terminada a la que le revirtieron el pago
+// vuelve a deber, y antes el detalle se quedaba sin un solo botón para
+// cobrarla —el dinero quedaba fuera de la app (2026-09-23)—. Cobrar una nota ya
+// cerrada no mueve su estado ni su inventario: solo registra el pago.
 export const puedeLiquidar = (nota) =>
-  !esTerminal(nota) && nota?.estado_pago === 'PENDIENTE';
+  nota?.estado_pago === 'PENDIENTE' && nota?.estado !== 'CANCELADA';
 
 // Finalizar es el último paso —la ropa se entregó— y exige que ya esté cobrada:
 // una nota pendiente no se puede dar por entregada.

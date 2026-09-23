@@ -10,6 +10,7 @@ import { FORMAS_PAGO, formaPagoLabel } from '../lib/formasPago';
 import { formatHora12, formatFechaHora12 } from '../lib/fecha';
 import { leerAvisoCobro, limpiarAvisoCobro } from '../lib/avisoCobro';
 import { esTerminal, puedeLiquidar, puedeFinalizar, puedeEliminar, eliminarSoloEnEscritorio } from '../lib/accionesNota';
+import AbrirCajaModal from '../components/AbrirCajaModal';
 
 // Unidad de venta de un producto de la nota, en texto ("2 botellas" / "3 tapas").
 function unidadProdTxt(p) {
@@ -62,18 +63,23 @@ const PASOS_ESTADO = [
 ];
 
 // Pasos que se dibujan para esta nota. En autoservicio el cliente se lleva su
-// ropa él mismo: la nota pagada se finaliza sola al terminar sus cargas y nunca
+// ropa él mismo: la nota PAGADA se finaliza sola al terminar sus cargas y nunca
 // pasa por "Por Entregar", así que ese paso sobra. Se conserva en la nota de
-// autoservicio que sí lo vive: la que quedó a deber y espera ahí su cobro.
+// autoservicio que sí lo vive: la que debe y espera ahí su cobro.
 function pasosDeNota(nota) {
   // La venta de Productos (mig. 112) nace finalizada: no hay lavado, ni secado,
   // ni nada que entregar después. Su línea de tiempo es un solo punto; dibujar
   // los cinco pasos contaría un proceso que esa nota nunca vivió.
   if (nota.tipo_servicio === 'PRODUCTOS') return PASOS_ESTADO.filter(p => p.key === 'FINALIZADA');
   if (nota.tipo_servicio !== 'AUTOSERVICIO') return PASOS_ESTADO;
-  const estuvoPorEntregar = ['LISTA', 'PAGADA'].includes(nota.estado)
-    || (nota.historial_estados ?? []).some(h => h.estado === 'LISTA');
-  return estuvoPorEntregar ? PASOS_ESTADO : PASOS_ESTADO.filter(p => p.key !== 'LISTA');
+  const porEntregar = ['LISTA', 'PAGADA'].includes(nota.estado)
+    || (nota.historial_estados ?? []).some(h => h.estado === 'LISTA')
+    // …y el que todavía DEBE va a pasar por ahí aunque aún no haya llegado:
+    // sin el cobro no se cierra solo, espera en "Por Entregar" a que lo
+    // liquiden (2026-09-23). Saltarse el paso prometía un final que esa nota
+    // no iba a tener.
+    || nota.estado_pago === 'PENDIENTE';
+  return porEntregar ? PASOS_ESTADO : PASOS_ESTADO.filter(p => p.key !== 'LISTA');
 }
 
 // Índice del paso ACTUAL dentro de los pasos que se dibujan.
@@ -195,7 +201,13 @@ function ModalConfirmar({ titulo, mensaje, onCancelar, onConfirmar, loading, col
 
 // Modal de cobro: pide la forma de pago además de confirmar. Sin este dato el
 // corte de caja no distingue el dinero del cajón de transferencias y tarjetas.
-function ModalLiquidar({ monto, folio, formaPago, onFormaPago, onCancelar, onConfirmar, loading }) {
+//
+// `cajaAbierta === false` avisa que el cobro se va a quedar fuera del corte del
+// día. El aviso vivía solo en Nueva Nota, que era donde se cobraba el
+// autoservicio; desde que el cobro se hace aquí (2026-09-23) tenía que venirse
+// con él, o el dinero se salía del corte sin que nadie se enterara.
+function ModalLiquidar({ monto, folio, formaPago, onFormaPago, onCancelar, onConfirmar, loading,
+                         cajaAbierta, onAbrirCaja }) {
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4 max-h-[90vh] overflow-y-auto">
@@ -210,6 +222,22 @@ function ModalLiquidar({ monto, folio, formaPago, onFormaPago, onCancelar, onCon
           <p className="text-xs font-semibold text-blue-700 uppercase tracking-wide">Total</p>
           <p className="text-4xl font-bold text-dark-blue leading-tight mt-1">{monto}</p>
         </div>
+
+        {cajaAbierta === false && (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
+            <p className="text-sm font-semibold text-amber-900">La caja del día no está abierta</p>
+            <p className="mt-0.5 text-sm text-amber-800">
+              Puedes cobrar, pero este dinero no va a aparecer en el corte de hoy.
+            </p>
+            <button
+              type="button"
+              onClick={onAbrirCaja}
+              className="mt-2.5 text-sm font-medium text-amber-800 border border-amber-300 bg-white rounded-lg px-4 py-2 hover:bg-amber-100 transition-colors"
+            >
+              Abrir caja
+            </button>
+          </div>
+        )}
 
         {/* Mismos botones que el cobro de Nueva Nota: el empleado elige la
             forma de pago en el mismo gesto en las dos pantallas. */}
@@ -285,6 +313,19 @@ export default function DetalleNota() {
   // cobro (el backend la devolvió a PENDIENTE). Aquí, junto al estado de pago y
   // al botón de cobrar, se explica cuánto falta cobrar o devolver.
   const [avisoCobro, setAvisoCobro] = useState(() => leerAvisoCobro(id));
+  // ¿Hay caja abierta? Solo se pregunta al ir a cobrar, que es cuando importa.
+  // null = todavía no se sabe (o falló la consulta): entonces no se avisa nada.
+  const [cajaAbierta,   setCajaAbierta]   = useState(null);
+  const [modalCajaOpen, setModalCajaOpen] = useState(false);
+
+  // Abre el modal de cobro y, de paso, mira si hay caja abierta para poder
+  // avisar que ese dinero se quedaría fuera del corte del día.
+  function abrirLiquidar() {
+    setConfirmLiquidar(true);
+    api.get('/caja/actual')
+      .then(r => setCajaAbierta(Boolean(r?.abierta)))
+      .catch(() => setCajaAbierta(null));
+  }
 
   useEffect(() => {
     let activo = true;
@@ -464,6 +505,24 @@ export default function DetalleNota() {
   const puedeCancelar = esAdmin
     && !['CANCELADA', 'PAGADA'].includes(nota.estado)
     && nota.estado_pago !== 'PAGADO';
+  // Cobrar se puede desde que la nota existe, no solo cuando ya está lista: en
+  // Por Encargo el cliente suele pagar al dejar la ropa, y hasta hace poco el
+  // botón no aparecía hasta el final, cuando ese dinero ya se había cobrado en
+  // la vida real y no en el sistema. El servidor lo permite en cualquier estado
+  // menos CANCELADA.
+  //
+  // Va en una variable porque sale en los DOS bloques de acciones: el de la
+  // nota viva y el de la nota ya cerrada — una FINALIZADA a la que le
+  // revirtieron el pago vuelve a deber y también hay que poder cobrarla.
+  const botonLiquidar = puedeLiquidar(nota) && (
+    <button
+      onClick={abrirLiquidar}
+      disabled={loadingAccion}
+      className="flex items-center gap-1.5 px-4 py-2 bg-blue hover:opacity-90 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
+    >
+      Liquidar
+    </button>
+  );
   const badgeTipoServicio    = BADGE_TIPO_SERVICIO[nota.tipo_servicio] ?? BADGE_TIPO_SERVICIO.AUTOSERVICIO;
   const badgePago     = BADGE_PAGO[nota.estado_pago];
   const barcodeValue  = nota.folio ?? String(nota.id);
@@ -592,20 +651,7 @@ export default function DetalleNota() {
           >
             Salidas
           </button>
-          {/* Cobrar se puede desde que la nota existe, no solo cuando ya está
-              lista: en Por Encargo el cliente suele pagar al dejar la ropa, y
-              hasta ahora el botón no aparecía hasta el final, cuando ese dinero
-              ya se había cobrado en la vida real y no en el sistema. El
-              servidor lo permite en cualquier estado menos CANCELADA. */}
-          {puedeLiquidar(nota) && (
-            <button
-              onClick={() => setConfirmLiquidar(true)}
-              disabled={loadingAccion}
-              className="flex items-center gap-1.5 px-4 py-2 bg-blue hover:opacity-90 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
-            >
-              Liquidar
-            </button>
-          )}
+          {botonLiquidar}
           {/* Finalizar sigue siendo el último paso y sigue exigiendo el cobro:
               una nota pendiente no se puede dar por entregada. */}
           {puedeFinalizar(nota) && (
@@ -632,9 +678,11 @@ export default function DetalleNota() {
           )}
         </div>
       )}
-      {/* Ya cerrada, el botón se ve en los dos tamaños. */}
+      {/* Ya cerrada, el botón se ve en los dos tamaños. Y si quedó debiendo
+          —le revirtieron el pago—, sigue habiendo por dónde cobrarla. */}
       {terminal && (
         <div className="flex flex-wrap gap-2">
+          {botonLiquidar}
           {puedeEliminar(nota, esAdmin) && (
             <button
               onClick={() => setConfirmEliminar(true)}
@@ -1164,8 +1212,18 @@ export default function DetalleNota() {
           onCancelar={() => { setConfirmLiquidar(false); setFormaPagoSel(''); }}
           onConfirmar={liquidarNota}
           loading={loadingAccion}
+          cajaAbierta={cajaAbierta}
+          onAbrirCaja={() => setModalCajaOpen(true)}
         />
       )}
+
+      {/* Va DESPUÉS del modal de cobro: comparten z-index, así que el último
+          en el DOM es el que queda encima. */}
+      <AbrirCajaModal
+        open={modalCajaOpen}
+        onClose={() => setModalCajaOpen(false)}
+        onAbierta={() => { setModalCajaOpen(false); setCajaAbierta(true); }}
+      />
 
       {/* Modal revertir pago (solo admin, caja aún abierta). El motivo es
           obligatorio: sin él el botón de confirmar queda apagado. */}
