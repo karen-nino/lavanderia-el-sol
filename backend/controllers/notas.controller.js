@@ -1570,28 +1570,19 @@ export const updateNota = async (req, res) => {
       });
     }
 
-    // Revertir un pago desde el formulario de edición tiene el mismo
-    // control que el endpoint de estado-pago: solo admin, con rastro y solo
-    // mientras la caja donde entró ese dinero siga abierta. Si el corte ya se
-    // cerró, sus cifras quedaron congeladas (mig. 101): la venta seguiría
-    // contada ahí y volver a cobrar la nota la sumaría otra vez en la caja de
-    // hoy, el mismo dinero en dos cortes.
+    // Deshacer un cobro NO se hace desde aquí (2026-09-22). Editar la nota es
+    // para corregir lo que la nota dice; descobrar es una decisión de dinero y
+    // tiene su propia puerta —"Revertir pago" en el detalle—, que exige motivo
+    // y solo funciona con la caja de ese cobro abierta. Tenerlo en dos sitios
+    // obligaba a escribir la misma regla dos veces, y la de aquí ya se había
+    // quedado corta: revertía sin motivo.
     const esReversionPago = estado_pago === 'PENDIENTE' && actual.estado_pago === 'PAGADO';
-    if (esReversionPago && !esAdmin(req.user.rol)) {
+    if (esReversionPago) {
       await client.query('ROLLBACK');
-      return res.status(403).json({ message: 'Solo un administrador puede revertir un pago.' });
-    }
-    if (esReversionPago && actual.caja_id) {
-      const { rows: cajaRows } = await client.query(
-        'SELECT estado FROM cajas WHERE id = $1', [actual.caja_id]
-      );
-      if (cajaRows[0]?.estado !== 'abierta') {
-        await client.query('ROLLBACK');
-        return res.status(409).json({
-          message: 'El corte de caja de esta nota ya se cerró: el pago solo se puede revertir '
-                 + 'mientras esa caja siga abierta.',
-        });
-      }
+      return res.status(409).json({
+        message: 'El cobro de esta nota no se deshace desde la edición. Usa "Revertir pago" '
+               + 'en el detalle de la nota, que pide el motivo y lo deja anotado.',
+      });
     }
 
     // Cobrar desde la edición exige la forma de pago igual que el endpoint
@@ -1828,7 +1819,7 @@ export const updateNota = async (req, res) => {
         precioFinal,
         // Cobro nuevo → la forma recibida. Reversión → se limpia. En cualquier
         // otro caso se conserva la que ya tenía la nota.
-        esCobroNuevo ? formaPagoNueva : (esReversionPago ? null : actual.forma_pago),
+        esCobroNuevo ? formaPagoNueva : actual.forma_pago,
       ]
     );
 
@@ -1839,8 +1830,8 @@ export const updateNota = async (req, res) => {
     // Si la edición movió el total de una nota que ya estaba pagada, el cobro
     // deja de corresponder y vuelve a PENDIENTE. Se compara contra el precio
     // que tenía ANTES de editar (no contra el provisional). No aplica si en
-    // esta misma petición se está cobrando o revirtiendo el pago a mano.
-    if (actual.estado_pago === 'PAGADO' && !esCobroNuevo && !esReversionPago
+    // esta misma petición se está cobrando.
+    if (actual.estado_pago === 'PAGADO' && !esCobroNuevo
         && Number(rows[0].precio_total) !== Number(actual.precio_total)) {
       // Séptima puerta al mismo sitio: si ese cobro ya quedó congelado en un
       // corte cerrado, no se devuelve a pendiente (mismo motivo que arriba).
@@ -1870,14 +1861,6 @@ export const updateNota = async (req, res) => {
     if (errTope) {
       await client.query('ROLLBACK');
       return res.status(400).json({ message: errTope });
-    }
-
-    if (esReversionPago) {
-      // El formulario de edición no pide motivo (el botón del detalle sí), pero
-      // el aviso de la campana no puede quedar mudo: al menos dice de dónde
-      // vino, que es lo que permite rastrearlo después.
-      await registrarReversionPago(client, actual, req.user.id, req.sucursal,
-        'desde la edición de la nota');
     }
 
     // Quitar la carga que ya no se va a usar puede dejar la nota terminada: sin

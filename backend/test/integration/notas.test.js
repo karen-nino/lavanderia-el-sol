@@ -1001,21 +1001,30 @@ describe('PATCH /api/notas/:id — edición', () => {
     expect(res.body.message).toMatch(/no se puede editar/i);
   });
 
-  it('revertir un pago desde la edición es solo para admin', async () => {
-    const empleado = await seedUsuario({ rol: 'operador', sucursal: 'centro', nombre: 'Empleado' });
+  // Descobrar es una decisión de dinero y tiene una sola puerta: "Revertir
+  // pago" del detalle, que exige motivo y la caja de ese cobro abierta. Por la
+  // edición no se pasa, ni siendo admin: tener la regla en dos sitios obligaba
+  // a escribirla dos veces y la de aquí ya se había quedado corta.
+  it('el cobro NO se deshace desde la edición, ni para un admin', async () => {
     const { notaId } = await autoservicio({ estado_pago: 'PAGADO' });
 
-    // El empleado no puede revertir el pago.
-    const bloqueado = await request(app).patch(`/api/notas/${notaId}`)
-      .set(auth(empleado.token)).send({ estado_pago: 'PENDIENTE' });
-    expect(bloqueado.status).toBe(403);
-    expect(bloqueado.body.message).toMatch(/administrador/i);
-
-    // El admin sí.
-    const ok = await request(app).patch(`/api/notas/${notaId}`)
+    const res = await request(app).patch(`/api/notas/${notaId}`)
       .set(auth(admin.token)).send({ estado_pago: 'PENDIENTE' });
-    expect(ok.status).toBe(200);
-    expect(ok.body.estado_pago).toBe('PENDIENTE');
+    expect(res.status).toBe(409);
+    expect(res.body.message).toMatch(/Revertir pago/i);
+
+    // Y el cobro se queda como estaba.
+    const nota = await request(app).get(`/api/notas/${notaId}`).set(auth(admin.token));
+    expect(nota.body.estado_pago).toBe('PAGADO');
+  });
+
+  // Cobrar por la edición sigue igual: lo que se cierra es el sentido contrario.
+  it('cobrar desde la edición sigue funcionando', async () => {
+    const { notaId } = await autoservicio({ estado_pago: 'PENDIENTE' });
+    const res = await request(app).patch(`/api/notas/${notaId}`)
+      .set(auth(admin.token)).send({ estado_pago: 'PAGADO', forma_pago: 'EFECTIVO' });
+    expect(res.status).toBe(200);
+    expect(res.body.estado_pago).toBe('PAGADO');
   });
 
   it('productos que no es lista → 400', async () => {

@@ -162,6 +162,11 @@ export default function NuevaNota() {
   const navigate = useNavigate();
   const { id } = useParams();
   const esEdicion = Boolean(id);
+  // Nota que ya está cobrada y se está EDITANDO: el cobro no se deshace desde
+  // aquí. Ese camino vive en "Revertir pago" del detalle, que pide motivo y
+  // solo funciona con la caja de ese cobro abierta; tenerlo en dos sitios
+  // obligaba a escribir la misma regla dos veces (2026-09-22).
+  const [cobroBloqueado, setCobroBloqueado] = useState(false);
   const [maquinas,          setMaquinas]          = useState([]);
   const [productosCatalogo, setProductosCatalogo] = useState([]);
   const [telas,             setTelas]             = useState([]);
@@ -369,6 +374,8 @@ export default function NuevaNota() {
           }));
 
           if (esEncargo) {
+            // Ya cobrada: el toggle se enseña con lo que hay, pero no se cambia.
+            setCobroBloqueado(nota.estado_pago === 'PAGADO');
             setEncargoForm({
               cliente_id:      nota.cliente_id ? String(nota.cliente_id) : '',
               pago_anticipado: nota.estado_pago === 'PAGADO' ? 'SI' : 'NO',
@@ -387,8 +394,15 @@ export default function NuevaNota() {
               tipo_tela:              c.tipo_tela      ?? '',
               tamano_edredon:         c.tamano_edredon ?? '',
               tamano:                 c.tamano         ?? '',
-              lavadora_tipo:          c.lavadora_tipo ?? '',
-              secadora_tipo:          c.secadora_tipo ?? '',
+              // El TIPO que la nota compró (`_previsto`), no el de la máquina
+              // física: `lavadora_tipo` trae 'lavadora_mediana' cuando ya hay
+              // máquina puesta, y null cuando todavía no. Con cualquiera de los
+              // dos el formulario mostraba "Sin lavado", la carga quedaba
+              // inválida y el asistente NO dejaba avanzar: editar una nota Por
+              // Encargo era imposible (venía del 2026-08-23; Autoservicio, unas
+              // líneas abajo, siempre lo hizo bien).
+              lavadora_tipo:          c.lavadora_tipo_previsto ?? '',
+              secadora_tipo:          c.secadora_tipo_previsto ?? '',
               ajuste:                 c.ajuste != null ? String(c.ajuste) : '0',
               // La bolsa se maneja aparte (auto por tamaño): se saca de la lista
               // de productos y se recuerda si estaba puesta o no.
@@ -1683,16 +1697,31 @@ export default function NuevaNota() {
                       <button
                         key={opt.v}
                         type="button"
+                        disabled={cobroBloqueado}
                         onClick={() => setEncargoForm(f => ({ ...f, pago_anticipado: opt.v, forma_pago: opt.v === 'SI' ? f.forma_pago : '' }))}
                         className={`py-8 px-2 border-2 rounded-xl font-semibold text-lg truncate transition-colors ${
                           selected ? 'border-blue bg-light-blue text-blue-700' : 'border-gray-300 bg-white text-gray-700 hover:border-blue-300'
-                        }`}
+                        } ${cobroBloqueado ? 'opacity-60 cursor-not-allowed' : ''}`}
                       >
                         {opt.label}
                       </button>
                     );
                   })}
                 </div>
+
+                {/* La nota ya se cobró: deshacerlo es una decisión de dinero y
+                    vive en su propia puerta, con motivo y con la regla de la
+                    caja. Se deja ver que está pagada, pero no se cambia desde
+                    aquí (2026-09-22). */}
+                {cobroBloqueado && (
+                  <p className="text-sm text-gray-500">
+                    Esta nota ya está cobrada, así que el cobro no se toca desde aquí: para
+                    deshacerlo usa <span className="font-medium text-gray-700">Revertir pago</span> y
+                    para corregir cómo se pagó,{' '}
+                    <span className="font-medium text-gray-700">Corregir forma de pago</span>, los dos
+                    en el detalle de la nota.
+                  </p>
+                )}
 
                 {/* Forma de pago: solo si pagó anticipado (si queda a deber, aún
                     no hay pago). */}
@@ -1706,10 +1735,15 @@ export default function NuevaNota() {
                           <button
                             key={opt.v}
                             type="button"
+                            // En una nota ya cobrada el servidor ignora lo que
+                            // se mande aquí (conserva la forma con la que se
+                            // cobró): corregirla tiene su propio botón en el
+                            // detalle, con la regla de la caja.
+                            disabled={cobroBloqueado}
                             onClick={() => setEncargoForm(f => ({ ...f, forma_pago: opt.v }))}
                             className={`py-6 px-2 border-2 rounded-xl font-semibold text-base truncate transition-colors ${
                               selected ? 'border-blue bg-light-blue text-blue-700' : 'border-gray-300 bg-white text-gray-700 hover:border-blue-300'
-                            }`}
+                            } ${cobroBloqueado ? 'opacity-60 cursor-not-allowed' : ''}`}
                           >
                             {opt.label}
                           </button>

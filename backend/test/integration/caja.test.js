@@ -343,9 +343,10 @@ describe('un corte cerrado no cambia después (mig. 101)', () => {
     expect(corte.diferencia).toBe(0);   // y sigue cuadrando
   });
 
-  // La edición de la nota es el otro camino para revertir un cobro (manda
-  // estado_pago: PENDIENTE); si solo se cerrara el endpoint dedicado, el
-  // candado sería de adorno.
+  // La edición de la nota era el otro camino para revertir un cobro (manda
+  // estado_pago: PENDIENTE). Desde el 2026-09-22 esa puerta está cerrada del
+  // todo —descobrar solo se hace desde el detalle, con motivo—, así que aquí
+  // ni siquiera se llega a mirar la caja.
   it('tampoco se revierte desde la edición de la nota', async () => {
     await request(app).post('/api/caja/abrir').set(auth(admin.token)).send({ monto_inicial: 0 }).expect(201);
     const notaId = await cobrar();
@@ -354,7 +355,7 @@ describe('un corte cerrado no cambia después (mig. 101)', () => {
     const res = await request(app).patch(`/api/notas/${notaId}`)
       .set(auth(admin.token)).send({ estado_pago: 'PENDIENTE' });
     expect(res.status).toBe(409);
-    expect(res.body.message).toMatch(/ya se cerró/i);
+    expect(res.body.message).toMatch(/Revertir pago/i);
   });
 
   it('con la caja todavía abierta, el admin sí puede revertir el cobro', async () => {
