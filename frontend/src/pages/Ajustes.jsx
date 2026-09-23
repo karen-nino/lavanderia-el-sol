@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, mensajeDeError } from '../lib/api';
 import InstalarApp from '../components/InstalarApp';
@@ -280,14 +280,30 @@ function MobileSectionButton({ label, icon, onClick }) {
 // Cada cambio se guarda de inmediato contra su endpoint; no depende del botón
 // "Guardar" general de Ajustes. Las etiquetas se desactivan (no se borran) para
 // que las notas viejas conserven su valor.
-function CatalogoEtiquetas({ endpoint, singular, inputCls, onMensaje }) {
+// `extra` son los campos fijos de un catálogo que cuelga de otro: los modelos
+// de máquina cuelgan de su marca (mig. 117), así que `{ marca_id }` filtra el
+// listado y viaja en el alta y en el reordenar.
+// `conMinutos` agrega a cada renglón su tiempo de ciclo propio, que puede ir
+// vacío: entonces el modelo usa el tiempo de su marca.
+// `onCambio` avisa la lista fresca a quien envuelve el catálogo (lo usa el
+// desplegable de marcas, que tiene que enterarse de las que se agregan aquí).
+// Tiene que ser estable (useCallback): entra en las dependencias de la carga.
+function CatalogoEtiquetas({
+  endpoint, singular, inputCls, onMensaje,
+  extra = null, conMinutos = false, vacioTexto = 'Aún no hay etiquetas.', onCambio,
+}) {
   const [items,      setItems]      = useState([]);
   const [nuevo,      setNuevo]      = useState('');
+  const [nuevoMin,   setNuevoMin]   = useState('');
   const [saving,     setSaving]     = useState(false);
   const [confirmar,  setConfirmar]  = useState(false);
   const [editId,     setEditId]     = useState(null);
   const [editNombre, setEditNombre] = useState('');
+  const [editMin,    setEditMin]    = useState('');
   const [savedId,    setSavedId]    = useState(null);
+
+  // Los campos fijos viajan como filtro en el listado y en el cuerpo del resto.
+  const extraQs = extra ? `?${new URLSearchParams(extra)}` : '';
 
   // Reordenamiento con Pointer Events: funciona igual con mouse (desktop) y con
   // el dedo (touch/móvil), a diferencia del arrastre nativo del navegador.
@@ -296,13 +312,16 @@ function CatalogoEtiquetas({ endpoint, singular, inputCls, onMensaje }) {
   const [draggingId, setDraggingId] = useState(null);
 
   useEffect(() => {
-    api.get(endpoint).then(data => setItems(data ?? [])).catch(() => {});
-  }, [endpoint]);
+    api.get(`${endpoint}${extraQs}`)
+      .then(data => { setItems(data ?? []); onCambio?.(data ?? []); })
+      .catch(() => {});
+  }, [endpoint, extraQs, onCambio]);
 
   // Guarda el nuevo orden (lista de ids) en el servidor.
   const persistirOrden = async (lista) => {
     try {
-      await api.patch(`${endpoint}/reordenar`, { ids: lista.map(x => x.id) });
+      await api.patch(`${endpoint}/reordenar`, { ...extra, ids: lista.map(x => x.id) });
+      onCambio?.(lista);
     } catch (err) {
       onMensaje?.({ tipo: 'error', texto: err.message });
     }
@@ -359,9 +378,12 @@ function CatalogoEtiquetas({ endpoint, singular, inputCls, onMensaje }) {
     if (!nombre) return;
     setSaving(true);
     try {
-      const creado = await api.post(endpoint, { nombre });
-      setItems(prev => [...prev, creado]);
+      const creado = await api.post(endpoint, {
+        ...extra, nombre, ...(conMinutos && { minutos: nuevoMin.trim() }),
+      });
+      setItems(prev => { const lista = [...prev, creado]; onCambio?.(lista); return lista; });
       setNuevo('');
+      setNuevoMin('');
       setConfirmar(false);
       // Confirmación como animación (palomita) en la fila recién agregada.
       setSavedId(creado.id);
@@ -378,8 +400,10 @@ function CatalogoEtiquetas({ endpoint, singular, inputCls, onMensaje }) {
     const nombre = editNombre.trim();
     if (!nombre) return;
     try {
-      const upd = await api.put(`${endpoint}/${id}`, { nombre });
-      setItems(prev => prev.map(x => (x.id === id ? upd : x)));
+      const upd = await api.put(`${endpoint}/${id}`, {
+        nombre, ...(conMinutos && { minutos: editMin.trim() }),
+      });
+      setItems(prev => { const lista = prev.map(x => (x.id === id ? upd : x)); onCambio?.(lista); return lista; });
       setEditId(null);
       // Confirmación como animación (palomita) en la fila, en vez de banner.
       setSavedId(id);
@@ -392,7 +416,7 @@ function CatalogoEtiquetas({ endpoint, singular, inputCls, onMensaje }) {
   const toggleActivo = async (item) => {
     try {
       const upd = await api.put(`${endpoint}/${item.id}`, { activo: !item.activo });
-      setItems(prev => prev.map(x => (x.id === item.id ? upd : x)));
+      setItems(prev => { const lista = prev.map(x => (x.id === item.id ? upd : x)); onCambio?.(lista); return lista; });
     } catch (err) {
       onMensaje?.({ tipo: 'error', texto: err.message });
     }
@@ -401,15 +425,31 @@ function CatalogoEtiquetas({ endpoint, singular, inputCls, onMensaje }) {
   return (
     <>
     <div className="space-y-3">
+      {/* El ancho lo ponen los envoltorios: los inputs llevan w-full en su
+          clase y sin esto se apilan uno por renglón en móvil. */}
       <div className="flex gap-2">
-        <input
-          type="text"
-          value={nuevo}
-          onChange={(e) => setNuevo(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); pedirAgregar(); } }}
-          placeholder={`Agregar ${singular.toLowerCase()}`}
-          className={inputCls}
-        />
+        <div className="flex-1 min-w-0">
+          <input
+            type="text"
+            value={nuevo}
+            onChange={(e) => setNuevo(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); pedirAgregar(); } }}
+            placeholder={`Agregar ${singular.toLowerCase()}`}
+            className={inputCls}
+          />
+        </div>
+        {conMinutos && (
+          <div className="w-20 flex-shrink-0">
+            <input
+              type="number" min="1" step="1"
+              value={nuevoMin}
+              onChange={(e) => setNuevoMin(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); pedirAgregar(); } }}
+              placeholder="min"
+              className={`${inputCls} px-2 text-center`}
+            />
+          </div>
+        )}
         <button
           type="button"
           onClick={pedirAgregar}
@@ -421,25 +461,39 @@ function CatalogoEtiquetas({ endpoint, singular, inputCls, onMensaje }) {
       </div>
 
       {items.length === 0 ? (
-        <p className="text-sm text-gray-400">Aún no hay etiquetas.</p>
+        <p className="text-sm text-gray-400">{vacioTexto}</p>
       ) : (
         <ul ref={listRef} className="divide-y divide-gray-100 border border-gray-100 rounded-lg overflow-hidden">
           {items.map((item) => (
             <li
               key={item.id}
               data-row={item.id}
-              className={`flex items-center gap-2 px-3 py-2.5 bg-white ${draggingId === item.id ? 'opacity-40 ring-2 ring-blue/40 ring-inset' : ''}`}
+              className={`flex flex-wrap items-center gap-2 px-3 py-2.5 bg-white ${draggingId === item.id ? 'opacity-40 ring-2 ring-blue/40 ring-inset' : ''}`}
             >
               {editId === item.id ? (
                 <>
-                  <input
-                    type="text"
-                    value={editNombre}
-                    onChange={(e) => setEditNombre(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); guardarNombre(item.id); } }}
-                    className={`${inputCls} flex-1`}
-                    autoFocus
-                  />
+                  <div className="flex-1 min-w-0">
+                    <input
+                      type="text"
+                      value={editNombre}
+                      onChange={(e) => setEditNombre(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); guardarNombre(item.id); } }}
+                      className={inputCls}
+                      autoFocus
+                    />
+                  </div>
+                  {conMinutos && (
+                    <div className="w-20 flex-shrink-0">
+                      <input
+                        type="number" min="1" step="1"
+                        value={editMin}
+                        onChange={(e) => setEditMin(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); guardarNombre(item.id); } }}
+                        placeholder="min"
+                        className={`${inputCls} px-2 text-center`}
+                      />
+                    </div>
+                  )}
                   <button type="button" onClick={() => guardarNombre(item.id)}
                     className="text-sm font-medium text-blue px-2">Guardar</button>
                   <button type="button" onClick={() => setEditId(null)}
@@ -464,6 +518,11 @@ function CatalogoEtiquetas({ endpoint, singular, inputCls, onMensaje }) {
                   <span className={`flex-1 text-sm ${item.activo ? 'text-gray-800' : 'text-gray-400 line-through'}`}>
                     {item.nombre}
                   </span>
+                  {conMinutos && (
+                    <span className="flex-shrink-0 text-xs text-gray-400">
+                      {item.minutos ? `${item.minutos} min` : 'sin tiempo'}
+                    </span>
+                  )}
                   {savedId === item.id && (
                     <span className="flex items-center gap-1 text-green-600 text-xs font-medium animate-fade-in">
                       <IconoGuardado />
@@ -472,7 +531,11 @@ function CatalogoEtiquetas({ endpoint, singular, inputCls, onMensaje }) {
                   )}
                   <button
                     type="button"
-                    onClick={() => { setEditId(item.id); setEditNombre(item.nombre); }}
+                    onClick={() => {
+                      setEditId(item.id);
+                      setEditNombre(item.nombre);
+                      setEditMin(item.minutos == null ? '' : String(item.minutos));
+                    }}
                     className="text-sm text-gray-500 hover:text-blue px-2"
                   >
                     Editar
@@ -526,6 +589,99 @@ function CatalogoEtiquetas({ endpoint, singular, inputCls, onMensaje }) {
         </div>
       </div>
     )}
+    </>
+  );
+}
+
+// Marcas de máquina y, colgando de cada una, sus modelos (mig. 117).
+//
+// Van juntas porque se administran juntas: se da de alta la marca y enseguida
+// sus modelos. El desplegable dice de qué marca es la lista de abajo, y el
+// catálogo de marcas avisa sus cambios para que una marca recién agregada
+// aparezca ahí sin recargar la pantalla.
+//
+// El tiempo del modelo es opcional: vacío significa que ese modelo se
+// cronometra con el tiempo de su marca, el de más arriba en esta misma
+// pantalla. En el desplegable salen también las marcas desactivadas, porque
+// sus máquinas siguen dadas de alta y sus modelos se tienen que poder corregir.
+//
+// Las dos versiones de Ajustes (escritorio y móvil) pintan lo mismo y solo
+// cambian de estilo, así que `movil` elige el renglón y las clases en vez de
+// duplicar la sección entera.
+function MarcasYModelos({ movil = false, onMensaje }) {
+  const Campo      = movil ? MobileField : Field;
+  const inputCls   = movil ? MOBILE_INPUT_CLS : INPUT_CLS;
+  const divisorCls = movil
+    ? 'border-t border-light-blue/60 pt-5'
+    : 'border-t border-gray-100 pt-4';
+
+  const [marcas,  setMarcas]  = useState([]);
+  const [elegida, setElegida] = useState('');
+
+  // La marca elegida se deriva en vez de guardarse a secas: si deja de existir
+  // —o todavía no se elige ninguna— manda la primera de la lista, sin un efecto
+  // que encadene otra pintada.
+  const marcaId = marcas.some(m => String(m.id) === String(elegida))
+    ? elegida
+    : String(marcas[0]?.id ?? '');
+
+  // Estable a propósito: el catálogo la lleva en las dependencias de su carga.
+  const recibirMarcas = useCallback((lista) => setMarcas(lista), []);
+
+  return (
+    <>
+      <Campo
+        label="Marcas"
+        hint="Se eligen al dar de alta una máquina. Desactivar una marca la quita de la lista sin tocar las máquinas que ya la tienen."
+      >
+        <CatalogoEtiquetas
+          endpoint="/etiquetas/marcas-maquina"
+          singular="Marca"
+          vacioTexto="Aún no hay marcas."
+          inputCls={inputCls}
+          onMensaje={onMensaje}
+          onCambio={recibirMarcas}
+        />
+      </Campo>
+
+      <div className={divisorCls}>
+        <Campo
+          label="Modelos"
+          hint="Los modelos de la marca elegida. El tiempo es opcional: vacío = el modelo usa el tiempo de su marca."
+        >
+          {marcas.length === 0 ? (
+            <p className="text-sm text-gray-400">Primero agrega una marca.</p>
+          ) : (
+            <div className="space-y-3">
+              <select
+                value={marcaId}
+                onChange={(e) => setElegida(e.target.value)}
+                className={inputCls}
+              >
+                {marcas.map(m => (
+                  <option key={m.id} value={m.id}>
+                    {m.nombre}{m.activo ? '' : ' (desactivada)'}
+                  </option>
+                ))}
+              </select>
+              {/* La `key` es a propósito: al cambiar de marca se vacía el
+                  formulario de alta y el renglón que se estaba editando. */}
+              {marcaId && (
+                <CatalogoEtiquetas
+                  key={marcaId}
+                  endpoint="/etiquetas/modelos-maquina"
+                  singular="Modelo"
+                  extra={{ marca_id: marcaId }}
+                  conMinutos
+                  vacioTexto="Esta marca todavía no tiene modelos."
+                  inputCls={inputCls}
+                  onMensaje={onMensaje}
+                />
+              )}
+            </div>
+          )}
+        </Campo>
+      </div>
     </>
   );
 }
@@ -1252,6 +1408,12 @@ export default function Ajustes() {
       {camposTiempoMarca('secadora', 'mediana')}
       {camposTiempoMarca('secadora', 'jumbo')}
     </Section>
+
+    {/* El catálogo va al final: los tiempos de arriba son del día a día y esto
+        se toca cuando entra una máquina nueva. */}
+    <Section titulo="Marcas y modelos">
+      <MarcasYModelos onMensaje={setMensaje} />
+    </Section>
     </>
   );
 
@@ -1949,6 +2111,15 @@ export default function Ajustes() {
           {campoTiempoM('tiempo_carga_secadora', 'Se usa en las secadoras que no tengan tiempo por marca.')}
           {camposTiempoMarcaM('secadora', 'mediana')}
           {camposTiempoMarcaM('secadora', 'jumbo')}
+        </TarjetaMobile>
+      </div>
+
+      {/* El catálogo va al final: los tiempos de arriba son del día a día y
+          esto se toca cuando entra una máquina nueva. */}
+      <div className="border-t border-light-blue/60 pt-8 space-y-6">
+        <TituloGrupoMobile>Marcas y modelos</TituloGrupoMobile>
+        <TarjetaMobile>
+          <MarcasYModelos movil onMensaje={setMensaje} />
         </TarjetaMobile>
       </div>
     </div>
