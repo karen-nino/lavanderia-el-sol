@@ -1079,8 +1079,15 @@ export const getNotas = async (req, res) => {
                      OR (nc.secadora_tipo IS NOT NULL AND nc.secadora_id IS NULL
                          AND nc.secadora_iniciada_at IS NULL
                          AND NOT nc.secadora_removida AND nc.secadora_usada_id IS NULL)
-                     OR (nc.lavadora_id IS NOT NULL AND nc.lavadora_iniciada_at IS NULL)
-                     OR (nc.secadora_id IS NOT NULL AND nc.secadora_iniciada_at IS NULL)
+                     -- Máquina PUESTA que no está corriendo: puede no haber
+                     -- arrancado nunca, estar encendida esperando el arranque
+                     -- (mig. 110) o haberse detenido a media vuelta. En los
+                     -- tres casos queda trabajo. Mirar iniciada_at no basta:
+                     -- un ciclo detenido la deja marcada como iniciada.
+                     OR EXISTS (SELECT 1 FROM maquinas ml2 WHERE ml2.id = nc.lavadora_id
+                                 AND NOT (ml2.estado = 'en_uso' AND ml2.en_uso_desde IS NOT NULL))
+                     OR EXISTS (SELECT 1 FROM maquinas ms2 WHERE ms2.id = nc.secadora_id
+                                 AND NOT (ms2.estado = 'en_uso' AND ms2.en_uso_desde IS NOT NULL))
                    )
               ) AS trabajo_pendiente
        FROM notas n

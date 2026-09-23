@@ -294,6 +294,56 @@ describe('un cobro congelado en su corte no se deshace por un cambio', () => {
   });
 });
 
+// La pantalla usa este campo para NO prometer "Por Entregar" al cerrar una
+// máquina. Tiene que ver todo lo que sobrevive a ese cierre, no solo lo que
+// falta asignar: una máquina puesta y sin arrancar, o detenida a media vuelta,
+// deja la nota en proceso igual.
+describe('trabajo pendiente de una nota', () => {
+  async function conCarga(extra = {}) {
+    const lavadoraId = await seedMaquina({ nombre: `L-${Math.random().toString(36).slice(2, 7)}`, tipo: 'lavadora_mediana' });
+    const nota = await request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'POR_ENCARGO', cliente_id: await seedCliente(), tipo_prenda: 'ROPA',
+      estado_pago: 'PENDIENTE', cargas: [{ lavadora_tipo: 'mediana', ...extra }],
+    });
+    return { notaId: nota.body.id, cargaId: nota.body.cargas[0].id, lavadoraId };
+  }
+  const pendiente = async (notaId) => {
+    const lista = await request(app).get('/api/notas').set(auth(admin.token));
+    return lista.body.find(n => n.id === notaId).trabajo_pendiente;
+  };
+
+  it('una máquina que la carga compró y no tiene puesta cuenta como pendiente', async () => {
+    const { notaId } = await conCarga({ secadora_tipo: 'mediana' });
+    expect(await pendiente(notaId)).toBe(true);
+  });
+
+  it('una máquina puesta y sin arrancar también', async () => {
+    const { notaId, cargaId, lavadoraId } = await conCarga();
+    await request(app).patch(`/api/notas/${notaId}/asignar-carga-maquina`).set(auth(admin.token))
+      .send({ carga_id: cargaId, slot: 'lavadora', maquina_id: lavadoraId }).expect(200);
+    expect(await pendiente(notaId)).toBe(true);
+  });
+
+  it('la máquina que está CORRIENDO no cuenta: es la que se va a cerrar', async () => {
+    const { notaId, cargaId, lavadoraId } = await conCarga();
+    await request(app).patch(`/api/notas/${notaId}/asignar-carga-maquina`).set(auth(admin.token))
+      .send({ carga_id: cargaId, slot: 'lavadora', maquina_id: lavadoraId });
+    await request(app).patch(`/api/notas/${notaId}/activar-pendientes`).set(auth(admin.token))
+      .send({ maquina_id: lavadoraId }).expect(200);
+    expect(await pendiente(notaId)).toBe(false);
+  });
+
+  it('un ciclo DETENIDO vuelve a dejar trabajo, aunque la máquina ya había arrancado', async () => {
+    const { notaId, cargaId, lavadoraId } = await conCarga();
+    await request(app).patch(`/api/notas/${notaId}/asignar-carga-maquina`).set(auth(admin.token))
+      .send({ carga_id: cargaId, slot: 'lavadora', maquina_id: lavadoraId });
+    await request(app).patch(`/api/notas/${notaId}/activar-pendientes`).set(auth(admin.token))
+      .send({ maquina_id: lavadoraId });
+    await request(app).patch(`/api/maquinas/${lavadoraId}/detener-ciclo`).set(auth(admin.token)).expect(200);
+    expect(await pendiente(notaId)).toBe(true);
+  });
+});
+
 describe('encadenar el secado es cosa de Autoservicio', () => {
   async function conLavadoraPuesta(tipo_servicio) {
     const lavadoraId = await seedMaquina({ nombre: `L-${tipo_servicio}`, tipo: 'lavadora_mediana' });

@@ -718,7 +718,10 @@ export default function Salidas() {
   // proceso, así que el modal no puede prometer "Por Entregar".
   const trabajoPendiente = (maq) => slotsPorAsignar.length > 0
     || maquinasAsignadas.some(m => m.actual && String(m.id) !== String(maq.id)
-         && m.estado !== 'en_uso' && m.estado !== 'terminado' && m.estado !== 'removida');
+         && m.estado !== 'terminado' && m.estado !== 'removida'
+         // Corriendo = en uso y con el cronómetro andando. Encendida esperando
+         // arranque, o detenida a media vuelta, es trabajo que sigue ahí.
+         && (m.estado !== 'en_uso' || m.esperandoArranque));
 
   const productosNota  = [...(nota?.productos || [])].sort((a, b) => ordenProducto(a) - ordenProducto(b));
   const totalProductosNota = productosNota.reduce((a, x) => a + Number(x.subtotal || 0), 0);
