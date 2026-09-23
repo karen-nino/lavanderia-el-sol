@@ -1,7 +1,11 @@
 import { Router } from 'express';
 import { verifyToken } from '../middleware/auth.js';
 import { bloquearPruebaGlobal } from '../middleware/sucursalActiva.js';
-import { tiposTela, tamanosEdredon, marcasProducto, envasesProducto, marcasMaquina, getTiemposMarca, guardarTiempoMarca } from '../controllers/etiquetas.controller.js';
+import {
+  tiposTela, tamanosEdredon, marcasProducto, envasesProducto, marcasMaquina,
+  getModelosMaquina, crearModeloMaquina, actualizarModeloMaquina, reordenarModelosMaquina,
+  getTiemposMarca, guardarTiempoMarca,
+} from '../controllers/etiquetas.controller.js';
 
 const router = Router();
 
@@ -38,12 +42,19 @@ router.patch('/envases-producto/reordenar', envasesProducto.reorder);
 router.put('/envases-producto/:id',        envasesProducto.update);
 
 // Marcas de máquina (mig. 106): LG, Samsung, Speed Queen. Se eligen de la
-// lista al dar de alta la máquina y se amplían desde el mismo formulario.
-// El modelo (ej. "FH4U2VHN2") sigue siendo texto libre en la máquina.
+// lista al dar de alta la máquina, y tanto ellas como sus modelos se
+// administran en Ajustes → Máquinas.
 router.get('/marcas-maquina',            marcasMaquina.getAll);
 router.post('/marcas-maquina',           marcasMaquina.create);
 router.patch('/marcas-maquina/reordenar', marcasMaquina.reorder);
 router.put('/marcas-maquina/:id',        marcasMaquina.update);
+
+// Modelos de máquina (mig. 117). Cuelgan de una marca, así que el listado se
+// filtra por `?marca_id=` y el reordenar dice a qué marca pertenece la lista.
+router.get('/modelos-maquina',            getModelosMaquina);
+router.post('/modelos-maquina',           crearModeloMaquina);
+router.patch('/modelos-maquina/reordenar', reordenarModelosMaquina);
+router.put('/modelos-maquina/:id',        actualizarModeloMaquina);
 
 // Tiempos de ciclo por marca y tamaño (mig. 107). No es un catálogo con la
 // forma de los de arriba, así que va con sus propios handlers.

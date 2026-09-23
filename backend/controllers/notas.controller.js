@@ -6,7 +6,7 @@ import { tarifaSecadora, precioProductoEnNota, unidadDeServicio, tapasPorUnidad,
 // acción que el empleado está mirando: no debe depender de que el listener esté
 // vivo. Es idempotente, así que el aviso del trigger llegando después no molesta.
 import { sincronizarSonoff, maxCiclosDeMaquina } from '../services/sincronizarSonoff.js';
-import { MINUTOS_DE_MARCA } from '../db/sqlMaquina.js';
+import { MINUTOS_CONFIGURADOS } from '../db/sqlMaquina.js';
 
 const ESTADOS_VALIDOS     = ['EN_ESPERA', 'LAVANDO', 'SECANDO', 'LISTA', 'PAGADA', 'FINALIZADA', 'CANCELADA'];
 // PRODUCTOS es la venta de mostrador (mig. 112): productos sueltos, sin lavado
@@ -492,14 +492,19 @@ async function sellarCicloMaquinas(client, notaId) {
          -- Lavadoras de la nota
          SELECT nc.lavadora_id AS mid,
                 COALESCE(
+                  mo.minutos,
                   tm.minutos,
                   CASE WHEN ml.tipo = 'lavadora_jumbo' THEN $2::int ELSE $3::int END
                 ) AS minutos
            FROM nota_cargas nc
            JOIN maquinas ml ON ml.id = nc.lavadora_id
-           -- La máquina guarda el NOMBRE de la marca (mig. 106), así que el
-           -- catálogo se alcanza por nombre y no por id.
+           -- La máquina guarda el NOMBRE de la marca y del modelo (migs. 106 y
+           -- 117), así que los catálogos se alcanzan por nombre y no por id.
            LEFT JOIN marcas_maquina mm ON mm.nombre = ml.marca
+           -- Misma cadena que MINUTOS_CONFIGURADOS: manda el modelo, y si no
+           -- tiene tiempo propio manda su marca.
+           LEFT JOIN modelos_maquina mo
+                  ON mo.marca_id = mm.id AND mo.nombre = ml.modelo
            LEFT JOIN tiempos_marca tm
                   ON tm.marca_id = mm.id AND tm.tipo = 'lavadora' AND tm.tamano = ml.tamano
           WHERE nc.nota_id = $1 AND nc.lavadora_id IS NOT NULL
@@ -508,10 +513,12 @@ async function sellarCicloMaquinas(client, notaId) {
          -- Secadoras de la nota. Mismo criterio; el respaldo sigue siendo un
          -- tiempo único para todas, como hasta ahora.
          SELECT nc.secadora_id AS mid,
-                COALESCE(tm.minutos, $4::int) AS minutos
+                COALESCE(mo.minutos, tm.minutos, $4::int) AS minutos
            FROM nota_cargas nc
            JOIN maquinas ms ON ms.id = nc.secadora_id
            LEFT JOIN marcas_maquina mm ON mm.nombre = ms.marca
+           LEFT JOIN modelos_maquina mo
+                  ON mo.marca_id = mm.id AND mo.nombre = ms.modelo
            LEFT JOIN tiempos_marca tm
                   ON tm.marca_id = mm.id AND tm.tipo = 'secadora' AND tm.tamano = ms.tamano
           WHERE nc.nota_id = $1 AND nc.secadora_id IS NOT NULL
@@ -2302,10 +2309,10 @@ async function cargaConCiclosDisponibles(client, notaId, maquinaId) {
                  AND ncm.slot = CASE WHEN nc.lavadora_id = $2 THEN 'lavadora' ELSE 'secadora' END
                ORDER BY ncm.asignada_at DESC, ncm.id DESC LIMIT 1
             ), FALSE) AS ciclo_unico,
-            ${MINUTOS_DE_MARCA} AS minutos_marca
+            ${MINUTOS_CONFIGURADOS} AS minutos_ciclo
        FROM nota_cargas nc
-       -- La máquina entra por el tope de ciclos: una lavadora sin tiempo de
-       -- marca corre uno solo, así que aquí ya no hay "otra vuelta" que
+       -- La máquina entra por el tope de ciclos: una lavadora sin tiempo
+       -- configurado corre uno solo, así que aquí ya no hay "otra vuelta" que
        -- encender y el botón tiene que llevar a Finalizar.
        JOIN maquinas m ON m.id = $2
       WHERE nc.nota_id = $1

@@ -79,11 +79,12 @@ export async function seedMaquina({
   estado = 'disponible',
   sucursal = 'centro',
   marca = null,
+  modelo = null,
 } = {}) {
   const { rows } = await pool.query(
-    `INSERT INTO maquinas (nombre, tipo, tamano, estado, sucursal, marca)
-     VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-    [nombre, tipo, tamano, estado, sucursal, marca]
+    `INSERT INTO maquinas (nombre, tipo, tamano, estado, sucursal, marca, modelo)
+     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+    [nombre, tipo, tamano, estado, sucursal, marca, modelo]
   );
   return rows[0].id;
 }

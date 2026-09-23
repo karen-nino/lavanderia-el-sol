@@ -2,7 +2,7 @@ import pool from '../db/pool.js';
 import { TZ_NEGOCIO } from '../utils/tz.js';
 import * as dispositivos from '../services/dispositivos/index.js';
 import { explicarFalla, resumirMotivo } from '../services/dispositivos/mensajes.js';
-import { MINUTOS_DE_MARCA } from '../db/sqlMaquina.js';
+import { MINUTOS_CONFIGURADOS } from '../db/sqlMaquina.js';
 import {
   HORAS_ENCENDIDO_MANUAL,
   PAUSA_OTRO_CICLO_SEGUNDOS,
@@ -125,9 +125,9 @@ const mensajeDeviceDuplicado = (nombre, deviceCanal) =>
 const conDatosDeOtroCiclo = (m) => {
   const ciclos = m.ciclos_carga ?? null;
   const desde = instanteOtroCiclo(m);
-  // El tope no es el mismo para todas: una lavadora sin tiempo de marca corre
-  // un solo ciclo. Sale de la fila, así que la consulta tiene que traer
-  // `minutos_marca`.
+  // El tope no es el mismo para todas: una lavadora sin tiempo configurado
+  // corre un solo ciclo. Sale de la fila, así que la consulta tiene que traer
+  // `minutos_ciclo`.
   // `ciclo_unico` viene de la carga que corre ahora (lateral de getMaquinas),
   // así que el tope se calcula con la fila completa.
   const maxCiclos = maxCiclosDeMaquina(m);
@@ -159,7 +159,7 @@ export const getMaquinas = async (req, res) => {
     //   "Detener Lavado" al lado (2026-09-22).
     const { rows } = await pool.query(
       `SELECT m.*,
-              ${MINUTOS_DE_MARCA} AS minutos_marca,
+              ${MINUTOS_CONFIGURADOS} AS minutos_ciclo,
               (r.folio IS NOT NULL) AS reservada,
               r.folio               AS reservada_folio,
               r.id                  AS reservada_nota_id,
@@ -885,7 +885,7 @@ export const otroCiclo = async (req, res) => {
     await client.query('BEGIN');
 
     const { rows } = await client.query(
-      `SELECT m.*, ${MINUTOS_DE_MARCA} AS minutos_marca
+      `SELECT m.*, ${MINUTOS_CONFIGURADOS} AS minutos_ciclo
          FROM maquinas m WHERE m.id = $1 AND m.sucursal = $2 FOR UPDATE OF m`,
       [id, req.sucursal]
     );
@@ -998,9 +998,9 @@ export const otroCiclo = async (req, res) => {
     // de abajo la vuelve a encender.
     //
     // El ciclo se vuelve a sellar porque "Encender máquina" lo dejó en NULL: una
-    // máquina esperando arranque no tiene cronómetro. Sale de su marca y su
-    // tamaño (mig. 107) con el mismo respaldo por tamaño de siempre, para que el
-    // segundo ciclo dure exactamente lo que duró el primero.
+    // máquina esperando arranque no tiene cronómetro. Sale de su modelo o su
+    // marca (migs. 117 y 107) con el mismo respaldo por tamaño de siempre, para
+    // que el segundo ciclo dure exactamente lo que duró el primero.
     const { rows: upd } = await client.query(
       `UPDATE maquinas m
           SET en_uso_desde = NOW(),
@@ -1008,12 +1008,7 @@ export const otroCiclo = async (req, res) => {
               encendida_para_nota_id   = NULL,
               ciclo_minutos = COALESCE(
                 m.ciclo_minutos,
-                (SELECT tm.minutos
-                   FROM marcas_maquina mm
-                   JOIN tiempos_marca tm ON tm.marca_id = mm.id
-                  WHERE mm.nombre = m.marca
-                    AND tm.tipo = CASE WHEN m.tipo = 'secadora' THEN 'secadora' ELSE 'lavadora' END
-                    AND tm.tamano = m.tamano),
+                ${MINUTOS_CONFIGURADOS},
                 (SELECT CASE WHEN m.tipo = 'secadora'       THEN a.tiempo_carga_secadora
                              WHEN m.tipo = 'lavadora_jumbo' THEN a.tiempo_carga_jumbo
                              ELSE a.tiempo_carga_mediana END
@@ -1031,7 +1026,7 @@ export const otroCiclo = async (req, res) => {
     await sincronizarSonoff(maq.id);
 
     const { rows: fresca } = await pool.query(
-      `SELECT m.*, ${MINUTOS_DE_MARCA} AS minutos_marca FROM maquinas m WHERE m.id = $1`,
+      `SELECT m.*, ${MINUTOS_CONFIGURADOS} AS minutos_ciclo FROM maquinas m WHERE m.id = $1`,
       [maq.id]
     );
     const ciclo = carga.ciclos + 1;

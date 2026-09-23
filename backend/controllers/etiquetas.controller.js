@@ -151,6 +151,188 @@ export const marcasMaquina = crearControladorEtiqueta('marcas_maquina', {
   singular: 'la marca', plural: 'las marcas', uno: 'una marca',
 });
 
+// ── Modelos de máquina (mig. 117) ───────────────────────────────────────────
+//
+// Los modelos cuelgan de una marca, así que no encajan en la fábrica de
+// arriba: toda consulta se filtra por `marca_id` y cada modelo puede tener su
+// propio tiempo de ciclo. El resto se comporta igual que cualquier catálogo
+// (crear, renombrar, activar/desactivar, reordenar; solo admin).
+
+// Normaliza los minutos que llegan del formulario: vacío es un modelo sin
+// tiempo propio —cae al respaldo por marca—, y cualquier otra cosa tiene que
+// ser un entero positivo. Devuelve { valor } o { error }.
+function leerMinutos(minutos) {
+  if (minutos === null || minutos === undefined || minutos === '') return { valor: null };
+  const n = Number(minutos);
+  if (!Number.isInteger(n) || n <= 0) {
+    return { error: 'El tiempo debe ser un número de minutos mayor que cero.' };
+  }
+  return { valor: n };
+}
+
+// Todos los modelos, o los de una marca si viene `?marca_id=`. Vienen con el
+// nombre de su marca porque la máquina guarda el NOMBRE y no el id (mig. 106):
+// quien arma el desplegable compara por nombre.
+export const getModelosMaquina = async (req, res) => {
+  const { marca_id: marcaId } = req.query;
+  if (marcaId !== undefined && !/^\d+$/.test(String(marcaId))) {
+    return res.status(400).json({ message: 'Elige una marca válida.' });
+  }
+  try {
+    const { rows } = await pool.query(
+      `SELECT mo.*, mm.nombre AS marca
+         FROM modelos_maquina mo
+         JOIN marcas_maquina mm ON mm.id = mo.marca_id
+        WHERE $1::int IS NULL OR mo.marca_id = $1::int
+        ORDER BY mm.orden ASC NULLS LAST, mm.id ASC,
+                 mo.orden ASC NULLS LAST, mo.id ASC`,
+      [marcaId ?? null]
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error('getModelosMaquina error:', err);
+    res.status(500).json({ message: 'No se pudieron cargar los modelos. Intenta de nuevo.' });
+  }
+};
+
+export const crearModeloMaquina = async (req, res) => {
+  if (!esAdmin(req.user.rol)) {
+    return res.status(403).json({ message: 'Solo un administrador puede realizar esta acción.' });
+  }
+  const { marca_id: marcaId } = req.body;
+  if (!/^\d+$/.test(String(marcaId))) {
+    return res.status(400).json({ message: 'Elige una marca válida.' });
+  }
+  const nombre = String(req.body.nombre ?? '').trim();
+  if (!nombre) {
+    return res.status(400).json({ message: 'El nombre es requerido.' });
+  }
+  const minutos = leerMinutos(req.body.minutos);
+  if (minutos.error) return res.status(400).json({ message: minutos.error });
+
+  try {
+    // El orden se cuenta dentro de la marca: cada marca tiene su propia lista.
+    const { rows } = await pool.query(
+      `INSERT INTO modelos_maquina (marca_id, nombre, minutos, orden)
+       VALUES ($1, $2, $3,
+               (SELECT COALESCE(MAX(orden), 0) + 1 FROM modelos_maquina WHERE marca_id = $1))
+       RETURNING *`,
+      [marcaId, nombre, minutos.valor]
+    );
+    res.status(201).json(rows[0]);
+  } catch (err) {
+    if (err.code === '23505') {
+      return res.status(409).json({ message: 'Esa marca ya tiene un modelo con ese nombre.' });
+    }
+    if (err.code === '23503') {
+      return res.status(404).json({ message: 'Esa marca ya no existe.' });
+    }
+    console.error('crearModeloMaquina error:', err);
+    res.status(500).json({ message: 'No se pudo guardar el modelo. Intenta de nuevo.' });
+  }
+};
+
+export const actualizarModeloMaquina = async (req, res) => {
+  if (!esAdmin(req.user.rol)) {
+    return res.status(403).json({ message: 'Solo un administrador puede realizar esta acción.' });
+  }
+  const { id } = req.params;
+  if (!/^\d+$/.test(String(id))) {
+    return res.status(404).json({ message: 'No se encontró el modelo.' });
+  }
+  const { nombre, activo, minutos } = req.body;
+
+  const updates = [];
+  const values  = [];
+  let i = 1;
+
+  if (nombre !== undefined) {
+    const limpio = String(nombre).trim();
+    if (!limpio) {
+      return res.status(400).json({ message: 'El nombre no puede estar vacío.' });
+    }
+    updates.push(`nombre = $${i++}`);
+    values.push(limpio);
+  }
+  if (activo !== undefined) {
+    updates.push(`activo = $${i++}`);
+    values.push(Boolean(activo));
+  }
+  // `minutos: null` es un cambio de verdad —quitarle el tiempo propio al
+  // modelo—, así que se distingue de no mandar el campo.
+  if (minutos !== undefined) {
+    const leido = leerMinutos(minutos);
+    if (leido.error) return res.status(400).json({ message: leido.error });
+    updates.push(`minutos = $${i++}`);
+    values.push(leido.valor);
+  }
+  if (updates.length === 0) {
+    return res.status(400).json({ message: 'No hay cambios que guardar.' });
+  }
+  updates.push('updated_at = NOW()');
+  values.push(id);
+
+  try {
+    const { rows } = await pool.query(
+      `UPDATE modelos_maquina SET ${updates.join(', ')} WHERE id = $${i} RETURNING *`,
+      values
+    );
+    if (rows.length === 0) {
+      return res.status(404).json({ message: 'No se encontró el modelo.' });
+    }
+    res.json(rows[0]);
+  } catch (err) {
+    if (err.code === '23505') {
+      return res.status(409).json({ message: 'Esa marca ya tiene un modelo con ese nombre.' });
+    }
+    console.error('actualizarModeloMaquina error:', err);
+    res.status(500).json({ message: 'No se pudieron guardar los cambios del modelo. Intenta de nuevo.' });
+  }
+};
+
+// Reordena los modelos de UNA marca: llegan sus ids en el nuevo orden. El
+// filtro por `marca_id` evita que una lista mal armada renumere los modelos de
+// otra marca.
+export const reordenarModelosMaquina = async (req, res) => {
+  if (!esAdmin(req.user.rol)) {
+    return res.status(403).json({ message: 'Solo un administrador puede realizar esta acción.' });
+  }
+  const { marca_id: marcaId } = req.body;
+  if (!/^\d+$/.test(String(marcaId))) {
+    return res.status(400).json({ message: 'Elige una marca válida.' });
+  }
+  const ids = Array.isArray(req.body.ids) ? req.body.ids.map(Number).filter(Number.isInteger) : [];
+  if (ids.length === 0) {
+    return res.status(400).json({ message: 'No llegó el nuevo orden de la lista. Intenta de nuevo.' });
+  }
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    for (let i = 0; i < ids.length; i++) {
+      await client.query(
+        'UPDATE modelos_maquina SET orden = $1, updated_at = NOW() WHERE id = $2 AND marca_id = $3',
+        [i + 1, ids[i], marcaId]
+      );
+    }
+    await client.query('COMMIT');
+    const { rows } = await client.query(
+      `SELECT mo.*, mm.nombre AS marca
+         FROM modelos_maquina mo
+         JOIN marcas_maquina mm ON mm.id = mo.marca_id
+        WHERE mo.marca_id = $1
+        ORDER BY mo.orden ASC NULLS LAST, mo.id ASC`,
+      [marcaId]
+    );
+    res.json(rows);
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('reordenarModelosMaquina error:', err);
+    res.status(500).json({ message: 'No se pudo guardar el nuevo orden de los modelos. Intenta de nuevo.' });
+  } finally {
+    client.release();
+  }
+};
+
 // ── Tiempos de ciclo por marca y tamaño (mig. 107) ──────────────────────────
 //
 // La duración de un ciclo es de la MÁQUINA y no de la carga: una LG mediana

@@ -3,19 +3,40 @@
 // Viven aquí y no copiados en cada consulta porque son reglas, no detalles de
 // una pantalla: si cambian, tienen que cambiar en todas a la vez.
 
-// Los minutos que `tiempos_marca` (mig. 107) tiene configurados para ESTA
-// máquina, o NULL si su marca no tiene tiempo para su tipo y tamaño —o si ni
-// siquiera tiene marca—. NULL significa "esta máquina se cronometra con el
-// respaldo por tamaño de Ajustes", que es un tiempo supuesto, no medido.
+// Los minutos de ciclo CONFIGURADOS para ESTA máquina, o NULL si nadie los ha
+// medido. Se resuelven en cadena, del dato más específico al más general:
+//
+//   1. su MODELO, si tiene uno con minutos propios (mig. 117);
+//   2. su MARCA para su tipo y tamaño (mig. 107);
+//   3. NULL → la máquina se cronometra con el respaldo por tamaño de Ajustes,
+//      que es un tiempo supuesto y no medido.
+//
+// El escalón del modelo va primero porque es el que sabe de verdad cuánto
+// tarda el aparato; el de la marca no se puede quitar, porque hoy ninguna
+// máquina tiene modelo capturado y sin él las LG se cronometrarían cortas
+// (que es justo el bug que arregló la mig. 107).
+//
+// Tanto la marca como el modelo se alcanzan por NOMBRE y no por id (migs. 106
+// y 117): es lo que guarda la máquina.
 //
 // Se interpola en consultas donde la tabla `maquinas` va con el alias `m`, y
 // no lleva parámetros: es una subconsulta correlacionada, no una plantilla con
 // valores del usuario.
-export const MINUTOS_DE_MARCA = `(
-  SELECT tm.minutos
-    FROM marcas_maquina mm
-    JOIN tiempos_marca tm ON tm.marca_id = mm.id
-   WHERE mm.nombre = m.marca
-     AND tm.tipo = CASE WHEN m.tipo = 'secadora' THEN 'secadora' ELSE 'lavadora' END
-     AND tm.tamano = m.tamano
+export const MINUTOS_CONFIGURADOS = `COALESCE(
+  (
+    SELECT mo.minutos
+      FROM marcas_maquina mm
+      JOIN modelos_maquina mo ON mo.marca_id = mm.id
+     WHERE mm.nombre = m.marca
+       AND mo.nombre = m.modelo
+       AND mo.minutos IS NOT NULL
+  ),
+  (
+    SELECT tm.minutos
+      FROM marcas_maquina mm
+      JOIN tiempos_marca tm ON tm.marca_id = mm.id
+     WHERE mm.nombre = m.marca
+       AND tm.tipo = CASE WHEN m.tipo = 'secadora' THEN 'secadora' ELSE 'lavadora' END
+       AND tm.tamano = m.tamano
+  )
 )`;

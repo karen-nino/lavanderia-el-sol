@@ -102,20 +102,21 @@ export const MAX_CICLOS_POR_CARGA = (() => {
 // · **Las secadoras, siempre.** Un secado es uno; encadenar dos es del lavado,
 //   no del secado. Es regla del negocio, no de la configuración.
 //
-// · **Una lavadora sin tiempo de marca** (mig. 107). Se cronometra con el
+// · **Una lavadora sin tiempo configurado** (modelo o marca, migs. 117 y
+//   107). Se cronometra con el
 //   respaldo por tamaño de Ajustes, que es un "no se sabe qué máquina es, usa
 //   el más largo plausible": encadenarle otra vuelta de un tiempo que nadie
 //   midió la deja corriendo el doble de lo que debería, y con el corte por fin
 //   de ciclo activo eso es corriente regalada.
 //
-// Espera la fila de `maquinas` con `minutos_marca` (ver MINUTOS_DE_MARCA en
-// db/sqlMaquina.js). Sin ese campo toda lavadora parecería no tener marca, así
-// que las consultas que deciden sobre ciclos tienen que traerlo.
+// Espera la fila de `maquinas` con `minutos_ciclo` (ver MINUTOS_CONFIGURADOS
+// en db/sqlMaquina.js). Sin ese campo toda lavadora parecería no tener tiempo
+// medido, así que las consultas que deciden sobre ciclos tienen que traerlo.
 // · **La vuelta EXTRA agregada desde Salidas** (mig. 115). Va sin cobro sobre
 //   un lavado ya cobrado; encadenarle otra sería regalar el doble.
 //   Lo dice la fila: `ciclo_unico` de la última pasada de esa carga.
 export const maxCiclosDeMaquina = (maq) =>
-  maq?.tipo === 'secadora' || maq?.minutos_marca == null || maq?.ciclo_unico
+  maq?.tipo === 'secadora' || maq?.minutos_ciclo == null || maq?.ciclo_unico
     ? 1 : MAX_CICLOS_POR_CARGA;
 
 // Cuánto aguanta encendida una máquina que espera su arranque (mig. 110).
