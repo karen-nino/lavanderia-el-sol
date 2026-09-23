@@ -290,9 +290,13 @@ async function liberarMaquinasDeNota(client, notaId) {
 // abierta; aquí lo tapa por el lado automático (2026-09-22).
 class CorteCerradoError extends Error {
   constructor(folio) {
-    super(`La nota ${folio} se cobró en un corte que ya se cerró: cambiar lo que cuesta `
-        + 'la devolvería a pendiente y ese dinero ya está contado. Si hay que corregirla, '
-        + 'hazlo con la caja de ese cobro abierta.');
+    // Ojo con lo que se promete: un corte cerrado NO se reabre (caja solo pasa
+    // a 'cerrada', nunca al revés), así que mandar a "abrir esa caja" sería
+    // mandar a la nada. Lo que sí se puede hacer es cobrar o devolver aparte.
+    super(`El cobro de la nota ${folio} ya quedó en un corte cerrado, así que no se puede `
+        + 'cambiar lo que cuesta: la nota volvería a pendiente y ese dinero ya está contado '
+        + 'en aquel corte. Si falta cobrar algo, hazlo en una nota nueva; si hay que devolver, '
+        + 'regístralo como salida de caja.');
     this.name = 'CorteCerradoError';
   }
 }
@@ -317,13 +321,23 @@ async function recalcularPrecioTotal(client, notaId, opciones = {}) {
   const { desmarcarPagoSiCambia = false, usuarioId = null, sucursal = null } = opciones;
   const { rows: previas } = desmarcarPagoSiCambia
     ? await client.query(
-        `SELECT n.id, n.folio, n.precio_total, n.estado_pago, n.caja_id,
-                cj.estado AS caja_estado
-           FROM notas n LEFT JOIN cajas cj ON cj.id = n.caja_id
-          WHERE n.id = $1`,
+        'SELECT id, folio, precio_total, estado_pago, caja_id FROM notas WHERE id = $1',
         [notaId]
       )
     : { rows: [] };
+
+  // El estado de su caja se lee APARTE y con candado: `cerrarCaja` toma esa
+  // fila con FOR UPDATE y congela las cifras desde su propia foto, así que un
+  // cierre que corra entre esta lectura y el COMMIT contaría la venta mientras
+  // aquí se deja la nota en PENDIENTE — justo el descuadre que esto evita.
+  // (Va en su propia consulta porque Postgres no deja bloquear el lado nulo de
+  // un LEFT JOIN.)
+  if (previas[0]?.caja_id) {
+    const { rows: cj } = await client.query(
+      'SELECT estado FROM cajas WHERE id = $1 FOR SHARE', [previas[0].caja_id]
+    );
+    previas[0].caja_estado = cj[0]?.estado ?? null;
+  }
   const { rows } = await client.query(
     `UPDATE notas n
         SET precio_total =
@@ -1135,7 +1149,14 @@ export const getNotaById = async (req, res) => {
               (n.estado_pago = 'PAGADO' AND n.estado <> 'CANCELADA' AND (
                  n.caja_id IS NULL
                  OR EXISTS (SELECT 1 FROM cajas cj WHERE cj.id = n.caja_id AND cj.estado = 'abierta')
-              )) AS pago_reversible
+              )) AS pago_reversible,
+              -- ¿El cobro de esta nota quedó congelado en un corte cerrado?
+              -- Entonces NADA que mueva su total se puede hacer (ver
+              -- CorteCerradoError): la pantalla lo usa para no ofrecer acciones
+              -- que van a terminar en 409 al confirmar (2026-09-22).
+              (n.estado_pago = 'PAGADO' AND n.caja_id IS NOT NULL AND NOT EXISTS (
+                 SELECT 1 FROM cajas cj WHERE cj.id = n.caja_id AND cj.estado = 'abierta'
+              )) AS cobro_congelado
        FROM notas n
        LEFT JOIN clientes   c  ON c.id = n.cliente_id
        JOIN      usuarios   u  ON u.id = n.usuario_id
@@ -1824,7 +1845,8 @@ export const updateNota = async (req, res) => {
       // Séptima puerta al mismo sitio: si ese cobro ya quedó congelado en un
       // corte cerrado, no se devuelve a pendiente (mismo motivo que arriba).
       if (actual.caja_id) {
-        const { rows: cj } = await client.query('SELECT estado FROM cajas WHERE id = $1', [actual.caja_id]);
+        const { rows: cj } = await client.query(
+          'SELECT estado FROM cajas WHERE id = $1 FOR SHARE', [actual.caja_id]);
         if (cj[0]?.estado !== 'abierta') {
           await client.query('ROLLBACK');
           return res.status(409).json({ message: new CorteCerradoError(actual.folio ?? `#${actual.id}`).message });

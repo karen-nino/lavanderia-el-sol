@@ -17,6 +17,11 @@
 //                   cuando decirlo en prosa no basta para decidir
 //   textoConfirmar: el verbo del botón, el mismo que se pulsó para llegar aquí
 //   procesando:     deshabilita los botones mientras la acción corre
+//   error:          lo que respondió el servidor si la acción falló. Va DENTRO
+//                   del modal porque el aviso de la página queda debajo de su
+//                   fondo y, en una pantalla larga, fuera de vista: cerrar el
+//                   modal para enseñarlo hacía que el rechazo pareciera que no
+//                   pasó nada (2026-09-22)
 const TONOS = {
   peligro: {
     circulo: 'bg-red-100',
@@ -38,6 +43,7 @@ export default function ConfirmacionModal({
   detalle = [],
   textoConfirmar = 'Continuar',
   procesando = false,
+  error = '',
   onClose,
   onConfirm,
 }) {
@@ -76,6 +82,11 @@ export default function ConfirmacionModal({
                   <span className="font-semibold text-gray-900">{d.valor}</span>
                 </div>
               ))}
+            </div>
+          )}
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3 mb-4">
+              {error}
             </div>
           )}
           <div className="flex gap-3">

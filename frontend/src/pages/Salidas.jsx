@@ -177,6 +177,10 @@ export default function Salidas() {
   // En Autoservicio TODO se cobra: no se pregunta el cobro al asignar máquina
   // (a diferencia de Por Encargo, donde una carga puede ir sin cobro).
   const esAutoservicio = nota?.tipo_servicio === 'AUTOSERVICIO';
+  // Cobro atado a un corte ya cerrado: el servidor rechaza cualquier cambio que
+  // mueva el total (y una caja cerrada no se reabre), así que esas acciones ni
+  // se ofrecen.
+  const cobroCongelado = Boolean(nota?.cobro_congelado);
 
   // Máquinas asignadas a la nota, sin repetir. Todas viven en sus cargas: la
   // denormalización a nivel nota (maquina_id / secadora_id) se eliminó en la
@@ -463,14 +467,13 @@ export default function Salidas() {
     setErrorAccion('');
     try {
       await api.delete(`/notas/${id}/productos/${productoId}`);
+      setConfirmQuitarProd(null);
       await cargarDatos();
     } catch (err) {
+      // El modal se queda abierto con el motivo dentro: el aviso de la página
+      // vive arriba del todo y en esta pantalla larga queda fuera de vista.
       setErrorAccion(err.message);
     } finally {
-      // El modal se cierra pase lo que pase: `ConfirmacionModal` no tiene dónde
-      // pintar un error y el aviso de la página queda debajo de su fondo, así
-      // que un rechazo (403, nota ya pagada) dejaba el modal abierto y mudo.
-      setConfirmQuitarProd(null);
       setLoadingProducto(null);
     }
   }
@@ -478,14 +481,18 @@ export default function Salidas() {
   // Quita una carga que el cliente ya no va a usar (trajo menos ropa de la
   // prevista). Solo se ofrece en las cargas sin máquina: las que ya lavaron son
   // historial y el servidor las rechaza.
+  // Devuelve si se pudo: quien la llama cierra su modal solo cuando salió bien,
+  // para que un rechazo se lea ahí mismo y no en un aviso fuera de pantalla.
   async function quitarCarga(carga) {
     setLoadingMaquina(true);
     setErrorAccion('');
     try {
       await api.delete(`/notas/${id}/cargas/${carga.id}`);
       await cargarDatos();
+      return true;
     } catch (err) {
       setErrorAccion(err.message);
+      return false;
     } finally {
       setLoadingMaquina(false);
     }
@@ -752,6 +759,17 @@ export default function Salidas() {
         </div>
       )}
 
+      {/* El cobro de esta nota quedó en un corte que ya se cerró: nada que
+          mueva su total se puede hacer, así que se dice de una vez en vez de
+          dejar que el empleado lo descubra al confirmar (2026-09-22). */}
+      {cobroCongelado && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-lg p-3">
+          Esta nota se cobró en un corte que ya se cerró, así que <span className="font-medium">no se
+          puede cambiar lo que cuesta</span>: no se agregan ni se quitan máquinas ni productos. Lo que
+          falte se cobra en una nota nueva; lo que haya que devolver va como salida de caja.
+        </div>
+      )}
+
       {/* Sección 1 — Máquinas */}
       <div className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
         <div className="px-4 py-3 border-b border-gray-50 flex items-center justify-between gap-2">
@@ -764,7 +782,8 @@ export default function Salidas() {
               que una máquina de más es una nota nueva, no un agregado a una
               nota que ya se pagó. Las máquinas que la nota SÍ compró se
               asignan con el botón "Asignar" de cada carga. */}
-          {nota && !esAutoservicio && !['FINALIZADA', 'CANCELADA'].includes(nota.estado)
+          {nota && !esAutoservicio && !cobroCongelado
+            && !['FINALIZADA', 'CANCELADA'].includes(nota.estado)
             && cargasDestino.length > 0 && (
             <button
               onClick={() => iniciarAsignar()}
@@ -963,7 +982,7 @@ export default function Salidas() {
                 <span className="text-sm text-gray-400 italic">Sin máquina asignada</span>
                 <div className="flex items-center gap-2">
                   {/* Quitar carga es de admin: deshace lo capturado y baja el total. */}
-                  {esAdmin && (
+                  {esAdmin && !cobroCongelado && (
                     <button
                       onClick={() => setConfirmQuitarCarga(c)}
                       disabled={loadingMaquina}
@@ -1012,7 +1031,7 @@ export default function Salidas() {
                     Cant. {p.cantidad} × {fmtMonto(p.precio_unitario)} = {fmtMonto(p.subtotal)}
                   </p>
                 </div>
-                {esAdmin && (
+                {esAdmin && !cobroCongelado && (
                   <button
                     onClick={() => setConfirmQuitarProd(p)}
                     disabled={loadingProducto === p.producto_id}
@@ -1049,6 +1068,7 @@ export default function Salidas() {
           ]}
           textoConfirmar={loadingProducto === confirmQuitarProd.producto_id ? 'Quitando…' : 'Quitar producto'}
           procesando={loadingProducto === confirmQuitarProd.producto_id}
+          error={errorAccion}
           onClose={() => setConfirmQuitarProd(null)}
           onConfirm={() => eliminarProducto(confirmQuitarProd.producto_id)}
         />
@@ -1071,10 +1091,11 @@ export default function Salidas() {
             ]}
             textoConfirmar={loadingMaquina ? 'Quitando…' : 'Quitar carga'}
             procesando={loadingMaquina}
-            onClose={() => setConfirmQuitarCarga(null)}
+            error={errorAccion}
+            onClose={() => { setConfirmQuitarCarga(null); setErrorAccion(''); }}
             onConfirm={async () => {
-              await quitarCarga(confirmQuitarCarga);
-              setConfirmQuitarCarga(null);
+              // Se cierra solo si salió bien; si no, el motivo se lee dentro.
+              if (await quitarCarga(confirmQuitarCarga)) setConfirmQuitarCarga(null);
             }}
           />
         );

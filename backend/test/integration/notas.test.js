@@ -276,7 +276,7 @@ describe('un cobro congelado en su corte no se deshace por un cambio', () => {
     const res = await request(app).delete(`/api/notas/${notaId}/productos/${productoId}`)
       .set(auth(admin.token));
     expect(res.status).toBe(409);
-    expect(res.body.message).toMatch(/corte que ya se cerró/i);
+    expect(res.body.message).toMatch(/corte cerrado/i);
 
     const { rows } = await pool.query('SELECT estado_pago, caja_id FROM notas WHERE id = $1', [notaId]);
     expect(rows[0].estado_pago).toBe('PAGADO');
