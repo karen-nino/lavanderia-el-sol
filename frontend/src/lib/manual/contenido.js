@@ -55,9 +55,11 @@ Si nadie cerró la caja de ayer, la app la cierra sola a medianoche y la deja ma
 2. Elige Autoservicio.
 3. Por cada carga di qué necesita: lavadora (Mediana o Jumbo) y, si va a secar, la secadora.
 4. Agrega los productos que se lleve (jabón, suavizante, bolsas) con el botón Agregar productos.
-5. Toca Aceptar. Se abre el cobro: elige cómo pagó y confirma.
+5. Toca Aceptar. La nota se guarda pendiente de cobro.
 
-EN AUTOSERVICIO SE COBRA ANTES DE LAVAR. La app no deja arrancar una máquina de una nota que todavía debe.
+EL COBRO SE HACE DESPUÉS, EN LA NOTA. Abre la nota y toca Liquidar: ahí eliges cómo pagó. La máquina se puede arrancar aunque todavía no haya pagado, igual que por encargo.
+
+Si la nota ya terminó todas sus cargas, al liquidarla se cierra sola: el cliente ya se llevó su ropa y no hay nada que entregar.
 
 El cliente no se identifica: la nota queda anónima. Si quieres mandarle el ticket, pídele su teléfono en la pantalla del ticket.
 
@@ -76,7 +78,7 @@ La nota nace En Espera y SIN máquina asignada: la máquina física se elige des
 5. Pon la fecha de entrega.
 6. Elige si te paga ahora o al entregar.
 
-A diferencia de autoservicio, aquí SÍ se puede empezar sin cobrar: en el encargo se suele cobrar al entregar.
+Aquí el cobro también puede esperar: en el encargo se suele cobrar al entregar.
 
 El precio de una carga por encargo lo manda el TOPE de su tamaño, que el administrador configura en Ajustes.`,
       },

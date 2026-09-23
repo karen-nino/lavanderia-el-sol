@@ -62,9 +62,9 @@ const PASOS_ESTADO = [
 ];
 
 // Pasos que se dibujan para esta nota. En autoservicio el cliente se lleva su
-// ropa él mismo: la nota se finaliza sola al terminar sus cargas y nunca pasa
-// por "Por Entregar", así que ese paso sobra. Se conserva en la única nota de
-// autoservicio que sí lo vive: la que quedó a deber y espera el cobro ahí.
+// ropa él mismo: la nota pagada se finaliza sola al terminar sus cargas y nunca
+// pasa por "Por Entregar", así que ese paso sobra. Se conserva en la nota de
+// autoservicio que sí lo vive: la que quedó a deber y espera ahí su cobro.
 function pasosDeNota(nota) {
   // La venta de Productos (mig. 112) nace finalizada: no hay lavado, ni secado,
   // ni nada que entregar después. Su línea de tiempo es un solo punto; dibujar
@@ -402,7 +402,13 @@ export default function DetalleNota() {
   }
 
   // Liquidar = cobrar la nota (estado_pago → PAGADO). Solo entonces se puede
-  // finalizar. No cambia el estado (sigue LISTA/Por Entregar).
+  // finalizar.
+  //
+  // Normalmente no cambia el estado (sigue LISTA/Por Entregar), pero un
+  // Autoservicio que ya terminó sus cargas se FINALIZA solo al cobrarlo: el
+  // cliente se llevó su ropa y no hay nada que entregar (2026-09-23). Por eso
+  // se vuelve a leer la nota completa en vez de parchar el pago: así el estado,
+  // la línea de tiempo y los botones cuentan lo mismo que el servidor.
   async function liquidarNota() {
     setLoadingAccion(true);
     setErrorAccion('');
@@ -411,7 +417,13 @@ export default function DetalleNota() {
         estado_pago: 'PAGADO',
         forma_pago: formaPagoSel,
       });
-      setNota(prev => ({ ...prev, estado_pago: updated.estado_pago, forma_pago: updated.forma_pago }));
+      const fresca = await api.get(`/notas/${id}`).catch(() => null);
+      setNota(prev => fresca ?? ({
+        ...prev,
+        estado_pago: updated.estado_pago,
+        forma_pago:  updated.forma_pago,
+        estado:      updated.estado ?? prev.estado,
+      }));
       // Ya se cobró por el importe nuevo: el aviso deja de aplicar.
       limpiarAvisoCobro(id);
       setAvisoCobro(null);

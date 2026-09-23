@@ -1541,9 +1541,8 @@ describe('cierre automático de la nota al terminar sus cargas', () => {
     expect(res.body.estado).toBe('FINALIZADA');
   });
 
-  // Ya no se puede arrancar un autoservicio sin pagar, así que a este estado
-  // solo se llega revirtiendo el pago con la carga andando. Aun así la nota no
-  // debe cerrarse: FINALIZADA es terminal y el cobro quedaría sin registrar.
+  // Un autoservicio que debe no se cierra al terminar su carga: FINALIZADA es
+  // terminal y el cobro quedaría sin registrar. Espera en Por Entregar.
   it('autoservicio al que le revirtieron el pago: se queda en Por Entregar', async () => {
     const lav = await seedMaquina({ nombre: 'Lavadora rev', tipo: 'lavadora_mediana' });
     const crea = await request(app).post('/api/notas').set(auth(admin.token)).send({
@@ -1562,20 +1561,64 @@ describe('cierre automático de la nota al terminar sus cargas', () => {
     expect(res.body.estado).toBe('LISTA');
   });
 
-  it('autoservicio sin pagar: no deja arrancar la carga', async () => {
+  // El autoservicio dejó de cobrarse por adelantado (2026-09-23): se crea
+  // pendiente como Por Encargo, la carga corre igual y el cobro se registra
+  // después desde el detalle. Al liquidarla ya no queda nada por hacer —el
+  // cliente se llevó su ropa—, así que la nota se cierra sola y el producto
+  // que tenía apartado sale del inventario, igual que cuando se cierra al
+  // terminar la carga.
+  it('autoservicio sin pagar: arranca igual, espera el cobro y al liquidarlo se cierra solo', async () => {
+    const prod = await seedProducto({
+      nombre: 'Detergente a deber', precio_botella: 30, stock_actual: 100,
+      tipo_liquido: 'marca', botella_ml: 800, tapa_ml: 200,
+    });
     const lav = await seedMaquina({ nombre: 'Lavadora sin pago', tipo: 'lavadora_mediana' });
+    const crea = await request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE',
+      cargas: [{ lavadora_tipo: 'mediana', productos: [{ producto_id: prod, cantidad: 1 }] }],
+    });
+    expect(crea.status).toBe(201);
+    expect(crea.body.estado_pago).toBe('PENDIENTE');
+
+    // Arranca sin haber cobrado: ya no hay candado.
+    await arrancar(crea.body.id, crea.body.cargas[0].id, lav);
+
+    // Terminada la carga espera el cobro en Por Entregar, con su producto
+    // todavía apartado (no vendido).
+    const fin = await request(app).patch(`/api/notas/${crea.body.id}/terminar-lavado-final`)
+      .set(auth(admin.token)).send({ lavadora_id: lav });
+    expect(fin.status).toBe(200);
+    expect(fin.body.estado).toBe('LISTA');
+    const enEspera = await pool.query(
+      'SELECT stock_actual, stock_reservado FROM productos WHERE id = $1', [prod]);
+    expect(Number(enEspera.rows[0].stock_actual)).toBe(100);
+    expect(Number(enEspera.rows[0].stock_reservado)).toBeGreaterThan(0);
+    const apartado = Number(enEspera.rows[0].stock_reservado);
+
+    // Se liquida desde el detalle: la nota se cierra sola y el producto sale.
+    const pago = await request(app).patch(`/api/notas/${crea.body.id}/estado-pago`)
+      .set(auth(admin.token)).send({ estado_pago: 'PAGADO', forma_pago: 'EFECTIVO' });
+    expect(pago.status).toBe(200);
+    expect(pago.body.estado_pago).toBe('PAGADO');
+    expect(pago.body.estado).toBe('FINALIZADA');
+
+    const despues = await pool.query(
+      'SELECT stock_actual, stock_reservado FROM productos WHERE id = $1', [prod]);
+    expect(Number(despues.rows[0].stock_actual)).toBe(100 - apartado);
+    expect(Number(despues.rows[0].stock_reservado)).toBe(0);
+  });
+
+  // Mientras le falte una carga, cobrarla NO la cierra: la ropa sigue adentro.
+  it('cobrar un autoservicio que todavía tiene cargas pendientes no lo cierra', async () => {
     const crea = await request(app).post('/api/notas').set(auth(admin.token)).send({
       tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE',
       cargas: [{ lavadora_tipo: 'mediana' }],
     });
     expect(crea.status).toBe(201);
-    await request(app).patch(`/api/notas/${crea.body.id}/asignar-carga-maquina`).set(auth(admin.token))
-      .send({ carga_id: crea.body.cargas[0].id, slot: 'lavadora', maquina_id: lav }).expect(200);
-
-    const res = await request(app).patch(`/api/notas/${crea.body.id}/activar-pendientes`)
-      .set(auth(admin.token)).send({ maquina_id: lav });
-    expect(res.status).toBe(400);
-    expect(res.body.message).toMatch(/se cobra antes de iniciar/i);
+    const pago = await request(app).patch(`/api/notas/${crea.body.id}/estado-pago`)
+      .set(auth(admin.token)).send({ estado_pago: 'PAGADO', forma_pago: 'EFECTIVO' });
+    expect(pago.status).toBe(200);
+    expect(pago.body.estado).toBe('EN_ESPERA');
   });
 
   // El cierre a mano (cambiarEstadoNota) descuenta el producto del inventario al

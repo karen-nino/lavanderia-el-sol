@@ -201,8 +201,9 @@ export default function NuevaNota() {
   // tapa); `carga` solo aplica al segundo. Un producto puesto no se cambia: se
   // borra y se agrega el correcto.
   const [selectorProducto,  setSelectorProducto]  = useState(null);
-  // Autoservicio se cobra al momento: "Aceptar" abre este modal, donde se elige
-  // la forma de pago y se confirma la creación de la nota.
+  // La venta de mostrador se cobra al momento: "Aceptar" abre este modal, donde
+  // se elige la forma de pago y se confirma la creación de la nota. El
+  // Autoservicio ya no pasa por aquí (2026-09-23): nace pendiente.
   const [cobroOpen,         setCobroOpen]         = useState(false);
   const [nuevoCliente,      setNuevoCliente]      = useState({ nombre: '', apellido: '', telefono: '' });
   const [creandoCliente,    setCreandoCliente]    = useState(false);
@@ -755,10 +756,10 @@ export default function NuevaNota() {
     }
   };
 
-  // Lo que hay que tener listo antes de pasar al cobro. Devuelve el problema o
-  // null si todo está en orden. Los dos servicios que se cobran al momento
-  // (Autoservicio y la venta de Productos) pasan por aquí.
-  const problemaAntesDeCobrar = () => {
+  // Lo que le falta a la nota para poder guardarse. Devuelve el problema o null
+  // si todo está en orden. Lo usan el Autoservicio (que guarda directo) y la
+  // venta de Productos (que antes de guardar pasa por el cobro).
+  const problemaDeLaNota = () => {
     if (esVenta) {
       return productosLista.some(p => p.producto_id && Number(p.cantidad) > 0)
         ? null
@@ -770,9 +771,10 @@ export default function NuevaNota() {
     return null;
   };
 
-  // "Aceptar": valida la nota y abre el cobro. La nota se crea desde el modal.
+  // "Aceptar" de la venta de mostrador: valida y abre el cobro. La nota se crea
+  // desde el modal, ya con la forma de pago elegida.
   const abrirCobro = () => {
-    const problema = problemaAntesDeCobrar();
+    const problema = problemaDeLaNota();
     setError(problema ?? '');
     if (!problema) setCobroOpen(true);
   };
@@ -783,14 +785,15 @@ export default function NuevaNota() {
     if (tipoServicio !== 'AUTOSERVICIO' && !esVenta) return;
     setError('');
 
-    const problema = problemaAntesDeCobrar();
+    const problema = problemaDeLaNota();
     if (problema) {
       setError(problema);
       setCobroOpen(false);
       return;
     }
-    // Los dos se cobran al momento: hay que elegir la forma de pago.
-    if (!form.forma_pago) {
+    // Solo la venta de mostrador se cobra al momento: ahí sí hace falta la
+    // forma de pago. El autoservicio nace pendiente y se liquida en el detalle.
+    if (esVenta && !form.forma_pago) {
       setError('Elige la forma de pago.');
       return;
     }
@@ -819,8 +822,11 @@ export default function NuevaNota() {
       // Autoservicio nace En Espera SIN máquina: se elige el tipo y la máquina
       // física se asigna después en Salidas (igual que Por Encargo).
       estado:          'EN_ESPERA',
-      estado_pago:     'PAGADO',
-      forma_pago:      form.forma_pago || null,
+      // El autoservicio ya no se cobra al crear la nota (2026-09-23): nace
+      // pendiente y se liquida desde el detalle, como Por Encargo. En edición
+      // no se manda nada de pago — el cobro tiene su propia puerta y mandar
+      // 'PENDIENTE' sobre una nota ya cobrada sería intentar revertirlo.
+      ...(esEdicion ? {} : { estado_pago: 'PENDIENTE' }),
       // null (no undefined) para que al editar, limpiar un campo lo borre.
       instrucciones:   form.instrucciones || null,
       tipo_tela:       null,
@@ -2167,22 +2173,14 @@ export default function NuevaNota() {
                 </div>
               )}
 
-              {(ajusteNum !== 0 || form.forma_pago) && (
+              {/* Sin forma de pago: la nota nace pendiente y se cobra desde su
+                  detalle, así que aquí solo queda el ajuste. */}
+              {ajusteNum !== 0 && (
                 <div className="space-y-2 mb-2 text-sm text-blue border-t border-blue-200 pt-3">
-                  {ajusteNum !== 0 && (
-                    <div className="flex justify-between">
-                      <span>Ajuste</span>
-                      <span>{ajusteNum > 0 ? '+' : ''}${ajusteNum.toFixed(2)}</span>
-                    </div>
-                  )}
-                  {form.forma_pago && (
-                    <div className="flex justify-between">
-                      <span>Forma de pago</span>
-                      <span className="font-medium">
-                        {FORMAS_PAGO.find(f => f.v === form.forma_pago)?.label}
-                      </span>
-                    </div>
-                  )}
+                  <div className="flex justify-between">
+                    <span>Ajuste</span>
+                    <span>{ajusteNum > 0 ? '+' : ''}${ajusteNum.toFixed(2)}</span>
+                  </div>
                 </div>
               )}
               {/* Mismo remate que el resumen de Por Encargo. */}
@@ -2208,11 +2206,15 @@ export default function NuevaNota() {
           >
             Cancelar
           </button>
+          {/* Sin paso de cobro: la nota se crea pendiente y se liquida desde su
+              detalle, igual que Por Encargo (2026-09-23). */}
           <button
-            type="button" onClick={abrirCobro} disabled={loading}
+            type="button" onClick={() => handleSubmit()} disabled={loading}
             className="flex-1 bg-blue hover:opacity-90 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
           >
-            Aceptar
+            {loading
+              ? (esEdicion ? 'Guardando...' : 'Creando...')
+              : (esEdicion ? 'Guardar cambios' : 'Aceptar')}
           </button>
         </div>
         </div>

@@ -138,28 +138,18 @@ async function hayCargasPendientes(client, notaId) {
   return rows[0].pendientes;
 }
 
-// En autoservicio el cliente paga por adelantado: no se arranca una carga de una
-// nota que todavía debe. Es la contraparte del cierre automático de aquí abajo
-// — una nota que arranca pagada llega al final pagada, y puede finalizarse sola
-// sin dejar un cobro sin registrar. Devuelve el mensaje para el cliente, o null
-// si puede correr. Por Encargo y Edredón no aplican: ahí se cobra al entregar.
-function bloqueoPorPagoPendiente(nota) {
-  return (nota?.tipo_servicio === 'AUTOSERVICIO' && nota.estado_pago !== 'PAGADO')
-    ? 'En autoservicio la nota se cobra antes de iniciar la carga. Registra el pago para poder arrancar la máquina.'
-    : null;
-}
-
 // Estado en el que queda una nota a la que ya no le falta ninguna carga.
 //
-// Autoservicio: el cliente está en el local y se lleva su ropa él mismo, así
-// que no hay nada "por entregar" — la nota se cierra sola. En Por Encargo y
+// Autoservicio PAGADO: el cliente está en el local y se lleva su ropa él mismo,
+// así que no hay nada "por entregar" — la nota se cierra sola. En Por Encargo y
 // Edredón sí pasa por Por Entregar: el negocio guarda la ropa hasta que la
 // recogen.
 //
-// La excepción es una nota de autoservicio que quedara a deber (hoy, solo si le
-// revirtieron el pago con la carga andando): se queda en Por Entregar, porque
-// FINALIZADA es terminal y cerrarla ahí dejaría el cobro sin registrar y sin
-// forma de hacerlo desde la nota.
+// Un autoservicio que todavía DEBE se queda en Por Entregar, porque FINALIZADA
+// es terminal y cerrarla ahí dejaría el cobro sin registrar y sin forma de
+// hacerlo desde la nota. Desde el 2026-09-23 ese es el caso normal —el cobro
+// dejó de ser obligatorio para arrancar—, y al liquidarla desde el detalle se
+// cierra sola (ver `cambiarEstadoPago`).
 async function estadoAlTerminarCargas(client, notaId) {
   const { rows } = await client.query(
     'SELECT tipo_servicio, estado_pago FROM notas WHERE id = $1',
@@ -1380,11 +1370,6 @@ export const createNota = async (req, res) => {
       return res.status(400).json({ message: e.message });
     }
     if (idsActivar.length > 0) {
-      const bloqueo = bloqueoPorPagoPendiente({ tipo_servicio, estado_pago });
-      if (bloqueo) {
-        await client.query('ROLLBACK');
-        return res.status(400).json({ message: bloqueo });
-      }
       const { rows: maqs } = await client.query(
         'SELECT id, nombre, estado FROM maquinas WHERE id = ANY($1) FOR UPDATE',
         [idsActivar]
@@ -1696,17 +1681,6 @@ export const updateNota = async (req, res) => {
         }
         const tomar = [...despues].filter(mid => !maquinasAntes.includes(mid));
         if (tomar.length > 0) {
-          // Editar la nota es otra puerta para arrancar una máquina. Cuenta el
-          // pago que deja esta misma edición: el empleado puede cobrar y
-          // asignar la máquina de una sola vez.
-          const bloqueo = bloqueoPorPagoPendiente({
-            tipo_servicio: actual.tipo_servicio,
-            estado_pago: estado_pago ?? actual.estado_pago,
-          });
-          if (bloqueo) {
-            await client.query('ROLLBACK');
-            return res.status(400).json({ message: bloqueo });
-          }
           await client.query(
             `UPDATE maquinas SET estado = 'en_uso', en_uso_desde = NOW()
               WHERE id = ANY($1) AND estado = 'disponible'`,
@@ -2375,14 +2349,6 @@ export const encenderMaquinaDeNota = async (req, res) => {
       await client.query('ROLLBACK');
       return res.status(400).json({ message: `No se pueden encender máquinas de una nota ${palabra(notaRows[0].estado)}.` });
     }
-    // El mismo candado que al iniciar: si el Autoservicio no está pagado, no se
-    // le da corriente. Encender ya es dar el servicio.
-    const bloqueoPago = bloqueoPorPagoPendiente(notaRows[0]);
-    if (bloqueoPago) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ message: bloqueoPago });
-    }
-
     const ids = await maquinasDeNota(client, id);
     if (!ids.some(x => String(x) === String(maquina_id))) {
       await client.query('ROLLBACK');
@@ -2502,12 +2468,6 @@ export const activarMaquinasPendientes = async (req, res) => {
       await client.query('ROLLBACK');
       return res.status(400).json({ message: `No se pueden activar máquinas de una nota ${palabra(notaRows[0].estado)}.` });
     }
-    const bloqueoPago = bloqueoPorPagoPendiente(notaRows[0]);
-    if (bloqueoPago) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ message: bloqueoPago });
-    }
-
     const ids = await maquinasDeNota(client, id);
     if (ids.length === 0) {
       await client.query('ROLLBACK');
@@ -3605,7 +3565,8 @@ export const cambiarEstadoPago = async (req, res) => {
     await client.query('BEGIN');
 
     const { rows: notaRows } = await client.query(
-      'SELECT id, folio, estado, estado_pago, caja_id FROM notas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
+      `SELECT id, folio, estado, estado_pago, caja_id, tipo_servicio
+         FROM notas WHERE id = $1 AND sucursal = $2 FOR UPDATE`,
       [id, req.sucursal]
     );
     if (notaRows.length === 0) {
@@ -3659,8 +3620,29 @@ export const cambiarEstadoPago = async (req, res) => {
       await registrarReversionPago(client, actual, req.user.id, req.sucursal, motivoReversion);
     }
 
+    // Autoservicio que esperaba el cobro en "Por Entregar": al liquidarlo ya no
+    // queda nada que hacer —el cliente se llevó su ropa cuando terminó su
+    // carga—, así que la nota se cierra sola en vez de pedir un "Finalizar" que
+    // solo es un trámite. Es la misma regla de `estadoAlTerminarCargas`, que
+    // hasta ahora solo corría al terminar la última carga; desde que el pago
+    // dejó de ser obligatorio para arrancar (2026-09-23), el cobro puede llegar
+    // después y es aquí donde la nota queda sin pendientes.
+    //
+    // Se exige estado LISTA para no re-consumir el stock de una nota que ya se
+    // cerró (FINALIZADA consume al cerrar), y que no le falte ninguna carga.
+    let notaFinal = rows[0];
+    if (estado_pago === 'PAGADO'
+        && actual.tipo_servicio === 'AUTOSERVICIO'
+        && actual.estado === 'LISTA'
+        && !(await hayCargasPendientes(client, id))) {
+      const estadoNuevo = await cerrarNotaSinCargasPendientes(client, id, {
+        sucursal: req.sucursal, usuarioId: req.user?.id,
+      });
+      notaFinal = { ...notaFinal, estado: estadoNuevo };
+    }
+
     await client.query('COMMIT');
-    res.json(rows[0]);
+    res.json(notaFinal);
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('cambiarEstadoPago error:', err);
