@@ -24,7 +24,12 @@ export const puedeFinalizar = (nota) =>
 // hay casos en los que hace falta sin pasar por cancelar (una nota cobrada no
 // se puede cancelar sin revertir antes el pago, y eso son tres pasos para algo
 // que a veces solo es un error de captura).
-export const puedeEliminar = (nota, esAdmin) => Boolean(esAdmin);
+//
+// La excepción es el cobro ya congelado en un corte cerrado (`cobro_congelado`,
+// mig. 101): ahí el servidor responde 409 y el botón solo llevaría a un error,
+// igual que ya pasa con editar, cancelar y revertir el pago (2026-09-23).
+export const puedeEliminar = (nota, esAdmin) =>
+  Boolean(esAdmin) && !nota?.cobro_congelado;
 
 // …pero en TÁCTIL, mientras la nota sigue viva, el botón no se enseña. Ahí
 // está pegado a Cancelar, se pulsa con el dedo y borrar no se deshace: lo que

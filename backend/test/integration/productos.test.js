@@ -334,6 +334,60 @@ describe('GET /api/productos/reporte-diario', () => {
     expect(d22.fin_botellas_tapas).toBe(68); // sin movimientos posteriores
   });
 
+  // Una venta anulada el mismo día devuelve el producto al estante (movimiento
+  // 'liberacion'). Antes "Salió" seguía contándola y contradecía a "Queda al
+  // final", que sí veía la devolución.
+  it('resta del día lo que se devolvió al anular una venta', async () => {
+    const id = await crearGranel();
+    await pool.query('DELETE FROM producto_movimientos WHERE producto_id = $1', [id]);
+    await insertarMov(id, { tipo: 'venta',      tapas: 12, fecha: '2026-08-21 10:00:00-06' });
+    await insertarMov(id, { tipo: 'liberacion', tapas: 4,  fecha: '2026-08-21 18:00:00-06' });
+    await pool.query('UPDATE productos SET stock_actual = 40 WHERE id = $1', [id]);
+
+    const r = await request(app).get('/api/productos/reporte-diario?fecha=2026-08-21').set(auth(admin.token));
+    expect(r.status).toBe(200);
+    const p = r.body.productos.find((x) => x.id === id);
+    expect(p.vendido_tapas).toBe(8);   // 12 vendidas − 4 devueltas
+    expect(p.devuelto_tapas).toBe(4);
+    expect(p.fin_botellas_tapas).toBe(40);
+  });
+
+  // Lo que se devuelve hoy pudo venderse ayer: ese día no salió producto, entró.
+  it('un día que solo tuvo devoluciones sale en negativo y lo explica', async () => {
+    const id = await crearGranel();
+    await pool.query('DELETE FROM producto_movimientos WHERE producto_id = $1', [id]);
+    await insertarMov(id, { tipo: 'venta',      tapas: 8, fecha: '2026-08-20 10:00:00-06' });
+    await insertarMov(id, { tipo: 'liberacion', tapas: 8, fecha: '2026-08-21 10:00:00-06' });
+
+    const r = await request(app).get('/api/productos/reporte-diario?fecha=2026-08-21').set(auth(admin.token));
+    const p = r.body.productos.find((x) => x.id === id);
+    expect(p.vendido_tapas).toBe(-8);
+    expect(p.devuelto_tapas).toBe(8);
+  });
+
+  // El caso real: venta de mostrador cobrada y borrada el mismo día.
+  it('una venta de mostrador borrada el mismo día deja de contar como salida', async () => {
+    const id = await crearGranel();
+    const venta = await request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'PRODUCTOS', estado_pago: 'PAGADO', forma_pago: 'EFECTIVO',
+      productos: [{ producto_id: id, cantidad: 1 }],   // 1 botella = 4 tapas
+    });
+    expect(venta.status).toBe(201);
+
+    const conVenta = await request(app).get('/api/productos/reporte-diario').set(auth(admin.token));
+    expect(conVenta.body.productos.find((x) => x.id === id).vendido_tapas).toBe(4);
+
+    await request(app).delete(`/api/notas/${venta.body.id}`).set(auth(admin.token)).expect(204);
+
+    const despues = await request(app).get('/api/productos/reporte-diario').set(auth(admin.token));
+    const p = despues.body.productos.find((x) => x.id === id);
+    expect(p.vendido_tapas).toBe(0);    // la venta se deshizo: no salió nada
+    expect(p.devuelto_tapas).toBe(4);
+    // Y "queda al final" coincide con la existencia intacta.
+    const { rows } = await pool.query('SELECT stock_actual FROM productos WHERE id = $1', [id]);
+    expect(p.fin_botellas_tapas).toBe(Number(rows[0].stock_actual));
+  });
+
   it('sin fecha usa el día de hoy (200)', async () => {
     await crearGranel();
     const res = await request(app).get('/api/productos/reporte-diario').set(auth(admin.token));

@@ -159,7 +159,7 @@ describe('cerrarCajasAbiertas', () => {
     expect(await cerrarCajasAbiertas()).toEqual([]);
   });
 
-  it('congela las cifras: borrar una nota no reescribe el corte ya cerrado', async () => {
+  it('congela las cifras: el corte cerrado no se reescribe pase lo que pase con la nota', async () => {
     // Es la misma garantía que da el cierre manual (mig. 101). El automático
     // las dejaba en NULL y el historial las recalculaba en vivo, así que
     // cualquier movimiento posterior cambiaba un corte de un día ya cerrado.
@@ -179,12 +179,20 @@ describe('cerrarCajasAbiertas', () => {
     const antes = await request(app).get('/api/caja/historial').set(auth(admin.token));
     expect(antes.body[0].ventas).toBe(cobrado);
 
-    // Al día siguiente el admin borra aquella nota. Revertir el pago ya no es
-    // camino —con el corte cerrado el servidor lo rechaza—, pero eliminar sí
-    // la saca de la base, y el corte de aquel día tiene que quedarse igual.
+    // Al día siguiente el admin intenta deshacer aquella nota. Todas las
+    // puertas están cerradas: revertir el pago, editarla, cancelarla y —desde
+    // el 2026-09-23— también borrarla, que era la que seguía abierta.
     const del = await request(app).delete(`/api/notas/${nota.body.id}`)
       .set(auth(admin.token));
-    expect(del.status).toBe(204);
+    expect(del.status).toBe(409);
+    expect(del.body.message).toMatch(/corte cerrado/i);
+
+    // Y si la nota cambiara por cualquier otra vía, el corte tampoco se movería:
+    // sus cifras son una copia de aquel día, no un cálculo en vivo.
+    await pool.query(
+      "UPDATE notas SET precio_total = 0, estado = 'CANCELADA' WHERE id = $1",
+      [nota.body.id]
+    );
 
     const despues = await request(app).get('/api/caja/historial').set(auth(admin.token));
     expect(despues.body[0].ventas).toBe(cobrado);        // el corte no se movió

@@ -2008,7 +2008,8 @@ export const eliminarNota = async (req, res) => {
     await client.query('BEGIN');
 
     const { rows: notaRows } = await client.query(
-      'SELECT estado, tipo_servicio, folio FROM notas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
+      `SELECT estado, tipo_servicio, folio, estado_pago, caja_id
+         FROM notas WHERE id = $1 AND sucursal = $2 FOR UPDATE`,
       [id, req.sucursal]
     );
     if (notaRows.length === 0) {
@@ -2016,6 +2017,29 @@ export const eliminarNota = async (req, res) => {
       return res.status(404).json({ message: 'Nota no encontrada.' });
     }
     const { estado: estadoNota } = notaRows[0];
+
+    // El cobro que ya quedó congelado en un corte CERRADO (mig. 101) no se
+    // deshace por ninguna puerta: editar la nota, revertir su pago y cancelarla
+    // ya respondían 409, pero BORRARLA seguía permitido — y es el cambio más
+    // grande de todos. El corte de aquel día conserva la venta (sus cifras están
+    // congeladas) mientras Ventas, que suma las notas vivas, la pierde: dos
+    // reportes del mismo día diciendo cosas distintas, y un dinero en el cajón
+    // sin nota que lo explique (2026-09-23).
+    //
+    // Un cobro SIN caja (caja_id NULL) no entró en ningún corte: ese sí se borra.
+    if (notaRows[0].estado_pago === 'PAGADO' && notaRows[0].caja_id) {
+      const { rows: cj } = await client.query(
+        'SELECT estado FROM cajas WHERE id = $1 FOR SHARE', [notaRows[0].caja_id]
+      );
+      if (cj[0]?.estado !== 'abierta') {
+        await client.query('ROLLBACK');
+        return res.status(409).json({
+          message: `El cobro de la nota ${notaRows[0].folio} ya quedó en un corte cerrado, así que `
+                 + 'la nota no se puede eliminar: ese dinero está contado ahí y el corte no se '
+                 + 'reabre. Si hay que devolverlo, regístralo como salida de caja.',
+        });
+      }
+    }
 
     // Una máquina de esta nota CORRIENDO su ciclo (lavando o secando) no se
     // interrumpe por un borrado: hay ropa dentro y el ciclo va a medias. Se mide

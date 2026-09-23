@@ -16,17 +16,22 @@ const esMarca  = (p) => p.tipo_liquido === 'marca';
 const nombreProd = (p) => (esMarca(p) && p.marca ? `${p.marca} · ${p.nombre}` : p.nombre);
 
 const salioTexto = (p) => textoBotellas(p.vendido_tapas, p.tapas_por_botella, { marca: esMarca(p) });
+// Ventas anuladas ese día (ya restadas de "Salió"): van en su propia columna
+// para que el total no parezca un error de captura.
+const devueltoTexto = (p) =>
+  (p.devuelto_tapas > 0 ? textoBotellas(p.devuelto_tapas, p.tapas_por_botella, { marca: esMarca(p) }) : '');
 const rellenadasTexto = (p) => textoBotellas(p.fin_botellas_tapas, p.tapas_por_botella, { marca: esMarca(p) });
 const granelTexto = (p) => (esMarca(p) ? '' : textoGranel(p.fin_granel_tapas, p.tapas_por_bidon, p.tapas_por_botella));
 
 // ── CSV ─────────────────────────────────────────────────────
-const ENCABEZADOS_CSV = ['Tipo', 'Marca', 'Producto', 'Salió', 'Queda (rellenadas)', 'Queda (a granel)'];
+const ENCABEZADOS_CSV = ['Tipo', 'Marca', 'Producto', 'Salió', 'Devuelto', 'Queda (rellenadas)', 'Queda (a granel)'];
 
 const filaCSV = (p) => [
   esMarca(p) ? 'Marca' : 'Granel',
   p.marca ?? '',
   p.nombre ?? '',
   salioTexto(p),
+  devueltoTexto(p),
   rellenadasTexto(p),
   granelTexto(p),
 ];
@@ -47,7 +52,7 @@ const seccion = (titulo, productos) => {
   const filas = productos.map((p) => `
     <tr>
       <td>${esc(nombreProd(p))}</td>
-      <td>${esc(salioTexto(p))}</td>
+      <td>${esc(salioTexto(p))}${p.devuelto_tapas > 0 ? `<br><small>Devuelto: ${esc(devueltoTexto(p))}</small>` : ''}</td>
       <td>${quedaCelda(p)}</td>
     </tr>`).join('');
   return `

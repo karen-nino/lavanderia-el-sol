@@ -548,12 +548,28 @@ export const getReporteDiario = async (req, res) => {
               THEN floor(p.volumen_envase_ml::numeric / p.tapa_ml) END AS tapas_por_bidon,
          p.stock_actual,
          p.stock_granel_tapas,
-         -- Vendido/consumido en notas ese día (siempre sale de las botellas).
+         -- Lo que SALIÓ de verdad ese día por notas (siempre sale de las
+         -- botellas): lo vendido MENOS lo devuelto. Anular una venta —cancelar
+         -- la nota o borrarla— regresa el producto al estante y deja un
+         -- movimiento 'liberacion'; sin restarlo, la columna "Salió" seguía
+         -- contando una venta que se deshizo y contradecía a "Queda al final",
+         -- que sí veía la devolución.
+         --
+         -- Puede dar negativo cuando lo que se devuelve hoy se vendió ayer: ese
+         -- día entró producto, no salió, y la pantalla lo dice con "Devuelto".
          COALESCE((
-           SELECT SUM(m.cantidad_tapas) FROM producto_movimientos m, bounds
-            WHERE m.producto_id = p.id AND m.tipo = 'venta'
+           SELECT SUM(CASE WHEN m.tipo = 'venta' THEN m.cantidad_tapas
+                           ELSE -m.cantidad_tapas END)
+             FROM producto_movimientos m, bounds
+            WHERE m.producto_id = p.id AND m.tipo IN ('venta', 'liberacion')
               AND m.created_at >= bounds.inicio AND m.created_at < bounds.cierre
          ), 0) AS vendido_tapas,
+         -- Devuelto ese día (ventas anuladas), para poder explicarlo aparte.
+         COALESCE((
+           SELECT SUM(m.cantidad_tapas) FROM producto_movimientos m, bounds
+            WHERE m.producto_id = p.id AND m.tipo = 'liberacion'
+              AND m.created_at >= bounds.inicio AND m.created_at < bounds.cierre
+         ), 0) AS devuelto_tapas,
          -- Efecto sobre botellas de lo ocurrido DESPUÉS del cierre (para revertir).
          COALESCE((
            SELECT SUM(CASE
@@ -595,6 +611,7 @@ export const getReporteDiario = async (req, res) => {
         tapas_por_botella: r.tapas_por_botella != null ? int(r.tapas_por_botella) : null,
         tapas_por_bidon:   r.tapas_por_bidon != null ? int(r.tapas_por_bidon) : null,
         vendido_tapas:     int(r.vendido_tapas),
+        devuelto_tapas:    int(r.devuelto_tapas),
         // La existencia no puede ser negativa; se acota a 0 por si hay datos raros.
         fin_botellas_tapas: Math.max(0, int(r.stock_actual) - int(r.efecto_botellas_post)),
         fin_granel_tapas:   Math.max(0, int(r.stock_granel_tapas) - int(r.efecto_granel_post)),

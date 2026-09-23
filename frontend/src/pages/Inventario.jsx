@@ -59,17 +59,38 @@ function unidadVenta(p, n = 2) {
   if (p.tipo_liquido === 'marca') return n === 1 ? 'unidad' : 'unidades';
   return n === 1 ? 'botella' : 'botellas';
 }
-// Texto de las botellas rellenadas (con las tapas sueltas si las hay).
-function textoRellenadas(p) {
-  // Las bolsas se cuentan en piezas directas (no hay tapas).
+// Unas tapas contadas en la unidad del producto ("3 botellas y 2 tapas",
+// "5 bolsas", "2 unidades"). Las bolsas se cuentan en piezas (no hay tapas).
+function textoExistencia(p, tapas) {
   if (p.clase === 'bolsa') {
-    const n = Math.round(Number(p.stock_actual) || 0);
+    const n = Math.max(0, Math.round(Number(tapas) || 0));
     return `${n} ${unidadVenta(p, n)}`;
   }
-  const { botellas, tapas } = desglosarBotellas(p.stock_actual, p);
-  const partes = [`${botellas} ${unidadVenta(p, botellas)}`];
-  if (tapas > 0) partes.push(plural(tapas, 'tapa', 'tapas'));
+  const { botellas, tapas: sueltas } = desglosarBotellas(Math.max(0, Number(tapas) || 0), p);
+  const partes = [];
+  // El "0 botellas" solo se dice cuando no hay nada más que decir: con tapas
+  // sueltas estorba ("0 botellas y 1 tapa"). Misma regla que el reporte diario.
+  if (botellas > 0 || sueltas === 0) partes.push(`${botellas} ${unidadVenta(p, botellas)}`);
+  if (sueltas > 0) partes.push(plural(sueltas, 'tapa', 'tapas'));
   return partes.join(' y ');
+}
+// Lo que está en el estante.
+function textoRellenadas(p) {
+  return textoExistencia(p, p.stock_actual);
+}
+// Tapas comprometidas con notas abiertas: siguen en el estante, pero ya tienen
+// dueño. El semáforo (estado_stock) se calcula con lo DISPONIBLE, así que sin
+// decir esto la tarjeta mostraba "9 botellas" junto a un "Por agotarse" que
+// parecía un error.
+function tapasApartadas(p) {
+  return Math.max(0, Math.round(Number(p.stock_reservado) || 0));
+}
+function textoApartadas(p) {
+  return textoExistencia(p, tapasApartadas(p));
+}
+// Lo que de verdad se puede vender hoy: existencia menos lo apartado.
+function textoDisponible(p) {
+  return textoExistencia(p, (Number(p.stock_actual) || 0) - tapasApartadas(p));
 }
 // Texto del líquido a granel: se expresa en bidones (con las botellas sueltas
 // como remanente si las hay).
@@ -79,6 +100,16 @@ function textoGranel(p) {
   const partes = [plural(bidones, 'bidón', 'bidones')];
   if (botellas > 0) partes.push(plural(botellas, 'botella', 'botellas'));
   return partes.join(' y ');
+}
+// Línea bajo la existencia: qué parte ya está apartada en notas y qué queda
+// libre. Solo sale cuando hay algo apartado, para no ensuciar el caso normal.
+function LineaApartadas({ p, className = 'text-xs text-gray-500 mt-0.5' }) {
+  if (tapasApartadas(p) <= 0) return null;
+  return (
+    <p className={className}>
+      Disponibles: {textoDisponible(p)} · apartadas en notas: {textoApartadas(p)}
+    </p>
+  );
 }
 function precioTxt(v) {
   return v != null && v !== '' ? `$${Number(v).toFixed(2)}` : '—';
@@ -110,13 +141,17 @@ function unidadAviso(p) {
   }
   return unidadVenta(p);
 }
-// Mensajes de aviso (estilo "Se acabaron … — hay N actualmente").
+// Mensajes de aviso ("Se acabaron …", "Están por acabarse … — disponibles: …").
+// Cuentan lo DISPONIBLE, que es lo que decide el semáforo: decir "hay 9" cuando
+// las 9 están apartadas en notas no mandaba a nadie a rellenar.
 function mensajeAvisoBotellas(p) {
-  if (p.estado_stock === 'agotado') return `Se acabaron las ${unidadAviso(p)}`;
-  const n = p.clase === 'bolsa'
-    ? Math.round(Number(p.stock_actual) || 0)
-    : desglosarBotellas(p.stock_actual, p).botellas;
-  return `Están por acabarse las ${unidadAviso(p)} — hay ${n} actualmente`;
+  if (p.estado_stock === 'agotado') {
+    return tapasApartadas(p) > 0
+      ? `No quedan ${unidadAviso(p)} libres — apartadas en notas: ${textoApartadas(p)}`
+      : `Se acabaron las ${unidadAviso(p)}`;
+  }
+  const apartadas = tapasApartadas(p) > 0 ? ` · apartadas en notas: ${textoApartadas(p)}` : '';
+  return `Están por acabarse las ${unidadAviso(p)} — disponibles: ${textoDisponible(p)}${apartadas}`;
 }
 function mensajeAvisoGranel(p) {
   if (p.estado_granel === 'agotado') return 'Se acabaron los bidones';
@@ -1135,7 +1170,17 @@ function ReporteDiario() {
                       {esMarca && p.marca && <p className="text-xs text-gray-400">{p.nombre}</p>}
                     </td>
                     <td className="px-4 py-3 text-gray-700">
-                      {textoBotellas(p.vendido_tapas, p.tapas_por_botella, { marca: esMarca })}
+                      <span className="block">
+                        {textoBotellas(p.vendido_tapas, p.tapas_por_botella, { marca: esMarca })}
+                      </span>
+                      {/* Ventas anuladas ese día: el producto volvió al estante,
+                          así que ya viene restado de la línea de arriba. Se dice
+                          aparte para que nadie lo lea como una venta perdida. */}
+                      {p.devuelto_tapas > 0 && (
+                        <span className="block text-xs text-gray-500">
+                          Devuelto: {textoBotellas(p.devuelto_tapas, p.tapas_por_botella, { marca: esMarca })}
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-gray-700">{quedaCelda(p)}</td>
                   </tr>
@@ -1679,6 +1724,7 @@ export default function Inventario() {
                             <span className="font-medium text-gray-800">{textoRellenadas(p)}</span>
                             <BadgeEstado estado={es} />
                           </div>
+                          <LineaApartadas p={p} />
                         </td>
                         <td className="px-4 py-3 text-gray-600">
                           {p.tipo_liquido === 'granel'
@@ -1754,6 +1800,7 @@ export default function Inventario() {
                     <span className="text-sm font-medium text-gray-700">{textoRellenadas(p)}</span>
                     <BadgeEstado estado={es} />
                   </div>
+                  <LineaApartadas p={p} />
                   {p.tipo_liquido === 'granel' && (
                     <p className="text-xs text-gray-500 mt-0.5 inline-flex items-center gap-1.5">
                       <span>A granel: {textoGranel(p)}</span>
@@ -1868,6 +1915,7 @@ export default function Inventario() {
                     <span className="text-base font-medium text-gray-800">{textoRellenadas(p)}</span>
                     <BadgeEstado estado={es} />
                   </div>
+                  <LineaApartadas p={p} className="text-xs text-gray-500 mt-1" />
                 </div>
                 {p.tipo_liquido === 'granel' && (
                   <div>

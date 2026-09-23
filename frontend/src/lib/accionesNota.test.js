@@ -51,6 +51,14 @@ describe('acciones del detalle de una nota', () => {
     }
   });
 
+  // El cobro que ya entró en un corte cerrado no se toca por ninguna vía: el
+  // servidor responde 409, así que el botón no debe ni aparecer.
+  it('una nota con el cobro congelado en un corte cerrado no se elimina', () => {
+    expect(puedeEliminar({ ...nota('FINALIZADA', 'PAGADO'), cobro_congelado: true }, true)).toBe(false);
+    // Con su caja todavía abierta (o cobrada sin caja) sí se puede.
+    expect(puedeEliminar({ ...nota('FINALIZADA', 'PAGADO'), cobro_congelado: false }, true)).toBe(true);
+  });
+
   it('un empleado no elimina nunca', () => {
     expect(puedeEliminar(nota('CANCELADA', 'PENDIENTE'), false)).toBe(false);
     expect(puedeEliminar(nota('EN_ESPERA', 'PENDIENTE'), false)).toBe(false);

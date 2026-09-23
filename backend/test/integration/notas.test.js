@@ -283,6 +283,27 @@ describe('un cobro congelado en su corte no se deshace por un cambio', () => {
     expect(rows[0].caja_id).not.toBeNull();
   });
 
+  // Borrar la nota entera era la única puerta que seguía abierta: el corte de
+  // aquel día conserva la venta y Ventas, que suma notas vivas, la perdía.
+  it('borrar la nota entera también se rechaza con 409', async () => {
+    const { notaId } = await notaPagadaEnCorteCerrado();
+    const res = await request(app).delete(`/api/notas/${notaId}`).set(auth(admin.token));
+    expect(res.status).toBe(409);
+    expect(res.body.message).toMatch(/corte cerrado/i);
+
+    const { rows } = await pool.query('SELECT estado_pago FROM notas WHERE id = $1', [notaId]);
+    expect(rows).toHaveLength(1);              // la nota sigue ahí
+    expect(rows[0].estado_pago).toBe('PAGADO');
+  });
+
+  it('con la caja de ese cobro abierta, la nota sí se borra', async () => {
+    const { notaId } = await notaPagadaEnCorteCerrado();
+    await pool.query("UPDATE cajas SET estado = 'abierta', cerrada_at = NULL WHERE id = (SELECT caja_id FROM notas WHERE id = $1)", [notaId]);
+    await request(app).delete(`/api/notas/${notaId}`).set(auth(admin.token)).expect(204);
+    const { rows } = await pool.query('SELECT id FROM notas WHERE id = $1', [notaId]);
+    expect(rows).toHaveLength(0);
+  });
+
   it('con la caja de ese cobro ABIERTA sí se puede', async () => {
     const { notaId, productoId } = await notaPagadaEnCorteCerrado();
     await pool.query("UPDATE cajas SET estado = 'abierta', cerrada_at = NULL WHERE id = (SELECT caja_id FROM notas WHERE id = $1)", [notaId]);
