@@ -2865,7 +2865,7 @@ export const asignarMaquina = async (req, res) => {
     await client.query('BEGIN');
 
     const { rows: notaRows } = await client.query(
-      'SELECT estado, tipo_prenda FROM notas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
+      'SELECT estado, tipo_prenda, tipo_servicio FROM notas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
       [id, req.sucursal]
     );
     if (notaRows.length === 0) {
@@ -2875,6 +2875,22 @@ export const asignarMaquina = async (req, res) => {
     if (['FINALIZADA', 'CANCELADA'].includes(notaRows[0].estado)) {
       await client.query('ROLLBACK');
       return res.status(400).json({ message: 'No se puede asignar una máquina a una nota finalizada o cancelada.' });
+    }
+    // En Autoservicio se cobra todo por adelantado, así que una máquina de más
+    // es una NOTA NUEVA, no un agregado a una nota ya pagada. Salidas esconde
+    // el botón, pero eso era toda la regla: la ruta seguía aceptándolo si
+    // alguien la llamaba directo (2026-09-22).
+    //
+    // Cerrarlo aquí no le quita nada a Autoservicio: sus cargas nacen con el
+    // TIPO de máquina elegido (createNota las manda por la misma rama que Por
+    // Encargo), y la máquina física se pone con `asignar-carga-maquina`, que es
+    // otra ruta. Esta solo sirve para AGREGAR.
+    if (notaRows[0].tipo_servicio === 'AUTOSERVICIO') {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        message: 'En Autoservicio no se agregan máquinas a una nota: se cobra por adelantado, '
+               + 'así que una máquina de más va en una nota nueva.',
+      });
     }
 
     const { rows: maqRows } = await client.query(
