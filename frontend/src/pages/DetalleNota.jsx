@@ -125,8 +125,6 @@ const BADGE_MAQUINA_ESTADO = {
   en_uso:        { label: 'En uso',        cls: 'bg-blue-100 text-blue-700',   dot: 'bg-blue-500'  },
   // "terminado" = la máquina ya cumplió su parte y se desvinculó de la carga: verde.
   terminado:     { label: 'Terminó',       cls: 'bg-green-100 text-green-700', dot: 'bg-green-500' },
-  // "removida" = estuvo asignada y se eliminó: gris tenue, línea tachada.
-  removida:      { label: 'Eliminada',     cls: 'bg-gray-100 text-gray-400',   dot: 'bg-gray-300' },
   mantenimiento: { label: 'Mantenimiento', cls: 'bg-red-100 text-red-700',     dot: 'bg-red-500'   },
 };
 
@@ -825,26 +823,17 @@ export default function DetalleNota() {
                   // Repetirlo haría parecer que se cobraron dos lavados.
                   const usadas = cg.maquinas_usadas ?? [];
                   const primeraDe = (slot) => usadas.find(u => u.slot === slot)?.id ?? null;
-                  const ultimaDe = (slot) => {
-                    const delSlot = usadas.filter(u => u.slot === slot);
-                    return delSlot.length ? delSlot[delSlot.length - 1].id : null;
-                  };
                   const primeraLav = primeraDe('lavadora');
                   const primeraSec = primeraDe('secadora');
-                  const ultimaLav = ultimaDe('lavadora');
-                  const ultimaSec = ultimaDe('secadora');
                   const maquinasCarga = usadas.map(u => {
                     const esLav = u.slot === 'lavadora';
-                    const esUltima = u.id === (esLav ? ultimaLav : ultimaSec);
                     const esPrimera = u.id === (esLav ? primeraLav : primeraSec);
-                    const removida = esLav ? cg.lavadora_removida : cg.secadora_removida;
                     const estadoVivo = esLav ? cg.lavadora_estado : cg.secadora_estado;
                     return {
                       nombre: u.nombre, tipo: u.tipo, tamano: esLav ? undefined : u.tamano,
                       // La que sigue puesta muestra su estado en vivo; una pasada
-                      // ya cerrada cumplió su parte (verde), y la que se quitó
-                      // antes de arrancar va tachada.
-                      estado: u.actual ? estadoVivo : (esUltima && removida ? 'removida' : 'terminado'),
+                      // ya cerrada cumplió su parte (verde).
+                      estado: u.actual ? estadoVivo : 'terminado',
                       precio: esPrimera
                         ? Number(esLav ? cg.precio_lavadora : cg.precio_secadora)
                         : null,
@@ -892,10 +881,8 @@ export default function DetalleNota() {
                           // es de un solo tamaño, así que va solo con su nombre.
                           const tamanoLabel = m.tipo === 'secadora' ? null : MAQUINA_TIPO_LABEL[m.tipo];
                           const tipoLabel = tamanoLabel ? (TAMANO_ABBR[tamanoLabel] ?? tamanoLabel) : null;
-                          // Máquina eliminada: línea tachada y en gris.
-                          const removida = m.estado === 'removida';
                           return (
-                            <div key={i} className={`flex items-start justify-between gap-2 ${removida ? 'line-through text-gray-400' : ''}`}>
+                            <div key={i} className="flex items-start justify-between gap-2">
                               <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 min-w-0">
                                 {/* Estado: solo el punto de color al inicio */}
                                 {cfg && (
@@ -904,7 +891,7 @@ export default function DetalleNota() {
                                     title={cfg.label}
                                   />
                                 )}
-                                <span className={`text-sm font-medium ${removida ? 'text-gray-400' : 'text-gray-800'}`}>{m.nombre}</span>
+                                <span className="text-sm font-medium text-gray-800">{m.nombre}</span>
                                 {tipoLabel && (
                                   <span className="text-xs text-gray-500">— {tipoLabel}</span>
                                 )}

@@ -113,7 +113,7 @@ async function faseProcesoDeNota(client, notaId) {
 //   · tiene una máquina asignada o corriendo, o
 //   · se pidió lavado (lavadora_tipo) que nunca arrancó, o
 //   · se pidió secado (secadora_tipo) que nunca arrancó.
-// Quitar la máquina a propósito (removida) o haberla usado ya no cuenta.
+// Haber usado ya la máquina no cuenta.
 //
 // Sin esto bastaba con que NINGUNA máquina estuviera en uso para dar la nota
 // por terminada, y una carga que todavía no arrancaba no tiene máquina en uso:
@@ -128,9 +128,9 @@ async function hayCargasPendientes(client, notaId) {
             nc.lavadora_id IS NOT NULL
             OR nc.secadora_id IS NOT NULL
             OR (nc.lavadora_tipo IS NOT NULL AND nc.lavadora_iniciada_at IS NULL
-                AND NOT nc.lavadora_removida AND nc.lavadora_usada_id IS NULL)
+                AND nc.lavadora_usada_id IS NULL)
             OR (nc.secadora_tipo IS NOT NULL AND nc.secadora_iniciada_at IS NULL
-                AND NOT nc.secadora_removida AND nc.secadora_usada_id IS NULL)
+                AND nc.secadora_usada_id IS NULL)
           )
      ) AS pendientes`,
     [notaId]
@@ -898,7 +898,6 @@ async function cargasDeNota(client, notaId) {
             (ms.estado = 'en_uso' AND ms.en_uso_desde IS NULL
              AND ms.encendida_para_nota_id = nc.nota_id) AS secadora_esperando_arranque,
             nc.lavadora_usada_id, nc.secadora_usada_id,
-            nc.lavadora_removida, nc.secadora_removida,
             mlu.nombre AS lavadora_usada_nombre, mlu.tipo AS lavadora_usada_tipo,
             msu.nombre AS secadora_usada_nombre, msu.tipo AS secadora_usada_tipo,
             msu.tamano AS secadora_usada_tamano,
@@ -1089,10 +1088,10 @@ export const getNotas = async (req, res) => {
                    AND (
                      (nc.lavadora_tipo IS NOT NULL AND nc.lavadora_id IS NULL
                       AND nc.lavadora_iniciada_at IS NULL
-                      AND NOT nc.lavadora_removida AND nc.lavadora_usada_id IS NULL)
+                      AND nc.lavadora_usada_id IS NULL)
                      OR (nc.secadora_tipo IS NOT NULL AND nc.secadora_id IS NULL
                          AND nc.secadora_iniciada_at IS NULL
-                         AND NOT nc.secadora_removida AND nc.secadora_usada_id IS NULL)
+                         AND nc.secadora_usada_id IS NULL)
                      -- Máquina PUESTA que no está corriendo: puede no haber
                      -- arrancado nunca, estar encendida esperando el arranque
                      -- (mig. 110) o haberse detenido a media vuelta. En los

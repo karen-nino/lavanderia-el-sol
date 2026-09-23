@@ -266,3 +266,77 @@ describe('GET /api/maquinas — marca de apartada', () => {
     expect(await marcaDe(lav)).toBe(false);
   });
 });
+
+describe('GET /api/maquinas — quién tiene la máquina en uso', () => {
+  // Asignar no aparta: varias notas pueden tener la misma lavadora asignada y
+  // se la queda la que le dé a Iniciar primero. "en_uso_folio" es lo único que
+  // dice cuál fue, y resolverlo por la nota más ANTIGUA con la máquina asignada
+  // señalaba a la equivocada en cuanto esa nota vieja tenía OTRA máquina
+  // corriendo: en Salidas veía el ciclo ajeno como suyo, con su botón de
+  // "Detener Lavado" al lado (2026-09-22).
+  const crearNotaPagada = (cargas = 1) =>
+    request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA',
+      estado_pago: 'PAGADO', forma_pago: 'EFECTIVO',
+      cargas: Array.from({ length: cargas }, () => ({ lavadora_tipo: 'mediana' })),
+    });
+
+  const asignar = (nota, indice, lav) =>
+    request(app).patch(`/api/notas/${nota.id}/asignar-carga-maquina`).set(auth(admin.token))
+      .send({ carga_id: nota.cargas[indice].id, slot: 'lavadora', maquina_id: lav });
+
+  const encender = (nota, lav) =>
+    request(app).patch(`/api/notas/${nota.id}/encender-maquina`).set(auth(admin.token))
+      .send({ maquina_id: lav });
+
+  const iniciar = (nota, lav) =>
+    request(app).patch(`/api/notas/${nota.id}/activar-pendientes`).set(auth(admin.token))
+      .send({ maquina_id: lav });
+
+  const enUsoDe = async (id) => {
+    const res = await request(app).get('/api/maquinas').set(auth(admin.token));
+    return res.body.find((m) => m.id === id)?.en_uso_folio;
+  };
+
+  // La nota vieja queda LAVANDO por su PROPIA máquina (L2) y además tiene
+  // asignada la que se pelea (L1), que nunca arrancó. Ese es el caso que
+  // confundía a la consulta.
+  const notaViejaLavando = async (enDisputa, propia) => {
+    const vieja = (await crearNotaPagada(2).expect(201)).body;
+    await asignar(vieja, 0, enDisputa).expect(200);
+    await asignar(vieja, 1, propia).expect(200);
+    await encender(vieja, propia).expect(200);
+    await iniciar(vieja, propia).expect(200);
+    return vieja;
+  };
+
+  it('la dueña es la que la arrancó, no la nota más vieja que la tenía asignada', async () => {
+    await seedAjustes({ precio_carga_mediana: 70 });
+    const l1 = await seedMaquina({ nombre: 'L1', tipo: 'lavadora_mediana', tamano: 'mediana' });
+    const l2 = await seedMaquina({ nombre: 'L2', tipo: 'lavadora_mediana', tamano: 'mediana' });
+
+    const vieja = await notaViejaLavando(l1, l2);
+    const nueva = (await crearNotaPagada().expect(201)).body;
+    await asignar(nueva, 0, l1).expect(200);
+
+    // La nota nueva le da a Iniciar primero: L1 es suya.
+    await encender(nueva, l1).expect(200);
+    await iniciar(nueva, l1).expect(200);
+
+    expect(await enUsoDe(l1)).toBe(nueva.folio);
+    expect(await enUsoDe(l2)).toBe(vieja.folio);
+  });
+
+  it('encendida y aún sin arrancar, ya es de la nota que la encendió', async () => {
+    await seedAjustes({ precio_carga_mediana: 70 });
+    const l1 = await seedMaquina({ nombre: 'L1', tipo: 'lavadora_mediana', tamano: 'mediana' });
+    const l2 = await seedMaquina({ nombre: 'L2', tipo: 'lavadora_mediana', tamano: 'mediana' });
+
+    await notaViejaLavando(l1, l2);
+    const nueva = (await crearNotaPagada().expect(201)).body;
+    await asignar(nueva, 0, l1).expect(200);
+    await encender(nueva, l1).expect(200);
+
+    expect(await enUsoDe(l1)).toBe(nueva.folio);
+  });
+});

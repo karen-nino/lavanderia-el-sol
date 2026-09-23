@@ -151,7 +151,12 @@ export const getMaquinas = async (req, res) => {
     //   abierta que aún no la arranca. NO bloquea —asignar no aparta— pero se
     //   muestra para avisar que alguien más va por ella.
     // · "en_uso_folio": la nota que la está usando ahora mismo. Es la que se
-    //   la quedó al darle a Iniciar; las demás tienen que cambiar de máquina.
+    //   la quedó al darle a Iniciar —por eso se busca por `iniciada_at`, la
+    //   marca de haberla arrancado—; las demás tienen que cambiar de máquina.
+    //   Resolverlo por la nota más antigua con la máquina ASIGNADA era mirar el
+    //   dato equivocado: asignar no aparta, así que la nota vieja que nunca le
+    //   dio a Iniciar salía como dueña del ciclo de otra, con su botón de
+    //   "Detener Lavado" al lado (2026-09-22).
     const { rows } = await pool.query(
       `SELECT m.*,
               ${MINUTOS_DE_MARCA} AS minutos_marca,
@@ -179,14 +184,22 @@ export const getMaquinas = async (req, res) => {
          LEFT JOIN LATERAL (
            SELECT n.id, n.folio
              FROM notas n
+             JOIN nota_cargas nc ON nc.nota_id = n.id
             WHERE m.estado = 'en_uso'
-              AND n.estado IN ('LAVANDO', 'SECANDO')
-              AND EXISTS (
-                SELECT 1 FROM nota_cargas nc
-                 WHERE nc.nota_id = n.id
-                   AND (nc.lavadora_id = m.id OR nc.secadora_id = m.id)
+              AND n.estado IN ('EN_ESPERA', 'LAVANDO', 'SECANDO')
+              AND (
+                -- La arrancó esta nota, o está encendida esperando su arranque
+                -- (mig. 110): en esa ventana la máquina ya es suya aunque el
+                -- cronómetro no haya empezado.
+                (nc.lavadora_id = m.id
+                 AND (nc.lavadora_iniciada_at IS NOT NULL OR m.encendida_para_nota_id = n.id))
+                OR (nc.secadora_id = m.id
+                    AND (nc.secadora_iniciada_at IS NOT NULL OR m.encendida_para_nota_id = n.id))
               )
-            ORDER BY n.created_at ASC
+            -- La última en arrancarla es la que la tiene: una carga puede
+            -- repetir máquina, y la encendida sin arrancar va al final.
+            ORDER BY (CASE WHEN nc.lavadora_id = m.id THEN nc.lavadora_iniciada_at
+                           ELSE nc.secadora_iniciada_at END) DESC NULLS LAST
             LIMIT 1
          ) u ON TRUE
          -- Ciclos que lleva la carga que está corriendo en esta máquina

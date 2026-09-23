@@ -27,8 +27,6 @@ const BADGE_MAQUINA_ESTADO = {
   en_uso:        { label: 'En uso',        cls: 'bg-blue-100 text-blue-700',   dot: 'bg-blue-500'  },
   // "terminado" = la máquina ya cumplió su parte y se desvinculó de la carga: verde.
   terminado:     { label: 'Terminó',       cls: 'bg-green-100 text-green-700', dot: 'bg-green-500' },
-  // "removida" = estuvo asignada y se eliminó: gris tenue, línea tachada.
-  removida:      { label: 'Eliminada',     cls: 'bg-gray-100 text-gray-400',   dot: 'bg-gray-300' },
   mantenimiento: { label: 'Mantenimiento', cls: 'bg-red-100 text-red-700',     dot: 'bg-red-500'   },
 };
 
@@ -533,13 +531,10 @@ export default function Salidas() {
     // anteriores son historial y van sin botones.
     return cargasNota
       .map(c => ({
+        id: c.id,
         orden: c.orden,
         maquinas: (c.maquinas_usadas ?? []).map(u => {
           const esLav = u.slot === 'lavadora';
-          const removida = esLav ? c.lavadora_removida : c.secadora_removida;
-          const ultimaDelSlot = (c.maquinas_usadas ?? [])
-            .filter(x => x.slot === u.slot).slice(-1)[0];
-          const esUltima = ultimaDelSlot && ultimaDelSlot.id === u.id;
           return {
             // Sin `maquina_id` la máquina se borró del catálogo: queda el
             // nombre congelado, pero ya no hay nada que accionar.
@@ -552,11 +547,10 @@ export default function Salidas() {
             tipo: u.tipo,
             ...(esLav ? {} : { tamano: u.tamano }),
             // La pasada viva muestra el estado real de su máquina; una ya
-            // cerrada cumplió su parte (verde) y la que se quitó antes de
-            // arrancar va tachada.
+            // cerrada cumplió su parte (verde).
             estado: u.actual
               ? (esLav ? c.lavadora_estado : c.secadora_estado)
-              : (esUltima && removida ? 'removida' : 'terminado'),
+              : 'terminado',
             en_uso_desde: u.actual ? (esLav ? c.lavadora_en_uso_desde : c.secadora_en_uso_desde) : null,
             esperandoArranque: Boolean(u.actual
               && (esLav ? c.lavadora_esperando_arranque : c.secadora_esperando_arranque)),
@@ -661,15 +655,20 @@ export default function Salidas() {
     }
     return out;
   });
-  // Los huecos se pintan agrupados por carga: la carga es la unidad que el
-  // cliente entiende ("la Carga 1 lleva lavadora y secadora"), y así su título
-  // sale una sola vez aunque le falten las dos máquinas.
-  const gruposSlots = Object.values(
-    slotsPorAsignar.reduce((acc, s) => {
-      (acc[s.carga.id] ??= { carga: s.carga, slots: [] }).slots.push(s);
-      return acc;
-    }, {})
-  );
+  // Todo lo de una carga va junto y bajo UN solo título: las máquinas que ya
+  // tiene puestas, los huecos que le faltan por asignar y el aviso de que no
+  // tiene ninguna. La carga es la unidad que el mostrador entiende ("la Carga 1
+  // lleva lavadora y secadora"), y antes eran tres listas independientes: una
+  // carga con la lavadora puesta y la secadora pendiente salía dos veces, cada
+  // vez con su propio "Carga 1" (2026-09-22).
+  const bloquesCarga = cargasNota
+    .map(c => ({
+      carga: c,
+      maquinas: cargasMaquinas.find(g => String(g.id) === String(c.id))?.maquinas ?? [],
+      slots: slotsPorAsignar.filter(s => String(s.carga.id) === String(c.id)),
+      vacia: cargasVacias.some(v => String(v.id) === String(c.id)),
+    }))
+    .filter(b => b.maquinas.length > 0 || b.slots.length > 0 || b.vacia);
 
   // Máquinas disponibles que coinciden con un slot (lavadora/secadora) y su tipo.
   // Se ofrecen todas las máquinas libres del tipo. Que otra nota ya tenga
@@ -717,18 +716,36 @@ export default function Salidas() {
   const secadorasDisp = huecosAsignar.secadora
     ? sugiriendoPrimero(maquinasModal.filter(m => m.tipo === 'secadora'), idUltimaSec) : [];
 
-  // ¿Otras máquinas de la nota siguen en uso además de esta?
-  const otrasEnUso = (maq) => maquinasAsignadas.some(m => String(m.id) !== String(maq.id) && m.estado === 'en_uso');
-  // Trabajo que le queda a la nota aparte de lo que está corriendo: máquinas
-  // que la carga compró y aún no tiene puestas, y máquinas ya puestas que nadie
-  // ha arrancado. Al cerrar `maq`, cualquiera de las dos deja la nota en
-  // proceso, así que el modal no puede prometer "Por Entregar".
-  const trabajoPendiente = (maq) => slotsPorAsignar.length > 0
-    || maquinasAsignadas.some(m => m.actual && String(m.id) !== String(maq.id)
-         && m.estado !== 'terminado' && m.estado !== 'removida'
-         // Corriendo = en uso y con el cronómetro andando. Encendida esperando
-         // arranque, o detenida a media vuelta, es trabajo que sigue ahí.
-         && (m.estado !== 'en_uso' || m.esperandoArranque));
+  // ¿Por qué la nota NO pasa a "Por Entregar" al cerrar esta máquina? Devuelve
+  // el motivo ya redactado, o null si al cerrarla la nota sí queda lista.
+  //
+  // Los tres casos van en una sola función porque el ORDEN importa. Una máquina
+  // que otra nota se ganó al iniciar se ve "en uso" —el estado es de la
+  // máquina, no de la carga—, y contarla entre las que están corriendo daba un
+  // veredicto correcto con una explicación falsa: "sus demás cargas todavía
+  // están en máquina", cuando esa carga no ha arrancado nunca (2026-09-22).
+  const motivoEnProceso = (maq) => {
+    // Las demás máquinas de la nota. Se comparan por máquina y no por pasada
+    // para que la carga que repitió la misma lavadora no se cuente a sí misma.
+    const otras = maquinasAsignadas.filter(m => String(m.id) !== String(maq.id));
+    const tomada = otras.find(m => m.actual && m.tomadaPor);
+    if (tomada) {
+      return `: la nota ${tomada.tomadaPor} se quedó con ${tomada.nombre}, así que esa carga todavía no arranca.`;
+    }
+    if (otras.some(m => m.estado === 'en_uso' && !m.tomadaPor)) {
+      return ': sus demás cargas todavía están en máquina.';
+    }
+    // Trabajo que le queda a la nota aparte de lo que está corriendo: máquinas
+    // que la carga compró y aún no tiene puestas, y máquinas ya puestas que
+    // nadie ha arrancado.
+    const pendiente = slotsPorAsignar.length > 0
+      || otras.some(m => m.actual && m.estado !== 'terminado'
+           // Corriendo = en uso y con el cronómetro andando. Encendida esperando
+           // arranque, o detenida a media vuelta, es trabajo que sigue ahí.
+           && (m.estado !== 'en_uso' || m.esperandoArranque));
+    return pendiente ? ': le queda otra máquina por asignar o por arrancar.' : null;
+  };
+  const motivoTerminar = confirmTerminarMaq ? motivoEnProceso(confirmTerminarMaq) : null;
 
   const productosNota  = [...(nota?.productos || [])].sort((a, b) => ordenProducto(a) - ordenProducto(b));
   const totalProductosNota = productosNota.reduce((a, x) => a + Number(x.subtotal || 0), 0);
@@ -798,208 +815,200 @@ export default function Salidas() {
           )}
         </div>
         <div className="px-4 py-4 space-y-4">
-          {cargasMaquinas.length > 0 ? (
-            cargasMaquinas.map((grupo, gi) => (
-              <div key={gi} className="space-y-2 [&:not(:first-child)]:border-t [&:not(:first-child)]:border-gray-100 [&:not(:first-child)]:pt-4">
-                {grupo.orden != null && (
-                  <p className="text-xs font-semibold text-gray-500">Carga {grupo.orden}</p>
-                )}
-                {grupo.maquinas.map((m, i) => {
-                  // Lavadora que ya cumplió su ciclo (terminó el lavado): se
-                  // muestra en verde y sin botón; el secado se inicia aparte
-                  // desde la secadora de la carga.
-                  const lavadoTerminado = m.estado === 'en_uso' && m.tipo !== 'secadora' && cicloCumplido(m);
-                  const cfg = lavadoTerminado ? BADGE_MAQUINA_ESTADO.terminado : BADGE_MAQUINA_ESTADO[m.estado];
-                  // La secadora muestra su tamaño (Mediana/Jumbo) igual que la
-                  // lavadora; se muestra abreviado (M/J/E) en el renglón.
-                  const tamanoLabel = labelTamano(m);
-                  const tipoLabel = TAMANO_ABBR[tamanoLabel] ?? tamanoLabel;
-                  // Máquina eliminada: línea tachada y en gris (estuvo asignada).
-                  const removida = m.estado === 'removida';
-                  return (
-                    <div key={m.pasadaId ?? i} className="flex flex-wrap items-center justify-between gap-2">
-                      <div className={`flex flex-wrap items-center gap-2 min-w-0 ${removida ? 'line-through text-gray-400' : ''}`}>
-                        {/* Estado: solo el punto de color */}
-                        {cfg && (
-                          <span
-                            className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${cfg.dot} ${m.estado === 'en_uso' && !lavadoTerminado ? 'animate-pulse' : ''}`}
-                            title={cfg.label}
-                          />
-                        )}
-                        <span className={`text-sm font-medium ${removida ? 'text-gray-400' : 'text-gray-800'}`}>{m.nombre}</span>
-                        {tipoLabel && (
-                          <span className="text-xs text-gray-500">— {tipoLabel}</span>
-                        )}
-                        {m.tomadaPor && (
-                          <span className="text-xs font-medium text-amber-700 basis-full">
-                            La está usando la nota {m.tomadaPor}. Cámbiala por otra para poder iniciar.
-                          </span>
-                        )}
-                        {m.esperandoArranque && (
-                          <span className="text-xs font-medium text-green-700 basis-full">
-                            Encendida. Carga la ropa, arráncala y dale a Iniciar.
-                          </span>
-                        )}
-                      </div>
-                      {/* Otra nota se la ganó al iniciar: aquí no hay nada que
-                          arrancar ni detener, solo cambiarla por una libre. */}
-                      {m.tomadaPor ? (
-                        <button
-                          onClick={() => iniciarCambiar(m)}
-                          disabled={loadingMaquina}
-                          className="px-4 py-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
-                        >
-                          Cambiar máquina
-                        </button>
-                      ) : (<>
-                      {/* Acción por máquina, en dos pasos (mig. 110). Primero
-                          "Encender máquina", que solo le da corriente para poder
-                          cargar la ropa y apretar su botón físico; después
-                          "Iniciar", que arranca el cronómetro cuando el lavado
-                          ya empezó de verdad. Cuando los dos eran uno, el rato
-                          de cargar se le descontaba al ciclo.
-                          Los dos botones abren el MISMO modal: el paso que
-                          muestra lo decide el estado de la máquina, así que la
-                          que ya está encendida entra directo al de iniciar. */}
-                      {m.estado === 'disponible' && (
-                        <button
-                          onClick={() => abrirModalMaquina(m)}
-                          disabled={loadingMaquina || Boolean(encendiendo)}
-                          className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
-                        >
-                          Encender máquina
-                        </button>
+          {bloquesCarga.length === 0 && (
+            // Ni máquinas puestas, ni huecos por asignar, ni cargas vacías:
+            // ahí sí no hay nada que enseñar.
+            <p className="text-sm text-gray-400 italic">Sin máquina asignada</p>
+          )}
+
+          {bloquesCarga.map(({ carga, maquinas, slots, vacia }) => (
+            <div key={carga.id} className="space-y-2 [&:not(:first-child)]:border-t [&:not(:first-child)]:border-gray-100 [&:not(:first-child)]:pt-4">
+              {carga.orden != null && (
+                <p className="text-xs font-semibold text-gray-500">Carga {carga.orden}</p>
+              )}
+              {maquinas.map((m, i) => {
+                // Lavadora que ya cumplió su ciclo (terminó el lavado): se
+                // muestra en verde y sin botón; el secado se inicia aparte
+                // desde la secadora de la carga.
+                const lavadoTerminado = m.estado === 'en_uso' && m.tipo !== 'secadora' && cicloCumplido(m);
+                const cfg = lavadoTerminado ? BADGE_MAQUINA_ESTADO.terminado : BADGE_MAQUINA_ESTADO[m.estado];
+                // La secadora muestra su tamaño (Mediana/Jumbo) igual que la
+                // lavadora; se muestra abreviado (M/J/E) en el renglón.
+                const tamanoLabel = labelTamano(m);
+                const tipoLabel = TAMANO_ABBR[tamanoLabel] ?? tamanoLabel;
+                return (
+                  <div key={m.pasadaId ?? i} className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex flex-wrap items-center gap-2 min-w-0">
+                      {/* Estado: solo el punto de color */}
+                      {cfg && (
+                        <span
+                          className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${cfg.dot} ${m.estado === 'en_uso' && !lavadoTerminado ? 'animate-pulse' : ''}`}
+                          title={cfg.label}
+                        />
+                      )}
+                      <span className="text-sm font-medium text-gray-800">{m.nombre}</span>
+                      {tipoLabel && (
+                        <span className="text-xs text-gray-500">— {tipoLabel}</span>
+                      )}
+                      {m.tomadaPor && (
+                        <span className="text-xs font-medium text-amber-700 basis-full">
+                          La está usando la nota {m.tomadaPor}. Cámbiala por otra para poder iniciar.
+                        </span>
                       )}
                       {m.esperandoArranque && (
-                        <button
-                          onClick={() => abrirModalMaquina(m)}
-                          disabled={loadingMaquina}
-                          className="px-4 py-2 bg-blue hover:opacity-90 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
-                        >
-                          {m.tipo === 'secadora' ? 'Iniciar Secado' : 'Iniciar Lavado'}
-                        </button>
+                        <span className="text-xs font-medium text-green-700 basis-full">
+                          Encendida. Carga la ropa, arráncala y dale a Iniciar.
+                        </span>
                       )}
-                      {m.estado === 'en_uso' && !m.esperandoArranque && (
-                        cicloCumplido(m) ? (
-                          // Ya cumplió su ciclo: cerrar la carga de esa máquina.
-                          // La única que no lo ofrece es la lavadora que encadena
-                          // secado (Autoservicio): ahí el paso es pasar la ropa a
-                          // la secadora, desde la tarjeta de Máquinas.
-                          !m.encadenaSecado ? (
-                            <button
-                              onClick={() => setConfirmTerminarMaq(m)}
-                              disabled={loadingMaquina}
-                              className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
-                            >
-                              Finalizar Carga
-                            </button>
-                          ) : null
-                        ) : (
-                          // Solo un admin puede detener una LAVADORA; la secadora
-                          // la puede detener cualquier usuario. Oculto por ahora
-                          // (ver la bandera arriba).
-                          MOSTRAR_DETENER_CICLO && (m.tipo === 'secadora' || esAdmin) && (
-                            <button
-                              onClick={() => setConfirmDetener(m)}
-                              disabled={loadingMaquina}
-                              className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
-                            >
-                              {m.tipo === 'secadora' ? 'Detener Secado' : 'Detener Lavado'}
-                            </button>
-                          )
-                        )
-                      )}
-                      {/* estado "terminado": ya cumplió su parte, sin acciones
-                          (solo el punto verde a la izquierda lo indica). */}
-                      </>)}
                     </div>
-                  );
-                })}
-              </div>
-            ))
-          ) : cargasVacias.length === 0 && gruposSlots.length === 0 ? (
-            // Nada asignado y nada por asignar: ahí sí no hay máquinas. Con
-            // huecos pendientes el aviso sobraba, porque debajo se listan.
-            <p className="text-sm text-gray-400 italic">Sin máquina asignada</p>
-          ) : null}
-
-          {/* Por Encargo: cargas con TIPO elegido, sin máquina física. Se
-              asigna eligiendo una máquina disponible del tipo correspondiente. */}
-          {gruposSlots.map(({ carga, slots }) => (
-            <div key={`slots-${carga.id}`} className="space-y-2 [&:not(:first-child)]:border-t [&:not(:first-child)]:border-gray-100 [&:not(:first-child)]:pt-4">
-              <p className="text-xs font-semibold text-gray-500">Carga {carga.orden}</p>
-              {/* Lavadora y secadora son dos renglones casi idénticos con el
-                  mismo botón azul, y se pulsan con el dedo: los separa el aire
-                  entre ellos y el botón diciendo QUÉ asigna, para no darle a la
-                  máquina equivocada. La línea se reserva para separar cargas
-                  (la pinta el contenedor de arriba), que es la división que
-                  cuenta. */}
-              <div>
-                {slots.map(({ slot, tipo }) => {
-                  const opciones = maquinasParaSlot(slot, tipo);
-                  const queFalta = slot === 'lavadora'
-                    ? `lavadoras ${TIPO_MAQ_LABEL[tipo] ?? tipo}`
-                    : 'secadoras';
-                  const esLavadora = slot === 'lavadora';
-                  return (
-                    <div key={slot} className="flex flex-wrap items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
-                      {/* Solo "Lavadora": el tamaño no se dice aquí. Igual se
-                          respeta al asignar —el modal solo ofrece máquinas del
-                          tipo que la nota compró— y si no hay, el aviso de al
-                          lado sí lo nombra. */}
-                      <span className="text-sm font-medium text-gray-700">
-                        {esLavadora ? 'Lavadora' : 'Secadora'}
-                      </span>
-                      {opciones.length === 0 ? (
-                        <span className="text-sm text-red-600">No hay {queFalta} disponibles</span>
+                    {/* Otra nota se la ganó al iniciar: aquí no hay nada que
+                        arrancar ni detener, solo cambiarla por una libre. */}
+                    {m.tomadaPor ? (
+                      <button
+                        onClick={() => iniciarCambiar(m)}
+                        disabled={loadingMaquina}
+                        className="px-4 py-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
+                      >
+                        Cambiar máquina
+                      </button>
+                    ) : (<>
+                    {/* Acción por máquina, en dos pasos (mig. 110). Primero
+                        "Encender máquina", que solo le da corriente para poder
+                        cargar la ropa y apretar su botón físico; después
+                        "Iniciar", que arranca el cronómetro cuando el lavado
+                        ya empezó de verdad. Cuando los dos eran uno, el rato
+                        de cargar se le descontaba al ciclo.
+                        Los dos botones abren el MISMO modal: el paso que
+                        muestra lo decide el estado de la máquina, así que la
+                        que ya está encendida entra directo al de iniciar. */}
+                    {m.estado === 'disponible' && (
+                      <button
+                        onClick={() => abrirModalMaquina(m)}
+                        disabled={loadingMaquina || Boolean(encendiendo)}
+                        className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
+                      >
+                        Encender máquina
+                      </button>
+                    )}
+                    {m.esperandoArranque && (
+                      <button
+                        onClick={() => abrirModalMaquina(m)}
+                        disabled={loadingMaquina}
+                        className="px-4 py-2 bg-blue hover:opacity-90 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
+                      >
+                        {m.tipo === 'secadora' ? 'Iniciar Secado' : 'Iniciar Lavado'}
+                      </button>
+                    )}
+                    {m.estado === 'en_uso' && !m.esperandoArranque && (
+                      cicloCumplido(m) ? (
+                        // Ya cumplió su ciclo: cerrar la carga de esa máquina.
+                        // La única que no lo ofrece es la lavadora que encadena
+                        // secado (Autoservicio): ahí el paso es pasar la ropa a
+                        // la secadora, desde la tarjeta de Máquinas.
+                        !m.encadenaSecado ? (
+                          <button
+                            onClick={() => setConfirmTerminarMaq(m)}
+                            disabled={loadingMaquina}
+                            className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
+                          >
+                            Finalizar Carga
+                          </button>
+                        ) : null
                       ) : (
-                        // Abre el mismo modal que "+ Agregar", ya fijado a
-                        // esta carga y a las máquinas del tipo que le toca. El
-                        // botón dice QUÉ asigna —abreviado, para que quepa
-                        // junto a su etiqueta hasta en pantallas de 320px— y
-                        // así no se confunde con el renglón de al lado.
-                        <button
-                          onClick={() => iniciarAsignarSlot(carga, slot, tipo)}
-                          disabled={loadingMaquina}
-                          className="w-full min-[360px]:w-auto px-4 py-3 bg-blue hover:opacity-90 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors whitespace-nowrap"
-                        >
-                          {esLavadora ? 'Asignar Lav.' : 'Asignar Sec.'}
-                        </button>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
+                        // Solo un admin puede detener una LAVADORA; la secadora
+                        // la puede detener cualquier usuario. Oculto por ahora
+                        // (ver la bandera arriba).
+                        MOSTRAR_DETENER_CICLO && (m.tipo === 'secadora' || esAdmin) && (
+                          <button
+                            onClick={() => setConfirmDetener(m)}
+                            disabled={loadingMaquina}
+                            className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
+                          >
+                            {m.tipo === 'secadora' ? 'Detener Secado' : 'Detener Lavado'}
+                          </button>
+                        )
+                      )
+                    )}
+                    {/* estado "terminado": ya cumplió su parte, sin acciones
+                        (solo el punto verde a la izquierda lo indica). */}
+                    </>)}
+                  </div>
+                );
+              })}
 
-          {/* Cargas que se eligieron al hacer la nota pero se quedaron sin
-              máquina: se muestran para asignarles una rápidamente. */}
-          {cargasVacias.map(c => (
-            <div key={`vacia-${c.id}`} className="space-y-2 [&:not(:first-child)]:border-t [&:not(:first-child)]:border-gray-100 [&:not(:first-child)]:pt-4">
-              <p className="text-xs font-semibold text-gray-500">Carga {c.orden}</p>
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="text-sm text-gray-400 italic">Sin máquina asignada</span>
-                <div className="flex items-center gap-2">
-                  {/* Quitar carga es de admin: deshace lo capturado y baja el total. */}
-                  {esAdmin && !cobroCongelado && (
-                    <button
-                      onClick={() => setConfirmQuitarCarga(c)}
-                      disabled={loadingMaquina}
-                      className="px-3 py-2 text-sm font-medium text-gray-500 hover:text-red-600 disabled:opacity-60 transition-colors"
-                    >
-                      Quitar carga
-                    </button>
-                  )}
-                  <button
-                    onClick={() => iniciarAsignar(c)}
-                    disabled={loadingMaquina}
-                    className="px-4 py-2 bg-blue hover:opacity-90 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
-                  >
-                    Asignar máquina
-                  </button>
+              {/* Por Encargo: huecos con TIPO elegido y sin máquina física. Se
+                  asigna eligiendo una máquina disponible del tipo que toca. */}
+              {slots.length > 0 && (<>
+                {/* Lavadora y secadora son dos renglones casi idénticos con el
+                    mismo botón azul, y se pulsan con el dedo: los separa el aire
+                    entre ellos y el botón diciendo QUÉ asigna, para no darle a la
+                    máquina equivocada. La línea se reserva para separar cargas
+                    (la pinta el contenedor de arriba), que es la división que
+                    cuenta. */}
+                <div>
+                  {slots.map(({ slot, tipo }) => {
+                    const opciones = maquinasParaSlot(slot, tipo);
+                    const queFalta = slot === 'lavadora'
+                      ? `lavadoras ${TIPO_MAQ_LABEL[tipo] ?? tipo}`
+                      : 'secadoras';
+                    const esLavadora = slot === 'lavadora';
+                    return (
+                      <div key={slot} className="flex flex-wrap items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
+                        {/* Solo "Lavadora": el tamaño no se dice aquí. Igual se
+                            respeta al asignar —el modal solo ofrece máquinas del
+                            tipo que la nota compró— y si no hay, el aviso de al
+                            lado sí lo nombra. */}
+                        <span className="text-sm font-medium text-gray-700">
+                          {esLavadora ? 'Lavadora' : 'Secadora'}
+                        </span>
+                        {opciones.length === 0 ? (
+                          <span className="text-sm text-red-600">No hay {queFalta} disponibles</span>
+                        ) : (
+                          // Abre el mismo modal que "+ Agregar", ya fijado a
+                          // esta carga y a las máquinas del tipo que le toca. El
+                          // botón dice QUÉ asigna —abreviado, para que quepa
+                          // junto a su etiqueta hasta en pantallas de 320px— y
+                          // así no se confunde con el renglón de al lado.
+                          <button
+                            onClick={() => iniciarAsignarSlot(carga, slot, tipo)}
+                            disabled={loadingMaquina}
+                            className="w-full min-[360px]:w-auto px-4 py-3 bg-blue hover:opacity-90 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors whitespace-nowrap"
+                          >
+                            {esLavadora ? 'Asignar Lav.' : 'Asignar Sec.'}
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
-              </div>
+              </>)}
+
+              {/* La carga se eligió al hacer la nota y se quedó sin máquina:
+                  se muestra para asignarle una rápidamente. */}
+              {vacia && (
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-sm text-gray-400 italic">Sin máquina asignada</span>
+                  <div className="flex items-center gap-2">
+                    {/* Quitar carga es de admin: deshace lo capturado y baja el total. */}
+                    {esAdmin && !cobroCongelado && (
+                      <button
+                        onClick={() => setConfirmQuitarCarga(carga)}
+                        disabled={loadingMaquina}
+                        className="px-3 py-2 text-sm font-medium text-gray-500 hover:text-red-600 disabled:opacity-60 transition-colors"
+                      >
+                        Quitar carga
+                      </button>
+                    )}
+                    <button
+                      onClick={() => iniciarAsignar(carga)}
+                      disabled={loadingMaquina}
+                      className="px-4 py-2 bg-blue hover:opacity-90 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
+                    >
+                      Asignar máquina
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           ))}
 
@@ -1349,15 +1358,13 @@ export default function Salidas() {
               {confirmTerminarMaq.tipo === 'secadora' ? 'La secadora' : 'La lavadora'} pasará a disponible.
             </p>
             {/* A la nota le puede quedar trabajo que no está corriendo: una
-                máquina sin asignar, o una ya asignada que nadie ha arrancado
-                —lo habitual desde que la secadora se pone desde el principio—.
-                En los dos casos la nota sigue en proceso. */}
-            {otrasEnUso(confirmTerminarMaq) || trabajoPendiente(confirmTerminarMaq) ? (
+                máquina sin asignar, una ya asignada que nadie ha arrancado
+                —lo habitual desde que la secadora se pone desde el principio—,
+                o una que otra nota se llevó. En los tres casos la nota sigue en
+                proceso, y el motivo dice cuál de ellos es. */}
+            {motivoTerminar ? (
               <p className="text-sm text-gray-500">
-                La nota sigue en proceso
-                {otrasEnUso(confirmTerminarMaq)
-                  ? ': sus demás cargas todavía están en máquina.'
-                  : ': le queda otra máquina por asignar o por arrancar.'} Aún no pasa a "Por Entregar".
+                La nota sigue en proceso{motivoTerminar} Aún no pasa a "Por Entregar".
               </p>
             ) : (
               <p className="text-sm text-gray-500">
