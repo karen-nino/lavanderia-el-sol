@@ -7,6 +7,8 @@ import { useAuth } from '../context/AuthContext';
 import { esAdmin as esAdminFn } from '../lib/roles';
 import MaquinaCicloOverlay from '../components/MaquinaCicloOverlay';
 import ConfirmacionModal from '../components/ConfirmacionModal';
+import ElegirTiempoModal from '../components/ElegirTiempoModal';
+import { preguntaTiempo, tiemposDeMaquina } from '../lib/tiemposModelo';
 
 function fmtMonto(n) {
   return n != null ? `$${Number(n).toFixed(2)}` : '—';
@@ -82,6 +84,8 @@ export default function Salidas() {
   // al encenderla sin cerrar el modal.
   const [maquinaModalId,   setMaquinaModalId]   = useState(null);
   const [iniciando,        setIniciando]        = useState(null); // máquina arrancando (animación)
+  // Máquina esperando que se elija con cuál de sus tiempos correr (mig. 120).
+  const [eligiendoTiempo,  setEligiendoTiempo]  = useState(null);
   const [encendiendo,      setEncendiendo]      = useState(null); // máquina recibiendo corriente (mig. 110)
   const [deteniendo,       setDeteniendo]       = useState(null); // máquina deteniéndose (animación)
 
@@ -213,8 +217,16 @@ export default function Salidas() {
     }
   }
 
-  async function iniciarMaquina() {
+  // Hay modelos con varios programas que preguntan cuál correr (mig. 120): el
+  // modal sale entre el "Iniciar" y la llamada, y lo elegido viaja con ella.
+  function iniciarMaquina() {
     const maq = maqModal;
+    if (!maq) return;
+    if (preguntaTiempo(maq)) { setEligiendoTiempo(maq); return; }
+    return arrancarMaquina(maq, null);
+  }
+
+  async function arrancarMaquina(maq, minutos) {
     if (!maq) return;
     setLoadingMaquina(true);
     setErrorAccion('');
@@ -223,9 +235,12 @@ export default function Salidas() {
       // Duración mínima para que la animación (agua llenándose) se alcance a
       // ver aunque la API responda al instante.
       await Promise.all([
-        api.patch(`/notas/${id}/activar-pendientes`, { maquina_id: maq.id }),
+        api.patch(`/notas/${id}/activar-pendientes`, {
+          maquina_id: maq.id, ...(minutos != null && { minutos }),
+        }),
         new Promise((r) => setTimeout(r, 2500)),
       ]);
+      setEligiendoTiempo(null);
       setMaquinaModalId(null);
       await cargarDatos();
     } catch (err) {
@@ -545,6 +560,9 @@ export default function Salidas() {
             actual: Boolean(u.actual),
             nombre: u.nombre,
             tipo: u.tipo,
+            // Los tiempos que ofrece su modelo: deciden si al iniciarla se
+            // pregunta con cuál correr (mig. 120).
+            modelo_tiempos: u.modelo_tiempos ?? null,
             ...(esLav ? {} : { tamano: u.tamano }),
             // La pasada viva muestra el estado real de su máquina; una ya
             // cerrada cumplió su parte (verde).
@@ -1119,6 +1137,19 @@ export default function Salidas() {
       })()}
 
       {/* Animaciones de encender / iniciar / detener ciclo */}
+      {/* Elegir con cuál de los tiempos del modelo corre el ciclo (mig. 120).
+          Va antes de la animación: primero se decide, luego arranca. */}
+      {eligiendoTiempo && !iniciando && (
+        <ElegirTiempoModal
+          maquina={eligiendoTiempo}
+          tiempos={tiemposDeMaquina(eligiendoTiempo)}
+          guardando={loadingMaquina}
+          error={errorAccion}
+          onElegir={(min) => arrancarMaquina(eligiendoTiempo, min)}
+          onCancelar={() => { setEligiendoTiempo(null); setErrorAccion(''); }}
+        />
+      )}
+
       {encendiendo && <MaquinaCicloOverlay modo="encender" tipo={encendiendo.tipo} nombre={encendiendo.nombre} />}
       {iniciando && <MaquinaCicloOverlay modo="iniciar" tipo={iniciando.tipo} nombre={iniciando.nombre} />}
       {deteniendo && <MaquinaCicloOverlay modo="detener" tipo={deteniendo.tipo} nombre={deteniendo.nombre} />}

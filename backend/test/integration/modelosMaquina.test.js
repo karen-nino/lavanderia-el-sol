@@ -354,3 +354,83 @@ describe('GET/PUT /api/etiquetas/tiempos-marca — el renglón dice marca y mode
       .send({ modelo_id: modelo.id, minutos: 0 }).expect(400);
   });
 });
+
+// Tres tiempos por modelo y el interruptor que los pregunta (mig. 120).
+describe('modelo con tres tiempos', () => {
+  // Una secadora con su modelo de tres tiempos, lista para arrancar dentro de
+  // una nota que ya tiene su lavadora corriendo.
+  async function conSecadoraDeTresTiempos({ pregunta = true } = {}) {
+    const sq = await seedMarca('Speed Queen');
+    const modelo = (await crearModelo(admin.token, {
+      marca_id: sq, nombre: 'Sec49', tipo: 'secadora', tamano: 'jumbo', minutos: 30,
+    })).body;
+    await request(app).put('/api/etiquetas/tiempos-marca').set(auth(admin.token))
+      .send({ modelo_id: modelo.id, minutos: 30, minutos_2: 45, minutos_3: 60, pregunta_tiempo: pregunta })
+      .expect(200);
+
+    const lavadoraId = await seedMaquina({ nombre: 'L1', tipo: 'lavadora_mediana', tamano: 'mediana' });
+    const secadoraId = await seedMaquina({
+      nombre: 'S1', tipo: 'secadora', tamano: 'jumbo', marca: 'Speed Queen', modelo: 'Sec49',
+    });
+
+    const creada = await request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA',
+      estado_pago: 'PAGADO', forma_pago: 'EFECTIVO',
+      cargas: [{ lavadora_tipo: 'mediana', secadora_tipo: 'jumbo' }],
+    });
+    expect(creada.status).toBe(201);
+    const cargaId = creada.body.cargas[0].id;
+    for (const [slot, maquina_id] of [['lavadora', lavadoraId], ['secadora', secadoraId]]) {
+      await request(app).patch(`/api/notas/${creada.body.id}/asignar-carga-maquina`).set(auth(admin.token))
+        .send({ carga_id: cargaId, slot, maquina_id }).expect(200);
+    }
+    return { notaId: creada.body.id, secadoraId, modelo };
+  }
+
+  it('el tiempo elegido en el modal es el que se sella', async () => {
+    const { notaId, secadoraId } = await conSecadoraDeTresTiempos();
+
+    await request(app).patch(`/api/notas/${notaId}/activar-pendientes`).set(auth(admin.token))
+      .send({ maquina_id: secadoraId, minutos: 45 }).expect(200);
+
+    expect(await cicloDe(secadoraId)).toBe(45);
+  });
+
+  it('sin elegir nada manda el último de los tres, que es el más largo', async () => {
+    const { notaId, secadoraId } = await conSecadoraDeTresTiempos();
+
+    await request(app).patch(`/api/notas/${notaId}/activar-pendientes`).set(auth(admin.token))
+      .send({ maquina_id: secadoraId }).expect(200);
+
+    expect(await cicloDe(secadoraId)).toBe(60);
+  });
+
+  it('con el interruptor apagado también manda el último, y no se acepta elegir', async () => {
+    const { notaId, secadoraId } = await conSecadoraDeTresTiempos({ pregunta: false });
+
+    const res = await request(app).patch(`/api/notas/${notaId}/activar-pendientes`).set(auth(admin.token))
+      .send({ maquina_id: secadoraId, minutos: 30 });
+    expect(res.status).toBe(400);
+
+    await request(app).patch(`/api/notas/${notaId}/activar-pendientes`).set(auth(admin.token))
+      .send({ maquina_id: secadoraId }).expect(200);
+    expect(await cicloDe(secadoraId)).toBe(60);
+  });
+
+  it('un tiempo que el modelo no ofrece se rechaza: es lo que corta la corriente', async () => {
+    const { notaId, secadoraId } = await conSecadoraDeTresTiempos();
+
+    const res = await request(app).patch(`/api/notas/${notaId}/activar-pendientes`).set(auth(admin.token))
+      .send({ maquina_id: secadoraId, minutos: 120 });
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/no ofrece ese tiempo/i);
+  });
+
+  it('la máquina lleva sus tiempos y el interruptor para que la pantalla sepa si preguntar', async () => {
+    const { secadoraId } = await conSecadoraDeTresTiempos();
+
+    const { body } = await request(app).get('/api/maquinas').set(auth(admin.token));
+    const secadora = body.find(m => m.id === secadoraId);
+    expect(secadora.modelo_tiempos).toEqual({ pregunta: true, minutos: [30, 45, 60] });
+  });
+});

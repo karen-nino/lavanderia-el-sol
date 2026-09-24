@@ -4,6 +4,8 @@ import { api } from '../lib/api';
 import MachineCard from './MachineCard';
 import MaquinaCicloOverlay from './MaquinaCicloOverlay';
 import { prepararAviso, reproducirAvisoCiclo } from '../lib/avisoSonoro';
+import ElegirTiempoModal from './ElegirTiempoModal';
+import { preguntaTiempo, tiemposDeMaquina } from '../lib/tiemposModelo';
 
 // Cada cuánto se re-consultan notas y máquinas en segundo plano.
 const REFRESCO_MS = 15000;
@@ -59,6 +61,8 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
   const [loading, setLoading]   = useState(true);
   const [now, setNow]           = useState(() => Date.now());
   const [confirmTerminar, setConfirmTerminar] = useState(null);
+  // Secadora esperando que se elija su tiempo antes de arrancar (mig. 120).
+  const [eligiendoTiempo, setEligiendoTiempo] = useState(null);
   // Secadora que arranca al terminar el lavado (para la animación de ciclo).
   const [iniciandoSecadora, setIniciandoSecadora] = useState(null);
   const [secadoraSel, setSecadoraSel] = useState('');
@@ -230,9 +234,15 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
   // que cierra la nota.
   const sigueEnProceso = otrasEnUso || Boolean(notaParaTerminar?.trabajo_pendiente);
 
-  const confirmarTerminarCiclo = async () => {
+  const confirmarTerminarCiclo = async (minutosElegidos = null) => {
     if (!confirmTerminar) return;
     if (terminaLavado && !secadoraSel) return;
+    // La secadora que va a arrancar puede ser de un modelo con varios
+    // programas: se pregunta antes de tocar nada (mig. 120).
+    if (terminaLavado && minutosElegidos == null) {
+      const sec = secadorasDisponibles.find(m => String(m.id) === String(secadoraSel));
+      if (preguntaTiempo(sec)) { setEligiendoTiempo(sec); return; }
+    }
     setTerminando(true);
     setErrorTerminar('');
     // Si la sesión expira a mitad de esto, la app redirige a /login y se pierde
@@ -252,6 +262,7 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
           api.patch(`/notas/${notaParaTerminar.id}/terminar-lavado`, {
             lavadora_id: Number(confirmTerminar.id),
             secadora_id: Number(secadoraSel),
+            ...(minutosElegidos != null && { minutos: minutosElegidos }),
           }),
           new Promise((r) => setTimeout(r, 2500)),
         ]);
@@ -276,6 +287,7 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
       limpiarAccionPendiente();
       setConfirmTerminar(null);
       setSecadoraSel('');
+      setEligiendoTiempo(null);
       // La nota pudo liberar o tomar más máquinas (todas las de sus cargas):
       // se refresca para reflejar el estado real.
       refrescarDatos();
@@ -384,6 +396,19 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
       setEncendiendoMaquina(null);
     }
   };
+
+  // Elegir con cuál de sus tiempos corre la secadora (mig. 120). Se pinta
+  // aparte del modal de confirmación: aquel ya hizo su pregunta.
+  const modalElegirTiempo = eligiendoTiempo && (
+    <ElegirTiempoModal
+      maquina={eligiendoTiempo}
+      tiempos={tiemposDeMaquina(eligiendoTiempo)}
+      guardando={terminando}
+      error={errorTerminar}
+      onElegir={(min) => confirmarTerminarCiclo(min)}
+      onCancelar={() => { setEligiendoTiempo(null); setErrorTerminar(''); }}
+    />
+  );
 
   const renderCard = (m) => {
     const { maquina: maquinaAumentada, nota: notaRel } = datosDeCiclo(m);
@@ -523,6 +548,8 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
         </>
       )}
 
+      {modalElegirTiempo}
+
       {/* Corriente de vuelta para el siguiente ciclo: misma animación que el
           "Encender máquina" de Salidas, porque es exactamente el mismo paso. */}
       {encendiendoMaquina && (
@@ -605,7 +632,7 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
               </button>
               <button
                 type="button"
-                onClick={confirmarTerminarCiclo}
+                onClick={() => confirmarTerminarCiclo()}
                 disabled={terminando || (terminaLavado && !secadoraSel)}
                 className="flex-1 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
               >

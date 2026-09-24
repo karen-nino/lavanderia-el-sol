@@ -2,7 +2,7 @@ import pool from '../db/pool.js';
 import { TZ_NEGOCIO } from '../utils/tz.js';
 import * as dispositivos from '../services/dispositivos/index.js';
 import { explicarFalla, resumirMotivo } from '../services/dispositivos/mensajes.js';
-import { MINUTOS_CONFIGURADOS } from '../db/sqlMaquina.js';
+import { MINUTOS_CONFIGURADOS, TIEMPOS_DEL_MODELO } from '../db/sqlMaquina.js';
 import {
   HORAS_ENCENDIDO_MANUAL,
   PAUSA_OTRO_CICLO_SEGUNDOS,
@@ -160,6 +160,9 @@ export const getMaquinas = async (req, res) => {
     const { rows } = await pool.query(
       `SELECT m.*,
               ${MINUTOS_CONFIGURADOS} AS minutos_ciclo,
+              -- Los tiempos que ofrece su modelo y si hay que preguntar cuál
+              -- usar al iniciarla (mig. 120).
+              ${TIEMPOS_DEL_MODELO} AS modelo_tiempos,
               (r.folio IS NOT NULL) AS reservada,
               r.folio               AS reservada_folio,
               r.id                  AS reservada_nota_id,

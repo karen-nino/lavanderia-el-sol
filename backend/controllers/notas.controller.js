@@ -488,7 +488,10 @@ function tarifaLavadora(tipoMaquina, tipoPrenda, t) {
 // Solo se sella el ciclo de las máquinas que ESTA nota arrancó: otra nota
 // puede tener la misma máquina asignada, y resellarle el ciclo le movería el
 // temporizador a media lavada (mig. 097).
-async function sellarCicloMaquinas(client, notaId) {
+// `elegido` es `{ maquinaId, minutos }` cuando el empleado escogió la duración
+// en el modal del modelo que pregunta (mig. 120): se escribe encima de lo que
+// resolvió la cadena, y solo para esa máquina.
+async function sellarCicloMaquinas(client, notaId, elegido = null) {
   const ti = await tiemposCarga(client);
   await client.query(
     `UPDATE maquinas m
@@ -497,7 +500,7 @@ async function sellarCicloMaquinas(client, notaId) {
          -- Lavadoras de la nota
          SELECT nc.lavadora_id AS mid,
                 COALESCE(
-                  mo.minutos,
+                  COALESCE(mo.minutos_3, mo.minutos_2, mo.minutos),
                   tm.minutos,
                   CASE WHEN ml.tipo = 'lavadora_jumbo' THEN $2::int ELSE $3::int END
                 ) AS minutos
@@ -519,7 +522,7 @@ async function sellarCicloMaquinas(client, notaId) {
          -- tamaño desde que la secadora se da de alta como mediana o jumbo.
          SELECT nc.secadora_id AS mid,
                 COALESCE(
-                  mo.minutos, tm.minutos,
+                  COALESCE(mo.minutos_3, mo.minutos_2, mo.minutos), tm.minutos,
                   CASE WHEN ms.tamano = 'jumbo' THEN $5::int ELSE $4::int END
                 ) AS minutos
            FROM nota_cargas nc
@@ -535,6 +538,39 @@ async function sellarCicloMaquinas(client, notaId) {
       WHERE m.id = ciclos.mid AND m.estado = 'en_uso'`,
     [notaId, ti.jumbo, ti.mediana, ti.secMediana, ti.secJumbo]
   );
+
+  if (elegido) {
+    await client.query(
+      `UPDATE maquinas SET ciclo_minutos = $2 WHERE id = $1 AND estado = 'en_uso'`,
+      [elegido.maquinaId, elegido.minutos]
+    );
+  }
+}
+
+// El tiempo que llega del modal tiene que ser UNO DE LOS QUE OFRECE el modelo
+// de esa máquina: es lo que decide cuándo se le corta la corriente, así que no
+// se acepta un número cualquiera del cliente. Devuelve `{ minutos }` si vale,
+// `{ error }` si no, y `null` si no llegó ninguno (el caso normal).
+async function tiempoElegidoDeMaquina(client, maquinaId, minutos) {
+  if (minutos === undefined || minutos === null || minutos === '') return null;
+  const n = Number(minutos);
+  if (!Number.isInteger(n) || n <= 0) {
+    return { error: 'El tiempo elegido no es válido.' };
+  }
+  const { rows } = await client.query(
+    `SELECT mo.pregunta_tiempo,
+            ARRAY_REMOVE(ARRAY[mo.minutos, mo.minutos_2, mo.minutos_3], NULL) AS tiempos
+       FROM maquinas m
+       JOIN marcas_maquina mm ON mm.nombre = m.marca
+       JOIN modelos_maquina mo ON mo.marca_id = mm.id AND mo.nombre = m.modelo
+      WHERE m.id = $1`,
+    [maquinaId]
+  );
+  const modelo = rows[0];
+  if (!modelo || !modelo.pregunta_tiempo || !(modelo.tiempos ?? []).includes(n)) {
+    return { error: 'Esa máquina no ofrece ese tiempo de ciclo.' };
+  }
+  return { minutos: n };
 }
 
 // Tope de precio por tamaño de carga (Ajustes): ninguna carga con tamaño
@@ -919,6 +955,16 @@ async function cargasDeNota(client, notaId) {
                  SELECT ncm.id, ncm.slot, ncm.maquina_id, ncm.asignada_at,
                         ncm.maquina_nombre AS nombre, ncm.maquina_tipo AS tipo,
                         ncm.maquina_tamano AS tamano,
+                        -- Los tiempos que ofrece su modelo (mig. 120): con
+                        -- ellos la pantalla sabe si al iniciarla hay que
+                        -- preguntar con cuál correr.
+                        (SELECT json_build_object(
+                                  'pregunta', mo.pregunta_tiempo,
+                                  'minutos', ARRAY_REMOVE(ARRAY[mo.minutos, mo.minutos_2, mo.minutos_3], NULL))
+                           FROM maquinas mm2
+                           JOIN marcas_maquina mmk ON mmk.nombre = mm2.marca
+                           JOIN modelos_maquina mo ON mo.marca_id = mmk.id AND mo.nombre = mm2.modelo
+                          WHERE mm2.id = ncm.maquina_id) AS modelo_tiempos,
                         -- Actual = la ÚLTIMA pasada del hueco, y solo si esa
                         -- máquina sigue puesta. Con la comparación a secas, una
                         -- carga relavada en la misma lavadora marcaba las dos.
@@ -2469,10 +2515,21 @@ export const encenderMaquinaDeNota = async (req, res) => {
 
 export const activarMaquinasPendientes = async (req, res) => {
   const { id } = req.params;
-  const { maquina_id } = req.body ?? {};
+  const { maquina_id, minutos } = req.body ?? {};
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+
+    // Duración elegida en el modal del modelo que pregunta (mig. 120).
+    let elegido = null;
+    if (maquina_id) {
+      const leido = await tiempoElegidoDeMaquina(client, maquina_id, minutos);
+      if (leido?.error) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ message: leido.error });
+      }
+      if (leido) elegido = { maquinaId: maquina_id, minutos: leido.minutos };
+    }
 
     const { rows: notaRows } = await client.query(
       'SELECT estado, tipo_servicio, estado_pago FROM notas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
@@ -2579,7 +2636,7 @@ export const activarMaquinasPendientes = async (req, res) => {
       );
     }
 
-    await sellarCicloMaquinas(client, id);
+    await sellarCicloMaquinas(client, id, elegido);
     // La nota queda en la fase que dicten sus máquinas: si se activó una
     // lavadora vuelve/queda en LAVANDO; si solo corren secadoras, SECANDO.
     const fase = await faseProcesoDeNota(client, id);
@@ -3239,7 +3296,7 @@ export const cambiarMaquina = async (req, res) => {
 // carga que le quede pendiente (ver terminarSecado).
 export const terminarLavado = async (req, res) => {
   const { id } = req.params;
-  const { lavadora_id, secadora_id } = req.body;
+  const { lavadora_id, secadora_id, minutos } = req.body;
 
   if (!lavadora_id || !secadora_id) {
     return res.status(400).json({ message: 'Elige la lavadora y la secadora.' });
@@ -3330,7 +3387,14 @@ export const terminarLavado = async (req, res) => {
       [secadora_id]
     );
     await marcarMaquinasIniciadas(client, id, [secadora_id]);
-    await sellarCicloMaquinas(client, id);
+    // La secadora puede ser de un modelo que pregunta su duración (mig. 120):
+    // este es el otro camino que la arranca, así que también la acepta.
+    const leido = await tiempoElegidoDeMaquina(client, secadora_id, minutos);
+    if (leido?.error) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: leido.error });
+    }
+    await sellarCicloMaquinas(client, id, leido ? { maquinaId: secadora_id, minutos: leido.minutos } : null);
     // Si era la última lavadora, la nota pasa a SECANDO; si otras cargas
     // siguen en lavadora, continúa LAVANDO.
     const fase = await faseProcesoDeNota(client, id);

@@ -1024,12 +1024,45 @@ export default function Ajustes() {
   // es el modelo. Lo que quede vacío cae al tiempo general de arriba.
   const claveTiempo = (t) => `modelo|${t.modelo_id}`;
   const etiquetaTiempo = (t) => `${t.marca} · ${t.modelo}`;
-  const ayudaTiempo = () => 'Duración del ciclo de este modelo. Vacío = usa el tiempo de arriba.';
+  const ayudaTiempo = (t) => (
+    t?.pregunta_tiempo
+      ? 'Al iniciar una máquina de este modelo se pregunta con cuál de sus tiempos correr. Vacío = usa el tiempo de arriba.'
+      : 'Duración del ciclo de este modelo. Con más de un tiempo manda el último, que es el más largo. Vacío = usa el tiempo de arriba.'
+  );
+
+  // Un modelo puede llevar hasta TRES tiempos y un interruptor (mig. 120): la
+  // Sec49 no tiene "un" ciclo, tiene tres programas y quien elige es el
+  // empleado con la ropa delante. Los dos tiempos extra van siempre a la
+  // vista, aunque estén vacíos: son los que mandan cuando el interruptor está
+  // apagado, y esconderlos sería dejar el tiempo real fuera de la pantalla.
+  const camposOtrosTiempos = (t, inputCls, unidadCls) => (
+    <div className="mt-3 space-y-3">
+      <div className="flex items-center gap-2">
+        <span className={`${unidadCls} flex-shrink-0 w-24`}>Otros tiempos</span>
+        {['minutos_2', 'minutos_3'].map(campo => (
+          <input
+            key={campo}
+            type="number" min="1" step="1" placeholder="—"
+            value={t[campo] ?? ''}
+            onChange={e => setMinutosMarca(claveTiempo(t), e.target.value, campo)}
+            className={`${inputCls} text-center`}
+          />
+        ))}
+        <span className={`${unidadCls} flex-shrink-0`}>min</span>
+      </div>
+      <ToggleRow
+        label="Preguntar el tiempo al iniciar"
+        hint="Con esto encendido, al arrancar una máquina de este modelo se elige entre sus tiempos."
+        checked={!!t.pregunta_tiempo}
+        onChange={(v) => setMinutosMarca(claveTiempo(t), v, 'pregunta_tiempo')}
+      />
+    </div>
+  );
   const tiemposDe = (tipo, tamano) =>
     tiemposMarca.filter(t => t.tipo === tipo && t.tamano === tamano);
 
-  const setMinutosMarca = (clave, valor) =>
-    setTiemposMarca(prev => prev.map(t => (claveTiempo(t) === clave ? { ...t, minutos: valor } : t)));
+  const setMinutosMarca = (clave, valor, campo = 'minutos') =>
+    setTiemposMarca(prev => prev.map(t => (claveTiempo(t) === clave ? { ...t, [campo]: valor } : t)));
 
   const stepMinutosMarca = (clave, paso) =>
     setTiemposMarca(prev => prev.map(t => {
@@ -1054,14 +1087,26 @@ export default function Ajustes() {
   // temporizador.
   const guardarTiemposMarca = async () => {
     const aNumero = (v) => (v === '' || v == null ? null : Number(v));
-    const antes = new Map(tiemposOrigRef.current.map(t => [claveTiempo(t), aNumero(t.minutos)]));
-    const cambiados = tiemposMarca.filter(t => antes.get(claveTiempo(t)) !== aNumero(t.minutos));
+    // Un renglón puede cambiar por cualquiera de sus tres tiempos o por el
+    // interruptor, así que la comparación va campo por campo.
+    const foto = (t) => [
+      aNumero(t.minutos), aNumero(t.minutos_2), aNumero(t.minutos_3), !!t.pregunta_tiempo,
+    ].join('|');
+    const antes = new Map(tiemposOrigRef.current.map(t => [claveTiempo(t), foto(t)]));
+    const cambiados = tiemposMarca.filter(t => antes.get(claveTiempo(t)) !== foto(t));
     if (cambiados.length === 0) return;
 
     await Promise.all(cambiados.map(t => api.put('/etiquetas/tiempos-marca', {
-      modelo_id: t.modelo_id, minutos: aNumero(t.minutos),
+      modelo_id: t.modelo_id,
+      minutos:   aNumero(t.minutos),
+      minutos_2: aNumero(t.minutos_2),
+      minutos_3: aNumero(t.minutos_3),
+      pregunta_tiempo: !!t.pregunta_tiempo,
     })));
-    tiemposOrigRef.current = tiemposMarca.map(t => ({ ...t, minutos: aNumero(t.minutos) }));
+    tiemposOrigRef.current = tiemposMarca.map(t => ({
+      ...t,
+      minutos: aNumero(t.minutos), minutos_2: aNumero(t.minutos_2), minutos_3: aNumero(t.minutos_3),
+    }));
   };
 
   const handlePerfilChange = (e) => {
@@ -1393,7 +1438,7 @@ export default function Ajustes() {
       <Field
         key={claveTiempo(t)}
         label={etiquetaTiempo(t)}
-        hint={ayudaTiempo()}
+        hint={ayudaTiempo(t)}
       >
         <div className="flex items-center gap-2">
           <input
@@ -1404,6 +1449,7 @@ export default function Ajustes() {
           <span className="text-sm text-gray-500 flex-shrink-0">min</span>
           {stepBtnsMarca(claveTiempo(t))}
         </div>
+        {camposOtrosTiempos(t, INPUT_CLS, 'text-sm text-gray-500')}
       </Field>
     ));
   };
@@ -2118,7 +2164,7 @@ export default function Ajustes() {
       <MobileField
         key={claveTiempo(t)}
         label={etiquetaTiempo(t)}
-        hint={ayudaTiempo()}
+        hint={ayudaTiempo(t)}
       >
         <div className="flex items-center gap-2">
           <input
@@ -2129,6 +2175,7 @@ export default function Ajustes() {
           <span className="text-base text-grey flex-shrink-0">min</span>
           {stepBtnsMarca(claveTiempo(t), true)}
         </div>
+        {camposOtrosTiempos(t, MOBILE_INPUT_CLS, 'text-base text-grey')}
       </MobileField>
     ));
   };

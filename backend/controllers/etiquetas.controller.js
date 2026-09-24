@@ -393,7 +393,8 @@ export const getTiemposMarca = async (req, res) => {
     const { rows } = await pool.query(
       `SELECT mo.marca_id, mm.nombre AS marca,
               mo.id AS modelo_id, mo.nombre AS modelo,
-              mo.tipo, mo.tamano, mo.minutos
+              mo.tipo, mo.tamano,
+              mo.minutos, mo.minutos_2, mo.minutos_3, mo.pregunta_tiempo
          FROM modelos_maquina mo
          JOIN marcas_maquina mm ON mm.id = mo.marca_id
         WHERE mo.activo AND mm.activo
@@ -429,14 +430,36 @@ export const guardarTiempoMarca = async (req, res) => {
     if (!/^\d+$/.test(String(modelo_id))) {
       return res.status(400).json({ message: 'Elige un modelo válido.' });
     }
-    const leido = leerMinutos(minutos);
-    if (leido.error) return res.status(400).json({ message: leido.error });
+    // Un modelo puede llevar hasta tres tiempos y un interruptor (mig. 120).
+    // Se manda solo lo que cambió, así que cada campo se mira por separado.
+    const updates = [];
+    const values  = [];
+    let i = 1;
+    for (const [campo, valor] of [
+      ['minutos', minutos], ['minutos_2', req.body.minutos_2], ['minutos_3', req.body.minutos_3],
+    ]) {
+      if (valor === undefined) continue;
+      const leido = leerMinutos(valor);
+      if (leido.error) return res.status(400).json({ message: leido.error });
+      updates.push(`${campo} = $${i++}`);
+      values.push(leido.valor);
+    }
+    if (req.body.pregunta_tiempo !== undefined) {
+      updates.push(`pregunta_tiempo = $${i++}`);
+      values.push(Boolean(req.body.pregunta_tiempo));
+    }
+    if (updates.length === 0) {
+      return res.status(400).json({ message: 'No hay cambios que guardar.' });
+    }
+    updates.push('updated_at = NOW()');
+    values.push(modelo_id);
     try {
       const { rows } = await pool.query(
-        `UPDATE modelos_maquina SET minutos = $1, updated_at = NOW()
-          WHERE id = $2
-          RETURNING id AS modelo_id, marca_id, nombre AS modelo, tipo, tamano, minutos`,
-        [leido.valor, modelo_id]
+        `UPDATE modelos_maquina SET ${updates.join(', ')}
+          WHERE id = $${i}
+          RETURNING id AS modelo_id, marca_id, nombre AS modelo, tipo, tamano,
+                    minutos, minutos_2, minutos_3, pregunta_tiempo`,
+        values
       );
       if (rows.length === 0) {
         return res.status(404).json({ message: 'No se encontró el modelo.' });
