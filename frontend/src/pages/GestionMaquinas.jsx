@@ -851,11 +851,21 @@ export default function GestionMaquinas() {
               {/* Marca y modelo: los dos son catálogos elegibles (migs. 106 y
                   117) y se administran en Ajustes → Máquinas. Son el dato que
                   se repite entre máquinas y sobre el que se puede razonar —
-                  entre otras cosas, cuánto dura de verdad un ciclo. */}
+                  entre otras cosas, cuánto dura de verdad un ciclo.
+
+                  La marca es obligatoria: sin ella no hay modelo que elegir, y
+                  sin modelo no hay dónde configurarle el tiempo de ciclo. El
+                  renglón vacío es un "elige", no una opción que se pueda
+                  guardar: `required` no deja pasar el formulario con él. */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Marca</label>
-                <select name="marca" value={form.marca} onChange={handleCambioConModelo} className={INPUT_CLS}>
-                  <option value="">Sin especificar</option>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Marca <span className="text-red-500">*</span>
+                </label>
+                <select
+                  name="marca" value={form.marca} onChange={handleCambioConModelo}
+                  required className={INPUT_CLS}
+                >
+                  <option value="">Elige una marca</option>
                   {/* Una marca desactivada o escrita antes del catálogo sigue
                       apareciendo mientras sea la de esta máquina: si no,
                       editarla por cualquier otra cosa se la borraría sin aviso. */}

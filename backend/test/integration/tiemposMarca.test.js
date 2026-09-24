@@ -145,25 +145,24 @@ describe('sellado del ciclo — manda la marca de la máquina', () => {
 });
 
 describe('GET/PUT /api/etiquetas/tiempos-marca', () => {
-  it('lista las combinaciones que existen y guarda una nueva', async () => {
+  // La pantalla ya solo configura tiempos por MODELO (mig. 118), así que el
+  // listado no trae marcas sueltas. El tiempo por marca se conserva como
+  // respaldo de las máquinas sin modelo, y se puede seguir escribiendo por su
+  // endpoint para corregir uno heredado.
+  it('el listado ya no trae la marca suelta, pero su tiempo se puede escribir', async () => {
     const lg = await seedMarca('LG');
     const lavadoraId = await seedMaquina({ nombre: 'L1', tipo: 'lavadora_mediana', tamano: 'mediana' });
     await ponerMarca(lavadoraId, 'LG');
 
-    // La combinación aparece aunque todavía no tenga tiempo configurado.
     const lista = await request(app).get('/api/etiquetas/tiempos-marca').set(auth(admin.token));
     expect(lista.status).toBe(200);
-    expect(lista.body).toContainEqual(
-      expect.objectContaining({ marca: 'LG', tipo: 'lavadora', tamano: 'mediana', minutos: null })
-    );
+    expect(lista.body.some(t => t.marca === 'LG' && t.modelo_id == null)).toBe(false);
 
     await request(app).put('/api/etiquetas/tiempos-marca').set(auth(admin.token))
       .send({ marca_id: lg, tipo: 'lavadora', tamano: 'mediana', minutos: 45 }).expect(200);
 
-    const despues = await request(app).get('/api/etiquetas/tiempos-marca').set(auth(admin.token));
-    expect(despues.body).toContainEqual(
-      expect.objectContaining({ marca: 'LG', tipo: 'lavadora', tamano: 'mediana', minutos: 45 })
-    );
+    await arrancar(lavadoraId);
+    expect(await cicloDe(lavadoraId)).toBe(45);
   });
 
   it('vaciar el tiempo lo borra y la máquina vuelve al respaldo por tamaño', async () => {

@@ -1019,19 +1019,12 @@ export default function Ajustes() {
     );
   };
 
-  // ── Tiempos de ciclo (migs. 107 y 118) ──
-  // Hay dos clases de renglón: el del MODELO ("LG · WM22WV26SR") y el de la
-  // MARCA ("LG"), que es el respaldo de sus máquinas sin modelo. La clave los
-  // distingue porque conviven en el mismo bloque.
-  const claveTiempo = (t) => (
-    t.modelo_id != null ? `modelo|${t.modelo_id}` : `marca|${t.marca_id}|${t.tipo}|${t.tamano}`
-  );
-  const etiquetaTiempo = (t) => (t.modelo ? `${t.marca} · ${t.modelo}` : t.marca);
-  const ayudaTiempo = (t) => (
-    t.modelo
-      ? `Duración del ciclo de este modelo. Vacío = usa el tiempo de ${t.marca}.`
-      : `Duración del ciclo en las máquinas ${t.marca} de este tamaño que no tengan modelo con tiempo propio. Vacío = usa el tiempo de arriba.`
-  );
+  // ── Tiempos de ciclo por modelo (mig. 118) ──
+  // Un renglón por modelo, "LG · WM22WV26SR": quien sabe cuánto dura un ciclo
+  // es el modelo. Lo que quede vacío cae al tiempo general de arriba.
+  const claveTiempo = (t) => `modelo|${t.modelo_id}`;
+  const etiquetaTiempo = (t) => `${t.marca} · ${t.modelo}`;
+  const ayudaTiempo = () => 'Duración del ciclo de este modelo. Vacío = usa el tiempo de arriba.';
   const tiemposDe = (tipo, tamano) =>
     tiemposMarca.filter(t => t.tipo === tipo && t.tamano === tamano);
 
@@ -1065,10 +1058,9 @@ export default function Ajustes() {
     const cambiados = tiemposMarca.filter(t => antes.get(claveTiempo(t)) !== aNumero(t.minutos));
     if (cambiados.length === 0) return;
 
-    await Promise.all(cambiados.map(t => api.put('/etiquetas/tiempos-marca', t.modelo_id != null
-      ? { modelo_id: t.modelo_id, minutos: aNumero(t.minutos) }
-      : { marca_id: t.marca_id, tipo: t.tipo, tamano: t.tamano, minutos: aNumero(t.minutos) }
-    )));
+    await Promise.all(cambiados.map(t => api.put('/etiquetas/tiempos-marca', {
+      modelo_id: t.modelo_id, minutos: aNumero(t.minutos),
+    })));
     tiemposOrigRef.current = tiemposMarca.map(t => ({ ...t, minutos: aNumero(t.minutos) }));
   };
 
@@ -1390,10 +1382,10 @@ export default function Ajustes() {
       </div>
     </Field>
   );
-  // Un renglón por modelo de ese tipo+tamaño, y uno por marca que exista ahí.
-  // Van debajo del tiempo general, que se queda de respaldo para las máquinas
-  // sin marca: la duración es de la MÁQUINA (una LG mediana tarda 45 y una
-  // Speed Queen jumbo 35), pero no todas las máquinas tienen marca ni modelo.
+  // Un renglón por modelo de ese tipo+tamaño. Van debajo del tiempo general,
+  // que se queda de respaldo: la duración es de la MÁQUINA (una LG mediana
+  // tarda 45 y una Speed Queen jumbo 35), pero mientras una máquina no tenga
+  // modelo capturado no hay de dónde sacarla.
   const camposTiempoMarca = (tipo, tamano) => {
     const lista = tiemposDe(tipo, tamano);
     if (lista.length === 0) return null;
@@ -1401,7 +1393,7 @@ export default function Ajustes() {
       <Field
         key={claveTiempo(t)}
         label={etiquetaTiempo(t)}
-        hint={ayudaTiempo(t)}
+        hint={ayudaTiempo()}
       >
         <div className="flex items-center gap-2">
           <input
@@ -1423,14 +1415,14 @@ export default function Ajustes() {
     <Section titulo="Lavadora">
       {subTitulo('Mediana')}
       {campoPrecio('precio_carga_mediana', 'Aplica a lavadoras medianas en autoservicio y por encargo.')}
-      {campoTiempo('tiempo_carga_mediana', 'Se usa en las lavadoras medianas que no tengan tiempo por marca.')}
+      {campoTiempo('tiempo_carga_mediana', 'Se usa en las lavadoras medianas cuyo modelo no tenga tiempo propio.')}
       {camposTiempoMarca('lavadora', 'mediana')}
 
       <div className="border-t border-gray-100" />
 
       {subTitulo('Jumbo')}
       {campoPrecio('precio_carga_jumbo', 'Aplica a lavadoras jumbo en autoservicio y por encargo.')}
-      {campoTiempo('tiempo_carga_jumbo', 'Se usa en las lavadoras jumbo que no tengan tiempo por marca.')}
+      {campoTiempo('tiempo_carga_jumbo', 'Se usa en las lavadoras jumbo cuyo modelo no tenga tiempo propio.')}
       {camposTiempoMarca('lavadora', 'jumbo')}
 
       <div className="border-t border-gray-100" />
@@ -1443,7 +1435,7 @@ export default function Ajustes() {
 
     <Section titulo="Secadora">
       {campoPrecio('precio_carga_secadora', 'Precio del secado de una carga.')}
-      {campoTiempo('tiempo_carga_secadora', 'Se usa en las secadoras que no tengan tiempo por marca.')}
+      {campoTiempo('tiempo_carga_secadora', 'Se usa en las secadoras cuyo modelo no tenga tiempo propio.')}
       {camposTiempoMarca('secadora', 'mediana')}
       {camposTiempoMarca('secadora', 'jumbo')}
     </Section>
@@ -2105,7 +2097,7 @@ export default function Ajustes() {
       <MobileField
         key={claveTiempo(t)}
         label={etiquetaTiempo(t)}
-        hint={ayudaTiempo(t)}
+        hint={ayudaTiempo()}
       >
         <div className="flex items-center gap-2">
           <input
@@ -2127,12 +2119,12 @@ export default function Ajustes() {
         <div className="space-y-4">
         <TarjetaMobile titulo="Mediana">
           {campoPrecioM('precio_carga_mediana', 'Aplica a lavadoras medianas (autoservicio y por encargo).')}
-          {campoTiempoM('tiempo_carga_mediana', 'Se usa en las lavadoras medianas que no tengan tiempo por marca.')}
+          {campoTiempoM('tiempo_carga_mediana', 'Se usa en las lavadoras medianas cuyo modelo no tenga tiempo propio.')}
           {camposTiempoMarcaM('lavadora', 'mediana')}
         </TarjetaMobile>
         <TarjetaMobile titulo="Jumbo">
           {campoPrecioM('precio_carga_jumbo', 'Aplica a lavadoras jumbo (autoservicio y por encargo).')}
-          {campoTiempoM('tiempo_carga_jumbo', 'Se usa en las lavadoras jumbo que no tengan tiempo por marca.')}
+          {campoTiempoM('tiempo_carga_jumbo', 'Se usa en las lavadoras jumbo cuyo modelo no tenga tiempo propio.')}
           {camposTiempoMarcaM('lavadora', 'jumbo')}
         </TarjetaMobile>
         {/* El edredón conserva su precio, pero ya no su tiempo: usa el de la
@@ -2147,7 +2139,7 @@ export default function Ajustes() {
         <TituloGrupoMobile>Secadora</TituloGrupoMobile>
         <TarjetaMobile>
           {campoPrecioM('precio_carga_secadora', 'Precio del secado de una carga.')}
-          {campoTiempoM('tiempo_carga_secadora', 'Se usa en las secadoras que no tengan tiempo por marca.')}
+          {campoTiempoM('tiempo_carga_secadora', 'Se usa en las secadoras cuyo modelo no tenga tiempo propio.')}
           {camposTiempoMarcaM('secadora', 'mediana')}
           {camposTiempoMarcaM('secadora', 'jumbo')}
         </TarjetaMobile>

@@ -363,63 +363,32 @@ export const reordenarModelosMaquina = async (req, res) => {
   }
 };
 
-// ── Tiempos de ciclo (migs. 107 y 118) ──────────────────────────────────────
+// ── Tiempos de ciclo por modelo (migs. 107 y 118) ───────────────────────────
 //
 // La duración de un ciclo es de la MÁQUINA y no de la carga: una LG mediana
 // tarda 45 min y una Speed Queen jumbo 35, al revés de lo que suponía el eje
-// del tamaño. Aquí se configuran, en los dos escalones que existen:
+// del tamaño. Quien lo sabe de verdad es el MODELO, así que es lo único que
+// se configura: "LG · WM22WV26SR".
 //
-//   · por MODELO  → "LG · WM22WV26SR", el dato fino (mig. 118);
-//   · por MARCA   → "LG", el respaldo de las máquinas de esa marca sin modelo
-//                   con tiempo propio (mig. 107).
-//
-// Lo que no esté aquí cae al tiempo por tamaño de Ajustes, que sigue existiendo
-// como último respaldo.
+// El escalón por MARCA de la mig. 107 sigue existiendo en la base y en el
+// cálculo (ver MINUTOS_CONFIGURADOS), pero ya no se lista: es el respaldo de
+// las máquinas que todavía no tienen modelo capturado, no algo que se
+// configure. Cuando todas lo tengan, deja de usarse solo.
 
-// Devuelve una fila por combinación marca+tipo+tamaño que tenga sentido
-// mostrar: las que existen en máquinas dadas de alta, más las que ya tengan un
-// tiempo configurado. Así la pantalla enseña la lavandería real y no una
-// matriz llena de campos vacíos (no hay ninguna LG jumbo, así que ese renglón
-// no aparece hasta que exista la máquina).
+// Un renglón por modelo activo. El modelo dice su tipo y su tamaño (mig. 118),
+// así que aparece en su bloque aunque todavía no haya ninguna máquina con ese
+// modelo: primero se configura el tiempo, luego se le asigna a las máquinas.
 export const getTiemposMarca = async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `WITH combos AS (
-         SELECT DISTINCT mm.id AS marca_id,
-                CASE WHEN m.tipo = 'secadora' THEN 'secadora' ELSE 'lavadora' END AS tipo,
-                m.tamano
-           FROM maquinas m
-           JOIN marcas_maquina mm ON mm.nombre = m.marca
-          WHERE m.tamano IS NOT NULL
-         UNION
-         SELECT tm.marca_id, tm.tipo, tm.tamano FROM tiempos_marca tm
-       ),
-       -- Renglón por MARCA: el respaldo de las máquinas de esa marca que no
-       -- tienen modelo, o cuyo modelo no tiene tiempo propio.
-       por_marca AS (
-         SELECT c.marca_id, mm.nombre AS marca,
-                NULL::int AS modelo_id, NULL::varchar AS modelo,
-                c.tipo, c.tamano, tm.minutos, mm.orden AS orden_marca, 0 AS orden_fila
-           FROM combos c
-           JOIN marcas_maquina mm ON mm.id = c.marca_id
-           LEFT JOIN tiempos_marca tm
-                  ON tm.marca_id = c.marca_id AND tm.tipo = c.tipo AND tm.tamano = c.tamano
-          WHERE mm.activo
-       ),
-       -- Renglón por MODELO: el modelo dice su tipo y su tamaño (mig. 118), así
-       -- que aparece aunque todavía no haya ninguna máquina con ese modelo.
-       por_modelo AS (
-         SELECT mo.marca_id, mm.nombre AS marca,
-                mo.id AS modelo_id, mo.nombre AS modelo,
-                mo.tipo, mo.tamano, mo.minutos, mm.orden AS orden_marca, 1 AS orden_fila
-           FROM modelos_maquina mo
-           JOIN marcas_maquina mm ON mm.id = mo.marca_id
-          WHERE mo.activo AND mm.activo
-       )
-       SELECT marca_id, marca, modelo_id, modelo, tipo, tamano, minutos
-         FROM (SELECT * FROM por_marca UNION ALL SELECT * FROM por_modelo) t
-        ORDER BY tipo, CASE tamano WHEN 'mediana' THEN 0 ELSE 1 END,
-                 orden_marca NULLS LAST, marca_id, orden_fila, modelo`
+      `SELECT mo.marca_id, mm.nombre AS marca,
+              mo.id AS modelo_id, mo.nombre AS modelo,
+              mo.tipo, mo.tamano, mo.minutos
+         FROM modelos_maquina mo
+         JOIN marcas_maquina mm ON mm.id = mo.marca_id
+        WHERE mo.activo AND mm.activo
+        ORDER BY mo.tipo, CASE mo.tamano WHEN 'mediana' THEN 0 ELSE 1 END,
+                 mm.orden NULLS LAST, mm.id, mo.orden NULLS LAST, mo.id`
     );
     res.json(rows);
   } catch (err) {
@@ -434,7 +403,12 @@ export const getTiemposMarca = async (req, res) => {
 // temporizador.
 //
 // Con `modelo_id` el tiempo es del modelo y vive en su fila del catálogo
-// (mig. 118); sin él es el de la marca para ese tipo y tamaño (mig. 107).
+// (mig. 118): es el único que se configura desde la pantalla.
+//
+// Sin él escribe el tiempo por marca (mig. 107), que ya no se lista pero
+// sigue aplicándose a las máquinas sin modelo. Se conserva porque es la única
+// forma de corregir uno de esos tiempos heredados mientras queden máquinas
+// así; el día que todas tengan modelo, sobra.
 export const guardarTiempoMarca = async (req, res) => {
   if (!esAdmin(req.user.rol)) {
     return res.status(403).json({ message: 'Solo un administrador puede realizar esta acción.' });

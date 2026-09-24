@@ -321,17 +321,27 @@ describe('GET/PUT /api/etiquetas/tiempos-marca — el renglón dice marca y mode
     expect(await cicloDe(lavadoraId)).toBe(45);
   });
 
-  it('el renglón de la marca sigue estando para las máquinas sin modelo', async () => {
+  it('la marca suelta ya no se lista, aunque tenga máquinas y tiempo propio', async () => {
     const lg = await seedMarca('LG');
-    const lavadoraId = await seedMaquina({
-      nombre: 'L3', tipo: 'lavadora_mediana', tamano: 'mediana', marca: 'LG',
-    });
-    expect(lavadoraId).toBeTruthy();
+    await tiempoDeMarca(lg, 'lavadora', 'mediana', 45);
+    await seedMaquina({ nombre: 'L3', tipo: 'lavadora_mediana', tamano: 'mediana', marca: 'LG' });
 
     const { body } = await request(app).get('/api/etiquetas/tiempos-marca').set(auth(admin.token));
-    expect(body).toContainEqual(expect.objectContaining({
-      marca: 'LG', modelo: null, tipo: 'lavadora', tamano: 'mediana',
-    }));
+    expect(body.every(t => t.modelo_id != null)).toBe(true);
+  });
+
+  it('el tiempo por marca deja de listarse pero sigue aplicándose a las máquinas sin modelo', async () => {
+    const lg = await seedMarca('LG');
+    await tiempoDeMarca(lg, 'lavadora', 'mediana', 45);
+    const lavadoraId = await seedMaquina({
+      nombre: 'L4', tipo: 'lavadora_mediana', tamano: 'mediana', marca: 'LG',
+    });
+
+    await arrancar(lavadoraId);
+
+    // 45 (el de la marca), no los 30 del respaldo por tamaño: quitarlo de la
+    // pantalla no puede cambiarle el ciclo a una máquina en operación.
+    expect(await cicloDe(lavadoraId)).toBe(45);
   });
 
   it('un modelo inexistente → 404 y un minutos inválido → 400', async () => {
