@@ -2463,7 +2463,7 @@ export const encenderMaquinaDeNota = async (req, res) => {
       await client.query('COMMIT');
       await sincronizarSonoff(Number(maquina_id));
       return res.json({
-        message: `${maq.nombre} encendida. Arráncala otra vez y dale a Otro ciclo.`,
+        message: `${maq.nombre} encendida. Arráncala otra vez y dale a Iniciar ciclo.`,
         maquina: reUpd[0],
       });
     }

@@ -138,23 +138,32 @@ export default function MachineCard({
     const ofreceOtroCiclo = Boolean(maquina.puede_otro_ciclo);
     const enPausa = ofreceOtroCiclo && maquina.espera_otro_ciclo > 0;
     // El siguiente ciclo empieza igual que el primero: la máquina se quedó sin
-    // corriente al terminar, así que primero hay que encenderla. "Otro ciclo"
-    // llega después, en la tarjeta ámbar, cuando ya está arrancada.
+    // corriente al terminar, así que primero hay que encenderla. "Iniciar
+    // ciclo" llega después, cuando ya está arrancada.
     const etiquetaBoton = otroCicloEnCurso ? 'ENCENDIENDO…'
       : enPausa            ? `ENCENDER EN ${maquina.espera_otro_ciclo}s`
       : ofreceOtroCiclo    ? 'ENCENDER MÁQUINA'
       : finalizaCarga      ? 'FINALIZAR CARGA'
       : 'INICIAR SECADO';
+    // El color va con lo que pide el botón, no con el estado de la tarjeta:
+    // **ámbar mientras falte algo por hacer** —darle corriente— y **verde
+    // cuando lo que toca es arrancar o cerrar la carga**. Por eso esta misma
+    // tarjeta es ámbar si ofrece encender y verde si ya solo queda finalizar.
+    const c = ofreceOtroCiclo
+      ? { fondo: 'bg-amber-50', aro: 'ring-amber-400', cabecera: 'bg-amber-500',
+          titulo: 'text-amber-700', boton: 'bg-amber-500 ring-amber-600' }
+      : { fondo: 'bg-light-green', aro: 'ring-green', cabecera: 'bg-green',
+          titulo: 'text-green', boton: 'bg-green ring-green-700' };
     return (
       <div
         {...containerProps}
-        className={`rounded-card bg-light-green ring-green shadow-card overflow-hidden ring-2 ring-inset ${interactivoCls}`}
+        className={`rounded-card ${c.fondo} ${c.aro} shadow-card overflow-hidden ring-2 ring-inset ${interactivoCls}`}
       >
-        <div className={`${headerCls} bg-green text-white`}>
+        <div className={`${headerCls} ${c.cabecera} text-white`}>
           <span className={nombreCls}>{maquina.nombre}</span>
         </div>
         <div className="px-card-pad pt-5 pb-6 flex flex-col items-center gap-3">
-          <p className="text-card-title text-green text-center uppercase tracking-wide">
+          <p className={`text-card-title ${c.titulo} text-center uppercase tracking-wide`}>
             {esSecadora ? <>Finalizó<br />secadora</> : <>Finalizó<br />lavadora</>}
           </p>
           {infoNota}
@@ -168,7 +177,7 @@ export default function MachineCard({
               else onTerminarCiclo?.(maquina);
             }}
             disabled={otroCicloEnCurso || enPausa}
-            className="w-full bg-green ring ring-green-700 text-white text-section py-8 rounded-card-sm shadow-card hover:opacity-90 transition-opacity mt-1 disabled:opacity-60 disabled:cursor-not-allowed"
+            className={`w-full ${c.boton} ring text-white text-section py-8 rounded-card-sm shadow-card hover:opacity-90 transition-opacity mt-1 disabled:opacity-60 disabled:cursor-not-allowed`}
           >
             {etiquetaBoton}
           </button>
@@ -183,31 +192,31 @@ export default function MachineCard({
 
   // Encendida y esperando a que la arranquen (mig. 110). Es el paso intermedio
   // del siguiente ciclo: ya tiene corriente pero nadie ha apretado su botón, así
-  // que no hay cronómetro que mostrar. Se pinta como aviso —ámbar— porque lo que
-  // comunica es que falta algo por hacer, no que esté trabajando.
+  // que no hay cronómetro que mostrar. Va en verde: la corriente ya está dada y
+  // lo único que queda es arrancar el ciclo.
   if (maquina.esperando_arranque && nota) {
     return (
       <div
         {...containerProps}
-        className={`rounded-card bg-amber-50 ring-amber-400 shadow-card overflow-hidden ring-2 ring-inset ${interactivoCls}`}
+        className={`rounded-card bg-light-green ring-green shadow-card overflow-hidden ring-2 ring-inset ${interactivoCls}`}
       >
-        <div className={`${headerCls} bg-amber-500 text-white`}>
+        <div className={`${headerCls} bg-green text-white`}>
           <span className={nombreCls}>{maquina.nombre}</span>
         </div>
         <div className="px-card-pad pt-5 pb-6 flex flex-col items-center gap-3">
-          <p className="text-card-title text-amber-700 text-center uppercase tracking-wide">
+          <p className="text-card-title text-green text-center uppercase tracking-wide">
             Encendida
           </p>
-          <p className="text-kpi-label text-amber-800 text-sm text-center">
-            Arráncala con su botón y dale a Otro ciclo.
+          <p className="text-kpi-label text-green-700 text-sm text-center">
+            Arráncala con su botón y dale a Iniciar ciclo.
           </p>
           {infoNota}
           <button
             onClick={(e) => { e.stopPropagation(); onOtroCiclo?.(maquina); }}
             disabled={otroCicloEnCurso}
-            className="w-full bg-amber-500 ring ring-amber-600 text-white text-section py-8 rounded-card-sm shadow-card hover:opacity-90 transition-opacity mt-1 disabled:opacity-60 disabled:cursor-not-allowed"
+            className="w-full bg-green ring ring-green-700 text-white text-section py-8 rounded-card-sm shadow-card hover:opacity-90 transition-opacity mt-1 disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            {otroCicloEnCurso ? 'INICIANDO…' : 'OTRO CICLO'}
+            {otroCicloEnCurso ? 'INICIANDO…' : 'INICIAR CICLO'}
           </button>
           {contadorCiclos}
           {errorOtroCiclo && (

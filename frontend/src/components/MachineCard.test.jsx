@@ -79,7 +79,8 @@ describe('MachineCard', () => {
 
   // El siguiente ciclo repite los pasos del primero: la máquina se quedó sin
   // corriente al terminar, así que primero se enciende y solo después se
-  // arranca el cronómetro. Por eso la tarjeta verde NO ofrece "Otro ciclo".
+  // arranca el cronómetro. Por eso la tarjeta de "finalizó" NO ofrece
+  // "Iniciar ciclo": primero hay que darle corriente.
   it('al terminar un ciclo con ciclos por correr, ofrece encender la máquina', async () => {
     const onEncender = vi.fn();
     render(
@@ -96,7 +97,7 @@ describe('MachineCard', () => {
     expect(onEncender).toHaveBeenCalled();
   });
 
-  it('ya encendida, el botón pasa a Otro ciclo y pide que la arranquen', async () => {
+  it('ya encendida, el botón pasa a Iniciar ciclo y pide que la arranquen', async () => {
     const onOtroCiclo = vi.fn();
     render(
       <MachineCard
@@ -109,7 +110,7 @@ describe('MachineCard', () => {
 
     expect(screen.getByText('Encendida')).toBeInTheDocument();
     expect(screen.getByText(/Arráncala con su botón/)).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'OTRO CICLO' }));
+    await userEvent.click(screen.getByRole('button', { name: 'INICIAR CICLO' }));
     expect(onOtroCiclo).toHaveBeenCalled();
   });
 
@@ -177,7 +178,7 @@ describe('MachineCard', () => {
     );
 
     expect(screen.getAllByRole('button')).toHaveLength(1);
-    expect(screen.queryByRole('button', { name: /OTRO CICLO/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /INICIAR CICLO/ })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'FINALIZAR CARGA' })).toBeInTheDocument();
   });
 
