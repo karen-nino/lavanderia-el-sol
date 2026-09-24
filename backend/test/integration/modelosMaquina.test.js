@@ -361,11 +361,15 @@ describe('modelo con tres tiempos', () => {
   // una nota que ya tiene su lavadora corriendo.
   async function conSecadoraDeTresTiempos({ pregunta = true } = {}) {
     const sq = await seedMarca('Speed Queen');
+    // Que el modelo tenga varios tiempos se declara en su catálogo; los
+    // minutos se escriben desde el bloque de tiempos.
     const modelo = (await crearModelo(admin.token, {
       marca_id: sq, nombre: 'Sec49', tipo: 'secadora', tamano: 'jumbo', minutos: 30,
+      pregunta_tiempo: pregunta,
     })).body;
+    expect(modelo.pregunta_tiempo).toBe(pregunta);
     await request(app).put('/api/etiquetas/tiempos-marca').set(auth(admin.token))
-      .send({ modelo_id: modelo.id, minutos: 30, minutos_2: 45, minutos_3: 60, pregunta_tiempo: pregunta })
+      .send({ modelo_id: modelo.id, minutos: 30, minutos_2: 45, minutos_3: 60 })
       .expect(200);
 
     const lavadoraId = await seedMaquina({ nombre: 'L1', tipo: 'lavadora_mediana', tamano: 'mediana' });
@@ -386,6 +390,17 @@ describe('modelo con tres tiempos', () => {
     }
     return { notaId: creada.body.id, secadoraId, modelo };
   }
+
+  it('el interruptor se enciende y se apaga desde el catálogo del modelo', async () => {
+    const lg = await seedMarca('LG');
+    const { body } = await crearModelo(admin.token, { marca_id: lg, nombre: 'DLE7300', tipo: 'secadora' });
+    expect(body.pregunta_tiempo).toBe(false);
+
+    const res = await request(app).put(`/api/etiquetas/modelos-maquina/${body.id}`)
+      .set(auth(admin.token)).send({ pregunta_tiempo: true });
+    expect(res.status).toBe(200);
+    expect(res.body.pregunta_tiempo).toBe(true);
+  });
 
   it('el tiempo elegido en el modal es el que se sella', async () => {
     const { notaId, secadoraId } = await conSecadoraDeTresTiempos();

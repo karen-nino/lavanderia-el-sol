@@ -283,9 +283,10 @@ function MobileSectionButton({ label, icon, onClick }) {
 // `extra` son los campos fijos de un catálogo que cuelga de otro: los modelos
 // de máquina cuelgan de su marca (mig. 117), así que `{ marca_id }` filtra el
 // listado y viaja en el alta y en el reordenar.
-// `extraCampos` son los desplegables que lleva cada renglón además del nombre
-// (el modelo dice si es lavadora o secadora y de qué tamaño): se describen
-// como { name, defecto, opciones: [{ v, label }] }.
+// `extraCampos` son los campos que lleva cada renglón además del nombre (el
+// modelo dice si es lavadora o secadora y de qué tamaño): se describen como
+// { name, defecto, opciones: [{ v, label }] } para un desplegable, o con
+// `tipo: 'check'` y `label` para un sí/no.
 // `onCambio` avisa la lista fresca a quien envuelve el catálogo (lo usa el
 // desplegable de marcas, que tiene que enterarse de las que se agregan aquí).
 // Tiene que ser estable (useCallback): entra en las dependencias de la carga.
@@ -308,8 +309,35 @@ function CatalogoEtiquetas({
   const [nuevoExtra, setNuevoExtra] = useState(porDefecto);
   const [editExtra,  setEditExtra]  = useState({});
 
-  const etiquetaDe = (campo, valor) =>
-    campo.opciones.find(o => o.v === valor)?.label ?? valor;
+  // En el subtítulo del renglón un sí/no se resume (`chip`); la frase larga es
+  // para la casilla, que es donde hay que entender qué se está marcando.
+  const etiquetaDe = (campo, valor) => (
+    campo.tipo === 'check'
+      ? (valor ? (campo.chip ?? campo.label) : null)
+      : (campo.opciones.find(o => o.v === valor)?.label ?? valor)
+  );
+
+  // Un campo extra, igual en el alta que en la edición del renglón.
+  const campoExtra = (campo, valor, alCambiar) => (campo.tipo === 'check' ? (
+    <label key={campo.name} className="flex items-center gap-2 text-sm text-gray-600 basis-full">
+      <input
+        type="checkbox" checked={!!valor}
+        onChange={(e) => alCambiar(e.target.checked)}
+        className="w-4 h-4 accent-blue"
+      />
+      {campo.label}
+    </label>
+  ) : (
+    <div key={campo.name} className="flex-1 min-w-0">
+      <select
+        value={valor ?? campo.defecto}
+        onChange={(e) => alCambiar(e.target.value)}
+        className={inputCls}
+      >
+        {campo.opciones.map(o => <option key={o.v} value={o.v}>{o.label}</option>)}
+      </select>
+    </div>
+  ));
 
   // Los campos fijos viajan como filtro en el listado y en el cuerpo del resto.
   const extraQs = extra ? `?${new URLSearchParams(extra)}` : '';
@@ -445,16 +473,10 @@ function CatalogoEtiquetas({
             className={inputCls}
           />
         </div>
-        {extraCampos.map(campo => (
-          <div key={campo.name} className="flex-1 min-w-0">
-            <select
-              value={nuevoExtra[campo.name] ?? campo.defecto}
-              onChange={(e) => setNuevoExtra(prev => ({ ...prev, [campo.name]: e.target.value }))}
-              className={inputCls}
-            >
-              {campo.opciones.map(o => <option key={o.v} value={o.v}>{o.label}</option>)}
-            </select>
-          </div>
+        {extraCampos.map(campo => campoExtra(
+          campo,
+          nuevoExtra[campo.name] ?? campo.defecto,
+          (v) => setNuevoExtra(prev => ({ ...prev, [campo.name]: v })),
         ))}
         <button
           type="button"
@@ -488,16 +510,10 @@ function CatalogoEtiquetas({
                       autoFocus
                     />
                   </div>
-                  {extraCampos.map(campo => (
-                    <div key={campo.name} className="flex-1 min-w-0">
-                      <select
-                        value={editExtra[campo.name] ?? campo.defecto}
-                        onChange={(e) => setEditExtra(prev => ({ ...prev, [campo.name]: e.target.value }))}
-                        className={inputCls}
-                      >
-                        {campo.opciones.map(o => <option key={o.v} value={o.v}>{o.label}</option>)}
-                      </select>
-                    </div>
+                  {extraCampos.map(campo => campoExtra(
+                    campo,
+                    editExtra[campo.name] ?? campo.defecto,
+                    (v) => setEditExtra(prev => ({ ...prev, [campo.name]: v })),
                   ))}
                   <button type="button" onClick={() => guardarNombre(item.id)}
                     className="text-sm font-medium text-blue px-2">Guardar</button>
@@ -529,7 +545,7 @@ function CatalogoEtiquetas({
                     </p>
                     {extraCampos.length > 0 && (
                       <p className="text-xs text-gray-400 truncate">
-                        {extraCampos.map(c => etiquetaDe(c, item[c.name])).join(' · ')}
+                        {extraCampos.map(c => etiquetaDe(c, item[c.name])).filter(Boolean).join(' · ')}
                       </p>
                     )}
                   </div>
@@ -617,6 +633,11 @@ const CAMPOS_MODELO = [
     { v: 'mediana', label: 'Mediana' },
     { v: 'jumbo',   label: 'Jumbo'   },
   ] },
+  // Los modelos con varios programas (mig. 120). Se declara aquí y no en el
+  // bloque de tiempos para que los demás modelos —que son casi todos— no
+  // carguen con campos que no usan.
+  { name: 'pregunta_tiempo', defecto: false, tipo: 'check',
+    label: 'Varios tiempos: se elige cuál al iniciar', chip: 'varios tiempos' },
 ];
 
 // Marcas de máquina y, colgando de cada una, sus modelos (migs. 117 y 118).
@@ -1027,17 +1048,23 @@ export default function Ajustes() {
   const ayudaTiempo = (t) => (
     t?.pregunta_tiempo
       ? 'Al iniciar una máquina de este modelo se pregunta con cuál de sus tiempos correr. Vacío = usa el tiempo de arriba.'
-      : 'Duración del ciclo de este modelo. Con más de un tiempo manda el último, que es el más largo. Vacío = usa el tiempo de arriba.'
+      : t?.minutos_2 != null || t?.minutos_3 != null
+        ? 'Duración del ciclo de este modelo. Con el interruptor apagado manda el último, que es el más largo.'
+        : 'Duración del ciclo de este modelo. Vacío = usa el tiempo de arriba.'
   );
 
-  // Un modelo puede llevar hasta TRES tiempos y un interruptor (mig. 120): la
-  // Sec49 no tiene "un" ciclo, tiene tres programas y quien elige es el
-  // empleado con la ropa delante. Los dos tiempos extra van siempre a la
-  // vista, aunque estén vacíos: son los que mandan cuando el interruptor está
-  // apagado, y esconderlos sería dejar el tiempo real fuera de la pantalla.
+  // Un modelo puede llevar hasta TRES tiempos (mig. 120): la Sec49 no tiene
+  // "un" ciclo, tiene tres programas y quien elige es el empleado con la ropa
+  // delante. Los dos campos extra salen SOLO en los modelos marcados como de
+  // varios tiempos (en Marcas y modelos) o que ya tengan alguno capturado —lo
+  // segundo para que apagar el interruptor no esconda un tiempo que sigue
+  // mandando—. El resto de modelos, que son casi todos, no los ven.
+  const tieneVariosTiempos = (t) =>
+    Boolean(t.pregunta_tiempo) || t.minutos_2 != null || t.minutos_3 != null;
+
   const camposOtrosTiempos = (t, inputCls, unidadCls) => (
-    <div className="mt-3 space-y-3">
-      <div className="flex items-center gap-2">
+    tieneVariosTiempos(t) ? (
+      <div className="mt-3 flex items-center gap-2">
         <span className={`${unidadCls} flex-shrink-0 w-24`}>Otros tiempos</span>
         {['minutos_2', 'minutos_3'].map(campo => (
           <input
@@ -1050,13 +1077,7 @@ export default function Ajustes() {
         ))}
         <span className={`${unidadCls} flex-shrink-0`}>min</span>
       </div>
-      <ToggleRow
-        label="Preguntar el tiempo al iniciar"
-        hint="Con esto encendido, al arrancar una máquina de este modelo se elige entre sus tiempos."
-        checked={!!t.pregunta_tiempo}
-        onChange={(v) => setMinutosMarca(claveTiempo(t), v, 'pregunta_tiempo')}
-      />
-    </div>
+    ) : null
   );
   const tiemposDe = (tipo, tamano) =>
     tiemposMarca.filter(t => t.tipo === tipo && t.tamano === tamano);
@@ -1090,7 +1111,7 @@ export default function Ajustes() {
     // Un renglón puede cambiar por cualquiera de sus tres tiempos o por el
     // interruptor, así que la comparación va campo por campo.
     const foto = (t) => [
-      aNumero(t.minutos), aNumero(t.minutos_2), aNumero(t.minutos_3), !!t.pregunta_tiempo,
+      aNumero(t.minutos), aNumero(t.minutos_2), aNumero(t.minutos_3),
     ].join('|');
     const antes = new Map(tiemposOrigRef.current.map(t => [claveTiempo(t), foto(t)]));
     const cambiados = tiemposMarca.filter(t => antes.get(claveTiempo(t)) !== foto(t));
@@ -1101,7 +1122,6 @@ export default function Ajustes() {
       minutos:   aNumero(t.minutos),
       minutos_2: aNumero(t.minutos_2),
       minutos_3: aNumero(t.minutos_3),
-      pregunta_tiempo: !!t.pregunta_tiempo,
     })));
     tiemposOrigRef.current = tiemposMarca.map(t => ({
       ...t,

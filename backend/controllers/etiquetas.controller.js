@@ -226,7 +226,7 @@ export const crearModeloMaquina = async (req, res) => {
   if (!nombre) {
     return res.status(400).json({ message: 'El nombre es requerido.' });
   }
-  const { tipo, tamano } = req.body;
+  const { tipo, tamano, pregunta_tiempo } = req.body;
   if (!TIPOS_TIEMPO.includes(tipo)) {
     return res.status(400).json({ message: 'El tipo de máquina debe ser lavadora o secadora.' });
   }
@@ -239,11 +239,11 @@ export const crearModeloMaquina = async (req, res) => {
   try {
     // El orden se cuenta dentro de la marca: cada marca tiene su propia lista.
     const { rows } = await pool.query(
-      `INSERT INTO modelos_maquina (marca_id, nombre, tipo, tamano, minutos, orden)
-       VALUES ($1, $2, $3, $4, $5,
+      `INSERT INTO modelos_maquina (marca_id, nombre, tipo, tamano, minutos, pregunta_tiempo, orden)
+       VALUES ($1, $2, $3, $4, $5, $6,
                (SELECT COALESCE(MAX(orden), 0) + 1 FROM modelos_maquina WHERE marca_id = $1))
        RETURNING *`,
-      [marcaId, nombre, tipo, tamano, minutos.valor]
+      [marcaId, nombre, tipo, tamano, minutos.valor, Boolean(pregunta_tiempo)]
     );
     res.status(201).json(rows[0]);
   } catch (err) {
@@ -266,7 +266,7 @@ export const actualizarModeloMaquina = async (req, res) => {
   if (!/^\d+$/.test(String(id))) {
     return res.status(404).json({ message: 'No se encontró el modelo.' });
   }
-  const { nombre, activo, tipo, tamano, minutos } = req.body;
+  const { nombre, activo, tipo, tamano, minutos, pregunta_tiempo } = req.body;
 
   const updates = [];
   const values  = [];
@@ -297,6 +297,13 @@ export const actualizarModeloMaquina = async (req, res) => {
     }
     updates.push(`tamano = $${i++}`);
     values.push(tamano);
+  }
+  // Que el modelo tenga varios tiempos y pregunte cuál usar es parte de lo que
+  // ES el modelo (mig. 120), igual que su tipo: se declara aquí, y el bloque de
+  // tiempos enseña los campos extra solo a los modelos que lo tienen.
+  if (pregunta_tiempo !== undefined) {
+    updates.push(`pregunta_tiempo = $${i++}`);
+    values.push(Boolean(pregunta_tiempo));
   }
   // `minutos: null` es un cambio de verdad —quitarle el tiempo propio al
   // modelo—, así que se distingue de no mandar el campo.
@@ -443,10 +450,6 @@ export const guardarTiempoMarca = async (req, res) => {
       if (leido.error) return res.status(400).json({ message: leido.error });
       updates.push(`${campo} = $${i++}`);
       values.push(leido.valor);
-    }
-    if (req.body.pregunta_tiempo !== undefined) {
-      updates.push(`pregunta_tiempo = $${i++}`);
-      values.push(Boolean(req.body.pregunta_tiempo));
     }
     if (updates.length === 0) {
       return res.status(400).json({ message: 'No hay cambios que guardar.' });
