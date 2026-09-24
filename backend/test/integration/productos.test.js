@@ -1,7 +1,10 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import request from 'supertest';
 import app from '../../app.js';
-import { pool, limpiarBase, seedSucursal, seedUsuario, seedProducto, seedMaquina, seedCliente, auth } from '../helpers.js';
+import {
+  pool, limpiarBase, seedSucursal, seedUsuario, seedProducto, seedMaquina,
+  seedCliente, seedEtiquetas, auth,
+} from '../helpers.js';
 
 let admin;
 
@@ -9,6 +12,9 @@ beforeEach(async () => {
   await limpiarBase();
   await seedSucursal('centro');
   admin = await seedUsuario({ rol: 'admin', sucursal: 'centro' });
+  // El catálogo de tamaños de bolsa lo siembra la mig. 119, pero limpiarBase
+  // lo vacía: sin él no se puede dar de alta una bolsa.
+  await seedEtiquetas('tamanos_bolsa', ['Chica', 'Grande', 'Jumbo']);
 });
 
 describe('POST /api/productos — validaciones', () => {
@@ -163,12 +169,21 @@ describe('bolsas (clase = bolsa)', () => {
     expect(salida.body.estado_stock).toBe('ok'); // 195 > 20
   });
 
+  it('un tamaño que sí está en el catálogo se acepta aunque no sea de los tres de siempre', async () => {
+    await seedEtiquetas('tamanos_bolsa', ['Extra grande']);
+    const res = await request(app).post('/api/productos').set(auth(admin.token)).send({
+      clase: 'bolsa', nombre: 'Bolsa', tamano_bolsa: 'extra grande', bolsas_por_rollo: 50,
+    });
+    expect(res.status).toBe(201);
+    expect(res.body.tamano_bolsa).toBe('extra grande');
+  });
+
   it('tamaño de bolsa inválido → 400', async () => {
     const res = await request(app).post('/api/productos').set(auth(admin.token)).send({
       clase: 'bolsa', nombre: 'Bolsa', tamano_bolsa: 'mediana', bolsas_por_rollo: 100,
     });
     expect(res.status).toBe(400);
-    expect(res.body.message).toMatch(/tamaño de la bolsa/i);
+    expect(res.body.message).toMatch(/tamaño de bolsa/i);
   });
 });
 

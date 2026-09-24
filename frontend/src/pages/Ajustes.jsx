@@ -1761,6 +1761,16 @@ export default function Ajustes() {
           <CatalogoEtiquetas endpoint="/etiquetas/envases-producto" singular="Envase" inputCls={INPUT_CLS} onMensaje={setMensaje} />
         </Field>
       </div>
+      <div className="border-t border-gray-100 pt-4">
+        <Field label="Granel" hint="Los líquidos que se venden a granel. Se eligen como nombre del producto cuando se rellena desde un bidón.">
+          <CatalogoEtiquetas endpoint="/etiquetas/graneles-producto" singular="Granel" inputCls={INPUT_CLS} onMensaje={setMensaje} />
+        </Field>
+      </div>
+      <div className="border-t border-gray-100 pt-4">
+        <Field label="Bolsas" hint="Los tamaños de bolsa. Conviene que coincidan con los tamaños de carga: la bolsa se cobra en la nota según el tamaño de la carga.">
+          <CatalogoEtiquetas endpoint="/etiquetas/tamanos-bolsa" singular="Tamaño" inputCls={INPUT_CLS} onMensaje={setMensaje} />
+        </Field>
+      </div>
     </Section>
   );
 
@@ -2272,6 +2282,24 @@ export default function Ajustes() {
           hint="Se ofrecen al capturar el envase de un producto por tapa/medida."
         >
           <CatalogoEtiquetas endpoint="/etiquetas/envases-producto" singular="Envase" inputCls={MOBILE_INPUT_CLS} onMensaje={setMensaje} />
+        </MobileField>
+      </div>
+
+      <div className="border-t border-light-blue/60 pt-5">
+        <MobileField
+          label="Granel"
+          hint="Los líquidos que se venden a granel. Se eligen como nombre del producto cuando se rellena desde un bidón."
+        >
+          <CatalogoEtiquetas endpoint="/etiquetas/graneles-producto" singular="Granel" inputCls={MOBILE_INPUT_CLS} onMensaje={setMensaje} />
+        </MobileField>
+      </div>
+
+      <div className="border-t border-light-blue/60 pt-5">
+        <MobileField
+          label="Bolsas"
+          hint="Los tamaños de bolsa. Conviene que coincidan con los tamaños de carga: la bolsa se cobra en la nota según el tamaño de la carga."
+        >
+          <CatalogoEtiquetas endpoint="/etiquetas/tamanos-bolsa" singular="Tamaño" inputCls={MOBILE_INPUT_CLS} onMensaje={setMensaje} />
         </MobileField>
       </div>
     </div>

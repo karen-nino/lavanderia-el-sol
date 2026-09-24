@@ -150,6 +150,16 @@ export const envasesProducto = crearControladorEtiqueta('envases_producto', {
 export const marcasMaquina = crearControladorEtiqueta('marcas_maquina', {
   singular: 'la marca', plural: 'las marcas', uno: 'una marca',
 });
+// Los líquidos que se venden a granel (mig. 119): es el nombre del producto
+// cuando se rellena desde un bidón ("Jabón", "Suavizante").
+export const granelesProducto = crearControladorEtiqueta('graneles_producto', {
+  singular: 'el granel', plural: 'los graneles', uno: 'un granel',
+});
+// Tamaños de bolsa (mig. 119). Conviene que coincidan con los tamaños de carga:
+// la bolsa se cobra en la nota comparando su tamaño con el de la carga.
+export const tamanosBolsa = crearControladorEtiqueta('tamanos_bolsa', {
+  singular: 'el tamaño de bolsa', plural: 'los tamaños de bolsa', uno: 'un tamaño de bolsa',
+});
 
 // Los dos ejes de una máquina, cerrados: los comparten el catálogo de modelos
 // (mig. 118) y los tiempos por marca (mig. 107).

@@ -91,6 +91,19 @@ export async function seedMaquina({
 
 // Inserta un cliente en la sucursal dada y devuelve su id. Necesario para las
 // notas Por Encargo, que exigen cliente_id de la misma sucursal.
+// Los catálogos editables (marcas, envases, graneles, tamaños de bolsa) los
+// siembra su migración, pero `limpiarBase` los vacía como a todo lo demás. Las
+// pruebas que dependan de uno lo vuelven a sembrar con esto.
+export async function seedEtiquetas(tabla, nombres) {
+  for (const [i, nombre] of nombres.entries()) {
+    await pool.query(
+      `INSERT INTO ${tabla} (nombre, orden) VALUES ($1, $2)
+       ON CONFLICT (nombre) DO NOTHING`,
+      [nombre, i + 1]
+    );
+  }
+}
+
 export async function seedCliente({ nombre = 'Cliente', apellido = 'Prueba', sucursal = 'centro' } = {}) {
   const { rows } = await pool.query(
     `INSERT INTO clientes (nombre, apellido, sucursal, activo)

@@ -130,11 +130,29 @@ export const archivarProducto = async (req, res) => {
   }
 };
 
+// Los tamaños de bolsa dejaron de estar en el código: los dice el catálogo de
+// Ajustes → Inventario (mig. 119). La comparación va en minúsculas porque el
+// producto guarda el nombre así ('chica') y el catálogo lo muestra con mayúscula
+// inicial ('Chica'). No se filtra por `activo`: desactivar un tamaño lo quita de
+// la lista, pero no tiene por qué impedir editar el producto que ya lo usa.
+async function tamanoBolsaValido(tamano) {
+  const limpio = String(tamano ?? '').trim();
+  if (!limpio) return false;
+  const { rows } = await pool.query(
+    'SELECT 1 FROM tamanos_bolsa WHERE lower(nombre) = lower($1) LIMIT 1',
+    [limpio]
+  );
+  return rows.length > 0;
+}
+
+const MSG_TAMANO_BOLSA =
+  'Elige un tamaño de bolsa de la lista. Se administran en Ajustes → Inventario.';
+
 // Crea una bolsa: producto (clase='bolsa') contado en piezas. Nace en 0; la
 // existencia se carga con una entrada (por rollo o por pieza).
 async function crearBolsa(req, res, { nombre, descripcion, marca, tamano_bolsa, bolsas_por_rollo, precio_unitario, stock_minimo }) {
-  if (!['chica', 'grande', 'jumbo'].includes(tamano_bolsa)) {
-    return res.status(400).json({ message: 'Elige el tamaño de la bolsa: chica, grande o jumbo.' });
+  if (!await tamanoBolsaValido(tamano_bolsa)) {
+    return res.status(400).json({ message: MSG_TAMANO_BOLSA });
   }
   const porRollo = Number(bolsas_por_rollo);
   if (!(porRollo > 0)) {
@@ -270,8 +288,8 @@ export const updateProducto = async (req, res) => {
 
   // ── Bolsa: solo atributos (tamaño, bolsas por rollo, precio por pieza) ──
   if (clase === 'bolsa') {
-    if (!['chica', 'grande', 'jumbo'].includes(tamano_bolsa)) {
-      return res.status(400).json({ message: 'Elige el tamaño de la bolsa: chica, grande o jumbo.' });
+    if (!await tamanoBolsaValido(tamano_bolsa)) {
+      return res.status(400).json({ message: MSG_TAMANO_BOLSA });
     }
     const porRollo = Number(bolsas_por_rollo);
     if (!(porRollo > 0)) {

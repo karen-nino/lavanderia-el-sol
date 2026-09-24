@@ -42,6 +42,37 @@ describe('POST /api/etiquetas/tipos-tela', () => {
   });
 });
 
+// Los dos catálogos de Inventario que nacieron con la mig. 119. Comparten la
+// misma fábrica que los de arriba, así que basta un smoke de cada uno más lo
+// que sí es propio: el de bolsas es el que valida el alta de un producto.
+describe('catálogos de Granel y Bolsas (mig. 119)', () => {
+  for (const [endpoint, nombre] of [
+    ['graneles-producto', 'Cloro'],
+    ['tamanos-bolsa', 'Extra grande'],
+  ]) {
+    it(`${endpoint}: el admin lo agrega y lo desactiva`, async () => {
+      const creado = await request(app).post(`/api/etiquetas/${endpoint}`)
+        .set(auth(admin.token)).send({ nombre });
+      expect(creado.status).toBe(201);
+      expect(creado.body).toMatchObject({ nombre, activo: true });
+
+      const upd = await request(app).put(`/api/etiquetas/${endpoint}/${creado.body.id}`)
+        .set(auth(admin.token)).send({ activo: false });
+      expect(upd.status).toBe(200);
+      expect(upd.body.activo).toBe(false);
+
+      const lista = await request(app).get(`/api/etiquetas/${endpoint}`).set(auth(admin.token));
+      expect(lista.body.map(x => x.nombre)).toContain(nombre);
+    });
+
+    it(`${endpoint}: un empleado no puede tocarlo`, async () => {
+      const empleado = await seedUsuario({ rol: 'operador', sucursal: 'centro', nombre: 'Empleado' });
+      await request(app).post(`/api/etiquetas/${endpoint}`)
+        .set(auth(empleado.token)).send({ nombre }).expect(403);
+    });
+  }
+});
+
 describe('PUT /api/etiquetas/tipos-tela/:id', () => {
   it('renombra una etiqueta', async () => {
     const { body } = await crear(admin.token, 'Lino');

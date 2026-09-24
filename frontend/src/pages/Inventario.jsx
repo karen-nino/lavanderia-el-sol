@@ -184,14 +184,16 @@ const FORM_VACIO = {
   precio_botella:       '',
   stock_minimo_botellas: '0',   // el aviso se captura en botellas; se guarda en tapas
   stock_minimo_bidones:  '0',   // aviso del granel, en bidones; se guarda en tapas
-  // Bolsas:
-  tamano_bolsa:      'chica',
+  // Bolsas: el tamaño sale del catálogo (mig. 119), así que arranca vacío y
+  // `required` obliga a elegirlo en vez de dar por buena una "chica" que nadie
+  // escogió.
+  tamano_bolsa:      '',
   bolsas_por_rollo:  '',
   stock_minimo_bolsas: '0',
 };
 
 // ── Modal crear / editar ────────────────────────────────────────
-function ModalProducto({ producto, onClose, onGuardado, marcas = [] }) {
+function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = [], tamanosBolsa = [] }) {
   const esEdicion = Boolean(producto);
   const [form, setForm] = useState(producto
     ? {
@@ -199,7 +201,7 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [] }) {
         marca:          producto.marca ?? '',
         tipo_liquido:   producto.clase === 'bolsa' ? 'bolsa' : (producto.tipo_liquido ?? 'granel'),
         envase:         producto.envase ?? 'Bidón',
-        tamano_bolsa:   producto.tamano_bolsa ?? 'chica',
+        tamano_bolsa:   producto.tamano_bolsa ?? '',
         bolsas_por_rollo: producto.bolsas_por_rollo ?? '',
         stock_minimo_bolsas: producto.clase === 'bolsa' ? String(producto.stock_minimo ?? 0) : '0',
         bidon_valor:    producto.volumen_envase_ml
@@ -243,6 +245,16 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [] }) {
   const tapasBidon = botellasBidon * tapasBotella;
 
   const marcaOptions = form.marca && !marcas.includes(form.marca) ? [form.marca, ...marcas] : marcas;
+  // Mismo criterio para los dos catálogos nuevos (mig. 119): un nombre o un
+  // tamaño que ya no esté en la lista sigue apareciendo si es el del producto
+  // que se está editando, para no borrárselo sin avisar al guardar.
+  const granelOptions = form.nombre && !graneles.includes(form.nombre)
+    ? [form.nombre, ...graneles] : graneles;
+  // El producto guarda el tamaño en minúsculas ('chica'); el catálogo lo
+  // muestra como se escribió ('Chica'). El valor es el slug, la etiqueta el
+  // nombre del catálogo.
+  const bolsaOptions = tamanosBolsa.map(n => ({ v: n.toLowerCase(), label: n }));
+  const bolsaFuera = form.tamano_bolsa && !bolsaOptions.some(o => o.v === form.tamano_bolsa);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -363,17 +375,35 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [] }) {
             </div>
           </div>
 
-          {/* Nombre (las bolsas siempre se llaman "Bolsa"; se distinguen por tamaño) */}
+          {/* Nombre (las bolsas siempre se llaman "Bolsa"; se distinguen por
+              tamaño). En el granel sale de su catálogo (Ajustes → Inventario):
+              son pocos y siempre los mismos, y escritos a mano acababan
+              contando por separado ("jabon" y "Jabón"). El de marca lo sigue
+              escribiendo. */}
           {!esBolsa && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">
                 Nombre <span className="text-red-500">*</span>
               </label>
-              <input
-                type="text" name="nombre" required
-                value={form.nombre} onChange={handleChange}
-                placeholder="Ej. Suavizante" className={INPUT_CLS}
-              />
+              {esGranel ? (
+                <>
+                  <select name="nombre" required value={form.nombre} onChange={handleChange} className={INPUT_CLS}>
+                    <option value="">Seleccionar...</option>
+                    {granelOptions.map(g => <option key={g} value={g}>{g}</option>)}
+                  </select>
+                  {granelOptions.length === 0 && (
+                    <p className="text-xs text-gray-400 mt-1">
+                      Todavía no hay graneles. Se agregan en Ajustes → Inventario.
+                    </p>
+                  )}
+                </>
+              ) : (
+                <input
+                  type="text" name="nombre" required
+                  value={form.nombre} onChange={handleChange}
+                  placeholder="Ej. Suavizante" className={INPUT_CLS}
+                />
+              )}
             </div>
           )}
 
@@ -398,10 +428,19 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [] }) {
                   Tamaño <span className="text-red-500">*</span>
                 </label>
                 <select name="tamano_bolsa" required value={form.tamano_bolsa} onChange={handleChange} className={INPUT_CLS}>
-                  <option value="chica">Chica</option>
-                  <option value="grande">Grande</option>
-                  <option value="jumbo">Jumbo</option>
+                  <option value="">Seleccionar...</option>
+                  {bolsaFuera && (
+                    <option value={form.tamano_bolsa}>
+                      {form.tamano_bolsa[0].toUpperCase() + form.tamano_bolsa.slice(1)}
+                    </option>
+                  )}
+                  {bolsaOptions.map(o => <option key={o.v} value={o.v}>{o.label}</option>)}
                 </select>
+                {bolsaOptions.length === 0 && (
+                  <p className="text-xs text-gray-400 mt-1">
+                    Todavía no hay tamaños de bolsa. Se agregan en Ajustes → Inventario.
+                  </p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
@@ -1303,13 +1342,24 @@ export default function Inventario() {
   const [searchParams, setSearchParams] = useSearchParams();
   const highlightAplicadoRef = useRef(null);
 
-  // Catálogo editable de marcas (Ajustes → Inventario). Solo las activas.
+  // Catálogos editables de Ajustes → Inventario. Solo los activos: lo que se
+  // desactiva se deja de ofrecer, pero no se le quita a los productos que ya
+  // lo usan (eso lo resuelve el modal).
   const [marcas, setMarcas] = useState([]);
+  const [graneles, setGraneles] = useState([]);
+  const [tamanosBolsa, setTamanosBolsa] = useState([]);
 
   useEffect(() => {
     let activo = true;
+    const activos = (data) => (data ?? []).filter(x => x.activo).map(x => x.nombre);
     api.get('/etiquetas/marcas-producto')
-      .then(data => { if (activo) setMarcas((data ?? []).filter(x => x.activo).map(x => x.nombre)); })
+      .then(data => { if (activo) setMarcas(activos(data)); })
+      .catch(() => {});
+    api.get('/etiquetas/graneles-producto')
+      .then(data => { if (activo) setGraneles(activos(data)); })
+      .catch(() => {});
+    api.get('/etiquetas/tamanos-bolsa')
+      .then(data => { if (activo) setTamanosBolsa(activos(data)); })
       .catch(() => {});
     return () => { activo = false; };
   }, []);
@@ -2003,6 +2053,8 @@ export default function Inventario() {
         <ModalProducto
           producto={modalProducto === 'nuevo' ? null : modalProducto}
           marcas={marcas}
+          graneles={graneles}
+          tamanosBolsa={tamanosBolsa}
           onClose={() => setModalProducto(null)}
           onGuardado={handleGuardado}
         />

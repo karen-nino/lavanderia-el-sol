@@ -1,10 +1,9 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import request from 'supertest';
 import app from '../../app.js';
-import pool from '../../db/pool.js';
 import {
   pool, limpiarBase, seedSucursal, seedUsuario, seedMaquina,
-  seedCliente, seedProducto, seedAjustes, auth,
+  seedCliente, seedProducto, seedAjustes, seedEtiquetas, auth,
 } from '../helpers.js';
 
 let admin;
@@ -13,6 +12,9 @@ beforeEach(async () => {
   await limpiarBase();
   await seedSucursal('centro');
   admin = await seedUsuario({ rol: 'admin', sucursal: 'centro' });
+  // El catálogo de tamaños de bolsa lo siembra la mig. 119, pero limpiarBase
+  // lo vacía: sin él no se puede dar de alta una bolsa.
+  await seedEtiquetas('tamanos_bolsa', ['Chica', 'Grande', 'Jumbo']);
 });
 
 describe('POST /api/notas — validaciones', () => {

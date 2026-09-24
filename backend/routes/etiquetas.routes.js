@@ -3,6 +3,7 @@ import { verifyToken } from '../middleware/auth.js';
 import { bloquearPruebaGlobal } from '../middleware/sucursalActiva.js';
 import {
   tiposTela, tamanosEdredon, marcasProducto, envasesProducto, marcasMaquina,
+  granelesProducto, tamanosBolsa,
   getModelosMaquina, crearModeloMaquina, actualizarModeloMaquina, reordenarModelosMaquina,
   getTiemposMarca, guardarTiempoMarca,
 } from '../controllers/etiquetas.controller.js';
@@ -40,6 +41,19 @@ router.get('/envases-producto',            envasesProducto.getAll);
 router.post('/envases-producto',           envasesProducto.create);
 router.patch('/envases-producto/reordenar', envasesProducto.reorder);
 router.put('/envases-producto/:id',        envasesProducto.update);
+
+// Líquidos a granel (mig. 119): el nombre del producto cuando se rellena
+// desde un bidón.
+router.get('/graneles-producto',            granelesProducto.getAll);
+router.post('/graneles-producto',           granelesProducto.create);
+router.patch('/graneles-producto/reordenar', granelesProducto.reorder);
+router.put('/graneles-producto/:id',        granelesProducto.update);
+
+// Tamaños de bolsa (mig. 119).
+router.get('/tamanos-bolsa',            tamanosBolsa.getAll);
+router.post('/tamanos-bolsa',           tamanosBolsa.create);
+router.patch('/tamanos-bolsa/reordenar', tamanosBolsa.reorder);
+router.put('/tamanos-bolsa/:id',        tamanosBolsa.update);
 
 // Marcas de máquina (mig. 106): LG, Samsung, Speed Queen. Se eligen de la
 // lista al dar de alta la máquina, y tanto ellas como sus modelos se
