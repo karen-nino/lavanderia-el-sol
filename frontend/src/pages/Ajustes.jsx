@@ -1433,10 +1433,21 @@ export default function Ajustes() {
       {campoPrecio('precio_edredon_jumbo', 'Tarifa fija por edredón lavado en máquina jumbo.')}
     </Section>
 
+    {/* La secadora va separada en Mediana y Jumbo igual que la lavadora. El
+        precio es de la CARGA (una carga jumbo se seca más cara aunque la
+        secadora sea la misma); el tiempo es de la MÁQUINA. Las dos columnas
+        existen desde la mig. 051. */}
     <Section titulo="Secadora">
-      {campoPrecio('precio_carga_secadora', 'Precio del secado de una carga.')}
-      {campoTiempo('tiempo_carga_secadora', 'Se usa en las secadoras cuyo modelo no tenga tiempo propio.')}
+      {subTitulo('Mediana')}
+      {campoPrecio('precio_carga_secadora', 'Precio del secado de una carga mediana.')}
+      {campoTiempo('tiempo_carga_secadora', 'Se usa en las secadoras medianas cuyo modelo no tenga tiempo propio.')}
       {camposTiempoMarca('secadora', 'mediana')}
+
+      <div className="border-t border-gray-100" />
+
+      {subTitulo('Jumbo')}
+      {campoPrecio('precio_secadora_jumbo', 'Precio del secado de una carga jumbo.')}
+      {campoTiempo('tiempo_secadora_jumbo', 'Se usa en las secadoras jumbo cuyo modelo no tenga tiempo propio.')}
       {camposTiempoMarca('secadora', 'jumbo')}
     </Section>
 
@@ -2137,12 +2148,18 @@ export default function Ajustes() {
 
       <div className="border-t border-light-blue/60 pt-8 space-y-6">
         <TituloGrupoMobile>Secadora</TituloGrupoMobile>
-        <TarjetaMobile>
-          {campoPrecioM('precio_carga_secadora', 'Precio del secado de una carga.')}
-          {campoTiempoM('tiempo_carga_secadora', 'Se usa en las secadoras cuyo modelo no tenga tiempo propio.')}
+        <div className="space-y-4">
+        <TarjetaMobile titulo="Mediana">
+          {campoPrecioM('precio_carga_secadora', 'Precio del secado de una carga mediana.')}
+          {campoTiempoM('tiempo_carga_secadora', 'Se usa en las secadoras medianas cuyo modelo no tenga tiempo propio.')}
           {camposTiempoMarcaM('secadora', 'mediana')}
+        </TarjetaMobile>
+        <TarjetaMobile titulo="Jumbo">
+          {campoPrecioM('precio_secadora_jumbo', 'Precio del secado de una carga jumbo.')}
+          {campoTiempoM('tiempo_secadora_jumbo', 'Se usa en las secadoras jumbo cuyo modelo no tenga tiempo propio.')}
           {camposTiempoMarcaM('secadora', 'jumbo')}
         </TarjetaMobile>
+        </div>
       </div>
 
       {/* El catálogo va al final: los tiempos de arriba son del día a día y

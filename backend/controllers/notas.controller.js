@@ -448,14 +448,19 @@ function topeDeCarga(prenda, tamano, t) {
 // distingue el servicio.
 async function tiemposCarga(client) {
   const { rows } = await client.query(
-    `SELECT tiempo_carga_mediana, tiempo_carga_jumbo, tiempo_carga_secadora
+    `SELECT tiempo_carga_mediana, tiempo_carga_jumbo,
+            tiempo_carga_secadora, tiempo_secadora_jumbo
        FROM ajustes WHERE id = 1`
   );
   const c = rows[0] ?? {};
+  // La columna plana `tiempo_carga_secadora` es la secadora MEDIANA (mig. 051);
+  // la jumbo tiene la suya y cae en la mediana mientras no se configure.
+  const secMediana = c.tiempo_carga_secadora != null ? Number(c.tiempo_carga_secadora) : 30;
   return {
     mediana:    c.tiempo_carga_mediana  != null ? Number(c.tiempo_carga_mediana)  : 30,
     jumbo:      c.tiempo_carga_jumbo    != null ? Number(c.tiempo_carga_jumbo)    : 45,
-    secMediana: c.tiempo_carga_secadora != null ? Number(c.tiempo_carga_secadora) : 30,
+    secMediana,
+    secJumbo:   c.tiempo_secadora_jumbo != null ? Number(c.tiempo_secadora_jumbo) : secMediana,
   };
 }
 
@@ -510,10 +515,13 @@ async function sellarCicloMaquinas(client, notaId) {
           WHERE nc.nota_id = $1 AND nc.lavadora_id IS NOT NULL
             AND nc.lavadora_iniciada_at IS NOT NULL
          UNION ALL
-         -- Secadoras de la nota. Mismo criterio; el respaldo sigue siendo un
-         -- tiempo único para todas, como hasta ahora.
+         -- Secadoras de la nota. Mismo criterio, y el respaldo también va por
+         -- tamaño desde que la secadora se da de alta como mediana o jumbo.
          SELECT nc.secadora_id AS mid,
-                COALESCE(mo.minutos, tm.minutos, $4::int) AS minutos
+                COALESCE(
+                  mo.minutos, tm.minutos,
+                  CASE WHEN ms.tamano = 'jumbo' THEN $5::int ELSE $4::int END
+                ) AS minutos
            FROM nota_cargas nc
            JOIN maquinas ms ON ms.id = nc.secadora_id
            LEFT JOIN marcas_maquina mm ON mm.nombre = ms.marca
@@ -525,7 +533,7 @@ async function sellarCicloMaquinas(client, notaId) {
             AND nc.secadora_iniciada_at IS NOT NULL
        ) ciclos
       WHERE m.id = ciclos.mid AND m.estado = 'en_uso'`,
-    [notaId, ti.jumbo, ti.mediana, ti.secMediana]
+    [notaId, ti.jumbo, ti.mediana, ti.secMediana, ti.secJumbo]
   );
 }
 

@@ -53,6 +53,11 @@ const tiempoDe = (marcaId, tipo, tamano, minutos) =>
     [marcaId, tipo, tamano, minutos]
   );
 
+const cargaDe = async (notaId) => {
+  const { rows } = await pool.query('SELECT id FROM nota_cargas WHERE nota_id = $1 ORDER BY id LIMIT 1', [notaId]);
+  return rows[0];
+};
+
 const cicloDe = async (maquinaId) => {
   const { rows } = await pool.query('SELECT ciclo_minutos FROM maquinas WHERE id = $1', [maquinaId]);
   return rows[0].ciclo_minutos;
@@ -97,6 +102,22 @@ describe('sellado del ciclo — manda la marca de la máquina', () => {
     await arrancar(lavadoraId, { lavadora_tipo: 'jumbo' });
 
     expect(await cicloDe(lavadoraId)).toBe(35);
+  });
+
+  // La secadora también se da de alta mediana o jumbo, y su respaldo por
+  // tamaño existe desde la mig. 051 aunque hasta ahora no se usara.
+  it('una secadora jumbo sin marca usa su propio respaldo, no el de la mediana', async () => {
+    await seedAjustes({ tiempo_carga_secadora: 20, tiempo_secadora_jumbo: 55 });
+    const lavadoraId = await seedMaquina({ nombre: 'L1', tipo: 'lavadora_mediana', tamano: 'mediana' });
+    const secadoraId = await seedMaquina({ nombre: 'S1', tipo: 'secadora', tamano: 'jumbo' });
+
+    const notaId = await arrancar(lavadoraId, { secadora_tipo: 'jumbo' });
+    await request(app).patch(`/api/notas/${notaId}/asignar-carga-maquina`).set(auth(admin.token))
+      .send({ carga_id: (await cargaDe(notaId)).id, slot: 'secadora', maquina_id: secadoraId }).expect(200);
+    await request(app).patch(`/api/notas/${notaId}/activar-pendientes`).set(auth(admin.token))
+      .send({ maquina_id: secadoraId }).expect(200);
+
+    expect(await cicloDe(secadoraId)).toBe(55);
   });
 
   it('sin marca sigue mandando el tamaño: nada cambia para las máquinas de siempre', async () => {

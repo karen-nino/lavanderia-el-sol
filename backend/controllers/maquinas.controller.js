@@ -1009,9 +1009,14 @@ export const otroCiclo = async (req, res) => {
               ciclo_minutos = COALESCE(
                 m.ciclo_minutos,
                 ${MINUTOS_CONFIGURADOS},
-                (SELECT CASE WHEN m.tipo = 'secadora'       THEN a.tiempo_carga_secadora
-                             WHEN m.tipo = 'lavadora_jumbo' THEN a.tiempo_carga_jumbo
-                             ELSE a.tiempo_carga_mediana END
+                (SELECT CASE
+                          -- La secadora también tiene respaldo por tamaño
+                          -- (mig. 051): la columna plana es la mediana.
+                          WHEN m.tipo = 'secadora' AND m.tamano = 'jumbo'
+                            THEN COALESCE(a.tiempo_secadora_jumbo, a.tiempo_carga_secadora)
+                          WHEN m.tipo = 'secadora'       THEN a.tiempo_carga_secadora
+                          WHEN m.tipo = 'lavadora_jumbo' THEN a.tiempo_carga_jumbo
+                          ELSE a.tiempo_carga_mediana END
                    FROM ajustes a WHERE a.id = 1)
               )
         WHERE m.id = $1 RETURNING *`,

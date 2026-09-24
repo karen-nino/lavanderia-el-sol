@@ -305,10 +305,8 @@ export default function GestionMaquinas() {
   // que la lista se cruza por nombre.
   const modelosVisibles = form.marca
     ? modelos.filter(mo => (
-        mo.marca === form.marca && mo.activo && mo.tipo === form.tipo
-        // La secadora no pregunta tamaño (es de un solo tamaño), así que sus
-        // modelos tampoco se filtran por él.
-        && (form.tipo === 'secadora' || mo.tamano === form.tamano)
+        mo.marca === form.marca && mo.activo
+        && mo.tipo === form.tipo && mo.tamano === form.tamano
       ))
     : [];
   const modeloFueraDeLista = Boolean(form.modelo) && !modelosVisibles.some(mo => mo.nombre === form.modelo);
@@ -823,8 +821,9 @@ export default function GestionMaquinas() {
                 </select>
               </div>
 
-              {/* La secadora es de un solo tamaño: el tamaño solo aplica a lavadoras. */}
-              {form.tipo === 'lavadora' && (
+              {/* La secadora también se da de alta con tamaño: su precio de
+                  secado y su tiempo de ciclo van separados en Mediana y Jumbo,
+                  igual que los de la lavadora. */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
                   Tamaño <span className="text-red-500">*</span>
@@ -835,7 +834,6 @@ export default function GestionMaquinas() {
                   ))}
                 </select>
               </div>
-              )}
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
@@ -903,7 +901,7 @@ export default function GestionMaquinas() {
                   {!form.marca
                     ? 'Elige primero la marca.'
                     : modelosVisibles.length === 0
-                      ? `${form.marca} no tiene modelos de este tipo. Se agregan en Ajustes → Máquinas.`
+                      ? `${form.marca} no tiene modelos de este tipo y tamaño. Se agregan en Ajustes → Máquinas.`
                       : 'Los modelos se agregan en Ajustes → Máquinas.'}
                 </p>
               </div>
