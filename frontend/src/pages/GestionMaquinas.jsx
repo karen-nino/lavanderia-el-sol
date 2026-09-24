@@ -877,13 +877,23 @@ export default function GestionMaquinas() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Modelo</label>
+                {/* Obligatorio, porque el tiempo del ciclo se configura por
+                    modelo: una máquina sin él se cronometra a ciegas.
+
+                    `required` sobre un select apagado no se valida, y eso es
+                    justo lo que hace falta: cuando la marca todavía no tiene
+                    modelos de este tipo no hay nada que elegir y la máquina se
+                    puede guardar igual (si no, no se le podría ni corregir el
+                    Sonoff). En cuanto hay de dónde elegir, hay que elegir. */}
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Modelo <span className="text-red-500">*</span>
+                </label>
                 <select
                   name="modelo" value={form.modelo} onChange={handleChange}
-                  disabled={modeloBloqueado}
+                  disabled={modeloBloqueado} required
                   className={`${INPUT_CLS} disabled:bg-gray-50 disabled:text-gray-400`}
                 >
-                  <option value="">Sin especificar</option>
+                  <option value="">Elige un modelo</option>
                   {modeloFueraDeLista && <option value={form.modelo}>{form.modelo}</option>}
                   {modelosVisibles.map(mo => (
                     <option key={mo.id} value={mo.nombre}>{mo.nombre}</option>
