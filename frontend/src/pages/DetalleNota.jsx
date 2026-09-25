@@ -79,7 +79,19 @@ function pasosDeNota(nota) {
     // liquiden (2026-09-23). Saltarse el paso prometía un final que esa nota
     // no iba a tener.
     || nota.estado_pago === 'PENDIENTE';
-  return porEntregar ? PASOS_ESTADO : PASOS_ESTADO.filter(p => p.key !== 'LISTA');
+  // "Secando" solo si esta nota tiene secadora. En Autoservicio hay notas que
+  // son puro lavado, y dibujar el paso prometía una fase que nunca iba a llegar
+  // (2026-09-25). Cuenta la secadora puesta, la que ya se usó y la que se eligió
+  // al hacer la nota y todavía no se asigna; y si la nota YA pasó por ahí, el
+  // paso se queda aunque ahora no haya ninguna.
+  const conSecado = nota.estado === 'SECANDO'
+    || (nota.historial_estados ?? []).some(h => h.estado === 'SECANDO')
+    || (nota.cargas ?? []).some(cg =>
+         cg.secadora_id || cg.secadora_usada_id || cg.secadora_tipo_previsto);
+  const fuera = new Set();
+  if (!porEntregar) fuera.add('LISTA');
+  if (!conSecado)   fuera.add('SECANDO');
+  return PASOS_ESTADO.filter(p => !fuera.has(p.key));
 }
 
 // Índice del paso ACTUAL dentro de los pasos que se dibujan.
