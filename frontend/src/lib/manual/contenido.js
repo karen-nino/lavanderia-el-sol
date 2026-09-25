@@ -138,7 +138,7 @@ El buscador encuentra por FOLIO, por nombre del cliente o por teléfono. No hace
 
 El filtro de fecha arranca en Hoy. Cámbialo a Ayer, Últimos 7 días, Este mes, o elige un mes o un año concretos.
 
-El filtro de estado te deja ver solo las que están Por Entregar, las que tienen pagos pendientes, las canceladas, etc.
+El filtro de estado te deja ver solo las que están Por Entregar, las que están Por Cobrar, las canceladas, etc.
 
 Los filtros se quedan puestos: si entras a una nota y regresas con la flecha, la lista sigue como la dejaste.`,
       },

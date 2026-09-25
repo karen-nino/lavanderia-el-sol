@@ -33,13 +33,13 @@ const ESTADOS_POR_ENTREGAR = ['LISTA', 'PAGADA'];
 const FILTRO_LABEL = {
   TODOS:        'Todos',
   POR_ENTREGAR: 'Por Entregar',
-  PENDIENTE:    'Pagos Pendientes',
+  PENDIENTE:    'Por Cobrar',
   FINALIZADA:   'Finalizadas',
   CANCELADA:    'Canceladas',
 };
 
 // Mensaje del estado vacío según el filtro activo, para que el texto se
-// relacione con el filtro (p. ej. "No hay notas con pagos pendientes").
+// relacione con el filtro (p. ej. "No hay notas por cobrar").
 const FILTRO_VACIO = {
   TODOS:        'No hay notas',
   EN_ESPERA:    'No hay notas en espera',
@@ -47,7 +47,7 @@ const FILTRO_VACIO = {
   SECANDO:      'No hay notas secando',
   POR_ENTREGAR: 'No hay notas por entregar',
   FINALIZADA:   'No hay notas finalizadas',
-  PENDIENTE:    'No hay notas con pagos pendientes',
+  PENDIENTE:    'No hay notas por cobrar',
   CANCELADA:    'No hay notas canceladas',
 };
 
@@ -423,8 +423,8 @@ export default function Notas() {
                     <button
                       key={e}
                       // Al elegir un estado se busca en TODAS las fechas, para no
-                      // esconder notas de días anteriores (p. ej. pagos pendientes
-                      // viejos). El filtro de fecha queda disponible para acotar.
+                      // esconder notas de días anteriores (p. ej. las que están
+                      // por cobrar de hace días). El filtro de fecha acota.
                       onClick={() => { setFiltro(e); setRangoFecha('TODAS'); setPagina(1); setMostrarEstado(false); }}
                       className={`text-left text-sm px-3 py-2 rounded-lg transition-colors ${
                         filtro === e
