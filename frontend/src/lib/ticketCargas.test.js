@@ -20,8 +20,20 @@ describe('cargaVisibleEnTicket', () => {
     }))).toBe(true);
   });
 
-  it('muestra la carga que solo tiene el TIPO elegido (aún sin máquina física)', () => {
-    expect(cargaVisibleEnTicket(carga({ lavadora_tipo_previsto: 'mediana', precio_lavadora: 50 }))).toBe(true);
+  it('en Por Encargo muestra la carga que solo tiene el TIPO elegido (aún sin máquina física)', () => {
+    expect(cargaVisibleEnTicket(carga({ lavadora_tipo_previsto: 'mediana', precio_lavadora: 50 }), 'POR_ENCARGO')).toBe(true);
+  });
+
+  it('en Autoservicio oculta la carga cuya máquina aún no se asigna en Salidas', () => {
+    // Ahí la máquina se cobra al asignarla, así que la carga todavía vale $0:
+    // el cliente no debe ver una máquina que no se usó.
+    expect(cargaVisibleEnTicket(carga({ lavadora_tipo_previsto: 'mediana' }), 'AUTOSERVICIO')).toBe(false);
+  });
+
+  it('en Autoservicio la muestra en cuanto la máquina está asignada', () => {
+    expect(cargaVisibleEnTicket(carga({
+      lavadora_usada_id: 7, lavadora_usada_tipo: 'lavadora_mediana', precio_lavadora: 50,
+    }), 'AUTOSERVICIO')).toBe(true);
   });
 
   it('muestra la carga sin máquina pero con productos', () => {
@@ -53,6 +65,11 @@ describe('maquinasDeCarga', () => {
   it('usa el tipo elegido mientras no haya máquina física', () => {
     const m = maquinasDeCarga(carga({ lavadora_tipo_previsto: 'jumbo', precio_lavadora: 70 }));
     expect(m).toEqual([{ nombre: 'Lavadora', tipo: 'Jumbo', precio: 70 }]);
+  });
+
+  it('en Autoservicio no anuncia la máquina que aún no se asigna', () => {
+    expect(maquinasDeCarga(carga({ lavadora_tipo_previsto: 'mediana' }), 'AUTOSERVICIO')).toEqual([]);
+    expect(maquinasDeCarga(carga({ secadora_tipo_previsto: 'mediana' }), 'AUTOSERVICIO')).toEqual([]);
   });
 
   it('la secadora va sin calificativo: es de un solo tamaño', () => {

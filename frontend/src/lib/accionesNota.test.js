@@ -16,6 +16,20 @@ describe('acciones del detalle de una nota', () => {
     expect(puedeLiquidar(nota('LISTA', 'PENDIENTE'))).toBe(true);
   });
 
+  it('un Autoservicio sin máquina asignada todavía no se cobra', () => {
+    // La máquina se tarifa al asignarla en Salidas: antes de eso la nota vale
+    // $0 y cobrarla dejaría el dinero fuera.
+    const auto = (carga) => ({
+      estado: 'EN_ESPERA', estado_pago: 'PENDIENTE',
+      tipo_servicio: 'AUTOSERVICIO', cargas: [carga],
+    });
+    expect(puedeLiquidar(auto({ lavadora_tipo_previsto: 'mediana' }))).toBe(false);
+    expect(puedeLiquidar(auto({ secadora_tipo_previsto: 'mediana' }))).toBe(false);
+    expect(puedeLiquidar(auto({
+      lavadora_tipo_previsto: 'mediana', lavadora_usada_id: 7,
+    }))).toBe(true);
+  });
+
   it('una nota ya cobrada no se vuelve a liquidar', () => {
     expect(puedeLiquidar(nota('LISTA', 'PAGADO'))).toBe(false);
   });

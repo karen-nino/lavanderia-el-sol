@@ -201,13 +201,17 @@ describe('GET /api/maquinas/:id/uso — solo cuenta el uso real', () => {
     await seedAjustes({ precio_carga_mediana: 70 });
     const lav = await seedMaquina({ nombre: 'L-uso', tipo: 'lavadora_mediana' });
     const crear = () => request(app).post('/api/notas').set(auth(admin.token)).send({
-      tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PAGADO', forma_pago: 'EFECTIVO',
+      tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE',
       cargas: [{ lavadora_tipo: 'mediana' }],
     });
     const notas = [(await crear()).body, (await crear()).body, (await crear()).body];
+    // Las tres la tienen asignada —ahí se tarifan (2026-09-25)— y las tres se
+    // cobran; el reporte solo debe contar la que de verdad la usó.
     for (const n of notas) {
       await request(app).patch(`/api/notas/${n.id}/asignar-carga-maquina`).set(auth(admin.token))
         .send({ carga_id: n.cargas[0].id, slot: 'lavadora', maquina_id: lav }).expect(200);
+      await request(app).patch(`/api/notas/${n.id}/estado-pago`).set(auth(admin.token))
+        .send({ estado_pago: 'PAGADO', forma_pago: 'EFECTIVO' }).expect(200);
     }
     // Solo la primera le da a Iniciar.
     await request(app).patch(`/api/notas/${notas[0].id}/activar-pendientes`).set(auth(admin.token))

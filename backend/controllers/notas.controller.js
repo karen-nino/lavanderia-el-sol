@@ -776,10 +776,16 @@ async function prepararCargas(client, cargas, tipoPrendaNota, sucursal, tipo_ser
       if (!lavadoraTipo && !secadoraTipo) {
         throw new Error(`La carga ${i + 1} necesita al menos un tipo de lavado o secado.`);
       }
-      if (lavadoraTipo) {
+      // Autoservicio NO se tarifa al crear la nota (2026-09-25): la máquina se
+      // cobra cuando se asigna la física en Salidas, que es cuando de verdad se
+      // sabe cuál usó el cliente. Hasta entonces la nota vale $0 y su ticket no
+      // enseña ninguna carga. Por Encargo sí se tarifa aquí, porque lo que cobra
+      // es el tope de la carga y no depende de qué máquina le toque.
+      const tarifaAlCrear = tipo_servicio !== 'AUTOSERVICIO';
+      if (lavadoraTipo && tarifaAlCrear) {
         precioLavadora = tarifaLavadora(lavadoraTipo === 'jumbo' ? 'lavadora_jumbo' : 'lavadora_mediana', prendaCarga, t);
       }
-      if (secadoraTipo) {
+      if (secadoraTipo && tarifaAlCrear) {
         precioSecadora = tarifaSecadora(secadoraTipo, prendaCarga, t);
       }
       activar = false;
@@ -2680,7 +2686,7 @@ export const asignarCargaMaquina = async (req, res) => {
     await client.query('BEGIN');
 
     const { rows: notaRows } = await client.query(
-      'SELECT estado FROM notas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
+      'SELECT estado, tipo_servicio FROM notas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
       [id, req.sucursal]
     );
     if (notaRows.length === 0) {
@@ -2693,7 +2699,7 @@ export const asignarCargaMaquina = async (req, res) => {
     }
 
     const { rows: cargaRows } = await client.query(
-      `SELECT id, lavadora_id, secadora_id, lavadora_tipo, secadora_tipo
+      `SELECT id, lavadora_id, secadora_id, lavadora_tipo, secadora_tipo, tipo_prenda
          FROM nota_cargas WHERE id = $1 AND nota_id = $2 FOR UPDATE`,
       [carga_id, id]
     );
@@ -2748,10 +2754,33 @@ export const asignarCargaMaquina = async (req, res) => {
     const col = slot === 'lavadora' ? 'lavadora_id' : 'secadora_id';
     const colUsada = slot === 'lavadora' ? 'lavadora_usada_id' : 'secadora_usada_id';
     await registrarMaquinaEnCarga(client, carga_id, slot, maquina_id);
-    await client.query(
-      `UPDATE nota_cargas SET ${col} = $1, ${colUsada} = $1 WHERE id = $2`,
-      [maquina_id, carga_id]
-    );
+    // AQUÍ se cobra la máquina en Autoservicio (2026-09-25): la nota nace en $0
+    // y es al asignar la física cuando se sabe qué se usó, así que es cuando se
+    // tarifa. En Por Encargo el precio no depende de esto —la carga se cobra por
+    // su tope, congelado al crear la nota—, así que ahí no se toca nada.
+    const tarifaAlAsignar = notaRows[0].tipo_servicio === 'AUTOSERVICIO';
+    if (tarifaAlAsignar) {
+      const t = await tarifasCarga(client);
+      const precio = slot === 'lavadora'
+        ? tarifaLavadora(maq.tipo, carga.tipo_prenda, t)
+        : tarifaSecadora(maq.tamano, carga.tipo_prenda, t);
+      const precioCol = slot === 'lavadora' ? 'precio_lavadora' : 'precio_secadora';
+      await client.query(
+        `UPDATE nota_cargas SET ${col} = $1, ${colUsada} = $1, ${precioCol} = $2 WHERE id = $3`,
+        [maquina_id, precio, carga_id]
+      );
+      // Si la nota ya estaba pagada, lo cobrado deja de corresponder: vuelve a
+      // PENDIENTE para cobrarla por el importe nuevo (mismo criterio que
+      // cambiar-maquina).
+      await recalcularPrecioTotal(client, id, {
+        desmarcarPagoSiCambia: true, usuarioId: req.user?.id, sucursal: req.sucursal,
+      });
+    } else {
+      await client.query(
+        `UPDATE nota_cargas SET ${col} = $1, ${colUsada} = $1 WHERE id = $2`,
+        [maquina_id, carga_id]
+      );
+    }
 
     await client.query('COMMIT');
     const { rows } = await pool.query('SELECT n.* FROM notas n WHERE n.id = $1', [id]);
@@ -3660,6 +3689,28 @@ export const cambiarEstadoPago = async (req, res) => {
     if (actual.estado === 'CANCELADA') {
       await client.query('ROLLBACK');
       return res.status(400).json({ message: 'No se puede cambiar el pago de una nota cancelada.' });
+    }
+
+    // Autoservicio sin máquina asignada no se puede cobrar (2026-09-25): su
+    // carga todavía no vale nada (se tarifa al asignar en Salidas), así que el
+    // cobro entraría en $0 y al asignar la máquina el total subiría y la nota
+    // volvería sola a PENDIENTE — con el corte ya cerrado, ni eso se podría.
+    if (estado_pago === 'PAGADO' && actual.tipo_servicio === 'AUTOSERVICIO') {
+      const { rows: sinMaquina } = await client.query(
+        `SELECT COUNT(*)::int AS faltan
+           FROM nota_cargas
+          WHERE nota_id = $1
+            AND ((lavadora_tipo IS NOT NULL AND lavadora_usada_id IS NULL)
+              OR (secadora_tipo IS NOT NULL AND secadora_usada_id IS NULL))`,
+        [id]
+      );
+      if (sinMaquina[0].faltan > 0) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({
+          message: 'Asigna la máquina en Salidas antes de cobrar: hasta entonces la nota no '
+                 + 'tiene nada que cobrar.',
+        });
+      }
     }
 
     const esReversion = actual.estado_pago === 'PAGADO' && estado_pago === 'PENDIENTE';

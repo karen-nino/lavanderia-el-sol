@@ -138,7 +138,7 @@ function armarTextoTicket(nota, rfc, notaPie) {
   // Vuelca las líneas de una carga (máquinas, productos, ajuste) al arreglo L.
   const volcarCarga = cg => {
     L.push(`Carga ${cg.orden}:`);
-    maquinasDeCarga(cg).forEach(m => {
+    maquinasDeCarga(cg, nota.tipo_servicio).forEach(m => {
       L.push(`  • 1 x ${m.nombre}${m.tipo ? ` (${m.tipo})` : ''} — ${fmtMonto(m.precio)}`);
     });
     // Las tapas son información interna: no se listan en el ticket.
@@ -154,7 +154,7 @@ function armarTextoTicket(nota, rfc, notaPie) {
 
   // Mismo criterio que la vista: las cargas que se quedaron sin nada que cobrar
   // no se listan.
-  const cargas      = (nota.cargas ?? []).filter(cargaVisibleEnTicket);
+  const cargas      = (nota.cargas ?? []).filter(cg => cargaVisibleEnTicket(cg, nota.tipo_servicio));
   const originales  = cargas.filter(cg => !cg.es_adicional);
   const adicionales = cargas.filter(cg => cg.es_adicional);
 
@@ -359,7 +359,7 @@ export default function TicketNota() {
   const prodsNota   = productos.filter(p => p.unidad !== 'tapa');
   // Cargas creadas al dar de alta la nota (originales) vs. las agregadas
   // después (adicionales), para mostrarlas en bloques separados.
-  const visibles    = cargas.filter(cargaVisibleEnTicket);
+  const visibles    = cargas.filter(cg => cargaVisibleEnTicket(cg, nota.tipo_servicio));
   const originales  = visibles.filter(cg => !cg.es_adicional);
   const adicionales = visibles.filter(cg => cg.es_adicional);
   const esEncargo   = nota.tipo_servicio === 'POR_ENCARGO';
@@ -387,7 +387,7 @@ export default function TicketNota() {
   // Render de una carga del recibo: encabezado con su total y el detalle de
   // máquinas, productos y ajuste. Se reusa para el bloque original y el adicional.
   const renderCarga = cg => {
-    const maquinas   = maquinasDeCarga(cg);
+    const maquinas   = maquinasDeCarga(cg, nota.tipo_servicio);
     const prods      = [...(cg.productos ?? [])].sort((a, b) => ordenProducto(a) - ordenProducto(b));
     const totalCarga = costoDeCarga(cg);
 

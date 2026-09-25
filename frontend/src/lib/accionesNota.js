@@ -17,8 +17,19 @@ export const esTerminal = (nota) => ['FINALIZADA', 'CANCELADA'].includes(nota?.e
 // vuelve a deber, y antes el detalle se quedaba sin un solo botón para
 // cobrarla —el dinero quedaba fuera de la app (2026-09-23)—. Cobrar una nota ya
 // cerrada no mueve su estado ni su inventario: solo registra el pago.
+// Autoservicio se tarifa al asignar la máquina en Salidas (2026-09-25): hasta
+// entonces la carga vale $0, así que cobrarla sería cobrar de menos y al asignar
+// la máquina la nota volvería sola a PENDIENTE. El servidor lo rechaza con un
+// 409; aquí ni se ofrece el botón.
+export const faltaAsignarMaquina = (nota) =>
+  nota?.tipo_servicio === 'AUTOSERVICIO'
+  && (nota?.cargas ?? []).some(cg =>
+       (cg.lavadora_tipo_previsto && !cg.lavadora_usada_id)
+       || (cg.secadora_tipo_previsto && !cg.secadora_usada_id));
+
 export const puedeLiquidar = (nota) =>
-  nota?.estado_pago === 'PENDIENTE' && nota?.estado !== 'CANCELADA';
+  nota?.estado_pago === 'PENDIENTE' && nota?.estado !== 'CANCELADA'
+  && !faltaAsignarMaquina(nota);
 
 // Finalizar es el último paso —la ropa se entregó— y exige que ya esté cobrada:
 // una nota pendiente no se puede dar por entregada.

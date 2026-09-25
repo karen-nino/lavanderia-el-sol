@@ -113,12 +113,18 @@ describe('POST /api/caja/movimientos', () => {
   // empleado en turno. El total del día sí las suma, pero aparte.
   it('el esperado del cajón solo cuenta el efectivo, no transferencias ni tarjetas', async () => {
     await seedAjustes({ precio_carga_mediana: 70 });
+    // La nota nace en $0 y se tarifa al asignarle la máquina (2026-09-25), así
+    // que el cobro es el último paso.
     const cobrar = async (nombre, forma_pago) => {
       const lavadoraId = await seedMaquina({ nombre, tipo: 'lavadora_mediana' });
-      await request(app).post('/api/notas').set(auth(admin.token)).send({
-        tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PAGADO', forma_pago,
-        cargas: [{ lavadora_id: lavadoraId, lavadora_tipo: 'mediana' }],
+      const nota = await request(app).post('/api/notas').set(auth(admin.token)).send({
+        tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE',
+        cargas: [{ lavadora_tipo: 'mediana' }],
       }).expect(201);
+      await request(app).patch(`/api/notas/${nota.body.id}/asignar-carga-maquina`).set(auth(admin.token))
+        .send({ carga_id: nota.body.cargas[0].id, slot: 'lavadora', maquina_id: lavadoraId }).expect(200);
+      await request(app).patch(`/api/notas/${nota.body.id}/estado-pago`).set(auth(admin.token))
+        .send({ estado_pago: 'PAGADO', forma_pago }).expect(200);
     };
     await cobrar('L-efec', 'EFECTIVO');
     await cobrar('L-tran', 'TRANSFERENCIA');
@@ -309,13 +315,20 @@ describe('DELETE /api/caja/historial/:id (eliminar corte)', () => {
 // y un corte YA CERRADO aparecía con un faltante que nadie causó ese día.
 describe('un corte cerrado no cambia después (mig. 101)', () => {
   async function cobrar(monto = 70) {
+    const lavadoraId = await seedMaquina({ nombre: `Lavadora ${Date.now()}${Math.random()}`, tipo: 'lavadora_mediana' });
     const nota = await request(app).post('/api/notas').set(auth(admin.token)).send({
-      tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA',
-      estado_pago: 'PAGADO', forma_pago: 'EFECTIVO',
+      tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE',
       cargas: [{ lavadora_tipo: 'mediana' }],
     });
     expect(nota.status).toBe(201);
-    expect(Number(nota.body.precio_total)).toBe(monto);
+    // La carga se tarifa al asignarle la máquina, y hasta entonces se cobra.
+    const asignada = await request(app).patch(`/api/notas/${nota.body.id}/asignar-carga-maquina`)
+      .set(auth(admin.token))
+      .send({ carga_id: nota.body.cargas[0].id, slot: 'lavadora', maquina_id: lavadoraId });
+    expect(asignada.status).toBe(200);
+    expect(Number(asignada.body.precio_total)).toBe(monto);
+    await request(app).patch(`/api/notas/${nota.body.id}/estado-pago`).set(auth(admin.token))
+      .send({ estado_pago: 'PAGADO', forma_pago: 'EFECTIVO' }).expect(200);
     return nota.body.id;
   }
 

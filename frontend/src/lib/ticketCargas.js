@@ -13,21 +13,28 @@ const MAQUINA_TIPO_LABEL = {
 // el identificador es de uso interno y en el ticket no le dice nada. El tamaño
 // sale de la máquina asignada, o del tipo elegido al crear la nota mientras no
 // haya una.
-export function maquinasDeCarga(cg) {
+//
+// En AUTOSERVICIO el tipo elegido no basta (2026-09-25): ahí la máquina se
+// cobra al asignarla en Salidas, así que mientras no haya máquina física no hay
+// nada que enseñar — el ticket mostraría una máquina y un precio que todavía no
+// existen. En Por Encargo sí se anuncia el tipo elegido, porque la carga se
+// cobra por su tope desde que se hace la nota.
+export function maquinasDeCarga(cg, tipoServicio) {
   const capitalizar = (t) => (t ? t.charAt(0).toUpperCase() + t.slice(1) : '');
+  const soloAsignadas = tipoServicio === 'AUTOSERVICIO';
 
   const lavadora = cg.lavadora_usada_id
     ? { nombre: 'Lavadora',
         tipo: MAQUINA_TIPO_LABEL[cg.lavadora_usada_tipo] ?? '',
         precio: Number(cg.precio_lavadora) }
-    : cg.lavadora_tipo_previsto
+    : cg.lavadora_tipo_previsto && !soloAsignadas
       ? { nombre: 'Lavadora',
           tipo: capitalizar(cg.lavadora_tipo_previsto),
           precio: Number(cg.precio_lavadora) }
       : null;
 
   // La secadora es de un solo tamaño: no lleva calificativo.
-  const secadora = (cg.secadora_usada_id || cg.secadora_tipo_previsto)
+  const secadora = (cg.secadora_usada_id || (cg.secadora_tipo_previsto && !soloAsignadas))
     ? { nombre: 'Secadora', tipo: '', precio: Number(cg.precio_secadora) }
     : null;
 
@@ -38,8 +45,8 @@ export function maquinasDeCarga(cg) {
 // productos y sin precio no debe aparecer en el ticket: el cliente vería una
 // "Carga 2 · $0.00" que no existió. Se conserva si tiene máquina (puesta o solo
 // elegida), productos o un precio que cobrar.
-export function cargaVisibleEnTicket(cg) {
-  const tieneMaquinas  = maquinasDeCarga(cg).length > 0;
+export function cargaVisibleEnTicket(cg, tipoServicio) {
+  const tieneMaquinas  = maquinasDeCarga(cg, tipoServicio).length > 0;
   const tieneProductos = (cg.productos ?? []).some(p => p.unidad !== 'tapa');
   const cobraAlgo      = Number(cg.precio_tope ?? 0) > 0
     || Number(cg.precio_lavadora ?? 0) > 0

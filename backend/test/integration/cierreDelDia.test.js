@@ -166,12 +166,18 @@ describe('cerrarCajasAbiertas', () => {
     await request(app).post('/api/caja/abrir').set(auth(admin.token)).send({ monto_inicial: 100 });
     const lavadoraId = await seedMaquina({ nombre: 'L9', tipo: 'lavadora_mediana' });
     const nota = await request(app).post('/api/notas').set(auth(admin.token)).send({
-      tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PAGADO',
-      forma_pago: 'EFECTIVO',
+      tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE',
       cargas: [{ lavadora_tipo: 'mediana' }],
     });
     expect(nota.status).toBe(201);
-    const cobrado = Number(nota.body.precio_total);
+    // La carga se tarifa al asignarle la máquina (2026-09-25); recién entonces
+    // hay algo que cobrar.
+    const asignada = await request(app).patch(`/api/notas/${nota.body.id}/asignar-carga-maquina`)
+      .set(auth(admin.token))
+      .send({ carga_id: nota.body.cargas[0].id, slot: 'lavadora', maquina_id: lavadoraId }).expect(200);
+    await request(app).patch(`/api/notas/${nota.body.id}/estado-pago`).set(auth(admin.token))
+      .send({ estado_pago: 'PAGADO', forma_pago: 'EFECTIVO' }).expect(200);
+    const cobrado = Number(asignada.body.precio_total);
     expect(cobrado).toBeGreaterThan(0);
 
     await cerrarCajasAbiertas();

@@ -97,10 +97,17 @@ describe('GET /api/usuarios/:id/desempeno', () => {
   it('agrega por día las notas que creó el empleado', async () => {
     const emp = await seedUsuario({ rol: 'operador', sucursal: 'centro', nombre: 'Vendedor' });
     for (let i = 0; i < 2; i++) {
-      await request(app).post('/api/notas').set(auth(emp.token)).send({
-        tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PAGADO',
+      // El autoservicio se tarifa al asignarle la máquina (2026-09-25): sin ese
+      // paso la nota valdría $0 y no habría nada vendido que agregar.
+      const lav = await seedMaquina({ nombre: `Lavadora ${i + 1}`, tipo: 'lavadora_mediana' });
+      const crea = await request(app).post('/api/notas').set(auth(emp.token)).send({
+        tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE',
         cargas: [{ lavadora_tipo: 'mediana' }],
       }).expect(201);
+      await request(app).patch(`/api/notas/${crea.body.id}/asignar-carga-maquina`).set(auth(emp.token))
+        .send({ carga_id: crea.body.cargas[0].id, slot: 'lavadora', maquina_id: lav }).expect(200);
+      await request(app).patch(`/api/notas/${crea.body.id}/estado-pago`).set(auth(emp.token))
+        .send({ estado_pago: 'PAGADO', forma_pago: 'EFECTIVO' }).expect(200);
     }
 
     const res = await request(app).get(`/api/usuarios/${emp.id}/desempeno`).set(auth(admin.token));

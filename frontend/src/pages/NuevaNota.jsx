@@ -2021,25 +2021,24 @@ export default function NuevaNota() {
                   <div key={i} className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-sm font-semibold text-gray-900">Máquina {i + 1}</p>
-                      <div className="flex items-center gap-1.5 flex-shrink-0">
-                        <span className="text-sm font-medium text-blue">${subtotalDeCarga(c).toFixed(2)}</span>
-                        {i > 0 && (
-                          <button
-                            type="button"
-                            onClick={() => eliminarCargaAuto(i)}
-                            aria-label={`Quitar máquina ${i + 1}`}
-                            className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                            </svg>
-                          </button>
-                        )}
-                      </div>
+                      {/* Sin importe en la tarjeta (2026-09-25): la captura no
+                          habla de dinero; el cobro vive en el detalle de la nota. */}
+                      {i > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => eliminarCargaAuto(i)}
+                          aria-label={`Quitar máquina ${i + 1}`}
+                          className="flex-shrink-0 w-7 h-7 flex items-center justify-center rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      )}
                     </div>
                     {/* Una sola elección por máquina (2026-09-25): o lavadora o
-                        secadora, nunca las dos. El lavado se cobra con la tarifa
-                        Mediana; la máquina física se asigna después en Salidas. */}
+                        secadora, nunca las dos, y sin tamaño — el lavado se cobra
+                        con la tarifa Mediana. La máquina física se asigna en Salidas. */}
                     <div>
                       <label className="block text-xs font-medium text-gray-500 mb-1.5">Máquina</label>
                       <select
@@ -2051,8 +2050,6 @@ export default function NuevaNota() {
                         )}
                         className={`${INPUT_CLS} bg-white`}
                       >
-                        {/* Sin precio en las opciones (2026-09-25): el costo se
-                            ve arriba en la tarjeta, en el subtotal y en el resumen. */}
                         <option value="">Elige lavadora o secadora</option>
                         <option value="lavadora">Lavadora</option>
                         <option value="secadora">Secadora</option>
@@ -2064,9 +2061,6 @@ export default function NuevaNota() {
                   </div>
                 );
               })}
-              <p className="text-xs text-blue font-medium text-right">
-                Subtotal máquinas: ${subtotalCargas.toFixed(2)}
-              </p>
               {/* Informativo, no bloquea: la nota se crea con el TIPO de máquina
                   y la máquina física se asigna después en Salidas. */}
               {maquinas.length === 0 && (
@@ -2103,17 +2097,14 @@ export default function NuevaNota() {
                 </div>
               </div>
 
-              {/* Cada máquina con lo que se le cobra. Ya no hay desglose: cada
-                  una es lavadora o secadora. La máquina física no va aquí: en
+              {/* Qué se lleva cada máquina, sin precios (2026-09-25): el
+                  resumen solo enumera. La máquina física tampoco va aquí: en
                   Autoservicio se elige el tipo y se asigna en Salidas. */}
               <div className="space-y-2 mb-3 last:mb-0 text-sm text-blue border-t border-blue-200 pt-3">
                 {cargasAuto.map((c, i) => (
-                  <div key={i} className="flex justify-between font-medium">
-                    <span>
-                      Máquina {i + 1}
-                      {c.lavadora_tipo ? ' · Lavadora' : c.secadora_tipo ? ' · Secadora' : ''}
-                    </span>
-                    <span>${subtotalDeCarga(c).toFixed(2)}</span>
+                  <div key={i} className="font-medium">
+                    Máquina {i + 1}
+                    {c.lavadora_tipo ? ' · Lavadora' : c.secadora_tipo ? ' · Secadora' : ''}
                   </div>
                 ))}
               </div>

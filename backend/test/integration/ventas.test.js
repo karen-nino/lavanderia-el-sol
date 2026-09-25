@@ -54,10 +54,12 @@ describe('GET /api/ventas/resumen', () => {
 // Crea una nota de autoservicio con una lavadora mediana (tarifa default 70)
 // y devuelve su respuesta. `nombreMaquina` debe ser único por nota (cada una
 // toma su propia máquina disponible).
-async function crearNota(token, { nombreMaquina, estado_pago = 'PENDIENTE', ajuste = 0, productos, sucursal = 'centro' } = {}) {
+async function crearNota(token, { nombreMaquina, estado_pago = 'PENDIENTE', forma_pago = 'EFECTIVO', ajuste = 0, productos, sucursal = 'centro' } = {}) {
   const lavadoraId = await seedMaquina({ nombre: nombreMaquina, tipo: 'lavadora_mediana', sucursal });
+  // Nace PENDIENTE siempre: en Autoservicio la carga se tarifa al asignarle la
+  // máquina (2026-09-25), así que el cobro va al final de la secuencia.
   const body = {
-    tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago, ajuste,
+    tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE', ajuste,
     cargas: [{ lavadora_tipo: 'mediana' }],
   };
   if (productos) body.productos = productos;
@@ -68,6 +70,11 @@ async function crearNota(token, { nombreMaquina, estado_pago = 'PENDIENTE', ajus
       .send({ carga_id: creada.body.cargas[0].id, slot: 'lavadora', maquina_id: lavadoraId });
     await request(app).patch(`/api/notas/${creada.body.id}/activar-pendientes`).set(auth(token, sucursal))
       .send({ maquina_id: lavadoraId });
+    if (estado_pago === 'PAGADO') {
+      const pago = await request(app).patch(`/api/notas/${creada.body.id}/estado-pago`)
+        .set(auth(token, sucursal)).send({ estado_pago: 'PAGADO', forma_pago });
+      creada.body = pago.body;
+    }
   }
   return creada;
 }

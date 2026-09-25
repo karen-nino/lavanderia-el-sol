@@ -9,7 +9,7 @@ import { etiquetaProducto, tituloProducto, subtituloProducto, ordenProducto } fr
 import { FORMAS_PAGO, formaPagoLabel } from '../lib/formasPago';
 import { formatHora12, formatFechaHora12 } from '../lib/fecha';
 import { leerAvisoCobro, limpiarAvisoCobro } from '../lib/avisoCobro';
-import { esTerminal, puedeLiquidar, puedeFinalizar, puedeEliminar, eliminarSoloEnEscritorio } from '../lib/accionesNota';
+import { esTerminal, puedeLiquidar, puedeFinalizar, puedeEliminar, eliminarSoloEnEscritorio, faltaAsignarMaquina } from '../lib/accionesNota';
 import AbrirCajaModal from '../components/AbrirCajaModal';
 
 // Unidad de venta de un producto de la nota, en texto ("2 botellas" / "3 tapas").
@@ -705,6 +705,13 @@ export default function DetalleNota() {
             <div className="min-w-0">
               <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide">Pendiente de cobro</p>
               <p className="text-3xl font-bold text-amber-900 leading-tight mt-0.5">{fmtMonto(nota.precio_total)}</p>
+              {/* En Autoservicio la máquina se cobra al asignarla: mientras no
+                  se asigne, el total es $0 y no hay botón de Liquidar. */}
+              {faltaAsignarMaquina(nota) && (
+                <p className="text-xs text-amber-800 mt-1">
+                  Asigna la máquina en Salidas para saber cuánto cobrar.
+                </p>
+              )}
             </div>
             <svg className="w-8 h-8 text-amber-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
