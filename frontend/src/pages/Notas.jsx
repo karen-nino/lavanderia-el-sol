@@ -6,7 +6,11 @@ import { useAuth } from '../context/AuthContext';
 import { esAdminMain as esAdminMainFn } from '../lib/roles';
 import SucursalBar from '../components/SucursalBar';
 
-const ESTADOS = ['TODOS', 'EN_ESPERA', 'LAVANDO', 'SECANDO', 'POR_ENTREGAR', 'FINALIZADA', 'PENDIENTE', 'CANCELADA'];
+// Orden del filtro: el ciclo de la nota tal como pasa en el mostrador y, justo
+// después de Por Entregar, las que están Por Cobrar — es el par que más se
+// consulta junto. Lavando y Secando salieron de aquí (2026-09-25): lo que está
+// corriendo se ve en Máquinas y en el Inicio, y la nota lo dice en su badge.
+const ESTADOS = ['TODOS', 'EN_ESPERA', 'POR_ENTREGAR', 'PENDIENTE', 'FINALIZADA', 'CANCELADA'];
 
 // Renglones por página en la tabla de escritorio.
 const POR_PAGINA = 15;
@@ -43,8 +47,6 @@ const FILTRO_LABEL = {
 const FILTRO_VACIO = {
   TODOS:        'No hay notas',
   EN_ESPERA:    'No hay notas en espera',
-  LAVANDO:      'No hay notas lavando',
-  SECANDO:      'No hay notas secando',
   POR_ENTREGAR: 'No hay notas por entregar',
   FINALIZADA:   'No hay notas finalizadas',
   PENDIENTE:    'No hay notas por cobrar',
@@ -297,12 +299,6 @@ export default function Notas() {
       if (n.estado_pago !== 'PENDIENTE') return false;
     } else if (filtro === 'POR_ENTREGAR') {
       if (!ESTADOS_POR_ENTREGAR.includes(n.estado)) return false;
-    } else if (filtro === 'SECANDO') {
-      // Una nota que lava y seca a la vez tiene estado LAVANDO, pero también
-      // debe aparecer en el filtro Secando si tiene una secadora activa.
-      const secando = n.estado === 'SECANDO'
-        || (n.estado === 'LAVANDO' && n.hay_secadora_activa);
-      if (!secando) return false;
     } else if (filtro !== 'TODOS' && n.estado !== filtro) {
       return false;
     }
