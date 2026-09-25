@@ -769,7 +769,7 @@ export default function NuevaNota() {
         : 'Agrega al menos un producto: una venta sin productos no es nota.';
     }
     if (!cargasAuto.every(c => c.lavadora_tipo || c.secadora_tipo)) {
-      return 'Cada carga necesita al menos un tipo de lavado o secado.';
+      return 'Cada máquina necesita ser lavadora o secadora.';
     }
     return null;
   };
@@ -2037,35 +2037,27 @@ export default function NuevaNota() {
                         )}
                       </div>
                     </div>
-                    {/* Autoservicio: se elige el TIPO de lavado y/o secado; la
-                        máquina física se asigna después en Salidas. */}
+                    {/* Una sola elección por máquina (2026-09-25): o lavadora o
+                        secadora, nunca las dos. El lavado se cobra con la tarifa
+                        Mediana; la máquina física se asigna después en Salidas. */}
                     <div>
-                      <label className="block text-xs font-medium text-gray-500 mb-1.5">Lavadora</label>
-                      {/* El secado NO se precarga al elegir lavadora: se cobra aparte
-                          y no todas las cargas lo llevan. */}
+                      <label className="block text-xs font-medium text-gray-500 mb-1.5">Máquina</label>
                       <select
-                        value={c.lavadora_tipo}
-                        onChange={e => set({ lavadora_tipo: e.target.value })}
+                        value={c.lavadora_tipo ? 'lavadora' : c.secadora_tipo ? 'secadora' : ''}
+                        onChange={e => set(
+                          e.target.value === 'lavadora' ? { lavadora_tipo: 'mediana', secadora_tipo: '' }
+                          : e.target.value === 'secadora' ? { lavadora_tipo: '', secadora_tipo: 'mediana' }
+                          : { lavadora_tipo: '', secadora_tipo: '' }
+                        )}
                         className={`${INPUT_CLS} bg-white`}
                       >
-                        <option value="">Sin lavado</option>
-                        <option value="mediana">Mediana — ${precioLavadoTipo('mediana', c.tipo_prenda).toFixed(2)}</option>
-                        <option value="jumbo">Jumbo — ${precioLavadoTipo('jumbo', c.tipo_prenda).toFixed(2)}</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-500 mb-1.5">Secadora</label>
-                      <select
-                        value={c.secadora_tipo}
-                        onChange={e => set({ secadora_tipo: e.target.value })}
-                        className={`${INPUT_CLS} bg-white`}
-                      >
-                        <option value="">Sin secado</option>
-                        <option value="mediana">Con secado — ${precioSecadoTipo('mediana', c.tipo_prenda).toFixed(2)}</option>
+                        <option value="">Elige lavadora o secadora</option>
+                        <option value="lavadora">Lavadora — ${precioLavadoTipo('mediana', c.tipo_prenda).toFixed(2)}</option>
+                        <option value="secadora">Secadora — ${precioSecadoTipo('mediana', c.tipo_prenda).toFixed(2)}</option>
                       </select>
                     </div>
                     {!c.lavadora_tipo && !c.secadora_tipo && (
-                      <p className="text-sm text-red-600">Elige al menos un tipo de lavado o secado.</p>
+                      <p className="text-sm text-red-600">Elige lavadora o secadora.</p>
                     )}
                   </div>
                 );
@@ -2109,35 +2101,19 @@ export default function NuevaNota() {
                 </div>
               </div>
 
-              {/* Cada carga con lo que se le cobra. La máquina física no va
-                  aquí: en Autoservicio se elige el tipo y se asigna en Salidas. */}
-              <div className="space-y-3 mb-3 text-sm text-blue border-t border-blue-200 pt-3">
-                {cargasAuto.map((c, i) => {
-                  const lavado = precioLavadoTipo(c.lavadora_tipo, c.tipo_prenda);
-                  const secado = precioSecadoTipo(c.secadora_tipo, c.tipo_prenda);
-                  return (
-                    <div key={i}>
-                      <div className="flex justify-between font-medium">
-                        <span>Máquina {i + 1}</span>
-                        <span>${subtotalDeCarga(c).toFixed(2)}</span>
-                      </div>
-                      <div className="pl-3 mt-1.5 space-y-1.5 text-xs text-blue-700/80">
-                        {c.lavadora_tipo && (
-                          <div className="flex justify-between">
-                            <span>Lavadora · {c.lavadora_tipo.charAt(0).toUpperCase() + c.lavadora_tipo.slice(1)}</span>
-                            <span>${lavado.toFixed(2)}</span>
-                          </div>
-                        )}
-                        {c.secadora_tipo && (
-                          <div className="flex justify-between">
-                            <span>Secadora</span>
-                            <span>${secado.toFixed(2)}</span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
+              {/* Cada máquina con lo que se le cobra. Ya no hay desglose: cada
+                  una es lavadora o secadora. La máquina física no va aquí: en
+                  Autoservicio se elige el tipo y se asigna en Salidas. */}
+              <div className="space-y-2 mb-3 text-sm text-blue border-t border-blue-200 pt-3">
+                {cargasAuto.map((c, i) => (
+                  <div key={i} className="flex justify-between font-medium">
+                    <span>
+                      Máquina {i + 1}
+                      {c.lavadora_tipo ? ' · Lavadora' : c.secadora_tipo ? ' · Secadora' : ''}
+                    </span>
+                    <span>${subtotalDeCarga(c).toFixed(2)}</span>
+                  </div>
+                ))}
               </div>
 
               {productosLista.length > 0 && (
