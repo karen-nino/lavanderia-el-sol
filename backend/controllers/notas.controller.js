@@ -2712,6 +2712,9 @@ export const asignarCargaMaquina = async (req, res) => {
       return res.status(404).json({ message: 'La carga no pertenece a la nota.' });
     }
     const carga = cargaRows[0];
+    // Autoservicio: la máquina se cobra al asignarla (2026-09-25), y el tamaño
+    // de lavadora no se eligió en la nota. Las dos cosas cuelgan de aquí.
+    const tarifaAlAsignar = notaRows[0].tipo_servicio === 'AUTOSERVICIO';
     const tipoPrevisto = slot === 'lavadora' ? carga.lavadora_tipo : carga.secadora_tipo;
     const yaAsignada   = slot === 'lavadora' ? carga.lavadora_id   : carga.secadora_id;
     if (!tipoPrevisto) {
@@ -2742,8 +2745,12 @@ export const asignarCargaMaquina = async (req, res) => {
         await client.query('ROLLBACK');
         return res.status(400).json({ message: `${maq.nombre} es una secadora, no una lavadora.` });
       }
+      // El tamaño solo se exige donde la nota lo eligió. En Autoservicio ya no
+      // se elige (2026-09-25): sirve cualquier lavadora libre y el precio sale
+      // de la que se asigne, que es la que el cliente va a usar. En Por Encargo
+      // el tamaño lo manda el de la carga, así que ahí sí tiene que coincidir.
       const tipoMaq = maq.tipo === 'lavadora_jumbo' ? 'jumbo' : 'mediana';
-      if (tipoMaq !== tipoPrevisto) {
+      if (!tarifaAlAsignar && tipoMaq !== tipoPrevisto) {
         await client.query('ROLLBACK');
         return res.status(400).json({ message: `La lavadora debe ser ${tipoPrevisto} (${maq.nombre} es ${tipoMaq}).` });
       }
@@ -2760,9 +2767,9 @@ export const asignarCargaMaquina = async (req, res) => {
     await registrarMaquinaEnCarga(client, carga_id, slot, maquina_id);
     // AQUÍ se cobra la máquina en Autoservicio (2026-09-25): la nota nace en $0
     // y es al asignar la física cuando se sabe qué se usó, así que es cuando se
-    // tarifa. En Por Encargo el precio no depende de esto —la carga se cobra por
-    // su tope, congelado al crear la nota—, así que ahí no se toca nada.
-    const tarifaAlAsignar = notaRows[0].tipo_servicio === 'AUTOSERVICIO';
+    // tarifa —con la tarifa de ESA máquina, mediana o jumbo—. En Por Encargo el
+    // precio no depende de esto: la carga se cobra por su tope, congelado al
+    // crear la nota, así que ahí no se toca nada.
     if (tarifaAlAsignar) {
       const t = await tarifasCarga(client);
       const precio = slot === 'lavadora'

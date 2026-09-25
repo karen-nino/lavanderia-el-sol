@@ -517,7 +517,6 @@ export default function DetalleNota() {
   if (!nota) return null;
 
   const terminal     = esTerminal(nota);
-  const puedeEditar  = !['PAGADA', 'FINALIZADA', 'CANCELADA'].includes(nota.estado);
   // Cancelar: solo admin y solo mientras la nota NO esté cobrada. Después del
   // cobro habría que devolver dinero, y eso descuadra el corte del día; para
   // eso está la reversión de pago.
@@ -654,14 +653,6 @@ export default function DetalleNota() {
               className="flex items-center gap-1.5 px-4 py-2 bg-orange-500 hover:bg-orange-600 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
             >
               Cancelar nota
-            </button>
-          )}
-          {puedeEditar && (esAdmin || nota.estado === 'EN_ESPERA') && (
-            <button
-              onClick={() => navigate(`/notas/${id}/editar`)}
-              className="flex items-center gap-1.5 px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-colors"
-            >
-              Editar nota
             </button>
           )}
           <button

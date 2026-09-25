@@ -766,6 +766,11 @@ export default function Salidas() {
   const maquinasParaSlot = (slot, tipo) => todasMaquinas.filter(m => {
     if (m.estado !== 'disponible') return false;
     if (slot === 'lavadora') {
+      // En Autoservicio la nota no elige tamaño de lavadora (2026-09-25): el
+      // cliente usa la que esté libre y el precio sale de la máquina que se le
+      // asigne, así que aquí se ofrecen TODAS las lavadoras. En Por Encargo el
+      // tamaño lo manda el de la carga y solo cabe la lavadora que aguanta.
+      if (esAutoservicio) return m.tipo !== 'secadora';
       return m.tipo === (tipo === 'jumbo' ? 'lavadora_jumbo' : 'lavadora_mediana');
     }
     // La secadora es de un solo tamaño: cualquier secadora disponible sirve.
@@ -1642,7 +1647,9 @@ export default function Salidas() {
                 {asignarSlot
                   ? <>Elige la <span className="font-medium text-gray-700">
                       {asignarSlot.slot === 'lavadora'
-                        ? `lavadora ${TIPO_MAQ_LABEL[asignarSlot.tipo] ?? asignarSlot.tipo}`
+                        ? (esAutoservicio
+                            ? 'lavadora'
+                            : `lavadora ${TIPO_MAQ_LABEL[asignarSlot.tipo] ?? asignarSlot.tipo}`)
                         : 'secadora'}
                     </span> que le falta a la {esAutoservicio ? 'Máquina' : 'Carga'} {cargaDestino?.orden}. Queda asignada; la inicias después con su botón.</>
                   : cargaDestino

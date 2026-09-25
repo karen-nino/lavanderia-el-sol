@@ -1923,6 +1923,23 @@ describe('una nota no se queda atascada si sobra una carga', () => {
 
   // Quien se equivoca al agregar una máquina de más la quita en el momento: no
   // hace falta un admin (2026-09-25). El resto de las reglas no se movió.
+  it('en Autoservicio cabe cualquier lavadora y se cobra la de esa máquina', async () => {
+    // La nota no elige tamaño: guarda 'mediana' y el cliente usa la que esté
+    // libre, así que una jumbo también se puede asignar y se cobra como jumbo.
+    await seedAjustes({ precio_carga_mediana: 70, precio_carga_jumbo: 90 });
+    const jumbo = await seedMaquina({ nombre: 'L-jumbo', tipo: 'lavadora_jumbo', tamano: 'jumbo' });
+    const crea = await request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE',
+      cargas: [{ lavadora_tipo: 'mediana' }],
+    });
+    expect(crea.status).toBe(201);
+    const res = await request(app).patch(`/api/notas/${crea.body.id}/asignar-carga-maquina`)
+      .set(auth(admin.token))
+      .send({ carga_id: crea.body.cargas[0].id, slot: 'lavadora', maquina_id: jumbo });
+    expect(res.status).toBe(200);
+    expect(Number(res.body.precio_total)).toBe(90);
+  });
+
   it('un empleado puede quitar una máquina que nunca arrancó', async () => {
     const emp = await seedUsuario({ rol: 'operador', sucursal: 'centro', nombre: 'Mostrador' });
     const { notaId, cargaSinUsar, cargaUsada } = await notaConCargaTerminadaYOtraSinUsar();
