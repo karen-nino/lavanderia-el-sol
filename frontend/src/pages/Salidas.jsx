@@ -75,6 +75,13 @@ export default function Salidas() {
   const [loadingProducto,  setLoadingProducto]  = useState(null); // id del producto en proceso
   // Producto de la nota pendiente de confirmar antes de quitarlo (solo admin).
   const [confirmQuitarProd, setConfirmQuitarProd] = useState(null);
+  // Agregar un producto a la nota desde Salidas (2026-09-25): el cliente pide
+  // el jabón cuando ya está frente a la máquina, no al hacer la nota.
+  const [agregarProdOpen, setAgregarProdOpen] = useState(false);
+  const [catalogoProd, setCatalogoProd]       = useState([]);
+  const [loadingCatalogo, setLoadingCatalogo] = useState(false);
+  const [prodSel, setProdSel]                 = useState('');
+  const [prodCant, setProdCant]               = useState('1');
   const [confirmQuitarCarga, setConfirmQuitarCarga] = useState(null);
   const [errorAccion,      setErrorAccion]      = useState('');
   const [confirmDetener,   setConfirmDetener]   = useState(null); // máquina a detener
@@ -479,9 +486,46 @@ export default function Salidas() {
     }
   }
 
-  // Quita un producto mal capturado en la nota. Es de admin: desde Salidas ya
-  // no se agregan productos, así que esto solo deshace lo que se capturó al
-  // crear la nota. El producto vuelve al inventario y el total baja.
+  // Abre el modal con el catálogo de productos activos de la sucursal.
+  async function iniciarAgregarProducto() {
+    setErrorAccion('');
+    setProdSel('');
+    setProdCant('1');
+    setAgregarProdOpen(true);
+    setLoadingCatalogo(true);
+    try {
+      const data = await api.get('/productos');
+      setCatalogoProd(data ?? []);
+    } catch (err) {
+      setErrorAccion(err.message);
+    } finally {
+      setLoadingCatalogo(false);
+    }
+  }
+
+  // Suma el producto a la nota. El precio y la unidad los pone el servidor
+  // según el servicio (botella en Autoservicio, tapa en Por Encargo), y el
+  // producto queda apartado del inventario.
+  async function confirmarAgregarProducto() {
+    const cantidad = Number(prodCant);
+    if (!prodSel || !Number.isFinite(cantidad) || cantidad <= 0) return;
+    setLoadingProducto('nuevo');
+    setErrorAccion('');
+    try {
+      await api.post(`/notas/${id}/productos`, {
+        producto_id: Number(prodSel), cantidad,
+      });
+      setAgregarProdOpen(false);
+      await cargarDatos();
+    } catch (err) {
+      setErrorAccion(err.message);
+    } finally {
+      setLoadingProducto(null);
+    }
+  }
+
+  // Quita un producto mal capturado en la nota. Es de admin: el producto vuelve
+  // al inventario y el total baja.
   async function eliminarProducto(productoId) {
     setLoadingProducto(productoId);
     setErrorAccion('');
@@ -1056,12 +1100,27 @@ export default function Salidas() {
         </div>
       </div>
 
-      {/* Sección 2 — Productos de la nota. Aquí no se agregan: se capturan al
-          crear la nota (o en una nota de servicio Productos). El admin sí puede
-          quitar uno mal capturado. */}
+      {/* Sección 2 — Productos de la nota. Se capturan al hacerla, pero también
+          se pueden agregar aquí (2026-09-25): el cliente pide el jabón ya
+          estando en la máquina. El admin además puede quitar uno mal capturado. */}
       <div className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
-        <div className="px-4 py-3 border-b border-gray-50">
+        <div className="px-4 py-3 border-b border-gray-50 flex items-center justify-between gap-2">
           <h2 className="text-sm font-semibold text-gray-700">Productos</h2>
+          {/* Una nota cobrada y cerrada ya no acepta productos, y con el cobro
+              congelado en un corte cerrado no se toca lo que cuesta. */}
+          {nota && !cobroCongelado
+            && !['PAGADA', 'FINALIZADA', 'CANCELADA'].includes(nota.estado) && (
+            <button
+              onClick={iniciarAgregarProducto}
+              disabled={loadingProducto != null}
+              className="flex items-center gap-1 text-xs font-medium text-blue hover:underline disabled:opacity-60"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+              </svg>
+              Agregar
+            </button>
+          )}
         </div>
         {productosNota.length === 0 ? (
           <p className="px-4 py-4 text-sm text-gray-400 italic">Sin productos agregados</p>
@@ -1103,6 +1162,84 @@ export default function Salidas() {
           </div>
         )}
       </div>
+
+      {/* Modal agregar producto: qué producto y cuánto. El precio lo pone el
+          servidor según el servicio, así que aquí no se decide nada más. */}
+      {agregarProdOpen && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div>
+              <h3 className="text-base font-bold text-gray-900">Agregar producto</h3>
+              <p className="text-sm text-gray-500 mt-1">
+                {esAutoservicio
+                  ? 'Se cobra por pieza completa y se aparta del inventario.'
+                  : 'Se cobra por tapa/medida y se aparta del inventario.'}
+              </p>
+            </div>
+
+            {errorAccion && (
+              <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">
+                {errorAccion}
+              </div>
+            )}
+
+            {loadingCatalogo ? (
+              <div className="flex justify-center py-6">
+                <div className="animate-spin rounded-full h-7 w-7 border-b-2 border-blue" />
+              </div>
+            ) : catalogoProd.length === 0 ? (
+              <p className="text-sm text-gray-400 text-center py-6">No hay productos en el inventario.</p>
+            ) : (
+              <>
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide">Producto</label>
+                  <select
+                    value={prodSel}
+                    onChange={e => setProdSel(e.target.value)}
+                    className="w-full px-4 py-3.5 text-base border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue focus:border-blue"
+                  >
+                    <option value="">Elige el producto</option>
+                    {catalogoProd.map(p => {
+                      const sub = subtituloProducto(p);
+                      return (
+                        <option key={p.id} value={p.id}>
+                          {tituloProducto(p)}{sub ? ` · ${sub}` : ''}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide">Cantidad</label>
+                  <input
+                    type="number" min="1" step="1"
+                    value={prodCant}
+                    onChange={e => setProdCant(e.target.value)}
+                    className="w-full px-4 py-3.5 text-base border border-gray-300 rounded-lg text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none focus:ring-2 focus:ring-blue focus:border-blue"
+                  />
+                </div>
+              </>
+            )}
+
+            <div className="flex gap-3 pt-1">
+              <button
+                onClick={() => { setAgregarProdOpen(false); setErrorAccion(''); }}
+                className="flex-1 border border-gray-300 text-gray-700 font-medium py-3.5 rounded-lg text-base hover:bg-gray-50 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={confirmarAgregarProducto}
+                disabled={!prodSel || Number(prodCant) <= 0 || loadingProducto != null}
+                className="flex-1 bg-blue hover:opacity-90 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
+              >
+                {loadingProducto === 'nuevo' ? 'Agregando...' : 'Agregar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {confirmQuitarProd && (
         <ConfirmacionModal

@@ -142,10 +142,14 @@ function armarTextoTicket(nota, rfc, notaPie) {
   L.push(`Método de pago: ${formaPagoLabel(nota.forma_pago) || 'Pendiente'}`);
 
   // Vuelca las líneas de una carga (máquinas, productos, ajuste) al arreglo L.
+  // En Autoservicio no lleva encabezado (2026-09-25): cada máquina es una línea
+  // suelta con su precio, que es justo lo que el cliente pagó.
   const volcarCarga = cg => {
-    L.push(`${etiquetaCarga(cg, nota.tipo_servicio)}:`);
+    const conEncabezado = nota.tipo_servicio !== 'AUTOSERVICIO';
+    if (conEncabezado) L.push(`${etiquetaCarga(cg, nota.tipo_servicio)}:`);
+    const vineta = conEncabezado ? '  • ' : '';
     maquinasDeCarga(cg, nota.tipo_servicio).forEach(m => {
-      L.push(`  • 1 x ${m.nombre}${m.tipo ? ` (${m.tipo})` : ''} — ${fmtMonto(m.precio)}`);
+      L.push(`${vineta}1 x ${m.nombre}${m.tipo ? ` (${m.tipo})` : ''} — ${fmtMonto(m.precio)}`);
     });
     // Las tapas son información interna: no se listan en el ticket.
     (cg.productos ?? []).filter(p => p.unidad !== 'tapa')
@@ -161,8 +165,13 @@ function armarTextoTicket(nota, rfc, notaPie) {
   // Mismo criterio que la vista: las cargas que se quedaron sin nada que cobrar
   // no se listan.
   const cargas      = (nota.cargas ?? []).filter(cg => cargaVisibleEnTicket(cg, nota.tipo_servicio));
-  const originales  = cargas.filter(cg => !cg.es_adicional);
-  const adicionales = cargas.filter(cg => cg.es_adicional);
+  // En Autoservicio todas las máquinas van en una sola lista (2026-09-25): que
+  // una se agregara después es cosa del mostrador, no algo que el cliente
+  // tenga que leer. En los demás servicios el bloque aparte sí dice algo: la
+  // nota creció después de que se llevara su primer ticket.
+  const unaSolaLista = nota.tipo_servicio === 'AUTOSERVICIO';
+  const originales  = unaSolaLista ? cargas : cargas.filter(cg => !cg.es_adicional);
+  const adicionales = unaSolaLista ? []     : cargas.filter(cg => cg.es_adicional);
 
   // En Por Encargo el bloque es la lista de servicios cobrados (una línea por
   // carga); en los demás tipos, el desglose carga por carga.
@@ -366,8 +375,11 @@ export default function TicketNota() {
   // Cargas creadas al dar de alta la nota (originales) vs. las agregadas
   // después (adicionales), para mostrarlas en bloques separados.
   const visibles    = cargas.filter(cg => cargaVisibleEnTicket(cg, nota.tipo_servicio));
-  const originales  = visibles.filter(cg => !cg.es_adicional);
-  const adicionales = visibles.filter(cg => cg.es_adicional);
+  // Autoservicio lista todas sus máquinas juntas, sin el bloque "ADICIONAL":
+  // ahí agregar una máquina es parte del servicio, no un añadido posterior.
+  const unaSolaLista = nota.tipo_servicio === 'AUTOSERVICIO';
+  const originales  = unaSolaLista ? visibles : visibles.filter(cg => !cg.es_adicional);
+  const adicionales = unaSolaLista ? []       : visibles.filter(cg => cg.es_adicional);
   const esEncargo   = nota.tipo_servicio === 'POR_ENCARGO';
 
   // Bloque de cargas. Por Encargo se cobra la carga completa (máquinas y
@@ -399,10 +411,14 @@ export default function TicketNota() {
 
     return (
       <div key={cg.id} className="space-y-1">
-        <div className="flex items-baseline justify-between gap-2 font-bold">
-          <span className="uppercase whitespace-nowrap">{etiquetaCarga(cg, nota.tipo_servicio)}</span>
-          <span className="whitespace-nowrap">{fmtMonto(totalCarga)}</span>
-        </div>
+        {/* En Autoservicio la máquina ES el renglón (2026-09-25): no lleva
+            encabezado propio, se lista como una línea más con su importe. */}
+        {nota.tipo_servicio !== 'AUTOSERVICIO' && (
+          <div className="flex items-baseline justify-between gap-2 font-bold">
+            <span className="uppercase whitespace-nowrap">{etiquetaCarga(cg, nota.tipo_servicio)}</span>
+            <span className="whitespace-nowrap">{fmtMonto(totalCarga)}</span>
+          </div>
+        )}
         {maquinas.map((m, i) => (
           <div key={i} className="flex items-baseline justify-between gap-2">
             {/* Cada carga usa a lo más una lavadora y una secadora: de ahí el 1. */}
@@ -539,9 +555,12 @@ export default function TicketNota() {
               <span>IMPORTE</span>
             </div>
 
-            {/* Desglose por cargas (originales) */}
+            {/* Desglose por cargas (originales). En Autoservicio cada máquina
+                es una sola línea, así que van juntas y no separadas por bloque. */}
             {originales.length > 0 && (
-              <div className="mt-2 pb-4 space-y-3">{renderBloqueCargas(originales)}</div>
+              <div className={`mt-2 pb-4 ${unaSolaLista ? 'space-y-1' : 'space-y-3'}`}>
+                {renderBloqueCargas(originales)}
+              </div>
             )}
 
             {/* Cargas adicionales (agregadas después de crear la nota) */}
