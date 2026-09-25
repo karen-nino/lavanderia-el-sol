@@ -2051,9 +2051,11 @@ export default function NuevaNota() {
                         )}
                         className={`${INPUT_CLS} bg-white`}
                       >
+                        {/* Sin precio en las opciones (2026-09-25): el costo se
+                            ve arriba en la tarjeta, en el subtotal y en el resumen. */}
                         <option value="">Elige lavadora o secadora</option>
-                        <option value="lavadora">Lavadora — ${precioLavadoTipo('mediana', c.tipo_prenda).toFixed(2)}</option>
-                        <option value="secadora">Secadora — ${precioSecadoTipo('mediana', c.tipo_prenda).toFixed(2)}</option>
+                        <option value="lavadora">Lavadora</option>
+                        <option value="secadora">Secadora</option>
                       </select>
                     </div>
                     {!c.lavadora_tipo && !c.secadora_tipo && (
