@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { etiquetaEstadoNota } from '../lib/estadoNota';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../lib/api';
 import { recordarListaNotas } from '../lib/filtrosNotas';
@@ -457,16 +458,6 @@ export default function Notas() {
               <div className="absolute right-0 top-12 z-10 bg-white border border-gray-200 rounded-xl shadow-lg p-3 w-56">
                 <p className="text-xs font-semibold text-gray-500 uppercase mb-2 px-1">Fecha</p>
                 <div className="flex flex-col gap-1">
-                  <button
-                    onClick={() => { setRangoFecha('TODAS'); setPagina(1); setMostrarFecha(false); }}
-                    className={`text-left text-sm px-3 py-2 rounded-lg transition-colors ${
-                      rangoFecha === 'TODAS'
-                        ? 'bg-light-blue text-blue-700 font-medium'
-                        : 'text-gray-700 hover:bg-gray-50'
-                    }`}
-                  >
-                    Todas las fechas
-                  </button>
                   {RANGOS_FECHA.map(r => (
                     <button
                       key={r.value}
@@ -500,6 +491,18 @@ export default function Notas() {
                     }`}
                   >
                     {rangoFecha.startsWith('ANIO:') ? rangoFecha.slice(5) : 'Por año'}
+                  </button>
+                  {/* "Todas las fechas" cierra la lista, después de los rangos
+                      concretos: es la que quita el filtro, no una opción más. */}
+                  <button
+                    onClick={() => { setRangoFecha('TODAS'); setPagina(1); setMostrarFecha(false); }}
+                    className={`text-left text-sm px-3 py-2 rounded-lg transition-colors ${
+                      rangoFecha === 'TODAS'
+                        ? 'bg-light-blue text-blue-700 font-medium'
+                        : 'text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    Todas las fechas
                   </button>
                 </div>
               </div>
@@ -674,7 +677,7 @@ export default function Notas() {
                               </div>
                             ) : (
                               <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${badgeEstado.cls}`}>
-                                {badgeEstado.label}
+                                {etiquetaEstadoNota(n.estado, n.tipo_servicio, badgeEstado.label)}
                               </span>
                             )}
                           </td>
@@ -795,7 +798,7 @@ export default function Notas() {
                       </div>
                     ) : (
                       <span className={`text-xs font-bold tracking-wide px-3 py-1 rounded-pill ${badgeEstado.cls}`}>
-                        {badgeEstado.label}
+                        {etiquetaEstadoNota(n.estado, n.tipo_servicio, badgeEstado.label)}
                       </span>
                     )}
                   </div>

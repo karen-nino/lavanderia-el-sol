@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { etiquetaEstadoLista } from '../lib/estadoNota';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import { tituloProducto, subtituloProducto, ordenProducto } from '../lib/formatoInventario';
@@ -836,12 +837,12 @@ export default function Salidas() {
   const motivoTerminar = confirmTerminarMaq ? motivoEnProceso(confirmTerminarMaq) : null;
   // En qué estado queda la nota cuando esta máquina era lo último: el
   // autoservicio YA COBRADO se cierra solo (el cliente se lleva su ropa), y el
-  // que todavía debe espera su cobro en "Por Entregar", igual que un encargo.
-  // Es la regla de `estadoAlTerminarCargas` en el servidor; aquí solo se usa
-  // para no prometer un estado que no va a pasar.
+  // que todavía debe espera ahí su cobro — "Por Cobrar" en Autoservicio, "Por
+  // Entregar" en un encargo. Es la regla de `estadoAlTerminarCargas` en el
+  // servidor; aquí solo se usa para no prometer un estado que no va a pasar.
   const estadoAlCerrar = esAutoservicio && nota?.estado_pago === 'PAGADO'
     ? 'Finalizada'
-    : 'Por Entregar';
+    : etiquetaEstadoLista(nota?.tipo_servicio);
 
   const productosNota  = [...(nota?.productos || [])].sort((a, b) => ordenProducto(a) - ordenProducto(b));
   const totalProductosNota = productosNota.reduce((a, x) => a + Number(x.subtotal || 0), 0);
@@ -1600,7 +1601,7 @@ export default function Salidas() {
             ) : (
               <p className="text-sm text-gray-500">
                 La nota pasará a estado <span className="font-semibold text-gray-800">"{estadoAlCerrar}"</span>.
-                {estadoAlCerrar === 'Por Entregar' && esAutoservicio && ' Ahí se liquida.'}
+                {estadoAlCerrar !== 'Finalizada' && esAutoservicio && ' Ahí se liquida.'}
               </p>
             )}
             <div className="flex gap-3">

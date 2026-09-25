@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { etiquetaEstadoNota } from '../lib/estadoNota';
 import { useParams, useNavigate } from 'react-router-dom';
 import Barcode from 'react-barcode';
 import { api } from '../lib/api';
@@ -58,6 +59,8 @@ const PASOS_ESTADO = [
   { key: 'EN_ESPERA',  label: 'En Espera',    fechaKey: 'EN_ESPERA'  },
   { key: 'LAVANDO',    label: 'Lavando',      fechaKey: 'LAVANDO'    },
   { key: 'SECANDO',    label: 'Secando',      fechaKey: 'SECANDO'    },
+  // El label de LISTA lo pone etiquetaEstadoLista(): en Autoservicio esa nota
+  // no espera una entrega, espera su cobro.
   { key: 'LISTA',      label: 'Por Entregar', fechaKey: 'LISTA'      },
   { key: 'FINALIZADA', label: 'Finalizada',   fechaKey: 'FINALIZADA' },
 ];
@@ -1140,7 +1143,7 @@ export default function DetalleNota() {
                     </span>
                     <div className="-mt-0.5 pb-0.5 min-w-0">
                       <p className={`text-sm font-semibold ${activo ? 'text-gray-900' : 'text-gray-400'}`}>
-                        {paso.label}
+                        {etiquetaEstadoNota(paso.key, nota.tipo_servicio, paso.label)}
                       </p>
                       <p className="text-xs text-gray-400">{subtituloEstado(paso.key, { done, current }, paso.fechaKey ? fechaPorEstado[paso.fechaKey] : undefined)}</p>
 

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { etiquetaEstadoNota } from '../lib/estadoNota';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { esAdmin as esAdminFn, esAdminMain as esAdminMainFn } from '../lib/roles';
@@ -153,12 +154,12 @@ const ESTADO_BADGE = {
   CANCELADA:  { label: 'Cancelada',    cls: 'bg-red-100 text-red-700'       },
 };
 
-function EstadoBadge({ estado }) {
+function EstadoBadge({ estado, tipoServicio }) {
   const b = ESTADO_BADGE[estado];
   if (!b) return null;
   return (
     <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${b.cls}`}>
-      {b.label}
+      {etiquetaEstadoNota(estado, tipoServicio, b.label)}
     </span>
   );
 }
@@ -192,7 +193,7 @@ function MetricaModal({ metrica, fecha, count, items, onClose }) {
               <FilaModal key={i} left={`Nota ${n.folio}`}
                 sub={[TIPO_SERVICIO_LABEL[n.tipo_servicio] ?? n.tipo_servicio, n.cliente].filter(Boolean).join(' · ')}
                 right={fmtMoneda(n.precio)}
-                rightSub={<EstadoBadge estado={n.estado} />}
+                rightSub={<EstadoBadge estado={n.estado} tipoServicio={n.tipo_servicio} />}
                 onClick={n.id ? () => { onClose(); navigate(`/notas/${n.id}`); } : undefined} />
             ))
           ) : metrica === 'maquinas' ? (
