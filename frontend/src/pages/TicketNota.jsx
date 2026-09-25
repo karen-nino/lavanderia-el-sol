@@ -31,6 +31,12 @@ function tamanoCargaTxt(cg) {
   return TAMANO_CARGA_LABEL[cg.tamano] ?? null;
 }
 
+// Cómo se nombra el renglón del ticket. En Autoservicio cada carga ES una
+// máquina —así se captura y así lo llama el mostrador (2026-09-25)—; en los
+// demás servicios sigue siendo una carga.
+const etiquetaCarga = (cg, tipoServicio) =>
+  `${tipoServicio === 'AUTOSERVICIO' ? 'Máquina' : 'Carga'} ${cg.orden}`;
+
 // Costo real de la carga: máquinas + productos + ajuste.
 function costoDeCarga(cg) {
   const prods = (cg.productos ?? []).reduce((s, p) => s + Number(p.subtotal ?? 0), 0);
@@ -137,7 +143,7 @@ function armarTextoTicket(nota, rfc, notaPie) {
 
   // Vuelca las líneas de una carga (máquinas, productos, ajuste) al arreglo L.
   const volcarCarga = cg => {
-    L.push(`Carga ${cg.orden}:`);
+    L.push(`${etiquetaCarga(cg, nota.tipo_servicio)}:`);
     maquinasDeCarga(cg, nota.tipo_servicio).forEach(m => {
       L.push(`  • 1 x ${m.nombre}${m.tipo ? ` (${m.tipo})` : ''} — ${fmtMonto(m.precio)}`);
     });
@@ -394,7 +400,7 @@ export default function TicketNota() {
     return (
       <div key={cg.id} className="space-y-1">
         <div className="flex items-baseline justify-between gap-2 font-bold">
-          <span className="uppercase whitespace-nowrap">Carga {cg.orden}</span>
+          <span className="uppercase whitespace-nowrap">{etiquetaCarga(cg, nota.tipo_servicio)}</span>
           <span className="whitespace-nowrap">{fmtMonto(totalCarga)}</span>
         </div>
         {maquinas.map((m, i) => (
