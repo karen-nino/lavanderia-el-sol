@@ -810,37 +810,33 @@ describe('handlers de máquina — asignar / cambiar / quitar', () => {
     return { notaId: res.body.id, lavadoraId };
   }
 
-  // Agregar una máquina a la nota solo existe en Por Encargo. En Autoservicio
-  // se cobra todo por adelantado, así que una máquina de más es una NOTA NUEVA:
-  // sumarla a una nota ya pagada la devolvería a PENDIENTE. Salidas esconde el
-  // botón, pero eso era toda la regla y la ruta seguía aceptándolo (2026-09-22).
-  it('asignar-maquina rechaza una nota de Autoservicio', async () => {
+  // Autoservicio también agrega máquinas (2026-09-25). Antes se rechazaba
+  // porque se cobraba por adelantado y sumar una máquina a una nota ya pagada
+  // la devolvía a PENDIENTE; hoy la nota nace pendiente y cada máquina se
+  // tarifa al asignarla, así que la de más es un renglón más de la misma nota.
+  it('asignar-maquina agrega una máquina más a una nota de Autoservicio', async () => {
     await seedAjustes({ precio_carga_mediana: 70 });
     const lavadoraId = await seedMaquina({ nombre: 'L-auto', tipo: 'lavadora_mediana', tamano: 'mediana' });
     const nota = await request(app).post('/api/notas').set(auth(admin.token)).send({
-      tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA',
-      estado_pago: 'PAGADO', forma_pago: 'EFECTIVO',
+      tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE',
       cargas: [{ lavadora_tipo: 'mediana' }],
     });
     expect(nota.status).toBe(201);
-    const total = Number(nota.body.precio_total);
-    const otra = await seedMaquina({ nombre: 'S-auto', tipo: 'secadora' });
-
-    const res = await request(app).patch(`/api/notas/${nota.body.id}/asignar-maquina`)
-      .set(auth(admin.token)).send({ maquina_id: otra, cobrar: true });
-
-    expect(res.status).toBe(400);
-    expect(res.body.message).toMatch(/nota nueva/i);
-    // Ni el total ni el cobro se movieron.
-    const detalle = await request(app).get(`/api/notas/${nota.body.id}`).set(auth(admin.token));
-    expect(Number(detalle.body.precio_total)).toBe(total);
-    expect(detalle.body.estado_pago).toBe('PAGADO');
-    // La máquina que la nota SÍ compró se sigue pudiendo asignar: esa va por
-    // `asignar-carga-maquina`, que es otra ruta.
-    await request(app).patch(`/api/notas/${nota.body.id}/asignar-carga-maquina`)
+    // La máquina que la nota traía elegida va por su ruta y ahí se tarifa.
+    const asignada = await request(app).patch(`/api/notas/${nota.body.id}/asignar-carga-maquina`)
       .set(auth(admin.token))
       .send({ carga_id: nota.body.cargas[0].id, slot: 'lavadora', maquina_id: lavadoraId })
       .expect(200);
+    expect(Number(asignada.body.precio_total)).toBe(70);
+
+    // Y la de más entra como carga nueva, con su tarifa.
+    const otra = await seedMaquina({ nombre: 'S-auto', tipo: 'secadora', tamano: 'mediana' });
+    const res = await request(app).patch(`/api/notas/${nota.body.id}/asignar-maquina`)
+      .set(auth(admin.token)).send({ maquina_id: otra, cobrar: true });
+
+    expect(res.status).toBe(200);
+    expect(res.body.cargas).toHaveLength(2);
+    expect(Number(res.body.precio_total)).toBe(115); // 70 lavado + 45 secado
   });
 
   it('asignar-maquina agrega una carga nueva y suma su tarifa', async () => {
