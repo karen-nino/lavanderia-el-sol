@@ -338,7 +338,9 @@ export default function Salidas() {
     // secadora); abrir una carga nueva es la excepción, y queda al final.
     // `asignarCargaFija` sigue mirando el parámetro, no el precargado: el
     // selector solo se oculta si el modal se abrió desde una carga concreta.
-    setAsignarCarga(carga ?? cargasDestino[0] ?? null);
+    // En Autoservicio la máquina extra NO se mete en un renglón existente: abre
+    // uno nuevo (2026-09-25), así que no se precarga ninguna carga destino.
+    setAsignarCarga(carga ?? (esAutoservicio ? null : cargasDestino[0] ?? null));
     setAsignarCargaFija(Boolean(carga));
     setAsignarSlot(null);
     setAsignarOpen(true);
@@ -364,6 +366,9 @@ export default function Salidas() {
     const esSec = (mid) => maquinasModal.some(m => String(m.id) === String(mid) && m.tipo === 'secadora');
     setAsignarMaqSel(prev => {
       if (prev.includes(s)) return prev.filter(x => x !== s);
+      // En Autoservicio cada máquina es su propio renglón: se elige una y, si
+      // hacen falta dos, se repite el "+ Agregar".
+      if (esAutoservicio && !asignarCarga) return [s];
       if (asignarCarga) return [...prev.filter(x => esSec(x) !== esSec(s)), s];
       return [...prev, s];
     });
@@ -380,12 +385,13 @@ export default function Salidas() {
   // Asigna las máquinas elegidas: el backend crea la(s) carga(s) nueva(s) y las
   // máquinas quedan asignadas (sin iniciar). Ya no se pregunta si se cobra: en
   // Por Encargo la máquina extra SIEMPRE va sin cobro (lo que se cobra se
-  // capturó al hacer la nota) y en Autoservicio todo se cobra por adelantado,
-  // así que no hay nada que decidir aquí (2026-09-22).
+  // capturó al hacer la nota) y en Autoservicio se cobra su tarifa, que es lo
+  // que hace la máquina en esa nota (2026-09-22).
   async function confirmarAsignar() {
     if (asignarMaqSel.length === 0) return;
-    // Desde Salidas siempre se suma a una carga que ya existe.
-    if (!asignarSlot && !asignarCarga) return;
+    // En Por Encargo la máquina se suma a una carga que ya existe; en
+    // Autoservicio puede ir sin destino: abre su propio renglón.
+    if (!asignarSlot && !asignarCarga && !esAutoservicio) return;
     // Modo slot: la carga ya existe y ya está cobrada; solo se le pone máquina.
     if (asignarSlot) {
       await asignarTipoCarga(asignarSlot.carga.id, asignarSlot.slot, asignarMaqSel[0]);
@@ -398,7 +404,8 @@ export default function Salidas() {
       await api.patch(`/notas/${id}/asignar-maquina`, {
         maquina_ids: asignarMaqSel.map(Number),
         cobrar,
-        carga_id: asignarCarga.id,
+        // Sin carga destino (Autoservicio) el backend abre una carga nueva.
+        ...(asignarCarga ? { carga_id: asignarCarga.id } : {}),
       });
       cerrarAsignar();
       await cargarDatos();
@@ -818,16 +825,17 @@ export default function Salidas() {
         <div className="px-4 py-3 border-b border-gray-50 flex items-center justify-between gap-2">
           <h2 className="text-sm font-semibold text-gray-700">Máquinas</h2>
           {/* Asignar una máquina EXTRA (una que no se vendió en la nota):
-              disponible desde el inicio, salvo en notas cerradas y salvo que no
-              haya ninguna carga con hueco libre — la máquina siempre va a una
-              carga que ya existe. En
-              Autoservicio no se ofrece: ahí se cobra todo por adelantado, así
-              que una máquina de más es una nota nueva, no un agregado a una
-              nota que ya se pagó. Las máquinas que la nota SÍ compró se
-              asignan con el botón "Asignar" de cada carga. */}
-          {nota && !esAutoservicio && !cobroCongelado
+              disponible desde el inicio, salvo en notas cerradas.
+              En Por Encargo va a una carga que ya existe, así que hace falta
+              alguna con hueco libre. En Autoservicio vuelve a ofrecerse
+              (2026-09-25): ya no se cobra por adelantado, y ahí la máquina de
+              más entra como una MÁQUINA NUEVA de la nota —su propio renglón,
+              con su tarifa—, igual que se capturan en la nota. Las máquinas que
+              la nota SÍ compró se asignan con el botón "Asignar" de cada carga.
+          */}
+          {nota && !cobroCongelado
             && !['FINALIZADA', 'CANCELADA'].includes(nota.estado)
-            && cargasDestino.length > 0 && (
+            && (esAutoservicio || cargasDestino.length > 0) && (
             <button
               onClick={() => iniciarAsignar()}
               disabled={loadingMaquina}
@@ -850,7 +858,11 @@ export default function Salidas() {
           {bloquesCarga.map(({ carga, maquinas, slots, vacia }) => (
             <div key={carga.id} className="space-y-2 [&:not(:first-child)]:border-t [&:not(:first-child)]:border-gray-100 [&:not(:first-child)]:pt-4">
               {carga.orden != null && (
-                <p className="text-xs font-semibold text-gray-500">Carga {carga.orden}</p>
+                <p className="text-xs font-semibold text-gray-500">
+                  {/* En Autoservicio cada carga es una máquina y así se llama
+                      también en la captura y en el ticket (2026-09-25). */}
+                  {esAutoservicio ? 'Máquina' : 'Carga'} {carga.orden}
+                </p>
               )}
               {maquinas.map((m, i) => {
                 // Lavadora que ya cumplió su ciclo (terminó el lavado): se
@@ -1441,7 +1453,9 @@ export default function Salidas() {
               <h3 className="text-base font-bold text-gray-900">
                 {/* Sin carga destino se abre una carga nueva: ahí se AGREGA
                     una máquina a la nota, no se asigna a algo que ya existe. */}
-                {cargaDestino ? `Asignar máquina · Carga ${cargaDestino.orden}` : 'Agregar máquina'}
+                {cargaDestino
+                  ? `Asignar máquina · ${esAutoservicio ? 'Máquina' : 'Carga'} ${cargaDestino.orden}`
+                  : 'Agregar máquina'}
               </h3>
               <p className="text-sm text-gray-500 mt-1">
                 {asignarSlot
@@ -1449,8 +1463,10 @@ export default function Salidas() {
                       {asignarSlot.slot === 'lavadora'
                         ? `lavadora ${TIPO_MAQ_LABEL[asignarSlot.tipo] ?? asignarSlot.tipo}`
                         : 'secadora'}
-                    </span> que le falta a la Carga {cargaDestino?.orden}. Queda asignada; la inicias después con su botón.</>
-                  : <>La máquina se suma a la <span className="font-medium text-gray-700">Carga {cargaDestino?.orden}</span> <span className="font-medium text-gray-700">sin cobro</span>: no cambia el total de la nota. Queda asignada; la inicias después con su botón.</>}
+                    </span> que le falta a la {esAutoservicio ? 'Máquina' : 'Carga'} {cargaDestino?.orden}. Queda asignada; la inicias después con su botón.</>
+                  : cargaDestino
+                    ? <>La máquina se suma a la <span className="font-medium text-gray-700">Carga {cargaDestino.orden}</span> <span className="font-medium text-gray-700">sin cobro</span>: no cambia el total de la nota. Queda asignada; la inicias después con su botón.</>
+                    : <>Entra como una <span className="font-medium text-gray-700">máquina más de la nota</span> y <span className="font-medium text-gray-700">se cobra su tarifa</span>. Queda asignada; la inicias después con su botón.</>}
               </p>
             </div>
 
@@ -1464,7 +1480,7 @@ export default function Salidas() {
                 Salidas no se abren cargas nuevas, para eso está una nota nueva
                 (2026-09-22). Solo se ofrece cuando el modal viene de
                 "+ Agregar" (sin destino fijo) y hay más de una candidata. */}
-            {!asignarCargaFija && cargasDestino.length > 0 && (
+            {!asignarCargaFija && !esAutoservicio && cargasDestino.length > 0 && (
               <div className="space-y-2">
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Dónde va</p>
                 <div className="flex flex-wrap gap-2">
