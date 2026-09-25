@@ -79,17 +79,21 @@ function pasosDeNota(nota) {
     // liquiden (2026-09-23). Saltarse el paso prometía un final que esa nota
     // no iba a tener.
     || nota.estado_pago === 'PENDIENTE';
-  // "Secando" solo si esta nota tiene secadora. En Autoservicio hay notas que
-  // son puro lavado, y dibujar el paso prometía una fase que nunca iba a llegar
-  // (2026-09-25). Cuenta la secadora puesta, la que ya se usó y la que se eligió
-  // al hacer la nota y todavía no se asigna; y si la nota YA pasó por ahí, el
-  // paso se queda aunque ahora no haya ninguna.
-  const conSecado = nota.estado === 'SECANDO'
-    || (nota.historial_estados ?? []).some(h => h.estado === 'SECANDO')
-    || (nota.cargas ?? []).some(cg =>
-         cg.secadora_id || cg.secadora_usada_id || cg.secadora_tipo_previsto);
+  // "Lavando" y "Secando" solo si esta nota los va a vivir. En Autoservicio hay
+  // notas de puro lavado y otras de puro secado, y dibujar el paso que falta
+  // prometía una fase que nunca iba a llegar (2026-09-25). Cuenta la máquina
+  // puesta, la que ya se usó y la que se eligió al hacer la nota y todavía no
+  // se asigna; y si la nota YA pasó por esa fase, el paso se queda aunque hoy
+  // no le quede ninguna máquina de ese tipo.
+  const tieneFase = (estado, campos) =>
+    nota.estado === estado
+    || (nota.historial_estados ?? []).some(h => h.estado === estado)
+    || (nota.cargas ?? []).some(cg => campos.some(c => cg[c]));
+  const conLavado = tieneFase('LAVANDO', ['lavadora_id', 'lavadora_usada_id', 'lavadora_tipo_previsto']);
+  const conSecado = tieneFase('SECANDO', ['secadora_id', 'secadora_usada_id', 'secadora_tipo_previsto']);
   const fuera = new Set();
   if (!porEntregar) fuera.add('LISTA');
+  if (!conLavado)   fuera.add('LAVANDO');
   if (!conSecado)   fuera.add('SECANDO');
   return PASOS_ESTADO.filter(p => !fuera.has(p.key));
 }
