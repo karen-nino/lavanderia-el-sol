@@ -240,7 +240,10 @@ export default function NuevaNota() {
   // Cada carga se cobra con la tarifa del TIPO de lavado más la del secado.
   const subtotalDeCarga = (c) =>
     precioLavadoTipo(c.lavadora_tipo, c.tipo_prenda) + precioSecadoTipo(c.secadora_tipo, c.tipo_prenda);
-  const ajusteNum      = Number(form.ajuste) || 0;
+  // Ajuste a nivel nota: ya solo existe en la venta de mostrador. Autoservicio
+  // perdió el campo (2026-09-25) y Por Encargo lo lleva por carga, así que
+  // fuera de la venta no suma nada aunque el form arrastre un valor viejo.
+  const ajusteNum      = esVenta ? (Number(form.ajuste) || 0) : 0;
   // Precio efectivo de un producto según la unidad de venta: en Autoservicio se
   // vende por BOTELLA (precio_botella); en Por Encargo por TAPA (precio_unitario).
   const precioProducto = (prod, unidad = 'tapa') => {
@@ -840,7 +843,8 @@ export default function NuevaNota() {
         tipo_tela:      (c.tipo_prenda || 'ROPA') === 'ROPA' ? (c.tipo_tela || null) : null,
         tamano_edredon: c.tipo_prenda === 'EDREDON' ? (c.tamano_edredon || null) : null,
       })),
-      ajuste:          ajusteNum,
+      // Autoservicio ya no tiene Ajuste (2026-09-25).
+      ajuste:          0,
       productos:       productosLista
         .filter(p => p.producto_id && p.cantidad)
         .map(p => ({ producto_id: Number(p.producto_id), cantidad: Number(p.cantidad) })),
@@ -2084,11 +2088,6 @@ export default function NuevaNota() {
           {/* ── Productos ────────────────────────────────────── */}
 
           {bloqueProductos()}
-
-          <Separador />
-
-          {/* Ajuste */}
-          {bloqueAjuste()}
         </div>
 
         <Separador />
@@ -2173,16 +2172,8 @@ export default function NuevaNota() {
                 </div>
               )}
 
-              {/* Sin forma de pago: la nota nace pendiente y se cobra desde su
-                  detalle, así que aquí solo queda el ajuste. */}
-              {ajusteNum !== 0 && (
-                <div className="space-y-2 mb-2 text-sm text-blue border-t border-blue-200 pt-3">
-                  <div className="flex justify-between">
-                    <span>Ajuste</span>
-                    <span>{ajusteNum > 0 ? '+' : ''}${ajusteNum.toFixed(2)}</span>
-                  </div>
-                </div>
-              )}
+              {/* Sin forma de pago (la nota nace pendiente y se cobra desde su
+                  detalle) y sin ajuste (2026-09-25): del detalle se pasa al total. */}
               {/* Mismo remate que el resumen de Por Encargo. */}
               <div className="flex items-baseline justify-between border-t border-blue-200 pt-3">
                 <span className="text-sm font-medium text-blue">Total</span>
