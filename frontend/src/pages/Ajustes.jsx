@@ -1833,7 +1833,7 @@ export default function Ajustes() {
         </Field>
       </div>
       <div className="border-t border-gray-100 pt-4">
-        <Field label="Bolsas" hint="Los tamaños de bolsa. Conviene que coincidan con los tamaños de carga: la bolsa se cobra en la nota según el tamaño de la carga.">
+        <Field label="Bolsas" hint="Los tamaños de bolsa. La bolsa del tamaño de la carga se precarga en la nota, así que conviene que las dos listas coincidan; cualquier otra bolsa se puede agregar a mano en la nota.">
           <CatalogoEtiquetas endpoint="/etiquetas/tamanos-bolsa" singular="Tamaño" inputCls={INPUT_CLS} onMensaje={setMensaje} />
         </Field>
       </div>
@@ -2364,7 +2364,7 @@ export default function Ajustes() {
       <div className="border-t border-light-blue/60 pt-5">
         <MobileField
           label="Bolsas"
-          hint="Los tamaños de bolsa. Conviene que coincidan con los tamaños de carga: la bolsa se cobra en la nota según el tamaño de la carga."
+          hint="Los tamaños de bolsa. La bolsa del tamaño de la carga se precarga en la nota, así que conviene que las dos listas coincidan; cualquier otra bolsa se puede agregar a mano en la nota."
         >
           <CatalogoEtiquetas endpoint="/etiquetas/tamanos-bolsa" singular="Tamaño" inputCls={MOBILE_INPUT_CLS} onMensaje={setMensaje} />
         </MobileField>
