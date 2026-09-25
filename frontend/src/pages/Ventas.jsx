@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
+import { etiquetaEstadoNota } from '../lib/estadoNota';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import { formaPagoLabel } from '../lib/formasPago';
@@ -67,18 +68,19 @@ const ESTADO_BADGE = {
   CANCELADA:  { label: 'Cancelada',    cls: 'bg-red-100 text-red-700'       },
 };
 
-function EstadoBadge({ estado, onClick }) {
+function EstadoBadge({ estado, tipoServicio, onClick }) {
   const b = ESTADO_BADGE[estado];
   if (!b) return <span className="text-gray-400">—</span>;
+  const label = etiquetaEstadoNota(estado, tipoServicio, b.label);
   const cls = `text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${b.cls}`;
   if (onClick) {
     return (
       <button type="button" onClick={onClick} className={`${cls} hover:opacity-80 underline decoration-dotted underline-offset-2`}>
-        {b.label}
+        {label}
       </button>
     );
   }
-  return <span className={cls}>{b.label}</span>;
+  return <span className={cls}>{label}</span>;
 }
 
 const PERIODOS = [
@@ -731,6 +733,7 @@ export default function Ventas() {
                           <td className="px-4 py-3">
                             <EstadoBadge
                               estado={nota.estado}
+                              tipoServicio={nota.tipo_servicio}
                               onClick={nota.estado === 'CANCELADA'
                                 ? () => setMotivoModal({ folio: nota.folio, motivo: nota.motivo_cancelacion })
                                 : undefined}

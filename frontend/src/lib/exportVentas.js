@@ -15,6 +15,7 @@ import {
   fmtMoneda, num, fechaLarga, slug, esc,
   descargarCSV, imprimirDocumento,
 } from './exportUtils';
+import { etiquetaEstadoNota } from './estadoNota';
 
 // Etiquetas de estado (iguales a las de la tabla de Ventas).
 const ESTADO_LABEL = {
@@ -26,7 +27,10 @@ const ESTADO_LABEL = {
   FINALIZADA: 'Finalizada',
   CANCELADA:  'Cancelada',
 };
-const estadoLabel = (e) => ESTADO_LABEL[e] ?? (e ?? '');
+// El estado LISTA se lee según el servicio: en Autoservicio no hay nada que
+// entregar, la nota espera su cobro (2026-09-25).
+const estadoLabel = (e, tipoServicio) =>
+  etiquetaEstadoNota(e, tipoServicio, ESTADO_LABEL[e] ?? (e ?? ''));
 
 
 // Máquinas de una nota como texto: "Lavadora 1 (2 cargas), Secadora 3 (1 carga)".
@@ -55,7 +59,7 @@ const filaCSV = (n) => [
   n.folio ?? '',
   typeof n.fecha === 'string' ? n.fecha.slice(0, 10) : '',
   formatHora12(n.creado_en),
-  estadoLabel(n.estado),
+  estadoLabel(n.estado, n.tipo_servicio),
   maquinasTexto(n.maquinas),
   n.atendio ?? '',
   formaPagoLabel(n.forma_pago),
@@ -115,7 +119,7 @@ const bloqueNotas = (notas) => {
     const cancelada = n.estado === 'CANCELADA';
     const pendiente = !cancelada && n.estado_pago === 'PENDIENTE';
     const cls = cancelada ? 'cancelada' : pendiente ? 'pendiente' : '';
-    const estadoCell = `${esc(estadoLabel(n.estado))}` +
+    const estadoCell = `${esc(estadoLabel(n.estado, n.tipo_servicio))}` +
       (pendiente ? ' <span class="chip">Pago pendiente</span>' : '');
     const totalCell = cancelada || pendiente
       ? `<span class="tachado">${fmtMoneda(n.total)}</span>`

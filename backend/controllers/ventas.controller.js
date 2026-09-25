@@ -131,6 +131,10 @@ export async function getResumen(req, res) {
           o.estado,
           o.estado_pago,
           o.forma_pago,
+          -- El servicio decide cómo se lee el estado LISTA: "Por Cobrar" en
+          -- Autoservicio (el cliente ya se llevó su ropa) y "Por Entregar" en
+          -- los demás (2026-09-25).
+          o.tipo_servicio,
           o.motivo_cancelacion,
           -- Máquina(s) de la nota con su número de cargas: [{ nombre, cargas }].
           -- Cuenta las cargas (nota_cargas) donde aparece cada máquina,
