@@ -44,12 +44,22 @@ function costoDeCarga(cg) {
     + Number(cg.ajuste ?? 0) + prods;
 }
 
+// Productos de MARCA de la carga. No son material del lavado: son un producto
+// que el cliente compra, así que se cobran encima del tope y se listan aparte
+// (2026-09-25). El granel y la bolsa sí van incluidos en el servicio.
+function marcaDeCarga(cg) {
+  return (cg.productos ?? [])
+    .filter(p => p.tipo_liquido === 'marca')
+    .reduce((s, p) => s + Number(p.subtotal ?? 0), 0);
+}
+
 // Lo que el cliente paga por la carga. En Por Encargo con tope el precio ES el
-// tope del tamaño (lo de adentro va incluido); el ajuste manual va aparte. Sin
-// tope, y en los demás tipos de servicio, se cobra el costo real.
+// tope del tamaño (el granel y la bolsa van incluidos), más los productos de
+// marca; el ajuste manual va aparte. Sin tope, y en los demás tipos de
+// servicio, se cobra el costo real.
 function precioDeCarga(cg, esEncargo) {
   if (esEncargo && cg.tope_carga != null) {
-    return Number(cg.tope_carga) + Number(cg.ajuste ?? 0);
+    return Number(cg.tope_carga) + Number(cg.ajuste ?? 0) + marcaDeCarga(cg);
   }
   return costoDeCarga(cg);
 }
@@ -179,8 +189,13 @@ function armarTextoTicket(nota, rfc, notaPie) {
     if (esEncargo) {
       lista.forEach(cg => {
         const tam = tamanoCargaTxt(cg);
+        // El servicio va sin los productos de marca: esos se cobran aparte y se
+        // listan en su propia línea, para que el total se explique solo.
         L.push(`1 x Servicio por encargo${tam ? ` · ${tam}` : ''}`
-             + ` — ${fmtMonto(precioDeCarga(cg, true))}`);
+             + ` — ${fmtMonto(precioDeCarga(cg, true) - marcaDeCarga(cg))}`);
+        (cg.productos ?? []).filter(p => p.tipo_liquido === 'marca').forEach(p => {
+          L.push(`${p.cantidad} x ${nombreProd(p)} — ${fmtMonto(p.subtotal)}`);
+        });
       });
       return;
     }
@@ -389,13 +404,29 @@ export default function TicketNota() {
     esEncargo
       ? lista.map(cg => {
           const tam = tamanoCargaTxt(cg);
+          // Los productos de marca no van dentro del servicio: se cobran encima
+          // del tope, así que cada uno lleva su propio renglón.
+          const marca = (cg.productos ?? []).filter(p => p.tipo_liquido === 'marca');
           return (
-            <div key={cg.id} className="flex items-baseline justify-between gap-2">
-              <span className="flex-1">
-                <span className="inline-block w-9">1</span>
-                SERVICIO POR ENCARGO{tam && ` ${tam.toUpperCase()}`}
-              </span>
-              <span className="whitespace-nowrap">{fmtMonto(precioDeCarga(cg, true))}</span>
+            <div key={cg.id} className="space-y-1">
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="flex-1">
+                  <span className="inline-block w-9">1</span>
+                  SERVICIO POR ENCARGO{tam && ` ${tam.toUpperCase()}`}
+                </span>
+                <span className="whitespace-nowrap">
+                  {fmtMonto(precioDeCarga(cg, true) - marcaDeCarga(cg))}
+                </span>
+              </div>
+              {marca.map(p => (
+                <div key={p.id} className="flex items-baseline justify-between gap-2">
+                  <span className="flex-1">
+                    <span className="inline-block w-9">{p.cantidad}</span>
+                    {nombreProd(p).toUpperCase()}
+                  </span>
+                  <span className="whitespace-nowrap">{fmtMonto(p.subtotal)}</span>
+                </div>
+              ))}
             </div>
           );
         })

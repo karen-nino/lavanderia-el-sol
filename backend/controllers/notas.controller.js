@@ -266,8 +266,10 @@ async function liberarMaquinasDeNota(client, notaId) {
 //
 // Precio cobrado por carga:
 //   - Por Encargo CON tope: el precio ES el tope (precio fijo de la carga),
-//     aunque el costo interno (máquinas + productos) sea menor. Los productos
-//     de la carga quedan absorbidos en el tope (no se suman aparte).
+//     aunque el costo interno (máquinas + productos) sea menor. El granel y la
+//     bolsa quedan absorbidos en el tope; los productos de MARCA no: esos son
+//     un producto que el cliente compra y se cobran aparte, encima del tope
+//     (2026-09-25).
 //   - Por Encargo SIN tope, o Autoservicio: suma real = máquinas + productos
 //     de la carga.
 //   + el ajuste por carga (nota_cargas.ajuste), que va aparte del tope.
@@ -335,7 +337,7 @@ async function recalcularPrecioTotal(client, notaId, opciones = {}) {
             SELECT SUM(
               CASE
                 WHEN n.tipo_servicio = 'POR_ENCARGO' AND carga.tope IS NOT NULL
-                  THEN carga.tope
+                  THEN carga.tope + carga.productos_marca
                 ELSE carga.maquinas + carga.productos
               END
               + carga.ajuste)
@@ -346,7 +348,14 @@ async function recalcularPrecioTotal(client, notaId, opciones = {}) {
               SELECT nc.ajuste, nc.precio_tope AS tope,
                      nc.precio_lavadora + nc.precio_secadora AS maquinas,
                      COALESCE((SELECT SUM(np.cantidad * np.precio_unitario)
-                                 FROM nota_productos np WHERE np.carga_id = nc.id), 0) AS productos
+                                 FROM nota_productos np WHERE np.carga_id = nc.id), 0) AS productos,
+                     -- Los de marca van encima del tope: no es material del
+                     -- lavado, es un producto que el cliente compra.
+                     COALESCE((SELECT SUM(np.cantidad * np.precio_unitario)
+                                 FROM nota_productos np
+                                 JOIN productos a ON a.id = np.producto_id
+                                WHERE np.carga_id = nc.id
+                                  AND a.tipo_liquido = 'marca'), 0) AS productos_marca
                 FROM nota_cargas nc
                WHERE nc.nota_id = n.id
             ) carga
@@ -587,12 +596,17 @@ async function validarTopesCargas(client, notaId) {
     `SELECT nc.orden, nc.tamano,
             UPPER(COALESCE(nc.tipo_prenda, '')) = 'EDREDON' AS es_edredon,
             nc.precio_lavadora + nc.precio_secadora AS maquinas,
-            COALESCE(SUM(np.cantidad * np.precio_unitario), 0) AS productos,
+            -- Solo lo que el tope absorbe: el granel y la bolsa. Los productos
+            -- de marca se cobran aparte, así que no cuentan contra el tope
+            -- (2026-09-25).
+            COALESCE(SUM(CASE WHEN a.tipo_liquido = 'marca' THEN 0
+                              ELSE np.cantidad * np.precio_unitario END), 0) AS productos,
             -- El tope congelado en la carga (mig. 096), que es su precio.
             nc.precio_tope AS tope
        FROM nota_cargas nc
        JOIN notas n ON n.id = nc.nota_id
        LEFT JOIN nota_productos np ON np.carga_id = nc.id
+       LEFT JOIN productos a ON a.id = np.producto_id
       WHERE nc.nota_id = $1 AND n.tipo_servicio = 'POR_ENCARGO'
         AND (nc.tamano IS NOT NULL OR UPPER(COALESCE(nc.tipo_prenda, '')) = 'EDREDON')
       GROUP BY nc.id

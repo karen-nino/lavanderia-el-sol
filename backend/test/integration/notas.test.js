@@ -626,6 +626,32 @@ describe('topes de precio por carga (solo Por Encargo)', () => {
     expect(Number(res.body.precio_total)).toBe(100);
   });
 
+  // Los productos de MARCA no son material del lavado: el cliente los compra,
+  // así que se cobran ENCIMA del tope y no cuentan contra él (2026-09-25).
+  it('un producto de marca se cobra sobre el tope y no lo rebasa', async () => {
+    const { clienteId } = await armar();
+    const marca = await seedProducto({
+      nombre: 'Ensueño', tipo_liquido: 'marca', precio_unitario: 40, precio_botella: 120,
+    });
+    const res = await request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'POR_ENCARGO', cliente_id: clienteId, tipo_prenda: 'ROPA',
+      estado_pago: 'PENDIENTE',
+      cargas: [{ tamano: 'grande', lavadora_tipo: 'mediana',
+                 productos: [{ producto_id: marca, cantidad: 1 }] }],
+    });
+    // Aunque 70 (máquina) + 120 (producto) pasa de 100, la nota SE CREA: contra
+    // el tope solo cuentan las máquinas y el granel.
+    expect(res.status).toBe(201);
+    expect(Number(res.body.precio_total)).toBe(220); // tope 100 + 120 del producto
+    // Y se vendió la unidad completa: 4 tapas (800 ml / 200 ml).
+    const { rows } = await pool.query(
+      `SELECT np.unidad, a.stock_reservado
+         FROM nota_productos np JOIN productos a ON a.id = np.producto_id
+        WHERE np.producto_id = $1`, [marca]);
+    expect(rows[0].unidad).toBe('botella');
+    expect(Number(rows[0].stock_reservado)).toBe(4);
+  });
+
   it('un producto que rebasa el tope → 400 y no crea la nota', async () => {
     const { clienteId } = await armar();
     const productoId = await seedProducto({ precio_unitario: 40 }); // 70 + 40 = 110 > 100

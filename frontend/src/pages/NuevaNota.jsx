@@ -610,10 +610,20 @@ export default function NuevaNota() {
   const pasoEntrega      = 4 + nCargas; // fecha + tiempo + instrucciones
   const pasoResumen      = 5 + nCargas;
 
-  const subtotalProductosLista = (lista) => (lista ?? []).reduce((sum, p) => {
+  // Precio de un producto DENTRO de una carga: el granel se sirve por tapa y los
+  // de marca por unidad, el envase completo (2026-09-25).
+  const esProductoMarca = (prod) => prod?.tipo_liquido === 'marca';
+  const precioProductoCarga = (prod) =>
+    precioProducto(prod, esProductoMarca(prod) ? 'botella' : 'tapa');
+  const sumaProductosCarga = (lista, cuenta = () => true) => (lista ?? []).reduce((sum, p) => {
     const prod = productosCatalogo.find(x => String(x.id) === String(p.producto_id));
-    return sum + precioProducto(prod) * (Number(p.cantidad) || 0);
+    if (!prod || !cuenta(prod)) return sum;
+    return sum + precioProductoCarga(prod) * (Number(p.cantidad) || 0);
   }, 0);
+  const subtotalProductosLista = (lista) => sumaProductosCarga(lista);
+  // Lo que el tope absorbe (granel) y lo que va encima de él (marca).
+  const subtotalAbsorbidoLista = (lista) => sumaProductosCarga(lista, p => !esProductoMarca(p));
+  const subtotalMarcaLista     = (lista) => sumaProductosCarga(lista, esProductoMarca);
 
   // ── Bolsas (Por Encargo): según el tamaño de la carga se incluye 1 bolsa ──
   const bolsasCatalogo = productosCatalogo.filter(p => p.clase === 'bolsa');
@@ -647,21 +657,25 @@ export default function NuevaNota() {
     return c?.tamano ? (topes[c.tamano] ?? null) : null;
   };
 
-  // Costo interno de la carga: lavado + secado (por tipo) + productos. Es lo
-  // que se compara contra el tope (el ajuste manual va aparte y NO cuenta).
+  // Costo interno de la carga: lavado + secado (por tipo) + el granel y la bolsa
+  // que van dentro del servicio. Es lo que se compara contra el tope; el ajuste
+  // manual va aparte y NO cuenta, y los productos de MARCA tampoco (2026-09-25):
+  // esos no son material del lavado, son un producto que el cliente compra y se
+  // cobran encima del tope.
   const usadoContraTope = (c) =>
     precioLavadoTipo(c.lavadora_tipo, c.tipo_prenda)
     + precioSecadoTipo(c.secadora_tipo, c.tipo_prenda)
-    + subtotalProductosLista(c.productos)
+    + subtotalAbsorbidoLista(c.productos)
     + costoBolsaCarga(c);
 
   // Precio cobrado por una carga de encargo. Con tope configurado el precio ES
   // el tope (precio fijo de la carga, aunque el costo interno sea menor); sin
-  // tope, es la suma real. En ambos casos se suma el ajuste manual (va aparte).
+  // tope, es la suma real. En los dos casos se suman aparte los productos de
+  // marca y el ajuste manual.
   const subtotalCargaEncargo = (c) => {
     const tope = topeDeCarga(c);
     const base = tope != null ? Number(tope) : usadoContraTope(c);
-    return base + (Number(c.ajuste) || 0);
+    return base + subtotalMarcaLista(c.productos) + (Number(c.ajuste) || 0);
   };
   const encargoPrecioTotal  = encargoCargas.reduce((s, c) => s + subtotalCargaEncargo(c), 0);
 
@@ -1525,7 +1539,7 @@ export default function NuevaNota() {
                         c.productos.map((item, j) => {
                           const prod  = productosCatalogo.find(x => String(x.id) === String(item.producto_id));
                           const cant  = Number(item.cantidad) || 0;
-                          const subtotal = precioProducto(prod) * cant;
+                          const subtotal = precioProductoCarga(prod) * cant;
                           return (
                             <div key={j} className={`flex flex-wrap items-center gap-x-2 gap-y-4 px-3 py-4 ${j > 0 ? 'border-t border-gray-100' : ''}`}>
                               {/* Solo texto: el producto no se cambia, se borra el renglón y se
@@ -1893,11 +1907,11 @@ export default function NuevaNota() {
                             const prod = productosCatalogo.find(x => String(x.id) === String(p.producto_id));
                             if (!prod) return null;
                             const cant = Number(p.cantidad) || 0;
-                            const unidad = prod.es_por_tapa ? (cant === 1 ? 'tapa' : 'tapas') : (prod.unidad || 'u');
+                            const unidad = unidadEnAmbito(prod, 'carga', cant);
                             return (
                               <li key={j} className="flex justify-between gap-2">
                                 <span>· {prod.nombre}{prod.marca ? ` ${prod.marca}` : ''} × {cant} {unidad}</span>
-                                <span>${(precioProducto(prod) * cant).toFixed(2)}</span>
+                                <span>${(precioProductoCarga(prod) * cant).toFixed(2)}</span>
                               </li>
                             );
                           })}
