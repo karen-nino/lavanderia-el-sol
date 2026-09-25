@@ -2104,7 +2104,7 @@ export default function NuevaNota() {
               {/* Cada máquina con lo que se le cobra. Ya no hay desglose: cada
                   una es lavadora o secadora. La máquina física no va aquí: en
                   Autoservicio se elige el tipo y se asigna en Salidas. */}
-              <div className="space-y-2 mb-3 text-sm text-blue border-t border-blue-200 pt-3">
+              <div className="space-y-2 mb-3 last:mb-0 text-sm text-blue border-t border-blue-200 pt-3">
                 {cargasAuto.map((c, i) => (
                   <div key={i} className="flex justify-between font-medium">
                     <span>
@@ -2117,7 +2117,7 @@ export default function NuevaNota() {
               </div>
 
               {productosLista.length > 0 && (
-                <div className="space-y-2 mb-3 text-sm text-blue border-t border-blue-200 pt-3">
+                <div className="space-y-2 mb-3 last:mb-0 text-sm text-blue border-t border-blue-200 pt-3">
                   <div className="flex justify-between font-medium">
                     <span>Productos</span>
                     <span>${subtotalProductos.toFixed(2)}</span>
@@ -2148,13 +2148,9 @@ export default function NuevaNota() {
                 </div>
               )}
 
-              {/* Sin forma de pago (la nota nace pendiente y se cobra desde su
-                  detalle) y sin ajuste (2026-09-25): del detalle se pasa al total. */}
-              {/* Mismo remate que el resumen de Por Encargo. */}
-              <div className="flex items-baseline justify-between border-t border-blue-200 pt-3">
-                <span className="text-sm font-medium text-blue">Total</span>
-                <span className="text-3xl font-bold text-blue-700">${precioTotal.toFixed(2)}</span>
-              </div>
+              {/* Sin forma de pago, sin ajuste y sin Total (2026-09-25): la nota
+                  nace pendiente y el cobro vive en su detalle, así que el resumen
+                  solo enumera lo que se va a cobrar. */}
             </div>
             </div>
           );
@@ -2214,7 +2210,7 @@ export default function NuevaNota() {
               </div>
 
               {productosLista.length > 0 && (
-                <div className="space-y-2 mb-3 text-sm text-blue border-t border-blue-200 pt-3">
+                <div className="space-y-2 mb-3 last:mb-0 text-sm text-blue border-t border-blue-200 pt-3">
                   <div className="flex justify-between font-medium">
                     <span>Productos</span>
                     <span>${subtotalProductos.toFixed(2)}</span>
