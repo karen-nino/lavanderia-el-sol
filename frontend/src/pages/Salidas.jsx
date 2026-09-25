@@ -679,6 +679,25 @@ export default function Salidas() {
     secadora: Boolean(c) && !c.secadora_id && !previstoPendiente(c, 'secadora'),
   });
 
+  // ¿Esta máquina (su carga) se puede quitar de la nota? Es para deshacer un
+  // agregado por error: solo mientras NUNCA haya arrancado —después es
+  // historial de un lavado que sí ocurrió—, nunca la única que le queda a la
+  // nota (para eso se cancela) y no con el cobro congelado en un corte cerrado.
+  // El servidor aplica las mismas tres reglas; esto solo evita ofrecer un botón
+  // que iba a fallar.
+  const puedeQuitarCarga = (c) =>
+    Boolean(nota) && !notaCerrada && !cobroCongelado
+    && cargasNota.length > 1
+    && !c.lavadora_iniciada_at && !c.secadora_iniciada_at;
+
+  // Lo que esta carga le cobra a la nota: sus máquinas, sus productos y su
+  // ajuste. Es lo que deja de cobrarse al quitarla.
+  const costoDeCarga = (c) => {
+    const prods = (c?.productos ?? []).reduce((a, p) => a + Number(p.subtotal || 0), 0);
+    return Number(c?.precio_lavadora || 0) + Number(c?.precio_secadora || 0)
+      + Number(c?.ajuste || 0) + prods;
+  };
+
   // Cargas a las que se les puede sumar una máquina en vez de abrir una carga
   // nueva (p. ej. la Carga 1 solo tiene lavadora y se le agrega la secadora).
   const cargasDestino = notaCerrada ? [] : cargasNota.filter(c => {
@@ -902,11 +921,30 @@ export default function Salidas() {
           {bloquesCarga.map(({ carga, maquinas, slots, vacia }) => (
             <div key={carga.id} className="space-y-2 [&:not(:first-child)]:border-t [&:not(:first-child)]:border-gray-100 [&:not(:first-child)]:pt-4">
               {carga.orden != null && (
-                <p className="text-xs font-semibold text-gray-500">
-                  {/* En Autoservicio cada carga es una máquina y así se llama
-                      también en la captura y en el ticket (2026-09-25). */}
-                  {esAutoservicio ? 'Máquina' : 'Carga'} {carga.orden}
-                </p>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs font-semibold text-gray-500">
+                    {/* En Autoservicio cada carga es una máquina y así se llama
+                        también en la captura y en el ticket (2026-09-25). */}
+                    {esAutoservicio ? 'Máquina' : 'Carga'} {carga.orden}
+                  </p>
+                  {/* Quitar la que se agregó de más. Solo mientras no haya
+                      arrancado (después es historial), nunca la única que le
+                      queda a la nota, y no con el cobro congelado. */}
+                  {puedeQuitarCarga(carga) && (
+                    <button
+                      onClick={() => setConfirmQuitarCarga(carga)}
+                      disabled={loadingMaquina}
+                      className="text-red-400 hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50 transition-colors disabled:opacity-40 flex-shrink-0"
+                      title="Quitar de la nota"
+                      aria-label={`Quitar ${esAutoservicio ? 'máquina' : 'carga'} ${carga.orden} de la nota`}
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
               )}
               {maquinas.map((m, i) => {
                 // Lavadora que ya cumplió su ciclo (terminó el lavado): se
@@ -1071,16 +1109,9 @@ export default function Salidas() {
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="text-sm text-gray-400 italic">Sin máquina asignada</span>
                   <div className="flex items-center gap-2">
-                    {/* Quitar carga es de admin: deshace lo capturado y baja el total. */}
-                    {esAdmin && !cobroCongelado && (
-                      <button
-                        onClick={() => setConfirmQuitarCarga(carga)}
-                        disabled={loadingMaquina}
-                        className="px-3 py-2 text-sm font-medium text-gray-500 hover:text-red-600 disabled:opacity-60 transition-colors"
-                      >
-                        Quitar carga
-                      </button>
-                    )}
+                    {/* Quitarla va en el encabezado del bloque, junto a su
+                        nombre: desde ahí se puede quitar cualquiera que no haya
+                        arrancado, tenga máquina o no (2026-09-25). */}
                     <button
                       onClick={() => iniciarAsignar(carga)}
                       disabled={loadingMaquina}
@@ -1262,18 +1293,30 @@ export default function Salidas() {
           baja el total de la nota. Antes era un confirm() del navegador, que
           además no decía cuánto dejaba de cobrarse. */}
       {confirmQuitarCarga && (() => {
-        const importe = Number(confirmQuitarCarga.precio_lavadora || 0)
-                      + Number(confirmQuitarCarga.precio_secadora || 0);
+        // Siempre la versión recién cargada: el importe y las máquinas de la
+        // carga pueden haber cambiado mientras el modal estaba abierto.
+        const c = cargasNota.find(x => String(x.id) === String(confirmQuitarCarga.id)) ?? confirmQuitarCarga;
+        const nombre  = esAutoservicio ? 'máquina' : 'carga';
+        const Nombre  = esAutoservicio ? 'Máquina' : 'Carga';
+        const importe = costoDeCarga(c);
+        const fisicas = [c.lavadora_nombre, c.secadora_nombre].filter(Boolean);
         return (
           <ConfirmacionModal
-            titulo={`Quitar la Carga ${confirmQuitarCarga.orden}`}
-            mensaje="La carga sale de la nota y deja de cobrarse."
+            titulo={`Quitar la ${Nombre} ${c.orden}`}
+            mensaje={`Sale de la nota y deja de cobrarse.`
+              + (fisicas.length > 0
+                ? ` ${fisicas.join(' y ')} ${fisicas.length > 1 ? 'vuelven' : 'vuelve'} a quedar disponible${fisicas.length > 1 ? 's' : ''}.`
+                : '')}
+            puntos={[
+              (c.productos ?? []).length > 0
+                ? 'Los productos que tenía apartados vuelven al inventario.' : null,
+            ]}
             detalle={[
               { etiqueta: 'Deja de cobrarse', valor: fmtMonto(importe) },
               { etiqueta: 'Nuevo total de la nota',
                 valor: fmtMonto(Number(nota?.precio_total || 0) - importe) },
             ]}
-            textoConfirmar={loadingMaquina ? 'Quitando…' : 'Quitar carga'}
+            textoConfirmar={loadingMaquina ? 'Quitando…' : `Quitar ${nombre}`}
             procesando={loadingMaquina}
             error={errorAccion}
             onClose={() => { setConfirmQuitarCarga(null); setErrorAccion(''); }}

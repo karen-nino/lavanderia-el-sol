@@ -1921,6 +1921,23 @@ describe('una nota no se queda atascada si sobra una carga', () => {
     expect(res.body.cargas).toHaveLength(1);
   });
 
+  // Quien se equivoca al agregar una máquina de más la quita en el momento: no
+  // hace falta un admin (2026-09-25). El resto de las reglas no se movió.
+  it('un empleado puede quitar una máquina que nunca arrancó', async () => {
+    const emp = await seedUsuario({ rol: 'operador', sucursal: 'centro', nombre: 'Mostrador' });
+    const { notaId, cargaSinUsar, cargaUsada } = await notaConCargaTerminadaYOtraSinUsar();
+
+    const res = await request(app).delete(`/api/notas/${notaId}/cargas/${cargaSinUsar}`)
+      .set(auth(emp.token));
+    expect(res.status).toBe(200);
+    expect(res.body.cargas).toHaveLength(1);
+
+    // Pero la que ya lavó sigue siendo historial, también para el empleado.
+    const historial = await request(app).delete(`/api/notas/${notaId}/cargas/${cargaUsada}`)
+      .set(auth(emp.token));
+    expect(historial.status).toBe(409);
+  });
+
   it('no deja quitar una carga que ya se lavó: es historial', async () => {
     const { notaId, cargaUsada } = await notaConCargaTerminadaYOtraSinUsar();
     const res = await request(app).delete(`/api/notas/${notaId}/cargas/${cargaUsada}`)

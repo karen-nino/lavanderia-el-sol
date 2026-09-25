@@ -45,8 +45,10 @@ router.post('/',          createNota);
 router.get('/:id',        getNotaById);
 router.patch('/:id', updateNota);
 router.delete('/:id', eliminarNota);
-// Quitar una carga es de admin: deshace lo capturado y cambia el total.
-router.delete('/:id/cargas/:cargaId', requireAdmin, quitarCarga);
+// La máquina/carga agregada de más la quita quien se equivocó, sin esperar a
+// un admin (2026-09-25). El controlador sigue siendo el que manda: solo se
+// quitan las que nunca arrancaron y nunca la última de la nota.
+router.delete('/:id/cargas/:cargaId', quitarCarga);
 router.patch('/:id/estado',      cambiarEstadoNota);
 // Paso previo a activar: da corriente sin arrancar el cronómetro (mig. 110).
 router.patch('/:id/encender-maquina', encenderMaquinaDeNota);

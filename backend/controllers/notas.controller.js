@@ -932,6 +932,10 @@ async function cargasDeNota(client, notaId) {
     `SELECT nc.id, nc.orden, nc.lavadora_id, nc.secadora_id,
             nc.precio_lavadora, nc.precio_secadora, nc.es_adicional,
             nc.tipo_prenda, nc.tipo_tela, nc.tamano_edredon, nc.tamano, nc.ajuste,
+            -- Cuándo arrancó cada hueco: una carga que ya pasó por la máquina es
+            -- historial y no se puede quitar, y con esto la pantalla lo sabe sin
+            -- adivinarlo por el estado de la máquina (2026-09-25).
+            nc.lavadora_iniciada_at, nc.secadora_iniciada_at,
             nc.lavadora_tipo AS lavadora_tipo_previsto,
             nc.secadora_tipo AS secadora_tipo_previsto,
             ml.nombre AS lavadora_nombre, ml.tipo AS lavadora_tipo, ml.estado AS lavadora_estado,
