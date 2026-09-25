@@ -531,18 +531,26 @@ export default function NuevaNota() {
   // tapa y solo admite granel; Autoservicio cobra por botella (o pieza) y admite
   // todo el catálogo.
   const esCarga        = (ambito) => ambito === 'carga';
+  // En la carga de Por Encargo van los productos LÍQUIDOS: el granel y los de
+  // marca (2026-09-25). Los dos se sirven por tapa/medida dentro de la carga
+  // —que es como se cobran ahí—; antes solo se ofrecía el granel. Las bolsas no:
+  // esas se venden por pieza a nivel nota.
   const catalogoDe     = (ambito) => (esCarga(ambito)
-    ? productosCatalogo.filter(p => p.tipo_liquido === 'granel')
+    ? productosCatalogo.filter(p => ['granel', 'marca'].includes(p.tipo_liquido))
     : productosCatalogo);
-  const precioEnAmbito = (prod, ambito) => precioProducto(prod, esCarga(ambito) ? 'tapa' : 'botella');
-  const unidadEnAmbito = (prod, ambito, n = 2) => (esCarga(ambito)
+  // Los de MARCA se venden por unidad (el envase completo) en todas partes: no
+  // se sirven por tapas como el granel (2026-09-25). Así que dentro de una carga
+  // de Por Encargo el granel va por tapa y la marca por unidad.
+  const porTapa = (prod, ambito) => esCarga(ambito) && prod?.tipo_liquido !== 'marca';
+  const precioEnAmbito = (prod, ambito) => precioProducto(prod, porTapa(prod, ambito) ? 'tapa' : 'botella');
+  const unidadEnAmbito = (prod, ambito, n = 2) => (porTapa(prod, ambito)
     ? (n === 1 ? 'tapa' : 'tapas')
     : unidadVentaNota(prod, n));
-  // Cuántas piezas se pueden vender: en tapas para Por Encargo, en botellas
-  // (o unidades sueltas) para Autoservicio.
+  // Cuántas piezas se pueden vender: tapas si se sirve por tapa, y envases
+  // completos (botellas o unidades) si se vende por unidad.
   const disponiblesDe  = (prod, ambito) => {
     if (!prod) return 0;
-    return esCarga(ambito)
+    return porTapa(prod, ambito)
       ? Number(prod.stock_disponible ?? prod.stock_actual) || 0
       : botellasDisponibles(prod);
   };
@@ -2407,7 +2415,7 @@ export default function NuevaNota() {
                 if (lista.length === 0) {
                   return (
                     <p className="px-2 py-6 text-center text-sm text-gray-500">
-                      {esCarga(ambito) ? 'No hay productos a granel dados de alta.' : 'No hay productos dados de alta.'}
+                      {esCarga(ambito) ? 'No hay productos líquidos dados de alta.' : 'No hay productos dados de alta.'}
                     </p>
                   );
                 }

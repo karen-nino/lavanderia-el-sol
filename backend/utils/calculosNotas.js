@@ -27,10 +27,19 @@ export function tapasPorUnidad(art, unidad) {
   return t > 0 && b > 0 ? Math.floor(b / t) : 1;
 }
 
+// Unidad en la que se vende un producto DENTRO de una nota. El granel se sirve
+// por medidas, así que su unidad la decide el servicio (botella en Autoservicio,
+// tapa en Por Encargo); los productos de MARCA se venden siempre por unidad —la
+// botella o el envase completo—, porque no se sirven por tapas (2026-09-25).
+export function unidadDeVenta(art, tipo_servicio) {
+  if (art?.tipo_liquido === 'marca') return 'botella';
+  return unidadDeServicio(tipo_servicio);
+}
+
 // Precio efectivo de un producto dentro de una nota, según la unidad vendida:
-// precio por botella (Autoservicio) o precio por tapa (Por Encargo).
+// precio por botella/unidad o precio por tapa.
 export function precioProductoEnNota(art, tipo_servicio) {
-  return unidadDeServicio(tipo_servicio) === 'botella'
+  return unidadDeVenta(art, tipo_servicio) === 'botella'
     ? (art.precio_botella ?? 0)
     : (art.precio_unitario ?? 0);
 }

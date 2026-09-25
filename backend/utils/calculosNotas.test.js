@@ -35,9 +35,17 @@ describe('precioProductoEnNota', () => {
     expect(precioProductoEnNota(producto, 'PRODUCTOS')).toBe(120);
   });
 
+  // Los de marca se venden por unidad (el envase completo) también en Por
+  // Encargo: no se sirven por tapas como el granel (2026-09-25).
+  it('un producto de marca cobra su precio por unidad en cualquier servicio', () => {
+    const marca = { tipo_liquido: 'marca', precio_unitario: 15, precio_botella: 120 };
+    expect(precioProductoEnNota(marca, 'POR_ENCARGO')).toBe(120);
+    expect(precioProductoEnNota(marca, 'AUTOSERVICIO')).toBe(120);
+  });
+
   it('sin precio en la unidad que toca devuelve 0', () => {
-    // Producto de marca que solo se vende por botella: por tapa no tiene precio.
-    expect(precioProductoEnNota({ precio_botella: 120 }, 'POR_ENCARGO')).toBe(0);
+    // Granel sin precio por tapa: en Por Encargo no hay nada que cobrar.
+    expect(precioProductoEnNota({ tipo_liquido: 'granel', precio_botella: 120 }, 'POR_ENCARGO')).toBe(0);
     expect(precioProductoEnNota({ precio_unitario: 15 }, 'AUTOSERVICIO')).toBe(0);
     expect(precioProductoEnNota({}, 'AUTOSERVICIO')).toBe(0);
   });

@@ -1,6 +1,6 @@
 import pool from '../db/pool.js';
 import { esAdmin } from '../middleware/roles.js';
-import { tarifaSecadora, precioProductoEnNota, unidadDeServicio, tapasPorUnidad, generarFolio } from '../utils/calculosNotas.js';
+import { tarifaSecadora, precioProductoEnNota, unidadDeVenta, tapasPorUnidad, generarFolio } from '../utils/calculosNotas.js';
 // El resto del archivo se apoya en el trigger de LISTEN/NOTIFY (mig. 075) para
 // encender y apagar. Aquí se llama directo porque "Encender máquina" es la
 // acción que el empleado está mirando: no debe depender de que el listener esté
@@ -625,10 +625,11 @@ async function reservarProducto(client, notaId, cargaId, productoId, cantidad, s
     throw new Error(`Producto ${productoId} no encontrado.`);
   }
   const art = artRows[0];
-  // Bolsas: por pieza (precio por pieza). Líquidos: la unidad la define el
-  // servicio — botella (Autoservicio) o tapa (Por Encargo).
+  // Bolsas: por pieza (precio por pieza). Granel: la unidad la define el
+  // servicio — botella (Autoservicio) o tapa (Por Encargo). Los de marca van
+  // siempre por unidad, también dentro de una carga de Por Encargo.
   const esBolsa = art.clase === 'bolsa';
-  const unidad = esBolsa ? 'pieza' : unidadDeServicio(tipo_servicio);
+  const unidad = esBolsa ? 'pieza' : unidadDeVenta(art, tipo_servicio);
   const tpu = esBolsa ? 1 : tapasPorUnidad(art, unidad);
   const precioUnit = esBolsa ? (Number(art.precio_unitario) || 0) : precioProductoEnNota(art, tipo_servicio);
   const cantidadTapas = Number(cantidad) * tpu;
