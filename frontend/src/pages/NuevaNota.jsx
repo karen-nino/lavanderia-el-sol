@@ -1975,10 +1975,10 @@ export default function NuevaNota() {
           {/* Cuántas cargas y las cargas en sí son lo mismo: se agrupan
               para que el aire de sección no las separe. */}
           <div className="space-y-3">
-            {/* Cantidad de cargas */}
+            {/* Cantidad de máquinas */}
             <div className="pb-6">
               <label className={LABEL_CLS}>
-                Cantidad de cargas <span className="text-red-500">*</span>
+                Cantidad de máquinas <span className="text-red-500">*</span>
               </label>
               <div className="flex items-center gap-2">
                 <input
@@ -1991,7 +1991,7 @@ export default function NuevaNota() {
                   type="button"
                   onClick={() => setCantidadCargas(cargasAuto.length - 1)}
                   disabled={cargasAuto.length <= 1}
-                  aria-label="Disminuir cargas"
+                  aria-label="Disminuir máquinas"
                   className="flex-shrink-0 w-14 py-3.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-xl font-semibold hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                 >
                   −
@@ -2000,30 +2000,30 @@ export default function NuevaNota() {
                   type="button"
                   onClick={() => setCantidadCargas(cargasAuto.length + 1)}
                   disabled={cargasAuto.length >= MAX_CARGAS}
-                  aria-label="Aumentar cargas"
+                  aria-label="Aumentar máquinas"
                   className="flex-shrink-0 w-14 py-3.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-xl font-semibold hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                 >
                   +
                 </button>
               </div>
-              <p className="text-xs text-gray-400 mt-1.5">Cada carga usa una máquina: lavadora o secadora</p>
+              <p className="text-xs text-gray-400 mt-1.5">Cada máquina es una lavadora o una secadora</p>
             </div>
 
-            {/* Máquinas por carga */}
+            {/* Una tarjeta por máquina */}
             <div className="space-y-3">
               {cargasAuto.map((c, i) => {
                 const set = (cambios) => actualizarCargaObj(i, cambios);
                 return (
                   <div key={i} className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
                     <div className="flex items-center justify-between gap-2">
-                      <p className="text-sm font-semibold text-gray-900">Carga {i + 1}</p>
+                      <p className="text-sm font-semibold text-gray-900">Máquina {i + 1}</p>
                       <div className="flex items-center gap-1.5 flex-shrink-0">
                         <span className="text-sm font-medium text-blue">${subtotalDeCarga(c).toFixed(2)}</span>
                         {i > 0 && (
                           <button
                             type="button"
                             onClick={() => eliminarCargaAuto(i)}
-                            aria-label={`Quitar carga ${i + 1}`}
+                            aria-label={`Quitar máquina ${i + 1}`}
                             className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
                           >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2067,7 +2067,7 @@ export default function NuevaNota() {
                 );
               })}
               <p className="text-xs text-blue font-medium text-right">
-                Subtotal cargas: ${subtotalCargas.toFixed(2)}
+                Subtotal máquinas: ${subtotalCargas.toFixed(2)}
               </p>
               {/* Informativo, no bloquea: la nota se crea con el TIPO de máquina
                   y la máquina física se asigna después en Salidas. */}
@@ -2105,7 +2105,7 @@ export default function NuevaNota() {
                   <span className="font-medium">{TIPO_LABEL[tipoServicio]}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Cargas</span>
+                  <span>Máquinas</span>
                   <span className="font-medium">{cargasAuto.length}</span>
                 </div>
               </div>
@@ -2119,7 +2119,7 @@ export default function NuevaNota() {
                   return (
                     <div key={i}>
                       <div className="flex justify-between font-medium">
-                        <span>Carga {i + 1}</span>
+                        <span>Máquina {i + 1}</span>
                         <span>${subtotalDeCarga(c).toFixed(2)}</span>
                       </div>
                       <div className="pl-3 mt-1.5 space-y-1.5 text-xs text-blue-700/80">
