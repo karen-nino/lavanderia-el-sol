@@ -142,10 +142,11 @@ const CARGA_ENCARGO_INIT = {
   sin_bolsa:              false,
 };
 
+// Cuándo estará lista la ropa. Es el DÍA que se le promete al cliente, no una
+// hora del día (2026-09-25), y es opcional.
 const TIEMPOS_ENTREGA = [
-  { v: 'MANANA', label: 'Mañana' },
-  { v: 'TARDE',  label: 'Tarde'  },
-  { v: 'NOCHE',  label: 'Noche'  },
+  { v: 'MANANA',   label: 'Mañana'     },
+  { v: 'DOS_DIAS', label: 'En 2 días'  },
 ];
 const TIEMPO_ENTREGA_LABEL = Object.fromEntries(TIEMPOS_ENTREGA.map(t => [t.v, t.label]));
 
@@ -158,7 +159,9 @@ const fechaHoyISO = () => {
 
 // Pasos fijos del wizard, además de una pantalla por carga:
 // Cliente, Cantidad de cargas, [Carga ×N], Pago, Entrega, Instrucciones, Resumen.
-const ENCARGO_STEPS_FIJOS = 5;
+// Cliente, Cantidad, Entrega y Resumen (que incluye el pago). Las pantallas
+// de carga se suman aparte.
+const ENCARGO_STEPS_FIJOS = 4;
 
 export default function NuevaNota() {
   const navigate = useNavigate();
@@ -629,15 +632,19 @@ export default function NuevaNota() {
     }
   };
 
-  // Pasos dinámicos: Cliente, Cantidad, [una pantalla por carga], Pago,
-  // Entrega (fecha + tiempo + instrucciones), Resumen.
+  // Pasos dinámicos: Cliente, Cantidad, [una pantalla por carga], Entrega
+  // (fecha + tiempo + instrucciones), Resumen, Pago. El orden es el del
+  // mostrador (2026-09-25): se acuerda la entrega, se revisa lo que va a
+  // cobrarse y el pago se deja al final, que es cuando se cobra de verdad —y
+  // ahí mismo se crea la nota.
   const nCargas          = encargoCargas.length;
   const ENCARGO_STEPS    = nCargas + ENCARGO_STEPS_FIJOS;
   const esPasoCarga      = encargoStep >= 3 && encargoStep <= 2 + nCargas;
   const cargaActivaIdx   = esPasoCarga ? encargoStep - 3 : -1;
-  const pasoPago         = 3 + nCargas;
-  const pasoEntrega      = 4 + nCargas; // fecha + tiempo + instrucciones
-  const pasoResumen      = 5 + nCargas;
+  const pasoEntrega      = 3 + nCargas; // fecha + tiempo + instrucciones
+  // Último paso: el resumen y, debajo, el pago anticipado (2026-09-25). Se ve
+  // lo que se va a cobrar y se cobra ahí mismo, sin una pantalla de por medio.
+  const pasoResumen      = 4 + nCargas;
 
   // Precio de un producto DENTRO de una carga: el granel se sirve por tapa y los
   // de marca por unidad, el envase completo (2026-09-25).
@@ -737,17 +744,22 @@ export default function NuevaNota() {
       if (excesoDeCarga(c) > 0) return false;
       return true;
     }
-    if (encargoStep === pasoPago) {
-      if (!encargoForm.pago_anticipado) return false;
-      // Si pagó anticipado, hay que elegir la forma de pago.
-      if (encargoForm.pago_anticipado === 'SI' && !encargoForm.forma_pago) return false;
-      return true;
-    }
     return true;
   })();
 
+  // El pago se captura debajo del resumen, en el último paso: sin él no se crea
+  // la nota. Si pagó anticipado, además hay que decir cómo pagó.
+  const pagoCapturado = Boolean(encargoForm.pago_anticipado)
+    && (encargoForm.pago_anticipado !== 'SI' || Boolean(encargoForm.forma_pago));
+
   const handleEncargoSubmit = async () => {
     setError('');
+    if (!pagoCapturado) {
+      setError(encargoForm.pago_anticipado
+        ? 'Elige la forma de pago.'
+        : 'Indica si hay pago anticipado.');
+      return;
+    }
     // Tope de precio por carga: el backend también lo rechaza, pero aquí se
     // avisa antes de mandar (p. ej. si se regresó a editar una carga previa).
     const idxExcedida = encargoCargas.findIndex(c => excesoDeCarga(c) > 0);
@@ -1705,75 +1717,6 @@ export default function NuevaNota() {
               );
             })()}
 
-            {/* Pago Anticipado */}
-            {encargoStep === pasoPago && (
-              <div className="space-y-4">
-                <h2 className="text-base font-semibold text-gray-900">Pago Anticipado</h2>
-                <div className="grid grid-cols-2 gap-3">
-                  {[{ v: 'SI', label: 'Sí' }, { v: 'NO', label: 'No' }].map(opt => {
-                    const selected = encargoForm.pago_anticipado === opt.v;
-                    return (
-                      <button
-                        key={opt.v}
-                        type="button"
-                        disabled={cobroBloqueado}
-                        onClick={() => setEncargoForm(f => ({ ...f, pago_anticipado: opt.v, forma_pago: opt.v === 'SI' ? f.forma_pago : '' }))}
-                        className={`py-8 px-2 border-2 rounded-xl font-semibold text-lg truncate transition-colors ${
-                          selected ? 'border-blue bg-light-blue text-blue-700' : 'border-gray-300 bg-white text-gray-700 hover:border-blue-300'
-                        } ${cobroBloqueado ? 'opacity-60 cursor-not-allowed' : ''}`}
-                      >
-                        {opt.label}
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {/* La nota ya se cobró: deshacerlo es una decisión de dinero y
-                    vive en su propia puerta, con motivo y con la regla de la
-                    caja. Se deja ver que está pagada, pero no se cambia desde
-                    aquí (2026-09-22). */}
-                {cobroBloqueado && (
-                  <p className="text-sm text-gray-500">
-                    Esta nota ya está cobrada, así que el cobro no se toca desde aquí: para
-                    deshacerlo usa <span className="font-medium text-gray-700">Revertir pago</span> y
-                    para corregir cómo se pagó,{' '}
-                    <span className="font-medium text-gray-700">Corregir forma de pago</span>, los dos
-                    en el detalle de la nota.
-                  </p>
-                )}
-
-                {/* Forma de pago: solo si pagó anticipado (si queda a deber, aún
-                    no hay pago). */}
-                {encargoForm.pago_anticipado === 'SI' && (
-                  <div className="space-y-3 pt-2">
-                    <h2 className="text-base font-semibold text-gray-900">Forma de pago</h2>
-                    <div className="grid grid-cols-3 gap-3">
-                      {FORMAS_PAGO.map(opt => {
-                        const selected = encargoForm.forma_pago === opt.v;
-                        return (
-                          <button
-                            key={opt.v}
-                            type="button"
-                            // En una nota ya cobrada el servidor ignora lo que
-                            // se mande aquí (conserva la forma con la que se
-                            // cobró): corregirla tiene su propio botón en el
-                            // detalle, con la regla de la caja.
-                            disabled={cobroBloqueado}
-                            onClick={() => setEncargoForm(f => ({ ...f, forma_pago: opt.v }))}
-                            className={`py-6 px-2 border-2 rounded-xl font-semibold text-base truncate transition-colors ${
-                              selected ? 'border-blue bg-light-blue text-blue-700' : 'border-gray-300 bg-white text-gray-700 hover:border-blue-300'
-                            } ${cobroBloqueado ? 'opacity-60 cursor-not-allowed' : ''}`}
-                          >
-                            {opt.label}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
             {/* Entrega: fecha + tiempo + instrucciones */}
             {encargoStep === pasoEntrega && (
               <div className="space-y-5">
@@ -1800,8 +1743,10 @@ export default function NuevaNota() {
                   </div>
                 </div>
                 <div>
-                  <label className={LABEL_CLS}>Tiempo de entrega</label>
-                  <div className="grid grid-cols-3 gap-3">
+                  <label className={LABEL_CLS}>
+                    Día que estará lista <span className="text-gray-400 font-normal">(opcional)</span>
+                  </label>
+                  <div className="grid grid-cols-2 gap-3">
                     {TIEMPOS_ENTREGA.map(t => {
                       const selected = encargoForm.tiempo_entrega === t.v;
                       return (
@@ -1862,7 +1807,7 @@ export default function NuevaNota() {
                     <div className="flex justify-between"><span>Entrega</span><span className="font-medium">{encargoForm.fecha_entrega}</span></div>
                   )}
                   {encargoForm.tiempo_entrega && (
-                    <div className="flex justify-between"><span>Tiempo</span><span className="font-medium">{TIEMPO_ENTREGA_LABEL[encargoForm.tiempo_entrega]}</span></div>
+                    <div className="flex justify-between"><span>Lista</span><span className="font-medium">{TIEMPO_ENTREGA_LABEL[encargoForm.tiempo_entrega]}</span></div>
                   )}
                 </div>
                 <div className="space-y-5 mb-2 text-sm text-blue border-t border-blue-200 pt-4">
@@ -1934,6 +1879,76 @@ export default function NuevaNota() {
               </div>
             )}
 
+            {/* Pago anticipado: va debajo del resumen, en el mismo paso, para
+                cobrar viendo lo que se cobra (2026-09-25). */}
+            {encargoStep === pasoResumen && (
+              <div className="space-y-4">
+                <h2 className="text-base font-semibold text-gray-900">Pago Anticipado</h2>
+                <div className="grid grid-cols-2 gap-3">
+                  {[{ v: 'SI', label: 'Sí' }, { v: 'NO', label: 'No' }].map(opt => {
+                    const selected = encargoForm.pago_anticipado === opt.v;
+                    return (
+                      <button
+                        key={opt.v}
+                        type="button"
+                        disabled={cobroBloqueado}
+                        onClick={() => setEncargoForm(f => ({ ...f, pago_anticipado: opt.v, forma_pago: opt.v === 'SI' ? f.forma_pago : '' }))}
+                        className={`py-8 px-2 border-2 rounded-xl font-semibold text-lg truncate transition-colors ${
+                          selected ? 'border-blue bg-light-blue text-blue-700' : 'border-gray-300 bg-white text-gray-700 hover:border-blue-300'
+                        } ${cobroBloqueado ? 'opacity-60 cursor-not-allowed' : ''}`}
+                      >
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* La nota ya se cobró: deshacerlo es una decisión de dinero y
+                    vive en su propia puerta, con motivo y con la regla de la
+                    caja. Se deja ver que está pagada, pero no se cambia desde
+                    aquí (2026-09-22). */}
+                {cobroBloqueado && (
+                  <p className="text-sm text-gray-500">
+                    Esta nota ya está cobrada, así que el cobro no se toca desde aquí: para
+                    deshacerlo usa <span className="font-medium text-gray-700">Revertir pago</span> y
+                    para corregir cómo se pagó,{' '}
+                    <span className="font-medium text-gray-700">Corregir forma de pago</span>, los dos
+                    en el detalle de la nota.
+                  </p>
+                )}
+
+                {/* Forma de pago: solo si pagó anticipado (si queda a deber, aún
+                    no hay pago). */}
+                {encargoForm.pago_anticipado === 'SI' && (
+                  <div className="space-y-3 pt-2">
+                    <h2 className="text-base font-semibold text-gray-900">Forma de pago</h2>
+                    <div className="grid grid-cols-3 gap-3">
+                      {FORMAS_PAGO.map(opt => {
+                        const selected = encargoForm.forma_pago === opt.v;
+                        return (
+                          <button
+                            key={opt.v}
+                            type="button"
+                            // En una nota ya cobrada el servidor ignora lo que
+                            // se mande aquí (conserva la forma con la que se
+                            // cobró): corregirla tiene su propio botón en el
+                            // detalle, con la regla de la caja.
+                            disabled={cobroBloqueado}
+                            onClick={() => setEncargoForm(f => ({ ...f, forma_pago: opt.v }))}
+                            className={`py-6 px-2 border-2 rounded-xl font-semibold text-base truncate transition-colors ${
+                              selected ? 'border-blue bg-light-blue text-blue-700' : 'border-gray-300 bg-white text-gray-700 hover:border-blue-300'
+                            } ${cobroBloqueado ? 'opacity-60 cursor-not-allowed' : ''}`}
+                          >
+                            {opt.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             {error && (
               <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">
                 {error}
@@ -1966,7 +1981,7 @@ export default function NuevaNota() {
                 <button
                   type="button"
                   onClick={handleEncargoSubmit}
-                  disabled={encargoLoading}
+                  disabled={encargoLoading || !pagoCapturado}
                   className="flex-1 bg-blue hover:opacity-90 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
                 >
                   {encargoLoading

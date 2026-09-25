@@ -32,7 +32,10 @@ const TIPOS_PRENDA_VALIDOS = ['ROPA', 'EDREDON'];
 // Tipo de máquina previsto por carga en Por Encargo (define el precio; la
 // máquina física real se asigna después en Salidas).
 const TIPOS_MAQUINA_VALIDOS = ['mediana', 'jumbo', 'edredon'];
-const TIEMPOS_ENTREGA_VALIDOS = ['MANANA', 'TARDE', 'NOCHE'];
+// Cuándo estará lista la ropa: mañana o en dos días (2026-09-25). Antes eran
+// horarios del día (mañana/tarde/noche), pero lo que el mostrador promete es
+// el DÍA. Es opcional: una nota puede no prometer nada.
+const TIEMPOS_ENTREGA_VALIDOS = ['MANANA', 'DOS_DIAS'];
 
 // Los estados y catálogos se guardan en MAYÚSCULAS, pero nadie los lee así en
 // pantalla: los mensajes hablan de "por encargo" y "en espera", no de

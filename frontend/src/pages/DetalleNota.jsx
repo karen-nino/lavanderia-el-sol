@@ -35,11 +35,12 @@ const PRENDA_LABEL = {
   EDREDON: 'Edredón',
 };
 
-// Tiempo de entrega elegido en el paso de Entrega (paso 5 de 6).
+// Día que se le prometió al cliente, elegido en el paso de Entrega. Antes eran
+// horarios (mañana/tarde/noche); las notas viejas con esos valores se muestran
+// tal cual, sin etiqueta (2026-09-25).
 const TIEMPO_ENTREGA_LABEL = {
-  MANANA: 'Mañana',
-  TARDE:  'Tarde',
-  NOCHE:  'Noche',
+  MANANA:   'Mañana',
+  DOS_DIAS: 'En 2 días',
 };
 
 const BADGE_PAGO = {
@@ -781,7 +782,7 @@ export default function DetalleNota() {
             <FilaDetalle label="Fecha de entrega">
               {nota.fecha_entrega ? fmtFecha(nota.fecha_entrega) : <span className="text-gray-400">—</span>}
             </FilaDetalle>
-            <FilaDetalle label="Tiempo de entrega">
+            <FilaDetalle label="Día que estará lista">
               {nota.tiempo_entrega
                 ? (TIEMPO_ENTREGA_LABEL[nota.tiempo_entrega] ?? nota.tiempo_entrega)
                 : <span className="text-gray-400">—</span>}

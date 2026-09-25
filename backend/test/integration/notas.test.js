@@ -170,7 +170,7 @@ describe('POST /api/notas — Por Encargo', () => {
       cliente_id: clienteId,
       tipo_prenda: 'ROPA',
       estado_pago: 'PENDIENTE',
-      tiempo_entrega: 'TARDE',
+      tiempo_entrega: 'DOS_DIAS',
       cargas: [{ tamano: 'chico', lavadora_tipo: 'mediana' }],
     });
 
