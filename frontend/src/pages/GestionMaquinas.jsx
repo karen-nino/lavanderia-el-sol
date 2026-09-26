@@ -612,8 +612,11 @@ export default function GestionMaquinas() {
             const cfg = ESTADO_CFG[estadoVisual(m)] ?? ESTADO_CFG.disponible;
             const { tipo, tamano } = descomponerTipo(m.tipo);
             const tipoLabel = tipo === 'lavadora' ? 'Lavadora' : 'Secadora';
-            // El tamaño solo aplica a lavadoras: la secadora es de un solo tamaño.
-            const tamanoVal = tipo === 'lavadora' ? (m.tamano ?? tamano) : null;
+            // El tamaño se enseña también en las secadoras: desde que se
+            // separaron en Mediana y Jumbo tienen precio y tiempo propios, y
+            // es lo que decide qué modelos puede elegir la máquina. Ocultarlo
+            // dejaba invisible una secadora con el tamaño equivocado.
+            const tamanoVal = m.tamano ?? tamano;
             const tamanoLabel = tamanoVal
               ? (tamanoVal === 'jumbo' ? 'Jumbo' : 'Mediana')
               : null;
