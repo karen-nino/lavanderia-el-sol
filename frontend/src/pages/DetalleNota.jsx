@@ -12,6 +12,7 @@ import { formatHora12, formatFechaHora12 } from '../lib/fecha';
 import { leerAvisoCobro, limpiarAvisoCobro } from '../lib/avisoCobro';
 import { esTerminal, puedeLiquidar, puedeFinalizar, puedeEliminar, eliminarSoloEnEscritorio } from '../lib/accionesNota';
 import AbrirCajaModal from '../components/AbrirCajaModal';
+import { armarMensajeWhatsapp, hayMensajeWhatsapp, telefonoWhatsapp } from '../lib/mensajeWhatsapp';
 
 // Unidad de venta de un producto de la nota, en texto ("2 botellas" / "3 tapas").
 function unidadProdTxt(p) {
@@ -222,141 +223,57 @@ function ModalConfirmar({ titulo, mensaje, onCancelar, onConfirmar, loading, col
   );
 }
 
-// Modal de abono (mig. 121): un pago PARCIAL de la nota. Pide cuánto y con qué
-// forma, y no deja pasarse de lo que falta — ese dinero la nota no lo debe. El
-// monto arranca en 0: lo teclea quien cobra, con el efectivo en la mano.
-function ModalAbonar({ saldo, folio, monto, onMonto, formaPago, onFormaPago,
-                       onCancelar, onConfirmar, loading, error, cajaAbierta, onAbrirCaja }) {
-  const importe = Number(monto);
-  const valido = Number.isFinite(importe) && importe > 0 && importe <= saldo + 1e-9;
-  return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4 max-h-[90vh] overflow-y-auto">
-        <div>
-          <h3 className="text-base font-bold text-gray-900">Abonar a la nota</h3>
-          <p className="text-sm text-gray-500">Nota {folio}</p>
-        </div>
-
-        <div className="rounded-2xl bg-light-blue border-2 border-blue/30 px-5 py-4 text-center">
-          <p className="text-xs font-semibold text-blue-700 uppercase tracking-wide">Falta por cobrar</p>
-          <p className="text-4xl font-bold text-dark-blue leading-tight mt-1">{fmtMonto(saldo)}</p>
-        </div>
-
-        {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">{error}</div>
-        )}
-
-        {cajaAbierta === false && (
-          <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
-            <p className="text-sm font-semibold text-amber-900">La caja del día no está abierta</p>
-            <p className="mt-0.5 text-sm text-amber-800">
-              Puedes abonar, pero este dinero no va a aparecer en el corte de hoy.
-            </p>
-            <button
-              type="button"
-              onClick={onAbrirCaja}
-              className="mt-2.5 text-sm font-medium text-amber-800 border border-amber-300 bg-white rounded-lg px-4 py-2 hover:bg-amber-100 transition-colors"
-            >
-              Abrir caja
-            </button>
-          </div>
-        )}
-
-        <div className="space-y-2">
-          <label className="text-sm font-semibold text-gray-900">¿Cuánto abona?</label>
-          <div className="relative">
-            <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 text-base">$</span>
-            <input
-              type="number" min="0" step="any" max={saldo}
-              value={monto}
-              onChange={e => onMonto(e.target.value)}
-              className="w-full pl-8 pr-4 py-3.5 text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue focus:border-blue [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-            />
-          </div>
-          {Number.isFinite(importe) && importe > saldo + 1e-9 && (
-            <p className="text-xs text-red-600">
-              La nota solo debe {fmtMonto(saldo)}.
-            </p>
-          )}
-        </div>
-
-        <div className="space-y-2">
-          <p className="text-sm font-semibold text-gray-900">Método de pago:</p>
-          <div className="grid grid-cols-3 gap-3">
-            {FORMAS_PAGO.map(opt => {
-              const selected = formaPago === opt.v;
-              return (
-                <button
-                  key={opt.v}
-                  type="button"
-                  onClick={() => onFormaPago(opt.v)}
-                  className={`py-4 px-2 border-2 rounded-xl font-semibold text-base truncate transition-colors ${
-                    selected
-                      ? 'border-blue bg-light-blue text-blue-700'
-                      : 'border-gray-300 bg-white text-gray-700 hover:border-blue-300'
-                  }`}
-                >
-                  {opt.label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className="flex gap-3 pt-4 border-t border-gray-100">
-          <button
-            onClick={onCancelar}
-            disabled={loading}
-            className="flex-1 border border-gray-300 text-gray-700 font-medium py-3.5 rounded-lg text-base hover:bg-gray-50 disabled:opacity-60 transition-colors"
-          >
-            Cancelar
-          </button>
-          <button
-            onClick={onConfirmar}
-            disabled={loading || !valido || !formaPago}
-            className="flex-1 bg-blue hover:opacity-90 text-white font-medium py-3.5 rounded-lg text-base transition-colors disabled:opacity-60"
-          >
-            {loading ? 'Registrando...' : 'Abonar'}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// Modal de cobro: pide la forma de pago además de confirmar. Sin este dato el
-// corte de caja no distingue el dinero del cajón de transferencias y tarjetas.
+// Modal ÚNICO de cobro (2026-09-26). Antes eran dos —"Abonar" y "Liquidar"—,
+// y en el mostrador son el mismo gesto: recibir dinero. La única diferencia es
+// si lo que trae el cliente alcanza para todo, y eso lo dice el importe, no un
+// botón distinto. Aquí viene puesto el saldo completo, que es el caso normal
+// (liquidar de un toque); bajarlo deja la nota abonada y debiendo el resto.
 //
-// `cajaAbierta === false` avisa que el cobro se va a quedar fuera del corte del
-// día. El aviso vivía solo en Nueva Nota, que era donde se cobraba el
-// autoservicio; desde que el cobro se hace aquí (2026-09-23) tenía que venirse
-// con él, o el dinero se salía del corte sin que nadie se enterara.
-function ModalLiquidar({ monto, folio, formaPago, onFormaPago, onCancelar, onConfirmar, loading,
-                         cajaAbierta, onAbrirCaja, abonado = 0, total }) {
+// Con saldo 0 no hay importe que teclear —no se puede abonar $0— y el modal se
+// queda en confirmar el cobro y su forma, como hacía Liquidar.
+//
+// `cajaAbierta === false` avisa que el dinero se va a quedar fuera del corte
+// del día. El aviso vivía solo en Nueva Nota, que era donde se cobraba el
+// autoservicio; desde que el cobro se hace aquí (2026-09-23) se vino con él, o
+// el dinero se salía del corte sin que nadie se enterara.
+function ModalCobrar({ saldo, folio, monto, onMonto, formaPago, onFormaPago,
+                       onCancelar, onConfirmar, loading, error, cajaAbierta, onAbrirCaja,
+                       abonado = 0, total }) {
+  const sinSaldo = saldo <= 1e-9;
+  const importe = Number(monto);
+  const montoOk = Number.isFinite(importe) && importe > 0 && importe <= saldo + 1e-9;
+  const valido = sinSaldo || montoOk;
+  // Lo que pasa al confirmar, dicho antes de confirmar: es lo que antes
+  // elegías al escoger entre los dos botones.
+  const liquida = sinSaldo || (montoOk && importe >= saldo - 1e-9);
+  const restante = montoOk ? saldo - importe : 0;
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4 max-h-[90vh] overflow-y-auto">
         <div>
-          <h3 className="text-base font-bold text-gray-900">Liquidar nota</h3>
+          <h3 className="text-base font-bold text-gray-900">Cobrar nota</h3>
           <p className="text-sm text-gray-500">Nota {folio}</p>
         </div>
 
         {/* El monto es lo que el empleado tiene que cobrar: va en grande y
-            aparte, no escondido dentro del texto. */}
-        {/* Con abonos, lo que hay que cobrar NO es el total de la nota: es lo
-            que falta. El total se dice debajo para que se entienda el número
-            grande (mig. 121). */}
+            aparte, no escondido dentro del texto. Con abonos no es el total de
+            la nota sino lo que falta; el total se dice debajo para que se
+            entienda el número grande (mig. 121). */}
         <div className="rounded-2xl bg-light-blue border-2 border-blue/30 px-5 py-4 text-center">
           <p className="text-xs font-semibold text-blue-700 uppercase tracking-wide">
             {abonado > 0 ? 'Falta por cobrar' : 'Total'}
           </p>
-          <p className="text-4xl font-bold text-dark-blue leading-tight mt-1">{monto}</p>
+          <p className="text-4xl font-bold text-dark-blue leading-tight mt-1">{fmtMonto(saldo)}</p>
           {abonado > 0 && (
             <p className="text-xs text-blue-700 mt-1">
               Ya abonó {fmtMonto(abonado)} de {fmtMonto(total)}
             </p>
           )}
         </div>
+
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">{error}</div>
+        )}
 
         {cajaAbierta === false && (
           <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
@@ -371,6 +288,30 @@ function ModalLiquidar({ monto, folio, formaPago, onFormaPago, onCancelar, onCon
             >
               Abrir caja
             </button>
+          </div>
+        )}
+
+        {!sinSaldo && (
+          <div className="space-y-2">
+            <label className="text-sm font-semibold text-gray-900">¿Cuánto recibes?</label>
+            <div className="relative">
+              <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 text-base">$</span>
+              <input
+                type="number" min="0" step="any" max={saldo}
+                value={monto}
+                onChange={e => onMonto(e.target.value)}
+                className="w-full pl-8 pr-4 py-3.5 text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue focus:border-blue [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+              />
+            </div>
+            {Number.isFinite(importe) && importe > saldo + 1e-9 ? (
+              <p className="text-xs text-red-600">La nota solo debe {fmtMonto(saldo)}.</p>
+            ) : montoOk && !liquida ? (
+              <p className="text-xs text-gray-500">
+                Queda abonada: le faltarían {fmtMonto(restante)} por pagar.
+              </p>
+            ) : montoOk ? (
+              <p className="text-xs text-gray-500">Con esto la nota queda liquidada.</p>
+            ) : null}
           </div>
         )}
 
@@ -409,10 +350,10 @@ function ModalLiquidar({ monto, folio, formaPago, onFormaPago, onCancelar, onCon
           </button>
           <button
             onClick={onConfirmar}
-            disabled={loading || !formaPago}
-            className="flex-1 bg-blue hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed text-white font-medium py-3.5 rounded-lg text-base transition-colors"
+            disabled={loading || !valido || !formaPago}
+            className="flex-1 bg-blue hover:opacity-90 text-white font-medium py-3.5 rounded-lg text-base transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            {loading ? 'Procesando...' : 'Confirmar'}
+            {loading ? 'Procesando...' : liquida ? 'Liquidar' : 'Abonar'}
           </button>
         </div>
       </div>
@@ -437,12 +378,16 @@ export default function DetalleNota() {
   const [confirmFinalizar,  setConfirmFinalizar]  = useState(false);
   // Deshacer la entrega (solo admin): la nota vuelve a Por Entregar.
   const [confirmReabrir,    setConfirmReabrir]    = useState(false);
-  const [confirmLiquidar,  setConfirmLiquidar]  = useState(false);
-  const [formaPagoSel,     setFormaPagoSel]     = useState('');
-  // Abono: pago parcial de la nota (mig. 121).
-  const [abonarOpen,       setAbonarOpen]       = useState(false);
-  const [abonoMonto,       setAbonoMonto]       = useState('');
-  const [abonoForma,       setAbonoForma]       = useState('');
+  // Aviso de "ya está procesada" por WhatsApp (mig. 124). La plantilla la
+  // escribe el negocio en Ajustes; aquí solo se rellena y se manda.
+  const [procesadoOpen,    setProcesadoOpen]    = useState(false);
+  const [plantillaWa,      setPlantillaWa]      = useState('');
+
+  // Cobro: uno solo para liquidar y para abonar (2026-09-26). Lo que se cobra
+  // lo dice el importe, no dos botones distintos.
+  const [cobroOpen,        setCobroOpen]        = useState(false);
+  const [cobroMonto,       setCobroMonto]       = useState('');
+  const [cobroForma,       setCobroForma]       = useState('');
   const [confirmRevertirAbono, setConfirmRevertirAbono] = useState(null);
   const [motivoAbono,      setMotivoAbono]      = useState('');
   const [corrigiendoPago,  setCorrigiendoPago]  = useState(false);
@@ -463,8 +408,15 @@ export default function DetalleNota() {
 
   // Abre el modal de cobro y, de paso, mira si hay caja abierta para poder
   // avisar que ese dinero se quedaría fuera del corte del día.
-  function abrirLiquidar() {
-    setConfirmLiquidar(true);
+  //
+  // El importe arranca en $0 y lo teclea quien cobra, con el dinero en la
+  // mano: es justo lo que trae el cliente, no un número que la app suponga
+  // (mismo criterio que tenía el abono desde el 2026-09-25).
+  function abrirCobro() {
+    setErrorAccion('');
+    setCobroMonto('0');
+    setCobroForma('');
+    setCobroOpen(true);
     api.get('/caja/actual')
       .then(r => setCajaAbierta(Boolean(r?.abierta)))
       .catch(() => setCajaAbierta(null));
@@ -489,34 +441,57 @@ export default function DetalleNota() {
     }
   }
 
-  // Abonar: el monto arranca en 0 y lo teclea quien cobra (2026-09-25) — el
-  // abono es justo lo que el cliente trae, no un número que la app suponga.
-  // Avisa igual que el cobro si la caja del día no está abierta.
-  function abrirAbonar() {
-    setErrorAccion('');
-    setAbonoMonto('0');
-    setAbonoForma('');
-    setAbonarOpen(true);
-    api.get('/caja/actual')
-      .then(r => setCajaAbierta(Boolean(r?.abierta)))
-      .catch(() => setCajaAbierta(null));
+  // Manda el aviso de "ya está procesada" al WhatsApp del cliente (mig. 124).
+  //
+  // Va por wa.me y no por la hoja de compartir: esto es TEXTO, así que sí se
+  // puede mandar a un número concreto —lo que el ticket no puede, por ser una
+  // imagen— y quien atiende no tiene que buscar el chat. No se registra nada
+  // en la nota: es un aviso, no un cambio de estado.
+  function enviarProcesado() {
+    if (!mensajeProcesado.trim() || !telefonoCliente) return;
+    window.open(
+      `https://wa.me/${telefonoCliente}?text=${encodeURIComponent(mensajeProcesado)}`,
+      '_blank', 'noopener,noreferrer'
+    );
+    setProcesadoOpen(false);
   }
 
-  // Registra el abono y vuelve a leer la nota: el abono puede haberla dejado
-  // pagada (y a un Autoservicio ya terminado, finalizada), así que el estado,
-  // los botones y la línea de tiempo se releen del servidor.
-  async function abonarNota() {
+  // Cobra la nota: un solo camino para liquidar y para abonar (2026-09-26).
+  //
+  // Todo entra por /abonos, que ya hacía las dos cosas: registra el pago y, si
+  // cubre lo que falta, marca la nota PAGADA con esa forma de pago y finaliza
+  // un Autoservicio que ya terminó sus cargas —exactamente lo que hacía
+  // Liquidar—. La excepción es una nota que no debe nada (total $0): ahí no
+  // hay abono que registrar, /abonos lo rechaza, y se marca cobrada por el
+  // camino de siempre.
+  //
+  // Después se relee la nota completa en vez de parchar el pago: el cobro
+  // puede haber cambiado el estado, y así los botones y la línea de tiempo
+  // cuentan lo mismo que el servidor.
+  async function cobrarNota() {
     setLoadingAccion(true);
     setErrorAccion('');
     try {
-      await api.post(`/notas/${id}/abonos`, {
-        monto: Number(abonoMonto), forma_pago: abonoForma,
-      });
+      if (saldoNota > 1e-9) {
+        await api.post(`/notas/${id}/abonos`, {
+          monto: Number(cobroMonto), forma_pago: cobroForma,
+        });
+      } else {
+        await api.patch(`/notas/${id}/estado-pago`, {
+          estado_pago: 'PAGADO', forma_pago: cobroForma,
+        });
+      }
       const fresca = await api.get(`/notas/${id}`);
       setNota(fresca);
-      setAbonarOpen(false);
-      setAbonoMonto('');
-      setAbonoForma('');
+      // Si el cobro la dejó pagada, el aviso de "cobra la diferencia" deja de
+      // aplicar. Un abono parcial no lo quita: la nota sigue debiendo.
+      if (fresca?.estado_pago === 'PAGADO') {
+        limpiarAvisoCobro(id);
+        setAvisoCobro(null);
+      }
+      setCobroOpen(false);
+      setCobroMonto('');
+      setCobroForma('');
     } catch (err) {
       // El motivo se queda dentro del modal: el aviso de la página está arriba
       // del todo y aquí no se vería.
@@ -560,6 +535,18 @@ export default function DetalleNota() {
       .finally(() => { if (activo) setLoading(false); });
     return () => { activo = false; };
   }, [id]);
+
+  // La plantilla del aviso por WhatsApp (mig. 124). Va aparte de la nota y sin
+  // bloquear: si los ajustes fallan, el detalle se muestra igual y el botón
+  // dirá que falta configurar el mensaje.
+  useEffect(() => {
+    if (nota?.tipo_servicio !== 'POR_ENCARGO') return undefined;
+    let activo = true;
+    api.get('/ajustes')
+      .then(cfg => { if (activo) setPlantillaWa(cfg?.whatsapp_mensaje_encargo ?? ''); })
+      .catch(() => { if (activo) setPlantillaWa(''); });
+    return () => { activo = false; };
+  }, [nota?.tipo_servicio]);
 
   async function cancelarNota() {
     setLoadingAccion(true);
@@ -661,41 +648,6 @@ export default function DetalleNota() {
     }
   }
 
-  // Liquidar = cobrar la nota (estado_pago → PAGADO). Solo entonces se puede
-  // finalizar.
-  //
-  // Normalmente no cambia el estado (sigue LISTA/Por Entregar), pero un
-  // Autoservicio que ya terminó sus cargas se FINALIZA solo al cobrarlo: el
-  // cliente se llevó su ropa y no hay nada que entregar (2026-09-23). Por eso
-  // se vuelve a leer la nota completa en vez de parchar el pago: así el estado,
-  // la línea de tiempo y los botones cuentan lo mismo que el servidor.
-  async function liquidarNota() {
-    setLoadingAccion(true);
-    setErrorAccion('');
-    try {
-      const updated = await api.patch(`/notas/${id}/estado-pago`, {
-        estado_pago: 'PAGADO',
-        forma_pago: formaPagoSel,
-      });
-      const fresca = await api.get(`/notas/${id}`).catch(() => null);
-      setNota(prev => fresca ?? ({
-        ...prev,
-        estado_pago: updated.estado_pago,
-        forma_pago:  updated.forma_pago,
-        estado:      updated.estado ?? prev.estado,
-      }));
-      // Ya se cobró por el importe nuevo: el aviso deja de aplicar.
-      limpiarAvisoCobro(id);
-      setAvisoCobro(null);
-      setConfirmLiquidar(false);
-    } catch (err) {
-      setErrorAccion(err.message);
-      setConfirmLiquidar(false);
-    } finally {
-      setLoadingAccion(false);
-    }
-  }
-
   if (loading) {
     return (
       <div className="flex justify-center items-center py-24">
@@ -738,28 +690,37 @@ export default function DetalleNota() {
   const abonosNota = nota.abonos ?? [];
   const abonadoNota = Number(nota.abonado ?? 0);
   const saldoNota = Number(nota.saldo ?? nota.precio_total ?? 0);
-  // Abonar es para Por Encargo, que es donde el cliente adelanta una parte al
-  // dejar la ropa. Lo puede hacer cualquiera que atienda el mostrador, mientras
-  // la nota siga debiendo y no esté cancelada.
-  const botonAbonar = nota.tipo_servicio === 'POR_ENCARGO'
-    && nota.estado_pago === 'PENDIENTE'
-    && nota.estado !== 'CANCELADA'
-    && saldoNota > 0 && (
+  // UN solo botón de cobro (2026-09-26). Antes eran dos, "Abonar" —solo en Por
+  // Encargo, para el adelanto de quien deja la ropa— y "Liquidar". En el
+  // mostrador es el mismo gesto y la diferencia la decide el importe, así que
+  // se cobran desde el mismo sitio. La condición es la que ya tenía Liquidar:
+  // cubre a la de Abonar, que era un subconjunto suyo.
+  // Aviso por WhatsApp de que la ropa ya se procesó (mig. 124). Solo en Por
+  // Encargo: el autoservicio no captura cliente, así que no hay a quién
+  // avisarle. No se ofrece en una nota terminada —entregada o cancelada— donde
+  // el aviso ya no viene a cuento.
+  //
+  // El botón se enseña aunque falte el mensaje o el teléfono: es el modal
+  // quien lo explica. Esconderlo dejaría a quien atiende sin saber por qué no
+  // está el botón que sí ve en las demás notas.
+  const mensajeProcesado = armarMensajeWhatsapp(plantillaWa, nota);
+  const telefonoCliente = telefonoWhatsapp(nota.cliente_telefono);
+  const botonProcesado = nota.tipo_servicio === 'POR_ENCARGO' && !esTerminal(nota) && (
     <button
-      onClick={abrirAbonar}
+      onClick={() => { setErrorAccion(''); setProcesadoOpen(true); }}
       disabled={loadingAccion}
-      className="flex items-center gap-1.5 px-4 py-2 bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
+      className="flex items-center gap-1.5 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
     >
-      Abonar
+      Procesado
     </button>
   );
-  const botonLiquidar = puedeLiquidar(nota) && (
+  const botonCobrar = puedeLiquidar(nota) && (
     <button
-      onClick={abrirLiquidar}
+      onClick={abrirCobro}
       disabled={loadingAccion}
       className="flex items-center gap-1.5 px-4 py-2 bg-blue hover:opacity-90 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
     >
-      Liquidar
+      Cobrar
     </button>
   );
   const badgeTipoServicio    = BADGE_TIPO_SERVICIO[nota.tipo_servicio] ?? BADGE_TIPO_SERVICIO.AUTOSERVICIO;
@@ -882,8 +843,8 @@ export default function DetalleNota() {
           >
             Salidas
           </button>
-          {botonAbonar}
-          {botonLiquidar}
+          {botonCobrar}
+          {botonProcesado}
           {/* Último paso, y sigue exigiendo el cobro: una nota pendiente no se
               puede dar por entregada. En Por Encargo el botón dice ENTREGAR,
               que es lo que de verdad se hace con la ropa (2026-09-25). */}
@@ -915,8 +876,7 @@ export default function DetalleNota() {
           —le revirtieron el pago—, sigue habiendo por dónde cobrarla. */}
       {terminal && (
         <div className="flex flex-wrap gap-2">
-          {botonAbonar}
-          {botonLiquidar}
+          {botonCobrar}
           {/* Deshacer la entrega: la nota vuelve a Por Entregar, como antes de
               confirmarla. Para el error de mostrador —se entregó la nota
               equivocada—, así que es de admin (2026-09-25). */}
@@ -1499,17 +1459,83 @@ export default function DetalleNota() {
         </div>
       )}
 
-      {/* Modal confirmar liquidación (cobro) */}
-      {abonarOpen && (
-        <ModalAbonar
+      {/* Confirmar el aviso por WhatsApp. Enseña el mensaje YA armado, con el
+          nombre y la hora puestos: es lo que el cliente va a leer, y es la
+          última oportunidad de ver que un comodín quedó mal escrito. */}
+      {procesadoOpen && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div>
+              <h3 className="text-base font-bold text-gray-900">Avisar que ya está procesada</h3>
+              <p className="text-sm text-gray-500 mt-0.5">
+                {nota.cliente_nombre
+                  ? <>Se le manda por WhatsApp a <span className="font-medium text-gray-700">{nota.cliente_nombre}</span>
+                      {nota.cliente_telefono ? ` (${nota.cliente_telefono})` : ''}.</>
+                  : 'Esta nota no tiene cliente capturado.'}
+              </p>
+            </div>
+
+            {!hayMensajeWhatsapp(plantillaWa) ? (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
+                <p className="text-sm font-semibold text-amber-900">Todavía no hay mensaje escrito</p>
+                <p className="mt-0.5 text-sm text-amber-800">
+                  Se escribe una sola vez en Ajustes → WhatsApp y sirve para todas las notas.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => navigate('/ajustes')}
+                  className="mt-2.5 text-sm font-medium text-amber-800 border border-amber-300 bg-white rounded-lg px-4 py-2 hover:bg-amber-100 transition-colors"
+                >
+                  Ir a Ajustes
+                </button>
+              </div>
+            ) : (
+              <div className="rounded-xl bg-green-50 border border-green-200 px-4 py-3">
+                <p className="text-xs font-semibold text-green-800 uppercase tracking-wide">Mensaje</p>
+                <p className="mt-1.5 text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">
+                  {mensajeProcesado}
+                </p>
+              </div>
+            )}
+
+            {hayMensajeWhatsapp(plantillaWa) && !telefonoCliente && (
+              <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">
+                El cliente no tiene teléfono capturado, así que no hay a dónde mandarlo.
+              </div>
+            )}
+
+            <div className="flex gap-3 pt-4 border-t border-gray-100">
+              <button
+                onClick={() => setProcesadoOpen(false)}
+                className="flex-1 border border-gray-300 text-gray-700 font-medium py-3.5 rounded-lg text-base hover:bg-gray-50 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={enviarProcesado}
+                disabled={!mensajeProcesado.trim() || !telefonoCliente}
+                className="flex-1 bg-green-600 hover:bg-green-700 text-white font-medium py-3.5 rounded-lg text-base transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                Enviar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de cobro: liquidar y abonar en el mismo (2026-09-26) */}
+      {cobroOpen && (
+        <ModalCobrar
           folio={nota.folio ?? `#${nota.id}`}
           saldo={saldoNota}
-          monto={abonoMonto}
-          onMonto={setAbonoMonto}
-          formaPago={abonoForma}
-          onFormaPago={setAbonoForma}
-          onCancelar={() => { setAbonarOpen(false); setErrorAccion(''); }}
-          onConfirmar={abonarNota}
+          abonado={abonadoNota}
+          total={nota.precio_total}
+          monto={cobroMonto}
+          onMonto={setCobroMonto}
+          formaPago={cobroForma}
+          onFormaPago={setCobroForma}
+          onCancelar={() => { setCobroOpen(false); setCobroForma(''); setErrorAccion(''); }}
+          onConfirmar={cobrarNota}
           loading={loadingAccion}
           error={errorAccion}
           cajaAbierta={cajaAbierta}
@@ -1564,22 +1590,6 @@ export default function DetalleNota() {
             </div>
           </div>
         </div>
-      )}
-
-      {confirmLiquidar && (
-        <ModalLiquidar
-          folio={nota.folio ?? `#${nota.id}`}
-          monto={fmtMonto(saldoNota)}
-          abonado={abonadoNota}
-          total={nota.precio_total}
-          formaPago={formaPagoSel}
-          onFormaPago={setFormaPagoSel}
-          onCancelar={() => { setConfirmLiquidar(false); setFormaPagoSel(''); }}
-          onConfirmar={liquidarNota}
-          loading={loadingAccion}
-          cajaAbierta={cajaAbierta}
-          onAbrirCaja={() => setModalCajaOpen(true)}
-        />
       )}
 
       {/* Va DESPUÉS del modal de cobro: comparten z-index, así que el último

@@ -8,6 +8,7 @@ import { useAuth } from '../context/AuthContext';
 import { esAdminMain as esAdminMainFn } from '../lib/roles';
 import { ES_DEMO } from '../lib/entorno';
 import { almacenSesion } from '../lib/sesion';
+import { COMODINES_WHATSAPP, armarMensajeWhatsapp } from '../lib/mensajeWhatsapp';
 
 // El nombre del negocio y el logo se quedan fuera de la DEMO: son de la
 // configuración global, los comparten todos los visitantes a la vez y se quedan
@@ -84,6 +85,15 @@ const SectionIcon = {
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 8h8M8 12h8M8 16h5" />
     </svg>
   ),
+  // Globo de mensaje con un teléfono dentro: el WhatsApp de la app es un
+  // mensaje que sale del mostrador, no la marca (no se usa su logotipo).
+  whatsapp: (
+    <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+        d="M21 11.5a8.38 8.38 0 0 1-8.5 8.5 8.7 8.7 0 0 1-3.9-.9L3 21l1.9-5.6A8.7 8.7 0 0 1 4 11.5 8.38 8.38 0 0 1 12.5 3 8.38 8.38 0 0 1 21 11.5Z" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 9.5h6M9 13h4" />
+    </svg>
+  ),
   manual: (
     <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -140,6 +150,24 @@ const SectionIcon = {
   ),
 };
 
+// Cómo se va a ver el mensaje. Se enseña con una nota de ejemplo porque la
+// regla de los asteriscos no se entiende leyéndola: se entiende viendo que
+// *Nombre* se convierte en un nombre y que *ya está* se queda en negritas.
+const NOTA_EJEMPLO = { cliente_nombre: 'Ana López', created_at: '2026-09-26T14:30:00' };
+
+function PreviaWhatsapp({ plantilla }) {
+  const texto = armarMensajeWhatsapp(plantilla, NOTA_EJEMPLO);
+  if (!texto.trim()) return null;
+  return (
+    <div className="rounded-xl bg-green-50 border border-green-200 px-4 py-3">
+      <p className="text-xs font-semibold text-green-800 uppercase tracking-wide">
+        Así le llegaría a Ana López
+      </p>
+      <p className="mt-1.5 text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">{texto}</p>
+    </div>
+  );
+}
+
 const MOBILE_SECTIONS = [
   { id: 'perfil',  label: 'Mi Perfil',                 subtitle: 'Información de perfil',    icon: SectionIcon.perfil  },
   { id: 'negocio', label: 'Negocio y Sucursales',      subtitle: 'Información de sucursales', icon: SectionIcon.negocio },
@@ -149,6 +177,7 @@ const MOBILE_SECTIONS = [
   { id: 'etiquetas', label: 'Etiquetas de encargo',    subtitle: 'Tipos de tela y tamaños de edredón', icon: SectionIcon.etiquetas },
   { id: 'inventario', label: 'Inventario',              subtitle: 'Marcas y envases de productos', icon: SectionIcon.inventario },
   { id: 'ticket',   label: 'Ticket',                   subtitle: 'Notas al pie del ticket', icon: SectionIcon.ticket },
+  { id: 'whatsapp', label: 'WhatsApp',                 subtitle: 'Mensaje para Por Encargo', icon: SectionIcon.whatsapp },
 ];
 
 // El manual no es configuración: abre su propia página (/manual). Se ofrece
@@ -1247,6 +1276,7 @@ export default function Ajustes() {
       ticket_nota_autoservicio: config.ticket_nota_autoservicio ?? '',
       ticket_nota_encargo:      config.ticket_nota_encargo ?? '',
       ticket_nota_productos:    config.ticket_nota_productos ?? '',
+      whatsapp_mensaje_encargo: config.whatsapp_mensaje_encargo ?? '',
     }),
     stock_minimo_global:   Number(config.stock_minimo_global),
     alerta_ciclo_detenido: !!config.alerta_ciclo_detenido,
@@ -2388,6 +2418,41 @@ export default function Ajustes() {
     </div>
   );
 
+  // Ayuda de los comodines, compartida por escritorio y móvil: se escribe una
+  // vez y sale de COMODINES_WHATSAPP, así que añadir uno nuevo no obliga a
+  // tocar la pantalla.
+  const ayudaComodines = (
+    <>
+      Se manda desde el botón <span className="font-medium">Procesado</span> de una nota
+      Por Encargo, al número del cliente. Entre asteriscos puedes poner:
+      <span className="block mt-1.5 space-y-0.5">
+        {COMODINES_WHATSAPP.map(c => (
+          <span key={c.clave} className="block">
+            <code className="font-mono text-gray-700">*{c.clave}*</code> — {c.descripcion}
+          </span>
+        ))}
+      </span>
+    </>
+  );
+
+  const seccionWhatsappDesktop = (
+    <Section titulo="WhatsApp">
+      {ES_DEMO && <p className="text-xs text-gray-400 -mt-2">{NOTA_DEMO}</p>}
+      <Field label="Mensaje para Por Encargo" hint={ayudaComodines}>
+        <textarea
+          name="whatsapp_mensaje_encargo"
+          rows={6}
+          value={config.whatsapp_mensaje_encargo ?? ''}
+          onChange={handleChange}
+          placeholder="Hola *Nombre*, tu ropa de las *Tiempo* ya está lista."
+          disabled={ES_DEMO}
+          className={`${INPUT_CLS} resize-y leading-relaxed disabled:bg-gray-50 disabled:text-gray-500 disabled:cursor-not-allowed`}
+        />
+      </Field>
+      <PreviaWhatsapp plantilla={config.whatsapp_mensaje_encargo} />
+    </Section>
+  );
+
   const seccionTicketMobile = (
     <div className="space-y-6">
       {ES_DEMO && <p className="text-xs text-grey">{NOTA_DEMO}</p>}
@@ -2438,6 +2503,24 @@ export default function Ajustes() {
     </div>
   );
 
+  const seccionWhatsappMobile = (
+    <div className="space-y-6">
+      {ES_DEMO && <p className="text-xs text-grey">{NOTA_DEMO}</p>}
+      <MobileField label="Mensaje para Por Encargo" hint={ayudaComodines}>
+        <textarea
+          name="whatsapp_mensaje_encargo"
+          rows={7}
+          value={config.whatsapp_mensaje_encargo ?? ''}
+          onChange={handleChange}
+          placeholder="Hola *Nombre*, tu ropa de las *Tiempo* ya está lista."
+          disabled={ES_DEMO}
+          className={`${MOBILE_INPUT_CLS} resize-y leading-relaxed disabled:bg-gray-50 disabled:text-gray-500 disabled:cursor-not-allowed`}
+        />
+      </MobileField>
+      <PreviaWhatsapp plantilla={config.whatsapp_mensaje_encargo} />
+    </div>
+  );
+
   const mobileSectionContent = {
     perfil:  seccionPerfilMobile,
     negocio: seccionSucursalesMobile,
@@ -2447,6 +2530,7 @@ export default function Ajustes() {
     etiquetas: seccionEtiquetasMobile,
     inventario: seccionInventarioMobile,
     ticket: seccionTicketMobile,
+    whatsapp: seccionWhatsappMobile,
     instalar: <InstalarApp variant="mobile" />,
   };
 
@@ -2629,6 +2713,7 @@ export default function Ajustes() {
           {seccionEtiquetasDesktop}
           {seccionInventarioDesktop}
           {seccionTicketDesktop}
+          {seccionWhatsappDesktop}
         </div>
 
         {/* El manual y la instalación van al final: son acciones, no ajustes

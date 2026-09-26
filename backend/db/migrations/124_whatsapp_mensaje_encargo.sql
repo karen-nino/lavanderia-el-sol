@@ -1,0 +1,22 @@
+-- Migración 124: mensaje de WhatsApp para Por Encargo
+-- Fecha: 2026-09-26
+--
+-- Hasta ahora lo único que salía por WhatsApp era el ticket, y como IMAGEN
+-- (mig. 094 y siguientes): wa.me no admite adjuntos, así que el PNG se manda
+-- por la hoja de compartir. Esto es otra cosa: un mensaje de TEXTO que el
+-- mostrador le manda al cliente de Por Encargo cuando su ropa ya se procesó.
+--
+-- El texto se escribe una vez en Ajustes → WhatsApp y se reutiliza en cada
+-- nota. Lleva comodines entre asteriscos que se sustituyen al enviar:
+--
+--   *Nombre*  → el nombre del cliente de la nota
+--   *Tiempo*  → la hora a la que se levantó la nota
+--
+-- Los asteriscos son también la marca de NEGRITAS de WhatsApp, y eso no
+-- estorba: al sustituir el comodín desaparecen con él, así que una palabra
+-- entre asteriscos que no sea un comodín se sigue viendo en negritas.
+--
+-- NULL o vacío = sin mensaje configurado; el botón de la nota lo dice en vez
+-- de mandar un WhatsApp en blanco.
+
+ALTER TABLE ajustes ADD COLUMN IF NOT EXISTS whatsapp_mensaje_encargo TEXT;

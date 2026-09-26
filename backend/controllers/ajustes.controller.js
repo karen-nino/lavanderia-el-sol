@@ -75,6 +75,7 @@ export const updateAjustes = async (req, res) => {
     ticket_nota_autoservicio,
     ticket_nota_encargo,
     ticket_nota_productos,
+    whatsapp_mensaje_encargo,
     direccion,
     telefono,
     stock_minimo_global,
@@ -163,7 +164,7 @@ export const updateAjustes = async (req, res) => {
   // rechazarlos tumbaría también lo demás, que en la demo sí se puede cambiar.
   const IDENTIDAD_DEL_NEGOCIO = [
     'nombre_negocio', 'rfc', 'ticket_nota_autoservicio', 'ticket_nota_encargo',
-    'ticket_nota_productos', 'direccion', 'telefono',
+    'ticket_nota_productos', 'whatsapp_mensaje_encargo', 'direccion', 'telefono',
   ];
   const editable = (campo, valor) =>
     valor !== undefined && !(ENTORNO_DEMO && IDENTIDAD_DEL_NEGOCIO.includes(campo));
@@ -191,6 +192,10 @@ export const updateAjustes = async (req, res) => {
   if (editable('ticket_nota_autoservicio', ticket_nota_autoservicio)) { updates.push(`ticket_nota_autoservicio = $${i++}`); values.push(textoONull(ticket_nota_autoservicio)); }
   if (editable('ticket_nota_encargo', ticket_nota_encargo)) { updates.push(`ticket_nota_encargo = $${i++}`); values.push(textoONull(ticket_nota_encargo)); }
   if (editable('ticket_nota_productos', ticket_nota_productos)) { updates.push(`ticket_nota_productos = $${i++}`); values.push(textoONull(ticket_nota_productos)); }
+  // El mensaje de WhatsApp de Por Encargo (mig. 124) va con la identidad del
+  // negocio: es texto libre que sale del negocio hacia el cliente, igual que
+  // las notas al pie del ticket, así que en la demo tampoco se toca.
+  if (editable('whatsapp_mensaje_encargo', whatsapp_mensaje_encargo)) { updates.push(`whatsapp_mensaje_encargo = $${i++}`); values.push(textoONull(whatsapp_mensaje_encargo)); }
   if (editable('direccion', direccion)) { updates.push(`direccion = $${i++}`); values.push(direccion); }
   if (editable('telefono', telefono)) { updates.push(`telefono = $${i++}`); values.push(telefono); }
   if (stock_minimo_global   !== undefined) { updates.push(`stock_minimo_global = $${i++}`);   values.push(stock_minimo_global); }
