@@ -2178,3 +2178,64 @@ describe('PATCH /api/notas/:id/reabrir', () => {
     expect(res.body.estado).toBe('FINALIZADA');
   });
 });
+
+// Ajuste de la nota desde Salidas (2026-09-25): descuento o cargo extra sobre
+// el total, que además sale impreso en el ticket.
+describe('PATCH /api/notas/:id/ajuste', () => {
+  async function encargoDe150() {
+    await seedAjustes({ precio_carga_mediana: 70, tope_carga_grande: 150 });
+    const clienteId = await seedCliente();
+    const res = await request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'POR_ENCARGO', cliente_id: clienteId, tipo_prenda: 'ROPA',
+      estado_pago: 'PENDIENTE',
+      cargas: [{ tamano: 'grande', lavadora_tipo: 'mediana' }],
+    });
+    expect(res.status).toBe(201);
+    expect(Number(res.body.precio_total)).toBe(150);
+    return res.body.id;
+  }
+
+  it('un descuento baja el total de la nota', async () => {
+    const id = await encargoDe150();
+    const res = await request(app).patch(`/api/notas/${id}/ajuste`)
+      .set(auth(admin.token)).send({ ajuste: -20 });
+    expect(res.status).toBe(200);
+    expect(Number(res.body.ajuste)).toBe(-20);
+    expect(Number(res.body.precio_total)).toBe(130);
+  });
+
+  it('un cargo extra lo sube, y el empleado también puede ponerlo', async () => {
+    const emp = await seedUsuario({ rol: 'operador', sucursal: 'centro', nombre: 'Mostrador' });
+    const id = await encargoDe150();
+    const res = await request(app).patch(`/api/notas/${id}/ajuste`)
+      .set(auth(emp.token)).send({ ajuste: 30 });
+    expect(res.status).toBe(200);
+    expect(Number(res.body.precio_total)).toBe(180);
+  });
+
+  it('no deja el total en negativo ni acepta texto', async () => {
+    const id = await encargoDe150();
+    const negativo = await request(app).patch(`/api/notas/${id}/ajuste`)
+      .set(auth(admin.token)).send({ ajuste: -500 });
+    expect(negativo.status).toBe(400);
+    expect(negativo.body.message).toMatch(/no puede ser negativo/i);
+    // Y la nota se quedó como estaba.
+    const det = await request(app).get(`/api/notas/${id}`).set(auth(admin.token));
+    expect(Number(det.body.precio_total)).toBe(150);
+
+    await request(app).patch(`/api/notas/${id}/ajuste`)
+      .set(auth(admin.token)).send({ ajuste: 'mucho' }).expect(400);
+  });
+
+  it('si la nota estaba cobrada, el ajuste la deja pendiente por el importe nuevo', async () => {
+    const id = await encargoDe150();
+    await request(app).patch(`/api/notas/${id}/estado-pago`)
+      .set(auth(admin.token)).send({ estado_pago: 'PAGADO', forma_pago: 'EFECTIVO' }).expect(200);
+
+    const res = await request(app).patch(`/api/notas/${id}/ajuste`)
+      .set(auth(admin.token)).send({ ajuste: -20 });
+    expect(res.status).toBe(200);
+    expect(res.body.estado_pago).toBe('PENDIENTE');
+    expect(Number(res.body.precio_total)).toBe(130);
+  });
+});

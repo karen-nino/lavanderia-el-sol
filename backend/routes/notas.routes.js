@@ -23,6 +23,7 @@ import {
   terminarSecado,
   cambiarEstadoPago,
   reabrirNota,
+  ajustarNota,
   abonarNota,
   revertirAbono,
   corregirFormaPago,
@@ -74,6 +75,8 @@ router.patch('/:id/abonos/:abonoId/revertir', requireAdmin, revertirAbono);
 // Corregir la forma de pago de una nota ya cobrada es cosa de admin.
 router.patch('/:id/forma-pago', requireAdmin, corregirFormaPago);
 router.patch('/:id/telefono', guardarTelefono);
+// Ajuste de la nota (descuento o cargo extra) desde Salidas.
+router.patch('/:id/ajuste', ajustarNota);
 router.get('/:id/productos',    getNotaProductos);
 router.post('/:id/productos',   addProductoToNota);
 // Quitar un producto ya capturado en la nota es cosa de admin, igual que

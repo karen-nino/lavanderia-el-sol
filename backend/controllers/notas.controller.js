@@ -4332,3 +4332,67 @@ export const reabrirNota = async (req, res) => {
     client.release();
   }
 };
+
+// ── PATCH /notas/:id/ajuste ─────────────────────────────────
+//
+// Ajuste de la nota desde Salidas (2026-09-25): un descuento (negativo) o un
+// cargo extra (positivo) sobre el total. Se captura donde se atiende la nota,
+// que es donde aparece el motivo real ("le rebajo $20 porque una prenda se
+// manchó"), y sale impreso en el ticket.
+//
+// Si la nota ya estaba cobrada y el ajuste mueve su total, el cobro deja de
+// corresponder y la nota vuelve a PENDIENTE por el importe nuevo — la misma
+// regla que al cambiar cualquier otra cosa que cuesta dinero. Con el cobro
+// congelado en un corte cerrado no se permite.
+export const ajustarNota = async (req, res) => {
+  const { id } = req.params;
+  const { ajuste } = req.body;
+
+  if (ajuste == null || ajuste === '' || !Number.isFinite(Number(ajuste))) {
+    return res.status(400).json({ message: 'El ajuste debe ser un número.' });
+  }
+  const ajusteNum = Number(ajuste);
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const { rows } = await client.query(
+      'SELECT id, estado FROM notas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
+      [id, req.sucursal]
+    );
+    if (rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: 'Nota no encontrada.' });
+    }
+    if (['FINALIZADA', 'CANCELADA'].includes(rows[0].estado)) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        message: `No se puede ajustar una nota ${palabra(rows[0].estado)}.`,
+      });
+    }
+
+    await client.query('UPDATE notas SET ajuste = $1 WHERE id = $2', [ajusteNum, id]);
+    const total = await recalcularPrecioTotal(client, id, {
+      desmarcarPagoSiCambia: true, usuarioId: req.user?.id, sucursal: req.sucursal,
+    });
+    // Un descuento no puede dejar la nota en números rojos.
+    if (Number(total) < 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        message: 'El total de la nota no puede ser negativo. Revisa el ajuste.',
+      });
+    }
+
+    const { rows: fresca } = await client.query('SELECT * FROM notas WHERE id = $1', [id]);
+    await client.query('COMMIT');
+    res.json({ ...fresca[0], cargas: await cargasDeNota(pool, id) });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    if (respondioCorteCerrado(res, err)) return;
+    console.error('ajustarNota error:', err);
+    res.status(500).json({ message: 'No se pudo guardar el ajuste. Intenta de nuevo.' });
+  } finally {
+    client.release();
+  }
+};
