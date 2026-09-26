@@ -4263,3 +4263,68 @@ export const revertirAbono = async (req, res) => {
     client.release();
   }
 };
+
+// ── PATCH /notas/:id/reabrir ────────────────────────────────
+//
+// Deshace la ENTREGA de una nota: la nota finalizada vuelve a "Por Entregar",
+// tal como estaba antes de confirmar que el cliente se la llevó (2026-09-25).
+// Es para el error de mostrador —se marcó entregada la nota equivocada, o el
+// cliente no se llevó todo—, así que es de admin.
+//
+// Entregar consume el stock de los productos de la nota (los da por vendidos),
+// así que reabrirla lo devuelve: el producto vuelve al estante y queda otra vez
+// APARTADO para esta nota, que sigue viva. El cobro no se toca: reabrir la
+// entrega no deshace el pago.
+export const reabrirNota = async (req, res) => {
+  const { id } = req.params;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const { rows } = await client.query(
+      `SELECT id, estado, estado_pago FROM notas
+        WHERE id = $1 AND sucursal = $2 FOR UPDATE`,
+      [id, req.sucursal]
+    );
+    if (rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: 'Nota no encontrada.' });
+    }
+    const nota = rows[0];
+    if (nota.estado === 'CANCELADA') {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'Una nota cancelada no se reabre.' });
+    }
+    if (nota.estado !== 'FINALIZADA') {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        message: 'Solo se reabre una nota ya entregada: esta sigue abierta.',
+      });
+    }
+
+    // El producto vuelve al estante y se aparta de nuevo para esta nota.
+    await registrarMovimientosProductosNota(client, id, req.sucursal, req.user?.id ?? null, 'liberacion');
+    await client.query(
+      `UPDATE productos a
+          SET stock_actual    = stock_actual    + np.cantidad_tapas,
+              stock_reservado = stock_reservado + np.cantidad_tapas
+        FROM nota_productos np
+        WHERE np.nota_id = $1 AND np.producto_id = a.id`,
+      [id]
+    );
+
+    const { rows: actualizada } = await client.query(
+      `UPDATE notas SET estado = 'LISTA' WHERE id = $1 RETURNING *`,
+      [id]
+    );
+
+    await client.query('COMMIT');
+    res.json({ ...actualizada[0], cargas: await cargasDeNota(pool, id) });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('reabrirNota error:', err);
+    res.status(500).json({ message: 'No se pudo reabrir la nota. Intenta de nuevo.' });
+  } finally {
+    client.release();
+  }
+};

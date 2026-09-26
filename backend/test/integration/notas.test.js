@@ -2077,3 +2077,71 @@ describe('editar una nota en proceso no borra lo que ya se lavó', () => {
   });
 });
 
+
+// Deshacer la entrega (2026-09-25): la nota entregada vuelve a Por Entregar,
+// como antes de confirmarla. Es de admin y devuelve al inventario los productos
+// que la entrega había dado por vendidos.
+describe('PATCH /api/notas/:id/reabrir', () => {
+  async function encargoEntregado() {
+    const prod = await seedProducto({ nombre: 'Jabón entrega', precio_unitario: 10, stock_actual: 100 });
+    const clienteId = await seedCliente();
+    await seedAjustes({ precio_carga_mediana: 70, tope_carga_grande: 150 });
+    const crea = await request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'POR_ENCARGO', cliente_id: clienteId, tipo_prenda: 'ROPA',
+      estado_pago: 'PENDIENTE',
+      cargas: [{ tamano: 'grande', lavadora_tipo: 'mediana',
+                 productos: [{ producto_id: prod, cantidad: 2 }] }],
+    });
+    expect(crea.status).toBe(201);
+    const notaId = crea.body.id;
+    // Lista → cobrada → entregada.
+    await request(app).patch(`/api/notas/${notaId}/estado`)
+      .set(auth(admin.token)).send({ estado: 'LISTA' }).expect(200);
+    await request(app).patch(`/api/notas/${notaId}/estado-pago`)
+      .set(auth(admin.token)).send({ estado_pago: 'PAGADO', forma_pago: 'EFECTIVO' }).expect(200);
+    await request(app).patch(`/api/notas/${notaId}/estado`)
+      .set(auth(admin.token)).send({ estado: 'FINALIZADA' }).expect(200);
+    return { notaId, prod };
+  }
+
+  it('la nota entregada vuelve a Por Entregar y el producto se aparta otra vez', async () => {
+    const { notaId, prod } = await encargoEntregado();
+    // Entregada: el producto salió del estante y dejó de estar apartado.
+    const { rows: vendido } = await pool.query(
+      'SELECT stock_actual, stock_reservado FROM productos WHERE id = $1', [prod]);
+    expect(Number(vendido[0].stock_actual)).toBe(98);
+    expect(Number(vendido[0].stock_reservado)).toBe(0);
+
+    const res = await request(app).patch(`/api/notas/${notaId}/reabrir`).set(auth(admin.token));
+    expect(res.status).toBe(200);
+    expect(res.body.estado).toBe('LISTA');
+    // El cobro no se toca.
+    expect(res.body.estado_pago).toBe('PAGADO');
+
+    const { rows: devuelto } = await pool.query(
+      'SELECT stock_actual, stock_reservado FROM productos WHERE id = $1', [prod]);
+    expect(Number(devuelto[0].stock_actual)).toBe(100);
+    expect(Number(devuelto[0].stock_reservado)).toBe(2);
+  });
+
+  it('solo admin, y solo una nota ya entregada', async () => {
+    const emp = await seedUsuario({ rol: 'operador', sucursal: 'centro', nombre: 'Mostrador' });
+    const { notaId } = await encargoEntregado();
+    await request(app).patch(`/api/notas/${notaId}/reabrir`).set(auth(emp.token)).expect(403);
+
+    // Reabierta una vez, ya no se puede otra: sigue abierta.
+    await request(app).patch(`/api/notas/${notaId}/reabrir`).set(auth(admin.token)).expect(200);
+    const res = await request(app).patch(`/api/notas/${notaId}/reabrir`).set(auth(admin.token));
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/sigue abierta/i);
+  });
+
+  it('se puede volver a entregar después de reabrirla', async () => {
+    const { notaId } = await encargoEntregado();
+    await request(app).patch(`/api/notas/${notaId}/reabrir`).set(auth(admin.token)).expect(200);
+    const res = await request(app).patch(`/api/notas/${notaId}/estado`)
+      .set(auth(admin.token)).send({ estado: 'FINALIZADA' });
+    expect(res.status).toBe(200);
+    expect(res.body.estado).toBe('FINALIZADA');
+  });
+});

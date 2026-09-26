@@ -435,6 +435,8 @@ export default function DetalleNota() {
   const [motivoCancelarOpen, setMotivoCancelarOpen] = useState(false);
   const [motivoCancelar,   setMotivoCancelar]   = useState('');
   const [confirmFinalizar,  setConfirmFinalizar]  = useState(false);
+  // Deshacer la entrega (solo admin): la nota vuelve a Por Entregar.
+  const [confirmReabrir,    setConfirmReabrir]    = useState(false);
   const [confirmLiquidar,  setConfirmLiquidar]  = useState(false);
   const [formaPagoSel,     setFormaPagoSel]     = useState('');
   // Abono: pago parcial de la nota (mig. 121).
@@ -466,6 +468,25 @@ export default function DetalleNota() {
     api.get('/caja/actual')
       .then(r => setCajaAbierta(Boolean(r?.abierta)))
       .catch(() => setCajaAbierta(null));
+  }
+
+  // Deshace la entrega: la nota finalizada vuelve a "Por Entregar", como antes
+  // de confirmarla. Se relee del servidor porque también devuelve al inventario
+  // los productos que la entrega había dado por vendidos.
+  async function reabrirNota() {
+    setLoadingAccion(true);
+    setErrorAccion('');
+    try {
+      await api.patch(`/notas/${id}/reabrir`, {});
+      const fresca = await api.get(`/notas/${id}`);
+      setNota(fresca);
+      setConfirmReabrir(false);
+    } catch (err) {
+      setErrorAccion(err.message);
+      setConfirmReabrir(false);
+    } finally {
+      setLoadingAccion(false);
+    }
   }
 
   // Abonar: el monto arranca en 0 y lo teclea quien cobra (2026-09-25) — el
@@ -709,6 +730,9 @@ export default function DetalleNota() {
   // Va en una variable porque sale en los DOS bloques de acciones: el de la
   // nota viva y el de la nota ya cerrada — una FINALIZADA a la que le
   // revirtieron el pago vuelve a deber y también hay que poder cobrarla.
+  // En Por Encargo la ropa se entrega en mostrador, así que el último paso se
+  // llama ENTREGAR y un admin puede deshacerlo (2026-09-25).
+  const esEncargoNota = nota.tipo_servicio === 'POR_ENCARGO';
   // Lo abonado y lo que falta (mig. 121). El servidor los manda calculados; con
   // notas viejas o sin abonos, `saldo` es el total de la nota.
   const abonosNota = nota.abonos ?? [];
@@ -860,15 +884,16 @@ export default function DetalleNota() {
           </button>
           {botonAbonar}
           {botonLiquidar}
-          {/* Finalizar sigue siendo el último paso y sigue exigiendo el cobro:
-              una nota pendiente no se puede dar por entregada. */}
+          {/* Último paso, y sigue exigiendo el cobro: una nota pendiente no se
+              puede dar por entregada. En Por Encargo el botón dice ENTREGAR,
+              que es lo que de verdad se hace con la ropa (2026-09-25). */}
           {puedeFinalizar(nota) && (
             <button
               onClick={() => setConfirmFinalizar(true)}
               disabled={loadingAccion}
               className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
             >
-              Finalizar
+              {esEncargoNota ? 'Entregar' : 'Finalizar'}
             </button>
           )}
           {/* Mientras la nota vive, Eliminar solo se ve donde se apunta con mouse
@@ -892,6 +917,18 @@ export default function DetalleNota() {
         <div className="flex flex-wrap gap-2">
           {botonAbonar}
           {botonLiquidar}
+          {/* Deshacer la entrega: la nota vuelve a Por Entregar, como antes de
+              confirmarla. Para el error de mostrador —se entregó la nota
+              equivocada—, así que es de admin (2026-09-25). */}
+          {esAdmin && esEncargoNota && nota.estado === 'FINALIZADA' && (
+            <button
+              onClick={() => { setErrorAccion(''); setConfirmReabrir(true); }}
+              disabled={loadingAccion}
+              className="flex items-center gap-1.5 px-4 py-2 bg-amber-600 hover:bg-amber-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
+            >
+              Abrir nota
+            </button>
+          )}
           {puedeEliminar(nota, esAdmin) && (
             <button
               onClick={() => setConfirmEliminar(true)}
@@ -1664,15 +1701,32 @@ export default function DetalleNota() {
         </div>
       )}
 
-      {/* Modal confirmar entrega */}
+      {/* Modal confirmar entrega. En Por Encargo un admin puede deshacerla
+          después con "Abrir nota", así que ya no se promete que no se pueda. */}
       {confirmFinalizar && (
         <ModalConfirmar
-          titulo="Finalizar nota"
-          mensaje={`¿Marcar la nota ${nota.folio ?? `#${nota.id}`} como finalizada? Esta acción no se puede deshacer.`}
+          titulo={esEncargoNota ? 'Entregar nota' : 'Finalizar nota'}
+          mensaje={esEncargoNota
+            ? `¿Marcar la nota ${nota.folio ?? `#${nota.id}`} como entregada? El cliente ya se llevó su ropa.`
+            : `¿Marcar la nota ${nota.folio ?? `#${nota.id}`} como finalizada? Esta acción no se puede deshacer.`}
           onCancelar={() => setConfirmFinalizar(false)}
           onConfirmar={finalizarNota}
           loading={loadingAccion}
           colorBtn="bg-emerald-600 hover:bg-emerald-700"
+        />
+      )}
+
+      {/* Modal de "Abrir nota": deshace la entrega. */}
+      {confirmReabrir && (
+        <ModalConfirmar
+          titulo="Abrir nota"
+          mensaje={`La nota ${nota.folio ?? `#${nota.id}`} vuelve a "Por Entregar", como antes de `
+            + 'confirmar la entrega. Los productos que llevaba vuelven a quedar apartados para ella. '
+            + 'El cobro no se toca.'}
+          onCancelar={() => { setConfirmReabrir(false); setErrorAccion(''); }}
+          onConfirmar={reabrirNota}
+          loading={loadingAccion}
+          colorBtn="bg-amber-600 hover:bg-amber-700"
         />
       )}
 

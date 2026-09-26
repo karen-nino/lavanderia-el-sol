@@ -22,6 +22,7 @@ import {
   terminarLavadoFinal,
   terminarSecado,
   cambiarEstadoPago,
+  reabrirNota,
   abonarNota,
   revertirAbono,
   corregirFormaPago,
@@ -53,6 +54,8 @@ router.delete('/:id', eliminarNota);
 // quitan las que nunca arrancaron y nunca la última de la nota.
 router.delete('/:id/cargas/:cargaId', quitarCarga);
 router.patch('/:id/estado',      cambiarEstadoNota);
+// Deshacer la entrega: la nota finalizada vuelve a Por Entregar. Solo admin.
+router.patch('/:id/reabrir', requireAdmin, reabrirNota);
 // Paso previo a activar: da corriente sin arrancar el cronómetro (mig. 110).
 router.patch('/:id/encender-maquina', encenderMaquinaDeNota);
 router.patch('/:id/activar-pendientes', activarMaquinasPendientes);
