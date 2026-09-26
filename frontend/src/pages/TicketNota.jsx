@@ -240,8 +240,7 @@ function armarTextoTicket(nota, rfc, notaPie) {
   const abonos = abonosDeNota(nota);
   if (abonos.length > 0) {
     abonos.forEach(ab => {
-      L.push(`Abono ${fmtFecha(ab.created_at)} (${formaPagoLabel(ab.forma_pago)})`
-           + `${ab.usuario_nombre ? ` · ${ab.usuario_nombre}` : ''}: ${fmtMonto(ab.monto)}`);
+      L.push(`Abono ${fmtFecha(ab.created_at)} (${formaPagoLabel(ab.forma_pago)}): ${fmtMonto(ab.monto)}`);
     });
     const abonado = totalAbonado(nota);
     L.push(`Abonado: ${fmtMonto(abonado)}`);
@@ -662,7 +661,9 @@ export default function TicketNota() {
             </div>
 
             {/* Abonos (mig. 121): solo si la nota tiene alguno. Cada uno con su
-                fecha, forma y quién lo recibió, y al final lo que resta. */}
+                fecha y su forma de pago, y al final lo que resta. Quién lo
+                recibió NO va en el ticket (2026-09-25): es dato interno, se ve
+                en el detalle de la nota y en Ventas. */}
             {abonosDeNota(nota).length > 0 && (() => {
               const abonos = abonosDeNota(nota);
               const abonado = totalAbonado(nota);
@@ -673,7 +674,6 @@ export default function TicketNota() {
                     <div key={ab.id} className="flex items-baseline justify-between gap-2">
                       <span className="flex-1 uppercase">
                         ABONO {fmtFecha(ab.created_at)} · {formaPagoLabel(ab.forma_pago).toUpperCase()}
-                        {ab.usuario_nombre ? ` · ${ab.usuario_nombre.toUpperCase()}` : ''}
                       </span>
                       <span className="whitespace-nowrap">{fmtMonto(ab.monto)}</span>
                     </div>
