@@ -47,7 +47,12 @@ function costoDeCarga(cg) {
 // Abonos vivos de la nota (mig. 121). Los revertidos no cuentan: ese dinero
 // volvió. Solo se imprimen si hay alguno — una nota sin abonos se ve como
 // siempre (2026-09-25).
+//
+// Y en una nota YA LIQUIDADA tampoco: ahí no queda saldo que explicar —da igual
+// si se pagó de una o abonando— y el ticket ya dice que está cobrada. Los
+// abonos son para el ticket de la nota que todavía debe.
 function abonosDeNota(nota) {
+  if (nota.estado_pago === 'PAGADO') return [];
   return (nota.abonos ?? []).filter(a => a.revertido_at == null);
 }
 function totalAbonado(nota) {
