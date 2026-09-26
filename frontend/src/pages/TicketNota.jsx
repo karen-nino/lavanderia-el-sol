@@ -44,6 +44,16 @@ function costoDeCarga(cg) {
     + Number(cg.ajuste ?? 0) + prods;
 }
 
+// Abonos vivos de la nota (mig. 121). Los revertidos no cuentan: ese dinero
+// volvió. Solo se imprimen si hay alguno — una nota sin abonos se ve como
+// siempre (2026-09-25).
+function abonosDeNota(nota) {
+  return (nota.abonos ?? []).filter(a => a.revertido_at == null);
+}
+function totalAbonado(nota) {
+  return abonosDeNota(nota).reduce((s, a) => s + Number(a.monto), 0);
+}
+
 // Productos de MARCA de la carga. No son material del lavado: son un producto
 // que el cliente compra, así que se cobran encima del tope y se listan aparte
 // (2026-09-25). El granel y la bolsa sí van incluidos en el servicio.
@@ -226,6 +236,17 @@ function armarTextoTicket(nota, rfc, notaPie) {
   }
 
   L.push('', `*Total: ${fmtMonto(nota.precio_total)}*`);
+  // Lo abonado y lo que resta: el cliente se lleva la cuenta de lo que ya pagó.
+  const abonos = abonosDeNota(nota);
+  if (abonos.length > 0) {
+    abonos.forEach(ab => {
+      L.push(`Abono ${fmtFecha(ab.created_at)} (${formaPagoLabel(ab.forma_pago)})`
+           + `${ab.usuario_nombre ? ` · ${ab.usuario_nombre}` : ''}: ${fmtMonto(ab.monto)}`);
+    });
+    const abonado = totalAbonado(nota);
+    L.push(`Abonado: ${fmtMonto(abonado)}`);
+    L.push(`*Resta: ${fmtMonto(Math.max(0, Number(nota.precio_total) - abonado))}*`);
+  }
   if (nota.fecha_entrega) {
     L.push(`Entrega: ${fmtFecha(nota.fecha_entrega)}`);
   }
@@ -639,6 +660,35 @@ export default function TicketNota() {
               <span>TOTAL M.N.</span>
               <span className="whitespace-nowrap">{fmtMonto(nota.precio_total)}</span>
             </div>
+
+            {/* Abonos (mig. 121): solo si la nota tiene alguno. Cada uno con su
+                fecha, forma y quién lo recibió, y al final lo que resta. */}
+            {abonosDeNota(nota).length > 0 && (() => {
+              const abonos = abonosDeNota(nota);
+              const abonado = totalAbonado(nota);
+              const resta = Math.max(0, Number(nota.precio_total) - abonado);
+              return (
+                <div className="mt-2 pt-2 border-t border-dashed border-black/40 space-y-1">
+                  {abonos.map(ab => (
+                    <div key={ab.id} className="flex items-baseline justify-between gap-2">
+                      <span className="flex-1 uppercase">
+                        ABONO {fmtFecha(ab.created_at)} · {formaPagoLabel(ab.forma_pago).toUpperCase()}
+                        {ab.usuario_nombre ? ` · ${ab.usuario_nombre.toUpperCase()}` : ''}
+                      </span>
+                      <span className="whitespace-nowrap">{fmtMonto(ab.monto)}</span>
+                    </div>
+                  ))}
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span>ABONADO</span>
+                    <span className="whitespace-nowrap">{fmtMonto(abonado)}</span>
+                  </div>
+                  <div className="flex items-baseline justify-between gap-2 font-bold">
+                    <span>RESTA</span>
+                    <span className="whitespace-nowrap">{fmtMonto(resta)}</span>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
 
           <Asteriscos />

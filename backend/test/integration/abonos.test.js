@@ -117,6 +117,33 @@ describe('el abono entra en el corte del día que se hizo', () => {
     expect(caja.body.totales.ventas_desglose.efectivo).toBe(100);
   });
 
+  it('Ventas dice quién recibió cada abono', async () => {
+    const emp = await seedUsuario({ rol: 'operador', sucursal: 'centro', nombre: 'Pedro' });
+    const id = await notaDe100();
+    await request(app).post(`/api/notas/${id}/abonos`)
+      .set(auth(emp.token)).send({ monto: 20, forma_pago: 'EFECTIVO' }).expect(201);
+
+    const res = await request(app).get('/api/ventas/resumen?periodo=hoy').set(auth(admin.token));
+    expect(res.body.abonos).toHaveLength(1);
+    expect(res.body.abonos[0]).toMatchObject({ monto: 20, forma_pago: 'EFECTIVO', recibio: 'Pedro' });
+
+    // Y el detalle de la nota también lo dice.
+    const det = await detalle(id);
+    expect(det.body.abonos[0].usuario_nombre).toBe('Pedro');
+  });
+
+  it('un abono revertido deja de listarse en Ventas', async () => {
+    const id = await notaDe100();
+    const abono = await request(app).post(`/api/notas/${id}/abonos`)
+      .set(auth(admin.token)).send({ monto: 20, forma_pago: 'EFECTIVO' });
+    await request(app).patch(`/api/notas/${id}/abonos/${abono.body.id}/revertir`)
+      .set(auth(admin.token)).send({ motivo: 'error' }).expect(200);
+
+    const res = await request(app).get('/api/ventas/resumen?periodo=hoy').set(auth(admin.token));
+    expect(res.body.abonos).toEqual([]);
+    expect(res.body.tarjetas.total_cobrado).toBe(0);
+  });
+
   it('el resumen de Ventas cuenta lo mismo que la caja', async () => {
     await request(app).post('/api/caja/abrir').set(auth(admin.token))
       .send({ monto_inicial: 0 }).expect(201);

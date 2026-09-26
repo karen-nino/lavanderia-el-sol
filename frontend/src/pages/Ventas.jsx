@@ -664,6 +664,29 @@ export default function Ventas() {
                   </p>
                 </div>
               )}
+              {/* Abonos del período (mig. 121): pagos parciales, con quién los
+                  recibió. Parte del dinero de arriba viene de aquí, así que se
+                  detalla; sin abonos el bloque no aparece. */}
+              {(data.abonos ?? []).length > 0 && (
+                <div className="px-4 py-3 bg-teal-50 border-t border-teal-100">
+                  <p className="text-xs font-semibold text-teal-800 uppercase tracking-wide mb-2">
+                    Abonos recibidos ({data.abonos.length}) ·{' '}
+                    {fmt(data.abonos.reduce((t, a) => t + a.monto, 0))}
+                  </p>
+                  <ul className="space-y-1.5">
+                    {data.abonos.map(a => (
+                      <li key={a.id} className="text-xs text-teal-900">
+                        <span className="font-semibold">{a.folio}</span> · {fmt(a.monto)} ·{' '}
+                        {formaPagoLabel(a.forma_pago)}
+                        <span className="block text-teal-700">
+                          Recibió {a.recibio ?? 'Usuario eliminado'} · {formatFechaHora12(a.creado_en)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
               {/* Correcciones de forma de pago del período (mig. 102). Van aquí
                   porque explican por qué el desglose de arriba puede no cuadrar
                   con lo que se recordaba: el dinero cambió de columna. */}

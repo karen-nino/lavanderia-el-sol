@@ -71,6 +71,23 @@ const filaCSV = (n) => [
 export function descargarVentasCSV(data, sufijo) {
   const notas = data?.lista_notas ?? [];
   descargarCSV(`ventas-${slug(sufijo)}`, ENCABEZADOS_CSV, notas.map(filaCSV));
+  // Los abonos van en su propio archivo: son otro tipo de renglón (un pago, no
+  // una nota) y mezclarlos dejaría media tabla vacía (2026-09-25).
+  const abonos = data?.abonos ?? [];
+  if (abonos.length > 0) {
+    descargarCSV(
+      `abonos-${slug(sufijo)}`,
+      ['Folio', 'Fecha', 'Hora', 'Forma de pago', 'Recibió', 'Monto'],
+      abonos.map((a) => [
+        a.folio ?? '',
+        typeof a.fecha === 'string' ? a.fecha.slice(0, 10) : '',
+        formatHora12(a.creado_en),
+        formaPagoLabel(a.forma_pago),
+        a.recibio ?? '',
+        num(a.monto),
+      ]),
+    );
+  }
 }
 
 // ── PDF (impresión del navegador) ───────────────────────────
@@ -150,12 +167,43 @@ const bloqueNotas = (notas) => {
     </table>`;
 };
 
+// Abonos del período (mig. 121): quién recibió cada pago parcial. Solo sale si
+// hay abonos; una exportación sin ellos se ve como siempre.
+const bloqueAbonos = (abonos) => {
+  if (abonos.length === 0) return '';
+  const total = abonos.reduce((t, a) => t + Number(a.monto || 0), 0);
+  const filas = abonos.map((a) => `
+    <tr>
+      <td>${esc(a.folio)}</td>
+      <td>${esc(fechaLarga(fechaNotaLocal(a.fecha)))}</td>
+      <td>${esc(formatHora12(a.creado_en))}</td>
+      <td>${esc(formaPagoLabel(a.forma_pago) || '—')}</td>
+      <td>${esc(a.recibio || '—')}</td>
+      <td class="r">${fmtMoneda(a.monto)}</td>
+    </tr>`).join('');
+  return `
+    <div class="seccion">Abonos recibidos (${abonos.length})</div>
+    <table class="resumen">
+      <thead>
+        <tr>
+          <th>Folio</th><th>Fecha</th><th>Hora</th><th>Pago</th>
+          <th>Recibió</th><th class="r">Monto</th>
+        </tr>
+      </thead>
+      <tbody>${filas}</tbody>
+      <tfoot>
+        <tr class="tot"><td colspan="5">Total abonado</td><td class="r">${fmtMoneda(total)}</td></tr>
+      </tfoot>
+    </table>`;
+};
+
 // Abre una ventana con el reporte de ventas y lanza la impresión (Guardar PDF).
 export function imprimirVentas(data, { titulo, subtitulo } = {}) {
   if (!data) return;
   const cuerpo =
     bloqueTarjetas(data.tarjetas) +
     bloqueCorte(data.corte) +
+    bloqueAbonos(data.abonos ?? []) +
     bloqueNotas(data.lista_notas ?? []);
   imprimirDocumento({ titulo: titulo || 'Ventas', subtitulo, cuerpo });
 }

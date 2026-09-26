@@ -111,7 +111,7 @@ export async function getResumen(req, res) {
   const whereCobro = `c.sucursal = $${sucIdx} AND ${periodCobroSQL}`;
 
   try {
-    const [tarjetasRes, pendientesRes, graficaRes, listaRes, corteRes, correccionesRes, cobradoRes] = await Promise.all([
+    const [tarjetasRes, pendientesRes, graficaRes, listaRes, corteRes, correccionesRes, abonosRes, cobradoRes] = await Promise.all([
       // Tarjetas: total_cobrado, notas_pagadas, productos_consumidos
       pool.query(
         `SELECT
@@ -236,6 +236,23 @@ export async function getResumen(req, res) {
         params
       ),
 
+      // Abonos del período (mig. 121): quién recibió cada pago parcial y de qué
+      // nota. Los revertidos no se listan: ese dinero volvió.
+      pool.query(
+        `SELECT ab.id, ab.monto, ab.forma_pago, ab.created_at,
+                ${fechaNegocio('ab.created_at')} AS fecha,
+                n.id AS nota_id, n.folio,
+                TRIM(u.nombre || ' ' || COALESCE(u.apellido, '')) AS recibio
+           FROM nota_abonos ab
+           JOIN notas n ON n.id = ab.nota_id
+           LEFT JOIN usuarios u ON u.id = ab.usuario_id
+          WHERE n.sucursal = $${sucIdx} AND ab.revertido_at IS NULL
+            AND n.estado != 'CANCELADA'
+            AND ${buildPeriodSQL(periodo, 'ab.created_at', anioSel != null, mesSel != null)}
+          ORDER BY ab.created_at DESC`,
+        params
+      ),
+
       // Dinero que entró en el período, con su forma de pago. Es lo que cuadra
       // con el corte de caja de esos días.
       pool.query(
@@ -307,6 +324,17 @@ export async function getResumen(req, res) {
         // que se abonó. Es el número que cuadra con el corte de caja.
         total_cobrado,
       },
+      // Quién recibió cada abono y de qué nota (mig. 121).
+      abonos: abonosRes.rows.map((r) => ({
+        id:         r.id,
+        nota_id:    r.nota_id,
+        folio:      r.folio,
+        fecha:      r.fecha,
+        creado_en:  r.created_at,
+        monto:      parseFloat(r.monto),
+        forma_pago: r.forma_pago,
+        recibio:    r.recibio,
+      })),
       correcciones_pago: correccionesRes.rows.map((r) => ({
         nota_id:        r.nota_id,
         folio:          r.folio,
