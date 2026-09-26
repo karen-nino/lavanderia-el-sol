@@ -175,12 +175,16 @@ describe('el siguiente ciclo repite los mismos dos pasos', () => {
       [maquinaId, segundos]
     );
 
-  // La lavadora va con marca y tiempo configurado: una lavadora sin tiempo de
-  // marca corre un solo ciclo, y este describe es justo el del segundo.
+  // La lavadora va con marca, tiempo configurado y un MODELO marcado como de
+  // dos ciclos (mig. 123): sin cualquiera de las dos cosas la carga corre un
+  // solo ciclo, y este describe es justo el del segundo.
   async function arrancada(nombre) {
-    await seedMarca({ nombre: 'LG', tipo: 'lavadora', tamano: 'mediana', minutos: 15 });
+    await seedMarca({
+      nombre: 'LG', tipo: 'lavadora', tamano: 'mediana', minutos: 15,
+      modelo: 'WM-2C', dos_ciclos: true,
+    });
     const id = await seedMaquina({
-      nombre, tipo: 'lavadora_mediana', tamano: 'mediana', marca: 'LG',
+      nombre, tipo: 'lavadora_mediana', tamano: 'mediana', marca: 'LG', modelo: 'WM-2C',
     });
     const notaId = await notaConLavadora(id);
     await iniciar(notaId, id).expect(200);

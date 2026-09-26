@@ -9,7 +9,7 @@ import { esAdmin } from '../middleware/roles.js';
 // `nombres` son las palabras con las que el usuario conoce el catálogo, para
 // que los mensajes hablen de "el tipo de tela" y no del nombre de la tabla.
 // `banderas` son columnas BOOLEAN propias de ese catálogo que se guardan junto
-// al nombre (mig. 122: `arranca_sola` y `ciclo_unico` de la marca de máquina).
+// al nombre (mig. 122: `arranca_sola` de la marca de máquina).
 // Se listan aquí y no se leen del body a lo que venga: los nombres entran en el
 // SQL, así que solo pueden ser los que el catálogo declara.
 function crearControladorEtiqueta(tabla, nombres, banderas = []) {
@@ -160,12 +160,12 @@ export const marcasProducto = crearControladorEtiqueta('marcas_producto', {
 export const envasesProducto = crearControladorEtiqueta('envases_producto', {
   singular: 'el envase', plural: 'los envases', uno: 'un envase',
 });
-// La marca de máquina declara además cómo se comportan sus aparatos (mig. 122):
-// si arrancan solos al recibir corriente —y entonces Salidas ofrece "Iniciar"
-// en un paso— y si una carga corre un solo ciclo en ellos.
+// La marca de máquina declara además si sus aparatos **arrancan solos** al
+// recibir corriente (mig. 122): entonces Salidas ofrece "Iniciar" en un paso,
+// sin encender antes. Los dos ciclos por carga los declara el MODELO (mig. 123).
 export const marcasMaquina = crearControladorEtiqueta('marcas_maquina', {
   singular: 'la marca', plural: 'las marcas', uno: 'una marca',
-}, ['arranca_sola', 'ciclo_unico']);
+}, ['arranca_sola']);
 // Los líquidos que se venden a granel (mig. 119): es el nombre del producto
 // cuando se rellena desde un bidón ("Jabón", "Suavizante").
 export const granelesProducto = crearControladorEtiqueta('graneles_producto', {
@@ -242,7 +242,7 @@ export const crearModeloMaquina = async (req, res) => {
   if (!nombre) {
     return res.status(400).json({ message: 'El nombre es requerido.' });
   }
-  const { tipo, tamano, pregunta_tiempo } = req.body;
+  const { tipo, tamano, pregunta_tiempo, dos_ciclos } = req.body;
   if (!TIPOS_TIEMPO.includes(tipo)) {
     return res.status(400).json({ message: 'El tipo de máquina debe ser lavadora o secadora.' });
   }
@@ -255,11 +255,11 @@ export const crearModeloMaquina = async (req, res) => {
   try {
     // El orden se cuenta dentro de la marca: cada marca tiene su propia lista.
     const { rows } = await pool.query(
-      `INSERT INTO modelos_maquina (marca_id, nombre, tipo, tamano, minutos, pregunta_tiempo, orden)
-       VALUES ($1, $2, $3, $4, $5, $6,
+      `INSERT INTO modelos_maquina (marca_id, nombre, tipo, tamano, minutos, pregunta_tiempo, dos_ciclos, orden)
+       VALUES ($1, $2, $3, $4, $5, $6, $7,
                (SELECT COALESCE(MAX(orden), 0) + 1 FROM modelos_maquina WHERE marca_id = $1))
        RETURNING *`,
-      [marcaId, nombre, tipo, tamano, minutos.valor, Boolean(pregunta_tiempo)]
+      [marcaId, nombre, tipo, tamano, minutos.valor, Boolean(pregunta_tiempo), Boolean(dos_ciclos)]
     );
     res.status(201).json(rows[0]);
   } catch (err) {
@@ -282,7 +282,7 @@ export const actualizarModeloMaquina = async (req, res) => {
   if (!/^\d+$/.test(String(id))) {
     return res.status(404).json({ message: 'No se encontró el modelo.' });
   }
-  const { nombre, activo, tipo, tamano, minutos, pregunta_tiempo } = req.body;
+  const { nombre, activo, tipo, tamano, minutos, pregunta_tiempo, dos_ciclos } = req.body;
 
   const updates = [];
   const values  = [];
@@ -320,6 +320,11 @@ export const actualizarModeloMaquina = async (req, res) => {
   if (pregunta_tiempo !== undefined) {
     updates.push(`pregunta_tiempo = $${i++}`);
     values.push(Boolean(pregunta_tiempo));
+  }
+  // Mig. 123: la segunda vuelta de la carga se declara en el modelo.
+  if (dos_ciclos !== undefined) {
+    updates.push(`dos_ciclos = $${i++}`);
+    values.push(Boolean(dos_ciclos));
   }
   // `minutos: null` es un cambio de verdad —quitarle el tiempo propio al
   // modelo—, así que se distingue de no mandar el campo.
@@ -417,7 +422,7 @@ export const getTiemposMarca = async (req, res) => {
       `SELECT mo.marca_id, mm.nombre AS marca,
               mo.id AS modelo_id, mo.nombre AS modelo,
               mo.tipo, mo.tamano,
-              mo.minutos, mo.minutos_2, mo.minutos_3, mo.pregunta_tiempo
+              mo.minutos, mo.minutos_2, mo.minutos_3, mo.pregunta_tiempo, mo.dos_ciclos
          FROM modelos_maquina mo
          JOIN marcas_maquina mm ON mm.id = mo.marca_id
         WHERE mo.activo AND mm.activo

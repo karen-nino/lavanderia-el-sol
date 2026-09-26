@@ -115,16 +115,18 @@ export const MAX_CICLOS_POR_CARGA = (() => {
 // · **La vuelta EXTRA agregada desde Salidas** (mig. 115). Va sin cobro sobre
 //   un lavado ya cobrado; encadenarle otra sería regalar el doble.
 //   Lo dice la fila: `ciclo_unico` de la última pasada de esa carga.
-// Una marca puede declarar que sus máquinas corren UN SOLO ciclo (mig. 122):
-// el programa completo de una Speed Queen basta para una carga, y encadenarle
-// otra vuelta sería regalar agua y luz. Se suma a los casos que ya corrían uno:
-// las secadoras, las lavadoras sin tiempo configurado y la vuelta extra de la
-// mig. 115.
+// Una carga corre UN ciclo salvo que el MODELO de su máquina declare que corre
+// dos (mig. 123, `dos_ciclos`). Antes era al revés —dos por defecto en cuanto
+// la lavadora tuviera tiempo configurado (mig. 108)— y el negocio lo pidió
+// cambiado: la segunda vuelta es la excepción de un aparato concreto, no la
+// regla. Los demás candados siguen mandando por encima: una secadora corre uno,
+// una máquina sin tiempo configurado también (no se le puede encadenar nada a
+// un tiempo supuesto) y la vuelta extra de la mig. 115 se marca en la carga.
 export const maxCiclosDeMaquina = (maq) =>
   maq?.tipo === 'secadora'
   || maq?.minutos_ciclo == null
   || maq?.ciclo_unico
-  || maq?.marca_opciones?.ciclo_unico
+  || !maq?.marca_opciones?.dos_ciclos
     ? 1 : MAX_CICLOS_POR_CARGA;
 
 // Cuánto aguanta encendida una máquina que espera su arranque (mig. 110).

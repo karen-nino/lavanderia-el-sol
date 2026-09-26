@@ -41,10 +41,14 @@ beforeEach(async () => {
   admin = await seedUsuario({ rol: 'admin', sucursal: 'centro' });
   operador = await seedUsuario({ rol: 'operador', sucursal: 'centro', nombre: 'Operador' });
   await seedAjustes({ tiempo_carga_mediana: 15, tiempo_carga_jumbo: 45, tiempo_carga_secadora: 30 });
-  // Las lavadoras de estas pruebas son LG con su tiempo configurado: sin
-  // tiempo de marca la carga corre un solo ciclo y no habría segundo que
-  // probar (ver el describe del final).
-  await seedMarca({ nombre: 'LG', tipo: 'lavadora', tamano: 'mediana', minutos: 15 });
+  // Las lavadoras de estas pruebas son LG con su tiempo configurado y con un
+  // MODELO marcado como de dos ciclos (mig. 123): sin eso —o sin tiempo de
+  // marca— la carga corre uno solo y no habría segundo que probar (ver el
+  // describe del final).
+  await seedMarca({
+    nombre: 'LG', tipo: 'lavadora', tamano: 'mediana', minutos: 15,
+    modelo: 'WM-2C', dos_ciclos: true,
+  });
 });
 
 // Crea una nota de autoservicio pagada, le asigna la lavadora y la arranca.
@@ -85,7 +89,7 @@ const otroCiclo = (maquinaId, usuario) =>
 
 describe('otro ciclo — camino normal', () => {
   it('reinicia el reloj y sube el contador de la carga', async () => {
-    const id = await seedMaquina({ nombre: 'L1', tipo: 'lavadora_mediana', tamano: 'mediana', marca: 'LG' });
+    const id = await seedMaquina({ nombre: 'L1', tipo: 'lavadora_mediana', tamano: 'mediana', marca: 'LG', modelo: 'WM-2C' });
     const { cargaId } = await arrancar(id);
     expect(await ciclosDe(cargaId)).toBe(1);
 
@@ -106,7 +110,7 @@ describe('otro ciclo — camino normal', () => {
   });
 
   it('un operador puede darlo: es quien está en el mostrador', async () => {
-    const id = await seedMaquina({ nombre: 'L2', tipo: 'lavadora_mediana', tamano: 'mediana', marca: 'LG' });
+    const id = await seedMaquina({ nombre: 'L2', tipo: 'lavadora_mediana', tamano: 'mediana', marca: 'LG', modelo: 'WM-2C' });
     await arrancar(id);
     await envejecer(id, YA_SE_PUEDE);
 
@@ -114,7 +118,7 @@ describe('otro ciclo — camino normal', () => {
   });
 
   it('la nota sigue abierta y la máquina en uso: solo cambia el reloj', async () => {
-    const id = await seedMaquina({ nombre: 'L3', tipo: 'lavadora_mediana', tamano: 'mediana', marca: 'LG' });
+    const id = await seedMaquina({ nombre: 'L3', tipo: 'lavadora_mediana', tamano: 'mediana', marca: 'LG', modelo: 'WM-2C' });
     const { notaId } = await arrancar(id);
     await envejecer(id, YA_SE_PUEDE);
 
@@ -129,7 +133,7 @@ describe('otro ciclo — camino normal', () => {
 
 describe('otro ciclo — candados', () => {
   it('no se puede a mitad del ciclo', async () => {
-    const id = await seedMaquina({ nombre: 'L4', tipo: 'lavadora_mediana', tamano: 'mediana', marca: 'LG' });
+    const id = await seedMaquina({ nombre: 'L4', tipo: 'lavadora_mediana', tamano: 'mediana', marca: 'LG', modelo: 'WM-2C' });
     const { cargaId } = await arrancar(id);
 
     const r = await otroCiclo(id, admin);
@@ -140,7 +144,7 @@ describe('otro ciclo — candados', () => {
   });
 
   it('no se puede antes de que pase la pausa sin corriente', async () => {
-    const id = await seedMaquina({ nombre: 'L5', tipo: 'lavadora_mediana', tamano: 'mediana', marca: 'LG' });
+    const id = await seedMaquina({ nombre: 'L5', tipo: 'lavadora_mediana', tamano: 'mediana', marca: 'LG', modelo: 'WM-2C' });
     await arrancar(id);
     // El ciclo terminó, pero la máquina todavía no ha estado sin corriente.
     await envejecer(id, RECIEN_TERMINADO);
@@ -152,7 +156,7 @@ describe('otro ciclo — candados', () => {
   });
 
   it('se agota en el tope de ciclos de la carga', async () => {
-    const id = await seedMaquina({ nombre: 'L6', tipo: 'lavadora_mediana', tamano: 'mediana', marca: 'LG' });
+    const id = await seedMaquina({ nombre: 'L6', tipo: 'lavadora_mediana', tamano: 'mediana', marca: 'LG', modelo: 'WM-2C' });
     const { cargaId } = await arrancar(id);
 
     // Gasta todos los ciclos permitidos después del primero.
@@ -171,7 +175,7 @@ describe('otro ciclo — candados', () => {
   });
 
   it('una máquina disponible no acepta otro ciclo', async () => {
-    const id = await seedMaquina({ nombre: 'L7', tipo: 'lavadora_mediana', tamano: 'mediana', marca: 'LG' });
+    const id = await seedMaquina({ nombre: 'L7', tipo: 'lavadora_mediana', tamano: 'mediana', marca: 'LG', modelo: 'WM-2C' });
 
     const r = await otroCiclo(id, admin);
 
@@ -181,7 +185,7 @@ describe('otro ciclo — candados', () => {
 
   it('una máquina de otra sucursal no se encuentra', async () => {
     await seedSucursal('norte', 'Norte');
-    const id = await seedMaquina({ nombre: 'L8', tipo: 'lavadora_mediana', tamano: 'mediana', marca: 'LG', sucursal: 'norte' });
+    const id = await seedMaquina({ nombre: 'L8', tipo: 'lavadora_mediana', tamano: 'mediana', marca: 'LG', modelo: 'WM-2C', sucursal: 'norte' });
 
     const r = await otroCiclo(id, admin);
 
@@ -191,7 +195,7 @@ describe('otro ciclo — candados', () => {
 
 describe('otro ciclo — lo que expone la lista de máquinas', () => {
   it('trae los ciclos de la carga y cuándo se habilita el siguiente', async () => {
-    const id = await seedMaquina({ nombre: 'L9', tipo: 'lavadora_mediana', tamano: 'mediana', marca: 'LG' });
+    const id = await seedMaquina({ nombre: 'L9', tipo: 'lavadora_mediana', tamano: 'mediana', marca: 'LG', modelo: 'WM-2C' });
     await arrancar(id);
 
     const r = await request(app).get('/api/maquinas').set(auth(admin.token)).expect(200);
@@ -203,7 +207,7 @@ describe('otro ciclo — lo que expone la lista de máquinas', () => {
   });
 
   it('una máquina libre no ofrece otro ciclo', async () => {
-    const id = await seedMaquina({ nombre: 'L10', tipo: 'lavadora_mediana', tamano: 'mediana', marca: 'LG' });
+    const id = await seedMaquina({ nombre: 'L10', tipo: 'lavadora_mediana', tamano: 'mediana', marca: 'LG', modelo: 'WM-2C' });
 
     const r = await request(app).get('/api/maquinas').set(auth(admin.token)).expect(200);
     const m = r.body.find(x => String(x.id) === String(id));

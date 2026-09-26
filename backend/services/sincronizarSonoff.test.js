@@ -412,17 +412,29 @@ describe('tope de ciclos por máquina', () => {
     expect(maxCiclosDeMaquina({ tipo: 'lavadora_jumbo', minutos_ciclo: null })).toBe(1);
   });
 
-  it('con tiempo de marca vuelve al tope normal', async () => {
-    const { maxCiclosDeMaquina, MAX_CICLOS_POR_CARGA } = await cargar();
-    expect(maxCiclosDeMaquina({ tipo: 'lavadora_mediana', minutos_ciclo: 45 }))
-      .toBe(MAX_CICLOS_POR_CARGA);
+  // Desde la mig. 123 los DOS ciclos son la excepción y los declara el modelo:
+  // una lavadora con tiempo configurado, pero sin esa marca, corre uno solo.
+  it('con tiempo de marca, pero sin el modelo marcado, corre un ciclo', async () => {
+    const { maxCiclosDeMaquina } = await cargar();
+    expect(maxCiclosDeMaquina({ tipo: 'lavadora_mediana', minutos_ciclo: 45 })).toBe(1);
+    expect(maxCiclosDeMaquina({
+      tipo: 'lavadora_mediana', minutos_ciclo: 45, marca_opciones: { dos_ciclos: false },
+    })).toBe(1);
   });
 
-  it('la vuelta extra corre un solo ciclo aunque la marca dé para dos', async () => {
+  it('el modelo marcado con dos ciclos sube al tope normal', async () => {
+    const { maxCiclosDeMaquina, MAX_CICLOS_POR_CARGA } = await cargar();
+    expect(maxCiclosDeMaquina({
+      tipo: 'lavadora_mediana', minutos_ciclo: 45, marca_opciones: { dos_ciclos: true },
+    })).toBe(MAX_CICLOS_POR_CARGA);
+  });
+
+  it('la vuelta extra corre un solo ciclo aunque el modelo dé para dos', async () => {
     const { maxCiclosDeMaquina } = await cargar();
-    // Misma lavadora, mismo tiempo de marca: lo que cambia es la pasada.
-    expect(maxCiclosDeMaquina({ tipo: 'lavadora_mediana', minutos_ciclo: 45, ciclo_unico: false })).toBe(2);
-    expect(maxCiclosDeMaquina({ tipo: 'lavadora_mediana', minutos_ciclo: 45, ciclo_unico: true })).toBe(1);
+    // Misma lavadora, mismo modelo: lo que cambia es la pasada (mig. 115).
+    const dos = { tipo: 'lavadora_mediana', minutos_ciclo: 45, marca_opciones: { dos_ciclos: true } };
+    expect(maxCiclosDeMaquina({ ...dos, ciclo_unico: false })).toBe(2);
+    expect(maxCiclosDeMaquina({ ...dos, ciclo_unico: true })).toBe(1);
   });
 
   it('una secadora corre un ciclo aunque tenga tiempo de marca', async () => {

@@ -43,18 +43,32 @@ export async function seedUsuario({ rol = 'admin', sucursal = 'centro', nombre =
 // Inserta una marca en el catálogo y, si se le dan minutos, su tiempo de ciclo
 // para ese tipo y tamaño (mig. 107). `limpiarBase` vacía también los catálogos,
 // así que la marca que sembró la migración no sobrevive al beforeEach.
+// `modelo` siembra además un modelo de esa marca (migs. 117/118). Es lo que
+// declara si una carga corre DOS ciclos (mig. 123): sin modelo marcado, una
+// carga corre uno solo por más tiempo que tenga configurado la máquina.
 export async function seedMarca({
   nombre = 'LG',
   tipo = 'lavadora',
   tamano = 'mediana',
   minutos = null,
+  modelo = null,
+  dos_ciclos = false,
+  arranca_sola = false,
 } = {}) {
   const { rows } = await pool.query(
-    `INSERT INTO marcas_maquina (nombre) VALUES ($1)
-       ON CONFLICT (nombre) DO UPDATE SET nombre = EXCLUDED.nombre
+    `INSERT INTO marcas_maquina (nombre, arranca_sola) VALUES ($1, $2)
+       ON CONFLICT (nombre) DO UPDATE SET arranca_sola = EXCLUDED.arranca_sola
      RETURNING id`,
-    [nombre]
+    [nombre, arranca_sola]
   );
+  if (modelo) {
+    await pool.query(
+      `INSERT INTO modelos_maquina (marca_id, nombre, tipo, tamano, dos_ciclos)
+       VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT (marca_id, nombre) DO UPDATE SET dos_ciclos = EXCLUDED.dos_ciclos`,
+      [rows[0].id, modelo, tipo, tamano, dos_ciclos]
+    );
+  }
   if (minutos != null) {
     await pool.query(
       `INSERT INTO tiempos_marca (marca_id, tipo, tamano, minutos) VALUES ($1, $2, $3, $4)

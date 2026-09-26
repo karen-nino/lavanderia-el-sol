@@ -1007,12 +1007,16 @@ async function cargasDeNota(client, notaId) {
                            JOIN marcas_maquina mmk ON mmk.nombre = mm2.marca
                            JOIN modelos_maquina mo ON mo.marca_id = mmk.id AND mo.nombre = mm2.modelo
                           WHERE mm2.id = ncm.maquina_id) AS modelo_tiempos,
-                        -- Y lo que declara su MARCA (mig. 122): si arranca sola
-                        -- al recibir corriente, Salidas ofrece "Iniciar" en un
-                        -- solo paso en vez de encender y luego arrancar.
+                        -- Cómo se comporta: la MARCA dice si arranca sola al
+                        -- recibir corriente —y entonces Salidas ofrece "Iniciar"
+                        -- en un solo paso (mig. 122)— y el MODELO si la carga
+                        -- corre dos ciclos (mig. 123).
                         (SELECT json_build_object(
                                   'arranca_sola', mmk2.arranca_sola,
-                                  'ciclo_unico',  mmk2.ciclo_unico)
+                                  'dos_ciclos', COALESCE((
+                                    SELECT mo2.dos_ciclos FROM modelos_maquina mo2
+                                     WHERE mo2.marca_id = mmk2.id AND mo2.nombre = mm3.modelo
+                                  ), FALSE))
                            FROM maquinas mm3
                            JOIN marcas_maquina mmk2 ON mmk2.nombre = mm3.marca
                           WHERE mm3.id = ncm.maquina_id) AS marca_opciones,

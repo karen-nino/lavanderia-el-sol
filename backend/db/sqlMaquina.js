@@ -45,15 +45,21 @@ export const MINUTOS_CONFIGURADOS = `COALESCE(
   )
 )`;
 
-// Lo que la MARCA de esta máquina dice de su arranque y de sus ciclos
-// (mig. 122): `arranca_sola` = empieza al recibir corriente, así que el flujo
-// de dos pasos sobra; `ciclo_unico` = una carga corre una sola vuelta. Mismo
-// alias `m` que MINUTOS_CONFIGURADOS. Sin marca capturada, las dos en FALSE:
-// el comportamiento de siempre.
+// Cómo se comporta esta máquina, según su catálogo:
+//   · `arranca_sola` lo declara la MARCA (mig. 122): empieza al recibir
+//     corriente, así que el flujo de dos pasos sobra.
+//   · `dos_ciclos` lo declara el MODELO (mig. 123): una carga corre DOS vueltas
+//     en ese aparato. Sin modelo capturado va en FALSE y la carga corre una
+//     sola, que es lo normal.
+// Mismo alias `m` que MINUTOS_CONFIGURADOS.
 export const OPCIONES_DE_MARCA = `(
   SELECT json_build_object(
            'arranca_sola', mm.arranca_sola,
-           'ciclo_unico',  mm.ciclo_unico
+           'dos_ciclos', COALESCE((
+             SELECT mo.dos_ciclos
+               FROM modelos_maquina mo
+              WHERE mo.marca_id = mm.id AND mo.nombre = m.modelo
+           ), FALSE)
          )
     FROM marcas_maquina mm
    WHERE mm.nombre = m.marca

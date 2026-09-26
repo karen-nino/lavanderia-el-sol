@@ -638,18 +638,21 @@ const CAMPOS_MODELO = [
   // carguen con campos que no usan.
   { name: 'pregunta_tiempo', defecto: false, tipo: 'check',
     label: 'Varios tiempos: se elige cuál al iniciar', chip: 'varios tiempos' },
+  // La segunda vuelta de la carga (migs. 108 y 123). Va al revés de como nació:
+  // lo normal es un ciclo y los dos son la excepción de un aparato concreto.
+  { name: 'dos_ciclos', defecto: false, tipo: 'check',
+    label: 'Una carga corre 2 ciclos', chip: '2 ciclos' },
 ];
 
-// Lo que una MARCA dice de cómo se comportan sus máquinas (mig. 122). Las dos
-// casillas van aquí —y no en el modelo, donde viven los tiempos— porque es lo
-// que las ocho máquinas reales tienen capturado: marca sí, modelo todavía no.
+// Lo que una MARCA dice de cómo se comportan sus máquinas (mig. 122): que
+// arrancan al recibir corriente. Va en la marca —y no en el modelo— porque es
+// lo que las ocho máquinas reales tienen capturado: marca sí, modelo todavía
+// no. Los dos ciclos por carga sí son del modelo (mig. 123): eso es del
+// aparato, no del fabricante.
 const CAMPOS_MARCA_MAQUINA = [
   { name: 'arranca_sola', defecto: false, tipo: 'check',
     label: 'Arranca sola al recibir corriente (no pasa por "Encender máquina")',
     chip: 'arranca sola' },
-  { name: 'ciclo_unico', defecto: false, tipo: 'check',
-    label: 'Una carga corre un solo ciclo',
-    chip: 'un ciclo' },
 ];
 
 // Marcas de máquina y, colgando de cada una, sus modelos (migs. 117 y 118).
@@ -692,7 +695,7 @@ function MarcasYModelos({ movil = false, onMensaje }) {
     <>
       <Campo
         label="Marcas"
-        hint="Se eligen al dar de alta una máquina. Las dos casillas dicen cómo se comportan sus aparatos: si arrancan al recibir corriente (Salidas ofrece «Iniciar» en un solo paso, sin encender antes) y si una carga corre un solo ciclo. Desactivar una marca la quita de la lista sin tocar las máquinas que ya la tienen."
+        hint="Se eligen al dar de alta una máquina. La casilla dice si sus aparatos arrancan al recibir corriente: entonces Salidas ofrece «Iniciar» en un solo paso, sin encender antes. Desactivar una marca la quita de la lista sin tocar las máquinas que ya la tienen."
       >
         <CatalogoEtiquetas
           endpoint="/etiquetas/marcas-maquina"
@@ -708,7 +711,7 @@ function MarcasYModelos({ movil = false, onMensaje }) {
       <div className={divisorCls}>
         <Campo
           label="Modelos"
-          hint="Los modelos de la marca elegida. Su tiempo de ciclo se configura arriba, en el bloque de Lavadora o Secadora que les toque."
+          hint="Los modelos de la marca elegida. Su tiempo de ciclo se configura arriba, en el bloque de Lavadora o Secadora que les toque. Marca «2 ciclos» solo en los aparatos cuyo programa no alcanza para una carga: sin eso, cada carga corre uno."
         >
           {marcas.length === 0 ? (
             <p className="text-sm text-gray-400">Primero agrega una marca.</p>
