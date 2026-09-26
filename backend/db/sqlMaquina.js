@@ -45,6 +45,20 @@ export const MINUTOS_CONFIGURADOS = `COALESCE(
   )
 )`;
 
+// Lo que la MARCA de esta máquina dice de su arranque y de sus ciclos
+// (mig. 122): `arranca_sola` = empieza al recibir corriente, así que el flujo
+// de dos pasos sobra; `ciclo_unico` = una carga corre una sola vuelta. Mismo
+// alias `m` que MINUTOS_CONFIGURADOS. Sin marca capturada, las dos en FALSE:
+// el comportamiento de siempre.
+export const OPCIONES_DE_MARCA = `(
+  SELECT json_build_object(
+           'arranca_sola', mm.arranca_sola,
+           'ciclo_unico',  mm.ciclo_unico
+         )
+    FROM marcas_maquina mm
+   WHERE mm.nombre = m.marca
+)`;
+
 // Los tiempos que ofrece el modelo de ESTA máquina y si hay que preguntar cuál
 // usar (mig. 120). Va como objeto porque las dos cosas se leen juntas: la
 // pantalla pregunta solo si el interruptor está encendido y hay más de uno.

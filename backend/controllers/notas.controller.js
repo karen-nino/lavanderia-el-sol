@@ -6,7 +6,7 @@ import { tarifaSecadora, precioProductoEnNota, unidadDeVenta, tapasPorUnidad, ge
 // acción que el empleado está mirando: no debe depender de que el listener esté
 // vivo. Es idempotente, así que el aviso del trigger llegando después no molesta.
 import { sincronizarSonoff, maxCiclosDeMaquina } from '../services/sincronizarSonoff.js';
-import { MINUTOS_CONFIGURADOS } from '../db/sqlMaquina.js';
+import { MINUTOS_CONFIGURADOS, OPCIONES_DE_MARCA } from '../db/sqlMaquina.js';
 
 const ESTADOS_VALIDOS     = ['EN_ESPERA', 'LAVANDO', 'SECANDO', 'LISTA', 'PAGADA', 'FINALIZADA', 'CANCELADA'];
 // PRODUCTOS es la venta de mostrador (mig. 112): productos sueltos, sin lavado
@@ -1007,6 +1007,15 @@ async function cargasDeNota(client, notaId) {
                            JOIN marcas_maquina mmk ON mmk.nombre = mm2.marca
                            JOIN modelos_maquina mo ON mo.marca_id = mmk.id AND mo.nombre = mm2.modelo
                           WHERE mm2.id = ncm.maquina_id) AS modelo_tiempos,
+                        -- Y lo que declara su MARCA (mig. 122): si arranca sola
+                        -- al recibir corriente, Salidas ofrece "Iniciar" en un
+                        -- solo paso en vez de encender y luego arrancar.
+                        (SELECT json_build_object(
+                                  'arranca_sola', mmk2.arranca_sola,
+                                  'ciclo_unico',  mmk2.ciclo_unico)
+                           FROM maquinas mm3
+                           JOIN marcas_maquina mmk2 ON mmk2.nombre = mm3.marca
+                          WHERE mm3.id = ncm.maquina_id) AS marca_opciones,
                         -- Actual = la ÚLTIMA pasada del hueco, y solo si esa
                         -- máquina sigue puesta. Con la comparación a secas, una
                         -- carga relavada en la misma lavadora marcaba las dos.
@@ -2435,7 +2444,10 @@ async function cargaConCiclosDisponibles(client, notaId, maquinaId) {
                  AND ncm.slot = CASE WHEN nc.lavadora_id = $2 THEN 'lavadora' ELSE 'secadora' END
                ORDER BY ncm.asignada_at DESC, ncm.id DESC LIMIT 1
             ), FALSE) AS ciclo_unico,
-            ${MINUTOS_CONFIGURADOS} AS minutos_ciclo
+            ${MINUTOS_CONFIGURADOS} AS minutos_ciclo,
+            -- Y lo que su marca declara (mig. 122): una marca de ciclo único
+            -- tampoco tiene "otra vuelta" que ofrecer.
+            ${OPCIONES_DE_MARCA} AS marca_opciones
        FROM nota_cargas nc
        -- La máquina entra por el tope de ciclos: una lavadora sin tiempo
        -- configurado corre uno solo, así que aquí ya no hay "otra vuelta" que

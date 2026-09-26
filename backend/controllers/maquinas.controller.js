@@ -2,7 +2,7 @@ import pool from '../db/pool.js';
 import { TZ_NEGOCIO } from '../utils/tz.js';
 import * as dispositivos from '../services/dispositivos/index.js';
 import { explicarFalla, resumirMotivo } from '../services/dispositivos/mensajes.js';
-import { MINUTOS_CONFIGURADOS, TIEMPOS_DEL_MODELO } from '../db/sqlMaquina.js';
+import { MINUTOS_CONFIGURADOS, TIEMPOS_DEL_MODELO, OPCIONES_DE_MARCA } from '../db/sqlMaquina.js';
 import {
   HORAS_ENCENDIDO_MANUAL,
   PAUSA_OTRO_CICLO_SEGUNDOS,
@@ -163,6 +163,8 @@ export const getMaquinas = async (req, res) => {
               -- Los tiempos que ofrece su modelo y si hay que preguntar cuál
               -- usar al iniciarla (mig. 120).
               ${TIEMPOS_DEL_MODELO} AS modelo_tiempos,
+              -- Lo que su marca dice del arranque y de los ciclos (mig. 122).
+              ${OPCIONES_DE_MARCA} AS marca_opciones,
               (r.folio IS NOT NULL) AS reservada,
               r.folio               AS reservada_folio,
               r.id                  AS reservada_nota_id,
@@ -888,7 +890,8 @@ export const otroCiclo = async (req, res) => {
     await client.query('BEGIN');
 
     const { rows } = await client.query(
-      `SELECT m.*, ${MINUTOS_CONFIGURADOS} AS minutos_ciclo
+      `SELECT m.*, ${MINUTOS_CONFIGURADOS} AS minutos_ciclo,
+              ${OPCIONES_DE_MARCA} AS marca_opciones
          FROM maquinas m WHERE m.id = $1 AND m.sucursal = $2 FOR UPDATE OF m`,
       [id, req.sucursal]
     );
@@ -1034,7 +1037,9 @@ export const otroCiclo = async (req, res) => {
     await sincronizarSonoff(maq.id);
 
     const { rows: fresca } = await pool.query(
-      `SELECT m.*, ${MINUTOS_CONFIGURADOS} AS minutos_ciclo FROM maquinas m WHERE m.id = $1`,
+      `SELECT m.*, ${MINUTOS_CONFIGURADOS} AS minutos_ciclo,
+              ${OPCIONES_DE_MARCA} AS marca_opciones
+         FROM maquinas m WHERE m.id = $1`,
       [maq.id]
     );
     const ciclo = carga.ciclos + 1;

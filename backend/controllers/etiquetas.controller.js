@@ -8,7 +8,11 @@ import { esAdmin } from '../middleware/roles.js';
 //
 // `nombres` son las palabras con las que el usuario conoce el catálogo, para
 // que los mensajes hablen de "el tipo de tela" y no del nombre de la tabla.
-function crearControladorEtiqueta(tabla, nombres) {
+// `banderas` son columnas BOOLEAN propias de ese catálogo que se guardan junto
+// al nombre (mig. 122: `arranca_sola` y `ciclo_unico` de la marca de máquina).
+// Se listan aquí y no se leen del body a lo que venga: los nombres entran en el
+// SQL, así que solo pueden ser los que el catálogo declara.
+function crearControladorEtiqueta(tabla, nombres, banderas = []) {
   const getAll = async (req, res) => {
     try {
       const { rows } = await pool.query(
@@ -30,12 +34,15 @@ function crearControladorEtiqueta(tabla, nombres) {
       return res.status(400).json({ message: 'El nombre es requerido.' });
     }
     try {
-      // Se agrega al final del orden actual.
+      // Se agrega al final del orden actual. Las banderas que declare el
+      // catálogo entran con su valor del body (false si no viene).
+      const cols = banderas.map((b, k) => `, ${b}`).join('');
+      const vals = banderas.map((b, k) => `, $${k + 2}`).join('');
       const { rows } = await pool.query(
-        `INSERT INTO ${tabla} (nombre, orden)
-         VALUES ($1, (SELECT COALESCE(MAX(orden), 0) + 1 FROM ${tabla}))
+        `INSERT INTO ${tabla} (nombre, orden${cols})
+         VALUES ($1, (SELECT COALESCE(MAX(orden), 0) + 1 FROM ${tabla})${vals})
          RETURNING *`,
-        [nombre]
+        [nombre, ...banderas.map(b => Boolean(req.body[b]))]
       );
       res.status(201).json(rows[0]);
     } catch (err) {
@@ -74,6 +81,12 @@ function crearControladorEtiqueta(tabla, nombres) {
     if (activo !== undefined) {
       updates.push(`activo = $${i++}`);
       values.push(Boolean(activo));
+    }
+    for (const bandera of banderas) {
+      if (req.body[bandera] !== undefined) {
+        updates.push(`${bandera} = $${i++}`);
+        values.push(Boolean(req.body[bandera]));
+      }
     }
     if (updates.length === 0) {
       return res.status(400).json({ message: 'No hay cambios que guardar.' });
@@ -147,9 +160,12 @@ export const marcasProducto = crearControladorEtiqueta('marcas_producto', {
 export const envasesProducto = crearControladorEtiqueta('envases_producto', {
   singular: 'el envase', plural: 'los envases', uno: 'un envase',
 });
+// La marca de máquina declara además cómo se comportan sus aparatos (mig. 122):
+// si arrancan solos al recibir corriente —y entonces Salidas ofrece "Iniciar"
+// en un paso— y si una carga corre un solo ciclo en ellos.
 export const marcasMaquina = crearControladorEtiqueta('marcas_maquina', {
   singular: 'la marca', plural: 'las marcas', uno: 'una marca',
-});
+}, ['arranca_sola', 'ciclo_unico']);
 // Los líquidos que se venden a granel (mig. 119): es el nombre del producto
 // cuando se rellena desde un bidón ("Jabón", "Suavizante").
 export const granelesProducto = crearControladorEtiqueta('graneles_producto', {
