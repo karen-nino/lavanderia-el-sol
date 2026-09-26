@@ -223,6 +223,49 @@ function ModalConfirmar({ titulo, mensaje, onCancelar, onConfirmar, loading, col
   );
 }
 
+// Acción en redondo: un círculo de color con su ícono y la palabra debajo
+// (2026-09-26, referencia en `info/`). Es el patrón de las apps de banco, y
+// aquí gana porque en el teléfono el ícono se reconoce de un vistazo mientras
+// que una hilera de píldoras de colores hay que leerla entera.
+//
+// El botón entero es el área que se toca —círculo y palabra—, no solo el
+// círculo: con el dedo, 44 px de círculo suelto se falla.
+function AccionCircular({ icono, label, onClick, color, disabled = false, title }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      className="flex flex-col items-center gap-1.5 w-20 disabled:opacity-60 disabled:cursor-not-allowed group"
+    >
+      <span className={`w-14 h-14 rounded-full flex items-center justify-center text-white transition-colors ${color}`}>
+        {icono}
+      </span>
+      <span className="text-xs font-medium text-gray-700 text-center leading-tight">{label}</span>
+    </button>
+  );
+}
+
+// Los íconos de esas acciones, en trazo blanco sobre el círculo.
+const IconoSalidas = (
+  <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    {/* Puerta con una flecha que sale: la ropa que deja la lavandería. */}
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+      d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 17l5-5-5-5M21 12H9" />
+  </svg>
+);
+
+const IconoCobrar = (
+  <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    {/* Billete con su moneda en medio. */}
+    <rect x="2" y="6" width="20" height="12" rx="2" strokeWidth={2} />
+    <circle cx="12" cy="12" r="2.5" strokeWidth={2} />
+    <path strokeLinecap="round" strokeWidth={2} d="M6 12h.01M18 12h.01" />
+  </svg>
+);
+
 // Modal ÚNICO de cobro (2026-09-26). Antes eran dos —"Abonar" y "Liquidar"—,
 // y en el mostrador son el mismo gesto: recibir dinero. La única diferencia es
 // si lo que trae el cliente alcanza para todo, y eso lo dice el importe, no un
@@ -721,13 +764,13 @@ export default function DetalleNota() {
     </button>
   );
   const botonCobrar = puedeLiquidar(nota) && (
-    <button
+    <AccionCircular
+      label="Cobrar"
+      icono={IconoCobrar}
+      color="bg-blue group-hover:opacity-90"
       onClick={abrirCobro}
       disabled={loadingAccion}
-      className="flex items-center gap-1.5 px-4 py-2 bg-blue hover:opacity-90 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
-    >
-      Cobrar
-    </button>
+    />
   );
   const badgeTipoServicio    = BADGE_TIPO_SERVICIO[nota.tipo_servicio] ?? BADGE_TIPO_SERVICIO.AUTOSERVICIO;
   const badgePago     = BADGE_PAGO[nota.estado_pago];
@@ -833,7 +876,7 @@ export default function DetalleNota() {
 
       {/* Botones de acción */}
       {!terminal && (
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-start gap-2">
           {puedeCancelar && (
             <button
               onClick={() => setConfirmCancelar(true)}
@@ -843,12 +886,12 @@ export default function DetalleNota() {
               Cancelar nota
             </button>
           )}
-          <button
+          <AccionCircular
+            label="Salidas"
+            icono={IconoSalidas}
+            color="bg-blue-600 group-hover:bg-blue-700"
             onClick={() => navigate(`/notas/${id}/salidas`)}
-            className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
-          >
-            Salidas
-          </button>
+          />
           {botonCobrar}
           {botonProcesado}
           {/* Último paso, y sigue exigiendo el cobro: una nota pendiente no se
@@ -881,7 +924,7 @@ export default function DetalleNota() {
       {/* Ya cerrada, el botón se ve en los dos tamaños. Y si quedó debiendo
           —le revirtieron el pago—, sigue habiendo por dónde cobrarla. */}
       {terminal && (
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-start gap-2">
           {botonCobrar}
           {/* Deshacer la entrega: la nota vuelve a Por Entregar, como antes de
               confirmarla. Para el error de mostrador —se entregó la nota
