@@ -223,9 +223,8 @@ function ModalConfirmar({ titulo, mensaje, onCancelar, onConfirmar, loading, col
 }
 
 // Modal de abono (mig. 121): un pago PARCIAL de la nota. Pide cuánto y con qué
-// forma, y no deja pasarse de lo que falta — ese dinero la nota no lo debe.
-// Arranca con el saldo completo escrito: abonar el resto es el caso más común y
-// así queda a un toque.
+// forma, y no deja pasarse de lo que falta — ese dinero la nota no lo debe. El
+// monto arranca en 0: lo teclea quien cobra, con el efectivo en la mano.
 function ModalAbonar({ saldo, folio, monto, onMonto, formaPago, onFormaPago,
                        onCancelar, onConfirmar, loading, error, cajaAbierta, onAbrirCaja }) {
   const importe = Number(monto);
@@ -274,9 +273,9 @@ function ModalAbonar({ saldo, folio, monto, onMonto, formaPago, onFormaPago,
               className="w-full pl-8 pr-4 py-3.5 text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue focus:border-blue [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
             />
           </div>
-          {monto !== '' && !valido && (
+          {Number.isFinite(importe) && importe > saldo + 1e-9 && (
             <p className="text-xs text-red-600">
-              Escribe un monto entre $0.01 y {fmtMonto(saldo)}.
+              La nota solo debe {fmtMonto(saldo)}.
             </p>
           )}
         </div>
@@ -333,7 +332,7 @@ function ModalAbonar({ saldo, folio, monto, onMonto, formaPago, onFormaPago,
 // autoservicio; desde que el cobro se hace aquí (2026-09-23) tenía que venirse
 // con él, o el dinero se salía del corte sin que nadie se enterara.
 function ModalLiquidar({ monto, folio, formaPago, onFormaPago, onCancelar, onConfirmar, loading,
-                         cajaAbierta, onAbrirCaja }) {
+                         cajaAbierta, onAbrirCaja, abonado = 0, total }) {
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4 max-h-[90vh] overflow-y-auto">
@@ -344,9 +343,19 @@ function ModalLiquidar({ monto, folio, formaPago, onFormaPago, onCancelar, onCon
 
         {/* El monto es lo que el empleado tiene que cobrar: va en grande y
             aparte, no escondido dentro del texto. */}
+        {/* Con abonos, lo que hay que cobrar NO es el total de la nota: es lo
+            que falta. El total se dice debajo para que se entienda el número
+            grande (mig. 121). */}
         <div className="rounded-2xl bg-light-blue border-2 border-blue/30 px-5 py-4 text-center">
-          <p className="text-xs font-semibold text-blue-700 uppercase tracking-wide">Total</p>
+          <p className="text-xs font-semibold text-blue-700 uppercase tracking-wide">
+            {abonado > 0 ? 'Falta por cobrar' : 'Total'}
+          </p>
           <p className="text-4xl font-bold text-dark-blue leading-tight mt-1">{monto}</p>
+          {abonado > 0 && (
+            <p className="text-xs text-blue-700 mt-1">
+              Ya abonó {fmtMonto(abonado)} de {fmtMonto(total)}
+            </p>
+          )}
         </div>
 
         {cajaAbierta === false && (
@@ -459,11 +468,12 @@ export default function DetalleNota() {
       .catch(() => setCajaAbierta(null));
   }
 
-  // Abonar: el modal nace con el saldo completo escrito (abonar el resto es lo
-  // más común) y avisa igual que el cobro si la caja del día no está abierta.
+  // Abonar: el monto arranca en 0 y lo teclea quien cobra (2026-09-25) — el
+  // abono es justo lo que el cliente trae, no un número que la app suponga.
+  // Avisa igual que el cobro si la caja del día no está abierta.
   function abrirAbonar() {
     setErrorAccion('');
-    setAbonoMonto(String(saldoNota));
+    setAbonoMonto('0');
     setAbonoForma('');
     setAbonarOpen(true);
     api.get('/caja/actual')
@@ -1522,7 +1532,9 @@ export default function DetalleNota() {
       {confirmLiquidar && (
         <ModalLiquidar
           folio={nota.folio ?? `#${nota.id}`}
-          monto={fmtMonto(nota.precio_total)}
+          monto={fmtMonto(saldoNota)}
+          abonado={abonadoNota}
+          total={nota.precio_total}
           formaPago={formaPagoSel}
           onFormaPago={setFormaPagoSel}
           onCancelar={() => { setConfirmLiquidar(false); setFormaPagoSel(''); }}
