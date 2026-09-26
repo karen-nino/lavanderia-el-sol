@@ -695,17 +695,23 @@ export default function DetalleNota() {
   // mostrador es el mismo gesto y la diferencia la decide el importe, así que
   // se cobran desde el mismo sitio. La condición es la que ya tenía Liquidar:
   // cubre a la de Abonar, que era un subconjunto suyo.
-  // Aviso por WhatsApp de que la ropa ya se procesó (mig. 124). Solo en Por
-  // Encargo: el autoservicio no captura cliente, así que no hay a quién
-  // avisarle. No se ofrece en una nota terminada —entregada o cancelada— donde
-  // el aviso ya no viene a cuento.
+  // Aviso por WhatsApp de que la ropa ya se procesó (mig. 124).
+  //
+  // Aparece cuando la nota llega a LISTA —"Por Entregar" en Por Encargo—, que
+  // es justo cuando ya se lavó y se secó todo y hay algo que avisarle al
+  // cliente. Antes se ofrecía desde que la nota nacía, y eso invitaba a
+  // mandarle "ya está lista" a alguien cuya ropa seguía en la lavadora.
+  //
+  // Solo en Por Encargo: el autoservicio no captura cliente, así que no hay a
+  // quién avisarle (y su LISTA significa otra cosa, "Por Cobrar"). Un estado
+  // terminado queda fuera solo: FINALIZADA y CANCELADA no son LISTA.
   //
   // El botón se enseña aunque falte el mensaje o el teléfono: es el modal
   // quien lo explica. Esconderlo dejaría a quien atiende sin saber por qué no
   // está el botón que sí ve en las demás notas.
   const mensajeProcesado = armarMensajeWhatsapp(plantillaWa, nota);
   const telefonoCliente = telefonoWhatsapp(nota.cliente_telefono);
-  const botonProcesado = nota.tipo_servicio === 'POR_ENCARGO' && !esTerminal(nota) && (
+  const botonProcesado = nota.tipo_servicio === 'POR_ENCARGO' && nota.estado === 'LISTA' && (
     <button
       onClick={() => { setErrorAccion(''); setProcesadoOpen(true); }}
       disabled={loadingAccion}
