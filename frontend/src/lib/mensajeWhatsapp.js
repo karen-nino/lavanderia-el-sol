@@ -16,15 +16,34 @@ import { formatHora12 } from './fecha';
 // Qué se puede meter en el mensaje. La descripción es la que se enseña en
 // Ajustes, así que vive junto al comodín y no suelta en la pantalla.
 export const COMODINES_WHATSAPP = [
-  { clave: 'Nombre', descripcion: 'El nombre del cliente de la nota' },
+  { clave: 'Nombre', descripcion: 'El nombre de pila del cliente, sin apellidos' },
   { clave: 'Tiempo', descripcion: 'La hora a la que se levantó la nota' },
+  { clave: 'Clave',  descripcion: 'El número de la nota, sin la fecha (1796 de 1796-260926)' },
 ];
+
+// Solo el nombre de pila: en un WhatsApp se saluda "Hola Ana", no "Hola Ana
+// López" (2026-09-26). Se toma la primera palabra, que es lo único que se
+// puede distinguir con certeza — en "María José García" no hay forma de saber
+// que el nombre son dos palabras, así que sale "María", que sigue saludando
+// bien.
+const primerNombre = (nombre) => String(nombre ?? '').trim().split(/\s+/)[0] ?? '';
+
+// La clave con la que el cliente recoge su ropa: el número de la nota sin la
+// fecha. El folio es `<id>-<ddmmaa>` ("1796-260926"), y al cliente solo le
+// sirve la primera mitad para decir cuál es su bolsa. Sin folio se cae al id,
+// que es de donde sale ese número.
+const claveDeNota = (nota) => {
+  const folio = String(nota?.folio ?? '').trim();
+  if (folio) return folio.split('-')[0];
+  return nota?.id != null ? String(nota.id) : '';
+};
 
 // Cómo se resuelve cada comodín contra una nota. Añadir uno nuevo es añadirlo
 // aquí y en COMODINES_WHATSAPP; el resto de la pantalla se entera sola.
 const VALORES = {
-  nombre: (nota) => (nota?.cliente_nombre ?? '').trim(),
+  nombre: (nota) => primerNombre(nota?.cliente_nombre),
   tiempo: (nota) => formatHora12(nota?.created_at),
+  clave:  (nota) => claveDeNota(nota),
 };
 
 // Quita acentos y baja a minúsculas para comparar el nombre del comodín.

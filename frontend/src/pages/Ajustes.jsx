@@ -153,7 +153,11 @@ const SectionIcon = {
 // Cómo se va a ver el mensaje. Se enseña con una nota de ejemplo porque la
 // regla de los asteriscos no se entiende leyéndola: se entiende viendo que
 // *Nombre* se convierte en un nombre y que *ya está* se queda en negritas.
-const NOTA_EJEMPLO = { cliente_nombre: 'Ana López', created_at: '2026-09-26T14:30:00' };
+const NOTA_EJEMPLO = {
+  cliente_nombre: 'Ana López',
+  created_at: '2026-09-26T14:30:00',
+  folio: '1796-260926',
+};
 
 function PreviaWhatsapp({ plantilla }) {
   const texto = armarMensajeWhatsapp(plantilla, NOTA_EJEMPLO);
