@@ -5,6 +5,16 @@ import { etiquetaProducto, ordenProducto } from '../lib/formatoInventario';
 import { capitalizarNombre } from '../lib/texto';
 import { FORMAS_PAGO } from '../lib/formasPago';
 import AbrirCajaModal from '../components/AbrirCajaModal';
+import Desplegable from '../components/Desplegable';
+
+// Lo elegible en la tarjeta de máquina: solo las dos: "Elige lavadora o
+// secadora" es el texto del campo vacío, no una tercera opción de la lista
+// (2026-09-26). Fuera del render: no cambia, y una lista nueva en cada pintada
+// haría trabajar de más al desplegable.
+const OPCIONES_MAQUINA = [
+  { valor: 'lavadora', etiqueta: 'Lavadora' },
+  { valor: 'secadora', etiqueta: 'Secadora' },
+];
 
 const INPUT_CLS =
   'w-full px-4 py-3.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent transition';
@@ -2093,19 +2103,19 @@ export default function NuevaNota() {
                         con la tarifa Mediana. La máquina física se asigna en Salidas. */}
                     <div>
                       <label className="block text-xs font-medium text-gray-500 mb-1.5">Máquina</label>
-                      <select
-                        value={c.lavadora_tipo ? 'lavadora' : c.secadora_tipo ? 'secadora' : ''}
-                        onChange={e => set(
-                          e.target.value === 'lavadora' ? { lavadora_tipo: 'mediana', secadora_tipo: '' }
-                          : e.target.value === 'secadora' ? { lavadora_tipo: '', secadora_tipo: 'mediana' }
+                      {/* Desplegable propio y no `<select>`: la lista del
+                          nativo la pinta el sistema y no se parece al campo. */}
+                      <Desplegable
+                        etiquetaAria={`Máquina ${i + 1}`}
+                        valor={c.lavadora_tipo ? 'lavadora' : c.secadora_tipo ? 'secadora' : ''}
+                        onChange={v => set(
+                          v === 'lavadora' ? { lavadora_tipo: 'mediana', secadora_tipo: '' }
+                          : v === 'secadora' ? { lavadora_tipo: '', secadora_tipo: 'mediana' }
                           : { lavadora_tipo: '', secadora_tipo: '' }
                         )}
-                        className={`${INPUT_CLS} bg-white`}
-                      >
-                        <option value="">Elige lavadora o secadora</option>
-                        <option value="lavadora">Lavadora</option>
-                        <option value="secadora">Secadora</option>
-                      </select>
+                        opciones={OPCIONES_MAQUINA}
+                        marcador="Elige lavadora o secadora"
+                      />
                     </div>
                     {!c.lavadora_tipo && !c.secadora_tipo && (
                       <p className="text-sm text-red-600">Elige lavadora o secadora.</p>
