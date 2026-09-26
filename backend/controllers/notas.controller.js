@@ -186,6 +186,19 @@ async function cerrarNotaSinCargasPendientes(client, notaId, { sucursal, usuario
   return estado;
 }
 
+// ¿El producto de esta nota ya se dio por VENDIDO? Se sabe por su movimiento de
+// inventario: entregar (o cobrar) lo saca del estante y deja la marca. Importa
+// porque una nota entregada se puede reabrir (2026-09-25) y volver a entregar:
+// sin esto, la segunda entrega descontaría el mismo producto otra vez.
+async function stockYaConsumido(client, notaId) {
+  const { rows } = await client.query(
+    `SELECT 1 FROM producto_movimientos
+      WHERE nota_id = $1 AND tipo = 'venta' LIMIT 1`,
+    [notaId]
+  );
+  return rows.length > 0;
+}
+
 // IDs (sin repetir) de todas las máquinas vinculadas a una nota.
 async function maquinasDeNota(client, notaId) {
   const { rows } = await client.query(
@@ -2332,10 +2345,11 @@ export const cambiarEstadoNota = async (req, res) => {
       });
     }
 
+    const consumido = await stockYaConsumido(client, id);
     if (estado === 'CANCELADA') {
-      if (estadoActual === 'PAGADA') {
-        // El pago ya consumió stock_actual y liberó la reserva; al anular
-        // la venta el producto vuelve al estante.
+      if (consumido) {
+        // El producto ya se dio por vendido (se cobró o se entregó): al anular
+        // la venta vuelve al estante. La reserva ya se había liberado.
         await registrarMovimientosProductosNota(client, id, req.sucursal, req.user.id, 'liberacion');
         await client.query(
           `UPDATE productos a
@@ -2353,9 +2367,10 @@ export const cambiarEstadoNota = async (req, res) => {
           [id]
         );
       }
-    } else if (estado === 'PAGADA' || (estado === 'FINALIZADA' && estadoActual !== 'PAGADA')) {
-      // Consumir stock al cobrar o al entregar, lo que ocurra primero.
-      // (PAGADA → FINALIZADA no vuelve a consumir.)
+    } else if (!consumido && (estado === 'PAGADA' || estado === 'FINALIZADA')) {
+      // Consumir stock al cobrar o al entregar, lo que ocurra primero, y solo
+      // una vez: ni PAGADA → FINALIZADA ni una nota reabierta y vuelta a
+      // entregar descuentan el mismo producto dos veces (2026-09-25).
       await registrarMovimientosProductosNota(client, id, req.sucursal, req.user.id, 'venta');
       await client.query(
         `UPDATE productos a
@@ -4271,10 +4286,10 @@ export const revertirAbono = async (req, res) => {
 // Es para el error de mostrador —se marcó entregada la nota equivocada, o el
 // cliente no se llevó todo—, así que es de admin.
 //
-// Entregar consume el stock de los productos de la nota (los da por vendidos),
-// así que reabrirla lo devuelve: el producto vuelve al estante y queda otra vez
-// APARTADO para esta nota, que sigue viva. El cobro no se toca: reabrir la
-// entrega no deshace el pago.
+// El producto de la nota NO vuelve al inventario: ya se usó en ella (2026-09-25).
+// Tampoco se vuelve a descontar si la nota se entrega otra vez: el consumo queda
+// marcado en el historial de inventario y solo ocurre una vez. El cobro tampoco
+// se toca: reabrir la entrega no deshace el pago.
 export const reabrirNota = async (req, res) => {
   const { id } = req.params;
   const client = await pool.connect();
@@ -4301,17 +4316,6 @@ export const reabrirNota = async (req, res) => {
         message: 'Solo se reabre una nota ya entregada: esta sigue abierta.',
       });
     }
-
-    // El producto vuelve al estante y se aparta de nuevo para esta nota.
-    await registrarMovimientosProductosNota(client, id, req.sucursal, req.user?.id ?? null, 'liberacion');
-    await client.query(
-      `UPDATE productos a
-          SET stock_actual    = stock_actual    + np.cantidad_tapas,
-              stock_reservado = stock_reservado + np.cantidad_tapas
-        FROM nota_productos np
-        WHERE np.nota_id = $1 AND np.producto_id = a.id`,
-      [id]
-    );
 
     const { rows: actualizada } = await client.query(
       `UPDATE notas SET estado = 'LISTA' WHERE id = $1 RETURNING *`,

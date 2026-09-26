@@ -471,8 +471,8 @@ export default function DetalleNota() {
   }
 
   // Deshace la entrega: la nota finalizada vuelve a "Por Entregar", como antes
-  // de confirmarla. Se relee del servidor porque también devuelve al inventario
-  // los productos que la entrega había dado por vendidos.
+  // de confirmarla. El inventario no se mueve —el producto ya se usó en esa
+  // nota— y el cobro se queda como estaba.
   async function reabrirNota() {
     setLoadingAccion(true);
     setErrorAccion('');
@@ -1707,7 +1707,7 @@ export default function DetalleNota() {
         <ModalConfirmar
           titulo={esEncargoNota ? 'Entregar nota' : 'Finalizar nota'}
           mensaje={esEncargoNota
-            ? `¿Marcar la nota ${nota.folio ?? `#${nota.id}`} como entregada? El cliente ya se llevó su ropa.`
+            ? `¿Marcar la nota ${nota.folio ?? `#${nota.id}`} como entregada? El cliente ya se llevó su encargo.`
             : `¿Marcar la nota ${nota.folio ?? `#${nota.id}`} como finalizada? Esta acción no se puede deshacer.`}
           onCancelar={() => setConfirmFinalizar(false)}
           onConfirmar={finalizarNota}
@@ -1721,8 +1721,7 @@ export default function DetalleNota() {
         <ModalConfirmar
           titulo="Abrir nota"
           mensaje={`La nota ${nota.folio ?? `#${nota.id}`} vuelve a "Por Entregar", como antes de `
-            + 'confirmar la entrega. Los productos que llevaba vuelven a quedar apartados para ella. '
-            + 'El cobro no se toca.'}
+            + 'confirmar la entrega. El cobro y los productos que llevaba no se tocan.'}
           onCancelar={() => { setConfirmReabrir(false); setErrorAccion(''); }}
           onConfirmar={reabrirNota}
           loading={loadingAccion}

@@ -2104,7 +2104,7 @@ describe('PATCH /api/notas/:id/reabrir', () => {
     return { notaId, prod };
   }
 
-  it('la nota entregada vuelve a Por Entregar y el producto se aparta otra vez', async () => {
+  it('la nota entregada vuelve a Por Entregar sin mover el inventario', async () => {
     const { notaId, prod } = await encargoEntregado();
     // Entregada: el producto salió del estante y dejó de estar apartado.
     const { rows: vendido } = await pool.query(
@@ -2118,10 +2118,43 @@ describe('PATCH /api/notas/:id/reabrir', () => {
     // El cobro no se toca.
     expect(res.body.estado_pago).toBe('PAGADO');
 
-    const { rows: devuelto } = await pool.query(
+    // El producto ya se usó en esta nota: no vuelve al estante ni se aparta.
+    const { rows: igual } = await pool.query(
       'SELECT stock_actual, stock_reservado FROM productos WHERE id = $1', [prod]);
-    expect(Number(devuelto[0].stock_actual)).toBe(100);
-    expect(Number(devuelto[0].stock_reservado)).toBe(2);
+    expect(Number(igual[0].stock_actual)).toBe(98);
+    expect(Number(igual[0].stock_reservado)).toBe(0);
+  });
+
+  it('volver a entregarla no descuenta el producto dos veces', async () => {
+    const { notaId, prod } = await encargoEntregado();
+    await request(app).patch(`/api/notas/${notaId}/reabrir`).set(auth(admin.token)).expect(200);
+    await request(app).patch(`/api/notas/${notaId}/estado`)
+      .set(auth(admin.token)).send({ estado: 'FINALIZADA' }).expect(200);
+
+    const { rows } = await pool.query(
+      'SELECT stock_actual, stock_reservado FROM productos WHERE id = $1', [prod]);
+    expect(Number(rows[0].stock_actual)).toBe(98);
+    expect(Number(rows[0].stock_reservado)).toBe(0);
+    // Y una sola venta en el historial de inventario.
+    const mov = await pool.query(
+      `SELECT tipo FROM producto_movimientos WHERE nota_id = $1 AND producto_id = $2`,
+      [notaId, prod]);
+    expect(mov.rows.filter(r => r.tipo === 'venta')).toHaveLength(1);
+  });
+
+  it('cancelar una nota reabierta devuelve el producto al estante', async () => {
+    const { notaId, prod } = await encargoEntregado();
+    await request(app).patch(`/api/notas/${notaId}/reabrir`).set(auth(admin.token)).expect(200);
+    // Cancelar exige revertir antes el cobro.
+    await request(app).patch(`/api/notas/${notaId}/estado-pago`)
+      .set(auth(admin.token)).send({ estado_pago: 'PENDIENTE', motivo: 'se reabrió por error' }).expect(200);
+    await request(app).patch(`/api/notas/${notaId}/estado`)
+      .set(auth(admin.token)).send({ estado: 'CANCELADA', motivo: 'ya no la quiso' }).expect(200);
+
+    const { rows } = await pool.query(
+      'SELECT stock_actual, stock_reservado FROM productos WHERE id = $1', [prod]);
+    expect(Number(rows[0].stock_actual)).toBe(100);
+    expect(Number(rows[0].stock_reservado)).toBe(0);
   });
 
   it('solo admin, y solo una nota ya entregada', async () => {
