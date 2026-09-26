@@ -41,6 +41,9 @@ const PRENDA_LABEL = {
 const TIEMPO_ENTREGA_LABEL = {
   MANANA:   'Mañana',
   DOS_DIAS: 'En 2 días',
+  // "Otra" no se enseña como palabra: lo que dice algo es su fecha, que va en
+  // la fila de abajo.
+  OTRA:     'Otra fecha',
 };
 
 const BADGE_PAGO = {
@@ -219,6 +222,109 @@ function ModalConfirmar({ titulo, mensaje, onCancelar, onConfirmar, loading, col
   );
 }
 
+// Modal de abono (mig. 121): un pago PARCIAL de la nota. Pide cuánto y con qué
+// forma, y no deja pasarse de lo que falta — ese dinero la nota no lo debe.
+// Arranca con el saldo completo escrito: abonar el resto es el caso más común y
+// así queda a un toque.
+function ModalAbonar({ saldo, folio, monto, onMonto, formaPago, onFormaPago,
+                       onCancelar, onConfirmar, loading, error, cajaAbierta, onAbrirCaja }) {
+  const importe = Number(monto);
+  const valido = Number.isFinite(importe) && importe > 0 && importe <= saldo + 1e-9;
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+        <div>
+          <h3 className="text-base font-bold text-gray-900">Abonar a la nota</h3>
+          <p className="text-sm text-gray-500">Nota {folio}</p>
+        </div>
+
+        <div className="rounded-2xl bg-light-blue border-2 border-blue/30 px-5 py-4 text-center">
+          <p className="text-xs font-semibold text-blue-700 uppercase tracking-wide">Falta por cobrar</p>
+          <p className="text-4xl font-bold text-dark-blue leading-tight mt-1">{fmtMonto(saldo)}</p>
+        </div>
+
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">{error}</div>
+        )}
+
+        {cajaAbierta === false && (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
+            <p className="text-sm font-semibold text-amber-900">La caja del día no está abierta</p>
+            <p className="mt-0.5 text-sm text-amber-800">
+              Puedes abonar, pero este dinero no va a aparecer en el corte de hoy.
+            </p>
+            <button
+              type="button"
+              onClick={onAbrirCaja}
+              className="mt-2.5 text-sm font-medium text-amber-800 border border-amber-300 bg-white rounded-lg px-4 py-2 hover:bg-amber-100 transition-colors"
+            >
+              Abrir caja
+            </button>
+          </div>
+        )}
+
+        <div className="space-y-2">
+          <label className="text-sm font-semibold text-gray-900">¿Cuánto abona?</label>
+          <div className="relative">
+            <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 text-base">$</span>
+            <input
+              type="number" min="0" step="any" max={saldo}
+              value={monto}
+              onChange={e => onMonto(e.target.value)}
+              className="w-full pl-8 pr-4 py-3.5 text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue focus:border-blue [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+            />
+          </div>
+          {monto !== '' && !valido && (
+            <p className="text-xs text-red-600">
+              Escribe un monto entre $0.01 y {fmtMonto(saldo)}.
+            </p>
+          )}
+        </div>
+
+        <div className="space-y-2">
+          <p className="text-sm font-semibold text-gray-900">Método de pago:</p>
+          <div className="grid grid-cols-3 gap-3">
+            {FORMAS_PAGO.map(opt => {
+              const selected = formaPago === opt.v;
+              return (
+                <button
+                  key={opt.v}
+                  type="button"
+                  onClick={() => onFormaPago(opt.v)}
+                  className={`py-4 px-2 border-2 rounded-xl font-semibold text-base truncate transition-colors ${
+                    selected
+                      ? 'border-blue bg-light-blue text-blue-700'
+                      : 'border-gray-300 bg-white text-gray-700 hover:border-blue-300'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="flex gap-3 pt-4 border-t border-gray-100">
+          <button
+            onClick={onCancelar}
+            disabled={loading}
+            className="flex-1 border border-gray-300 text-gray-700 font-medium py-3.5 rounded-lg text-base hover:bg-gray-50 disabled:opacity-60 transition-colors"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={onConfirmar}
+            disabled={loading || !valido || !formaPago}
+            className="flex-1 bg-blue hover:opacity-90 text-white font-medium py-3.5 rounded-lg text-base transition-colors disabled:opacity-60"
+          >
+            {loading ? 'Registrando...' : 'Abonar'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Modal de cobro: pide la forma de pago además de confirmar. Sin este dato el
 // corte de caja no distingue el dinero del cajón de transferencias y tarjetas.
 //
@@ -322,6 +428,12 @@ export default function DetalleNota() {
   const [confirmFinalizar,  setConfirmFinalizar]  = useState(false);
   const [confirmLiquidar,  setConfirmLiquidar]  = useState(false);
   const [formaPagoSel,     setFormaPagoSel]     = useState('');
+  // Abono: pago parcial de la nota (mig. 121).
+  const [abonarOpen,       setAbonarOpen]       = useState(false);
+  const [abonoMonto,       setAbonoMonto]       = useState('');
+  const [abonoForma,       setAbonoForma]       = useState('');
+  const [confirmRevertirAbono, setConfirmRevertirAbono] = useState(null);
+  const [motivoAbono,      setMotivoAbono]      = useState('');
   const [corrigiendoPago,  setCorrigiendoPago]  = useState(false);
   // Reversión del cobro (solo admin, caja aún abierta): el motivo es
   // obligatorio, así que el modal lleva su propio texto.
@@ -345,6 +457,60 @@ export default function DetalleNota() {
     api.get('/caja/actual')
       .then(r => setCajaAbierta(Boolean(r?.abierta)))
       .catch(() => setCajaAbierta(null));
+  }
+
+  // Abonar: el modal nace con el saldo completo escrito (abonar el resto es lo
+  // más común) y avisa igual que el cobro si la caja del día no está abierta.
+  function abrirAbonar() {
+    setErrorAccion('');
+    setAbonoMonto(String(saldoNota));
+    setAbonoForma('');
+    setAbonarOpen(true);
+    api.get('/caja/actual')
+      .then(r => setCajaAbierta(Boolean(r?.abierta)))
+      .catch(() => setCajaAbierta(null));
+  }
+
+  // Registra el abono y vuelve a leer la nota: el abono puede haberla dejado
+  // pagada (y a un Autoservicio ya terminado, finalizada), así que el estado,
+  // los botones y la línea de tiempo se releen del servidor.
+  async function abonarNota() {
+    setLoadingAccion(true);
+    setErrorAccion('');
+    try {
+      await api.post(`/notas/${id}/abonos`, {
+        monto: Number(abonoMonto), forma_pago: abonoForma,
+      });
+      const fresca = await api.get(`/notas/${id}`);
+      setNota(fresca);
+      setAbonarOpen(false);
+      setAbonoMonto('');
+      setAbonoForma('');
+    } catch (err) {
+      // El motivo se queda dentro del modal: el aviso de la página está arriba
+      // del todo y aquí no se vería.
+      setErrorAccion(err.message);
+    } finally {
+      setLoadingAccion(false);
+    }
+  }
+
+  // Deshace un abono mal capturado (solo admin, con motivo). Si ese abono había
+  // dejado la nota pagada, vuelve a deber.
+  async function revertirAbono(abonoId) {
+    setLoadingAccion(true);
+    setErrorAccion('');
+    try {
+      await api.patch(`/notas/${id}/abonos/${abonoId}/revertir`, { motivo: motivoAbono.trim() });
+      const fresca = await api.get(`/notas/${id}`);
+      setNota(fresca);
+      setConfirmRevertirAbono(null);
+      setMotivoAbono('');
+    } catch (err) {
+      setErrorAccion(err.message);
+    } finally {
+      setLoadingAccion(false);
+    }
   }
 
   useEffect(() => {
@@ -533,6 +699,26 @@ export default function DetalleNota() {
   // Va en una variable porque sale en los DOS bloques de acciones: el de la
   // nota viva y el de la nota ya cerrada — una FINALIZADA a la que le
   // revirtieron el pago vuelve a deber y también hay que poder cobrarla.
+  // Lo abonado y lo que falta (mig. 121). El servidor los manda calculados; con
+  // notas viejas o sin abonos, `saldo` es el total de la nota.
+  const abonosNota = nota.abonos ?? [];
+  const abonadoNota = Number(nota.abonado ?? 0);
+  const saldoNota = Number(nota.saldo ?? nota.precio_total ?? 0);
+  // Abonar es para Por Encargo, que es donde el cliente adelanta una parte al
+  // dejar la ropa. Lo puede hacer cualquiera que atienda el mostrador, mientras
+  // la nota siga debiendo y no esté cancelada.
+  const botonAbonar = nota.tipo_servicio === 'POR_ENCARGO'
+    && nota.estado_pago === 'PENDIENTE'
+    && nota.estado !== 'CANCELADA'
+    && saldoNota > 0 && (
+    <button
+      onClick={abrirAbonar}
+      disabled={loadingAccion}
+      className="flex items-center gap-1.5 px-4 py-2 bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
+    >
+      Abonar
+    </button>
+  );
   const botonLiquidar = puedeLiquidar(nota) && (
     <button
       onClick={abrirLiquidar}
@@ -662,6 +848,7 @@ export default function DetalleNota() {
           >
             Salidas
           </button>
+          {botonAbonar}
           {botonLiquidar}
           {/* Finalizar sigue siendo el último paso y sigue exigiendo el cobro:
               una nota pendiente no se puede dar por entregada. */}
@@ -693,6 +880,7 @@ export default function DetalleNota() {
           —le revirtieron el pago—, sigue habiendo por dónde cobrarla. */}
       {terminal && (
         <div className="flex flex-wrap gap-2">
+          {botonAbonar}
           {botonLiquidar}
           {puedeEliminar(nota, esAdmin) && (
             <button
@@ -715,7 +903,14 @@ export default function DetalleNota() {
           <div className="rounded-xl border-2 border-amber-300 bg-amber-50 px-5 py-4 flex items-center justify-between gap-3">
             <div className="min-w-0">
               <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide">Pendiente de cobro</p>
-              <p className="text-3xl font-bold text-amber-900 leading-tight mt-0.5">{fmtMonto(nota.precio_total)}</p>
+              {/* Con abonos, lo que falta NO es el total de la nota: el monto
+                  grande es el saldo y debajo se dice de cuánto viene. */}
+              <p className="text-3xl font-bold text-amber-900 leading-tight mt-0.5">{fmtMonto(saldoNota)}</p>
+              {abonadoNota > 0 && (
+                <p className="text-xs text-amber-800 mt-1">
+                  Abonado {fmtMonto(abonadoNota)} de {fmtMonto(nota.precio_total)}
+                </p>
+              )}
             </div>
             <svg className="w-8 h-8 text-amber-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -871,6 +1066,45 @@ export default function DetalleNota() {
                     </span>
                   </div>
                 ))}
+              </div>
+            </FilaDetalle>
+          )}
+          {/* Abonos (mig. 121): cada pago parcial con su forma, quién lo tomó y
+              cuándo. Los revertidos se siguen viendo, tachados: el rastro del
+              dinero no se borra. */}
+          {abonosNota.length > 0 && (
+            <FilaDetalle label="Abonos">
+              <div className="space-y-2">
+                {abonosNota.map(ab => {
+                  const revertido = ab.revertido_at != null;
+                  return (
+                    <div key={ab.id} className="text-xs text-gray-500">
+                      <span className={`font-medium ${revertido ? 'text-gray-400 line-through' : 'text-gray-700'}`}>
+                        {fmtMonto(ab.monto)} · {formaPagoLabel(ab.forma_pago)}
+                      </span>
+                      <span className="block">
+                        {ab.usuario_nombre ?? 'Usuario eliminado'} · {formatFechaHora12(ab.created_at)}
+                      </span>
+                      {revertido && (
+                        <span className="block text-gray-400">
+                          Revertido: {ab.motivo_reversion}
+                        </span>
+                      )}
+                      {esAdmin && ab.reversible && !terminal && (
+                        <button
+                          type="button"
+                          onClick={() => { setMotivoAbono(''); setErrorAccion(''); setConfirmRevertirAbono(ab); }}
+                          className="mt-0.5 text-xs font-semibold text-amber-800 underline underline-offset-2 hover:text-amber-900"
+                        >
+                          Revertir abono
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+                <div className="text-xs font-semibold text-gray-700 pt-1 border-t border-gray-100">
+                  Abonado {fmtMonto(abonadoNota)} · Falta {fmtMonto(saldoNota)}
+                </div>
               </div>
             </FilaDetalle>
           )}
@@ -1219,6 +1453,72 @@ export default function DetalleNota() {
       )}
 
       {/* Modal confirmar liquidación (cobro) */}
+      {abonarOpen && (
+        <ModalAbonar
+          folio={nota.folio ?? `#${nota.id}`}
+          saldo={saldoNota}
+          monto={abonoMonto}
+          onMonto={setAbonoMonto}
+          formaPago={abonoForma}
+          onFormaPago={setAbonoForma}
+          onCancelar={() => { setAbonarOpen(false); setErrorAccion(''); }}
+          onConfirmar={abonarNota}
+          loading={loadingAccion}
+          error={errorAccion}
+          cajaAbierta={cajaAbierta}
+          onAbrirCaja={() => setModalCajaOpen(true)}
+        />
+      )}
+
+      {confirmRevertirAbono && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-4">
+            <div>
+              <h3 className="text-base font-semibold text-gray-900">Revertir abono</h3>
+              <p className="text-sm text-gray-500 mt-0.5">
+                Se deshace el abono de {fmtMonto(confirmRevertirAbono.monto)}: sale del corte
+                de su caja y la nota vuelve a deber ese dinero.
+              </p>
+            </div>
+            <div>
+              <label htmlFor="motivo-abono" className="block text-sm font-medium text-gray-700 mb-1">
+                Motivo
+              </label>
+              <textarea
+                id="motivo-abono"
+                value={motivoAbono}
+                onChange={e => setMotivoAbono(e.target.value)}
+                rows={3}
+                maxLength={200}
+                placeholder="Ej. Se capturó de más"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent transition resize-none"
+              />
+            </div>
+            {errorAccion && (
+              <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">{errorAccion}</div>
+            )}
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => { setConfirmRevertirAbono(null); setMotivoAbono(''); setErrorAccion(''); }}
+                disabled={loadingAccion}
+                className="flex-1 border border-gray-300 text-gray-700 font-medium py-3.5 rounded-lg text-base hover:bg-gray-50 transition-colors disabled:opacity-60"
+              >
+                Atrás
+              </button>
+              <button
+                type="button"
+                onClick={() => revertirAbono(confirmRevertirAbono.id)}
+                disabled={loadingAccion || !motivoAbono.trim()}
+                className="flex-1 bg-orange-500 hover:bg-orange-600 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
+              >
+                {loadingAccion ? 'Revirtiendo…' : 'Revertir abono'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {confirmLiquidar && (
         <ModalLiquidar
           folio={nota.folio ?? `#${nota.id}`}

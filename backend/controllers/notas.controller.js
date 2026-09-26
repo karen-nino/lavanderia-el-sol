@@ -32,10 +32,11 @@ const TIPOS_PRENDA_VALIDOS = ['ROPA', 'EDREDON'];
 // Tipo de máquina previsto por carga en Por Encargo (define el precio; la
 // máquina física real se asigna después en Salidas).
 const TIPOS_MAQUINA_VALIDOS = ['mediana', 'jumbo', 'edredon'];
-// Cuándo estará lista la ropa: mañana o en dos días (2026-09-25). Antes eran
-// horarios del día (mañana/tarde/noche), pero lo que el mostrador promete es
-// el DÍA. Es opcional: una nota puede no prometer nada.
-const TIEMPOS_ENTREGA_VALIDOS = ['MANANA', 'DOS_DIAS'];
+// Cuándo estará lista la ropa: mañana, en dos días, u OTRA fecha —que entonces
+// va en `fecha_entrega` (2026-09-25)—. Antes eran horarios del día
+// (mañana/tarde/noche), pero lo que el mostrador promete es el DÍA. Es
+// opcional: una nota puede no prometer nada.
+const TIEMPOS_ENTREGA_VALIDOS = ['MANANA', 'DOS_DIAS', 'OTRA'];
 
 // Los estados y catálogos se guardan en MAYÚSCULAS, pero nadie los lee así en
 // pantalla: los mensajes hablan de "por encargo" y "en espera", no de
@@ -1288,9 +1289,37 @@ export const getNotaById = async (req, res) => {
 
     const cargas = await cargasDeNota(pool, id);
 
+    // Abonos (mig. 121): pagos parciales de la nota. Los revertidos se enseñan
+    // igual —el rastro importa— pero no suman.
+    const { rows: abonos } = await pool.query(
+      `SELECT ab.id, ab.monto, ab.forma_pago, ab.created_at, ab.caja_id,
+              ab.revertido_at, ab.motivo_reversion,
+              TRIM(u.nombre || ' ' || COALESCE(u.apellido, '')) AS usuario_nombre,
+              -- Solo se revierte mientras la caja de ESE abono siga abierta: con
+              -- el corte cerrado sus cifras ya quedaron congeladas (mig. 101).
+              (ab.revertido_at IS NULL AND (
+                 ab.caja_id IS NULL
+                 OR EXISTS (SELECT 1 FROM cajas cj WHERE cj.id = ab.caja_id AND cj.estado = 'abierta')
+               )) AS reversible
+         FROM nota_abonos ab
+         LEFT JOIN usuarios u ON u.id = ab.usuario_id
+        WHERE ab.nota_id = $1
+        ORDER BY ab.created_at ASC`,
+      [id]
+    );
+    const abonado = abonos
+      .filter(a => a.revertido_at == null)
+      .reduce((s, a) => s + Number(a.monto), 0);
+
     res.json({
       ...rows[0], productos, cargas, insumos_consumidos: movs,
       historial_estados: historial, historial_forma_pago: historialPago,
+      abonos,
+      abonado,
+      // Lo que falta por cobrar. Una nota ya pagada no debe nada.
+      saldo: rows[0].estado_pago === 'PAGADO'
+        ? 0
+        : Math.max(0, Number(rows[0].precio_total) - abonado),
     });
   } catch (err) {
     console.error('getNotaById error:', err);
@@ -4038,6 +4067,198 @@ export const removeProductoFromNota = async (req, res) => {
     if (respondioCorteCerrado(res, err)) return;
     console.error('removeProductoFromNota error:', err);
     res.status(500).json({ message: 'No se pudo quitar el producto de la nota. Intenta de nuevo.' });
+  } finally {
+    client.release();
+  }
+};
+
+// ── Abonos (pagos parciales, mig. 121) ──────────────────────
+//
+// Por Encargo el cliente suele adelantar una parte al dejar la ropa. El abono
+// es dinero que entró HOY: se guarda con la caja abierta de su sucursal, y el
+// corte de ese día lo cuenta. Al liquidar la nota solo entra lo que faltaba, así
+// que cada peso se cuenta una sola vez y en el corte que le toca.
+//
+// Cuando los abonos cubren el total, la nota se marca PAGADA sola: nadie tiene
+// que apretar Liquidar para cerrar algo que ya está cobrado.
+
+// Suma de lo abonado (sin los revertidos) de una nota.
+async function totalAbonado(client, notaId) {
+  const { rows } = await client.query(
+    `SELECT COALESCE(SUM(monto), 0) AS abonado
+       FROM nota_abonos WHERE nota_id = $1 AND revertido_at IS NULL`,
+    [notaId]
+  );
+  return Number(rows[0].abonado);
+}
+
+export const abonarNota = async (req, res) => {
+  const { id } = req.params;
+  const { monto, forma_pago } = req.body;
+
+  const importe = Number(monto);
+  if (!Number.isFinite(importe) || importe <= 0) {
+    return res.status(400).json({ message: 'El abono tiene que ser mayor a $0.' });
+  }
+  const formaPago = normalizarFormaPago(forma_pago);
+  if (!formaPago) {
+    return res.status(400).json({
+      message: `Indica la forma de pago: ${enPalabras(FORMAS_PAGO_VALIDAS)}.`,
+    });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const { rows: notaRows } = await client.query(
+      `SELECT id, folio, estado, estado_pago, precio_total
+         FROM notas WHERE id = $1 AND sucursal = $2 FOR UPDATE`,
+      [id, req.sucursal]
+    );
+    if (notaRows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: 'Nota no encontrada.' });
+    }
+    const nota = notaRows[0];
+    if (nota.estado === 'CANCELADA') {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'Una nota cancelada no recibe abonos.' });
+    }
+    if (nota.estado_pago === 'PAGADO') {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'Esta nota ya está pagada: no hay nada que abonar.' });
+    }
+
+    // Nunca se abona de más: lo que sobra sería dinero que la nota no debe.
+    const abonado = await totalAbonado(client, id);
+    const saldo = Number(nota.precio_total) - abonado;
+    if (saldo <= 0) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ message: 'Esta nota ya está cubierta por sus abonos.' });
+    }
+    if (importe > saldo + 1e-9) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        message: `El abono pasa de lo que falta: quedan $${saldo.toFixed(2)} por cobrar.`,
+      });
+    }
+
+    // La caja abierta de la sucursal, que es donde entra este dinero. Sin caja
+    // abierta el abono se registra igual (queda fuera de todo corte, como un
+    // cobro sin caja).
+    const { rows: cajaRows } = await client.query(
+      `SELECT id FROM cajas WHERE estado = 'abierta' AND sucursal = $1 LIMIT 1`,
+      [req.sucursal]
+    );
+    const cajaId = cajaRows[0]?.id ?? null;
+
+    const { rows: abonoRows } = await client.query(
+      `INSERT INTO nota_abonos (nota_id, caja_id, usuario_id, monto, forma_pago)
+       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+      [id, cajaId, req.user?.id ?? null, importe, formaPago]
+    );
+
+    // ¿Quedó cubierta? Entonces la nota se cobra sola, con la forma de este
+    // último abono (es el que la terminó de pagar).
+    const cubierta = importe >= saldo - 1e-9;
+    if (cubierta) {
+      await client.query(
+        `UPDATE notas SET estado_pago = 'PAGADO', forma_pago = $2 WHERE id = $1`,
+        [id, formaPago]
+      );
+      // Mismo cierre que al liquidar: un Autoservicio que ya terminó sus cargas
+      // no tiene nada que entregar, así que queda finalizado.
+      const { rows: estadoRows } = await client.query(
+        'SELECT tipo_servicio, estado FROM notas WHERE id = $1', [id]
+      );
+      if (estadoRows[0]?.tipo_servicio === 'AUTOSERVICIO'
+          && estadoRows[0]?.estado === 'LISTA'
+          && !(await hayCargasPendientes(client, id))) {
+        await cerrarNotaSinCargasPendientes(client, id, {
+          sucursal: req.sucursal, usuarioId: req.user?.id,
+        });
+      }
+    }
+
+    await client.query('COMMIT');
+    res.status(201).json({ ...abonoRows[0], nota_pagada: cubierta });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('abonarNota error:', err);
+    res.status(500).json({ message: 'No se pudo registrar el abono. Intenta de nuevo.' });
+  } finally {
+    client.release();
+  }
+};
+
+// Deshace un abono mal capturado. Es de admin y pide motivo, como revertir un
+// pago: el abono no se borra, se marca revertido con quién y por qué. Solo
+// mientras la caja donde entró siga abierta —con el corte cerrado sus cifras ya
+// quedaron congeladas (mig. 101)—, y si el abono había dejado la nota pagada,
+// esta vuelve a deber.
+export const revertirAbono = async (req, res) => {
+  const { id, abonoId } = req.params;
+  const motivo = String(req.body?.motivo ?? '').trim().slice(0, 200);
+  if (!motivo) {
+    return res.status(400).json({ message: 'Escribe por qué se revierte el abono.' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const { rows } = await client.query(
+      `SELECT ab.id, ab.monto, ab.caja_id, ab.revertido_at, n.estado_pago, n.id AS nota_id
+         FROM nota_abonos ab
+         JOIN notas n ON n.id = ab.nota_id
+        WHERE ab.id = $1 AND ab.nota_id = $2 AND n.sucursal = $3
+        FOR UPDATE OF ab`,
+      [abonoId, id, req.sucursal]
+    );
+    if (rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: 'Ese abono no es de esta nota.' });
+    }
+    const abono = rows[0];
+    if (abono.revertido_at) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ message: 'Ese abono ya estaba revertido.' });
+    }
+    if (abono.caja_id) {
+      const { rows: cj } = await client.query(
+        'SELECT estado FROM cajas WHERE id = $1', [abono.caja_id]
+      );
+      if (cj[0]?.estado !== 'abierta') {
+        await client.query('ROLLBACK');
+        return res.status(409).json({
+          message: 'El corte de caja de ese abono ya se cerró: solo se puede revertir '
+                 + 'mientras esa caja siga abierta.',
+        });
+      }
+    }
+
+    await client.query(
+      `UPDATE nota_abonos
+          SET revertido_at = NOW(), revertido_por = $2, motivo_reversion = $3
+        WHERE id = $1`,
+      [abonoId, req.user?.id ?? null, motivo]
+    );
+
+    // Si con este abono la nota había quedado pagada, vuelve a deber.
+    if (abono.estado_pago === 'PAGADO') {
+      await client.query(
+        `UPDATE notas SET estado_pago = 'PENDIENTE', forma_pago = NULL WHERE id = $1`,
+        [id]
+      );
+    }
+
+    await client.query('COMMIT');
+    res.json({ ok: true });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('revertirAbono error:', err);
+    res.status(500).json({ message: 'No se pudo revertir el abono. Intenta de nuevo.' });
   } finally {
     client.release();
   }

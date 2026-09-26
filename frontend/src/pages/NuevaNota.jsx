@@ -145,16 +145,28 @@ const CARGA_ENCARGO_INIT = {
 // Cuándo estará lista la ropa. Es el DÍA que se le promete al cliente, no una
 // hora del día (2026-09-25), y es opcional.
 const TIEMPOS_ENTREGA = [
-  { v: 'MANANA',   label: 'Mañana'     },
-  { v: 'DOS_DIAS', label: 'En 2 días'  },
+  { v: 'MANANA',   label: 'Mañana'    },
+  { v: 'DOS_DIAS', label: 'En 2 días' },
+  // "Otra" abre el calendario: la fecha se guarda en fecha_entrega.
+  { v: 'OTRA',     label: 'Otra'      },
 ];
 const TIEMPO_ENTREGA_LABEL = Object.fromEntries(TIEMPOS_ENTREGA.map(t => [t.v, t.label]));
 
-// Fecha de hoy en formato YYYY-MM-DD (local). Se usa como entrega por defecto
-// cuando no se elige una fecha en el paso de Entrega.
-const fechaHoyISO = () => {
+// Fecha local en formato YYYY-MM-DD, tantos días después de hoy. Sin argumento
+// es hoy, que es la entrega por defecto cuando no se promete ningún día.
+const fechaISOEnDias = (dias = 0) => {
   const d = new Date();
+  d.setDate(d.getDate() + dias);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+const fechaHoyISO = () => fechaISOEnDias(0);
+// Qué fecha se guarda según el día prometido: mañana es hoy + 1, "en 2 días" es
+// hoy + 2 y "Otra" es la que se eligió en el calendario (2026-09-25). Así la
+// fecha de entrega de la nota dice lo mismo que se le prometió al cliente.
+const fechaSegunDiaPrometido = (tiempo, fechaElegida) => {
+  if (tiempo === 'MANANA')   return fechaISOEnDias(1);
+  if (tiempo === 'DOS_DIAS') return fechaISOEnDias(2);
+  return fechaElegida || fechaHoyISO();
 };
 
 // Pasos fijos del wizard, además de una pantalla por carga:
@@ -390,7 +402,8 @@ export default function NuevaNota() {
               pago_anticipado: nota.estado_pago === 'PAGADO' ? 'SI' : 'NO',
               forma_pago:      nota.forma_pago ?? '',
               fecha_entrega:   nota.fecha_entrega  ? String(nota.fecha_entrega).slice(0, 10) : '',
-              tiempo_entrega:  nota.tiempo_entrega ?? '',
+              // Una nota vieja con fecha pero sin día elegido se lee como "Otra".
+              tiempo_entrega:  nota.tiempo_entrega ?? (nota.fecha_entrega ? 'OTRA' : ''),
               instrucciones:   nota.instrucciones  ?? '',
             });
             // Cargas de la nota; si es una nota vieja sin cargas, se arma una
@@ -800,7 +813,7 @@ export default function NuevaNota() {
         // Forma de pago solo si pagó anticipado; si queda a deber, va null.
         forma_pago:     encargoForm.pago_anticipado === 'SI' ? (encargoForm.forma_pago || null) : null,
         // Si no se eligió fecha, la entrega se da por hecho para hoy.
-        fecha_entrega:  encargoForm.fecha_entrega  || fechaHoyISO(),
+        fecha_entrega:  fechaSegunDiaPrometido(encargoForm.tiempo_entrega, encargoForm.fecha_entrega),
         tiempo_entrega: encargoForm.tiempo_entrega || null,
         instrucciones:  encargoForm.instrucciones  || null,
       };
@@ -1722,38 +1735,22 @@ export default function NuevaNota() {
               <div className="space-y-5">
                 <h2 className="text-base font-semibold text-gray-900">Entrega</h2>
                 <div>
-                  <label className={LABEL_CLS}>Fecha de entrega</label>
-                  <div className="relative">
-                    <input
-                      type="date" name="fecha_entrega"
-                      value={encargoForm.fecha_entrega} onChange={handleEncargoChange}
-                      // Con appearance-none se oculta el ícono del calendario; al
-                      // hacer click se abre el selector nativo (showPicker) para que
-                      // se pueda elegir la fecha tocando cualquier parte del campo.
-                      onClick={(e) => { try { e.currentTarget.showPicker?.(); } catch { /* no soportado */ } }}
-                      className={`${INPUT_CLS} min-w-0 block bg-white h-[54px] cursor-pointer ${
-                        encargoForm.fecha_entrega ? '' : 'text-transparent'
-                      }`}
-                    />
-                    {!encargoForm.fecha_entrega && (
-                      <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-base">
-                        Seleccionar fecha
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <div>
                   <label className={LABEL_CLS}>
                     Día que estará lista <span className="text-gray-400 font-normal">(opcional)</span>
                   </label>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-3 gap-3">
                     {TIEMPOS_ENTREGA.map(t => {
                       const selected = encargoForm.tiempo_entrega === t.v;
                       return (
                         <button
                           key={t.v}
                           type="button"
-                          onClick={() => setEncargoForm(f => ({ ...f, tiempo_entrega: f.tiempo_entrega === t.v ? '' : t.v }))}
+                          // Al salir de "Otra" se limpia la fecha: quedaría una
+                          // fecha suelta contradiciendo lo que dice el botón.
+                          onClick={() => setEncargoForm(f => {
+                            const v = f.tiempo_entrega === t.v ? '' : t.v;
+                            return { ...f, tiempo_entrega: v, ...(v === 'OTRA' ? {} : { fecha_entrega: '' }) };
+                          })}
                           className={`py-4 px-2 border-2 rounded-xl font-semibold text-base truncate transition-colors ${
                             selected ? 'border-blue bg-light-blue text-blue-700' : 'border-gray-300 bg-white text-gray-700 hover:border-blue-300'
                           }`}
@@ -1764,6 +1761,32 @@ export default function NuevaNota() {
                     })}
                   </div>
                 </div>
+
+                {/* El calendario solo aparece con "Otra": mañana y en 2 días se
+                    explican solos (2026-09-25). */}
+                {encargoForm.tiempo_entrega === 'OTRA' && (
+                  <div>
+                    <label className={LABEL_CLS}>Fecha de entrega</label>
+                    <div className="relative">
+                      <input
+                        type="date" name="fecha_entrega"
+                        value={encargoForm.fecha_entrega} onChange={handleEncargoChange}
+                        // Con appearance-none se oculta el ícono del calendario; al
+                        // hacer click se abre el selector nativo (showPicker) para que
+                        // se pueda elegir la fecha tocando cualquier parte del campo.
+                        onClick={(e) => { try { e.currentTarget.showPicker?.(); } catch { /* no soportado */ } }}
+                        className={`${INPUT_CLS} min-w-0 block bg-white h-[54px] cursor-pointer ${
+                          encargoForm.fecha_entrega ? '' : 'text-transparent'
+                        }`}
+                      />
+                      {!encargoForm.fecha_entrega && (
+                        <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-base">
+                          Seleccionar fecha
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
                 <div>
                   <label className={LABEL_CLS}>Instrucciones</label>
                   <textarea
@@ -1803,11 +1826,15 @@ export default function NuevaNota() {
                       </span>
                     </div>
                   )}
-                  {encargoForm.fecha_entrega && (
-                    <div className="flex justify-between"><span>Entrega</span><span className="font-medium">{encargoForm.fecha_entrega}</span></div>
-                  )}
                   {encargoForm.tiempo_entrega && (
-                    <div className="flex justify-between"><span>Lista</span><span className="font-medium">{TIEMPO_ENTREGA_LABEL[encargoForm.tiempo_entrega]}</span></div>
+                    <div className="flex justify-between">
+                      <span>Lista</span>
+                      <span className="font-medium">
+                        {encargoForm.tiempo_entrega === 'OTRA'
+                          ? (encargoForm.fecha_entrega || 'Otra fecha')
+                          : TIEMPO_ENTREGA_LABEL[encargoForm.tiempo_entrega]}
+                      </span>
+                    </div>
                   )}
                 </div>
                 <div className="space-y-5 mb-2 text-sm text-blue border-t border-blue-200 pt-4">

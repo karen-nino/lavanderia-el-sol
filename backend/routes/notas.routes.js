@@ -22,6 +22,8 @@ import {
   terminarLavadoFinal,
   terminarSecado,
   cambiarEstadoPago,
+  abonarNota,
+  revertirAbono,
   corregirFormaPago,
   guardarTelefono,
   getNotaProductos,
@@ -36,6 +38,7 @@ const router = Router();
 router.param('id', validarId('la nota'));
 router.param('cargaId', validarId('la carga'));
 router.param('productoId', validarId('el producto'));
+router.param('abonoId', validarId('el abono'));
 
 router.use(verifyToken, sucursalActiva);
 
@@ -61,6 +64,10 @@ router.patch('/:id/terminar-lavado', terminarLavado);
 router.patch('/:id/terminar-lavado-final', terminarLavadoFinal);
 router.patch('/:id/terminar-secado', terminarSecado);
 router.patch('/:id/estado-pago', cambiarEstadoPago);
+// Abonos (mig. 121): un pago parcial lo registra cualquiera que atienda el
+// mostrador; revertirlo es de admin, como revertir un cobro.
+router.post('/:id/abonos', abonarNota);
+router.patch('/:id/abonos/:abonoId/revertir', requireAdmin, revertirAbono);
 // Corregir la forma de pago de una nota ya cobrada es cosa de admin.
 router.patch('/:id/forma-pago', requireAdmin, corregirFormaPago);
 router.patch('/:id/telefono', guardarTelefono);

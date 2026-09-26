@@ -154,7 +154,7 @@ function fmtFecha(iso) {
 const MESES_ABR = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 const DIAS_SEMANA = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 
-const TIEMPO_ENTREGA_LABEL = { MANANA: 'Mañana', DOS_DIAS: 'En 2 días' };
+const TIEMPO_ENTREGA_LABEL = { MANANA: 'Mañana', DOS_DIAS: 'En 2 días', OTRA: 'Otra fecha' };
 
 // Fecha de entrega (solo la parte de fecha, sin corrimiento por zona horaria).
 // Ej.: "14 Ago" (sin año).

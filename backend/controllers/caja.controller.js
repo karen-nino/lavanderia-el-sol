@@ -15,17 +15,37 @@ import { esAdmin } from '../middleware/roles.js';
 // fila que se cuele después). Una nota cancelada no es una venta: su dinero se
 // devolvió.
 async function ventasDeSesion(client, cajaId) {
+  // Con abonos (mig. 121) el dinero de una nota puede llegar en varios días, así
+  // que cada peso se cuenta en la caja donde entró:
+  //   · de una nota cobrada aquí, lo que faltaba = precio_total − lo ya abonado;
+  //   · más los abonos hechos en ESTA caja (los revertidos no cuentan).
+  // Sin abonos las dos consultas dan exactamente lo de siempre.
   const { rows } = await client.query(
-    `SELECT
-        COALESCE(SUM(precio_total), 0) AS total,
-        COALESCE(SUM(precio_total) FILTER (
+    `WITH cobros AS (
+        SELECT n.forma_pago,
+               n.precio_total - COALESCE((
+                 SELECT SUM(ab.monto) FROM nota_abonos ab
+                  WHERE ab.nota_id = n.id AND ab.revertido_at IS NULL
+               ), 0) AS monto
+          FROM notas n
+         WHERE n.caja_id = $1
+           AND n.estado_pago = 'PAGADO'
+           AND n.estado <> 'CANCELADA'
+        UNION ALL
+        SELECT ab.forma_pago, ab.monto
+          FROM nota_abonos ab
+          JOIN notas n ON n.id = ab.nota_id
+         WHERE ab.caja_id = $1
+           AND ab.revertido_at IS NULL
+           AND n.estado <> 'CANCELADA'
+     )
+     SELECT
+        COALESCE(SUM(monto), 0) AS total,
+        COALESCE(SUM(monto) FILTER (
           WHERE COALESCE(forma_pago, 'EFECTIVO') = 'EFECTIVO'), 0) AS efectivo,
-        COALESCE(SUM(precio_total) FILTER (WHERE forma_pago = 'TRANSFERENCIA'), 0) AS transferencia,
-        COALESCE(SUM(precio_total) FILTER (WHERE forma_pago = 'TARJETA'), 0) AS tarjeta
-       FROM notas
-      WHERE caja_id = $1
-        AND estado_pago = 'PAGADO'
-        AND estado <> 'CANCELADA'`,
+        COALESCE(SUM(monto) FILTER (WHERE forma_pago = 'TRANSFERENCIA'), 0) AS transferencia,
+        COALESCE(SUM(monto) FILTER (WHERE forma_pago = 'TARJETA'), 0) AS tarjeta
+       FROM cobros`,
     [cajaId]
   );
   const r = rows[0];

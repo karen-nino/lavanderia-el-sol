@@ -56,6 +56,11 @@ export async function getResumen(req, res) {
   // corrigieron, no por cuándo se cobró la nota, porque lo que se está
   // reportando es la corrección en sí.
   const periodCorrSQL = buildPeriodSQL(periodo, 'h.created_at', anioSel != null, mesSel != null);
+  // El dinero se mide por CUÁNDO entró (mig. 121): una nota puede cobrarse en
+  // varios pagos —abonos— y cada uno cuenta el día que se hizo. Al liquidarla
+  // entra solo lo que faltaba, así que ningún peso se cuenta dos veces y estos
+  // totales cuadran con el corte de caja de esos días.
+  const periodCobroSQL = buildPeriodSQL(periodo, 'c.momento', anioSel != null, mesSel != null);
 
   if (isCustom && (!desde || !hasta)) {
     return res.status(400).json({ message: 'Elige la fecha de inicio y la de fin del período.' });
@@ -85,8 +90,28 @@ export async function getResumen(req, res) {
   // canceladas se muestran con su estado, pero no cuentan en los totales.
   const whereLista = `o.sucursal = $${sucIdx} AND ${periodListSQL}`;
 
+  // Cada peso cobrado, con el momento en que entró y su forma de pago.
+  const COBROS_CTE = `
+    WITH cobros AS (
+      -- Lo que se cobró al liquidar: el total menos lo que ya se había abonado.
+      SELECT o.sucursal, o.forma_pago, o.pagado_en AS momento,
+             o.precio_total - COALESCE((
+               SELECT SUM(ab.monto) FROM nota_abonos ab
+                WHERE ab.nota_id = o.id AND ab.revertido_at IS NULL
+             ), 0) AS monto
+        FROM notas o
+       WHERE o.estado_pago = 'PAGADO' AND o.estado != 'CANCELADA'
+      UNION ALL
+      -- Y cada abono, el día que se hizo.
+      SELECT n.sucursal, ab.forma_pago, ab.created_at AS momento, ab.monto
+        FROM nota_abonos ab
+        JOIN notas n ON n.id = ab.nota_id
+       WHERE ab.revertido_at IS NULL AND n.estado != 'CANCELADA'
+    )`;
+  const whereCobro = `c.sucursal = $${sucIdx} AND ${periodCobroSQL}`;
+
   try {
-    const [tarjetasRes, pendientesRes, graficaRes, listaRes, corteRes, correccionesRes] = await Promise.all([
+    const [tarjetasRes, pendientesRes, graficaRes, listaRes, corteRes, correccionesRes, cobradoRes] = await Promise.all([
       // Tarjetas: total_cobrado, notas_pagadas, productos_consumidos
       pool.query(
         `SELECT
@@ -111,11 +136,12 @@ export async function getResumen(req, res) {
         [req.sucursal]
       ),
 
-      // Gráfica: por fecha
+      // Gráfica: dinero que entró por fecha (liquidaciones y abonos)
       pool.query(
-        `SELECT ${fechaNegocio('o.pagado_en')} AS fecha, COALESCE(SUM(o.precio_total), 0) AS total
-        FROM notas o
-        WHERE ${whereBase}
+        `${COBROS_CTE}
+         SELECT ${fechaNegocio('c.momento')} AS fecha, COALESCE(SUM(c.monto), 0) AS total
+        FROM cobros c
+        WHERE ${whereCobro}
         GROUP BY 1
         ORDER BY fecha ASC`,
         params
@@ -209,6 +235,21 @@ export async function getResumen(req, res) {
           ORDER BY h.created_at DESC`,
         params
       ),
+
+      // Dinero que entró en el período, con su forma de pago. Es lo que cuadra
+      // con el corte de caja de esos días.
+      pool.query(
+        `${COBROS_CTE}
+         SELECT
+          COALESCE(SUM(c.monto), 0) AS total_cobrado,
+          COALESCE(SUM(c.monto) FILTER (
+            WHERE COALESCE(c.forma_pago, 'EFECTIVO') = 'EFECTIVO'), 0) AS total_efectivo,
+          COALESCE(SUM(c.monto) FILTER (WHERE c.forma_pago = 'TRANSFERENCIA'), 0) AS total_transferencia,
+          COALESCE(SUM(c.monto) FILTER (WHERE c.forma_pago = 'TARJETA'), 0) AS total_tarjeta
+         FROM cobros c
+        WHERE ${whereCobro}`,
+        params
+      ),
     ]);
 
     const tarjetas = tarjetasRes.rows[0];
@@ -218,14 +259,18 @@ export async function getResumen(req, res) {
     const total_cargas    = parseFloat(corte.total_cargas);
     const total_productos = parseFloat(corte.total_productos);
     const total_ajustes   = parseFloat(corte.total_ajustes);
-    const total_efectivo      = parseFloat(corte.total_efectivo);
-    const total_transferencia = parseFloat(corte.total_transferencia);
-    const total_tarjeta       = parseFloat(corte.total_tarjeta);
-    const total_cobrado       = parseFloat(corte.total_cobrado);
+    // El dinero (y su desglose) sale de los COBROS, no de los totales de las
+    // notas: con abonos, una nota se paga en varios días y cada parte cuenta el
+    // suyo (mig. 121).
+    const cobrado = cobradoRes.rows[0];
+    const total_efectivo      = parseFloat(cobrado.total_efectivo);
+    const total_transferencia = parseFloat(cobrado.total_transferencia);
+    const total_tarjeta       = parseFloat(cobrado.total_tarjeta);
+    const total_cobrado       = parseFloat(cobrado.total_cobrado);
 
     res.json({
       tarjetas: {
-        total_cobrado:       parseFloat(tarjetas.total_cobrado),
+        total_cobrado:       total_cobrado,
         notas_pagadas:       parseInt(tarjetas.notas_pagadas, 10),
         productos_consumidos: parseInt(tarjetas.productos_consumidos, 10),
         notas_pendientes:    parseInt(pendientesRow.notas_pendientes, 10),
@@ -258,8 +303,8 @@ export async function getResumen(req, res) {
         total_efectivo,
         total_transferencia,
         total_tarjeta,
-        // Dinero que realmente entró (suma de precio_total de las notas
-        // cobradas). Es el número que cuadra con el corte de caja.
+        // Dinero que realmente entró en el período: lo que se liquidó más lo
+        // que se abonó. Es el número que cuadra con el corte de caja.
         total_cobrado,
       },
       correcciones_pago: correccionesRes.rows.map((r) => ({
