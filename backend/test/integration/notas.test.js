@@ -193,10 +193,10 @@ describe('POST /api/notas — Por Encargo', () => {
     expect(detalle.body.cargas[0].lavadora_id).toBeNull();
   });
 
-  it('asignar-carga-maquina pone la máquina en la carga (y rechaza otro tipo)', async () => {
+  it('asignar-carga-maquina pone la máquina en la carga (y rechaza una secadora)', async () => {
     const clienteId = await seedCliente();
     const lavMed = await seedMaquina({ nombre: 'Lav Mediana', tipo: 'lavadora_mediana', tamano: 'mediana' });
-    const lavJum = await seedMaquina({ nombre: 'Lav Jumbo', tipo: 'lavadora_jumbo', tamano: 'jumbo' });
+    const sec = await seedMaquina({ nombre: 'Sec 1', tipo: 'secadora', tamano: 'mediana' });
 
     const nota = await request(app).post('/api/notas').set(auth(admin.token)).send({
       tipo_servicio: 'POR_ENCARGO', cliente_id: clienteId, tipo_prenda: 'ROPA',
@@ -204,12 +204,11 @@ describe('POST /api/notas — Por Encargo', () => {
     });
     const cargaId = nota.body.cargas[0].id;
 
-    // Rechaza una lavadora jumbo en un slot mediana.
+    // Una secadora nunca entra en el hueco de lavadora.
     const malo = await request(app).patch(`/api/notas/${nota.body.id}/asignar-carga-maquina`)
-      .set(auth(admin.token)).send({ carga_id: cargaId, slot: 'lavadora', maquina_id: lavJum });
+      .set(auth(admin.token)).send({ carga_id: cargaId, slot: 'lavadora', maquina_id: sec });
     expect(malo.status).toBe(400);
 
-    // Asigna la lavadora mediana correcta.
     const ok = await request(app).patch(`/api/notas/${nota.body.id}/asignar-carga-maquina`)
       .set(auth(admin.token)).send({ carga_id: cargaId, slot: 'lavadora', maquina_id: lavMed });
     expect(ok.status).toBe(200);
@@ -219,6 +218,47 @@ describe('POST /api/notas — Por Encargo', () => {
     const { rows } = await pool.query('SELECT estado FROM maquinas WHERE id = $1', [lavMed]);
     expect(rows[0].estado).toBe('disponible');
     expect(ok.body.estado).toBe('EN_ESPERA');
+  });
+
+  // El tamaño dejó de atar la asignación (2026-09-26): en el mostrador la ropa
+  // entra en la lavadora que esté libre, y el precio de Por Encargo no depende
+  // de cuál sea —se cobra el tope de la carga, congelado al crear la nota—.
+  it('asignar-carga-maquina acepta una jumbo en una carga mediana, sin mover el precio', async () => {
+    const clienteId = await seedCliente();
+    const lavJum = await seedMaquina({ nombre: 'Lav Jumbo', tipo: 'lavadora_jumbo', tamano: 'jumbo' });
+
+    const nota = await request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'POR_ENCARGO', cliente_id: clienteId, tipo_prenda: 'ROPA',
+      estado_pago: 'PENDIENTE', cargas: [{ tamano: 'chico', lavadora_tipo: 'mediana' }],
+    });
+    const antes = Number(nota.body.precio_total);
+
+    const ok = await request(app).patch(`/api/notas/${nota.body.id}/asignar-carga-maquina`)
+      .set(auth(admin.token))
+      .send({ carga_id: nota.body.cargas[0].id, slot: 'lavadora', maquina_id: lavJum });
+    expect(ok.status).toBe(200);
+    expect(ok.body.cargas[0].lavadora_id).toBe(lavJum);
+    expect(Number(ok.body.precio_total)).toBe(antes);
+  });
+
+  // La excepción que sigue en pie, y que antes tapaba el chequeo de tamaño:
+  // un edredón no cabe en una mediana.
+  it('asignar-carga-maquina rechaza una mediana para un edredón', async () => {
+    const clienteId = await seedCliente();
+    const lavMed = await seedMaquina({ nombre: 'Lav Mediana', tipo: 'lavadora_mediana', tamano: 'mediana' });
+
+    const nota = await request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'POR_ENCARGO', cliente_id: clienteId, tipo_prenda: 'ROPA',
+      estado_pago: 'PENDIENTE',
+      cargas: [{ tamano: 'jumbo', tipo_prenda: 'EDREDON', lavadora_tipo: 'jumbo' }],
+    });
+    expect(nota.status).toBe(201);
+
+    const malo = await request(app).patch(`/api/notas/${nota.body.id}/asignar-carga-maquina`)
+      .set(auth(admin.token))
+      .send({ carga_id: nota.body.cargas[0].id, slot: 'lavadora', maquina_id: lavMed });
+    expect(malo.status).toBe(400);
+    expect(malo.body.message).toMatch(/edredones solo van en lavadora jumbo/i);
   });
 
   it('tiempo_entrega inválido → 400', async () => {

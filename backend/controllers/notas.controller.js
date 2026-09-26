@@ -2748,9 +2748,10 @@ export const activarMaquinasPendientes = async (req, res) => {
 
 // ── PATCH /notas/:id/asignar-carga-maquina ──────────────────
 // Asigna una máquina física a una carga (de Autoservicio o Por Encargo) creada
-// con TIPO pero sin máquina. Valida que coincida con el tipo previsto del slot,
-// que esté disponible y que no la tenga apartada otra nota abierta. La máquina
-// queda asignada En Espera (se arranca luego con "Iniciar").
+// con TIPO pero sin máquina. Valida que sea del slot que toca (una secadora no
+// entra de lavadora), que esté disponible y que no la tenga apartada otra nota
+// abierta. El TAMAÑO ya no se valida salvo en el edredón (2026-09-26). La
+// máquina queda asignada En Espera (se arranca luego con "Iniciar").
 // El precio ya está fijado por el tipo: NO se recalcula.
 export const asignarCargaMaquina = async (req, res) => {
   const { id } = req.params;
@@ -2823,14 +2824,20 @@ export const asignarCargaMaquina = async (req, res) => {
         await client.query('ROLLBACK');
         return res.status(400).json({ message: `${maq.nombre} es una secadora, no una lavadora.` });
       }
-      // El tamaño solo se exige donde la nota lo eligió. En Autoservicio ya no
-      // se elige (2026-09-25): sirve cualquier lavadora libre y el precio sale
-      // de la que se asigne, que es la que el cliente va a usar. En Por Encargo
-      // el tamaño lo manda el de la carga, así que ahí sí tiene que coincidir.
-      const tipoMaq = maq.tipo === 'lavadora_jumbo' ? 'jumbo' : 'mediana';
-      if (!tarifaAlAsignar && tipoMaq !== tipoPrevisto) {
+      // El tamaño ya NO tiene que coincidir con el que eligió la nota
+      // (2026-09-26). En el mostrador la ropa entra en la lavadora que esté
+      // libre, y el precio no depende de cuál sea: en Por Encargo se cobra el
+      // tope de la carga, congelado al crearla, y en Autoservicio se tarifa
+      // abajo con la máquina que de verdad se asigna. Exigirlo solo dejaba una
+      // carga esperando una mediana con dos jumbos desocupadas al lado.
+      //
+      // Lo que sigue en pie es físico, no de tarifa: un edredón no cabe en una
+      // mediana. Antes lo tapaba el propio chequeo de tamaño —una carga de
+      // edredón se crea con lavadora_tipo 'jumbo'—, así que al quitarlo hay
+      // que decirlo aquí explícitamente.
+      if (String(carga.tipo_prenda).toUpperCase() === 'EDREDON' && maq.tipo !== 'lavadora_jumbo') {
         await client.query('ROLLBACK');
-        return res.status(400).json({ message: `La lavadora debe ser ${tipoPrevisto} (${maq.nombre} es ${tipoMaq}).` });
+        return res.status(400).json({ message: `Los edredones solo van en lavadora jumbo (${maq.nombre} no lo es).` });
       }
     } else {
       // La secadora es de un solo tamaño: cualquier secadora disponible sirve.

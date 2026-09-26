@@ -39,6 +39,11 @@ const MAQUINA_TIPO_LABEL = {
   secadora:         'Secadora',
 };
 
+// ¿La carga lleva un edredón? Es lo único que sigue atando una carga a un
+// tamaño de lavadora: no cabe en una mediana. El resto de tamaños dejó de
+// filtrar al asignar (2026-09-26).
+const esEdredonCarga = (c) => String(c?.tipo_prenda ?? '').toUpperCase() === 'EDREDON';
+
 // Abreviatura del tamaño en la lista de máquinas: Mediana → M, Jumbo → J,
 // Edredón → E. Otros valores se muestran tal cual.
 const TAMANO_ABBR = { Mediana: 'M', Jumbo: 'J', Edredón: 'E' };
@@ -301,12 +306,14 @@ export default function Salidas() {
 
   // Abre el mismo modal de asignar, pero para el hueco de una carga de Por
   // Encargo que ya tiene TIPO elegido: solo se elige la máquina física.
-  function iniciarAsignarSlot(carga, slot, tipo) {
+  // Sin el tipo de la carga: desde el 2026-09-26 el tamaño ya no elige qué
+  // máquinas se ofrecen, lo hace la propia carga (por el edredón).
+  function iniciarAsignarSlot(carga, slot) {
     setErrorAccion('');
     setAsignarMaqSel([]);
     setAsignarCarga(carga);
     setAsignarCargaFija(true);
-    setAsignarSlot({ carga, slot, tipo });
+    setAsignarSlot({ carga, slot });
     setAsignarOpen(true);
   }
 
@@ -740,9 +747,6 @@ export default function Salidas() {
   const cargaDestino = asignarCarga
     ? (cargasNota.find(c => String(c.id) === String(asignarCarga.id)) ?? asignarCarga)
     : null;
-  // Slots de Por Encargo con TIPO elegido pero sin máquina física: se asignan
-  // eligiendo una máquina disponible del tipo correspondiente.
-  const TIPO_MAQ_LABEL = { mediana: 'Mediana', jumbo: 'Jumbo', edredon: 'Edredón' };
   // ¿Esta máquina ya cumplió su tiempo de ciclo? Cada máquina es
   // independiente (mismo cálculo que las tarjetas del dashboard): la
   // lavadora terminada ofrece "Iniciar Secado" y la secadora terminada
@@ -793,15 +797,20 @@ export default function Salidas() {
   // Se ofrecen todas las máquinas libres del tipo. Que otra nota ya tenga
   // asignada una de ellas no la descarta: asignar no aparta, se la queda quien
   // le dé a Iniciar primero. Eso sí, se avisa en la propia opción.
-  const maquinasParaSlot = (slot, tipo) => todasMaquinas.filter(m => {
+  const maquinasParaSlot = (slot, carga) => todasMaquinas.filter(m => {
     if (m.estado !== 'disponible') return false;
     if (slot === 'lavadora') {
-      // En Autoservicio la nota no elige tamaño de lavadora (2026-09-25): el
-      // cliente usa la que esté libre y el precio sale de la máquina que se le
-      // asigne, así que aquí se ofrecen TODAS las lavadoras. En Por Encargo el
-      // tamaño lo manda el de la carga y solo cabe la lavadora que aguanta.
-      if (esAutoservicio) return m.tipo !== 'secadora';
-      return m.tipo === (tipo === 'jumbo' ? 'lavadora_jumbo' : 'lavadora_mediana');
+      if (m.tipo === 'secadora') return false;
+      // Se ofrecen TODAS las lavadoras libres, sin mirar el tamaño que eligió
+      // la nota (2026-09-26). En el mostrador se mete la ropa en la que esté
+      // desocupada, y el precio no depende de eso: en Por Encargo se cobra el
+      // tope de la carga, congelado al crearla, y en Autoservicio se tarifa la
+      // máquina que de verdad se asigne. Filtrar por tamaño solo dejaba a la
+      // carga esperando una mediana con dos jumbos libres al lado.
+      //
+      // La única excepción es física y no de tarifa: un edredón no cabe en una
+      // mediana. El backend la vuelve a comprobar al asignar.
+      return esEdredonCarga(carga) ? m.tipo === 'lavadora_jumbo' : true;
     }
     // La secadora es de un solo tamaño: cualquier secadora disponible sirve.
     return m.tipo === 'secadora';
@@ -814,7 +823,7 @@ export default function Salidas() {
     ? { lavadora: asignarSlot.slot === 'lavadora', secadora: asignarSlot.slot === 'secadora' }
     : cargaDestino ? huecosDeCarga(cargaDestino) : { lavadora: true, secadora: true };
   const maquinasModal = asignarSlot
-    ? maquinasParaSlot(asignarSlot.slot, asignarSlot.tipo)
+    ? maquinasParaSlot(asignarSlot.slot, asignarSlot.carga)
     : maquinasDisp;
   // La que esta carga acabó de usar en ese hueco (mig. 114). Es la candidata
   // natural para la vuelta siguiente —relavar, secar de más—: la ropa ya está
@@ -1106,18 +1115,19 @@ export default function Salidas() {
                     (la pinta el contenedor de arriba), que es la división que
                     cuenta. */}
                 <div>
-                  {slots.map(({ slot, tipo }) => {
-                    const opciones = maquinasParaSlot(slot, tipo);
-                    const queFalta = slot === 'lavadora'
-                      ? `lavadoras ${TIPO_MAQ_LABEL[tipo] ?? tipo}`
-                      : 'secadoras';
+                  {slots.map(({ slot, carga: cargaSlot }) => {
+                    const opciones = maquinasParaSlot(slot, cargaSlot);
+                    // El tamaño solo se nombra donde todavía manda: el edredón.
+                    const queFalta = slot !== 'lavadora' ? 'secadoras'
+                      : esEdredonCarga(cargaSlot) ? 'lavadoras Jumbo'
+                      : 'lavadoras';
                     const esLavadora = slot === 'lavadora';
                     return (
                       <div key={slot} className="flex flex-wrap items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
-                        {/* Solo "Lavadora": el tamaño no se dice aquí. Igual se
-                            respeta al asignar —el modal solo ofrece máquinas del
-                            tipo que la nota compró— y si no hay, el aviso de al
-                            lado sí lo nombra. */}
+                        {/* Solo "Lavadora": el tamaño dejó de decidir cuál se
+                            puede asignar (2026-09-26), así que nombrarlo aquí
+                            sobraba. Donde sigue mandando —el edredón— lo dice
+                            el aviso de al lado. */}
                         <span className="text-sm font-medium text-gray-700">
                           {esLavadora ? 'Lavadora' : 'Secadora'}
                         </span>
@@ -1130,7 +1140,7 @@ export default function Salidas() {
                           // junto a su etiqueta hasta en pantallas de 320px— y
                           // así no se confunde con el renglón de al lado.
                           <button
-                            onClick={() => iniciarAsignarSlot(carga, slot, tipo)}
+                            onClick={() => iniciarAsignarSlot(carga, slot)}
                             disabled={loadingMaquina}
                             className="w-full min-[360px]:w-auto px-4 py-3 bg-blue hover:opacity-90 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors whitespace-nowrap"
                           >
@@ -1757,10 +1767,11 @@ export default function Salidas() {
               <p className="text-sm text-gray-500 mt-1">
                 {asignarSlot
                   ? <>Elige la <span className="font-medium text-gray-700">
+                      {/* Sin tamaño: sirve cualquier lavadora libre
+                          (2026-09-26). El edredón es la excepción, y ahí sí se
+                          nombra porque la lista solo trae jumbos. */}
                       {asignarSlot.slot === 'lavadora'
-                        ? (esAutoservicio
-                            ? 'lavadora'
-                            : `lavadora ${TIPO_MAQ_LABEL[asignarSlot.tipo] ?? asignarSlot.tipo}`)
+                        ? (esEdredonCarga(asignarSlot.carga) ? 'lavadora Jumbo' : 'lavadora')
                         : 'secadora'}
                     </span> que le falta a la {esAutoservicio ? 'Máquina' : 'Carga'} {cargaDestino?.orden}. Queda asignada; la inicias después con su botón.</>
                   : cargaDestino
