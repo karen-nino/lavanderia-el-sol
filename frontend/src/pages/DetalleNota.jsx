@@ -242,7 +242,12 @@ function AccionCircular({ icono, label, onClick, color, disabled = false, title 
       <span className={`w-14 h-14 rounded-full flex items-center justify-center text-white transition-colors ${color}`}>
         {icono}
       </span>
-      <span className="text-xs font-medium text-gray-700 text-center leading-tight">{label}</span>
+      {/* Versalitas apretadas contra el círculo: en mayúsculas y con aire
+          entre letras la palabra se lee como rótulo del ícono y no como un
+          botón de texto más (2026-09-26). */}
+      <span className="text-[12px] font-bold uppercase tracking-wider text-gray-700 text-center leading-tight">
+        {label}
+      </span>
     </button>
   );
 }
