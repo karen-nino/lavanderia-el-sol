@@ -95,10 +95,10 @@ export const updateAjustes = async (req, res) => {
     precio_secadora_jumbo:   'El precio del secado jumbo',
     precio_secadora_edredon: 'El precio del secado de edredón',
     precio_edredon_jumbo:    'El precio del edredón en jumbo',
-    tope_carga_chico:        'El tope de la carga chica',
-    tope_carga_grande:       'El tope de la carga grande',
+    tope_carga_chico:        'El precio del servicio Chica',
+    tope_carga_grande:       'El precio del servicio Grande',
     tope_carga_jumbo:        'El tope de la carga jumbo',
-    tope_carga_edredon:      'El tope de la carga de edredón',
+    tope_carga_edredon:      'El precio del servicio Edredón',
     tiempo_carga_mediana:    'El tiempo de la carga mediana',
     tiempo_carga_jumbo:      'El tiempo de la carga jumbo',
     tiempo_carga_secadora:   'El tiempo del secado',
@@ -113,14 +113,27 @@ export const updateAjustes = async (req, res) => {
       return res.status(400).json({ message: `${nombreDe(campo)} debe ser un número mayor o igual a 0.` });
     }
   }
-  // Topes de precio por tamaño de carga: opcionales. null o '' los borra
-  // (sin tope); si viene un valor debe ser un número mayor o igual a 0.
-  const topes = { tope_carga_chico, tope_carga_grande, tope_carga_jumbo, tope_carga_edredon };
-  for (const [campo, valor] of Object.entries(topes)) {
-    if (valor !== undefined && valor !== null && valor !== '' &&
-        (!esNumero(valor) || Number(valor) < 0)) {
-      return res.status(400).json({ message: `${nombreDe(campo)} debe ser un número mayor o igual a 0. Déjalo vacío para quitar el tope.` });
+  // Precio de los servicios Por Encargo (columnas `tope_carga_*`, mig. 050 y
+  // 052). Nacieron como topes contra los que se comparaba lo que llevaba la
+  // carga, pero desde el rediseño del alta de Por Encargo ese número ES el
+  // precio del servicio: por eso son OBLIGATORIOS. Vaciarlos dejaría el
+  // servicio en $0 y la nota se cobraría sola mal, así que se rechaza.
+  const preciosServicio = { tope_carga_chico, tope_carga_grande, tope_carga_edredon };
+  for (const [campo, valor] of Object.entries(preciosServicio)) {
+    if (valor === undefined) continue; // no se manda = no se toca
+    if (valor === null || valor === '') {
+      return res.status(400).json({ message: `${nombreDe(campo)} es obligatorio: sin precio no se puede vender el servicio.` });
     }
+    if (!esNumero(valor) || Number(valor) < 0) {
+      return res.status(400).json({ message: `${nombreDe(campo)} debe ser un número mayor o igual a 0.` });
+    }
+  }
+  // Jumbo ya no se vende: su columna solo sobrevive para las notas viejas que
+  // eligieron ese tamaño. Si alguien todavía la manda, se valida como antes
+  // (opcional) para no romper un cliente viejo.
+  if (tope_carga_jumbo !== undefined && tope_carga_jumbo !== null && tope_carga_jumbo !== '' &&
+      (!esNumero(tope_carga_jumbo) || Number(tope_carga_jumbo) < 0)) {
+    return res.status(400).json({ message: `${nombreDe('tope_carga_jumbo')} debe ser un número mayor o igual a 0. Déjalo vacío para quitar el tope.` });
   }
   const topeONull = (v) => (v === null || v === '' ? null : v);
 

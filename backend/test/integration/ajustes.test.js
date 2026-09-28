@@ -99,11 +99,22 @@ describe('PATCH /api/ajustes', () => {
     expect(res.body.ticket_nota_autoservicio).toBeNull();
   });
 
-  it('un tope vacío ("") lo quita (queda en null)', async () => {
+  // El precio del servicio Por Encargo es obligatorio: vaciarlo dejaría el
+  // servicio en $0, porque ese número ES lo que se cobra.
+  it('vaciar ("") el precio de un servicio Por Encargo → 400', async () => {
     const res = await request(app).patch('/api/ajustes').set(auth(admin.token))
       .send({ tope_carga_grande: '' });
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/obligatorio/i);
+  });
+
+  // Jumbo ya no se vende: su columna sigue ahí para las notas viejas y admite
+  // quedarse vacía, como cualquier tope de antes.
+  it('un tope jumbo vacío ("") lo quita (queda en null)', async () => {
+    const res = await request(app).patch('/api/ajustes').set(auth(admin.token))
+      .send({ tope_carga_jumbo: '' });
     expect(res.status).toBe(200);
-    expect(res.body.tope_carga_grande).toBeNull();
+    expect(res.body.tope_carga_jumbo).toBeNull();
   });
 
   it('sin campos para actualizar → 400', async () => {

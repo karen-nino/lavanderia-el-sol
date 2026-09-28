@@ -176,12 +176,24 @@ const MOBILE_SECTIONS = [
   { id: 'perfil',  label: 'Mi Perfil',                 subtitle: 'Información de perfil',    icon: SectionIcon.perfil  },
   { id: 'negocio', label: 'Negocio y Sucursales',      subtitle: 'Información de sucursales', icon: SectionIcon.negocio },
   { id: 'maquinas', label: 'Máquinas',                  subtitle: 'Detalles de máquinas',      icon: SectionIcon.maquinas },
-  { id: 'cargas',   label: 'Cargas y Precios',          subtitle: 'Topes de precio por carga', icon: SectionIcon.cargas },
+  { id: 'cargas',   label: 'Servicios Por Encargo',      subtitle: 'Precio de cada servicio',   icon: SectionIcon.cargas },
   { id: 'alertas', label: 'Alertas y Notificaciones',  subtitle: 'Ajustes de alertas', icon: SectionIcon.alertas },
   { id: 'etiquetas', label: 'Etiquetas de encargo',    subtitle: 'Tipos de tela y tamaños de edredón', icon: SectionIcon.etiquetas },
   { id: 'inventario', label: 'Inventario',              subtitle: 'Marcas y envases de productos', icon: SectionIcon.inventario },
   { id: 'ticket',   label: 'Ticket',                   subtitle: 'Notas al pie del ticket', icon: SectionIcon.ticket },
   { id: 'whatsapp', label: 'WhatsApp',                 subtitle: 'Mensaje para Por Encargo', icon: SectionIcon.whatsapp },
+];
+
+// Los tres servicios que vende Por Encargo, con el campo de Ajustes que lleva
+// su precio. Las columnas siguen llamándose `tope_carga_*` porque nacieron como
+// topes (mig. 050 y 052), pero desde el rediseño del alta de Por Encargo ese
+// número ES el precio del servicio, no un máximo.
+// Jumbo no está: el tamaño dejó de venderse y su columna solo sobrevive para
+// las notas viejas que lo eligieron.
+const PRECIOS_SERVICIO = [
+  ['tope_carga_chico',   'Servicio Chica',   'chica'],
+  ['tope_carga_grande',  'Servicio Grande',  'grande'],
+  ['tope_carga_edredon', 'Servicio Edredón', 'de edredón'],
 ];
 
 // El manual no es configuración: abre su propia página (/manual). Se ofrece
@@ -1231,6 +1243,8 @@ export default function Ajustes() {
     if (s && !String(s.nombre ?? '').trim()) {
       return setMensaje({ tipo: 'error', texto: 'El nombre de la sucursal no puede estar vacío.' });
     }
+    const problema = problemaDeAjustes();
+    if (problema) return setMensaje({ tipo: 'error', texto: problema });
     setSaving(true);
     setMensaje(null);
     try {
@@ -1248,8 +1262,27 @@ export default function Ajustes() {
     }
   };
 
-  // Topes de precio por carga: opcionales. Vacío = sin tope (null).
-  const topeONull = (v) => (v === '' || v == null ? null : Number(v));
+  // Un servicio sin precio capturado. Pinta el campo en rojo y frena el guardado.
+  const sinPrecioServicio = (name) => {
+    const v = config[name];
+    return v === '' || v == null;
+  };
+  // Lo que le falta a la configuración para poder guardarse, o null si está
+  // completa. Los precios de los servicios Por Encargo son obligatorios: el
+  // backend también los exige, pero aquí se dice antes y con el nombre que se
+  // ve en la pantalla.
+  const problemaDeAjustes = () => {
+    const falta = PRECIOS_SERVICIO.filter(([name]) => sinPrecioServicio(name));
+    if (falta.length === 0) return null;
+    return `Falta el precio de: ${falta.map(([, label]) => label).join(', ')}. `
+      + 'Sin precio no se puede vender el servicio.';
+  };
+
+  // Precio de cada servicio Por Encargo: obligatorio. Es EL precio que se
+  // cobra (ya no un tope contra el que se compara lo que lleva la carga), así
+  // que un servicio sin precio no se puede vender: vacío se manda como null y
+  // el backend lo rechaza diciendo cuál falta.
+  const precioServicioONull = (v) => (v === '' || v == null ? null : Number(v));
 
   // Payload de configuración del negocio para PATCH /ajustes. Se arma con el
   // estado completo de `config`, así que guardar desde cualquier sección envía
@@ -1261,10 +1294,12 @@ export default function Ajustes() {
     precio_secadora_jumbo:   Number(config.precio_secadora_jumbo),
     precio_secadora_edredon: Number(config.precio_secadora_edredon),
     precio_edredon_jumbo:  Number(config.precio_edredon_jumbo),
-    tope_carga_chico:      topeONull(config.tope_carga_chico),
-    tope_carga_grande:     topeONull(config.tope_carga_grande),
-    tope_carga_jumbo:      topeONull(config.tope_carga_jumbo),
-    tope_carga_edredon:    topeONull(config.tope_carga_edredon),
+    tope_carga_chico:      precioServicioONull(config.tope_carga_chico),
+    tope_carga_grande:     precioServicioONull(config.tope_carga_grande),
+    tope_carga_edredon:    precioServicioONull(config.tope_carga_edredon),
+    // Jumbo ya no se captura: Por Encargo vende Chica, Grande y Edredón. La
+    // columna se conserva para las notas viejas que sí eligieron ese tamaño,
+    // así que no se manda —ni se borra— desde aquí.
     // El edredón conserva su precio pero ya no tiene tiempo propio (mig. 107):
     // usa el de su tamaño, como cualquier otra carga de esa máquina.
     tiempo_carga_mediana:  Number(config.tiempo_carga_mediana),
@@ -1320,6 +1355,8 @@ export default function Ajustes() {
     if (sucursalActualEdit && !String(sucursalActualEdit.nombre ?? '').trim()) {
       return setMensaje({ tipo: 'error', texto: 'El nombre de la sucursal no puede estar vacío.' });
     }
+    const problemaConfig = problemaDeAjustes();
+    if (problemaConfig) return setMensaje({ tipo: 'error', texto: problemaConfig });
 
     setSaving(true);
     setMensaje(null);
@@ -1349,6 +1386,8 @@ export default function Ajustes() {
 
   const handleGuardar = async (e) => {
     e?.preventDefault();
+    const problema = problemaDeAjustes();
+    if (problema) return setMensaje({ tipo: 'error', texto: problema });
     setSaving(true);
     setMensaje(null);
     try {
@@ -1575,35 +1614,41 @@ export default function Ajustes() {
     </>
   );
 
-  // Renglón de tope (opcional, vacío = sin tope) reutilizable.
-  const campoTope = (name, label, tamano) => (
-    <Field label={label} hint={`Precio máximo de una carga ${tamano} (máquinas + productos). Vacío = sin tope.`}>
+  // Renglón del precio de un servicio Por Encargo. Es obligatorio: vacío se
+  // marca en rojo aquí y el backend lo rechaza al guardar.
+  const campoPrecioServicio = (name, label, servicio) => (
+    <Field
+      label={<>{label} <span className="text-red-500">*</span></>}
+      hint={`Lo que se cobra por un servicio ${servicio}. Incluye lavado, secado, jabón y bolsa.`}
+    >
       <div className="flex items-center gap-2">
         <span className="text-sm text-gray-500 flex-shrink-0">$</span>
         <input type="number" name={name} min="0" step="0.01"
-          value={config[name] ?? ''} onChange={handleChange} className={INPUT_CLS} />
+          value={config[name] ?? ''} onChange={handleChange}
+          className={`${INPUT_CLS} ${sinPrecioServicio(name) ? 'border-red-300' : ''}`} />
         <span className="text-sm text-gray-500 flex-shrink-0">MXN</span>
         {stepBtns(name, 5, 0)}
       </div>
+      {sinPrecioServicio(name) && (
+        <p className="mt-1.5 text-xs text-red-600">
+          Sin precio no se puede vender este servicio.
+        </p>
+      )}
     </Field>
   );
 
   const seccionCargasPreciosDesktop = (
     <>
-    <Section titulo="Tope de precio por carga">
+    <Section titulo="Precio de los servicios Por Encargo">
       <p className="text-sm text-gray-500 -mt-1">
-        Límite del precio de una carga (máquinas + productos) según su tamaño. El ajuste manual
-        no cuenta contra el tope. Aplica a las cargas Por Encargo (que capturan tamaño).
+        Lo que se cobra por cada servicio, ya con su lavado, su secado, el jabón y la bolsa
+        dentro. En la nota se multiplica por la cantidad de servicios; los productos que el
+        cliente compre aparte y el ajuste manual se suman encima.
       </p>
       <div className="space-y-4">
-        {[
-          ['tope_carga_chico',   'Carga Chica',   'chica'],
-          ['tope_carga_grande',  'Carga Grande',  'grande'],
-          ['tope_carga_jumbo',   'Carga Jumbo',   'jumbo'],
-          ['tope_carga_edredon', 'Carga Edredón', 'de edredón'],
-        ].map(([name, label, tamano]) => (
+        {PRECIOS_SERVICIO.map(([name, label, servicio]) => (
           <div key={name} className="rounded-xl border border-gray-200 px-5 py-4">
-            {campoTope(name, label, tamano)}
+            {campoPrecioServicio(name, label, servicio)}
           </div>
         ))}
       </div>
@@ -2300,15 +2345,24 @@ export default function Ajustes() {
     </div>
   );
 
-  const campoTopeM = (name, label, tamano) => (
-    <MobileField label={label} hint={`Precio máximo de una carga ${tamano} (máquinas + productos). Vacío = sin tope.`}>
+  const campoPrecioServicioM = (name, label, servicio) => (
+    <MobileField
+      label={<>{label} <span className="text-red-500">*</span></>}
+      hint={`Lo que se cobra por un servicio ${servicio}. Incluye lavado, secado, jabón y bolsa.`}
+    >
       <div className="flex items-center gap-2">
         <span className="text-base text-grey flex-shrink-0">$</span>
         <input type="number" name={name} min="0" step="0.01"
-          value={config[name] ?? ''} onChange={handleChange} className={MOBILE_INPUT_CLS} />
+          value={config[name] ?? ''} onChange={handleChange}
+          className={`${MOBILE_INPUT_CLS} ${sinPrecioServicio(name) ? 'border-red-300' : ''}`} />
         <span className="text-base text-grey flex-shrink-0">MXN</span>
         {stepBtns(name, 5, 0, true)}
       </div>
+      {sinPrecioServicio(name) && (
+        <p className="mt-1.5 text-xs text-red-600">
+          Sin precio no se puede vender este servicio.
+        </p>
+      )}
     </MobileField>
   );
 
@@ -2316,19 +2370,19 @@ export default function Ajustes() {
     <div className="space-y-10">
       <div className="space-y-6">
         <div className="space-y-1.5">
-          <TituloGrupoMobile>Tope de precio por carga</TituloGrupoMobile>
+          <TituloGrupoMobile>Precio de los servicios Por Encargo</TituloGrupoMobile>
           <p className="text-sm text-grey">
-            Límite del precio de una carga (máquinas + productos) según su tamaño. El ajuste manual
-            no cuenta contra el tope. Aplica a las cargas Por Encargo (que capturan tamaño).
+            Lo que se cobra por cada servicio, ya con su lavado, su secado, el jabón y la bolsa
+            dentro. En la nota se multiplica por la cantidad de servicios; los productos que el
+            cliente compre aparte y el ajuste manual se suman encima.
           </p>
         </div>
-        {/* Una tarjeta por carga: son precios independientes entre sí y
+        {/* Una tarjeta por servicio: son precios independientes entre sí y
             apelotonarlos en un bloque los hacía leer como una lista. */}
         <div className="space-y-4">
-          <TarjetaMobile>{campoTopeM('tope_carga_chico',   'Carga Chica',   'chica')}</TarjetaMobile>
-          <TarjetaMobile>{campoTopeM('tope_carga_grande',  'Carga Grande',  'grande')}</TarjetaMobile>
-          <TarjetaMobile>{campoTopeM('tope_carga_jumbo',   'Carga Jumbo',   'jumbo')}</TarjetaMobile>
-          <TarjetaMobile>{campoTopeM('tope_carga_edredon', 'Carga Edredón', 'de edredón')}</TarjetaMobile>
+          {PRECIOS_SERVICIO.map(([name, label, servicio]) => (
+            <TarjetaMobile key={name}>{campoPrecioServicioM(name, label, servicio)}</TarjetaMobile>
+          ))}
         </div>
       </div>
 

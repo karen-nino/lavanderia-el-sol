@@ -15,6 +15,10 @@ beforeEach(async () => {
   // El catálogo de tamaños de bolsa lo siembra la mig. 119, pero limpiarBase
   // lo vacía: sin él no se puede dar de alta una bolsa.
   await seedEtiquetas('tamanos_bolsa', ['Chica', 'Grande', 'Jumbo']);
+  // Los precios de los servicios Por Encargo (Chica 120, Grande 150, Edredón
+  // 180) van de entrada, como en la aplicación: sin ellos no se puede crear la
+  // nota. Cada prueba que necesite otros los sobreescribe con seedAjustes.
+  await seedAjustes();
 });
 
 describe('POST /api/notas — validaciones', () => {
@@ -180,11 +184,12 @@ describe('POST /api/notas — Por Encargo', () => {
     expect(res.body.estado_pago).toBe('PENDIENTE');
     expect(res.body.cliente_id).toBe(clienteId);
     // No se reserva máquina: la carga guarda el tipo previsto, sin lavadora_id.
-    // Precio derivado del tipo mediana (tarifa default 70).
+    // El precio es el del SERVICIO Chica (120), no la tarifa de la máquina: lo
+    // que se cobra en Por Encargo ya no depende de en qué se lave.
     expect(res.body.cargas).toHaveLength(1);
     expect(res.body.cargas[0].lavadora_id).toBeNull();
     expect(res.body.cargas[0].lavadora_tipo).toBe('mediana');
-    expect(Number(res.body.precio_total)).toBe(70);
+    expect(Number(res.body.precio_total)).toBe(120);
 
     const detalle = await request(app).get(`/api/notas/${res.body.id}`).set(auth(admin.token));
     expect(detalle.body.cliente_nombre).toBe('Ana');
@@ -645,6 +650,89 @@ async function crearNotaEncargo(estado_pago) {
   return creada;
 }
 
+// Por Encargo vende SERVICIOS: Chica, Grande y Edredón, cada uno a su precio de
+// Ajustes. La nota ya no elige tipo de máquina —eso se decide en Salidas, sin
+// tocar el cobro— y lo que el cliente compra aparte va a nivel nota, encima del
+// precio de los servicios.
+describe('servicios Por Encargo (sin tipo de máquina)', () => {
+  it('cobra el precio de cada servicio y no exige tipo de máquina', async () => {
+    const clienteId = await seedCliente();
+    const res = await request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'POR_ENCARGO', cliente_id: clienteId, tipo_prenda: 'ROPA',
+      estado_pago: 'PENDIENTE',
+      cargas: [
+        { tamano: 'chico',  tipo_prenda: 'ROPA' },
+        { tamano: 'chico',  tipo_prenda: 'ROPA' },
+        { tamano: 'jumbo',  tipo_prenda: 'EDREDON' },
+      ],
+    });
+    expect(res.status).toBe(201);
+    // 120 + 120 + 180, los precios que siembra seedAjustes.
+    expect(Number(res.body.precio_total)).toBe(420);
+    expect(res.body.cargas).toHaveLength(3);
+    for (const c of res.body.cargas) {
+      expect(c.lavadora_tipo).toBeNull();
+      expect(c.secadora_tipo).toBeNull();
+      expect(Number(c.precio_lavadora)).toBe(0);
+    }
+    // La nota nace En Espera: no hay máquina que arrancar.
+    expect(res.body.estado).toBe('EN_ESPERA');
+  });
+
+  it('los productos de la nota se cobran ENCIMA del precio de los servicios', async () => {
+    const clienteId = await seedCliente();
+    const jabon = await seedProducto({ nombre: 'Jabón', stock_actual: 100, precio_unitario: 7 });
+    const res = await request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'POR_ENCARGO', cliente_id: clienteId, tipo_prenda: 'ROPA',
+      estado_pago: 'PENDIENTE',
+      cargas: [{ tamano: 'grande', tipo_prenda: 'ROPA' }],
+      // A nivel nota: es lo que el cliente compra, no el material del servicio.
+      productos: [{ producto_id: jabon, cantidad: 3 }],
+      ajuste: -20,
+    });
+    expect(res.status).toBe(201);
+    // Servicio Grande 150 + 3 tapas × 7 − 20 de ajuste.
+    expect(Number(res.body.precio_total)).toBe(151);
+  });
+
+  it('sin precio configurado para ese servicio → 400 que dice cuál falta', async () => {
+    await seedAjustes({ tope_carga_grande: null });
+    const clienteId = await seedCliente();
+    const res = await request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'POR_ENCARGO', cliente_id: clienteId, tipo_prenda: 'ROPA',
+      estado_pago: 'PENDIENTE', cargas: [{ tamano: 'grande', tipo_prenda: 'ROPA' }],
+    });
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/precio del servicio Grande/i);
+  });
+
+  // La regresión que abre vender sin tipo de máquina: `lavadora_tipo` era la
+  // marca de "a esta carga le falta lavarse", y ya no viene.
+  it('no se da por lista mientras haya un servicio sin pasar por máquina', async () => {
+    const clienteId = await seedCliente();
+    const lav = await seedMaquina({ nombre: 'L-serv', tipo: 'lavadora_mediana', tamano: 'mediana' });
+    const nota = await request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'POR_ENCARGO', cliente_id: clienteId, tipo_prenda: 'ROPA',
+      estado_pago: 'PENDIENTE',
+      cargas: [{ tamano: 'chico', tipo_prenda: 'ROPA' }, { tamano: 'chico', tipo_prenda: 'ROPA' }],
+    });
+    expect(nota.status).toBe(201);
+    const notaId = nota.body.id;
+
+    // Se le pone máquina a la PRIMERA, se arranca y se termina.
+    await request(app).patch(`/api/notas/${notaId}/asignar-maquina`).set(auth(admin.token))
+      .send({ maquina_ids: [lav], cobrar: false, carga_id: nota.body.cargas[0].id }).expect(200);
+    await request(app).patch(`/api/notas/${notaId}/activar-pendientes`).set(auth(admin.token))
+      .send({ maquina_id: lav }).expect(200);
+    await request(app).patch(`/api/notas/${notaId}/terminar-lavado-final`).set(auth(admin.token))
+      .send({ lavadora_id: lav }).expect(200);
+
+    // El segundo servicio no ha pasado por nada: la nota NO queda por entregar.
+    const despues = await request(app).get(`/api/notas/${notaId}`).set(auth(admin.token));
+    expect(despues.body.estado).not.toBe('LISTA');
+  });
+});
+
 describe('topes de precio por carga (solo Por Encargo)', () => {
   // Tope de $100 para el tamaño "grande"; lavado mediana tarifa 70.
   async function armar() {
@@ -702,7 +790,7 @@ describe('topes de precio por carga (solo Por Encargo)', () => {
                  productos: [{ producto_id: productoId, cantidad: 1 }] }],
     });
     expect(res.status).toBe(400);
-    expect(res.body.message).toMatch(/rebasa el tope/i);
+    expect(res.body.message).toMatch(/se cobra en/i);
     // Rollback: ni la nota ni la reserva de stock quedaron.
     const { rows: notas } = await pool.query('SELECT COUNT(*)::int c FROM notas');
     expect(notas[0].c).toBe(0);
@@ -912,7 +1000,10 @@ describe('handlers de máquina — asignar / cambiar / quitar', () => {
       .set(auth(admin.token)).send({ maquina_id: otra, cobrar: true });
     expect(res.status).toBe(200);
     expect(res.body.cargas).toHaveLength(2);
-    expect(Number(res.body.precio_total)).toBe(140); // 70 + 70
+    // El servicio Chica de la nota (120) más la tarifa de la máquina agregada
+    // con cobrar:true (70). La carga original ya no cobra su máquina: en Por
+    // Encargo lo que se cobra es el precio del servicio.
+    expect(Number(res.body.precio_total)).toBe(190);
     // La máquina agregada queda asignada pero sin iniciar (disponible).
     const { rows } = await pool.query('SELECT estado FROM maquinas WHERE id = $1', [otra]);
     expect(rows[0].estado).toBe('disponible');
@@ -1213,7 +1304,7 @@ describe('PATCH /api/notas/:id — edición', () => {
       .send({ cargas: [{ tamano: 'grande', lavadora_tipo: 'mediana',
                          productos: [{ producto_id: productoId, cantidad: 1 }] }] });
     expect(res.status).toBe(400);
-    expect(res.body.message).toMatch(/rebasa el tope/i);
+    expect(res.body.message).toMatch(/se cobra en/i);
   });
 });
 
@@ -1298,7 +1389,10 @@ describe('edredón (lavadora jumbo)', () => {
       estado_pago: 'PENDIENTE', cargas: [{ lavadora_tipo: 'jumbo' }],
     });
     expect(res.status).toBe(201);
-    expect(Number(res.body.precio_total)).toBe(80); // edredonJumbo (default)
+    // La carga sigue guardando la tarifa jumbo de edredón (80) porque la nota
+    // mandó el tipo de lavado, pero lo que se COBRA es el precio del servicio
+    // Edredón (180): el tope manda sobre la suma de las máquinas.
+    expect(Number(res.body.precio_total)).toBe(180);
     expect(Number(res.body.cargas[0].precio_lavadora)).toBe(80);
   });
 
@@ -1325,7 +1419,7 @@ describe('edredón (lavadora jumbo)', () => {
                  productos: [{ producto_id: productoId, cantidad: 1 }] }],
     });
     expect(res.status).toBe(400);
-    expect(res.body.message).toMatch(/rebasa el tope/i);
+    expect(res.body.message).toMatch(/se cobra en/i);
   });
 });
 

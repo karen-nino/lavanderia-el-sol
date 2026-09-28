@@ -1223,8 +1223,19 @@ export default function DetalleNota() {
                   ].filter(Boolean);
                   const prods = cg.productos ?? [];
                   const totalProds = prods.reduce((s, p) => s + Number(p.subtotal ?? 0), 0);
-                  const totalCarga = Number(cg.precio_lavadora) + Number(cg.precio_secadora)
-                    + Number(cg.ajuste ?? 0) + totalProds;
+                  // Lo que la carga le cobra a la nota. En Por Encargo es el
+                  // PRECIO DEL SERVICIO congelado en la carga (mig. 096), que ya
+                  // lleva dentro su material: sumar máquinas y productos daría
+                  // los $25 del jabón y la bolsa en vez de los $150 que se
+                  // cobran. Lo que va encima del servicio son los productos de
+                  // marca y el ajuste, igual que en el total de la nota.
+                  const marcaProds = prods
+                    .filter(p => p.tipo_liquido === 'marca')
+                    .reduce((s, p) => s + Number(p.subtotal ?? 0), 0);
+                  const totalCarga = cg.tope_carga != null
+                    ? Number(cg.tope_carga) + marcaProds + Number(cg.ajuste ?? 0)
+                    : Number(cg.precio_lavadora) + Number(cg.precio_secadora)
+                      + Number(cg.ajuste ?? 0) + totalProds;
                   // Autoservicio no maneja prenda/tela/tamaño: se omite esa línea.
                   const atributos = nota.tipo_servicio === 'AUTOSERVICIO' ? [] : [
                     PRENDA_LABEL[cg.tipo_prenda],
@@ -1241,7 +1252,13 @@ export default function DetalleNota() {
                         <span className="text-sm font-medium text-gray-700">{fmtMonto(totalCarga)}</span>
                       </div>
                       {maquinasCarga.length === 0 && slotsPrevistos.length === 0 ? (
-                        <span className="text-sm text-gray-400 italic">Sin máquinas</span>
+                        // En Por Encargo esto es lo normal hasta que Salidas le
+                        // asigna una: el servicio se vendió sin elegir máquina.
+                        <span className="text-sm text-gray-400 italic">
+                          {nota.tipo_servicio === 'POR_ENCARGO'
+                            ? 'Máquina por asignar en Salidas'
+                            : 'Sin máquinas'}
+                        </span>
                       ) : (
                         maquinasCarga.map((m, i) => {
                           const cfg = BADGE_MAQUINA_ESTADO[m.estado];

@@ -157,7 +157,14 @@ export async function seedProducto({
 // test necesite. Los topes solo aplican a Por Encargo y comparan
 // lavadora + secadora + productos contra el tope del tamaño de la carga.
 export async function seedAjustes(overrides = {}) {
-  const cols = { precio_carga_mediana: 70, precio_carga_secadora: 45, ...overrides };
+  // Los precios de los servicios Por Encargo van por defecto porque la
+  // aplicación los exige: son lo que se cobra por un servicio Chica, Grande o
+  // Edredón, y sin ellos no se puede crear una nota de ese tamaño.
+  const cols = {
+    precio_carga_mediana: 70, precio_carga_secadora: 45,
+    tope_carga_chico: 120, tope_carga_grande: 150, tope_carga_edredon: 180,
+    ...overrides,
+  };
   const nombres = Object.keys(cols);
   const valores = Object.values(cols);
   const placeholders = nombres.map((_, i) => `$${i + 1}`).join(', ');

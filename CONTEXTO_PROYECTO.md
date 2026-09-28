@@ -1,7 +1,7 @@
 # Contexto técnico — Lavandería El Sol
 
 > Documento para pegar al inicio de una conversación nueva con Claude. Técnico y directo.
-> Última actualización: 2026-09-26 (segunda actualización del día).
+> Última actualización: 2026-09-28.
 
 ---
 
@@ -9,7 +9,16 @@
 
 Sistema web de gestión para una lavandería (**Lavandería El Sol**): clientes, notas (autoservicio y por encargo), máquinas, inventario (productos + insumos + bolsas), caja, empleados y ventas. Usuarios: administradores y empleados del negocio (uso interno, no cara al cliente final).
 
-**Estado de uso:** la infraestructura está desplegada en producción (**Vercel** + Fly.io + Supabase; el frontend se mudó de Netlify a Vercel el 2026-09-17, §2) y el sistema **todavía no está en uso real** en la lavandería. Lo verificado el **2026-09-19** sigue siendo lo que hay en línea: backend en el release **v57** (desplegado la noche del 18) con las migraciones **hasta la 113**, y bundle **1.2.0** en Vercel, con la venta de productos dentro. **Sin desplegar** va el trabajo del **19** (las reglas de eliminación), el del **21**, el del **22**, el del **23**, el del **25** y el del **26** (§6); al publicar, el bundle salta a **1.9.0** y las migraciones de la **114** a la **124** se aplican al arrancar. **El control real de los Sonoff está APAGADO** (`DISPOSITIVOS_DRIVER=null`), en pausa a petición del negocio desde la tarde del 2026-09-17.
+**Estado de uso:** la infraestructura está desplegada en producción (**Vercel** + Fly.io + Supabase; el frontend se mudó de Netlify a Vercel el 2026-09-17, §2) y el sistema **todavía no está en uso real** en la lavandería. Lo verificado el **2026-09-19** sigue siendo lo que hay en línea: backend en el release **v57** (desplegado la noche del 18) con las migraciones **hasta la 113**, y bundle **1.2.0** en Vercel, con la venta de productos dentro. **Sin desplegar** va el trabajo del **19** (las reglas de eliminación), el del **21**, el del **22**, el del **23**, el del **25** y el del **26** (§6); al publicar, el bundle salta a **1.10.0** y las migraciones de la **114** a la **124** se aplican al arrancar. **El control real de los Sonoff está APAGADO** (`DISPOSITIVOS_DRIVER=null`), en pausa a petición del negocio desde la tarde del 2026-09-17.
+
+**El 2026-09-28 se rehízo el alta de Por Encargo: ya no se capturan cargas, se venden SERVICIOS.** Sin migraciones —las columnas no cambiaron, cambió lo que significan— y en cinco entregas, todas verificadas con la app corriendo.
+
+1. **El wizard pasó de `4 + N` pasos a 4 fijos.** Los pasos "cuántas cargas" y "una pantalla por carga" se fundieron en uno solo, **Servicios**: tres contadores (**Chica**, **Grande**, **Edredón**) con su precio al lado y, debajo, el detalle de cada servicio (tela o tamaño de edredón, los dos opcionales), el material incluido, el ajuste y los productos. Con tres cargas el mostrador pasaba por cinco pantallas; ahora pasa por una.
+2. **El TIPO DE MÁQUINA desapareció del alta.** El servicio se cobra a su precio y la máquina —la que esté libre— se le asigna en **Salidas**, sin mover el cobro. `lavadora_tipo`/`secadora_tipo` viajan en NULL y `precio_lavadora` en $0: lo único que cobra la carga es su `precio_tope`. El backend dejó de exigir "al menos un tipo de lavado o secado" en Por Encargo (Autoservicio lo sigue exigiendo, porque ahí lo que se cobra ES la máquina).
+3. **El tope dejó de ser un tope: es el PRECIO del servicio.** En Ajustes, "Tope de precio por carga" pasó a **Servicios Por Encargo**, con los tres precios **obligatorios** (sin precio no se puede vender el servicio, ni desde la pantalla ni desde el servidor). **Jumbo de ropa ya no se vende**: su columna sigue ahí para las notas que lo eligieron y su contador solo aparece al editar una de ellas.
+4. **El ajuste y los productos son de la NOTA, una sola vez.** Lo que el cliente compra aparte se cobra **encima** del precio de los servicios. El material que el servicio ya incluye —jabón, suavizante y bolsa— se sigue pegando a cada servicio, que es lo que hace que su precio lo absorba en vez de cobrarlo dos veces, y se administra desde un solo bloque, **"Incluido en los servicios"**.
+5. **El Edredón viaja como prenda EDREDON en tamaño jumbo**, que es lo que lo mantiene atado a la lavadora jumbo cuando Salidas le asigna máquina. Salidas, además, **nombra el servicio junto a la carga** ("Carga 3 · Edredón") —con el tipo fuera, es lo que dice qué máquina le toca— y filtra la lista para que un edredón no pueda mandarse a una mediana.
+6. **Regresión cazada de paso:** `lavadora_tipo` era la marca de "a esta carga le falta lavarse", y al quitarla una nota de tres servicios se daba por **lista** en cuanto terminaba el primero. Ahora un servicio Por Encargo cuenta como pendiente mientras **no haya pasado por ninguna máquina**. Con prueba propia.
 
 **La TARDE del 2026-09-26 fue de mostrador otra vez, y el hilo fue el cobro y el aviso al cliente.** Una migración (**124**) y seis entregas, todas verificadas con la app corriendo.
 

@@ -73,14 +73,15 @@ La nota nace En Espera y SIN máquina asignada: la máquina física se elige des
 
 1. Toca Nueva nota y elige Por Encargo.
 2. Elige el cliente (o dalo de alta ahí mismo). Aquí SÍ hace falta cliente: es la ropa de alguien que va a volver por ella.
-3. Por cada carga captura qué recibes: tipo de prenda, tela o tamaño de edredón, y el tamaño de la carga (Chica, Grande, Jumbo).
-4. Cada carga ya viene con jabón y suavizante precargados; quítalos o cámbialos si no aplica.
-5. Pon la fecha de entrega.
-6. Elige si te paga ahora o al entregar.
+3. Di cuántos servicios son de cada tamaño: Chica, Grande y Edredón. Cada servicio ya incluye su lavado, su secado, el jabón, el suavizante y la bolsa.
+4. Si quieres, captura el detalle de cada servicio: el tipo de tela, o el tamaño del edredón. Los dos son opcionales.
+5. Lo que el servicio trae dentro sale en "Incluido en los servicios": ahí puedes servir más jabón o quitar la bolsa. Eso NO se cobra aparte.
+6. Si el cliente compra algo (un suavizante de marca, bolsas de más), agrégalo en Productos: eso SÍ se cobra encima del servicio.
+7. Pon la fecha de entrega y elige si te paga ahora o al entregar.
 
 Aquí el cobro también puede esperar: en el encargo se suele cobrar al entregar.
 
-El precio de una carga por encargo lo manda el TOPE de su tamaño, que el administrador configura en Ajustes.`,
+El precio de cada servicio lo configura el administrador en Ajustes → Servicios Por Encargo, y no depende de en qué máquina acabe lavándose: la máquina se le asigna después, en Salidas.`,
       },
       {
         id: 'nota-productos',

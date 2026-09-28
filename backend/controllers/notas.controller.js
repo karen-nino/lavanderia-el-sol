@@ -116,17 +116,25 @@ async function faseProcesoDeNota(client, notaId) {
 // ¿A la nota le falta trabajo por hacer? Una carga cuenta como PENDIENTE si:
 //   · tiene una máquina asignada o corriendo, o
 //   · se pidió lavado (lavadora_tipo) que nunca arrancó, o
-//   · se pidió secado (secadora_tipo) que nunca arrancó.
+//   · se pidió secado (secadora_tipo) que nunca arrancó, o
+//   · es un SERVICIO Por Encargo que todavía no ha pasado por ninguna máquina.
 // Haber usado ya la máquina no cuenta.
 //
 // Sin esto bastaba con que NINGUNA máquina estuviera en uso para dar la nota
 // por terminada, y una carga que todavía no arrancaba no tiene máquina en uso:
 // una nota de dos cargas pasaba a "Por entregar" —y se dejaba liquidar— con la
 // segunda carga sin lavar.
+//
+// El último caso es el de hoy: Por Encargo vende servicios y ya no elige tipo de
+// máquina, así que `lavadora_tipo` —que era la marca de "esta carga compró un
+// lavado"— viene en NULL. Lo que dice que el servicio está hecho es haber pasado
+// por alguna máquina; sin eso, una nota de tres servicios se daba por lista en
+// cuanto terminaba el primero.
 async function hayCargasPendientes(client, notaId) {
   const { rows } = await client.query(
     `SELECT EXISTS (
        SELECT 1 FROM nota_cargas nc
+         JOIN notas n ON n.id = nc.nota_id
         WHERE nc.nota_id = $1
           AND (
             nc.lavadora_id IS NOT NULL
@@ -135,6 +143,8 @@ async function hayCargasPendientes(client, notaId) {
                 AND nc.lavadora_usada_id IS NULL)
             OR (nc.secadora_tipo IS NOT NULL AND nc.secadora_iniciada_at IS NULL
                 AND nc.secadora_usada_id IS NULL)
+            OR (n.tipo_servicio = 'POR_ENCARGO'
+                AND nc.lavadora_usada_id IS NULL AND nc.secadora_usada_id IS NULL)
           )
      ) AS pendientes`,
     [notaId]
@@ -461,6 +471,24 @@ function topeDeCarga(prenda, tamano, t) {
   }
 }
 
+// Los tres servicios que Por Encargo vende hoy: Chica, Grande y Edredón. El
+// edredón viaja como prenda EDREDON en tamaño jumbo (es lo que lo ata a la
+// lavadora jumbo), así que se reconoce por la prenda. Jumbo de ropa ya no se
+// vende: sigue siendo válido para las notas que lo eligieron cuando existía.
+const esServicioQueSeVende = (prenda, tamano) =>
+  String(prenda ?? '').toUpperCase() === 'EDREDON' || tamano === 'chico' || tamano === 'grande';
+
+// Cómo se llama el servicio en la pantalla, para los mensajes de error.
+function nombreServicio(prenda, tamano) {
+  if (String(prenda ?? '').toUpperCase() === 'EDREDON') return 'Edredón';
+  switch (tamano) {
+    case 'chico':  return 'Chica';
+    case 'grande': return 'Grande';
+    case 'jumbo':  return 'Jumbo';
+    default:       return 'sin tamaño';
+  }
+}
+
 // Tiempos de ciclo (minutos) de RESPALDO, por tamaño de carga.
 //
 // Desde la mig. 107 el tiempo bueno sale de la marca de la máquina (una LG
@@ -635,10 +663,16 @@ async function validarTopesCargas(client, notaId) {
     if (r.tope == null) continue;
     const total = Number(r.maquinas) + Number(r.productos);
     if (total > Number(r.tope) + 1e-9) {
-      const etiqueta = r.es_edredon ? 'edredón' : r.tamano;
-      return `La carga ${r.orden} (${etiqueta}) rebasa el tope de ${fmt(r.tope)}: ` +
-             `máquinas ${fmt(r.maquinas)} + productos y bolsa ${fmt(r.productos)} = ${fmt(total)}. ` +
-             `Baja $${(total - Number(r.tope)).toFixed(2)}: quita algún producto o la bolsa.`;
+      const servicio = nombreServicio(r.es_edredon ? 'EDREDON' : 'ROPA', r.tamano);
+      // El desglose nombra las máquinas solo cuando cobran algo: en las notas de
+      // hoy Por Encargo ya no las tarifa, y enseñar "máquinas $0.00" en cada
+      // aviso solo estorba. Las notas viejas sí las traen cobradas.
+      const desglose = Number(r.maquinas) > 0
+        ? `máquinas ${fmt(r.maquinas)} + material ${fmt(r.productos)} = ${fmt(total)}`
+        : `su material incluido (jabón, suavizante y bolsa) suma ${fmt(total)}`;
+      return `El servicio ${servicio} (carga ${r.orden}) se cobra en ${fmt(r.tope)} y ${desglose}. ` +
+             `Baja $${(total - Number(r.tope)).toFixed(2)}: quita algún producto o la bolsa, ` +
+             'o sube el precio del servicio en Ajustes.';
     }
   }
   return null;
@@ -805,7 +839,13 @@ async function prepararCargas(client, cargas, tipoPrendaNota, sucursal, tipo_ser
       if (prendaCarga === 'EDREDON' && lavadoraTipo && lavadoraTipo !== 'jumbo') {
         throw new Error(`Los edredones solo van en lavadora jumbo (carga ${i + 1}).`);
       }
-      if (!lavadoraTipo && !secadoraTipo) {
+      // Por Encargo ya NO elige tipo de máquina: el servicio se vende por
+      // tamaño (Chica, Grande, Edredón) y la máquina —la que sea— se le asigna
+      // en Salidas, sin que eso cambie el precio. Los tipos se siguen
+      // aceptando porque las notas de antes los traen y editarlas los reenvía.
+      // Autoservicio sí sigue necesitando uno: ahí lo que se cobra ES la
+      // máquina, así que una carga sin lavado ni secado no cobraría nada.
+      if (tipo_servicio === 'AUTOSERVICIO' && !lavadoraTipo && !secadoraTipo) {
         throw new Error(`La carga ${i + 1} necesita al menos un tipo de lavado o secado.`);
       }
       // Autoservicio NO se tarifa al crear la nota (2026-09-25): la máquina se
@@ -842,6 +882,25 @@ async function prepararCargas(client, cargas, tipoPrendaNota, sucursal, tipo_ser
       activar = c.activar !== false;
     }
 
+    // Precio del servicio Por Encargo. Sale de Ajustes y se congela en la
+    // carga (mig. 096). Desde el rediseño del alta ya no es un tope contra el
+    // que se compara lo que lleva la carga: ES lo que se cobra, así que un
+    // servicio de los que hoy se venden sin precio configurado no se acepta
+    // —la nota quedaría en $0 sin que nadie se diera cuenta—.
+    // Las cargas viejas sin tamaño no entran en esa regla: nacieron cobrando la
+    // suma de sus máquinas y editar su nota no debe volverse imposible.
+    const tamanoCarga = c.tamano ? String(c.tamano).toLowerCase() : null;
+    let precioTope = null;
+    if (tipo_servicio === 'POR_ENCARGO') {
+      precioTope = topeDeCarga(prendaCarga, tamanoCarga, t);
+      if (precioTope == null && esServicioQueSeVende(prendaCarga, tamanoCarga)) {
+        throw new Error(
+          `Falta configurar el precio del servicio ${nombreServicio(prendaCarga, tamanoCarga)} `
+          + 'en Ajustes → Servicios Por Encargo.'
+        );
+      }
+    }
+
     return {
       orden:           i + 1,
       lavadora_id:     lavadoraId,
@@ -853,14 +912,11 @@ async function prepararCargas(client, cargas, tipoPrendaNota, sucursal, tipo_ser
       tipo_prenda:     c.tipo_prenda ? prendaCarga : null,
       tipo_tela:       prendaCarga === 'ROPA' && c.tipo_tela ? String(c.tipo_tela).trim() : null,
       tamano_edredon:  prendaCarga === 'EDREDON' && c.tamano_edredon ? String(c.tamano_edredon).trim() : null,
-      tamano:          c.tamano ? String(c.tamano).toLowerCase() : null,
+      tamano:          tamanoCarga,
       ajuste:          ajusteCarga,
-      // Precio de la carga en Por Encargo: el tope vigente de su tamaño, que se
-      // congela aquí (mig. 096). Editar las cargas de una nota las vuelve a
+      // Se congela aquí (mig. 096): editar las cargas de una nota las vuelve a
       // tarifar con los precios de hoy, igual que a sus máquinas.
-      precio_tope:     tipo_servicio === 'POR_ENCARGO'
-        ? topeDeCarga(prendaCarga, c.tamano ? String(c.tamano).toLowerCase() : null, t)
-        : null,
+      precio_tope:     precioTope,
       activar,
       productos,
     };
@@ -1197,6 +1253,13 @@ export const getNotas = async (req, res) => {
                       AND nc.lavadora_usada_id IS NULL)
                      OR (nc.secadora_tipo IS NOT NULL AND nc.secadora_id IS NULL
                          AND nc.secadora_iniciada_at IS NULL
+                         AND nc.secadora_usada_id IS NULL)
+                     -- Un SERVICIO Por Encargo que no ha pasado por ninguna
+                     -- máquina: se vendió sin elegir tipo, así que lo que dice
+                     -- que le falta trabajo es no haber usado nada todavía.
+                     OR (n.tipo_servicio = 'POR_ENCARGO'
+                         AND nc.lavadora_id IS NULL AND nc.secadora_id IS NULL
+                         AND nc.lavadora_usada_id IS NULL
                          AND nc.secadora_usada_id IS NULL)
                      -- Máquina PUESTA que no está corriendo: puede no haber
                      -- arrancado nunca, estar encendida esperando el arranque

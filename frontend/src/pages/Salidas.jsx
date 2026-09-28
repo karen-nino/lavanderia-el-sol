@@ -44,6 +44,13 @@ const MAQUINA_TIPO_LABEL = {
 // filtrar al asignar (2026-09-26).
 const esEdredonCarga = (c) => String(c?.tipo_prenda ?? '').toUpperCase() === 'EDREDON';
 
+// Qué servicio se vendió en la carga (Por Encargo). Desde que la nota ya no
+// elige tipo de máquina, esto es lo que le dice al mostrador qué máquina le
+// toca: el edredón va en la jumbo y lo demás en la que esté libre.
+const SERVICIO_CARGA = { chico: 'Chica', grande: 'Grande', jumbo: 'Jumbo' };
+const nombreServicioCarga = (c) =>
+  esEdredonCarga(c) ? 'Edredón' : (SERVICIO_CARGA[c?.tamano] ?? null);
+
 // Abreviatura del tamaño en la lista de máquinas: Mediana → M, Jumbo → J,
 // Edredón → E. Otros valores se muestran tal cual.
 const TAMANO_ABBR = { Mediana: 'M', Jumbo: 'J', Edredón: 'E' };
@@ -824,7 +831,13 @@ export default function Salidas() {
     : cargaDestino ? huecosDeCarga(cargaDestino) : { lavadora: true, secadora: true };
   const maquinasModal = asignarSlot
     ? maquinasParaSlot(asignarSlot.slot, asignarSlot.carga)
-    : maquinasDisp;
+    // Con carga destino vale la misma regla física que en el modo slot: un
+    // edredón no cabe en una mediana. Importa desde que Por Encargo dejó de
+    // elegir tipo de máquina al hacer la nota —sus cargas llegan aquí sin hueco
+    // previsto y entran por este camino—; el servidor lo vuelve a comprobar.
+    : cargaDestino && esEdredonCarga(cargaDestino)
+      ? maquinasDisp.filter(m => m.tipo === 'secadora' || m.tipo === 'lavadora_jumbo')
+      : maquinasDisp;
   // La que esta carga acabó de usar en ese hueco (mig. 114). Es la candidata
   // natural para la vuelta siguiente —relavar, secar de más—: la ropa ya está
   // adentro y la máquina acaba de quedar libre. Se sugiere de primera en la
@@ -971,6 +984,13 @@ export default function Salidas() {
                     {/* En Autoservicio cada carga es una máquina y así se llama
                         también en la captura y en el ticket (2026-09-25). */}
                     {esAutoservicio ? 'Máquina' : 'Carga'} {carga.orden}
+                    {/* El servicio que se vendió: con él se sabe qué máquina
+                        pedirle, ahora que la nota ya no elige tipo. */}
+                    {!esAutoservicio && nombreServicioCarga(carga) && (
+                      <span className="ml-1.5 font-normal text-gray-400">
+                        · {nombreServicioCarga(carga)}
+                      </span>
+                    )}
                   </p>
                   {/* Quitar la que se agregó de más. Solo mientras no haya
                       arrancado (después es historial), nunca la única que le
