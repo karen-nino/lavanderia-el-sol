@@ -57,17 +57,26 @@ const BADGE_PAGO = {
 // notas: basta poner esto en true para que reaparezca.
 const MOSTRAR_CODIGO_BARRAS = false;
 
-// Ciclo de vida de la nota completa. Los pasos "Lavando" y "Secando" se
-// expanden con el avance Lavado/Secado de cada carga (ver desglose en el
-// render), ya que con varias cargas cada una puede ir en una fase distinta.
+// Ciclo de vida de la nota completa.
+//
+// LAVANDO y SECANDO van en UN SOLO paso, "En proceso" (2026-09-28). Son dos
+// estados en la base —y así se siguen guardando—, pero en la línea de tiempo
+// contaban una secuencia que el mostrador no vive: las máquinas van
+// independientes, una carga puede estar secando mientras otra lava, y el paso
+// que faltaba se quedaba en gris como si nunca hubiera pasado. Lo que de verdad
+// dice en qué va cada carga es el desglose de abajo (Lavado/Secado por carga),
+// que se conserva entero.
+//
+// `estados` son los estados de la nota que caen en ese paso; el paso se cuenta
+// como actual cuando el de la nota es cualquiera de ellos, y su fecha es la
+// PRIMERA de las que tenga (cuándo empezó a procesarse).
 const PASOS_ESTADO = [
-  { key: 'EN_ESPERA',  label: 'En Espera',    fechaKey: 'EN_ESPERA'  },
-  { key: 'LAVANDO',    label: 'Lavando',      fechaKey: 'LAVANDO'    },
-  { key: 'SECANDO',    label: 'Secando',      fechaKey: 'SECANDO'    },
+  { key: 'EN_ESPERA',  label: 'En Espera',    estados: ['EN_ESPERA'] },
+  { key: 'PROCESO',    label: 'En proceso',   estados: ['LAVANDO', 'SECANDO'] },
   // El label de LISTA lo pone etiquetaEstadoLista(): en Autoservicio esa nota
   // no espera una entrega, espera su cobro.
-  { key: 'LISTA',      label: 'Por Entregar', fechaKey: 'LISTA'      },
-  { key: 'FINALIZADA', label: 'Finalizada',   fechaKey: 'FINALIZADA' },
+  { key: 'LISTA',      label: 'Por Entregar', estados: ['LISTA'] },
+  { key: 'FINALIZADA', label: 'Finalizada',   estados: ['FINALIZADA'] },
 ];
 
 // Pasos que se dibujan para esta nota. En autoservicio el cliente se lleva su
@@ -101,16 +110,26 @@ function pasosDeNota(nota) {
   const conSecado = tieneFase('SECANDO', ['secadora_id', 'secadora_usada_id', 'secadora_tipo_previsto']);
   const fuera = new Set();
   if (!porEntregar) fuera.add('LISTA');
-  if (!conLavado)   fuera.add('LAVANDO');
-  if (!conSecado)   fuera.add('SECANDO');
+  // Ahora es un solo paso: sobra únicamente si la nota no lava NI seca.
+  if (!conLavado && !conSecado) fuera.add('PROCESO');
   return PASOS_ESTADO.filter(p => !fuera.has(p.key));
 }
 
-// Índice del paso ACTUAL dentro de los pasos que se dibujan.
+// Índice del paso ACTUAL dentro de los pasos que se dibujan. El estado de la
+// nota puede caer en un paso que agrupa varios (LAVANDO y SECANDO son los dos
+// "En proceso"), así que se busca por la lista de estados del paso.
 function progresoPasos(nota, pasos) {
   const clave = nota.estado === 'PAGADA' ? 'LISTA' : nota.estado;
-  const i = pasos.findIndex(p => p.key === clave);
+  const i = pasos.findIndex(p => p.estados.includes(clave));
   return i === -1 ? 0 : i;
+}
+
+// Cuándo empezó este paso: la primera fecha de los estados que agrupa. "En
+// proceso" empieza cuando la nota empezó a lavar —o a secar, si arrancó por
+// ahí—, no cuando cambió de una fase a la otra.
+function fechaDePaso(paso, fechaPorEstado) {
+  const fechas = paso.estados.map(e => fechaPorEstado[e]).filter(Boolean);
+  return fechas.length > 0 ? fechas.sort()[0] : undefined;
 }
 
 // Fase de una máquina dentro de su carga: en curso (asignada y EN USO), en
@@ -810,6 +829,18 @@ export default function DetalleNota() {
   // En Por Encargo la ropa se entrega en mostrador, así que el último paso se
   // llama ENTREGAR y un admin puede deshacerlo (2026-09-25).
   const esEncargoNota = nota.tipo_servicio === 'POR_ENCARGO';
+
+  // Cómo se llama un renglón de la nota, igual en la lista de Cargas que en la
+  // línea de tiempo. En Por Encargo hay dos clases y se numeran por separado:
+  // los que traen precio son los SERVICIOS vendidos y los demás son las
+  // MÁQUINAS que se agregaron en Salidas —la "Máquina 2" de aquí es la de esa
+  // pantalla, aunque sea el quinto renglón de la nota—.
+  const nombreDeCarga = (cg) => {
+    if (!esEncargoNota) return `Carga ${cg.orden}`;
+    const esServicio = cg.tope_carga != null;
+    const n = (nota.cargas ?? []).filter(x => (x.tope_carga != null) === esServicio).indexOf(cg) + 1;
+    return `${esServicio ? 'Servicio' : 'Máquina'} ${n}`;
+  };
   // Lo abonado y lo que falta (mig. 121). El servidor los manda calculados; con
   // notas viejas o sin abonos, `saldo` es el total de la nota.
   const abonosNota = nota.abonos ?? [];
@@ -1326,15 +1357,13 @@ export default function DetalleNota() {
                       + Number(cg.ajuste ?? 0) + totalProds;
                   // En Por Encargo el renglón con precio es un SERVICIO vendido;
                   // el que no lo tiene es una máquina agregada en Salidas.
-                  const esEncargoNota    = nota.tipo_servicio === 'POR_ENCARGO';
                   const esServicioEncargo = esEncargoNota && cg.tope_carga != null;
-                  const esMaquinaEncargo  = esEncargoNota && cg.tope_carga == null;
-                  // Servicios y máquinas se numeran por separado: la Máquina 2
-                  // de aquí es la Máquina 2 de Salidas, aunque sea el quinto
-                  // renglón de la nota. El `orden` de la carga cuenta los dos.
-                  const numero = esEncargoNota
-                    ? nota.cargas.filter(x => (x.tope_carga != null) === esServicioEncargo).indexOf(cg) + 1
-                    : cg.orden;
+                  // Y ese renglón de MÁQUINA no lleva importe: en Por Encargo lo
+                  // que se cobra es el servicio, y la máquina que lo lava no
+                  // suma nada. Enseñar "$0.00" dos veces por máquina hacía dudar
+                  // de si faltaba cobrar algo. En Autoservicio sí lo lleva: ahí
+                  // lo que se cobra ES la máquina.
+                  const maquinaSinPrecio = esEncargoNota && !esServicioEncargo;
                   // Autoservicio no maneja prenda/tela/tamaño: se omite esa línea.
                   const atributos = nota.tipo_servicio === 'AUTOSERVICIO' ? [] : [
                     PRENDA_LABEL[cg.tipo_prenda],
@@ -1348,13 +1377,11 @@ export default function DetalleNota() {
                           máquina (lavadora y secadora) con su costo. */}
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-semibold text-gray-500">
-                          {/* En Por Encargo la nota tiene dos clases de renglón:
-                              los SERVICIOS que se cobran (los que traen precio) y
-                              las MÁQUINAS que se agregaron en Salidas, que no
-                              cobran nada. Se nombran por lo que son. */}
-                          {esServicioEncargo ? 'Servicio' : esMaquinaEncargo ? 'Máquina' : 'Carga'} {numero}
+                          {nombreDeCarga(cg)}
                         </span>
-                        <span className="text-sm font-medium text-gray-700">{fmtMonto(totalCarga)}</span>
+                        {!maquinaSinPrecio && (
+                          <span className="text-sm font-medium text-gray-700">{fmtMonto(totalCarga)}</span>
+                        )}
                       </div>
                       {maquinasCarga.length === 0 && slotsPrevistos.length === 0 ? (
                         // Un servicio no lleva máquina: las máquinas son de
@@ -1386,8 +1413,9 @@ export default function DetalleNota() {
                                 )}
                               </div>
                               {/* Sin importe: es una pasada anterior del mismo
-                                  hueco y no se cobró aparte. */}
-                              {m.precio != null && (
+                                  hueco y no se cobró aparte, o es una máquina de
+                                  Por Encargo, que no cobra nada. */}
+                              {m.precio != null && !maquinaSinPrecio && (
                                 <span className="flex-shrink-0 text-sm text-gray-600">{fmtMonto(m.precio)}</span>
                               )}
                             </div>
@@ -1516,13 +1544,13 @@ export default function DetalleNota() {
                 const done    = i < pasoActual;
                 const current = i === pasoActual;
                 const isLast  = i === pasos.length - 1;
-                // Cargas con su máquina EN USO en este paso. Se evalúa cada paso
-                // por separado: una carga con lavadora y secadora corriendo a la
-                // vez aparece bajo Lavando y bajo Secando.
-                const cargasAqui =
-                  paso.key === 'LAVANDO' ? (nota.cargas ?? []).filter(cg => cg.lavadora_id && cg.lavadora_estado === 'en_uso')
-                  : paso.key === 'SECANDO' ? (nota.cargas ?? []).filter(cg => cg.secadora_id && cg.secadora_estado === 'en_uso')
-                  : [];
+                // Cargas con alguna máquina EN USO. Van todas bajo el mismo
+                // paso —lavando y secando son uno— y cada una enseña abajo la
+                // fase en la que va: una carga con lavadora y secadora
+                // corriendo a la vez lista las dos.
+                const cargasAqui = paso.key !== 'PROCESO' ? [] : (nota.cargas ?? []).filter(cg =>
+                  (cg.lavadora_id && cg.lavadora_estado === 'en_uso')
+                  || (cg.secadora_id && cg.secadora_estado === 'en_uso'));
                 // Un paso se resalta si ya se pasó, es el actual de la nota, o
                 // tiene alguna carga viviéndolo (p. ej. Secando con una carga
                 // adelantada mientras otra sigue en Lavando).
@@ -1553,19 +1581,20 @@ export default function DetalleNota() {
                       <p className={`text-sm font-semibold ${activo ? 'text-gray-900' : 'text-gray-400'}`}>
                         {etiquetaEstadoNota(paso.key, nota.tipo_servicio, paso.label)}
                       </p>
-                      <p className="text-xs text-gray-400">{subtituloEstado(paso.key, { done, current }, paso.fechaKey ? fechaPorEstado[paso.fechaKey] : undefined)}</p>
+                      <p className="text-xs text-gray-400">{subtituloEstado(paso.key, { done, current }, fechaDePaso(paso, fechaPorEstado))}</p>
 
-                      {/* Desglose de las cargas que viven este paso: cada una
-                          con el avance de ESE paso (Lavado bajo Lavando, Secado
-                          bajo Secando), no ambos. */}
+                      {/* Desglose de las cargas que están en máquina, con la
+                          fase de cada una: el paso dice que la nota se está
+                          procesando y esto dice en qué va cada carga. */}
                       {cargasAqui.length > 0 && (
                         <div className="mt-2 space-y-1.5">
                           {cargasAqui.map(cg => (
                             <div key={cg.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-                              <span className="font-semibold text-gray-500">Carga {cg.orden}</span>
-                              {paso.key === 'LAVANDO' ? (
+                              <span className="font-semibold text-gray-500">{nombreDeCarga(cg)}</span>
+                              {cg.lavadora_id && cg.lavadora_estado === 'en_uso' && (
                                 <FaseChip label="Lavado" fase={faseMaquina(cg.lavadora_id, cg.lavadora_usada_id, cg.lavadora_estado)} />
-                              ) : (
+                              )}
+                              {cg.secadora_id && cg.secadora_estado === 'en_uso' && (
                                 <FaseChip label="Secado" fase={faseMaquina(cg.secadora_id, cg.secadora_usada_id, cg.secadora_estado)} />
                               )}
                             </div>
