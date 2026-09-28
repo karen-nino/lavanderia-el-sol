@@ -938,10 +938,10 @@ export const otroCiclo = async (req, res) => {
       });
     }
 
-    // Una lavadora sin tiempo de marca corre un solo ciclo, y la vuelta extra
-    // agregada desde Salidas también (mig. 115). Se revalida aquí y no solo en
-    // la tarjeta porque este endpoint es lo que de verdad alarga el lavado: el
-    // botón es únicamente quien lo pide.
+    // Una lavadora sin tiempo de marca corre un solo ciclo, y la vuelta
+    // REPETIDA sobre la misma carga también (mig. 115). Se revalida aquí y no
+    // solo en la tarjeta porque este endpoint es lo que de verdad alarga el
+    // lavado: el botón es únicamente quien lo pide.
     const maxCiclos = maxCiclosDeMaquina({ ...maq, ciclo_unico: carga.ciclo_unico });
     if (carga.ciclos >= maxCiclos) {
       await client.query('ROLLBACK');
@@ -949,7 +949,7 @@ export const otroCiclo = async (req, res) => {
         message: maxCiclos > 1
           ? `Esta carga ya corrió sus ${maxCiclos} ciclos. Termínala para liberar ${maq.nombre}.`
           : carga.ciclo_unico
-          ? `Esta vuelta se agregó sin cobro, así que corre un solo ciclo. Termínala para liberar ${maq.nombre}.`
+          ? `Esta vuelta es una repetición (relavado o secado de más), así que corre un solo ciclo. Termínala para liberar ${maq.nombre}.`
           // Una secadora corre un ciclo por regla del negocio, tenga o no
           // tiempo de marca: mandarla a configurarlo no arregla nada.
           : maq.tipo === 'secadora'

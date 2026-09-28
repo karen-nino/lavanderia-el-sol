@@ -404,6 +404,35 @@ export default function Salidas() {
     });
   }
 
+  // Otra vuelta de una máquina que ya terminó (Por Encargo). Vuelve a ponerla en
+  // el hueco que acaba de dejar libre, así que entra como una PASADA MÁS de esa
+  // misma carga: queda asignada y En Espera, y el renglón ofrece "Encender" y
+  // luego "Iniciar", como cualquier máquina recién puesta.
+  //
+  // Corre UN SOLO ciclo, y eso no hace falta pedirlo aquí: el servidor marca la
+  // pasada repetida con `ciclo_unico` (mig. 115), que es justo lo que significa
+  // —relavar o secar de más sobre ropa que ya dio su vuelta—.
+  //
+  // Va sin cobro: lo que se cobra en Por Encargo es el servicio, así que una
+  // vuelta más no mueve el total. Si la nota ya había pasado a "Por Entregar",
+  // el propio endpoint la devuelve a En Espera al ver que tiene máquina otra vez.
+  async function otroCiclo(carga, maq) {
+    setLoadingMaquina(true);
+    setErrorAccion('');
+    try {
+      await api.patch(`/notas/${id}/asignar-maquina`, {
+        maquina_ids: [Number(maq.id)],
+        cobrar: false,
+        carga_id: carga.id,
+      });
+      await cargarDatos();
+    } catch (err) {
+      setErrorAccion(err.message);
+    } finally {
+      setLoadingMaquina(false);
+    }
+  }
+
   // Cambia la carga destino y limpia la selección: los huecos disponibles
   // cambian con el destino.
   function elegirDestino(carga) {
@@ -649,6 +678,9 @@ export default function Salidas() {
             // veces, el id de máquina ya no distingue una pasada de la otra.
             pasadaId: u.id,
             actual: Boolean(u.actual),
+            // De qué hueco es la pasada: hace falta para saber si ese hueco
+            // quedó libre y se le puede dar otra vuelta a la misma máquina.
+            slot: u.slot,
             nombre: u.nombre,
             tipo: u.tipo,
             // Los tiempos que ofrece su modelo: deciden si al iniciarla se
@@ -1043,6 +1075,18 @@ export default function Salidas() {
                 // muestra en verde y sin botón; el secado se inicia aparte
                 // desde la secadora de la carga.
                 const lavadoTerminado = m.estado === 'en_uso' && m.tipo !== 'secadora' && cicloCumplido(m);
+                // ¿Se le puede dar otra vuelta a ESTA máquina? Solo en Por
+                // Encargo, sobre la ÚLTIMA pasada de su hueco —las anteriores
+                // son historial—, con el hueco libre (ya se soltó al terminar),
+                // la máquina todavía en el catálogo y sin que otra nota la haya
+                // tomado mientras tanto.
+                const ultimaDelSlot = maquinas.filter(x => x.slot === m.slot).at(-1);
+                const puedeOtroCiclo = esEncargo && !notaCerrada
+                  && m.estado === 'terminado'
+                  && String(ultimaDelSlot?.pasadaId) === String(m.pasadaId)
+                  && huecosDeCarga(carga)[m.slot]
+                  && Boolean(m.id)
+                  && todasMaquinas.some(x => String(x.id) === String(m.id) && x.estado === 'disponible');
                 const cfg = lavadoTerminado ? BADGE_MAQUINA_ESTADO.terminado : BADGE_MAQUINA_ESTADO[m.estado];
                 // La secadora muestra su tamaño (Mediana/Jumbo) igual que la
                 // lavadora; se muestra abreviado (M/J/E) en el renglón.
@@ -1145,8 +1189,20 @@ export default function Salidas() {
                         )
                       )
                     )}
-                    {/* estado "terminado": ya cumplió su parte, sin acciones
-                        (solo el punto verde a la izquierda lo indica). */}
+                    {/* estado "terminado": ya cumplió su parte. En Por Encargo
+                        se le puede dar una vuelta más —la ropa salió sucia, hay
+                        que relavarla o secarla otro rato—, y esa vuelta corre un
+                        solo ciclo. En los demás casos el renglón se queda sin
+                        acciones, solo con el punto verde. */}
+                    {puedeOtroCiclo && (
+                      <button
+                        onClick={() => otroCiclo(carga, m)}
+                        disabled={loadingMaquina}
+                        className="px-4 py-2 border border-gray-300 bg-white text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 disabled:opacity-60 transition-colors"
+                      >
+                        Otro ciclo
+                      </button>
+                    )}
                     </>)}
                   </div>
                 );

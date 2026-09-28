@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import request from 'supertest';
 import app from '../../app.js';
+import { liberarMaquinasCierreDelDia } from '../../jobs/cierreDelDia.js';
 import {
   pool, limpiarBase, seedSucursal, seedUsuario, seedMaquina,
   seedCliente, seedProducto, seedAjustes, seedEtiquetas, auth,
@@ -695,6 +696,103 @@ describe('servicios Por Encargo (sin tipo de máquina)', () => {
     expect(Number(res.body.precio_total)).toBe(151);
   });
 
+  // "Otro ciclo" del renglón de la máquina: se vuelve a poner la MISMA máquina
+  // en el hueco que acaba de dejar libre. Entra como una pasada repetida —un
+  // solo ciclo— y, si la nota ya había pasado a Por Entregar, vuelve a En
+  // Espera: si no, no habría forma de encenderla ni de iniciarla.
+  it('otro ciclo: repite la máquina, corre un solo ciclo y reabre la nota', async () => {
+    const clienteId = await seedCliente();
+    const lav = await seedMaquina({ nombre: 'L-otro', tipo: 'lavadora_mediana', tamano: 'mediana' });
+    const nota = await request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'POR_ENCARGO', cliente_id: clienteId, tipo_prenda: 'ROPA',
+      estado_pago: 'PENDIENTE', cargas: [{ tamano: 'chico', tipo_prenda: 'ROPA' }],
+    });
+    const notaId = nota.body.id;
+    const total  = Number(nota.body.precio_total);
+
+    // La máquina se agrega en Salidas, abre su renglón, se arranca y se termina.
+    const conMaquina = await request(app).patch(`/api/notas/${notaId}/asignar-maquina`)
+      .set(auth(admin.token)).send({ maquina_ids: [lav], cobrar: false });
+    expect(conMaquina.status).toBe(200);
+    const cargaMaquina = conMaquina.body.cargas.find(c => String(c.lavadora_id) === String(lav));
+    await request(app).patch(`/api/notas/${notaId}/activar-pendientes`)
+      .set(auth(admin.token)).send({ maquina_id: lav }).expect(200);
+    await request(app).patch(`/api/notas/${notaId}/terminar-lavado-final`)
+      .set(auth(admin.token)).send({ lavadora_id: lav }).expect(200);
+
+    // Se marca "Procesado", que es lo único que la pasa a Por Entregar.
+    await request(app).patch(`/api/notas/${notaId}/estado`)
+      .set(auth(admin.token)).send({ estado: 'LISTA' }).expect(200);
+
+    // Otro ciclo: la misma máquina, al mismo hueco.
+    const otro = await request(app).patch(`/api/notas/${notaId}/asignar-maquina`)
+      .set(auth(admin.token)).send({ maquina_ids: [lav], cobrar: false, carga_id: cargaMaquina.id });
+    expect(otro.status).toBe(200);
+    // Vuelve a haber trabajo: la nota deja de estar Por Entregar.
+    expect(otro.body.estado).toBe('EN_ESPERA');
+    // Y el total no se mueve: en Por Encargo lo que se cobra es el servicio.
+    expect(Number(otro.body.precio_total)).toBe(total);
+
+    // La vuelta nueva es una repetición: un solo ciclo.
+    const { rows } = await pool.query(
+      `SELECT ciclo_unico FROM nota_carga_maquinas
+        WHERE carga_id = $1 AND slot = 'lavadora' ORDER BY asignada_at, id`, [cargaMaquina.id]
+    );
+    expect(rows.map(x => x.ciclo_unico)).toEqual([false, true]);
+  });
+
+  // Por Encargo pasa a Por Entregar SOLO cuando alguien confirma "Procesado"
+  // (2026-09-28): que las máquinas terminen no quiere decir que la ropa esté
+  // doblada, empacada y revisada.
+  describe('a Por Entregar solo por "Procesado"', () => {
+    // Deja la nota con su lavado terminado y devuelve su id y su estado.
+    async function trasLavar(nombre) {
+      const clienteId = await seedCliente();
+      const lav = await seedMaquina({ nombre: `L-${nombre}`, tipo: 'lavadora_mediana', tamano: 'mediana' });
+      const nota = await request(app).post('/api/notas').set(auth(admin.token)).send({
+        tipo_servicio: 'POR_ENCARGO', cliente_id: clienteId, tipo_prenda: 'ROPA',
+        estado_pago: 'PENDIENTE', cargas: [{ tamano: 'chico', tipo_prenda: 'ROPA' }],
+      });
+      expect(nota.status).toBe(201);
+      const notaId = nota.body.id;
+      await request(app).patch(`/api/notas/${notaId}/asignar-maquina`)
+        .set(auth(admin.token)).send({ maquina_ids: [lav], cobrar: false }).expect(200);
+      await request(app).patch(`/api/notas/${notaId}/activar-pendientes`)
+        .set(auth(admin.token)).send({ maquina_id: lav }).expect(200);
+      await request(app).patch(`/api/notas/${notaId}/terminar-lavado-final`)
+        .set(auth(admin.token)).send({ lavadora_id: lav }).expect(200);
+      const res = await request(app).get(`/api/notas/${notaId}`).set(auth(admin.token));
+      return { notaId, estado: res.body.estado, lav };
+    }
+
+    it('terminar la última máquina NO la pasa a Por Entregar', async () => {
+      const { estado } = await trasLavar('proc');
+      expect(estado).toBe('EN_ESPERA');
+    });
+
+    it('confirmar "Procesado" sí, y de paso suelta sus máquinas', async () => {
+      const { notaId, lav } = await trasLavar('proc2');
+      const res = await request(app).patch(`/api/notas/${notaId}/estado`)
+        .set(auth(admin.token)).send({ estado: 'LISTA' });
+      expect(res.status).toBe(200);
+      expect(res.body.estado).toBe('LISTA');
+      const { rows } = await pool.query('SELECT estado FROM maquinas WHERE id = $1', [lav]);
+      expect(rows[0].estado).toBe('disponible');
+    });
+
+    // El cierre del día está para soltar máquinas, no para dar por procesada la
+    // ropa de nadie: una nota Por Encargo que se quedó lavando vuelve a En Espera.
+    it('el cierre del día tampoco la da por procesada', async () => {
+      const { notaId, lav } = await trasLavar('cierre');
+      // Se la deja lavando otra vez, como una nota que nadie cerró en la noche.
+      await pool.query("UPDATE notas SET estado = 'LAVANDO' WHERE id = $1", [notaId]);
+      await pool.query("UPDATE maquinas SET estado = 'en_uso', en_uso_desde = NOW() WHERE id = $1", [lav]);
+      await liberarMaquinasCierreDelDia();
+      const res = await request(app).get(`/api/notas/${notaId}`).set(auth(admin.token));
+      expect(res.body.estado).toBe('EN_ESPERA');
+    });
+  });
+
   it('sin precio configurado para ese servicio → 400 que dice cuál falta', async () => {
     await seedAjustes({ tope_carga_grande: null });
     const clienteId = await seedCliente();
@@ -1094,9 +1192,27 @@ describe('handlers de máquina — asignar / cambiar / quitar', () => {
     expect(pasadas.map(x => x.ciclo_unico)).toEqual([false, true]);
   });
 
-  // El ciclo único es de la vuelta EXTRA (sin cobro o repetida), no de haber
-  // entrado por este endpoint: un lavado que se cobra a tarifa completa vale lo
-  // que dé la marca de su máquina.
+  // El ciclo único es de la vuelta REPETIDA —relavar, secar de más sobre ropa
+  // que ya dio su vuelta—, no de ir sin cobro. En Por Encargo TODAS las
+  // máquinas se ponen desde Salidas y sin cobro, porque lo que se cobra es el
+  // servicio: capar por ahí dejaba el lavado normal del cliente en un ciclo
+  // aunque su modelo pidiera dos.
+  it('una máquina nueva SIN cobro tampoco queda capada a un ciclo', async () => {
+    const { notaId } = await porEncargoEnEspera();
+    const otra = await seedMaquina({ nombre: 'Lavadora sin cobro', tipo: 'lavadora_mediana' });
+    const res = await request(app).patch(`/api/notas/${notaId}/asignar-maquina`)
+      .set(auth(admin.token)).send({ maquina_ids: [otra], cobrar: false });
+    expect(res.status).toBe(200);
+
+    const { rows } = await pool.query(
+      `SELECT ncm.ciclo_unico
+         FROM nota_carga_maquinas ncm JOIN nota_cargas nc ON nc.id = ncm.carga_id
+        WHERE nc.nota_id = $1 AND ncm.maquina_id = $2`, [notaId, otra]
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0].ciclo_unico).toBe(false);
+  });
+
   it('una carga nueva COBRADA no queda capada a un ciclo', async () => {
     const { notaId } = await porEncargoEnEspera();
     const otra = await seedMaquina({ nombre: 'Lavadora 2', tipo: 'lavadora_mediana' });
@@ -1977,23 +2093,26 @@ describe('cierre automático de la nota al terminar sus cargas', () => {
     expect(mov.rows).toHaveLength(1);
   });
 
-  it('por encargo sin pagar: sí arranca, ahí se cobra al entregar', async () => {
+  // Por Encargo NO se cierra sola al terminar la máquina (2026-09-28): la ropa
+  // lavada todavía hay que doblarla y empacarla, y quien lo dice es el botón
+  // "Procesado". Se queda En Espera —que es donde está— pagada o no.
+  it('por encargo sin pagar: termina su máquina y espera a que la procesen', async () => {
     const clienteId = await seedCliente();
     const res = await terminarUnicaCarga({
       tipo_servicio: 'POR_ENCARGO', cliente_id: clienteId, estado_pago: 'PENDIENTE',
     });
     expect(res.status).toBe(200);
-    expect(res.body.estado).toBe('LISTA');
+    expect(res.body.estado).toBe('EN_ESPERA');
   });
 
-  it('por encargo pagado: sigue esperando en Por Entregar a que lo recojan', async () => {
+  it('por encargo pagado: tampoco se adelanta a Por Entregar', async () => {
     const clienteId = await seedCliente();
     const res = await terminarUnicaCarga({
       tipo_servicio: 'POR_ENCARGO', cliente_id: clienteId,
       estado_pago: 'PAGADO', forma_pago: 'EFECTIVO',
     });
     expect(res.status).toBe(200);
-    expect(res.body.estado).toBe('LISTA');
+    expect(res.body.estado).toBe('EN_ESPERA');
   });
 });
 

@@ -15,8 +15,8 @@ const fmtHora  = new Intl.DateTimeFormat('en-US', { timeZone: TZ, hour: '2-digit
 const fmtFecha = new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit' });
 
 // Barrido de fin de día. Hace dos cosas:
-//   1. Libera las máquinas que quedaron EN USO y cierra sus notas como LISTA
-//      (mismo efecto que el "Procesar carga" manual).
+//   1. Libera las máquinas que quedaron EN USO y cierra sus notas (LISTA, o
+//      EN ESPERA en Por Encargo, donde "Por Entregar" lo marca una persona).
 //   2. Suelta las máquinas que se asignaron pero nunca se arrancaron: esas
 //      notas quedaban En Espera reteniendo su lavadora indefinidamente.
 // Idempotente: si no hay nada pendiente no cambia nada. Devuelve los conteos.
@@ -27,8 +27,12 @@ export async function liberarMaquinasCierreDelDia() {
     // Se cierran TODAS las notas en proceso (no solo las de la columna legada
     // maquina_id): con varias cargas la(s) máquina(s) puede(n) vivir solo en
     // nota_cargas. Se guardan sus IDs para limpiar sus cargas.
+    // Por Encargo vuelve a EN ESPERA, no a LISTA: ahí "Por Entregar" lo marca
+    // una persona con el botón "Procesado" (2026-09-28), y el cierre del día
+    // está para soltar máquinas, no para dar por procesada la ropa de nadie.
     const notas = await client.query(
-      `UPDATE notas SET estado = 'LISTA'
+      `UPDATE notas
+          SET estado = (CASE WHEN tipo_servicio = 'POR_ENCARGO' THEN 'EN_ESPERA' ELSE 'LISTA' END)::estado_orden
          WHERE estado IN ('LAVANDO', 'SECANDO')
        RETURNING id`
     );

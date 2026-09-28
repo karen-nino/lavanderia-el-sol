@@ -160,12 +160,20 @@ async function hayCargasPendientes(client, notaId) {
 // hacerlo desde la nota. Desde el 2026-09-23 ese es el caso normal —el cobro
 // dejó de ser obligatorio para arrancar—, y al liquidarla desde el detalle se
 // cierra sola (ver `cambiarEstadoPago`).
+//
+// POR ENCARGO ya no pasa sola a Por Entregar (2026-09-28). Que las máquinas
+// terminen no quiere decir que la ropa esté lista: falta doblarla, empacarla y
+// revisarla, y eso lo dice una persona con el botón **"Procesado"** del detalle
+// —que además es el que avisa al cliente—. Mientras tanto la nota se queda En
+// Espera, que es donde de verdad está. Es el ÚNICO camino a Por Entregar en
+// este servicio: ni terminar la última máquina ni el cierre del día la mueven.
 async function estadoAlTerminarCargas(client, notaId) {
   const { rows } = await client.query(
     'SELECT tipo_servicio, estado_pago FROM notas WHERE id = $1',
     [notaId]
   );
   const nota = rows[0];
+  if (nota?.tipo_servicio === 'POR_ENCARGO') return 'EN_ESPERA';
   return (nota?.tipo_servicio === 'AUTOSERVICIO' && nota.estado_pago === 'PAGADO')
     ? 'FINALIZADA'
     : 'LISTA';
@@ -3214,17 +3222,22 @@ export const asignarMaquina = async (req, res) => {
         // y la máquina repetida va sin cobro. Sin esto, repetir con cobrar
         // false pondría el precio en 0 y bajaría el total de la nota.
         // Cada hueco que se llena aquí es una pasada más de esa carga. Corre un
-        // solo ciclo (mig. 115) si es una REPETICIÓN de ese hueco o si va sin
-        // cobro; lo que NO puede pasar es capar un lavado que se está cobrando
-        // a tarifa completa — es el mismo criterio con el que se decide el
-        // precio tres líneas abajo, y hacerlo por el sitio de la llamada dejaba
-        // una carga de $50 sin su segundo ciclo.
+        // solo ciclo (mig. 115) cuando es una REPETICIÓN de ese hueco: relavar
+        // o secar de más sobre ropa que ya dio su vuelta, donde encadenar dos
+        // ciclos es regalar el doble de agua y luz.
+        //
+        // Ya NO se mira si va sin cobro. Ese era un buen atajo cuando la nota
+        // traía sus máquinas elegidas y lo que se agregaba aquí era un extra;
+        // desde que Por Encargo vende servicios y TODAS sus máquinas se ponen
+        // en Salidas —siempre sin cobro, porque lo que se cobra es el
+        // servicio—, capar por ahí dejaba el lavado normal del cliente en un
+        // solo ciclo aunque su modelo pida dos (una LG, sin ir más lejos).
         const repiteLav = Boolean(cargaObjetivo.lavadora_usada_id);
         const repiteSec = Boolean(cargaObjetivo.secadora_usada_id);
         await registrarMaquinaEnCarga(client, cargaObjetivo.id, 'lavadora',
-          lavadora ? lavadora.id : null, 'pasada', repiteLav || !cobrar);
+          lavadora ? lavadora.id : null, 'pasada', repiteLav);
         await registrarMaquinaEnCarga(client, cargaObjetivo.id, 'secadora',
-          secadora ? secadora.id : null, 'pasada', repiteSec || !cobrar);
+          secadora ? secadora.id : null, 'pasada', repiteSec);
         await client.query(
           `UPDATE nota_cargas
               SET lavadora_id       = COALESCE($1::int, lavadora_id),
@@ -3264,12 +3277,15 @@ export const asignarMaquina = async (req, res) => {
           tipoPrenda,
         ]
       );
-      // Carga nueva: es un lavado de estreno, así que solo corre un ciclo si va
-      // sin cobro. Cobrada, vale lo que dé la marca de su máquina.
+      // Carga nueva: es un lavado de estreno, nunca una repetición, así que
+      // corre lo que diga el modelo de su máquina. Que vaya sin cobro no la
+      // capa: en Por Encargo TODAS las máquinas se ponen aquí y sin cobro
+      // —lo cobrado es el servicio—, así que mirarlo dejaba el lavado del
+      // cliente en un ciclo.
       await registrarMaquinaEnCarga(client, nuevaCarga[0].id, 'lavadora',
-        lavadora ? lavadora.id : null, 'pasada', !cobrar);
+        lavadora ? lavadora.id : null, 'pasada', false);
       await registrarMaquinaEnCarga(client, nuevaCarga[0].id, 'secadora',
-        secadora ? secadora.id : null, 'pasada', !cobrar);
+        secadora ? secadora.id : null, 'pasada', false);
     }
 
     // Estado según las máquinas EN USO: las nuevas no cuentan (no se iniciaron).

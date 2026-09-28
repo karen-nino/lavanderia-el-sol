@@ -489,19 +489,44 @@ export default function DetalleNota() {
     }
   }
 
-  // Manda el aviso de "ya está procesada" al WhatsApp del cliente (mig. 124).
+  // Confirma que la ropa ya se procesó: pasa la nota a POR ENTREGAR y le avisa
+  // al cliente. Es el único camino a ese estado en Por Encargo (2026-09-28).
   //
-  // Va por wa.me y no por la hoja de compartir: esto es TEXTO, así que sí se
-  // puede mandar a un número concreto —lo que el ticket no puede, por ser una
-  // imagen— y quien atiende no tiene que buscar el chat. No se registra nada
-  // en la nota: es un aviso, no un cambio de estado.
-  function enviarProcesado() {
-    if (!mensajeProcesado.trim() || !telefonoCliente) return;
-    window.open(
-      `https://wa.me/${telefonoCliente}?text=${encodeURIComponent(mensajeProcesado)}`,
-      '_blank', 'noopener,noreferrer'
-    );
-    setProcesadoOpen(false);
+  // El aviso va por wa.me y no por la hoja de compartir: esto es TEXTO, así que
+  // sí se puede mandar a un número concreto —lo que el ticket no puede, por ser
+  // una imagen— y quien atiende no tiene que buscar el chat.
+  //
+  // El orden importa: primero el estado y después el WhatsApp. Si el aviso no
+  // se puede mandar (sin teléfono, sin mensaje escrito) la nota igual avanza;
+  // al revés, un fallo al guardar dejaría al cliente avisado de algo que la app
+  // sigue teniendo en proceso.
+  //
+  // Ya procesada, esto solo repite el aviso: el estado no se toca.
+  async function enviarProcesado() {
+    const avisar = () => {
+      if (!mensajeProcesado.trim() || !telefonoCliente) return;
+      window.open(
+        `https://wa.me/${telefonoCliente}?text=${encodeURIComponent(mensajeProcesado)}`,
+        '_blank', 'noopener,noreferrer'
+      );
+    };
+    if (yaProcesada) {
+      avisar();
+      setProcesadoOpen(false);
+      return;
+    }
+    setLoadingAccion(true);
+    setErrorAccion('');
+    try {
+      await api.patch(`/notas/${id}/estado`, { estado: 'LISTA' });
+      setNota(await api.get(`/notas/${id}`));
+      setProcesadoOpen(false);
+      avisar();
+    } catch (err) {
+      setErrorAccion(err.message);
+    } finally {
+      setLoadingAccion(false);
+    }
   }
 
   // Cobra la nota: un solo camino para liquidar y para abonar (2026-09-26).
@@ -743,29 +768,38 @@ export default function DetalleNota() {
   // mostrador es el mismo gesto y la diferencia la decide el importe, así que
   // se cobran desde el mismo sitio. La condición es la que ya tenía Liquidar:
   // cubre a la de Abonar, que era un subconjunto suyo.
-  // Aviso por WhatsApp de que la ropa ya se procesó (mig. 124).
+  // "Procesado": lo que pasa una nota Por Encargo a POR ENTREGAR (2026-09-28).
   //
-  // Aparece cuando la nota llega a LISTA —"Por Entregar" en Por Encargo—, que
-  // es justo cuando ya se lavó y se secó todo y hay algo que avisarle al
-  // cliente. Antes se ofrecía desde que la nota nacía, y eso invitaba a
-  // mandarle "ya está lista" a alguien cuya ropa seguía en la lavadora.
+  // Es el ÚNICO camino. Que las máquinas terminen ya no la mueve: la ropa
+  // lavada todavía hay que doblarla, empacarla y revisarla, y eso lo dice una
+  // persona, no un temporizador. Al confirmarlo la nota suelta sus máquinas y
+  // —si hay mensaje y teléfono— se le avisa al cliente por WhatsApp (mig. 124),
+  // que es el mismo gesto del mostrador: "ya está, avísale".
   //
-  // Solo en Por Encargo: el autoservicio no captura cliente, así que no hay a
-  // quién avisarle (y su LISTA significa otra cosa, "Por Cobrar"). Un estado
-  // terminado queda fuera solo: FINALIZADA y CANCELADA no son LISTA.
+  // Ya marcada, el botón se queda para poder REPETIR el aviso (el cliente
+  // borró el mensaje, se mandó al número viejo): ahí ya no cambia el estado.
   //
-  // El botón se enseña aunque falte el mensaje o el teléfono: es el modal
-  // quien lo explica. Esconderlo dejaría a quien atiende sin saber por qué no
-  // está el botón que sí ve en las demás notas.
+  // Solo en Por Encargo: el autoservicio no captura cliente y su LISTA
+  // significa otra cosa ("Por Cobrar"). Una nota terminada o cancelada no lo
+  // ofrece.
+  //
+  // El botón se enseña aunque falte el mensaje o el teléfono: es el modal quien
+  // lo explica, y la nota tiene que poder avanzar aunque no haya a quién
+  // avisarle.
   const mensajeProcesado = armarMensajeWhatsapp(plantillaWa, nota);
   const telefonoCliente = telefonoWhatsapp(nota.cliente_telefono);
-  const botonProcesado = nota.tipo_servicio === 'POR_ENCARGO' && nota.estado === 'LISTA' && (
+  const yaProcesada = nota.estado === 'LISTA';
+  const botonProcesado = nota.tipo_servicio === 'POR_ENCARGO' && !esTerminal(nota) && (
     <button
       onClick={() => { setErrorAccion(''); setProcesadoOpen(true); }}
       disabled={loadingAccion}
-      className="flex items-center gap-1.5 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
+      className={`flex items-center gap-1.5 px-4 py-2 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors ${
+        yaProcesada
+          ? 'bg-gray-500 hover:bg-gray-600'
+          : 'bg-green-600 hover:bg-green-700'
+      }`}
     >
-      Procesado
+      {yaProcesada ? 'Volver a avisar' : 'Procesado'}
     </button>
   );
   const botonCobrar = puedeLiquidar(nota) && (
@@ -1553,10 +1587,15 @@ export default function DetalleNota() {
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4 max-h-[90vh] overflow-y-auto">
             <div>
-              <h3 className="text-base font-bold text-gray-900">Avisar que ya está procesada</h3>
+              <h3 className="text-base font-bold text-gray-900">
+                {yaProcesada ? 'Volver a avisar al cliente' : 'Marcar la nota como procesada'}
+              </h3>
               <p className="text-sm text-gray-500 mt-0.5">
+                {/* Lo primero es lo que hace: la nota avanza. El aviso es la
+                    segunda mitad del gesto, y puede no haber a quién mandarlo. */}
+                {!yaProcesada && <>La nota pasa a <span className="font-medium text-gray-700">Por Entregar</span> y suelta sus máquinas. </>}
                 {nota.cliente_nombre
-                  ? <>Se le manda por WhatsApp a <span className="font-medium text-gray-700">{nota.cliente_nombre}</span>
+                  ? <>Se le avisa por WhatsApp a <span className="font-medium text-gray-700">{nota.cliente_nombre}</span>
                       {nota.cliente_telefono ? ` (${nota.cliente_telefono})` : ''}.</>
                   : 'Esta nota no tiene cliente capturado.'}
               </p>
@@ -1586,8 +1625,15 @@ export default function DetalleNota() {
             )}
 
             {hayMensajeWhatsapp(plantillaWa) && !telefonoCliente && (
-              <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">
+              <div className="bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-lg p-3">
                 El cliente no tiene teléfono capturado, así que no hay a dónde mandarlo.
+                {!yaProcesada && ' La nota se marca igual: el aviso es aparte.'}
+              </div>
+            )}
+
+            {errorAccion && (
+              <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">
+                {errorAccion}
               </div>
             )}
 
@@ -1600,10 +1646,13 @@ export default function DetalleNota() {
               </button>
               <button
                 onClick={enviarProcesado}
-                disabled={!mensajeProcesado.trim() || !telefonoCliente}
+                // Marcar la nota no depende del aviso: sin mensaje escrito o sin
+                // teléfono, la nota igual avanza y el WhatsApp simplemente no
+                // sale. Solo el botón que ÚNICAMENTE avisa necesita las dos cosas.
+                disabled={loadingAccion || (yaProcesada && (!mensajeProcesado.trim() || !telefonoCliente))}
                 className="flex-1 bg-green-600 hover:bg-green-700 text-white font-medium py-3.5 rounded-lg text-base transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                Enviar
+                {loadingAccion ? 'Guardando...' : yaProcesada ? 'Enviar' : 'Marcar procesada'}
               </button>
             </div>
           </div>
