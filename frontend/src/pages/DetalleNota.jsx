@@ -230,14 +230,16 @@ function ModalConfirmar({ titulo, mensaje, onCancelar, onConfirmar, loading, col
 //
 // El botón entero es el área que se toca —círculo y palabra—, no solo el
 // círculo: con el dedo, 44 px de círculo suelto se falla.
-function AccionCircular({ icono, label, onClick, color, disabled = false, title }) {
+function AccionCircular({ icono, label, onClick, color, disabled = false, title, className = 'flex' }) {
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
       title={title}
-      className="flex flex-col items-center gap-1.5 w-20 disabled:opacity-60 disabled:cursor-not-allowed group"
+      // `className` trae cómo se MUESTRA (Eliminar se esconde en táctil), por
+      // eso el `flex` va ahí y no fijo: si no, no habría manera de ocultarlo.
+      className={`${className} flex-col items-center gap-1.5 w-20 disabled:opacity-60 disabled:cursor-not-allowed group`}
     >
       <span className={`w-14 h-14 rounded-full flex items-center justify-center text-white transition-colors ${color}`}>
         {icono}
@@ -268,6 +270,56 @@ const IconoCobrar = (
     <rect x="2" y="6" width="20" height="12" rx="2" strokeWidth={2} />
     <circle cx="12" cy="12" r="2.5" strokeWidth={2} />
     <path strokeLinecap="round" strokeWidth={2} d="M6 12h.01M18 12h.01" />
+  </svg>
+);
+
+const IconoCancelar = (
+  <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    {/* Círculo tachado: la nota se anula. */}
+    <circle cx="12" cy="12" r="9" strokeWidth={2} />
+    <path strokeLinecap="round" strokeWidth={2} d="M5.6 5.6l12.8 12.8" />
+  </svg>
+);
+
+const IconoProcesado = (
+  <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    {/* Paquete cerrado con su cinta: la ropa ya doblada y empacada. */}
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+      d="M3 8.5L12 4l9 4.5v7L12 20l-9-4.5v-7z" />
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8.5L12 13l9-4.5M12 13v7" />
+  </svg>
+);
+
+const IconoAvisar = (
+  <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    {/* Avión de papel: el aviso que se le manda al cliente. */}
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+      d="M21 3L10.5 13.5M21 3l-6.5 18-4-8-8-4L21 3z" />
+  </svg>
+);
+
+const IconoEntregar = (
+  <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    {/* Palomita en círculo: el último paso, la ropa se fue con su dueño. */}
+    <circle cx="12" cy="12" r="9" strokeWidth={2} />
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12.5l2.5 2.5L16 9.5" />
+  </svg>
+);
+
+const IconoAbrirNota = (
+  <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    {/* Flecha que da la vuelta: deshacer la entrega. */}
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+      d="M3 10h11a5 5 0 0 1 0 10h-4" />
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 6l-4 4 4 4" />
+  </svg>
+);
+
+const IconoEliminar = (
+  <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    {/* Bote de basura, el mismo de Salidas. */}
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
   </svg>
 );
 
@@ -790,17 +842,16 @@ export default function DetalleNota() {
   const telefonoCliente = telefonoWhatsapp(nota.cliente_telefono);
   const yaProcesada = nota.estado === 'LISTA';
   const botonProcesado = nota.tipo_servicio === 'POR_ENCARGO' && !esTerminal(nota) && (
-    <button
+    <AccionCircular
+      label={yaProcesada ? 'Avisar' : 'Procesado'}
+      title={yaProcesada ? 'Volver a avisarle al cliente' : 'Marcar la nota como procesada'}
+      icono={yaProcesada ? IconoAvisar : IconoProcesado}
+      color={yaProcesada
+        ? 'bg-gray-500 group-hover:bg-gray-600'
+        : 'bg-green-600 group-hover:bg-green-700'}
       onClick={() => { setErrorAccion(''); setProcesadoOpen(true); }}
       disabled={loadingAccion}
-      className={`flex items-center gap-1.5 px-4 py-2 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors ${
-        yaProcesada
-          ? 'bg-gray-500 hover:bg-gray-600'
-          : 'bg-green-600 hover:bg-green-700'
-      }`}
-    >
-      {yaProcesada ? 'Volver a avisar' : 'Procesado'}
-    </button>
+    />
   );
   const botonCobrar = puedeLiquidar(nota) && (
     <AccionCircular
@@ -917,13 +968,14 @@ export default function DetalleNota() {
       {!terminal && (
         <div className="flex flex-wrap items-start gap-2">
           {puedeCancelar && (
-            <button
+            <AccionCircular
+              label="Cancelar"
+              title="Cancelar la nota"
+              icono={IconoCancelar}
+              color="bg-orange-500 group-hover:bg-orange-600"
               onClick={() => setConfirmCancelar(true)}
               disabled={loadingAccion}
-              className="flex items-center gap-1.5 px-4 py-2 bg-orange-500 hover:bg-orange-600 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
-            >
-              Cancelar nota
-            </button>
+            />
           )}
           <AccionCircular
             label="Salidas"
@@ -937,26 +989,27 @@ export default function DetalleNota() {
               puede dar por entregada. En Por Encargo el botón dice ENTREGAR,
               que es lo que de verdad se hace con la ropa (2026-09-25). */}
           {puedeFinalizar(nota) && (
-            <button
+            <AccionCircular
+              label={esEncargoNota ? 'Entregar' : 'Finalizar'}
+              icono={IconoEntregar}
+              color="bg-emerald-600 group-hover:bg-emerald-700"
               onClick={() => setConfirmFinalizar(true)}
               disabled={loadingAccion}
-              className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
-            >
-              {esEncargoNota ? 'Entregar' : 'Finalizar'}
-            </button>
+            />
           )}
           {/* Mientras la nota vive, Eliminar solo se ve donde se apunta con mouse
               o trackpad (`pointer: fine`). Con el dedo está pegado a Cancelar y
               borrar no se deshace; por ancho no salía, porque una tablet grande
               mide lo mismo que una laptop. En táctil el camino es cancelar. */}
           {puedeEliminar(nota, esAdmin) && (
-            <button
+            <AccionCircular
+              label="Eliminar"
+              icono={IconoEliminar}
+              color="bg-red-600 group-hover:bg-red-700"
+              className={eliminarSoloEnEscritorio(nota) ? 'hidden pointer-fine:flex' : 'flex'}
               onClick={() => setConfirmEliminar(true)}
               disabled={loadingAccion}
-              className={`${eliminarSoloEnEscritorio(nota) ? 'hidden pointer-fine:flex' : 'flex'} items-center gap-1.5 px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors`}
-            >
-              Eliminar
-            </button>
+            />
           )}
         </div>
       )}
@@ -969,22 +1022,23 @@ export default function DetalleNota() {
               confirmarla. Para el error de mostrador —se entregó la nota
               equivocada—, así que es de admin (2026-09-25). */}
           {esAdmin && esEncargoNota && nota.estado === 'FINALIZADA' && (
-            <button
+            <AccionCircular
+              label="Abrir"
+              title="Deshacer la entrega"
+              icono={IconoAbrirNota}
+              color="bg-amber-600 group-hover:bg-amber-700"
               onClick={() => { setErrorAccion(''); setConfirmReabrir(true); }}
               disabled={loadingAccion}
-              className="flex items-center gap-1.5 px-4 py-2 bg-amber-600 hover:bg-amber-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
-            >
-              Abrir nota
-            </button>
+            />
           )}
           {puedeEliminar(nota, esAdmin) && (
-            <button
+            <AccionCircular
+              label="Eliminar"
+              icono={IconoEliminar}
+              color="bg-red-600 group-hover:bg-red-700"
               onClick={() => setConfirmEliminar(true)}
               disabled={loadingAccion}
-              className="flex items-center gap-1.5 px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
-            >
-              Eliminar
-            </button>
+            />
           )}
         </div>
       )}
