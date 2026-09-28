@@ -24,6 +24,19 @@ describe('cargaVisibleEnTicket', () => {
     expect(cargaVisibleEnTicket(carga({ lavadora_tipo_previsto: 'mediana', precio_lavadora: 50 }), 'POR_ENCARGO')).toBe(true);
   });
 
+  it('en Por Encargo muestra el servicio por su precio, sin mirar la máquina', () => {
+    expect(cargaVisibleEnTicket(carga({ tamano: 'chico', precio_tope: 150 }), 'POR_ENCARGO')).toBe(true);
+  });
+
+  // El mostrador agrega una secadora en Salidas y esa máquina abre su propio
+  // renglón. No cobra nada: en Por Encargo lo que se cobra es el servicio, y
+  // listarla imprimiría un "SERVICIO POR ENCARGO · $0.00" que nadie compró.
+  it('en Por Encargo oculta la máquina agregada en Salidas, que no cobra nada', () => {
+    expect(cargaVisibleEnTicket(carga({
+      es_adicional: true, secadora_usada_id: 9, secadora_usada_tipo: 'secadora',
+    }), 'POR_ENCARGO')).toBe(false);
+  });
+
   it('en Autoservicio oculta la carga cuya máquina aún no se asigna en Salidas', () => {
     // Ahí la máquina se cobra al asignarla, así que la carga todavía vale $0:
     // el cliente no debe ver una máquina que no se usó.

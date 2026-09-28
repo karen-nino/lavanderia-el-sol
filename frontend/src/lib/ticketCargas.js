@@ -45,13 +45,20 @@ export function maquinasDeCarga(cg, tipoServicio) {
 // productos y sin precio no debe aparecer en el ticket: el cliente vería una
 // "Carga 2 · $0.00" que no existió. Se conserva si tiene máquina (puesta o solo
 // elegida), productos o un precio que cobrar.
+//
+// POR ENCARGO es la excepción: ahí el ticket lista SERVICIOS, no máquinas, y el
+// cliente paga por el servicio venga en una máquina o en tres. Una máquina que
+// el mostrador agregó en Salidas —una secadora que abre su propio renglón— no
+// cobra nada, y listarla imprimiría un "SERVICIO POR ENCARGO · $0.00" que el
+// cliente no compró. Por eso ahí solo se enseña lo que cuesta algo.
 export function cargaVisibleEnTicket(cg, tipoServicio) {
-  const tieneMaquinas  = maquinasDeCarga(cg, tipoServicio).length > 0;
   const tieneProductos = (cg.productos ?? []).some(p => p.unidad !== 'tapa');
   const cobraAlgo      = Number(cg.precio_tope ?? 0) > 0
     || Number(cg.precio_lavadora ?? 0) > 0
     || Number(cg.precio_secadora ?? 0) > 0
     || Number(cg.ajuste ?? 0) !== 0;
+  if (tipoServicio === 'POR_ENCARGO') return tieneProductos || cobraAlgo;
+  const tieneMaquinas  = maquinasDeCarga(cg, tipoServicio).length > 0;
   return tieneMaquinas || tieneProductos || cobraAlgo;
 }
 
