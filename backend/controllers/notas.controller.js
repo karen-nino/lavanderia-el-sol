@@ -116,8 +116,7 @@ async function faseProcesoDeNota(client, notaId) {
 // ¿A la nota le falta trabajo por hacer? Una carga cuenta como PENDIENTE si:
 //   · tiene una máquina asignada o corriendo, o
 //   · se pidió lavado (lavadora_tipo) que nunca arrancó, o
-//   · se pidió secado (secadora_tipo) que nunca arrancó, o
-//   · es un SERVICIO Por Encargo que todavía no ha pasado por ninguna máquina.
+//   · se pidió secado (secadora_tipo) que nunca arrancó.
 // Haber usado ya la máquina no cuenta.
 //
 // Sin esto bastaba con que NINGUNA máquina estuviera en uso para dar la nota
@@ -125,16 +124,15 @@ async function faseProcesoDeNota(client, notaId) {
 // una nota de dos cargas pasaba a "Por entregar" —y se dejaba liquidar— con la
 // segunda carga sin lavar.
 //
-// El último caso es el de hoy: Por Encargo vende servicios y ya no elige tipo de
-// máquina, así que `lavadora_tipo` —que era la marca de "esta carga compró un
-// lavado"— viene en NULL. Lo que dice que el servicio está hecho es haber pasado
-// por alguna máquina; sin eso, una nota de tres servicios se daba por lista en
-// cuanto terminaba el primero.
+// Lo que NO cuenta es un SERVICIO de Por Encargo sin máquina. Ahí la nota
+// captura lo que se cobra —dos servicios Chica, un Edredón— y las máquinas se
+// manejan aparte, en Salidas: son independientes de lo que se vendió, así que
+// un servicio no es una máquina esperando turno. Lo que dice que a la nota le
+// falta trabajo son sus MÁQUINAS, puestas o corriendo.
 async function hayCargasPendientes(client, notaId) {
   const { rows } = await client.query(
     `SELECT EXISTS (
        SELECT 1 FROM nota_cargas nc
-         JOIN notas n ON n.id = nc.nota_id
         WHERE nc.nota_id = $1
           AND (
             nc.lavadora_id IS NOT NULL
@@ -143,8 +141,6 @@ async function hayCargasPendientes(client, notaId) {
                 AND nc.lavadora_usada_id IS NULL)
             OR (nc.secadora_tipo IS NOT NULL AND nc.secadora_iniciada_at IS NULL
                 AND nc.secadora_usada_id IS NULL)
-            OR (n.tipo_servicio = 'POR_ENCARGO'
-                AND nc.lavadora_usada_id IS NULL AND nc.secadora_usada_id IS NULL)
           )
      ) AS pendientes`,
     [notaId]
@@ -1253,13 +1249,6 @@ export const getNotas = async (req, res) => {
                       AND nc.lavadora_usada_id IS NULL)
                      OR (nc.secadora_tipo IS NOT NULL AND nc.secadora_id IS NULL
                          AND nc.secadora_iniciada_at IS NULL
-                         AND nc.secadora_usada_id IS NULL)
-                     -- Un SERVICIO Por Encargo que no ha pasado por ninguna
-                     -- máquina: se vendió sin elegir tipo, así que lo que dice
-                     -- que le falta trabajo es no haber usado nada todavía.
-                     OR (n.tipo_servicio = 'POR_ENCARGO'
-                         AND nc.lavadora_id IS NULL AND nc.secadora_id IS NULL
-                         AND nc.lavadora_usada_id IS NULL
                          AND nc.secadora_usada_id IS NULL)
                      -- Máquina PUESTA que no está corriendo: puede no haber
                      -- arrancado nunca, estar encendida esperando el arranque

@@ -44,12 +44,6 @@ const MAQUINA_TIPO_LABEL = {
 // filtrar al asignar (2026-09-26).
 const esEdredonCarga = (c) => String(c?.tipo_prenda ?? '').toUpperCase() === 'EDREDON';
 
-// Qué servicio se vendió en la carga (Por Encargo). Desde que la nota ya no
-// elige tipo de máquina, esto es lo que le dice al mostrador qué máquina le
-// toca: el edredón va en la jumbo y lo demás en la que esté libre.
-const SERVICIO_CARGA = { chico: 'Chica', grande: 'Grande', jumbo: 'Jumbo' };
-const nombreServicioCarga = (c) =>
-  esEdredonCarga(c) ? 'Edredón' : (SERVICIO_CARGA[c?.tamano] ?? null);
 
 // Abreviatura del tamaño en la lista de máquinas: Mediana → M, Jumbo → J,
 // Edredón → E. Otros valores se muestran tal cual.
@@ -706,8 +700,13 @@ export default function Salidas() {
 
   // Cargas que se eligieron al hacer la nota pero se quedaron sin máquina (ni
   // asignada ni ya usada). Se muestran para poder asignarles una rápidamente.
+  //
+  // En POR ENCARGO no hay ninguna: lo que la nota captura son SERVICIOS —lo que
+  // se le cobra al cliente— y las máquinas son de esta pantalla, independientes
+  // de lo que se vendió. Tres servicios no son tres máquinas por llenar: el
+  // mostrador mete la ropa en las máquinas que le acomoden y las agrega aquí.
   const notaCerrada = ['FINALIZADA', 'CANCELADA'].includes(nota?.estado);
-  const cargasVacias = notaCerrada ? [] : cargasNota.filter(c =>
+  const cargasVacias = notaCerrada || esEncargo ? [] : cargasNota.filter(c =>
     !c.lavadora_id && !c.secadora_id && !c.lavadora_usada_id && !c.secadora_usada_id
     // Las cargas de Por Encargo con TIPO previsto se asignan en su sección propia.
     && !c.lavadora_tipo_previsto && !c.secadora_tipo_previsto
@@ -818,6 +817,17 @@ export default function Salidas() {
       vacia: cargasVacias.some(v => String(v.id) === String(c.id)),
     }))
     .filter(b => b.maquinas.length > 0 || b.slots.length > 0 || b.vacia);
+
+  // Con qué número se enseña un renglón. En Por Encargo se cuenta por su lugar
+  // en ESTA pantalla: el `orden` de la carga cuenta también los servicios
+  // vendidos —que aquí no salen, porque las máquinas son independientes de lo
+  // que se cobró—, así que la primera máquina de la nota aparecía como
+  // "Máquina 4". En los demás servicios el orden ya es el del renglón.
+  const numeroDeCarga = (c) => {
+    if (!esEncargo) return c?.orden;
+    const i = bloquesCarga.findIndex(b => String(b.carga.id) === String(c?.id));
+    return i >= 0 ? i + 1 : c?.orden;
+  };
 
   // Máquinas disponibles que coinciden con un slot (lavadora/secadora) y su tipo.
   // Se ofrecen todas las máquinas libres del tipo. Que otra nota ya tenga
@@ -1002,14 +1012,12 @@ export default function Salidas() {
                   <p className="text-xs font-semibold text-gray-500">
                     {/* Cada renglón es una máquina, y así se llama también en la
                         captura y en el ticket (2026-09-25). */}
-                    {Renglon} {carga.orden}
-                    {/* El servicio que se vendió: con él se sabe qué máquina
-                        pedirle, ahora que la nota ya no elige tipo. */}
-                    {!esAutoservicio && nombreServicioCarga(carga) && (
-                      <span className="ml-1.5 font-normal text-gray-400">
-                        · {nombreServicioCarga(carga)}
-                      </span>
-                    )}
+                    {/* Sin el tamaño de la carga al lado: el tamaño es del
+                        bulto de ropa, no de la máquina, y aquí se administran
+                        máquinas. Cualquiera sirve para cualquier servicio —la
+                        única excepción es física, el edredón en la jumbo—, así
+                        que ponerlo aquí sugería una atadura que no existe. */}
+                    {Renglon} {numeroDeCarga(carga)}
                   </p>
                   {/* Quitar la que se agregó de más. Solo mientras no haya
                       arrancado (después es historial), nunca la única que le
@@ -1020,7 +1028,7 @@ export default function Salidas() {
                       disabled={loadingMaquina}
                       className="text-red-400 hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50 transition-colors disabled:opacity-40 flex-shrink-0"
                       title="Quitar de la nota"
-                      aria-label={`Quitar ${renglon} ${carga.orden} de la nota`}
+                      aria-label={`Quitar ${renglon} ${numeroDeCarga(carga)} de la nota`}
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -1454,7 +1462,7 @@ export default function Salidas() {
         const fisicas = [c.lavadora_nombre, c.secadora_nombre].filter(Boolean);
         return (
           <ConfirmacionModal
-            titulo={`Quitar la ${Nombre} ${c.orden}`}
+            titulo={`Quitar la ${Nombre} ${numeroDeCarga(c)}`}
             mensaje={`Sale de la nota y deja de cobrarse.`
               + (fisicas.length > 0
                 ? ` ${fisicas.join(' y ')} ${fisicas.length > 1 ? 'vuelven' : 'vuelve'} a quedar disponible${fisicas.length > 1 ? 's' : ''}.`
@@ -1800,7 +1808,7 @@ export default function Salidas() {
                 {/* Sin carga destino se abre una carga nueva: ahí se AGREGA
                     una máquina a la nota, no se asigna a algo que ya existe. */}
                 {cargaDestino
-                  ? `Asignar máquina · ${Renglon} ${cargaDestino.orden}`
+                  ? `Asignar máquina · ${Renglon} ${numeroDeCarga(cargaDestino)}`
                   : 'Agregar máquina'}
               </h3>
               <p className="text-sm text-gray-500 mt-1">
@@ -1812,9 +1820,9 @@ export default function Salidas() {
                       {asignarSlot.slot === 'lavadora'
                         ? (esEdredonCarga(asignarSlot.carga) ? 'lavadora Jumbo' : 'lavadora')
                         : 'secadora'}
-                    </span> que le falta a la {Renglon} {cargaDestino?.orden}. Queda asignada; la inicias después con su botón.</>
+                    </span> que le falta a la {Renglon} {numeroDeCarga(cargaDestino)}. Queda asignada; la inicias después con su botón.</>
                   : cargaDestino
-                    ? <>La máquina se suma a la <span className="font-medium text-gray-700">{Renglon} {cargaDestino.orden}</span> <span className="font-medium text-gray-700">sin cobro</span>: no cambia el total de la nota. Queda asignada; la inicias después con su botón.</>
+                    ? <>La máquina se suma a la <span className="font-medium text-gray-700">{Renglon} {numeroDeCarga(cargaDestino)}</span> <span className="font-medium text-gray-700">sin cobro</span>: no cambia el total de la nota. Queda asignada; la inicias después con su botón.</>
                     : <>Entra como una <span className="font-medium text-gray-700">máquina más de la nota</span> y{' '}
                       {/* En Autoservicio lo que se cobra ES la máquina, así que
                           una de más suma su tarifa. En Por Encargo se cobró el
@@ -1855,7 +1863,7 @@ export default function Salidas() {
                           sel ? 'border-blue bg-light-blue' : 'border-gray-200 bg-white hover:border-blue-300'
                         }`}
                       >
-                        <span className="text-sm font-medium text-gray-800">{Renglon} {c.orden}</span>
+                        <span className="text-sm font-medium text-gray-800">{Renglon} {numeroDeCarga(c)}</span>
                         <span className="text-xs text-gray-500">{admite}</span>
                       </button>
                     );

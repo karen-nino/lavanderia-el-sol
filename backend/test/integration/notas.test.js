@@ -706,30 +706,32 @@ describe('servicios Por Encargo (sin tipo de máquina)', () => {
     expect(res.body.message).toMatch(/precio del servicio Grande/i);
   });
 
-  // La regresión que abre vender sin tipo de máquina: `lavadora_tipo` era la
-  // marca de "a esta carga le falta lavarse", y ya no viene.
-  it('no se da por lista mientras haya un servicio sin pasar por máquina', async () => {
+  // Las máquinas son INDEPENDIENTES de lo que se vendió: la nota captura los
+  // servicios y en Salidas se agregan las máquinas que de verdad se usan, tantas
+  // como haga falta. Un servicio sin máquina no es una máquina esperando turno,
+  // así que lo que dice si a la nota le falta trabajo son sus máquinas.
+  it('la máquina agregada abre su propio renglón, sin tocar el precio', async () => {
     const clienteId = await seedCliente();
-    const lav = await seedMaquina({ nombre: 'L-serv', tipo: 'lavadora_mediana', tamano: 'mediana' });
+    const sec = await seedMaquina({ nombre: 'S-serv', tipo: 'secadora', tamano: 'mediana' });
     const nota = await request(app).post('/api/notas').set(auth(admin.token)).send({
       tipo_servicio: 'POR_ENCARGO', cliente_id: clienteId, tipo_prenda: 'ROPA',
       estado_pago: 'PENDIENTE',
       cargas: [{ tamano: 'chico', tipo_prenda: 'ROPA' }, { tamano: 'chico', tipo_prenda: 'ROPA' }],
     });
     expect(nota.status).toBe(201);
-    const notaId = nota.body.id;
+    expect(Number(nota.body.precio_total)).toBe(240); // dos servicios Chica
 
-    // Se le pone máquina a la PRIMERA, se arranca y se termina.
-    await request(app).patch(`/api/notas/${notaId}/asignar-maquina`).set(auth(admin.token))
-      .send({ maquina_ids: [lav], cobrar: false, carga_id: nota.body.cargas[0].id }).expect(200);
-    await request(app).patch(`/api/notas/${notaId}/activar-pendientes`).set(auth(admin.token))
-      .send({ maquina_id: lav }).expect(200);
-    await request(app).patch(`/api/notas/${notaId}/terminar-lavado-final`).set(auth(admin.token))
-      .send({ lavadora_id: lav }).expect(200);
-
-    // El segundo servicio no ha pasado por nada: la nota NO queda por entregar.
-    const despues = await request(app).get(`/api/notas/${notaId}`).set(auth(admin.token));
-    expect(despues.body.estado).not.toBe('LISTA');
+    // Sin carga destino: la máquina entra como un renglón más, sin cobro.
+    const res = await request(app).patch(`/api/notas/${nota.body.id}/asignar-maquina`)
+      .set(auth(admin.token)).send({ maquina_ids: [sec], cobrar: false });
+    expect(res.status).toBe(200);
+    expect(res.body.cargas).toHaveLength(3);
+    // El renglón de la máquina no vende nada: sin precio de servicio y en $0.
+    const extra = res.body.cargas.find(c => String(c.secadora_id) === String(sec));
+    expect(extra.precio_tope ?? null).toBeNull();
+    expect(Number(extra.precio_secadora)).toBe(0);
+    // Y el total sigue siendo el de los servicios.
+    expect(Number(res.body.precio_total)).toBe(240);
   });
 });
 

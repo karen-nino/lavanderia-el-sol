@@ -1236,6 +1236,17 @@ export default function DetalleNota() {
                     ? Number(cg.tope_carga) + marcaProds + Number(cg.ajuste ?? 0)
                     : Number(cg.precio_lavadora) + Number(cg.precio_secadora)
                       + Number(cg.ajuste ?? 0) + totalProds;
+                  // En Por Encargo el renglón con precio es un SERVICIO vendido;
+                  // el que no lo tiene es una máquina agregada en Salidas.
+                  const esEncargoNota    = nota.tipo_servicio === 'POR_ENCARGO';
+                  const esServicioEncargo = esEncargoNota && cg.tope_carga != null;
+                  const esMaquinaEncargo  = esEncargoNota && cg.tope_carga == null;
+                  // Servicios y máquinas se numeran por separado: la Máquina 2
+                  // de aquí es la Máquina 2 de Salidas, aunque sea el quinto
+                  // renglón de la nota. El `orden` de la carga cuenta los dos.
+                  const numero = esEncargoNota
+                    ? nota.cargas.filter(x => (x.tope_carga != null) === esServicioEncargo).indexOf(cg) + 1
+                    : cg.orden;
                   // Autoservicio no maneja prenda/tela/tamaño: se omite esa línea.
                   const atributos = nota.tipo_servicio === 'AUTOSERVICIO' ? [] : [
                     PRENDA_LABEL[cg.tipo_prenda],
@@ -1248,17 +1259,22 @@ export default function DetalleNota() {
                       {/* Carga N en su propia línea; debajo, una línea por
                           máquina (lavadora y secadora) con su costo. */}
                       <div className="flex items-center justify-between">
-                        <span className="text-xs font-semibold text-gray-500">Carga {cg.orden}</span>
+                        <span className="text-xs font-semibold text-gray-500">
+                          {/* En Por Encargo la nota tiene dos clases de renglón:
+                              los SERVICIOS que se cobran (los que traen precio) y
+                              las MÁQUINAS que se agregaron en Salidas, que no
+                              cobran nada. Se nombran por lo que son. */}
+                          {esServicioEncargo ? 'Servicio' : esMaquinaEncargo ? 'Máquina' : 'Carga'} {numero}
+                        </span>
                         <span className="text-sm font-medium text-gray-700">{fmtMonto(totalCarga)}</span>
                       </div>
                       {maquinasCarga.length === 0 && slotsPrevistos.length === 0 ? (
-                        // En Por Encargo esto es lo normal hasta que Salidas le
-                        // asigna una: el servicio se vendió sin elegir máquina.
-                        <span className="text-sm text-gray-400 italic">
-                          {nota.tipo_servicio === 'POR_ENCARGO'
-                            ? 'Máquina por asignar en Salidas'
-                            : 'Sin máquinas'}
-                        </span>
+                        // Un servicio no lleva máquina: las máquinas son de
+                        // Salidas y van en sus propios renglones, así que aquí
+                        // no hay nada que decir.
+                        esServicioEncargo ? null : (
+                          <span className="text-sm text-gray-400 italic">Sin máquinas</span>
+                        )
                       ) : (
                         maquinasCarga.map((m, i) => {
                           const cfg = BADGE_MAQUINA_ESTADO[m.estado];
