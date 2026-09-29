@@ -53,7 +53,11 @@ export function maquinasDeCarga(cg, tipoServicio) {
 // cliente no compró. Por eso ahí solo se enseña lo que cuesta algo.
 export function cargaVisibleEnTicket(cg, tipoServicio) {
   const tieneProductos = (cg.productos ?? []).some(p => p.unidad !== 'tapa');
-  const cobraAlgo      = Number(cg.precio_tope ?? 0) > 0
+  // El precio del servicio Por Encargo llega de la API como `tope_carga`
+  // (`nota_cargas.precio_tope` renombrado en el SELECT). Mirar solo
+  // `precio_tope` dejaba fuera del ticket al servicio Chico o Grande, que no
+  // cobra máquinas ni lleva productos: su única línea es su precio.
+  const cobraAlgo      = Number(cg.tope_carga ?? cg.precio_tope ?? 0) > 0
     || Number(cg.precio_lavadora ?? 0) > 0
     || Number(cg.precio_secadora ?? 0) > 0
     || Number(cg.ajuste ?? 0) !== 0;

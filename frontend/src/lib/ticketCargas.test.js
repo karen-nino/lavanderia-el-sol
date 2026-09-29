@@ -24,8 +24,16 @@ describe('cargaVisibleEnTicket', () => {
     expect(cargaVisibleEnTicket(carga({ lavadora_tipo_previsto: 'mediana', precio_lavadora: 50 }), 'POR_ENCARGO')).toBe(true);
   });
 
+  // La API manda el precio del servicio como `tope_carga`: con el nombre de la
+  // columna (`precio_tope`) el servicio Chico no salía en el ticket.
   it('en Por Encargo muestra el servicio por su precio, sin mirar la máquina', () => {
-    expect(cargaVisibleEnTicket(carga({ tamano: 'chico', precio_tope: 150 }), 'POR_ENCARGO')).toBe(true);
+    expect(cargaVisibleEnTicket(carga({ tamano: 'chico', tope_carga: 150 }), 'POR_ENCARGO')).toBe(true);
+  });
+
+  it('en Por Encargo el servicio Chico sin máquina ni productos se muestra igual', () => {
+    expect(cargaVisibleEnTicket(carga({
+      tamano: 'chico', tipo_prenda: 'ROPA', tope_carga: 150,
+    }), 'POR_ENCARGO')).toBe(true);
   });
 
   // El mostrador agrega una secadora en Salidas y esa máquina abre su propio
@@ -62,7 +70,7 @@ describe('cargaVisibleEnTicket', () => {
   });
 
   it('en Por Encargo se muestra si cobra su tope, aunque no tenga máquina', () => {
-    expect(cargaVisibleEnTicket(carga({ precio_tope: 150 }))).toBe(true);
+    expect(cargaVisibleEnTicket(carga({ tope_carga: 150 }))).toBe(true);
   });
 });
 
