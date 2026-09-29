@@ -341,33 +341,37 @@ export default function Login() {
           )}
         </div>
 
-        {/* Versión de la app. El punto marca que se estrena versión y se apaga
-            en el siguiente cierre del día.
+        {/* Versión de la app, y SIEMPRE el botón para traerla de nuevo.
 
-            Cuando el servidor ya tiene otra versión, la línea se vuelve el
-            botón que la trae: es el único lugar donde la app instalada puede
-            enterarse, porque abrirla desde el ícono no la recarga sola. */}
-        {hayActualizacion ? (
-          <button
-            type="button"
-            onClick={async () => { setActualizando(true); await aplicarActualizacion(); }}
-            disabled={actualizando}
-            className="mx-auto mt-6 flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold text-blue-300 hover:text-blue-200 underline underline-offset-4 disabled:opacity-60"
-          >
+            Que solo apareciera al detectar una versión nueva no alcanzaba: la
+            app instalada que todavía corre una versión vieja no trae este
+            código, así que no tiene botón que apretar y se queda anclada. Con
+            el botón fijo, cualquier versión que llegue a esta pantalla puede
+            forzar la actualización a mano — y de paso sirve cuando la
+            comprobación no pudo hacerse (sin red, o el servidor no contestó).
+
+            El punto azul marca que se estrena versión y se apaga en el
+            siguiente cierre del día. */}
+        <button
+          type="button"
+          onClick={async () => { setActualizando(true); await aplicarActualizacion(); }}
+          disabled={actualizando}
+          title="Volver a cargar la app para traer la versión más reciente"
+          className={`mx-auto mt-6 flex items-center justify-center gap-1.5 px-3 py-2 text-xs underline underline-offset-4 disabled:opacity-60 ${
+            hayActualizacion
+              ? 'font-semibold text-blue-300 hover:text-blue-200'
+              : 'text-slate-400 hover:text-slate-300'
+          }`}
+        >
+          {(hayActualizacion || versionNueva) && (
             <span className="w-1.5 h-1.5 rounded-full bg-blue-400" aria-hidden="true" />
-            {actualizando ? 'Actualizando…' : `Actualizar a la versión ${versionServidor}`}
-          </button>
-        ) : (
-          <p className="flex items-center justify-center gap-1.5 text-xs text-slate-400 mt-6">
-            {versionNueva && (
-              <>
-                <span className="w-1.5 h-1.5 rounded-full bg-blue-400" aria-hidden="true" />
-                <span className="sr-only">Versión nueva:</span>
-              </>
-            )}
-            Versión {APP_VERSION}
-          </p>
-        )}
+          )}
+          {actualizando
+            ? 'Actualizando…'
+            : hayActualizacion
+              ? `Actualizar a la versión ${versionServidor}`
+              : `Versión ${APP_VERSION}`}
+        </button>
       </div>
     </div>
   );
