@@ -967,39 +967,6 @@ export default function DetalleNota() {
         </div>
       )}
 
-      {/* Un cambio hecho en Salidas movió el total y dejó sin efecto el cobro:
-          la nota volvió a Pendiente y hay que cobrarla por el importe nuevo. */}
-      {avisoCobro && nota.estado_pago === 'PENDIENTE' && (
-        <div className="bg-amber-50 border border-amber-300 rounded-xl p-4 flex items-start gap-3">
-          <svg className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-          </svg>
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold text-amber-900">Esta nota quedó pendiente de cobro</p>
-            <p className="text-sm text-amber-800 mt-0.5">
-              Cambió en Salidas y el total {avisoCobro.ahora > avisoCobro.antes ? 'subió' : 'bajó'} de{' '}
-              <span className="font-medium">{fmtMonto(avisoCobro.antes)}</span> a{' '}
-              <span className="font-medium">{fmtMonto(avisoCobro.ahora)}</span>, así que el pago
-              anterior ya no corresponde.{' '}
-              {avisoCobro.ahora > avisoCobro.antes
-                ? `Cobra la diferencia de ${fmtMonto(avisoCobro.ahora - avisoCobro.antes)} y vuelve a liquidarla.`
-                : `Devuelve ${fmtMonto(avisoCobro.antes - avisoCobro.ahora)} y vuelve a liquidarla.`}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => { limpiarAvisoCobro(id); setAvisoCobro(null); }}
-            aria-label="Cerrar aviso"
-            className="text-amber-600 hover:text-amber-800 flex-shrink-0"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-      )}
-
       {/* Botones de acción */}
       {!terminal && (
         <div className="flex flex-wrap items-start gap-x-3 gap-y-6 mt-2">
@@ -1079,13 +1046,48 @@ export default function DetalleNota() {
         </div>
       )}
 
+      <div className='space-y-6 mt-12'>
+
+            {/* Un cambio hecho en Salidas movió el total y dejó sin efecto el cobro:
+          la nota volvió a Pendiente y hay que cobrarla por el importe nuevo. */}
+      {avisoCobro && nota.estado_pago === 'PENDIENTE' && (
+        <div className="bg-amber-50 border border-amber-300 rounded-xl p-4 flex items-start gap-3">
+          <svg className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold text-amber-900">Esta nota quedó pendiente de cobro</p>
+            <p className="text-sm text-amber-800 mt-0.5">
+              Cambió en Salidas y el total {avisoCobro.ahora > avisoCobro.antes ? 'subió' : 'bajó'} de{' '}
+              <span className="font-medium">{fmtMonto(avisoCobro.antes)}</span> a{' '}
+              <span className="font-medium">{fmtMonto(avisoCobro.ahora)}</span>, así que el pago
+              anterior ya no corresponde.{' '}
+              {avisoCobro.ahora > avisoCobro.antes
+                ? `Cobra la diferencia de ${fmtMonto(avisoCobro.ahora - avisoCobro.antes)} y vuelve a liquidarla.`
+                : `Devuelve ${fmtMonto(avisoCobro.antes - avisoCobro.ahora)} y vuelve a liquidarla.`}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => { limpiarAvisoCobro(id); setAvisoCobro(null); }}
+            aria-label="Cerrar aviso"
+            className="text-amber-600 hover:text-amber-800 flex-shrink-0"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      )}
+
       {/* Cuánto falta cobrar (o cuánto se cobró ya). Va arriba y en grande
           porque es el dato que el empleado necesita al entregar la ropa; en el
           bloque de Detalles el total quedaba como una fila más entre el ID y la
           fecha. En notas canceladas no aplica: no hay nada que cobrar. */}
       {nota.estado !== 'CANCELADA' && (
         nota.estado_pago === 'PENDIENTE' ? (
-          <div className="rounded-xl border-2 border-amber-300 bg-amber-50 px-5 py-4 flex items-center justify-between gap-3 mt-12">
+          <div className="rounded-xl border-2 border-amber-300 bg-amber-50 px-5 py-4 flex items-center justify-between gap-3">
             <div className="min-w-0">
               <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide">Pendiente de cobro</p>
               {/* Con abonos, lo que falta NO es el total de la nota: el monto
@@ -1103,7 +1105,7 @@ export default function DetalleNota() {
             </svg>
           </div>
         ) : (
-          <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-5 py-3">
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-5 py-3 mt-12">
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wide">
@@ -1142,6 +1144,9 @@ export default function DetalleNota() {
           </div>
         )
       )}
+
+      </div>
+
 
       <div className='space-y-6 mt-6'>
 
