@@ -193,6 +193,37 @@ describe('PATCH /api/notas/:id/abonos/:abonoId/revertir', () => {
     expect(Number(det.body.saldo)).toBe(100);
   });
 
+  // El caso real del 2026-09-29: la nota 0041 se cobró con dos abonos que
+  // cubrían el total, se revirtió el pago y quedó "Pendiente de cobro $0.00 ·
+  // Abonado $140 de $140": marcada como que debe, sin deber nada. Desde que
+  // TODO cobro entra por /abonos, revertir el pago tiene que devolver también
+  // ese dinero.
+  it('revertir el PAGO revierte los abonos que lo cubrían y la nota vuelve a deber todo', async () => {
+    await request(app).post('/api/caja/abrir').set(auth(admin.token))
+      .send({ monto_inicial: 0 }).expect(201);
+    const id = await notaDe100();
+    await request(app).post(`/api/notas/${id}/abonos`)
+      .set(auth(admin.token)).send({ monto: 40, forma_pago: 'EFECTIVO' }).expect(201);
+    const ultimo = await request(app).post(`/api/notas/${id}/abonos`)
+      .set(auth(admin.token)).send({ monto: 60, forma_pago: 'EFECTIVO' });
+    expect(ultimo.body.nota_pagada).toBe(true);
+
+    const res = await request(app).patch(`/api/notas/${id}/estado-pago`)
+      .set(auth(admin.token)).send({ estado_pago: 'PENDIENTE', motivo: 'se cobró la nota equivocada' });
+    expect(res.status).toBe(200);
+
+    const det = await detalle(id);
+    expect(det.body.estado_pago).toBe('PENDIENTE');
+    expect(Number(det.body.abonado)).toBe(0);
+    expect(Number(det.body.saldo)).toBe(100);
+    expect(det.body.abonos.every(a => a.revertido_at != null)).toBe(true);
+
+    // Y el dinero sale del corte: si siguiera contado, el corte cerraría con
+    // una venta que ya no existe.
+    const caja = await request(app).get('/api/caja/actual').set(auth(admin.token));
+    expect(caja.body.totales.ventas).toBe(0);
+  });
+
   it('un empleado no puede revertir, y sin motivo tampoco el admin', async () => {
     const emp = await seedUsuario({ rol: 'operador', sucursal: 'centro', nombre: 'Mostrador' });
     const id = await notaDe100();

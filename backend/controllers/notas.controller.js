@@ -1205,10 +1205,16 @@ async function perteneceASucursal(tabla, id, sucursal) {
 // Deja rastro en la campana del Dashboard cuando se revierte un pago
 // (PAGADO → PENDIENTE): es el vector directo para desaparecer una venta,
 // así que siempre queda registrado quién lo hizo y en qué nota.
-async function registrarReversionPago(client, nota, usuarioId, sucursal, motivo = null) {
+// `abonos` son los que la reversión echó atrás: van en el aviso porque es el
+// dinero que sale del corte, que es justo lo que se revisa después.
+async function registrarReversionPago(client, nota, usuarioId, sucursal, motivo = null, abonos = []) {
   const { rows } = await client.query("SELECT TRIM(nombre || ' ' || COALESCE(apellido, '')) AS nombre FROM usuarios WHERE id = $1", [usuarioId]);
   const quien = rows[0]?.nombre ?? 'un administrador';
+  const devuelto = abonos.reduce((t, a) => t + Number(a.monto), 0);
   const mensaje = `Pago revertido en la nota ${nota.folio ?? `#${nota.id}`} por ${quien}`
+                + (abonos.length > 0
+                    ? ` (se revirtieron ${abonos.length} abono(s) por $${devuelto.toFixed(2)})`
+                    : '')
                 + (motivo ? `: ${motivo}` : '');
   await client.query(
     `INSERT INTO notificaciones (tipo, mensaje, usuario_id, sucursal)
@@ -3973,14 +3979,58 @@ export const cambiarEstadoPago = async (req, res) => {
       }
     }
 
+    // Revertir el pago tiene que devolver también el DINERO, y desde el
+    // 2026-09-26 el dinero entra por los abonos: cobrar una nota de un tirón
+    // registra un abono por el total y la marca pagada sola. Sin esto, la nota
+    // volvía a PENDIENTE con sus abonos vivos y quedaba "Pendiente de cobro
+    // $0.00 · Abonado $140 de $140": marcada como que debe, sin deber nada.
+    //
+    // Se revierten TODOS los abonos vivos: revertir el pago es decir "esta nota
+    // no está cobrada", así que no puede quedar dinero suyo contado en ningún
+    // corte. Para deshacer solo una parte —un adelanto mal capturado— está el
+    // botón de cada abono, que es más fino y pide su propio motivo.
+    let abonosRevertidos = [];
+    if (esReversion) {
+      const { rows: vivos } = await client.query(
+        `SELECT ab.id, ab.monto, ab.caja_id, cj.estado AS caja_estado
+           FROM nota_abonos ab
+           LEFT JOIN cajas cj ON cj.id = ab.caja_id
+          WHERE ab.nota_id = $1 AND ab.revertido_at IS NULL
+          FOR UPDATE OF ab`,
+        [id]
+      );
+      // Un abono que ya entró en un corte CERRADO no se deshace, igual que un
+      // cobro (mig. 101). Y esta es la única puerta que lo vigilaba: el cobro
+      // por abonos no deja `notas.caja_id`, así que el control de arriba ni se
+      // asomaba a este dinero.
+      const congelado = vivos.find(a => a.caja_id && a.caja_estado !== 'abierta');
+      if (congelado) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({
+          message: 'Un abono de esta nota ya quedó en un corte de caja cerrado: el pago solo se '
+                 + 'puede revertir mientras esa caja siga abierta.',
+        });
+      }
+      if (vivos.length > 0) {
+        await client.query(
+          `UPDATE nota_abonos
+              SET revertido_at = NOW(), revertido_por = $2, motivo_reversion = $3
+            WHERE id = ANY($1)`,
+          [vivos.map(a => a.id), req.user?.id ?? null, `Reversión del cobro: ${motivoReversion}`]
+        );
+        abonosRevertidos = vivos;
+      }
+    }
+
     // Al revertir un pago la forma deja de aplicar y se limpia, para que no
     // quede una nota PENDIENTE marcada como pagada en efectivo.
     const { rows } = await client.query(
-      'UPDATE notas SET estado_pago = $1, forma_pago = $2 WHERE id = $3 RETURNING *',
-      [estado_pago, estado_pago === 'PAGADO' ? formaPago : null, id]
+      'UPDATE notas SET estado_pago = $1, forma_pago = $2, caja_id = $4 WHERE id = $3 RETURNING *',
+      [estado_pago, estado_pago === 'PAGADO' ? formaPago : null, id,
+       estado_pago === 'PAGADO' ? actual.caja_id : null]
     );
     if (esReversion) {
-      await registrarReversionPago(client, actual, req.user.id, req.sucursal, motivoReversion);
+      await registrarReversionPago(client, actual, req.user.id, req.sucursal, motivoReversion, abonosRevertidos);
     }
 
     // Autoservicio que esperaba el cobro en "Por Entregar": al liquidarlo ya no
