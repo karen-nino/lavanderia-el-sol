@@ -883,8 +883,8 @@ export default function DetalleNota() {
       title={yaProcesada ? 'Volver a avisarle al cliente' : 'Marcar la nota como procesada'}
       icono={yaProcesada ? IconoAvisar : IconoProcesado}
       color={yaProcesada
-        ? 'bg-gray-500 group-hover:bg-gray-600'
-        : 'bg-green-600 group-hover:bg-green-700'}
+        ? 'bg-green-500 group-hover:bg-green-600'
+        : 'bg-blue group-hover:bg-blue-700'}
       onClick={() => { setErrorAccion(''); setProcesadoOpen(true); }}
       disabled={loadingAccion}
     />
@@ -893,7 +893,7 @@ export default function DetalleNota() {
     <AccionCircular
       label="Cobrar"
       icono={IconoCobrar}
-      color="bg-blue group-hover:opacity-90"
+      color="bg-blue group-hover:bg-green-600"
       onClick={abrirCobro}
       disabled={loadingAccion}
     />
@@ -958,7 +958,7 @@ export default function DetalleNota() {
       </div>
 
       {/* Contenido */}
-      <div className="max-w-2xl mx-auto px-6 md:p-6 py-6 space-y-6">
+      <div className="max-w-2xl mx-auto px-6 md:p-6 py-6">
 
       {/* Error de acción */}
       {errorAccion && (
@@ -1002,24 +1002,24 @@ export default function DetalleNota() {
 
       {/* Botones de acción */}
       {!terminal && (
-        <div className="flex flex-wrap items-start gap-2">
+        <div className="flex flex-wrap items-start gap-x-3 gap-y-6 mt-2">
           {puedeCancelar && (
             <AccionCircular
               label="Cancelar"
               title="Cancelar la nota"
               icono={IconoCancelar}
-              color="bg-orange-500 group-hover:bg-orange-600"
+              color="bg-blue group-hover:bg-orange-600"
               onClick={() => setConfirmCancelar(true)}
               disabled={loadingAccion}
             />
           )}
+          {botonCobrar}
           <AccionCircular
             label="Salidas"
             icono={IconoSalidas}
-            color="bg-blue-600 group-hover:bg-blue-700"
+            color="bg-blue group-hover:bg-blue-700"
             onClick={() => navigate(`/notas/${id}/salidas`)}
           />
-          {botonCobrar}
           {botonProcesado}
           {/* Último paso, y sigue exigiendo el cobro: una nota pendiente no se
               puede dar por entregada. En Por Encargo el botón dice ENTREGAR,
@@ -1028,7 +1028,7 @@ export default function DetalleNota() {
             <AccionCircular
               label={esEncargoNota ? 'Entregar' : 'Finalizar'}
               icono={IconoEntregar}
-              color="bg-emerald-600 group-hover:bg-emerald-700"
+              color="bg-blue group-hover:bg-emerald-700"
               onClick={() => setConfirmFinalizar(true)}
               disabled={loadingAccion}
             />
@@ -1041,7 +1041,7 @@ export default function DetalleNota() {
             <AccionCircular
               label="Eliminar"
               icono={IconoEliminar}
-              color="bg-red-600 group-hover:bg-red-700"
+              color="bg-blue group-hover:bg-red-700"
               className={eliminarSoloEnEscritorio(nota) ? 'hidden pointer-fine:flex' : 'flex'}
               onClick={() => setConfirmEliminar(true)}
               disabled={loadingAccion}
@@ -1085,7 +1085,7 @@ export default function DetalleNota() {
           fecha. En notas canceladas no aplica: no hay nada que cobrar. */}
       {nota.estado !== 'CANCELADA' && (
         nota.estado_pago === 'PENDIENTE' ? (
-          <div className="rounded-xl border-2 border-amber-300 bg-amber-50 px-5 py-4 flex items-center justify-between gap-3">
+          <div className="rounded-xl border-2 border-amber-300 bg-amber-50 px-5 py-4 flex items-center justify-between gap-3 mt-12">
             <div className="min-w-0">
               <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide">Pendiente de cobro</p>
               {/* Con abonos, lo que falta NO es el total de la nota: el monto
@@ -1142,6 +1142,8 @@ export default function DetalleNota() {
           </div>
         )
       )}
+
+      <div className='space-y-6 mt-6'>
 
       {/* Código de barras: apagado, no borrado (ver MOSTRAR_CODIGO_BARRAS). */}
       {MOSTRAR_CODIGO_BARRAS && (
@@ -1522,6 +1524,9 @@ export default function DetalleNota() {
         )}
       </div>
       )}
+
+      </div>
+
 
       {/* Estado: ESCONDIDO a la espera de que el negocio decida si lo
           mantiene (2026-09-28). La línea de tiempo cuenta el proceso paso a
