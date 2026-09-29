@@ -4264,6 +4264,110 @@ export const removeProductoFromNota = async (req, res) => {
   }
 };
 
+// ── PATCH /notas/:id/productos/:productoId ──────────────────
+// Cambia la CANTIDAD de un producto que la nota ya tiene. Es lo que hacen los
+// botones + y − de Salidas: agregar otra vez sumaba, pero no había forma de
+// servir menos sin borrar el renglón y volver a ponerlo (y eso, además, es de
+// admin). La cantidad viaja completa, no un delta: dos empleados tocando los
+// botones a la vez terminan en el número que se ve, no en la suma de los dos.
+//
+// El precio unitario NO se recalcula: es el que se congeló al ponerlo, igual
+// que hace `reservarProducto` al sumar. Lo que se ajusta es la reserva del
+// inventario, y por eso se valida que alcance.
+export const cambiarCantidadProducto = async (req, res) => {
+  const { id, productoId } = req.params;
+  const cantidad = Number(req.body?.cantidad);
+
+  if (!Number.isFinite(cantidad) || cantidad <= 0) {
+    return res.status(400).json({ message: 'La cantidad debe ser mayor a 0. Para quitarlo, bórralo.' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const { rows: npRows } = await client.query(
+      `SELECT np.*, n.estado AS nota_estado FROM nota_productos np
+       JOIN notas n ON n.id = np.nota_id AND n.sucursal = $3
+       WHERE np.nota_id = $1 AND np.producto_id = $2`,
+      [id, productoId, req.sucursal]
+    );
+    if (npRows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: 'Producto no encontrado en la nota.' });
+    }
+    const np = npRows[0];
+    if (['PAGADA', 'FINALIZADA', 'CANCELADA'].includes(np.nota_estado)) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        message: `No se pueden cambiar los productos de una nota ${palabra(np.nota_estado)}.`,
+      });
+    }
+
+    // Las tapas por unidad salen de lo que ya está guardado: así una botella
+    // sigue valiendo las mismas tapas aunque el catálogo haya cambiado después.
+    const tapasPorPieza = Number(np.cantidad_tapas) / Number(np.cantidad);
+    const tapasNuevas = cantidad * tapasPorPieza;
+    const delta = tapasNuevas - Number(np.cantidad_tapas);
+
+    const { rows: artRows } = await client.query(
+      'SELECT nombre, stock_actual, stock_reservado FROM productos WHERE id = $1 AND sucursal = $2 FOR UPDATE',
+      [productoId, req.sucursal]
+    );
+    if (artRows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: 'El producto ya no existe en esta sucursal.' });
+    }
+    const art = artRows[0];
+    const disponible = Number(art.stock_actual) - Number(art.stock_reservado);
+    if (delta > disponible + 1e-9) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        message: `No hay suficiente existencia de "${art.nombre}" para servir esa cantidad.`,
+      });
+    }
+
+    await client.query(
+      'UPDATE nota_productos SET cantidad = $1, cantidad_tapas = $2 WHERE nota_id = $3 AND producto_id = $4',
+      [cantidad, tapasNuevas, id, productoId]
+    );
+    await client.query(
+      'UPDATE productos SET stock_reservado = stock_reservado + $1 WHERE id = $2',
+      [delta, productoId]
+    );
+
+    // Si el cambio movió el total y la nota ya estaba pagada, el cobro deja de
+    // corresponder: vuelve a PENDIENTE para cobrarla por el importe nuevo.
+    await recalcularPrecioTotal(client, id, {
+      desmarcarPagoSiCambia: true, usuarioId: req.user?.id, sucursal: req.sucursal,
+    });
+
+    // El tope manda igual que al agregar: servir más desde aquí no puede pasarse
+    // de lo que el servicio cobra.
+    const errTope = await validarTopesCargas(client, id);
+    if (errTope) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: errTope });
+    }
+
+    await client.query('COMMIT');
+    const { rows } = await pool.query(
+      `SELECT np.*, a.nombre, (np.cantidad * np.precio_unitario) AS subtotal
+         FROM nota_productos np JOIN productos a ON a.id = np.producto_id
+        WHERE np.nota_id = $1 AND np.producto_id = $2`,
+      [id, productoId]
+    );
+    res.json(rows[0]);
+  } catch (err) {
+    await client.query('ROLLBACK');
+    if (respondioCorteCerrado(res, err)) return;
+    console.error('cambiarCantidadProducto error:', err);
+    res.status(500).json({ message: 'No se pudo cambiar la cantidad. Intenta de nuevo.' });
+  } finally {
+    client.release();
+  }
+};
+
 // ── Abonos (pagos parciales, mig. 121) ──────────────────────
 //
 // Por Encargo el cliente suele adelantar una parte al dejar la ropa. El abono

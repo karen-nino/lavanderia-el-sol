@@ -2219,6 +2219,70 @@ describe('cierre automático de la nota al terminar sus cargas', () => {
   });
 });
 
+// Los botones + y − de Salidas: cambian la cantidad de un producto que la nota
+// ya lleva, sin borrar el renglón (borrarlo es de admin y es otra cosa).
+describe('cambiar la cantidad de un producto de la nota', () => {
+  async function notaConProducto(extra = {}) {
+    const clienteId = await seedCliente();
+    const prod = await seedProducto({
+      nombre: 'Jabón', stock_actual: 20, precio_unitario: 7, ...extra,
+    });
+    const nota = await request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'POR_ENCARGO', cliente_id: clienteId, tipo_prenda: 'ROPA',
+      estado_pago: 'PENDIENTE', cargas: [{ tamano: 'grande', tipo_prenda: 'ROPA' }],
+      productos: [{ producto_id: prod, cantidad: 1 }],
+    });
+    expect(nota.status).toBe(201);
+    return { notaId: nota.body.id, prod };
+  }
+
+  it('sube la cantidad y ajusta la reserva del inventario', async () => {
+    const { notaId, prod } = await notaConProducto();
+    const res = await request(app).patch(`/api/notas/${notaId}/productos/${prod}`)
+      .set(auth(admin.token)).send({ cantidad: 3 });
+    expect(res.status).toBe(200);
+    expect(Number(res.body.cantidad)).toBe(3);
+    const { rows } = await pool.query('SELECT stock_reservado FROM productos WHERE id = $1', [prod]);
+    expect(Number(rows[0].stock_reservado)).toBe(3);
+  });
+
+  it('baja la cantidad y devuelve lo apartado', async () => {
+    const { notaId, prod } = await notaConProducto();
+    await request(app).patch(`/api/notas/${notaId}/productos/${prod}`)
+      .set(auth(admin.token)).send({ cantidad: 5 }).expect(200);
+    await request(app).patch(`/api/notas/${notaId}/productos/${prod}`)
+      .set(auth(admin.token)).send({ cantidad: 2 }).expect(200);
+    const { rows } = await pool.query('SELECT stock_reservado FROM productos WHERE id = $1', [prod]);
+    expect(Number(rows[0].stock_reservado)).toBe(2);
+  });
+
+  it('no deja pasarse de la existencia', async () => {
+    const { notaId, prod } = await notaConProducto({ stock_actual: 4 });
+    const res = await request(app).patch(`/api/notas/${notaId}/productos/${prod}`)
+      .set(auth(admin.token)).send({ cantidad: 9 });
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/existencia/i);
+  });
+
+  // El tope manda igual que al agregar: servir más desde Salidas no puede
+  // pasarse de lo que el servicio cobra.
+  it('no deja pasarse del precio del servicio', async () => {
+    const { notaId, prod } = await notaConProducto();
+    // Grande: tope 150, máquina 115. Con 7 por tapa, 5 tapas ya son 150.
+    const res = await request(app).patch(`/api/notas/${notaId}/productos/${prod}`)
+      .set(auth(admin.token)).send({ cantidad: 6 });
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/se cobra en|material de la nota/i);
+  });
+
+  it('cantidad 0 o negativa → 400 (para quitarlo está el borrado)', async () => {
+    const { notaId, prod } = await notaConProducto();
+    const res = await request(app).patch(`/api/notas/${notaId}/productos/${prod}`)
+      .set(auth(admin.token)).send({ cantidad: 0 });
+    expect(res.status).toBe(400);
+  });
+});
+
 describe('cancelar una nota es cosa de administradores', () => {
   it('un empleado no puede cancelar', async () => {
     const empleado = await seedUsuario({ rol: 'operador', sucursal: 'centro', nombre: 'Empleado' });

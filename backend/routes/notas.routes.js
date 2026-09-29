@@ -30,6 +30,7 @@ import {
   guardarTelefono,
   getNotaProductos,
   addProductoToNota,
+  cambiarCantidadProducto,
   removeProductoFromNota,
 } from '../controllers/notas.controller.js';
 
@@ -81,6 +82,9 @@ router.get('/:id/productos',    getNotaProductos);
 router.post('/:id/productos',   addProductoToNota);
 // Quitar un producto ya capturado en la nota es cosa de admin, igual que
 // quitar una carga: deshace lo cobrado y devuelve stock.
+// Cambiar la cantidad NO es de admin: es el mismo gesto que agregar, que
+// cualquiera puede hacer. Borrar el renglón sí, porque deshace la captura.
+router.patch('/:id/productos/:productoId', cambiarCantidadProducto);
 router.delete('/:id/productos/:productoId', requireAdmin, removeProductoFromNota);
 
 export default router;

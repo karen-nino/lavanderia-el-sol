@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { etiquetaEstadoLista } from '../lib/estadoNota';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
-import { tituloProducto, subtituloProducto, ordenProducto } from '../lib/formatoInventario';
+import { tituloProducto, subtituloProducto, ordenProducto, etiquetaProducto, plural } from '../lib/formatoInventario';
 import { guardarAvisoCobro } from '../lib/avisoCobro';
 import { useAuth } from '../context/AuthContext';
 import { esAdmin as esAdminFn } from '../lib/roles';
@@ -87,8 +87,7 @@ export default function Salidas() {
   const [agregarProdOpen, setAgregarProdOpen] = useState(false);
   const [catalogoProd, setCatalogoProd]       = useState([]);
   const [loadingCatalogo, setLoadingCatalogo] = useState(false);
-  const [prodSel, setProdSel]                 = useState('');
-  const [prodCant, setProdCant]               = useState('1');
+
   const [confirmQuitarCarga, setConfirmQuitarCarga] = useState(null);
   // Ajuste de la nota (2026-09-25): descuento o cargo extra. Se captura aquí y
   // sale impreso en el ticket.
@@ -542,8 +541,6 @@ export default function Salidas() {
   // Abre el modal con el catálogo de productos activos de la sucursal.
   async function iniciarAgregarProducto() {
     setErrorAccion('');
-    setProdSel('');
-    setProdCant('1');
     setAgregarProdOpen(true);
     setLoadingCatalogo(true);
     try {
@@ -556,19 +553,35 @@ export default function Salidas() {
     }
   }
 
-  // Suma el producto a la nota. El precio y la unidad los pone el servidor
-  // según el servicio (botella en Autoservicio, tapa en Por Encargo), y el
-  // producto queda apartado del inventario.
-  async function confirmarAgregarProducto() {
-    const cantidad = Number(prodCant);
-    if (!prodSel || !Number.isFinite(cantidad) || cantidad <= 0) return;
+  // Suma el producto a la nota, de uno en uno: entra con cantidad 1 y desde el
+  // renglón se sube con el +. El precio y la unidad los pone el servidor según
+  // el servicio (botella en Autoservicio, tapa en Por Encargo), y el producto
+  // queda apartado del inventario.
+  async function agregarProductoDeLista(productoId) {
     setLoadingProducto('nuevo');
     setErrorAccion('');
     try {
       await api.post(`/notas/${id}/productos`, {
-        producto_id: Number(prodSel), cantidad,
+        producto_id: Number(productoId), cantidad: 1,
       });
       setAgregarProdOpen(false);
+      await cargarDatos();
+    } catch (err) {
+      setErrorAccion(err.message);
+    } finally {
+      setLoadingProducto(null);
+    }
+  }
+
+  // Sube o baja la cantidad de un producto que la nota ya lleva. Va con la
+  // cantidad COMPLETA, no con un delta: si dos empleados tocan los botones a la
+  // vez, la nota acaba en el número que se ve y no en la suma de los dos.
+  async function cambiarCantidadProducto(productoId, cantidad) {
+    if (cantidad < 1) return;
+    setLoadingProducto(productoId);
+    setErrorAccion('');
+    try {
+      await api.patch(`/notas/${id}/productos/${productoId}`, { cantidad });
       await cargarDatos();
     } catch (err) {
       setErrorAccion(err.message);
@@ -963,21 +976,33 @@ export default function Salidas() {
     : etiquetaEstadoLista(nota?.tipo_servicio);
 
   const productosNota  = [...(nota?.productos || [])].sort((a, b) => ordenProducto(a) - ordenProducto(b));
-  // En Por Encargo el granel y las bolsas son material del servicio: no se
-  // cobran (su precio ya lo paga el servicio) y gastan de su tope. Los de marca
-  // se venden por unidad y sí se cobran. En los demás servicios se cobra todo.
-  const esMaterialDeServicio = (p) => esEncargo && p.tipo_liquido !== 'marca';
-  const totalProductosNota = productosNota.reduce(
-    (a, x) => a + (esMaterialDeServicio(x) ? 0 : Number(x.subtotal || 0)), 0);
-  // Se puede tocar la lista mientras la nota no esté cerrada y el cobro no esté
-  // congelado en un corte.
+  const totalProductosNota = productosNota.reduce((a, x) => a + Number(x.subtotal || 0), 0);
+  // Una nota cobrada y cerrada ya no acepta productos, y con el cobro congelado
+  // en un corte cerrado no se toca lo que cuesta.
   const puedeTocarProductos = Boolean(nota) && !cobroCongelado
     && !['PAGADA', 'FINALIZADA', 'CANCELADA'].includes(nota.estado);
-  // Unidad con la que se sirvió, para el renglón: "$5.00/tapa".
-  const unidadProducto = (p) => {
-    if (p.unidad === 'pieza') return p.clase === 'bolsa' ? 'bolsa' : 'pieza';
-    if (p.unidad === 'tapa') return 'tapa';
-    return p.tipo_liquido === 'marca' ? 'unidad' : 'botella';
+
+  // Lo que queda de un producto del catálogo, en las piezas con las que se
+  // sirve: tapas el granel, unidades la marca y piezas las bolsas. El stock
+  // vive en tapas, así que los que se venden por envase se convierten.
+  const porTapa = (p) => p.clase !== 'bolsa' && p.tipo_liquido === 'granel' && esEncargo;
+  const existenciaProducto = (p) => {
+    const tapas = Number(p.stock_disponible ?? p.stock_actual) || 0;
+    if (p.clase === 'bolsa' || porTapa(p)) return tapas;
+    const tpb = Number(p.tapas_por_botella) || 0;
+    return tpb > 0 ? Math.floor(tapas / tpb) : tapas;
+  };
+  // Precio y existencia en una línea, como en el alta: "$5.00/tapa · 12 tapas".
+  const detalleProducto = (p) => {
+    const disp = existenciaProducto(p);
+    const [uno, varios] = p.clase === 'bolsa' ? ['bolsa', 'bolsas']
+      : porTapa(p) ? ['tapa', 'tapas']
+      : p.tipo_liquido === 'marca' ? ['unidad', 'unidades']
+      : ['botella', 'botellas'];
+    const precio = porTapa(p) || p.clase === 'bolsa'
+      ? Number(p.precio_unitario) || 0
+      : Number(p.precio_botella) || 0;
+    return `${fmtMonto(precio)}/${uno} · ${plural(disp, uno, varios)}`;
   };
 
   return (
@@ -1364,181 +1389,203 @@ export default function Salidas() {
 
       {/* Sección 3 — Productos de la nota. Se capturan al hacerla, pero también
           se pueden agregar aquí (2026-09-25): el cliente pide el jabón ya
-          estando en la máquina. El admin además puede quitar uno mal capturado.
-          Se ve igual que en el alta (2026-09-28): es la misma lista, y tenerla
-          con dos formas distintas hacía dudar de si eran dos cosas. */}
-      <div>
-        {/* Agregar vive solo en el encabezado: así no cambia de sitio conforme
-            crece la lista. */}
-        <div className="flex items-center justify-between gap-3 mb-3">
-          <div className="flex items-baseline gap-2 min-w-0">
-            <h2 className="text-sm font-semibold text-gray-700">Productos</h2>
-            {productosNota.length > 0 && (
-              <span className="text-xs text-gray-500 truncate">
-                {productosNota.length} {productosNota.length === 1 ? 'producto' : 'productos'}
-              </span>
-            )}
-          </div>
-          {/* Una nota cobrada y cerrada ya no acepta productos, y con el cobro
-              congelado en un corte cerrado no se toca lo que cuesta. */}
+          estando en la máquina. El admin además puede quitar uno mal capturado. */}
+      <div className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
+        <div className="px-4 py-3 border-b border-gray-50 flex items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold text-gray-700">Productos</h2>
           {puedeTocarProductos && (
             <button
               onClick={iniciarAgregarProducto}
               disabled={loadingProducto != null}
-              className="flex-shrink-0 flex items-center gap-1.5 bg-blue text-white rounded-pill pl-3 pr-4 py-2.5 text-xs font-bold hover:opacity-90 disabled:opacity-60 transition-opacity"
+              className="flex items-center gap-1 text-xs font-medium text-blue hover:underline disabled:opacity-60"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
               </svg>
-              Agregar producto
+              Agregar
             </button>
           )}
         </div>
-
-        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-          {productosNota.length === 0 ? (
-            <p className="px-4 py-5 text-sm text-gray-500">No hay productos en esta nota.</p>
-          ) : (
-            productosNota.map((p, i) => {
-              const material = esMaterialDeServicio(p);
-              const sub = subtituloProducto(p);
-              return (
-                <div key={p.producto_id} className={`flex flex-wrap items-center gap-x-2 gap-y-4 px-3 py-4 ${i > 0 ? 'border-t border-gray-100' : ''}`}>
-                  <div className="flex-1 min-w-[10rem]">
-                    <p className="text-sm font-semibold text-gray-900">
-                      {tituloProducto(p)}{sub ? ` · ${sub}` : ''}
-                    </p>
-                    <p className="text-xs text-gray-500 tabular-nums">
-                      {fmtMonto(p.precio_unitario)}/{unidadProducto(p)}
-                      {material && (
-                        <span className="ml-1.5 text-gray-400">· va dentro del servicio</span>
-                      )}
-                    </p>
-                  </div>
-
-                  {/* La cantidad no se edita aquí: la nota ya existe, así que se
-                      agrega otra vez para servir más y se quita para deshacer. */}
-                  <div className="flex flex-1 items-center justify-between gap-2">
-                    <span className="text-sm font-semibold text-gray-900 tabular-nums">
-                      {p.cantidad} {unidadProducto(p)}{Number(p.cantidad) === 1 ? '' : 's'}
-                    </span>
-
-                    <div className="flex items-center gap-2">
-                      <span className={`w-16 text-right text-base font-bold tabular-nums ${
-                        material ? 'text-gray-400' : 'text-blue-700'
-                      }`}>
-                        {fmtMonto(p.subtotal)}
-                      </span>
-
-                      {esAdmin && !cobroCongelado && (
-                        <button
-                          onClick={() => setConfirmQuitarProd(p)}
-                          disabled={loadingProducto === p.producto_id}
-                          className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-40"
-                          title="Quitar producto"
-                          aria-label={`Quitar ${tituloProducto(p)}`}
-                        >
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
-                              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                        </button>
-                      )}
-                    </div>
-                  </div>
+        {productosNota.length === 0 ? (
+          <p className="px-4 py-4 text-sm text-gray-400 italic">Sin productos agregados</p>
+        ) : (
+          <div className="divide-y divide-gray-50">
+            {productosNota.map(p => (
+              <div key={p.producto_id} className="px-4 py-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-gray-800 truncate">{tituloProducto(p)}</p>
+                  {subtituloProducto(p) && (
+                    <p className="text-xs text-gray-400">{subtituloProducto(p)}</p>
+                  )}
+                  <p className="text-xs text-gray-400">
+                    Cant. {p.cantidad} × {fmtMonto(p.precio_unitario)} = {fmtMonto(p.subtotal)}
+                  </p>
                 </div>
-              );
-            })
-          )}
-
-          {/* Lo que estos productos le suman a la nota. En Por Encargo puede ser
-              $0: si todo lo agregado va dentro del servicio, no se cobra nada
-              aparte y decirlo con un total en cero solo haría dudar. */}
-          {productosNota.length > 0 && (!esEncargo || totalProductosNota > 0) && (
-            <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 bg-gray-50">
-              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                {esEncargo ? 'Se cobra aparte' : 'Total productos'}
-              </span>
-              <span className="text-base font-bold text-dark-blue tabular-nums">
-                {fmtMonto(totalProductosNota)}
-              </span>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {/* Servir más o menos sin borrar el renglón. El − se detiene
+                      en 1: quitarlo del todo es otra cosa, y tiene su bote de
+                      basura (que además es de admin). */}
+                  {puedeTocarProductos && (
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        onClick={() => cambiarCantidadProducto(p.producto_id, Number(p.cantidad) - 1)}
+                        disabled={Number(p.cantidad) <= 1 || loadingProducto != null}
+                        aria-label={`Servir menos ${tituloProducto(p)}`}
+                        className="w-9 h-9 flex items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-700 text-base font-semibold hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                      >
+                        −
+                      </button>
+                      <span className="w-7 text-center text-sm font-semibold text-gray-900 tabular-nums">
+                        {p.cantidad}
+                      </span>
+                      <button
+                        onClick={() => cambiarCantidadProducto(p.producto_id, Number(p.cantidad) + 1)}
+                        disabled={loadingProducto != null}
+                        aria-label={`Servir más ${tituloProducto(p)}`}
+                        className="w-9 h-9 flex items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-700 text-base font-semibold hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                      >
+                        +
+                      </button>
+                    </div>
+                  )}
+                  {esAdmin && !cobroCongelado && (
+                    <button
+                      onClick={() => setConfirmQuitarProd(p)}
+                      disabled={loadingProducto === p.producto_id}
+                      className="text-red-400 hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50 transition-colors disabled:opacity-40 flex-shrink-0"
+                      title="Quitar producto"
+                      aria-label={`Quitar ${tituloProducto(p)}`}
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+            {/* Suma de los productos. El total de la nota (máquinas, ajuste y
+                todo lo demás) vive en el detalle, no en esta tarjeta. */}
+            <div className="px-4 py-3 bg-gray-50 flex justify-between">
+              <span className="text-sm font-semibold text-gray-700">Total productos</span>
+              <span className="text-sm font-bold text-gray-900">{fmtMonto(totalProductosNota)}</span>
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
-      {/* Modal agregar producto: qué producto y cuánto. El precio lo pone el
-          servidor según el servicio, así que aquí no se decide nada más. */}
+      {/* Modal agregar producto: la MISMA lista del alta (2026-09-28). Antes era
+          un desplegable con un campo de cantidad; se elige de una lista donde
+          cada producto enseña su precio y lo que queda, que es lo que hace falta
+          para decidir. Entra con 1 y desde el renglón se sube con el +. */}
       {agregarProdOpen && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4 max-h-[90vh] overflow-y-auto">
-            <div>
-              <h3 className="text-base font-bold text-gray-900">Agregar producto</h3>
-              <p className="text-sm text-gray-500 mt-1">
-                {esAutoservicio
-                  ? 'Se cobra por pieza completa y se aparta del inventario.'
-                  : 'Se cobra por tapa/medida y se aparta del inventario.'}
-              </p>
+        <div
+          className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
+          onClick={() => { setAgregarProdOpen(false); setErrorAccion(''); }}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[85vh] flex flex-col"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-gray-100 flex-shrink-0">
+              <div>
+                <h2 className="text-base font-semibold text-gray-900">Agregar producto</h2>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {esEncargo ? 'El granel se sirve por tapa' : 'Se cobra por pieza completa'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => { setAgregarProdOpen(false); setErrorAccion(''); }}
+                aria-label="Cerrar"
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
             </div>
 
             {errorAccion && (
-              <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">
+              <div className="mx-5 mt-4 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">
                 {errorAccion}
               </div>
             )}
 
-            {loadingCatalogo ? (
-              <div className="flex justify-center py-6">
-                <div className="animate-spin rounded-full h-7 w-7 border-b-2 border-blue" />
-              </div>
-            ) : catalogoProd.length === 0 ? (
-              <p className="text-sm text-gray-400 text-center py-6">No hay productos en el inventario.</p>
-            ) : (
-              <>
-                <div className="space-y-1.5">
-                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide">Producto</label>
-                  <select
-                    value={prodSel}
-                    onChange={e => setProdSel(e.target.value)}
-                    className="w-full px-4 py-3.5 text-base border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue focus:border-blue"
-                  >
-                    <option value="">Elige el producto</option>
+            <div className="p-3 overflow-y-auto">
+              {loadingCatalogo ? (
+                <div className="flex justify-center py-6">
+                  <div className="animate-spin rounded-full h-7 w-7 border-b-2 border-blue" />
+                </div>
+              ) : catalogoProd.length === 0 ? (
+                <p className="px-2 py-6 text-center text-sm text-gray-500">
+                  No hay productos dados de alta.
+                </p>
+              ) : (() => {
+                // Los que la nota ya lleva no se ofrecen otra vez: para servir
+                // más se sube la cantidad del renglón que ya existe.
+                const puestos = productosNota.map(x => String(x.producto_id));
+                const hayAlguno = catalogoProd.some(p =>
+                  !puestos.includes(String(p.id)) && existenciaProducto(p) > 0);
+                return (
+                  <div className="space-y-1.5">
+                    {!hayAlguno && (
+                      <p className="px-3 py-3 mb-1 text-sm text-bronce bg-light-bronce border border-bronce/30 rounded-xl">
+                        La nota ya lleva todos los productos disponibles. Para servir más de alguno,
+                        sube su cantidad en la lista.
+                      </p>
+                    )}
                     {catalogoProd.map(p => {
-                      const sub = subtituloProducto(p);
+                      const yaEsta    = puestos.includes(String(p.id));
+                      const sinStock  = existenciaProducto(p) <= 0;
+                      const bloqueado = yaEsta || sinStock || loadingProducto != null;
                       return (
-                        <option key={p.id} value={p.id}>
-                          {tituloProducto(p)}{sub ? ` · ${sub}` : ''}
-                        </option>
+                        <button
+                          key={p.id}
+                          type="button"
+                          disabled={bloqueado}
+                          onClick={() => agregarProductoDeLista(p.id)}
+                          className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl border text-left transition-colors ${
+                            bloqueado
+                              ? 'border-gray-100 bg-gray-50 cursor-not-allowed'
+                              : 'border-gray-200 hover:border-blue hover:bg-light-blue/40'
+                          }`}
+                        >
+                          <div className="flex-1 min-w-0">
+                            <p className={`text-base font-semibold ${bloqueado ? 'text-gray-400' : 'text-gray-900'}`}>
+                              {etiquetaProducto(p)}
+                            </p>
+                            <p className="text-xs text-gray-500 tabular-nums">{detalleProducto(p)}</p>
+                          </div>
+                          {yaEsta ? (
+                            <span className="flex-shrink-0 text-xs font-semibold text-gray-500 bg-gray-200 rounded-pill px-2.5 py-1">
+                              Ya está en la nota
+                            </span>
+                          ) : sinStock ? (
+                            <span className="flex-shrink-0 text-xs font-semibold text-red bg-light-red rounded-pill px-2.5 py-1">
+                              Sin existencias
+                            </span>
+                          ) : (
+                            <svg className="w-5 h-5 flex-shrink-0 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                            </svg>
+                          )}
+                        </button>
                       );
                     })}
-                  </select>
-                </div>
+                  </div>
+                );
+              })()}
+            </div>
 
-                <div className="space-y-1.5">
-                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide">Cantidad</label>
-                  <input
-                    type="number" min="1" step="1"
-                    value={prodCant}
-                    onChange={e => setProdCant(e.target.value)}
-                    className="w-full px-4 py-3.5 text-base border border-gray-300 rounded-lg text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none focus:ring-2 focus:ring-blue focus:border-blue"
-                  />
-                </div>
-              </>
-            )}
-
-            <div className="flex gap-3 pt-1">
+            <div className="px-5 py-4 border-t border-gray-100 flex-shrink-0">
               <button
+                type="button"
                 onClick={() => { setAgregarProdOpen(false); setErrorAccion(''); }}
-                className="flex-1 border border-gray-300 text-gray-700 font-medium py-3.5 rounded-lg text-base hover:bg-gray-50 transition-colors"
+                className="w-full border border-gray-300 text-gray-700 font-medium py-3.5 rounded-lg text-base hover:bg-gray-50 transition-colors"
               >
-                Cancelar
-              </button>
-              <button
-                onClick={confirmarAgregarProducto}
-                disabled={!prodSel || Number(prodCant) <= 0 || loadingProducto != null}
-                className="flex-1 bg-blue hover:opacity-90 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
-              >
-                {loadingProducto === 'nuevo' ? 'Agregando...' : 'Agregar'}
+                Cerrar
               </button>
             </div>
           </div>
