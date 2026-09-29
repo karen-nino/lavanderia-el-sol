@@ -121,7 +121,19 @@ export default function Dashboard() {
   const notasDeHoy       = notas.filter(n => esDeHoy(n.created_at, now));
   const enUso            = maquinas.filter(m => m.estado === 'en_uso').length;
   const notasPagadas     = notasDeHoy.filter(n => n.estado_pago === 'PAGADO').length;
-  const notasPorCobrar   = notasDeHoy.filter(n => n.estado_pago === 'PENDIENTE').length;
+  // "Por Cobrar" es la cuenta del AUTOSERVICIO: es ahí donde el cliente se lleva
+  // la máquina antes de pagar y la nota espera su cobro en el mostrador. Las
+  // notas Por Encargo, de Edredón y las ventas de productos no entran aunque
+  // queden pendientes: esas se cobran al entregar, no son dinero esperando caja.
+  // Una nota CANCELADA no se va a cobrar nunca, así que no entra: cancelar no
+  // toca el estado de pago —y una nota ya cobrada ni siquiera se puede cancelar
+  // sin revertir antes el pago—, así que toda cancelada se queda en PENDIENTE y
+  // engordaba el número.
+  const notasPorCobrar   = notasDeHoy.filter(
+    n => n.tipo_servicio === 'AUTOSERVICIO'
+      && n.estado_pago   === 'PENDIENTE'
+      && n.estado        !== 'CANCELADA'
+  ).length;
   // "Para Entregar" no se reinicia al día: cuenta todas las notas listas para
   // entregar (LISTA/PAGADA) sin importar cuándo se crearon, hasta que finalicen.
   const paraEntregar     = notas.filter(n => ['LISTA', 'PAGADA'].includes(n.estado)).length;
