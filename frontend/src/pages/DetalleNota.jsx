@@ -1150,6 +1150,33 @@ export default function DetalleNota() {
 
       <div className='space-y-6 mt-6'>
 
+      {/* De quién es la nota y cuál es. Va en su propia tarjeta —como el
+          pendiente de cobro— porque es lo que se busca al abrirla desde el
+          mostrador: el folio que trae el cliente en su ticket y el nombre con
+          el que se le llama. Las filas de Detalles siguen ahí para quien lee la
+          nota entera; aquí van grandes y a la vista. */}
+      <div className="bg-white border border-gray-100 rounded-xl shadow-sm px-5 py-4 flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide"># Nota</p>
+          {/* Solo el consecutivo (1806), no el folio entero (1806-280926): es
+              el número con el que se pide la nota en el mostrador, igual que en
+              la lista de Notas. La fecha del folio se lee completa en la
+              cabecera y en la fila # Nota de Detalles. */}
+          <p className="text-2xl font-bold text-gray-900 leading-tight mt-0.5 truncate">
+            {nota.folio?.split('-')[0] ?? nota.id}
+          </p>
+          <p className="text-sm text-gray-600 mt-1 truncate">
+            {nota.cliente_nombre
+              ? `${nota.cliente_nombre}${nota.cliente_apellido ? ' ' + nota.cliente_apellido : ''}`
+              : <span className="text-gray-400 italic">Anónimo</span>}
+          </p>
+        </div>
+        <svg className="w-8 h-8 text-gray-300 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+            d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+        </svg>
+      </div>
+
       {/* Código de barras: apagado, no borrado (ver MOSTRAR_CODIGO_BARRAS). */}
       {MOSTRAR_CODIGO_BARRAS && (
         <div className="bg-white border border-gray-100 rounded-xl p-4 flex justify-center shadow-sm">
@@ -1166,9 +1193,6 @@ export default function DetalleNota() {
             <h2 className="text-sm font-semibold text-gray-700">Entrega</h2>
           </div>
           <div className="px-4">
-            <FilaDetalle label="Fecha de entrega">
-              {nota.fecha_entrega ? fmtFecha(nota.fecha_entrega) : <span className="text-gray-400">—</span>}
-            </FilaDetalle>
             <FilaDetalle label="Día que estará lista">
               {nota.tiempo_entrega
                 ? (TIEMPO_ENTREGA_LABEL[nota.tiempo_entrega] ?? nota.tiempo_entrega)
