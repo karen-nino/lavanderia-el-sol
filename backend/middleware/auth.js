@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
-import pool from '../db/pool.js';
+import { consultarReintentando } from '../db/pool.js';
+import { esErrorDeConexion } from '../utils/erroresDb.js';
 
 export const verifyToken = async (req, res, next) => {
   const authHeader = req.headers['authorization'];
@@ -18,7 +19,10 @@ export const verifyToken = async (req, res, next) => {
   // de rol/sucursal después de emitirlo. Se releen de la base en cada
   // petición para que desactivar a alguien corte su sesión de inmediato.
   try {
-    const { rows } = await pool.query(
+    // Con reintento: esta consulta la atraviesa CADA petición autenticada, así
+    // que una conexión que el pooler soltó no tumba una, tumba todas a la vez
+    // (pasó el 2026-09-29). Es de solo lectura: repetirla no cambia nada.
+    const { rows } = await consultarReintentando(
       'SELECT id, rol, sucursal, es_prueba, session_id FROM usuarios WHERE id = $1 AND activo = TRUE',
       [decoded.id]
     );
@@ -38,6 +42,15 @@ export const verifyToken = async (req, res, next) => {
     next();
   } catch (err) {
     console.error('verifyToken error:', err);
+    // No se pudo llegar a la base: la sesión del empleado está perfectamente
+    // bien, el que no contesta es el servidor. Mandarlo a iniciar sesión otra
+    // vez —lo que decía antes— le hace perder el tiempo en algo que no arregla
+    // nada. 503 y a reintentar.
+    if (esErrorDeConexion(err)) {
+      return res.status(503).json({
+        message: 'El servidor no responde en este momento. Espera unos segundos y vuelve a intentar.',
+      });
+    }
     res.status(500).json({ message: 'No se pudo validar tu sesión. Vuelve a iniciar sesión.' });
   }
 };

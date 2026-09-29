@@ -3,6 +3,7 @@ import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { esErrorDeConexion } from '../utils/erroresDb.js';
 
 dotenv.config();
 
@@ -41,6 +42,49 @@ export const dbConfig = process.env.DATABASE_URL
       database: process.env.DB_NAME,
     };
 
-const pool = new Pool(dbConfig);
+// Opciones del pool, además de la conexión:
+//   · keepAlive — el sistema operativo sondea el socket cada tanto, así que una
+//     conexión que el pooler ya cortó se detecta antes de que una petición se
+//     estrelle contra ella.
+//   · connectionTimeoutMillis — si la base no contesta, la petición falla en 10
+//     segundos en vez de quedarse colgada; un 503 rápido se entiende mejor que
+//     una pantalla que nunca carga.
+const pool = new Pool({
+  ...dbConfig,
+  keepAlive: true,
+  connectionTimeoutMillis: 10_000,
+});
+
+// Un cliente OCIOSO puede morir sin que nadie lo esté usando (el pooler de
+// Supabase suelta conexiones de vez en cuando). Ese error llega aquí, y sin
+// este manejador Node lo trata como excepción no capturada y tumba el proceso
+// entero. El pool ya descarta el cliente roto solo; lo único que falta es
+// dejar constancia y seguir.
+pool.on('error', (err) => {
+  console.error('pool: conexión ociosa caída (se descarta y se abre otra):', err.message);
+});
+
+// Consulta que aguanta que la conexión se caiga por debajo.
+//
+// Un ECONNRESET del pooler significa que la consulta NUNCA llegó a la base, así
+// que repetirla no duplica nada (ver utils/erroresDb.js). Al segundo intento el
+// pool ya tiró el socket muerto y abre uno nuevo. Solo se reintenta una vez: si
+// la base de verdad está caída, insistir solo alarga la espera del empleado.
+//
+// No sustituye a `pool.query` en todos lados: es para las consultas sueltas y
+// de solo lectura que atraviesan cada petición. Lo que va dentro de una
+// transacción no se puede reintentar así —la transacción entera murió con la
+// conexión— y ahí el reintento tiene que ser del flujo completo.
+export async function consultarReintentando(texto, valores) {
+  try {
+    return await pool.query(texto, valores);
+  } catch (err) {
+    if (!esErrorDeConexion(err)) throw err;
+    // Un respiro antes de insistir: si el pooler está reiniciando, volver en el
+    // mismo milisegundo encuentra lo mismo.
+    await new Promise(r => setTimeout(r, 100));
+    return pool.query(texto, valores);
+  }
+}
 
 export default pool;
