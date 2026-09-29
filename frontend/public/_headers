@@ -16,3 +16,14 @@
 /sw.js
   Cache-Control: no-cache
 
+
+# El index.html tampoco. Es el archivo que dice qué piezas del build hay que
+# cargar, así que una copia vieja deja al teléfono anclado a la versión
+# anterior aunque el servidor ya tenga otra. Lo mismo para version.json, que
+# es justo lo que se consulta para saber si hay versión nueva.
+/
+  Cache-Control: no-cache
+/index.html
+  Cache-Control: no-cache
+/version.json
+  Cache-Control: no-cache

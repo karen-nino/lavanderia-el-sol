@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../lib/api';
 import { APP_VERSION, versionEsNueva } from '../lib/version';
+import { hayQueActualizar, versionPublicada, aplicarActualizacion } from '../lib/actualizacion';
 import LogoSol from '../components/LogoSol';
 import { ES_DEMO } from '../lib/entorno';
 
@@ -31,6 +32,30 @@ export default function Login() {
 
   // Se resuelve una sola vez al montar: la marca no debe apagarse por recargar.
   const [versionNueva] = useState(versionEsNueva);
+
+  // ¿El servidor ya tiene otra versión? Es el caso de la app instalada en el
+  // teléfono, que puede llevar semanas sin recargarse (ver lib/actualizacion).
+  // Se pregunta al montar y cada vez que la app vuelve al frente, que es cuando
+  // el empleado la retoma y el momento bueno para ofrecerle la nueva.
+  const [versionServidor, setVersionServidor] = useState(null);
+  const [actualizando, setActualizando]       = useState(false);
+
+  useEffect(() => {
+    let cancelado = false;
+    const revisar = async () => {
+      const v = await versionPublicada();
+      if (!cancelado) setVersionServidor(v);
+    };
+    revisar();
+    const alVolver = () => { if (document.visibilityState === 'visible') revisar(); };
+    document.addEventListener('visibilitychange', alVolver);
+    return () => {
+      cancelado = true;
+      document.removeEventListener('visibilitychange', alVolver);
+    };
+  }, []);
+
+  const hayActualizacion = hayQueActualizar(versionServidor);
 
   const { login } = useAuth();
   const navigate = useNavigate();
@@ -317,16 +342,32 @@ export default function Login() {
         </div>
 
         {/* Versión de la app. El punto marca que se estrena versión y se apaga
-            en el siguiente cierre del día. */}
-        <p className="flex items-center justify-center gap-1.5 text-xs text-slate-400 mt-6">
-          {versionNueva && (
-            <>
-              <span className="w-1.5 h-1.5 rounded-full bg-blue-400" aria-hidden="true" />
-              <span className="sr-only">Versión nueva:</span>
-            </>
-          )}
-          Versión {APP_VERSION}
-        </p>
+            en el siguiente cierre del día.
+
+            Cuando el servidor ya tiene otra versión, la línea se vuelve el
+            botón que la trae: es el único lugar donde la app instalada puede
+            enterarse, porque abrirla desde el ícono no la recarga sola. */}
+        {hayActualizacion ? (
+          <button
+            type="button"
+            onClick={async () => { setActualizando(true); await aplicarActualizacion(); }}
+            disabled={actualizando}
+            className="mx-auto mt-6 flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold text-blue-300 hover:text-blue-200 underline underline-offset-4 disabled:opacity-60"
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-blue-400" aria-hidden="true" />
+            {actualizando ? 'Actualizando…' : `Actualizar a la versión ${versionServidor}`}
+          </button>
+        ) : (
+          <p className="flex items-center justify-center gap-1.5 text-xs text-slate-400 mt-6">
+            {versionNueva && (
+              <>
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-400" aria-hidden="true" />
+                <span className="sr-only">Versión nueva:</span>
+              </>
+            )}
+            Versión {APP_VERSION}
+          </p>
+        )}
       </div>
     </div>
   );
