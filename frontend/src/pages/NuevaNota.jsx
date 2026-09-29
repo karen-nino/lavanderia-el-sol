@@ -63,19 +63,19 @@ const CARGA_INIT  = { lavadora_tipo: '', secadora_tipo: '', tipo_prenda: 'ROPA',
 const MAX_CARGAS  = 20;
 
 const TAMANOS = [
-  { v: 'chico',  label: 'Chica'  },
+  { v: 'chico',  label: 'Chico'  },
   { v: 'grande', label: 'Grande' },
   { v: 'jumbo',  label: 'Jumbo'  },
 ];
 const TAMANO_LABEL = Object.fromEntries(TAMANOS.map(t => [t.v, t.label]));
 
 // Los servicios que vende Por Encargo. El servicio es la unidad que se cobra:
-// su precio sale de Ajustes (Chica, Grande, Edredón) y ya lleva dentro el
+// su precio sale de Ajustes (Chico, Grande, Edredón) y ya lleva dentro el
 // lavado, el secado, el jabón y la bolsa. Cada servicio se guarda como una
 // carga, y el Edredón viaja como prenda EDREDON en tamaño jumbo, que es lo que
 // lo ata a la lavadora jumbo cuando se le asigna máquina en Salidas.
 const SERVICIOS = [
-  { v: 'chico',   label: 'Chica',   tamano: 'chico',  tipo_prenda: 'ROPA'    },
+  { v: 'chico',   label: 'Chico',   tamano: 'chico',  tipo_prenda: 'ROPA'    },
   { v: 'grande',  label: 'Grande',  tamano: 'grande', tipo_prenda: 'ROPA'    },
   { v: 'edredon', label: 'Edredón', tamano: 'jumbo',  tipo_prenda: 'EDREDON' },
   // Jumbo de ropa dejó de venderse. No tiene contador: solo aparece al editar
@@ -749,7 +749,7 @@ export default function NuevaNota() {
   };
 
   // Lo que le cuesta al negocio la MÁQUINA de un servicio. La nota ya no elige
-  // tipo de máquina, pero el servicio sí sabe cuál le toca: Chica y Grande van
+  // tipo de máquina, pero el servicio sí sabe cuál le toca: Chico y Grande van
   // en lavadora y secadora medianas, y el Edredón en la lavadora jumbo —secarlo
   // es una decisión aparte, así que no cuenta—. Jumbo de ropa ya no se vende;
   // se conserva para las notas que lo eligieron.
@@ -1624,8 +1624,8 @@ export default function NuevaNota() {
                       <div className="space-y-3">
                         {encargoCargas.map((c, idx) => {
                           const nombre = SERVICIO_POR_V[c.servicio]?.label ?? 'Servicio';
-                          // Cuántos van de este servicio para numerarlo: "Chica 1",
-                          // "Chica 2". Con uno solo no se numera.
+                          // Cuántos van de este servicio para numerarlo: "Chico 1",
+                          // "Chico 2". Con uno solo no se numera.
                           const mismos = encargoCargas.filter(x => x.servicio === c.servicio);
                           const num    = mismos.indexOf(c) + 1;
                           const etiqueta = mismos.length > 1 ? `${nombre} ${num}` : nombre;

@@ -16,13 +16,13 @@ const BADGE_TIPO_SERVICIO = {
 
 
 // Tamaño de la carga tal como se nombra al cliente.
-const TAMANO_CARGA_LABEL = { chico: 'Chica', grande: 'Grande', jumbo: 'Jumbo' };
+const TAMANO_CARGA_LABEL = { chico: 'Chico', grande: 'Grande', jumbo: 'Jumbo' };
 
 function fmtMonto(n) {
   return n != null ? `$${Number(n).toFixed(2)}` : '—';
 }
 
-// Lo único que el cliente ve de una carga Por Encargo: su tamaño ("Chica").
+// Lo único que el cliente ve de una carga Por Encargo: su tamaño ("Chico").
 // En edredones no hay tamaño de carga, se usa el del edredón.
 function tamanoCargaTxt(cg) {
   if (String(cg.tipo_prenda ?? '').toUpperCase() === 'EDREDON') {

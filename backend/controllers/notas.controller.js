@@ -125,7 +125,7 @@ async function faseProcesoDeNota(client, notaId) {
 // segunda carga sin lavar.
 //
 // Lo que NO cuenta es un SERVICIO de Por Encargo sin máquina. Ahí la nota
-// captura lo que se cobra —dos servicios Chica, un Edredón— y las máquinas se
+// captura lo que se cobra —dos servicios Chico, un Edredón— y las máquinas se
 // manejan aparte, en Salidas: son independientes de lo que se vendió, así que
 // un servicio no es una máquina esperando turno. Lo que dice que a la nota le
 // falta trabajo son sus MÁQUINAS, puestas o corriendo.
@@ -484,7 +484,7 @@ function topeDeCarga(prenda, tamano, t) {
   }
 }
 
-// Los tres servicios que Por Encargo vende hoy: Chica, Grande y Edredón. El
+// Los tres servicios que Por Encargo vende hoy: Chico, Grande y Edredón. El
 // edredón viaja como prenda EDREDON en tamaño jumbo (es lo que lo ata a la
 // lavadora jumbo), así que se reconoce por la prenda. Jumbo de ropa ya no se
 // vende: sigue siendo válido para las notas que lo eligieron cuando existía.
@@ -494,7 +494,7 @@ const esServicioQueSeVende = (prenda, tamano) =>
 // Lo que le cuesta al negocio la MÁQUINA de un servicio Por Encargo.
 //
 // La nota ya no elige tipo de máquina, pero el servicio sí sabe cuál le toca:
-// Chica y Grande van en lavadora y secadora medianas, y el Edredón en la
+// Chico y Grande van en lavadora y secadora medianas, y el Edredón en la
 // lavadora jumbo —secarlo es una decisión aparte, así que no cuenta—. Ese costo
 // es parte de lo que el precio del servicio tiene que cubrir, así que gasta de
 // su tope igual que el jabón: si no, el tope solo cuidaba el material y se
@@ -514,7 +514,7 @@ function costoMaquinasDeServicio(prenda, tamano, t) {
 function nombreServicio(prenda, tamano) {
   if (String(prenda ?? '').toUpperCase() === 'EDREDON') return 'Edredón';
   switch (tamano) {
-    case 'chico':  return 'Chica';
+    case 'chico':  return 'Chico';
     case 'grande': return 'Grande';
     case 'jumbo':  return 'Jumbo';
     default:       return 'sin tamaño';
@@ -920,7 +920,7 @@ async function prepararCargas(client, cargas, tipoPrendaNota, sucursal, tipo_ser
         throw new Error(`Los edredones solo van en lavadora jumbo (carga ${i + 1}).`);
       }
       // Por Encargo ya NO elige tipo de máquina: el servicio se vende por
-      // tamaño (Chica, Grande, Edredón) y la máquina —la que sea— se le asigna
+      // tamaño (Chico, Grande, Edredón) y la máquina —la que sea— se le asigna
       // en Salidas, sin que eso cambie el precio. Los tipos se siguen
       // aceptando porque las notas de antes los traen y editarlas los reenvía.
       // Autoservicio sí sigue necesitando uno: ahí lo que se cobra ES la

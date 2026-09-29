@@ -95,7 +95,7 @@ export const updateAjustes = async (req, res) => {
     precio_secadora_jumbo:   'El precio del secado jumbo',
     precio_secadora_edredon: 'El precio del secado de edredón',
     precio_edredon_jumbo:    'El precio del edredón en jumbo',
-    tope_carga_chico:        'El precio del servicio Chica',
+    tope_carga_chico:        'El precio del servicio Chico',
     tope_carga_grande:       'El precio del servicio Grande',
     tope_carga_jumbo:        'El tope de la carga jumbo',
     tope_carga_edredon:      'El precio del servicio Edredón',

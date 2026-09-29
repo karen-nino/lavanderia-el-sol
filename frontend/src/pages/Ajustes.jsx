@@ -191,7 +191,7 @@ const MOBILE_SECTIONS = [
 // Jumbo no está: el tamaño dejó de venderse y su columna solo sobrevive para
 // las notas viejas que lo eligieron.
 const PRECIOS_SERVICIO = [
-  ['tope_carga_chico',   'Servicio Chica',   'chica'],
+  ['tope_carga_chico',   'Servicio Chico',   'chico'],
   ['tope_carga_grande',  'Servicio Grande',  'grande'],
   ['tope_carga_edredon', 'Servicio Edredón', 'de edredón'],
 ];
@@ -1297,7 +1297,7 @@ export default function Ajustes() {
     tope_carga_chico:      precioServicioONull(config.tope_carga_chico),
     tope_carga_grande:     precioServicioONull(config.tope_carga_grande),
     tope_carga_edredon:    precioServicioONull(config.tope_carga_edredon),
-    // Jumbo ya no se captura: Por Encargo vende Chica, Grande y Edredón. La
+    // Jumbo ya no se captura: Por Encargo vende Chico, Grande y Edredón. La
     // columna se conserva para las notas viejas que sí eligieron ese tamaño,
     // así que no se manda —ni se borra— desde aquí.
     // El edredón conserva su precio pero ya no tiene tiempo propio (mig. 107):
