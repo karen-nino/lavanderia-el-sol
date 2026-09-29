@@ -97,6 +97,12 @@ const servicioDeCarga = (c) => {
 // Cuántos servicios del mismo tipo caben en una nota.
 const MAX_SERVICIOS = 20;
 
+// El detalle por servicio —tipo de tela y tamaño del edredón— está ESCONDIDO a
+// petición del negocio (2026-09-28): los dos son opcionales y el mostrador no
+// los captura, así que el paso se lee más corto sin ellos. Se enseña otra vez
+// poniendo esto en true; el bloque sigue ahí, entero.
+const MOSTRAR_DETALLE_SERVICIO = false;
+
 // Datos a nivel nota. La prenda, el tamaño y los productos incluidos viven en
 // cada carga (encargoCargas); el ajuste y los productos que el cliente compra
 // aparte son de la nota, una sola vez.
@@ -125,9 +131,6 @@ const CARGA_ENCARGO_INIT = {
   tamano:                 '',
   ajuste:                 '0',
   productos:              [],
-  // La bolsa del tamaño se precarga como un producto más de la carga; si se
-  // quita, esto lo recuerda para no reponerla al cambiar el tamaño.
-  sin_bolsa:              false,
 };
 
 // Cuándo estará lista la ropa. Es el DÍA que se le promete al cliente, no una
@@ -422,7 +425,24 @@ export default function NuevaNota() {
               instrucciones:   nota.instrucciones  ?? '',
               ajuste:          nota.ajuste != null ? String(nota.ajuste) : '0',
             });
-            // Lo que el cliente compró aparte (productos a nivel nota).
+            // Los productos de la nota, en UNA sola lista. Una nota hecha
+            // cuando el material vivía dentro de cada carga trae ahí su jabón y
+            // su bolsa: se suben aquí para que se vean y se puedan editar donde
+            // están todos los demás. Al guardar quedan a nivel nota, que para
+            // el cobro y para el tope es lo mismo.
+            const materialDeCargas = [];
+            for (const c of nota.cargas ?? []) {
+              for (const pr of c.productos ?? []) {
+                const fila = materialDeCargas.find(x => String(x.producto_id) === String(pr.producto_id));
+                if (fila) fila.cantidad = String((Number(fila.cantidad) || 0) + Number(pr.cantidad));
+                else materialDeCargas.push({ producto_id: String(pr.producto_id), cantidad: String(pr.cantidad) });
+              }
+            }
+            for (const m of materialDeCargas) {
+              const fila = prods.find(x => String(x.producto_id) === String(m.producto_id));
+              if (fila) fila.cantidad = String((Number(fila.cantidad) || 0) + Number(m.cantidad));
+              else prods.push(m);
+            }
             setProductosLista(prods);
             // Cargas de la nota; si es una nota vieja sin cargas, se arma una
             // carga a partir de los campos legados a nivel nota.
@@ -444,11 +464,10 @@ export default function NuevaNota() {
                 // cuando existía se conserva para no cambiarle el precio al
                 // guardarla.
                 ajuste:                 c.ajuste != null ? String(c.ajuste) : '0',
-                // El material incluido en el servicio, la bolsa entre él.
-                // `sin_bolsa` recuerda si alguien la quitó, para no reponerla.
-                productos:              (c.productos ?? [])
-                  .map(p => ({ producto_id: String(p.producto_id), cantidad: String(p.cantidad) })),
-                sin_bolsa:              !(c.productos ?? []).some(p => p.clase === 'bolsa'),
+                // Sin productos: los que traía se subieron a la lista de la
+                // nota, que es donde se administran todos desde que son una
+                // sola lista.
+                productos:              [],
               };
             });
             setEncargoCargas(cargasNota.length > 0 ? cargasNota : [{
@@ -539,31 +558,56 @@ export default function NuevaNota() {
   // entonces no se puede vender y la pantalla lo dice.
   const precioServicio = (serv) => topes[serv] ?? null;
 
-  // Un servicio nuevo nace con su material dentro: jabón y suavizante (2 tapas
-  // cada uno) y la bolsa que le toca por tamaño. Eso es lo que el precio del
-  // servicio ya incluye; lo que el cliente compre aparte va en los productos de
-  // la nota y se cobra encima.
+  // Un servicio nuevo nace vacío: su material —jabón, suavizante y la bolsa que
+  // le toca— va a la LISTA DE PRODUCTOS de la nota, junto con lo que el cliente
+  // compre. Es una sola lista (2026-09-28): tener el material en un bloque y los
+  // productos en otro obligaba a mirar dos sitios para saber qué lleva la nota,
+  // y el de arriba contaba "por servicio" mientras el de abajo contaba piezas.
   const nuevoServicio = (serv) => {
     const s = SERVICIO_POR_V[serv];
-    const base = { ...CARGA_ENCARGO_INIT, servicio: serv, tamano: s.tamano, tipo_prenda: s.tipo_prenda };
-    const bolsa = bolsaDeCargaConStock(base);
-    return {
-      ...base,
-      productos: [
-        ...defaultProductosCarga(),
-        ...(bolsa ? [{ producto_id: String(bolsa.id), cantidad: '1' }] : []),
-      ],
-    };
+    return { ...CARGA_ENCARGO_INIT, servicio: serv, tamano: s.tamano, tipo_prenda: s.tipo_prenda };
   };
 
-  // Pone la nota en N servicios de un tipo, conservando los que ya estaban (con
-  // su tela o su tamaño de edredón ya capturados) y dejándolos siempre en el
-  // orden de SERVICIOS, que es el que se lee en la pantalla y en el ticket.
+  // Lo que un servicio trae puesto: jabón y suavizante (2 tapas cada uno) y la
+  // bolsa de su tamaño, si queda existencia.
+  const materialDeServicio = (serv) => {
+    const s = SERVICIO_POR_V[serv];
+    const bolsa = bolsaDeCargaConStock({ tamano: s.tamano, tipo_prenda: s.tipo_prenda });
+    return [
+      ...defaultProductosCarga(),
+      ...(bolsa ? [{ producto_id: String(bolsa.id), cantidad: '1' }] : []),
+    ];
+  };
+
+  // Suma (o resta, con `veces` negativo) el material de un servicio a la lista
+  // de productos de la nota. Al quitar un servicio se va lo que trajo; si el
+  // renglón se queda en cero, desaparece.
+  const ajustarMaterial = (serv, veces) => {
+    if (veces === 0) return;
+    const material = materialDeServicio(serv);
+    if (material.length === 0) return;
+    setProductosLista(prev => {
+      const lista = prev.map(p => ({ ...p }));
+      for (const m of material) {
+        const delta = (Number(m.cantidad) || 0) * veces;
+        const fila = lista.find(p => String(p.producto_id) === String(m.producto_id));
+        if (fila) fila.cantidad = String(Math.max(0, (Number(fila.cantidad) || 0) + delta));
+        else if (delta > 0) lista.push({ producto_id: String(m.producto_id), cantidad: String(delta) });
+      }
+      return lista.filter(p => (Number(p.cantidad) || 0) > 0);
+    });
+  };
+
+  // Pone la nota en N servicios de un tipo, conservando los que ya estaban y
+  // dejándolos siempre en el orden de SERVICIOS, que es el que se lee en la
+  // pantalla y en el ticket. El material de los que entran (o salen) se suma o
+  // se resta de la lista de productos.
   const setCantidadServicio = (serv, n) => {
     const objetivo = Math.max(0, Math.min(MAX_SERVICIOS, n));
+    const actuales = cuentaServicio(serv);
+    if (objetivo === actuales) return;
     setEncargoCargas(prev => {
       const mios = prev.filter(c => c.servicio === serv);
-      if (objetivo === mios.length) return prev;
       const nuevos = objetivo < mios.length
         ? mios.slice(0, objetivo)
         : [...mios, ...Array.from({ length: objetivo - mios.length }, () => nuevoServicio(serv))];
@@ -575,46 +619,11 @@ export default function NuevaNota() {
         ...juntos.filter(c => !SERVICIO_POR_V[c.servicio]),
       ];
     });
+    ajustarMaterial(serv, objetivo - actuales);
   };
 
   const actualizarCargaEncargo = (i, cambios) =>
     setEncargoCargas(prev => prev.map((c, idx) => (idx === i ? { ...c, ...cambios } : c)));
-
-  // ── Material incluido en los servicios ──────────────────
-  // Se administra para TODOS los servicios a la vez: es el mismo jabón en todos,
-  // y una lista por servicio volvería a partir la pantalla que acabamos de
-  // juntar. Cada renglón es un producto con su cantidad POR SERVICIO.
-  const incluidosDeLaNota = (() => {
-    const porProducto = new Map();
-    for (const c of encargoCargas) {
-      for (const p of c.productos ?? []) {
-        if (!p.producto_id) continue;
-        const prev = porProducto.get(p.producto_id);
-        const cant = Number(p.cantidad) || 0;
-        if (prev) { prev.servicios += 1; prev.total += cant; }
-        else porProducto.set(p.producto_id, { producto_id: p.producto_id, porServicio: p.cantidad, servicios: 1, total: cant });
-      }
-    }
-    return [...porProducto.values()];
-  })();
-
-  // Cambia la cantidad por servicio de un producto incluido en todos los
-  // servicios que lo lleven.
-  const setCantidadIncluido = (productoId, cantidad) =>
-    setEncargoCargas(prev => prev.map(c => ({
-      ...c,
-      productos: (c.productos ?? []).map(p =>
-        String(p.producto_id) === String(productoId) ? { ...p, cantidad: String(Math.max(1, cantidad)) } : p),
-    })));
-
-  // Quita un producto incluido de todos los servicios. Si era la bolsa se
-  // recuerda (`sin_bolsa`) para no reponerla sola.
-  const quitarIncluido = (productoId) =>
-    setEncargoCargas(prev => prev.map(c => ({
-      ...c,
-      productos: (c.productos ?? []).filter(p => String(p.producto_id) !== String(productoId)),
-      ...(esBolsa(prodDeCatalogo(productoId)) ? { sin_bolsa: true } : {}),
-    })));
 
   // Diferencias entre los dos ámbitos, en un solo lugar: Por Encargo cobra por
   // tapa y solo admite granel; Autoservicio cobra por botella (o pieza) y admite
@@ -696,8 +705,6 @@ export default function NuevaNota() {
 
   // Precio de un producto DENTRO de una carga: el granel se sirve por tapa y los
   // de marca por unidad, el envase completo (2026-09-25).
-  const prodDeCatalogo = (id) => productosCatalogo.find(x => String(x.id) === String(id)) ?? null;
-  const esBolsa = (prod) => prod?.clase === 'bolsa';
   const esProductoMarca = (prod) => prod?.tipo_liquido === 'marca';
   const precioProductoCarga = (prod) =>
     precioProducto(prod, esProductoMarca(prod) ? 'botella' : 'tapa');
@@ -776,6 +783,10 @@ export default function NuevaNota() {
     const base = tope != null ? Number(tope) : usadoContraTope(c);
     return base + subtotalMarcaLista(c.productos) + (Number(c.ajuste) || 0);
   };
+  // Ajuste de la nota: descuento (negativo) o cargo extra (positivo). Es uno
+  // solo para toda la nota desde que los servicios se venden por cantidad. Va
+  // antes que las cuentas de abajo porque entra en el presupuesto del tope.
+  const ajusteEncargo       = Number(encargoForm.ajuste) || 0;
   // Lo que suman los servicios, sin los productos sueltos ni el ajuste.
   const subtotalServicios   = encargoCargas.reduce((s, c) => s + subtotalCargaEncargo(c), 0);
   // Presupuesto de material de la nota: lo que se cobra por los servicios. Todo
@@ -788,11 +799,13 @@ export default function NuevaNota() {
   }, 0);
   const materialUsado = encargoCargas.reduce((s, c) => s + usadoContraTope(c), 0)
     + materialProductosNota;
+  // El AJUSTE también entra en la cuenta, porque cambia lo que la nota cobra por
+  // esos servicios: un descuento de $20 deja $130 para pagar lo mismo, y un
+  // cargo extra da más aire. Se suma al presupuesto (con su signo), no al
+  // usado, que es lo que de verdad cuesta el servicio.
+  const presupuestoConAjuste = presupuestoServicios + ajusteEncargo;
   // Cuánto se pasa del presupuesto (0 o menos = cabe).
-  const excesoDeLaNota = presupuestoServicios > 0 ? materialUsado - presupuestoServicios : 0;
-  // Ajuste de la nota: descuento (negativo) o cargo extra (positivo). Es uno
-  // solo para toda la nota desde que los servicios se venden por cantidad.
-  const ajusteEncargo       = Number(encargoForm.ajuste) || 0;
+  const excesoDeLaNota = presupuestoServicios > 0 ? materialUsado - presupuestoConAjuste : 0;
   const encargoPrecioTotal  = subtotalServicios + subtotalProductos + ajusteEncargo;
 
   const excesoDeCarga = (c) => {
@@ -859,7 +872,8 @@ export default function NuevaNota() {
     // rechaza también; aquí se dice antes y con los números a la vista.
     if (excesoDeLaNota > 0) {
       setError(`El material de la nota suma $${materialUsado.toFixed(2)} y los servicios `
-        + `se cobran en $${presupuestoServicios.toFixed(2)}. `
+        + `se cobran en $${presupuestoConAjuste.toFixed(2)}`
+        + (ajusteEncargo !== 0 ? ' (ya con el ajuste). ' : '. ')
         + `Baja $${excesoDeLaNota.toFixed(2)}: quita productos o sirve menos.`);
       return;
     }
@@ -1558,6 +1572,45 @@ export default function NuevaNota() {
                   )}
                 </div>
 
+                {/* Ajuste de la nota */}
+                <Separador />
+                <div>
+                  <label className={LABEL_CLS}>Ajuste ($)</label>
+                  <div className="flex items-center gap-2">
+                    <div className="relative flex-1">
+                      <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 text-base">$</span>
+                      <input
+                        type="number" name="ajuste" step="any"
+                        value={encargoForm.ajuste} onChange={handleEncargoChange}
+                        placeholder="Ej. -10 para descuento, 20 para cargo extra"
+                        className={`${INPUT_CLS} pl-8 text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`}
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setEncargoForm(f => ({ ...f, ajuste: String((Number(f.ajuste) || 0) - 10) }))}
+                      aria-label="Disminuir ajuste"
+                      className="flex-shrink-0 w-14 py-3.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-xl font-semibold hover:bg-gray-50 transition-colors"
+                    >
+                      −
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEncargoForm(f => ({ ...f, ajuste: String((Number(f.ajuste) || 0) + 10) }))}
+                      aria-label="Aumentar ajuste"
+                      className="flex-shrink-0 w-14 py-3.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-xl font-semibold hover:bg-gray-50 transition-colors"
+                    >
+                      +
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-400 mt-1.5">Descuento (negativo) o cargo extra (positivo)</p>
+                </div>
+
+                {/* Escondido por ahora, a petición del negocio: la tela y el
+                    tamaño del edredón son opcionales y el mostrador no los está
+                    capturando. Se vuelve a enseñar poniendo la bandera en true;
+                    lo que hay debajo se conserva tal cual para eso. */}
+                {MOSTRAR_DETALLE_SERVICIO && (<>
                 {/* Detalle de cada servicio: la tela de la ropa y el tamaño del
                     edredón, los dos opcionales. Es un renglón por servicio, no
                     una pantalla: con tres servicios son tres renglones. */}
@@ -1622,125 +1675,32 @@ export default function NuevaNota() {
                   </>
                 )}
 
-                {/* Lo que el precio del servicio ya paga. Se enseña para poder
-                    quitarlo o servir más, no para cobrarlo: no suma al total. */}
-                {incluidosDeLaNota.length > 0 && (
-                  <>
-                    <Separador />
-                    <div>
-                      <div className="flex items-baseline justify-between gap-2 mb-3">
-                        <h3 className="text-sm font-semibold text-gray-900">Incluido en los servicios</h3>
-                        <span className="text-xs text-gray-500">No se cobra aparte</span>
-                      </div>
-                      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-                        {incluidosDeLaNota.map((item, i) => {
-                          const prod = prodDeCatalogo(item.producto_id);
-                          const porServicio = Number(item.porServicio) || 0;
-                          return (
-                            <div key={item.producto_id} className={`flex flex-wrap items-center gap-x-2 gap-y-3 px-3 py-4 ${i > 0 ? 'border-t border-gray-100' : ''}`}>
-                              <div className="flex-1 min-w-[10rem]">
-                                <p className={`text-sm font-semibold ${prod ? 'text-gray-900' : 'text-gray-400'}`}>
-                                  {prod ? etiquetaProducto(prod) : 'Producto no disponible'}
-                                </p>
-                                <p className="text-xs text-gray-500 tabular-nums">
-                                  {porServicio} {prod ? unidadEnAmbito(prod, 'carga', porServicio) : ''} por servicio
-                                  {item.servicios > 1 ? ` · ${item.total} en total` : ''}
-                                </p>
-                              </div>
-                              <div className="flex items-center gap-1.5">
-                                <button
-                                  type="button"
-                                  onClick={() => setCantidadIncluido(item.producto_id, porServicio - 1)}
-                                  disabled={porServicio <= 1}
-                                  aria-label="Servir menos"
-                                  className="w-9 h-9 flex items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-700 text-base font-semibold hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                                >
-                                  −
-                                </button>
-                                <span className="w-7 text-center text-sm font-semibold text-gray-900 tabular-nums">{porServicio}</span>
-                                <button
-                                  type="button"
-                                  onClick={() => setCantidadIncluido(item.producto_id, porServicio + 1)}
-                                  aria-label="Servir más"
-                                  className="w-9 h-9 flex items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-700 text-base font-semibold hover:bg-gray-50 transition-colors"
-                                >
-                                  +
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => quitarIncluido(item.producto_id)}
-                                  aria-label="Quitar del servicio"
-                                  className="w-8 h-8 ml-1 flex items-center justify-center rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                                >
-                                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                  </svg>
-                                </button>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                      {/* Un servicio cuyo material cuesta más de lo que se cobra
-                          se vendería en pérdida: aquí se ve de quién es. */}
-                      {encargoCargas.map((c, idx) => {
-                        const exceso = excesoDeCarga(c);
-                        if (!(exceso > 0)) return null;
-                        const nombre = SERVICIO_POR_V[c.servicio]?.label ?? `Carga ${idx + 1}`;
-                        return (
-                          <div key={idx} className="mt-3 bg-red-50 border border-red-200 rounded-lg px-3 py-2.5">
-                            <p className="text-sm font-semibold text-red-700">
-                              El servicio {nombre} se cobra en ${Number(topeDeCarga(c)).toFixed(2)} y su material suma ${usadoContraTope(c).toFixed(2)}
-                            </p>
-                            <p className="text-xs text-red-600 mt-0.5">
-                              Baja ${exceso.toFixed(2)}: sirve menos, quita la bolsa o sube el precio del servicio en Ajustes.
-                            </p>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </>
-                )}
+                </>)}
 
-                {/* Ajuste de la nota */}
-                <Separador />
-                <div>
-                  <label className={LABEL_CLS}>Ajuste ($)</label>
-                  <div className="flex items-center gap-2">
-                    <div className="relative flex-1">
-                      <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 text-base">$</span>
-                      <input
-                        type="number" name="ajuste" step="any"
-                        value={encargoForm.ajuste} onChange={handleEncargoChange}
-                        placeholder="Ej. -10 para descuento, 20 para cargo extra"
-                        className={`${INPUT_CLS} pl-8 text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`}
-                      />
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setEncargoForm(f => ({ ...f, ajuste: String((Number(f.ajuste) || 0) - 10) }))}
-                      aria-label="Disminuir ajuste"
-                      className="flex-shrink-0 w-14 py-3.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-xl font-semibold hover:bg-gray-50 transition-colors"
-                    >
-                      −
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setEncargoForm(f => ({ ...f, ajuste: String((Number(f.ajuste) || 0) + 10) }))}
-                      aria-label="Aumentar ajuste"
-                      className="flex-shrink-0 w-14 py-3.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-xl font-semibold hover:bg-gray-50 transition-colors"
-                    >
-                      +
-                    </button>
-                  </div>
-                  <p className="text-xs text-gray-400 mt-1.5">Descuento (negativo) o cargo extra (positivo)</p>
-                </div>
-
-                {/* Productos. En Por Encargo se parten en dos por lo que son: el
-                    granel y las bolsas entran en el servicio (y gastan de su
-                    precio) y los de marca los compra el cliente. */}
+                {/* Productos: UNA sola lista con lo que lleva la nota, el
+                    material que traen puestos los servicios incluido. Cada
+                    renglón dice si va dentro del servicio (granel y bolsas, que
+                    gastan de su precio) o si se cobra aparte (los de marca). */}
                 <Separador />
                 {bloqueProductos()}
+
+                {/* Un servicio cuyo material cuesta más de lo que se cobra se
+                    vendería en pérdida: aquí se ve de cuál se trata. */}
+                {encargoCargas.map((c, idx) => {
+                  const exceso = excesoDeCarga(c);
+                  if (!(exceso > 0)) return null;
+                  const nombre = SERVICIO_POR_V[c.servicio]?.label ?? `Carga ${idx + 1}`;
+                  return (
+                    <div key={idx} className="bg-red-50 border border-red-200 rounded-lg px-3 py-2.5">
+                      <p className="text-sm font-semibold text-red-700">
+                        El servicio {nombre} se cobra en ${Number(topeDeCarga(c)).toFixed(2)} y su material suma ${usadoContraTope(c).toFixed(2)}
+                      </p>
+                      <p className="text-xs text-red-600 mt-0.5">
+                        Baja ${exceso.toFixed(2)}: sirve menos, quita la bolsa o sube el precio del servicio en Ajustes.
+                      </p>
+                    </div>
+                  );
+                })}
 
                 {/* El tope, siempre a la vista: cuánto se cobra, cuánto lleva
                     gastado el material y cuánto queda. Es lo que deja servir
@@ -1749,17 +1709,25 @@ export default function NuevaNota() {
                   excesoDeLaNota > 0 ? (
                     <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2.5">
                       <p className="text-sm font-semibold text-red-700">
-                        El material suma ${materialUsado.toFixed(2)} y el tope es ${presupuestoServicios.toFixed(2)}
+                        El material suma ${materialUsado.toFixed(2)} y el tope
+                        {ajusteEncargo !== 0 ? ', ya con el ajuste,' : ''} es ${presupuestoConAjuste.toFixed(2)}
                       </p>
                       <p className="text-xs text-red-600 mt-0.5">
-                        Baja ${excesoDeLaNota.toFixed(2)}: quita productos, sirve menos o sube el precio de los servicios en Ajustes.
+                        Baja ${excesoDeLaNota.toFixed(2)}: quita productos, sirve menos
+                        {ajusteEncargo < 0 ? ', baja el descuento' : ''} o sube el precio de los servicios en Ajustes.
                       </p>
                     </div>
                   ) : (
                     <p className="text-xs text-gray-500 text-right tabular-nums">
                       {nCargas === 1 ? 'Tope del servicio' : 'Tope de los servicios'}: ${presupuestoServicios.toFixed(2)}
                       {' · '}usado ${materialUsado.toFixed(2)}
-                      {' · '}disponible ${(presupuestoServicios - materialUsado).toFixed(2)}
+                      {/* El ajuste se nombra aparte cuando lo hay: cambia lo que
+                          queda, y verlo restado sin decir de dónde sale hacía
+                          dudar de la cuenta. */}
+                      {ajusteEncargo !== 0 && (
+                        <>{' · '}ajuste {ajusteEncargo < 0 ? '−' : '+'}${Math.abs(ajusteEncargo).toFixed(2)}</>
+                      )}
+                      {' · '}disponible ${(presupuestoConAjuste - materialUsado).toFixed(2)}
                     </p>
                   )
                 )}
@@ -2551,7 +2519,7 @@ export default function NuevaNota() {
                           </div>
                           {yaEsta ? (
                             <span className="flex-shrink-0 text-xs font-semibold text-gray-500 bg-gray-200 rounded-pill px-2.5 py-1">
-                              Ya está en la carga
+                              Ya está en la nota
                             </span>
                           ) : sinStock ? (
                             <span className="flex-shrink-0 text-xs font-semibold text-red bg-light-red rounded-pill px-2.5 py-1">

@@ -727,7 +727,11 @@ async function validarTopesCargas(client, notaId) {
   // que no salió de ahí.
   const { rows: totales } = await client.query(
     `SELECT
-       COALESCE((SELECT SUM(nc2.precio_tope) FROM nota_cargas nc2 WHERE nc2.nota_id = $1), 0) AS presupuesto,
+       -- El AJUSTE de la nota entra en el presupuesto porque cambia lo que se
+       -- cobra por esos servicios: un descuento de $20 deja $20 menos para
+       -- pagar el mismo lavado, y un cargo extra da más aire.
+       COALESCE((SELECT SUM(nc2.precio_tope) FROM nota_cargas nc2 WHERE nc2.nota_id = $1), 0)
+         + n.ajuste AS presupuesto,
        COALESCE((SELECT SUM(np.cantidad * np.precio_unitario)
                    FROM nota_productos np
                    JOIN productos a ON a.id = np.producto_id
@@ -737,7 +741,10 @@ async function validarTopesCargas(client, notaId) {
     [notaId]
   );
   const tot = totales[0];
-  if (tot && Number(tot.presupuesto) > 0) {
+  // El presupuesto se mira solo si hay servicios vendidos; un ajuste que lo deja
+  // en 0 o menos se trata como cualquier otro exceso.
+  const hayServicios = rows.some(r => r.tope != null);
+  if (tot && hayServicios) {
     // Las máquinas de los SERVICIOS (las de `rows`, que son los que traen tope);
     // un renglón de máquina de Salidas no trae presupuesto propio ni cobra.
     const maquinas = rows.reduce((a, r) => a + (r.tope == null ? 0 : maquinasDe(r)), 0);

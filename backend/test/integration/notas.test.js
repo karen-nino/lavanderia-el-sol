@@ -689,12 +689,34 @@ describe('servicios Por Encargo (sin tipo de máquina)', () => {
       tipo_servicio: 'POR_ENCARGO', cliente_id: clienteId, tipo_prenda: 'ROPA',
       estado_pago: 'PENDIENTE',
       cargas: [{ tamano: 'grande', tipo_prenda: 'ROPA' }],
-      productos: [{ producto_id: jabon, cantidad: 3 }],
+      productos: [{ producto_id: jabon, cantidad: 1 }],
       ajuste: -20,
     });
     expect(res.status).toBe(201);
-    // Servicio Grande 150 − 20 de ajuste: las 3 tapas van dentro.
+    // Servicio Grande 150 − 20 de ajuste: la tapa va dentro y no se cobra.
     expect(Number(res.body.precio_total)).toBe(130);
+  });
+
+  // El ajuste entra en el presupuesto: un descuento deja menos para pagar el
+  // mismo lavado, así que puede dejar el servicio sin aire.
+  it('un descuento baja el presupuesto del servicio', async () => {
+    const clienteId = await seedCliente();
+    const jabon = await seedProducto({ nombre: 'Jabón', stock_actual: 100, precio_unitario: 7 });
+    const cargas = [{ tamano: 'grande', tipo_prenda: 'ROPA' }];
+    const productos = [{ producto_id: jabon, cantidad: 3 }];
+    // Grande: máquina 115 + 21 de jabón = 136. Sin descuento cabe en 150…
+    const cabe = await request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'POR_ENCARGO', cliente_id: clienteId, tipo_prenda: 'ROPA',
+      estado_pago: 'PENDIENTE', cargas, productos,
+    });
+    expect(cabe.status).toBe(201);
+    // …y con 20 de descuento ya no: quedan 130 para pagar 136.
+    const conDescuento = await request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'POR_ENCARGO', cliente_id: clienteId, tipo_prenda: 'ROPA',
+      estado_pago: 'PENDIENTE', cargas, productos, ajuste: -20,
+    });
+    expect(conDescuento.status).toBe(400);
+    expect(conDescuento.body.message).toMatch(/material de la nota/i);
   });
 
   // Y si con ellos el material se pasa del precio de los servicios, no se crea:
