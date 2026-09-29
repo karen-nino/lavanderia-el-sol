@@ -70,6 +70,11 @@ const MOSTRAR_CODIGO_BARRAS = false;
 // `estados` son los estados de la nota que caen en ese paso; el paso se cuenta
 // como actual cuando el de la nota es cualquiera de ellos, y su fecha es la
 // PRIMERA de las que tenga (cuándo empezó a procesarse).
+// La tarjeta "Estado" —la línea de tiempo de la nota— está ESCONDIDA mientras
+// el negocio decide si la mantiene (2026-09-28). Se enseña otra vez poniendo
+// esto en true; la tarjeta sigue ahí, entera.
+const MOSTRAR_ESTADO_NOTA = false;
+
 const PASOS_ESTADO = [
   { key: 'EN_ESPERA',  label: 'En Espera',    estados: ['EN_ESPERA'] },
   { key: 'PROCESO',    label: 'En proceso',   estados: ['LAVANDO', 'SECANDO'] },
@@ -1518,6 +1523,12 @@ export default function DetalleNota() {
       </div>
       )}
 
+      {/* Estado: ESCONDIDO a la espera de que el negocio decida si lo
+          mantiene (2026-09-28). La línea de tiempo cuenta el proceso paso a
+          paso, y el mostrador ya lo sigue desde Salidas y desde la lista de
+          notas. Se vuelve a enseñar poniendo la bandera en true; lo que hay
+          debajo se conserva entero para eso. */}
+      {MOSTRAR_ESTADO_NOTA && (<>
       {/* Estado */}
       <div className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
         <div className="px-4 py-3 border-b border-gray-50">
@@ -1609,6 +1620,7 @@ export default function DetalleNota() {
           )}
         </div>
       </div>
+      </>)}
       </div>
 
       {/* Modal confirmar cancelación → abre el modal del motivo */}
