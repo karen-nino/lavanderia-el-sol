@@ -102,7 +102,14 @@ export default function Salidas() {
   const [maquinaModalId,   setMaquinaModalId]   = useState(null);
   const [iniciando,        setIniciando]        = useState(null); // máquina arrancando (animación)
   // Máquina esperando que se elija con cuál de sus tiempos correr (mig. 120).
+  // `{ maquina, paso }`: de qué paso salió el modal de tiempos ('encender' o
+  // 'iniciar'), porque lo que se hace al elegir es distinto en cada uno.
   const [eligiendoTiempo,  setEligiendoTiempo]  = useState(null);
+  // Tiempo elegido al encender, guardado hasta que se confirme el arranque.
+  // Vive aquí y no en la base a propósito: si la pantalla se recarga en medio,
+  // se pierde y el paso de Iniciar lo vuelve a preguntar, que es justo lo que
+  // debe pasar —nadie se acuerda de qué se eligió hace media hora—.
+  const [minutosPorMaquina, setMinutosPorMaquina] = useState({});
   const [encendiendo,      setEncendiendo]      = useState(null); // máquina recibiendo corriente (mig. 110)
   const [deteniendo,       setDeteniendo]       = useState(null); // máquina deteniéndose (animación)
 
@@ -244,13 +251,46 @@ export default function Salidas() {
     }
   }
 
-  // Hay modelos con varios programas que preguntan cuál correr (mig. 120): el
-  // modal sale entre el "Iniciar" y la llamada, y lo elegido viaja con ella.
+  // Encender desde el modal. En el modelo que pregunta su tiempo, la pregunta
+  // va ANTES de la corriente: así el empleado ya sabe con cuál va a correr
+  // cuando se pare frente a la pantalla de la máquina a marcarlo.
+  function encenderDesdeModal() {
+    const maq = maqModal;
+    if (!maq) return;
+    if (preguntaTiempo(maq) && minutosDeMaquina(maq) == null) {
+      setEligiendoTiempo({ maquina: maq, paso: 'encender' });
+      return;
+    }
+    return encenderMaquina(maq);
+  }
+
+  // Hay modelos con varios programas que preguntan cuál correr (mig. 120).
+  // Normalmente se pregunta aquí, entre el "Iniciar" y la llamada. En los que
+  // llevan dos pasos ya se preguntó al encender y lo elegido se recuerda: este
+  // botón solo CONFIRMA que la máquina ya está girando, que es cuando el
+  // cronómetro tiene que empezar. Si la elección se perdió (recarga en medio),
+  // se vuelve a preguntar antes de arrancar.
   function iniciarMaquina() {
     const maq = maqModal;
     if (!maq) return;
-    if (preguntaTiempo(maq)) { setEligiendoTiempo(maq); return; }
+    if (preguntaTiempo(maq)) {
+      const min = minutosDeMaquina(maq);
+      if (min != null) return arrancarMaquina(maq, min);
+      setEligiendoTiempo({ maquina: maq, paso: 'iniciar' });
+      return;
+    }
     return arrancarMaquina(maq, null);
+  }
+
+  // Lo que se hace al elegir un tiempo depende del paso del que salió el modal:
+  // al encender se guarda y se da corriente; al iniciar, arranca el ciclo.
+  async function elegirTiempo(min) {
+    const { maquina, paso } = eligiendoTiempo ?? {};
+    if (!maquina) return;
+    setMinutosPorMaquina(prev => ({ ...prev, [maquina.id]: min }));
+    setEligiendoTiempo(null);
+    if (paso === 'encender') return encenderMaquina(maquina);
+    return arrancarMaquina(maquina, min);
   }
 
   async function arrancarMaquina(maq, minutos) {
@@ -269,6 +309,12 @@ export default function Salidas() {
       ]);
       setEligiendoTiempo(null);
       setMaquinaModalId(null);
+      // El ciclo ya quedó sellado con su tiempo: recordarlo más sería arrastrar
+      // la elección de esta vuelta a la siguiente.
+      setMinutosPorMaquina(prev => {
+        const { [maq.id]: _ya, ...resto } = prev;
+        return resto;
+      });
       await cargarDatos();
     } catch (err) {
       // El modal de confirmación sigue abierto detrás; ahí se muestra el error.
@@ -740,8 +786,18 @@ export default function Salidas() {
     : maquinasAsignadas.find(x => x.actual && String(x.id) === String(maquinaModalId)) ?? null;
   // La que arranca sola no tiene primer paso: darle corriente ES arrancarla,
   // así que el modal entra directo al de iniciar (mig. 122).
-  const pasoModal = (maqModal?.esperandoArranque || maqModal?.arrancaSola)
+  //
+  // EXCEPCIÓN: el modelo que pregunta su tiempo (la Speed Queen Sec49) sí
+  // necesita los dos pasos aunque su marca arranque sola. El tiempo no se
+  // marca en la app, se marca en la PANTALLA de la máquina —cada toque sube de
+  // 10 en 10— y después se le da a su botón de iniciar. Si la app arrancara el
+  // cronómetro al dar corriente, contaría los 20 minutos mientras el aparato
+  // todavía va en 10 (2026-09-29).
+  const preguntaSuTiempo = preguntaTiempo(maqModal);
+  const pasoModal = (maqModal?.esperandoArranque || (maqModal?.arrancaSola && !preguntaSuTiempo))
     ? 'iniciar' : 'encender';
+  // Lo que se eligió al encender esta máquina, si sigue vivo.
+  const minutosDeMaquina = (maq) => (maq ? minutosPorMaquina[maq.id] ?? null : null);
 
   // Cargas que se eligieron al hacer la nota pero se quedaron sin máquina (ni
   // asignada ni ya usada). Se muestran para poder asignarles una rápidamente.
@@ -1654,13 +1710,13 @@ export default function Salidas() {
       {/* Animaciones de encender / iniciar / detener ciclo */}
       {/* Elegir con cuál de los tiempos del modelo corre el ciclo (mig. 120).
           Va antes de la animación: primero se decide, luego arranca. */}
-      {eligiendoTiempo && !iniciando && (
+      {eligiendoTiempo && !iniciando && !encendiendo && (
         <ElegirTiempoModal
-          maquina={eligiendoTiempo}
-          tiempos={tiemposDeMaquina(eligiendoTiempo)}
+          maquina={eligiendoTiempo.maquina}
+          tiempos={tiemposDeMaquina(eligiendoTiempo.maquina)}
           guardando={loadingMaquina}
           error={errorAccion}
-          onElegir={(min) => arrancarMaquina(eligiendoTiempo, min)}
+          onElegir={elegirTiempo}
           onCancelar={() => { setEligiendoTiempo(null); setErrorAccion(''); }}
         />
       )}
@@ -1676,6 +1732,8 @@ export default function Salidas() {
         const esSecadora = maqModal.tipo === 'secadora';
         const esIniciar  = pasoModal === 'iniciar';
         const accion     = esSecadora ? 'secado' : 'lavado';
+        // Minutos elegidos para esta vuelta, en el modelo que los pregunta.
+        const minElegidos = minutosDeMaquina(maqModal);
         return (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-7 space-y-6">
@@ -1701,7 +1759,20 @@ export default function Salidas() {
             </div>
 
             {esIniciar ? (
-              maqModal.arrancaSola ? (
+              /* El modelo que pregunta su tiempo se marca en SU pantalla, no
+                 aquí: este botón solo confirma que ya está girando, que es
+                 cuando el cronómetro debe empezar. */
+              preguntaSuTiempo ? (
+                <p className="text-sm text-gray-500">
+                  ¿Ya está girando{' '}
+                  <span className="font-semibold text-gray-800">{maqModal.nombre}</span>? Desde aquí
+                  empiezan a correr{' '}
+                  {minElegidos != null
+                    ? <>los <span className="font-semibold text-gray-800">{minElegidos} min</span> que elegiste</>
+                    : 'los minutos del ciclo'}, así que confírmalo solo cuando ya la hayas
+                  arrancado con su botón.
+                </p>
+              ) : maqModal.arrancaSola ? (
                 /* La que arranca sola: al confirmar recibe corriente y empieza
                    a lavar, así que no hay nada que apretar en la máquina ni
                    tiempo que se descuente (mig. 122). */
@@ -1719,6 +1790,14 @@ export default function Salidas() {
                   botón: lo que tardes de más se le descuenta al {accion}.
                 </p>
               )
+            ) : preguntaSuTiempo && minElegidos != null ? (
+              <p className="text-sm text-gray-500">
+                Se le da corriente a{' '}
+                <span className="font-semibold text-gray-800">{maqModal.nombre}</span>. En su pantalla
+                marca <span className="font-semibold text-gray-800">{minElegidos} min</span> —cada
+                toque sube de 10 en 10— y arráncala con su botón. El tiempo todavía NO empieza: se
+                confirma en el paso siguiente, aquí mismo.
+              </p>
             ) : (
               <p className="text-sm text-gray-500">
                 Se le da corriente a{' '}
@@ -1771,7 +1850,7 @@ export default function Salidas() {
               ) : (
                 <button
                   type="button"
-                  onClick={() => encenderMaquina(maqModal)}
+                  onClick={encenderDesdeModal}
                   disabled={loadingMaquina}
                   className="w-full bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
                 >
