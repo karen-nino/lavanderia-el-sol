@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { etiquetaEstadoLista } from '../lib/estadoNota';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
-import { tituloProducto, subtituloProducto, ordenProducto, etiquetaProducto, plural } from '../lib/formatoInventario';
+import { tituloProducto, subtituloProducto, etiquetaProducto, plural } from '../lib/formatoInventario';
 import { guardarAvisoCobro } from '../lib/avisoCobro';
 import { useAuth } from '../context/AuthContext';
 import { esAdmin as esAdminFn } from '../lib/roles';
@@ -975,7 +975,10 @@ export default function Salidas() {
     ? 'Finalizada'
     : etiquetaEstadoLista(nota?.tipo_servicio);
 
-  const productosNota  = [...(nota?.productos || [])].sort((a, b) => ordenProducto(a) - ordenProducto(b));
+  // En el orden en que se agregaron —el que manda el servidor— así el producto
+  // recién puesto aparece ABAJO, donde lo dejó quien lo agregó. Ordenarlos por
+  // tipo lo mandaba al medio de la lista y había que buscarlo.
+  const productosNota  = nota?.productos ?? [];
   const totalProductosNota = productosNota.reduce((a, x) => a + Number(x.subtotal || 0), 0);
   // Una nota cobrada y cerrada ya no acepta productos, y con el cobro congelado
   // en un corte cerrado no se toca lo que cuesta.
