@@ -680,20 +680,53 @@ describe('servicios Por Encargo (sin tipo de máquina)', () => {
     expect(res.body.estado).toBe('EN_ESPERA');
   });
 
-  it('los productos de la nota se cobran ENCIMA del precio de los servicios', async () => {
+  // El granel que el mostrador agrega a la nota es MATERIAL del servicio: no se
+  // cobra aparte —el precio del servicio ya lo paga— pero gasta de su tope.
+  it('el granel de la nota va dentro del servicio y gasta de su tope', async () => {
     const clienteId = await seedCliente();
     const jabon = await seedProducto({ nombre: 'Jabón', stock_actual: 100, precio_unitario: 7 });
     const res = await request(app).post('/api/notas').set(auth(admin.token)).send({
       tipo_servicio: 'POR_ENCARGO', cliente_id: clienteId, tipo_prenda: 'ROPA',
       estado_pago: 'PENDIENTE',
       cargas: [{ tamano: 'grande', tipo_prenda: 'ROPA' }],
-      // A nivel nota: es lo que el cliente compra, no el material del servicio.
       productos: [{ producto_id: jabon, cantidad: 3 }],
       ajuste: -20,
     });
     expect(res.status).toBe(201);
-    // Servicio Grande 150 + 3 tapas × 7 − 20 de ajuste.
-    expect(Number(res.body.precio_total)).toBe(151);
+    // Servicio Grande 150 − 20 de ajuste: las 3 tapas van dentro.
+    expect(Number(res.body.precio_total)).toBe(130);
+  });
+
+  // Y si con ellos el material se pasa del precio de los servicios, no se crea:
+  // servir $210 de jabón en una nota de $150 sería regalarlo.
+  it('el granel que rebasa el precio de los servicios → 400', async () => {
+    const clienteId = await seedCliente();
+    const jabon = await seedProducto({ nombre: 'Jabón caro', stock_actual: 100, precio_unitario: 70 });
+    const res = await request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'POR_ENCARGO', cliente_id: clienteId, tipo_prenda: 'ROPA',
+      estado_pago: 'PENDIENTE',
+      cargas: [{ tamano: 'chico', tipo_prenda: 'ROPA' }], // servicio de 120
+      productos: [{ producto_id: jabon, cantidad: 3 }],   // 210 de material
+    });
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/material de la nota/i);
+  });
+
+  // Y el de marca gasta del mismo bolsillo: dos jabones de marca en un servicio
+  // Chica de $120 no caben, aunque sean de marca.
+  it('el producto de marca también cuenta contra el precio de los servicios', async () => {
+    const clienteId = await seedCliente();
+    const marca = await seedProducto({
+      nombre: 'Persil', tipo_liquido: 'marca', precio_unitario: 300, precio_botella: 300,
+    });
+    const res = await request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'POR_ENCARGO', cliente_id: clienteId, tipo_prenda: 'ROPA',
+      estado_pago: 'PENDIENTE',
+      cargas: [{ tamano: 'chico', tipo_prenda: 'ROPA' }],
+      productos: [{ producto_id: marca, cantidad: 1 }],
+    });
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/material de la nota/i);
   });
 
   // "Otro ciclo" del renglón de la máquina: se vuelve a poner la MISMA máquina
@@ -793,6 +826,37 @@ describe('servicios Por Encargo (sin tipo de máquina)', () => {
     });
   });
 
+  // El tope tiene que cubrir la máquina, no solo el jabón: un servicio Chica va
+  // en lavadora y secadora medianas, y ese costo sale del mismo precio.
+  it('la máquina del servicio cuenta contra su tope', async () => {
+    const clienteId = await seedCliente();
+    // Chica: tope 120, máquina 70 + 45 = 115. Quedan 5 para material.
+    const caro = await seedProducto({ nombre: 'Jabón caro', stock_actual: 100, precio_unitario: 10 });
+    const res = await request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'POR_ENCARGO', cliente_id: clienteId, tipo_prenda: 'ROPA',
+      estado_pago: 'PENDIENTE',
+      cargas: [{ tamano: 'chico', tipo_prenda: 'ROPA',
+                 productos: [{ producto_id: caro, cantidad: 1 }] }],
+    });
+    expect(res.status).toBe(400); // 115 + 10 = 125 > 120
+    expect(res.body.message).toMatch(/máquinas \$115\.00/);
+  });
+
+  // El edredón va en la lavadora jumbo y sin secado: su costo es otro.
+  it('el edredón cuenta su lavadora jumbo y no una secadora', async () => {
+    const clienteId = await seedCliente();
+    // Edredón: tope 180, lavadora jumbo de edredón 80. Quedan 100.
+    const prod = await seedProducto({ nombre: 'Jabón', stock_actual: 100, precio_unitario: 90 });
+    const res = await request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'POR_ENCARGO', cliente_id: clienteId, tipo_prenda: 'EDREDON',
+      estado_pago: 'PENDIENTE',
+      cargas: [{ tamano: 'jumbo', tipo_prenda: 'EDREDON',
+                 productos: [{ producto_id: prod, cantidad: 1 }] }],
+    });
+    expect(res.status).toBe(201); // 80 + 90 = 170 ≤ 180
+    expect(Number(res.body.precio_total)).toBe(180);
+  });
+
   it('sin precio configurado para ese servicio → 400 que dice cuál falta', async () => {
     await seedAjustes({ tope_carga_grande: null });
     const clienteId = await seedCliente();
@@ -854,12 +918,13 @@ describe('topes de precio por carga (solo Por Encargo)', () => {
     expect(Number(res.body.precio_total)).toBe(100);
   });
 
-  // Los productos de MARCA no son material del lavado: el cliente los compra,
-  // así que se cobran ENCIMA del tope y no cuentan contra él (2026-09-25).
-  it('un producto de marca se cobra sobre el tope y no lo rebasa', async () => {
+  // El jabón de MARCA también es material del lavado: con él se lava la ropa,
+  // así que el precio del servicio lo paga y cuenta contra el tope como el
+  // granel (2026-09-28). Vender una botella es una nota de Productos.
+  it('un producto de marca va dentro del servicio y cuenta contra el tope', async () => {
     const { clienteId } = await armar();
     const marca = await seedProducto({
-      nombre: 'Ensueño', tipo_liquido: 'marca', precio_unitario: 40, precio_botella: 120,
+      nombre: 'Ensueño', tipo_liquido: 'marca', precio_unitario: 40, precio_botella: 20,
     });
     const res = await request(app).post('/api/notas').set(auth(admin.token)).send({
       tipo_servicio: 'POR_ENCARGO', cliente_id: clienteId, tipo_prenda: 'ROPA',
@@ -867,17 +932,32 @@ describe('topes de precio por carga (solo Por Encargo)', () => {
       cargas: [{ tamano: 'grande', lavadora_tipo: 'mediana',
                  productos: [{ producto_id: marca, cantidad: 1 }] }],
     });
-    // Aunque 70 (máquina) + 120 (producto) pasa de 100, la nota SE CREA: contra
-    // el tope solo cuentan las máquinas y el granel.
+    // 70 (máquina) + 20 (producto) = 90, cabe en el tope de 100.
     expect(res.status).toBe(201);
-    expect(Number(res.body.precio_total)).toBe(220); // tope 100 + 120 del producto
-    // Y se vendió la unidad completa: 4 tapas (800 ml / 200 ml).
+    // Y se cobra el tope y nada más: el producto va dentro.
+    expect(Number(res.body.precio_total)).toBe(100);
+    // Se sirvió la unidad completa: 4 tapas (800 ml / 200 ml).
     const { rows } = await pool.query(
       `SELECT np.unidad, a.stock_reservado
          FROM nota_productos np JOIN productos a ON a.id = np.producto_id
         WHERE np.producto_id = $1`, [marca]);
     expect(rows[0].unidad).toBe('botella');
     expect(Number(rows[0].stock_reservado)).toBe(4);
+  });
+
+  it('un producto de marca que rebasa el tope → 400', async () => {
+    const { clienteId } = await armar();
+    const marca = await seedProducto({
+      nombre: 'Persil', tipo_liquido: 'marca', precio_unitario: 40, precio_botella: 120,
+    });
+    const res = await request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'POR_ENCARGO', cliente_id: clienteId, tipo_prenda: 'ROPA',
+      estado_pago: 'PENDIENTE',
+      cargas: [{ tamano: 'grande', lavadora_tipo: 'mediana',
+                 productos: [{ producto_id: marca, cantidad: 1 }] }],
+    });
+    expect(res.status).toBe(400); // 70 + 120 = 190 > 100
+    expect(res.body.message).toMatch(/se cobra en/i);
   });
 
   it('un producto que rebasa el tope → 400 y no crea la nota', async () => {
@@ -1542,7 +1622,11 @@ describe('edredón (lavadora jumbo)', () => {
 });
 
 describe('productos por tapa', () => {
-  it('en Por Encargo el producto por tapa se cobra (cuenta al total) y reserva stock', async () => {
+  // En Por Encargo el granel es MATERIAL del servicio: se sirve por tapa, el
+  // precio del servicio lo paga y no se cobra aparte. Lo que impide regalarlo
+  // sin medida es el tope, no el cobro. Aquí la carga no tiene tamaño —nota
+  // vieja, sin servicio vendido—, así que no hay tope y se cobra la máquina.
+  it('en Por Encargo el granel de la nota no se cobra aparte, pero sí reserva stock', async () => {
     const clienteId = await seedCliente();
     const tapa = await seedProducto({ nombre: 'Suavizante', precio_unitario: 15, es_por_tapa: true });
     const res = await request(app).post('/api/notas').set(auth(admin.token)).send({
@@ -1551,11 +1635,26 @@ describe('productos por tapa', () => {
       productos: [{ producto_id: tapa, cantidad: 2 }],
     });
     expect(res.status).toBe(201);
-    // Sin tope (la carga no tiene tamaño): suma real. La tapa ya no va gratis:
-    // 70 lavado + 2×15 tapa = 100.
-    expect(Number(res.body.precio_total)).toBe(100);
+    expect(Number(res.body.precio_total)).toBe(70); // solo el lavado
     const { rows } = await pool.query('SELECT stock_reservado FROM productos WHERE id = $1', [tapa]);
     expect(Number(rows[0].stock_reservado)).toBe(2);
+  });
+
+  // El de MARCA va igual: es el jabón con el que se lava, no una venta.
+  it('en Por Encargo el producto de marca de la nota tampoco se cobra', async () => {
+    const clienteId = await seedCliente();
+    // Barato a propósito: el tope de la Chica (120) ya carga con su máquina
+    // (mediana 70 + secadora 45), así que queda poco para el material.
+    const marca = await seedProducto({
+      nombre: 'Ensueño', tipo_liquido: 'marca', precio_unitario: 4, precio_botella: 4,
+    });
+    const res = await request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'POR_ENCARGO', cliente_id: clienteId, tipo_prenda: 'ROPA',
+      estado_pago: 'PENDIENTE', cargas: [{ tamano: 'chico', tipo_prenda: 'ROPA' }],
+      productos: [{ producto_id: marca, cantidad: 1 }],
+    });
+    expect(res.status).toBe(201);
+    expect(Number(res.body.precio_total)).toBe(120); // solo el servicio Chica
   });
 
   it('en Autoservicio el producto se vende por botella (precio_botella)', async () => {

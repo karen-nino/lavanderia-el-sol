@@ -367,8 +367,12 @@ async function recalcularPrecioTotal(client, notaId, opciones = {}) {
           COALESCE((
             SELECT SUM(
               CASE
+                -- Por Encargo se cobra el PRECIO DEL SERVICIO y nada más: todo
+                -- lo que lleva dentro —jabón de granel o de marca, suavizante,
+                -- bolsa— ya está pagado por él. Lo que impide servir de más es
+                -- el tope, no un cobro aparte (validarTopesCargas).
                 WHEN n.tipo_servicio = 'POR_ENCARGO' AND carga.tope IS NOT NULL
-                  THEN carga.tope + carga.productos_marca
+                  THEN carga.tope
                 ELSE carga.maquinas + carga.productos
               END
               + carga.ajuste)
@@ -379,21 +383,19 @@ async function recalcularPrecioTotal(client, notaId, opciones = {}) {
               SELECT nc.ajuste, nc.precio_tope AS tope,
                      nc.precio_lavadora + nc.precio_secadora AS maquinas,
                      COALESCE((SELECT SUM(np.cantidad * np.precio_unitario)
-                                 FROM nota_productos np WHERE np.carga_id = nc.id), 0) AS productos,
-                     -- Los de marca van encima del tope: no es material del
-                     -- lavado, es un producto que el cliente compra.
-                     COALESCE((SELECT SUM(np.cantidad * np.precio_unitario)
-                                 FROM nota_productos np
-                                 JOIN productos a ON a.id = np.producto_id
-                                WHERE np.carga_id = nc.id
-                                  AND a.tipo_liquido = 'marca'), 0) AS productos_marca
+                                 FROM nota_productos np WHERE np.carga_id = nc.id), 0) AS productos
                 FROM nota_cargas nc
                WHERE nc.nota_id = n.id
             ) carga
           ), 0)
+          -- Productos a nivel nota. En POR ENCARGO no se cobran: son material
+          -- del servicio —el jabón con el que se lava, sea de granel o de
+          -- marca— y su precio ya los paga. En los demás servicios el producto
+          -- es una venta y se cobra.
           + COALESCE((SELECT SUM(np.cantidad * np.precio_unitario)
                         FROM nota_productos np
-                       WHERE np.nota_id = n.id AND np.carga_id IS NULL), 0)
+                       WHERE np.nota_id = n.id AND np.carga_id IS NULL
+                         AND n.tipo_servicio <> 'POR_ENCARGO'), 0)
           + n.ajuste
       WHERE n.id = $1
       RETURNING precio_total`,
@@ -481,6 +483,25 @@ function topeDeCarga(prenda, tamano, t) {
 // vende: sigue siendo válido para las notas que lo eligieron cuando existía.
 const esServicioQueSeVende = (prenda, tamano) =>
   String(prenda ?? '').toUpperCase() === 'EDREDON' || tamano === 'chico' || tamano === 'grande';
+
+// Lo que le cuesta al negocio la MÁQUINA de un servicio Por Encargo.
+//
+// La nota ya no elige tipo de máquina, pero el servicio sí sabe cuál le toca:
+// Chica y Grande van en lavadora y secadora medianas, y el Edredón en la
+// lavadora jumbo —secarlo es una decisión aparte, así que no cuenta—. Ese costo
+// es parte de lo que el precio del servicio tiene que cubrir, así que gasta de
+// su tope igual que el jabón: si no, el tope solo cuidaba el material y se
+// podía servir hasta el último peso como si la lavadora fuera gratis.
+//
+// Jumbo de ropa ya no se vende; se conserva para las notas que lo eligieron.
+function costoMaquinasDeServicio(prenda, tamano, t) {
+  if (String(prenda ?? '').toUpperCase() === 'EDREDON') return Number(t.edredonJumbo) || 0;
+  if (tamano === 'jumbo')  return (Number(t.jumbo)   || 0) + (Number(t.secadora) || 0);
+  if (tamano === 'chico' || tamano === 'grande') {
+    return (Number(t.mediana) || 0) + (Number(t.secadora) || 0);
+  }
+  return 0;
+}
 
 // Cómo se llama el servicio en la pantalla, para los mensajes de error.
 function nombreServicio(prenda, tamano) {
@@ -642,20 +663,19 @@ async function tiempoElegidoDeMaquina(client, maquinaId, minutos) {
 // Devuelve el mensaje de error o null si todas las cargas caben.
 async function validarTopesCargas(client, notaId) {
   const { rows } = await client.query(
-    `SELECT nc.orden, nc.tamano,
+    `SELECT nc.orden, nc.tamano, nc.tipo_prenda,
             UPPER(COALESCE(nc.tipo_prenda, '')) = 'EDREDON' AS es_edredon,
             nc.precio_lavadora + nc.precio_secadora AS maquinas,
-            -- Solo lo que el tope absorbe: el granel y la bolsa. Los productos
-            -- de marca se cobran aparte, así que no cuentan contra el tope
-            -- (2026-09-25).
-            COALESCE(SUM(CASE WHEN a.tipo_liquido = 'marca' THEN 0
-                              ELSE np.cantidad * np.precio_unitario END), 0) AS productos,
+            -- TODO lo que lleva la carga cuenta contra el tope: el granel, la
+            -- bolsa y también el jabón de MARCA. Con el que se lava la ropa es
+            -- material del servicio, se llame Persil o venga del bidón; el
+            -- precio del servicio lo paga y por eso no puede pasarse de él.
+            COALESCE(SUM(np.cantidad * np.precio_unitario), 0) AS productos,
             -- El tope congelado en la carga (mig. 096), que es su precio.
             nc.precio_tope AS tope
        FROM nota_cargas nc
        JOIN notas n ON n.id = nc.nota_id
        LEFT JOIN nota_productos np ON np.carga_id = nc.id
-       LEFT JOIN productos a ON a.id = np.producto_id
       WHERE nc.nota_id = $1 AND n.tipo_servicio = 'POR_ENCARGO'
         AND (nc.tamano IS NOT NULL OR UPPER(COALESCE(nc.tipo_prenda, '')) = 'EDREDON')
       GROUP BY nc.id
@@ -663,22 +683,61 @@ async function validarTopesCargas(client, notaId) {
     [notaId]
   );
   const fmt = (n) => `$${Number(n).toFixed(2)}`;
+  const t = await tarifasCarga(client);
+  // Lo que cuesta la máquina del servicio. Las notas del modelo de servicios no
+  // guardan precio de máquina (lo que se cobra es el servicio), así que se
+  // deduce de lo que le toca; las viejas sí lo traen y se respeta el suyo.
+  const maquinasDe = (r) => {
+    const guardado = Number(r.maquinas) || 0;
+    return guardado > 0 ? guardado : costoMaquinasDeServicio(r.tipo_prenda, r.tamano, t);
+  };
+
+  // Primero el servicio concreto: decir cuál se pasó y por cuánto es lo que
+  // deja arreglarlo.
   for (const r of rows) {
     if (r.tope == null) continue;
-    const total = Number(r.maquinas) + Number(r.productos);
+    const total = maquinasDe(r) + Number(r.productos);
     if (total > Number(r.tope) + 1e-9) {
       const servicio = nombreServicio(r.es_edredon ? 'EDREDON' : 'ROPA', r.tamano);
-      // El desglose nombra las máquinas solo cuando cobran algo: en las notas de
-      // hoy Por Encargo ya no las tarifa, y enseñar "máquinas $0.00" en cada
-      // aviso solo estorba. Las notas viejas sí las traen cobradas.
-      const desglose = Number(r.maquinas) > 0
-        ? `máquinas ${fmt(r.maquinas)} + material ${fmt(r.productos)} = ${fmt(total)}`
-        : `su material incluido (jabón, suavizante y bolsa) suma ${fmt(total)}`;
-      return `El servicio ${servicio} (carga ${r.orden}) se cobra en ${fmt(r.tope)} y ${desglose}. ` +
-             `Baja $${(total - Number(r.tope)).toFixed(2)}: quita algún producto o la bolsa, ` +
-             'o sube el precio del servicio en Ajustes.';
+      const desglose = `máquinas ${fmt(maquinasDe(r))} + material ${fmt(r.productos)} = ${fmt(total)}`;
+      return `El servicio ${servicio} (carga ${r.orden}) se cobra en ${fmt(r.tope)} y ${desglose}. `
+        + `Baja $${(total - Number(r.tope)).toFixed(2)}: quita algún producto o la bolsa, `
+        + 'o sube el precio del servicio en Ajustes.';
     }
   }
+
+  // Y después el techo de la NOTA: todo el material junto —el de cada servicio
+  // más el que se agregó a la nota— contra la suma de lo que se cobra por los
+  // servicios. Cuenta TODO producto, de granel o de marca: en Por Encargo el
+  // producto no es una venta, es con lo que se lava. Sin esto se podían servir
+  // $200 de jabón en una nota de $150 sin que nada avisara.
+  //
+  // Las máquinas que se cuentan son las de los SERVICIOS. Un renglón de máquina
+  // —los que abre Salidas— no trae presupuesto propio y en Por Encargo va sin
+  // cobro; sumar su tarifa aquí descontaría del bolsillo de los servicios algo
+  // que no salió de ahí.
+  const { rows: totales } = await client.query(
+    `SELECT
+       COALESCE((SELECT SUM(nc2.precio_tope) FROM nota_cargas nc2 WHERE nc2.nota_id = $1), 0) AS presupuesto,
+       COALESCE((SELECT SUM(np.cantidad * np.precio_unitario)
+                   FROM nota_productos np
+                  WHERE np.nota_id = $1), 0) AS material
+       FROM notas n
+      WHERE n.id = $1 AND n.tipo_servicio = 'POR_ENCARGO'`,
+    [notaId]
+  );
+  const tot = totales[0];
+  if (tot && Number(tot.presupuesto) > 0) {
+    // Las máquinas de los SERVICIOS (las de `rows`, que son los que traen tope);
+    // un renglón de máquina de Salidas no trae presupuesto propio ni cobra.
+    const maquinas = rows.reduce((a, r) => a + (r.tope == null ? 0 : maquinasDe(r)), 0);
+    const usado = maquinas + Number(tot.material);
+    if (usado > Number(tot.presupuesto) + 1e-9) {
+      return `El material de la nota suma ${fmt(usado)} y los servicios se cobran en ${fmt(tot.presupuesto)}. `
+        + `Baja $${(usado - Number(tot.presupuesto)).toFixed(2)}: quita productos o sube el precio de los servicios en Ajustes.`;
+    }
+  }
+
   return null;
 }
 
@@ -4111,6 +4170,16 @@ export const addProductoToNota = async (req, res) => {
     await recalcularPrecioTotal(client, id, {
       desmarcarPagoSiCambia: true, usuarioId: req.user?.id, sucursal: req.sucursal,
     });
+
+    // El tope manda también aquí. En Por Encargo el granel y las bolsas que se
+    // agregan son material del servicio, así que gastan de su precio: sin esta
+    // comprobación, lo que el alta no deja servir se podía servir igual desde
+    // Salidas, que es la otra puerta para agregar productos.
+    const errTope = await validarTopesCargas(client, id);
+    if (errTope) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: errTope });
+    }
 
     await client.query('COMMIT');
     res.status(201).json(fila);

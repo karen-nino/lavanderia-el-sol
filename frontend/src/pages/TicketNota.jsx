@@ -59,22 +59,13 @@ function totalAbonado(nota) {
   return abonosDeNota(nota).reduce((s, a) => s + Number(a.monto), 0);
 }
 
-// Productos de MARCA de la carga. No son material del lavado: son un producto
-// que el cliente compra, así que se cobran encima del tope y se listan aparte
-// (2026-09-25). El granel y la bolsa sí van incluidos en el servicio.
-function marcaDeCarga(cg) {
-  return (cg.productos ?? [])
-    .filter(p => p.tipo_liquido === 'marca')
-    .reduce((s, p) => s + Number(p.subtotal ?? 0), 0);
-}
-
 // Lo que el cliente paga por la carga. En Por Encargo con tope el precio ES el
-// tope del tamaño (el granel y la bolsa van incluidos), más los productos de
-// marca; el ajuste manual va aparte. Sin tope, y en los demás tipos de
-// servicio, se cobra el costo real.
+// precio del servicio y ahí se acaba: todo lo que lleva dentro —jabón de granel
+// o de marca, suavizante, bolsa— ya está pagado por él. El ajuste manual se
+// suma. Sin tope, y en los demás tipos de servicio, se cobra el costo real.
 function precioDeCarga(cg, esEncargo) {
   if (esEncargo && cg.tope_carga != null) {
-    return Number(cg.tope_carga) + Number(cg.ajuste ?? 0) + marcaDeCarga(cg);
+    return Number(cg.tope_carga) + Number(cg.ajuste ?? 0);
   }
   return costoDeCarga(cg);
 }
@@ -204,13 +195,11 @@ function armarTextoTicket(nota, rfc, notaPie) {
     if (esEncargo) {
       lista.forEach(cg => {
         const tam = tamanoCargaTxt(cg);
-        // El servicio va sin los productos de marca: esos se cobran aparte y se
-        // listan en su propia línea, para que el total se explique solo.
+        // Una línea por servicio y nada más: lo que lleva dentro ya lo paga su
+        // precio, así que listarlo aparte sumaría al ojo del cliente algo que
+        // el total no cobra.
         L.push(`1 x Servicio por encargo${tam ? ` · ${tam}` : ''}`
-             + ` — ${fmtMonto(precioDeCarga(cg, true) - marcaDeCarga(cg))}`);
-        (cg.productos ?? []).filter(p => p.tipo_liquido === 'marca').forEach(p => {
-          L.push(`${p.cantidad} x ${nombreProd(p)} — ${fmtMonto(p.subtotal)}`);
-        });
+             + ` — ${fmtMonto(precioDeCarga(cg, true))}`);
       });
       return;
     }
@@ -411,7 +400,13 @@ export default function TicketNota() {
   const productos   = [...(nota.productos ?? [])].sort((a, b) => ordenProducto(a) - ordenProducto(b));
   // Los productos de la nota que sí se imprimen: las tapas son información
   // interna y no salen en el ticket.
-  const prodsNota   = productos.filter(p => p.unidad !== 'tapa');
+  //
+  // Y en POR ENCARGO no sale ninguno: lo que el mostrador agregó es material
+  // del servicio —el jabón con el que se lava— y ya lo paga su precio, así que
+  // imprimirlo con su importe sumaría al ojo del cliente algo que el total no
+  // cobra.
+  const prodsNota   = productos.filter(p =>
+    p.unidad !== 'tapa' && nota.tipo_servicio !== 'POR_ENCARGO');
   // Cargas creadas al dar de alta la nota (originales) vs. las agregadas
   // después (adicionales), para mostrarlas en bloques separados.
   const visibles    = cargas.filter(cg => cargaVisibleEnTicket(cg, nota.tipo_servicio));
@@ -429,29 +424,15 @@ export default function TicketNota() {
     esEncargo
       ? lista.map(cg => {
           const tam = tamanoCargaTxt(cg);
-          // Los productos de marca no van dentro del servicio: se cobran encima
-          // del tope, así que cada uno lleva su propio renglón.
-          const marca = (cg.productos ?? []).filter(p => p.tipo_liquido === 'marca');
+          // Una línea por servicio y nada más: el jabón, el suavizante y la
+          // bolsa que lleva dentro ya los paga su precio.
           return (
-            <div key={cg.id} className="space-y-1">
-              <div className="flex items-baseline justify-between gap-2">
-                <span className="flex-1">
-                  <span className="inline-block w-9">1</span>
-                  SERVICIO POR ENCARGO{tam && ` ${tam.toUpperCase()}`}
-                </span>
-                <span className="whitespace-nowrap">
-                  {fmtMonto(precioDeCarga(cg, true) - marcaDeCarga(cg))}
-                </span>
-              </div>
-              {marca.map(p => (
-                <div key={p.id} className="flex items-baseline justify-between gap-2">
-                  <span className="flex-1">
-                    <span className="inline-block w-9">{p.cantidad}</span>
-                    {nombreProd(p).toUpperCase()}
-                  </span>
-                  <span className="whitespace-nowrap">{fmtMonto(p.subtotal)}</span>
-                </div>
-              ))}
+            <div key={cg.id} className="flex items-baseline justify-between gap-2">
+              <span className="flex-1">
+                <span className="inline-block w-9">1</span>
+                SERVICIO POR ENCARGO{tam && ` ${tam.toUpperCase()}`}
+              </span>
+              <span className="whitespace-nowrap">{fmtMonto(precioDeCarga(cg, true))}</span>
             </div>
           );
         })

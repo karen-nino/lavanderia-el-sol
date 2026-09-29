@@ -316,10 +316,20 @@ export default function NuevaNota() {
     ambitoProductosNota === 'encargo' && prod?.tipo_liquido === 'granel' && prod?.clase !== 'bolsa'
       ? 'tapa' : 'botella'
   );
-  const subtotalProductos = productosLista.reduce((sum, p) => {
+  // En POR ENCARGO todo lo que el mostrador agrega es MATERIAL del servicio: el
+  // jabón con el que se lava la ropa, se llame Persil o venga del bidón. El
+  // precio del servicio lo paga —no se cobra aparte— y gasta de su tope. En los
+  // demás servicios el producto es una venta y se cobra.
+  const esMaterialDeNota = () => tipoServicio === 'POR_ENCARGO';
+  const sumaProductosNota = (cuenta) => productosLista.reduce((sum, p) => {
     const prod = productosCatalogo.find(x => String(x.id) === String(p.producto_id));
+    if (!prod || !cuenta(prod)) return sum;
     return sum + precioProductoNota(prod) * (Number(p.cantidad) || 0);
   }, 0);
+  // Lo que se COBRA de los productos de la nota.
+  const subtotalProductos = sumaProductosNota(() => !esMaterialDeNota());
+  // Lo que GASTA del presupuesto de los servicios.
+  const materialProductosNota = sumaProductosNota(() => esMaterialDeNota());
   const precioTotal = subtotalCargas + ajusteNum + subtotalProductos;
   // La venta de Productos no tiene cargas: su total son los productos y el ajuste.
   const totalVenta  = subtotalProductos + ajusteNum;
@@ -694,9 +704,9 @@ export default function NuevaNota() {
     if (!prod || !cuenta(prod)) return sum;
     return sum + precioProductoCarga(prod) * (Number(p.cantidad) || 0);
   }, 0);
-  // Lo que el tope absorbe (granel) y lo que va encima de él (marca).
-  const subtotalAbsorbidoLista = (lista) => sumaProductosCarga(lista, p => !esProductoMarca(p));
-  const subtotalMarcaLista     = (lista) => sumaProductosCarga(lista, esProductoMarca);
+  // Todo lo que lleva una carga cuenta contra su tope: en Por Encargo el
+  // producto no es una venta, es con lo que se lava.
+  const subtotalAbsorbidoLista = (lista) => sumaProductosCarga(lista);
 
   // ── Bolsas (Por Encargo): según el tamaño de la carga se precarga 1 bolsa ──
   const bolsasCatalogo = productosCatalogo.filter(p => p.clase === 'bolsa');
@@ -728,27 +738,55 @@ export default function NuevaNota() {
     return c?.tamano ? (topes[c.tamano] ?? null) : null;
   };
 
-  // Costo interno de la carga: lavado + secado (por tipo) + el granel y la bolsa
-  // que van dentro del servicio. Es lo que se compara contra el tope; el ajuste
-  // manual va aparte y NO cuenta, y los productos de MARCA tampoco (2026-09-25):
-  // esos no son material del lavado, son un producto que el cliente compra y se
-  // cobran encima del tope.
-  const usadoContraTope = (c) =>
-    precioLavadoTipo(c.lavadora_tipo, c.tipo_prenda)
-    + precioSecadoTipo(c.secadora_tipo, c.tipo_prenda)
-    + subtotalAbsorbidoLista(c.productos);
+  // Lo que le cuesta al negocio la MÁQUINA de un servicio. La nota ya no elige
+  // tipo de máquina, pero el servicio sí sabe cuál le toca: Chica y Grande van
+  // en lavadora y secadora medianas, y el Edredón en la lavadora jumbo —secarlo
+  // es una decisión aparte, así que no cuenta—. Jumbo de ropa ya no se vende;
+  // se conserva para las notas que lo eligieron.
+  const costoMaquinasServicio = (c) => {
+    if (String(c?.tipo_prenda).toUpperCase() === 'EDREDON') return precios.edredonJumbo;
+    if (c?.tamano === 'jumbo')  return precios.jumbo + precios.secadora;
+    if (c?.tamano === 'chico' || c?.tamano === 'grande') return precios.mediana + precios.secadora;
+    return 0;
+  };
+
+  // Costo interno de la carga: la máquina que le toca + TODO el material que
+  // lleva dentro (granel, marca y bolsa). Es lo que se compara contra el tope,
+  // porque el precio del servicio tiene que cubrir las dos cosas: si la máquina
+  // no contara, el tope dejaría servir hasta el último peso como si lavar fuera
+  // gratis. Solo el ajuste manual va aparte y no cuenta.
+  //
+  // Una nota vieja trae su máquina elegida y con precio: ahí manda el suyo.
+  const usadoContraTope = (c) => {
+    const elegidas = precioLavadoTipo(c.lavadora_tipo, c.tipo_prenda)
+      + precioSecadoTipo(c.secadora_tipo, c.tipo_prenda);
+    return (elegidas > 0 ? elegidas : costoMaquinasServicio(c))
+      + subtotalAbsorbidoLista(c.productos);
+  };
 
   // Precio cobrado por una carga de encargo. Con tope configurado el precio ES
-  // el tope (precio fijo de la carga, aunque el costo interno sea menor); sin
-  // tope, es la suma real. En los dos casos se suman aparte los productos de
-  // marca y el ajuste manual.
+  // el tope (precio fijo del servicio, aunque el material cueste menos) y ahí
+  // se acaba: lo que lleva dentro ya está pagado por él. Sin tope —notas viejas
+  // sin tamaño— es la suma real. El ajuste manual se suma en los dos casos.
   const subtotalCargaEncargo = (c) => {
     const tope = topeDeCarga(c);
     const base = tope != null ? Number(tope) : usadoContraTope(c);
-    return base + subtotalMarcaLista(c.productos) + (Number(c.ajuste) || 0);
+    return base + (Number(c.ajuste) || 0);
   };
   // Lo que suman los servicios, sin los productos sueltos ni el ajuste.
   const subtotalServicios   = encargoCargas.reduce((s, c) => s + subtotalCargaEncargo(c), 0);
+  // Presupuesto de material de la nota: lo que se cobra por los servicios. Todo
+  // el material —el que va dentro de cada servicio y el que se agrega en
+  // Productos— sale de aquí, así que sirve para lo mismo que el tope de una
+  // carga: que no se regale más jabón del que el precio paga.
+  const presupuestoServicios = encargoCargas.reduce((s, c) => {
+    const tope = topeDeCarga(c);
+    return s + (tope != null ? Number(tope) : 0);
+  }, 0);
+  const materialUsado = encargoCargas.reduce((s, c) => s + usadoContraTope(c), 0)
+    + materialProductosNota;
+  // Cuánto se pasa del presupuesto (0 o menos = cabe).
+  const excesoDeLaNota = presupuestoServicios > 0 ? materialUsado - presupuestoServicios : 0;
   // Ajuste de la nota: descuento (negativo) o cargo extra (positivo). Es uno
   // solo para toda la nota desde que los servicios se venden por cantidad.
   const ajusteEncargo       = Number(encargoForm.ajuste) || 0;
@@ -784,6 +822,9 @@ export default function NuevaNota() {
       // Un servicio cuyo material incluido cuesta más de lo que se cobra por él
       // se vendería en pérdida: se frena aquí, como lo frena el servidor.
       if (encargoCargas.some(c => excesoDeCarga(c) > 0)) return false;
+      // Y lo mismo con todo el material junto contra lo que cobran los
+      // servicios: los productos que se agregan abajo gastan del mismo bolsillo.
+      if (excesoDeLaNota > 0) return false;
       // El ajuste no puede dejar la nota en negativo.
       if (encargoPrecioTotal < 0) return false;
       return true;
@@ -809,6 +850,14 @@ export default function NuevaNota() {
     if (serviciosSinPrecio.length > 0) {
       setError(`Falta el precio de: ${serviciosSinPrecio.map(s => s.label).join(', ')}. `
         + 'Configúralo en Ajustes → Servicios Por Encargo.');
+      return;
+    }
+    // Todo el material contra lo que cobran los servicios. El servidor lo
+    // rechaza también; aquí se dice antes y con los números a la vista.
+    if (excesoDeLaNota > 0) {
+      setError(`El material de la nota suma $${materialUsado.toFixed(2)} y los servicios `
+        + `se cobran en $${presupuestoServicios.toFixed(2)}. `
+        + `Baja $${excesoDeLaNota.toFixed(2)}: quita productos o sirve menos.`);
       return;
     }
     // Material incluido que cuesta más de lo que se cobra por el servicio: se
@@ -1131,6 +1180,10 @@ export default function NuevaNota() {
             const prod = productosCatalogo.find(x => String(x.id) === String(item.producto_id));
             const cant = Number(item.cantidad) || 0;
             const subtotal = precioProductoNota(prod) * cant;
+            // En Por Encargo el granel y las bolsas son material del servicio:
+            // no se cobran, gastan de su presupuesto. Se dice en el renglón
+            // para que nadie piense que ese importe se le está cobrando.
+            const esMaterial = esMaterialDeNota();
             return (
               <div key={i} className={`flex flex-wrap items-center gap-x-2 gap-y-4 px-3 py-4 ${i > 0 ? 'border-t border-gray-100' : ''}`}>
                 {/* Solo texto: el producto no se cambia, se borra el renglón y se
@@ -1141,6 +1194,9 @@ export default function NuevaNota() {
                   </p>
                   <p className="text-xs text-gray-500 tabular-nums">
                     {prod ? precioProductoTexto(prod, ambitoProductosNota) : '—'}
+                    {prod && esMaterial && (
+                      <span className="ml-1.5 not-italic text-gray-400">· va dentro del servicio</span>
+                    )}
                   </p>
                 </div>
 
@@ -1169,7 +1225,9 @@ export default function NuevaNota() {
                   </div>
 
                   <div className="flex items-center gap-2">
-                    <span className="w-16 text-right text-base font-bold text-blue-700 tabular-nums">
+                    <span className={`w-16 text-right text-base font-bold tabular-nums ${
+                      esMaterial ? 'text-gray-400' : 'text-blue-700'
+                    }`}>
                       ${subtotal.toFixed(2)}
                     </span>
 
@@ -1191,11 +1249,18 @@ export default function NuevaNota() {
         )}
 
         {productosLista.length > 0 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 bg-gray-50">
-            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Total productos</span>
-            <span className="text-base font-bold text-dark-blue tabular-nums">
-              ${subtotalProductos.toFixed(2)}
-            </span>
+          <div className="px-4 py-3 border-t border-gray-200 bg-gray-50 space-y-1.5">
+            {/* En Por Encargo nada de esto se cobra: todo va dentro del precio
+                del servicio, así que el pie no dice un total, dice cuánto del
+                tope se lleva gastado y cuánto queda. */}
+            {tipoServicio !== 'POR_ENCARGO' && (
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Total productos</span>
+                <span className="text-base font-bold text-dark-blue tabular-nums">
+                  ${subtotalProductos.toFixed(2)}
+                </span>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -1665,10 +1730,33 @@ export default function NuevaNota() {
                   <p className="text-xs text-gray-400 mt-1.5">Descuento (negativo) o cargo extra (positivo)</p>
                 </div>
 
-                {/* Productos que el cliente compra aparte: se cobran ENCIMA del
-                    precio de los servicios. */}
+                {/* Productos. En Por Encargo se parten en dos por lo que son: el
+                    granel y las bolsas entran en el servicio (y gastan de su
+                    precio) y los de marca los compra el cliente. */}
                 <Separador />
                 {bloqueProductos()}
+
+                {/* El tope, siempre a la vista: cuánto se cobra, cuánto lleva
+                    gastado el material y cuánto queda. Es lo que deja servir
+                    con cabeza en vez de descubrir al final que no cabía. */}
+                {presupuestoServicios > 0 && (
+                  excesoDeLaNota > 0 ? (
+                    <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2.5">
+                      <p className="text-sm font-semibold text-red-700">
+                        El material suma ${materialUsado.toFixed(2)} y el tope es ${presupuestoServicios.toFixed(2)}
+                      </p>
+                      <p className="text-xs text-red-600 mt-0.5">
+                        Baja ${excesoDeLaNota.toFixed(2)}: quita productos, sirve menos o sube el precio de los servicios en Ajustes.
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-gray-500 text-right tabular-nums">
+                      {nCargas === 1 ? 'Tope del servicio' : 'Tope de los servicios'}: ${presupuestoServicios.toFixed(2)}
+                      {' · '}usado ${materialUsado.toFixed(2)}
+                      {' · '}disponible ${(presupuestoServicios - materialUsado).toFixed(2)}
+                    </p>
+                  )
+                )}
 
                 <div className="flex items-baseline justify-between border-t border-gray-200 pt-4">
                   <span className="text-sm font-medium text-gray-700">Total de la nota</span>
@@ -1817,12 +1905,17 @@ export default function NuevaNota() {
                     );
                   })}
 
-                  {productosLista.filter(p => p.producto_id && Number(p.cantidad) > 0).length > 0 && (
+                  {!esMaterialDeNota() && productosLista.some(p => {
+                    const prod = productosCatalogo.find(x => String(x.id) === String(p.producto_id));
+                    return prod && Number(p.cantidad) > 0;
+                  }) && (
                     <div className="pt-2 mt-1 border-t border-blue-200/60 space-y-2">
                       {productosLista.map((p, j) => {
                         const prod = productosCatalogo.find(x => String(x.id) === String(p.producto_id));
                         const cant = Number(p.cantidad) || 0;
-                        if (!prod || cant <= 0) return null;
+                        // El material no se cobra: va dentro del precio del
+                        // servicio, así que no es un renglón del resumen.
+                        if (!prod || cant <= 0 || esMaterialDeNota()) return null;
                         return (
                           <div key={j} className="flex justify-between gap-2">
                             <span>
