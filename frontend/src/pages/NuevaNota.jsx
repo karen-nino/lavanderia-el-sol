@@ -316,20 +316,22 @@ export default function NuevaNota() {
     ambitoProductosNota === 'encargo' && prod?.tipo_liquido === 'granel' && prod?.clase !== 'bolsa'
       ? 'tapa' : 'botella'
   );
-  // En POR ENCARGO todo lo que el mostrador agrega es MATERIAL del servicio: el
-  // jabón con el que se lava la ropa, se llame Persil o venga del bidón. El
-  // precio del servicio lo paga —no se cobra aparte— y gasta de su tope. En los
-  // demás servicios el producto es una venta y se cobra.
-  const esMaterialDeNota = () => tipoServicio === 'POR_ENCARGO';
+  // En POR ENCARGO lo que el mostrador agrega se parte por cómo se vende: el
+  // granel va por TAPA y las bolsas por pieza —es lo que se sirve dentro del
+  // servicio, así que su precio ya lo paga y gasta de su tope— y los de MARCA
+  // por UNIDAD: el cliente se lleva el envase, así que se cobran encima. En los
+  // demás servicios todo producto es una venta.
+  const esMaterialDeNota = (prod) =>
+    tipoServicio === 'POR_ENCARGO' && prod?.tipo_liquido !== 'marca';
   const sumaProductosNota = (cuenta) => productosLista.reduce((sum, p) => {
     const prod = productosCatalogo.find(x => String(x.id) === String(p.producto_id));
     if (!prod || !cuenta(prod)) return sum;
     return sum + precioProductoNota(prod) * (Number(p.cantidad) || 0);
   }, 0);
   // Lo que se COBRA de los productos de la nota.
-  const subtotalProductos = sumaProductosNota(() => !esMaterialDeNota());
+  const subtotalProductos = sumaProductosNota(prod => !esMaterialDeNota(prod));
   // Lo que GASTA del presupuesto de los servicios.
-  const materialProductosNota = sumaProductosNota(() => esMaterialDeNota());
+  const materialProductosNota = sumaProductosNota(esMaterialDeNota);
   const precioTotal = subtotalCargas + ajusteNum + subtotalProductos;
   // La venta de Productos no tiene cargas: su total son los productos y el ajuste.
   const totalVenta  = subtotalProductos + ajusteNum;
@@ -704,9 +706,10 @@ export default function NuevaNota() {
     if (!prod || !cuenta(prod)) return sum;
     return sum + precioProductoCarga(prod) * (Number(p.cantidad) || 0);
   }, 0);
-  // Todo lo que lleva una carga cuenta contra su tope: en Por Encargo el
-  // producto no es una venta, es con lo que se lava.
-  const subtotalAbsorbidoLista = (lista) => sumaProductosCarga(lista);
+  // Contra el tope cuenta lo que se SIRVE dentro del servicio (granel y bolsa);
+  // los de MARCA se venden por unidad y van encima.
+  const subtotalAbsorbidoLista = (lista) => sumaProductosCarga(lista, p => !esProductoMarca(p));
+  const subtotalMarcaLista     = (lista) => sumaProductosCarga(lista, esProductoMarca);
 
   // ── Bolsas (Por Encargo): según el tamaño de la carga se precarga 1 bolsa ──
   const bolsasCatalogo = productosCatalogo.filter(p => p.clase === 'bolsa');
@@ -750,8 +753,8 @@ export default function NuevaNota() {
     return 0;
   };
 
-  // Costo interno de la carga: la máquina que le toca + TODO el material que
-  // lleva dentro (granel, marca y bolsa). Es lo que se compara contra el tope,
+  // Costo interno de la carga: la máquina que le toca + el material que se sirve
+  // dentro (granel y bolsa). Es lo que se compara contra el tope,
   // porque el precio del servicio tiene que cubrir las dos cosas: si la máquina
   // no contara, el tope dejaría servir hasta el último peso como si lavar fuera
   // gratis. Solo el ajuste manual va aparte y no cuenta.
@@ -765,13 +768,13 @@ export default function NuevaNota() {
   };
 
   // Precio cobrado por una carga de encargo. Con tope configurado el precio ES
-  // el tope (precio fijo del servicio, aunque el material cueste menos) y ahí
-  // se acaba: lo que lleva dentro ya está pagado por él. Sin tope —notas viejas
-  // sin tamaño— es la suma real. El ajuste manual se suma en los dos casos.
+  // el tope (precio fijo del servicio, aunque el material cueste menos); sin
+  // tope —notas viejas sin tamaño— es la suma real. En los dos casos se suman
+  // encima los productos de MARCA, que se venden por unidad, y el ajuste manual.
   const subtotalCargaEncargo = (c) => {
     const tope = topeDeCarga(c);
     const base = tope != null ? Number(tope) : usadoContraTope(c);
-    return base + (Number(c.ajuste) || 0);
+    return base + subtotalMarcaLista(c.productos) + (Number(c.ajuste) || 0);
   };
   // Lo que suman los servicios, sin los productos sueltos ni el ajuste.
   const subtotalServicios   = encargoCargas.reduce((s, c) => s + subtotalCargaEncargo(c), 0);
@@ -1183,7 +1186,7 @@ export default function NuevaNota() {
             // En Por Encargo el granel y las bolsas son material del servicio:
             // no se cobran, gastan de su presupuesto. Se dice en el renglón
             // para que nadie piense que ese importe se le está cobrando.
-            const esMaterial = esMaterialDeNota();
+            const esMaterial = esMaterialDeNota(prod);
             return (
               <div key={i} className={`flex flex-wrap items-center gap-x-2 gap-y-4 px-3 py-4 ${i > 0 ? 'border-t border-gray-100' : ''}`}>
                 {/* Solo texto: el producto no se cambia, se borra el renglón y se
@@ -1250,12 +1253,15 @@ export default function NuevaNota() {
 
         {productosLista.length > 0 && (
           <div className="px-4 py-3 border-t border-gray-200 bg-gray-50 space-y-1.5">
-            {/* En Por Encargo nada de esto se cobra: todo va dentro del precio
-                del servicio, así que el pie no dice un total, dice cuánto del
-                tope se lleva gastado y cuánto queda. */}
-            {tipoServicio !== 'POR_ENCARGO' && (
+            {/* En Por Encargo puede no cobrarse nada —si todo lo agregado se
+                sirve dentro del servicio—, y un "Se cobra aparte $0.00" solo
+                hace dudar de si falta cobrar algo. Lo que gasta del tope se ve
+                en el renglón de abajo. */}
+            {(tipoServicio !== 'POR_ENCARGO' || subtotalProductos > 0) && (
               <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Total productos</span>
+                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                  {tipoServicio === 'POR_ENCARGO' ? 'Se cobra aparte' : 'Total productos'}
+                </span>
                 <span className="text-base font-bold text-dark-blue tabular-nums">
                   ${subtotalProductos.toFixed(2)}
                 </span>
@@ -1905,9 +1911,9 @@ export default function NuevaNota() {
                     );
                   })}
 
-                  {!esMaterialDeNota() && productosLista.some(p => {
+                  {productosLista.some(p => {
                     const prod = productosCatalogo.find(x => String(x.id) === String(p.producto_id));
-                    return prod && Number(p.cantidad) > 0;
+                    return prod && Number(p.cantidad) > 0 && !esMaterialDeNota(prod);
                   }) && (
                     <div className="pt-2 mt-1 border-t border-blue-200/60 space-y-2">
                       {productosLista.map((p, j) => {
@@ -1915,7 +1921,7 @@ export default function NuevaNota() {
                         const cant = Number(p.cantidad) || 0;
                         // El material no se cobra: va dentro del precio del
                         // servicio, así que no es un renglón del resumen.
-                        if (!prod || cant <= 0 || esMaterialDeNota()) return null;
+                        if (!prod || cant <= 0 || esMaterialDeNota(prod)) return null;
                         return (
                           <div key={j} className="flex justify-between gap-2">
                             <span>

@@ -367,12 +367,11 @@ async function recalcularPrecioTotal(client, notaId, opciones = {}) {
           COALESCE((
             SELECT SUM(
               CASE
-                -- Por Encargo se cobra el PRECIO DEL SERVICIO y nada más: todo
-                -- lo que lleva dentro —jabón de granel o de marca, suavizante,
-                -- bolsa— ya está pagado por él. Lo que impide servir de más es
-                -- el tope, no un cobro aparte (validarTopesCargas).
+                -- Por Encargo cobra el PRECIO DEL SERVICIO, que ya paga lo que
+                -- se sirve dentro: el granel (por tapa) y la bolsa. Los de
+                -- MARCA no: esos se venden por unidad, así que van encima.
                 WHEN n.tipo_servicio = 'POR_ENCARGO' AND carga.tope IS NOT NULL
-                  THEN carga.tope
+                  THEN carga.tope + carga.productos_marca
                 ELSE carga.maquinas + carga.productos
               END
               + carga.ajuste)
@@ -383,19 +382,27 @@ async function recalcularPrecioTotal(client, notaId, opciones = {}) {
               SELECT nc.ajuste, nc.precio_tope AS tope,
                      nc.precio_lavadora + nc.precio_secadora AS maquinas,
                      COALESCE((SELECT SUM(np.cantidad * np.precio_unitario)
-                                 FROM nota_productos np WHERE np.carga_id = nc.id), 0) AS productos
+                                 FROM nota_productos np WHERE np.carga_id = nc.id), 0) AS productos,
+                     -- Los de marca se venden por unidad y van encima del tope.
+                     COALESCE((SELECT SUM(np.cantidad * np.precio_unitario)
+                                 FROM nota_productos np
+                                 JOIN productos a ON a.id = np.producto_id
+                                WHERE np.carga_id = nc.id
+                                  AND a.tipo_liquido = 'marca'), 0) AS productos_marca
                 FROM nota_cargas nc
                WHERE nc.nota_id = n.id
             ) carga
           ), 0)
-          -- Productos a nivel nota. En POR ENCARGO no se cobran: son material
-          -- del servicio —el jabón con el que se lava, sea de granel o de
-          -- marca— y su precio ya los paga. En los demás servicios el producto
-          -- es una venta y se cobra.
+          -- Productos a nivel nota. En POR ENCARGO solo se cobran los de MARCA,
+          -- que se venden por unidad: el granel y las bolsas son material del
+          -- servicio —el jabón con el que se lava— y su precio ya los paga; lo
+          -- que impide servirlos sin medida es el tope (validarTopesCargas).
+          -- En los demás servicios el producto es una venta y se cobra todo.
           + COALESCE((SELECT SUM(np.cantidad * np.precio_unitario)
                         FROM nota_productos np
+                        JOIN productos a ON a.id = np.producto_id
                        WHERE np.nota_id = n.id AND np.carga_id IS NULL
-                         AND n.tipo_servicio <> 'POR_ENCARGO'), 0)
+                         AND (n.tipo_servicio <> 'POR_ENCARGO' OR a.tipo_liquido = 'marca')), 0)
           + n.ajuste
       WHERE n.id = $1
       RETURNING precio_total`,
@@ -666,16 +673,18 @@ async function validarTopesCargas(client, notaId) {
     `SELECT nc.orden, nc.tamano, nc.tipo_prenda,
             UPPER(COALESCE(nc.tipo_prenda, '')) = 'EDREDON' AS es_edredon,
             nc.precio_lavadora + nc.precio_secadora AS maquinas,
-            -- TODO lo que lleva la carga cuenta contra el tope: el granel, la
-            -- bolsa y también el jabón de MARCA. Con el que se lava la ropa es
-            -- material del servicio, se llame Persil o venga del bidón; el
-            -- precio del servicio lo paga y por eso no puede pasarse de él.
-            COALESCE(SUM(np.cantidad * np.precio_unitario), 0) AS productos,
+            -- Contra el tope cuenta lo que se SIRVE dentro del servicio: el
+            -- granel (por tapa) y la bolsa. Los de MARCA se venden por unidad
+            -- —el cliente se lleva el envase— así que se cobran aparte y no
+            -- gastan del presupuesto del servicio.
+            COALESCE(SUM(CASE WHEN a.tipo_liquido = 'marca' THEN 0
+                              ELSE np.cantidad * np.precio_unitario END), 0) AS productos,
             -- El tope congelado en la carga (mig. 096), que es su precio.
             nc.precio_tope AS tope
        FROM nota_cargas nc
        JOIN notas n ON n.id = nc.nota_id
        LEFT JOIN nota_productos np ON np.carga_id = nc.id
+       LEFT JOIN productos a ON a.id = np.producto_id
       WHERE nc.nota_id = $1 AND n.tipo_servicio = 'POR_ENCARGO'
         AND (nc.tamano IS NOT NULL OR UPPER(COALESCE(nc.tipo_prenda, '')) = 'EDREDON')
       GROUP BY nc.id
@@ -708,9 +717,9 @@ async function validarTopesCargas(client, notaId) {
 
   // Y después el techo de la NOTA: todo el material junto —el de cada servicio
   // más el que se agregó a la nota— contra la suma de lo que se cobra por los
-  // servicios. Cuenta TODO producto, de granel o de marca: en Por Encargo el
-  // producto no es una venta, es con lo que se lava. Sin esto se podían servir
-  // $200 de jabón en una nota de $150 sin que nada avisara.
+  // servicios. Cuenta el granel y las bolsas, que es lo que se sirve dentro; los
+  // de marca se venden por unidad y van por su cuenta. Sin esto se podían
+  // servir $200 de jabón de bidón en una nota de $150 sin que nada avisara.
   //
   // Las máquinas que se cuentan son las de los SERVICIOS. Un renglón de máquina
   // —los que abre Salidas— no trae presupuesto propio y en Por Encargo va sin
@@ -721,7 +730,8 @@ async function validarTopesCargas(client, notaId) {
        COALESCE((SELECT SUM(nc2.precio_tope) FROM nota_cargas nc2 WHERE nc2.nota_id = $1), 0) AS presupuesto,
        COALESCE((SELECT SUM(np.cantidad * np.precio_unitario)
                    FROM nota_productos np
-                  WHERE np.nota_id = $1), 0) AS material
+                   JOIN productos a ON a.id = np.producto_id
+                  WHERE np.nota_id = $1 AND a.tipo_liquido IS DISTINCT FROM 'marca'), 0) AS material
        FROM notas n
       WHERE n.id = $1 AND n.tipo_servicio = 'POR_ENCARGO'`,
     [notaId]
