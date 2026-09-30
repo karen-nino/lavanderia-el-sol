@@ -72,7 +72,7 @@ La nota nace En Espera y SIN máquina asignada: la máquina física se elige des
         cuerpo: `Por encargo es cuando el cliente deja su ropa y el negocio la lava, la seca y la entrega.
 
 1. Toca Nueva nota y elige Por Encargo.
-2. Elige el cliente (o dalo de alta ahí mismo). Aquí SÍ hace falta cliente: es la ropa de alguien que va a volver por ella.
+2. Elige el cliente, dalo de alta ahí mismo, o toca Mostrador si no lo vas a registrar. Con Mostrador la nota queda a ese nombre: si luego quieres mandarle el ticket o avisarle que ya está, la app te pide su teléfono en ese momento, igual que en autoservicio.
 3. Di cuántos servicios son de cada tamaño: Chico, Grande y Edredón. Cada servicio ya incluye su lavado, su secado, el jabón, el suavizante y la bolsa.
 4. Si quieres, captura el detalle de cada servicio: el tipo de tela, o el tamaño del edredón. Los dos son opcionales.
 5. Lo que el servicio trae dentro sale en "Incluido en los servicios": ahí puedes servir más jabón o quitar la bolsa. Eso NO se cobra aparte.

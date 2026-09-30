@@ -1531,9 +1531,14 @@ export const createNota = async (req, res) => {
       message: `Indica si la nota queda ${enPalabras(ESTADOS_PAGO_VALIDOS)}.`,
     });
   }
-  if (tipo_servicio === 'POR_ENCARGO' && !cliente_id) {
-    return res.status(400).json({ message: 'Elige el cliente: las notas Por Encargo llevan cliente.' });
-  }
+  // Por Encargo SÍ puede venir sin cliente: es la nota de mostrador, la del que
+  // deja ropa de paso y no se registra (2026-09-29). Antes esto era un 400
+  // —"las notas Por Encargo llevan cliente"— y la única salida era dar de alta
+  // un cliente que nadie iba a volver a usar. Sin cliente la nota queda a
+  // nombre de Mostrador y el teléfono, si hace falta mandarle el ticket o el
+  // aviso, se captura a nivel nota (PATCH /notas/:id/telefono). El formulario
+  // no manda un null por descuido: obliga a elegir entre un cliente y
+  // Mostrador antes de dejar avanzar.
   // La venta de mostrador no lava nada: no lleva cargas y lo que la justifica
   // son sus productos. Es de mostrador como el autoservicio —el que viene a comprar
   // un jabón no se identifica—, así que tampoco lleva cliente.

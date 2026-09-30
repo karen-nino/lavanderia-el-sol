@@ -38,11 +38,39 @@ describe('POST /api/notas — validaciones', () => {
     expect(res.status).toBe(400);
   });
 
-  it('Por Encargo sin cliente_id → 400', async () => {
-    const res = await request(app).post('/api/notas').set(auth(admin.token))
-      .send({ ...base, tipo_servicio: 'POR_ENCARGO' });
-    expect(res.status).toBe(400);
-    expect(res.body.message).toMatch(/cliente/i);
+  // Por Encargo SIN cliente ya no es un error: es la nota de mostrador
+  // (2026-09-29). Antes esto devolvía 400 con "las notas Por Encargo llevan
+  // cliente", y la única salida era dar de alta un cliente de una sola nota.
+  it('Por Encargo sin cliente_id se crea a nombre de Mostrador', async () => {
+    const res = await request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'POR_ENCARGO',
+      tipo_prenda: 'ROPA',
+      estado_pago: 'PENDIENTE',
+      tiempo_entrega: 'DOS_DIAS',
+      cargas: [{ tamano: 'chico', lavadora_tipo: 'mediana' }],
+    });
+    expect(res.status).toBe(201);
+    expect(res.body.cliente_id).toBeNull();
+    // El teléfono del ticket se captura aparte, a nivel nota: nace vacío.
+    expect(res.body.telefono ?? null).toBeNull();
+  });
+
+  // Y el teléfono que se le captura para mandarle el ticket o el aviso vive en
+  // la nota, no en un cliente inventado.
+  it('a una nota de mostrador se le puede guardar un teléfono', async () => {
+    const creada = await request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'POR_ENCARGO',
+      tipo_prenda: 'ROPA',
+      estado_pago: 'PENDIENTE',
+      tiempo_entrega: 'DOS_DIAS',
+      cargas: [{ tamano: 'chico', lavadora_tipo: 'mediana' }],
+    });
+    const res = await request(app)
+      .patch(`/api/notas/${creada.body.id}/telefono`)
+      .set(auth(admin.token))
+      .send({ telefono: '33 1234 5678' });
+    expect(res.status).toBe(200);
+    expect(res.body.telefono).toBe('3312345678');
   });
 
   it('cargas vacías → 400', async () => {

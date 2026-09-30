@@ -582,9 +582,9 @@ export default function DetalleNota() {
   // Ya procesada, esto solo repite el aviso: el estado no se toca.
   async function enviarProcesado() {
     const avisar = () => {
-      if (!mensajeProcesado.trim() || !telefonoCliente) return;
+      if (!mensajeProcesado.trim() || !telefonoAviso) return;
       window.open(
-        `https://wa.me/${telefonoCliente}?text=${encodeURIComponent(mensajeProcesado)}`,
+        `https://wa.me/${telefonoAviso}?text=${encodeURIComponent(mensajeProcesado)}`,
         '_blank', 'noopener,noreferrer'
       );
     };
@@ -877,7 +877,11 @@ export default function DetalleNota() {
   // lo explica, y la nota tiene que poder avanzar aunque no haya a quién
   // avisarle.
   const mensajeProcesado = armarMensajeWhatsapp(plantillaWa, nota);
-  const telefonoCliente = telefonoWhatsapp(nota.cliente_telefono);
+  // A dónde se manda el aviso: el teléfono del cliente registrado o, en una
+  // nota de mostrador, el que se capturó a mano para el ticket (nota.telefono).
+  // Antes solo miraba el del cliente, así que una nota de mostrador con
+  // teléfono ya capturado no tenía a dónde mandar nada.
+  const telefonoAviso = telefonoWhatsapp(nota.cliente_telefono || nota.telefono);
   const yaProcesada = nota.estado === 'LISTA';
   const botonProcesado = nota.tipo_servicio === 'POR_ENCARGO' && !esTerminal(nota) && (
     <AccionCircular
@@ -1728,7 +1732,9 @@ export default function DetalleNota() {
                 {nota.cliente_nombre
                   ? <>Se le avisa por WhatsApp a <span className="font-medium text-gray-700">{nota.cliente_nombre}</span>
                       {nota.cliente_telefono ? ` (${nota.cliente_telefono})` : ''}.</>
-                  : 'Esta nota no tiene cliente capturado.'}
+                  : nota.telefono
+                    ? <>Es una nota de <span className="font-medium text-gray-700">Mostrador</span>: se le avisa al {nota.telefono}, el teléfono que se capturó para el ticket.</>
+                    : <>Es una nota de <span className="font-medium text-gray-700">Mostrador</span>, sin teléfono capturado.</>}
               </p>
             </div>
 
@@ -1755,9 +1761,11 @@ export default function DetalleNota() {
               </div>
             )}
 
-            {hayMensajeWhatsapp(plantillaWa) && !telefonoCliente && (
+            {hayMensajeWhatsapp(plantillaWa) && !telefonoAviso && (
               <div className="bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-lg p-3">
-                El cliente no tiene teléfono capturado, así que no hay a dónde mandarlo.
+                {nota.cliente_nombre
+                  ? 'El cliente no tiene teléfono capturado, así que no hay a dónde mandarlo.'
+                  : 'No hay teléfono capturado, así que no hay a dónde mandarlo. Se pide al mandar el ticket.'}
                 {!yaProcesada && ' La nota se marca igual: el aviso es aparte.'}
               </div>
             )}
@@ -1780,7 +1788,7 @@ export default function DetalleNota() {
                 // Marcar la nota no depende del aviso: sin mensaje escrito o sin
                 // teléfono, la nota igual avanza y el WhatsApp simplemente no
                 // sale. Solo el botón que ÚNICAMENTE avisa necesita las dos cosas.
-                disabled={loadingAccion || (yaProcesada && (!mensajeProcesado.trim() || !telefonoCliente))}
+                disabled={loadingAccion || (yaProcesada && (!mensajeProcesado.trim() || !telefonoAviso))}
                 className="flex-1 bg-green-600 hover:bg-green-700 text-white font-medium py-3.5 rounded-lg text-base transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 {loadingAccion ? 'Guardando...' : yaProcesada ? 'Enviar' : 'Marcar procesada'}

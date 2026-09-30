@@ -38,6 +38,13 @@ const TIPOS_SERVICIO = [
 ];
 const TIPO_LABEL = Object.fromEntries(TIPOS_SERVICIO.map(t => [t.v, t.label]));
 
+// Cliente de mostrador: el que deja ropa Por Encargo de paso y no se registra
+// (2026-09-29). Ocupa el mismo hueco que el id de un cliente —así el paso 1
+// sigue midiendo "ya hay a nombre de quién" con un solo dato— y al armar la
+// nota se traduce a cliente_id: null, que es como el backend guarda una nota
+// sin cliente. No es un id posible: los ids son números.
+const CLIENTE_MOSTRADOR = 'MOSTRADOR';
+
 const TIPOS_PRENDA = [
   { v: 'ROPA',    label: 'Ropa'    },
   { v: 'EDREDON', label: 'Edredón' },
@@ -440,7 +447,9 @@ export default function NuevaNota() {
             // Ya cobrada: el toggle se enseña con lo que hay, pero no se cambia.
             setCobroBloqueado(nota.estado_pago === 'PAGADO');
             setEncargoForm({
-              cliente_id:      nota.cliente_id ? String(nota.cliente_id) : '',
+              // Sin cliente es de mostrador, no un hueco por llenar: si se
+              // dejara vacío, editar la nota no dejaría pasar del paso 1.
+              cliente_id:      nota.cliente_id ? String(nota.cliente_id) : CLIENTE_MOSTRADOR,
               pago_anticipado: nota.estado_pago === 'PAGADO' ? 'SI' : 'NO',
               forma_pago:      nota.forma_pago ?? '',
               fecha_entrega:   nota.fecha_entrega  ? String(nota.fecha_entrega).slice(0, 10) : '',
@@ -836,6 +845,7 @@ export default function NuevaNota() {
     const tope = topeDeCarga(c);
     return tope != null ? usadoContraTope(c) - tope : 0;
   };
+  const esClienteMostrador = encargoForm.cliente_id === CLIENTE_MOSTRADOR;
   const clienteSeleccionado = clientes.find(c => String(c.id) === String(encargoForm.cliente_id));
   const sinAcentos = (s) => (s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   const clienteSearchQ    = sinAcentos(clienteSearch.trim());
@@ -939,7 +949,9 @@ export default function NuevaNota() {
         tipo_servicio:      'POR_ENCARGO',
         // Prenda a nivel nota (para lista/badge): la de la primera carga.
         tipo_prenda:    encargoCargas[0]?.tipo_prenda || 'ROPA',
-        cliente_id:     Number(encargoForm.cliente_id),
+        // Mostrador va sin cliente: la nota queda a su nombre en pantalla y el
+        // teléfono, si hay que mandarle algo, se captura desde el ticket.
+        cliente_id:     esClienteMostrador ? null : Number(encargoForm.cliente_id),
         cargas:         cargasPayload,
         ajuste:         ajusteEncargo,
         // Lo que el cliente compra aparte: va a la nota y se cobra ENCIMA del
@@ -1102,6 +1114,24 @@ export default function NuevaNota() {
         />
       </div>
 
+      {esClienteMostrador && !clienteSearchQ && (
+        <div className="flex items-center justify-between gap-3 bg-light-blue border border-blue-200 rounded-lg px-4 py-3">
+          <div>
+            <p className="text-xs font-medium text-blue uppercase tracking-wide">Cliente seleccionado</p>
+            <p className="font-medium text-gray-900">Mostrador</p>
+            <p className="text-sm text-gray-500">Sin cliente registrado</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setEncargoForm(f => ({ ...f, cliente_id: '' }))}
+            aria-label="Quitar cliente"
+            className="flex-shrink-0 px-3 py-1.5 text-sm text-blue-700 hover:bg-light-blue rounded-md transition-colors"
+          >
+            Cambiar
+          </button>
+        </div>
+      )}
+
       {clienteSeleccionado && !clienteSearchQ && (
         <div className="flex items-center justify-between gap-3 bg-light-blue border border-blue-200 rounded-lg px-4 py-3">
           <div>
@@ -1168,6 +1198,28 @@ export default function NuevaNota() {
           )}
         </div>
       )}
+
+      {/* Mostrador va ARRIBA de crear cliente porque es la salida rápida: el
+          que deja ropa de paso no se registra, y darlo de alta para nunca
+          volver a buscarlo llenaba la libreta de clientes de una sola nota. */}
+      <button
+        type="button"
+        onClick={() => {
+          setEncargoForm(f => ({ ...f, cliente_id: CLIENTE_MOSTRADOR }));
+          setClienteSearch('');
+        }}
+        className={`w-full py-3 border-2 border-dashed rounded-lg transition-colors flex items-center justify-center gap-2 text-sm font-medium ${
+          esClienteMostrador
+            ? 'border-blue bg-light-blue text-blue-700'
+            : 'border-gray-300 text-gray-600 hover:text-blue hover:border-blue-400 hover:bg-light-blue/40'
+        }`}
+      >
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+            d="M3.75 9.35V21h16.5V9.35M2.6 5.6l1.2-1.2a1.5 1.5 0 011.05-.4h14.3a1.5 1.5 0 011.05.4l1.2 1.2a3 3 0 01-.6 4.7 3 3 0 01-3.75-.6 3 3 0 01-2.25 1 3 3 0 01-2.25-1 3 3 0 01-2.25 1 3 3 0 01-2.25-1 3 3 0 01-3.75.6 3 3 0 01-.6-4.7M8.25 21v-6.75h7.5V21" />
+        </svg>
+        Mostrador
+      </button>
 
       <button
         type="button"
@@ -1847,7 +1899,7 @@ export default function NuevaNota() {
                     <span className="font-medium">
                       {clienteSeleccionado
                         ? `${clienteSeleccionado.nombre}${clienteSeleccionado.apellido ? ' ' + clienteSeleccionado.apellido : ''}`
-                        : '—'}
+                        : esClienteMostrador ? 'Mostrador' : '—'}
                     </span>
                   </div>
                   <div className="flex justify-between">
