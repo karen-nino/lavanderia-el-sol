@@ -53,17 +53,19 @@ Si nadie cerró la caja de ayer, la app la cierra sola a medianoche y la deja ma
 
 1. Toca el botón azul (+) en Inicio, o entra a Notas y elige Nueva nota.
 2. Elige Autoservicio.
-3. Por cada carga di qué necesita: lavadora (Mediana o Jumbo) y, si va a secar, la secadora.
-4. Agrega los productos que se lleve (jabón, suavizante, bolsas) con el botón Agregar productos.
-5. Toca Aceptar. La nota se guarda pendiente de cobro.
+3. Toca **Agregar máquina**: sale la lista de las que están libres, con su tamaño y su precio. Marca todas las que va a usar el cliente —L1 y S2, las que sean— y toca Agregar. Cada una entra como una máquina de la nota, con su tarifa.
+4. Agrega los productos que se lleve (jabón, suavizante, bolsas) con el botón Agregar producto.
+5. El Resumen te dice lo que va a pagar. Toca Aceptar: la nota se guarda pendiente de cobro.
+
+SE ELIGE LA MÁQUINA, NO EL TIPO. Ya no se dice "una lavadora mediana" para escoger cuál después: se escoge L3 de una vez, y por eso el alta ya sabe cuánto cobrar. Si te equivocaste, el bote de basura del renglón la quita.
+
+LA MÁQUINA QUEDA APUNTADA, NO ARRANCADA. Se inicia en Salidas, con su botón. Y apuntarla no la aparta: si otra nota tiene la misma, se la queda quien le dé a Iniciar primero. Por eso la lista avisa "También en 0018-…".
 
 EL COBRO SE HACE DESPUÉS, EN LA NOTA. Abre la nota y toca Liquidar: ahí eliges cómo pagó. La máquina se puede arrancar aunque todavía no haya pagado, igual que por encargo.
 
 Si la nota ya terminó todas sus cargas, al liquidarla se cierra sola: el cliente ya se llevó su ropa y no hay nada que entregar.
 
-El cliente no se identifica: la nota queda a nombre de Mostrador. Si quieres mandarle el ticket, pídele su teléfono en la pantalla del ticket.
-
-La nota nace En Espera y SIN máquina asignada: la máquina física se elige después, en Salidas.`,
+El cliente no se identifica: la nota queda a nombre de Mostrador. Si quieres mandarle el ticket, pídele su teléfono en la pantalla del ticket.`,
       },
       {
         id: 'nota-por-encargo',
@@ -154,9 +156,11 @@ Los filtros se quedan puestos: si entras a una nota y regresas con la flecha, la
         id: 'asignar-maquina',
         titulo: 'Asignar una máquina a una carga',
         claves: ['salidas', 'poner lavadora', 'secadora', 'que maquina'],
-        cuerpo: `Al crear la nota solo se elige el TIPO de máquina. La máquina física se asigna después, cuando vas a meter la ropa.
+        cuerpo: `EN AUTOSERVICIO la máquina ya se eligió al hacer la nota: aquí solo se inicia. Lo que sigue es meter la ropa y darle a Encender / Iniciar.
 
-Abre la nota y entra a Salidas (o entra desde la lista de máquinas). Cada carga lista lo que la nota compró —Lavadora, Secadora— con su botón Asignar Lav. / Asignar Sec. Las dos se pueden asignar desde el principio, sin esperar a que termine el lavado.
+EN POR ENCARGO la nota vende SERVICIOS (Chico, Grande, Edredón) y las máquinas son cosa de esta pantalla: se ponen con + Agregar, las que te acomoden, y van sin cobro porque lo cobrado es el servicio.
+
+Abre la nota y entra a Salidas (o entra desde la lista de máquinas). Si ves botones Asignar Lav. / Asignar Sec., es una nota vieja de autoservicio que se quedó con el tipo apuntado y sin máquina: ésa se pone por ahí.
 
 Si hace falta una máquina EXTRA (la ropa quedó húmeda y necesita más secado, o hay que volver a lavarla), usa + Agregar. Esa máquina va SIN COBRO: no cambia el total de la nota. Siempre se suma a una carga que ya existe, y una carga admite otra lavadora u otra secadora aunque ya haya pasado por una; lo único que no cabe es una segunda máquina del mismo tipo al mismo tiempo.
 

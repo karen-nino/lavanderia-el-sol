@@ -5,16 +5,7 @@ import { etiquetaProducto, ordenProducto } from '../lib/formatoInventario';
 import { capitalizarNombre } from '../lib/texto';
 import { FORMAS_PAGO } from '../lib/formasPago';
 import AbrirCajaModal from '../components/AbrirCajaModal';
-import Desplegable from '../components/Desplegable';
-
-// Lo elegible en la tarjeta de máquina: solo las dos: "Elige lavadora o
-// secadora" es el texto del campo vacío, no una tercera opción de la lista
-// (2026-09-26). Fuera del render: no cambia, y una lista nueva en cada pintada
-// haría trabajar de más al desplegable.
-const OPCIONES_MAQUINA = [
-  { valor: 'lavadora', etiqueta: 'Lavadora' },
-  { valor: 'secadora', etiqueta: 'Secadora' },
-];
+import ElegirMaquinasModal from '../components/ElegirMaquinasModal';
 
 const INPUT_CLS =
   'w-full px-4 py-3.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent transition';
@@ -63,10 +54,11 @@ const FORM_INIT = {
   forma_pago:     '',
 };
 
-// Autoservicio: la carga elige el TIPO de lavado y/o secado (no la máquina
-// física, que se asigna después en Salidas), porque ahí lo que se cobra ES la
-// máquina. Por Encargo ya no elige tipo: vende servicios a su precio.
-const CARGA_INIT  = { lavadora_tipo: '', secadora_tipo: '', tipo_prenda: 'ROPA', tipo_tela: '', tamano_edredon: '' };
+// Autoservicio elige LA MÁQUINA, no su tipo (2026-09-29): el mostrador la
+// escoge de la lista de máquinas libres, igual que en Salidas, y con la máquina
+// ya se sabe su tarifa —así el alta vuelve a enseñar el total de la nota—.
+// Cada renglón es una máquina; las notas viejas pueden traer lavadora y
+// secadora en el mismo renglón, y por eso caben las dos.
 const MAX_CARGAS  = 20;
 
 const TAMANOS = [
@@ -185,7 +177,8 @@ export default function NuevaNota() {
   // solo funciona con la caja de ese cobro abierta; tenerlo en dos sitios
   // obligaba a escribir la misma regla dos veces (2026-09-22).
   const [cobroBloqueado, setCobroBloqueado] = useState(false);
-  const [maquinas,          setMaquinas]          = useState([]);
+  // Máquinas LIBRES que ofrece el modal de elegir máquina. Se piden al abrirlo.
+  const [maquinasLibres,    setMaquinasLibres]    = useState([]);
   const [productosCatalogo, setProductosCatalogo] = useState([]);
   const [telas,             setTelas]             = useState([]);
   const [tamanosEdredon,    setTamanosEdredon]    = useState([]);
@@ -206,7 +199,17 @@ export default function NuevaNota() {
   // Venta de mostrador (mig. 112): sin cargas ni máquinas, se cobra al momento.
   const esVenta = tipoServicio === 'PRODUCTOS';
   const [tipoOpen,          setTipoOpen]          = useState(false);
-  const [cargasAuto,        setCargasAuto]        = useState([{ ...CARGA_INIT }]);
+  // Máquinas de la nota de Autoservicio. Cada renglón es una máquina elegida
+  // de la lista de libres: { id?, lavadora, secadora }, con `id` solo en las
+  // cargas de una nota que se está editando. Arranca vacío: el contador de
+  // "Cantidad de máquinas" se fue con el selector de tipo (2026-09-29), porque
+  // el número sale de lo que se elige en el modal.
+  const [cargasAuto,        setCargasAuto]        = useState([]);
+  // Modal de elegir máquinas (el mismo gesto que "Asignar máquina" de Salidas).
+  const [maqModalOpen,      setMaqModalOpen]      = useState(false);
+  const [maqModalSel,       setMaqModalSel]       = useState([]);
+  const [maqModalError,     setMaqModalError]     = useState('');
+  const [loadingMaquinas,   setLoadingMaquinas]   = useState(false);
   const [encargoStep,       setEncargoStep]       = useState(1);
   const [encargoForm,       setEncargoForm]       = useState(ENCARGO_INIT);
   // Arranca SIN servicios: el mostrador dice cuántos son de cada tamaño en el
@@ -281,9 +284,34 @@ export default function NuevaNota() {
     : tipo === 'mediana' ? precioPorTipo('lavadora_mediana', prenda)
     : 0;
   const precioSecadoTipo = (tipo, prenda) => (tipo ? precioSecado(tipo, prenda) : 0);
-  // Cada carga se cobra con la tarifa del TIPO de lavado más la del secado.
+  // Lo que cobra una MÁQUINA en Autoservicio. Es la misma tarifa que aplica el
+  // servidor al crear la nota (`tarifaLavadora`/`tarifaSecadora`): la lavadora
+  // según su tipo —Mediana o Jumbo— y la secadora a precio único. Saberla aquí
+  // es lo que permite enseñar el total en el alta.
+  const precioDeMaquina = (m) => {
+    if (!m) return 0;
+    if (m.tipo === 'secadora') return precioSecado();
+    return precioPorTipo(m.tipo === 'lavadora_jumbo' ? 'lavadora_jumbo' : 'lavadora_mediana', 'ROPA');
+  };
+  // Un renglón es una máquina; las notas viejas pueden traer las dos.
   const subtotalDeCarga = (c) =>
-    precioLavadoTipo(c.lavadora_tipo, c.tipo_prenda) + precioSecadoTipo(c.secadora_tipo, c.tipo_prenda);
+    precioDeMaquina(c.lavadora) + precioDeMaquina(c.secadora)
+    // Nota vieja cuya carga se quedó en TIPO sin máquina: se cobra por su tipo,
+    // como se cobraba entonces, para no cambiarle el total al editarla.
+    + (c.lavadora ? 0 : precioLavadoTipo(c.lavadora_tipo, 'ROPA'))
+    + (c.secadora ? 0 : precioSecadoTipo(c.secadora_tipo, 'ROPA'));
+  // Ids de las máquinas que la nota ya tiene: no se vuelven a ofrecer.
+  const maquinasElegidas = cargasAuto.flatMap(c =>
+    [c.lavadora?.id, c.secadora?.id].filter(Boolean).map(String));
+  // Nombre corto de lo que lleva un renglón: "L3 · Lavadora Mediana".
+  const etiquetaRenglon = (c) => {
+    const partes = [];
+    if (c.lavadora) partes.push(`${c.lavadora.nombre} · Lavadora${c.lavadora.tipo === 'lavadora_jumbo' ? ' Jumbo' : ' Mediana'}`);
+    if (c.secadora) partes.push(`${c.secadora.nombre} · Secadora`);
+    if (partes.length === 0 && c.lavadora_tipo) partes.push('Lavadora (sin asignar)');
+    if (partes.length === 0 && c.secadora_tipo) partes.push('Secadora (sin asignar)');
+    return partes.join(' + ');
+  };
   // Ajuste a nivel nota: ya solo existe en la venta de mostrador. Autoservicio
   // perdió el campo (2026-09-25) y Por Encargo lo lleva por carga, así que
   // fuera de la venta no suma nada aunque el form arrastre un valor viejo.
@@ -378,7 +406,6 @@ export default function NuevaNota() {
 
   useEffect(() => {
     const promesas = [
-      api.get('/maquinas'),
       api.get('/productos'),
       api.get('/ajustes'),
       api.get('/clientes'),
@@ -389,22 +416,13 @@ export default function NuevaNota() {
 
     Promise.all(promesas)
       .then((resultados) => {
-        const [m, prod, cfg, cli, telasCat, tamanosCat, extra] = resultados;
+        const [prod, cfg, cli, telasCat, tamanosCat, extra] = resultados;
         setTelas(telasCat || []);
         setTamanosEdredon(tamanosCat || []);
         const nota = esEdicion ? extra : null;
         setFolio(esEdicion ? (nota?.folio ?? '') : (extra?.folio ?? ''));
-        // En edición, incluir las máquinas de la nota aunque no estén "disponibles"
-        const idsActuales = esEdicion
-          ? (nota?.cargas ?? []).flatMap(c => [c.lavadora_id, c.secadora_id]).filter(Boolean)
-          : [];
-        // Esta pantalla ya no asigna máquinas físicas (eso pasó a Salidas): la
-        // lista solo alimenta el aviso de "no hay máquinas disponibles" y, en
-        // edición, tiene que incluir las que la nota ya trae.
-        const maquinasFiltradas = m.filter(
-          maq => maq.estado === 'disponible' || idsActuales.includes(maq.id)
-        );
-        setMaquinas(maquinasFiltradas);
+        // La lista de máquinas la pide el modal al abrirse, no esta carga: lo
+        // que importa es lo que está libre en el momento de elegir.
         setProductosCatalogo(prod);
         if (cfg) {
           setPrecios({
@@ -520,19 +538,26 @@ export default function NuevaNota() {
               instrucciones:   nota.instrucciones  ?? '',
               forma_pago:      nota.forma_pago     ?? '',
             });
-            // Cada carga lleva su TIPO de lavado y/o secado (la máquina se asigna
-            // en Salidas).
+            // Cada renglón es una máquina de la nota. Se lee la que tiene
+            // puesta (o la que ya usó, si se liberó); una nota vieja que se
+            // quedó en TIPO sin máquina conserva su tipo, para que al guardarla
+            // no cambie de precio ni pierda lo que pidió.
+            const maqDe = (id, nombre, tipo) =>
+              (id && nombre ? { id, nombre, tipo } : null);
             const cargasNota = (nota.cargas ?? []).map(c => ({
               // Igual que en Por Encargo: el id identifica las cargas que ya
               // se lavaron para que el servidor no las rehaga.
               id:             c.id,
-              tipo_prenda:    (c.tipo_prenda ?? prendaNota) || 'ROPA',
-              tipo_tela:      c.tipo_tela      ?? '',
-              tamano_edredon: c.tamano_edredon ?? '',
+              lavadora:       maqDe(c.lavadora_id ?? c.lavadora_usada_id,
+                                    c.lavadora_nombre ?? c.lavadora_usada_nombre,
+                                    c.lavadora_tipo ?? c.lavadora_usada_tipo ?? 'lavadora_mediana'),
+              secadora:       maqDe(c.secadora_id ?? c.secadora_usada_id,
+                                    c.secadora_nombre ?? c.secadora_usada_nombre,
+                                    'secadora'),
               lavadora_tipo:  c.lavadora_tipo_previsto ?? '',
               secadora_tipo:  c.secadora_tipo_previsto ?? '',
             }));
-            setCargasAuto(cargasNota.length > 0 ? cargasNota : [{ ...CARGA_INIT }]);
+            setCargasAuto(cargasNota);
             setProductosLista(prods);
           }
         }
@@ -556,24 +581,53 @@ export default function NuevaNota() {
   const eliminarProducto = (i) =>
     setProductosLista(prev => prev.filter((_, idx) => idx !== i));
 
-  // Quita una carga de Autoservicio. La numeración sale del índice, así que las
-  // siguientes se recorren solas. La carga 1 no se puede quitar.
+  // Quita una máquina de la nota. La numeración sale del índice, así que las
+  // siguientes se recorren solas.
   const eliminarCargaAuto = (i) =>
-    setCargasAuto(prev => (prev.length > 1 ? prev.filter((_, idx) => idx !== i) : prev));
+    setCargasAuto(prev => prev.filter((_, idx) => idx !== i));
 
-  // Ajusta el número de cargas conservando las selecciones existentes.
-  const setCantidadCargas = (n) => {
-    const objetivo = Math.max(1, Math.min(MAX_CARGAS, n));
-    setCargasAuto(prev => {
-      if (objetivo === prev.length) return prev;
-      if (objetivo < prev.length)  return prev.slice(0, objetivo);
-      return [...prev, ...Array.from({ length: objetivo - prev.length }, () => ({ ...CARGA_INIT }))];
-    });
+  // ── Elegir máquinas (modal) ─────────────────────────────
+  // Las máquinas de la nota se escogen de la lista de LIBRES, igual que en
+  // Salidas. Se piden al abrir el modal y no al cargar la pantalla: entre que
+  // se abre el formulario y se elige la máquina, otro compañero pudo haberla
+  // ocupado, y lo que importa es lo que está libre AHORA.
+  const abrirSelectorMaquinas = async () => {
+    setMaqModalSel([]);
+    setMaqModalError('');
+    setMaqModalOpen(true);
+    setLoadingMaquinas(true);
+    try {
+      const data = await api.get('/maquinas');
+      // Las que ya tiene esta nota no se vuelven a ofrecer.
+      setMaquinasLibres((data ?? []).filter(m =>
+        m.estado === 'disponible' && !maquinasElegidas.includes(String(m.id))));
+    } catch (err) {
+      setMaqModalError(err.message);
+    } finally {
+      setLoadingMaquinas(false);
+    }
   };
 
-  // Actualiza una carga de Autoservicio con un objeto de cambios parcial.
-  const actualizarCargaObj = (i, cambios) =>
-    setCargasAuto(prev => prev.map((c, idx) => (idx === i ? { ...c, ...cambios } : c)));
+  const toggleMaquinaSel = (maquinaId) =>
+    setMaqModalSel(prev => (prev.some(x => String(x) === String(maquinaId))
+      ? prev.filter(x => String(x) !== String(maquinaId))
+      : [...prev, String(maquinaId)]));
+
+  // Cada máquina marcada entra como un renglón propio de la nota, con su
+  // tarifa. Igual que en Salidas: una máquina de más es una máquina más, no un
+  // añadido a la de al lado.
+  const confirmarMaquinas = () => {
+    const elegidas = maqModalSel
+      .map(id => maquinasLibres.find(m => String(m.id) === String(id)))
+      .filter(Boolean)
+      .map(m => (m.tipo === 'secadora'
+        ? { lavadora: null, secadora: m }
+        : { lavadora: m, secadora: null }));
+    setCargasAuto(prev => [...prev, ...elegidas].slice(0, MAX_CARGAS));
+    setMaqModalOpen(false);
+    setMaqModalSel([]);
+    setError('');
+  };
 
   const handleEncargoChange = (e) => {
     const { name, value } = e.target;
@@ -990,8 +1044,8 @@ export default function NuevaNota() {
         ? null
         : 'Agrega al menos un producto: una venta sin productos no es nota.';
     }
-    if (!cargasAuto.every(c => c.lavadora_tipo || c.secadora_tipo)) {
-      return 'Cada máquina necesita ser lavadora o secadora.';
+    if (cargasAuto.length === 0) {
+      return 'Agrega al menos una máquina: es lo que la nota le cobra al cliente.';
     }
     return null;
   };
@@ -1056,14 +1110,18 @@ export default function NuevaNota() {
       instrucciones:   form.instrucciones || null,
       tipo_tela:       null,
       tamano_edredon:  null,
-      // La carga elige el TIPO de lavado/secado; la máquina se asigna en Salidas.
+      // Cada renglón manda LA MÁQUINA elegida (2026-09-29). El servidor la
+      // valida, la deja asignada —sin arrancarla— y la tarifa, que es el precio
+      // que este formulario ya enseñó en el resumen. Los `*_tipo` solo viajan
+      // en las cargas de una nota vieja que se quedó sin máquina, para no
+      // perder lo que pidió ni cambiarle el precio.
       cargas:          cargasAuto.map(c => ({
         id:             c.id ?? null,
-        lavadora_tipo:  c.lavadora_tipo || null,
-        secadora_tipo:  c.secadora_tipo || null,
-        tipo_prenda:    c.tipo_prenda || 'ROPA',
-        tipo_tela:      (c.tipo_prenda || 'ROPA') === 'ROPA' ? (c.tipo_tela || null) : null,
-        tamano_edredon: c.tipo_prenda === 'EDREDON' ? (c.tamano_edredon || null) : null,
+        lavadora_id:    c.lavadora?.id ?? null,
+        secadora_id:    c.secadora?.id ?? null,
+        lavadora_tipo:  c.lavadora ? null : (c.lavadora_tipo || null),
+        secadora_tipo:  c.secadora ? null : (c.secadora_tipo || null),
+        tipo_prenda:    'ROPA',
       })),
       // Autoservicio ya no tiene Ajuste (2026-09-25).
       ajuste:          0,
@@ -2116,99 +2174,85 @@ export default function NuevaNota() {
             space-y del <form>, que dejaba el resumen más pegado que el resto. */}
         <div className="space-y-8">
 
-          {/* Cuántas cargas y las cargas en sí son lo mismo: se agrupan
-              para que el aire de sección no las separe. */}
-          <div className="space-y-3">
-            {/* Cantidad de máquinas */}
-            <div className="pb-6">
-              <label className={LABEL_CLS}>
-                Cantidad de máquinas <span className="text-red-500">*</span>
-              </label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="number" min="1" max={MAX_CARGAS} step="1"
-                  value={cargasAuto.length}
-                  onChange={e => setCantidadCargas(Number(e.target.value) || 1)}
-                  className={`${INPUT_CLS} text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`}
-                />
-                <button
-                  type="button"
-                  onClick={() => setCantidadCargas(cargasAuto.length - 1)}
-                  disabled={cargasAuto.length <= 1}
-                  aria-label="Disminuir máquinas"
-                  className="flex-shrink-0 w-14 py-3.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-xl font-semibold hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                >
-                  −
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setCantidadCargas(cargasAuto.length + 1)}
-                  disabled={cargasAuto.length >= MAX_CARGAS}
-                  aria-label="Aumentar máquinas"
-                  className="flex-shrink-0 w-14 py-3.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-xl font-semibold hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                >
-                  +
-                </button>
+          {/* ── Máquinas ─────────────────────────────────────
+              La nota se arma eligiendo las máquinas que va a usar el cliente,
+              de la lista de libres y en el mismo modal que Salidas (2026-09-29).
+              Antes se decía "cuántas" y de qué tipo, y la máquina física se
+              elegía después: eran dos capturas para lo mismo, y hasta la segunda
+              la nota no valía nada. Ahora cada máquina entra con su tarifa, así
+              que el resumen ya puede decir lo que se va a cobrar. */}
+          <div>
+            <div className="flex items-center justify-between gap-3 mb-3">
+              <div className="flex items-baseline gap-2 min-w-0">
+                <h2 className={LABEL_CLS + ' mb-0'}>Máquinas <span className="text-red-500">*</span></h2>
+                {cargasAuto.length > 0 && (
+                  <span className="text-xs text-gray-500 truncate">
+                    {cargasAuto.length} {cargasAuto.length === 1 ? 'máquina' : 'máquinas'}
+                  </span>
+                )}
               </div>
-              <p className="text-xs text-gray-400 mt-1.5">Cada máquina es una lavadora o una secadora</p>
+              <button
+                type="button"
+                onClick={abrirSelectorMaquinas}
+                disabled={cargasAuto.length >= MAX_CARGAS}
+                className="flex-shrink-0 flex items-center gap-1.5 bg-blue text-white rounded-pill pl-3 pr-4 py-2.5 text-xs font-bold hover:opacity-90 disabled:opacity-60 transition-opacity"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+                </svg>
+                Agregar máquina
+              </button>
             </div>
 
-            {/* Una tarjeta por máquina */}
-            <div className="space-y-3">
-              {cargasAuto.map((c, i) => {
-                const set = (cambios) => actualizarCargaObj(i, cambios);
-                return (
-                  <div key={i} className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
-                    <div className="flex items-center justify-between gap-2">
+            {/* Misma fila compacta que los productos: qué es, qué cobra y el
+                tache para quitarla. */}
+            <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+              {cargasAuto.length === 0 ? (
+                <p className="px-4 py-5 text-sm text-gray-500">No hay máquinas en esta nota.</p>
+              ) : (
+                cargasAuto.map((c, i) => (
+                  <div key={i} className={`flex items-center gap-x-2 px-3 py-4 ${i > 0 ? 'border-t border-gray-100' : ''}`}>
+                    <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold text-gray-900">Máquina {i + 1}</p>
-                      {/* Sin importe en la tarjeta (2026-09-25): la captura no
-                          habla de dinero; el cobro vive en el detalle de la nota. */}
-                      {i > 0 && (
-                        <button
-                          type="button"
-                          onClick={() => eliminarCargaAuto(i)}
-                          aria-label={`Quitar máquina ${i + 1}`}
-                          className="flex-shrink-0 w-7 h-7 flex items-center justify-center rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                          </svg>
-                        </button>
-                      )}
+                      <p className="text-xs text-gray-500 truncate">{etiquetaRenglon(c) || '—'}</p>
                     </div>
-                    {/* Una sola elección por máquina (2026-09-25): o lavadora o
-                        secadora, nunca las dos, y sin tamaño — el lavado se cobra
-                        con la tarifa Mediana. La máquina física se asigna en Salidas. */}
-                    <div>
-                      <label className="block text-xs font-medium text-gray-500 mb-1.5">Máquina</label>
-                      {/* Desplegable propio y no `<select>`: la lista del
-                          nativo la pinta el sistema y no se parece al campo. */}
-                      <Desplegable
-                        etiquetaAria={`Máquina ${i + 1}`}
-                        valor={c.lavadora_tipo ? 'lavadora' : c.secadora_tipo ? 'secadora' : ''}
-                        onChange={v => set(
-                          v === 'lavadora' ? { lavadora_tipo: 'mediana', secadora_tipo: '' }
-                          : v === 'secadora' ? { lavadora_tipo: '', secadora_tipo: 'mediana' }
-                          : { lavadora_tipo: '', secadora_tipo: '' }
-                        )}
-                        opciones={OPCIONES_MAQUINA}
-                        marcador="Elige lavadora o secadora"
-                      />
-                    </div>
-                    {!c.lavadora_tipo && !c.secadora_tipo && (
-                      <p className="text-sm text-red-600">Elige lavadora o secadora.</p>
-                    )}
+                    <span className="w-16 text-right text-base font-bold text-blue-700 tabular-nums">
+                      ${subtotalDeCarga(c).toFixed(2)}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => eliminarCargaAuto(i)}
+                      aria-label={`Quitar máquina ${i + 1}`}
+                      className="w-8 h-8 flex-shrink-0 flex items-center justify-center rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
                   </div>
-                );
-              })}
-              {/* Informativo, no bloquea: la nota se crea con el TIPO de máquina
-                  y la máquina física se asigna después en Salidas. */}
-              {maquinas.length === 0 && (
-                <p className="text-xs text-amber-700">
-                  Ahora mismo no hay máquinas libres. Puedes crear la nota igual: la máquina se asigna en Salidas.
-                </p>
+                ))
+              )}
+
+              {cargasAuto.length > 0 && (
+                <div className="px-4 py-3 border-t border-gray-200 bg-gray-50 flex items-center justify-between">
+                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                    Total máquinas
+                  </span>
+                  <span className="text-base font-bold text-dark-blue tabular-nums">
+                    ${subtotalCargas.toFixed(2)}
+                  </span>
+                </div>
               )}
             </div>
+
+            {/* Asignar no aparta la máquina: se la queda quien le dé a Iniciar
+                primero, y eso pasa en Salidas. Se dice aquí para que nadie
+                cuente con una máquina que otro puede arrancar antes. */}
+            {cargasAuto.length > 0 && (
+              <p className="text-xs text-gray-400 mt-1.5">
+                Quedan asignadas; se inician en Salidas.
+              </p>
+            )}
           </div>
 
           <Separador />
@@ -2237,17 +2281,26 @@ export default function NuevaNota() {
                 </div>
               </div>
 
-              {/* Qué se lleva cada máquina, sin precios (2026-09-25): el
-                  resumen solo enumera. La máquina física tampoco va aquí: en
-                  Autoservicio se elige el tipo y se asigna en Salidas. */}
-              <div className="space-y-2 mb-3 last:mb-0 text-sm text-blue border-t border-blue-200 pt-3">
-                {cargasAuto.map((c, i) => (
-                  <div key={i} className="font-medium">
-                    Máquina {i + 1}
-                    {c.lavadora_tipo ? ' · Lavadora' : c.secadora_tipo ? ' · Secadora' : ''}
-                  </div>
-                ))}
-              </div>
+              {/* Cada máquina con lo que cobra (2026-09-29). Los precios
+                  volvieron al resumen en cuanto la máquina se elige aquí: ya se
+                  sabe cuál es y, con ella, su tarifa. */}
+              {cargasAuto.length > 0 && (
+                <div className="space-y-1.5 mb-3 last:mb-0 text-sm text-blue border-t border-blue-200 pt-3">
+                  {cargasAuto.map((c, i) => (
+                    <div key={i} className="flex justify-between gap-2">
+                      <span className="font-medium truncate">
+                        Máquina {i + 1}
+                        <span className="font-normal text-blue-700/80">
+                          {etiquetaRenglon(c) ? ` · ${etiquetaRenglon(c)}` : ''}
+                        </span>
+                      </span>
+                      <span className="flex-shrink-0 font-medium tabular-nums">
+                        ${subtotalDeCarga(c).toFixed(2)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
 
               {productosLista.length > 0 && (
                 <div className="space-y-2 mb-3 last:mb-0 text-sm text-blue border-t border-blue-200 pt-3">
@@ -2281,9 +2334,15 @@ export default function NuevaNota() {
                 </div>
               )}
 
-              {/* Sin forma de pago, sin ajuste y sin Total (2026-09-25): la nota
-                  nace pendiente y el cobro vive en su detalle, así que el resumen
-                  solo enumera lo que se va a cobrar. */}
+              {/* El Total vuelve (2026-09-29): con la máquina elegida aquí, el
+                  alta ya sabe lo que cuesta la nota. Lo que NO vuelve es el
+                  cobro: la nota nace pendiente y se liquida desde su detalle
+                  (2026-09-23), así que aquí no hay forma de pago. */}
+              <div className="flex items-baseline justify-between border-t border-blue-200 pt-3">
+                <span className="text-sm font-medium text-blue">Total</span>
+                <span className="text-3xl font-bold text-blue-700 tabular-nums">${precioTotal.toFixed(2)}</span>
+              </div>
+              <p className="text-xs text-blue-700/70 mt-1.5">Se cobra en la nota, con Liquidar.</p>
             </div>
             </div>
           );
@@ -2423,6 +2482,19 @@ export default function NuevaNota() {
         </div>
         )}
       </form>
+
+      {/* Modal — elegir las máquinas de la nota de Autoservicio */}
+      <ElegirMaquinasModal
+        abierto={maqModalOpen}
+        maquinas={maquinasLibres}
+        seleccion={maqModalSel}
+        cargando={loadingMaquinas}
+        error={maqModalError}
+        precioDe={precioDeMaquina}
+        onToggle={toggleMaquinaSel}
+        onConfirmar={confirmarMaquinas}
+        onCancelar={() => { setMaqModalOpen(false); setMaqModalSel([]); }}
+      />
 
       {/* Modal — cobro al momento (Autoservicio y venta de Productos) */}
       {cobroOpen && (

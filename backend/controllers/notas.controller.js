@@ -865,21 +865,32 @@ async function prepararCargas(client, cargas, tipoPrendaNota, sucursal, tipo_ser
   if (cargas.length > 20) {
     throw new Error('Máximo 20 cargas por nota.');
   }
-  // Por Encargo y Autoservicio: la carga elige TIPO de máquina (no máquina
-  // física), así que no se buscan ni validan máquinas por id (se asignan luego
-  // en Salidas). Solo el legado EDREDON usa máquina específica.
+  // Por Encargo vende SERVICIOS: sus cargas no traen máquina, se les asigna en
+  // Salidas sin que eso cambie el precio.
+  //
+  // AUTOSERVICIO sí trae máquina desde el alta otra vez (2026-09-29): ahí lo que
+  // se cobra ES la máquina, y elegirla en dos pasos —el tipo al hacer la nota,
+  // la física en Salidas— dejaba la nota en $0 hasta el segundo. Se elige de la
+  // lista de libres, se tarifa aquí y queda asignada sin arrancar. Las notas
+  // viejas que se quedaron a medias (tipo sin máquina) siguen entrando por el
+  // camino del tipo, para no cambiarles el precio al editarlas.
   const esPorEncargo = tipo_servicio === 'POR_ENCARGO' || tipo_servicio === 'AUTOSERVICIO';
-  const ids = esPorEncargo ? [] : [...new Set(
+  const ids = tipo_servicio === 'POR_ENCARGO' ? [] : [...new Set(
     cargas.flatMap(c => [c.lavadora_id, c.secadora_id]).filter(Boolean).map(Number)
   )];
   const tipoPorId = new Map();
   const tamanoPorId = new Map();
+  const estadoPorId = new Map();
   if (ids.length > 0) {
     const { rows } = await client.query(
-      'SELECT id, tipo, tamano FROM maquinas WHERE id = ANY($1) AND sucursal = $2',
+      'SELECT id, nombre, tipo, tamano, estado FROM maquinas WHERE id = ANY($1) AND sucursal = $2',
       [ids, sucursal]
     );
-    rows.forEach(r => { tipoPorId.set(Number(r.id), r.tipo); tamanoPorId.set(Number(r.id), r.tamano); });
+    rows.forEach(r => {
+      tipoPorId.set(Number(r.id), r.tipo);
+      tamanoPorId.set(Number(r.id), r.tamano);
+      estadoPorId.set(Number(r.id), { estado: r.estado, nombre: r.nombre });
+    });
     const faltante = ids.find(id => !tipoPorId.has(id));
     if (faltante) throw new Error(`La máquina ${faltante} no existe.`);
   }
@@ -923,22 +934,55 @@ async function prepararCargas(client, cargas, tipoPrendaNota, sucursal, tipo_ser
       // tamaño (Chico, Grande, Edredón) y la máquina —la que sea— se le asigna
       // en Salidas, sin que eso cambie el precio. Los tipos se siguen
       // aceptando porque las notas de antes los traen y editarlas los reenvía.
-      // Autoservicio sí sigue necesitando uno: ahí lo que se cobra ES la
-      // máquina, así que una carga sin lavado ni secado no cobraría nada.
-      if (tipo_servicio === 'AUTOSERVICIO' && !lavadoraTipo && !secadoraTipo) {
-        throw new Error(`La carga ${i + 1} necesita al menos un tipo de lavado o secado.`);
+      // AUTOSERVICIO: la máquina FÍSICA que eligió el mostrador (2026-09-29).
+      // Se valida como en Salidas —que sea del hueco que dice ser y que esté
+      // libre— y se tarifa con la tarifa de esa máquina, que es la que el
+      // formulario ya le enseñó al cliente en el resumen. Queda asignada, NO
+      // arrancada: la inicia una persona desde Salidas.
+      if (tipo_servicio === 'AUTOSERVICIO') {
+        lavadoraId = c.lavadora_id ? Number(c.lavadora_id) : null;
+        secadoraId = c.secadora_id ? Number(c.secadora_id) : null;
+        if (lavadoraId && tipoPorId.get(lavadoraId) === 'secadora') {
+          throw new Error(`La máquina de lavado de la máquina ${i + 1} es una secadora.`);
+        }
+        if (secadoraId && tipoPorId.get(secadoraId) !== 'secadora') {
+          throw new Error(`La máquina de secado de la máquina ${i + 1} no es una secadora.`);
+        }
+        // Libre ahora mismo: entre que se abrió el formulario y se guardó la
+        // nota, otro compañero pudo haber arrancado esa máquina.
+        for (const mid of [lavadoraId, secadoraId].filter(Boolean)) {
+          const m = estadoPorId.get(mid);
+          if (m && m.estado !== 'disponible') {
+            throw new Error(`La máquina ${m.nombre} ya no está disponible. Elige otra.`);
+          }
+        }
+        // El tipo se deriva de la máquina puesta: es lo que la nota pidió, y de
+        // ahí sale el desglose del ticket y el trabajo pendiente de la nota.
+        // Un edredón no cabe en una mediana: es física, no tarifa.
+        if (prendaCarga === 'EDREDON' && lavadoraId && tipoPorId.get(lavadoraId) !== 'lavadora_jumbo') {
+          throw new Error(`Los edredones solo van en lavadora jumbo (máquina ${i + 1}).`);
+        }
+        if (lavadoraId) lavadoraTipo = tipoPorId.get(lavadoraId) === 'lavadora_jumbo' ? 'jumbo' : 'mediana';
+        if (secadoraId) secadoraTipo = 'mediana';
       }
-      // Autoservicio NO se tarifa al crear la nota (2026-09-25): la máquina se
-      // cobra cuando se asigna la física en Salidas, que es cuando de verdad se
-      // sabe cuál usó el cliente. Hasta entonces la nota vale $0 y su ticket no
-      // enseña ninguna carga. Por Encargo sí se tarifa aquí, porque lo que cobra
-      // es el tope de la carga y no depende de qué máquina le toque.
-      const tarifaAlCrear = tipo_servicio !== 'AUTOSERVICIO';
+      // Una máquina de autoservicio sin nada puesto no cobraría nada: ahí lo
+      // que se cobra ES la máquina.
+      if (tipo_servicio === 'AUTOSERVICIO' && !lavadoraId && !secadoraId && !lavadoraTipo && !secadoraTipo) {
+        throw new Error(`La máquina ${i + 1} necesita ser una lavadora o una secadora.`);
+      }
+      // Con máquina puesta se tarifa AL CREAR, con la tarifa de esa máquina.
+      // Sin ella —la nota vieja que se quedó en TIPO— se mantiene lo de antes:
+      // vale $0 hasta que se le asigne la física en Salidas (2026-09-25). Por
+      // Encargo se tarifa siempre aquí, porque lo que cobra es el precio del
+      // servicio y no depende de qué máquina le toque.
+      const tarifaAlCrear = tipo_servicio !== 'AUTOSERVICIO' || Boolean(lavadoraId || secadoraId);
       if (lavadoraTipo && tarifaAlCrear) {
-        precioLavadora = tarifaLavadora(lavadoraTipo === 'jumbo' ? 'lavadora_jumbo' : 'lavadora_mediana', prendaCarga, t);
+        precioLavadora = lavadoraId
+          ? tarifaLavadora(tipoPorId.get(lavadoraId), prendaCarga, t)
+          : tarifaLavadora(lavadoraTipo === 'jumbo' ? 'lavadora_jumbo' : 'lavadora_mediana', prendaCarga, t);
       }
       if (secadoraTipo && tarifaAlCrear) {
-        precioSecadora = tarifaSecadora(secadoraTipo, prendaCarga, t);
+        precioSecadora = tarifaSecadora(secadoraId ? tamanoPorId.get(secadoraId) : secadoraTipo, prendaCarga, t);
       }
       activar = false;
     } else {

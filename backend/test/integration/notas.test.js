@@ -118,6 +118,79 @@ describe('POST /api/notas — Autoservicio (happy path)', () => {
   });
 });
 
+// El alta de Autoservicio elige LA MÁQUINA, no su tipo (2026-09-29): el
+// mostrador la escoge de la lista de libres y la nota nace ya tarifada, que es
+// lo que permite enseñar el total en el formulario y cobrar sin pasar por
+// Salidas. La máquina queda asignada, no arrancada.
+describe('POST /api/notas — Autoservicio con máquina elegida en el alta', () => {
+  const crearCon = (cargas) => request(app).post('/api/notas').set(auth(admin.token)).send({
+    tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE', cargas,
+  });
+
+  it('cobra la tarifa de la máquina elegida y la deja asignada sin arrancar', async () => {
+    await seedAjustes({ precio_carga_mediana: 70, precio_carga_secadora: 45 });
+    const lavadora = await seedMaquina({ nombre: 'L1', tipo: 'lavadora_mediana', tamano: 'mediana' });
+    const secadora = await seedMaquina({ nombre: 'S1', tipo: 'secadora', tamano: 'mediana' });
+
+    const res = await crearCon([{ lavadora_id: lavadora }, { secadora_id: secadora }]);
+
+    expect(res.status).toBe(201);
+    // Nace En Espera: elegir la máquina no la arranca, eso se hace en Salidas.
+    expect(res.body.estado).toBe('EN_ESPERA');
+    expect(res.body.cargas).toHaveLength(2);
+    expect(res.body.cargas[0].lavadora_id).toBe(lavadora);
+    // La marca de "usada" nace puesta, igual que al asignar desde Salidas: es
+    // lo que distingue una máquina puesta de un tipo esperando máquina.
+    expect(res.body.cargas[0].lavadora_usada_id).toBe(lavadora);
+    expect(Number(res.body.cargas[0].precio_lavadora)).toBe(70);
+    expect(Number(res.body.cargas[1].precio_secadora)).toBe(45);
+    expect(Number(res.body.precio_total)).toBe(115);
+
+    const { rows } = await pool.query('SELECT estado FROM maquinas WHERE id = $1', [lavadora]);
+    expect(rows[0].estado).toBe('disponible');
+  });
+
+  it('la lavadora jumbo cobra su tarifa', async () => {
+    await seedAjustes({ precio_carga_mediana: 70, precio_carga_jumbo: 90 });
+    const jumbo = await seedMaquina({ nombre: 'L8', tipo: 'lavadora_jumbo', tamano: 'jumbo' });
+    const res = await crearCon([{ lavadora_id: jumbo }]);
+    expect(res.status).toBe(201);
+    expect(Number(res.body.precio_total)).toBe(90);
+  });
+
+  it('se puede cobrar sin pasar por Salidas: la máquina ya está puesta', async () => {
+    await seedAjustes({ precio_carga_mediana: 70 });
+    const lavadora = await seedMaquina({ nombre: 'L2', tipo: 'lavadora_mediana', tamano: 'mediana' });
+    const nota = await crearCon([{ lavadora_id: lavadora }]);
+
+    const cobro = await request(app).patch(`/api/notas/${nota.body.id}/estado-pago`)
+      .set(auth(admin.token)).send({ estado_pago: 'PAGADO', forma_pago: 'EFECTIVO' });
+    expect(cobro.status).toBe(200);
+    expect(cobro.body.estado_pago).toBe('PAGADO');
+  });
+
+  it('una máquina que ya no está libre se rechaza con su nombre', async () => {
+    const ocupada = await seedMaquina({
+      nombre: 'L3', tipo: 'lavadora_mediana', tamano: 'mediana', estado: 'en_uso',
+    });
+    const res = await crearCon([{ lavadora_id: ocupada }]);
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/L3 ya no está disponible/i);
+  });
+
+  it('una secadora no vale como lavadora', async () => {
+    const secadora = await seedMaquina({ nombre: 'S2', tipo: 'secadora', tamano: 'mediana' });
+    const res = await crearCon([{ lavadora_id: secadora }]);
+    expect(res.status).toBe(400);
+  });
+
+  it('una máquina vacía —sin máquina y sin tipo— no se acepta', async () => {
+    const res = await crearCon([{ tipo_prenda: 'ROPA' }]);
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/lavadora o una secadora/i);
+  });
+});
+
 describe('lecturas del modelo por cargas (invariantes que deben sobrevivir el refactor)', () => {
   async function crearAutoservicio() {
     const lavadoraId = await seedMaquina({ nombre: 'Lavadora 1', tipo: 'lavadora_mediana' });
