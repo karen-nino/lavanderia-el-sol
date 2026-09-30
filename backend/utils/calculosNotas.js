@@ -27,12 +27,22 @@ export function tapasPorUnidad(art, unidad) {
   return t > 0 && b > 0 ? Math.floor(b / t) : 1;
 }
 
-// Unidad en la que se vende un producto DENTRO de una nota. El granel se sirve
-// por medidas, así que su unidad la decide el servicio (botella en Autoservicio,
-// tapa en Por Encargo); los productos de MARCA se venden siempre por unidad —la
-// botella o el envase completo—, porque no se sirven por tapas (2026-09-25).
+// Lo que se vende por UNIDAD entera: los productos de marca (el cliente se
+// lleva el envase) y el jabón EN POLVO, que no se sirve por medidas (mig. 126).
+// La columna la calcula la BD; el resto se deduce por si el artículo llega sin
+// ella (una línea vieja de nota, por ejemplo).
+export function seVendePorUnidad(art) {
+  if (art?.se_vende_por_unidad != null) return Boolean(art.se_vende_por_unidad);
+  return art?.tipo_liquido === 'marca' || art?.forma === 'polvo';
+}
+
+// Unidad en la que se vende un producto DENTRO de una nota. El granel líquido se
+// sirve por medidas, así que su unidad la decide el servicio (botella en
+// Autoservicio, tapa en Por Encargo); lo que se vende por unidad —marca y
+// polvo— va siempre por envase completo, porque no se sirve por tapas
+// (2026-09-25).
 export function unidadDeVenta(art, tipo_servicio) {
-  if (art?.tipo_liquido === 'marca') return 'botella';
+  if (seVendePorUnidad(art)) return 'botella';
   return unidadDeServicio(tipo_servicio);
 }
 

@@ -4,7 +4,7 @@
 // Recibe { fecha: 'YYYY-MM-DD', productos: [...] } de GET /productos/reporte-diario.
 
 import { slug, esc, descargarCSV, imprimirDocumento, fechaLarga } from './exportUtils';
-import { textoBotellas, textoGranel } from './formatoInventario';
+import { textoBotellas, textoGranel, seVendePorUnidad, esPolvo } from './formatoInventario';
 
 // 'YYYY-MM-DD' → Date local (sin corrimiento por zona horaria).
 const fechaLocal = (iso) => {
@@ -12,7 +12,9 @@ const fechaLocal = (iso) => {
   return new Date(y, (m || 1) - 1, d || 1);
 };
 
-const esMarca  = (p) => p.tipo_liquido === 'marca';
+// Para el reporte, lo que se cuenta por unidades (marca y polvo) se lee igual:
+// sin botellas ni bidón detrás.
+const esMarca  = (p) => seVendePorUnidad(p);
 const nombreProd = (p) => (esMarca(p) && p.marca ? `${p.marca} · ${p.nombre}` : p.nombre);
 
 const salioTexto = (p) => textoBotellas(p.vendido_tapas, p.tapas_por_botella, { marca: esMarca(p) });
@@ -27,7 +29,7 @@ const granelTexto = (p) => (esMarca(p) ? '' : textoGranel(p.fin_granel_tapas, p.
 const ENCABEZADOS_CSV = ['Tipo', 'Marca', 'Producto', 'Salió', 'Devuelto', 'Queda (rellenadas)', 'Queda (a granel)'];
 
 const filaCSV = (p) => [
-  esMarca(p) ? 'Marca' : 'Granel',
+  esPolvo(p) ? 'Polvo' : esMarca(p) ? 'Marca' : 'Granel',
   p.marca ?? '',
   p.nombre ?? '',
   salioTexto(p),
@@ -69,10 +71,11 @@ export function imprimirReporte(data) {
   if (!data) return;
   const productos = data.productos ?? [];
   const granel = productos.filter((p) => !esMarca(p));
-  const marca  = productos.filter(esMarca);
+  const polvo  = productos.filter(esPolvo);
+  const marca  = productos.filter((p) => esMarca(p) && !esPolvo(p));
   const cuerpo = productos.length === 0
     ? '<p>Sin productos líquidos en este período.</p>'
-    : seccion('Granel', granel) + seccion('Marca', marca);
+    : seccion('Granel', granel) + seccion('Polvo', polvo) + seccion('Marca', marca);
   imprimirDocumento({
     titulo: 'Reporte diario de inventario',
     subtitulo: fechaLarga(fechaLocal(data.fecha)),

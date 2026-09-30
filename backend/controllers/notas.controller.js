@@ -383,26 +383,28 @@ async function recalcularPrecioTotal(client, notaId, opciones = {}) {
                      nc.precio_lavadora + nc.precio_secadora AS maquinas,
                      COALESCE((SELECT SUM(np.cantidad * np.precio_unitario)
                                  FROM nota_productos np WHERE np.carga_id = nc.id), 0) AS productos,
-                     -- Los de marca se venden por unidad y van encima del tope.
+                     -- Lo que se vende por unidad (marca y polvo) va encima
+                     -- del tope; lo servido por medidas ya lo paga el servicio.
                      COALESCE((SELECT SUM(np.cantidad * np.precio_unitario)
                                  FROM nota_productos np
                                  JOIN productos a ON a.id = np.producto_id
                                 WHERE np.carga_id = nc.id
-                                  AND a.tipo_liquido = 'marca'), 0) AS productos_marca
+                                  AND a.se_vende_por_unidad), 0) AS productos_marca
                 FROM nota_cargas nc
                WHERE nc.nota_id = n.id
             ) carga
           ), 0)
-          -- Productos a nivel nota. En POR ENCARGO solo se cobran los de MARCA,
-          -- que se venden por unidad: el granel y las bolsas son material del
-          -- servicio —el jabón con el que se lava— y su precio ya los paga; lo
-          -- que impide servirlos sin medida es el tope (validarTopesCargas).
+          -- Productos a nivel nota. En POR ENCARGO solo se cobra lo que se
+          -- vende POR UNIDAD (marca y polvo): el granel líquido y las bolsas son
+          -- material del servicio —el jabón con el que se lava— y su precio ya
+          -- los paga; lo que impide servirlos sin medida es el tope
+          -- (validarTopesCargas).
           -- En los demás servicios el producto es una venta y se cobra todo.
           + COALESCE((SELECT SUM(np.cantidad * np.precio_unitario)
                         FROM nota_productos np
                         JOIN productos a ON a.id = np.producto_id
                        WHERE np.nota_id = n.id AND np.carga_id IS NULL
-                         AND (n.tipo_servicio <> 'POR_ENCARGO' OR a.tipo_liquido = 'marca')), 0)
+                         AND (n.tipo_servicio <> 'POR_ENCARGO' OR a.se_vende_por_unidad)), 0)
           + n.ajuste
       WHERE n.id = $1
       RETURNING precio_total`,
@@ -674,10 +676,10 @@ async function validarTopesCargas(client, notaId) {
             UPPER(COALESCE(nc.tipo_prenda, '')) = 'EDREDON' AS es_edredon,
             nc.precio_lavadora + nc.precio_secadora AS maquinas,
             -- Contra el tope cuenta lo que se SIRVE dentro del servicio: el
-            -- granel (por tapa) y la bolsa. Los de MARCA se venden por unidad
-            -- —el cliente se lleva el envase— así que se cobran aparte y no
-            -- gastan del presupuesto del servicio.
-            COALESCE(SUM(CASE WHEN a.tipo_liquido = 'marca' THEN 0
+            -- granel líquido (por tapa) y la bolsa. Lo que se vende por unidad
+            -- —marca y polvo, que el cliente se lleva entero— se cobra aparte y
+            -- no gasta del presupuesto del servicio.
+            COALESCE(SUM(CASE WHEN a.se_vende_por_unidad THEN 0
                               ELSE np.cantidad * np.precio_unitario END), 0) AS productos,
             -- El tope congelado en la carga (mig. 096), que es su precio.
             nc.precio_tope AS tope
@@ -735,7 +737,7 @@ async function validarTopesCargas(client, notaId) {
        COALESCE((SELECT SUM(np.cantidad * np.precio_unitario)
                    FROM nota_productos np
                    JOIN productos a ON a.id = np.producto_id
-                  WHERE np.nota_id = $1 AND a.tipo_liquido IS DISTINCT FROM 'marca'), 0) AS material
+                  WHERE np.nota_id = $1 AND NOT a.se_vende_por_unidad), 0) AS material
        FROM notas n
       WHERE n.id = $1 AND n.tipo_servicio = 'POR_ENCARGO'`,
     [notaId]
@@ -843,7 +845,7 @@ async function registrarMovimientosProductosNota(client, notaId, sucursal, usuar
             np.cantidad || (CASE
                               WHEN np.unidad = 'pieza' THEN ' bolsa(s)'
                               WHEN np.unidad = 'botella'
-                                THEN (CASE WHEN a.tipo_liquido = 'marca' THEN ' unidad(es)' ELSE ' botella(s)' END)
+                                THEN (CASE WHEN a.se_vende_por_unidad THEN ' unidad(es)' ELSE ' botella(s)' END)
                               ELSE ' tapa(s)' END),
             np.nota_id
        FROM nota_productos np
@@ -1252,7 +1254,7 @@ async function cargasDeNota(client, notaId) {
   );
   const { rows: prods } = await client.query(
     `SELECT np.id, np.carga_id, np.producto_id, a.nombre, np.cantidad, np.unidad, np.precio_unitario,
-            a.es_por_tapa, a.tipo_liquido, a.clase, a.tamano_bolsa, a.marca,
+            a.es_por_tapa, a.tipo_liquido, a.forma, a.se_vende_por_unidad, a.clase, a.tamano_bolsa, a.marca,
             (np.cantidad * np.precio_unitario) AS subtotal
        FROM nota_productos np
        JOIN productos a ON a.id = np.producto_id
@@ -1488,7 +1490,7 @@ export const getNotaById = async (req, res) => {
 
     const { rows: productos } = await pool.query(
       `SELECT np.id, np.producto_id, a.nombre, np.cantidad, np.unidad, np.precio_unitario,
-              a.es_por_tapa, a.tipo_liquido, a.clase, a.tamano_bolsa, a.marca,
+              a.es_por_tapa, a.tipo_liquido, a.forma, a.se_vende_por_unidad, a.clase, a.tamano_bolsa, a.marca,
               (np.cantidad * np.precio_unitario) AS subtotal
        FROM nota_productos np
        JOIN productos a ON a.id = np.producto_id
@@ -4255,7 +4257,7 @@ export const getNotaProductos = async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT np.id, np.producto_id, a.nombre, np.cantidad, np.precio_unitario,
-              a.tipo_liquido, a.clase, a.tamano_bolsa, a.marca,
+              a.tipo_liquido, a.forma, a.se_vende_por_unidad, a.clase, a.tamano_bolsa, a.marca,
               (np.cantidad * np.precio_unitario) AS subtotal
        FROM nota_productos np
        JOIN productos a ON a.id = np.producto_id

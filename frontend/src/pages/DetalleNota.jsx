@@ -6,7 +6,7 @@ import { api } from '../lib/api';
 import { urlListaNotas } from '../lib/filtrosNotas';
 import { useAuth } from '../context/AuthContext';
 import { esAdmin as esAdminFn } from '../lib/roles';
-import { etiquetaProducto, tituloProducto, subtituloProducto, ordenProducto } from '../lib/formatoInventario';
+import { etiquetaProducto, tituloProducto, subtituloProducto, ordenProducto, seVendePorUnidad } from '../lib/formatoInventario';
 import { FORMAS_PAGO, formaPagoLabel } from '../lib/formasPago';
 import { formatHora12, formatFechaHora12 } from '../lib/fecha';
 import { leerAvisoCobro, limpiarAvisoCobro } from '../lib/avisoCobro';
@@ -19,7 +19,8 @@ function unidadProdTxt(p) {
   const n = Number(p.cantidad);
   if (p.unidad === 'pieza') return n === 1 ? 'pieza' : 'piezas';
   if (p.unidad === 'botella') {
-    if (p.tipo_liquido === 'marca') return n === 1 ? 'unidad' : 'unidades';
+    // Marca y polvo se cuentan por unidad entera; el granel líquido, por botella.
+    if (seVendePorUnidad(p)) return n === 1 ? 'unidad' : 'unidades';
     return n === 1 ? 'botella' : 'botellas';
   }
   return n === 1 ? 'tapa' : 'tapas';
@@ -1391,7 +1392,7 @@ export default function DetalleNota() {
                   // cobran. Lo que va encima del servicio son los productos de
                   // marca y el ajuste, igual que en el total de la nota.
                   const marcaProds = prods
-                    .filter(p => p.tipo_liquido === 'marca')
+                    .filter(seVendePorUnidad)
                     .reduce((s, p) => s + Number(p.subtotal ?? 0), 0);
                   const totalCarga = cg.tope_carga != null
                     ? Number(cg.tope_carga) + marcaProds + Number(cg.ajuste ?? 0)

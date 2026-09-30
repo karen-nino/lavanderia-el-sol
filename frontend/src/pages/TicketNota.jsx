@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { toBlob } from 'html-to-image';
-import { etiquetaProducto, ordenProducto } from '../lib/formatoInventario';
+import { etiquetaProducto, ordenProducto, seVendePorUnidad, esPolvo } from '../lib/formatoInventario';
 import { api } from '../lib/api';
 import { maquinasDeCarga, cargaVisibleEnTicket } from '../lib/ticketCargas';
 import { notaAlPieDeTicket } from '../lib/ticketNotaPie';
@@ -64,7 +64,7 @@ function totalAbonado(nota) {
 // El granel (por tapa) y la bolsa sí van servidos dentro del servicio.
 function marcaDeCarga(cg) {
   return (cg.productos ?? [])
-    .filter(p => p.tipo_liquido === 'marca')
+    .filter(seVendePorUnidad)
     .reduce((s, p) => s + Number(p.subtotal ?? 0), 0);
 }
 
@@ -84,13 +84,14 @@ function unidadProdTxt(p) {
   const n = Number(p.cantidad);
   if (p.unidad === 'pieza') return n === 1 ? 'pieza' : 'piezas';
   if (p.unidad === 'botella') {
-    if (p.tipo_liquido === 'marca') return n === 1 ? 'unidad' : 'unidades';
+    // Marca y polvo se cuentan por unidad entera; el granel líquido, por botella.
+    if (seVendePorUnidad(p)) return n === 1 ? 'unidad' : 'unidades';
     return n === 1 ? 'botella' : 'botellas';
   }
   return n === 1 ? 'tapa' : 'tapas';
 }
 function nombreProd(p) {
-  return etiquetaProducto(p) + (p.tipo_liquido === 'granel' ? ' · Granel' : '');
+  return etiquetaProducto(p) + (p.tipo_liquido === 'granel' && !esPolvo(p) ? ' · Granel' : '');
 }
 
 // En el ticket las fechas van como en un recibo impreso: 04/09/2026, y la hora
@@ -208,7 +209,7 @@ function armarTextoTicket(nota, rfc, notaPie) {
         // y llevan su propia línea, para que el total se explique solo.
         L.push(`1 x Servicio por encargo${tam ? ` · ${tam}` : ''}`
              + ` — ${fmtMonto(precioDeCarga(cg, true) - marcaDeCarga(cg))}`);
-        (cg.productos ?? []).filter(p => p.tipo_liquido === 'marca').forEach(p => {
+        (cg.productos ?? []).filter(seVendePorUnidad).forEach(p => {
           L.push(`${p.cantidad} x ${nombreProd(p)} — ${fmtMonto(p.subtotal)}`);
         });
       });
@@ -418,7 +419,7 @@ export default function TicketNota() {
   // venden por unidad, sí se imprimen.
   const prodsNota   = productos.filter(p =>
     p.unidad !== 'tapa'
-    && (nota.tipo_servicio !== 'POR_ENCARGO' || p.tipo_liquido === 'marca'));
+    && (nota.tipo_servicio !== 'POR_ENCARGO' || seVendePorUnidad(p)));
   // Cargas creadas al dar de alta la nota (originales) vs. las agregadas
   // después (adicionales), para mostrarlas en bloques separados.
   const visibles    = cargas.filter(cg => cargaVisibleEnTicket(cg, nota.tipo_servicio));
@@ -438,7 +439,7 @@ export default function TicketNota() {
           const tam = tamanoCargaTxt(cg);
           // El jabón de granel, el suavizante y la bolsa van dentro del precio
           // del servicio. Los de MARCA se venden por unidad: su propio renglón.
-          const marca = (cg.productos ?? []).filter(p => p.tipo_liquido === 'marca');
+          const marca = (cg.productos ?? []).filter(seVendePorUnidad);
           return (
             <div key={cg.id} className="space-y-1">
               <div className="flex items-baseline justify-between gap-2">

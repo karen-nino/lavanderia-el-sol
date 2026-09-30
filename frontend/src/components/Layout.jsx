@@ -756,7 +756,9 @@ export default function Layout() {
       });
     // Alertas del líquido a granel (bidón) por acabarse o agotado.
     const granel = productos
-      .filter(p => p.tipo_liquido === 'granel' && p.estado_granel && p.estado_granel !== 'ok')
+      // Solo el granel líquido tiene bidón que avisar: el polvo se cuenta en
+      // unidades y ya sale en el aviso de existencia.
+      .filter(p => p.tipo_liquido === 'granel' && p.forma !== 'polvo' && p.estado_granel && p.estado_granel !== 'ok')
       .filter(p => !stockOcultas.has(`granel-${p.id}:${p.stock_granel_tapas}`))
       .sort((a, b) => (orden[a.estado_granel] ?? 99) - (orden[b.estado_granel] ?? 99))
       .map(p => ({

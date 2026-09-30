@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { etiquetaEstadoLista } from '../lib/estadoNota';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
-import { tituloProducto, subtituloProducto, etiquetaProducto, plural } from '../lib/formatoInventario';
+import { tituloProducto, subtituloProducto, etiquetaProducto, plural, seVendePorUnidad, esPolvo } from '../lib/formatoInventario';
 import { guardarAvisoCobro } from '../lib/avisoCobro';
 import { useAuth } from '../context/AuthContext';
 import { esAdmin as esAdminFn } from '../lib/roles';
@@ -854,7 +854,7 @@ export default function Salidas() {
     const prods = (c?.productos ?? []).reduce((a, p) => a + Number(p.subtotal || 0), 0);
     if (c?.tope_carga != null) {
       const marca = (c?.productos ?? [])
-        .filter(p => p.tipo_liquido === 'marca')
+        .filter(seVendePorUnidad)
         .reduce((a, p) => a + Number(p.subtotal || 0), 0);
       return Number(c.tope_carga) + marca + Number(c?.ajuste || 0);
     }
@@ -1044,7 +1044,7 @@ export default function Salidas() {
   // Lo que queda de un producto del catálogo, en las piezas con las que se
   // sirve: tapas el granel, unidades la marca y piezas las bolsas. El stock
   // vive en tapas, así que los que se venden por envase se convierten.
-  const porTapa = (p) => p.clase !== 'bolsa' && p.tipo_liquido === 'granel' && esEncargo;
+  const porTapa = (p) => p.clase !== 'bolsa' && p.tipo_liquido === 'granel' && !esPolvo(p) && esEncargo;
   const existenciaProducto = (p) => {
     const tapas = Number(p.stock_disponible ?? p.stock_actual) || 0;
     if (p.clase === 'bolsa' || porTapa(p)) return tapas;
@@ -1056,7 +1056,7 @@ export default function Salidas() {
     const disp = existenciaProducto(p);
     const [uno, varios] = p.clase === 'bolsa' ? ['bolsa', 'bolsas']
       : porTapa(p) ? ['tapa', 'tapas']
-      : p.tipo_liquido === 'marca' ? ['unidad', 'unidades']
+      : seVendePorUnidad(p) ? ['unidad', 'unidades']
       : ['botella', 'botellas'];
     const precio = porTapa(p) || p.clase === 'bolsa'
       ? Number(p.precio_unitario) || 0

@@ -52,11 +52,25 @@ function desglosarBidones(tapasGranel, p) {
 function plural(n, sing, plur) {
   return `${n} ${n === 1 ? sing : plur}`;
 }
-// Palabra para la existencia según el tipo: granel se cuenta en botellas; marca
-// en unidades.
+// El granel EN POLVO (mig. 126) se cuenta por unidades, no por medidas de un
+// bidón: para todo lo que sigue se comporta como un producto de marca.
+function esPolvo(p) {
+  return p?.clase !== 'bolsa' && p?.forma === 'polvo';
+}
+function porUnidad(p) {
+  if (p?.se_vende_por_unidad != null) return Boolean(p.se_vende_por_unidad);
+  return p?.tipo_liquido === 'marca' || esPolvo(p);
+}
+// El granel LÍQUIDO es el único con bidón detrás: es el que se rellena y el que
+// lleva dos existencias (a granel y rellenadas).
+function esGranelLiquido(p) {
+  return p?.clase !== 'bolsa' && p?.tipo_liquido === 'granel' && !esPolvo(p);
+}
+// Palabra para la existencia según el tipo: el granel líquido se cuenta en
+// botellas; la marca y el polvo, en unidades.
 function unidadVenta(p, n = 2) {
   if (p.clase === 'bolsa') return n === 1 ? 'bolsa' : 'bolsas';
-  if (p.tipo_liquido === 'marca') return n === 1 ? 'unidad' : 'unidades';
+  if (porUnidad(p)) return n === 1 ? 'unidad' : 'unidades';
   return n === 1 ? 'botella' : 'botellas';
 }
 // Unas tapas contadas en la unidad del producto ("3 botellas y 2 tapas",
@@ -95,7 +109,7 @@ function textoDisponible(p) {
 // Texto del líquido a granel: se expresa en bidones (con las botellas sueltas
 // como remanente si las hay).
 function textoGranel(p) {
-  if (p.tipo_liquido !== 'granel') return '';
+  if (!esGranelLiquido(p)) return '';
   const { bidones, botellas } = desglosarBidones(p.stock_granel_tapas, p);
   const partes = [plural(bidones, 'bidón', 'bidones')];
   if (botellas > 0) partes.push(plural(botellas, 'botella', 'botellas'));
@@ -130,6 +144,7 @@ function tituloProd(p) {
 }
 function subtituloProd(p) {
   if (p.clase === 'bolsa') return nombreBolsa(p) ? 'Bolsa' : null;
+  if (esPolvo(p)) return 'Polvo';
   return p.tipo_liquido === 'marca' && p.marca ? p.nombre : null;
 }
 // Orden de la lista: primero granel, luego marca, al final bolsas; dentro de
@@ -184,6 +199,8 @@ const FORM_VACIO = {
   bidon_valor:       '',
   bidon_unidad:      'Litros',
   botella_ml:        '',
+  // Granel: líquido (bidón, botellas y tapas) o en polvo (unidades sueltas).
+  forma:             'liquido',
   metodo_tapa:       'ml',   // 'ml' (tamaño de la tapa) | 'tapas' (tapas por botella)
   tapa_ml:           '',
   tapas_por_botella: '',
@@ -219,6 +236,7 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = 
         marca:          producto.marca ?? '',
         tipo_liquido:   producto.clase === 'bolsa' ? 'bolsa' : (producto.tipo_liquido ?? 'granel'),
         envase:         producto.envase ?? 'Bidón',
+        forma:          producto.forma ?? 'liquido',
         tamano_bolsa:   producto.tamano_bolsa ?? '',
         // Sin bolsas por rollo guardadas, la bolsa se compra suelta.
         compra_bolsa:   producto.clase === 'bolsa' ? (producto.bolsas_por_rollo ? 'rollo' : 'pieza') : '',
@@ -253,6 +271,11 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = 
   const esGranel = form.tipo_liquido === 'granel';
   const esBolsa  = form.tipo_liquido === 'bolsa';
   const esMarca  = form.tipo_liquido === 'marca';
+  // El polvo es granel de nombre y de catálogo, pero se cuenta por unidades:
+  // no tiene bidón, ni botella, ni tapa que capturar (mig. 126). Todo lo que
+  // pregunta por medidas es cosa del granel LÍQUIDO.
+  const esPolvoForm  = esGranel && form.forma === 'polvo';
+  const esGranelLiq  = esGranel && !esPolvoForm;
 
   // Cálculos en vivo para mostrar el rendimiento.
   const botellaMl = Number(form.botella_ml) || 0;
@@ -331,25 +354,27 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = 
       nombre:            form.nombre.trim(),
       marca:             esGranel ? null : (form.marca || null),
       tipo_liquido:      form.tipo_liquido,
+      forma:             esGranel ? form.forma : 'liquido',
       unidad:            'Tapas',
-      envase:            esGranel ? 'Bidón' : null,
-      // El precio por tapa (Por Encargo) solo aplica a granel.
-      precio_unitario:   esGranel && form.precio_tapa !== '' ? Number(form.precio_tapa) : null,
+      envase:            esGranelLiq ? 'Bidón' : null,
+      // El precio por tapa (Por Encargo) solo aplica al granel líquido.
+      precio_unitario:   esGranelLiq && form.precio_tapa !== '' ? Number(form.precio_tapa) : null,
       precio_botella:    form.precio_botella !== '' ? Number(form.precio_botella) : null,
-      volumen_envase_ml: esGranel && bidonMl > 0 ? bidonMl : null,
-      // Marca: se vende solo por botella (sin mL). Internamente 1 botella = 1
-      // unidad, así que botella_ml = tapa_ml = 1 (el stock queda en botellas).
-      botella_ml:        esGranel ? (botellaMl > 0 ? botellaMl : null) : 1,
-      tapa_ml:           esGranel
+      volumen_envase_ml: esGranelLiq && bidonMl > 0 ? bidonMl : null,
+      // Marca y polvo: se venden por unidad entera (sin mL). Internamente
+      // 1 unidad = 1 botella = 1 tapa, así que botella_ml = tapa_ml = 1 y el
+      // stock queda contado en unidades.
+      botella_ml:        esGranelLiq ? (botellaMl > 0 ? botellaMl : null) : 1,
+      tapa_ml:           esGranelLiq
         ? (form.metodo_tapa === 'ml' && tapaMl > 0 ? tapaMl : null)
         : 1,
-      tapas_por_botella: esGranel && form.metodo_tapa === 'tapas' ? (Number(form.tapas_por_botella) || null) : null,
+      tapas_por_botella: esGranelLiq && form.metodo_tapa === 'tapas' ? (Number(form.tapas_por_botella) || null) : null,
       // El aviso se captura en botellas y se guarda en tapas.
       stock_minimo:      tapasBotella > 0
         ? Math.round((Number(form.stock_minimo_botellas) || 0) * tapasBotella)
         : (Number(form.stock_minimo_botellas) || 0),
       // El aviso del granel se captura en bidones y se guarda en tapas.
-      stock_minimo_granel: esGranel
+      stock_minimo_granel: esGranelLiq
         ? (tapasBidon > 0
             ? Math.round((Number(form.stock_minimo_bidones) || 0) * tapasBidon)
             : (Number(form.stock_minimo_bidones) || 0))
@@ -435,6 +460,30 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = 
                   placeholder="Ej. Suavizante" className={INPUT_CLS}
                 />
               )}
+            </div>
+          )}
+
+          {/* Granel: líquido o en polvo. El polvo no se sirve por medidas, se
+              vende por unidades enteras como los de marca. */}
+          {esGranel && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                ¿Qué tipo es? <span className="text-red-500">*</span>
+              </label>
+              <div className="flex gap-2">
+                {[['liquido', 'Líquido', 'Se sirve por medidas'], ['polvo', 'Polvo', 'Se vende por unidades']].map(([val, label, hint]) => (
+                  <button
+                    key={val} type="button"
+                    onClick={() => setForm(f => ({ ...f, forma: val }))}
+                    className={`flex-1 py-2.5 px-2 rounded-lg border text-sm font-medium transition-colors ${
+                      form.forma === val ? 'border-blue bg-light-blue text-blue' : 'border-gray-300 bg-white text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    <span className="block">{label}</span>
+                    <span className="block text-[11px] font-normal text-gray-400 mt-0.5">{hint}</span>
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 
@@ -538,9 +587,9 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = 
             </>
           )}
 
-          {/* Volúmenes */}
+          {/* Volúmenes (solo el granel líquido: el polvo no tiene bidón) */}
           <div className="space-y-3">
-            {esGranel && (
+            {esGranelLiq && (
               <div>
                 <p className="text-sm font-medium text-gray-700 mb-1.5">
                   ¿Cuánto trae el bidón? <span className="text-red-500">*</span>
@@ -560,7 +609,7 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = 
                 </div>
               </div>
             )}
-            {esGranel && (
+            {esGranelLiq && (
               <div>
                 <p className="text-sm font-medium text-gray-700 mb-1.5">
                   ¿De qué tamaño es la botella? (mL) <span className="text-red-500">*</span>
@@ -572,9 +621,9 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = 
                 />
               </div>
             )}
-            {/* El rendimiento por tapa solo aplica a granel; el de marca se
-                vende solo por botella. */}
-            {esGranel && (
+            {/* El rendimiento por tapa solo aplica al granel líquido; la marca
+                y el polvo se venden por unidad entera. */}
+            {esGranelLiq && (
               <>
                 <div>
                   <p className="text-sm font-medium text-gray-700 mb-1.5">
@@ -633,8 +682,8 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = 
           </div>
 
           {/* Precios. El precio por tapa (Por Encargo) solo aplica a granel. */}
-          <div className={esGranel ? 'grid grid-cols-2 gap-3' : ''}>
-            {esGranel && (
+          <div className={esGranelLiq ? 'grid grid-cols-2 gap-3' : ''}>
+            {esGranelLiq && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
                   Precio por tapa ($)
@@ -652,7 +701,7 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = 
             )}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                {esGranel ? 'Precio por botella ($)' : esBolsa ? 'Precio por pieza ($)' : 'Precio por unidad ($)'}
+                {esGranelLiq ? 'Precio por botella ($)' : esBolsa ? 'Precio por pieza ($)' : 'Precio por unidad ($)'}
               </label>
               <div className="relative">
                 <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-base">$</span>
@@ -684,7 +733,7 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = 
           ) : (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                Avisar cuando queden ({esGranel ? 'botellas' : 'unidades'})
+                Avisar cuando queden ({esGranelLiq ? 'botellas' : 'unidades'})
               </label>
               <input
                 type="number" name="stock_minimo_botellas" min="0" step="1"
@@ -695,7 +744,7 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = 
           )}
 
           {/* Alerta de granel bajo (bidones) */}
-          {esGranel && (
+          {esGranelLiq && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">
                 Avisar cuando queden (bidones)
@@ -770,7 +819,7 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = 
 
 // ── Modal Entrada / Salida ──────────────────────────────────────
 function ModalMovimiento({ producto, tipo, onClose, onDone }) {
-  const esGranel = producto.tipo_liquido === 'granel';
+  const esGranel = esGranelLiquido(producto);
   const esBolsa  = producto.clase === 'bolsa';
   const [destino, setDestino] = useState(esGranel ? 'granel' : esBolsa ? 'piezas' : 'botellas');
   // Bolsas: rollo | pieza. Las que se compran sueltas no tienen rollo que
@@ -1254,13 +1303,15 @@ function ReporteDiario() {
   }, [exportOpen]);
 
   const productos = data?.productos ?? [];
-  const granel = productos.filter(p => p.tipo_liquido === 'granel');
+  // El polvo se cuenta por unidades como la marca, pero es granel: va en su
+  // propio grupo para no mezclarlo con productos que sí tienen marca.
+  const granel = productos.filter(p => p.tipo_liquido === 'granel' && !esPolvo(p));
+  const polvo  = productos.filter(esPolvo);
   const marca  = productos.filter(p => p.tipo_liquido === 'marca');
 
-  // Celda "Queda al final": marca = una línea; granel = rellenadas + a granel.
+  // Celda "Queda al final": por unidad = una línea; granel = rellenadas + a granel.
   const quedaCelda = (p) => {
-    const esMarca = p.tipo_liquido === 'marca';
-    if (esMarca) return <span>{textoBotellas(p.fin_botellas_tapas, p.tapas_por_botella, { marca: true })}</span>;
+    if (porUnidad(p)) return <span>{textoBotellas(p.fin_botellas_tapas, p.tapas_por_botella, { marca: true })}</span>;
     return (
       <span className="block">
         <span className="block">Rellenadas: {textoBotellas(p.fin_botellas_tapas, p.tapas_por_botella)}</span>
@@ -1287,7 +1338,7 @@ function ReporteDiario() {
             </thead>
             <tbody className="divide-y divide-gray-100">
               {lista.map(p => {
-                const esMarca = p.tipo_liquido === 'marca';
+                const esMarca = porUnidad(p);
                 return (
                   <tr key={p.id} className="hover:bg-gray-50 align-top">
                     <td className="px-4 py-3">
@@ -1383,6 +1434,7 @@ function ReporteDiario() {
       ) : (
         <>
           {grupo('Granel', granel)}
+          {grupo('Polvo', polvo)}
           {grupo('Marca', marca)}
         </>
       )}
@@ -1483,7 +1535,7 @@ export default function Inventario() {
   const stockSig = stockBajo.map(p => `${p.id}:${p.stock_actual}`).join(',');
   const mostrarStockBajo = stockBajo.length > 0 && stockSig !== stockOcultoSig;
   // Granel por acabarse o agotado (solo productos granel).
-  const granelBajo = productos.filter(p => p.tipo_liquido === 'granel' && p.estado_granel && p.estado_granel !== 'ok' && !recienCreados.has(p.id));
+  const granelBajo = productos.filter(p => esGranelLiquido(p) && p.estado_granel && p.estado_granel !== 'ok' && !recienCreados.has(p.id));
   // El aviso de granel se puede ocultar en la sesión; su firma incluye el stock,
   // así que reaparece si el granel cambia o entra otro producto a la lista.
   const granelSig = granelBajo.map(p => `${p.id}:${p.stock_granel_tapas}`).join(',');
@@ -1619,7 +1671,7 @@ export default function Inventario() {
       >
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" /></svg>
       </button>
-      {p.tipo_liquido === 'granel' && (
+      {esGranelLiquido(p) && (
         <button
           onClick={(e) => { e.stopPropagation(); setModalRellenar(p); }}
           className="p-1.5 text-gray-400 hover:text-blue hover:bg-light-blue rounded-lg transition-colors"
@@ -1713,7 +1765,7 @@ export default function Inventario() {
               {stockBajo.map(p => (
                 <p key={p.id} className="text-sm text-amber-800">
                   <span className="font-semibold">{tituloProd(p)}:</span> {mensajeAvisoBotellas(p)}
-                  {p.tipo_liquido === 'granel' && Number(p.stock_granel_tapas) >= tapasPorBotella(p) && tapasPorBotella(p) > 0 && (
+                  {esGranelLiquido(p) && Number(p.stock_granel_tapas) >= tapasPorBotella(p) && tapasPorBotella(p) > 0 && (
                     <button
                       onClick={() => setModalRellenar(p)}
                       className="ml-1.5 underline hover:no-underline font-semibold text-amber-900"
@@ -1848,7 +1900,7 @@ export default function Inventario() {
                             <div>Pieza: <span className="font-medium text-gray-700">{precioTxt(p.precio_unitario)}</span></div>
                           ) : (
                             <>
-                              {p.tipo_liquido === 'granel' && (
+                              {esGranelLiquido(p) && (
                                 <div>Tapa: <span className="font-medium text-gray-700">{precioTxt(p.precio_unitario)}</span></div>
                               )}
                               <div>{p.tipo_liquido === 'marca' ? 'Unidad' : 'Botella'}: <span className="font-medium text-gray-700">{precioTxt(p.precio_botella)}</span></div>
@@ -1863,7 +1915,7 @@ export default function Inventario() {
                           <LineaApartadas p={p} />
                         </td>
                         <td className="px-4 py-3 text-gray-600">
-                          {p.tipo_liquido === 'granel'
+                          {esGranelLiquido(p)
                             ? (
                               <div className="flex items-center gap-2 flex-wrap">
                                 <span>{textoGranel(p)}</span>
@@ -1937,7 +1989,7 @@ export default function Inventario() {
                     <BadgeEstado estado={es} />
                   </div>
                   <LineaApartadas p={p} />
-                  {p.tipo_liquido === 'granel' && (
+                  {esGranelLiquido(p) && (
                     <p className="text-xs text-gray-500 mt-0.5 inline-flex items-center gap-1.5">
                       <span>A granel: {textoGranel(p)}</span>
                       <BadgeGranel estado={recienCreados.has(p.id) ? 'ok' : p.estado_granel} />
@@ -2032,8 +2084,8 @@ export default function Inventario() {
                     <p className="text-base text-gray-700">{precioTxt(p.precio_unitario)}</p>
                   </div>
                 ) : (
-                  <div className={p.tipo_liquido === 'granel' ? 'grid grid-cols-2 gap-4' : ''}>
-                    {p.tipo_liquido === 'granel' && (
+                  <div className={esGranelLiquido(p) ? 'grid grid-cols-2 gap-4' : ''}>
+                    {esGranelLiquido(p) && (
                       <div>
                         <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Precio por tapa</p>
                         <p className="text-base text-gray-700">{precioTxt(p.precio_unitario)}</p>
@@ -2053,7 +2105,7 @@ export default function Inventario() {
                   </div>
                   <LineaApartadas p={p} className="text-xs text-gray-500 mt-1" />
                 </div>
-                {p.tipo_liquido === 'granel' && (
+                {esGranelLiquido(p) && (
                   <div>
                     <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Bidones (a granel)</p>
                     <div className="flex items-center gap-2 flex-wrap">
@@ -2080,7 +2132,7 @@ export default function Inventario() {
                       − Salida
                     </button>
                   </div>
-                  {p.tipo_liquido === 'granel' && (
+                  {esGranelLiquido(p) && (
                     <button
                       type="button"
                       onClick={() => { setModalRellenar(p); }}

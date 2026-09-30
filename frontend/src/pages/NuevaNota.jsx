@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { api } from '../lib/api';
-import { etiquetaProducto, ordenProducto } from '../lib/formatoInventario';
+import { etiquetaProducto, ordenProducto, seVendePorUnidad, esPolvo } from '../lib/formatoInventario';
 import { capitalizarNombre } from '../lib/texto';
 import { FORMAS_PAGO } from '../lib/formasPago';
 import AbrirCajaModal from '../components/AbrirCajaModal';
@@ -353,11 +353,11 @@ export default function NuevaNota() {
     const disp = Number(prod.stock_disponible ?? prod.stock_actual) || 0;
     return tpb > 0 ? Math.floor(disp / tpb) : disp;
   };
-  // Palabra de la unidad vendida en Autoservicio: botella (granel), unidad
-  // (marca) o bolsa (bolsa, por pieza).
+  // Palabra de la unidad vendida en Autoservicio: botella (granel líquido),
+  // unidad (marca y polvo) o bolsa (bolsa, por pieza).
   const unidadVentaNota = (prod, n = 2) => {
     if (prod?.clase === 'bolsa') return n === 1 ? 'bolsa' : 'bolsas';
-    if (prod?.tipo_liquido === 'marca') return n === 1 ? 'unidad' : 'unidades';
+    if (seVendePorUnidad(prod)) return n === 1 ? 'unidad' : 'unidades';
     return n === 1 ? 'botella' : 'botellas';
   };
   // Productos que trae puestos una carga Por Encargo: jabón y suavizante
@@ -366,10 +366,13 @@ export default function NuevaNota() {
   const TAPAS_PRECARGADAS = 2;
   const tapasDisponibles = (p) => Number(p.stock_disponible ?? p.stock_actual) || 0;
   const conStock = (p) => tapasDisponibles(p) > 0;
+  // Solo el granel LÍQUIDO se precarga: es el que se sirve por medidas dentro
+  // del servicio. El polvo se vende por unidad, así que se agrega a mano.
+  const granelServido = (p) => p.tipo_liquido === 'granel' && !esPolvo(p);
   const granelLlamado = (re) =>
-    productosCatalogo.find(p => p.tipo_liquido === 'granel' && conStock(p) && re.test(p.nombre || ''));
+    productosCatalogo.find(p => granelServido(p) && conStock(p) && re.test(p.nombre || ''));
   const jabonDefault = granelLlamado(/jab[oó]n/i)
-    ?? productosCatalogo.find(p => p.tipo_liquido === 'granel' && conStock(p));
+    ?? productosCatalogo.find(p => granelServido(p) && conStock(p));
   const suavizanteDefault = granelLlamado(/suavizante/i);
   const defaultProductosCarga = () => {
     const puestos = [];
@@ -396,16 +399,17 @@ export default function NuevaNota() {
   // calcula más arriba de donde vive ese ayudante.
   const precioProductoNota = (prod) => precioProducto(
     prod,
-    ambitoProductosNota === 'encargo' && prod?.tipo_liquido === 'granel' && prod?.clase !== 'bolsa'
+    ambitoProductosNota === 'encargo' && prod?.tipo_liquido === 'granel'
+      && prod?.clase !== 'bolsa' && !esPolvo(prod)
       ? 'tapa' : 'botella'
   );
   // En POR ENCARGO lo que el mostrador agrega se parte por cómo se vende: el
-  // granel va por TAPA y las bolsas por pieza —es lo que se sirve dentro del
-  // servicio, así que su precio ya lo paga y gasta de su tope— y los de MARCA
-  // por UNIDAD: el cliente se lleva el envase, así que se cobran encima. En los
-  // demás servicios todo producto es una venta.
+  // granel líquido va por TAPA y las bolsas por pieza —es lo que se sirve dentro
+  // del servicio, así que su precio ya lo paga y gasta de su tope— y lo que se
+  // vende por UNIDAD (marca y polvo) se cobra encima: el cliente se lleva el
+  // envase entero. En los demás servicios todo producto es una venta.
   const esMaterialDeNota = (prod) =>
-    tipoServicio === 'POR_ENCARGO' && prod?.tipo_liquido !== 'marca';
+    tipoServicio === 'POR_ENCARGO' && !seVendePorUnidad(prod);
   const sumaProductosNota = (cuenta) => productosLista.reduce((sum, p) => {
     const prod = productosCatalogo.find(x => String(x.id) === String(p.producto_id));
     if (!prod || !cuenta(prod)) return sum;
@@ -749,11 +753,13 @@ export default function NuevaNota() {
   // por tapa y los de marca por unidad. El servidor los cobra con esa misma
   // regla, así que la pantalla tiene que usarla o el total no cuadraría.
   const porTapaEnAmbito = (ambito) => ambito === 'carga' || ambito === 'encargo';
-  // Los de MARCA se venden por unidad (el envase completo) en todas partes: no
-  // se sirven por tapas como el granel (2026-09-25). Así que dentro de una carga
-  // de Por Encargo el granel va por tapa y la marca por unidad.
+  // La marca y el polvo se venden por unidad (el envase completo) en todas
+  // partes: no se sirven por tapas como el granel líquido (2026-09-25). Así que
+  // dentro de una carga de Por Encargo el granel líquido va por tapa y lo demás
+  // por unidad.
   const porTapa = (prod, ambito) =>
-    porTapaEnAmbito(ambito) && prod?.tipo_liquido === 'granel' && prod?.clase !== 'bolsa';
+    porTapaEnAmbito(ambito) && prod?.tipo_liquido === 'granel'
+    && prod?.clase !== 'bolsa' && !esPolvo(prod);
   const precioEnAmbito = (prod, ambito) => precioProducto(prod, porTapa(prod, ambito) ? 'tapa' : 'botella');
   const unidadEnAmbito = (prod, ambito, n = 2) => (porTapa(prod, ambito)
     ? (n === 1 ? 'tapa' : 'tapas')
@@ -820,7 +826,8 @@ export default function NuevaNota() {
 
   // Precio de un producto DENTRO de una carga: el granel se sirve por tapa y los
   // de marca por unidad, el envase completo (2026-09-25).
-  const esProductoMarca = (prod) => prod?.tipo_liquido === 'marca';
+  // Se cobra aparte, encima del tope: marca y polvo (se venden por unidad).
+  const esProductoMarca = (prod) => seVendePorUnidad(prod);
   const precioProductoCarga = (prod) =>
     precioProducto(prod, esProductoMarca(prod) ? 'botella' : 'tapa');
   const sumaProductosCarga = (lista, cuenta = () => true) => (lista ?? []).reduce((sum, p) => {
@@ -2361,7 +2368,7 @@ export default function NuevaNota() {
                           {/* "· Granel" distingue el bidón del producto de marca
                               que se llama igual (Suavizante vs. Ensueño). */}
                           <span>
-                            {etiquetaProducto(prod)}{prod.tipo_liquido === 'granel' ? ' · Granel' : ''}
+                            {etiquetaProducto(prod)}{prod.tipo_liquido === 'granel' && !esPolvo(prod) ? ' · Granel' : ''}
                             {' × '}{cant} {unidadVentaNota(prod, cant)}
                           </span>
                           <span className="flex-shrink-0">${(precioProducto(prod, 'botella') * cant).toFixed(2)}</span>
@@ -2459,7 +2466,7 @@ export default function NuevaNota() {
                             {/* "· Granel" distingue el bidón del producto de marca
                                 que se llama igual (Suavizante vs. Ensueño). */}
                             <span>
-                              {etiquetaProducto(prod)}{prod.tipo_liquido === 'granel' ? ' · Granel' : ''}
+                              {etiquetaProducto(prod)}{prod.tipo_liquido === 'granel' && !esPolvo(prod) ? ' · Granel' : ''}
                               {' × '}{cant} {unidadVentaNota(prod, cant)}
                             </span>
                             <span className="flex-shrink-0">${(precioProducto(prod, 'botella') * cant).toFixed(2)}</span>

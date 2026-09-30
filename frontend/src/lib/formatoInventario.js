@@ -2,6 +2,20 @@
 // decimales). El stock se lleva en TAPAS; aquí se reparte en botellas y bidones.
 // Lo usan la pestaña "Reporte diario" de Inventario y su exportación a PDF/CSV.
 
+// Lo que se cuenta y se vende por UNIDAD entera: los productos de marca y el
+// jabón EN POLVO (mig. 126), que no se sirve por medidas. La columna la calcula
+// la BD; lo demás es respaldo por si el producto llega sin ella.
+export function seVendePorUnidad(p) {
+  if (p?.se_vende_por_unidad != null) return Boolean(p.se_vende_por_unidad);
+  return p?.tipo_liquido === 'marca' || p?.forma === 'polvo';
+}
+
+// El granel en polvo: mismo catálogo de nombres que el líquido, pero contado en
+// unidades. Se nombra aparte para no confundir dos "Jabón" en la misma lista.
+export function esPolvo(p) {
+  return p?.clase !== 'bolsa' && p?.forma === 'polvo';
+}
+
 export function plural(n, sing, plur) {
   return `${n} ${n === 1 ? sing : plur}`;
 }
@@ -48,6 +62,7 @@ export function etiquetaProducto(p) {
     return p.tamano_bolsa ? `Bolsa ${p.tamano_bolsa}` : (p.nombre || 'Bolsa');
   }
   if (p.tipo_liquido === 'marca' && p.marca) return `${p.marca} · ${p.nombre}`;
+  if (esPolvo(p)) return `${p.nombre} · Polvo`;
   return p.nombre ?? '';
 }
 
@@ -67,6 +82,7 @@ export function tituloProducto(p) {
 export function subtituloProducto(p) {
   if (!p || p.clase === 'bolsa') return '';
   if (p.tipo_liquido === 'marca' && p.marca) return p.nombre ?? '';
+  if (esPolvo(p)) return 'Polvo';
   if (p.tipo_liquido === 'granel') return 'Granel';
   return '';
 }
