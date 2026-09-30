@@ -1,19 +1,22 @@
 /**
  * Elegir las máquinas de una nota de Autoservicio, al darla de alta.
  *
- * Es el mismo gesto —y la misma lista— que "Asignar máquina" de Salidas: las
- * máquinas LIBRES de la sucursal, partidas en Lavadoras y Secadoras, con su
- * tamaño y el aviso de que otra nota ya la tiene apuntada. La diferencia es que
- * aquí no se asigna nada todavía: lo elegido se queda en el formulario y viaja
- * con la nota al crearla, que es lo que permite cobrarla desde el alta —ya se
- * sabe qué máquina usó el cliente, y con ella su tarifa—.
+ * Es el mismo gesto que "Asignar máquina" de Salidas: las máquinas libres de la
+ * sucursal, partidas en Lavadoras y Secadoras, con su tamaño y su precio. La
+ * diferencia es que aquí no se asigna nada todavía: lo elegido se queda en el
+ * formulario y viaja con la nota al crearla, que es lo que permite cobrarla
+ * desde el alta —ya se sabe qué máquina usó el cliente, y con ella su tarifa—.
  *
  * Se pueden marcar VARIAS de una vez: cada una entra como una máquina más de la
  * nota (su propio renglón, con su precio), así que el mostrador elige de un
  * tirón todo lo que va a usar el cliente.
  *
- * Asignar NO aparta la máquina: quien le dé a Iniciar primero se la queda. Por
- * eso las que ya están apuntadas en otra nota se ofrecen igual, avisando.
+ * Aquí solo se ofrece lo que está libre de verdad: ni en uso, ni apuntado ya en
+ * otra nota abierta. En Salidas esas últimas sí se ofrecen —asignar no aparta,
+ * y ahí el empleado tiene la ropa delante y decide si se arriesga a que el otro
+ * inicie primero—, pero al dar de alta la nota se estaría vendiendo una máquina
+ * que otro cliente puede arrancar antes, y aquí ya se cobra por ella. El
+ * servidor lo vuelve a comprobar al guardar.
  */
 
 // Etiqueta de tamaño de una máquina: solo aplica a lavadoras (Mediana/Jumbo).
@@ -37,16 +40,13 @@ function SelCheck({ on }) {
 }
 
 function FilaMaquina({ maquina, seleccionada, precio, onToggle }) {
-  const reservada = Boolean(maquina.reservada);
   const tamano = labelTamano(maquina);
   return (
     <button
       type="button"
       onClick={() => onToggle(maquina.id)}
       className={`w-full flex items-center justify-between gap-2 px-4 py-3 border-2 rounded-xl text-left transition-colors ${
-        seleccionada ? 'border-blue bg-light-blue'
-          : reservada ? 'border-amber-300 bg-amber-50 hover:border-amber-400'
-          : 'border-gray-200 bg-white hover:border-blue-300'
+        seleccionada ? 'border-blue bg-light-blue' : 'border-gray-200 bg-white hover:border-blue-300'
       }`}
     >
       <span className="flex items-center gap-2 min-w-0">
@@ -54,11 +54,6 @@ function FilaMaquina({ maquina, seleccionada, precio, onToggle }) {
         <span className="font-medium text-gray-800 truncate">{maquina.nombre}</span>
       </span>
       <span className="flex items-center gap-2 flex-shrink-0">
-        {reservada && (
-          <span className="text-xs font-medium text-amber-600">
-            También en {maquina.reservada_folio ?? 'otra nota'}
-          </span>
-        )}
         {tamano && <span className="text-xs text-gray-500">{tamano}</span>}
         {/* Lo que va a cobrar esa máquina, aquí mismo: es la razón de elegir
             la máquina en el alta y no después. */}

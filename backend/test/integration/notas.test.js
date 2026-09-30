@@ -178,6 +178,28 @@ describe('POST /api/notas — Autoservicio con máquina elegida en el alta', () 
     expect(res.body.message).toMatch(/L3 ya no está disponible/i);
   });
 
+  it('una máquina que otra nota ya tiene apuntada se rechaza', async () => {
+    // Apuntarla no la aparta —en Salidas se puede compartir y se la queda quien
+    // inicie primero—, pero el alta la COBRA: venderla dos veces deja a un
+    // cliente esperando a que el otro termine.
+    const lavadora = await seedMaquina({ nombre: 'L9', tipo: 'lavadora_mediana', tamano: 'mediana' });
+    const primera = await crearCon([{ lavadora_id: lavadora }]);
+    expect(primera.status).toBe(201);
+
+    const segunda = await crearCon([{ lavadora_id: lavadora }]);
+    expect(segunda.status).toBe(400);
+    expect(segunda.body.message).toMatch(/L9 ya está apartada/i);
+  });
+
+  it('editar la nota no la choca con su propia máquina', async () => {
+    const lavadora = await seedMaquina({ nombre: 'L10', tipo: 'lavadora_mediana', tamano: 'mediana' });
+    const nota = await crearCon([{ lavadora_id: lavadora }]);
+    const res = await request(app).patch(`/api/notas/${nota.body.id}`)
+      .set(auth(admin.token))
+      .send({ cargas: [{ lavadora_id: lavadora }] });
+    expect(res.status).toBe(200);
+  });
+
   it('una secadora no vale como lavadora', async () => {
     const secadora = await seedMaquina({ nombre: 'S2', tipo: 'secadora', tamano: 'mediana' });
     const res = await crearCon([{ lavadora_id: secadora }]);

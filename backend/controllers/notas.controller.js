@@ -858,7 +858,7 @@ async function registrarMovimientosProductosNota(client, notaId, sucursal, usuar
 //     tamano, ajuste, productos: [{ producto_id, cantidad }] }
 // (todo opcional salvo que el tipo de servicio lo exija). Devuelve las filas listas
 // para insertar o lanza un Error con el mensaje para el cliente.
-async function prepararCargas(client, cargas, tipoPrendaNota, sucursal, tipo_servicio) {
+async function prepararCargas(client, cargas, tipoPrendaNota, sucursal, tipo_servicio, notaIdExcluir = null) {
   if (!Array.isArray(cargas) || cargas.length === 0) {
     throw new Error('cargas debe ser una lista con al menos una carga.');
   }
@@ -893,6 +893,33 @@ async function prepararCargas(client, cargas, tipoPrendaNota, sucursal, tipo_ser
     });
     const faltante = ids.find(id => !tipoPorId.has(id));
     if (faltante) throw new Error(`La máquina ${faltante} no existe.`);
+
+    // Máquinas que OTRA nota abierta ya tiene apuntadas (2026-09-29). En
+    // Autoservicio no se aceptan: la nota se cobra por esa máquina desde el
+    // alta, y venderla dos veces deja a un cliente esperando a que el otro
+    // termine. El formulario ya no las ofrece; esto lo sostiene cuando dos
+    // mostradores capturan a la vez y la lista de uno se quedó vieja.
+    // En Salidas sí se pueden asignar: ahí asignar no aparta y se la queda
+    // quien inicie primero, con la ropa delante.
+    if (tipo_servicio === 'AUTOSERVICIO') {
+      const { rows: apartadas } = await client.query(
+        `SELECT DISTINCT m.nombre, n.folio
+           FROM maquinas m
+           JOIN nota_cargas nc ON nc.lavadora_id = m.id OR nc.secadora_id = m.id
+           JOIN notas n ON n.id = nc.nota_id
+          WHERE m.id = ANY($1)
+            AND n.estado IN ('EN_ESPERA', 'LAVANDO', 'SECANDO')
+            AND ($2::int IS NULL OR n.id <> $2)
+          LIMIT 1`,
+        [ids, notaIdExcluir]
+      );
+      if (apartadas.length > 0) {
+        throw new Error(
+          `La máquina ${apartadas[0].nombre} ya está apartada por la nota `
+          + `${apartadas[0].folio ?? 'abierta'}. Elige otra.`
+        );
+      }
+    }
   }
   const t = await tarifasCarga(client);
   return cargas.map((c, i) => {
@@ -1961,7 +1988,7 @@ export const updateNota = async (req, res) => {
 
       if (entrantes.length > 0) {
         try {
-          filasCargas = await prepararCargas(client, entrantes, prendaEfectiva, req.sucursal, actual.tipo_servicio);
+          filasCargas = await prepararCargas(client, entrantes, prendaEfectiva, req.sucursal, actual.tipo_servicio, Number(id));
         } catch (e) {
           await client.query('ROLLBACK');
           return res.status(400).json({ message: e.message });

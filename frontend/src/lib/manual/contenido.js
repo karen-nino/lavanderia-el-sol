@@ -59,7 +59,9 @@ Si nadie cerró la caja de ayer, la app la cierra sola a medianoche y la deja ma
 
 SE ELIGE LA MÁQUINA, NO EL TIPO. Ya no se dice "una lavadora mediana" para escoger cuál después: se escoge L3 de una vez, y por eso el alta ya sabe cuánto cobrar. Si te equivocaste, el bote de basura del renglón la quita.
 
-LA MÁQUINA QUEDA APUNTADA, NO ARRANCADA. Se inicia en Salidas, con su botón. Y apuntarla no la aparta: si otra nota tiene la misma, se la queda quien le dé a Iniciar primero. Por eso la lista avisa "También en 0018-…".
+LA LISTA SOLO TRAE LAS QUE ESTÁN LIBRES. Si una máquina está en uso, o ya la apuntó otra nota que sigue abierta, no aparece: la nota cobra por esa máquina desde el alta, y no se puede vender dos veces.
+
+LA MÁQUINA QUEDA APUNTADA, NO ARRANCADA. Se inicia en Salidas, con su botón.
 
 EL COBRO SE HACE DESPUÉS, EN LA NOTA. Abre la nota y toca Liquidar: ahí eliges cómo pagó. La máquina se puede arrancar aunque todavía no haya pagado, igual que por encargo.
 

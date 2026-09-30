@@ -606,9 +606,16 @@ export default function NuevaNota() {
     setLoadingMaquinas(true);
     try {
       const data = await api.get('/maquinas');
-      // Las que ya tiene esta nota no se vuelven a ofrecer.
+      // Solo las que están LIBRES DE VERDAD: ni en uso, ni en mantenimiento, ni
+      // apuntadas ya en otra nota abierta (`reservada`). En Salidas esas sí se
+      // ofrecen —ahí el empleado tiene la ropa delante y decide si se arriesga
+      // a que el otro inicie primero—, pero al dar de alta la nota no: se
+      // estaría vendiendo una máquina que otro cliente puede arrancar antes, y
+      // aquí ya se cobra por ella. Tampoco las que esta misma nota ya tiene.
       setMaquinasLibres((data ?? []).filter(m =>
-        m.estado === 'disponible' && !maquinasElegidas.includes(String(m.id))));
+        m.estado === 'disponible'
+        && !m.reservada
+        && !maquinasElegidas.includes(String(m.id))));
     } catch (err) {
       setMaqModalError(err.message);
     } finally {
@@ -2190,35 +2197,49 @@ export default function NuevaNota() {
               la nota no valía nada. Ahora cada máquina entra con su tarifa, así
               que el resumen ya puede decir lo que se va a cobrar. */}
           <div>
-            <div className="flex items-center justify-between gap-3 mb-3">
-              <div className="flex items-baseline gap-2 min-w-0">
-                <h2 className={LABEL_CLS + ' mb-0'}>Máquinas <span className="text-red-500">*</span></h2>
-                {cargasAuto.length > 0 && (
-                  <span className="text-xs text-gray-500 truncate">
-                    {cargasAuto.length} {cargasAuto.length === 1 ? 'máquina' : 'máquinas'}
-                  </span>
-                )}
-              </div>
-              <button
-                type="button"
-                onClick={abrirSelectorMaquinas}
-                disabled={cargasAuto.length >= MAX_CARGAS}
-                className="flex-shrink-0 flex items-center gap-1.5 bg-blue text-white rounded-pill pl-3 pr-4 py-2.5 text-xs font-bold hover:opacity-90 disabled:opacity-60 transition-opacity"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
-                </svg>
-                Agregar máquina
-              </button>
+            <div className="flex items-baseline gap-2 min-w-0 mb-2">
+              <h2 className={LABEL_CLS + ' mb-0'}>Máquinas <span className="text-red-500">*</span></h2>
+              {cargasAuto.length > 0 && (
+                <span className="text-xs text-gray-500 truncate">
+                  {cargasAuto.length} {cargasAuto.length === 1 ? 'máquina' : 'máquinas'}
+                </span>
+              )}
             </div>
 
+            {/* El campo es un SELECTOR, no un botón de "agregar": se ve y se
+                toca como los demás campos del formulario —el mismo alto, el
+                mismo borde, su flecha— y lo que despliega es el modal con las
+                máquinas libres. Elegir la máquina es capturar un dato de la
+                nota, no una acción aparte, y como campo se lee así. */}
+            <button
+              type="button"
+              onClick={abrirSelectorMaquinas}
+              disabled={cargasAuto.length >= MAX_CARGAS}
+              className={`w-full px-4 py-3.5 mb-3 border rounded-lg bg-white text-left flex items-center justify-between gap-2 transition-colors disabled:opacity-60 ${
+                maqModalOpen
+                  ? 'border-blue-500 ring-1 ring-blue-500'
+                  : 'border-gray-300 hover:border-gray-400'
+              }`}
+            >
+              <span className="text-gray-400 truncate">
+                {cargasAuto.length === 0 ? 'Elige lavadora o secadora' : 'Agregar otra máquina'}
+              </span>
+              <svg
+                className={`w-5 h-5 flex-shrink-0 text-gray-500 transition-transform ${maqModalOpen ? 'rotate-180' : ''}`}
+                fill="none" stroke="currentColor" viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+
             {/* Misma fila compacta que los productos: qué es, qué cobra y el
-                tache para quitarla. */}
+                tache para quitarla. Sin máquinas no se pinta la caja: el campo
+                de arriba ya dice que no hay ninguna y qué hacer, y un "No hay
+                máquinas en esta nota" debajo de "Elige lavadora o secadora" es
+                decir dos veces lo mismo. */}
+            {cargasAuto.length > 0 && (
             <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-              {cargasAuto.length === 0 ? (
-                <p className="px-4 py-5 text-sm text-gray-500">No hay máquinas en esta nota.</p>
-              ) : (
-                cargasAuto.map((c, i) => (
+              {cargasAuto.map((c, i) => (
                   <div key={i} className={`flex items-center gap-x-2 px-3 py-4 ${i > 0 ? 'border-t border-gray-100' : ''}`}>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold text-gray-900">Máquina {i + 1}</p>
@@ -2238,20 +2259,18 @@ export default function NuevaNota() {
                       </svg>
                     </button>
                   </div>
-                ))
-              )}
+              ))}
 
-              {cargasAuto.length > 0 && (
-                <div className="px-4 py-3 border-t border-gray-200 bg-gray-50 flex items-center justify-between">
-                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                    Total máquinas
-                  </span>
-                  <span className="text-base font-bold text-dark-blue tabular-nums">
-                    ${subtotalCargas.toFixed(2)}
-                  </span>
-                </div>
-              )}
+              <div className="px-4 py-3 border-t border-gray-200 bg-gray-50 flex items-center justify-between">
+                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                  Total máquinas
+                </span>
+                <span className="text-base font-bold text-dark-blue tabular-nums">
+                  ${subtotalCargas.toFixed(2)}
+                </span>
+              </div>
             </div>
+            )}
 
             {/* Asignar no aparta la máquina: se la queda quien le dé a Iniciar
                 primero, y eso pasa en Salidas. Se dice aquí para que nadie
