@@ -55,7 +55,7 @@ Si nadie cerró la caja de ayer, la app la cierra sola a medianoche y la deja ma
 2. Elige Autoservicio.
 3. Toca **Agregar máquina**: sale la lista de las que están libres, con su tamaño y su precio. Marca todas las que va a usar el cliente —L1 y S2, las que sean— y toca Agregar. Cada una entra como una máquina de la nota, con su tarifa.
 4. Agrega los productos que se lleve (jabón, suavizante, bolsas) con el botón Agregar producto.
-5. El Resumen te dice lo que va a pagar. Toca Aceptar: la nota se guarda pendiente de cobro.
+5. El Resumen te dice lo que va a pagar. Toca Aceptar: la nota se guarda pendiente de cobro y la app te deja **en Salidas**, con sus máquinas listas para encender.
 
 SE ELIGE LA MÁQUINA, NO EL TIPO. Ya no se dice "una lavadora mediana" para escoger cuál después: se escoge L3 de una vez, y por eso el alta ya sabe cuánto cobrar. Si te equivocaste, el bote de basura del renglón la quita.
 

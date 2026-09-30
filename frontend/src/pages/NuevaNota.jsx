@@ -246,13 +246,21 @@ export default function NuevaNota() {
   // folio.
   useEffect(() => {
     if (!notaCreada) return;
-    const destino = notaCreada.id ? `/notas/${notaCreada.id}` : '/notas';
+    // El Autoservicio va directo a SALIDAS (2026-09-29): el cliente está
+    // enfrente con su ropa y lo siguiente es encender su máquina, no mirar la
+    // nota. Los demás servicios sí van al detalle: ahí es donde siguen sus
+    // acciones (cobrar, ticket, avisar que está listo).
+    const destino = !notaCreada.id
+      ? '/notas'
+      : notaCreada.tipo_servicio === 'AUTOSERVICIO'
+        ? `/notas/${notaCreada.id}/salidas`
+        : `/notas/${notaCreada.id}`;
     const t = setTimeout(() => {
       setNotaCreada(null);
-      // replace: el detalle SUSTITUYE en el historial al formulario que acaba
-      // de enviarse, para que el gesto de atrás no devuelva a una nueva nota
-      // ya mandada —desde donde se podía crear la misma nota dos veces— sino
-      // a la pantalla anterior a empezarla.
+      // replace: la pantalla de destino SUSTITUYE en el historial al
+      // formulario que acaba de enviarse, para que el gesto de atrás no
+      // devuelva a una nueva nota ya mandada —desde donde se podía crear la
+      // misma nota dos veces— sino a la pantalla anterior a empezarla.
       navigate(destino, { replace: true });
     }, 1600);
     return () => clearTimeout(t);
