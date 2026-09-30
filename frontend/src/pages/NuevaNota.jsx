@@ -224,17 +224,26 @@ export default function NuevaNota() {
   const [notaCreada,        setNotaCreada]        = useState(null);
   const tipoRef           = useRef(null);
 
-  // El aviso de nota creada no pide confirmación: corre su animación y se va
-  // solo a la lista de notas. Ya no había nada que decidir ahí —el botón
-  // Aceptar solo cerraba— y en el mostrador era un toque de más entre una
-  // nota y la siguiente. El plazo cubre la animación completa (el círculo
-  // tarda 0.4s y la palomita 0.4s más con 0.2s de retraso, o sea 0.6s) y deja
-  // un momento para leer el folio.
+  // El aviso de nota creada no pide confirmación: corre su animación y abre
+  // solo el detalle de la nota que se acaba de crear. Ya no había nada que
+  // decidir ahí —el botón Aceptar solo cerraba— y en el mostrador era un
+  // toque de más entre una nota y la siguiente. Va al detalle y no a la
+  // lista porque es donde siguen las acciones de esa nota (cobrar, salidas,
+  // ticket): buscarla otra vez en la lista era el paso que sobraba. Sin id
+  // —que no debería pasar, la API devuelve la nota completa— cae a la lista.
+  // El plazo cubre la animación completa (el círculo tarda 0.4s y la palomita
+  // 0.4s más con 0.2s de retraso, o sea 0.6s) y deja un momento para leer el
+  // folio.
   useEffect(() => {
     if (!notaCreada) return;
+    const destino = notaCreada.id ? `/notas/${notaCreada.id}` : '/notas';
     const t = setTimeout(() => {
       setNotaCreada(null);
-      navigate('/notas');
+      // replace: el detalle SUSTITUYE en el historial al formulario que acaba
+      // de enviarse, para que el gesto de atrás no devuelva a una nueva nota
+      // ya mandada —desde donde se podía crear la misma nota dos veces— sino
+      // a la pantalla anterior a empezarla.
+      navigate(destino, { replace: true });
     }, 1600);
     return () => clearTimeout(t);
   }, [notaCreada, navigate]);
@@ -1072,7 +1081,7 @@ export default function NuevaNota() {
 
   // Buscador de cliente del paso 1 de Por Encargo, el único servicio que lleva
   // cliente: ahí la ropa es de alguien que va a volver por ella. Autoservicio y
-  // la venta de Productos son anónimos.
+  // la venta de Productos son de mostrador, y quedan a nombre de Mostrador.
   const bloqueCliente = () => (
     <div className="space-y-4">
       <h2 className="text-base font-semibold text-gray-900">Cliente</h2>

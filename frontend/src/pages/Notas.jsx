@@ -659,7 +659,7 @@ export default function Notas() {
                           </td>
                           <td className="px-4 py-3">
                             <p className="font-medium text-gray-800">
-                              {fmtCliente(n) ?? <span className="text-gray-400 italic">Anónimo</span>}
+                              {fmtCliente(n) ?? <span className="text-gray-400 italic">Mostrador</span>}
                             </p>
                             {n.cliente_telefono && (
                               <p className="text-xs text-gray-400">{n.cliente_telefono}</p>

@@ -61,7 +61,7 @@ EL COBRO SE HACE DESPUÉS, EN LA NOTA. Abre la nota y toca Liquidar: ahí eliges
 
 Si la nota ya terminó todas sus cargas, al liquidarla se cierra sola: el cliente ya se llevó su ropa y no hay nada que entregar.
 
-El cliente no se identifica: la nota queda anónima. Si quieres mandarle el ticket, pídele su teléfono en la pantalla del ticket.
+El cliente no se identifica: la nota queda a nombre de Mostrador. Si quieres mandarle el ticket, pídele su teléfono en la pantalla del ticket.
 
 La nota nace En Espera y SIN máquina asignada: la máquina física se elige después, en Salidas.`,
       },

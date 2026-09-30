@@ -272,8 +272,8 @@ export default function TicketNota() {
   const [notasPie, setNotasPie] = useState({ autoservicio: '', encargo: '', productos: '' });
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState('');
-  // Autoservicio es anónimo (sin cliente): el empleado captura aquí el teléfono
-  // para enviar el ticket por WhatsApp.
+  // Autoservicio es de mostrador (sin cliente): el empleado captura aquí el
+  // teléfono para enviar el ticket por WhatsApp.
   const [telefonoManual, setTelefonoManual] = useState('');
   // El recibo que se convierte en imagen para mandar por WhatsApp.
   const reciboRef = useRef(null);
@@ -322,12 +322,12 @@ export default function TicketNota() {
   }
 
   // Teléfono a usar: el del cliente (Por Encargo) o el capturado a mano
-  // (Autoservicio anónimo).
+  // (Autoservicio, que es de mostrador).
   const telefonoDestino = nota?.cliente_telefono || telefonoManual;
   const telefonoDigits  = String(telefonoDestino || '').replace(/\D/g, '');
   const puedeEnviar     = telefonoDigits.length >= 10;
-  // Sin cliente (Autoservicio anónimo) no hay a quién mandarle: primero se
-  // pregunta el número.
+  // Sin cliente (Autoservicio, de mostrador) no hay a quién mandarle: primero
+  // se pregunta el número.
   const pideTelefono    = !nota?.cliente_telefono;
 
   // Lo que hacen los dos botones de WhatsApp (el de la cabecera y el del
@@ -583,7 +583,7 @@ export default function TicketNota() {
 
           {/* Datos generales. El número de nota encabeza el bloque: es el dato
               con el que el cliente reclama su ropa. Sin cliente no se imprime
-              la línea: al que viene de paso no le aporta nada leer "Anónimo". */}
+              la línea: al que viene de paso no le aporta nada leer "Mostrador". */}
           <div className="space-y-1 py-1">
             <Linea label="Nota" value={nota.folio ?? `#${nota.id}`} fuerte />
             {nota.fecha_entrega && <Linea label="Entrega" value={fmtFecha(nota.fecha_entrega).toUpperCase()} />}

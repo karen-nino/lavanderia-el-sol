@@ -1170,7 +1170,7 @@ export default function DetalleNota() {
           <p className="text-sm text-gray-600 mt-1 truncate">
             {nota.cliente_nombre
               ? `${nota.cliente_nombre}${nota.cliente_apellido ? ' ' + nota.cliente_apellido : ''}`
-              : <span className="text-gray-400 italic">Anónimo</span>}
+              : <span className="text-gray-400 italic">Mostrador</span>}
           </p>
         </div>
         <svg className="w-8 h-8 text-gray-300 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1499,7 +1499,7 @@ export default function DetalleNota() {
                     )}
                   </div>
                 )
-              : <span className="text-gray-400 italic">Anónimo</span>}
+              : <span className="text-gray-400 italic">Mostrador</span>}
           </FilaDetalle>
           <FilaDetalle label="Ajuste">
             {nota.ajuste != null ? fmtMonto(nota.ajuste) : '—'}

@@ -1535,7 +1535,7 @@ export const createNota = async (req, res) => {
     return res.status(400).json({ message: 'Elige el cliente: las notas Por Encargo llevan cliente.' });
   }
   // La venta de mostrador no lava nada: no lleva cargas y lo que la justifica
-  // son sus productos. Es anónima como el autoservicio —el que viene a comprar
+  // son sus productos. Es de mostrador como el autoservicio —el que viene a comprar
   // un jabón no se identifica—, así que tampoco lleva cliente.
   if (esVenta(tipo_servicio)) {
     if (Array.isArray(cargas) && cargas.length > 0) {
@@ -4152,7 +4152,7 @@ export const corregirFormaPago = async (req, res) => {
 
 // ── PATCH /notas/:id/telefono ───────────────────────────────
 // Guarda un teléfono de contacto a nivel nota (para el ticket de Autoservicio,
-// que es anónimo). Se normaliza a solo dígitos; vacío = null.
+// que es de mostrador y no lleva cliente). Se normaliza a solo dígitos; vacío = null.
 export const guardarTelefono = async (req, res) => {
   const { id } = req.params;
   const { telefono } = req.body;

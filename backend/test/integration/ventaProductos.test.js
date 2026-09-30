@@ -41,7 +41,7 @@ describe('POST /api/notas — venta de Productos', () => {
     expect(res.body.estado).toBe('FINALIZADA');
     expect(res.body.estado_pago).toBe('PAGADO');
     expect(res.body.forma_pago).toBe('EFECTIVO');
-    expect(res.body.cliente_id).toBeNull();   // anónima, como el autoservicio
+    expect(res.body.cliente_id).toBeNull();   // de mostrador, como el autoservicio
     expect(res.body.cargas).toEqual([]);
     expect(Number(res.body.precio_total)).toBe(54); // 2 botellas × $27
     expect(res.body.folio).toBeTruthy();
