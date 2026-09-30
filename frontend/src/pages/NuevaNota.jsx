@@ -835,17 +835,19 @@ export default function NuevaNota() {
 
   // ── Bolsas (Por Encargo): según el tamaño de la carga se precarga 1 bolsa ──
   const bolsasCatalogo = productosCatalogo.filter(p => p.clase === 'bolsa');
-  // Mapa carga → tamaño de bolsa: chico→chica, grande→grande, jumbo→jumbo, edredón→jumbo.
-  const bolsaTamanoParaCarga = (c) => {
-    if (String(c?.tipo_prenda).toUpperCase() === 'EDREDON') return 'jumbo';
-    if (c?.tamano === 'chico')  return 'chica';
+  // Qué servicio es la carga. Cada bolsa dice a cuáles va ligada (mig. 125), así
+  // que el nombre de la bolsa ya no importa: manda lo que se eligió al darla de
+  // alta. El jumbo de ropa ya no se vende y no tiene bolsa propia.
+  const servicioDeCarga = (c) => {
+    if (String(c?.tipo_prenda).toUpperCase() === 'EDREDON') return 'edredon';
+    if (c?.tamano === 'chico')  return 'chico';
     if (c?.tamano === 'grande') return 'grande';
-    if (c?.tamano === 'jumbo')  return 'jumbo';
     return null;
   };
   const bolsaDeCarga = (c) => {
-    const t = bolsaTamanoParaCarga(c);
-    return t ? (bolsasCatalogo.find(b => b.tamano_bolsa === t) ?? null) : null;
+    const servicio = servicioDeCarga(c);
+    if (!servicio) return null;
+    return bolsasCatalogo.find(b => (b.servicios_bolsa ?? []).includes(servicio)) ?? null;
   };
   // Existencia disponible de una bolsa (piezas). Sin existencia no se incluye
   // (para no bloquear la nota) y se avisa en la carga.

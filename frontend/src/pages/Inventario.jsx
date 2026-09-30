@@ -114,15 +114,22 @@ function LineaApartadas({ p, className = 'text-xs text-gray-500 mt-0.5' }) {
 function precioTxt(v) {
   return v != null && v !== '' ? `$${Number(v).toFixed(2)}` : '—';
 }
+// Nombre con el que se conoce la bolsa (el catálogo de tamaños: "Negra",
+// "Spe", "Edredón"). El campo `nombre` de todas las bolsas es "Bolsa", así que
+// es esto lo que distingue una de otra.
+function nombreBolsa(p) {
+  return p.tamano_bolsa ? p.tamano_bolsa[0].toUpperCase() + p.tamano_bolsa.slice(1) : null;
+}
 // En los productos de marca el título es la MARCA y el subtítulo el nombre;
-// en los de granel (sin marca) el título es el nombre.
+// en los de granel (sin marca) el título es el nombre. En las bolsas manda el
+// nombre de la bolsa y "Bolsa" baja al subtítulo: tres renglones "Bolsa" no se
+// distinguían entre sí de un vistazo.
 function tituloProd(p) {
+  if (p.clase === 'bolsa') return nombreBolsa(p) ?? p.nombre;
   return p.tipo_liquido === 'marca' && p.marca ? p.marca : p.nombre;
 }
 function subtituloProd(p) {
-  if (p.clase === 'bolsa') {
-    return p.tamano_bolsa ? p.tamano_bolsa[0].toUpperCase() + p.tamano_bolsa.slice(1) : null;
-  }
+  if (p.clase === 'bolsa') return nombreBolsa(p) ? 'Bolsa' : null;
   return p.tipo_liquido === 'marca' && p.marca ? p.nombre : null;
 }
 // Orden de la lista: primero granel, luego marca, al final bolsas; dentro de
@@ -188,9 +195,20 @@ const FORM_VACIO = {
   // `required` obliga a elegirlo en vez de dar por buena una "chica" que nadie
   // escogió.
   tamano_bolsa:      '',
+  // Cómo se surte la bolsa: 'rollo' (y cuántas trae) o 'pieza' (sueltas).
+  // Arranca vacío a propósito: no todas las bolsas vienen en rollo.
+  compra_bolsa:      '',
   bolsas_por_rollo:  '',
+  // Servicios de Por Encargo a los que va ligada la bolsa: es lo que hace que
+  // se agregue sola a la carga. Vacío = se vende a mano, no se precarga.
+  servicios_bolsa:   [],
   stock_minimo_bolsas: '0',
 };
+
+// Servicios de Por Encargo a los que se puede ligar una bolsa (mig. 125). El
+// valor es el que guarda el producto; la etiqueta, como se llama el servicio.
+// Una bolsa puede cubrir varios, así que se marcan uno por uno.
+const SERVICIOS_BOLSA = [['chico', 'Chico'], ['grande', 'Grande'], ['edredon', 'Edredón']];
 
 // ── Modal crear / editar ────────────────────────────────────────
 function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = [], tamanosBolsa = [] }) {
@@ -202,7 +220,10 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = 
         tipo_liquido:   producto.clase === 'bolsa' ? 'bolsa' : (producto.tipo_liquido ?? 'granel'),
         envase:         producto.envase ?? 'Bidón',
         tamano_bolsa:   producto.tamano_bolsa ?? '',
+        // Sin bolsas por rollo guardadas, la bolsa se compra suelta.
+        compra_bolsa:   producto.clase === 'bolsa' ? (producto.bolsas_por_rollo ? 'rollo' : 'pieza') : '',
         bolsas_por_rollo: producto.bolsas_por_rollo ?? '',
+        servicios_bolsa: producto.servicios_bolsa ?? [],
         stock_minimo_bolsas: producto.clase === 'bolsa' ? String(producto.stock_minimo ?? 0) : '0',
         bidon_valor:    producto.volumen_envase_ml
           ? (producto.volumen_envase_ml % 1000 === 0 ? String(producto.volumen_envase_ml / 1000) : String(producto.volumen_envase_ml))
@@ -263,6 +284,13 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = 
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    // Los botones no entran en la validación del navegador, así que el "¿cómo
+    // se compra?" se revisa aquí antes de pedir la confirmación.
+    if (esBolsa && !form.compra_bolsa) {
+      setError('Indica si la bolsa se compra por rollo o por pieza.');
+      return;
+    }
+    setError('');
     if (!esEdicion && !confirmar) { setConfirmar(true); return; }
     ejecutarGuardado();
   };
@@ -277,7 +305,10 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = 
         clase:            'bolsa',
         nombre:           'Bolsa',
         tamano_bolsa:     form.tamano_bolsa,
-        bolsas_por_rollo: Number(form.bolsas_por_rollo) || null,
+        // Por pieza no hay rollo que guardar: null es lo que distingue a una
+        // bolsa suelta de una que viene en rollo.
+        bolsas_por_rollo: form.compra_bolsa === 'rollo' ? (Number(form.bolsas_por_rollo) || null) : null,
+        servicios_bolsa:  form.servicios_bolsa,
         precio_unitario:  form.precio_botella !== '' ? Number(form.precio_botella) : null,
         stock_minimo:     Number(form.stock_minimo_bolsas) || 0,
       };
@@ -360,7 +391,7 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = 
               Tipo de producto <span className="text-red-500">*</span>
             </label>
             <div className="flex gap-2">
-              {[['granel', 'Granel', 'Se rellena desde un envase'], ['marca', 'De marca', 'Se compra embotellado'], ['bolsa', 'Bolsa', 'Se compra por rollo']].map(([val, label, hint]) => (
+              {[['granel', 'Granel', 'Se rellena desde un envase'], ['marca', 'De marca', 'Se compra embotellado'], ['bolsa', 'Bolsa', 'Por rollo o por pieza']].map(([val, label, hint]) => (
                 <button
                   key={val} type="button"
                   onClick={() => setForm(f => ({ ...f, tipo_liquido: val }))}
@@ -444,14 +475,66 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = 
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                  ¿Cuántas bolsas trae un rollo? <span className="text-red-500">*</span>
+                  ¿Cómo se compra? <span className="text-red-500">*</span>
                 </label>
-                <input
-                  type="number" name="bolsas_por_rollo" min="1" step="1" required
-                  value={form.bolsas_por_rollo} onChange={handleChange} placeholder="Ej. 100"
-                  className={NUM_CLS}
-                />
+                <div className="flex gap-2">
+                  {[['rollo', 'Por rollo', 'Cada rollo trae varias'], ['pieza', 'Por piezas', 'Bolsas sueltas']].map(([val, label, hint]) => (
+                    <button
+                      key={val} type="button"
+                      onClick={() => setForm(f => ({ ...f, compra_bolsa: val }))}
+                      className={`flex-1 py-2.5 px-2 rounded-lg border text-sm font-medium transition-colors ${
+                        form.compra_bolsa === val ? 'border-blue bg-light-blue text-blue' : 'border-gray-300 bg-white text-gray-600 hover:bg-gray-50'
+                      }`}
+                    >
+                      <span className="block">{label}</span>
+                      <span className="block text-[11px] font-normal text-gray-400 mt-0.5">{hint}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  ¿A qué servicios va ligada?
+                </label>
+                <div className="flex gap-2">
+                  {SERVICIOS_BOLSA.map(([val, label]) => {
+                    const marcado = form.servicios_bolsa.includes(val);
+                    return (
+                      <button
+                        key={val} type="button" aria-pressed={marcado}
+                        onClick={() => setForm(f => ({
+                          ...f,
+                          servicios_bolsa: marcado
+                            ? f.servicios_bolsa.filter(x => x !== val)
+                            : [...f.servicios_bolsa, val],
+                        }))}
+                        className={`flex-1 py-2.5 px-2 rounded-lg border text-sm font-medium transition-colors ${
+                          marcado ? 'border-blue bg-light-blue text-blue' : 'border-gray-300 bg-white text-gray-600 hover:bg-gray-50'
+                        }`}
+                      >
+                        {marcado && <span className="mr-1">✓</span>}{label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-xs text-gray-400 mt-1">
+                  {form.servicios_bolsa.length === 0
+                    ? 'Sin servicio no se agrega sola: se vende a mano.'
+                    : 'En Por Encargo, la nota agrega sola una bolsa de estas a cada carga de esos servicios.'}
+                </p>
+              </div>
+              {form.compra_bolsa === 'rollo' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    ¿Cuántas bolsas trae un rollo? <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="number" name="bolsas_por_rollo" min="1" step="1" required
+                    value={form.bolsas_por_rollo} onChange={handleChange} placeholder="Ej. 100"
+                    className={NUM_CLS}
+                  />
+                </div>
+              )}
             </>
           )}
 
@@ -690,7 +773,10 @@ function ModalMovimiento({ producto, tipo, onClose, onDone }) {
   const esGranel = producto.tipo_liquido === 'granel';
   const esBolsa  = producto.clase === 'bolsa';
   const [destino, setDestino] = useState(esGranel ? 'granel' : esBolsa ? 'piezas' : 'botellas');
-  const [unidadBolsa, setUnidadBolsa] = useState('rollo'); // bolsas: rollo | pieza
+  // Bolsas: rollo | pieza. Las que se compran sueltas no tienen rollo que
+  // ofrecer, así que entran y salen por pieza.
+  const porRollo = Number(producto.bolsas_por_rollo) > 0;
+  const [unidadBolsa, setUnidadBolsa] = useState(porRollo ? 'rollo' : 'pieza');
   const [cantidad, setCantidad] = useState('1');
   const [error, setError]     = useState('');
   const [loading, setLoading] = useState(false);
@@ -746,7 +832,7 @@ function ModalMovimiento({ producto, tipo, onClose, onDone }) {
         )}
 
         {/* Bolsas: elegir si la cantidad es por rollo o por pieza */}
-        {esBolsa && (
+        {esBolsa && porRollo && (
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">¿Por rollo o por pieza?</label>
             <div className="flex gap-2">

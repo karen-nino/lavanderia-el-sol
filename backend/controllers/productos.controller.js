@@ -148,25 +148,76 @@ async function tamanoBolsaValido(tamano) {
 const MSG_TAMANO_BOLSA =
   'Elige un tamaño de bolsa de la lista. Se administran en Ajustes → Inventario.';
 
+// Servicios a los que va ligada la bolsa para precargarse sola en Por Encargo
+// (mig. 125). Lista vacía = no se precarga en ninguna carga. Una bolsa puede
+// cubrir varios servicios; lo que no se permite es al revés (ver abajo).
+const SERVICIOS_BOLSA = ['chico', 'grande', 'edredon'];
+function normalizarServiciosBolsa(v) {
+  if (v === undefined || v === null || v === '') return { valor: [] };
+  const lista = Array.isArray(v) ? v : [v];
+  const limpia = [...new Set(lista.filter(x => x !== null && x !== undefined && x !== ''))];
+  if (limpia.some(x => !SERVICIOS_BOLSA.includes(x))) {
+    return { error: 'Elige servicios válidos para la bolsa: chico, grande o edredón.' };
+  }
+  return { valor: limpia };
+}
+
+const NOMBRE_SERVICIO = { chico: 'Chico', grande: 'Grande', edredon: 'Edredón' };
+
+// Un servicio no puede tener dos bolsas activas: al precargar la carga habría
+// que adivinar cuál toca. Como la lista vive en un arreglo, esto no se puede
+// dejar en un índice único; se revisa aquí antes de guardar.
+async function servicioBolsaOcupado(servicios, sucursal, excluirId) {
+  if (servicios.length === 0) return null;
+  const { rows } = await pool.query(
+    `SELECT servicios_bolsa FROM productos
+      WHERE clase = 'bolsa' AND archivado = FALSE AND sucursal = $1
+        AND servicios_bolsa && $2::TEXT[]
+        AND ($3::INTEGER IS NULL OR id <> $3)`,
+    [sucursal, servicios, excluirId ?? null]
+  );
+  if (rows.length === 0) return null;
+  const chocan = servicios.filter(sv => rows.some(r => (r.servicios_bolsa ?? []).includes(sv)));
+  const txt = chocan.map(sv => NOMBRE_SERVICIO[sv] ?? sv).join(' y ');
+  return `Ya hay otra bolsa ligada a ${txt}. Quítasela a esa primero.`;
+}
+
+// Cómo se surte la bolsa: en rollo (con cuántas bolsas trae) o suelta por
+// pieza. Vacío = por pieza; con valor, tiene que ser un número mayor que cero.
+function normalizarBolsasPorRollo(v) {
+  if (v === undefined || v === null || v === '') return { valor: null };
+  const n = Number(v);
+  if (!(n > 0)) return { error: 'Indica cuántas bolsas trae un rollo.' };
+  return { valor: Math.round(n) };
+}
+
 // Crea una bolsa: producto (clase='bolsa') contado en piezas. Nace en 0; la
 // existencia se carga con una entrada (por rollo o por pieza).
-async function crearBolsa(req, res, { nombre, descripcion, marca, tamano_bolsa, bolsas_por_rollo, precio_unitario, stock_minimo }) {
+async function crearBolsa(req, res, { nombre, descripcion, marca, tamano_bolsa, bolsas_por_rollo, servicios_bolsa, precio_unitario, stock_minimo }) {
   if (!await tamanoBolsaValido(tamano_bolsa)) {
     return res.status(400).json({ message: MSG_TAMANO_BOLSA });
   }
-  const porRollo = Number(bolsas_por_rollo);
-  if (!(porRollo > 0)) {
-    return res.status(400).json({ message: 'Indica cuántas bolsas trae un rollo.' });
+  const rollo = normalizarBolsasPorRollo(bolsas_por_rollo);
+  if (rollo.error) {
+    return res.status(400).json({ message: rollo.error });
+  }
+  const servicios = normalizarServiciosBolsa(servicios_bolsa);
+  if (servicios.error) {
+    return res.status(400).json({ message: servicios.error });
+  }
+  const ocupado = await servicioBolsaOcupado(servicios.valor, req.sucursal);
+  if (ocupado) {
+    return res.status(400).json({ message: ocupado });
   }
   try {
     const { rows } = await pool.query(
       `INSERT INTO productos
          (nombre, descripcion, unidad, precio_unitario, stock_actual, marca, sucursal,
-          clase, tamano_bolsa, bolsas_por_rollo, es_por_tapa, stock_minimo)
-       VALUES ($1, $2, 'pieza', $3, 0, $4, $5, 'bolsa', $6, $7, false, $8)
+          clase, tamano_bolsa, bolsas_por_rollo, servicios_bolsa, es_por_tapa, stock_minimo)
+       VALUES ($1, $2, 'pieza', $3, 0, $4, $5, 'bolsa', $6, $7, $8, false, $9)
        RETURNING ${SELECT_PRODUCTO}`,
       [nombre, descripcion || null, precio_unitario ?? null, marca || null, req.sucursal,
-       tamano_bolsa, Math.round(porRollo), Number(stock_minimo) || 0]
+       tamano_bolsa, rollo.valor, servicios.valor, Number(stock_minimo) || 0]
     );
     res.status(201).json(rows[0]);
   } catch (err) {
@@ -181,7 +232,7 @@ export const createProducto = async (req, res) => {
     clase = 'liquido', tipo_liquido = 'granel', envase, stock_minimo = 0, stock_minimo_granel = 0,
     volumen_envase_ml, botella_ml, tapa_ml, tapas_por_botella, precio_botella,
     // Bolsas:
-    tamano_bolsa, bolsas_por_rollo,
+    tamano_bolsa, bolsas_por_rollo, servicios_bolsa,
     // Existencias iniciales: botellas rellenadas y (granel) bidones a granel.
     stock_botellas = 0, stock_bidones = 0,
   } = req.body;
@@ -193,7 +244,7 @@ export const createProducto = async (req, res) => {
   // ── Bolsa: producto simple contado en piezas, comprado por rollo ──
   if (clase === 'bolsa') {
     return crearBolsa(req, res, {
-      nombre, descripcion, marca, tamano_bolsa, bolsas_por_rollo,
+      nombre, descripcion, marca, tamano_bolsa, bolsas_por_rollo, servicios_bolsa,
       precio_unitario, stock_minimo,
     });
   }
@@ -279,7 +330,7 @@ export const updateProducto = async (req, res) => {
     nombre, descripcion, unidad = 'Tapas', precio_unitario, marca,
     clase = 'liquido', tipo_liquido = 'granel', envase, stock_minimo = 0, stock_minimo_granel = 0,
     volumen_envase_ml, botella_ml, tapa_ml, tapas_por_botella, precio_botella,
-    tamano_bolsa, bolsas_por_rollo,
+    tamano_bolsa, bolsas_por_rollo, servicios_bolsa,
   } = req.body;
 
   if (!nombre) {
@@ -291,19 +342,28 @@ export const updateProducto = async (req, res) => {
     if (!await tamanoBolsaValido(tamano_bolsa)) {
       return res.status(400).json({ message: MSG_TAMANO_BOLSA });
     }
-    const porRollo = Number(bolsas_por_rollo);
-    if (!(porRollo > 0)) {
-      return res.status(400).json({ message: 'Indica cuántas bolsas trae un rollo.' });
+    const rollo = normalizarBolsasPorRollo(bolsas_por_rollo);
+    if (rollo.error) {
+      return res.status(400).json({ message: rollo.error });
+    }
+    const servicios = normalizarServiciosBolsa(servicios_bolsa);
+    if (servicios.error) {
+      return res.status(400).json({ message: servicios.error });
+    }
+    const ocupado = await servicioBolsaOcupado(servicios.valor, req.sucursal, id);
+    if (ocupado) {
+      return res.status(400).json({ message: ocupado });
     }
     try {
       const { rows } = await pool.query(
         `UPDATE productos
            SET nombre = $1, descripcion = $2, precio_unitario = $3, marca = $4,
-               tamano_bolsa = $5, bolsas_por_rollo = $6, stock_minimo = $7, updated_at = NOW()
-         WHERE id = $8 AND sucursal = $9
+               tamano_bolsa = $5, bolsas_por_rollo = $6, servicios_bolsa = $7,
+               stock_minimo = $8, updated_at = NOW()
+         WHERE id = $9 AND sucursal = $10
          RETURNING ${SELECT_PRODUCTO}`,
         [nombre, descripcion || null, precio_unitario ?? null, marca || null,
-         tamano_bolsa, Math.round(porRollo), Number(stock_minimo) || 0, id, req.sucursal]
+         tamano_bolsa, rollo.valor, servicios.valor, Number(stock_minimo) || 0, id, req.sucursal]
       );
       if (rows.length === 0) return res.status(404).json({ message: 'Producto no encontrado.' });
       return res.json(rows[0]);
@@ -456,6 +516,10 @@ export const crearMovimiento = async (req, res) => {
     if (destino === 'granel' && p.tipo_liquido !== 'granel') {
       await client.query('ROLLBACK');
       return res.status(400).json({ message: 'Este producto no maneja existencia a granel.' });
+    }
+    if (unidad === 'rollo' && !(Number(p.bolsas_por_rollo) > 0)) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: 'Estas bolsas se compran por pieza, no por rollo. Registra el movimiento en piezas.' });
     }
     const tapasPorUnidad = tapasDeUnidad(unidad, p);
     if (tapasPorUnidad <= 0) {
