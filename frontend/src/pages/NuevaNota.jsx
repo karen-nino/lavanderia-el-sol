@@ -1313,36 +1313,38 @@ export default function NuevaNota() {
   // servicio: pieza completa en los dos primeros, granel por tapa en Por Encargo.
   const bloqueProductos = () => (
     <div>
-      {/* Agregar vive solo en el encabezado: así no cambia de sitio conforme
-          crece la lista. */}
-      <div className="flex items-center justify-between gap-3 mb-3">
-        <div className="flex items-baseline gap-2 min-w-0">
-          <h2 className={LABEL_CLS + ' mb-0'}>Productos</h2>
-          {productosLista.length > 0 && (
-            <span className="text-xs text-gray-500 truncate">
-              {productosLista.length} {productosLista.length === 1 ? 'producto' : 'productos'}
-            </span>
-          )}
-        </div>
-        <button
-          type="button"
-          onClick={() => setSelectorProducto({ ambito: ambitoProductosNota })}
-          className="flex-shrink-0 flex items-center gap-1.5 bg-blue text-white rounded-pill pl-3 pr-4 py-2.5 text-xs font-bold hover:opacity-90 transition-opacity"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
-          </svg>
-          Agregar producto
-        </button>
+      <div className="flex items-baseline gap-2 min-w-0 mb-2">
+        <h2 className={LABEL_CLS + ' mb-0'}>Productos</h2>
+        {productosLista.length > 0 && (
+          <span className="text-xs text-gray-500 truncate">
+            {productosLista.length} {productosLista.length === 1 ? 'producto' : 'productos'}
+          </span>
+        )}
       </div>
 
+      {/* Mismo campo que el de máquinas: se ve y se toca como los demás campos
+          del formulario, y lo que abre es el modal para elegir. Agregar vive
+          arriba de la lista para que no cambie de sitio conforme crece. */}
+      <button
+        type="button"
+        onClick={() => setSelectorProducto({ ambito: ambitoProductosNota })}
+        className="w-full px-4 py-3.5 mb-3 border border-gray-300 rounded-lg bg-white text-left flex items-center justify-between gap-2 hover:border-gray-400 transition-colors"
+      >
+        <span className="text-gray-400 truncate">
+          {productosLista.length === 0 ? 'Elige un producto' : 'Agregar otro producto'}
+        </span>
+        <svg className="w-5 h-5 flex-shrink-0 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+        </svg>
+      </button>
+
       {/* Misma fila compacta que en Por Encargo. La diferencia es la unidad:
-          aquí se vende la pieza completa (botella, unidad o bolsa). */}
+          aquí se vende la pieza completa (botella, unidad o bolsa). Sin
+          productos no se pinta la caja: el campo de arriba ya dice que no hay
+          ninguno y qué hacer, igual que en Máquinas. */}
+      {productosLista.length > 0 && (
       <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-        {productosLista.length === 0 ? (
-          <p className="px-4 py-5 text-sm text-gray-500">No hay productos en esta nota.</p>
-        ) : (
-          productosLista.map((item, i) => {
+        {productosLista.map((item, i) => {
             const prod = productosCatalogo.find(x => String(x.id) === String(item.producto_id));
             const cant = Number(item.cantidad) || 0;
             const subtotal = precioProductoNota(prod) * cant;
@@ -1411,28 +1413,26 @@ export default function NuevaNota() {
                 </div>
               </div>
             );
-          })
-        )}
+        })}
 
-        {productosLista.length > 0 && (
-          <div className="px-4 py-3 border-t border-gray-200 bg-gray-50 space-y-1.5">
-            {/* En Por Encargo puede no cobrarse nada —si todo lo agregado se
-                sirve dentro del servicio—, y un "Se cobra aparte $0.00" solo
-                hace dudar de si falta cobrar algo. Lo que gasta del tope se ve
-                en el renglón de abajo. */}
-            {(tipoServicio !== 'POR_ENCARGO' || subtotalProductos > 0) && (
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                  {tipoServicio === 'POR_ENCARGO' ? 'Se cobra aparte' : 'Total productos'}
-                </span>
-                <span className="text-base font-bold text-dark-blue tabular-nums">
-                  ${subtotalProductos.toFixed(2)}
-                </span>
-              </div>
-            )}
-          </div>
-        )}
+        <div className="px-4 py-3 border-t border-gray-200 bg-gray-50 space-y-1.5">
+          {/* En Por Encargo puede no cobrarse nada —si todo lo agregado se
+              sirve dentro del servicio—, y un "Se cobra aparte $0.00" solo
+              hace dudar de si falta cobrar algo. Lo que gasta del tope se ve
+              en el renglón de abajo. */}
+          {(tipoServicio !== 'POR_ENCARGO' || subtotalProductos > 0) && (
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                {tipoServicio === 'POR_ENCARGO' ? 'Se cobra aparte' : 'Total productos'}
+              </span>
+              <span className="text-base font-bold text-dark-blue tabular-nums">
+                ${subtotalProductos.toFixed(2)}
+              </span>
+            </div>
+          )}
+        </div>
       </div>
+      )}
     </div>
   );
 
@@ -2207,9 +2207,9 @@ export default function NuevaNota() {
             </div>
 
             {/* El campo es un SELECTOR, no un botón de "agregar": se ve y se
-                toca como los demás campos del formulario —el mismo alto, el
-                mismo borde, su flecha— y lo que despliega es el modal con las
-                máquinas libres. Elegir la máquina es capturar un dato de la
+                toca como los demás campos del formulario —el mismo alto y el
+                mismo borde— y lo que despliega es el modal con las máquinas
+                libres. Elegir la máquina es capturar un dato de la
                 nota, no una acción aparte, y como campo se lee así. */}
             <button
               type="button"
@@ -2224,11 +2224,12 @@ export default function NuevaNota() {
               <span className="text-gray-400 truncate">
                 {cargasAuto.length === 0 ? 'Elige lavadora o secadora' : 'Agregar otra máquina'}
               </span>
-              <svg
-                className={`w-5 h-5 flex-shrink-0 text-gray-500 transition-transform ${maqModalOpen ? 'rotate-180' : ''}`}
-                fill="none" stroke="currentColor" viewBox="0 0 24 24"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              {/* Un + y no la flecha del desplegable: lo que hay detrás no es
+                  una lista que se abre y se cierra en el propio campo, sino un
+                  modal donde se marcan varias. En el gris del campo, que es un
+                  signo de lo que se puede hacer, no una llamada de atención. */}
+              <svg className="w-5 h-5 flex-shrink-0 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
               </svg>
             </button>
 
