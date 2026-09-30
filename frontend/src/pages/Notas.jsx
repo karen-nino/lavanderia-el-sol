@@ -770,9 +770,11 @@ export default function Notas() {
                 <div className="space-y-4">
                   {grupo.notas.map(n => {
               const badgeEstado    = BADGE_ESTADO[n.estado]       ?? BADGE_ESTADO.LAVANDO;
-              const badgeTipoServicio = BADGE_TIPO_SERVICIO[n.tipo_servicio] ?? BADGE_TIPO_SERVICIO.AUTOSERVICIO;
               const badgePago      = BADGE_PAGO[n.estado_pago];
-              const cliente        = fmtCliente(n) ?? badgeTipoServicio.label;
+              // Sin cliente la tarjeta dice Mostrador, igual que la tabla y que
+              // el detalle. Antes caía al tipo de servicio ("Por Encargo"), que
+              // en el renglón del cliente se leía como si ese fuera su nombre.
+              const cliente        = fmtCliente(n) ?? 'Mostrador';
               // Con varias cargas la nota puede estar lavando y secando a la vez
               // (una carga en lavadora, otra en secadora): se muestran ambos
               // estados apilados en lugar del único estado de la nota.
