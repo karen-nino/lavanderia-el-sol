@@ -395,8 +395,15 @@ export default function Notas() {
           <h1 className="text-xl font-bold text-gray-900">Notas</h1>
           <p className="text-sm text-gray-500">{filtradas.length} resultado(s)</p>
         </div>
-        <div className="flex items-center gap-3">
-          <div ref={estadoRef} className="relative">
+        {/* `relative` en la FILA, no en cada botón: los paneles miden 224px
+            (w-56) y se abren hacia la izquierda desde su ancla. Colgados del
+            botón de Estado —el más a la izquierda de los tres— se salían de la
+            pantalla en celulares angostos (se cortaban "ESTADO", "Todos", "En
+            Espera"…). Anclados aquí, el borde derecho es el de la fila y el
+            panel siempre cae dentro. Los paneles siguen DENTRO del div con
+            ref, que es lo que distingue un clic fuera para cerrarlos. */}
+        <div className="flex items-center gap-3 relative">
+          <div ref={estadoRef}>
             <button
               onClick={() => { setMostrarEstado(v => !v); setMostrarFecha(false); }}
               aria-label="Filtrar por estado"
@@ -413,7 +420,7 @@ export default function Notas() {
             </button>
 
             {mostrarEstado && (
-              <div className="absolute right-0 top-12 z-10 bg-white border border-gray-200 rounded-xl shadow-lg p-3 w-56">
+              <div className="absolute right-0 top-12 z-10 bg-white border border-gray-200 rounded-xl shadow-lg p-3 w-56 max-w-[calc(100vw-2rem)]">
                 <p className="text-xs font-semibold text-gray-500 uppercase mb-2 px-1">Estado</p>
                 <div className="flex flex-col gap-1">
                   {ESTADOS.map(e => (
@@ -437,7 +444,7 @@ export default function Notas() {
             )}
           </div>
 
-          <div ref={fechaRef} className="relative">
+          <div ref={fechaRef}>
             <button
               onClick={() => { setMostrarFecha(v => !v); setMostrarEstado(false); }}
               aria-label="Filtrar por fecha"
@@ -455,7 +462,7 @@ export default function Notas() {
             </button>
 
             {mostrarFecha && (
-              <div className="absolute right-0 top-12 z-10 bg-white border border-gray-200 rounded-xl shadow-lg p-3 w-56">
+              <div className="absolute right-0 top-12 z-10 bg-white border border-gray-200 rounded-xl shadow-lg p-3 w-56 max-w-[calc(100vw-2rem)]">
                 <p className="text-xs font-semibold text-gray-500 uppercase mb-2 px-1">Fecha</p>
                 <div className="flex flex-col gap-1">
                   {RANGOS_FECHA.map(r => (
@@ -805,9 +812,11 @@ export default function Notas() {
                     )}
                   </div>
 
-                  {/* Información: cliente + total */}
-                  <p className="text-sm text-dark-grey mt-2">Información:</p>
-                  <div className="flex items-center justify-between gap-2 mt-0.5">
+                  {/* Cliente + total. Sin rótulo encima: "Información:" no
+                      decía nada que el renglón no dijera ya solo. El mt-2 que
+                      llevaba el rótulo pasa aquí, para no perder el aire que
+                      lo separa del folio. */}
+                  <div className="flex items-center justify-between gap-2 mt-2">
                     <p className="text-md font-semibold">{cliente}</p>
                     <p className="text-xl font-bold">{fmtMonto(n.precio_total)}</p>
                   </div>
