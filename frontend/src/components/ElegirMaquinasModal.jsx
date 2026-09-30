@@ -2,10 +2,14 @@
  * Elegir las máquinas de una nota de Autoservicio, al darla de alta.
  *
  * Es el mismo gesto que "Asignar máquina" de Salidas: las máquinas libres de la
- * sucursal, partidas en Lavadoras y Secadoras, con su tamaño y su precio. La
- * diferencia es que aquí no se asigna nada todavía: lo elegido se queda en el
- * formulario y viaja con la nota al crearla, que es lo que permite cobrarla
- * desde el alta —ya se sabe qué máquina usó el cliente, y con ella su tarifa—.
+ * sucursal, partidas en Lavadoras y Secadoras, con su tamaño. La diferencia es
+ * que aquí no se asigna nada todavía: lo elegido se queda en el formulario y
+ * viaja con la nota al crearla, que es lo que permite cobrarla desde el alta
+ * —ya se sabe qué máquina usó el cliente, y con ella su tarifa—.
+ *
+ * Aquí no van los PRECIOS: lo que se elige es qué máquina, y el dinero se lee
+ * de un tirón donde se cobra —el renglón de cada máquina y el resumen de la
+ * nota—, no repetido en cada opción de una lista de la que solo se marca una.
  *
  * Se pueden marcar VARIAS de una vez: cada una entra como una máquina más de la
  * nota (su propio renglón, con su precio), así que el mostrador elige de un
@@ -39,7 +43,7 @@ function SelCheck({ on }) {
   );
 }
 
-function FilaMaquina({ maquina, seleccionada, precio, onToggle }) {
+function FilaMaquina({ maquina, seleccionada, onToggle }) {
   const tamano = labelTamano(maquina);
   return (
     <button
@@ -55,11 +59,6 @@ function FilaMaquina({ maquina, seleccionada, precio, onToggle }) {
       </span>
       <span className="flex items-center gap-2 flex-shrink-0">
         {tamano && <span className="text-xs text-gray-500">{tamano}</span>}
-        {/* Lo que va a cobrar esa máquina, aquí mismo: es la razón de elegir
-            la máquina en el alta y no después. */}
-        {precio != null && (
-          <span className="text-sm font-bold text-blue-700 tabular-nums">${precio.toFixed(2)}</span>
-        )}
       </span>
     </button>
   );
@@ -71,7 +70,6 @@ export default function ElegirMaquinasModal({
   seleccion = [],
   cargando = false,
   error = '',
-  precioDe = () => null,
   onToggle,
   onConfirmar,
   onCancelar,
@@ -115,8 +113,7 @@ export default function ElegirMaquinasModal({
               ) : (
                 lavadoras.map(m => (
                   <FilaMaquina
-                    key={m.id} maquina={m} seleccionada={marcada(m)}
-                    precio={precioDe(m)} onToggle={onToggle}
+                    key={m.id} maquina={m} seleccionada={marcada(m)} onToggle={onToggle}
                   />
                 ))
               )}
@@ -129,8 +126,7 @@ export default function ElegirMaquinasModal({
               ) : (
                 secadoras.map(m => (
                   <FilaMaquina
-                    key={m.id} maquina={m} seleccionada={marcada(m)}
-                    precio={precioDe(m)} onToggle={onToggle}
+                    key={m.id} maquina={m} seleccionada={marcada(m)} onToggle={onToggle}
                   />
                 ))
               )}

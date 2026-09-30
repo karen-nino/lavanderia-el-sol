@@ -311,7 +311,20 @@ export default function NuevaNota() {
   // Ids de las máquinas que la nota ya tiene: no se vuelven a ofrecer.
   const maquinasElegidas = cargasAuto.flatMap(c =>
     [c.lavadora?.id, c.secadora?.id].filter(Boolean).map(String));
-  // Nombre corto de lo que lleva un renglón: "L3 · Lavadora Mediana".
+  // Qué ES la máquina del renglón, sin nombrarla: "Lavadora Mediana".
+  // El resumen habla de lo que se cobra —una lavadora mediana cuesta lo que
+  // cuesta, se llame L1 o L8—, así que ahí no pinta el nombre de la máquina ni
+  // el número de renglón: es ruido entre el concepto y su importe.
+  const tipoDeRenglon = (c) => {
+    const partes = [];
+    if (c.lavadora) partes.push(`Lavadora ${c.lavadora.tipo === 'lavadora_jumbo' ? 'Jumbo' : 'Mediana'}`);
+    if (c.secadora) partes.push('Secadora');
+    if (partes.length === 0 && c.lavadora_tipo) partes.push('Lavadora (sin asignar)');
+    if (partes.length === 0 && c.secadora_tipo) partes.push('Secadora (sin asignar)');
+    return partes.join(' + ');
+  };
+  // Nombre corto de lo que lleva un renglón: "L3 · Lavadora Mediana". En la
+  // lista de arriba SÍ se nombra la máquina: es la que hay que ir a cargar.
   const etiquetaRenglon = (c) => {
     const partes = [];
     if (c.lavadora) partes.push(`${c.lavadora.nombre} · Lavadora${c.lavadora.tipo === 'lavadora_jumbo' ? ' Jumbo' : ' Mediana'}`);
@@ -2316,12 +2329,7 @@ export default function NuevaNota() {
                 <div className="space-y-1.5 mb-3 last:mb-0 text-sm text-blue border-t border-blue-200 pt-3">
                   {cargasAuto.map((c, i) => (
                     <div key={i} className="flex justify-between gap-2">
-                      <span className="font-medium truncate">
-                        Máquina {i + 1}
-                        <span className="font-normal text-blue-700/80">
-                          {etiquetaRenglon(c) ? ` · ${etiquetaRenglon(c)}` : ''}
-                        </span>
-                      </span>
+                      <span className="font-medium truncate">{tipoDeRenglon(c) || '—'}</span>
                       <span className="flex-shrink-0 font-medium tabular-nums">
                         ${subtotalDeCarga(c).toFixed(2)}
                       </span>
@@ -2370,7 +2378,6 @@ export default function NuevaNota() {
                 <span className="text-sm font-medium text-blue">Total</span>
                 <span className="text-3xl font-bold text-blue-700 tabular-nums">${precioTotal.toFixed(2)}</span>
               </div>
-              <p className="text-xs text-blue-700/70 mt-1.5">Se cobra en la nota, con Liquidar.</p>
             </div>
             </div>
           );
@@ -2518,7 +2525,6 @@ export default function NuevaNota() {
         seleccion={maqModalSel}
         cargando={loadingMaquinas}
         error={maqModalError}
-        precioDe={precioDeMaquina}
         onToggle={toggleMaquinaSel}
         onConfirmar={confirmarMaquinas}
         onCancelar={() => { setMaqModalOpen(false); setMaqModalSel([]); }}
