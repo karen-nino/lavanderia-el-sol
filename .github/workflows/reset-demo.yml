@@ -1,6 +1,6 @@
 # Devuelve la demo pública a su estado de exhibición, todas las noches.
 #
-# Quien entra a https://lavanderia-el-sol-demo.netlify.app lo hace como
+# Quien entra a https://lavanderia-el-sol-demo.vercel.app lo hace como
 # administrador y puede borrar el inventario o poner cualquier cosa en el
 # nombre del negocio. Esto lo deshace y vuelve a sembrar los 90 días de datos.
 #
