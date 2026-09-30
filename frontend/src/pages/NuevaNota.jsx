@@ -224,6 +224,21 @@ export default function NuevaNota() {
   const [notaCreada,        setNotaCreada]        = useState(null);
   const tipoRef           = useRef(null);
 
+  // El aviso de nota creada no pide confirmación: corre su animación y se va
+  // solo a la lista de notas. Ya no había nada que decidir ahí —el botón
+  // Aceptar solo cerraba— y en el mostrador era un toque de más entre una
+  // nota y la siguiente. El plazo cubre la animación completa (el círculo
+  // tarda 0.4s y la palomita 0.4s más con 0.2s de retraso, o sea 0.6s) y deja
+  // un momento para leer el folio.
+  useEffect(() => {
+    if (!notaCreada) return;
+    const t = setTimeout(() => {
+      setNotaCreada(null);
+      navigate('/notas');
+    }, 1600);
+    return () => clearTimeout(t);
+  }, [notaCreada, navigate]);
+
   useEffect(() => {
     if (!tipoOpen) return;
     const onMouseDown = (e) => {
@@ -2678,13 +2693,6 @@ export default function NuevaNota() {
                 </p>
               )}
             </div>
-            <button
-              type="button"
-              onClick={() => { setNotaCreada(null); navigate('/notas'); }}
-              className="w-full bg-blue hover:opacity-90 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
-            >
-              Aceptar
-            </button>
           </div>
         </div>
       )}
