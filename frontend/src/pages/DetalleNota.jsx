@@ -533,12 +533,14 @@ export default function DetalleNota() {
   // Abre el modal de cobro y, de paso, mira si hay caja abierta para poder
   // avisar que ese dinero se quedaría fuera del corte del día.
   //
-  // El importe arranca en $0 y lo teclea quien cobra, con el dinero en la
+  // El importe arranca EN BLANCO y lo teclea quien cobra, con el dinero en la
   // mano: es justo lo que trae el cliente, no un número que la app suponga
-  // (mismo criterio que tenía el abono desde el 2026-09-25).
+  // (mismo criterio que tenía el abono desde el 2026-09-25). En blanco y no
+  // en '0' porque el cero había que borrarlo antes de teclear, y si se
+  // olvidaba quedaba pegado delante de la cifra.
   function abrirCobro() {
     setErrorAccion('');
-    setCobroMonto('0');
+    setCobroMonto('');
     setCobroForma('');
     setCobroOpen(true);
     api.get('/caja/actual')
