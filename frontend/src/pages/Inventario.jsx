@@ -826,7 +826,7 @@ function ModalMovimiento({ producto, tipo, onClose, onDone }) {
   // ofrecer, así que entran y salen por pieza.
   const porRollo = Number(producto.bolsas_por_rollo) > 0;
   const [unidadBolsa, setUnidadBolsa] = useState(porRollo ? 'rollo' : 'pieza');
-  const [cantidad, setCantidad] = useState('1');
+  const [cantidad, setCantidad] = useState('');
   const [error, setError]     = useState('');
   const [loading, setLoading] = useState(false);
 
