@@ -201,7 +201,7 @@ const FORM_VACIO = {
   botella_ml:        '',
   // Granel: líquido (bidón, botellas y medidas) o en polvo (unidades sueltas).
   forma:             'liquido',
-  metodo_medida:       'ml',   // 'ml' (tamaño de la medida) | 'medidas' (medidas por botella)
+  metodo_medida:       'medidas',   // 'medidas' (medidas por botella) | 'ml' (tamaño de la medida)
   medida_ml:           '',
   medidas_por_botella: '',
   precio_medida:          '',
@@ -664,21 +664,21 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = 
                   <div className="flex gap-2 mb-2">
                     <button
                       type="button"
-                      onClick={() => setForm(f => ({ ...f, metodo_medida: 'ml' }))}
-                      className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-colors ${
-                        form.metodo_medida === 'ml' ? 'border-blue bg-light-blue text-blue' : 'border-gray-300 bg-white text-gray-600 hover:bg-gray-50'
-                      }`}
-                    >
-                      Tamaño de medida (mL)
-                    </button>
-                    <button
-                      type="button"
                       onClick={() => setForm(f => ({ ...f, metodo_medida: 'medidas' }))}
                       className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-colors ${
                         form.metodo_medida === 'medidas' ? 'border-blue bg-light-blue text-blue' : 'border-gray-300 bg-white text-gray-600 hover:bg-gray-50'
                       }`}
                     >
                       Medidas por botella
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setForm(f => ({ ...f, metodo_medida: 'ml' }))}
+                      className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                        form.metodo_medida === 'ml' ? 'border-blue bg-light-blue text-blue' : 'border-gray-300 bg-white text-gray-600 hover:bg-gray-50'
+                      }`}
+                    >
+                      Tamaño de medida (mL)
                     </button>
                   </div>
                   {form.metodo_medida === 'ml' ? (
