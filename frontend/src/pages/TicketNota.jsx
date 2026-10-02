@@ -16,7 +16,7 @@ const BADGE_TIPO_SERVICIO = {
 
 
 // Tamaño de la carga tal como se nombra al cliente.
-const TAMANO_CARGA_LABEL = { chico: 'Chico', grande: 'Grande', jumbo: 'Jumbo' };
+const TAMANO_CARGA_LABEL = { chico: 'Chico', mediano: 'Mediano', grande: 'Grande', jumbo: 'Jumbo' };
 
 function fmtMonto(n) {
   return n != null ? `$${Number(n).toFixed(2)}` : '—';

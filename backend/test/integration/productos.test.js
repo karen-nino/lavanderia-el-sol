@@ -153,7 +153,7 @@ describe('bolsas (clase = bolsa)', () => {
     });
     expect(res.status).toBe(201);
     expect(res.body.clase).toBe('bolsa');
-    expect(res.body.tamano_bolsa).toBe('chica');
+    expect(res.body.tamano_bolsa).toBe('Chica'); // tal como está en el catálogo
     expect(Number(res.body.bolsas_por_rollo)).toBe(100);
     expect(Number(res.body.stock_actual)).toBe(0); // nace vacía
 
@@ -175,7 +175,23 @@ describe('bolsas (clase = bolsa)', () => {
       clase: 'bolsa', nombre: 'Bolsa', tamano_bolsa: 'extra grande', bolsas_por_rollo: 50,
     });
     expect(res.status).toBe(201);
-    expect(res.body.tamano_bolsa).toBe('extra grande');
+    expect(res.body.tamano_bolsa).toBe('Extra grande');
+  });
+
+  it('renombrar el tamaño en Ajustes renombra la bolsa que lo usa', async () => {
+    await seedEtiquetas('tamanos_bolsa', ['Spe']);
+    const bolsa = await request(app).post('/api/productos').set(auth(admin.token)).send({
+      clase: 'bolsa', nombre: 'Bolsa', tamano_bolsa: 'spe', bolsas_por_rollo: 50,
+    });
+    expect(bolsa.body.tamano_bolsa).toBe('Spe');
+
+    const { rows } = await pool.query(`SELECT id FROM tamanos_bolsa WHERE nombre = 'Spe'`);
+    const ren = await request(app).put(`/api/etiquetas/tamanos-bolsa/${rows[0].id}`)
+      .set(auth(admin.token)).send({ nombre: 'SPE' });
+    expect(ren.status).toBe(200);
+
+    const { rows: [p] } = await pool.query('SELECT tamano_bolsa FROM productos WHERE id = $1', [bolsa.body.id]);
+    expect(p.tamano_bolsa).toBe('SPE');
   });
 
   it('tamaño de bolsa inválido → 400', async () => {

@@ -77,7 +77,7 @@ El cliente no se identifica: la nota queda a nombre de Mostrador. Si quieres man
 
 1. Toca Nueva nota y elige Por Encargo.
 2. Elige el cliente, dalo de alta ahí mismo, o toca Mostrador si no lo vas a registrar. Con Mostrador la nota queda a ese nombre: si luego quieres mandarle el ticket o avisarle que ya está, la app te pide su teléfono en ese momento, igual que en autoservicio.
-3. Di cuántos servicios son de cada tamaño: Chico, Grande y Edredón. Cada servicio ya incluye su lavado, su secado, el jabón, el suavizante y la bolsa.
+3. Di cuántos servicios son de cada tamaño: Chico, Mediano, Grande y Edredón. Cada servicio ya incluye su lavado, su secado, el jabón, el suavizante y la bolsa.
 4. Si quieres, captura el detalle de cada servicio: el tipo de tela, o el tamaño del edredón. Los dos son opcionales.
 5. Lo que el servicio trae dentro sale en "Incluido en los servicios": ahí puedes servir más jabón o quitar la bolsa. Eso NO se cobra aparte.
 6. Si el cliente compra algo (un suavizante de marca, bolsas de más), agrégalo en Productos: eso SÍ se cobra encima del servicio.
@@ -160,7 +160,7 @@ Los filtros se quedan puestos: si entras a una nota y regresas con la flecha, la
         claves: ['salidas', 'poner lavadora', 'secadora', 'que maquina'],
         cuerpo: `EN AUTOSERVICIO la máquina ya se eligió al hacer la nota: aquí solo se inicia. Lo que sigue es meter la ropa y darle a Encender / Iniciar.
 
-EN POR ENCARGO la nota vende SERVICIOS (Chico, Grande, Edredón) y las máquinas son cosa de esta pantalla: se ponen con + Agregar, las que te acomoden, y van sin cobro porque lo cobrado es el servicio.
+EN POR ENCARGO la nota vende SERVICIOS (Chico, Mediano, Grande, Edredón) y las máquinas son cosa de esta pantalla: se ponen con + Agregar, las que te acomoden, y van sin cobro porque lo cobrado es el servicio.
 
 Abre la nota y entra a Salidas (o entra desde la lista de máquinas). Si ves botones Asignar Lav. / Asignar Sec., es una nota vieja de autoservicio que se quedó con el tipo apuntado y sin máquina: ésa se pone por ahí.
 

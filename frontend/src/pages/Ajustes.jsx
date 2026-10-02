@@ -184,7 +184,7 @@ const MOBILE_SECTIONS = [
   { id: 'whatsapp', label: 'WhatsApp',                 subtitle: 'Mensaje para Por Encargo', icon: SectionIcon.whatsapp },
 ];
 
-// Los tres servicios que vende Por Encargo, con el campo de Ajustes que lleva
+// Los servicios que vende Por Encargo, con el campo de Ajustes que lleva
 // su precio. Las columnas siguen llamándose `tope_carga_*` porque nacieron como
 // topes (mig. 050 y 052), pero desde el rediseño del alta de Por Encargo ese
 // número ES el precio del servicio, no un máximo.
@@ -192,6 +192,7 @@ const MOBILE_SECTIONS = [
 // las notas viejas que lo eligieron.
 const PRECIOS_SERVICIO = [
   ['tope_carga_chico',   'Servicio Chico',   'chico'],
+  ['tope_carga_mediano', 'Servicio Mediano', 'mediano'],
   ['tope_carga_grande',  'Servicio Grande',  'grande'],
   ['tope_carga_edredon', 'Servicio Edredón', 'de edredón'],
 ];
@@ -1295,9 +1296,10 @@ export default function Ajustes() {
     precio_secadora_edredon: Number(config.precio_secadora_edredon),
     precio_edredon_jumbo:  Number(config.precio_edredon_jumbo),
     tope_carga_chico:      precioServicioONull(config.tope_carga_chico),
+    tope_carga_mediano:    precioServicioONull(config.tope_carga_mediano),
     tope_carga_grande:     precioServicioONull(config.tope_carga_grande),
     tope_carga_edredon:    precioServicioONull(config.tope_carga_edredon),
-    // Jumbo ya no se captura: Por Encargo vende Chico, Grande y Edredón. La
+    // Jumbo ya no se captura: Por Encargo vende Chico, Mediano, Grande y Edredón. La
     // columna se conserva para las notas viejas que sí eligieron ese tamaño,
     // así que no se manda —ni se borra— desde aquí.
     // El edredón conserva su precio pero ya no tiene tiempo propio (mig. 107):

@@ -128,11 +128,11 @@ function LineaApartadas({ p, className = 'text-xs text-gray-500 mt-0.5' }) {
 function precioTxt(v) {
   return v != null && v !== '' ? `$${Number(v).toFixed(2)}` : '—';
 }
-// Nombre con el que se conoce la bolsa (el catálogo de tamaños: "Negra",
-// "Spe", "Edredón"). El campo `nombre` de todas las bolsas es "Bolsa", así que
-// es esto lo que distingue una de otra.
+// Nombre con el que se conoce la bolsa (el catálogo de tamaños: "NEGRA",
+// "SPE", "Edredón"), tal como se escribió en Ajustes. El campo `nombre` de todas
+// las bolsas es "Bolsa", así que es esto lo que distingue una de otra.
 function nombreBolsa(p) {
-  return p.tamano_bolsa ? p.tamano_bolsa[0].toUpperCase() + p.tamano_bolsa.slice(1) : null;
+  return p.tamano_bolsa || null;
 }
 // En los productos de marca el título es la MARCA y el subtítulo el nombre;
 // en los de granel (sin marca) el título es el nombre. En las bolsas manda el
@@ -158,7 +158,7 @@ function ordenProd(a, b) {
 // ("bolsas chicas"); los líquidos usan botellas/unidades.
 function unidadAviso(p) {
   if (p.clase === 'bolsa') {
-    const t = { chica: 'chicas', grande: 'grandes', jumbo: 'jumbo' }[p.tamano_bolsa] ?? '';
+    const t = { chica: 'chicas', grande: 'grandes', jumbo: 'jumbo' }[p.tamano_bolsa?.toLowerCase()] ?? '';
     return `bolsas ${t}`.trim();
   }
   return unidadVenta(p);
@@ -225,7 +225,7 @@ const FORM_VACIO = {
 // Servicios de Por Encargo a los que se puede ligar una bolsa (mig. 125). El
 // valor es el que guarda el producto; la etiqueta, como se llama el servicio.
 // Una bolsa puede cubrir varios, así que se marcan uno por uno.
-const SERVICIOS_BOLSA = [['chico', 'Chico'], ['grande', 'Grande'], ['edredon', 'Edredón']];
+const SERVICIOS_BOLSA = [['chico', 'Chico'], ['mediano', 'Mediano'], ['grande', 'Grande'], ['edredon', 'Edredón']];
 
 // ── Modal crear / editar ────────────────────────────────────────
 function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = [], tamanosBolsa = [] }) {
@@ -294,11 +294,13 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = 
   // que se está editando, para no borrárselo sin avisar al guardar.
   const granelOptions = form.nombre && !graneles.includes(form.nombre)
     ? [form.nombre, ...graneles] : graneles;
-  // El producto guarda el tamaño en minúsculas ('chica'); el catálogo lo
-  // muestra como se escribió ('Chica'). El valor es el slug, la etiqueta el
-  // nombre del catálogo.
-  const bolsaOptions = tamanosBolsa.map(n => ({ v: n.toLowerCase(), label: n }));
-  const bolsaFuera = form.tamano_bolsa && !bolsaOptions.some(o => o.v === form.tamano_bolsa);
+  // El producto guarda el tamaño tal como está en el catálogo (mig. 128). Se
+  // empata sin distinguir mayúsculas por si el catálogo cambió de forma.
+  const bolsaOptions = tamanosBolsa.map(n => ({ v: n, label: n }));
+  const bolsaElegida = bolsaOptions.find(
+    o => o.v.toLowerCase() === form.tamano_bolsa.toLowerCase()
+  )?.v ?? form.tamano_bolsa;
+  const bolsaFuera = form.tamano_bolsa && !bolsaOptions.some(o => o.v === bolsaElegida);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -507,12 +509,10 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = 
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
                   Tamaño <span className="text-red-500">*</span>
                 </label>
-                <select name="tamano_bolsa" required value={form.tamano_bolsa} onChange={handleChange} className={INPUT_CLS}>
+                <select name="tamano_bolsa" required value={bolsaElegida} onChange={handleChange} className={INPUT_CLS}>
                   <option value="">Seleccionar...</option>
                   {bolsaFuera && (
-                    <option value={form.tamano_bolsa}>
-                      {form.tamano_bolsa[0].toUpperCase() + form.tamano_bolsa.slice(1)}
-                    </option>
+                    <option value={form.tamano_bolsa}>{form.tamano_bolsa}</option>
                   )}
                   {bolsaOptions.map(o => <option key={o.v} value={o.v}>{o.label}</option>)}
                 </select>

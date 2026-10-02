@@ -131,18 +131,19 @@ export const archivarProducto = async (req, res) => {
 };
 
 // Los tamaños de bolsa dejaron de estar en el código: los dice el catálogo de
-// Ajustes → Inventario (mig. 119). La comparación va en minúsculas porque el
-// producto guarda el nombre así ('chica') y el catálogo lo muestra con mayúscula
-// inicial ('Chica'). No se filtra por `activo`: desactivar un tamaño lo quita de
-// la lista, pero no tiene por qué impedir editar el producto que ya lo usa.
-async function tamanoBolsaValido(tamano) {
+// Ajustes → Inventario (mig. 119). El producto guarda el nombre tal como está
+// escrito en el catálogo ('SPE', no 'spe'), así que se busca sin distinguir
+// mayúsculas y se devuelve el del catálogo; null si no existe. No se filtra por
+// `activo`: desactivar un tamaño lo quita de la lista, pero no tiene por qué
+// impedir editar el producto que ya lo usa.
+async function tamanoBolsaDelCatalogo(tamano) {
   const limpio = String(tamano ?? '').trim();
-  if (!limpio) return false;
+  if (!limpio) return null;
   const { rows } = await pool.query(
-    'SELECT 1 FROM tamanos_bolsa WHERE lower(nombre) = lower($1) LIMIT 1',
+    'SELECT nombre FROM tamanos_bolsa WHERE lower(nombre) = lower($1) LIMIT 1',
     [limpio]
   );
-  return rows.length > 0;
+  return rows[0]?.nombre ?? null;
 }
 
 const MSG_TAMANO_BOLSA =
@@ -151,18 +152,18 @@ const MSG_TAMANO_BOLSA =
 // Servicios a los que va ligada la bolsa para precargarse sola en Por Encargo
 // (mig. 125). Lista vacía = no se precarga en ninguna carga. Una bolsa puede
 // cubrir varios servicios; lo que no se permite es al revés (ver abajo).
-const SERVICIOS_BOLSA = ['chico', 'grande', 'edredon'];
+const SERVICIOS_BOLSA = ['chico', 'mediano', 'grande', 'edredon'];
 function normalizarServiciosBolsa(v) {
   if (v === undefined || v === null || v === '') return { valor: [] };
   const lista = Array.isArray(v) ? v : [v];
   const limpia = [...new Set(lista.filter(x => x !== null && x !== undefined && x !== ''))];
   if (limpia.some(x => !SERVICIOS_BOLSA.includes(x))) {
-    return { error: 'Elige servicios válidos para la bolsa: chico, grande o edredón.' };
+    return { error: 'Elige servicios válidos para la bolsa: chico, mediano, grande o edredón.' };
   }
   return { valor: limpia };
 }
 
-const NOMBRE_SERVICIO = { chico: 'Chico', grande: 'Grande', edredon: 'Edredón' };
+const NOMBRE_SERVICIO = { chico: 'Chico', mediano: 'Mediano', grande: 'Grande', edredon: 'Edredón' };
 
 // Un servicio no puede tener dos bolsas activas: al precargar la carga habría
 // que adivinar cuál toca. Como la lista vive en un arreglo, esto no se puede
@@ -194,7 +195,8 @@ function normalizarBolsasPorRollo(v) {
 // Crea una bolsa: producto (clase='bolsa') contado en piezas. Nace en 0; la
 // existencia se carga con una entrada (por rollo o por pieza).
 async function crearBolsa(req, res, { nombre, descripcion, marca, tamano_bolsa, bolsas_por_rollo, servicios_bolsa, precio_unitario, stock_minimo }) {
-  if (!await tamanoBolsaValido(tamano_bolsa)) {
+  const tamano = await tamanoBolsaDelCatalogo(tamano_bolsa);
+  if (!tamano) {
     return res.status(400).json({ message: MSG_TAMANO_BOLSA });
   }
   const rollo = normalizarBolsasPorRollo(bolsas_por_rollo);
@@ -217,7 +219,7 @@ async function crearBolsa(req, res, { nombre, descripcion, marca, tamano_bolsa, 
        VALUES ($1, $2, 'pieza', $3, 0, $4, $5, 'bolsa', $6, $7, $8, false, $9)
        RETURNING ${SELECT_PRODUCTO}`,
       [nombre, descripcion || null, precio_unitario ?? null, marca || null, req.sucursal,
-       tamano_bolsa, rollo.valor, servicios.valor, Number(stock_minimo) || 0]
+       tamano, rollo.valor, servicios.valor, Number(stock_minimo) || 0]
     );
     res.status(201).json(rows[0]);
   } catch (err) {
@@ -349,7 +351,8 @@ export const updateProducto = async (req, res) => {
 
   // ── Bolsa: solo atributos (tamaño, bolsas por rollo, precio por pieza) ──
   if (clase === 'bolsa') {
-    if (!await tamanoBolsaValido(tamano_bolsa)) {
+    const tamano = await tamanoBolsaDelCatalogo(tamano_bolsa);
+    if (!tamano) {
       return res.status(400).json({ message: MSG_TAMANO_BOLSA });
     }
     const rollo = normalizarBolsasPorRollo(bolsas_por_rollo);
@@ -373,7 +376,7 @@ export const updateProducto = async (req, res) => {
          WHERE id = $9 AND sucursal = $10
          RETURNING ${SELECT_PRODUCTO}`,
         [nombre, descripcion || null, precio_unitario ?? null, marca || null,
-         tamano_bolsa, rollo.valor, servicios.valor, Number(stock_minimo) || 0, id, req.sucursal]
+         tamano, rollo.valor, servicios.valor, Number(stock_minimo) || 0, id, req.sucursal]
       );
       if (rows.length === 0) return res.status(404).json({ message: 'Producto no encontrado.' });
       return res.json(rows[0]);

@@ -12,7 +12,9 @@ import { esAdmin } from '../middleware/roles.js';
 // al nombre (mig. 122: `arranca_sola` de la marca de máquina).
 // Se listan aquí y no se leen del body a lo que venga: los nombres entran en el
 // SQL, así que solo pueden ser los que el catálogo declara.
-function crearControladorEtiqueta(tabla, nombres, banderas = []) {
+// `alRenombrar(client, viejo, nuevo)` es para el catálogo cuyo nombre se copia
+// en otra tabla: corre en la misma transacción que el cambio de nombre.
+function crearControladorEtiqueta(tabla, nombres, banderas = [], { alRenombrar } = {}) {
   const getAll = async (req, res) => {
     try {
       const { rows } = await pool.query(
@@ -94,21 +96,33 @@ function crearControladorEtiqueta(tabla, nombres, banderas = []) {
     updates.push('updated_at = NOW()');
     values.push(id);
 
+    const client = await pool.connect();
     try {
-      const { rows } = await pool.query(
+      await client.query('BEGIN');
+      const antes = await client.query(`SELECT nombre FROM ${tabla} WHERE id = $1 FOR UPDATE`, [id]);
+      const { rows } = await client.query(
         `UPDATE ${tabla} SET ${updates.join(', ')} WHERE id = $${i} RETURNING *`,
         values
       );
       if (rows.length === 0) {
+        await client.query('ROLLBACK');
         return res.status(404).json({ message: `No se encontró ${nombres.singular}.` });
       }
+      const viejo = antes.rows[0]?.nombre;
+      if (alRenombrar && viejo != null && viejo !== rows[0].nombre) {
+        await alRenombrar(client, viejo, rows[0].nombre);
+      }
+      await client.query('COMMIT');
       res.json(rows[0]);
     } catch (err) {
+      await client.query('ROLLBACK');
       if (err.code === '23505') {
         return res.status(409).json({ message: `Ya existe ${nombres.uno} con ese nombre.` });
       }
       console.error(`update ${tabla} error:`, err);
       res.status(500).json({ message: `No se pudieron guardar los cambios de ${nombres.singular}. Intenta de nuevo.` });
+    } finally {
+      client.release();
     }
   };
 
@@ -171,10 +185,16 @@ export const marcasMaquina = crearControladorEtiqueta('marcas_maquina', {
 export const granelesProducto = crearControladorEtiqueta('graneles_producto', {
   singular: 'el granel', plural: 'los graneles', uno: 'un granel',
 });
-// Tamaños de bolsa (mig. 119). Conviene que coincidan con los tamaños de carga:
-// la bolsa se cobra en la nota comparando su tamaño con el de la carga.
+// Tamaños de bolsa (mig. 119). La bolsa guarda el nombre tal como está en el
+// catálogo (mig. 128), así que al renombrarlo se renombra también en las bolsas.
 export const tamanosBolsa = crearControladorEtiqueta('tamanos_bolsa', {
   singular: 'el tamaño de bolsa', plural: 'los tamaños de bolsa', uno: 'un tamaño de bolsa',
+}, [], {
+  alRenombrar: (client, viejo, nuevo) => client.query(
+    `UPDATE productos SET tamano_bolsa = $1, updated_at = NOW()
+      WHERE clase = 'bolsa' AND lower(tamano_bolsa) = lower($2)`,
+    [nuevo, viejo]
+  ),
 });
 
 // Los dos ejes de una máquina, cerrados: los comparten el catálogo de modelos

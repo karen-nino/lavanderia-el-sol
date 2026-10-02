@@ -63,6 +63,7 @@ export const updateAjustes = async (req, res) => {
     precio_secadora_edredon,
     precio_edredon_jumbo,
     tope_carga_chico,
+    tope_carga_mediano,
     tope_carga_grande,
     tope_carga_jumbo,
     tope_carga_edredon,
@@ -96,6 +97,7 @@ export const updateAjustes = async (req, res) => {
     precio_secadora_edredon: 'El precio del secado de edredón',
     precio_edredon_jumbo:    'El precio del edredón en jumbo',
     tope_carga_chico:        'El precio del servicio Chico',
+    tope_carga_mediano:      'El precio del servicio Mediano',
     tope_carga_grande:       'El precio del servicio Grande',
     tope_carga_jumbo:        'El tope de la carga jumbo',
     tope_carga_edredon:      'El precio del servicio Edredón',
@@ -118,7 +120,7 @@ export const updateAjustes = async (req, res) => {
   // carga, pero desde el rediseño del alta de Por Encargo ese número ES el
   // precio del servicio: por eso son OBLIGATORIOS. Vaciarlos dejaría el
   // servicio en $0 y la nota se cobraría sola mal, así que se rechaza.
-  const preciosServicio = { tope_carga_chico, tope_carga_grande, tope_carga_edredon };
+  const preciosServicio = { tope_carga_chico, tope_carga_mediano, tope_carga_grande, tope_carga_edredon };
   for (const [campo, valor] of Object.entries(preciosServicio)) {
     if (valor === undefined) continue; // no se manda = no se toca
     if (valor === null || valor === '') {
@@ -193,6 +195,7 @@ export const updateAjustes = async (req, res) => {
   if (precio_secadora_edredon !== undefined) { updates.push(`precio_secadora_edredon = $${i++}`); values.push(precio_secadora_edredon); }
   if (precio_edredon_jumbo  !== undefined) { updates.push(`precio_edredon_jumbo = $${i++}`);  values.push(precio_edredon_jumbo); }
   if (tope_carga_chico      !== undefined) { updates.push(`tope_carga_chico = $${i++}`);      values.push(topeONull(tope_carga_chico)); }
+  if (tope_carga_mediano    !== undefined) { updates.push(`tope_carga_mediano = $${i++}`);    values.push(topeONull(tope_carga_mediano)); }
   if (tope_carga_grande     !== undefined) { updates.push(`tope_carga_grande = $${i++}`);     values.push(topeONull(tope_carga_grande)); }
   if (tope_carga_jumbo      !== undefined) { updates.push(`tope_carga_jumbo = $${i++}`);      values.push(topeONull(tope_carga_jumbo)); }
   if (tope_carga_edredon    !== undefined) { updates.push(`tope_carga_edredon = $${i++}`);    values.push(topeONull(tope_carga_edredon)); }

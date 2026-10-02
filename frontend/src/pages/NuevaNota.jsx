@@ -62,19 +62,21 @@ const FORM_INIT = {
 const MAX_CARGAS  = 20;
 
 const TAMANOS = [
-  { v: 'chico',  label: 'Chico'  },
-  { v: 'grande', label: 'Grande' },
+  { v: 'chico',   label: 'Chico'   },
+  { v: 'mediano', label: 'Mediano' },
+  { v: 'grande',  label: 'Grande'  },
   { v: 'jumbo',  label: 'Jumbo'  },
 ];
 const TAMANO_LABEL = Object.fromEntries(TAMANOS.map(t => [t.v, t.label]));
 
 // Los servicios que vende Por Encargo. El servicio es la unidad que se cobra:
-// su precio sale de Ajustes (Chico, Grande, Edredón) y ya lleva dentro el
+// su precio sale de Ajustes (Chico, Mediano, Grande, Edredón) y ya lleva dentro el
 // lavado, el secado, el jabón y la bolsa. Cada servicio se guarda como una
 // carga, y el Edredón viaja como prenda EDREDON en tamaño jumbo, que es lo que
 // lo ata a la lavadora jumbo cuando se le asigna máquina en Salidas.
 const SERVICIOS = [
   { v: 'chico',   label: 'Chico',   tamano: 'chico',  tipo_prenda: 'ROPA'    },
+  { v: 'mediano', label: 'Mediano', tamano: 'mediano', tipo_prenda: 'ROPA'   },
   { v: 'grande',  label: 'Grande',  tamano: 'grande', tipo_prenda: 'ROPA'    },
   { v: 'edredon', label: 'Edredón', tamano: 'jumbo',  tipo_prenda: 'EDREDON' },
   // Jumbo de ropa dejó de venderse. No tiene contador: solo aparece al editar
@@ -88,8 +90,9 @@ const SERVICIO_POR_V = Object.fromEntries(SERVICIOS.map(s => [s.v, s]));
 // servicio se busca con este valor directamente.
 const servicioDeCarga = (c) => {
   if (String(c?.tipo_prenda).toUpperCase() === 'EDREDON') return 'edredon';
-  if (c?.tamano === 'chico')  return 'chico';
-  if (c?.tamano === 'grande') return 'grande';
+  if (c?.tamano === 'chico')   return 'chico';
+  if (c?.tamano === 'mediano') return 'mediano';
+  if (c?.tamano === 'grande')  return 'grande';
   if (c?.tamano === 'jumbo')  return 'jumbo';
   return '';
 };
@@ -185,7 +188,7 @@ export default function NuevaNota() {
   const [precios,           setPrecios]           = useState({ mediana: 70, jumbo: 70, secadora: 45, secadoraJumbo: 45, secadoraEdredon: 45, edredonJumbo: 80 });
   // Tope de precio por carga (Ajustes); null = sin tope. `edredon` es un tope
   // por prenda que manda sobre el del tamaño para las cargas de edredón.
-  const [topes,             setTopes]             = useState({ chico: null, grande: null, jumbo: null, edredon: null });
+  const [topes,             setTopes]             = useState({ chico: null, mediano: null, grande: null, jumbo: null, edredon: null });
   const [loadingData,       setLoadingData]       = useState(true);
   // Caja del día: si nadie la abrió, los cobros de esta nota no entran en
   // ningún corte (van con caja_id nulo, mig. 101). Se avisa, no se bloquea.
@@ -461,6 +464,7 @@ export default function NuevaNota() {
           });
           setTopes({
             chico:   cfg.tope_carga_chico   != null ? Number(cfg.tope_carga_chico)   : null,
+            mediano: cfg.tope_carga_mediano != null ? Number(cfg.tope_carga_mediano) : null,
             grande:  cfg.tope_carga_grande  != null ? Number(cfg.tope_carga_grande)  : null,
             jumbo:   cfg.tope_carga_jumbo   != null ? Number(cfg.tope_carga_jumbo)   : null,
             edredon: cfg.tope_carga_edredon != null ? Number(cfg.tope_carga_edredon) : null,
@@ -842,8 +846,9 @@ export default function NuevaNota() {
   // alta. El jumbo de ropa ya no se vende y no tiene bolsa propia.
   const servicioDeCarga = (c) => {
     if (String(c?.tipo_prenda).toUpperCase() === 'EDREDON') return 'edredon';
-    if (c?.tamano === 'chico')  return 'chico';
-    if (c?.tamano === 'grande') return 'grande';
+    if (c?.tamano === 'chico')   return 'chico';
+    if (c?.tamano === 'mediano') return 'mediano';
+    if (c?.tamano === 'grande')  return 'grande';
     return null;
   };
   const bolsaDeCarga = (c) => {
@@ -868,14 +873,14 @@ export default function NuevaNota() {
   };
 
   // Lo que le cuesta al negocio la MÁQUINA de un servicio. La nota ya no elige
-  // tipo de máquina, pero el servicio sí sabe cuál le toca: Chico y Grande van
+  // tipo de máquina, pero el servicio sí sabe cuál le toca: Chico, Mediano y Grande van
   // en lavadora y secadora medianas, y el Edredón en la lavadora jumbo —secarlo
   // es una decisión aparte, así que no cuenta—. Jumbo de ropa ya no se vende;
   // se conserva para las notas que lo eligieron.
   const costoMaquinasServicio = (c) => {
     if (String(c?.tipo_prenda).toUpperCase() === 'EDREDON') return precios.edredonJumbo;
     if (c?.tamano === 'jumbo')  return precios.jumbo + precios.secadora;
-    if (c?.tamano === 'chico' || c?.tamano === 'grande') return precios.mediana + precios.secadora;
+    if (['chico', 'mediano', 'grande'].includes(c?.tamano)) return precios.mediana + precios.secadora;
     return 0;
   };
 

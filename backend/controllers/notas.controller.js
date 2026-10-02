@@ -27,7 +27,7 @@ const normalizarFormaPago = (v) => {
   const s = String(v).trim().toUpperCase();
   return FORMAS_PAGO_VALIDAS.includes(s) ? s : null;
 };
-const TAMANOS_VALIDOS     = ['chico', 'grande', 'jumbo'];
+const TAMANOS_VALIDOS     = ['chico', 'mediano', 'grande', 'jumbo'];
 const TIPOS_PRENDA_VALIDOS = ['ROPA', 'EDREDON'];
 // Tipo de máquina previsto por carga en Por Encargo (define el precio; la
 // máquina física real se asigna después en Salidas).
@@ -452,7 +452,7 @@ async function tarifasCarga(client) {
     `SELECT precio_carga_mediana, precio_carga_jumbo,
             precio_carga_secadora, precio_secadora_jumbo, precio_secadora_edredon,
             precio_edredon_jumbo,
-            tope_carga_chico, tope_carga_grande, tope_carga_jumbo, tope_carga_edredon
+            tope_carga_chico, tope_carga_mediano, tope_carga_grande, tope_carga_jumbo, tope_carga_edredon
        FROM ajustes WHERE id = 1`
   );
   const c = rows[0] ?? {};
@@ -466,6 +466,7 @@ async function tarifasCarga(client) {
     edredonJumbo:    c.precio_edredon_jumbo    != null ? Number(c.precio_edredon_jumbo)    : 80,
     // Topes por tamaño de carga (Por Encargo). NULL = sin tope configurado.
     topeChico:       c.tope_carga_chico   != null ? Number(c.tope_carga_chico)   : null,
+    topeMediano:     c.tope_carga_mediano != null ? Number(c.tope_carga_mediano) : null,
     topeGrande:      c.tope_carga_grande  != null ? Number(c.tope_carga_grande)  : null,
     topeJumbo:       c.tope_carga_jumbo   != null ? Number(c.tope_carga_jumbo)   : null,
     topeEdredon:     c.tope_carga_edredon != null ? Number(c.tope_carga_edredon) : null,
@@ -479,24 +480,25 @@ async function tarifasCarga(client) {
 function topeDeCarga(prenda, tamano, t) {
   if (String(prenda ?? '').toUpperCase() === 'EDREDON') return t.topeEdredon;
   switch (tamano) {
-    case 'chico':  return t.topeChico;
-    case 'grande': return t.topeGrande;
+    case 'chico':   return t.topeChico;
+    case 'mediano': return t.topeMediano;
+    case 'grande':  return t.topeGrande;
     case 'jumbo':  return t.topeJumbo;
     default:       return null;
   }
 }
 
-// Los tres servicios que Por Encargo vende hoy: Chico, Grande y Edredón. El
+// Los servicios que Por Encargo vende hoy: Chico, Mediano, Grande y Edredón. El
 // edredón viaja como prenda EDREDON en tamaño jumbo (es lo que lo ata a la
 // lavadora jumbo), así que se reconoce por la prenda. Jumbo de ropa ya no se
 // vende: sigue siendo válido para las notas que lo eligieron cuando existía.
 const esServicioQueSeVende = (prenda, tamano) =>
-  String(prenda ?? '').toUpperCase() === 'EDREDON' || tamano === 'chico' || tamano === 'grande';
+  String(prenda ?? '').toUpperCase() === 'EDREDON' || ['chico', 'mediano', 'grande'].includes(tamano);
 
 // Lo que le cuesta al negocio la MÁQUINA de un servicio Por Encargo.
 //
 // La nota ya no elige tipo de máquina, pero el servicio sí sabe cuál le toca:
-// Chico y Grande van en lavadora y secadora medianas, y el Edredón en la
+// Chico, Mediano y Grande van en lavadora y secadora medianas, y el Edredón en la
 // lavadora jumbo —secarlo es una decisión aparte, así que no cuenta—. Ese costo
 // es parte de lo que el precio del servicio tiene que cubrir, así que gasta de
 // su tope igual que el jabón: si no, el tope solo cuidaba el material y se
@@ -506,7 +508,7 @@ const esServicioQueSeVende = (prenda, tamano) =>
 function costoMaquinasDeServicio(prenda, tamano, t) {
   if (String(prenda ?? '').toUpperCase() === 'EDREDON') return Number(t.edredonJumbo) || 0;
   if (tamano === 'jumbo')  return (Number(t.jumbo)   || 0) + (Number(t.secadora) || 0);
-  if (tamano === 'chico' || tamano === 'grande') {
+  if (['chico', 'mediano', 'grande'].includes(tamano)) {
     return (Number(t.mediana) || 0) + (Number(t.secadora) || 0);
   }
   return 0;
@@ -516,10 +518,11 @@ function costoMaquinasDeServicio(prenda, tamano, t) {
 function nombreServicio(prenda, tamano) {
   if (String(prenda ?? '').toUpperCase() === 'EDREDON') return 'Edredón';
   switch (tamano) {
-    case 'chico':  return 'Chico';
-    case 'grande': return 'Grande';
-    case 'jumbo':  return 'Jumbo';
-    default:       return 'sin tamaño';
+    case 'chico':   return 'Chico';
+    case 'mediano': return 'Mediano';
+    case 'grande':  return 'Grande';
+    case 'jumbo':   return 'Jumbo';
+    default:        return 'sin tamaño';
   }
 }
 
@@ -960,7 +963,7 @@ async function prepararCargas(client, cargas, tipoPrendaNota, sucursal, tipo_ser
         throw new Error(`Los edredones solo van en lavadora jumbo (carga ${i + 1}).`);
       }
       // Por Encargo ya NO elige tipo de máquina: el servicio se vende por
-      // tamaño (Chico, Grande, Edredón) y la máquina —la que sea— se le asigna
+      // tamaño (Chico, Mediano, Grande, Edredón) y la máquina —la que sea— se le asigna
       // en Salidas, sin que eso cambie el precio. Los tipos se siguen
       // aceptando porque las notas de antes los traen y editarlas los reenvía.
       // AUTOSERVICIO: la máquina FÍSICA que eligió el mostrador (2026-09-29).
