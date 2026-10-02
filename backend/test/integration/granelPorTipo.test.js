@@ -74,6 +74,37 @@ describe('al crear la nota', () => {
   });
 });
 
+describe('medidas capturadas al crear la nota', () => {
+  it('mandan sobre las de Ajustes; 0 = no lleva de ese tipo', async () => {
+    await granel('OXXI MEJORADO', tipo.jabon);
+    await granel('PERSIL', tipo.jabon);
+    await granel('SE AZUL', tipo.suavizante);
+    await granel('SE BLANCO', tipo.suavizante);
+    const clienteId = await seedCliente();
+    const res = await request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'POR_ENCARGO', cliente_id: clienteId, tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE',
+      cargas: [{ tamano: 'chico', tipo_prenda: 'ROPA', granel: [
+        { tipo_granel_id: tipo.jabon, cantidad: 3 },
+        { tipo_granel_id: tipo.suavizante, cantidad: 0 },
+      ] }],
+    });
+    expect(res.status).toBe(201);
+    const detalle = await request(app).get(`/api/notas/${res.body.id}`).set(auth(admin.token));
+    expect(detalle.body.cargas[0].pendientes).toEqual([
+      expect.objectContaining({ tipo_granel: 'Jabón', cantidad: 3 }),
+    ]);
+  });
+
+  it('una cantidad que no es entero de 0 o más → 400', async () => {
+    const clienteId = await seedCliente();
+    const res = await request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'POR_ENCARGO', cliente_id: clienteId, tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE',
+      cargas: [{ tamano: 'chico', tipo_prenda: 'ROPA', granel: [{ tipo_granel_id: tipo.jabon, cantidad: -1 }] }],
+    });
+    expect(res.status).toBe(400);
+  });
+});
+
 describe('PUT /notas/:id/cargas/:cargaId/granel/:tipoId', () => {
   it('elige el producto, aparta su existencia y deja de estar pendiente', async () => {
     const oxxi = await granel('OXXI MEJORADO', tipo.jabon);

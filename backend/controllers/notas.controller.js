@@ -1096,8 +1096,29 @@ async function prepararCargas(client, cargas, tipoPrendaNota, sucursal, tipo_ser
       precio_tope:     precioTope,
       activar,
       productos,
+      // Medidas de cada tipo de granel que se capturaron al crear la nota; sin
+      // ellas, las de Ajustes (ver granelDeCarga).
+      granel:          tipo_servicio === 'POR_ENCARGO' ? leerGranelDeCarga(c.granel, i) : null,
     };
   });
+}
+
+// Medidas de cada tipo de granel que trae una carga desde la pantalla:
+// [{ tipo_granel_id, cantidad }]. Devuelve un Map tipo → medidas (0 = no lleva
+// de ese tipo), o null si no vino nada y mandan las de Ajustes.
+function leerGranelDeCarga(v, i) {
+  if (v == null) return null;
+  if (!Array.isArray(v)) throw new Error(`El granel de la carga ${i + 1} no es válido.`);
+  const porTipo = new Map();
+  for (const g of v) {
+    const tipo = Number(g?.tipo_granel_id);
+    const cantidad = Number(g?.cantidad);
+    if (!Number.isInteger(tipo) || tipo < 1 || !Number.isInteger(cantidad) || cantidad < 0) {
+      throw new Error(`Las medidas de granel de la carga ${i + 1} deben ser números enteros de 0 o más.`);
+    }
+    porTipo.set(tipo, cantidad);
+  }
+  return porTipo;
 }
 
 // Historial de máquinas de una carga (mig. 114): UNA FILA POR PASADA.
@@ -1212,13 +1233,16 @@ async function opcionesGranelDeServicio(client, sucursal) {
 // Si el tipo tiene un solo producto y alcanza, entra directo (no hay nada que
 // elegir); si no, queda pendiente y el empleado lo elige en Salidas. Que no
 // alcance no impide crear la nota: el aviso lo da la pantalla.
-async function granelDeCarga(client, notaId, carga, sucursal, tipo_servicio) {
+// `capturado` son las medidas que se pusieron al crear la nota (Map tipo →
+// medidas); el tipo que no venga ahí lleva las de Ajustes.
+async function granelDeCarga(client, notaId, carga, sucursal, tipo_servicio, capturado = null) {
   const clave = claveLigueServicio(carga.tipo_prenda, carga.tamano);
   if (!clave) return [];
-  const medidas = await medidasDeServicio(client, carga.tipo_prenda, carga.tamano, carga.tamano_edredon);
-  if (medidas <= 0) return [];
+  const deAjustes = await medidasDeServicio(client, carga.tipo_prenda, carga.tamano, carga.tamano_edredon);
   const productos = [];
   for (const [tipoId, opciones] of await opcionesGranelDeServicio(client, sucursal)) {
+    const medidas = capturado?.has(Number(tipoId)) ? capturado.get(Number(tipoId)) : deAjustes;
+    if (!(medidas > 0)) continue;
     if (opciones.length === 1 && Number(opciones[0].disponible) >= medidas) {
       productos.push(await reservarProducto(client, notaId, carga.id, opciones[0].id, medidas, sucursal, tipo_servicio));
     } else {
@@ -1291,7 +1315,7 @@ async function insertarCargas(client, notaId, filas, sucursal, tipo_servicio) {
       productos.push(await reservarProducto(client, notaId, carga.id, p.producto_id, p.cantidad, sucursal, tipo_servicio));
     }
     if (tipo_servicio === 'POR_ENCARGO') {
-      productos.push(...await granelDeCarga(client, notaId, carga, sucursal, tipo_servicio));
+      productos.push(...await granelDeCarga(client, notaId, carga, sucursal, tipo_servicio, f.granel));
     }
     insertadas.push({ ...carga, productos });
   }
