@@ -115,77 +115,65 @@ export default function GranelPorServicio({ nota, puedeEditar, onCambio }) {
             <p className="text-sm font-semibold text-gray-900">{etiqueta}</p>
             {renglones.map(r => {
               const opciones = opcionesDe(r.tipoId, r.producto);
-              const enProceso = ocupado === `${c.id}-${r.tipoId}`;
               const bloqueado = !puedeEditar || ocupado != null;
               const elegido = r.producto?.producto_id ?? null;
+              // Lo que queda de un producto no cuenta lo que este mismo
+              // servicio ya tiene apartado de él.
+              const quedanDe = (p) => disponible(p) + (elegido === p.id ? r.cantidad : 0);
               return (
-                <div key={r.tipoId} className="space-y-2">
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-sm text-gray-700">
-                      {nombreTipo(r.tipoId)}
-                      {!r.producto && (
-                        <span className="ml-2 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5">
-                          Por elegir
-                        </span>
-                      )}
-                    </p>
-                    {/* Las medidas: del que está por elegir o del ya elegido. */}
-                    <div className="flex items-center gap-1.5 flex-shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => guardar(c, r.tipoId, elegido, r.cantidad - 1)}
-                        disabled={bloqueado || r.cantidad <= 1}
-                        aria-label={`Menos medidas de ${nombreTipo(r.tipoId)}`}
-                        className="w-9 h-9 flex items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-700 text-base font-semibold hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                      >
-                        −
-                      </button>
-                      <span className="min-w-[4.5rem] text-center text-sm font-semibold text-gray-900 tabular-nums">
-                        {r.cantidad} {r.cantidad === 1 ? 'medida' : 'medidas'}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => guardar(c, r.tipoId, elegido, r.cantidad + 1)}
-                        disabled={bloqueado}
-                        aria-label={`Más medidas de ${nombreTipo(r.tipoId)}`}
-                        className="w-9 h-9 flex items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-700 text-base font-semibold hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                      >
-                        +
-                      </button>
-                    </div>
-                  </div>
+                <div key={r.tipoId} className="space-y-1.5">
+                  <p className="text-sm text-gray-700">
+                    {nombreTipo(r.tipoId)}
+                    {!r.producto && (
+                      <span className="ml-2 text-xs font-semibold text-amber-700">Por elegir</span>
+                    )}
+                  </p>
                   {opciones.length === 0 ? (
                     <p className="text-xs text-gray-400">
-                      No hay {nombreTipo(r.tipoId).toLowerCase()} en Inventario. Dalo de alta o asígnale su tipo en Ajustes → Inventario → Granel.
+                      No hay {nombreTipo(r.tipoId).toLowerCase()} en Inventario: dalo de alta o asígnale su tipo al producto.
                     </p>
                   ) : (
-                    <div className="flex flex-wrap gap-2">
-                      {opciones.map(p => {
-                        const marcado = elegido === p.id;
-                        // Lo que queda de un producto no cuenta lo que este mismo
-                        // servicio ya tiene apartado de él.
-                        const quedan = disponible(p) + (marcado ? r.cantidad : 0);
-                        const alcanza = quedan >= r.cantidad;
-                        return (
-                          <button
-                            key={p.id}
-                            type="button"
-                            onClick={() => !marcado && guardar(c, r.tipoId, p.id, r.cantidad)}
-                            disabled={bloqueado || (!marcado && !alcanza)}
-                            aria-pressed={marcado}
-                            className={`px-3 py-2 rounded-lg border text-sm font-medium text-left transition-colors disabled:cursor-not-allowed ${
-                              marcado
-                                ? 'border-blue bg-light-blue text-blue'
-                                : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50'
-                            }`}
-                          >
-                            {marcado && <span className="mr-1">✓</span>}{p.nombre}
-                            <span className={`block text-[11px] font-normal ${alcanza ? 'text-gray-400' : 'text-red-600'}`}>
-                              {enProceso && marcado ? 'Guardando…' : `quedan ${quedan}`}
-                            </span>
-                          </button>
-                        );
-                      })}
+                    <div className="flex items-center gap-2">
+                      {/* El producto: lo que queda va entre paréntesis y el que
+                          no alcanza para las medidas no se puede elegir. */}
+                      <select
+                        value={elegido ?? ''}
+                        onChange={(e) => e.target.value && guardar(c, r.tipoId, Number(e.target.value), r.cantidad)}
+                        disabled={bloqueado}
+                        aria-label={`${nombreTipo(r.tipoId)} de ${etiqueta}`}
+                        className={`flex-1 min-w-0 px-3 py-2.5 border rounded-lg bg-white text-sm text-gray-900 disabled:bg-gray-50 disabled:text-gray-500 ${
+                          r.producto ? 'border-gray-300' : 'border-amber-300'
+                        }`}
+                      >
+                        {!r.producto && <option value="">Elegir…</option>}
+                        {opciones.map(p => (
+                          <option key={p.id} value={p.id} disabled={elegido !== p.id && quedanDe(p) < r.cantidad}>
+                            {p.nombre} ({quedanDe(p) > 0 ? quedanDe(p) : 'agotado'})
+                          </option>
+                        ))}
+                      </select>
+                      {/* Las medidas: del que está por elegir o del ya elegido. */}
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => guardar(c, r.tipoId, elegido, r.cantidad - 1)}
+                          disabled={bloqueado || r.cantidad <= 1}
+                          aria-label={`Menos medidas de ${nombreTipo(r.tipoId)}`}
+                          className="w-9 h-9 flex items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-700 text-base font-semibold hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                        >
+                          −
+                        </button>
+                        <span className="w-6 text-center text-sm font-semibold text-gray-900 tabular-nums">{r.cantidad}</span>
+                        <button
+                          type="button"
+                          onClick={() => guardar(c, r.tipoId, elegido, r.cantidad + 1)}
+                          disabled={bloqueado}
+                          aria-label={`Más medidas de ${nombreTipo(r.tipoId)}`}
+                          className="w-9 h-9 flex items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-700 text-base font-semibold hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                        >
+                          +
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>
