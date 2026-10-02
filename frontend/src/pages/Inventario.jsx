@@ -20,10 +20,10 @@ function aMl(valor, unidad) {
   return unidad === 'Litros' ? v * 1000 : v;
 }
 
-// ── Conversiones de existencias (todo se guarda en TAPAS) ───────
-function tapasPorBotella(p) {
-  const t = Number(p.tapas_por_botella)
-    || (Number(p.botella_ml) && Number(p.tapa_ml) ? Math.floor(Number(p.botella_ml) / Number(p.tapa_ml)) : 0);
+// ── Conversiones de existencias (todo se guarda en MEDIDAS) ───────
+function medidasPorBotella(p) {
+  const t = Number(p.medidas_por_botella)
+    || (Number(p.botella_ml) && Number(p.medida_ml) ? Math.floor(Number(p.botella_ml) / Number(p.medida_ml)) : 0);
   return t > 0 ? t : 0;
 }
 function botellasPorBidon(p) {
@@ -31,23 +31,23 @@ function botellasPorBidon(p) {
     || (Number(p.volumen_envase_ml) && Number(p.botella_ml) ? Math.floor(Number(p.volumen_envase_ml) / Number(p.botella_ml)) : 0);
   return b > 0 ? b : 0;
 }
-function tapasPorBidon(p) {
-  return tapasPorBotella(p) * botellasPorBidon(p);
+function medidasPorBidon(p) {
+  return medidasPorBotella(p) * botellasPorBidon(p);
 }
-// Descompone unas tapas en "X botellas y Y tapas".
-function desglosarBotellas(tapas, p) {
-  const tpb = tapasPorBotella(p);
-  const t = Math.round(Number(tapas) || 0);
-  if (tpb <= 0) return { botellas: 0, tapas: t };
-  return { botellas: Math.floor(t / tpb), tapas: t % tpb };
+// Descompone unas medidas en "X botellas y Y medidas".
+function desglosarBotellas(medidas, p) {
+  const tpb = medidasPorBotella(p);
+  const t = Math.round(Number(medidas) || 0);
+  if (tpb <= 0) return { botellas: 0, medidas: t };
+  return { botellas: Math.floor(t / tpb), medidas: t % tpb };
 }
 // Descompone el líquido a granel en "N bidones y M botellas".
-function desglosarBidones(tapasGranel, p) {
-  const tpb = tapasPorBotella(p);
-  const tapasPorBidon = tpb * botellasPorBidon(p);
-  const t = Math.round(Number(tapasGranel) || 0);
-  if (tapasPorBidon <= 0) return { bidones: 0, botellas: tpb > 0 ? Math.floor(t / tpb) : 0 };
-  return { bidones: Math.floor(t / tapasPorBidon), botellas: tpb > 0 ? Math.floor((t % tapasPorBidon) / tpb) : 0 };
+function desglosarBidones(medidasGranel, p) {
+  const tpb = medidasPorBotella(p);
+  const medidasPorBidon = tpb * botellasPorBidon(p);
+  const t = Math.round(Number(medidasGranel) || 0);
+  if (medidasPorBidon <= 0) return { bidones: 0, botellas: tpb > 0 ? Math.floor(t / tpb) : 0 };
+  return { bidones: Math.floor(t / medidasPorBidon), botellas: tpb > 0 ? Math.floor((t % medidasPorBidon) / tpb) : 0 };
 }
 function plural(n, sing, plur) {
   return `${n} ${n === 1 ? sing : plur}`;
@@ -73,44 +73,44 @@ function unidadVenta(p, n = 2) {
   if (porUnidad(p)) return n === 1 ? 'unidad' : 'unidades';
   return n === 1 ? 'botella' : 'botellas';
 }
-// Unas tapas contadas en la unidad del producto ("3 botellas y 2 tapas",
-// "5 bolsas", "2 unidades"). Las bolsas se cuentan en piezas (no hay tapas).
-function textoExistencia(p, tapas) {
+// Unas medidas contadas en la unidad del producto ("3 botellas y 2 medidas",
+// "5 bolsas", "2 unidades"). Las bolsas se cuentan en piezas (no hay medidas).
+function textoExistencia(p, medidas) {
   if (p.clase === 'bolsa') {
-    const n = Math.max(0, Math.round(Number(tapas) || 0));
+    const n = Math.max(0, Math.round(Number(medidas) || 0));
     return `${n} ${unidadVenta(p, n)}`;
   }
-  const { botellas, tapas: sueltas } = desglosarBotellas(Math.max(0, Number(tapas) || 0), p);
+  const { botellas, medidas: sueltas } = desglosarBotellas(Math.max(0, Number(medidas) || 0), p);
   const partes = [];
-  // El "0 botellas" solo se dice cuando no hay nada más que decir: con tapas
-  // sueltas estorba ("0 botellas y 1 tapa"). Misma regla que el reporte diario.
+  // El "0 botellas" solo se dice cuando no hay nada más que decir: con medidas
+  // sueltas estorba ("0 botellas y 1 medida"). Misma regla que el reporte diario.
   if (botellas > 0 || sueltas === 0) partes.push(`${botellas} ${unidadVenta(p, botellas)}`);
-  if (sueltas > 0) partes.push(plural(sueltas, 'tapa', 'tapas'));
+  if (sueltas > 0) partes.push(plural(sueltas, 'medida', 'medidas'));
   return partes.join(' y ');
 }
 // Lo que está en el estante.
 function textoRellenadas(p) {
   return textoExistencia(p, p.stock_actual);
 }
-// Tapas comprometidas con notas abiertas: siguen en el estante, pero ya tienen
+// Medidas comprometidas con notas abiertas: siguen en el estante, pero ya tienen
 // dueño. El semáforo (estado_stock) se calcula con lo DISPONIBLE, así que sin
 // decir esto la tarjeta mostraba "9 botellas" junto a un "Por agotarse" que
 // parecía un error.
-function tapasApartadas(p) {
+function medidasApartadas(p) {
   return Math.max(0, Math.round(Number(p.stock_reservado) || 0));
 }
 function textoApartadas(p) {
-  return textoExistencia(p, tapasApartadas(p));
+  return textoExistencia(p, medidasApartadas(p));
 }
 // Lo que de verdad se puede vender hoy: existencia menos lo apartado.
 function textoDisponible(p) {
-  return textoExistencia(p, (Number(p.stock_actual) || 0) - tapasApartadas(p));
+  return textoExistencia(p, (Number(p.stock_actual) || 0) - medidasApartadas(p));
 }
 // Texto del líquido a granel: se expresa en bidones (con las botellas sueltas
 // como remanente si las hay).
 function textoGranel(p) {
   if (!esGranelLiquido(p)) return '';
-  const { bidones, botellas } = desglosarBidones(p.stock_granel_tapas, p);
+  const { bidones, botellas } = desglosarBidones(p.stock_granel_medidas, p);
   const partes = [plural(bidones, 'bidón', 'bidones')];
   if (botellas > 0) partes.push(plural(botellas, 'botella', 'botellas'));
   return partes.join(' y ');
@@ -118,7 +118,7 @@ function textoGranel(p) {
 // Línea bajo la existencia: qué parte ya está apartada en notas y qué queda
 // libre. Solo sale cuando hay algo apartado, para no ensuciar el caso normal.
 function LineaApartadas({ p, className = 'text-xs text-gray-500 mt-0.5' }) {
-  if (tapasApartadas(p) <= 0) return null;
+  if (medidasApartadas(p) <= 0) return null;
   return (
     <p className={className}>
       Disponibles: {textoDisponible(p)} · apartadas en notas: {textoApartadas(p)}
@@ -168,16 +168,16 @@ function unidadAviso(p) {
 // las 9 están apartadas en notas no mandaba a nadie a rellenar.
 function mensajeAvisoBotellas(p) {
   if (p.estado_stock === 'agotado') {
-    return tapasApartadas(p) > 0
+    return medidasApartadas(p) > 0
       ? `No quedan ${unidadAviso(p)} libres — apartadas en notas: ${textoApartadas(p)}`
       : `Se acabaron las ${unidadAviso(p)}`;
   }
-  const apartadas = tapasApartadas(p) > 0 ? ` · apartadas en notas: ${textoApartadas(p)}` : '';
+  const apartadas = medidasApartadas(p) > 0 ? ` · apartadas en notas: ${textoApartadas(p)}` : '';
   return `Están por acabarse las ${unidadAviso(p)} — disponibles: ${textoDisponible(p)}${apartadas}`;
 }
 function mensajeAvisoGranel(p) {
   if (p.estado_granel === 'agotado') return 'Se acabaron los bidones';
-  const { bidones } = desglosarBidones(p.stock_granel_tapas, p);
+  const { bidones } = desglosarBidones(p.stock_granel_medidas, p);
   return `Están por acabarse los bidones — hay ${bidones} actualmente`;
 }
 function fechaHoraCorta(iso) {
@@ -199,15 +199,15 @@ const FORM_VACIO = {
   bidon_valor:       '',
   bidon_unidad:      'Litros',
   botella_ml:        '',
-  // Granel: líquido (bidón, botellas y tapas) o en polvo (unidades sueltas).
+  // Granel: líquido (bidón, botellas y medidas) o en polvo (unidades sueltas).
   forma:             'liquido',
-  metodo_tapa:       'ml',   // 'ml' (tamaño de la tapa) | 'tapas' (tapas por botella)
-  tapa_ml:           '',
-  tapas_por_botella: '',
-  precio_tapa:          '',
+  metodo_medida:       'ml',   // 'ml' (tamaño de la medida) | 'medidas' (medidas por botella)
+  medida_ml:           '',
+  medidas_por_botella: '',
+  precio_medida:          '',
   precio_botella:       '',
-  stock_minimo_botellas: '0',   // el aviso se captura en botellas; se guarda en tapas
-  stock_minimo_bidones:  '0',   // aviso del granel, en bidones; se guarda en tapas
+  stock_minimo_botellas: '0',   // el aviso se captura en botellas; se guarda en medidas
+  stock_minimo_bidones:  '0',   // aviso del granel, en bidones; se guarda en medidas
   // Bolsas: el tamaño sale del catálogo (mig. 119), así que arranca vacío y
   // `required` obliga a elegirlo en vez de dar por buena una "chica" que nadie
   // escogió.
@@ -248,18 +248,18 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = 
           : '',
         bidon_unidad:   producto.volumen_envase_ml && producto.volumen_envase_ml % 1000 !== 0 ? 'Mililitros' : 'Litros',
         botella_ml:        producto.botella_ml ?? '',
-        metodo_tapa:       'ml',
-        tapa_ml:           producto.tapa_ml ?? '',
-        tapas_por_botella: '',
-        precio_tapa:       producto.precio_unitario ?? '',
+        metodo_medida:       'ml',
+        medida_ml:           producto.medida_ml ?? '',
+        medidas_por_botella: '',
+        precio_medida:       producto.precio_unitario ?? '',
         precio_botella:    producto.clase === 'bolsa' ? (producto.precio_unitario ?? '') : (producto.precio_botella ?? ''),
-        // El mínimo se guarda en tapas; en el formulario se muestra en botellas.
-        stock_minimo_botellas: tapasPorBotella(producto) > 0
-          ? String(Math.round(Number(producto.stock_minimo ?? 0) / tapasPorBotella(producto)))
+        // El mínimo se guarda en medidas; en el formulario se muestra en botellas.
+        stock_minimo_botellas: medidasPorBotella(producto) > 0
+          ? String(Math.round(Number(producto.stock_minimo ?? 0) / medidasPorBotella(producto)))
           : String(producto.stock_minimo ?? 0),
-        // El mínimo del granel se guarda en tapas; se muestra en bidones.
-        stock_minimo_bidones: tapasPorBidon(producto) > 0
-          ? String(Math.round(Number(producto.stock_minimo_granel ?? 0) / tapasPorBidon(producto)))
+        // El mínimo del granel se guarda en medidas; se muestra en bidones.
+        stock_minimo_bidones: medidasPorBidon(producto) > 0
+          ? String(Math.round(Number(producto.stock_minimo_granel ?? 0) / medidasPorBidon(producto)))
           : '0',
       }
     : FORM_VACIO
@@ -272,7 +272,7 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = 
   const esBolsa  = form.tipo_liquido === 'bolsa';
   const esMarca  = form.tipo_liquido === 'marca';
   // El polvo es granel de nombre y de catálogo, pero se cuenta por unidades:
-  // no tiene bidón, ni botella, ni tapa que capturar (mig. 126). Todo lo que
+  // no tiene bidón, ni botella, ni medida que capturar (mig. 126). Todo lo que
   // pregunta por medidas es cosa del granel LÍQUIDO.
   const esPolvoForm  = esGranel && form.forma === 'polvo';
   const esGranelLiq  = esGranel && !esPolvoForm;
@@ -280,13 +280,13 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = 
   // Cálculos en vivo para mostrar el rendimiento.
   const botellaMl = Number(form.botella_ml) || 0;
   const bidonMl   = aMl(form.bidon_valor, form.bidon_unidad);
-  const tapaMl    = Number(form.tapa_ml) || 0;
-  // Rendimiento: por tamaño de tapa (mL) o por tapas por botella (directo).
-  const tapasBotella = form.metodo_tapa === 'ml'
-    ? (tapaMl > 0 ? Math.floor(botellaMl / tapaMl) : 0)
-    : (Number(form.tapas_por_botella) || 0);
+  const medidaMl    = Number(form.medida_ml) || 0;
+  // Rendimiento: por tamaño de medida (mL) o por medidas por botella (directo).
+  const medidasBotella = form.metodo_medida === 'ml'
+    ? (medidaMl > 0 ? Math.floor(botellaMl / medidaMl) : 0)
+    : (Number(form.medidas_por_botella) || 0);
   const botellasBidon = botellaMl > 0 ? Math.floor(bidonMl / botellaMl) : 0;
-  const tapasBidon = botellasBidon * tapasBotella;
+  const medidasBidon = botellasBidon * medidasBotella;
 
   const marcaOptions = form.marca && !marcas.includes(form.marca) ? [form.marca, ...marcas] : marcas;
   // Mismo criterio para los dos catálogos nuevos (mig. 119): un nombre o un
@@ -355,28 +355,28 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = 
       marca:             esGranel ? null : (form.marca || null),
       tipo_liquido:      form.tipo_liquido,
       forma:             esGranel ? form.forma : 'liquido',
-      unidad:            'Tapas',
+      unidad:            'Medidas',
       envase:            esGranelLiq ? 'Bidón' : null,
-      // El precio por tapa (Por Encargo) solo aplica al granel líquido.
-      precio_unitario:   esGranelLiq && form.precio_tapa !== '' ? Number(form.precio_tapa) : null,
+      // El precio por medida (Por Encargo) solo aplica al granel líquido.
+      precio_unitario:   esGranelLiq && form.precio_medida !== '' ? Number(form.precio_medida) : null,
       precio_botella:    form.precio_botella !== '' ? Number(form.precio_botella) : null,
       volumen_envase_ml: esGranelLiq && bidonMl > 0 ? bidonMl : null,
       // Marca y polvo: se venden por unidad entera (sin mL). Internamente
-      // 1 unidad = 1 botella = 1 tapa, así que botella_ml = tapa_ml = 1 y el
+      // 1 unidad = 1 botella = 1 medida, así que botella_ml = medida_ml = 1 y el
       // stock queda contado en unidades.
       botella_ml:        esGranelLiq ? (botellaMl > 0 ? botellaMl : null) : 1,
-      tapa_ml:           esGranelLiq
-        ? (form.metodo_tapa === 'ml' && tapaMl > 0 ? tapaMl : null)
+      medida_ml:           esGranelLiq
+        ? (form.metodo_medida === 'ml' && medidaMl > 0 ? medidaMl : null)
         : 1,
-      tapas_por_botella: esGranelLiq && form.metodo_tapa === 'tapas' ? (Number(form.tapas_por_botella) || null) : null,
-      // El aviso se captura en botellas y se guarda en tapas.
-      stock_minimo:      tapasBotella > 0
-        ? Math.round((Number(form.stock_minimo_botellas) || 0) * tapasBotella)
+      medidas_por_botella: esGranelLiq && form.metodo_medida === 'medidas' ? (Number(form.medidas_por_botella) || null) : null,
+      // El aviso se captura en botellas y se guarda en medidas.
+      stock_minimo:      medidasBotella > 0
+        ? Math.round((Number(form.stock_minimo_botellas) || 0) * medidasBotella)
         : (Number(form.stock_minimo_botellas) || 0),
-      // El aviso del granel se captura en bidones y se guarda en tapas.
+      // El aviso del granel se captura en bidones y se guarda en medidas.
       stock_minimo_granel: esGranelLiq
-        ? (tapasBidon > 0
-            ? Math.round((Number(form.stock_minimo_bidones) || 0) * tapasBidon)
+        ? (medidasBidon > 0
+            ? Math.round((Number(form.stock_minimo_bidones) || 0) * medidasBidon)
             : (Number(form.stock_minimo_bidones) || 0))
         : 0,
     };
@@ -621,78 +621,78 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = 
                 />
               </div>
             )}
-            {/* El rendimiento por tapa solo aplica al granel líquido; la marca
+            {/* El rendimiento por medida solo aplica al granel líquido; la marca
                 y el polvo se venden por unidad entera. */}
             {esGranelLiq && (
               <>
                 <div>
                   <p className="text-sm font-medium text-gray-700 mb-1.5">
-                    Rendimiento de la tapa/medida <span className="text-red-500">*</span>
+                    Rendimiento de la medida <span className="text-red-500">*</span>
                   </p>
                   <div className="flex gap-2 mb-2">
                     <button
                       type="button"
-                      onClick={() => setForm(f => ({ ...f, metodo_tapa: 'ml' }))}
+                      onClick={() => setForm(f => ({ ...f, metodo_medida: 'ml' }))}
                       className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-colors ${
-                        form.metodo_tapa === 'ml' ? 'border-blue bg-light-blue text-blue' : 'border-gray-300 bg-white text-gray-600 hover:bg-gray-50'
+                        form.metodo_medida === 'ml' ? 'border-blue bg-light-blue text-blue' : 'border-gray-300 bg-white text-gray-600 hover:bg-gray-50'
                       }`}
                     >
-                      Tamaño de tapa (mL)
+                      Tamaño de medida (mL)
                     </button>
                     <button
                       type="button"
-                      onClick={() => setForm(f => ({ ...f, metodo_tapa: 'tapas' }))}
+                      onClick={() => setForm(f => ({ ...f, metodo_medida: 'medidas' }))}
                       className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-colors ${
-                        form.metodo_tapa === 'tapas' ? 'border-blue bg-light-blue text-blue' : 'border-gray-300 bg-white text-gray-600 hover:bg-gray-50'
+                        form.metodo_medida === 'medidas' ? 'border-blue bg-light-blue text-blue' : 'border-gray-300 bg-white text-gray-600 hover:bg-gray-50'
                       }`}
                     >
-                      Tapas por botella
+                      Medidas por botella
                     </button>
                   </div>
-                  {form.metodo_tapa === 'ml' ? (
+                  {form.metodo_medida === 'ml' ? (
                     <input
-                      type="number" name="tapa_ml" min="1" step="any" required
-                      value={form.tapa_ml} onChange={handleChange} placeholder="Ej. 200 mL"
+                      type="number" name="medida_ml" min="1" step="any" required
+                      value={form.medida_ml} onChange={handleChange} placeholder="Ej. 200 mL"
                       className={NUM_CLS}
                     />
                   ) : (
                     <>
                       <input
-                        type="number" name="tapas_por_botella" min="1" step="1" required
-                        value={form.tapas_por_botella} onChange={handleChange} placeholder="Ej. 4 tapas por botella"
+                        type="number" name="medidas_por_botella" min="1" step="1" required
+                        value={form.medidas_por_botella} onChange={handleChange} placeholder="Ej. 4 medidas por botella"
                         className={NUM_CLS}
                       />
                       <p className="text-[11px] text-gray-400 mt-1">
-                        Aproximado: cuántas tapas/medidas salen de una botella.
+                        Aproximado: cuántas medidas salen de una botella.
                       </p>
                     </>
                   )}
                 </div>
                 {/* Rendimiento calculado */}
-                <div className={`rounded-lg px-4 py-3 text-sm ${tapasBotella > 0 ? 'bg-green-50 text-green-800' : 'bg-gray-50 text-gray-500'}`}>
-                  {tapasBotella > 0 ? (
+                <div className={`rounded-lg px-4 py-3 text-sm ${medidasBotella > 0 ? 'bg-green-50 text-green-800' : 'bg-gray-50 text-gray-500'}`}>
+                  {medidasBotella > 0 ? (
                     <>
-                      Rinde <span className="font-bold">{tapasBotella} tapas</span> por botella
+                      Rinde <span className="font-bold">{medidasBotella} medidas</span> por botella
                       {botellasBidon > 0 && <> · <span className="font-bold">{botellasBidon} botellas</span> por bidón</>}.
                     </>
-                  ) : 'Captura los tamaños de botella y tapa para calcular el rendimiento.'}
+                  ) : 'Captura los tamaños de botella y medida para calcular el rendimiento.'}
                 </div>
               </>
             )}
           </div>
 
-          {/* Precios. El precio por tapa (Por Encargo) solo aplica a granel. */}
+          {/* Precios. El precio por medida (Por Encargo) solo aplica a granel. */}
           <div className={esGranelLiq ? 'grid grid-cols-2 gap-3' : ''}>
             {esGranelLiq && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                  Precio por tapa ($)
+                  Precio por medida ($)
                 </label>
                 <div className="relative">
                   <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-base">$</span>
                   <input
-                    type="number" name="precio_tapa" min="0" step="any"
-                    value={form.precio_tapa} onChange={handleChange} placeholder="0.00"
+                    type="number" name="precio_medida" min="0" step="any"
+                    value={form.precio_medida} onChange={handleChange} placeholder="0.00"
                     className={`${NUM_CLS} pl-7`}
                   />
                 </div>
@@ -934,8 +934,8 @@ function ModalMovimiento({ producto, tipo, onClose, onDone }) {
 
 // ── Modal Rellenar ──────────────────────────────────────────────
 function ModalRellenar({ producto, onClose, onDone }) {
-  const tpb = tapasPorBotella(producto);
-  const maxBotellas = tpb > 0 ? Math.floor(Number(producto.stock_granel_tapas) / tpb) : 0;
+  const tpb = medidasPorBotella(producto);
+  const maxBotellas = tpb > 0 ? Math.floor(Number(producto.stock_granel_medidas) / tpb) : 0;
   const [botellas, setBotellas] = useState(String(Math.min(maxBotellas, botellasPorBidon(producto) || maxBotellas)));
   const [error, setError]   = useState('');
   const [loading, setLoading] = useState(false);
@@ -1056,7 +1056,7 @@ function ModalHistorial({ producto, onClose }) {
                       <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${MOV_COLOR[m.tipo] ?? 'text-gray-600 bg-gray-100'}`}>
                         {MOV_LABEL[m.tipo] ?? m.tipo}
                       </span>
-                      <span className="text-sm font-medium text-gray-800">{m.descripcion ?? `${m.cantidad_tapas} tapas`}</span>
+                      <span className="text-sm font-medium text-gray-800">{m.descripcion ?? `${m.cantidad_medidas} medidas`}</span>
                     </div>
                     <p className="text-xs text-gray-400 mt-0.5">
                       {m.destino === 'granel' ? 'A granel' : 'Botellas'}
@@ -1311,11 +1311,11 @@ function ReporteDiario() {
 
   // Celda "Queda al final": por unidad = una línea; granel = rellenadas + a granel.
   const quedaCelda = (p) => {
-    if (porUnidad(p)) return <span>{textoBotellas(p.fin_botellas_tapas, p.tapas_por_botella, { marca: true })}</span>;
+    if (porUnidad(p)) return <span>{textoBotellas(p.fin_botellas_medidas, p.medidas_por_botella, { marca: true })}</span>;
     return (
       <span className="block">
-        <span className="block">Rellenadas: {textoBotellas(p.fin_botellas_tapas, p.tapas_por_botella)}</span>
-        <span className="block text-gray-500">A granel: {textoGranelFmt(p.fin_granel_tapas, p.tapas_por_bidon, p.tapas_por_botella)}</span>
+        <span className="block">Rellenadas: {textoBotellas(p.fin_botellas_medidas, p.medidas_por_botella)}</span>
+        <span className="block text-gray-500">A granel: {textoGranelFmt(p.fin_granel_medidas, p.medidas_por_bidon, p.medidas_por_botella)}</span>
       </span>
     );
   };
@@ -1347,14 +1347,14 @@ function ReporteDiario() {
                     </td>
                     <td className="px-4 py-3 text-gray-700">
                       <span className="block">
-                        {textoBotellas(p.vendido_tapas, p.tapas_por_botella, { marca: esMarca })}
+                        {textoBotellas(p.vendido_medidas, p.medidas_por_botella, { marca: esMarca })}
                       </span>
                       {/* Ventas anuladas ese día: el producto volvió al estante,
                           así que ya viene restado de la línea de arriba. Se dice
                           aparte para que nadie lo lea como una venta perdida. */}
-                      {p.devuelto_tapas > 0 && (
+                      {p.devuelto_medidas > 0 && (
                         <span className="block text-xs text-gray-500">
-                          Devuelto: {textoBotellas(p.devuelto_tapas, p.tapas_por_botella, { marca: esMarca })}
+                          Devuelto: {textoBotellas(p.devuelto_medidas, p.medidas_por_botella, { marca: esMarca })}
                         </span>
                       )}
                     </td>
@@ -1538,7 +1538,7 @@ export default function Inventario() {
   const granelBajo = productos.filter(p => esGranelLiquido(p) && p.estado_granel && p.estado_granel !== 'ok' && !recienCreados.has(p.id));
   // El aviso de granel se puede ocultar en la sesión; su firma incluye el stock,
   // así que reaparece si el granel cambia o entra otro producto a la lista.
-  const granelSig = granelBajo.map(p => `${p.id}:${p.stock_granel_tapas}`).join(',');
+  const granelSig = granelBajo.map(p => `${p.id}:${p.stock_granel_medidas}`).join(',');
   const mostrarGranel = granelBajo.length > 0 && granelSig !== granelOcultoSig;
 
   // Reemplaza un producto en la lista (tras editar / movimiento / rellenar). Si
@@ -1546,7 +1546,7 @@ export default function Inventario() {
   const reemplazarProducto = (prod) => {
     setProductos(prev => prev.map(p => (p.id === prod.id ? prod : p)));
     setInfoProducto(prev => (prev && prev.id === prod.id ? prod : prev));
-    if (Number(prod.stock_actual) > 0 || Number(prod.stock_granel_tapas) > 0) {
+    if (Number(prod.stock_actual) > 0 || Number(prod.stock_granel_medidas) > 0) {
       setRecienCreados(prev => {
         if (!prev.has(prod.id)) return prev;
         const next = new Set(prev); next.delete(prod.id); return next;
@@ -1765,7 +1765,7 @@ export default function Inventario() {
               {stockBajo.map(p => (
                 <p key={p.id} className="text-sm text-amber-800">
                   <span className="font-semibold">{tituloProd(p)}:</span> {mensajeAvisoBotellas(p)}
-                  {esGranelLiquido(p) && Number(p.stock_granel_tapas) >= tapasPorBotella(p) && tapasPorBotella(p) > 0 && (
+                  {esGranelLiquido(p) && Number(p.stock_granel_medidas) >= medidasPorBotella(p) && medidasPorBotella(p) > 0 && (
                     <button
                       onClick={() => setModalRellenar(p)}
                       className="ml-1.5 underline hover:no-underline font-semibold text-amber-900"
@@ -1901,7 +1901,7 @@ export default function Inventario() {
                           ) : (
                             <>
                               {esGranelLiquido(p) && (
-                                <div>Tapa: <span className="font-medium text-gray-700">{precioTxt(p.precio_unitario)}</span></div>
+                                <div>Medida: <span className="font-medium text-gray-700">{precioTxt(p.precio_unitario)}</span></div>
                               )}
                               <div>{p.tipo_liquido === 'marca' ? 'Unidad' : 'Botella'}: <span className="font-medium text-gray-700">{precioTxt(p.precio_botella)}</span></div>
                             </>
@@ -2077,7 +2077,7 @@ export default function Inventario() {
                   </div>
                   {subtituloProd(p) && <p className="text-sm text-gray-500 mt-0.5">{subtituloProd(p)}</p>}
                 </div>
-                {/* Precio: bolsa = por pieza; granel = tapa + botella; marca = unidad. */}
+                {/* Precio: bolsa = por pieza; granel = medida + botella; marca = unidad. */}
                 {p.clase === 'bolsa' ? (
                   <div>
                     <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Precio por pieza</p>
@@ -2087,7 +2087,7 @@ export default function Inventario() {
                   <div className={esGranelLiquido(p) ? 'grid grid-cols-2 gap-4' : ''}>
                     {esGranelLiquido(p) && (
                       <div>
-                        <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Precio por tapa</p>
+                        <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Precio por medida</p>
                         <p className="text-base text-gray-700">{precioTxt(p.precio_unitario)}</p>
                       </div>
                     )}

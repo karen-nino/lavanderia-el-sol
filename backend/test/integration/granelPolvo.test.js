@@ -25,14 +25,14 @@ const crearPolvo = (extra = {}) =>
   });
 
 describe('POST /api/productos — granel en polvo', () => {
-  it('se da de alta sin bidón ni tapa y se cuenta por unidades', async () => {
+  it('se da de alta sin bidón ni medida y se cuenta por unidades', async () => {
     const res = await crearPolvo();
     expect(res.status).toBe(201);
     expect(res.body.forma).toBe('polvo');
     expect(res.body.se_vende_por_unidad).toBe(true);
-    // 1 unidad = 1 botella = 1 tapa: el stock queda contado en unidades.
+    // 1 unidad = 1 botella = 1 medida: el stock queda contado en unidades.
     expect(Number(res.body.botella_ml)).toBe(1);
-    expect(Number(res.body.tapa_ml)).toBe(1);
+    expect(Number(res.body.medida_ml)).toBe(1);
     expect(res.body.volumen_envase_ml).toBeNull();
     expect(Number(res.body.stock_actual)).toBe(0);
   });
@@ -40,7 +40,7 @@ describe('POST /api/productos — granel en polvo', () => {
   it('no pide el volumen del bidón (que el líquido sí exige)', async () => {
     const liquido = await request(app).post('/api/productos').set(auth(admin.token)).send({
       clase: 'liquido', tipo_liquido: 'granel', nombre: 'Jabón',
-      botella_ml: 800, tapa_ml: 200, precio_botella: 27,
+      botella_ml: 800, medida_ml: 200, precio_botella: 27,
     });
     expect(liquido.status).toBe(400);
     expect(liquido.body.message).toMatch(/bidón/i);
@@ -58,7 +58,7 @@ describe('POST /api/productos — granel en polvo', () => {
       .set(auth(admin.token)).send({ botellas: 1 });
     expect(rellenar.status).toBe(400);
 
-    // La entrada normal sí: 5 unidades son 5 de existencia (1 unidad = 1 tapa).
+    // La entrada normal sí: 5 unidades son 5 de existencia (1 unidad = 1 medida).
     const entrada = await request(app).post(`/api/productos/${id}/movimiento`)
       .set(auth(admin.token)).send({ tipo: 'entrada', destino: 'botellas', unidad: 'botella', cantidad: 5 });
     expect(entrada.status).toBe(200);
@@ -73,7 +73,7 @@ describe('POR ENCARGO — el polvo se cobra encima del tope', () => {
     const clienteId = await seedCliente();
     const polvo = await seedProducto({
       nombre: 'Jabón', tipo_liquido: 'granel', forma: 'polvo',
-      botella_ml: 1, tapa_ml: 1, precio_unitario: null, precio_botella: 15, stock_actual: 10,
+      botella_ml: 1, medida_ml: 1, precio_unitario: null, precio_botella: 15, stock_actual: 10,
     });
 
     const res = await request(app).post('/api/notas').set(auth(admin.token)).send({
@@ -107,6 +107,6 @@ describe('POR ENCARGO — el polvo se cobra encima del tope', () => {
     });
 
     expect(res.status).toBe(201);
-    expect(Number(res.body.precio_total)).toBe(100); // el tope, sin sumar las tapas
+    expect(Number(res.body.precio_total)).toBe(100); // el tope, sin sumar las medidas
   });
 });

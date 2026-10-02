@@ -12,18 +12,18 @@ export function tarifaSecadora(_secadoraTamano, _tipoPrenda, t) {
 
 // Unidad de venta del producto según el servicio: en Autoservicio y en la venta
 // de mostrador (PRODUCTOS) se vende la BOTELLA entera; en Por Encargo se cobra
-// por TAPA/medida, porque ahí el producto es un insumo del lavado que hace el
+// por MEDIDA, porque ahí el producto es un insumo del lavado que hace el
 // negocio, no algo que el cliente se lleve.
 export function unidadDeServicio(tipo_servicio) {
-  return tipo_servicio === 'AUTOSERVICIO' || tipo_servicio === 'PRODUCTOS' ? 'botella' : 'tapa';
+  return tipo_servicio === 'AUTOSERVICIO' || tipo_servicio === 'PRODUCTOS' ? 'botella' : 'medida';
 }
 
-// Cuántas tapas equivale una unidad vendida (para el stock, que va en tapas).
-// Una tapa = 1; una botella = floor(botella_ml / tapa_ml) (mín. 1 de respaldo).
-export function tapasPorUnidad(art, unidad) {
+// Cuántas medidas equivale una unidad vendida (para el stock, que va en medidas).
+// Una medida = 1; una botella = floor(botella_ml / medida_ml) (mín. 1 de respaldo).
+export function medidasPorUnidad(art, unidad) {
   if (unidad !== 'botella') return 1;
   const b = Number(art.botella_ml) || 0;
-  const t = Number(art.tapa_ml) || 0;
+  const t = Number(art.medida_ml) || 0;
   return t > 0 && b > 0 ? Math.floor(b / t) : 1;
 }
 
@@ -38,8 +38,8 @@ export function seVendePorUnidad(art) {
 
 // Unidad en la que se vende un producto DENTRO de una nota. El granel líquido se
 // sirve por medidas, así que su unidad la decide el servicio (botella en
-// Autoservicio, tapa en Por Encargo); lo que se vende por unidad —marca y
-// polvo— va siempre por envase completo, porque no se sirve por tapas
+// Autoservicio, medida en Por Encargo); lo que se vende por unidad —marca y
+// polvo— va siempre por envase completo, porque no se sirve por medidas
 // (2026-09-25).
 export function unidadDeVenta(art, tipo_servicio) {
   if (seVendePorUnidad(art)) return 'botella';
@@ -47,7 +47,7 @@ export function unidadDeVenta(art, tipo_servicio) {
 }
 
 // Precio efectivo de un producto dentro de una nota, según la unidad vendida:
-// precio por botella/unidad o precio por tapa.
+// precio por botella/unidad o precio por medida.
 export function precioProductoEnNota(art, tipo_servicio) {
   return unidadDeVenta(art, tipo_servicio) === 'botella'
     ? (art.precio_botella ?? 0)

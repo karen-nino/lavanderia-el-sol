@@ -17,11 +17,11 @@ describe('tarifaSecadora', () => {
 });
 
 describe('precioProductoEnNota', () => {
-  // La unidad de venta la manda el servicio: Por Encargo cobra por TAPA
+  // La unidad de venta la manda el servicio: Por Encargo cobra por MEDIDA
   // (precio_unitario) y Autoservicio vende la BOTELLA entera (precio_botella).
   const producto = { precio_unitario: 15, precio_botella: 120 };
 
-  it('Por Encargo cobra el precio por tapa (cuenta contra el tope)', () => {
+  it('Por Encargo cobra el precio por medida (cuenta contra el tope)', () => {
     expect(precioProductoEnNota(producto, 'POR_ENCARGO')).toBe(15);
   });
 
@@ -30,13 +30,13 @@ describe('precioProductoEnNota', () => {
   });
 
   // La venta de mostrador (mig. 112) despacha piezas completas, como
-  // Autoservicio: si cayera del lado de la tapa se cobraría una fracción.
+  // Autoservicio: si cayera del lado de la medida se cobraría una fracción.
   it('la venta de Productos cobra el precio por botella', () => {
     expect(precioProductoEnNota(producto, 'PRODUCTOS')).toBe(120);
   });
 
   // Los de marca se venden por unidad (el envase completo) también en Por
-  // Encargo: no se sirven por tapas como el granel (2026-09-25).
+  // Encargo: no se sirven por medidas como el granel (2026-09-25).
   it('un producto de marca cobra su precio por unidad en cualquier servicio', () => {
     const marca = { tipo_liquido: 'marca', precio_unitario: 15, precio_botella: 120 };
     expect(precioProductoEnNota(marca, 'POR_ENCARGO')).toBe(120);
@@ -44,7 +44,7 @@ describe('precioProductoEnNota', () => {
   });
 
   it('sin precio en la unidad que toca devuelve 0', () => {
-    // Granel sin precio por tapa: en Por Encargo no hay nada que cobrar.
+    // Granel sin precio por medida: en Por Encargo no hay nada que cobrar.
     expect(precioProductoEnNota({ tipo_liquido: 'granel', precio_botella: 120 }, 'POR_ENCARGO')).toBe(0);
     expect(precioProductoEnNota({ precio_unitario: 15 }, 'AUTOSERVICIO')).toBe(0);
     expect(precioProductoEnNota({}, 'AUTOSERVICIO')).toBe(0);

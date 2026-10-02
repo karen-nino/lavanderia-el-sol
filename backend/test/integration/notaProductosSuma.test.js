@@ -34,7 +34,7 @@ const renglones = (notaId) =>
 
 describe('POST /api/notas/:id/productos — agregar dos veces el mismo producto', () => {
   it('suma la cantidad en el renglón que ya existe', async () => {
-    // 800 ml de botella / 200 de tapa = 4 tapas por botella.
+    // 800 ml de botella / 200 de medida = 4 medidas por botella.
     const jabon = await seedProducto({
       nombre: 'Jabón', precio_unitario: 5, precio_botella: 27, stock_actual: 40,
     });
@@ -51,7 +51,7 @@ describe('POST /api/notas/:id/productos — agregar dos veces el mismo producto'
     const filas = await renglones(notaId);
     expect(filas).toHaveLength(1);                    // un solo renglón
     expect(Number(filas[0].cantidad)).toBe(3);        // 1 + 2 botellas
-    expect(Number(filas[0].cantidad_tapas)).toBe(12); // 3 botellas × 4 tapas
+    expect(Number(filas[0].cantidad_medidas)).toBe(12); // 3 botellas × 4 medidas
     expect(Number(filas[0].precio_unitario)).toBe(27);
 
     // El stock reservado acumula las dos veces.
@@ -60,7 +60,7 @@ describe('POST /api/notas/:id/productos — agregar dos veces el mismo producto'
   });
 
   it('no deja pedir más de lo que hay entre las dos veces', async () => {
-    // 8 tapas = 2 botellas exactas.
+    // 8 medidas = 2 botellas exactas.
     const jabon = await seedProducto({
       nombre: 'Jabón', precio_unitario: 5, precio_botella: 27, stock_actual: 8,
     });

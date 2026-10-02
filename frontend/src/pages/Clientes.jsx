@@ -49,7 +49,7 @@ export default function Clientes() {
   // Modal info (mobile)
   const [infoCliente, setInfoCliente]     = useState(null);
 
-  // Cabecera sticky: su altura tapa el destino del índice alfabético,
+  // Cabecera sticky: su altura medida el destino del índice alfabético,
   // así que se mide para compensarla al hacer scroll.
   const stickyRef = useRef(null);
 

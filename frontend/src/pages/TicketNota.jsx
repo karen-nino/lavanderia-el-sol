@@ -61,7 +61,7 @@ function totalAbonado(nota) {
 
 // Productos de MARCA de la carga. Se venden por UNIDAD —el cliente se lleva el
 // envase—, así que se cobran encima del precio del servicio y se listan aparte.
-// El granel (por tapa) y la bolsa sí van servidos dentro del servicio.
+// El granel (por medida) y la bolsa sí van servidos dentro del servicio.
 function marcaDeCarga(cg) {
   return (cg.productos ?? [])
     .filter(seVendePorUnidad)
@@ -79,7 +79,7 @@ function precioDeCarga(cg, esEncargo) {
   return costoDeCarga(cg);
 }
 
-// Unidad de venta de un producto en texto ("2 botellas" / "3 tapas").
+// Unidad de venta de un producto en texto ("2 botellas" / "3 medidas").
 function unidadProdTxt(p) {
   const n = Number(p.cantidad);
   if (p.unidad === 'pieza') return n === 1 ? 'pieza' : 'piezas';
@@ -88,7 +88,7 @@ function unidadProdTxt(p) {
     if (seVendePorUnidad(p)) return n === 1 ? 'unidad' : 'unidades';
     return n === 1 ? 'botella' : 'botellas';
   }
-  return n === 1 ? 'tapa' : 'tapas';
+  return n === 1 ? 'medida' : 'medidas';
 }
 function nombreProd(p) {
   return etiquetaProducto(p) + (p.tipo_liquido === 'granel' && !esPolvo(p) ? ' · Granel' : '');
@@ -177,10 +177,10 @@ function armarTextoTicket(nota, rfc, notaPie) {
     maquinasDeCarga(cg, nota.tipo_servicio).forEach(m => {
       L.push(`${vineta}1 x ${m.nombre}${m.tipo ? ` (${m.tipo})` : ''} — ${fmtMonto(m.precio)}`);
     });
-    // Las tapas son información interna: no se listan en el ticket.
-    (cg.productos ?? []).filter(p => p.unidad !== 'tapa')
+    // Las medidas son información interna: no se listan en el ticket.
+    (cg.productos ?? []).filter(p => p.unidad !== 'medida')
       .sort((a, b) => ordenProducto(a) - ordenProducto(b)).forEach(p => {
-      const monto = p.es_por_tapa && Number(p.subtotal) === 0 ? 'Incluido' : fmtMonto(p.subtotal);
+      const monto = p.es_por_medida && Number(p.subtotal) === 0 ? 'Incluido' : fmtMonto(p.subtotal);
       L.push(`  • ${nombreProd(p)} x${p.cantidad} ${unidadProdTxt(p)} — ${monto}`);
     });
     if (Number(cg.ajuste)) {
@@ -227,12 +227,12 @@ function armarTextoTicket(nota, rfc, notaPie) {
     volcarBloque(adicionales);
   }
 
-  const productos = (nota.productos ?? []).filter(p => p.unidad !== 'tapa')
+  const productos = (nota.productos ?? []).filter(p => p.unidad !== 'medida')
     .sort((a, b) => ordenProducto(a) - ordenProducto(b));
   if (productos.length > 0) {
     L.push('', '*Productos*');
     productos.forEach(p => {
-      const monto = p.es_por_tapa && Number(p.subtotal) === 0 ? 'Incluido' : fmtMonto(p.subtotal);
+      const monto = p.es_por_medida && Number(p.subtotal) === 0 ? 'Incluido' : fmtMonto(p.subtotal);
       L.push(`  • ${nombreProd(p)} x${p.cantidad} ${unidadProdTxt(p)} — ${monto}`);
     });
   }
@@ -410,7 +410,7 @@ export default function TicketNota() {
 
   const cargas      = nota.cargas ?? [];
   const productos   = [...(nota.productos ?? [])].sort((a, b) => ordenProducto(a) - ordenProducto(b));
-  // Los productos de la nota que sí se imprimen: las tapas son información
+  // Los productos de la nota que sí se imprimen: las medidas son información
   // interna y no salen en el ticket.
   //
   // Y en POR ENCARGO tampoco sale lo que se SIRVE dentro del servicio —el granel
@@ -418,7 +418,7 @@ export default function TicketNota() {
   // sumaría al ojo del cliente algo que el total no cobra. Los de MARCA, que se
   // venden por unidad, sí se imprimen.
   const prodsNota   = productos.filter(p =>
-    p.unidad !== 'tapa'
+    p.unidad !== 'medida'
     && (nota.tipo_servicio !== 'POR_ENCARGO' || seVendePorUnidad(p)));
   // Cargas creadas al dar de alta la nota (originales) vs. las agregadas
   // después (adicionales), para mostrarlas en bloques separados.
@@ -493,14 +493,14 @@ export default function TicketNota() {
             <span className="whitespace-nowrap">{fmtMonto(m.precio)}</span>
           </div>
         ))}
-        {/* Las tapas son información interna: no se muestran en el ticket. */}
-        {prods.filter(p => p.unidad !== 'tapa').map(p => (
+        {/* Las medidas son información interna: no se muestran en el ticket. */}
+        {prods.filter(p => p.unidad !== 'medida').map(p => (
           <div key={p.id} className="flex items-baseline justify-between gap-2">
             <span className="flex-1">
               <span className="inline-block w-9">{p.cantidad}</span>
               {nombreProd(p).toUpperCase()}
             </span>
-            {p.es_por_tapa && Number(p.subtotal) === 0
+            {p.es_por_medida && Number(p.subtotal) === 0
               ? <span className="whitespace-nowrap">INCLUIDO</span>
               : <span className="whitespace-nowrap">{fmtMonto(p.subtotal)}</span>}
           </div>
@@ -652,7 +652,7 @@ export default function TicketNota() {
                       <span className="inline-block w-9">{p.cantidad}</span>
                       {nombreProd(p).toUpperCase()}
                     </span>
-                    {p.es_por_tapa && Number(p.subtotal) === 0
+                    {p.es_por_medida && Number(p.subtotal) === 0
                       ? <span className="whitespace-nowrap">INCLUIDO</span>
                       : <span className="whitespace-nowrap">{fmtMonto(p.subtotal)}</span>}
                   </div>

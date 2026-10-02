@@ -18,11 +18,11 @@ beforeEach(async () => {
 });
 
 describe('POST /api/productos — validaciones', () => {
-  it('crea un producto de granel y calcula los derivados y el stock en tapas', async () => {
+  it('crea un producto de granel y calcula los derivados y el stock en medidas', async () => {
     const res = await request(app).post('/api/productos').set(auth(admin.token))
       .send({
         nombre: 'Suavizante', tipo_liquido: 'granel', precio_unitario: 5, precio_botella: 40,
-        volumen_envase_ml: 20000, botella_ml: 800, tapa_ml: 200,
+        volumen_envase_ml: 20000, botella_ml: 800, medida_ml: 200,
         stock_bidones: 1, stock_botellas: 10,
       });
     expect(res.status).toBe(201);
@@ -30,36 +30,36 @@ describe('POST /api/productos — validaciones', () => {
     expect(res.body.sucursal).toBe('centro');
     expect(res.body.archivado).toBe(false);
     expect(res.body.tipo_liquido).toBe('granel');
-    expect(Number(res.body.tapas_por_botella)).toBe(4);   // 800 / 200
+    expect(Number(res.body.medidas_por_botella)).toBe(4);   // 800 / 200
     expect(Number(res.body.botellas_por_bidon)).toBe(25); // 20000 / 800
-    // Stock en tapas: 10 botellas × 4 = 40 rellenadas; 1 bidón = 100 a granel.
+    // Stock en medidas: 10 botellas × 4 = 40 rellenadas; 1 bidón = 100 a granel.
     expect(Number(res.body.stock_actual)).toBe(40);
-    expect(Number(res.body.stock_granel_tapas)).toBe(100);
+    expect(Number(res.body.stock_granel_medidas)).toBe(100);
   });
 
   it('crea un producto de marca (sin bidón)', async () => {
     const res = await request(app).post('/api/productos').set(auth(admin.token))
       .send({
         nombre: 'Ariel', tipo_liquido: 'marca', precio_unitario: 8, precio_botella: 60,
-        botella_ml: 1000, tapa_ml: 200, stock_botellas: 5,
+        botella_ml: 1000, medida_ml: 200, stock_botellas: 5,
       });
     expect(res.status).toBe(201);
     expect(res.body.tipo_liquido).toBe('marca');
-    expect(Number(res.body.tapas_por_botella)).toBe(5);      // 1000 / 200
+    expect(Number(res.body.medidas_por_botella)).toBe(5);      // 1000 / 200
     expect(Number(res.body.stock_actual)).toBe(25);          // 5 × 5
-    expect(Number(res.body.stock_granel_tapas)).toBe(0);
+    expect(Number(res.body.stock_granel_medidas)).toBe(0);
   });
 
-  it('acepta tapas por botella y deriva el tamaño de la tapa', async () => {
+  it('acepta medidas por botella y deriva el tamaño de la medida', async () => {
     const res = await request(app).post('/api/productos').set(auth(admin.token))
       .send({
         nombre: 'Cloro', tipo_liquido: 'granel', precio_unitario: 4, precio_botella: 30,
-        volumen_envase_ml: 20000, botella_ml: 800, tapas_por_botella: 4, // sin tapa_ml
+        volumen_envase_ml: 20000, botella_ml: 800, medidas_por_botella: 4, // sin medida_ml
         stock_botellas: 5,
       });
     expect(res.status).toBe(201);
-    expect(Number(res.body.tapa_ml)).toBe(200);            // 800 / 4
-    expect(Number(res.body.tapas_por_botella)).toBe(4);
+    expect(Number(res.body.medida_ml)).toBe(200);            // 800 / 4
+    expect(Number(res.body.medidas_por_botella)).toBe(4);
     expect(Number(res.body.stock_actual)).toBe(20);        // 5 × 4
   });
 
@@ -70,16 +70,16 @@ describe('POST /api/productos — validaciones', () => {
     expect(res.body.message).toMatch(/nombre/i);
   });
 
-  it('sin tamaño de botella/tapa → 400', async () => {
+  it('sin tamaño de botella/medida → 400', async () => {
     const res = await request(app).post('/api/productos').set(auth(admin.token))
       .send({ nombre: 'Suavizante', tipo_liquido: 'granel' });
     expect(res.status).toBe(400);
-    expect(res.body.message).toMatch(/botella y de la tapa|mL/i);
+    expect(res.body.message).toMatch(/botella y de la medida|mL/i);
   });
 
   it('granel sin volumen de bidón → 400', async () => {
     const res = await request(app).post('/api/productos').set(auth(admin.token))
-      .send({ nombre: 'Suavizante', tipo_liquido: 'granel', botella_ml: 800, tapa_ml: 200 });
+      .send({ nombre: 'Suavizante', tipo_liquido: 'granel', botella_ml: 800, medida_ml: 200 });
     expect(res.status).toBe(400);
     expect(res.body.message).toMatch(/bidón/i);
   });
@@ -89,20 +89,20 @@ describe('movimientos de stock (rellenar / entrada / salida / historial)', () =>
   async function crearGranel(overrides = {}) {
     const res = await request(app).post('/api/productos').set(auth(admin.token)).send({
       nombre: 'Suavizante', tipo_liquido: 'granel', precio_unitario: 5, precio_botella: 40,
-      volumen_envase_ml: 20000, botella_ml: 800, tapa_ml: 200,
+      volumen_envase_ml: 20000, botella_ml: 800, medida_ml: 200,
       stock_bidones: 1, stock_botellas: 0, ...overrides,
     });
     return res.body;
   }
 
   it('rellenar mueve líquido del bidón a botellas rellenadas', async () => {
-    const p = await crearGranel(); // 100 tapas a granel, 0 rellenadas
+    const p = await crearGranel(); // 100 medidas a granel, 0 rellenadas
     const res = await request(app).post(`/api/productos/${p.id}/rellenar`).set(auth(admin.token))
       .send({ botellas: 15 });
     expect(res.status).toBe(200);
-    // 15 botellas × 4 = 60 tapas movidas.
+    // 15 botellas × 4 = 60 medidas movidas.
     expect(Number(res.body.stock_actual)).toBe(60);        // rellenadas
-    expect(Number(res.body.stock_granel_tapas)).toBe(40);  // quedan en el bidón (10 botellas)
+    expect(Number(res.body.stock_granel_medidas)).toBe(40);  // quedan en el bidón (10 botellas)
   });
 
   it('rellenar por encima de lo disponible a granel → 400 (topado)', async () => {
@@ -119,7 +119,7 @@ describe('movimientos de stock (rellenar / entrada / salida / historial)', () =>
     const entrada = await request(app).post(`/api/productos/${p.id}/movimiento`).set(auth(admin.token))
       .send({ tipo: 'entrada', destino: 'granel', cantidad: 1, unidad: 'bidon' });
     expect(entrada.status).toBe(200);
-    expect(Number(entrada.body.stock_granel_tapas)).toBe(100);
+    expect(Number(entrada.body.stock_granel_medidas)).toBe(100);
 
     const salida = await request(app).post(`/api/productos/${p.id}/movimiento`).set(auth(admin.token))
       .send({ tipo: 'salida', destino: 'botellas', cantidad: 2, unidad: 'botella', motivo: 'Derrame' });
@@ -141,7 +141,7 @@ describe('movimientos de stock (rellenar / entrada / salida / historial)', () =>
     // Entrada inicial del bidón + el rellenado.
     expect(res.body.length).toBeGreaterThanOrEqual(2);
     expect(res.body[0].tipo).toBe('rellenar');
-    expect(res.body[0].cantidad_tapas).toBe(20); // 5 × 4
+    expect(res.body[0].cantidad_medidas).toBe(20); // 5 × 4
   });
 });
 
@@ -294,12 +294,12 @@ describe('DELETE múltiple /api/productos/eliminar-multiples', () => {
 describe('GET /api/productos/reporte-diario', () => {
   // Inserta un movimiento con fecha controlada (hora local MX) para probar la
   // reconstrucción de la existencia al cierre de un día.
-  async function insertarMov(productoId, { tipo, destino = 'botellas', tapas, fecha }) {
+  async function insertarMov(productoId, { tipo, destino = 'botellas', medidas, fecha }) {
     await pool.query(
       `INSERT INTO producto_movimientos
-         (producto_id, sucursal, usuario_id, tipo, destino, cantidad_tapas, descripcion, created_at)
+         (producto_id, sucursal, usuario_id, tipo, destino, cantidad_medidas, descripcion, created_at)
        VALUES ($1, 'centro', $2, $3, $4, $5, 'test', $6)`,
-      [productoId, admin.id, tipo, destino, tapas, fecha]
+      [productoId, admin.id, tipo, destino, medidas, fecha]
     );
   }
 
@@ -307,8 +307,8 @@ describe('GET /api/productos/reporte-diario', () => {
     const res = await request(app).post('/api/productos').set(auth(admin.token))
       .send({
         nombre: 'Suavizante', tipo_liquido: 'granel', precio_unitario: 5, precio_botella: 40,
-        volumen_envase_ml: 20000, botella_ml: 800, tapa_ml: 200,
-        stock_bidones: 1, stock_botellas: 12, // 12×4 = 48 tapas rellenadas; 1 bidón = 100 a granel
+        volumen_envase_ml: 20000, botella_ml: 800, medida_ml: 200,
+        stock_bidones: 1, stock_botellas: 12, // 12×4 = 48 medidas rellenadas; 1 bidón = 100 a granel
       });
     expect(res.status).toBe(201);
     return res.body.id;
@@ -318,14 +318,14 @@ describe('GET /api/productos/reporte-diario', () => {
     const id = await crearGranel();
     // Se controla toda la historia: se limpia el movimiento inicial que crea el
     // alta y se arma una línea de tiempo propia, fijando la existencia actual.
-    //   20/ago: entran 60 tapas → cierre 60
+    //   20/ago: entran 60 medidas → cierre 60
     //   21/ago: se venden 12    → cierre 48
-    //   22/ago: entran 20 tapas → cierre 68  (= existencia actual)
+    //   22/ago: entran 20 medidas → cierre 68  (= existencia actual)
     await pool.query('DELETE FROM producto_movimientos WHERE producto_id = $1', [id]);
-    await insertarMov(id, { tipo: 'entrada', tapas: 60, fecha: '2026-08-20 10:00:00-06' });
-    await insertarMov(id, { tipo: 'venta',   tapas: 12, fecha: '2026-08-21 12:00:00-06' });
-    await insertarMov(id, { tipo: 'entrada', tapas: 20, fecha: '2026-08-22 12:00:00-06' });
-    await pool.query('UPDATE productos SET stock_actual = 68, stock_granel_tapas = 100 WHERE id = $1', [id]);
+    await insertarMov(id, { tipo: 'entrada', medidas: 60, fecha: '2026-08-20 10:00:00-06' });
+    await insertarMov(id, { tipo: 'venta',   medidas: 12, fecha: '2026-08-21 12:00:00-06' });
+    await insertarMov(id, { tipo: 'entrada', medidas: 20, fecha: '2026-08-22 12:00:00-06' });
+    await pool.query('UPDATE productos SET stock_actual = 68, stock_granel_medidas = 100 WHERE id = $1', [id]);
 
     const dia = async (fecha) => {
       const r = await request(app).get(`/api/productos/reporte-diario?fecha=${fecha}`).set(auth(admin.token));
@@ -334,19 +334,19 @@ describe('GET /api/productos/reporte-diario', () => {
     };
 
     const d20 = await dia('2026-08-20');
-    expect(d20.tapas_por_botella).toBe(4);
-    expect(d20.tapas_por_bidon).toBe(100);
-    expect(d20.vendido_tapas).toBe(0);
-    expect(d20.fin_botellas_tapas).toBe(60); // 68 − (−12 + 20)
-    expect(d20.fin_granel_tapas).toBe(100);
+    expect(d20.medidas_por_botella).toBe(4);
+    expect(d20.medidas_por_bidon).toBe(100);
+    expect(d20.vendido_medidas).toBe(0);
+    expect(d20.fin_botellas_medidas).toBe(60); // 68 − (−12 + 20)
+    expect(d20.fin_granel_medidas).toBe(100);
 
     const d21 = await dia('2026-08-21');
-    expect(d21.vendido_tapas).toBe(12);      // 3 botellas
-    expect(d21.fin_botellas_tapas).toBe(48); // 68 − 20
+    expect(d21.vendido_medidas).toBe(12);      // 3 botellas
+    expect(d21.fin_botellas_medidas).toBe(48); // 68 − 20
 
     const d22 = await dia('2026-08-22');
-    expect(d22.vendido_tapas).toBe(0);
-    expect(d22.fin_botellas_tapas).toBe(68); // sin movimientos posteriores
+    expect(d22.vendido_medidas).toBe(0);
+    expect(d22.fin_botellas_medidas).toBe(68); // sin movimientos posteriores
   });
 
   // Una venta anulada el mismo día devuelve el producto al estante (movimiento
@@ -355,29 +355,29 @@ describe('GET /api/productos/reporte-diario', () => {
   it('resta del día lo que se devolvió al anular una venta', async () => {
     const id = await crearGranel();
     await pool.query('DELETE FROM producto_movimientos WHERE producto_id = $1', [id]);
-    await insertarMov(id, { tipo: 'venta',      tapas: 12, fecha: '2026-08-21 10:00:00-06' });
-    await insertarMov(id, { tipo: 'liberacion', tapas: 4,  fecha: '2026-08-21 18:00:00-06' });
+    await insertarMov(id, { tipo: 'venta',      medidas: 12, fecha: '2026-08-21 10:00:00-06' });
+    await insertarMov(id, { tipo: 'liberacion', medidas: 4,  fecha: '2026-08-21 18:00:00-06' });
     await pool.query('UPDATE productos SET stock_actual = 40 WHERE id = $1', [id]);
 
     const r = await request(app).get('/api/productos/reporte-diario?fecha=2026-08-21').set(auth(admin.token));
     expect(r.status).toBe(200);
     const p = r.body.productos.find((x) => x.id === id);
-    expect(p.vendido_tapas).toBe(8);   // 12 vendidas − 4 devueltas
-    expect(p.devuelto_tapas).toBe(4);
-    expect(p.fin_botellas_tapas).toBe(40);
+    expect(p.vendido_medidas).toBe(8);   // 12 vendidas − 4 devueltas
+    expect(p.devuelto_medidas).toBe(4);
+    expect(p.fin_botellas_medidas).toBe(40);
   });
 
   // Lo que se devuelve hoy pudo venderse ayer: ese día no salió producto, entró.
   it('un día que solo tuvo devoluciones sale en negativo y lo explica', async () => {
     const id = await crearGranel();
     await pool.query('DELETE FROM producto_movimientos WHERE producto_id = $1', [id]);
-    await insertarMov(id, { tipo: 'venta',      tapas: 8, fecha: '2026-08-20 10:00:00-06' });
-    await insertarMov(id, { tipo: 'liberacion', tapas: 8, fecha: '2026-08-21 10:00:00-06' });
+    await insertarMov(id, { tipo: 'venta',      medidas: 8, fecha: '2026-08-20 10:00:00-06' });
+    await insertarMov(id, { tipo: 'liberacion', medidas: 8, fecha: '2026-08-21 10:00:00-06' });
 
     const r = await request(app).get('/api/productos/reporte-diario?fecha=2026-08-21').set(auth(admin.token));
     const p = r.body.productos.find((x) => x.id === id);
-    expect(p.vendido_tapas).toBe(-8);
-    expect(p.devuelto_tapas).toBe(8);
+    expect(p.vendido_medidas).toBe(-8);
+    expect(p.devuelto_medidas).toBe(8);
   });
 
   // El caso real: venta de mostrador cobrada y borrada el mismo día.
@@ -385,22 +385,22 @@ describe('GET /api/productos/reporte-diario', () => {
     const id = await crearGranel();
     const venta = await request(app).post('/api/notas').set(auth(admin.token)).send({
       tipo_servicio: 'PRODUCTOS', estado_pago: 'PAGADO', forma_pago: 'EFECTIVO',
-      productos: [{ producto_id: id, cantidad: 1 }],   // 1 botella = 4 tapas
+      productos: [{ producto_id: id, cantidad: 1 }],   // 1 botella = 4 medidas
     });
     expect(venta.status).toBe(201);
 
     const conVenta = await request(app).get('/api/productos/reporte-diario').set(auth(admin.token));
-    expect(conVenta.body.productos.find((x) => x.id === id).vendido_tapas).toBe(4);
+    expect(conVenta.body.productos.find((x) => x.id === id).vendido_medidas).toBe(4);
 
     await request(app).delete(`/api/notas/${venta.body.id}`).set(auth(admin.token)).expect(204);
 
     const despues = await request(app).get('/api/productos/reporte-diario').set(auth(admin.token));
     const p = despues.body.productos.find((x) => x.id === id);
-    expect(p.vendido_tapas).toBe(0);    // la venta se deshizo: no salió nada
-    expect(p.devuelto_tapas).toBe(4);
+    expect(p.vendido_medidas).toBe(0);    // la venta se deshizo: no salió nada
+    expect(p.devuelto_medidas).toBe(4);
     // Y "queda al final" coincide con la existencia intacta.
     const { rows } = await pool.query('SELECT stock_actual FROM productos WHERE id = $1', [id]);
-    expect(p.fin_botellas_tapas).toBe(Number(rows[0].stock_actual));
+    expect(p.fin_botellas_medidas).toBe(Number(rows[0].stock_actual));
   });
 
   it('sin fecha usa el día de hoy (200)', async () => {

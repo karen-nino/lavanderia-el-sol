@@ -1,6 +1,6 @@
 import pool from '../db/pool.js';
 import { esAdmin } from '../middleware/roles.js';
-import { tarifaSecadora, precioProductoEnNota, unidadDeVenta, tapasPorUnidad, generarFolio } from '../utils/calculosNotas.js';
+import { tarifaSecadora, precioProductoEnNota, unidadDeVenta, medidasPorUnidad, generarFolio } from '../utils/calculosNotas.js';
 // El resto del archivo se apoya en el trigger de LISTEN/NOTIFY (mig. 075) para
 // encender y apagar. Aquí se llama directo porque "Encender máquina" es la
 // acción que el empleado está mirando: no debe depender de que el listener esté
@@ -189,8 +189,8 @@ async function cerrarNotaSinCargasPendientes(client, notaId, { sucursal, usuario
     await registrarMovimientosProductosNota(client, notaId, sucursal, usuarioId, 'venta');
     await client.query(
       `UPDATE productos a
-          SET stock_actual    = stock_actual    - np.cantidad_tapas,
-              stock_reservado = stock_reservado - np.cantidad_tapas
+          SET stock_actual    = stock_actual    - np.cantidad_medidas,
+              stock_reservado = stock_reservado - np.cantidad_medidas
         FROM nota_productos np
         WHERE np.nota_id = $1 AND np.producto_id = a.id`,
       [notaId]
@@ -310,7 +310,7 @@ async function liberarMaquinasDeNota(client, notaId) {
 // cifras congeladas (mig. 101), así que seguiría contando esa venta y al volver
 // a cobrar la nota el mismo dinero entraría otra vez en la caja de hoy. Es el
 // mismo motivo por el que la reversión manual solo se permite con la caja
-// abierta; aquí lo tapa por el lado automático (2026-09-22).
+// abierta; aquí lo medida por el lado automático (2026-09-22).
 class CorteCerradoError extends Error {
   constructor(folio) {
     // Ojo con lo que se promete: un corte cerrado NO se reabre (caja solo pasa
@@ -368,7 +368,7 @@ async function recalcularPrecioTotal(client, notaId, opciones = {}) {
             SELECT SUM(
               CASE
                 -- Por Encargo cobra el PRECIO DEL SERVICIO, que ya paga lo que
-                -- se sirve dentro: el granel (por tapa) y la bolsa. Los de
+                -- se sirve dentro: el granel (por medida) y la bolsa. Los de
                 -- MARCA no: esos se venden por unidad, así que van encima.
                 WHEN n.tipo_servicio = 'POR_ENCARGO' AND carga.tope IS NOT NULL
                   THEN carga.tope + carga.productos_marca
@@ -676,7 +676,7 @@ async function validarTopesCargas(client, notaId) {
             UPPER(COALESCE(nc.tipo_prenda, '')) = 'EDREDON' AS es_edredon,
             nc.precio_lavadora + nc.precio_secadora AS maquinas,
             -- Contra el tope cuenta lo que se SIRVE dentro del servicio: el
-            -- granel líquido (por tapa) y la bolsa. Lo que se vende por unidad
+            -- granel líquido (por medida) y la bolsa. Lo que se vende por unidad
             -- —marca y polvo, que el cliente se lleva entero— se cobra aparte y
             -- no gasta del presupuesto del servicio.
             COALESCE(SUM(CASE WHEN a.se_vende_por_unidad THEN 0
@@ -773,49 +773,49 @@ async function reservarProducto(client, notaId, cargaId, productoId, cantidad, s
   }
   const art = artRows[0];
   // Bolsas: por pieza (precio por pieza). Granel: la unidad la define el
-  // servicio — botella (Autoservicio) o tapa (Por Encargo). Los de marca van
+  // servicio — botella (Autoservicio) o medida (Por Encargo). Los de marca van
   // siempre por unidad, también dentro de una carga de Por Encargo.
   const esBolsa = art.clase === 'bolsa';
   const unidad = esBolsa ? 'pieza' : unidadDeVenta(art, tipo_servicio);
-  const tpu = esBolsa ? 1 : tapasPorUnidad(art, unidad);
+  const tpu = esBolsa ? 1 : medidasPorUnidad(art, unidad);
   const precioUnit = esBolsa ? (Number(art.precio_unitario) || 0) : precioProductoEnNota(art, tipo_servicio);
-  const cantidadTapas = Number(cantidad) * tpu;
-  const disponibleTapas = Number(art.stock_actual) - Number(art.stock_reservado);
-  if (disponibleTapas < cantidadTapas) {
-    const dispUnidad = unidad === 'botella' ? Math.floor(disponibleTapas / tpu) : disponibleTapas;
+  const cantidadMedidas = Number(cantidad) * tpu;
+  const disponibleMedidas = Number(art.stock_actual) - Number(art.stock_reservado);
+  if (disponibleMedidas < cantidadMedidas) {
+    const dispUnidad = unidad === 'botella' ? Math.floor(disponibleMedidas / tpu) : disponibleMedidas;
     // Nombre y unidad legibles para el aviso (la bolsa incluye su tamaño).
     const nombreArt = esBolsa && art.tamano_bolsa ? `Bolsa ${art.tamano_bolsa}` : art.nombre;
-    const uni = esBolsa ? 'bolsa(s)' : unidad === 'botella' ? 'botella(s)' : 'tapa(s)';
+    const uni = esBolsa ? 'bolsa(s)' : unidad === 'botella' ? 'botella(s)' : 'medida(s)';
     throw new Error(`No hay suficiente existencia de "${nombreArt}": quedan ${dispUnidad} ${uni} y se necesitan ${cantidad}. Carga más en Inventario o quítalo de la nota.`);
   }
   // Si el producto ya está en esta nota (y en la misma carga, si aplica) se le
   // suma la cantidad en vez de abrir otro renglón igual: así se puede pedir más
   // de lo mismo desde Salidas sin que la nota muestre el producto dos veces.
   const { rows: npRows } = await client.query(
-    `INSERT INTO nota_productos (nota_id, carga_id, producto_id, cantidad, unidad, precio_unitario, cantidad_tapas)
+    `INSERT INTO nota_productos (nota_id, carga_id, producto_id, cantidad, unidad, precio_unitario, cantidad_medidas)
           SELECT $1, $2, $3, $4, $5, $6, $7
            WHERE NOT EXISTS (
                  SELECT 1 FROM nota_productos
                   WHERE nota_id = $1 AND producto_id = $3
                     AND carga_id IS NOT DISTINCT FROM $2)
      RETURNING *`,
-    [notaId, cargaId, productoId, cantidad, unidad, precioUnit, cantidadTapas]
+    [notaId, cargaId, productoId, cantidad, unidad, precioUnit, cantidadMedidas]
   );
   if (npRows.length === 0) {
     const { rows } = await client.query(
       `UPDATE nota_productos
           SET cantidad       = cantidad + $4,
-              cantidad_tapas = cantidad_tapas + $5,
+              cantidad_medidas = cantidad_medidas + $5,
               precio_unitario = $6
         WHERE nota_id = $1 AND producto_id = $3 AND carga_id IS NOT DISTINCT FROM $2
      RETURNING *`,
-      [notaId, cargaId, productoId, cantidad, cantidadTapas, precioUnit]
+      [notaId, cargaId, productoId, cantidad, cantidadMedidas, precioUnit]
     );
     npRows.push(rows[0]);
   }
   await client.query(
     'UPDATE productos SET stock_reservado = stock_reservado + $1 WHERE id = $2',
-    [cantidadTapas, productoId]
+    [cantidadMedidas, productoId]
   );
   return { ...npRows[0], nombre: art.nombre, subtotal: Number(npRows[0].cantidad) * Number(npRows[0].precio_unitario) };
 }
@@ -824,7 +824,7 @@ async function reservarProducto(client, notaId, cargaId, productoId, cantidad, s
 async function liberarProductosDeNota(client, notaId) {
   await client.query(
     `UPDATE productos a
-        SET stock_reservado = stock_reservado - np.cantidad_tapas
+        SET stock_reservado = stock_reservado - np.cantidad_medidas
       FROM nota_productos np
       WHERE np.nota_id = $1 AND np.producto_id = a.id`,
     [notaId]
@@ -838,15 +838,15 @@ async function liberarProductosDeNota(client, notaId) {
 async function registrarMovimientosProductosNota(client, notaId, sucursal, usuarioId, tipo) {
   await client.query(
     `INSERT INTO producto_movimientos
-       (producto_id, sucursal, usuario_id, tipo, destino, cantidad_tapas, descripcion, nota_id)
+       (producto_id, sucursal, usuario_id, tipo, destino, cantidad_medidas, descripcion, nota_id)
      SELECT np.producto_id, $2, $3, $4,
             (CASE WHEN a.clase = 'bolsa' THEN 'piezas' ELSE 'botellas' END),
-            np.cantidad_tapas,
+            np.cantidad_medidas,
             np.cantidad || (CASE
                               WHEN np.unidad = 'pieza' THEN ' bolsa(s)'
                               WHEN np.unidad = 'botella'
                                 THEN (CASE WHEN a.se_vende_por_unidad THEN ' unidad(es)' ELSE ' botella(s)' END)
-                              ELSE ' tapa(s)' END),
+                              ELSE ' medida(s)' END),
             np.nota_id
        FROM nota_productos np
        JOIN productos a ON a.id = np.producto_id
@@ -1254,7 +1254,7 @@ async function cargasDeNota(client, notaId) {
   );
   const { rows: prods } = await client.query(
     `SELECT np.id, np.carga_id, np.producto_id, a.nombre, np.cantidad, np.unidad, np.precio_unitario,
-            a.es_por_tapa, a.tipo_liquido, a.forma, a.se_vende_por_unidad, a.clase, a.tamano_bolsa, a.marca,
+            a.es_por_medida, a.tipo_liquido, a.forma, a.se_vende_por_unidad, a.clase, a.tamano_bolsa, a.marca,
             (np.cantidad * np.precio_unitario) AS subtotal
        FROM nota_productos np
        JOIN productos a ON a.id = np.producto_id
@@ -1490,7 +1490,7 @@ export const getNotaById = async (req, res) => {
 
     const { rows: productos } = await pool.query(
       `SELECT np.id, np.producto_id, a.nombre, np.cantidad, np.unidad, np.precio_unitario,
-              a.es_por_tapa, a.tipo_liquido, a.forma, a.se_vende_por_unidad, a.clase, a.tamano_bolsa, a.marca,
+              a.es_por_medida, a.tipo_liquido, a.forma, a.se_vende_por_unidad, a.clase, a.tamano_bolsa, a.marca,
               (np.cantidad * np.precio_unitario) AS subtotal
        FROM nota_productos np
        JOIN productos a ON a.id = np.producto_id
@@ -1781,8 +1781,8 @@ export const createNota = async (req, res) => {
     }
 
     // ── Insertar productos en nota_productos ────────────────
-    // (nivel nota, carga_id NULL). La unidad/precio/tapas los resuelve
-    // reservarProducto según el servicio (botella en Autoservicio, tapa en Por Encargo).
+    // (nivel nota, carga_id NULL). La unidad/precio/medidas los resuelve
+    // reservarProducto según el servicio (botella en Autoservicio, medida en Por Encargo).
     const productosInsertados = [];
     for (const { producto_id, cantidad } of productos) {
       if (!producto_id || !cantidad || Number(cantidad) <= 0) continue;
@@ -1820,8 +1820,8 @@ export const createNota = async (req, res) => {
       await registrarMovimientosProductosNota(client, nota.id, req.sucursal, req.user.id, 'venta');
       await client.query(
         `UPDATE productos a
-            SET stock_actual    = stock_actual    - np.cantidad_tapas,
-                stock_reservado = stock_reservado - np.cantidad_tapas
+            SET stock_actual    = stock_actual    - np.cantidad_medidas,
+                stock_reservado = stock_reservado - np.cantidad_medidas
           FROM nota_productos np
           WHERE np.nota_id = $1 AND np.producto_id = a.id`,
         [nota.id]
@@ -2007,7 +2007,7 @@ export const updateNota = async (req, res) => {
       // stock_reservado). Los nuevos productos se reservan en insertarCargas.
       await client.query(
         `UPDATE productos a
-            SET stock_reservado = stock_reservado - np.cantidad_tapas
+            SET stock_reservado = stock_reservado - np.cantidad_medidas
           FROM nota_productos np
           WHERE np.nota_id = $1 AND np.carga_id IS NOT NULL
             AND NOT (np.carga_id = ANY($2::int[]))
@@ -2073,14 +2073,14 @@ export const updateNota = async (req, res) => {
       // de cargas se manejan junto con sus cargas.
       await client.query(
         `UPDATE productos a
-           SET stock_reservado = stock_reservado - np.cantidad_tapas
+           SET stock_reservado = stock_reservado - np.cantidad_medidas
          FROM nota_productos np
          WHERE np.nota_id = $1 AND np.carga_id IS NULL AND np.producto_id = a.id`,
         [id]
       );
       await client.query('DELETE FROM nota_productos WHERE nota_id = $1 AND carga_id IS NULL', [id]);
 
-      // Insertar los nuevos productos (nivel nota). La unidad/precio/tapas los
+      // Insertar los nuevos productos (nivel nota). La unidad/precio/medidas los
       // resuelve reservarProducto según el servicio.
       const productosInsertados = [];
       for (const { producto_id, cantidad } of productos) {
@@ -2291,7 +2291,7 @@ export const quitarCarga = async (req, res) => {
     // filas de nota_productos pero no revierte stock_reservado).
     await client.query(
       `UPDATE productos a
-          SET stock_reservado = stock_reservado - np.cantidad_tapas
+          SET stock_reservado = stock_reservado - np.cantidad_medidas
         FROM nota_productos np
         WHERE np.carga_id = $1 AND np.producto_id = a.id`,
       [cargaId]
@@ -2467,7 +2467,7 @@ export const eliminarNota = async (req, res) => {
       await registrarMovimientosProductosNota(client, id, req.sucursal, req.user.id, 'liberacion');
       await client.query(
         `UPDATE productos a
-           SET stock_actual = stock_actual + np.cantidad_tapas
+           SET stock_actual = stock_actual + np.cantidad_medidas
          FROM nota_productos np
          WHERE np.nota_id = $1 AND np.producto_id = a.id`,
         [id]
@@ -2475,7 +2475,7 @@ export const eliminarNota = async (req, res) => {
     } else if (!['FINALIZADA', 'CANCELADA'].includes(estadoNota)) {
       await client.query(
         `UPDATE productos a
-           SET stock_reservado = stock_reservado - np.cantidad_tapas
+           SET stock_reservado = stock_reservado - np.cantidad_medidas
          FROM nota_productos np
          WHERE np.nota_id = $1 AND np.producto_id = a.id`,
         [id]
@@ -2586,7 +2586,7 @@ export const cambiarEstadoNota = async (req, res) => {
         await registrarMovimientosProductosNota(client, id, req.sucursal, req.user.id, 'liberacion');
         await client.query(
           `UPDATE productos a
-             SET stock_actual = stock_actual + np.cantidad_tapas
+             SET stock_actual = stock_actual + np.cantidad_medidas
            FROM nota_productos np
            WHERE np.nota_id = $1 AND np.producto_id = a.id`,
           [id]
@@ -2594,7 +2594,7 @@ export const cambiarEstadoNota = async (req, res) => {
       } else {
         await client.query(
           `UPDATE productos a
-             SET stock_reservado = stock_reservado - np.cantidad_tapas
+             SET stock_reservado = stock_reservado - np.cantidad_medidas
            FROM nota_productos np
            WHERE np.nota_id = $1 AND np.producto_id = a.id`,
           [id]
@@ -2607,8 +2607,8 @@ export const cambiarEstadoNota = async (req, res) => {
       await registrarMovimientosProductosNota(client, id, req.sucursal, req.user.id, 'venta');
       await client.query(
         `UPDATE productos a
-           SET stock_actual    = stock_actual    - np.cantidad_tapas,
-               stock_reservado = stock_reservado - np.cantidad_tapas
+           SET stock_actual    = stock_actual    - np.cantidad_medidas,
+               stock_reservado = stock_reservado - np.cantidad_medidas
          FROM nota_productos np
          WHERE np.nota_id = $1 AND np.producto_id = a.id`,
         [id]
@@ -4301,7 +4301,7 @@ export const addProductoToNota = async (req, res) => {
       });
     }
 
-    // La unidad/precio/tapas se resuelven según el servicio (botella o tapa).
+    // La unidad/precio/medidas se resuelven según el servicio (botella o medida).
     let fila;
     try {
       fila = await reservarProducto(client, id, null, producto_id, cantidad, req.sucursal, notaRows[0].tipo_servicio);
@@ -4371,7 +4371,7 @@ export const removeProductoFromNota = async (req, res) => {
 
     await client.query(
       'UPDATE productos SET stock_reservado = stock_reservado - $1 WHERE id = $2',
-      [np.cantidad_tapas, productoId]
+      [np.cantidad_medidas, productoId]
     );
 
     // Si el cambio movió el total y la nota ya estaba pagada, el cobro deja de
@@ -4432,11 +4432,11 @@ export const cambiarCantidadProducto = async (req, res) => {
       });
     }
 
-    // Las tapas por unidad salen de lo que ya está guardado: así una botella
-    // sigue valiendo las mismas tapas aunque el catálogo haya cambiado después.
-    const tapasPorPieza = Number(np.cantidad_tapas) / Number(np.cantidad);
-    const tapasNuevas = cantidad * tapasPorPieza;
-    const delta = tapasNuevas - Number(np.cantidad_tapas);
+    // Las medidas por unidad salen de lo que ya está guardado: así una botella
+    // sigue valiendo las mismas medidas aunque el catálogo haya cambiado después.
+    const medidasPorPieza = Number(np.cantidad_medidas) / Number(np.cantidad);
+    const medidasNuevas = cantidad * medidasPorPieza;
+    const delta = medidasNuevas - Number(np.cantidad_medidas);
 
     const { rows: artRows } = await client.query(
       'SELECT nombre, stock_actual, stock_reservado FROM productos WHERE id = $1 AND sucursal = $2 FOR UPDATE',
@@ -4456,8 +4456,8 @@ export const cambiarCantidadProducto = async (req, res) => {
     }
 
     await client.query(
-      'UPDATE nota_productos SET cantidad = $1, cantidad_tapas = $2 WHERE nota_id = $3 AND producto_id = $4',
-      [cantidad, tapasNuevas, id, productoId]
+      'UPDATE nota_productos SET cantidad = $1, cantidad_medidas = $2 WHERE nota_id = $3 AND producto_id = $4',
+      [cantidad, medidasNuevas, id, productoId]
     );
     await client.query(
       'UPDATE productos SET stock_reservado = stock_reservado + $1 WHERE id = $2',

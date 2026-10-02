@@ -116,14 +116,14 @@ async function limpiar(db) {
   const m = await db.query('DELETE FROM producto_movimientos WHERE id = ANY($1) AND sucursal = $2',
                            [movimientos, SUCURSAL]);
   for (const s of stockPrevio) {
-    await db.query('UPDATE productos SET stock_actual = $2, stock_granel_tapas = $3 WHERE id = $1',
-                   [s.id, s.stock_actual, s.stock_granel_tapas]);
+    await db.query('UPDATE productos SET stock_actual = $2, stock_granel_medidas = $3 WHERE id = $1',
+                   [s.id, s.stock_actual, s.stock_granel_medidas]);
   }
   // Reserva apartada por las notas en espera (se recalcula desde sus productos).
   await db.query(
     `UPDATE productos p
-        SET stock_reservado = GREATEST(0, p.stock_reservado - x.tapas)
-       FROM (SELECT np.producto_id, SUM(np.cantidad_tapas) AS tapas
+        SET stock_reservado = GREATEST(0, p.stock_reservado - x.medidas)
+       FROM (SELECT np.producto_id, SUM(np.cantidad_medidas) AS medidas
                FROM nota_productos np JOIN notas n ON n.id = np.nota_id
               WHERE np.nota_id = ANY($1) AND n.estado NOT IN ('CANCELADA', 'FINALIZADA')
                 AND n.estado_pago = 'PENDIENTE'
@@ -168,7 +168,7 @@ async function sembrar(db) {
   };
 
   const { rows: productos } = await db.query(
-    `SELECT id, nombre, marca, clase, precio_unitario, precio_botella, botella_ml, tapa_ml
+    `SELECT id, nombre, marca, clase, precio_unitario, precio_botella, botella_ml, medida_ml
        FROM productos WHERE sucursal = $1 AND archivado = false`, [SUCURSAL]);
   const liquidos = productos.filter(p => p.clase === 'liquido');
   const bolsas   = productos.filter(p => p.clase === 'bolsa');
@@ -318,14 +318,14 @@ async function sembrar(db) {
             const precio = porBotella ? Number(p.precio_botella ?? 0) : Number(p.precio_unitario ?? 0);
             if (!precio) continue;
             const cant = porBotella ? 1 : entre(1, 3);
-            const tapas = porBotella
-              ? Math.max(1, Math.floor(Number(p.botella_ml || 0) / Number(p.tapa_ml || 1)) || 1)
+            const medidas = porBotella
+              ? Math.max(1, Math.floor(Number(p.botella_ml || 0) / Number(p.medida_ml || 1)) || 1)
               : cant;
             totalProductos += precio * cant;
             await db.query(
-              `INSERT INTO nota_productos (nota_id, producto_id, cantidad, precio_unitario, unidad, cantidad_tapas, carga_id, created_at)
+              `INSERT INTO nota_productos (nota_id, producto_id, cantidad, precio_unitario, unidad, cantidad_medidas, carga_id, created_at)
                VALUES ($1, $2, $3, $4, $5, $6, $7, $8::timestamp AT TIME ZONE 'America/Mexico_City')`,
-              [notaId, p.id, cant, precio, porBotella ? 'botella' : 'tapa', tapas, carga, stamp]);
+              [notaId, p.id, cant, precio, porBotella ? 'botella' : 'medida', medidas, carga, stamp]);
           }
         }
       }
@@ -336,7 +336,7 @@ async function sembrar(db) {
           const cant = entre(1, 2);
           totalProductos += precio * cant;
           await db.query(
-            `INSERT INTO nota_productos (nota_id, producto_id, cantidad, precio_unitario, unidad, cantidad_tapas, carga_id, created_at)
+            `INSERT INTO nota_productos (nota_id, producto_id, cantidad, precio_unitario, unidad, cantidad_medidas, carga_id, created_at)
              VALUES ($1, $2, $3, $4, 'pieza', $3, NULL, $5::timestamp AT TIME ZONE 'America/Mexico_City')`,
             [notaId, b.id, cant, precio, stamp]);
         }
@@ -390,10 +390,10 @@ async function cuadrar(db) {
   // ocurra primero. Una nota cancelada devuelve el producto; una que sigue en
   // espera y sin cobrar lo tiene apenas reservado.
   const { rows: lineas } = await db.query(
-    `SELECT np.id, np.nota_id, np.producto_id, np.cantidad, np.cantidad_tapas, np.unidad,
+    `SELECT np.id, np.nota_id, np.producto_id, np.cantidad, np.cantidad_medidas, np.unidad,
             n.created_at, n.usuario_id, n.estado, n.estado_pago,
-            p.clase, p.tipo_liquido, p.botella_ml, p.tapa_ml, p.volumen_envase_ml,
-            p.bolsas_por_rollo, p.stock_actual, p.stock_granel_tapas
+            p.clase, p.tipo_liquido, p.botella_ml, p.medida_ml, p.volumen_envase_ml,
+            p.bolsas_por_rollo, p.stock_actual, p.stock_granel_medidas
        FROM nota_productos np
        JOIN notas n    ON n.id = np.nota_id
        JOIN productos p ON p.id = np.producto_id
@@ -415,40 +415,40 @@ async function cuadrar(db) {
   const movVenta = async (l, destino) => {
     const etiqueta = l.unidad === 'pieza' ? ' bolsa(s)'
       : l.unidad === 'botella' ? (l.tipo_liquido === 'marca' ? ' unidad(es)' : ' botella(s)')
-      : ' tapa(s)';
+      : ' medida(s)';
     const { rows } = await db.query(
       `INSERT INTO producto_movimientos
-         (producto_id, sucursal, usuario_id, tipo, destino, cantidad_tapas, descripcion, nota_id, created_at)
+         (producto_id, sucursal, usuario_id, tipo, destino, cantidad_medidas, descripcion, nota_id, created_at)
        VALUES ($1, $2, $3, 'venta', $4, $5, $6, $7, $8) RETURNING id`,
-      [l.producto_id, SUCURSAL, l.usuario_id, destino, l.cantidad_tapas,
+      [l.producto_id, SUCURSAL, l.usuario_id, destino, l.cantidad_medidas,
        `${l.cantidad}${etiqueta}`, l.nota_id, l.created_at]);
     movimientos.push(rows[0].id);
   };
 
-  const movEntrada = async (prodId, usuarioId, tipo, destino, tapas, desc, cuando) => {
+  const movEntrada = async (prodId, usuarioId, tipo, destino, medidas, desc, cuando) => {
     const { rows } = await db.query(
       `INSERT INTO producto_movimientos
-         (producto_id, sucursal, usuario_id, tipo, destino, cantidad_tapas, descripcion, created_at)
+         (producto_id, sucursal, usuario_id, tipo, destino, cantidad_medidas, descripcion, created_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
-      [prodId, SUCURSAL, usuarioId, tipo, destino, tapas, desc, cuando]);
+      [prodId, SUCURSAL, usuarioId, tipo, destino, medidas, desc, cuando]);
     movimientos.push(rows[0].id);
   };
 
   for (const [prodId, ventas] of porProducto) {
     const p = ventas[0];
-    stockPrevio.push({ id: prodId, stock_actual: p.stock_actual, stock_granel_tapas: p.stock_granel_tapas });
+    stockPrevio.push({ id: prodId, stock_actual: p.stock_actual, stock_granel_medidas: p.stock_granel_medidas });
     // El stock de hoy se toma como el que había hace 90 días: a partir de ahí
     // se simulan compras y ventas, y al final se escribe el saldo resultante.
     let botellas = Number(p.stock_actual);
-    let granel   = Number(p.stock_granel_tapas);
-    const tapasBotella = (Number(p.botella_ml) > 0 && Number(p.tapa_ml) > 0)
-      ? Math.max(1, Math.floor(Number(p.botella_ml) / Number(p.tapa_ml))) : 1;
-    const tapasBidon = (Number(p.volumen_envase_ml) > 0 && Number(p.tapa_ml) > 0)
-      ? Math.floor(Number(p.volumen_envase_ml) / Number(p.tapa_ml)) : 0;
+    let granel   = Number(p.stock_granel_medidas);
+    const medidasBotella = (Number(p.botella_ml) > 0 && Number(p.medida_ml) > 0)
+      ? Math.max(1, Math.floor(Number(p.botella_ml) / Number(p.medida_ml))) : 1;
+    const medidasBidon = (Number(p.volumen_envase_ml) > 0 && Number(p.medida_ml) > 0)
+      ? Math.floor(Number(p.volumen_envase_ml) / Number(p.medida_ml)) : 0;
     const destino = p.clase === 'bolsa' ? 'piezas' : 'botellas';
 
     for (const l of ventas) {
-      const necesita = Number(l.cantidad_tapas);
+      const necesita = Number(l.cantidad_medidas);
       // Reabasto: el mostrador repone antes de quedarse sin nada que vender.
       if (botellas - necesita < 8) {
         const cuando = new Date(new Date(l.created_at).getTime() - 2 * 3600 * 1000);
@@ -457,19 +457,19 @@ async function cuadrar(db) {
           await movEntrada(prodId, l.usuario_id, 'entrada', 'piezas', rollo, '1 rollo', cuando);
           botellas += rollo;
         } else if (p.tipo_liquido === 'granel') {
-          const relleno = 10 * tapasBotella;               // 10 botellas del bidón
-          if (granel < relleno && tapasBidon > 0) {
-            await movEntrada(prodId, l.usuario_id, 'entrada', 'granel', 2 * tapasBidon, '2 bidón(es)', cuando);
-            granel += 2 * tapasBidon;
+          const relleno = 10 * medidasBotella;               // 10 botellas del bidón
+          if (granel < relleno && medidasBidon > 0) {
+            await movEntrada(prodId, l.usuario_id, 'entrada', 'granel', 2 * medidasBidon, '2 bidón(es)', cuando);
+            granel += 2 * medidasBidon;
           }
           const pasar = Math.min(relleno, granel);
           if (pasar > 0) {
             await movEntrada(prodId, l.usuario_id, 'rellenar', 'botellas', pasar,
-                             `${Math.round(pasar / tapasBotella)} botella(s)`, cuando);
+                             `${Math.round(pasar / medidasBotella)} botella(s)`, cuando);
             botellas += pasar; granel -= pasar;
           }
         } else {
-          const caja = 12 * tapasBotella;                  // caja de 12 unidades
+          const caja = 12 * medidasBotella;                  // caja de 12 unidades
           await movEntrada(prodId, l.usuario_id, 'entrada', 'botellas', caja, '12 unidad(es)', cuando);
           botellas += caja;
         }
@@ -478,26 +478,26 @@ async function cuadrar(db) {
       botellas -= necesita;
     }
     // Compra reciente de bidones: sin esto el granel termina en las últimas
-    // tapas y el inventario abre con la alerta de "por acabarse" encima.
-    if (p.tipo_liquido === 'granel' && tapasBidon > 0 && granel < 2 * tapasBidon) {
+    // medidas y el inventario abre con la alerta de "por acabarse" encima.
+    if (p.tipo_liquido === 'granel' && medidasBidon > 0 && granel < 2 * medidasBidon) {
       const ayer = new Date();
       ayer.setDate(ayer.getDate() - 1);
       ayer.setHours(9, 0, 0, 0);
       await movEntrada(prodId, ventas[ventas.length - 1].usuario_id, 'entrada', 'granel',
-                       3 * tapasBidon, '3 bidón(es)', ayer);
-      granel += 3 * tapasBidon;
+                       3 * medidasBidon, '3 bidón(es)', ayer);
+      granel += 3 * medidasBidon;
     }
-    await db.query('UPDATE productos SET stock_actual = $2, stock_granel_tapas = $3 WHERE id = $1',
+    await db.query('UPDATE productos SET stock_actual = $2, stock_granel_medidas = $3 WHERE id = $1',
                    [prodId, Math.max(0, botellas), Math.max(0, granel)]);
   }
 
   // Lo de las notas en espera y sin cobrar queda apartado, no consumido.
   for (const l of reservadas) {
     if (!stockPrevio.some(s => s.id === l.producto_id)) {
-      stockPrevio.push({ id: l.producto_id, stock_actual: l.stock_actual, stock_granel_tapas: l.stock_granel_tapas });
+      stockPrevio.push({ id: l.producto_id, stock_actual: l.stock_actual, stock_granel_medidas: l.stock_granel_medidas });
     }
     await db.query('UPDATE productos SET stock_reservado = stock_reservado + $2 WHERE id = $1',
-                   [l.producto_id, Number(l.cantidad_tapas)]);
+                   [l.producto_id, Number(l.cantidad_medidas)]);
   }
 
   // ── Caja: una sesión por día ────────────────────────────────────────────

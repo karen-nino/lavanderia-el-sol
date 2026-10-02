@@ -1918,7 +1918,7 @@ export default function Ajustes() {
         <CatalogoEtiquetas endpoint="/etiquetas/marcas-producto" singular="Marca" inputCls={INPUT_CLS} onMensaje={setMensaje} />
       </Field>
       <div className="border-t border-gray-100 pt-4">
-        <Field label="Envases" hint="Se ofrecen al capturar el envase de un producto por tapa/medida.">
+        <Field label="Envases" hint="Se ofrecen al capturar el envase de un producto por medida.">
           <CatalogoEtiquetas endpoint="/etiquetas/envases-producto" singular="Envase" inputCls={INPUT_CLS} onMensaje={setMensaje} />
         </Field>
       </div>
@@ -2450,7 +2450,7 @@ export default function Ajustes() {
       <div className="border-t border-light-blue/60 pt-5">
         <MobileField
           label="Envases"
-          hint="Se ofrecen al capturar el envase de un producto por tapa/medida."
+          hint="Se ofrecen al capturar el envase de un producto por medida."
         >
           <CatalogoEtiquetas endpoint="/etiquetas/envases-producto" singular="Envase" inputCls={MOBILE_INPUT_CLS} onMensaje={setMensaje} />
         </MobileField>

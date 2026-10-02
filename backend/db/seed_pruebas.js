@@ -38,9 +38,9 @@ const MAQUINAS_PRUEBA = [
   { nombre: 'S2', tipo: 'secadora',         tamano: 'jumbo',   capacidad: '35kg' },
 ];
 
-// El granel se lleva en TAPAS: un bidón de 20 L con tapa de 200 mL da 100
-// tapas. El entorno de pruebas siempre arranca con 4 bidones de cada líquido.
-const TAPAS_POR_BIDON = 100;
+// El granel se lleva en MEDIDAS: un bidón de 20 L con medida de 200 mL da 100
+// medidas. El entorno de pruebas siempre arranca con 4 bidones de cada líquido.
+const MEDIDAS_POR_BIDON = 100;
 const BIDONES_PRUEBA = 4;
 
 // Productos de arranque: una copia de lo que hay en la Sucursal Retiro
@@ -49,25 +49,25 @@ const BIDONES_PRUEBA = 4;
 // un suavizante de marca y las bolsas de los tres tamaños.
 const PRODUCTOS_PRUEBA = [
   {
-    nombre: 'Jabón', clase: 'liquido', unidad: 'Tapas',
-    es_por_tapa: true, tipo_liquido: 'granel', tapas_por_envase: 100,
-    botella_ml: 800, tapa_ml: 200, precio_botella: 27, precio_unitario: 5,
+    nombre: 'Jabón', clase: 'liquido', unidad: 'Medidas',
+    es_por_medida: true, tipo_liquido: 'granel', medidas_por_envase: 100,
+    botella_ml: 800, medida_ml: 200, precio_botella: 27, precio_unitario: 5,
     envase: 'Bidón', volumen_envase_ml: 20000,
-    stock_granel_tapas: TAPAS_POR_BIDON * BIDONES_PRUEBA, stock_minimo_granel: TAPAS_POR_BIDON,
+    stock_granel_medidas: MEDIDAS_POR_BIDON * BIDONES_PRUEBA, stock_minimo_granel: MEDIDAS_POR_BIDON,
     stock_actual: 96, stock_minimo: 8,
   },
   {
-    nombre: 'Suavizante', clase: 'liquido', unidad: 'Tapas',
-    es_por_tapa: true, tipo_liquido: 'granel', tapas_por_envase: 100,
-    botella_ml: 800, tapa_ml: 200, precio_botella: 27, precio_unitario: 5,
+    nombre: 'Suavizante', clase: 'liquido', unidad: 'Medidas',
+    es_por_medida: true, tipo_liquido: 'granel', medidas_por_envase: 100,
+    botella_ml: 800, medida_ml: 200, precio_botella: 27, precio_unitario: 5,
     envase: 'Bidón', volumen_envase_ml: 20000,
-    stock_granel_tapas: TAPAS_POR_BIDON * BIDONES_PRUEBA, stock_minimo_granel: TAPAS_POR_BIDON,
+    stock_granel_medidas: MEDIDAS_POR_BIDON * BIDONES_PRUEBA, stock_minimo_granel: MEDIDAS_POR_BIDON,
     stock_actual: 96, stock_minimo: 4,
   },
   {
-    nombre: 'Suavizante', clase: 'liquido', unidad: 'Tapas', marca: 'Ensueño',
-    es_por_tapa: true, tipo_liquido: 'marca', tapas_por_envase: 1,
-    botella_ml: 1, tapa_ml: 1, precio_botella: 28,
+    nombre: 'Suavizante', clase: 'liquido', unidad: 'Medidas', marca: 'Ensueño',
+    es_por_medida: true, tipo_liquido: 'marca', medidas_por_envase: 1,
+    botella_ml: 1, medida_ml: 1, precio_botella: 28,
     stock_actual: 3, stock_minimo: 2,
   },
   {
@@ -175,9 +175,9 @@ async function main() {
           await client.query(
             `UPDATE productos
                 SET envase = $1, volumen_envase_ml = $2,
-                    stock_granel_tapas = $3, stock_minimo_granel = $4, updated_at = NOW()
+                    stock_granel_medidas = $3, stock_minimo_granel = $4, updated_at = NOW()
               WHERE id = $5`,
-            [p.envase, p.volumen_envase_ml, p.stock_granel_tapas, p.stock_minimo_granel, existente.rows[0].id]
+            [p.envase, p.volumen_envase_ml, p.stock_granel_medidas, p.stock_minimo_granel, existente.rows[0].id]
           );
           console.log(`Bidones:     ${etiquetaProducto(p)} → ${BIDONES_PRUEBA}`);
         }
@@ -185,19 +185,19 @@ async function main() {
       }
       await client.query(
         `INSERT INTO productos
-           (nombre, clase, unidad, marca, es_por_tapa, tipo_liquido, tapas_por_envase,
-            botella_ml, tapa_ml, precio_botella, precio_unitario,
+           (nombre, clase, unidad, marca, es_por_medida, tipo_liquido, medidas_por_envase,
+            botella_ml, medida_ml, precio_botella, precio_unitario,
             tamano_bolsa, bolsas_por_rollo, stock_actual, stock_minimo,
-            envase, volumen_envase_ml, stock_granel_tapas, stock_minimo_granel, sucursal)
+            envase, volumen_envase_ml, stock_granel_medidas, stock_minimo_granel, sucursal)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)`,
         [
           p.nombre, p.clase, p.unidad, p.marca ?? null,
-          p.es_por_tapa ?? false, p.tipo_liquido ?? null, p.tapas_por_envase ?? null,
-          p.botella_ml ?? null, p.tapa_ml ?? null, p.precio_botella ?? null,
+          p.es_por_medida ?? false, p.tipo_liquido ?? null, p.medidas_por_envase ?? null,
+          p.botella_ml ?? null, p.medida_ml ?? null, p.precio_botella ?? null,
           p.precio_unitario ?? null, p.tamano_bolsa ?? null, p.bolsas_por_rollo ?? null,
           p.stock_actual ?? 0, p.stock_minimo ?? 0,
           p.envase ?? null, p.volumen_envase_ml ?? null,
-          p.stock_granel_tapas ?? 0, p.stock_minimo_granel ?? 0, SUCURSAL,
+          p.stock_granel_medidas ?? 0, p.stock_minimo_granel ?? 0, SUCURSAL,
         ]
       );
       console.log(`Producto:    ${etiquetaProducto(p)}`);

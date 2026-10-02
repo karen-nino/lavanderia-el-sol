@@ -221,7 +221,7 @@ export default function NuevaNota() {
   const [nuevoClienteOpen,  setNuevoClienteOpen]  = useState(false);
   // Selector para agregar un producto. `ambito` distingue los productos de la
   // nota (Autoservicio, por botella) de los de una carga (Por Encargo, por
-  // tapa); `carga` solo aplica al segundo. Un producto puesto no se cambia: se
+  // medida); `carga` solo aplica al segundo. Un producto puesto no se cambia: se
   // borra y se agrega el correcto.
   const [selectorProducto,  setSelectorProducto]  = useState(null);
   // La venta de mostrador se cobra al momento: "Aceptar" abre este modal, donde
@@ -338,18 +338,18 @@ export default function NuevaNota() {
   // fuera de la venta no suma nada aunque el form arrastre un valor viejo.
   const ajusteNum      = esVenta ? (Number(form.ajuste) || 0) : 0;
   // Precio efectivo de un producto según la unidad de venta: en Autoservicio se
-  // vende por BOTELLA (precio_botella); en Por Encargo por TAPA (precio_unitario).
-  const precioProducto = (prod, unidad = 'tapa') => {
+  // vende por BOTELLA (precio_botella); en Por Encargo por MEDIDA (precio_unitario).
+  const precioProducto = (prod, unidad = 'medida') => {
     if (!prod) return 0;
     if (prod.clase === 'bolsa') return Number(prod.precio_unitario) || 0; // por pieza
     return unidad === 'botella'
       ? (Number(prod.precio_botella) || 0)
       : (Number(prod.precio_unitario) || 0);
   };
-  // Botellas disponibles de un producto (el stock viene en tapas).
+  // Botellas disponibles de un producto (el stock viene en medidas).
   const botellasDisponibles = (prod) => {
     if (!prod) return 0;
-    const tpb = Number(prod.tapas_por_botella) || 0;
+    const tpb = Number(prod.medidas_por_botella) || 0;
     const disp = Number(prod.stock_disponible ?? prod.stock_actual) || 0;
     return tpb > 0 ? Math.floor(disp / tpb) : disp;
   };
@@ -361,11 +361,11 @@ export default function NuevaNota() {
     return n === 1 ? 'botella' : 'botellas';
   };
   // Productos que trae puestos una carga Por Encargo: jabón y suavizante
-  // (granel), 2 tapas de cada uno. Se buscan por nombre; del jabón, si no hay
+  // (granel), 2 medidas de cada uno. Se buscan por nombre; del jabón, si no hay
   // ninguno que se llame así, se toma el primer granel disponible.
-  const TAPAS_PRECARGADAS = 2;
-  const tapasDisponibles = (p) => Number(p.stock_disponible ?? p.stock_actual) || 0;
-  const conStock = (p) => tapasDisponibles(p) > 0;
+  const MEDIDAS_PRECARGADAS = 2;
+  const medidasDisponibles = (p) => Number(p.stock_disponible ?? p.stock_actual) || 0;
+  const conStock = (p) => medidasDisponibles(p) > 0;
   // Solo el granel LÍQUIDO se precarga: es el que se sirve por medidas dentro
   // del servicio. El polvo se vende por unidad, así que se agrega a mano.
   const granelServido = (p) => p.tipo_liquido === 'granel' && !esPolvo(p);
@@ -381,11 +381,11 @@ export default function NuevaNota() {
       // El jabón cae al "primer granel disponible" cuando no hay ninguno con
       // ese nombre, y ese primero puede ser justamente el suavizante.
       if (puestos.some(x => x.producto_id === String(prod.id))) continue;
-      // Si quedan menos tapas que las precargadas se pone lo que haya: dejar 2
+      // Si quedan menos medidas que las precargadas se pone lo que haya: dejar 2
       // sin existencias haría fallar el guardado por un valor que nadie eligió.
       puestos.push({
         producto_id: String(prod.id),
-        cantidad: String(Math.min(TAPAS_PRECARGADAS, tapasDisponibles(prod))),
+        cantidad: String(Math.min(MEDIDAS_PRECARGADAS, medidasDisponibles(prod))),
       });
     }
     return puestos;
@@ -393,7 +393,7 @@ export default function NuevaNota() {
   const subtotalCargas = cargasAuto.reduce((s, c) => s + subtotalDeCarga(c), 0);
   // Ámbito de los productos a nivel nota: en Autoservicio y en la venta de
   // mostrador se vende la pieza completa (botella, unidad o bolsa); en Por
-  // Encargo, el granel por tapa.
+  // Encargo, el granel por medida.
   const ambitoProductosNota = tipoServicio === 'POR_ENCARGO' ? 'encargo' : 'nota';
   // La unidad se resuelve aquí, y no con precioEnAmbito, porque esta suma se
   // calcula más arriba de donde vive ese ayudante.
@@ -401,10 +401,10 @@ export default function NuevaNota() {
     prod,
     ambitoProductosNota === 'encargo' && prod?.tipo_liquido === 'granel'
       && prod?.clase !== 'bolsa' && !esPolvo(prod)
-      ? 'tapa' : 'botella'
+      ? 'medida' : 'botella'
   );
   // En POR ENCARGO lo que el mostrador agrega se parte por cómo se vende: el
-  // granel líquido va por TAPA y las bolsas por pieza —es lo que se sirve dentro
+  // granel líquido va por MEDIDA y las bolsas por pieza —es lo que se sirve dentro
   // del servicio, así que su precio ya lo paga y gasta de su tope— y lo que se
   // vende por UNIDAD (marca y polvo) se cobra encima: el cliente se lleva el
   // envase entero. En los demás servicios todo producto es una venta.
@@ -687,7 +687,7 @@ export default function NuevaNota() {
     return { ...CARGA_ENCARGO_INIT, servicio: serv, tamano: s.tamano, tipo_prenda: s.tipo_prenda };
   };
 
-  // Lo que un servicio trae puesto: jabón y suavizante (2 tapas cada uno) y la
+  // Lo que un servicio trae puesto: jabón y suavizante (2 medidas cada uno) y la
   // bolsa de su tamaño, si queda existencia.
   const materialDeServicio = (serv) => {
     const s = SERVICIO_POR_V[serv];
@@ -745,37 +745,37 @@ export default function NuevaNota() {
     setEncargoCargas(prev => prev.map((c, idx) => (idx === i ? { ...c, ...cambios } : c)));
 
   // Diferencias entre los dos ámbitos, en un solo lugar: Por Encargo cobra por
-  // tapa y solo admite granel; Autoservicio cobra por botella (o pieza) y admite
+  // medida y solo admite granel; Autoservicio cobra por botella (o pieza) y admite
   // todo el catálogo.
   const esCarga        = (ambito) => ambito === 'carga';
   // Los productos que el cliente compra en una nota Por Encargo van a la nota
   // (no a un servicio), pero se sirven como dentro de un servicio: el granel
-  // por tapa y los de marca por unidad. El servidor los cobra con esa misma
+  // por medida y los de marca por unidad. El servidor los cobra con esa misma
   // regla, así que la pantalla tiene que usarla o el total no cuadraría.
-  const porTapaEnAmbito = (ambito) => ambito === 'carga' || ambito === 'encargo';
+  const porMedidaEnAmbito = (ambito) => ambito === 'carga' || ambito === 'encargo';
   // La marca y el polvo se venden por unidad (el envase completo) en todas
-  // partes: no se sirven por tapas como el granel líquido (2026-09-25). Así que
-  // dentro de una carga de Por Encargo el granel líquido va por tapa y lo demás
+  // partes: no se sirven por medidas como el granel líquido (2026-09-25). Así que
+  // dentro de una carga de Por Encargo el granel líquido va por medida y lo demás
   // por unidad.
-  const porTapa = (prod, ambito) =>
-    porTapaEnAmbito(ambito) && prod?.tipo_liquido === 'granel'
+  const porMedida = (prod, ambito) =>
+    porMedidaEnAmbito(ambito) && prod?.tipo_liquido === 'granel'
     && prod?.clase !== 'bolsa' && !esPolvo(prod);
-  const precioEnAmbito = (prod, ambito) => precioProducto(prod, porTapa(prod, ambito) ? 'tapa' : 'botella');
-  const unidadEnAmbito = (prod, ambito, n = 2) => (porTapa(prod, ambito)
-    ? (n === 1 ? 'tapa' : 'tapas')
+  const precioEnAmbito = (prod, ambito) => precioProducto(prod, porMedida(prod, ambito) ? 'medida' : 'botella');
+  const unidadEnAmbito = (prod, ambito, n = 2) => (porMedida(prod, ambito)
+    ? (n === 1 ? 'medida' : 'medidas')
     : unidadVentaNota(prod, n));
-  // Cuántas piezas se pueden vender: tapas si se sirve por tapa, y envases
+  // Cuántas piezas se pueden vender: medidas si se sirve por medida, y envases
   // completos (botellas o unidades) si se vende por unidad.
   const disponiblesDe  = (prod, ambito) => {
     if (!prod) return 0;
-    return porTapa(prod, ambito)
+    return porMedida(prod, ambito)
       ? Number(prod.stock_disponible ?? prod.stock_actual) || 0
       : botellasDisponibles(prod);
   };
-  // Precio con su unidad: "$5.00/tapa".
+  // Precio con su unidad: "$5.00/medida".
   const precioProductoTexto = (prod, ambito) =>
     `$${precioEnAmbito(prod, ambito).toFixed(2)}/${unidadEnAmbito(prod, ambito, 1)}`;
-  // Lo anterior más las existencias: "$5.00/tapa · 140 tapas". Solo en el
+  // Lo anterior más las existencias: "$5.00/medida · 140 medidas". Solo en el
   // selector, que es donde sirven para decidir.
   const detalleProducto = (prod, ambito) => {
     const disp = disponiblesDe(prod, ambito);
@@ -824,12 +824,12 @@ export default function NuevaNota() {
   const pasoEntrega = PASO_ENTREGA;
   const pasoResumen = PASO_RESUMEN;
 
-  // Precio de un producto DENTRO de una carga: el granel se sirve por tapa y los
+  // Precio de un producto DENTRO de una carga: el granel se sirve por medida y los
   // de marca por unidad, el envase completo (2026-09-25).
   // Se cobra aparte, encima del tope: marca y polvo (se venden por unidad).
   const esProductoMarca = (prod) => seVendePorUnidad(prod);
   const precioProductoCarga = (prod) =>
-    precioProducto(prod, esProductoMarca(prod) ? 'botella' : 'tapa');
+    precioProducto(prod, esProductoMarca(prod) ? 'botella' : 'medida');
   const sumaProductosCarga = (lista, cuenta = () => true) => (lista ?? []).reduce((sum, p) => {
     const prod = productosCatalogo.find(x => String(x.id) === String(p.producto_id));
     if (!prod || !cuenta(prod)) return sum;
@@ -1332,7 +1332,7 @@ export default function NuevaNota() {
   // Lista de productos a nivel nota. La comparten Autoservicio —donde acompañan
   // al lavado—, la venta de Productos, donde son la nota entera, y Por Encargo,
   // donde son lo que el cliente compra aparte del servicio. La unidad la pone el
-  // servicio: pieza completa en los dos primeros, granel por tapa en Por Encargo.
+  // servicio: pieza completa en los dos primeros, granel por medida en Por Encargo.
   const bloqueProductos = () => (
     <div>
       <div className="flex items-baseline gap-2 min-w-0 mb-2">
@@ -2639,7 +2639,7 @@ export default function NuevaNota() {
                 </h2>
                 <p className="text-xs text-gray-500 mt-0.5">
                   {esCarga(selectorProducto.ambito)
-                    ? `Carga ${selectorProducto.carga + 1} · se cobra por tapa`
+                    ? `Carga ${selectorProducto.carga + 1} · se cobra por medida`
                     : 'Se cobra por pieza completa'}
                 </p>
               </div>
@@ -2659,7 +2659,7 @@ export default function NuevaNota() {
               {(() => {
                 const { ambito } = selectorProducto;
                 // Todo el catálogo, en cualquier servicio (2026-09-25): el
-                // granel por tapa, los de marca por unidad y las bolsas por
+                // granel por medida, los de marca por unidad y las bolsas por
                 // pieza. Lo que cambia entre servicios es la unidad, no la lista.
                 const lista = productosCatalogo;
                 if (lista.length === 0) {
@@ -2682,7 +2682,7 @@ export default function NuevaNota() {
                     {disponibles.length === 0 && (
                       <p className="px-3 py-3 mb-1 text-sm text-bronce bg-light-bronce border border-bronce/30 rounded-xl">
                         {esCarga(ambito)
-                          ? 'Esta carga ya lleva todos los productos disponibles. Para llevar más de alguno, sube sus tapas en la lista.'
+                          ? 'Esta carga ya lleva todos los productos disponibles. Para llevar más de alguno, sube sus medidas en la lista.'
                           : 'La nota ya lleva todos los productos disponibles. Para llevar más de alguno, sube su cantidad en la lista.'}
                       </p>
                     )}

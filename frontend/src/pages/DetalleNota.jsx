@@ -14,7 +14,7 @@ import { esTerminal, puedeLiquidar, puedeFinalizar, puedeEliminar, eliminarSoloE
 import AbrirCajaModal from '../components/AbrirCajaModal';
 import { armarMensajeWhatsapp, hayMensajeWhatsapp, telefonoWhatsapp } from '../lib/mensajeWhatsapp';
 
-// Unidad de venta de un producto de la nota, en texto ("2 botellas" / "3 tapas").
+// Unidad de venta de un producto de la nota, en texto ("2 botellas" / "3 medidas").
 function unidadProdTxt(p) {
   const n = Number(p.cantidad);
   if (p.unidad === 'pieza') return n === 1 ? 'pieza' : 'piezas';
@@ -23,7 +23,7 @@ function unidadProdTxt(p) {
     if (seVendePorUnidad(p)) return n === 1 ? 'unidad' : 'unidades';
     return n === 1 ? 'botella' : 'botellas';
   }
-  return n === 1 ? 'tapa' : 'tapas';
+  return n === 1 ? 'medida' : 'medidas';
 }
 const BADGE_TIPO_SERVICIO = {
   AUTOSERVICIO: { label: 'Autoservicio', cls: 'bg-light-blue text-blue-700' },
@@ -1478,7 +1478,7 @@ export default function DetalleNota() {
                       )}
                       {prods.map(p => (
                         <p key={p.id} className="text-xs text-gray-500">
-                          {p.es_por_tapa && Number(p.subtotal) === 0
+                          {p.es_por_medida && Number(p.subtotal) === 0
                             ? <>{etiquetaProducto(p)} · {p.cantidad} {unidadProdTxt(p)} · <span className="text-green-700 font-medium">Incluido</span></>
                             : <>{etiquetaProducto(p)} · {p.cantidad} {unidadProdTxt(p)} × {fmtMonto(p.precio_unitario)} = {fmtMonto(p.subtotal)}</>}
                         </p>
@@ -1532,7 +1532,7 @@ export default function DetalleNota() {
         ) : (
           <div className="divide-y divide-gray-50">
             {[...(nota.productos || [])].sort((a, b) => ordenProducto(a) - ordenProducto(b)).map(p => {
-              const incluido = p.es_por_tapa && Number(p.subtotal) === 0;
+              const incluido = p.es_por_medida && Number(p.subtotal) === 0;
               return (
               <div key={p.id} className="px-4 py-3 flex items-center justify-between gap-3">
                 <div>

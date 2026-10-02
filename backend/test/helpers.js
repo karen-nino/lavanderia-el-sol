@@ -128,28 +128,28 @@ export async function seedCliente({ nombre = 'Cliente', apellido = 'Prueba', suc
 }
 
 // Inserta un producto con stock y devuelve su id. Por defecto un producto
-// normal (no por tapa) con precio y stock suficientes para reservarlo.
+// normal (no por medida) con precio y stock suficientes para reservarlo.
 export async function seedProducto({
   nombre = 'Detergente',
-  precio_unitario = 40,          // precio por tapa (Por Encargo)
+  precio_unitario = 40,          // precio por medida (Por Encargo)
   precio_botella = null,         // precio por botella (Autoservicio)
-  stock_actual = 100,            // en tapas
-  stock_granel_tapas = 0,
-  es_por_tapa = false,
+  stock_actual = 100,            // en medidas
+  stock_granel_medidas = 0,
+  es_por_medida = false,
   tipo_liquido = 'granel',
   forma = 'liquido',            // 'polvo' = se vende por unidad (mig. 126)
   botella_ml = 800,
-  tapa_ml = 200,                 // → 4 tapas por botella
+  medida_ml = 200,                 // → 4 medidas por botella
   stock_minimo = 0,
   sucursal = 'centro',
 } = {}) {
   const { rows } = await pool.query(
     `INSERT INTO productos
-       (nombre, precio_unitario, precio_botella, stock_actual, stock_reservado, stock_granel_tapas,
-        es_por_tapa, tipo_liquido, forma, botella_ml, tapa_ml, stock_minimo, sucursal)
+       (nombre, precio_unitario, precio_botella, stock_actual, stock_reservado, stock_granel_medidas,
+        es_por_medida, tipo_liquido, forma, botella_ml, medida_ml, stock_minimo, sucursal)
      VALUES ($1, $2, $3, $4, 0, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING id`,
-    [nombre, precio_unitario, precio_botella, stock_actual, stock_granel_tapas,
-     es_por_tapa, tipo_liquido, forma, botella_ml, tapa_ml, stock_minimo, sucursal]
+    [nombre, precio_unitario, precio_botella, stock_actual, stock_granel_medidas,
+     es_por_medida, tipo_liquido, forma, botella_ml, medida_ml, stock_minimo, sucursal]
   );
   return rows[0].id;
 }

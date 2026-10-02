@@ -759,11 +759,11 @@ export default function Layout() {
       // Solo el granel líquido tiene bidón que avisar: el polvo se cuenta en
       // unidades y ya sale en el aviso de existencia.
       .filter(p => p.tipo_liquido === 'granel' && p.forma !== 'polvo' && p.estado_granel && p.estado_granel !== 'ok')
-      .filter(p => !stockOcultas.has(`granel-${p.id}:${p.stock_granel_tapas}`))
+      .filter(p => !stockOcultas.has(`granel-${p.id}:${p.stock_granel_medidas}`))
       .sort((a, b) => (orden[a.estado_granel] ?? 99) - (orden[b.estado_granel] ?? 99))
       .map(p => ({
         key:         `granel-${p.id}`,
-        dismissKey:  `granel-${p.id}:${p.stock_granel_tapas}`,
+        dismissKey:  `granel-${p.id}:${p.stock_granel_medidas}`,
         dismissable: true,
         title:       `${(p.tipo_liquido === 'marca' && p.marca) ? p.marca : p.nombre} — granel`,
         description: p.estado_granel === 'agotado' ? 'Sin líquido a granel' : 'Granel por acabarse',

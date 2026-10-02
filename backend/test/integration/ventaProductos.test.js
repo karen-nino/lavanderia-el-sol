@@ -18,7 +18,7 @@ beforeEach(async () => {
   admin = await seedUsuario({ rol: 'admin', sucursal: 'centro' });
 });
 
-// Producto de marca que se vende por botella: 800/200 = 4 tapas por botella.
+// Producto de marca que se vende por botella: 800/200 = 4 medidas por botella.
 const seedJabon = (stock_actual = 40) =>
   seedProducto({ nombre: 'Jabón', precio_unitario: 5, precio_botella: 27, stock_actual });
 
@@ -46,7 +46,7 @@ describe('POST /api/notas — venta de Productos', () => {
     expect(Number(res.body.precio_total)).toBe(54); // 2 botellas × $27
     expect(res.body.folio).toBeTruthy();
 
-    // El renglón va a nivel nota (sin carga) y en botellas, no en tapas.
+    // El renglón va a nivel nota (sin carga) y en botellas, no en medidas.
     const { rows: prods } = await pool.query(
       'SELECT * FROM nota_productos WHERE nota_id = $1', [res.body.id]
     );
@@ -54,9 +54,9 @@ describe('POST /api/notas — venta de Productos', () => {
     expect(prods[0].carga_id).toBeNull();
     expect(prods[0].unidad).toBe('botella');
     expect(Number(prods[0].cantidad)).toBe(2);
-    expect(Number(prods[0].cantidad_tapas)).toBe(8);
+    expect(Number(prods[0].cantidad_medidas)).toBe(8);
 
-    // El producto salió del estante ya: ni una tapa queda reservada.
+    // El producto salió del estante ya: ni una medida queda reservada.
     const { rows: stock } = await pool.query(
       'SELECT stock_actual, stock_reservado FROM productos WHERE id = $1', [jabon]
     );
@@ -65,11 +65,11 @@ describe('POST /api/notas — venta de Productos', () => {
 
     // Y queda en el historial de inventario como venta.
     const { rows: movs } = await pool.query(
-      'SELECT tipo, cantidad_tapas FROM producto_movimientos WHERE nota_id = $1', [res.body.id]
+      'SELECT tipo, cantidad_medidas FROM producto_movimientos WHERE nota_id = $1', [res.body.id]
     );
     expect(movs).toHaveLength(1);
     expect(movs[0].tipo).toBe('venta');
-    expect(Number(movs[0].cantidad_tapas)).toBe(8);
+    expect(Number(movs[0].cantidad_medidas)).toBe(8);
   });
 
   it('el ajuste descuenta del total', async () => {

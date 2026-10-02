@@ -816,7 +816,7 @@ describe('servicios Por Encargo (sin tipo de máquina)', () => {
       ajuste: -20,
     });
     expect(res.status).toBe(201);
-    // Servicio Grande 150 − 20 de ajuste: la tapa va dentro y no se cobra.
+    // Servicio Grande 150 − 20 de ajuste: la medida va dentro y no se cobra.
     expect(Number(res.body.precio_total)).toBe(130);
   });
 
@@ -1064,7 +1064,7 @@ describe('topes de precio por carga (solo Por Encargo)', () => {
 
   // Los de MARCA se venden por UNIDAD: el cliente se lleva el envase, así que se
   // cobran ENCIMA del precio del servicio y no gastan de su tope. Lo que sí
-  // cuenta es lo que se SIRVE dentro: el granel por tapa y la bolsa.
+  // cuenta es lo que se SIRVE dentro: el granel por medida y la bolsa.
   it('un producto de marca se cobra sobre el tope y no lo rebasa', async () => {
     const { clienteId } = await armar();
     const marca = await seedProducto({
@@ -1080,7 +1080,7 @@ describe('topes de precio por carga (solo Por Encargo)', () => {
     // el tope solo cuentan las máquinas y lo que se sirve dentro.
     expect(res.status).toBe(201);
     expect(Number(res.body.precio_total)).toBe(220); // tope 100 + 120 del producto
-    // Y se vendió la unidad completa: 4 tapas (800 ml / 200 ml).
+    // Y se vendió la unidad completa: 4 medidas (800 ml / 200 ml).
     const { rows } = await pool.query(
       `SELECT np.unidad, a.stock_reservado
          FROM nota_productos np JOIN productos a ON a.id = np.producto_id
@@ -1590,12 +1590,12 @@ describe('PATCH /api/notas/:id — edición', () => {
 
   it('reemplazar los productos libera el stock viejo y reserva el nuevo', async () => {
     // Autoservicio vende por BOTELLA (precio_botella); el stock se reserva en
-    // tapas (4 por botella con los tamaños por defecto).
+    // medidas (4 por botella con los tamaños por defecto).
     const viejo = await seedProducto({ nombre: 'Viejo', precio_botella: 20, stock_actual: 50 });
     const nuevo = await seedProducto({ nombre: 'Nuevo', precio_botella: 35, stock_actual: 50 });
     const { notaId } = await autoservicio({ productos: [{ producto_id: viejo, cantidad: 2 }] });
 
-    // Al crear se reservaron 2 botellas del viejo = 8 tapas.
+    // Al crear se reservaron 2 botellas del viejo = 8 medidas.
     let r = await pool.query('SELECT stock_reservado FROM productos WHERE id = $1', [viejo]);
     expect(Number(r.rows[0].stock_reservado)).toBe(8);
 
@@ -1607,7 +1607,7 @@ describe('PATCH /api/notas/:id — edición', () => {
     r = await pool.query('SELECT stock_reservado FROM productos WHERE id = $1', [viejo]);
     expect(Number(r.rows[0].stock_reservado)).toBe(0);  // liberado
     r = await pool.query('SELECT stock_reservado FROM productos WHERE id = $1', [nuevo]);
-    expect(Number(r.rows[0].stock_reservado)).toBe(4);  // 1 botella × 4 tapas
+    expect(Number(r.rows[0].stock_reservado)).toBe(4);  // 1 botella × 4 medidas
   });
 
   it('un ajuste que deja el total negativo → 400', async () => {
@@ -1750,22 +1750,22 @@ describe('edredón (lavadora jumbo)', () => {
   });
 });
 
-describe('productos por tapa', () => {
-  // En Por Encargo el granel es MATERIAL del servicio: se sirve por tapa, el
+describe('productos por medida', () => {
+  // En Por Encargo el granel es MATERIAL del servicio: se sirve por medida, el
   // precio del servicio lo paga y no se cobra aparte. Lo que impide regalarlo
   // sin medida es el tope, no el cobro. Aquí la carga no tiene tamaño —nota
   // vieja, sin servicio vendido—, así que no hay tope y se cobra la máquina.
   it('en Por Encargo el granel de la nota no se cobra aparte, pero sí reserva stock', async () => {
     const clienteId = await seedCliente();
-    const tapa = await seedProducto({ nombre: 'Suavizante', precio_unitario: 15, es_por_tapa: true });
+    const medida = await seedProducto({ nombre: 'Suavizante', precio_unitario: 15, es_por_medida: true });
     const res = await request(app).post('/api/notas').set(auth(admin.token)).send({
       tipo_servicio: 'POR_ENCARGO', cliente_id: clienteId, tipo_prenda: 'ROPA',
       estado_pago: 'PENDIENTE', cargas: [{ lavadora_tipo: 'mediana' }],
-      productos: [{ producto_id: tapa, cantidad: 2 }],
+      productos: [{ producto_id: medida, cantidad: 2 }],
     });
     expect(res.status).toBe(201);
     expect(Number(res.body.precio_total)).toBe(70); // solo el lavado
-    const { rows } = await pool.query('SELECT stock_reservado FROM productos WHERE id = $1', [tapa]);
+    const { rows } = await pool.query('SELECT stock_reservado FROM productos WHERE id = $1', [medida]);
     expect(Number(rows[0].stock_reservado)).toBe(2);
   });
 
@@ -1793,22 +1793,22 @@ describe('productos por tapa', () => {
     });
     expect(res.status).toBe(201);
     expect(Number(res.body.precio_total)).toBe(30); // lavado en $0 (sin máquina) + 2 botellas × 15
-    // Se reservan 2 botellas = 8 tapas.
+    // Se reservan 2 botellas = 8 medidas.
     const { rows } = await pool.query('SELECT stock_reservado FROM productos WHERE id = $1', [prod]);
     expect(Number(rows[0].stock_reservado)).toBe(8);
   });
 
-  it('al finalizar se consume el stock del producto (en tapas) y se registra la venta', async () => {
+  it('al finalizar se consume el stock del producto (en medidas) y se registra la venta', async () => {
     const clienteId = await seedCliente();
     const lavadoraId = await seedMaquina({ nombre: 'L1', tipo: 'lavadora_mediana', tamano: 'mediana' });
-    const prod = await seedProducto({ nombre: 'Suavizante', precio_unitario: 15, stock_actual: 40 }); // 40 tapas
+    const prod = await seedProducto({ nombre: 'Suavizante', precio_unitario: 15, stock_actual: 40 }); // 40 medidas
     const creada = await request(app).post('/api/notas').set(auth(admin.token)).send({
       tipo_servicio: 'POR_ENCARGO', cliente_id: clienteId, tipo_prenda: 'ROPA',
       estado_pago: 'PENDIENTE',
       cargas: [{ lavadora_tipo: 'mediana', productos: [{ producto_id: prod, cantidad: 3 }] }],
     });
     const notaId = creada.body.id;
-    // Por Encargo → tapa: 3 tapas reservadas, stock intacto.
+    // Por Encargo → medida: 3 medidas reservadas, stock intacto.
     let r = await pool.query('SELECT stock_actual, stock_reservado FROM productos WHERE id = $1', [prod]);
     expect(Number(r.rows[0].stock_actual)).toBe(40);
     expect(Number(r.rows[0].stock_reservado)).toBe(3);
@@ -1830,7 +1830,7 @@ describe('productos por tapa', () => {
 
     // Quedó registrada la venta en el historial.
     const movs = await request(app).get(`/api/productos/${prod}/movimientos`).set(auth(admin.token));
-    expect(movs.body.some(m => m.tipo === 'venta' && Number(m.cantidad_tapas) === 3 && m.nota_id === notaId)).toBe(true);
+    expect(movs.body.some(m => m.tipo === 'venta' && Number(m.cantidad_medidas) === 3 && m.nota_id === notaId)).toBe(true);
   });
 });
 
@@ -1909,7 +1909,7 @@ describe('bolsas en Por Encargo', () => {
 });
 
 describe('escenario real de creación (repro del error)', () => {
-  it('Por Encargo con jabón (tapa) y bolsa dentro del tope', async () => {
+  it('Por Encargo con jabón (medida) y bolsa dentro del tope', async () => {
     await seedAjustes({ precio_carga_mediana: 50, precio_carga_secadora: 45, tope_carga_chico: 150 });
     const clienteId = await seedCliente();
     const jabon = await seedProducto({ nombre: 'Jabón', precio_unitario: 5, stock_actual: 100 });
@@ -2096,7 +2096,7 @@ describe('cierre automático de la nota al terminar sus cargas', () => {
   it('autoservicio sin pagar: arranca igual, espera el cobro y al liquidarlo se cierra solo', async () => {
     const prod = await seedProducto({
       nombre: 'Detergente a deber', precio_botella: 30, stock_actual: 100,
-      tipo_liquido: 'marca', botella_ml: 800, tapa_ml: 200,
+      tipo_liquido: 'marca', botella_ml: 800, medida_ml: 200,
     });
     const lav = await seedMaquina({ nombre: 'Lavadora sin pago', tipo: 'lavadora_mediana' });
     const crea = await request(app).post('/api/notas').set(auth(admin.token)).send({
@@ -2139,7 +2139,7 @@ describe('cierre automático de la nota al terminar sus cargas', () => {
   it('re-cobrar una nota ya cerrada no descuenta el inventario otra vez', async () => {
     const prod = await seedProducto({
       nombre: 'Detergente recobro', precio_botella: 30, stock_actual: 100,
-      tipo_liquido: 'marca', botella_ml: 800, tapa_ml: 200,
+      tipo_liquido: 'marca', botella_ml: 800, medida_ml: 200,
     });
     const lav = await seedMaquina({ nombre: 'Lavadora recobro', tipo: 'lavadora_mediana' });
     const crea = await request(app).post('/api/notas').set(auth(admin.token)).send({
@@ -2170,7 +2170,7 @@ describe('cierre automático de la nota al terminar sus cargas', () => {
 
     const { rows: fin } = await pool.query(
       'SELECT stock_actual, stock_reservado FROM productos WHERE id = $1', [prod]);
-    expect(Number(fin[0].stock_actual)).toBe(consumido);   // ni una tapa más
+    expect(Number(fin[0].stock_actual)).toBe(consumido);   // ni una medida más
     expect(Number(fin[0].stock_reservado)).toBe(0);
   });
 
@@ -2181,7 +2181,7 @@ describe('cierre automático de la nota al terminar sus cargas', () => {
   it('borrar una nota ya finalizada devuelve su producto al estante', async () => {
     const prod = await seedProducto({
       nombre: 'Detergente borrado', precio_botella: 30, stock_actual: 100,
-      tipo_liquido: 'marca', botella_ml: 800, tapa_ml: 200,
+      tipo_liquido: 'marca', botella_ml: 800, medida_ml: 200,
     });
     const lav = await seedMaquina({ nombre: 'Lavadora borrado', tipo: 'lavadora_mediana' });
     const crea = await request(app).post('/api/notas').set(auth(admin.token)).send({
@@ -2244,7 +2244,7 @@ describe('cierre automático de la nota al terminar sus cargas', () => {
   it('al cerrarse sola descuenta el producto del inventario, como el cierre a mano', async () => {
     const prod = await seedProducto({
       nombre: 'Detergente cierre', precio_botella: 30, stock_actual: 100,
-      tipo_liquido: 'marca', botella_ml: 800, tapa_ml: 200,
+      tipo_liquido: 'marca', botella_ml: 800, medida_ml: 200,
     });
     const lav = await seedMaquina({ nombre: 'Lavadora stock', tipo: 'lavadora_mediana' });
     const crea = await request(app).post('/api/notas').set(auth(admin.token)).send({
@@ -2287,7 +2287,7 @@ describe('cierre automático de la nota al terminar sus cargas', () => {
   it('terminar dos veces la misma carga no descuenta el producto dos veces', async () => {
     const prod = await seedProducto({
       nombre: 'Detergente doble', precio_botella: 30, stock_actual: 100,
-      tipo_liquido: 'marca', botella_ml: 800, tapa_ml: 200,
+      tipo_liquido: 'marca', botella_ml: 800, medida_ml: 200,
     });
     const lav = await seedMaquina({ nombre: 'Lavadora doble', tipo: 'lavadora_mediana' });
     const crea = await request(app).post('/api/notas').set(auth(admin.token)).send({
@@ -2391,7 +2391,7 @@ describe('cambiar la cantidad de un producto de la nota', () => {
   // pasarse de lo que el servicio cobra.
   it('no deja pasarse del precio del servicio', async () => {
     const { notaId, prod } = await notaConProducto();
-    // Grande: tope 150, máquina 115. Con 7 por tapa, 5 tapas ya son 150.
+    // Grande: tope 150, máquina 115. Con 7 por medida, 5 medidas ya son 150.
     const res = await request(app).patch(`/api/notas/${notaId}/productos/${prod}`)
       .set(auth(admin.token)).send({ cantidad: 6 });
     expect(res.status).toBe(400);

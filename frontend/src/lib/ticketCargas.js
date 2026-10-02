@@ -52,7 +52,7 @@ export function maquinasDeCarga(cg, tipoServicio) {
 // cobra nada, y listarla imprimiría un "SERVICIO POR ENCARGO · $0.00" que el
 // cliente no compró. Por eso ahí solo se enseña lo que cuesta algo.
 export function cargaVisibleEnTicket(cg, tipoServicio) {
-  const tieneProductos = (cg.productos ?? []).some(p => p.unidad !== 'tapa');
+  const tieneProductos = (cg.productos ?? []).some(p => p.unidad !== 'medida');
   // El precio del servicio Por Encargo llega de la API como `tope_carga`
   // (`nota_cargas.precio_tope` renombrado en el SELECT). Mirar solo
   // `precio_tope` dejaba fuera del ticket al servicio Chico o Grande, que no

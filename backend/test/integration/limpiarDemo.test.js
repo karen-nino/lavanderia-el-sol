@@ -76,7 +76,7 @@ async function seedVisitanteContaminando(sucursal = 'centro') {
      VALUES ($1, $2, 'salida', 1, $3)`, [insumo.id, u.id, nota.id]
   );
   await pool.query(
-    `INSERT INTO producto_movimientos (producto_id, sucursal, usuario_id, tipo, destino, cantidad_tapas, nota_id)
+    `INSERT INTO producto_movimientos (producto_id, sucursal, usuario_id, tipo, destino, cantidad_medidas, nota_id)
      VALUES ($1, $2, $3, 'venta', 'botellas', 1, $4)`, [producto, sucursal, u.id, nota.id]
   );
   await pool.query(`INSERT INTO checkins (usuario_id, fecha) VALUES ($1, CURRENT_DATE)`, [u.id]);

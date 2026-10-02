@@ -601,7 +601,7 @@ export default function Salidas() {
 
   // Suma el producto a la nota, de uno en uno: entra con cantidad 1 y desde el
   // renglón se sube con el +. El precio y la unidad los pone el servidor según
-  // el servicio (botella en Autoservicio, tapa en Por Encargo), y el producto
+  // el servicio (botella en Autoservicio, medida en Por Encargo), y el producto
   // queda apartado del inventario.
   async function agregarProductoDeLista(productoId) {
     setLoadingProducto('nuevo');
@@ -1042,23 +1042,23 @@ export default function Salidas() {
     && !['PAGADA', 'FINALIZADA', 'CANCELADA'].includes(nota.estado);
 
   // Lo que queda de un producto del catálogo, en las piezas con las que se
-  // sirve: tapas el granel, unidades la marca y piezas las bolsas. El stock
-  // vive en tapas, así que los que se venden por envase se convierten.
-  const porTapa = (p) => p.clase !== 'bolsa' && p.tipo_liquido === 'granel' && !esPolvo(p) && esEncargo;
+  // sirve: medidas el granel, unidades la marca y piezas las bolsas. El stock
+  // vive en medidas, así que los que se venden por envase se convierten.
+  const porMedida = (p) => p.clase !== 'bolsa' && p.tipo_liquido === 'granel' && !esPolvo(p) && esEncargo;
   const existenciaProducto = (p) => {
-    const tapas = Number(p.stock_disponible ?? p.stock_actual) || 0;
-    if (p.clase === 'bolsa' || porTapa(p)) return tapas;
-    const tpb = Number(p.tapas_por_botella) || 0;
-    return tpb > 0 ? Math.floor(tapas / tpb) : tapas;
+    const medidas = Number(p.stock_disponible ?? p.stock_actual) || 0;
+    if (p.clase === 'bolsa' || porMedida(p)) return medidas;
+    const tpb = Number(p.medidas_por_botella) || 0;
+    return tpb > 0 ? Math.floor(medidas / tpb) : medidas;
   };
-  // Precio y existencia en una línea, como en el alta: "$5.00/tapa · 12 tapas".
+  // Precio y existencia en una línea, como en el alta: "$5.00/medida · 12 medidas".
   const detalleProducto = (p) => {
     const disp = existenciaProducto(p);
     const [uno, varios] = p.clase === 'bolsa' ? ['bolsa', 'bolsas']
-      : porTapa(p) ? ['tapa', 'tapas']
+      : porMedida(p) ? ['medida', 'medidas']
       : seVendePorUnidad(p) ? ['unidad', 'unidades']
       : ['botella', 'botellas'];
-    const precio = porTapa(p) || p.clase === 'bolsa'
+    const precio = porMedida(p) || p.clase === 'bolsa'
       ? Number(p.precio_unitario) || 0
       : Number(p.precio_botella) || 0;
     return `${fmtMonto(precio)}/${uno} · ${plural(disp, uno, varios)}`;
@@ -1551,7 +1551,7 @@ export default function Salidas() {
               <div>
                 <h2 className="text-base font-semibold text-gray-900">Agregar producto</h2>
                 <p className="text-xs text-gray-500 mt-0.5">
-                  {esEncargo ? 'El granel se sirve por tapa' : 'Se cobra por pieza completa'}
+                  {esEncargo ? 'El granel se sirve por medida' : 'Se cobra por pieza completa'}
                 </p>
               </div>
               <button

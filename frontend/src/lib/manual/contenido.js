@@ -101,7 +101,7 @@ La venta es ANÓNIMA, como el autoservicio: no se captura cliente. Si te piden e
 
 LA VENTA SE COBRA AL MOMENTO. No se puede dejar a deber: la nota nace pagada y FINALIZADA en el mismo acto, porque el cliente se lleva lo que compró ahí mismo. No aparece en Salidas ni en Máquinas, y el producto sale del inventario de inmediato.
 
-Los líquidos se venden por BOTELLA entera (no por tapa, que es como se cobran dentro de un encargo) y las bolsas por pieza.
+Los líquidos se venden por BOTELLA entera (no por medida, que es como se cobran dentro de un encargo) y las bolsas por pieza.
 
 Si te equivocaste, la venta no se edita ni se cancela: un administrador la ELIMINA desde la nota y el producto vuelve al inventario.`,
       },
@@ -255,13 +255,13 @@ Un producto que ya se usó en notas NO se borra: se ARCHIVA. Así el historial v
       {
         id: 'granel-y-bolsas',
         titulo: 'Granel, bidones y bolsas',
-        claves: ['bidon', 'rellenar', 'tapas', 'botella', 'bolsa', 'rollo'],
+        claves: ['bidon', 'rellenar', 'medidas', 'botella', 'bolsa', 'rollo'],
         cuerpo: `Los líquidos se manejan de dos formas:
 
-· A GRANEL — se mide en TAPAS. Cuando llenas un bidón, usa Rellenar bidón: la app le suma las tapas que trae.
+· A GRANEL — se mide en MEDIDAS. Cuando llenas un bidón, usa Rellenar bidón: la app le suma las medidas que trae.
 · DE MARCA — se vende la botella entera.
 
-OJO CON EL PRECIO: en autoservicio se cobra la BOTELLA completa, y por encargo se cobra POR TAPA. Es el mismo producto con dos precios, según el servicio.
+OJO CON EL PRECIO: en autoservicio se cobra la BOTELLA completa, y por encargo se cobra POR MEDIDA. Es el mismo producto con dos precios, según el servicio.
 
 Las bolsas se compran POR ROLLO y se cobran POR PIEZA en la nota. Hay tres tamaños: chica, grande y jumbo.`,
       },

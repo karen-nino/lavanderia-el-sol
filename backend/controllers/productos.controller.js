@@ -2,14 +2,14 @@ import pool from '../db/pool.js';
 import { esAdmin } from '../middleware/roles.js';
 import { esFechaISO } from '../utils/tz.js';
 
-// Para productos por tapa/medida el mínimo se lleva por producto (en tapas);
+// Para productos por medida el mínimo se lleva por producto (en medidas);
 // para los demás se usa el mínimo global de Ajustes.
 const ESTADO_STOCK_SQL = `
   CASE
     WHEN (stock_actual - stock_reservado) = 0
       THEN 'agotado'
     WHEN (stock_actual - stock_reservado) <= (
-           CASE WHEN es_por_tapa OR clase = 'bolsa'
+           CASE WHEN es_por_medida OR clase = 'bolsa'
                 THEN stock_minimo
                 ELSE (SELECT stock_minimo_global FROM ajustes WHERE id = 1)
            END)
@@ -19,11 +19,11 @@ const ESTADO_STOCK_SQL = `
 `.trim();
 
 // Campos derivados que necesita el frontend para mostrar botellas/bidones:
-//   tapas_por_botella  = floor(botella_ml / tapa_ml)
+//   medidas_por_botella  = floor(botella_ml / medida_ml)
 //   botellas_por_bidon = floor(volumen_envase_ml / botella_ml)   (volumen_envase_ml = mL del bidón)
 const DERIVADOS_SQL = `
-  CASE WHEN botella_ml > 0 AND tapa_ml > 0
-       THEN floor(botella_ml::numeric / tapa_ml) END AS tapas_por_botella,
+  CASE WHEN botella_ml > 0 AND medida_ml > 0
+       THEN floor(botella_ml::numeric / medida_ml) END AS medidas_por_botella,
   CASE WHEN volumen_envase_ml > 0 AND botella_ml > 0
        THEN floor(volumen_envase_ml::numeric / botella_ml) END AS botellas_por_bidon
 `.trim();
@@ -33,8 +33,8 @@ const DERIVADOS_SQL = `
 const ESTADO_GRANEL_SQL = `
   CASE WHEN tipo_liquido = 'granel' THEN
     CASE
-      WHEN stock_granel_tapas <= 0 THEN 'agotado'
-      WHEN stock_minimo_granel > 0 AND stock_granel_tapas <= stock_minimo_granel THEN 'por_agotarse'
+      WHEN stock_granel_medidas <= 0 THEN 'agotado'
+      WHEN stock_minimo_granel > 0 AND stock_granel_medidas <= stock_minimo_granel THEN 'por_agotarse'
       ELSE 'ok'
     END
   END AS estado_granel
@@ -47,41 +47,41 @@ const SELECT_PRODUCTO = `*,
               ${ESTADO_STOCK_SQL},
               ${ESTADO_GRANEL_SQL}`;
 
-// Resuelve el tamaño de la tapa (mL). Si no se dio explícito, se deriva de
-// "cuántas tapas salen de una botella" (aprox): tapa_ml = floor(botella_ml / N).
-function resolverTapaMl(tapaMl, tapasPorBotella, botellaMl) {
-  const explicito = Number(tapaMl) || 0;
+// Resuelve el tamaño de la medida (mL). Si no se dio explícito, se deriva de
+// "cuántas medidas salen de una botella" (aprox): medida_ml = floor(botella_ml / N).
+function resolverMedidaMl(medidaMl, medidasPorBotella, botellaMl) {
+  const explicito = Number(medidaMl) || 0;
   if (explicito > 0) return explicito;
-  const n = Number(tapasPorBotella) || 0;
+  const n = Number(medidasPorBotella) || 0;
   if (n > 0 && botellaMl > 0) return Math.max(1, Math.floor(botellaMl / n));
   return 0;
 }
 
 // Cuántas unidades de stock representa una "unidad" dada.
-//   Líquidos (stock en tapas): tapa → 1 · botella → tapas/botella · bidon → tapas/bidón.
+//   Líquidos (stock en medidas): medida → 1 · botella → medidas/botella · bidon → medidas/bidón.
 //   Bolsas (stock en piezas):  pieza → 1 · rollo → bolsas por rollo.
-function tapasDeUnidad(unidad, p) {
+function medidasDeUnidad(unidad, p) {
   if (unidad === 'pieza') return 1;
   if (unidad === 'rollo') return Number(p.bolsas_por_rollo) || 0;
-  const tapaMl    = Number(p.tapa_ml) || 0;
+  const medidaMl    = Number(p.medida_ml) || 0;
   const botellaMl = Number(p.botella_ml) || 0;
   const bidonMl   = Number(p.volumen_envase_ml) || 0;
-  if (unidad === 'tapa')    return 1;
-  if (unidad === 'botella') return tapaMl > 0 ? Math.floor(botellaMl / tapaMl) : 0;
-  if (unidad === 'bidon')   return tapaMl > 0 ? Math.floor(bidonMl / tapaMl) : 0;
+  if (unidad === 'medida')    return 1;
+  if (unidad === 'botella') return medidaMl > 0 ? Math.floor(botellaMl / medidaMl) : 0;
+  if (unidad === 'bidon')   return medidaMl > 0 ? Math.floor(bidonMl / medidaMl) : 0;
   return 0;
 }
 
 // Inserta una fila en el historial de movimientos de stock.
 async function registrarMovimiento(client, {
-  productoId, sucursal, usuarioId, tipo, destino, cantidadTapas,
+  productoId, sucursal, usuarioId, tipo, destino, cantidadMedidas,
   descripcion = null, notaId = null,
 }) {
   await client.query(
     `INSERT INTO producto_movimientos
-       (producto_id, sucursal, usuario_id, tipo, destino, cantidad_tapas, descripcion, nota_id)
+       (producto_id, sucursal, usuario_id, tipo, destino, cantidad_medidas, descripcion, nota_id)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-    [productoId, sucursal, usuarioId ?? null, tipo, destino, cantidadTapas, descripcion, notaId]
+    [productoId, sucursal, usuarioId ?? null, tipo, destino, cantidadMedidas, descripcion, notaId]
   );
 }
 
@@ -213,7 +213,7 @@ async function crearBolsa(req, res, { nombre, descripcion, marca, tamano_bolsa, 
     const { rows } = await pool.query(
       `INSERT INTO productos
          (nombre, descripcion, unidad, precio_unitario, stock_actual, marca, sucursal,
-          clase, tamano_bolsa, bolsas_por_rollo, servicios_bolsa, es_por_tapa, stock_minimo)
+          clase, tamano_bolsa, bolsas_por_rollo, servicios_bolsa, es_por_medida, stock_minimo)
        VALUES ($1, $2, 'pieza', $3, 0, $4, $5, 'bolsa', $6, $7, $8, false, $9)
        RETURNING ${SELECT_PRODUCTO}`,
       [nombre, descripcion || null, precio_unitario ?? null, marca || null, req.sucursal,
@@ -228,10 +228,10 @@ async function crearBolsa(req, res, { nombre, descripcion, marca, tamano_bolsa, 
 
 export const createProducto = async (req, res) => {
   const {
-    nombre, descripcion, unidad = 'Tapas', precio_unitario, marca,
+    nombre, descripcion, unidad = 'Medidas', precio_unitario, marca,
     clase = 'liquido', tipo_liquido = 'granel', forma = 'liquido', envase,
     stock_minimo = 0, stock_minimo_granel = 0,
-    volumen_envase_ml, botella_ml, tapa_ml, tapas_por_botella, precio_botella,
+    volumen_envase_ml, botella_ml, medida_ml, medidas_por_botella, precio_botella,
     // Bolsas:
     tamano_bolsa, bolsas_por_rollo, servicios_bolsa,
     // Existencias iniciales: botellas rellenadas y (granel) bidones a granel.
@@ -257,17 +257,17 @@ export const createProducto = async (req, res) => {
     return res.status(400).json({ message: 'Indica si el producto es líquido o en polvo.' });
   }
   // El POLVO no se sirve por medidas: se cuenta por unidades enteras, igual que
-  // un producto de marca. No hay bidón ni tapa que capturar, así que
-  // 1 unidad = 1 botella = 1 tapa (mig. 126) y el stock queda en unidades.
+  // un producto de marca. No hay bidón ni medida que capturar, así que
+  // 1 unidad = 1 botella = 1 medida (mig. 126) y el stock queda en unidades.
   const esPolvo = forma === 'polvo';
   const botellaMl = esPolvo ? 1 : Number(botella_ml);
   if (!(botellaMl > 0)) {
     return res.status(400).json({ message: 'Indica el tamaño de la botella (mL).' });
   }
-  // La tapa se puede dar por tamaño (mL) o por cuántas tapas rinde una botella.
-  const tapaMl = esPolvo ? 1 : resolverTapaMl(tapa_ml, tapas_por_botella, botellaMl);
-  if (!(tapaMl > 0)) {
-    return res.status(400).json({ message: 'Indica el tamaño de la tapa (mL) o cuántas tapas salen de una botella.' });
+  // La medida se puede dar por tamaño (mL) o por cuántas medidas rinde una botella.
+  const medidaMl = esPolvo ? 1 : resolverMedidaMl(medida_ml, medidas_por_botella, botellaMl);
+  if (!(medidaMl > 0)) {
+    return res.status(400).json({ message: 'Indica el tamaño de la medida (mL) o cuántas medidas salen de una botella.' });
   }
   const conBidon = tipo_liquido === 'granel' && !esPolvo;
   if (conBidon && (!volumen_envase_ml || Number(volumen_envase_ml) <= 0)) {
@@ -275,13 +275,13 @@ export const createProducto = async (req, res) => {
   }
 
   const bidonMl   = conBidon ? Number(volumen_envase_ml) : null;
-  const tapasPorBotella = Math.floor(botellaMl / tapaMl);
-  const tapasPorBidon   = bidonMl ? Math.floor(bidonMl / tapaMl) : 0;
-  const tapasPorEnvase  = conBidon ? tapasPorBidon : tapasPorBotella;
+  const medidasPorBotella = Math.floor(botellaMl / medidaMl);
+  const medidasPorBidon   = bidonMl ? Math.floor(bidonMl / medidaMl) : 0;
+  const medidasPorEnvase  = conBidon ? medidasPorBidon : medidasPorBotella;
 
-  // El stock se guarda en TAPAS: rellenadas (stock_actual) y a granel (bidón).
-  const stockActual = Math.round((Number(stock_botellas) || 0) * tapasPorBotella);
-  const stockGranel = Math.round((Number(stock_bidones)  || 0) * tapasPorBidon);
+  // El stock se guarda en MEDIDAS: rellenadas (stock_actual) y a granel (bidón).
+  const stockActual = Math.round((Number(stock_botellas) || 0) * medidasPorBotella);
+  const stockGranel = Math.round((Number(stock_bidones)  || 0) * medidasPorBidon);
 
   const client = await pool.connect();
   try {
@@ -289,29 +289,29 @@ export const createProducto = async (req, res) => {
     const { rows } = await client.query(
       `INSERT INTO productos
          (nombre, descripcion, unidad, precio_unitario, precio_botella, stock_actual,
-          stock_granel_tapas, marca, sucursal, tipo_liquido, forma, es_por_tapa, tapas_por_envase,
-          envase, stock_minimo, stock_minimo_granel, volumen_envase_ml, botella_ml, tapa_ml)
+          stock_granel_medidas, marca, sucursal, tipo_liquido, forma, es_por_medida, medidas_por_envase,
+          envase, stock_minimo, stock_minimo_granel, volumen_envase_ml, botella_ml, medida_ml)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, true, $12, $13, $14, $15, $16, $17, $18)
        RETURNING ${SELECT_PRODUCTO}`,
       [nombre, descripcion || null, unidad, precio_unitario ?? null, precio_botella ?? null,
-       stockActual, stockGranel, marca || null, req.sucursal, tipo_liquido, forma, tapasPorEnvase,
+       stockActual, stockGranel, marca || null, req.sucursal, tipo_liquido, forma, medidasPorEnvase,
        envase || null, Number(stock_minimo) || 0,
        conBidon ? (Number(stock_minimo_granel) || 0) : 0,
-       bidonMl, botellaMl, tapaMl]
+       bidonMl, botellaMl, medidaMl]
     );
     const prod = rows[0];
     // Semilla del historial: registra las existencias iniciales como entradas.
     if (stockGranel > 0) {
       await registrarMovimiento(client, {
         productoId: prod.id, sucursal: req.sucursal, usuarioId: req.user?.id,
-        tipo: 'entrada', destino: 'granel', cantidadTapas: stockGranel,
+        tipo: 'entrada', destino: 'granel', cantidadMedidas: stockGranel,
         descripcion: `${Number(stock_bidones)} bidón(es) inicial(es)`,
       });
     }
     if (stockActual > 0) {
       await registrarMovimiento(client, {
         productoId: prod.id, sucursal: req.sucursal, usuarioId: req.user?.id,
-        tipo: 'entrada', destino: 'botellas', cantidadTapas: stockActual,
+        tipo: 'entrada', destino: 'botellas', cantidadMedidas: stockActual,
         descripcion: `${Number(stock_botellas)} botella(s) inicial(es)`,
       });
     }
@@ -336,10 +336,10 @@ export const updateProducto = async (req, res) => {
   }
 
   const {
-    nombre, descripcion, unidad = 'Tapas', precio_unitario, marca,
+    nombre, descripcion, unidad = 'Medidas', precio_unitario, marca,
     clase = 'liquido', tipo_liquido = 'granel', forma = 'liquido', envase,
     stock_minimo = 0, stock_minimo_granel = 0,
-    volumen_envase_ml, botella_ml, tapa_ml, tapas_por_botella, precio_botella,
+    volumen_envase_ml, botella_ml, medida_ml, medidas_por_botella, precio_botella,
     tamano_bolsa, bolsas_por_rollo, servicios_bolsa,
   } = req.body;
 
@@ -390,16 +390,16 @@ export const updateProducto = async (req, res) => {
     return res.status(400).json({ message: 'Indica si el producto es líquido o en polvo.' });
   }
   // El POLVO no se sirve por medidas: se cuenta por unidades enteras, igual que
-  // un producto de marca. No hay bidón ni tapa que capturar, así que
-  // 1 unidad = 1 botella = 1 tapa (mig. 126) y el stock queda en unidades.
+  // un producto de marca. No hay bidón ni medida que capturar, así que
+  // 1 unidad = 1 botella = 1 medida (mig. 126) y el stock queda en unidades.
   const esPolvo = forma === 'polvo';
   const botellaMl = esPolvo ? 1 : Number(botella_ml);
   if (!(botellaMl > 0)) {
     return res.status(400).json({ message: 'Indica el tamaño de la botella (mL).' });
   }
-  const tapaMl = esPolvo ? 1 : resolverTapaMl(tapa_ml, tapas_por_botella, botellaMl);
-  if (!(tapaMl > 0)) {
-    return res.status(400).json({ message: 'Indica el tamaño de la tapa (mL) o cuántas tapas salen de una botella.' });
+  const medidaMl = esPolvo ? 1 : resolverMedidaMl(medida_ml, medidas_por_botella, botellaMl);
+  if (!(medidaMl > 0)) {
+    return res.status(400).json({ message: 'Indica el tamaño de la medida (mL) o cuántas medidas salen de una botella.' });
   }
   const conBidon = tipo_liquido === 'granel' && !esPolvo;
   if (conBidon && (!volumen_envase_ml || Number(volumen_envase_ml) <= 0)) {
@@ -407,24 +407,24 @@ export const updateProducto = async (req, res) => {
   }
 
   const bidonMl   = conBidon ? Number(volumen_envase_ml) : null;
-  const tapasPorEnvase = conBidon
-    ? Math.floor(bidonMl / tapaMl)
-    : Math.floor(botellaMl / tapaMl);
+  const medidasPorEnvase = conBidon
+    ? Math.floor(bidonMl / medidaMl)
+    : Math.floor(botellaMl / medidaMl);
 
   try {
     const { rows } = await pool.query(
       `UPDATE productos
          SET nombre = $1, descripcion = $2, unidad = $3, precio_unitario = $4,
              precio_botella = $5, marca = $6, tipo_liquido = $7, forma = $8,
-             tapas_por_envase = $9, envase = $10, stock_minimo = $11,
+             medidas_por_envase = $9, envase = $10, stock_minimo = $11,
              stock_minimo_granel = $12, volumen_envase_ml = $13,
-             botella_ml = $14, tapa_ml = $15, es_por_tapa = true, updated_at = NOW()
+             botella_ml = $14, medida_ml = $15, es_por_medida = true, updated_at = NOW()
        WHERE id = $16 AND sucursal = $17
        RETURNING ${SELECT_PRODUCTO}`,
       [nombre, descripcion || null, unidad, precio_unitario ?? null, precio_botella ?? null,
-       marca || null, tipo_liquido, forma, tapasPorEnvase, envase || null, Number(stock_minimo) || 0,
+       marca || null, tipo_liquido, forma, medidasPorEnvase, envase || null, Number(stock_minimo) || 0,
        conBidon ? (Number(stock_minimo_granel) || 0) : 0,
-       bidonMl, botellaMl, tapaMl, id, req.sucursal]
+       bidonMl, botellaMl, medidaMl, id, req.sucursal]
     );
     if (rows.length === 0) {
       return res.status(404).json({ message: 'Producto no encontrado.' });
@@ -437,7 +437,7 @@ export const updateProducto = async (req, res) => {
 };
 
 // ── POST /productos/:id/rellenar ────────────────────────────────
-// Rellena N botellas desde el bidón (solo granel). Mueve N×tapas_por_botella
+// Rellena N botellas desde el bidón (solo granel). Mueve N×medidas_por_botella
 // de "a granel" a "rellenadas". Topa N a lo que alcance el líquido a granel.
 export const rellenarBotellas = async (req, res) => {
   const { id } = req.params;
@@ -463,29 +463,29 @@ export const rellenarBotellas = async (req, res) => {
       await client.query('ROLLBACK');
       return res.status(400).json({ message: 'Solo los productos líquidos a granel se rellenan desde un bidón.' });
     }
-    const tapasPorBotella = tapasDeUnidad('botella', p);
-    if (tapasPorBotella <= 0) {
+    const medidasPorBotella = medidasDeUnidad('botella', p);
+    if (medidasPorBotella <= 0) {
       await client.query('ROLLBACK');
-      return res.status(400).json({ message: 'El producto no tiene bien definidos los tamaños de botella y tapa.' });
+      return res.status(400).json({ message: 'El producto no tiene bien definidos los tamaños de botella y medida.' });
     }
-    const maxBotellas = Math.floor(Number(p.stock_granel_tapas) / tapasPorBotella);
+    const maxBotellas = Math.floor(Number(p.stock_granel_medidas) / medidasPorBotella);
     if (botellas > maxBotellas) {
       await client.query('ROLLBACK');
       return res.status(400).json({ message: `Solo alcanza para ${maxBotellas} botella(s) con el líquido a granel disponible.` });
     }
-    const tapas = botellas * tapasPorBotella;
+    const medidas = botellas * medidasPorBotella;
     const { rows: upd } = await client.query(
       `UPDATE productos
-         SET stock_granel_tapas = stock_granel_tapas - $1,
+         SET stock_granel_medidas = stock_granel_medidas - $1,
              stock_actual = stock_actual + $1,
              updated_at = NOW()
        WHERE id = $2 AND sucursal = $3
        RETURNING ${SELECT_PRODUCTO}`,
-      [tapas, id, req.sucursal]
+      [medidas, id, req.sucursal]
     );
     await registrarMovimiento(client, {
       productoId: p.id, sucursal: req.sucursal, usuarioId: req.user?.id,
-      tipo: 'rellenar', destino: 'botellas', cantidadTapas: tapas,
+      tipo: 'rellenar', destino: 'botellas', cantidadMedidas: medidas,
       descripcion: `${botellas} botella(s)`,
     });
     await client.query('COMMIT');
@@ -501,7 +501,7 @@ export const rellenarBotellas = async (req, res) => {
 
 // ── POST /productos/:id/movimiento ──────────────────────────────
 // Entrada o salida manual de stock. destino: 'granel' (bidón) o 'botellas'.
-// unidad: 'bidon' | 'botella' | 'tapa' (se convierte a tapas).
+// unidad: 'bidon' | 'botella' | 'medida' (se convierte a medidas).
 export const crearMovimiento = async (req, res) => {
   const { id } = req.params;
   const { tipo, destino, cantidad, unidad } = req.body;
@@ -512,8 +512,8 @@ export const crearMovimiento = async (req, res) => {
   if (!['granel', 'botellas', 'piezas'].includes(destino)) {
     return res.status(400).json({ message: 'Indica a dónde va el movimiento: granel, botellas o piezas.' });
   }
-  if (!['bidon', 'botella', 'tapa', 'rollo', 'pieza'].includes(unidad)) {
-    return res.status(400).json({ message: 'Elige una unidad válida: bidón, botella, tapa, rollo o pieza.' });
+  if (!['bidon', 'botella', 'medida', 'rollo', 'pieza'].includes(unidad)) {
+    return res.status(400).json({ message: 'Elige una unidad válida: bidón, botella, medida, rollo o pieza.' });
   }
   const cant = Number(cantidad);
   if (!(cant > 0)) {
@@ -540,27 +540,27 @@ export const crearMovimiento = async (req, res) => {
       await client.query('ROLLBACK');
       return res.status(400).json({ message: 'Estas bolsas se compran por pieza, no por rollo. Registra el movimiento en piezas.' });
     }
-    const tapasPorUnidad = tapasDeUnidad(unidad, p);
-    if (tapasPorUnidad <= 0) {
+    const medidasPorUnidad = medidasDeUnidad(unidad, p);
+    if (medidasPorUnidad <= 0) {
       await client.query('ROLLBACK');
       return res.status(400).json({ message: 'Faltan datos del producto (tamaños o bolsas por rollo) para registrar el movimiento. Revísalos en su edición.' });
     }
-    const tapas = Math.round(cant * tapasPorUnidad);
-    const columna = destino === 'granel' ? 'stock_granel_tapas' : 'stock_actual';
-    const delta = tipo === 'entrada' ? tapas : -tapas;
+    const medidas = Math.round(cant * medidasPorUnidad);
+    const columna = destino === 'granel' ? 'stock_granel_medidas' : 'stock_actual';
+    const delta = tipo === 'entrada' ? medidas : -medidas;
 
     // En salidas, valida que haya existencia suficiente (no negativa; en botellas
     // respeta lo reservado por notas).
     if (tipo === 'salida') {
       const disponible = destino === 'granel'
-        ? Number(p.stock_granel_tapas)
+        ? Number(p.stock_granel_medidas)
         : Number(p.stock_actual) - Number(p.stock_reservado);
-      if (tapas > disponible) {
+      if (medidas > disponible) {
         await client.query('ROLLBACK');
         // Muestra lo disponible en la unidad que el empleado eligió.
-        const dispUnidad = Math.floor(disponible / tapasPorUnidad);
+        const dispUnidad = Math.floor(disponible / medidasPorUnidad);
         const uni = unidad === 'bidon' ? 'bidón(es)' : unidad === 'rollo' ? 'rollo(s)'
-          : unidad === 'pieza' ? 'bolsa(s)' : unidad === 'botella' ? 'botella(s)' : 'tapa(s)';
+          : unidad === 'pieza' ? 'bolsa(s)' : unidad === 'botella' ? 'botella(s)' : 'medida(s)';
         return res.status(400).json({ message: `No hay suficiente existencia para esa salida: quedan ${dispUnidad} ${uni} disponibles.` });
       }
     }
@@ -579,10 +579,10 @@ export const crearMovimiento = async (req, res) => {
           ? 'bolsa(s)'
           : unidad === 'botella'
             ? (p.tipo_liquido === 'marca' ? 'unidad(es)' : 'botella(s)')
-            : 'tapa(s)';
+            : 'medida(s)';
     await registrarMovimiento(client, {
       productoId: p.id, sucursal: req.sucursal, usuarioId: req.user?.id,
-      tipo, destino, cantidadTapas: tapas,
+      tipo, destino, cantidadMedidas: medidas,
       descripcion: `${cant} ${unidadTxt}`,
     });
     await client.query('COMMIT');
@@ -621,7 +621,7 @@ export const getMovimientos = async (req, res) => {
 // Reporte para el admin: por producto líquido (granel/marca), cuánto SALIÓ ese
 // día (ventas/consumo en notas) y cuánto QUEDA al cierre del día.
 //
-// El stock se lleva en TAPAS. La existencia al cierre de un día se reconstruye
+// El stock se lleva en MEDIDAS. La existencia al cierre de un día se reconstruye
 // desde la existencia actual (exacta) restando los movimientos posteriores al
 // cierre — no se necesita una "foto" diaria. Efecto de cada movimiento sobre
 // cada existencia (botellas rellenadas = stock_actual, bidón = stock_granel):
@@ -643,12 +643,12 @@ export const getReporteDiario = async (req, res) => {
        )
        SELECT
          p.id, p.nombre, p.marca, p.tipo_liquido, p.forma, p.se_vende_por_unidad,
-         CASE WHEN p.botella_ml > 0 AND p.tapa_ml > 0
-              THEN floor(p.botella_ml::numeric / p.tapa_ml) END        AS tapas_por_botella,
-         CASE WHEN p.volumen_envase_ml > 0 AND p.tapa_ml > 0
-              THEN floor(p.volumen_envase_ml::numeric / p.tapa_ml) END AS tapas_por_bidon,
+         CASE WHEN p.botella_ml > 0 AND p.medida_ml > 0
+              THEN floor(p.botella_ml::numeric / p.medida_ml) END        AS medidas_por_botella,
+         CASE WHEN p.volumen_envase_ml > 0 AND p.medida_ml > 0
+              THEN floor(p.volumen_envase_ml::numeric / p.medida_ml) END AS medidas_por_bidon,
          p.stock_actual,
-         p.stock_granel_tapas,
+         p.stock_granel_medidas,
          -- Lo que SALIÓ de verdad ese día por notas (siempre sale de las
          -- botellas): lo vendido MENOS lo devuelto. Anular una venta —cancelar
          -- la nota o borrarla— regresa el producto al estante y deja un
@@ -659,26 +659,26 @@ export const getReporteDiario = async (req, res) => {
          -- Puede dar negativo cuando lo que se devuelve hoy se vendió ayer: ese
          -- día entró producto, no salió, y la pantalla lo dice con "Devuelto".
          COALESCE((
-           SELECT SUM(CASE WHEN m.tipo = 'venta' THEN m.cantidad_tapas
-                           ELSE -m.cantidad_tapas END)
+           SELECT SUM(CASE WHEN m.tipo = 'venta' THEN m.cantidad_medidas
+                           ELSE -m.cantidad_medidas END)
              FROM producto_movimientos m, bounds
             WHERE m.producto_id = p.id AND m.tipo IN ('venta', 'liberacion')
               AND m.created_at >= bounds.inicio AND m.created_at < bounds.cierre
-         ), 0) AS vendido_tapas,
+         ), 0) AS vendido_medidas,
          -- Devuelto ese día (ventas anuladas), para poder explicarlo aparte.
          COALESCE((
-           SELECT SUM(m.cantidad_tapas) FROM producto_movimientos m, bounds
+           SELECT SUM(m.cantidad_medidas) FROM producto_movimientos m, bounds
             WHERE m.producto_id = p.id AND m.tipo = 'liberacion'
               AND m.created_at >= bounds.inicio AND m.created_at < bounds.cierre
-         ), 0) AS devuelto_tapas,
+         ), 0) AS devuelto_medidas,
          -- Efecto sobre botellas de lo ocurrido DESPUÉS del cierre (para revertir).
          COALESCE((
            SELECT SUM(CASE
-             WHEN m.tipo = 'entrada'    AND m.destino = 'botellas' THEN  m.cantidad_tapas
-             WHEN m.tipo = 'salida'     AND m.destino = 'botellas' THEN -m.cantidad_tapas
-             WHEN m.tipo = 'rellenar'                              THEN  m.cantidad_tapas
-             WHEN m.tipo = 'venta'      AND m.destino = 'botellas' THEN -m.cantidad_tapas
-             WHEN m.tipo = 'liberacion' AND m.destino = 'botellas' THEN  m.cantidad_tapas
+             WHEN m.tipo = 'entrada'    AND m.destino = 'botellas' THEN  m.cantidad_medidas
+             WHEN m.tipo = 'salida'     AND m.destino = 'botellas' THEN -m.cantidad_medidas
+             WHEN m.tipo = 'rellenar'                              THEN  m.cantidad_medidas
+             WHEN m.tipo = 'venta'      AND m.destino = 'botellas' THEN -m.cantidad_medidas
+             WHEN m.tipo = 'liberacion' AND m.destino = 'botellas' THEN  m.cantidad_medidas
              ELSE 0 END)
             FROM producto_movimientos m, bounds
             WHERE m.producto_id = p.id AND m.created_at >= bounds.cierre
@@ -686,9 +686,9 @@ export const getReporteDiario = async (req, res) => {
          -- Efecto sobre el bidón (granel) posterior al cierre.
          COALESCE((
            SELECT SUM(CASE
-             WHEN m.tipo = 'entrada' AND m.destino = 'granel' THEN  m.cantidad_tapas
-             WHEN m.tipo = 'salida'  AND m.destino = 'granel' THEN -m.cantidad_tapas
-             WHEN m.tipo = 'rellenar'                         THEN -m.cantidad_tapas
+             WHEN m.tipo = 'entrada' AND m.destino = 'granel' THEN  m.cantidad_medidas
+             WHEN m.tipo = 'salida'  AND m.destino = 'granel' THEN -m.cantidad_medidas
+             WHEN m.tipo = 'rellenar'                         THEN -m.cantidad_medidas
              ELSE 0 END)
             FROM producto_movimientos m, bounds
             WHERE m.producto_id = p.id AND m.created_at >= bounds.cierre
@@ -709,13 +709,13 @@ export const getReporteDiario = async (req, res) => {
         nombre:            r.nombre,
         marca:             r.marca,
         tipo_liquido:      r.tipo_liquido,
-        tapas_por_botella: r.tapas_por_botella != null ? int(r.tapas_por_botella) : null,
-        tapas_por_bidon:   r.tapas_por_bidon != null ? int(r.tapas_por_bidon) : null,
-        vendido_tapas:     int(r.vendido_tapas),
-        devuelto_tapas:    int(r.devuelto_tapas),
+        medidas_por_botella: r.medidas_por_botella != null ? int(r.medidas_por_botella) : null,
+        medidas_por_bidon:   r.medidas_por_bidon != null ? int(r.medidas_por_bidon) : null,
+        vendido_medidas:     int(r.vendido_medidas),
+        devuelto_medidas:    int(r.devuelto_medidas),
         // La existencia no puede ser negativa; se acota a 0 por si hay datos raros.
-        fin_botellas_tapas: Math.max(0, int(r.stock_actual) - int(r.efecto_botellas_post)),
-        fin_granel_tapas:   Math.max(0, int(r.stock_granel_tapas) - int(r.efecto_granel_post)),
+        fin_botellas_medidas: Math.max(0, int(r.stock_actual) - int(r.efecto_botellas_post)),
+        fin_granel_medidas:   Math.max(0, int(r.stock_granel_medidas) - int(r.efecto_granel_post)),
       })),
     });
   } catch (err) {

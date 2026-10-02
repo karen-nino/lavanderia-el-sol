@@ -63,9 +63,9 @@ describe('cargaVisibleEnTicket', () => {
     }))).toBe(true);
   });
 
-  it('las tapas no cuentan: son información interna, no van en el ticket', () => {
+  it('las medidas no cuentan: son información interna, no van en el ticket', () => {
     expect(cargaVisibleEnTicket(carga({
-      productos: [{ id: 1, nombre: 'Jabón', unidad: 'tapa', subtotal: 0 }],
+      productos: [{ id: 1, nombre: 'Jabón', unidad: 'medida', subtotal: 0 }],
     }))).toBe(false);
   });
 
