@@ -879,7 +879,7 @@ export default function NuevaNota() {
   const subtotalAbsorbidoLista = (lista) => sumaProductosCarga(lista, p => !esProductoMarca(p));
   const subtotalMarcaLista     = (lista) => sumaProductosCarga(lista, esProductoMarca);
 
-  // ── Bolsas (Por Encargo): según el tamaño de la carga se precarga 1 bolsa ──
+  // ── Bolsas (Por Encargo): la ligada al servicio, tantas como diga Ajustes ──
   const bolsasCatalogo = productosCatalogo.filter(p => p.clase === 'bolsa');
   // Qué servicio es la carga. Cada bolsa dice a cuáles va ligada (mig. 125), así
   // que el nombre de la bolsa ya no importa: manda lo que se eligió al darla de

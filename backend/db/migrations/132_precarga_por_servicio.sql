@@ -32,3 +32,9 @@ ALTER TABLE tamanos_edredon
 ALTER TABLE tamanos_edredon DROP CONSTRAINT IF EXISTS tamanos_edredon_precarga_chk;
 ALTER TABLE tamanos_edredon ADD CONSTRAINT tamanos_edredon_precarga_chk
   CHECK (precarga_medidas >= 0 AND precarga_bolsas >= 0);
+
+-- La 131 ligó a todos los servicios los graneles que se llaman "jabón" o
+-- "suavizante" (la regla vieja, por nombre). Ya no hay regla por nombre: cada
+-- granel se liga a mano en Inventario.
+UPDATE productos SET servicios_precarga = '{}', updated_at = NOW()
+ WHERE servicios_precarga <> '{}';

@@ -1051,7 +1051,7 @@ export default function Salidas() {
     const tpb = Number(p.medidas_por_botella) || 0;
     return tpb > 0 ? Math.floor(medidas / tpb) : medidas;
   };
-  // Precio y existencia en una línea, como en el alta: "$5.00/medida · 12 medidas".
+  // Precio y existencia en una línea, como en el alta.
   const detalleProducto = (p) => {
     const disp = existenciaProducto(p);
     const [uno, varios] = p.clase === 'bolsa' ? ['bolsa', 'bolsas']

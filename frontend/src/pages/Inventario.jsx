@@ -73,8 +73,8 @@ function unidadVenta(p, n = 2) {
   if (porUnidad(p)) return n === 1 ? 'unidad' : 'unidades';
   return n === 1 ? 'botella' : 'botellas';
 }
-// Unas medidas contadas en la unidad del producto ("3 botellas y 2 medidas",
-// "5 bolsas", "2 unidades"). Las bolsas se cuentan en piezas (no hay medidas).
+// Unas medidas contadas en la unidad del producto. Las bolsas se cuentan en
+// piezas (no hay medidas).
 function textoExistencia(p, medidas) {
   if (p.clase === 'bolsa') {
     const n = Math.max(0, Math.round(Number(medidas) || 0));

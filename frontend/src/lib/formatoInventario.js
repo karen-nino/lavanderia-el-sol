@@ -28,8 +28,8 @@ export function partesBotellas(medidas, medidasPorBotella) {
   return { botellas: Math.floor(t / tpb), medidas: t % tpb };
 }
 
-// "3 botellas y 2 medidas" / "3 botellas" / "2 medidas" / "0 botellas".
-// En productos de marca la botella se nombra "unidad".
+// Unas medidas contadas en botellas y medidas sueltas. En productos de marca
+// la botella se nombra "unidad".
 export function textoBotellas(medidas, medidasPorBotella, { marca = false } = {}) {
   const { botellas, medidas: sueltas } = partesBotellas(medidas, medidasPorBotella);
   const unidad = marca ? plural(botellas, 'unidad', 'unidades') : plural(botellas, 'botella', 'botellas');
