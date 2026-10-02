@@ -1444,40 +1444,46 @@ export default function NuevaNota() {
   const bloqueGranel = () => {
     const tipos = resumenGranel();
     if (tipos.length === 0) return null;
+    // Por servicio: cada uno con un renglón por tipo. Las filas de cada tipo
+    // vienen en el mismo orden de servicios, así que se leen por posición.
+    const servicios = tipos[0].filas.map((f, k) => ({
+      idx: f.idx, etiqueta: f.etiqueta,
+      renglones: tipos.map(t => ({ tipoId: t.tipoId, nombre: t.nombre, medidas: t.filas[k].medidas })),
+    }));
+    const noAlcanza = tipos.filter(t => t.total > t.quedan);
     const btn = 'w-9 h-9 flex items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-700 text-base font-semibold hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors';
     return (
       <div className="bg-white border border-gray-200 rounded-xl overflow-hidden mb-3">
-        {tipos.map((t, i) => (
-          <div key={t.tipoId} className={`px-3 py-4 space-y-2.5 ${i > 0 ? 'border-t border-gray-100' : ''}`}>
-            <div className="flex items-baseline justify-between gap-2">
-              <p className="text-sm font-semibold text-gray-900">{t.nombre}</p>
-              <p className="text-sm font-semibold text-gray-900 tabular-nums">
-                {t.total} {t.total === 1 ? 'medida' : 'medidas'}
-              </p>
-            </div>
-            <div className="space-y-1.5">
-              {t.filas.map(f => (
-                <div key={f.idx} className="flex items-center justify-between gap-2">
-                  <span className="text-sm text-gray-600">{f.etiqueta}</span>
-                  <div className="flex items-center gap-1.5">
-                    <button type="button" className={btn} disabled={f.medidas <= 0}
-                      onClick={() => setMedidasGranel(f.idx, t.tipoId, f.medidas - 1)}
-                      aria-label={`Menos ${t.nombre.toLowerCase()} en ${f.etiqueta}`}>−</button>
-                    <span className="w-7 text-center text-sm font-semibold text-gray-900 tabular-nums">{f.medidas}</span>
-                    <button type="button" className={btn}
-                      onClick={() => setMedidasGranel(f.idx, t.tipoId, f.medidas + 1)}
-                      aria-label={`Más ${t.nombre.toLowerCase()} en ${f.etiqueta}`}>+</button>
-                  </div>
+        {servicios.map((sv, i) => (
+          <div key={sv.idx} className={`px-3 py-4 space-y-1.5 ${i > 0 ? 'border-t border-gray-100' : ''}`}>
+            <p className="text-sm font-semibold text-gray-900">{sv.etiqueta}</p>
+            {sv.renglones.map(r => (
+              <div key={r.tipoId} className="flex items-center justify-between gap-2">
+                <span className="text-sm text-gray-600">{r.nombre}</span>
+                <div className="flex items-center gap-1.5">
+                  <button type="button" className={btn} disabled={r.medidas <= 0}
+                    onClick={() => setMedidasGranel(sv.idx, r.tipoId, r.medidas - 1)}
+                    aria-label={`Menos ${r.nombre.toLowerCase()} en ${sv.etiqueta}`}>−</button>
+                  <span className="w-7 text-center text-sm font-semibold text-gray-900 tabular-nums">{r.medidas}</span>
+                  <button type="button" className={btn}
+                    onClick={() => setMedidasGranel(sv.idx, r.tipoId, r.medidas + 1)}
+                    aria-label={`Más ${r.nombre.toLowerCase()} en ${sv.etiqueta}`}>+</button>
                 </div>
-              ))}
-            </div>
-            {t.total > t.quedan && (
-              <p className="text-xs font-semibold text-amber-700">
-                No alcanza: se necesitan {t.total} y quedan {t.quedan}. La nota se crea igual.
-              </p>
-            )}
+              </div>
+            ))}
           </div>
         ))}
+        {/* Lo que no alcanza se cuenta por tipo, sumando todos los servicios. */}
+        {noAlcanza.length > 0 && (
+          <div className="px-3 py-3 border-t border-gray-100 bg-amber-50 space-y-0.5">
+            {noAlcanza.map(t => (
+              <p key={t.tipoId} className="text-xs font-semibold text-amber-700">
+                No alcanza el {t.nombre.toLowerCase()}: se necesitan {t.total} y quedan {t.quedan}.
+              </p>
+            ))}
+            <p className="text-xs text-amber-700">La nota se crea igual.</p>
+          </div>
+        )}
       </div>
     );
   };
@@ -1492,8 +1498,6 @@ export default function NuevaNota() {
           </span>
         )}
       </div>
-
-      {tipoServicio === 'POR_ENCARGO' && bloqueGranel()}
 
       {/* Mismo campo que el de máquinas: se ve y se toca como los demás campos
           del formulario, y lo que abre es el modal para elegir. Agregar vive
@@ -1510,6 +1514,10 @@ export default function NuevaNota() {
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
         </svg>
       </button>
+
+      {tipoServicio === 'POR_ENCARGO' && bloqueGranel()}
+
+
 
       {/* Misma fila compacta que en Por Encargo. La diferencia es la unidad:
           aquí se vende la pieza completa (botella, unidad o bolsa). Sin
