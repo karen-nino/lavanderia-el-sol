@@ -220,6 +220,8 @@ const FORM_VACIO = {
   // se agregue sola a la carga. Vacío = se vende a mano, no se precarga.
   servicios_bolsa:   [],
   stock_minimo_bolsas: '0',
+  // Granel líquido: Jabón, Suavizante… (mig. 136). Vacío = sin tipo.
+  tipo_granel_id:    '',
 };
 
 // Servicios de Por Encargo a los que se puede ligar una bolsa (mig. 125). El
@@ -228,7 +230,7 @@ const FORM_VACIO = {
 const SERVICIOS_BOLSA = [['chico', 'Chico'], ['mediano', 'Mediano'], ['grande', 'Grande'], ['edredon', 'Edredón']];
 
 // ── Modal crear / editar ────────────────────────────────────────
-function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = [], tamanosBolsa = [] }) {
+function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = [], tamanosBolsa = [], tiposGranel = [] }) {
   const esEdicion = Boolean(producto);
   const [form, setForm] = useState(producto
     ? {
@@ -242,6 +244,7 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = 
         compra_bolsa:   producto.clase === 'bolsa' ? (producto.bolsas_por_rollo ? 'rollo' : 'pieza') : '',
         bolsas_por_rollo: producto.bolsas_por_rollo ?? '',
         servicios_bolsa: producto.servicios_bolsa ?? [],
+        tipo_granel_id:  producto.tipo_granel_id != null ? String(producto.tipo_granel_id) : '',
         stock_minimo_bolsas: producto.clase === 'bolsa' ? String(producto.stock_minimo ?? 0) : '0',
         bidon_valor:    producto.volumen_envase_ml
           ? (producto.volumen_envase_ml % 1000 === 0 ? String(producto.volumen_envase_ml / 1000) : String(producto.volumen_envase_ml))
@@ -395,6 +398,8 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = 
         ? (form.metodo_medida === 'ml' && medidaMl > 0 ? medidaMl : null)
         : 1,
       medidas_por_botella: esGranelLiq && form.metodo_medida === 'medidas' ? (Number(form.medidas_por_botella) || null) : null,
+      // Su tipo: con él el servicio Por Encargo lo ofrece en Salidas (mig. 136).
+      tipo_granel_id:    esGranelLiq && form.tipo_granel_id !== '' ? Number(form.tipo_granel_id) : null,
       // El aviso se captura en botellas y se guarda en medidas.
       stock_minimo:      medidasBotella > 0
         ? Math.round((Number(form.stock_minimo_botellas) || 0) * medidasBotella)
@@ -510,6 +515,29 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = 
                   </button>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* Tipo de granel (mig. 136): Jabón, Suavizante… Es lo que hace que un
+              servicio Por Encargo lo ofrezca en Salidas. Solo el líquido: el
+              polvo se vende por unidad. Un tipo desactivado se sigue mostrando
+              si el producto ya lo tiene, para no quitárselo al editar. */}
+          {esGranelLiq && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                Tipo de granel
+              </label>
+              <select name="tipo_granel_id" value={form.tipo_granel_id} onChange={handleChange} className={INPUT_CLS}>
+                <option value="">Sin tipo</option>
+                {tiposGranel
+                  .filter(t => t.activo || String(t.id) === form.tipo_granel_id)
+                  .map(t => <option key={t.id} value={String(t.id)}>{t.nombre}</option>)}
+              </select>
+              <p className="text-xs text-gray-400 mt-1">
+                {form.tipo_granel_id === ''
+                  ? 'Sin tipo no se ofrece en los servicios Por Encargo. Los tipos se administran en Ajustes → Inventario.'
+                  : 'Los servicios Por Encargo lo ofrecen en Salidas junto con los demás de este tipo.'}
+              </p>
             </div>
           )}
 
@@ -1490,6 +1518,8 @@ export default function Inventario() {
   const [marcas, setMarcas] = useState([]);
   const [graneles, setGraneles] = useState([]);
   const [tamanosBolsa, setTamanosBolsa] = useState([]);
+  // Tipos de granel (mig. 133): todos, con su id; el modal decide cuáles ofrece.
+  const [tiposGranel, setTiposGranel] = useState([]);
 
   useEffect(() => {
     let activo = true;
@@ -1502,6 +1532,9 @@ export default function Inventario() {
       .catch(() => {});
     api.get('/etiquetas/tamanos-bolsa')
       .then(data => { if (activo) setTamanosBolsa(activos(data)); })
+      .catch(() => {});
+    api.get('/etiquetas/tipos-granel')
+      .then(data => { if (activo) setTiposGranel(data ?? []); })
       .catch(() => {});
     return () => { activo = false; };
   }, []);
@@ -2197,6 +2230,7 @@ export default function Inventario() {
           marcas={marcas}
           graneles={graneles}
           tamanosBolsa={tamanosBolsa}
+          tiposGranel={tiposGranel}
           onClose={() => setModalProducto(null)}
           onGuardado={handleGuardado}
         />

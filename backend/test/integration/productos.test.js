@@ -442,3 +442,37 @@ describe('GET /api/productos/reporte-diario', () => {
     expect(res.status).toBe(403);
   });
 });
+
+describe('tipo de granel en el producto (mig. 136)', () => {
+  const granel = (extra = {}) => ({
+    nombre: 'OXXI', tipo_liquido: 'granel', forma: 'liquido',
+    volumen_envase_ml: 20000, botella_ml: 1000, medida_ml: 100, ...extra,
+  });
+
+  it('el granel líquido guarda su tipo y se le puede quitar', async () => {
+    const { rows } = await pool.query(`INSERT INTO tipos_granel (nombre) VALUES ('Jabón') RETURNING id`);
+    const res = await request(app).post('/api/productos').set(auth(admin.token))
+      .send(granel({ tipo_granel_id: rows[0].id }));
+    expect(res.status).toBe(201);
+    expect(res.body.tipo_granel_id).toBe(rows[0].id);
+
+    const edit = await request(app).put(`/api/productos/${res.body.id}`).set(auth(admin.token))
+      .send(granel({ tipo_granel_id: '' }));
+    expect(edit.status).toBe(200);
+    expect(edit.body.tipo_granel_id).toBeNull();
+  });
+
+  it('el polvo no lleva tipo aunque lo mande', async () => {
+    const { rows } = await pool.query(`INSERT INTO tipos_granel (nombre) VALUES ('Jabón') RETURNING id`);
+    const res = await request(app).post('/api/productos').set(auth(admin.token))
+      .send({ nombre: 'TRATA', tipo_liquido: 'granel', forma: 'polvo', precio_botella: 10, tipo_granel_id: rows[0].id });
+    expect(res.status).toBe(201);
+    expect(res.body.tipo_granel_id).toBeNull();
+  });
+
+  it('un tipo que no existe → 400', async () => {
+    const res = await request(app).post('/api/productos').set(auth(admin.token))
+      .send(granel({ tipo_granel_id: 99999 }));
+    expect(res.status).toBe(400);
+  });
+});

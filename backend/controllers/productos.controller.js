@@ -40,20 +40,9 @@ const ESTADO_GRANEL_SQL = `
   END AS estado_granel
 `.trim();
 
-// Tipo del granel LÍQUIDO (mig. 133): sale del catálogo de Granel por el
-// nombre del producto. El polvo, el de marca y la bolsa no llevan tipo.
-const TIPO_GRANEL_SQL = `
-  CASE WHEN tipo_liquido = 'granel' AND COALESCE(forma, 'liquido') = 'liquido'
-            AND COALESCE(clase, 'liquido') <> 'bolsa'
-       THEN (SELECT g.tipo_id FROM graneles_producto g
-              WHERE lower(g.nombre) = lower(productos.nombre) LIMIT 1)
-  END AS tipo_granel_id
-`.trim();
-
 // SELECT estándar de un producto con sus campos calculados.
 const SELECT_PRODUCTO = `*,
               (stock_actual - stock_reservado) AS stock_disponible,
-              ${TIPO_GRANEL_SQL},
               ${DERIVADOS_SQL},
               ${ESTADO_STOCK_SQL},
               ${ESTADO_GRANEL_SQL}`;
@@ -245,6 +234,8 @@ export const createProducto = async (req, res) => {
     clase = 'liquido', tipo_liquido = 'granel', forma = 'liquido', envase,
     stock_minimo = 0, stock_minimo_granel = 0,
     volumen_envase_ml, botella_ml, medida_ml, medidas_por_botella, precio_botella,
+    // Granel líquido: su tipo (Jabón, Suavizante…), mig. 136.
+    tipo_granel_id,
     // Bolsas:
     tamano_bolsa, bolsas_por_rollo, servicios_bolsa,
     // Existencias iniciales: botellas rellenadas y (granel) bidones a granel.
@@ -286,6 +277,12 @@ export const createProducto = async (req, res) => {
   if (conBidon && (!volumen_envase_ml || Number(volumen_envase_ml) <= 0)) {
     return res.status(400).json({ message: 'Indica el volumen del bidón (mL).' });
   }
+  // Solo el granel líquido lleva tipo; vacío = sin tipo.
+  const tipoGranel = conBidon && tipo_granel_id !== undefined && tipo_granel_id !== null && tipo_granel_id !== ''
+    ? Number(tipo_granel_id) : null;
+  if (tipoGranel !== null && !(Number.isInteger(tipoGranel) && tipoGranel > 0)) {
+    return res.status(400).json({ message: 'Elige un tipo de granel de la lista.' });
+  }
 
   const bidonMl   = conBidon ? Number(volumen_envase_ml) : null;
   const medidasPorBotella = Math.floor(botellaMl / medidaMl);
@@ -303,14 +300,15 @@ export const createProducto = async (req, res) => {
       `INSERT INTO productos
          (nombre, descripcion, unidad, precio_unitario, precio_botella, stock_actual,
           stock_granel_medidas, marca, sucursal, tipo_liquido, forma, es_por_medida, medidas_por_envase,
-          envase, stock_minimo, stock_minimo_granel, volumen_envase_ml, botella_ml, medida_ml)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, true, $12, $13, $14, $15, $16, $17, $18)
+          envase, stock_minimo, stock_minimo_granel, volumen_envase_ml, botella_ml, medida_ml,
+          tipo_granel_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, true, $12, $13, $14, $15, $16, $17, $18, $19)
        RETURNING ${SELECT_PRODUCTO}`,
       [nombre, descripcion || null, unidad, precio_unitario ?? null, precio_botella ?? null,
        stockActual, stockGranel, marca || null, req.sucursal, tipo_liquido, forma, medidasPorEnvase,
        envase || null, Number(stock_minimo) || 0,
        conBidon ? (Number(stock_minimo_granel) || 0) : 0,
-       bidonMl, botellaMl, medidaMl]
+       bidonMl, botellaMl, medidaMl, tipoGranel]
     );
     const prod = rows[0];
     // Semilla del historial: registra las existencias iniciales como entradas.
@@ -332,6 +330,9 @@ export const createProducto = async (req, res) => {
     res.status(201).json(prod);
   } catch (err) {
     await client.query('ROLLBACK');
+    if (err.code === '23503') {
+      return res.status(400).json({ message: 'Elige un tipo de granel de la lista.' });
+    }
     console.error('createProducto error:', err);
     res.status(500).json({ message: 'No se pudo crear el producto. Intenta de nuevo.' });
   } finally {
@@ -353,7 +354,7 @@ export const updateProducto = async (req, res) => {
     clase = 'liquido', tipo_liquido = 'granel', forma = 'liquido', envase,
     stock_minimo = 0, stock_minimo_granel = 0,
     volumen_envase_ml, botella_ml, medida_ml, medidas_por_botella, precio_botella,
-    tamano_bolsa, bolsas_por_rollo, servicios_bolsa,
+    tamano_bolsa, bolsas_por_rollo, servicios_bolsa, tipo_granel_id,
   } = req.body;
 
   if (!nombre) {
@@ -419,6 +420,12 @@ export const updateProducto = async (req, res) => {
   if (conBidon && (!volumen_envase_ml || Number(volumen_envase_ml) <= 0)) {
     return res.status(400).json({ message: 'Indica el volumen del bidón (mL).' });
   }
+  // Solo el granel líquido lleva tipo; vacío = sin tipo.
+  const tipoGranel = conBidon && tipo_granel_id !== undefined && tipo_granel_id !== null && tipo_granel_id !== ''
+    ? Number(tipo_granel_id) : null;
+  if (tipoGranel !== null && !(Number.isInteger(tipoGranel) && tipoGranel > 0)) {
+    return res.status(400).json({ message: 'Elige un tipo de granel de la lista.' });
+  }
 
 
   const bidonMl   = conBidon ? Number(volumen_envase_ml) : null;
@@ -433,19 +440,23 @@ export const updateProducto = async (req, res) => {
              precio_botella = $5, marca = $6, tipo_liquido = $7, forma = $8,
              medidas_por_envase = $9, envase = $10, stock_minimo = $11,
              stock_minimo_granel = $12, volumen_envase_ml = $13,
-             botella_ml = $14, medida_ml = $15, es_por_medida = true, updated_at = NOW()
-       WHERE id = $16 AND sucursal = $17
+             botella_ml = $14, medida_ml = $15, es_por_medida = true,
+             tipo_granel_id = $16, updated_at = NOW()
+       WHERE id = $17 AND sucursal = $18
        RETURNING ${SELECT_PRODUCTO}`,
       [nombre, descripcion || null, unidad, precio_unitario ?? null, precio_botella ?? null,
        marca || null, tipo_liquido, forma, medidasPorEnvase, envase || null, Number(stock_minimo) || 0,
        conBidon ? (Number(stock_minimo_granel) || 0) : 0,
-       bidonMl, botellaMl, medidaMl, id, req.sucursal]
+       bidonMl, botellaMl, medidaMl, tipoGranel, id, req.sucursal]
     );
     if (rows.length === 0) {
       return res.status(404).json({ message: 'Producto no encontrado.' });
     }
     res.json(rows[0]);
   } catch (err) {
+    if (err.code === '23503') {
+      return res.status(400).json({ message: 'Elige un tipo de granel de la lista.' });
+    }
     console.error('updateProducto error:', err);
     res.status(500).json({ message: 'No se pudieron guardar los cambios del producto. Intenta de nuevo.' });
   }

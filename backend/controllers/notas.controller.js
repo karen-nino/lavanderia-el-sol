@@ -1187,17 +1187,17 @@ async function medidasDeServicio(client, prenda, tamano, tamanoEdredon) {
 }
 
 // Opciones de granel de un servicio, por tipo: los graneles líquidos de la
-// sucursal con tipo (Ajustes → Granel). Sirven para cualquier servicio (mig. 135).
+// sucursal con tipo (se elige en el producto, mig. 136). Sirven para cualquier
+// servicio (mig. 135).
 async function opcionesGranelDeServicio(client, sucursal) {
   const { rows } = await client.query(
-    `SELECT p.id, g.tipo_id, p.stock_actual - p.stock_reservado AS disponible
+    `SELECT p.id, p.tipo_granel_id AS tipo_id, p.stock_actual - p.stock_reservado AS disponible
        FROM productos p
-       JOIN graneles_producto g ON lower(g.nombre) = lower(p.nombre)
       WHERE p.sucursal = $1 AND p.archivado = FALSE
         AND p.tipo_liquido = 'granel' AND COALESCE(p.forma, 'liquido') = 'liquido'
         AND COALESCE(p.clase, 'liquido') <> 'bolsa'
-        AND g.tipo_id IS NOT NULL
-      ORDER BY g.tipo_id, p.id`,
+        AND p.tipo_granel_id IS NOT NULL
+      ORDER BY p.tipo_granel_id, p.id`,
     [sucursal]
   );
   const porTipo = new Map();
@@ -4544,8 +4544,7 @@ export const elegirGranelDeCarga = async (req, res) => {
       `SELECT np.id, np.producto_id, np.cantidad_medidas
          FROM nota_productos np
          JOIN productos p ON p.id = np.producto_id
-         JOIN graneles_producto g ON lower(g.nombre) = lower(p.nombre)
-        WHERE np.nota_id = $1 AND np.carga_id = $2 AND g.tipo_id = $3
+        WHERE np.nota_id = $1 AND np.carga_id = $2 AND p.tipo_granel_id = $3
           AND p.tipo_liquido = 'granel' AND COALESCE(p.forma, 'liquido') = 'liquido'
         FOR UPDATE OF np`,
       [id, cargaId, tipoId]
@@ -4567,8 +4566,7 @@ export const elegirGranelDeCarga = async (req, res) => {
       // Solo un granel líquido de ESE tipo: es lo que el servicio pide.
       const { rows: ok } = await client.query(
         `SELECT 1 FROM productos p
-           JOIN graneles_producto g ON lower(g.nombre) = lower(p.nombre)
-          WHERE p.id = $1 AND p.sucursal = $2 AND p.archivado = FALSE AND g.tipo_id = $3
+          WHERE p.id = $1 AND p.sucursal = $2 AND p.archivado = FALSE AND p.tipo_granel_id = $3
             AND p.tipo_liquido = 'granel' AND COALESCE(p.forma, 'liquido') = 'liquido'`,
         [producto_id, req.sucursal, tipoId]
       );
