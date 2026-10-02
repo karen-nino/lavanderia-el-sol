@@ -220,11 +220,15 @@ const FORM_VACIO = {
   // se agregue sola a la carga. Vacío = se vende a mano, no se precarga.
   servicios_bolsa:   [],
   stock_minimo_bolsas: '0',
+  // Granel líquido (mig. 131): a qué servicios se precarga solo y cuántas
+  // medidas. Vacío = no se precarga, se agrega a mano.
+  servicios_precarga: [],
+  medidas_precarga:   '',
 };
 
-// Servicios de Por Encargo a los que se puede ligar una bolsa (mig. 125). El
-// valor es el que guarda el producto; la etiqueta, como se llama el servicio.
-// Una bolsa puede cubrir varios, así que se marcan uno por uno.
+// Servicios de Por Encargo a los que se puede ligar una bolsa (mig. 125) o un
+// granel líquido (mig. 131). El valor es el que guarda el producto; la
+// etiqueta, como se llama el servicio. Se marcan uno por uno.
 const SERVICIOS_BOLSA = [['chico', 'Chico'], ['mediano', 'Mediano'], ['grande', 'Grande'], ['edredon', 'Edredón']];
 
 // ── Modal crear / editar ────────────────────────────────────────
@@ -242,6 +246,8 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = 
         compra_bolsa:   producto.clase === 'bolsa' ? (producto.bolsas_por_rollo ? 'rollo' : 'pieza') : '',
         bolsas_por_rollo: producto.bolsas_por_rollo ?? '',
         servicios_bolsa: producto.servicios_bolsa ?? [],
+        servicios_precarga: producto.servicios_precarga ?? [],
+        medidas_precarga:   producto.medidas_precarga != null ? String(producto.medidas_precarga) : '',
         stock_minimo_bolsas: producto.clase === 'bolsa' ? String(producto.stock_minimo ?? 0) : '0',
         bidon_valor:    producto.volumen_envase_ml
           ? (producto.volumen_envase_ml % 1000 === 0 ? String(producto.volumen_envase_ml / 1000) : String(producto.volumen_envase_ml))
@@ -270,6 +276,30 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = 
 
   const esGranel = form.tipo_liquido === 'granel';
   const esBolsa  = form.tipo_liquido === 'bolsa';
+
+  // Un botón por servicio Por Encargo; `campo` es la lista del form que marcan
+  // (los de la bolsa o los de la precarga del granel).
+  const botonesServicios = (campo) => (
+    <div className="flex gap-2">
+      {SERVICIOS_BOLSA.map(([val, label]) => {
+        const marcado = form[campo].includes(val);
+        return (
+          <button
+            key={val} type="button" aria-pressed={marcado}
+            onClick={() => setForm(f => ({
+              ...f,
+              [campo]: marcado ? f[campo].filter(x => x !== val) : [...f[campo], val],
+            }))}
+            className={`flex-1 py-2.5 px-2 rounded-lg border text-sm font-medium transition-colors ${
+              marcado ? 'border-blue bg-light-blue text-blue' : 'border-gray-300 bg-white text-gray-600 hover:bg-gray-50'
+            }`}
+          >
+            {marcado && <span className="mr-1">✓</span>}{label}
+          </button>
+        );
+      })}
+    </div>
+  );
   const esMarca  = form.tipo_liquido === 'marca';
   // El polvo es granel de nombre y de catálogo, pero se cuenta por unidades:
   // no tiene bidón, ni botella, ni medida que capturar (mig. 126). Todo lo que
@@ -381,6 +411,10 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = 
             ? Math.round((Number(form.stock_minimo_bidones) || 0) * medidasBidon)
             : (Number(form.stock_minimo_bidones) || 0))
         : 0,
+      // Precarga en los servicios Por Encargo: solo el granel líquido.
+      servicios_precarga: esGranelLiq ? form.servicios_precarga : [],
+      medidas_precarga:   esGranelLiq && form.servicios_precarga.length > 0
+        ? (Number(form.medidas_precarga) || null) : null,
     };
 
     try {
@@ -545,27 +579,7 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = 
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
                   ¿A qué servicios va ligada?
                 </label>
-                <div className="flex gap-2">
-                  {SERVICIOS_BOLSA.map(([val, label]) => {
-                    const marcado = form.servicios_bolsa.includes(val);
-                    return (
-                      <button
-                        key={val} type="button" aria-pressed={marcado}
-                        onClick={() => setForm(f => ({
-                          ...f,
-                          servicios_bolsa: marcado
-                            ? f.servicios_bolsa.filter(x => x !== val)
-                            : [...f.servicios_bolsa, val],
-                        }))}
-                        className={`flex-1 py-2.5 px-2 rounded-lg border text-sm font-medium transition-colors ${
-                          marcado ? 'border-blue bg-light-blue text-blue' : 'border-gray-300 bg-white text-gray-600 hover:bg-gray-50'
-                        }`}
-                      >
-                        {marcado && <span className="mr-1">✓</span>}{label}
-                      </button>
-                    );
-                  })}
-                </div>
+                {botonesServicios('servicios_bolsa')}
                 <p className="text-xs text-gray-400 mt-1">
                   {form.servicios_bolsa.length === 0
                     ? 'Sin servicio no se agrega sola: se vende a mano.'
@@ -714,6 +728,37 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = 
               <p className="text-[11px] text-gray-400 mt-1">{esBolsa ? 'Se cobra en la nota' : 'Autoservicio'}</p>
             </div>
           </div>
+
+          {/* Precarga en Por Encargo (mig. 131): a qué servicios se agrega solo
+              y cuántas medidas. Solo el granel líquido, que es el que se sirve
+              por medida dentro del servicio. */}
+          {esGranelLiq && (
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  ¿A qué servicios va ligado?
+                </label>
+                {botonesServicios('servicios_precarga')}
+                <p className="text-xs text-gray-400 mt-1">
+                  {form.servicios_precarga.length === 0
+                    ? 'Sin servicio no se agrega solo: se sirve a mano.'
+                    : 'En Por Encargo, la nota lo agrega solo a cada servicio de esos.'}
+                </p>
+              </div>
+              {form.servicios_precarga.length > 0 && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    Medidas que se precargan por servicio <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="number" name="medidas_precarga" min="1" step="1" required
+                    value={form.medidas_precarga} onChange={handleChange} placeholder="Ej. 2"
+                    className={NUM_CLS}
+                  />
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Las existencias (botellas rellenadas / bidones) se cargan con una
               Entrada, no al dar de alta el producto. */}

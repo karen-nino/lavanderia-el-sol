@@ -386,35 +386,25 @@ export default function NuevaNota() {
     if (seVendePorUnidad(prod)) return n === 1 ? 'unidad' : 'unidades';
     return n === 1 ? 'botella' : 'botellas';
   };
-  // Productos que trae puestos una carga Por Encargo: jabón y suavizante
-  // (granel), 2 medidas de cada uno. Se buscan por nombre; del jabón, si no hay
-  // ninguno que se llame así, se toma el primer granel disponible.
-  const MEDIDAS_PRECARGADAS = 2;
+  // Granel que trae puesto un servicio Por Encargo. Cada granel dice en
+  // Inventario a qué servicios va ligado y cuántas medidas lleva (mig. 131);
+  // `servicio` es la clave de ese ligue ('chico'… 'edredon').
   const medidasDisponibles = (p) => Number(p.stock_disponible ?? p.stock_actual) || 0;
-  const conStock = (p) => medidasDisponibles(p) > 0;
   // Solo el granel LÍQUIDO se precarga: es el que se sirve por medidas dentro
   // del servicio. El polvo se vende por unidad, así que se agrega a mano.
   const granelServido = (p) => p.tipo_liquido === 'granel' && !esPolvo(p);
-  const granelLlamado = (re) =>
-    productosCatalogo.find(p => granelServido(p) && conStock(p) && re.test(p.nombre || ''));
-  const jabonDefault = granelLlamado(/jab[oó]n/i)
-    ?? productosCatalogo.find(p => granelServido(p) && conStock(p));
-  const suavizanteDefault = granelLlamado(/suavizante/i);
-  const defaultProductosCarga = () => {
-    const puestos = [];
-    for (const prod of [jabonDefault, suavizanteDefault]) {
-      if (!prod) continue;
-      // El jabón cae al "primer granel disponible" cuando no hay ninguno con
-      // ese nombre, y ese primero puede ser justamente el suavizante.
-      if (puestos.some(x => x.producto_id === String(prod.id))) continue;
-      // Si quedan menos medidas que las precargadas se pone lo que haya: dejar 2
-      // sin existencias haría fallar el guardado por un valor que nadie eligió.
-      puestos.push({
-        producto_id: String(prod.id),
-        cantidad: String(Math.min(MEDIDAS_PRECARGADAS, medidasDisponibles(prod))),
-      });
-    }
-    return puestos;
+  const granelDeServicio = (servicio) => {
+    if (!servicio) return [];
+    return productosCatalogo
+      .filter(p => granelServido(p) && (p.servicios_precarga ?? []).includes(servicio))
+      // Si quedan menos medidas que las precargadas se pone lo que haya: dejar
+      // las de siempre sin existencias haría fallar el guardado por un valor
+      // que nadie eligió. Sin existencias, no se pone.
+      .map(p => ({
+        producto_id: String(p.id),
+        cantidad: String(Math.min(Number(p.medidas_precarga) || 0, medidasDisponibles(p))),
+      }))
+      .filter(x => Number(x.cantidad) > 0);
   };
   const subtotalCargas = cargasAuto.reduce((s, c) => s + subtotalDeCarga(c), 0);
   // Ámbito de los productos a nivel nota: en Autoservicio y en la venta de
@@ -716,13 +706,13 @@ export default function NuevaNota() {
     };
   };
 
-  // Lo que un servicio trae puesto: jabón y suavizante (2 medidas cada uno) y la
-  // bolsa de su tamaño, si queda existencia.
+  // Lo que un servicio trae puesto: el granel ligado a él (con sus medidas) y la
+  // bolsa que le toca, si queda existencia.
   const materialDeServicio = (serv) => {
     const s = SERVICIO_POR_V[serv];
     const bolsa = bolsaDeCargaConStock({ tamano: s.tamano, tipo_prenda: s.tipo_prenda });
     return [
-      ...defaultProductosCarga(),
+      ...granelDeServicio(servicioBolsa({ tamano: s.tamano, tipo_prenda: s.tipo_prenda })),
       ...(bolsa ? [{ producto_id: String(bolsa.id), cantidad: '1' }] : []),
     ];
   };
@@ -874,8 +864,9 @@ export default function NuevaNota() {
   // Qué servicio es la carga. Cada bolsa dice a cuáles va ligada (mig. 125), así
   // que el nombre de la bolsa ya no importa: manda lo que se eligió al darla de
   // alta. El jumbo de ropa ya no se vende y no tiene bolsa propia.
-  // Distinta de servicioDeCarga: a la bolsa le da igual el tamaño del edredón,
-  // todos van ligados al mismo servicio 'edredon'.
+  // Clave con que la bolsa y el granel se ligan a un servicio. Distinta de
+  // servicioDeCarga: al ligue le da igual el tamaño del edredón, todos van al
+  // mismo servicio 'edredon'.
   const servicioBolsa = (c) => {
     if (String(c?.tipo_prenda).toUpperCase() === 'EDREDON') return 'edredon';
     if (c?.tamano === 'chico')   return 'chico';
