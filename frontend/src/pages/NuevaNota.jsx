@@ -1439,8 +1439,8 @@ export default function NuevaNota() {
   // donde son lo que el cliente compra aparte del servicio. La unidad la pone el
   // servicio: pieza completa en los dos primeros, granel por medida en Por Encargo.
   // El granel de los servicios (Jabón, Suavizante…), arriba de lo que el cliente
-  // compra aparte. Solo informa qué producto se podrá usar: cuál, lo elige el
-  // empleado en Salidas. Las medidas de cada servicio sí se cambian aquí.
+  // compra aparte: cuántas medidas lleva cada servicio, que aquí se cambian. El
+  // producto lo elige el empleado en Salidas.
   const bloqueGranel = () => {
     const tipos = resumenGranel();
     if (tipos.length === 0) return null;
@@ -1471,21 +1471,9 @@ export default function NuevaNota() {
                 </div>
               ))}
             </div>
-            <p className="text-xs text-gray-500">
-              Se elige en Salidas:{' '}
-              {t.opciones.map((p, k) => (
-                <span key={p.id}>
-                  {k > 0 && ' · '}
-                  {p.nombre}{' '}
-                  <span className={medidasDisponibles(p) > 0 ? 'text-gray-400' : 'text-red-600'}>
-                    ({medidasDisponibles(p) > 0 ? `quedan ${medidasDisponibles(p)}` : 'agotado'})
-                  </span>
-                </span>
-              ))}
-            </p>
             {t.total > t.quedan && (
               <p className="text-xs font-semibold text-amber-700">
-                No alcanza: se necesitan {t.total} y quedan {t.quedan}. La nota se crea igual; se resuelve en Salidas.
+                No alcanza: se necesitan {t.total} y quedan {t.quedan}. La nota se crea igual.
               </p>
             )}
           </div>
