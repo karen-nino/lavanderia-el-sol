@@ -220,14 +220,11 @@ const FORM_VACIO = {
   // se agregue sola a la carga. Vacío = se vende a mano, no se precarga.
   servicios_bolsa:   [],
   stock_minimo_bolsas: '0',
-  // Granel líquido (mig. 131): a qué servicios se precarga solo. Cuántas
-  // medidas lo dice cada servicio en Ajustes. Vacío = se agrega a mano.
-  servicios_precarga: [],
 };
 
-// Servicios de Por Encargo a los que se puede ligar una bolsa (mig. 125) o un
-// granel líquido (mig. 131). El valor es el que guarda el producto; la
-// etiqueta, como se llama el servicio. Se marcan uno por uno.
+// Servicios de Por Encargo a los que se puede ligar una bolsa (mig. 125). El
+// valor es el que guarda el producto; la etiqueta, como se llama el servicio.
+// Una bolsa puede cubrir varios, así que se marcan uno por uno.
 const SERVICIOS_BOLSA = [['chico', 'Chico'], ['mediano', 'Mediano'], ['grande', 'Grande'], ['edredon', 'Edredón']];
 
 // ── Modal crear / editar ────────────────────────────────────────
@@ -245,7 +242,6 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = 
         compra_bolsa:   producto.clase === 'bolsa' ? (producto.bolsas_por_rollo ? 'rollo' : 'pieza') : '',
         bolsas_por_rollo: producto.bolsas_por_rollo ?? '',
         servicios_bolsa: producto.servicios_bolsa ?? [],
-        servicios_precarga: producto.servicios_precarga ?? [],
         stock_minimo_bolsas: producto.clase === 'bolsa' ? String(producto.stock_minimo ?? 0) : '0',
         bidon_valor:    producto.volumen_envase_ml
           ? (producto.volumen_envase_ml % 1000 === 0 ? String(producto.volumen_envase_ml / 1000) : String(producto.volumen_envase_ml))
@@ -409,8 +405,6 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = 
             ? Math.round((Number(form.stock_minimo_bidones) || 0) * medidasBidon)
             : (Number(form.stock_minimo_bidones) || 0))
         : 0,
-      // Precarga en los servicios Por Encargo: solo el granel líquido.
-      servicios_precarga: esGranelLiq ? form.servicios_precarga : [],
     };
 
     try {
@@ -724,24 +718,6 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = 
               <p className="text-[11px] text-gray-400 mt-1">{esBolsa ? 'Se cobra en la nota' : 'Autoservicio'}</p>
             </div>
           </div>
-
-          {/* Precarga en Por Encargo (mig. 131): a qué servicios se agrega
-              solo. Solo el granel líquido, que es el que se sirve por medida
-              dentro del servicio; cuántas medidas lo dice el servicio en
-              Ajustes (mig. 132). */}
-          {esGranelLiq && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                ¿A qué servicios va ligado?
-              </label>
-              {botonesServicios('servicios_precarga')}
-              <p className="text-xs text-gray-400 mt-1">
-                {form.servicios_precarga.length === 0
-                  ? 'Sin servicio no se agrega solo: se sirve a mano.'
-                  : 'En Por Encargo, la nota lo agrega solo a cada servicio de esos, con las medidas que diga el servicio en Ajustes.'}
-              </p>
-            </div>
-          )}
 
           {/* Las existencias (botellas rellenadas / bidones) se cargan con una
               Entrada, no al dar de alta el producto. */}

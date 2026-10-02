@@ -12,7 +12,7 @@ import { api } from '../lib/api';
 const NOMBRE_TAMANO = { chico: 'Chico', mediano: 'Mediano', grande: 'Grande', jumbo: 'Jumbo' };
 
 const esEdredon = (c) => String(c?.tipo_prenda ?? '').toUpperCase() === 'EDREDON';
-// Clave con que el granel se liga a un servicio en Inventario.
+// Los servicios que llevan granel (los de ropa y el edredón).
 const claveLigue = (c) => (esEdredon(c) ? 'edredon' : (['chico', 'mediano', 'grande'].includes(c?.tamano) ? c.tamano : null));
 const nombreServicio = (c) => (esEdredon(c)
   ? (c.tamano_edredon ? `Edredón ${c.tamano_edredon}` : 'Edredón')
@@ -69,11 +69,10 @@ export default function GranelPorServicio({ nota, puedeEditar, onCambio }) {
 
   const porElegir = conGranel.some(s => s.renglones.some(r => !r.producto));
 
-  // Opciones de un tipo para el servicio: los graneles de ese tipo ligados a
-  // él, más el que ya tenga puesto aunque ya no esté ligado.
-  const opcionesDe = (c, tipoId, actual) => {
-    const clave = claveLigue(c);
-    const lista = catalogo.filter(p => p.tipo_granel_id === tipoId && (p.servicios_precarga ?? []).includes(clave));
+  // Opciones de un tipo: los graneles de ese tipo (sirven para cualquier
+  // servicio, mig. 135), más el que ya tenga puesto aunque ya no sea de ese tipo.
+  const opcionesDe = (tipoId, actual) => {
+    const lista = catalogo.filter(p => p.tipo_granel_id === tipoId);
     if (actual && !lista.some(p => p.id === actual.producto_id)) {
       const p = porId.get(actual.producto_id);
       if (p) lista.push(p);
@@ -115,7 +114,7 @@ export default function GranelPorServicio({ nota, puedeEditar, onCambio }) {
           <div key={c.id} className="px-4 py-3 space-y-3">
             <p className="text-sm font-semibold text-gray-900">{etiqueta}</p>
             {renglones.map(r => {
-              const opciones = opcionesDe(c, r.tipoId, r.producto);
+              const opciones = opcionesDe(r.tipoId, r.producto);
               const enProceso = ocupado === `${c.id}-${r.tipoId}`;
               const bloqueado = !puedeEditar || ocupado != null;
               const elegido = r.producto?.producto_id ?? null;
@@ -157,7 +156,7 @@ export default function GranelPorServicio({ nota, puedeEditar, onCambio }) {
                   </div>
                   {opciones.length === 0 ? (
                     <p className="text-xs text-gray-400">
-                      No hay {nombreTipo(r.tipoId).toLowerCase()} ligado a este servicio. Lígalo en Inventario.
+                      No hay {nombreTipo(r.tipoId).toLowerCase()} en Inventario. Dalo de alta o asígnale su tipo en Ajustes → Inventario → Granel.
                     </p>
                   ) : (
                     <div className="flex flex-wrap gap-2">

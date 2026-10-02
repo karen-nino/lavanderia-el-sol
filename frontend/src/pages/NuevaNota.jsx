@@ -396,16 +396,17 @@ export default function NuevaNota() {
   // medidas de CADA tipo (Jabón, Suavizante); cuál producto de ese tipo lo
   // elige el empleado en Salidas, así que aquí no va a la lista de productos:
   // lo pone el servidor al crear la nota. Aquí solo se dice qué lleva y se
-  // avisa si no alcanza. `servicio` es la clave del ligue ('chico'… 'edredon').
+  // avisa si no alcanza.
   const medidasDisponibles = (p) => Number(p.stock_disponible ?? p.stock_actual) || 0;
   // Solo el granel LÍQUIDO con tipo: el polvo se vende por unidad.
   const granelServido = (p) => p.tipo_liquido === 'granel' && !esPolvo(p) && p.tipo_granel_id != null;
-  // Por tipo, los productos de ese tipo ligados al servicio.
+  // Por tipo, los productos de ese tipo. Sirven para cualquier servicio (mig.
+  // 135); `servicio` solo dice si la carga es un servicio que lleva granel.
   const granelPorTipo = (servicio) => {
     const porTipo = new Map();
     if (!servicio) return porTipo;
     for (const p of productosCatalogo) {
-      if (!granelServido(p) || !(p.servicios_precarga ?? []).includes(servicio)) continue;
+      if (!granelServido(p)) continue;
       if (!porTipo.has(p.tipo_granel_id)) porTipo.set(p.tipo_granel_id, []);
       porTipo.get(p.tipo_granel_id).push(p);
     }

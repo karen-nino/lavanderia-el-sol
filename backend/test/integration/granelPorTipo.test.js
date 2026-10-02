@@ -23,14 +23,13 @@ beforeEach(async () => {
   tipo = { jabon: rows[0].id, suavizante: rows[1].id };
 });
 
-// Un granel líquido ligado a Chico, con su tipo en el catálogo de Granel.
+// Un granel líquido con su tipo en el catálogo de Granel.
 async function granel(nombre, tipoId, stock = 50) {
   await pool.query(
     'INSERT INTO graneles_producto (nombre, tipo_id) VALUES ($1, $2) ON CONFLICT (nombre) DO NOTHING',
     [nombre, tipoId]
   );
   const id = await seedProducto({ nombre, precio_unitario: 1, stock_actual: stock });
-  await pool.query(`UPDATE productos SET servicios_precarga = ARRAY['chico'] WHERE id = $1`, [id]);
   return id;
 }
 

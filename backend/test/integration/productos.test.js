@@ -442,39 +442,3 @@ describe('GET /api/productos/reporte-diario', () => {
     expect(res.status).toBe(403);
   });
 });
-
-describe('precarga del granel en los servicios (migs. 131 y 132)', () => {
-  const granel = (extra = {}) => ({
-    nombre: 'Jabón', tipo_liquido: 'granel', forma: 'liquido',
-    volumen_envase_ml: 20000, botella_ml: 1000, medida_ml: 100, ...extra,
-  });
-
-  it('guarda a qué servicios va ligado y se puede quitar', async () => {
-    const res = await request(app).post('/api/productos').set(auth(admin.token))
-      .send(granel({ servicios_precarga: ['chico', 'edredon'] }));
-    expect(res.status).toBe(201);
-    expect(res.body.servicios_precarga).toEqual(['chico', 'edredon']);
-    // Cuántas medidas ya no es cosa del producto (mig. 132).
-    expect(res.body.medidas_precarga).toBeUndefined();
-
-    const edit = await request(app).put(`/api/productos/${res.body.id}`).set(auth(admin.token))
-      .send(granel({ servicios_precarga: [] }));
-    expect(edit.status).toBe(200);
-    expect(edit.body.servicios_precarga).toEqual([]);
-  });
-
-  it('un servicio que no existe → 400', async () => {
-    const res = await request(app).post('/api/productos').set(auth(admin.token))
-      .send(granel({ servicios_precarga: ['jumbo'] }));
-    expect(res.status).toBe(400);
-  });
-
-  it('el de marca no se precarga aunque lo mande', async () => {
-    const res = await request(app).post('/api/productos').set(auth(admin.token)).send({
-      nombre: 'Suavizante', tipo_liquido: 'marca', marca: 'Ensueño', botella_ml: 1000, medida_ml: 100,
-      servicios_precarga: ['chico'],
-    });
-    expect(res.status).toBe(201);
-    expect(res.body.servicios_precarga).toEqual([]);
-  });
-});

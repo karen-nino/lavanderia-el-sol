@@ -1187,8 +1187,8 @@ async function medidasDeServicio(client, prenda, tamano, tamanoEdredon) {
 }
 
 // Opciones de granel de un servicio, por tipo: los graneles líquidos de la
-// sucursal ligados a ese servicio (Inventario) y con tipo (Ajustes → Granel).
-async function opcionesGranelDeServicio(client, sucursal, clave) {
+// sucursal con tipo (Ajustes → Granel). Sirven para cualquier servicio (mig. 135).
+async function opcionesGranelDeServicio(client, sucursal) {
   const { rows } = await client.query(
     `SELECT p.id, g.tipo_id, p.stock_actual - p.stock_reservado AS disponible
        FROM productos p
@@ -1197,9 +1197,8 @@ async function opcionesGranelDeServicio(client, sucursal, clave) {
         AND p.tipo_liquido = 'granel' AND COALESCE(p.forma, 'liquido') = 'liquido'
         AND COALESCE(p.clase, 'liquido') <> 'bolsa'
         AND g.tipo_id IS NOT NULL
-        AND $2 = ANY(p.servicios_precarga)
       ORDER BY g.tipo_id, p.id`,
-    [sucursal, clave]
+    [sucursal]
   );
   const porTipo = new Map();
   for (const r of rows) {
@@ -1219,7 +1218,7 @@ async function granelDeCarga(client, notaId, carga, sucursal, tipo_servicio) {
   const medidas = await medidasDeServicio(client, carga.tipo_prenda, carga.tamano, carga.tamano_edredon);
   if (medidas <= 0) return [];
   const productos = [];
-  for (const [tipoId, opciones] of await opcionesGranelDeServicio(client, sucursal, clave)) {
+  for (const [tipoId, opciones] of await opcionesGranelDeServicio(client, sucursal)) {
     if (opciones.length === 1 && Number(opciones[0].disponible) >= medidas) {
       productos.push(await reservarProducto(client, notaId, carga.id, opciones[0].id, medidas, sucursal, tipo_servicio));
     } else {
