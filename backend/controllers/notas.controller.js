@@ -450,8 +450,7 @@ async function desmarcarPagoPorCambio(client, nota, antes, ahora, usuarioId, suc
 async function tarifasCarga(client) {
   const { rows } = await client.query(
     `SELECT precio_carga_mediana, precio_carga_jumbo,
-            precio_carga_secadora, precio_secadora_jumbo, precio_secadora_edredon,
-            precio_edredon_jumbo,
+            precio_carga_secadora, precio_secadora_jumbo,
             tope_carga_chico, tope_carga_mediano, tope_carga_grande, tope_carga_jumbo, tope_carga_edredon
        FROM ajustes WHERE id = 1`
   );
@@ -462,23 +461,40 @@ async function tarifasCarga(client) {
     // Secado por categoría. La columna plana precio_carga_secadora es la Mediana.
     secadora:        c.precio_carga_secadora   != null ? Number(c.precio_carga_secadora)   : 45,
     secadoraJumbo:   c.precio_secadora_jumbo   != null ? Number(c.precio_secadora_jumbo)   : 45,
-    secadoraEdredon: c.precio_secadora_edredon != null ? Number(c.precio_secadora_edredon) : 45,
-    edredonJumbo:    c.precio_edredon_jumbo    != null ? Number(c.precio_edredon_jumbo)    : 80,
     // Topes por tamaño de carga (Por Encargo). NULL = sin tope configurado.
     topeChico:       c.tope_carga_chico   != null ? Number(c.tope_carga_chico)   : null,
     topeMediano:     c.tope_carga_mediano != null ? Number(c.tope_carga_mediano) : null,
     topeGrande:      c.tope_carga_grande  != null ? Number(c.tope_carga_grande)  : null,
     topeJumbo:       c.tope_carga_jumbo   != null ? Number(c.tope_carga_jumbo)   : null,
     topeEdredon:     c.tope_carga_edredon != null ? Number(c.tope_carga_edredon) : null,
+    // Precio de cada tamaño de edredón (mig. 130), por nombre en minúsculas.
+    preciosEdredon:  await preciosEdredon(client),
   };
+}
+
+// El precio de cada tamaño de edredón sale de su catálogo (mig. 130). Se
+// incluyen los inactivos: editar una nota que ya lo usa no debe quedarse sin
+// precio. NULL = el tamaño no tiene precio todavía.
+async function preciosEdredon(client) {
+  const { rows } = await client.query('SELECT nombre, precio FROM tamanos_edredon');
+  return new Map(rows.map(r => [
+    String(r.nombre).trim().toLowerCase(),
+    r.precio != null ? Number(r.precio) : null,
+  ]));
 }
 
 // Tope vigente de una carga según su prenda y tamaño. En Por Encargo este tope
 // ES el precio de la carga, así que se congela en `nota_cargas.precio_tope` al
 // crearla (mig. 096): si el negocio cambia sus precios, las notas que ya
 // existen conservan el suyo. NULL = sin tope (se cobra la suma de lo que lleva).
-function topeDeCarga(prenda, tamano, t) {
-  if (String(prenda ?? '').toUpperCase() === 'EDREDON') return t.topeEdredon;
+// El edredón se cobra según su tamaño (mig. 130); el de una carga vieja sin
+// tamaño conserva el precio único de antes.
+function topeDeCarga(prenda, tamano, t, tamanoEdredon) {
+  if (String(prenda ?? '').toUpperCase() === 'EDREDON') {
+    const nombre = String(tamanoEdredon ?? '').trim().toLowerCase();
+    if (!nombre) return t.topeEdredon;
+    return t.preciosEdredon?.get(nombre) ?? null;
+  }
   switch (tamano) {
     case 'chico':   return t.topeChico;
     case 'mediano': return t.topeMediano;
@@ -488,7 +504,8 @@ function topeDeCarga(prenda, tamano, t) {
   }
 }
 
-// Los servicios que Por Encargo vende hoy: Chico, Mediano, Grande y Edredón. El
+// Los servicios que Por Encargo vende hoy: Chico, Mediano, Grande y Edredón
+// (uno por tamaño: Individual, Matrimonial, King, Cubre Colchón). El
 // edredón viaja como prenda EDREDON en tamaño jumbo (es lo que lo ata a la
 // lavadora jumbo), así que se reconoce por la prenda. Jumbo de ropa ya no se
 // vende: sigue siendo válido para las notas que lo eligieron cuando existía.
@@ -506,7 +523,7 @@ const esServicioQueSeVende = (prenda, tamano) =>
 //
 // Jumbo de ropa ya no se vende; se conserva para las notas que lo eligieron.
 function costoMaquinasDeServicio(prenda, tamano, t) {
-  if (String(prenda ?? '').toUpperCase() === 'EDREDON') return Number(t.edredonJumbo) || 0;
+  if (String(prenda ?? '').toUpperCase() === 'EDREDON') return Number(t.jumbo) || 0;
   if (tamano === 'jumbo')  return (Number(t.jumbo)   || 0) + (Number(t.secadora) || 0);
   if (['chico', 'mediano', 'grande'].includes(tamano)) {
     return (Number(t.mediana) || 0) + (Number(t.secadora) || 0);
@@ -515,8 +532,10 @@ function costoMaquinasDeServicio(prenda, tamano, t) {
 }
 
 // Cómo se llama el servicio en la pantalla, para los mensajes de error.
-function nombreServicio(prenda, tamano) {
-  if (String(prenda ?? '').toUpperCase() === 'EDREDON') return 'Edredón';
+function nombreServicio(prenda, tamano, tamanoEdredon) {
+  if (String(prenda ?? '').toUpperCase() === 'EDREDON') {
+    return tamanoEdredon ? `Edredón ${String(tamanoEdredon).trim()}` : 'Edredón';
+  }
   switch (tamano) {
     case 'chico':   return 'Chico';
     case 'mediano': return 'Mediano';
@@ -556,9 +575,9 @@ async function tiemposCarga(client) {
 }
 
 function tarifaLavadora(tipoMaquina, tipoPrenda, t) {
-  if (tipoMaquina === 'lavadora_jumbo') {
-    return String(tipoPrenda).toUpperCase() === 'EDREDON' ? t.edredonJumbo : t.jumbo;
-  }
+  // El edredón se cobra como cualquier carga jumbo: ya no tiene tarifa propia
+  // de máquina (2026-10-02); su precio Por Encargo es el del servicio.
+  if (tipoMaquina === 'lavadora_jumbo') return t.jumbo;
   return t.mediana;
 }
 
@@ -677,6 +696,7 @@ async function validarTopesCargas(client, notaId) {
   const { rows } = await client.query(
     `SELECT nc.orden, nc.tamano, nc.tipo_prenda,
             UPPER(COALESCE(nc.tipo_prenda, '')) = 'EDREDON' AS es_edredon,
+            nc.tamano_edredon,
             nc.precio_lavadora + nc.precio_secadora AS maquinas,
             -- Contra el tope cuenta lo que se SIRVE dentro del servicio: el
             -- granel líquido (por medida) y la bolsa. Lo que se vende por unidad
@@ -712,7 +732,7 @@ async function validarTopesCargas(client, notaId) {
     if (r.tope == null) continue;
     const total = maquinasDe(r) + Number(r.productos);
     if (total > Number(r.tope) + 1e-9) {
-      const servicio = nombreServicio(r.es_edredon ? 'EDREDON' : 'ROPA', r.tamano);
+      const servicio = nombreServicio(r.es_edredon ? 'EDREDON' : 'ROPA', r.tamano, r.tamano_edredon);
       const desglose = `máquinas ${fmt(maquinasDe(r))} + material ${fmt(r.productos)} = ${fmt(total)}`;
       return `El servicio ${servicio} (carga ${r.orden}) se cobra en ${fmt(r.tope)} y ${desglose}. `
         + `Baja $${(total - Number(r.tope)).toFixed(2)}: quita algún producto o la bolsa, `
@@ -1046,12 +1066,13 @@ async function prepararCargas(client, cargas, tipoPrendaNota, sucursal, tipo_ser
     // Las cargas viejas sin tamaño no entran en esa regla: nacieron cobrando la
     // suma de sus máquinas y editar su nota no debe volverse imposible.
     const tamanoCarga = c.tamano ? String(c.tamano).toLowerCase() : null;
+    const tamanoEdredon = prendaCarga === 'EDREDON' && c.tamano_edredon ? String(c.tamano_edredon).trim() : null;
     let precioTope = null;
     if (tipo_servicio === 'POR_ENCARGO') {
-      precioTope = topeDeCarga(prendaCarga, tamanoCarga, t);
+      precioTope = topeDeCarga(prendaCarga, tamanoCarga, t, tamanoEdredon);
       if (precioTope == null && esServicioQueSeVende(prendaCarga, tamanoCarga)) {
         throw new Error(
-          `Falta configurar el precio del servicio ${nombreServicio(prendaCarga, tamanoCarga)} `
+          `Falta configurar el precio del servicio ${nombreServicio(prendaCarga, tamanoCarga, tamanoEdredon)} `
           + 'en Ajustes → Servicios Por Encargo.'
         );
       }
@@ -1067,7 +1088,7 @@ async function prepararCargas(client, cargas, tipoPrendaNota, sucursal, tipo_ser
       precio_secadora: precioSecadora,
       tipo_prenda:     c.tipo_prenda ? prendaCarga : null,
       tipo_tela:       prendaCarga === 'ROPA' && c.tipo_tela ? String(c.tipo_tela).trim() : null,
-      tamano_edredon:  prendaCarga === 'EDREDON' && c.tamano_edredon ? String(c.tamano_edredon).trim() : null,
+      tamano_edredon:  tamanoEdredon,
       tamano:          tamanoCarga,
       ajuste:          ajusteCarga,
       // Se congela aquí (mig. 096): editar las cargas de una nota las vuelve a

@@ -14,7 +14,18 @@ import { esAdmin } from '../middleware/roles.js';
 // SQL, así que solo pueden ser los que el catálogo declara.
 // `alRenombrar(client, viejo, nuevo)` es para el catálogo cuyo nombre se copia
 // en otra tabla: corre en la misma transacción que el cambio de nombre.
-function crearControladorEtiqueta(tabla, nombres, banderas = [], { alRenombrar } = {}) {
+// `conPrecio` agrega la columna `precio` (mig. 130: el precio de cada tamaño de
+// edredón). Vacío = sin precio; si viene, es un número mayor o igual a 0.
+function crearControladorEtiqueta(tabla, nombres, banderas = [], { alRenombrar, conPrecio = false } = {}) {
+  // undefined = no se manda; null = sin precio; { error } si no es válido.
+  const leerPrecio = (v) => {
+    if (v === undefined) return undefined;
+    if (v === null || v === '') return null;
+    const n = Number(v);
+    if (!Number.isFinite(n) || n < 0) return { error: 'El precio debe ser un número mayor o igual a 0.' };
+    return n;
+  };
+
   const getAll = async (req, res) => {
     try {
       const { rows } = await pool.query(
@@ -35,16 +46,22 @@ function crearControladorEtiqueta(tabla, nombres, banderas = [], { alRenombrar }
     if (!nombre) {
       return res.status(400).json({ message: 'El nombre es requerido.' });
     }
+    const precio = conPrecio ? leerPrecio(req.body.precio) : undefined;
+    if (precio?.error) {
+      return res.status(400).json({ message: precio.error });
+    }
     try {
       // Se agrega al final del orden actual. Las banderas que declare el
       // catálogo entran con su valor del body (false si no viene).
-      const cols = banderas.map((b, k) => `, ${b}`).join('');
-      const vals = banderas.map((b, k) => `, $${k + 2}`).join('');
+      const extras = [...banderas.map(b => [b, Boolean(req.body[b])]),
+                      ...(conPrecio ? [['precio', precio ?? null]] : [])];
+      const cols = extras.map(([c]) => `, ${c}`).join('');
+      const vals = extras.map((_, k) => `, $${k + 2}`).join('');
       const { rows } = await pool.query(
         `INSERT INTO ${tabla} (nombre, orden${cols})
          VALUES ($1, (SELECT COALESCE(MAX(orden), 0) + 1 FROM ${tabla})${vals})
          RETURNING *`,
-        [nombre, ...banderas.map(b => Boolean(req.body[b]))]
+        [nombre, ...extras.map(([, v]) => v)]
       );
       res.status(201).json(rows[0]);
     } catch (err) {
@@ -88,6 +105,16 @@ function crearControladorEtiqueta(tabla, nombres, banderas = [], { alRenombrar }
       if (req.body[bandera] !== undefined) {
         updates.push(`${bandera} = $${i++}`);
         values.push(Boolean(req.body[bandera]));
+      }
+    }
+    if (conPrecio) {
+      const precio = leerPrecio(req.body.precio);
+      if (precio?.error) {
+        return res.status(400).json({ message: precio.error });
+      }
+      if (precio !== undefined) {
+        updates.push(`precio = $${i++}`);
+        values.push(precio);
       }
     }
     if (updates.length === 0) {
@@ -165,9 +192,10 @@ function crearControladorEtiqueta(tabla, nombres, banderas = [], { alRenombrar }
 export const tiposTela = crearControladorEtiqueta('tipos_tela', {
   singular: 'el tipo de tela', plural: 'los tipos de tela', uno: 'un tipo de tela',
 });
+// Cada tamaño de edredón es un servicio Por Encargo con su precio (mig. 130).
 export const tamanosEdredon = crearControladorEtiqueta('tamanos_edredon', {
   singular: 'el tamaño de edredón', plural: 'los tamaños de edredón', uno: 'un tamaño de edredón',
-});
+}, [], { conPrecio: true });
 export const marcasProducto = crearControladorEtiqueta('marcas_producto', {
   singular: 'la marca', plural: 'las marcas', uno: 'una marca',
 });

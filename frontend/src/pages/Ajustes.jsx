@@ -184,17 +184,20 @@ const MOBILE_SECTIONS = [
   { id: 'whatsapp', label: 'WhatsApp',                 subtitle: 'Mensaje para Por Encargo', icon: SectionIcon.whatsapp },
 ];
 
-// Los servicios que vende Por Encargo, con el campo de Ajustes que lleva
+// Los servicios fijos que vende Por Encargo, con el campo de Ajustes que lleva
 // su precio. Las columnas siguen llamándose `tope_carga_*` porque nacieron como
 // topes (mig. 050 y 052), pero desde el rediseño del alta de Por Encargo ese
 // número ES el precio del servicio, no un máximo.
 // Jumbo no está: el tamaño dejó de venderse y su columna solo sobrevive para
-// las notas viejas que lo eligieron.
+// las notas viejas que lo eligieron. El Edredón tampoco: se cobra según su
+// tamaño (mig. 130) y esos precios salen del catálogo de tamaños de edredón.
+// Clave con que el precio de un tamaño de edredón entra a `config`.
+const claveEdredon = (e) => `edredon_precio_${e.id}`;
+
 const PRECIOS_SERVICIO = [
   ['tope_carga_chico',   'Servicio Chico',   'chico'],
   ['tope_carga_mediano', 'Servicio Mediano', 'mediano'],
   ['tope_carga_grande',  'Servicio Grande',  'grande'],
-  ['tope_carga_edredon', 'Servicio Edredón', 'de edredón'],
 ];
 
 // El manual no es configuración: abre su propia página (/manual). Se ofrece
@@ -953,13 +956,16 @@ export default function Ajustes() {
   const soloGuardaPerfil = usuario?.es_prueba === true && !ES_DEMO;
 
   const [tiemposMarca, setTiemposMarca] = useState([]);
+  const [edredones, setEdredones] = useState([]);
+  // Precios de edredón tal como vinieron, para mandar solo los que cambiaron.
+  const edredonOrigRef = useRef({});
   // Lo que vino del servidor, para mandar solo lo que cambió al guardar.
   const tiemposOrigRef = useRef([]);
 
   useEffect(() => {
     api.get('/ajustes')
       .then(data => {
-        setConfig({ ...data, telefono: formatTelefono(data.telefono ?? '') });
+        setConfig(prev => ({ ...prev, ...data, telefono: formatTelefono(data.telefono ?? '') }));
         if (data.logo_url) setLogoPreview(data.logo_url);
       })
       .catch(e => setMensaje({ tipo: 'error', texto: e.message }))
@@ -970,6 +976,21 @@ export default function Ajustes() {
   // las combinaciones que tienen sentido: las que existen en máquinas dadas de
   // alta más las ya configuradas, así que la pantalla no se llena de campos
   // vacíos por marcas que no están en ese tamaño.
+  // Precio de cada tamaño de edredón (mig. 130). Viven en su catálogo, pero se
+  // capturan junto a los demás servicios: entran a `config` con una clave por
+  // tamaño para usar los mismos campos, y al guardar van a su endpoint.
+  useEffect(() => {
+    api.get('/etiquetas/tamanos-edredon')
+      .then(d => {
+        const lista = d ?? [];
+        const valores = Object.fromEntries(lista.map(e => [claveEdredon(e), e.precio ?? '']));
+        edredonOrigRef.current = valores;
+        setEdredones(lista);
+        setConfig(prev => ({ ...prev, ...valores }));
+      })
+      .catch(() => { /* sin catálogo no hay precios de edredón que mostrar */ });
+  }, []);
+
   useEffect(() => {
     api.get('/etiquetas/tiempos-marca')
       .then(d => { setTiemposMarca(d ?? []); tiemposOrigRef.current = d ?? []; })
@@ -1164,6 +1185,17 @@ export default function Ajustes() {
     );
   };
 
+  // Solo se mandan los precios de edredón que cambiaron, cada uno a su tamaño.
+  const guardarPreciosEdredon = async () => {
+    const cambiados = edredones.filter(e =>
+      String(config[claveEdredon(e)] ?? '') !== String(edredonOrigRef.current[claveEdredon(e)] ?? ''));
+    if (cambiados.length === 0) return;
+    await Promise.all(cambiados.map(e => api.put(`/etiquetas/tamanos-edredon/${e.id}`, {
+      precio: precioServicioONull(config[claveEdredon(e)]),
+    })));
+    edredonOrigRef.current = Object.fromEntries(edredones.map(e => [claveEdredon(e), config[claveEdredon(e)] ?? '']));
+  };
+
   // Solo se mandan las combinaciones que cambiaron, cada una a su endpoint.
   // Vaciar el campo borra el tiempo de esa marca: vuelve a mandar el de su
   // tamaño, que es la forma de deshacer sin dejar un cero que pararía el
@@ -1253,8 +1285,9 @@ export default function Ajustes() {
         api.patch('/ajustes', buildConfigPayload()),
         patchSucursalActual(),
         guardarTiemposMarca(),
+        guardarPreciosEdredon(),
       ]);
-      setConfig(updatedConfig);
+      setConfig(prev => ({ ...prev, ...updatedConfig }));
       marcarGuardado('mobile');
     } catch (err) {
       setMensaje({ tipo: 'error', texto: err.message });
@@ -1264,6 +1297,14 @@ export default function Ajustes() {
   };
 
   // Un servicio sin precio capturado. Pinta el campo en rojo y frena el guardado.
+  // Todos los precios de servicio que se capturan: los fijos y uno por cada
+  // tamaño de edredón activo.
+  const preciosServicio = [
+    ...PRECIOS_SERVICIO,
+    ...edredones.filter(e => e.activo).map(e => [
+      claveEdredon(e), `Servicio Edredón ${e.nombre}`, `de edredón ${e.nombre}`,
+    ]),
+  ];
   const sinPrecioServicio = (name) => {
     const v = config[name];
     return v === '' || v == null;
@@ -1273,7 +1314,7 @@ export default function Ajustes() {
   // backend también los exige, pero aquí se dice antes y con el nombre que se
   // ve en la pantalla.
   const problemaDeAjustes = () => {
-    const falta = PRECIOS_SERVICIO.filter(([name]) => sinPrecioServicio(name));
+    const falta = preciosServicio.filter(([name]) => sinPrecioServicio(name));
     if (falta.length === 0) return null;
     return `Falta el precio de: ${falta.map(([, label]) => label).join(', ')}. `
       + 'Sin precio no se puede vender el servicio.';
@@ -1293,17 +1334,16 @@ export default function Ajustes() {
     precio_carga_jumbo:    Number(config.precio_carga_jumbo),
     precio_carga_secadora: Number(config.precio_carga_secadora),
     precio_secadora_jumbo:   Number(config.precio_secadora_jumbo),
-    precio_secadora_edredon: Number(config.precio_secadora_edredon),
-    precio_edredon_jumbo:  Number(config.precio_edredon_jumbo),
     tope_carga_chico:      precioServicioONull(config.tope_carga_chico),
     tope_carga_mediano:    precioServicioONull(config.tope_carga_mediano),
     tope_carga_grande:     precioServicioONull(config.tope_carga_grande),
-    tope_carga_edredon:    precioServicioONull(config.tope_carga_edredon),
+    // El Edredón se cobra por tamaño (mig. 130): su precio va al catálogo, no
+    // aquí; `tope_carga_edredon` solo queda para cargas viejas sin tamaño.
     // Jumbo ya no se captura: Por Encargo vende Chico, Mediano, Grande y Edredón. La
     // columna se conserva para las notas viejas que sí eligieron ese tamaño,
     // así que no se manda —ni se borra— desde aquí.
-    // El edredón conserva su precio pero ya no tiene tiempo propio (mig. 107):
-    // usa el de su tamaño, como cualquier otra carga de esa máquina.
+    // El edredón ya no tiene precio ni tiempo de máquina propios (2026-10-02):
+    // se cobra y se cronometra como cualquier carga de la lavadora jumbo.
     tiempo_carga_mediana:  Number(config.tiempo_carga_mediana),
     tiempo_carga_jumbo:    Number(config.tiempo_carga_jumbo),
     tiempo_carga_secadora: Number(config.tiempo_carga_secadora),
@@ -1370,6 +1410,7 @@ export default function Ajustes() {
         api.patch('/auth/me', perfilPayload),
         api.patch('/ajustes', buildConfigPayload()),
         guardarTiemposMarca(),
+        guardarPreciosEdredon(),
         // La sucursal seleccionada se guarda junto con el resto. patchSucursalActual
         // actualiza su estado por dentro; su resultado no se necesita aquí.
         patchSucursalActual(),
@@ -1377,7 +1418,7 @@ export default function Ajustes() {
 
       updateUsuario({ nombre: updatedPerfil.nombre, apellido: updatedPerfil.apellido, rol: updatedPerfil.rol });
       setPerfilForm(f => ({ ...f, password: '' }));
-      setConfig(updatedConfig);
+      setConfig(prev => ({ ...prev, ...updatedConfig }));
       marcarGuardado('todo');
     } catch (err) {
       setMensaje({ tipo: 'error', texto: err.message });
@@ -1396,8 +1437,9 @@ export default function Ajustes() {
       const [updated] = await Promise.all([
         api.patch('/ajustes', buildConfigPayload()),
         guardarTiemposMarca(),
+        guardarPreciosEdredon(),
       ]);
-      setConfig(updated);
+      setConfig(prev => ({ ...prev, ...updated }));
       marcarGuardado('mobile');
     } catch (err) {
       setMensaje({ tipo: 'error', texto: err.message });
@@ -1581,13 +1623,6 @@ export default function Ajustes() {
       {campoPrecio('precio_carga_jumbo', 'Aplica a lavadoras jumbo en autoservicio y por encargo.')}
       {campoTiempo('tiempo_carga_jumbo', 'Se usa en las lavadoras jumbo cuyo modelo no tenga tiempo propio.')}
       {camposTiempoMarca('lavadora', 'jumbo')}
-
-      <div className="border-t border-gray-100" />
-
-      {/* El edredón conserva su precio, pero ya no su tiempo: usa el de la
-          máquina donde se lava, como cualquier otra carga (mig. 107). */}
-      {subTitulo('Edredón')}
-      {campoPrecio('precio_edredon_jumbo', 'Tarifa fija por edredón lavado en máquina jumbo.')}
     </Section>
 
     {/* La secadora va separada en Mediana y Jumbo igual que la lavadora. El
@@ -1648,7 +1683,7 @@ export default function Ajustes() {
         cliente compre aparte y el ajuste manual se suman encima.
       </p>
       <div className="space-y-4">
-        {PRECIOS_SERVICIO.map(([name, label, servicio]) => (
+        {preciosServicio.map(([name, label, servicio]) => (
           <div key={name} className="rounded-xl border border-gray-200 px-5 py-4">
             {campoPrecioServicio(name, label, servicio)}
           </div>
@@ -1907,7 +1942,7 @@ export default function Ajustes() {
         <CatalogoEtiquetas endpoint="/etiquetas/tipos-tela" singular="Tela" inputCls={INPUT_CLS} onMensaje={setMensaje} />
       </Field>
       <div className="border-t border-gray-100 pt-4">
-        <Field label="Tamaños de edredón" hint="Se ofrecen al crear un encargo de Edredón. Solo son etiquetas internas.">
+        <Field label="Tamaños de edredón" hint="Cada tamaño es un servicio Edredón con su propio precio, que se captura en Servicios Por Encargo.">
           <CatalogoEtiquetas endpoint="/etiquetas/tamanos-edredon" singular="Tamaño" inputCls={INPUT_CLS} onMensaje={setMensaje} />
         </Field>
       </div>
@@ -2312,11 +2347,6 @@ export default function Ajustes() {
           {campoTiempoM('tiempo_carga_jumbo', 'Se usa en las lavadoras jumbo cuyo modelo no tenga tiempo propio.')}
           {camposTiempoMarcaM('lavadora', 'jumbo')}
         </TarjetaMobile>
-        {/* El edredón conserva su precio, pero ya no su tiempo: usa el de la
-            máquina donde se lava, como cualquier otra carga (mig. 107). */}
-        <TarjetaMobile titulo="Edredón">
-          {campoPrecioM('precio_edredon_jumbo', 'Tarifa fija por edredón lavado en máquina jumbo.')}
-        </TarjetaMobile>
         </div>
       </div>
 
@@ -2382,7 +2412,7 @@ export default function Ajustes() {
         {/* Una tarjeta por servicio: son precios independientes entre sí y
             apelotonarlos en un bloque los hacía leer como una lista. */}
         <div className="space-y-4">
-          {PRECIOS_SERVICIO.map(([name, label, servicio]) => (
+          {preciosServicio.map(([name, label, servicio]) => (
             <TarjetaMobile key={name}>{campoPrecioServicioM(name, label, servicio)}</TarjetaMobile>
           ))}
         </div>
@@ -2432,7 +2462,7 @@ export default function Ajustes() {
       <div className="border-t border-light-blue/60 pt-5">
         <MobileField
           label="Tamaños de edredón"
-          hint="Se ofrecen al crear un encargo de Edredón. Solo son etiquetas internas."
+          hint="Cada tamaño es un servicio Edredón con su propio precio, que se captura en Servicios Por Encargo."
         >
           <CatalogoEtiquetas endpoint="/etiquetas/tamanos-edredon" singular="Tamaño" inputCls={MOBILE_INPUT_CLS} onMensaje={setMensaje} />
         </MobileField>

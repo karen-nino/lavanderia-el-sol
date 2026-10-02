@@ -1709,18 +1709,18 @@ describe('cargas múltiples', () => {
 });
 
 describe('edredón (lavadora jumbo)', () => {
-  it('tarifa el lavado de edredón con la tarifa jumbo de edredón', async () => {
+  it('tarifa el lavado de edredón con la tarifa de la lavadora jumbo', async () => {
     const clienteId = await seedCliente();
     const res = await request(app).post('/api/notas').set(auth(admin.token)).send({
       tipo_servicio: 'POR_ENCARGO', cliente_id: clienteId, tipo_prenda: 'EDREDON',
       estado_pago: 'PENDIENTE', cargas: [{ lavadora_tipo: 'jumbo' }],
     });
     expect(res.status).toBe(201);
-    // La carga sigue guardando la tarifa jumbo de edredón (80) porque la nota
-    // mandó el tipo de lavado, pero lo que se COBRA es el precio del servicio
+    // El edredón ya no tiene tarifa de máquina propia: la carga guarda la de la
+    // lavadora jumbo (70), pero lo que se COBRA es el precio del servicio
     // Edredón (180): el tope manda sobre la suma de las máquinas.
     expect(Number(res.body.precio_total)).toBe(180);
-    expect(Number(res.body.cargas[0].precio_lavadora)).toBe(80);
+    expect(Number(res.body.cargas[0].precio_lavadora)).toBe(70);
   });
 
   it('rechaza edredón con tipo de lavado que no es jumbo', async () => {
@@ -1733,8 +1733,39 @@ describe('edredón (lavadora jumbo)', () => {
     expect(res.body.message).toMatch(/jumbo/i);
   });
 
+  it('cobra el edredón con el precio de su tamaño (mig. 130)', async () => {
+    await pool.query(
+      `INSERT INTO tamanos_edredon (nombre, precio, orden) VALUES ('King', 250, 1)
+       ON CONFLICT (nombre) DO UPDATE SET precio = EXCLUDED.precio`
+    );
+    const clienteId = await seedCliente();
+    const res = await request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'POR_ENCARGO', cliente_id: clienteId, tipo_prenda: 'EDREDON',
+      estado_pago: 'PENDIENTE',
+      cargas: [{ tamano: 'jumbo', tipo_prenda: 'EDREDON', tamano_edredon: 'King' }],
+    });
+    expect(res.status).toBe(201);
+    expect(Number(res.body.precio_total)).toBe(250);
+    expect(res.body.cargas[0].tamano_edredon).toBe('King');
+  });
+
+  it('un tamaño de edredón sin precio no se puede vender', async () => {
+    await pool.query(
+      `INSERT INTO tamanos_edredon (nombre, precio, orden) VALUES ('Cubre Colchón', NULL, 1)
+       ON CONFLICT (nombre) DO UPDATE SET precio = NULL`
+    );
+    const clienteId = await seedCliente();
+    const res = await request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'POR_ENCARGO', cliente_id: clienteId, tipo_prenda: 'EDREDON',
+      estado_pago: 'PENDIENTE',
+      cargas: [{ tamano: 'jumbo', tipo_prenda: 'EDREDON', tamano_edredon: 'Cubre Colchón' }],
+    });
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/Edredón Cubre Colchón/);
+  });
+
   it('aplica el tope de edredón (lavado 80 + producto 90 > 160)', async () => {
-    await seedAjustes({ precio_edredon_jumbo: 80, tope_carga_edredon: 160 });
+    await seedAjustes({ precio_carga_jumbo: 80, tope_carga_edredon: 160 });
     const clienteId = await seedCliente();
     const productoId = await seedProducto({ precio_unitario: 90 });
     const res = await request(app).post('/api/notas').set(auth(admin.token)).send({

@@ -116,3 +116,35 @@ describe('GET /api/etiquetas/marcas-producto', () => {
     expect(res.body.map((m) => m.nombre)).toContain('Ariel');
   });
 });
+
+describe('precio de los tamaños de edredón (mig. 130)', () => {
+  it('guarda, cambia y borra el precio de un tamaño', async () => {
+    const alta = await request(app).post('/api/etiquetas/tamanos-edredon').set(auth(admin.token))
+      .send({ nombre: 'Matrimonial', precio: 200 });
+    expect(alta.status).toBe(201);
+    expect(Number(alta.body.precio)).toBe(200);
+
+    const cambio = await request(app).put(`/api/etiquetas/tamanos-edredon/${alta.body.id}`)
+      .set(auth(admin.token)).send({ precio: 220 });
+    expect(cambio.status).toBe(200);
+    expect(Number(cambio.body.precio)).toBe(220);
+
+    const vacio = await request(app).put(`/api/etiquetas/tamanos-edredon/${alta.body.id}`)
+      .set(auth(admin.token)).send({ precio: '' });
+    expect(vacio.status).toBe(200);
+    expect(vacio.body.precio).toBeNull();
+  });
+
+  it('un precio negativo → 400', async () => {
+    const res = await request(app).post('/api/etiquetas/tamanos-edredon').set(auth(admin.token))
+      .send({ nombre: 'King', precio: -5 });
+    expect(res.status).toBe(400);
+  });
+
+  it('los otros catálogos no aceptan precio', async () => {
+    const res = await request(app).post('/api/etiquetas/tipos-tela').set(auth(admin.token))
+      .send({ nombre: 'Seda', precio: 10 });
+    expect(res.status).toBe(201);
+    expect(res.body.precio).toBeUndefined();
+  });
+});

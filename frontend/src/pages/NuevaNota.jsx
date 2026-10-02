@@ -70,26 +70,50 @@ const TAMANOS = [
 const TAMANO_LABEL = Object.fromEntries(TAMANOS.map(t => [t.v, t.label]));
 
 // Los servicios que vende Por Encargo. El servicio es la unidad que se cobra:
-// su precio sale de Ajustes (Chico, Mediano, Grande, Edredón) y ya lleva dentro el
-// lavado, el secado, el jabón y la bolsa. Cada servicio se guarda como una
-// carga, y el Edredón viaja como prenda EDREDON en tamaño jumbo, que es lo que
-// lo ata a la lavadora jumbo cuando se le asigna máquina en Salidas.
-const SERVICIOS = [
-  { v: 'chico',   label: 'Chico',   tamano: 'chico',  tipo_prenda: 'ROPA'    },
-  { v: 'mediano', label: 'Mediano', tamano: 'mediano', tipo_prenda: 'ROPA'   },
-  { v: 'grande',  label: 'Grande',  tamano: 'grande', tipo_prenda: 'ROPA'    },
-  { v: 'edredon', label: 'Edredón', tamano: 'jumbo',  tipo_prenda: 'EDREDON' },
-  // Jumbo de ropa dejó de venderse. No tiene contador: solo aparece al editar
-  // una nota que lo eligió cuando existía, para no cambiarle el servicio —ni el
-  // precio— a espaldas de nadie.
-  { v: 'jumbo',   label: 'Jumbo',   tamano: 'jumbo',  tipo_prenda: 'ROPA', legado: true },
+// su precio sale de Ajustes y ya lleva dentro el lavado, el secado, el jabón y
+// la bolsa. Cada servicio se guarda como una carga.
+//
+// Los de ropa son fijos (Chico, Mediano, Grande). El Edredón se vende uno por
+// tamaño (Individual, Matrimonial…, mig. 130): esos salen del catálogo de
+// tamaños de edredón con su precio, y se arman en la pantalla (serviciosDe).
+// Viajan como prenda EDREDON en tamaño jumbo, que es lo que los ata a la
+// lavadora jumbo cuando se les asigna máquina en Salidas.
+const SERVICIOS_ROPA = [
+  { v: 'chico',   label: 'Chico',   tamano: 'chico',   tipo_prenda: 'ROPA' },
+  { v: 'mediano', label: 'Mediano', tamano: 'mediano', tipo_prenda: 'ROPA' },
+  { v: 'grande',  label: 'Grande',  tamano: 'grande',  tipo_prenda: 'ROPA' },
 ];
-const SERVICIO_POR_V = Object.fromEntries(SERVICIOS.map(s => [s.v, s]));
+// Ya no se venden. No tienen contador: solo aparecen al editar una nota que los
+// eligió cuando existían, para no cambiarle el servicio —ni el precio— a
+// espaldas de nadie. El Edredón sin tamaño es el de antes de la mig. 130.
+const SERVICIOS_LEGADO = [
+  { v: 'edredon', label: 'Edredón', tamano: 'jumbo', tipo_prenda: 'EDREDON', legado: true },
+  { v: 'jumbo',   label: 'Jumbo',   tamano: 'jumbo', tipo_prenda: 'ROPA',    legado: true },
+];
+const servicioEdredon = (nombre) => `edredon:${nombre}`;
+// La lista completa, en el orden en que se leen en la pantalla y en el ticket.
+// Un tamaño de edredón inactivo cuenta como legado: deja de ofrecerse, pero la
+// nota que ya lo trae lo conserva.
+const serviciosDe = (tamanosEdredon) => [
+  ...SERVICIOS_ROPA,
+  ...tamanosEdredon.map(e => ({
+    v:              servicioEdredon(e.nombre),
+    label:          `Edredón ${e.nombre}`,
+    tamano:         'jumbo',
+    tipo_prenda:    'EDREDON',
+    tamano_edredon: e.nombre,
+    precio:         e.precio != null ? Number(e.precio) : null,
+    legado:         !e.activo,
+  })),
+  ...SERVICIOS_LEGADO,
+];
 // Qué servicio se vendió en una carga, leído de lo que quedó guardado. Las
-// claves son las mismas que las de los topes de Ajustes, así que el precio del
-// servicio se busca con este valor directamente.
+// claves de ropa son las mismas que las de los topes de Ajustes, así que el
+// precio del servicio se busca con este valor directamente.
 const servicioDeCarga = (c) => {
-  if (String(c?.tipo_prenda).toUpperCase() === 'EDREDON') return 'edredon';
+  if (String(c?.tipo_prenda).toUpperCase() === 'EDREDON') {
+    return c?.tamano_edredon ? servicioEdredon(c.tamano_edredon) : 'edredon';
+  }
   if (c?.tamano === 'chico')   return 'chico';
   if (c?.tamano === 'mediano') return 'mediano';
   if (c?.tamano === 'grande')  return 'grande';
@@ -185,7 +209,7 @@ export default function NuevaNota() {
   const [productosCatalogo, setProductosCatalogo] = useState([]);
   const [telas,             setTelas]             = useState([]);
   const [tamanosEdredon,    setTamanosEdredon]    = useState([]);
-  const [precios,           setPrecios]           = useState({ mediana: 70, jumbo: 70, secadora: 45, secadoraJumbo: 45, secadoraEdredon: 45, edredonJumbo: 80 });
+  const [precios,           setPrecios]           = useState({ mediana: 70, jumbo: 70, secadora: 45, secadoraJumbo: 45 });
   // Tope de precio por carga (Ajustes); null = sin tope. `edredon` es un tope
   // por prenda que manda sobre el del tamaño para las cargas de edredón.
   const [topes,             setTopes]             = useState({ chico: null, mediano: null, grande: null, jumbo: null, edredon: null });
@@ -280,9 +304,8 @@ export default function NuevaNota() {
     return () => document.removeEventListener('mousedown', onMouseDown);
   }, [tipoOpen]);
 
-  const precioPorTipo = (tipoMaquina, tipoPrendaArg) => {
+  const precioPorTipo = (tipoMaquina) => {
     if (tipoMaquina === 'secadora') return precios.secadora;
-    if (tipoMaquina === 'lavadora_jumbo' && tipoPrendaArg === 'EDREDON') return precios.edredonJumbo;
     if (tipoMaquina === 'lavadora_jumbo') return precios.jumbo;
     return precios.mediana;
   };
@@ -459,8 +482,6 @@ export default function NuevaNota() {
             // Secado por categoría; el precio plano (precio_carga_secadora) es Mediana.
             secadora:        cfg.precio_carga_secadora   != null ? Number(cfg.precio_carga_secadora)   : 45,
             secadoraJumbo:   cfg.precio_secadora_jumbo   != null ? Number(cfg.precio_secadora_jumbo)   : 45,
-            secadoraEdredon: cfg.precio_secadora_edredon != null ? Number(cfg.precio_secadora_edredon) : 45,
-            edredonJumbo:    cfg.precio_edredon_jumbo    != null ? Number(cfg.precio_edredon_jumbo)    : 80,
           });
           setTopes({
             chico:   cfg.tope_carga_chico   != null ? Number(cfg.tope_carga_chico)   : null,
@@ -535,7 +556,7 @@ export default function NuevaNota() {
                 // Qué servicio se vendió, leído del tamaño y la prenda. Una nota
                 // vieja con carga Jumbo de ropa conserva su servicio: aparece con
                 // su contador, marcado como que ya no se vende.
-                servicio:               servicioDeCarga({ tipo_prenda: prenda, tamano: c.tamano }),
+                servicio:               servicioDeCarga({ tipo_prenda: prenda, tamano: c.tamano, tamano_edredon: c.tamano_edredon }),
                 tipo_prenda:            prenda,
                 tipo_tela:              c.tipo_tela      ?? '',
                 tamano_edredon:         c.tamano_edredon ?? '',
@@ -552,7 +573,7 @@ export default function NuevaNota() {
             });
             setEncargoCargas(cargasNota.length > 0 ? cargasNota : [{
               ...CARGA_ENCARGO_INIT,
-              servicio:       servicioDeCarga({ tipo_prenda: prendaNota, tamano: nota.tamano }),
+              servicio:       servicioDeCarga({ tipo_prenda: prendaNota, tamano: nota.tamano, tamano_edredon: nota.tamano_edredon }),
               tipo_prenda:    prendaNota,
               tipo_tela:      nota.tipo_tela      ?? '',
               tamano_edredon: nota.tamano_edredon ?? '',
@@ -666,15 +687,21 @@ export default function NuevaNota() {
   };
 
   // ── Servicios de Por Encargo ────────────────────────────
+  const SERVICIOS = serviciosDe(tamanosEdredon);
+  const SERVICIO_POR_V = Object.fromEntries(SERVICIOS.map(s => [s.v, s]));
   // Cuántos servicios de un tipo lleva la nota. La cuenta sale de las cargas:
   // no hay un contador aparte que pueda acabar diciendo otra cosa.
   const cuentaServicio = (serv) => encargoCargas.filter(c => c.servicio === serv).length;
-  // Los que se enseñan con contador: los tres que se venden, más el legado
-  // (Jumbo de ropa) solo si la nota que se está editando lo trae.
+  // Los que se enseñan con contador: los que se venden, más los de legado solo
+  // si la nota que se está editando los trae.
   const serviciosVisibles = SERVICIOS.filter(s => !s.legado || cuentaServicio(s.v) > 0);
   // Lo que se cobra por un servicio, de Ajustes. null = sin precio configurado:
   // entonces no se puede vender y la pantalla lo dice.
-  const precioServicio = (serv) => topes[serv] ?? null;
+  const precioServicio = (serv) => {
+    const s = SERVICIO_POR_V[serv];
+    if (s && 'precio' in s) return s.precio;  // tamaño de edredón: su catálogo
+    return topes[serv] ?? null;
+  };
 
   // Un servicio nuevo nace vacío: su material —jabón, suavizante y la bolsa que
   // le toca— va a la LISTA DE PRODUCTOS de la nota, junto con lo que el cliente
@@ -683,7 +710,10 @@ export default function NuevaNota() {
   // y el de arriba contaba "por servicio" mientras el de abajo contaba piezas.
   const nuevoServicio = (serv) => {
     const s = SERVICIO_POR_V[serv];
-    return { ...CARGA_ENCARGO_INIT, servicio: serv, tamano: s.tamano, tipo_prenda: s.tipo_prenda };
+    return {
+      ...CARGA_ENCARGO_INIT, servicio: serv, tamano: s.tamano, tipo_prenda: s.tipo_prenda,
+      tamano_edredon: s.tamano_edredon ?? '',
+    };
   };
 
   // Lo que un servicio trae puesto: jabón y suavizante (2 medidas cada uno) y la
@@ -844,7 +874,9 @@ export default function NuevaNota() {
   // Qué servicio es la carga. Cada bolsa dice a cuáles va ligada (mig. 125), así
   // que el nombre de la bolsa ya no importa: manda lo que se eligió al darla de
   // alta. El jumbo de ropa ya no se vende y no tiene bolsa propia.
-  const servicioDeCarga = (c) => {
+  // Distinta de servicioDeCarga: a la bolsa le da igual el tamaño del edredón,
+  // todos van ligados al mismo servicio 'edredon'.
+  const servicioBolsa = (c) => {
     if (String(c?.tipo_prenda).toUpperCase() === 'EDREDON') return 'edredon';
     if (c?.tamano === 'chico')   return 'chico';
     if (c?.tamano === 'mediano') return 'mediano';
@@ -852,7 +884,7 @@ export default function NuevaNota() {
     return null;
   };
   const bolsaDeCarga = (c) => {
-    const servicio = servicioDeCarga(c);
+    const servicio = servicioBolsa(c);
     if (!servicio) return null;
     return bolsasCatalogo.find(b => (b.servicios_bolsa ?? []).includes(servicio)) ?? null;
   };
@@ -868,7 +900,13 @@ export default function NuevaNota() {
   // Tope de la carga (Ajustes). Prenda edredón usa su tope dedicado (manda
   // sobre el del tamaño). NULL = sin tope configurado.
   const topeDeCarga  = (c) => {
-    if (String(c?.tipo_prenda).toUpperCase() === 'EDREDON') return topes.edredon ?? null;
+    if (String(c?.tipo_prenda).toUpperCase() === 'EDREDON') {
+      // Por tamaño (mig. 130); el de una carga vieja sin tamaño, el precio único.
+      if (!c.tamano_edredon) return topes.edredon ?? null;
+      const nombre = String(c.tamano_edredon).trim().toLowerCase();
+      const e = tamanosEdredon.find(x => String(x.nombre).trim().toLowerCase() === nombre);
+      return e?.precio != null ? Number(e.precio) : null;
+    }
     return c?.tamano ? (topes[c.tamano] ?? null) : null;
   };
 
@@ -878,7 +916,7 @@ export default function NuevaNota() {
   // es una decisión aparte, así que no cuenta—. Jumbo de ropa ya no se vende;
   // se conserva para las notas que lo eligieron.
   const costoMaquinasServicio = (c) => {
-    if (String(c?.tipo_prenda).toUpperCase() === 'EDREDON') return precios.edredonJumbo;
+    if (String(c?.tipo_prenda).toUpperCase() === 'EDREDON') return precios.jumbo;
     if (c?.tamano === 'jumbo')  return precios.jumbo + precios.secadora;
     if (['chico', 'mediano', 'grande'].includes(c?.tamano)) return precios.mediana + precios.secadora;
     return 0;
@@ -1764,33 +1802,12 @@ export default function NuevaNota() {
                           const mismos = encargoCargas.filter(x => x.servicio === c.servicio);
                           const num    = mismos.indexOf(c) + 1;
                           const etiqueta = mismos.length > 1 ? `${nombre} ${num}` : nombre;
-                          const tamanosDisp = tamanosEdredon.filter(t => t.activo || t.nombre === c.tamano_edredon);
                           return (
                             <div key={idx} className="rounded-xl border border-gray-200 bg-white px-4 py-3.5 space-y-2.5">
                               <p className="text-sm font-semibold text-gray-900">{etiqueta}</p>
-                              {c.tipo_prenda === 'EDREDON' ? (
-                                tamanosDisp.length === 0 ? (
-                                  <p className="text-xs text-gray-400">No hay tamaños de edredón configurados.</p>
-                                ) : (
-                                  <div className="flex flex-wrap gap-2">
-                                    {tamanosDisp.map(opt => {
-                                      const selected = c.tamano_edredon === opt.nombre;
-                                      return (
-                                        <button
-                                          key={opt.id}
-                                          type="button"
-                                          onClick={() => actualizarCargaEncargo(idx, { tamano_edredon: selected ? '' : opt.nombre })}
-                                          className={`px-4 py-2.5 border-2 rounded-lg text-sm font-semibold transition-colors ${
-                                            selected ? 'border-blue bg-light-blue text-blue-700' : 'border-gray-300 bg-white text-gray-700 hover:border-blue-300'
-                                          }`}
-                                        >
-                                          {opt.nombre}
-                                        </button>
-                                      );
-                                    })}
-                                  </div>
-                                )
-                              ) : (
+                              {/* El tamaño del edredón ya es su servicio
+                                  (mig. 130): no se elige aparte. */}
+                              {c.tipo_prenda === 'EDREDON' ? null : (
                                 <select
                                   value={c.tipo_tela}
                                   onChange={e => actualizarCargaEncargo(idx, { tipo_tela: e.target.value })}
@@ -1993,10 +2010,8 @@ export default function NuevaNota() {
                 <div className="space-y-2 mb-2 text-sm text-blue border-t border-blue-200 pt-4">
                   {encargoCargas.map((c, i) => {
                     const nombre = SERVICIO_POR_V[c.servicio]?.label ?? 'Servicio';
-                    const detalle = [
-                      c.tipo_tela || null,
-                      c.tamano_edredon || null,
-                    ].filter(Boolean).join(', ');
+                    // El tamaño del edredón ya va en el nombre del servicio.
+                    const detalle = c.tipo_tela || '';
                     const ajusteCarga = Number(c.ajuste) || 0;
                     return (
                       <div key={i} className="flex justify-between gap-2">
