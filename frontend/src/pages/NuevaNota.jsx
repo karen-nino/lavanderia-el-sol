@@ -333,9 +333,9 @@ export default function NuevaNota() {
     if (partes.length === 0 && c.secadora_tipo) partes.push('Secadora (sin asignar)');
     return partes.join(' + ');
   };
-  // Ajuste a nivel nota: ya solo existe en la venta de mostrador. Autoservicio
-  // perdió el campo (2026-09-25) y Por Encargo lo lleva por carga, así que
-  // fuera de la venta no suma nada aunque el form arrastre un valor viejo.
+  // Ajuste a nivel nota: ya no se captura en ningún lado (la venta de Productos
+  // perdió el campo el 2026-10-02). Solo se conserva el de una venta vieja que
+  // se reabra; fuera de la venta no suma nada aunque el form arrastre un valor.
   const ajusteNum      = esVenta ? (Number(form.ajuste) || 0) : 0;
   // Precio efectivo de un producto según la unidad de venta: en Autoservicio se
   // vende por BOTELLA (precio_botella); en Por Encargo por MEDIDA (precio_unitario).
@@ -589,11 +589,6 @@ export default function NuevaNota() {
       })
       .finally(() => setLoadingData(false));
   }, [id, esEdicion]);
-
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setForm(f => ({ ...f, [name]: value }));
-  };
 
   const agregarProducto = (productoId = '') =>
     setProductosLista(prev => [...prev, { producto_id: String(productoId), cantidad: '1' }]);
@@ -1455,42 +1450,6 @@ export default function NuevaNota() {
         </div>
       </div>
       )}
-    </div>
-  );
-
-  // Ajuste manual de la nota: descuento (negativo) o cargo extra (positivo).
-  // Igual en Autoservicio y en la venta de Productos.
-  const bloqueAjuste = () => (
-    <div>
-      <label className={LABEL_CLS}>Ajuste ($)</label>
-      <div className="flex items-center gap-2">
-        <div className="relative flex-1">
-          <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 text-base">$</span>
-          <input
-            type="number" name="ajuste" step="any"
-            value={form.ajuste} onChange={handleChange}
-            placeholder="Ej. -10 para descuento, 20 para cargo extra"
-            className={`${INPUT_CLS} pl-8 text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`}
-          />
-        </div>
-        <button
-          type="button"
-          onClick={() => setForm(f => ({ ...f, ajuste: String((Number(f.ajuste) || 0) - 10) }))}
-          aria-label="Disminuir ajuste"
-          className="flex-shrink-0 w-14 py-3.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-xl font-semibold hover:bg-gray-50 transition-colors"
-        >
-          −
-        </button>
-        <button
-          type="button"
-          onClick={() => setForm(f => ({ ...f, ajuste: String((Number(f.ajuste) || 0) + 10) }))}
-          aria-label="Aumentar ajuste"
-          className="flex-shrink-0 w-14 py-3.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-xl font-semibold hover:bg-gray-50 transition-colors"
-        >
-          +
-        </button>
-      </div>
-      <p className="text-xs text-gray-400 mt-1.5">Descuento (negativo) o cargo extra (positivo)</p>
     </div>
   );
 
@@ -2427,10 +2386,6 @@ export default function NuevaNota() {
         <div className="space-y-8">
 
           {bloqueProductos()}
-
-          <Separador />
-
-          {bloqueAjuste()}
 
           <Separador />
 
