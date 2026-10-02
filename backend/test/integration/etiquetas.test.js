@@ -148,3 +148,29 @@ describe('precio de los tamaños de edredón (mig. 130)', () => {
     expect(res.body.precio).toBeUndefined();
   });
 });
+
+describe('medidas y bolsas de cada tamaño de edredón (mig. 132)', () => {
+  it('nacen en 0, y se cambian', async () => {
+    const alta = await request(app).post('/api/etiquetas/tamanos-edredon').set(auth(admin.token))
+      .send({ nombre: 'King' });
+    expect(alta.body.precarga_medidas).toBe(0);
+    expect(alta.body.precarga_bolsas).toBe(0);
+
+    const res = await request(app).put(`/api/etiquetas/tamanos-edredon/${alta.body.id}`)
+      .set(auth(admin.token)).send({ precarga_medidas: 4, precarga_bolsas: 2 });
+    expect(res.status).toBe(200);
+    expect(res.body.precarga_medidas).toBe(4);
+    expect(res.body.precarga_bolsas).toBe(2);
+  });
+
+  it('vacío o negativo → 400', async () => {
+    const alta = await request(app).post('/api/etiquetas/tamanos-edredon').set(auth(admin.token))
+      .send({ nombre: 'Individual' });
+    const vacio = await request(app).put(`/api/etiquetas/tamanos-edredon/${alta.body.id}`)
+      .set(auth(admin.token)).send({ precarga_medidas: '' });
+    expect(vacio.status).toBe(400);
+    const neg = await request(app).put(`/api/etiquetas/tamanos-edredon/${alta.body.id}`)
+      .set(auth(admin.token)).send({ precarga_bolsas: -1 });
+    expect(neg.status).toBe(400);
+  });
+});

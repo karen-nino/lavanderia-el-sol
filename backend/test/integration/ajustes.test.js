@@ -124,3 +124,26 @@ describe('PATCH /api/ajustes', () => {
     expect(res.body.message).toMatch(/no hay cambios/i);
   });
 });
+
+describe('lo que trae puesto cada servicio (mig. 132)', () => {
+  it('nace en 0 medidas y 0 bolsas, y se cambia', async () => {
+    const antes = await request(app).get('/api/ajustes').set(auth(admin.token));
+    expect(antes.body.precarga_medidas_chico).toBe(0);
+    expect(antes.body.precarga_bolsas_grande).toBe(0);
+
+    const res = await request(app).patch('/api/ajustes').set(auth(admin.token))
+      .send({ precarga_medidas_mediano: 3, precarga_bolsas_mediano: 0 });
+    expect(res.status).toBe(200);
+    expect(res.body.precarga_medidas_mediano).toBe(3);
+    expect(res.body.precarga_bolsas_mediano).toBe(0);
+  });
+
+  it('un número que no es entero de 0 o más → 400', async () => {
+    const neg = await request(app).patch('/api/ajustes').set(auth(admin.token))
+      .send({ precarga_medidas_chico: -1 });
+    expect(neg.status).toBe(400);
+    const dec = await request(app).patch('/api/ajustes').set(auth(admin.token))
+      .send({ precarga_bolsas_grande: 1.5 });
+    expect(dec.status).toBe(400);
+  });
+});

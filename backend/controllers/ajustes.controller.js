@@ -71,6 +71,12 @@ export const updateAjustes = async (req, res) => {
     tiempo_carga_jumbo,
     tiempo_carga_secadora,
     tiempo_secadora_jumbo,
+    precarga_medidas_chico,
+    precarga_medidas_mediano,
+    precarga_medidas_grande,
+    precarga_bolsas_chico,
+    precarga_bolsas_mediano,
+    precarga_bolsas_grande,
     nombre_negocio,
     rfc,
     ticket_nota_autoservicio,
@@ -102,6 +108,12 @@ export const updateAjustes = async (req, res) => {
     tope_carga_jumbo:        'El tope de la carga jumbo',
     tope_carga_edredon:      'El precio del servicio Edredón',
     tiempo_carga_mediana:    'El tiempo de la carga mediana',
+    precarga_medidas_chico:   'Las medidas del servicio Chico',
+    precarga_medidas_mediano: 'Las medidas del servicio Mediano',
+    precarga_medidas_grande:  'Las medidas del servicio Grande',
+    precarga_bolsas_chico:    'Las bolsas del servicio Chico',
+    precarga_bolsas_mediano:  'Las bolsas del servicio Mediano',
+    precarga_bolsas_grande:   'Las bolsas del servicio Grande',
     tiempo_carga_jumbo:      'El tiempo de la carga jumbo',
     tiempo_carga_secadora:   'El tiempo del secado',
     tiempo_secadora_jumbo:   'El tiempo del secado jumbo',
@@ -146,6 +158,14 @@ export const updateAjustes = async (req, res) => {
   for (const [campo, valor] of Object.entries(tiempos)) {
     if (valor !== undefined && (!esNumero(valor) || !Number.isInteger(Number(valor)) || Number(valor) < 1)) {
       return res.status(400).json({ message: `${nombreDe(campo)} debe ser un número entero de 1 minuto o más.` });
+    }
+  }
+  // Lo que cada servicio trae puesto (mig. 132): medidas de cada granel ligado
+  // y bolsas. Enteros; 0 = no se precarga nada de eso.
+  const precargas = { precarga_medidas_chico, precarga_medidas_mediano, precarga_medidas_grande, precarga_bolsas_chico, precarga_bolsas_mediano, precarga_bolsas_grande };
+  for (const [campo, valor] of Object.entries(precargas)) {
+    if (valor !== undefined && (!esNumero(valor) || !Number.isInteger(Number(valor)) || Number(valor) < 0)) {
+      return res.status(400).json({ message: `${nombreDe(campo)} debe ser un número entero de 0 o más.` });
     }
   }
   if (stock_minimo_global !== undefined &&
@@ -203,6 +223,9 @@ export const updateAjustes = async (req, res) => {
   if (tiempo_carga_jumbo    !== undefined) { updates.push(`tiempo_carga_jumbo = $${i++}`);    values.push(tiempo_carga_jumbo); }
   if (tiempo_carga_secadora !== undefined) { updates.push(`tiempo_carga_secadora = $${i++}`); values.push(tiempo_carga_secadora); }
   if (tiempo_secadora_jumbo   !== undefined) { updates.push(`tiempo_secadora_jumbo = $${i++}`);   values.push(tiempo_secadora_jumbo); }
+  for (const [campo, valor] of Object.entries(precargas)) {
+    if (valor !== undefined) { updates.push(`${campo} = $${i++}`); values.push(Number(valor)); }
+  }
   if (editable('nombre_negocio', nombre_negocio)) { updates.push(`nombre_negocio = $${i++}`); values.push(nombre_negocio); }
   if (editable('rfc', rfc)) { updates.push(`rfc = $${i++}`); values.push(rfcLibre(rfc)); }
   if (editable('ticket_nota_autoservicio', ticket_nota_autoservicio)) { updates.push(`ticket_nota_autoservicio = $${i++}`); values.push(textoONull(ticket_nota_autoservicio)); }

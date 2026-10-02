@@ -164,21 +164,16 @@ function normalizarServicios(v, cosa) {
 }
 const normalizarServiciosBolsa = (v) => normalizarServicios(v, 'la bolsa');
 
-// Precarga del granel líquido (mig. 131): a qué servicios Por Encargo va ligado
-// y cuántas medidas se le ponen solas a cada uno. A diferencia de la bolsa, un
-// servicio sí puede llevar varios graneles (jabón y suavizante). Solo aplica al
-// granel líquido —el de marca y el polvo se venden por unidad—; para los demás
-// se guarda vacío.
-function normalizarPrecarga(servicios, medidas, aplica) {
-  if (!aplica) return { servicios: [], medidas: null };
+// Precarga del granel líquido (mig. 131): a qué servicios Por Encargo va
+// ligado. Cuántas medidas se le ponen lo dice cada servicio en Ajustes (mig.
+// 132). A diferencia de la bolsa, un servicio sí puede llevar varios graneles
+// (jabón y suavizante). Solo aplica al granel líquido —el de marca y el polvo
+// se venden por unidad—; para los demás se guarda vacío.
+function normalizarPrecarga(servicios, aplica) {
+  if (!aplica) return { servicios: [] };
   const sv = normalizarServicios(servicios, 'el producto');
   if (sv.error) return { error: sv.error };
-  if (sv.valor.length === 0) return { servicios: [], medidas: null };
-  const n = Number(medidas);
-  if (!Number.isInteger(n) || n < 1) {
-    return { error: 'Indica cuántas medidas se precargan al servicio (un número entero, 1 o más).' };
-  }
-  return { servicios: sv.valor, medidas: n };
+  return { servicios: sv.valor };
 }
 
 const NOMBRE_SERVICIO = { chico: 'Chico', mediano: 'Mediano', grande: 'Grande', edredon: 'Edredón' };
@@ -255,7 +250,7 @@ export const createProducto = async (req, res) => {
     // Bolsas:
     tamano_bolsa, bolsas_por_rollo, servicios_bolsa,
     // Granel líquido: precarga en los servicios Por Encargo.
-    servicios_precarga, medidas_precarga,
+    servicios_precarga,
     // Existencias iniciales: botellas rellenadas y (granel) bidones a granel.
     stock_botellas = 0, stock_bidones = 0,
   } = req.body;
@@ -295,7 +290,7 @@ export const createProducto = async (req, res) => {
   if (conBidon && (!volumen_envase_ml || Number(volumen_envase_ml) <= 0)) {
     return res.status(400).json({ message: 'Indica el volumen del bidón (mL).' });
   }
-  const precarga = normalizarPrecarga(servicios_precarga, medidas_precarga, conBidon);
+  const precarga = normalizarPrecarga(servicios_precarga, conBidon);
   if (precarga.error) {
     return res.status(400).json({ message: precarga.error });
   }
@@ -317,15 +312,15 @@ export const createProducto = async (req, res) => {
          (nombre, descripcion, unidad, precio_unitario, precio_botella, stock_actual,
           stock_granel_medidas, marca, sucursal, tipo_liquido, forma, es_por_medida, medidas_por_envase,
           envase, stock_minimo, stock_minimo_granel, volumen_envase_ml, botella_ml, medida_ml,
-          servicios_precarga, medidas_precarga)
+          servicios_precarga)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, true, $12, $13, $14, $15, $16, $17, $18,
-               $19, $20)
+               $19)
        RETURNING ${SELECT_PRODUCTO}`,
       [nombre, descripcion || null, unidad, precio_unitario ?? null, precio_botella ?? null,
        stockActual, stockGranel, marca || null, req.sucursal, tipo_liquido, forma, medidasPorEnvase,
        envase || null, Number(stock_minimo) || 0,
        conBidon ? (Number(stock_minimo_granel) || 0) : 0,
-       bidonMl, botellaMl, medidaMl, precarga.servicios, precarga.medidas]
+       bidonMl, botellaMl, medidaMl, precarga.servicios]
     );
     const prod = rows[0];
     // Semilla del historial: registra las existencias iniciales como entradas.
@@ -369,7 +364,7 @@ export const updateProducto = async (req, res) => {
     stock_minimo = 0, stock_minimo_granel = 0,
     volumen_envase_ml, botella_ml, medida_ml, medidas_por_botella, precio_botella,
     tamano_bolsa, bolsas_por_rollo, servicios_bolsa,
-    servicios_precarga, medidas_precarga,
+    servicios_precarga,
   } = req.body;
 
   if (!nombre) {
@@ -436,7 +431,7 @@ export const updateProducto = async (req, res) => {
     return res.status(400).json({ message: 'Indica el volumen del bidón (mL).' });
   }
 
-  const precarga = normalizarPrecarga(servicios_precarga, medidas_precarga, conBidon);
+  const precarga = normalizarPrecarga(servicios_precarga, conBidon);
   if (precarga.error) {
     return res.status(400).json({ message: precarga.error });
   }
@@ -454,13 +449,13 @@ export const updateProducto = async (req, res) => {
              medidas_por_envase = $9, envase = $10, stock_minimo = $11,
              stock_minimo_granel = $12, volumen_envase_ml = $13,
              botella_ml = $14, medida_ml = $15, es_por_medida = true,
-             servicios_precarga = $16, medidas_precarga = $17, updated_at = NOW()
-       WHERE id = $18 AND sucursal = $19
+             servicios_precarga = $16, updated_at = NOW()
+       WHERE id = $17 AND sucursal = $18
        RETURNING ${SELECT_PRODUCTO}`,
       [nombre, descripcion || null, unidad, precio_unitario ?? null, precio_botella ?? null,
        marca || null, tipo_liquido, forma, medidasPorEnvase, envase || null, Number(stock_minimo) || 0,
        conBidon ? (Number(stock_minimo_granel) || 0) : 0,
-       bidonMl, botellaMl, medidaMl, precarga.servicios, precarga.medidas, id, req.sucursal]
+       bidonMl, botellaMl, medidaMl, precarga.servicios, id, req.sucursal]
     );
     if (rows.length === 0) {
       return res.status(404).json({ message: 'Producto no encontrado.' });

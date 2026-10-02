@@ -213,6 +213,9 @@ export default function NuevaNota() {
   // Tope de precio por carga (Ajustes); null = sin tope. `edredon` es un tope
   // por prenda que manda sobre el del tamaño para las cargas de edredón.
   const [topes,             setTopes]             = useState({ chico: null, mediano: null, grande: null, jumbo: null, edredon: null });
+  // Lo que trae puesto cada servicio de ropa (mig. 132): medidas de cada granel
+  // ligado y bolsas. Los de edredón lo traen en su catálogo de tamaños.
+  const [precargas,         setPrecargas]         = useState({});
   const [loadingData,       setLoadingData]       = useState(true);
   // Caja del día: si nadie la abrió, los cobros de esta nota no entran en
   // ningún corte (van con caja_id nulo, mig. 101). Se avisa, no se bloquea.
@@ -393,8 +396,9 @@ export default function NuevaNota() {
   // Solo el granel LÍQUIDO se precarga: es el que se sirve por medidas dentro
   // del servicio. El polvo se vende por unidad, así que se agrega a mano.
   const granelServido = (p) => p.tipo_liquido === 'granel' && !esPolvo(p);
-  const granelDeServicio = (servicio) => {
-    if (!servicio) return [];
+  // `medidas` las dice el servicio (mig. 132), las mismas para cada granel.
+  const granelDeServicio = (servicio, medidas) => {
+    if (!servicio || !(medidas > 0)) return [];
     return productosCatalogo
       .filter(p => granelServido(p) && (p.servicios_precarga ?? []).includes(servicio))
       // Si quedan menos medidas que las precargadas se pone lo que haya: dejar
@@ -402,7 +406,7 @@ export default function NuevaNota() {
       // que nadie eligió. Sin existencias, no se pone.
       .map(p => ({
         producto_id: String(p.id),
-        cantidad: String(Math.min(Number(p.medidas_precarga) || 0, medidasDisponibles(p))),
+        cantidad: String(Math.min(medidas, medidasDisponibles(p))),
       }))
       .filter(x => Number(x.cantidad) > 0);
   };
@@ -480,6 +484,10 @@ export default function NuevaNota() {
             jumbo:   cfg.tope_carga_jumbo   != null ? Number(cfg.tope_carga_jumbo)   : null,
             edredon: cfg.tope_carga_edredon != null ? Number(cfg.tope_carga_edredon) : null,
           });
+          setPrecargas(Object.fromEntries(['chico', 'mediano', 'grande'].map(sv => [sv, {
+            medidas: Number(cfg[`precarga_medidas_${sv}`] ?? 0),
+            bolsas:  Number(cfg[`precarga_bolsas_${sv}`] ?? 0),
+          }])));
         }
         setClientes(cli);
 
@@ -706,16 +714,28 @@ export default function NuevaNota() {
     };
   };
 
-  // Lo que un servicio trae puesto: el granel ligado a él (con sus medidas) y la
-  // bolsa que le toca, si queda existencia.
+  // Lo que un servicio trae puesto: el granel ligado a él y la bolsa que le
+  // toca, en las cantidades que dice el servicio en Ajustes, si hay existencia.
   const materialDeServicio = (serv) => {
     const s = SERVICIO_POR_V[serv];
+    const { medidas, bolsas } = precargaDeServicio(s);
     const bolsa = bolsaDeCargaConStock({ tamano: s.tamano, tipo_prenda: s.tipo_prenda });
+    // Como el granel: si quedan menos bolsas de las que lleva, van las que haya.
+    const nBolsas = bolsa ? Math.min(bolsas, Number(bolsa.stock_disponible ?? bolsa.stock_actual) || 0) : 0;
     return [
-      ...granelDeServicio(servicioBolsa({ tamano: s.tamano, tipo_prenda: s.tipo_prenda })),
-      ...(bolsa ? [{ producto_id: String(bolsa.id), cantidad: '1' }] : []),
+      ...granelDeServicio(servicioBolsa({ tamano: s.tamano, tipo_prenda: s.tipo_prenda }), medidas),
+      ...(nBolsas > 0 ? [{ producto_id: String(bolsa.id), cantidad: String(nBolsas) }] : []),
     ];
   };
+  // Cuántas medidas de granel y cuántas bolsas trae puestas un servicio, según
+  // Ajustes (mig. 132). Sin configurar, nada.
+  function precargaDeServicio(s) {
+    if (s.tamano_edredon) {
+      const e = tamanosEdredon.find(x => x.nombre === s.tamano_edredon);
+      return { medidas: Number(e?.precarga_medidas ?? 0), bolsas: Number(e?.precarga_bolsas ?? 0) };
+    }
+    return precargas[s.v] ?? { medidas: 0, bolsas: 0 };
+  }
 
   // Suma (o resta, con `veces` negativo) el material de un servicio a la lista
   // de productos de la nota. Al quitar un servicio se va lo que trajo; si el

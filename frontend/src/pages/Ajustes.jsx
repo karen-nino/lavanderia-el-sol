@@ -191,14 +191,26 @@ const MOBILE_SECTIONS = [
 // Jumbo no está: el tamaño dejó de venderse y su columna solo sobrevive para
 // las notas viejas que lo eligieron. El Edredón tampoco: se cobra según su
 // tamaño (mig. 130) y esos precios salen del catálogo de tamaños de edredón.
-// Clave con que el precio de un tamaño de edredón entra a `config`.
-const claveEdredon = (e) => `edredon_precio_${e.id}`;
+// Cada servicio dice además cuántas medidas de cada granel ligado y cuántas
+// bolsas trae puestas (mig. 132): [precio, nombre, texto, medidas, bolsas].
+// Claves con que los datos de un tamaño de edredón entran a `config`.
+const claveEdredon         = (e) => `edredon_precio_${e.id}`;
+const claveEdredonMedidas  = (e) => `edredon_medidas_${e.id}`;
+const claveEdredonBolsas   = (e) => `edredon_bolsas_${e.id}`;
+// Lo que se guarda de un tamaño de edredón, con la clave que usa en `config`.
+const camposEdredon = (e) => [
+  [claveEdredon(e),        'precio',           e.precio ?? ''],
+  [claveEdredonMedidas(e), 'precarga_medidas', e.precarga_medidas ?? 0],
+  [claveEdredonBolsas(e),  'precarga_bolsas',  e.precarga_bolsas ?? 0],
+];
 
 const PRECIOS_SERVICIO = [
-  ['tope_carga_chico',   'Servicio Chico',   'chico'],
-  ['tope_carga_mediano', 'Servicio Mediano', 'mediano'],
-  ['tope_carga_grande',  'Servicio Grande',  'grande'],
+  ['tope_carga_chico',   'Servicio Chico',   'chico',   'precarga_medidas_chico',   'precarga_bolsas_chico'],
+  ['tope_carga_mediano', 'Servicio Mediano', 'mediano', 'precarga_medidas_mediano', 'precarga_bolsas_mediano'],
+  ['tope_carga_grande',  'Servicio Grande',  'grande',  'precarga_medidas_grande',  'precarga_bolsas_grande'],
 ];
+// Campos de precarga de los servicios fijos, para el payload de /ajustes.
+const CAMPOS_PRECARGA = PRECIOS_SERVICIO.flatMap(([, , , m, b]) => [m, b]);
 
 // El manual no es configuración: abre su propia página (/manual). Se ofrece
 // aparte de MOBILE_SECTIONS porque no tiene formulario que guardar y porque en
@@ -983,7 +995,7 @@ export default function Ajustes() {
     api.get('/etiquetas/tamanos-edredon')
       .then(d => {
         const lista = d ?? [];
-        const valores = Object.fromEntries(lista.map(e => [claveEdredon(e), e.precio ?? '']));
+        const valores = Object.fromEntries(lista.flatMap(e => camposEdredon(e).map(([k, , v]) => [k, v])));
         edredonOrigRef.current = valores;
         setEdredones(lista);
         setConfig(prev => ({ ...prev, ...valores }));
@@ -1185,15 +1197,19 @@ export default function Ajustes() {
     );
   };
 
-  // Solo se mandan los precios de edredón que cambiaron, cada uno a su tamaño.
+  // Solo se mandan los tamaños de edredón con algo cambiado (precio, medidas o
+  // bolsas), cada uno a su endpoint.
   const guardarPreciosEdredon = async () => {
-    const cambiados = edredones.filter(e =>
-      String(config[claveEdredon(e)] ?? '') !== String(edredonOrigRef.current[claveEdredon(e)] ?? ''));
+    const distinto = (k) => String(config[k] ?? '') !== String(edredonOrigRef.current[k] ?? '');
+    const cambiados = edredones.filter(e => camposEdredon(e).some(([k]) => distinto(k)));
     if (cambiados.length === 0) return;
     await Promise.all(cambiados.map(e => api.put(`/etiquetas/tamanos-edredon/${e.id}`, {
-      precio: precioServicioONull(config[claveEdredon(e)]),
+      precio:           precioServicioONull(config[claveEdredon(e)]),
+      precarga_medidas: Number(config[claveEdredonMedidas(e)]),
+      precarga_bolsas:  Number(config[claveEdredonBolsas(e)]),
     })));
-    edredonOrigRef.current = Object.fromEntries(edredones.map(e => [claveEdredon(e), config[claveEdredon(e)] ?? '']));
+    edredonOrigRef.current = Object.fromEntries(
+      edredones.flatMap(e => camposEdredon(e).map(([k]) => [k, config[k] ?? ''])));
   };
 
   // Solo se mandan las combinaciones que cambiaron, cada una a su endpoint.
@@ -1303,8 +1319,14 @@ export default function Ajustes() {
     ...PRECIOS_SERVICIO,
     ...edredones.filter(e => e.activo).map(e => [
       claveEdredon(e), `Servicio Edredón ${e.nombre}`, `de edredón ${e.nombre}`,
+      claveEdredonMedidas(e), claveEdredonBolsas(e),
     ]),
   ];
+  // Medidas o bolsas vacías o que no son un entero de 0 o más.
+  const precargaInvalida = (name) => {
+    const v = config[name];
+    return v === '' || v == null || !Number.isInteger(Number(v)) || Number(v) < 0;
+  };
   const sinPrecioServicio = (name) => {
     const v = config[name];
     return v === '' || v == null;
@@ -1315,9 +1337,16 @@ export default function Ajustes() {
   // ve en la pantalla.
   const problemaDeAjustes = () => {
     const falta = preciosServicio.filter(([name]) => sinPrecioServicio(name));
-    if (falta.length === 0) return null;
-    return `Falta el precio de: ${falta.map(([, label]) => label).join(', ')}. `
-      + 'Sin precio no se puede vender el servicio.';
+    if (falta.length > 0) {
+      return `Falta el precio de: ${falta.map(([, label]) => label).join(', ')}. `
+        + 'Sin precio no se puede vender el servicio.';
+    }
+    const malos = preciosServicio.filter(([, , , m, b]) => precargaInvalida(m) || precargaInvalida(b));
+    if (malos.length > 0) {
+      return `Revisa las medidas y bolsas de: ${malos.map(([, label]) => label).join(', ')}. `
+        + 'Van en números enteros, 0 o más.';
+    }
+    return null;
   };
 
   // Precio de cada servicio Por Encargo: obligatorio. Es EL precio que se
@@ -1337,6 +1366,8 @@ export default function Ajustes() {
     tope_carga_chico:      precioServicioONull(config.tope_carga_chico),
     tope_carga_mediano:    precioServicioONull(config.tope_carga_mediano),
     tope_carga_grande:     precioServicioONull(config.tope_carga_grande),
+    // Lo que trae puesto cada servicio fijo (mig. 132).
+    ...Object.fromEntries(CAMPOS_PRECARGA.map(c => [c, Number(config[c])])),
     // El Edredón se cobra por tamaño (mig. 130): su precio va al catálogo, no
     // aquí; `tope_carga_edredon` solo queda para cargas viejas sin tamaño.
     // Jumbo ya no se captura: Por Encargo vende Chico, Mediano, Grande y Edredón. La
@@ -1651,6 +1682,30 @@ export default function Ajustes() {
     </>
   );
 
+  // Lo que el servicio trae puesto al agregarlo a una nota (mig. 132): medidas
+  // de cada granel ligado a él y bolsas. Qué granel y qué bolsa se ligan en
+  // Inventario; aquí solo cuántas.
+  const camposPrecarga = (medidas, bolsas, mobile = false) => {
+    const Campo = mobile ? MobileField : Field;
+    const cls = mobile ? MOBILE_INPUT_CLS : INPUT_CLS;
+    const uno = (name, label, hint) => (
+      <Campo label={label} hint={hint}>
+        <div className="flex items-center gap-2">
+          <input type="number" name={name} min="0" step="1"
+            value={config[name] ?? ''} onChange={handleChange}
+            className={`${cls} ${precargaInvalida(name) ? 'border-red-300' : ''}`} />
+          {stepBtns(name, 1, 0, mobile)}
+        </div>
+      </Campo>
+    );
+    return (
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {uno(medidas, 'Medidas de granel', 'De cada granel ligado a este servicio.')}
+        {uno(bolsas, 'Bolsas', 'De la bolsa ligada a este servicio.')}
+      </div>
+    );
+  };
+
   // Renglón del precio de un servicio Por Encargo. Es obligatorio: vacío se
   // marca en rojo aquí y el backend lo rechaza al guardar.
   const campoPrecioServicio = (name, label, servicio) => (
@@ -1683,9 +1738,10 @@ export default function Ajustes() {
         cliente compre aparte y el ajuste manual se suman encima.
       </p>
       <div className="space-y-4">
-        {preciosServicio.map(([name, label, servicio]) => (
-          <div key={name} className="rounded-xl border border-gray-200 px-5 py-4">
+        {preciosServicio.map(([name, label, servicio, medidas, bolsas]) => (
+          <div key={name} className="rounded-xl border border-gray-200 px-5 py-4 space-y-4">
             {campoPrecioServicio(name, label, servicio)}
+            {camposPrecarga(medidas, bolsas)}
           </div>
         ))}
       </div>
@@ -2412,8 +2468,11 @@ export default function Ajustes() {
         {/* Una tarjeta por servicio: son precios independientes entre sí y
             apelotonarlos en un bloque los hacía leer como una lista. */}
         <div className="space-y-4">
-          {preciosServicio.map(([name, label, servicio]) => (
-            <TarjetaMobile key={name}>{campoPrecioServicioM(name, label, servicio)}</TarjetaMobile>
+          {preciosServicio.map(([name, label, servicio, medidas, bolsas]) => (
+            <TarjetaMobile key={name}>
+              {campoPrecioServicioM(name, label, servicio)}
+              {camposPrecarga(medidas, bolsas, true)}
+            </TarjetaMobile>
           ))}
         </div>
       </div>

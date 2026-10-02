@@ -16,7 +16,18 @@ import { esAdmin } from '../middleware/roles.js';
 // en otra tabla: corre en la misma transacción que el cambio de nombre.
 // `conPrecio` agrega la columna `precio` (mig. 130: el precio de cada tamaño de
 // edredón). Vacío = sin precio; si viene, es un número mayor o igual a 0.
-function crearControladorEtiqueta(tabla, nombres, banderas = [], { alRenombrar, conPrecio = false } = {}) {
+// `enteros` son columnas de conteo propias del catálogo (mig. 132: medidas y
+// bolsas que trae puestas cada tamaño de edredón): enteros de 0 o más.
+function crearControladorEtiqueta(tabla, nombres, banderas = [], { alRenombrar, conPrecio = false, enteros = [] } = {}) {
+  // undefined = no se manda; { error } si no es un entero de 0 o más.
+  const leerEntero = (v) => {
+    if (v === undefined) return undefined;
+    const n = Number(v);
+    if (v === null || v === '' || !Number.isInteger(n) || n < 0) {
+      return { error: 'Las medidas y las bolsas deben ser un número entero de 0 o más.' };
+    }
+    return n;
+  };
   // undefined = no se manda; null = sin precio; { error } si no es válido.
   const leerPrecio = (v) => {
     if (v === undefined) return undefined;
@@ -107,6 +118,16 @@ function crearControladorEtiqueta(tabla, nombres, banderas = [], { alRenombrar, 
         values.push(Boolean(req.body[bandera]));
       }
     }
+    for (const campo of enteros) {
+      const n = leerEntero(req.body[campo]);
+      if (n?.error) {
+        return res.status(400).json({ message: n.error });
+      }
+      if (n !== undefined) {
+        updates.push(`${campo} = $${i++}`);
+        values.push(n);
+      }
+    }
     if (conPrecio) {
       const precio = leerPrecio(req.body.precio);
       if (precio?.error) {
@@ -195,7 +216,7 @@ export const tiposTela = crearControladorEtiqueta('tipos_tela', {
 // Cada tamaño de edredón es un servicio Por Encargo con su precio (mig. 130).
 export const tamanosEdredon = crearControladorEtiqueta('tamanos_edredon', {
   singular: 'el tamaño de edredón', plural: 'los tamaños de edredón', uno: 'un tamaño de edredón',
-}, [], { conPrecio: true });
+}, [], { conPrecio: true, enteros: ['precarga_medidas', 'precarga_bolsas'] });
 export const marcasProducto = crearControladorEtiqueta('marcas_producto', {
   singular: 'la marca', plural: 'las marcas', uno: 'una marca',
 });
