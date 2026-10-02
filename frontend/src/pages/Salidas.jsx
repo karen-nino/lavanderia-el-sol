@@ -9,6 +9,7 @@ import { esAdmin as esAdminFn } from '../lib/roles';
 import MaquinaCicloOverlay from '../components/MaquinaCicloOverlay';
 import ConfirmacionModal from '../components/ConfirmacionModal';
 import ElegirTiempoModal from '../components/ElegirTiempoModal';
+import GranelPorServicio from '../components/GranelPorServicio';
 import { preguntaTiempo, tiemposDeMaquina } from '../lib/tiemposModelo';
 
 function fmtMonto(n) {
@@ -1445,6 +1446,11 @@ export default function Salidas() {
           </div>
         </div>
       )}
+
+      {/* Granel de cada servicio Por Encargo (migs. 132-134): qué jabón y qué
+          suavizante usa cada uno. Se elige aquí, y sin elegir no arranca la
+          lavadora. Se esconde sola si la nota no lleva granel por servicio. */}
+      <GranelPorServicio nota={nota} puedeEditar={puedeTocarProductos} onCambio={cargarDatos} />
 
       {/* Sección 3 — Productos de la nota. Se capturan al hacerla, pero también
           se pueden agregar aquí (2026-09-25): el cliente pide el jabón ya

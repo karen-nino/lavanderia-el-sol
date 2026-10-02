@@ -375,7 +375,7 @@ function CatalogoEtiquetas({
   const etiquetaDe = (campo, valor) => (
     campo.tipo === 'check'
       ? (valor ? (campo.chip ?? campo.label) : null)
-      : (campo.opciones.find(o => o.v === valor)?.label ?? valor)
+      : (campo.opciones.find(o => String(o.v) === String(valor))?.label ?? valor)
   );
 
   // Un campo extra, igual en el alta que en la edición del renglón.
@@ -968,6 +968,8 @@ export default function Ajustes() {
   const soloGuardaPerfil = usuario?.es_prueba === true && !ES_DEMO;
 
   const [tiemposMarca, setTiemposMarca] = useState([]);
+  // Tipos de granel (mig. 133): los ofrece el desplegable de cada granel.
+  const [tiposGranel, setTiposGranel] = useState([]);
   const [edredones, setEdredones] = useState([]);
   // Precios de edredón tal como vinieron, para mandar solo los que cambiaron.
   const edredonOrigRef = useRef({});
@@ -2005,6 +2007,19 @@ export default function Ajustes() {
     </Section>
   );
 
+  // El tipo de cada granel (mig. 133). Un tipo desactivado se sigue mostrando si
+  // un granel ya lo tiene, para no cambiárselo al editar otra cosa. El polvo no
+  // lleva tipo: se vende por unidad.
+  const camposGranel = [{
+    name: 'tipo_id', defecto: '',
+    opciones: [
+      { v: '', label: 'Sin tipo' },
+      ...tiposGranel.map(t => ({ v: String(t.id), label: t.activo ? t.nombre : `${t.nombre} (desactivado)` })),
+    ],
+  }];
+  const AYUDA_TIPOS = 'Jabón, Suavizante… Cada servicio Por Encargo lleva las medidas que diga Ajustes de cada tipo, y en Salidas el empleado elige cuál producto de ese tipo usa.';
+  const AYUDA_GRANEL = 'Los líquidos que se venden a granel. Se eligen como nombre del producto cuando se rellena desde un bidón. El tipo dice entre qué opciones se elige en Salidas; el polvo va sin tipo.';
+
   const seccionInventarioDesktop = (
     <Section titulo="Inventario">
       <Field label="Marcas" hint="Se ofrecen al crear un producto. Desactivar una opción la quita de la lista sin afectar a los productos que ya la usan.">
@@ -2016,8 +2031,13 @@ export default function Ajustes() {
         </Field>
       </div>
       <div className="border-t border-gray-100 pt-4">
-        <Field label="Granel" hint="Los líquidos que se venden a granel. Se eligen como nombre del producto cuando se rellena desde un bidón.">
-          <CatalogoEtiquetas endpoint="/etiquetas/graneles-producto" singular="Granel" inputCls={INPUT_CLS} onMensaje={setMensaje} />
+        <Field label="Tipos de granel" hint={AYUDA_TIPOS}>
+          <CatalogoEtiquetas endpoint="/etiquetas/tipos-granel" singular="Tipo" inputCls={INPUT_CLS} onMensaje={setMensaje} onCambio={setTiposGranel} />
+        </Field>
+      </div>
+      <div className="border-t border-gray-100 pt-4">
+        <Field label="Granel" hint={AYUDA_GRANEL}>
+          <CatalogoEtiquetas endpoint="/etiquetas/graneles-producto" singular="Granel" inputCls={INPUT_CLS} onMensaje={setMensaje} extraCampos={camposGranel} />
         </Field>
       </div>
       <div className="border-t border-gray-100 pt-4">
@@ -2548,11 +2568,14 @@ export default function Ajustes() {
       </div>
 
       <div className="border-t border-light-blue/60 pt-5">
-        <MobileField
-          label="Granel"
-          hint="Los líquidos que se venden a granel. Se eligen como nombre del producto cuando se rellena desde un bidón."
-        >
-          <CatalogoEtiquetas endpoint="/etiquetas/graneles-producto" singular="Granel" inputCls={MOBILE_INPUT_CLS} onMensaje={setMensaje} />
+        <MobileField label="Tipos de granel" hint={AYUDA_TIPOS}>
+          <CatalogoEtiquetas endpoint="/etiquetas/tipos-granel" singular="Tipo" inputCls={MOBILE_INPUT_CLS} onMensaje={setMensaje} onCambio={setTiposGranel} />
+        </MobileField>
+      </div>
+
+      <div className="border-t border-light-blue/60 pt-5">
+        <MobileField label="Granel" hint={AYUDA_GRANEL}>
+          <CatalogoEtiquetas endpoint="/etiquetas/graneles-producto" singular="Granel" inputCls={MOBILE_INPUT_CLS} onMensaje={setMensaje} extraCampos={camposGranel} />
         </MobileField>
       </div>
 

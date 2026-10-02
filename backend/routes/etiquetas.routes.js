@@ -3,7 +3,7 @@ import { verifyToken } from '../middleware/auth.js';
 import { bloquearPruebaGlobal } from '../middleware/sucursalActiva.js';
 import {
   tiposTela, tamanosEdredon, marcasProducto, envasesProducto, marcasMaquina,
-  granelesProducto, tamanosBolsa,
+  granelesProducto, tamanosBolsa, tiposGranel,
   getModelosMaquina, crearModeloMaquina, actualizarModeloMaquina, reordenarModelosMaquina,
   getTiemposMarca, guardarTiempoMarca,
 } from '../controllers/etiquetas.controller.js';
@@ -48,6 +48,12 @@ router.get('/graneles-producto',            granelesProducto.getAll);
 router.post('/graneles-producto',           granelesProducto.create);
 router.patch('/graneles-producto/reordenar', granelesProducto.reorder);
 router.put('/graneles-producto/:id',        granelesProducto.update);
+
+// Tipos de granel (mig. 133): Jabón, Suavizante…
+router.get('/tipos-granel',            tiposGranel.getAll);
+router.post('/tipos-granel',           tiposGranel.create);
+router.patch('/tipos-granel/reordenar', tiposGranel.reorder);
+router.put('/tipos-granel/:id',        tiposGranel.update);
 
 // Tamaños de bolsa (mig. 119).
 router.get('/tamanos-bolsa',            tamanosBolsa.getAll);

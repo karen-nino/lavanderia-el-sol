@@ -40,9 +40,20 @@ const ESTADO_GRANEL_SQL = `
   END AS estado_granel
 `.trim();
 
+// Tipo del granel LÍQUIDO (mig. 133): sale del catálogo de Granel por el
+// nombre del producto. El polvo, el de marca y la bolsa no llevan tipo.
+const TIPO_GRANEL_SQL = `
+  CASE WHEN tipo_liquido = 'granel' AND COALESCE(forma, 'liquido') = 'liquido'
+            AND COALESCE(clase, 'liquido') <> 'bolsa'
+       THEN (SELECT g.tipo_id FROM graneles_producto g
+              WHERE lower(g.nombre) = lower(productos.nombre) LIMIT 1)
+  END AS tipo_granel_id
+`.trim();
+
 // SELECT estándar de un producto con sus campos calculados.
 const SELECT_PRODUCTO = `*,
               (stock_actual - stock_reservado) AS stock_disponible,
+              ${TIPO_GRANEL_SQL},
               ${DERIVADOS_SQL},
               ${ESTADO_STOCK_SQL},
               ${ESTADO_GRANEL_SQL}`;

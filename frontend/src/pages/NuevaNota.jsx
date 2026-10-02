@@ -216,6 +216,9 @@ export default function NuevaNota() {
   // Lo que trae puesto cada servicio de ropa (mig. 132): medidas de cada granel
   // ligado y bolsas. Los de edredón lo traen en su catálogo de tamaños.
   const [precargas,         setPrecargas]         = useState({});
+  // Tipos de granel (mig. 133): Jabón, Suavizante… para nombrar lo que lleva
+  // cada servicio y avisar si no alcanza.
+  const [tiposGranel,       setTiposGranel]       = useState([]);
   const [loadingData,       setLoadingData]       = useState(true);
   // Caja del día: si nadie la abrió, los cobros de esta nota no entran en
   // ningún corte (van con caja_id nulo, mig. 101). Se avisa, no se bloquea.
@@ -389,26 +392,37 @@ export default function NuevaNota() {
     if (seVendePorUnidad(prod)) return n === 1 ? 'unidad' : 'unidades';
     return n === 1 ? 'botella' : 'botellas';
   };
-  // Granel que trae puesto un servicio Por Encargo. Cada granel dice en
-  // Inventario a qué servicios va ligado y cuántas medidas lleva (mig. 131);
-  // `servicio` es la clave de ese ligue ('chico'… 'edredon').
+  // Granel de un servicio Por Encargo (migs. 132-134). El servicio lleva N
+  // medidas de CADA tipo (Jabón, Suavizante); cuál producto de ese tipo lo
+  // elige el empleado en Salidas, así que aquí no va a la lista de productos:
+  // lo pone el servidor al crear la nota. Aquí solo se dice qué lleva y se
+  // avisa si no alcanza. `servicio` es la clave del ligue ('chico'… 'edredon').
   const medidasDisponibles = (p) => Number(p.stock_disponible ?? p.stock_actual) || 0;
-  // Solo el granel LÍQUIDO se precarga: es el que se sirve por medidas dentro
-  // del servicio. El polvo se vende por unidad, así que se agrega a mano.
-  const granelServido = (p) => p.tipo_liquido === 'granel' && !esPolvo(p);
-  // `medidas` las dice el servicio (mig. 132), las mismas para cada granel.
-  const granelDeServicio = (servicio, medidas) => {
-    if (!servicio || !(medidas > 0)) return [];
-    return productosCatalogo
-      .filter(p => granelServido(p) && (p.servicios_precarga ?? []).includes(servicio))
-      // Si quedan menos medidas que las precargadas se pone lo que haya: dejar
-      // las de siempre sin existencias haría fallar el guardado por un valor
-      // que nadie eligió. Sin existencias, no se pone.
-      .map(p => ({
-        producto_id: String(p.id),
-        cantidad: String(Math.min(medidas, medidasDisponibles(p))),
-      }))
-      .filter(x => Number(x.cantidad) > 0);
+  // Solo el granel LÍQUIDO con tipo: el polvo se vende por unidad.
+  const granelServido = (p) => p.tipo_liquido === 'granel' && !esPolvo(p) && p.tipo_granel_id != null;
+  // Por tipo, los productos de ese tipo ligados al servicio.
+  const granelPorTipo = (servicio) => {
+    const porTipo = new Map();
+    if (!servicio) return porTipo;
+    for (const p of productosCatalogo) {
+      if (!granelServido(p) || !(p.servicios_precarga ?? []).includes(servicio)) continue;
+      if (!porTipo.has(p.tipo_granel_id)) porTipo.set(p.tipo_granel_id, []);
+      porTipo.get(p.tipo_granel_id).push(p);
+    }
+    return porTipo;
+  };
+  const nombreTipo = (tipoId) => tiposGranel.find(t => t.id === tipoId)?.nombre ?? 'granel';
+  const ordenTipo  = (tipoId) => tiposGranel.findIndex(t => t.id === tipoId);
+  // "1 medida de jabón y 1 de suavizante", o null si el servicio no lleva.
+  const textoGranelDeServicio = (s) => {
+    const { medidas } = precargaDeServicio(s);
+    if (!(medidas > 0)) return null;
+    const tipos = [...granelPorTipo(servicioBolsa(s)).keys()]
+      .sort((a, b) => ordenTipo(a) - ordenTipo(b))
+      .map(t => nombreTipo(t).toLowerCase());
+    if (tipos.length === 0) return null;
+    const unidad = medidas === 1 ? 'medida' : 'medidas';
+    return `${medidas} ${unidad} de ${tipos.join(' y ')}`;
   };
   const subtotalCargas = cargasAuto.reduce((s, c) => s + subtotalDeCarga(c), 0);
   // Ámbito de los productos a nivel nota: en Autoservicio y en la venta de
@@ -456,14 +470,16 @@ export default function NuevaNota() {
       api.get('/clientes'),
       api.get('/etiquetas/tipos-tela'),
       api.get('/etiquetas/tamanos-edredon'),
+      api.get('/etiquetas/tipos-granel'),
     ];
     promesas.push(esEdicion ? api.get(`/notas/${id}`) : api.get('/notas/next-folio'));
 
     Promise.all(promesas)
       .then((resultados) => {
-        const [prod, cfg, cli, telasCat, tamanosCat, extra] = resultados;
+        const [prod, cfg, cli, telasCat, tamanosCat, tiposCat, extra] = resultados;
         setTelas(telasCat || []);
         setTamanosEdredon(tamanosCat || []);
+        setTiposGranel(tiposCat || []);
         const nota = esEdicion ? extra : null;
         setFolio(esEdicion ? (nota?.folio ?? '') : (extra?.folio ?? ''));
         // La lista de máquinas la pide el modal al abrirse, no esta carga: lo
@@ -714,18 +730,41 @@ export default function NuevaNota() {
     };
   };
 
-  // Lo que un servicio trae puesto: el granel ligado a él y la bolsa que le
-  // toca, en las cantidades que dice el servicio en Ajustes, si hay existencia.
+  // Lo que un servicio pone en la lista de productos: la bolsa que le toca, en
+  // la cantidad que dice el servicio en Ajustes, si hay existencia (si quedan
+  // menos, las que haya). El granel no: se elige en Salidas (ver arriba).
   const materialDeServicio = (serv) => {
     const s = SERVICIO_POR_V[serv];
-    const { medidas, bolsas } = precargaDeServicio(s);
+    const { bolsas } = precargaDeServicio(s);
     const bolsa = bolsaDeCargaConStock({ tamano: s.tamano, tipo_prenda: s.tipo_prenda });
-    // Como el granel: si quedan menos bolsas de las que lleva, van las que haya.
     const nBolsas = bolsa ? Math.min(bolsas, Number(bolsa.stock_disponible ?? bolsa.stock_actual) || 0) : 0;
-    return [
-      ...granelDeServicio(servicioBolsa({ tamano: s.tamano, tipo_prenda: s.tipo_prenda }), medidas),
-      ...(nBolsas > 0 ? [{ producto_id: String(bolsa.id), cantidad: String(nBolsas) }] : []),
-    ];
+    return nBolsas > 0 ? [{ producto_id: String(bolsa.id), cantidad: String(nBolsas) }] : [];
+  };
+
+  // Tipos de granel que no alcanzan para los servicios de la nota: entre todos
+  // los productos de ese tipo no quedan las medidas que suman. No impide crear
+  // la nota (decisión del negocio): se avisa y se resuelve en Salidas.
+  const granelQueNoAlcanza = () => {
+    const falta = new Map(); // tipoId → { necesita, opciones:Set }
+    for (const c of encargoCargas) {
+      const s = SERVICIO_POR_V[c.servicio];
+      if (!s || c.id) continue; // los servicios que ya existían ya tienen el suyo
+      const { medidas } = precargaDeServicio(s);
+      if (!(medidas > 0)) continue;
+      for (const [tipoId, prods] of granelPorTipo(servicioBolsa(s))) {
+        const f = falta.get(tipoId) ?? { necesita: 0, opciones: new Map() };
+        f.necesita += medidas;
+        prods.forEach(p => f.opciones.set(p.id, p));
+        falta.set(tipoId, f);
+      }
+    }
+    return [...falta.entries()]
+      .map(([tipoId, f]) => ({
+        tipo: nombreTipo(tipoId),
+        necesita: f.necesita,
+        quedan: [...f.opciones.values()].reduce((sum, p) => sum + medidasDisponibles(p), 0),
+      }))
+      .filter(x => x.quedan < x.necesita);
   };
   // Cuántas medidas de granel y cuántas bolsas trae puestas un servicio, según
   // Ajustes (mig. 132). Sin configurar, nada.
@@ -1668,7 +1707,8 @@ export default function NuevaNota() {
                       Cantidad de servicios <span className="text-red-500">*</span>
                     </h2>
                     <p className="text-xs text-gray-400 mt-1">
-                      Cada servicio ya incluye lavado, secado, jabón y bolsa.
+                      Cada servicio ya incluye lavado, secado, jabón y bolsa. Qué jabón y qué
+                      suavizante se usan se elige en Salidas.
                     </p>
                   </div>
 
@@ -1700,6 +1740,10 @@ export default function NuevaNota() {
                                 <span className="ml-1.5 font-bold text-blue-700">· ${(precio * cant).toFixed(2)}</span>
                               )}
                             </p>
+                            {/* Lo que lleva de granel; cuál producto se elige en Salidas. */}
+                            {textoGranelDeServicio(s) && (
+                              <p className="text-xs text-gray-400">Lleva {textoGranelDeServicio(s)}</p>
+                            )}
                           </div>
 
                           <div className="flex flex-shrink-0 items-center gap-2">
@@ -1743,6 +1787,18 @@ export default function NuevaNota() {
                     <p className="text-sm text-gray-500">
                       Agrega al menos un servicio para continuar.
                     </p>
+                  )}
+                  {granelQueNoAlcanza().length > 0 && (
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5">
+                      {granelQueNoAlcanza().map(f => (
+                        <p key={f.tipo} className="text-sm font-semibold text-amber-800">
+                          No alcanza el {f.tipo.toLowerCase()}: se necesitan {f.necesita} {f.necesita === 1 ? 'medida' : 'medidas'} y quedan {f.quedan}.
+                        </p>
+                      ))}
+                      <p className="text-xs text-amber-700 mt-0.5">
+                        La nota se puede crear igual; el empleado elige qué usar en Salidas.
+                      </p>
+                    </div>
                   )}
                   {serviciosSinPrecio.length > 0 && (
                     <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2.5">

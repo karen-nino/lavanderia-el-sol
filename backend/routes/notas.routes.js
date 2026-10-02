@@ -31,6 +31,7 @@ import {
   getNotaProductos,
   addProductoToNota,
   cambiarCantidadProducto,
+  elegirGranelDeCarga,
   removeProductoFromNota,
 } from '../controllers/notas.controller.js';
 
@@ -85,6 +86,9 @@ router.post('/:id/productos',   addProductoToNota);
 // Cambiar la cantidad NO es de admin: es el mismo gesto que agregar, que
 // cualquiera puede hacer. Borrar el renglón sí, porque deshace la captura.
 router.patch('/:id/productos/:productoId', cambiarCantidadProducto);
+// El granel de un servicio Por Encargo (Jabón, Suavizante…): lo elige el
+// empleado en Salidas, igual que agrega productos (migs. 133 y 134).
+router.put('/:id/cargas/:cargaId/granel/:tipoId', elegirGranelDeCarga);
 router.delete('/:id/productos/:productoId', requireAdmin, removeProductoFromNota);
 
 export default router;

@@ -1162,8 +1162,113 @@ async function registrarMaquinaEnCarga(client, cargaId, slot, maquinaId, modo = 
   );
 }
 
+// ── Granel por elegir de un servicio Por Encargo (migs. 132-134) ──────────
+// La clave con que el granel se liga a un servicio ('chico'… 'edredon'). Todos
+// los tamaños de edredón comparten la suya.
+function claveLigueServicio(prenda, tamano) {
+  if (String(prenda ?? '').toUpperCase() === 'EDREDON') return 'edredon';
+  return ['chico', 'mediano', 'grande'].includes(tamano) ? tamano : null;
+}
+
+// Cuántas medidas de CADA tipo de granel trae el servicio (Ajustes → Servicios
+// Por Encargo). El edredón lo dice su tamaño; uno viejo sin tamaño, nada.
+async function medidasDeServicio(client, prenda, tamano, tamanoEdredon) {
+  if (String(prenda ?? '').toUpperCase() === 'EDREDON') {
+    if (!tamanoEdredon) return 0;
+    const { rows } = await client.query(
+      'SELECT precarga_medidas FROM tamanos_edredon WHERE lower(nombre) = lower($1) LIMIT 1',
+      [String(tamanoEdredon).trim()]
+    );
+    return Number(rows[0]?.precarga_medidas) || 0;
+  }
+  if (!['chico', 'mediano', 'grande'].includes(tamano)) return 0;
+  const { rows } = await client.query(`SELECT precarga_medidas_${tamano} AS n FROM ajustes WHERE id = 1`);
+  return Number(rows[0]?.n) || 0;
+}
+
+// Opciones de granel de un servicio, por tipo: los graneles líquidos de la
+// sucursal ligados a ese servicio (Inventario) y con tipo (Ajustes → Granel).
+async function opcionesGranelDeServicio(client, sucursal, clave) {
+  const { rows } = await client.query(
+    `SELECT p.id, g.tipo_id, p.stock_actual - p.stock_reservado AS disponible
+       FROM productos p
+       JOIN graneles_producto g ON lower(g.nombre) = lower(p.nombre)
+      WHERE p.sucursal = $1 AND p.archivado = FALSE
+        AND p.tipo_liquido = 'granel' AND COALESCE(p.forma, 'liquido') = 'liquido'
+        AND COALESCE(p.clase, 'liquido') <> 'bolsa'
+        AND g.tipo_id IS NOT NULL
+        AND $2 = ANY(p.servicios_precarga)
+      ORDER BY g.tipo_id, p.id`,
+    [sucursal, clave]
+  );
+  const porTipo = new Map();
+  for (const r of rows) {
+    if (!porTipo.has(r.tipo_id)) porTipo.set(r.tipo_id, []);
+    porTipo.get(r.tipo_id).push(r);
+  }
+  return porTipo;
+}
+
+// Lo que lleva de granel un servicio recién creado: por cada tipo, N medidas.
+// Si el tipo tiene un solo producto y alcanza, entra directo (no hay nada que
+// elegir); si no, queda pendiente y el empleado lo elige en Salidas. Que no
+// alcance no impide crear la nota: el aviso lo da la pantalla.
+async function granelDeCarga(client, notaId, carga, sucursal, tipo_servicio) {
+  const clave = claveLigueServicio(carga.tipo_prenda, carga.tamano);
+  if (!clave) return [];
+  const medidas = await medidasDeServicio(client, carga.tipo_prenda, carga.tamano, carga.tamano_edredon);
+  if (medidas <= 0) return [];
+  const productos = [];
+  for (const [tipoId, opciones] of await opcionesGranelDeServicio(client, sucursal, clave)) {
+    if (opciones.length === 1 && Number(opciones[0].disponible) >= medidas) {
+      productos.push(await reservarProducto(client, notaId, carga.id, opciones[0].id, medidas, sucursal, tipo_servicio));
+    } else {
+      await client.query(
+        `INSERT INTO nota_carga_pendientes (nota_id, carga_id, tipo_granel_id, cantidad)
+         VALUES ($1, $2, $3, $4)`,
+        [notaId, carga.id, tipoId, medidas]
+      );
+    }
+  }
+  return productos;
+}
+
+// Ninguna lavadora de la nota arranca mientras algún servicio tenga granel por
+// elegir (decisión del negocio, 2026-10-02): el empleado elige en Salidas qué
+// jabón y qué suavizante usa, y sin eso no se sabe qué descontar. Es la nota
+// entera y no "la lavadora de ese servicio" porque en Por Encargo las máquinas
+// se agregan sueltas en Salidas, sin decir a qué servicio van. Devuelve el
+// mensaje que lo explica, o null si nada lo impide. Las secadoras no cuentan:
+// el granel se sirve al lavar.
+async function granelSinElegir(client, notaId, maquinaIds) {
+  if (!maquinaIds || maquinaIds.length === 0) return null;
+  const { rows: lavadoras } = await client.query(
+    `SELECT 1 FROM maquinas WHERE id = ANY($1::int[]) AND tipo::text LIKE 'lavadora%' LIMIT 1`,
+    [maquinaIds.map(Number)]
+  );
+  if (lavadoras.length === 0) return null;
+  const { rows } = await client.query(
+    `SELECT nc.orden, nc.tipo_prenda, nc.tamano, nc.tamano_edredon,
+            string_agg(t.nombre, ' y ' ORDER BY t.orden NULLS LAST, t.id) AS tipos
+       FROM nota_carga_pendientes pe
+       JOIN nota_cargas nc ON nc.id = pe.carga_id
+       JOIN tipos_granel t ON t.id = pe.tipo_granel_id
+      WHERE pe.nota_id = $1
+      GROUP BY nc.id
+      ORDER BY nc.orden
+      LIMIT 1`,
+    [notaId]
+  );
+  if (rows.length === 0) return null;
+  const r = rows[0];
+  const servicio = nombreServicio(r.tipo_prenda, r.tamano, r.tamano_edredon);
+  return `Antes de iniciar la lavadora, elige ${String(r.tipos).toLowerCase()} del servicio ${servicio} `
+    + 'en los productos de la nota.';
+}
+
 // Inserta las filas de nota_cargas ya preparadas (con sus productos, que
-// reservan stock). Devuelve las cargas con sus productos.
+// reservan stock). Devuelve las cargas con sus productos. En Por Encargo, además,
+// el granel que lleva cada servicio (granelDeCarga).
 async function insertarCargas(client, notaId, filas, sucursal, tipo_servicio) {
   const insertadas = [];
   for (const f of filas) {
@@ -1185,6 +1290,9 @@ async function insertarCargas(client, notaId, filas, sucursal, tipo_servicio) {
     const productos = [];
     for (const p of (f.productos ?? [])) {
       productos.push(await reservarProducto(client, notaId, carga.id, p.producto_id, p.cantidad, sucursal, tipo_servicio));
+    }
+    if (tipo_servicio === 'POR_ENCARGO') {
+      productos.push(...await granelDeCarga(client, notaId, carga, sucursal, tipo_servicio));
     }
     insertadas.push({ ...carga, productos });
   }
@@ -1286,7 +1394,20 @@ async function cargasDeNota(client, notaId) {
       ORDER BY np.created_at ASC`,
     [notaId]
   );
-  return rows.map(c => ({ ...c, productos: prods.filter(p => p.carga_id === c.id) }));
+  // Granel por elegir de cada servicio (mig. 134): "1 medida de Jabón".
+  const { rows: pendientes } = await client.query(
+    `SELECT pe.id, pe.carga_id, pe.tipo_granel_id, t.nombre AS tipo_granel, pe.cantidad
+       FROM nota_carga_pendientes pe
+       JOIN tipos_granel t ON t.id = pe.tipo_granel_id
+      WHERE pe.nota_id = $1
+      ORDER BY t.orden NULLS LAST, t.id`,
+    [notaId]
+  );
+  return rows.map(c => ({
+    ...c,
+    productos:  prods.filter(p => p.carga_id === c.id),
+    pendientes: pendientes.filter(p => p.carga_id === c.id),
+  }));
 }
 
 // Verifica que un registro exista y pertenezca a la sucursal indicada.
@@ -2750,6 +2871,11 @@ export const encenderMaquinaDeNota = async (req, res) => {
       await client.query('ROLLBACK');
       return res.status(400).json({ message: 'La máquina no está asignada a esta nota.' });
     }
+    const faltaGranel = await granelSinElegir(client, id, [maquina_id]);
+    if (faltaGranel) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ message: faltaGranel });
+    }
 
     // FOR UPDATE: dos empleados que le den a la vez a la misma máquina se
     // serializan aquí, igual que al iniciar.
@@ -2879,6 +3005,11 @@ export const activarMaquinasPendientes = async (req, res) => {
     if (ids.length === 0) {
       await client.query('ROLLBACK');
       return res.status(400).json({ message: 'La nota no tiene máquinas asignadas.' });
+    }
+    const faltaGranel = await granelSinElegir(client, id, maquina_id ? [maquina_id] : ids);
+    if (faltaGranel) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ message: faltaGranel });
     }
     const { rows: maqs } = await client.query(
       `SELECT id, estado, en_uso_desde, encendida_para_nota_id
@@ -4357,6 +4488,126 @@ export const addProductoToNota = async (req, res) => {
     if (respondioCorteCerrado(res, err)) return;
     console.error('addProductoToNota error:', err);
     res.status(500).json({ message: 'No se pudo agregar el producto a la nota. Intenta de nuevo.' });
+  } finally {
+    client.release();
+  }
+};
+
+// ── PUT /notas/:id/cargas/:cargaId/granel/:tipoId ───────────
+// El granel de un tipo (Jabón, Suavizante…) dentro de un servicio Por Encargo
+// (migs. 133 y 134). El empleado lo elige en Salidas: qué producto y cuántas
+// medidas. Sirve igual para el que está por elegir que para cambiar uno ya
+// elegido: lo que había de ese tipo en el servicio se suelta (devuelve lo
+// apartado) y se pone lo nuevo. Sin producto, el tipo vuelve a quedar por
+// elegir con la cantidad dada.
+export const elegirGranelDeCarga = async (req, res) => {
+  const { id, cargaId, tipoId } = req.params;
+  const { producto_id } = req.body ?? {};
+  const cantidad = Number(req.body?.cantidad);
+  if (![id, cargaId, tipoId].every(v => /^\d+$/.test(String(v)))) {
+    return res.status(404).json({ message: 'No se encontró el servicio.' });
+  }
+  if (!Number.isInteger(cantidad) || cantidad < 1) {
+    return res.status(400).json({ message: 'Las medidas deben ser un número entero de 1 o más.' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows: notaRows } = await client.query(
+      'SELECT estado, tipo_servicio FROM notas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
+      [id, req.sucursal]
+    );
+    if (notaRows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: 'Nota no encontrada.' });
+    }
+    if (['PAGADA', 'FINALIZADA', 'CANCELADA'].includes(notaRows[0].estado)) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: `No se pueden cambiar productos de una nota ${palabra(notaRows[0].estado)}.` });
+    }
+    const { rows: cargaRows } = await client.query(
+      'SELECT id FROM nota_cargas WHERE id = $1 AND nota_id = $2',
+      [cargaId, id]
+    );
+    if (cargaRows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: 'No se encontró el servicio.' });
+    }
+    const { rows: tipoRows } = await client.query('SELECT nombre FROM tipos_granel WHERE id = $1', [tipoId]);
+    if (tipoRows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: 'No se encontró el tipo de granel.' });
+    }
+
+    // Lo que el servicio ya tenía de este tipo: se suelta.
+    const { rows: previos } = await client.query(
+      `SELECT np.id, np.producto_id, np.cantidad_medidas
+         FROM nota_productos np
+         JOIN productos p ON p.id = np.producto_id
+         JOIN graneles_producto g ON lower(g.nombre) = lower(p.nombre)
+        WHERE np.nota_id = $1 AND np.carga_id = $2 AND g.tipo_id = $3
+          AND p.tipo_liquido = 'granel' AND COALESCE(p.forma, 'liquido') = 'liquido'
+        FOR UPDATE OF np`,
+      [id, cargaId, tipoId]
+    );
+    for (const np of previos) {
+      await client.query(
+        'UPDATE productos SET stock_reservado = GREATEST(0, stock_reservado - $2) WHERE id = $1',
+        [np.producto_id, Number(np.cantidad_medidas) || 0]
+      );
+      await client.query('DELETE FROM nota_productos WHERE id = $1', [np.id]);
+    }
+    await client.query(
+      'DELETE FROM nota_carga_pendientes WHERE carga_id = $1 AND tipo_granel_id = $2',
+      [cargaId, tipoId]
+    );
+
+    let fila = null;
+    if (producto_id) {
+      // Solo un granel líquido de ESE tipo: es lo que el servicio pide.
+      const { rows: ok } = await client.query(
+        `SELECT 1 FROM productos p
+           JOIN graneles_producto g ON lower(g.nombre) = lower(p.nombre)
+          WHERE p.id = $1 AND p.sucursal = $2 AND p.archivado = FALSE AND g.tipo_id = $3
+            AND p.tipo_liquido = 'granel' AND COALESCE(p.forma, 'liquido') = 'liquido'`,
+        [producto_id, req.sucursal, tipoId]
+      );
+      if (ok.length === 0) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ message: `Elige un ${tipoRows[0].nombre.toLowerCase()} de la lista.` });
+      }
+      try {
+        fila = await reservarProducto(client, id, Number(cargaId), Number(producto_id), cantidad, req.sucursal, notaRows[0].tipo_servicio);
+      } catch (e) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ message: e.message });
+      }
+    } else {
+      await client.query(
+        `INSERT INTO nota_carga_pendientes (nota_id, carga_id, tipo_granel_id, cantidad)
+         VALUES ($1, $2, $3, $4)`,
+        [id, cargaId, tipoId, cantidad]
+      );
+    }
+
+    await recalcularPrecioTotal(client, id, {
+      desmarcarPagoSiCambia: true, usuarioId: req.user?.id, sucursal: req.sucursal,
+    });
+    // El granel del servicio gasta de su precio, igual que al agregarlo.
+    const errTope = await validarTopesCargas(client, id);
+    if (errTope) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: errTope });
+    }
+
+    await client.query('COMMIT');
+    res.json({ producto: fila, cargas: await cargasDeNota(pool, id) });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    if (respondioCorteCerrado(res, err)) return;
+    console.error('elegirGranelDeCarga error:', err);
+    res.status(500).json({ message: 'No se pudo guardar el granel del servicio. Intenta de nuevo.' });
   } finally {
     client.release();
   }

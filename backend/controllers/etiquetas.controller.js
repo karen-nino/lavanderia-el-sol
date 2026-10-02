@@ -18,7 +18,17 @@ import { esAdmin } from '../middleware/roles.js';
 // edredón). Vacío = sin precio; si viene, es un número mayor o igual a 0.
 // `enteros` son columnas de conteo propias del catálogo (mig. 132: medidas y
 // bolsas que trae puestas cada tamaño de edredón): enteros de 0 o más.
-function crearControladorEtiqueta(tabla, nombres, banderas = [], { alRenombrar, conPrecio = false, enteros = [] } = {}) {
+// `referencias` son columnas que apuntan a otro catálogo (mig. 133: el tipo de
+// un granel). Vacío = sin referencia; si viene, es el id de un renglón.
+function crearControladorEtiqueta(tabla, nombres, banderas = [], { alRenombrar, conPrecio = false, enteros = [], referencias = [] } = {}) {
+  // undefined = no se manda; null = sin referencia; { error } si no es un id.
+  const leerReferencia = (v) => {
+    if (v === undefined) return undefined;
+    if (v === null || v === '') return null;
+    const n = Number(v);
+    if (!Number.isInteger(n) || n < 1) return { error: 'Elige una opción de la lista.' };
+    return n;
+  };
   // undefined = no se manda; { error } si no es un entero de 0 o más.
   const leerEntero = (v) => {
     if (v === undefined) return undefined;
@@ -61,11 +71,17 @@ function crearControladorEtiqueta(tabla, nombres, banderas = [], { alRenombrar, 
     if (precio?.error) {
       return res.status(400).json({ message: precio.error });
     }
+    const refs = referencias.map(c => [c, leerReferencia(req.body[c])]);
+    const refMala = refs.find(([, v]) => v?.error);
+    if (refMala) {
+      return res.status(400).json({ message: refMala[1].error });
+    }
     try {
       // Se agrega al final del orden actual. Las banderas que declare el
       // catálogo entran con su valor del body (false si no viene).
       const extras = [...banderas.map(b => [b, Boolean(req.body[b])]),
-                      ...(conPrecio ? [['precio', precio ?? null]] : [])];
+                      ...(conPrecio ? [['precio', precio ?? null]] : []),
+                      ...refs.map(([c, v]) => [c, v ?? null])];
       const cols = extras.map(([c]) => `, ${c}`).join('');
       const vals = extras.map((_, k) => `, $${k + 2}`).join('');
       const { rows } = await pool.query(
@@ -78,6 +94,9 @@ function crearControladorEtiqueta(tabla, nombres, banderas = [], { alRenombrar, 
     } catch (err) {
       if (err.code === '23505') {
         return res.status(409).json({ message: `Ya existe ${nombres.uno} con ese nombre.` });
+      }
+      if (err.code === '23503') {
+        return res.status(400).json({ message: 'Elige una opción de la lista.' });
       }
       console.error(`create ${tabla} error:`, err);
       res.status(500).json({ message: `No se pudo guardar ${nombres.singular}. Intenta de nuevo.` });
@@ -116,6 +135,16 @@ function crearControladorEtiqueta(tabla, nombres, banderas = [], { alRenombrar, 
       if (req.body[bandera] !== undefined) {
         updates.push(`${bandera} = $${i++}`);
         values.push(Boolean(req.body[bandera]));
+      }
+    }
+    for (const campo of referencias) {
+      const v = leerReferencia(req.body[campo]);
+      if (v?.error) {
+        return res.status(400).json({ message: v.error });
+      }
+      if (v !== undefined) {
+        updates.push(`${campo} = $${i++}`);
+        values.push(v);
       }
     }
     for (const campo of enteros) {
@@ -166,6 +195,9 @@ function crearControladorEtiqueta(tabla, nombres, banderas = [], { alRenombrar, 
       await client.query('ROLLBACK');
       if (err.code === '23505') {
         return res.status(409).json({ message: `Ya existe ${nombres.uno} con ese nombre.` });
+      }
+      if (err.code === '23503') {
+        return res.status(400).json({ message: 'Elige una opción de la lista.' });
       }
       console.error(`update ${tabla} error:`, err);
       res.status(500).json({ message: `No se pudieron guardar los cambios de ${nombres.singular}. Intenta de nuevo.` });
@@ -231,8 +263,22 @@ export const marcasMaquina = crearControladorEtiqueta('marcas_maquina', {
 }, ['arranca_sola']);
 // Los líquidos que se venden a granel (mig. 119): es el nombre del producto
 // cuando se rellena desde un bidón ("Jabón", "Suavizante").
+// Cada granel dice de qué tipo es (mig. 133); el producto lo hereda por nombre,
+// así que renombrar el granel renombra también sus productos.
 export const granelesProducto = crearControladorEtiqueta('graneles_producto', {
   singular: 'el granel', plural: 'los graneles', uno: 'un granel',
+}, [], {
+  referencias: ['tipo_id'],
+  alRenombrar: (client, viejo, nuevo) => client.query(
+    `UPDATE productos SET nombre = $1, updated_at = NOW()
+      WHERE tipo_liquido = 'granel' AND clase <> 'bolsa' AND lower(nombre) = lower($2)`,
+    [nuevo, viejo]
+  ),
+});
+// Tipos de granel (mig. 133): Jabón, Suavizante… Un servicio Por Encargo lleva
+// medidas de cada tipo y el empleado elige el producto en Salidas.
+export const tiposGranel = crearControladorEtiqueta('tipos_granel', {
+  singular: 'el tipo de granel', plural: 'los tipos de granel', uno: 'un tipo de granel',
 });
 // Tamaños de bolsa (mig. 119). La bolsa guarda el nombre tal como está en el
 // catálogo (mig. 128), así que al renombrarlo se renombra también en las bolsas.
