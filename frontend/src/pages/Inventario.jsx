@@ -659,7 +659,7 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = 
                     <>
                       <input
                         type="number" name="medidas_por_botella" min="1" step="1" required
-                        value={form.medidas_por_botella} onChange={handleChange} placeholder="Ej. 4 medidas por botella"
+                        value={form.medidas_por_botella} onChange={handleChange} placeholder="Ej. 2 medidas por botella"
                         className={NUM_CLS}
                       />
                       <p className="text-[11px] text-gray-400 mt-1">
