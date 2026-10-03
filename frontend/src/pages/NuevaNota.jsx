@@ -1644,9 +1644,9 @@ export default function NuevaNota() {
                   </div>
 
                   <div className="flex items-center gap-2">
-                    <span className={`w-16 text-right text-base font-bold tabular-nums ${
-                      esMaterial ? 'text-gray-400' : 'text-blue-700'
-                    }`}>
+                    {/* Siempre en azul (2026-10-03), también el material que va
+                        dentro del servicio: eso ya lo dice el renglón de arriba. */}
+                    <span className="w-16 text-right text-base font-bold tabular-nums text-blue-700">
                       ${subtotal.toFixed(2)}
                     </span>
 
