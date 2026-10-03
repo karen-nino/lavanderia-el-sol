@@ -4,7 +4,7 @@
 // Recibe { fecha: 'YYYY-MM-DD', productos: [...] } de GET /productos/reporte-diario.
 
 import { slug, esc, descargarCSV, imprimirDocumento, fechaLarga } from './exportUtils';
-import { textoBotellas, textoGranel, seVendePorUnidad, esPolvo, lineasEntradas } from './formatoInventario';
+import { textoBotellas, textoGranel, seVendePorUnidad, esPolvo, lineasEntradas, lineasSalidas } from './formatoInventario';
 
 // 'YYYY-MM-DD' → Date local (sin corrimiento por zona horaria).
 const fechaLocal = (iso) => {
@@ -18,7 +18,8 @@ const esMarca  = (p) => seVendePorUnidad(p);
 const nombreProd = (p) => (esMarca(p) && p.marca ? `${p.marca} · ${p.nombre}` : p.nombre);
 
 const entradasLineas = (p) => lineasEntradas(p, esMarca(p));
-const salioTexto = (p) => textoBotellas(p.vendido_medidas, p.medidas_por_botella, { marca: esMarca(p) });
+// Salidas: por notas más las manuales (merma, dañado…).
+const salidasLineas = (p) => lineasSalidas(p, esMarca(p));
 // Ventas anuladas ese día (ya restadas de "Salidas"): van en su propia columna
 // para que el total no parezca un error de captura.
 const devueltoTexto = (p) =>
@@ -34,7 +35,7 @@ const filaCSV = (p) => [
   p.marca ?? '',
   p.nombre ?? '',
   entradasLineas(p).join(' · '),
-  salioTexto(p),
+  salidasLineas(p).join(' · '),
   devueltoTexto(p),
   rellenadasTexto(p),
   granelTexto(p),
@@ -57,7 +58,7 @@ const seccion = (titulo, productos) => {
     <tr>
       <td>${esc(nombreProd(p))}</td>
       <td>${entradasLineas(p).map(esc).join('<br>')}</td>
-      <td>${esc(salioTexto(p))}${p.devuelto_medidas > 0 ? `<br><small>Devuelto: ${esc(devueltoTexto(p))}</small>` : ''}</td>
+      <td>${salidasLineas(p).map(esc).join('<br>')}${p.devuelto_medidas > 0 ? `<br><small>Devuelto: ${esc(devueltoTexto(p))}</small>` : ''}</td>
       <td>${quedaCelda(p)}</td>
     </tr>`).join('');
   return `

@@ -53,12 +53,10 @@ export function textoGranel(medidasGranel, medidasPorBidon, medidasPorBotella) {
   return partes.join(' y ');
 }
 
-// Lo que entró un día al producto (Reporte diario, 2026-10-03), en líneas. Lo
-// que se cuenta por unidad, una sola; el granel, lo que entró a botellas y lo
-// que entró al bidón, solo las que tuvieron algo (sin nada: "0 botellas").
-export function lineasEntradas(p, porUnidad) {
-  const bot = Number(p?.entrada_botellas_medidas) || 0;
-  const gra = Number(p?.entrada_granel_medidas) || 0;
+// Un movimiento del día en el Reporte diario (2026-10-03), en líneas: lo que
+// se cuenta por unidad, una sola; el granel, lo de botellas y lo del bidón,
+// solo las que tuvieron algo (sin nada: "0 botellas").
+function lineasMovimiento(p, porUnidad, bot, gra) {
   if (porUnidad) return [textoBotellas(bot + gra, p?.medidas_por_botella, { marca: true })];
   if (bot > 0 && gra > 0) {
     return [
@@ -68,6 +66,20 @@ export function lineasEntradas(p, porUnidad) {
   }
   if (gra > 0) return [`A granel: ${textoGranel(gra, p?.medidas_por_bidon, p?.medidas_por_botella)}`];
   return [textoBotellas(bot, p?.medidas_por_botella)];
+}
+
+// Lo que entró ese día (Inventario → Entradas y la existencia del alta).
+export function lineasEntradas(p, porUnidad) {
+  return lineasMovimiento(p, porUnidad,
+    Number(p?.entrada_botellas_medidas) || 0, Number(p?.entrada_granel_medidas) || 0);
+}
+
+// Lo que salió ese día: por notas (venta menos lo devuelto, siempre de
+// botellas) más las salidas manuales de Inventario (merma, dañado…). Lo
+// devuelto puede dejarlo en negativo; se lee como 0.
+export function lineasSalidas(p, porUnidad) {
+  const bot = (Number(p?.vendido_medidas) || 0) + (Number(p?.salida_botellas_medidas) || 0);
+  return lineasMovimiento(p, porUnidad, Math.max(0, bot), Number(p?.salida_granel_medidas) || 0);
 }
 
 // Nombre del producto con lo que lo distingue de otro que se llame igual: el

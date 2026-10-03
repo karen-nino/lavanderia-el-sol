@@ -704,6 +704,19 @@ export const getReporteDiario = async (req, res) => {
             WHERE m.producto_id = p.id AND m.tipo = 'entrada' AND m.destino = 'granel'
               AND m.created_at >= bounds.inicio AND m.created_at < bounds.cierre
          ), 0) AS entrada_granel_medidas,
+         -- Salidas manuales del día (Inventario → Salidas: merma, dañado…),
+         -- que la columna Salidas suma a lo que salió por notas (2026-10-03).
+         -- Van separadas por dónde salieron, como las entradas.
+         COALESCE((
+           SELECT SUM(m.cantidad_medidas) FROM producto_movimientos m, bounds
+            WHERE m.producto_id = p.id AND m.tipo = 'salida' AND m.destino = 'botellas'
+              AND m.created_at >= bounds.inicio AND m.created_at < bounds.cierre
+         ), 0) AS salida_botellas_medidas,
+         COALESCE((
+           SELECT SUM(m.cantidad_medidas) FROM producto_movimientos m, bounds
+            WHERE m.producto_id = p.id AND m.tipo = 'salida' AND m.destino = 'granel'
+              AND m.created_at >= bounds.inicio AND m.created_at < bounds.cierre
+         ), 0) AS salida_granel_medidas,
          -- Devuelto ese día (ventas anuladas), para poder explicarlo aparte.
          COALESCE((
            SELECT SUM(m.cantidad_medidas) FROM producto_movimientos m, bounds
@@ -754,6 +767,8 @@ export const getReporteDiario = async (req, res) => {
         devuelto_medidas:    int(r.devuelto_medidas),
         entrada_botellas_medidas: int(r.entrada_botellas_medidas),
         entrada_granel_medidas:   int(r.entrada_granel_medidas),
+        salida_botellas_medidas:  int(r.salida_botellas_medidas),
+        salida_granel_medidas:    int(r.salida_granel_medidas),
         // La existencia no puede ser negativa; se acota a 0 por si hay datos raros.
         fin_botellas_medidas: Math.max(0, int(r.stock_actual) - int(r.efecto_botellas_post)),
         fin_granel_medidas:   Math.max(0, int(r.stock_granel_medidas) - int(r.efecto_granel_post)),

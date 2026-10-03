@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { esAdmin as esAdminFn } from '../lib/roles';
-import { textoBotellas, textoGranel as textoGranelFmt, lineasEntradas } from '../lib/formatoInventario';
+import { textoBotellas, textoGranel as textoGranelFmt, lineasEntradas, lineasSalidas } from '../lib/formatoInventario';
 import { imprimirReporte, descargarReporteCSV } from '../lib/exportReporteInventario';
 import SucursalBar from '../components/SucursalBar';
 import Selector from '../components/Selector';
@@ -1405,9 +1405,10 @@ function ReporteDiario() {
                       ))}
                     </td>
                     <td className="px-4 py-3 text-gray-700">
-                      <span className="block">
-                        {textoBotellas(p.vendido_medidas, p.medidas_por_botella, { marca: esMarca })}
-                      </span>
+                      {/* Por notas más las salidas manuales (merma, dañado…). */}
+                      {lineasSalidas(p, esMarca).map((l, i) => (
+                        <span key={i} className={`block ${i > 0 ? 'text-gray-500' : ''}`}>{l}</span>
+                      ))}
                       {/* Ventas anuladas ese día: el producto volvió al estante,
                           así que ya viene restado de la línea de arriba. Se dice
                           aparte para que nadie lo lea como una venta perdida. */}
