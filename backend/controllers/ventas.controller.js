@@ -166,10 +166,11 @@ export async function getResumen(req, res) {
           -- encendidas: [{ nombre, cargas, segundos }]. Cuenta las cargas
           -- (nota_cargas) donde aparece cada máquina, incluidas las ya
           -- desvinculadas (*_usada_id). "segundos" suma las pasadas que se
-          -- finalizaron (mig. 140); NULL si ninguna lo tiene sellado.
+          -- finalizaron (mig. 140); NULL si ninguna lo tiene sellado. "tope"
+          -- dice si alguna llegó al tope del cronómetro (mig. 141).
           COALESCE((
             SELECT json_agg(json_build_object('nombre', t.nombre, 'cargas', t.cargas,
-                                              'segundos', t.segundos) ORDER BY t.nombre)
+                                              'segundos', t.segundos, 'tope', t.tope) ORDER BY t.nombre)
               FROM (
                 SELECT mm.nombre, COUNT(*)::int AS cargas,
                        (SELECT ROUND(SUM(EXTRACT(EPOCH FROM ncm.finalizada_at - ncm.encendida_at)))::int
@@ -179,6 +180,12 @@ export async function getResumen(req, res) {
                            AND ncm.maquina_id = mm.id
                            AND ncm.encendida_at IS NOT NULL
                            AND ncm.finalizada_at IS NOT NULL) AS segundos
+                       ,EXISTS (SELECT 1
+                          FROM nota_carga_maquinas ncm
+                          JOIN nota_cargas c2 ON c2.id = ncm.carga_id
+                         WHERE c2.nota_id = o.id
+                           AND ncm.maquina_id = mm.id
+                           AND ncm.llego_tope) AS tope
                   FROM nota_cargas nc
                   JOIN maquinas mm
                     ON mm.id = ANY(ARRAY[nc.lavadora_id, nc.secadora_id,

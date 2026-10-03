@@ -1225,13 +1225,23 @@ async function registrarMaquinaEnCarga(client, cargaId, slot, maquinaId, modo = 
 // la máquina no lo tiene (quedó en uso sin arrancar por aquí), se cae al
 // arranque de la carga. Solo toca la ÚLTIMA pasada de cada carga, y solo si es
 // de esta máquina y no estaba sellada.
+//
+// Con cronómetro el reloj se para en el tope (mig. 141): si ya se cumplió, el
+// corte le quitó la luz ahí, así que el fin es el del tope y no el del clic.
 async function sellarFinDePasada(client, notaId, slot, maquinaId) {
   const col = slot === 'secadora' ? 'secadora' : 'lavadora';
   await client.query(
     `UPDATE nota_carga_maquinas ncm
-        SET encendida_at  = COALESCE(m.en_uso_desde, nc.${col}_iniciada_at),
-            finalizada_at = NOW()
-       FROM nota_cargas nc, maquinas m
+        SET encendida_at  = t.inicio,
+            llego_tope    = COALESCE(t.inicio + t.tope <= NOW(), FALSE),
+            finalizada_at = CASE WHEN t.inicio + t.tope <= NOW()
+                                 THEN t.inicio + t.tope ELSE NOW() END
+       FROM nota_cargas nc, maquinas m,
+            LATERAL (
+              SELECT COALESCE(m.en_uso_desde, nc.${col}_iniciada_at) AS inicio,
+                     CASE WHEN ${esCronometroSql('m')} AND m.ciclo_minutos > 0
+                          THEN make_interval(mins => m.ciclo_minutos) END AS tope
+            ) t
       WHERE nc.nota_id = $1
         AND nc.${col}_id = $3
         AND m.id = $3

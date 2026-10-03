@@ -60,6 +60,7 @@ const MAQUINAS_VISIBLES = 2;
 
 // Cuánto estuvo encendida una máquina de la nota, de que arrancó a que se le
 // dio Finalizar: "38 min", "1 h 05 min". Null si no se finalizó por ahí.
+// Si llegó al tope del cronómetro, el tiempo se paró ahí y se dice.
 const fmtEncendida = (segundos) => {
   if (segundos == null) return null;
   const min = Math.max(0, Math.round(segundos / 60));
@@ -868,7 +869,9 @@ export default function Ventas() {
                     {m.nombre}
                   </span>
                   <span className="text-right text-gray-500">
-                    {fmtEncendida(m.segundos) ?? <span className="text-gray-400">—</span>}
+                    {fmtEncendida(m.segundos) == null
+                      ? <span className="text-gray-400">—</span>
+                      : m.tope ? `Tope de tiempo · ${fmtEncendida(m.segundos)}` : fmtEncendida(m.segundos)}
                   </span>
                 </li>
               ))}
