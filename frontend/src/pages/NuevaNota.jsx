@@ -2524,14 +2524,6 @@ export default function NuevaNota() {
             </div>
             )}
 
-            {/* Asignar no aparta la máquina: se la queda quien le dé a Iniciar
-                primero, y eso pasa en Salidas. Se dice aquí para que nadie
-                cuente con una máquina que otro puede arrancar antes. */}
-            {cargasAuto.length > 0 && (
-              <p className="text-xs text-gray-400 mt-1.5">
-                Quedan asignadas; se inician en Salidas.
-              </p>
-            )}
           </div>
 
           <Separador />
