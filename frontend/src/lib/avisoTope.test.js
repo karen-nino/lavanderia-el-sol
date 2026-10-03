@@ -13,12 +13,17 @@ describe('clavesEnTope', () => {
   it('no cuenta la que aún no llega', () => {
     expect(clavesEnTope([maq({ en_uso_desde: hace(30) })], ahora)).toEqual([]);
   });
-  it('ignora la que no es cronómetro, la libre y la encendida a mano', () => {
+  it('ignora la libre y la encendida a mano sin nota', () => {
     expect(clavesEnTope([
-      maq({ en_uso_desde: hace(90), cronometro: false }),
       maq({ en_uso_desde: hace(90), estado: 'disponible' }),
       maq({ en_uso_desde: hace(90), encendida_manual_at: hace(90) }),
     ], ahora)).toEqual([]);
+  });
+  it('temporizador: cuenta el ciclo terminado solo si una nota usa la máquina', () => {
+    const conNota = maq({ cronometro: false, ciclo_minutos: 45, en_uso_desde: hace(46), en_uso_nota_id: 7 });
+    expect(clavesEnTope([conNota], ahora)).toEqual([`1:${conNota.en_uso_desde}`]);
+    expect(clavesEnTope([maq({ cronometro: false, ciclo_minutos: 45, en_uso_desde: hace(46) })], ahora)).toEqual([]);
+    expect(clavesEnTope([maq({ cronometro: false, ciclo_minutos: 45, en_uso_desde: hace(20), en_uso_nota_id: 7 })], ahora)).toEqual([]);
   });
 });
 

@@ -1,11 +1,15 @@
-// Aviso de tope del cronómetro en TODA la app (2026-10-03).
+// Aviso sonoro de máquina en TODA la app (2026-10-03): suena en cualquier
+// pantalla, no solo en Máquinas, porque el empleado puede estar haciendo una
+// nota. Cubre los dos modos:
 //
-// Con cronómetro, la máquina no tiene "ciclo terminado": cuenta hacia arriba
-// hasta que alguien la finaliza, y si nadie lo hace, al llegar a su tope el
-// corte le quita la luz. Ese momento tiene que oírse, y no solo con la
-// pantalla de Máquinas abierta: el empleado puede estar haciendo una nota.
+//   · Cronómetro: cuenta hacia arriba hasta que alguien la finaliza; si nadie
+//     lo hace, al llegar a su tope el corte le quita la luz. Suena ahí.
+//   · Temporizador (MAQUINAS_CRONOMETRO=off): suena cuando el ciclo de una
+//     máquina con nota termina —la tarjeta pasa a verde—. Antes este aviso
+//     vivía solo en la pantalla de Máquinas (MaquinasEnUso).
 //
-// Lo que suena es el mismo aviso del temporizador (avisoSonoro.js).
+// En los dos casos el momento es el mismo: se cumplieron los minutos sellados
+// al arrancar (`ciclo_minutos`). Lo que suena es avisoSonoro.js.
 import { useEffect, useRef, useState } from 'react';
 import { api } from './api';
 import { prepararAviso, reproducirAvisoCiclo } from './avisoSonoro';
@@ -13,14 +17,16 @@ import { prepararAviso, reproducirAvisoCiclo } from './avisoSonoro';
 const REFRESCO_MS = 30_000; // cada cuánto se vuelve a pedir la lista de máquinas
 const REVISION_MS = 5_000;  // cada cuánto se compara con el reloj
 
-// Máquinas que ya llegaron a su tope, como claves "id:en_uso_desde": la misma
-// máquina en otro encendido es otra clave, así que vuelve a sonar.
-// Solo cronómetro, en uso y con tope; una encendida a mano sin nota no tiene
-// carga que cuidar.
+// Máquinas que ya cumplieron su tiempo, como claves "id:en_uso_desde": la
+// misma máquina en otro encendido es otra clave, así que vuelve a sonar.
+// En uso y con minutos sellados. Una encendida a mano sin nota no tiene carga
+// que cuidar; el temporizador, además, solo avisa si una nota la usa (es la
+// tarjeta verde de "terminar ciclo").
 export function clavesEnTope(maquinas, ahora = Date.now()) {
   return (maquinas ?? [])
-    .filter(m => m.cronometro && m.estado === 'en_uso' && m.en_uso_desde
-      && Number(m.ciclo_minutos) > 0 && !m.encendida_manual_at)
+    .filter(m => m.estado === 'en_uso' && m.en_uso_desde && Number(m.ciclo_minutos) > 0)
+    .filter(m => !(m.encendida_manual_at && !m.en_uso_nota_id))
+    .filter(m => m.cronometro || m.en_uso_nota_id)
     .filter(m => new Date(m.en_uso_desde).getTime() + Number(m.ciclo_minutos) * 60_000 <= ahora)
     .map(m => `${m.id}:${m.en_uso_desde}`);
 }

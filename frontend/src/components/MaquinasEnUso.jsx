@@ -1,9 +1,8 @@
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import MachineCard from './MachineCard';
 import MaquinaCicloOverlay from './MaquinaCicloOverlay';
-import { prepararAviso, reproducirAvisoCiclo } from '../lib/avisoSonoro';
 import ElegirTiempoModal from './ElegirTiempoModal';
 import { preguntaTiempo, tiemposDeMaquina } from '../lib/tiemposModelo';
 import { marcaYTamano } from '../lib/estadoMaquina';
@@ -461,27 +460,9 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
     );
   };
 
-  // Máquinas que ya terminaron su ciclo y están esperando a que alguien las
-  // atienda (la tarjeta verde con Iniciar Secado o Finalizar Carga).
-  const idsTerminadas = maquinasEnUso
-    .filter(m => datosDeCiclo(m).maquina.necesita_terminar_ciclo)
-    .map(m => String(m.id));
-  const claveTerminadas = idsTerminadas.join(',');
-  // `null` hasta la primera vuelta: al abrir la pantalla no suena por lo que ya
-  // estaba terminado, solo por lo que termina con la pantalla abierta.
-  const avisadasRef = useRef(null);
-
-  useEffect(() => { prepararAviso(); }, []);
-
-  useEffect(() => {
-    const previas = avisadasRef.current;
-    const actuales = new Set(idsTerminadas);
-    if (previas && idsTerminadas.some(id => !previas.has(id))) reproducirAvisoCiclo();
-    avisadasRef.current = actuales;
-    // `claveTerminadas` resume la lista: el efecto corre cuando cambia quién
-    // está terminado, no en cada tic del reloj.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [claveTerminadas]);
+  // El aviso sonoro de "ciclo terminado" ya no vive aquí: suena en cualquier
+  // pantalla desde el Layout (lib/avisoTope.js), para el temporizador y para
+  // el tope del cronómetro (2026-10-03).
 
   // Un carrusel horizontal por tipo, con conteo "en uso/total" en el título.
   const renderCarrusel = (titulo, enUso, total) => (
