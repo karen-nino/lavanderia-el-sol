@@ -3,6 +3,7 @@ import { etiquetaEstadoNota } from '../lib/estadoNota';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import SucursalBar from '../components/SucursalBar';
+import { fmtEncendidaConTope } from '../lib/tiempoEncendida';
 
 const fmtMoneda = (n) =>
   '$' + Number(n ?? 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -166,7 +167,10 @@ function MetricaModal({ metrica, fecha, count, items, onClose }) {
             ))
           ) : metrica === 'cargas' ? (
             items.map((c, i) => (
-              <FilaModal key={i} left={c.descripcion} sub={c.folio ? `Nota ${c.folio}` : null}
+              <FilaModal key={i} left={c.descripcion}
+                // Nota y cuánto estuvo encendida en ese ciclo (si se finalizó).
+                sub={[c.folio ? `Nota ${c.folio}` : null, fmtEncendidaConTope(c.segundos, c.tope)]
+                  .filter(Boolean).join(' · ') || null}
                 right={fmtMoneda(c.precio)} />
             ))
           ) : metrica === 'empleados' ? (

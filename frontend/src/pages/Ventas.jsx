@@ -3,6 +3,7 @@ import { etiquetaEstadoNota } from '../lib/estadoNota';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import { formaPagoLabel } from '../lib/formasPago';
+import { fmtEncendidaConTope } from '../lib/tiempoEncendida';
 import { formatHora12, formatFechaHora12 } from '../lib/fecha';
 import { imprimirVentas, descargarVentasCSV } from '../lib/exportVentas';
 import SucursalBar from '../components/SucursalBar';
@@ -57,18 +58,6 @@ const NOTAS_POR_PAGINA = 20;
 // Cuántas máquinas se muestran en la celda antes de resumir con "+N" (que abre
 // el modal con la lista completa).
 const MAQUINAS_VISIBLES = 2;
-
-// Cuánto estuvo encendida una máquina de la nota, de que arrancó a que se le
-// dio Finalizar: "38 min", "1 h 05 min". Null si no se finalizó por ahí.
-// Si llegó al tope del cronómetro, el tiempo se paró ahí y se dice.
-const fmtEncendida = (segundos) => {
-  if (segundos == null) return null;
-  // Menos de un minuto se lee "-1 min" ("menos de 1"), no "0 min".
-  if (segundos < 60) return '-1 min';
-  const min = Math.round(segundos / 60);
-  if (min < 60) return `${min} min`;
-  return `${Math.floor(min / 60)} h ${String(min % 60).padStart(2, '0')} min`;
-};
 
 // Forma de pago de una nota con abonos. Si se pagó con más de una forma
 // (efectivo y luego transferencia) dice "Varios" y el detalle está al tocarla;
@@ -874,9 +863,7 @@ export default function Ventas() {
                     {m.nombre}
                   </span>
                   <span className="text-right text-gray-500">
-                    {fmtEncendida(m.segundos) == null
-                      ? <span className="text-gray-400">—</span>
-                      : m.tope ? `Tope de tiempo · ${fmtEncendida(m.segundos)}` : fmtEncendida(m.segundos)}
+                    {fmtEncendidaConTope(m.segundos, m.tope) ?? <span className="text-gray-400">—</span>}
                   </span>
                 </li>
               ))}

@@ -274,7 +274,8 @@ export const getUsoMaquina = async (req, res) => {
     // Una pasada cuenta si la máquina arrancó: tiene su encendido sellado
     // (mig. 140) o la carga arrancó ese hueco (mig. 097).
     const PASADAS_DE_LA_MAQUINA = `
-      SELECT ncm.id, ncm.carga_id, ncm.slot, ncm.asignada_at, nc.nota_id
+      SELECT ncm.id, ncm.carga_id, ncm.slot, ncm.asignada_at, nc.nota_id,
+             ncm.encendida_at, ncm.finalizada_at, ncm.llego_tope
         FROM nota_carga_maquinas ncm
         JOIN nota_cargas nc ON nc.id = ncm.carga_id
        WHERE ncm.maquina_id = $1
@@ -320,12 +321,31 @@ export const getUsoMaquina = async (req, res) => {
                           ELSE aj.precio_carga_mediana
                         END
               END AS precio,
+              -- Cuánto estuvo encendida en este ciclo (migs. 140-141). Si aún
+              -- no se finaliza pero ya pasó su tope, el reloj se paró ahí y se
+              -- cuenta en vivo, como en Ventas.
+              p.finalizada_at IS NULL AND vivo.al_tope AS tope_vivo,
+              CASE WHEN p.finalizada_at IS NOT NULL
+                   THEN ROUND(EXTRACT(EPOCH FROM p.finalizada_at - p.encendida_at))::int
+                   WHEN vivo.al_tope THEN mx.ciclo_minutos * 60
+              END AS segundos,
+              p.llego_tope OR (p.finalizada_at IS NULL AND vivo.al_tope) AS tope,
               ml.nombre AS lav_nombre, ms.nombre AS sec_nombre
          FROM (${PASADAS_DE_LA_MAQUINA}) p
          JOIN nota_cargas nc ON nc.id = p.carga_id
          JOIN notas n ON n.id = nc.nota_id
          JOIN maquinas mx ON mx.id = $1
          LEFT JOIN ajustes aj ON aj.id = 1
+         -- ¿Esta pasada sigue corriendo y ya cumplió el tope del cronómetro?
+         CROSS JOIN LATERAL (
+           SELECT COALESCE(
+                    mx.en_uso_desde IS NOT NULL
+                    AND mx.ciclo_minutos > 0
+                    AND ${esCronometroSql('mx')}
+                    AND mx.en_uso_desde + make_interval(mins => mx.ciclo_minutos) <= NOW()
+                    AND (CASE WHEN p.slot = 'lavadora' THEN nc.lavadora_id ELSE nc.secadora_id END) = $1,
+                  FALSE) AS al_tope
+         ) vivo
          LEFT JOIN maquinas ml ON ml.id = COALESCE(nc.lavadora_id, nc.lavadora_usada_id)
          LEFT JOIN maquinas ms ON ms.id = COALESCE(nc.secadora_id, nc.secadora_usada_id)
         WHERE n.estado <> 'CANCELADA'
@@ -388,6 +408,8 @@ export const getUsoMaquina = async (req, res) => {
         folio: n.folio,
         descripcion: partes.join(' + ') || maq[0].nombre,
         precio: Number(c.precio) || 0,
+        segundos: c.segundos,
+        tope: Boolean(c.tope),
       });
     }
 
