@@ -24,8 +24,9 @@ describe('EmpleadoEditModal', () => {
     render(<EmpleadoEditModal empleado={operador} sucursales={sucursales} onClose={() => {}} onSaved={() => {}} />);
     expect(screen.getByPlaceholderText('Nombre')).toHaveValue('Juan');
     expect(screen.getByPlaceholderText('Apellido')).toHaveValue('Pérez');
-    // Hay 2 selects: rol y sucursal.
-    expect(screen.getAllByRole('combobox')).toHaveLength(2);
+    // Hay 2 selectores: rol y sucursal, cada uno con lo que tiene elegido.
+    expect(screen.getByRole('button', { name: 'Rol: Empleado' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Sucursal: Centro' })).toBeInTheDocument();
   });
 
   it('al guardar sin cambiar el rol, el payload no incluye rol ni password', async () => {
@@ -45,10 +46,11 @@ describe('EmpleadoEditModal', () => {
     api.patch.mockResolvedValue({});
     render(<EmpleadoEditModal empleado={operador} sucursales={sucursales} onClose={() => {}} onSaved={() => {}} />);
 
-    // Cambiar el rol a admin (el primer combobox es el de rol).
-    await userEvent.selectOptions(screen.getAllByRole('combobox')[0], 'admin');
-    // Ahora solo queda el select de rol (la sucursal desaparece).
-    expect(screen.getAllByRole('combobox')).toHaveLength(1);
+    // Cambiar el rol a admin: se abre la ventana del rol y se toca la opción.
+    await userEvent.click(screen.getByRole('button', { name: /^Rol:/ }));
+    await userEvent.click(screen.getByRole('option', { name: 'Admin' }));
+    // La sucursal desaparece.
+    expect(screen.queryByRole('button', { name: /^Sucursal:/ })).toBeNull();
 
     await userEvent.click(screen.getByRole('button', { name: 'Guardar cambios' }));
     expect(api.patch).toHaveBeenCalledWith('/usuarios/7', {
@@ -67,7 +69,8 @@ describe('EmpleadoEditModal', () => {
     useAuth.mockReturnValue({ usuario: { id: 3, rol: 'admin' } });
     const propioAdmin = { id: 3, nombre: 'Yo', apellido: '', rol: 'admin', sucursal: '' };
     render(<EmpleadoEditModal empleado={propioAdmin} sucursales={sucursales} onClose={() => {}} onSaved={() => {}} />);
-    // Como es admin, solo hay un combobox (rol) y está deshabilitado.
-    expect(screen.getByRole('combobox')).toBeDisabled();
+    // Como es admin, solo está el selector de rol, y deshabilitado.
+    expect(screen.getByRole('button', { name: /^Rol:/ })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: /^Sucursal:/ })).toBeNull();
   });
 });

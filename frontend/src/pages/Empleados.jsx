@@ -9,6 +9,7 @@ import EmpleadoDeleteModal from '../components/EmpleadoDeleteModal';
 import NombreEmpleado from '../components/NombreEmpleado';
 import { empleadoVisible, marcarComoPrueba } from '../lib/empleados';
 import { ES_DEMO } from '../lib/entorno';
+import Selector from '../components/Selector';
 
 const INPUT_CLS =
   'w-full px-4 py-3.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent transition';
@@ -342,10 +343,17 @@ export default function Empleados() {
             <form onSubmit={handleSubmit} className="p-5 space-y-4 overflow-y-auto">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">Rol</label>
-                <select name="rol" value={form.rol} onChange={handleChange} className={`${INPUT_CLS} bg-white`}>
-                  <option value="operador">Empleado</option>
-                  <option value="admin">Admin</option>
-                </select>
+                <Selector
+                  claseCampo={INPUT_CLS}
+                  valor={form.rol}
+                  onChange={v => handleChange({ target: { name: 'rol', value: v } })}
+                  titulo="Rol"
+                  etiquetaAria="Rol"
+                  opciones={[
+                    { valor: 'operador', etiqueta: 'Empleado' },
+                    { valor: 'admin', etiqueta: 'Admin' },
+                  ]}
+                />
               </div>
               {/* Un administrador es global: no se liga a una sucursal. */}
               {!esAdminFn(form.rol) && (
@@ -353,12 +361,16 @@ export default function Empleados() {
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">
                     Sucursal <span className="text-red-500">*</span>
                   </label>
-                  <select name="sucursal" required value={form.sucursal} onChange={handleChange} className={`${INPUT_CLS} bg-white`}>
-                    <option value="" disabled>Selecciona una sucursal</option>
-                    {sucursales.map(s => (
-                      <option key={s.slug} value={s.slug}>{s.nombre}</option>
-                    ))}
-                  </select>
+                  <Selector
+                    claseCampo={INPUT_CLS}
+                    requerido
+                    valor={form.sucursal}
+                    onChange={v => handleChange({ target: { name: 'sucursal', value: v } })}
+                    marcador="Selecciona una sucursal"
+                    titulo="Sucursal"
+                    etiquetaAria="Sucursal"
+                    opciones={sucursales.map(s => ({ valor: s.slug, etiqueta: s.nombre }))}
+                  />
                 </div>
               )}
               <div>

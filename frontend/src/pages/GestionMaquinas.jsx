@@ -6,6 +6,7 @@ import { esAdmin as esAdminFn } from '../lib/roles';
 import { estadoVisual, contarPorEstado, filtrarPorEstado } from '../lib/estadoMaquina';
 import SucursalBar from '../components/SucursalBar';
 import ConfirmacionModal from '../components/ConfirmacionModal';
+import Selector from '../components/Selector';
 
 const ESTADO_CFG = {
   disponible:    { label: 'Disponible',    cls: 'bg-green-100 text-green-700', clsActive: 'bg-green-600 text-white', dot: 'bg-green-500' },
@@ -817,11 +818,13 @@ export default function GestionMaquinas() {
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
                   Tipo <span className="text-red-500">*</span>
                 </label>
-                <select name="tipo" value={form.tipo} onChange={handleCambioConModelo} className={INPUT_CLS}>
-                  {TIPOS.map(t => (
-                    <option key={t.v} value={t.v}>{t.label}</option>
-                  ))}
-                </select>
+                <Selector
+                  claseCampo={INPUT_CLS}
+                  valor={form.tipo}
+                  onChange={v => handleCambioConModelo({ target: { name: 'tipo', value: v } })}
+                  titulo="Tipo"
+                  opciones={TIPOS.map(t => ({ valor: t.v, etiqueta: t.label }))}
+                />
               </div>
 
               {/* La secadora también se da de alta con tamaño: su precio de
@@ -831,22 +834,26 @@ export default function GestionMaquinas() {
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
                   Tamaño <span className="text-red-500">*</span>
                 </label>
-                <select name="tamano" value={form.tamano} onChange={handleCambioConModelo} className={INPUT_CLS}>
-                  {TAMANOS.map(t => (
-                    <option key={t.v} value={t.v}>{t.label}</option>
-                  ))}
-                </select>
+                <Selector
+                  claseCampo={INPUT_CLS}
+                  valor={form.tamano}
+                  onChange={v => handleCambioConModelo({ target: { name: 'tamano', value: v } })}
+                  titulo="Tamaño"
+                  opciones={TAMANOS.map(t => ({ valor: t.v, etiqueta: t.label }))}
+                />
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
                   Capacidad <span className="text-red-500">*</span>
                 </label>
-                <select name="capacidad" value={form.capacidad} onChange={handleChange} className={INPUT_CLS}>
-                  {CAPACIDADES.map(c => (
-                    <option key={c.v} value={c.v}>{c.label}</option>
-                  ))}
-                </select>
+                <Selector
+                  claseCampo={INPUT_CLS}
+                  valor={form.capacidad}
+                  onChange={v => handleChange({ target: { name: 'capacidad', value: v } })}
+                  titulo="Capacidad"
+                  opciones={CAPACIDADES.map(c => ({ valor: c.v, etiqueta: c.label }))}
+                />
               </div>
 
               {/* Marca y modelo: los dos son catálogos elegibles (migs. 106 y
@@ -862,19 +869,21 @@ export default function GestionMaquinas() {
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
                   Marca <span className="text-red-500">*</span>
                 </label>
-                <select
-                  name="marca" value={form.marca} onChange={handleCambioConModelo}
-                  required className={INPUT_CLS}
-                >
-                  <option value="">Elige una marca</option>
-                  {/* Una marca desactivada o escrita antes del catálogo sigue
-                      apareciendo mientras sea la de esta máquina: si no,
-                      editarla por cualquier otra cosa se la borraría sin aviso. */}
-                  {marcaFueraDeLista && <option value={form.marca}>{form.marca}</option>}
-                  {marcasVisibles.map(m => (
-                    <option key={m.id} value={m.nombre}>{m.nombre}</option>
-                  ))}
-                </select>
+                {/* Una marca desactivada o escrita antes del catálogo sigue
+                    apareciendo mientras sea la de esta máquina: si no,
+                    editarla por cualquier otra cosa se la borraría sin aviso. */}
+                <Selector
+                  claseCampo={INPUT_CLS}
+                  requerido
+                  valor={form.marca}
+                  onChange={v => handleCambioConModelo({ target: { name: 'marca', value: v } })}
+                  marcador="Elige una marca"
+                  titulo="Marca"
+                  opciones={[
+                    ...(marcaFueraDeLista ? [{ valor: form.marca, etiqueta: form.marca }] : []),
+                    ...marcasVisibles.map(m => ({ valor: m.nombre, etiqueta: m.nombre })),
+                  ]}
+                />
               </div>
 
               <div>
@@ -889,17 +898,19 @@ export default function GestionMaquinas() {
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
                   Modelo <span className="text-red-500">*</span>
                 </label>
-                <select
-                  name="modelo" value={form.modelo} onChange={handleChange}
-                  disabled={modeloBloqueado} required
-                  className={`${INPUT_CLS} disabled:bg-gray-50 disabled:text-gray-400`}
-                >
-                  <option value="">Elige un modelo</option>
-                  {modeloFueraDeLista && <option value={form.modelo}>{form.modelo}</option>}
-                  {modelosVisibles.map(mo => (
-                    <option key={mo.id} value={mo.nombre}>{mo.nombre}</option>
-                  ))}
-                </select>
+                <Selector
+                  claseCampo={INPUT_CLS}
+                  requerido
+                  deshabilitado={modeloBloqueado}
+                  valor={form.modelo}
+                  onChange={v => handleChange({ target: { name: 'modelo', value: v } })}
+                  marcador="Elige un modelo"
+                  titulo="Modelo"
+                  opciones={[
+                    ...(modeloFueraDeLista ? [{ valor: form.modelo, etiqueta: form.modelo }] : []),
+                    ...modelosVisibles.map(mo => ({ valor: mo.nombre, etiqueta: mo.nombre })),
+                  ]}
+                />
                 <p className="text-xs text-gray-400 mt-1">
                   {!form.marca
                     ? 'Elige primero la marca.'

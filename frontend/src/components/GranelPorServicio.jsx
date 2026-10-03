@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
+import Selector from './Selector';
 
 // Granel de cada servicio Por Encargo, en Salidas (migs. 132-134).
 //
@@ -136,22 +137,24 @@ export default function GranelPorServicio({ nota, puedeEditar, onCambio }) {
                     <div className="flex items-center gap-2">
                       {/* El producto: lo que queda va entre paréntesis y el que
                           no alcanza para las medidas no se puede elegir. */}
-                      <select
-                        value={elegido ?? ''}
-                        onChange={(e) => e.target.value && guardar(c, r.tipoId, Number(e.target.value), r.cantidad)}
-                        disabled={bloqueado}
-                        aria-label={`${nombreTipo(r.tipoId)} de ${etiqueta}`}
-                        className={`flex-1 min-w-0 px-3 py-2.5 border rounded-lg bg-white text-sm text-gray-900 disabled:bg-gray-50 disabled:text-gray-500 ${
-                          r.producto ? 'border-gray-300' : 'border-amber-300'
-                        }`}
-                      >
-                        {!r.producto && <option value="">Elegir…</option>}
-                        {opciones.map(p => (
-                          <option key={p.id} value={p.id} disabled={elegido !== p.id && quedanDe(p) < r.cantidad}>
-                            {p.nombre} ({quedanDe(p) > 0 ? quedanDe(p) : 'agotado'})
-                          </option>
-                        ))}
-                      </select>
+                      <Selector
+                        className="flex-1 min-w-0"
+                        claseCampo="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm"
+                        valor={elegido ?? ''}
+                        onChange={(v) => guardar(c, r.tipoId, Number(v), r.cantidad)}
+                        deshabilitado={bloqueado}
+                        alerta={!r.producto}
+                        marcador="Elegir…"
+                        etiquetaAria={`${nombreTipo(r.tipoId)} de ${etiqueta}`}
+                        titulo={`${nombreTipo(r.tipoId)} · ${etiqueta}`}
+                        opciones={opciones.map(p => ({
+                          valor: p.id,
+                          etiqueta: p.nombre,
+                          // Lo que queda, en medidas; el que no alcanza no se elige.
+                          detalle: quedanDe(p) > 0 ? `quedan ${quedanDe(p)}` : 'agotado',
+                          deshabilitado: elegido !== p.id && quedanDe(p) < r.cantidad,
+                        }))}
+                      />
                       {/* Las medidas: del que está por elegir o del ya elegido. */}
                       <div className="flex items-center gap-1.5 flex-shrink-0">
                         <button

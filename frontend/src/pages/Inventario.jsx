@@ -6,6 +6,7 @@ import { esAdmin as esAdminFn } from '../lib/roles';
 import { textoBotellas, textoGranel as textoGranelFmt } from '../lib/formatoInventario';
 import { imprimirReporte, descargarReporteCSV } from '../lib/exportReporteInventario';
 import SucursalBar from '../components/SucursalBar';
+import Selector from '../components/Selector';
 
 const INPUT_CLS =
   'w-full px-4 py-3.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent transition';
@@ -474,10 +475,14 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = 
               </label>
               {esGranel ? (
                 <>
-                  <select name="nombre" required value={form.nombre} onChange={handleChange} className={INPUT_CLS}>
-                    <option value="">Seleccionar...</option>
-                    {granelOptions.map(g => <option key={g} value={g}>{g}</option>)}
-                  </select>
+                  <Selector
+                    claseCampo={INPUT_CLS}
+                    requerido
+                    valor={form.nombre}
+                    onChange={v => handleChange({ target: { name: 'nombre', value: v } })}
+                    titulo="Granel"
+                    opciones={granelOptions.map(g => ({ valor: g, etiqueta: g }))}
+                  />
                   {granelOptions.length === 0 && (
                     <p className="text-xs text-gray-400 mt-1">
                       Todavía no hay graneles. Se agregan en Ajustes → Inventario.
@@ -527,12 +532,18 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = 
               <label className="block text-sm font-medium text-gray-700 mb-1.5">
                 Tipo de granel
               </label>
-              <select name="tipo_granel_id" value={form.tipo_granel_id} onChange={handleChange} className={INPUT_CLS}>
-                <option value="">Sin tipo</option>
-                {tiposGranel
-                  .filter(t => t.activo || String(t.id) === form.tipo_granel_id)
-                  .map(t => <option key={t.id} value={String(t.id)}>{t.nombre}</option>)}
-              </select>
+              <Selector
+                claseCampo={INPUT_CLS}
+                valor={form.tipo_granel_id}
+                onChange={v => handleChange({ target: { name: 'tipo_granel_id', value: v } })}
+                titulo="Tipo de granel"
+                opciones={[
+                  { valor: '', etiqueta: 'Sin tipo' },
+                  ...tiposGranel
+                    .filter(t => t.activo || String(t.id) === form.tipo_granel_id)
+                    .map(t => ({ valor: String(t.id), etiqueta: t.nombre })),
+                ]}
+              />
               <p className="text-xs text-gray-400 mt-1">
                 {form.tipo_granel_id === ''
                   ? 'Sin tipo no se ofrece en los servicios Por Encargo. Los tipos se administran en Ajustes → Inventario.'
@@ -547,10 +558,14 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = 
               <label className="block text-sm font-medium text-gray-700 mb-1.5">
                 Marca <span className="text-red-500">*</span>
               </label>
-              <select name="marca" required value={form.marca} onChange={handleChange} className={INPUT_CLS}>
-                <option value="">Seleccionar...</option>
-                {marcaOptions.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
+              <Selector
+                claseCampo={INPUT_CLS}
+                requerido
+                valor={form.marca}
+                onChange={v => handleChange({ target: { name: 'marca', value: v } })}
+                titulo="Marca"
+                opciones={marcaOptions.map(c => ({ valor: c, etiqueta: c }))}
+              />
             </div>
           )}
 
@@ -561,13 +576,17 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = 
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
                   Tamaño <span className="text-red-500">*</span>
                 </label>
-                <select name="tamano_bolsa" required value={bolsaElegida} onChange={handleChange} className={INPUT_CLS}>
-                  <option value="">Seleccionar...</option>
-                  {bolsaFuera && (
-                    <option value={form.tamano_bolsa}>{form.tamano_bolsa}</option>
-                  )}
-                  {bolsaOptions.map(o => <option key={o.v} value={o.v}>{o.label}</option>)}
-                </select>
+                <Selector
+                  claseCampo={INPUT_CLS}
+                  requerido
+                  valor={bolsaElegida}
+                  onChange={v => handleChange({ target: { name: 'tamano_bolsa', value: v } })}
+                  titulo="Tamaño de bolsa"
+                  opciones={[
+                    ...(bolsaFuera ? [{ valor: form.tamano_bolsa, etiqueta: form.tamano_bolsa }] : []),
+                    ...bolsaOptions.map(o => ({ valor: o.v, etiqueta: o.label })),
+                  ]}
+                />
                 {bolsaOptions.length === 0 && (
                   <p className="text-xs text-gray-400 mt-1">
                     Todavía no hay tamaños de bolsa. Se agregan en Ajustes → Inventario.
@@ -632,12 +651,14 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = 
                     value={form.bidon_valor} onChange={handleChange} placeholder="Ej. 20"
                     className={`${NUM_CLS} flex-1 min-w-0`}
                   />
-                  <select
-                    name="bidon_unidad" value={form.bidon_unidad} onChange={handleChange}
-                    className="w-28 flex-shrink-0 px-3 py-3.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent transition"
-                  >
-                    {UNIDADES_VOLUMEN.map(u => <option key={u} value={u}>{u}</option>)}
-                  </select>
+                  <Selector
+                    className="w-28 flex-shrink-0"
+                    claseCampo="w-full px-3 py-3.5 border border-gray-300 rounded-lg text-base"
+                    valor={form.bidon_unidad}
+                    onChange={v => handleChange({ target: { name: 'bidon_unidad', value: v } })}
+                    titulo="Unidad"
+                    opciones={UNIDADES_VOLUMEN.map(u => ({ valor: u, etiqueta: u }))}
+                  />
                 </div>
               </div>
             )}

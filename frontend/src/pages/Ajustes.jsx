@@ -9,6 +9,7 @@ import { esAdminMain as esAdminMainFn } from '../lib/roles';
 import { ES_DEMO } from '../lib/entorno';
 import { almacenSesion } from '../lib/sesion';
 import { COMODINES_WHATSAPP, armarMensajeWhatsapp } from '../lib/mensajeWhatsapp';
+import Selector from '../components/Selector';
 
 // El nombre del negocio y el logo se quedan fuera de la DEMO: son de la
 // configuración global, los comparten todos los visitantes a la vez y se quedan
@@ -396,13 +397,14 @@ function CatalogoEtiquetas({
     </label>
   ) : (
     <div key={campo.name} className="flex-1 min-w-0">
-      <select
-        value={valor ?? campo.defecto}
-        onChange={(e) => alCambiar(e.target.value)}
-        className={inputCls}
-      >
-        {campo.opciones.map(o => <option key={o.v} value={o.v}>{o.label}</option>)}
-      </select>
+      <Selector
+        claseCampo={inputCls}
+        valor={valor ?? campo.defecto}
+        onChange={alCambiar}
+        titulo={campo.label}
+        etiquetaAria={campo.label}
+        opciones={campo.opciones.map(o => ({ valor: o.v, etiqueta: o.label }))}
+      />
     </div>
   ));
 
@@ -784,17 +786,18 @@ function MarcasYModelos({ movil = false, onMensaje }) {
             <p className="text-sm text-gray-400">Primero agrega una marca.</p>
           ) : (
             <div className="space-y-3">
-              <select
-                value={marcaId}
-                onChange={(e) => setElegida(e.target.value)}
-                className={inputCls}
-              >
-                {marcas.map(m => (
-                  <option key={m.id} value={m.id}>
-                    {m.nombre}{m.activo ? '' : ' (desactivada)'}
-                  </option>
-                ))}
-              </select>
+              <Selector
+                claseCampo={inputCls}
+                valor={marcaId}
+                onChange={(v) => setElegida(String(v))}
+                titulo="Marca"
+                etiquetaAria="Marca de los modelos"
+                opciones={marcas.map(m => ({
+                  valor: String(m.id),
+                  etiqueta: m.nombre,
+                  detalle: m.activo ? null : 'desactivada',
+                }))}
+              />
               {/* La `key` es a propósito: al cambiar de marca se vacía el
                   formulario de alta y el renglón que se estaba editando. */}
               {marcaId && (
@@ -1905,15 +1908,15 @@ export default function Ajustes() {
         )}
 
         <Field label="Sucursal a editar">
-          <select
-            value={sucursalSel}
-            onChange={(e) => setSucursalSel(e.target.value)}
-            className={`${INPUT_CLS} bg-white`}
-          >
-            {sucursales.map((s) => (
-              <option key={s.slug} value={s.slug}>{s.nombre}{s.activa ? '' : ' (inactiva)'}</option>
-            ))}
-          </select>
+          <Selector
+            claseCampo={INPUT_CLS}
+            valor={sucursalSel}
+            onChange={setSucursalSel}
+            titulo="Sucursal a editar"
+            opciones={sucursales.map(s => ({
+              valor: s.slug, etiqueta: s.nombre, detalle: s.activa ? null : 'inactiva',
+            }))}
+          />
         </Field>
 
         {sucursalActual && (
@@ -2290,15 +2293,15 @@ export default function Ajustes() {
         )}
 
         <MobileField label="Sucursal a editar">
-          <select
-            value={sucursalSel}
-            onChange={(e) => setSucursalSel(e.target.value)}
-            className={`${MOBILE_INPUT_CLS} bg-white`}
-          >
-            {sucursales.map((s) => (
-              <option key={s.slug} value={s.slug}>{s.nombre}{s.activa ? '' : ' (inactiva)'}</option>
-            ))}
-          </select>
+          <Selector
+            claseCampo={MOBILE_INPUT_CLS}
+            valor={sucursalSel}
+            onChange={setSucursalSel}
+            titulo="Sucursal a editar"
+            opciones={sucursales.map(s => ({
+              valor: s.slug, etiqueta: s.nombre, detalle: s.activa ? null : 'inactiva',
+            }))}
+          />
         </MobileField>
 
         {sucursalActual && (

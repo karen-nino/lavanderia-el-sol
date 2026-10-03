@@ -6,6 +6,7 @@ import { capitalizarNombre } from '../lib/texto';
 import { FORMAS_PAGO } from '../lib/formasPago';
 import AbrirCajaModal from '../components/AbrirCajaModal';
 import ElegirMaquinasModal from '../components/ElegirMaquinasModal';
+import Selector from '../components/Selector';
 
 const INPUT_CLS =
   'w-full px-4 py-3.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent transition';
@@ -1904,16 +1905,17 @@ export default function NuevaNota() {
                               {/* El tamaño del edredón ya es su servicio
                                   (mig. 130): no se elige aparte. */}
                               {c.tipo_prenda === 'EDREDON' ? null : (
-                                <select
-                                  value={c.tipo_tela}
-                                  onChange={e => actualizarCargaEncargo(idx, { tipo_tela: e.target.value })}
-                                  className={`${INPUT_CLS} bg-white`}
-                                >
-                                  <option value="">Tipo de tela sin asignar</option>
-                                  {telas.filter(t => t.activo || t.nombre === c.tipo_tela).map(t => (
-                                    <option key={t.id} value={t.nombre}>{t.nombre}</option>
-                                  ))}
-                                </select>
+                                <Selector
+                                  claseCampo={INPUT_CLS}
+                                  valor={c.tipo_tela}
+                                  onChange={v => actualizarCargaEncargo(idx, { tipo_tela: v })}
+                                  titulo={`Tipo de tela · ${etiqueta}`}
+                                  opciones={[
+                                    { valor: '', etiqueta: 'Tipo de tela sin asignar' },
+                                    ...telas.filter(t => t.activo || t.nombre === c.tipo_tela)
+                                      .map(t => ({ valor: t.nombre, etiqueta: t.nombre })),
+                                  ]}
+                                />
                               )}
                             </div>
                           );
