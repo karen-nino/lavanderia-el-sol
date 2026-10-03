@@ -23,6 +23,8 @@ import { useEffect, useState } from 'react';
  *   claseCampo  — clases del campo para igualar a sus vecinos (INPUT_CLS,
  *                 MOBILE_INPUT_CLS…); sin ella, el tamaño estándar.
  *   alerta      — borde ámbar: falta elegir algo que hace falta.
+ *   disparador  — ({ abrir, elegida, deshabilitado }) => nodo: un botón propio
+ *                 en vez del campo (p. ej. "Elegir" en el granel de Salidas).
  */
 const CAMPO_BASE = 'w-full px-4 py-3.5 border border-gray-300 rounded-lg text-base';
 
@@ -39,6 +41,7 @@ export default function Selector({
   claseCampo = CAMPO_BASE,
   alerta = false,
   className = '',
+  disparador,
 }) {
   const [abierto, setAbierto] = useState(false);
   const actual = String(valor ?? '');
@@ -60,6 +63,7 @@ export default function Selector({
 
   return (
     <div className={`relative ${className}`}>
+      {disparador ? disparador({ abrir: () => setAbierto(true), elegida, deshabilitado }) : (
       <button
         id={id}
         type="button"
@@ -80,6 +84,7 @@ export default function Selector({
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
         </svg>
       </button>
+      )}
 
       {/* `required` sin <select>: un campo invisible encima del botón lleva la
           validación del navegador, que así sigue avisando en su sitio. */}

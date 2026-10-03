@@ -48,4 +48,19 @@ describe('Selector', () => {
     render(<Selector valor="a" onChange={() => {}} opciones={opciones} deshabilitado />);
     expect(screen.getByRole('button')).toBeDisabled();
   });
+
+  it('acepta un botón propio en lugar del campo', async () => {
+    const onChange = vi.fn();
+    render(
+      <Selector
+        valor="" onChange={onChange} opciones={opciones}
+        disparador={({ abrir, elegida }) => (
+          <button type="button" onClick={abrir}>{elegida ? 'Cambiar' : 'Elegir'}</button>
+        )}
+      />
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Elegir' }));
+    await userEvent.click(screen.getByRole('option', { name: /Jabón Ariel/ }));
+    expect(onChange).toHaveBeenCalledWith('a');
+  });
 });

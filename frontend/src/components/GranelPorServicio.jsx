@@ -81,6 +81,25 @@ export default function GranelPorServicio({ nota, puedeEditar, onCambio }) {
     return lista;
   };
 
+  // La ventana con tarjetas para elegir el producto de un renglón. Se abre
+  // desde "Elegir" o desde "Cambiar": cambia solo el botón que la dispara.
+  const selectorDe = (r, opciones, elegido, quedanDe, bloqueado, c, etiqueta, disparador) => (
+    <Selector
+      valor={elegido ?? ''}
+      onChange={(v) => guardar(c, r.tipoId, Number(v), r.cantidad)}
+      deshabilitado={bloqueado}
+      titulo={`${nombreTipo(r.tipoId)} · ${etiqueta}`}
+      opciones={opciones.map(p => ({
+        valor: p.id,
+        etiqueta: p.nombre,
+        // Lo que queda, en medidas; el que no alcanza no se elige.
+        detalle: quedanDe(p) > 0 ? `quedan ${quedanDe(p)}` : 'agotado',
+        deshabilitado: elegido !== p.id && quedanDe(p) < r.cantidad,
+      }))}
+      disparador={disparador}
+    />
+  );
+
   const guardar = async (c, tipoId, productoId, cantidad) => {
     if (cantidad < 1) return;
     setOcupado(`${c.id}-${tipoId}`);
@@ -122,61 +141,69 @@ export default function GranelPorServicio({ nota, puedeEditar, onCambio }) {
               // servicio ya tiene apartado de él.
               const quedanDe = (p) => disponible(p) + (elegido === p.id ? r.cantidad : 0);
               return (
-                <div key={r.tipoId} className="space-y-1.5">
-                  <p className="text-sm text-gray-700">
-                    {nombreTipo(r.tipoId)}
-                    {!r.producto && (
-                      <span className="ml-2 text-xs font-semibold text-amber-700">Por elegir</span>
-                    )}
-                  </p>
-                  {opciones.length === 0 ? (
-                    <p className="text-xs text-gray-400">
-                      No hay {nombreTipo(r.tipoId).toLowerCase()} en Inventario: dalo de alta o asígnale su tipo al producto.
-                    </p>
+                <div key={r.tipoId} className="flex items-center justify-between gap-3">
+                  {/* Sin producto, a la derecha va solo "Elegir", en el lugar de
+                      las medidas; elegido, abajo del nombre sale cuál es (con
+                      "Cambiar") y a la derecha las medidas (2026-10-02). */}
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-gray-800">{nombreTipo(r.tipoId)}</p>
+                    {opciones.length === 0 ? (
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        No hay {nombreTipo(r.tipoId).toLowerCase()} en Inventario: dalo de alta o asígnale su tipo al producto.
+                      </p>
+                    ) : r.producto && selectorDe(r, opciones, elegido, quedanDe, bloqueado, c, etiqueta,
+                      ({ abrir, elegida, deshabilitado }) => (
+                        <p className="text-xs text-gray-500 truncate mt-0.5">
+                          {elegida?.etiqueta ?? r.producto.nombre}
+                          {' · '}
+                          <button
+                            type="button"
+                            onClick={abrir}
+                            disabled={deshabilitado}
+                            aria-label={`Cambiar ${nombreTipo(r.tipoId).toLowerCase()} de ${etiqueta}`}
+                            className="font-medium text-blue hover:underline disabled:opacity-40 disabled:no-underline"
+                          >
+                            Cambiar
+                          </button>
+                        </p>
+                      ))}
+                  </div>
+
+                  {!r.producto ? (
+                    opciones.length > 0 && selectorDe(r, opciones, elegido, quedanDe, bloqueado, c, etiqueta,
+                      ({ abrir, deshabilitado }) => (
+                        <button
+                          type="button"
+                          onClick={abrir}
+                          disabled={deshabilitado}
+                          aria-label={`Elegir ${nombreTipo(r.tipoId).toLowerCase()} de ${etiqueta}`}
+                          className="h-9 px-5 rounded-full bg-light-blue text-blue text-sm font-semibold hover:bg-blue hover:text-white disabled:opacity-40 transition-colors flex-shrink-0"
+                        >
+                          Elegir
+                        </button>
+                      ))
                   ) : (
-                    <div className="flex items-center gap-2">
-                      {/* El producto: lo que queda va entre paréntesis y el que
-                          no alcanza para las medidas no se puede elegir. */}
-                      <Selector
-                        className="flex-1 min-w-0"
-                        claseCampo="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm"
-                        valor={elegido ?? ''}
-                        onChange={(v) => guardar(c, r.tipoId, Number(v), r.cantidad)}
-                        deshabilitado={bloqueado}
-                        alerta={!r.producto}
-                        marcador="Elegir…"
-                        etiquetaAria={`${nombreTipo(r.tipoId)} de ${etiqueta}`}
-                        titulo={`${nombreTipo(r.tipoId)} · ${etiqueta}`}
-                        opciones={opciones.map(p => ({
-                          valor: p.id,
-                          etiqueta: p.nombre,
-                          // Lo que queda, en medidas; el que no alcanza no se elige.
-                          detalle: quedanDe(p) > 0 ? `quedan ${quedanDe(p)}` : 'agotado',
-                          deshabilitado: elegido !== p.id && quedanDe(p) < r.cantidad,
-                        }))}
-                      />
-                      {/* Las medidas: del que está por elegir o del ya elegido. */}
-                      <div className="flex items-center gap-1.5 flex-shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => guardar(c, r.tipoId, elegido, r.cantidad - 1)}
-                          disabled={bloqueado || r.cantidad <= 1}
-                          aria-label={`Menos medidas de ${nombreTipo(r.tipoId)}`}
-                          className="w-9 h-9 flex items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-700 text-base font-semibold hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                        >
-                          −
-                        </button>
-                        <span className="w-6 text-center text-sm font-semibold text-gray-900 tabular-nums">{r.cantidad}</span>
-                        <button
-                          type="button"
-                          onClick={() => guardar(c, r.tipoId, elegido, r.cantidad + 1)}
-                          disabled={bloqueado}
-                          aria-label={`Más medidas de ${nombreTipo(r.tipoId)}`}
-                          className="w-9 h-9 flex items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-700 text-base font-semibold hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                        >
-                          +
-                        </button>
-                      </div>
+                    // Las medidas del producto elegido.
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => guardar(c, r.tipoId, elegido, r.cantidad - 1)}
+                        disabled={bloqueado || r.cantidad <= 1}
+                        aria-label={`Menos medidas de ${nombreTipo(r.tipoId)}`}
+                        className="w-9 h-9 flex items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-700 text-base font-semibold hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                      >
+                        −
+                      </button>
+                      <span className="w-6 text-center text-sm font-semibold text-gray-900 tabular-nums">{r.cantidad}</span>
+                      <button
+                        type="button"
+                        onClick={() => guardar(c, r.tipoId, elegido, r.cantidad + 1)}
+                        disabled={bloqueado}
+                        aria-label={`Más medidas de ${nombreTipo(r.tipoId)}`}
+                        className="w-9 h-9 flex items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-700 text-base font-semibold hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                      >
+                        +
+                      </button>
                     </div>
                   )}
                 </div>
