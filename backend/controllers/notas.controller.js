@@ -894,11 +894,13 @@ async function liberarProductosDeNota(client, notaId) {
 
 // Registra en el historial de inventario los movimientos de los productos de una
 // nota: 'venta' cuando se consume el stock (pago/entrega) o 'liberacion' cuando
-// se devuelve al anular una venta. Una fila por producto de la nota.
+// se devuelve al anular una venta. Una fila por producto de la nota. El folio
+// se copia (mig. 144): si la nota se borra, `nota_id` queda en NULL y sin la
+// copia la devolución ya no diría qué nota se anuló.
 async function registrarMovimientosProductosNota(client, notaId, sucursal, usuarioId, tipo) {
   await client.query(
     `INSERT INTO producto_movimientos
-       (producto_id, sucursal, usuario_id, tipo, destino, cantidad_medidas, descripcion, nota_id)
+       (producto_id, sucursal, usuario_id, tipo, destino, cantidad_medidas, descripcion, nota_id, nota_folio)
      SELECT np.producto_id, $2, $3, $4,
             (CASE WHEN a.clase = 'bolsa' THEN 'piezas' ELSE 'botellas' END),
             np.cantidad_medidas,
@@ -907,9 +909,11 @@ async function registrarMovimientosProductosNota(client, notaId, sucursal, usuar
                               WHEN np.unidad = 'botella'
                                 THEN (CASE WHEN a.se_vende_por_unidad THEN ' unidad(es)' ELSE ' botella(s)' END)
                               ELSE ' medida(s)' END),
-            np.nota_id
+            np.nota_id,
+            n.folio
        FROM nota_productos np
        JOIN productos a ON a.id = np.producto_id
+       JOIN notas n     ON n.id = np.nota_id
       WHERE np.nota_id = $1`,
     [notaId, sucursal, usuarioId ?? null, tipo]
   );

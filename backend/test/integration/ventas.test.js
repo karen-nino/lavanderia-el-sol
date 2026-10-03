@@ -41,7 +41,9 @@ describe('GET /api/ventas/resumen', () => {
     expect(Array.isArray(res.body.lista_notas)).toBe(true);
     expect(res.body.lista_notas).toHaveLength(1);
     expect(res.body.lista_notas[0].cargas).toBe(1);
-    expect(res.body.lista_notas[0].maquinas).toEqual([{ nombre: 'Lavadora 1', cargas: 1 }]);
+    // Cada máquina trae también cuánto estuvo encendida y si llegó al tope
+    // (migs. 140-141); sin finalizar, sin tiempo.
+    expect(res.body.lista_notas[0].maquinas).toEqual([{ nombre: 'Lavadora 1', cargas: 1, segundos: null, tope: false }]);
   });
 
   it('requiere rol admin (un operador recibe 403)', async () => {

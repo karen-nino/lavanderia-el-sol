@@ -645,8 +645,11 @@ export const getMovimientos = async (req, res) => {
   const tipos = TIPOS_MOVIMIENTO[req.query.tipo] ?? null;
   try {
     const { rows } = await pool.query(
-      `SELECT m.*, TRIM(u.nombre || ' ' || COALESCE(u.apellido, '')) AS usuario_nombre,
-              n.folio AS nota_folio
+      `SELECT m.id, m.producto_id, m.sucursal, m.usuario_id, m.tipo, m.destino,
+              m.cantidad_medidas, m.descripcion, m.nota_id, m.nota, m.created_at,
+              TRIM(u.nombre || ' ' || COALESCE(u.apellido, '')) AS usuario_nombre,
+              -- El folio vivo o, si la nota se borró, el copiado (mig. 144).
+              COALESCE(n.folio, m.nota_folio) AS nota_folio
          FROM producto_movimientos m
          LEFT JOIN usuarios u ON u.id = m.usuario_id
          LEFT JOIN notas n    ON n.id = m.nota_id

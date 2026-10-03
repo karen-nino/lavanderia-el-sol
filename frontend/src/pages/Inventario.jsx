@@ -1434,10 +1434,15 @@ function MovimientosDiaModal({ producto, tipo, fecha, onClose }) {
             const deNota = m.tipo === 'venta' || m.tipo === 'liberacion';
             const irANota = m.nota_id && m.nota_folio ? () => { onClose(); navigate(`/notas/${m.nota_id}`); } : null;
             const quienHora = `${m.usuario_nombre || 'Usuario eliminado'} · ${formatHora12(m.created_at)}`;
-            const tituloNota = irANota
-              ? (m.tipo === 'liberacion' ? `Devuelto · Nota ${m.nota_folio}` : `Nota ${m.nota_folio}`)
-              // La nota ya no existe (se borró): se dice qué fue, sin enlace.
-              : (m.tipo === 'liberacion' ? 'Devuelto (se anuló la venta)' : 'Venta en nota');
+            // Lo devuelto dice qué nota se anuló: si se canceló, lleva a ella;
+            // si se borró, queda su folio (mig. 144) pero ya no hay a dónde ir.
+            const tituloNota = m.tipo === 'liberacion'
+              ? (m.nota_folio
+                  ? `Nota ${m.nota_folio} anulada${irANota ? '' : ' (se eliminó)'}`
+                  : 'Nota anulada')
+              : (m.nota_folio
+                  ? `Nota ${m.nota_folio}${irANota ? '' : ' (se eliminó)'}`
+                  : 'Venta en nota');
             return (
               <div key={m.id} className="px-5 py-2.5 border-b border-gray-50 last:border-0">
                 <div className="flex items-center justify-between gap-3">
