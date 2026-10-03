@@ -11,6 +11,7 @@ import ConfirmacionModal from '../components/ConfirmacionModal';
 import ElegirTiempoModal from '../components/ElegirTiempoModal';
 import GranelPorServicio from '../components/GranelPorServicio';
 import { preguntaTiempo, tiemposDeMaquina } from '../lib/tiemposModelo';
+import { marcaYTamano } from '../lib/estadoMaquina';
 
 function fmtMonto(n) {
   return n != null ? `$${Number(n).toFixed(2)}` : '—';
@@ -1195,10 +1196,13 @@ export default function Salidas() {
                   && Boolean(m.id)
                   && todasMaquinas.some(x => String(x.id) === String(m.id) && x.estado === 'disponible');
                 const cfg = lavadoTerminado ? BADGE_MAQUINA_ESTADO.terminado : BADGE_MAQUINA_ESTADO[m.estado];
-                // La secadora muestra su tamaño (Mediana/Jumbo) igual que la
-                // lavadora; se muestra abreviado (M/J/E) en el renglón.
-                const tamanoLabel = labelTamano(m);
-                const tipoLabel = TAMANO_ABBR[tamanoLabel] ?? tamanoLabel;
+                // "Marca · Tamaño" (LG · Mediana). La pasada guarda el nombre y
+                // el tipo, no la marca: esa se lee del catálogo vivo. Si la
+                // máquina ya no está en él, queda solo el tamaño.
+                const fisica = todasMaquinas.find(x => String(x.id) === String(m.id));
+                const tipoLabel = marcaYTamano({
+                  ...m, marca: fisica?.marca, tamano: fisica?.tamano ?? m.tamano,
+                });
                 return (
                   <div key={m.pasadaId ?? i} className="flex flex-wrap items-center justify-between gap-2">
                     <div className="flex flex-wrap items-center gap-2 min-w-0">
@@ -1927,8 +1931,8 @@ export default function Salidas() {
               <div className="space-y-2">
                 {maquinasDisp.map(m => {
                   const selected = String(cambiarSel) === String(m.id);
-                  // Tamaño (Mediana/Jumbo) solo para lavadoras; la secadora no lo muestra.
-                  const tamanoLabel = labelTamano(m);
+                  // "Marca · Tamaño", igual que al agregar máquina.
+                  const tamanoLabel = marcaYTamano(m);
                   // Reservada por otra nota abierta: se muestra pero no se elige.
                   const reservada = Boolean(m.reservada);
                   return (
@@ -2189,8 +2193,8 @@ export default function Salidas() {
                                 También en {m.reservada_folio ?? 'otra nota'}
                               </span>
                             )}
-                            {labelTamano(m) && (
-                              <span className="text-xs text-gray-500">{labelTamano(m)}</span>
+                            {marcaYTamano(m) && (
+                              <span className="text-xs text-gray-500">{marcaYTamano(m)}</span>
                             )}
                           </span>
                         </button>
@@ -2240,8 +2244,8 @@ export default function Salidas() {
                                 También en {m.reservada_folio ?? 'otra nota'}
                               </span>
                             )}
-                            {labelTamano(m) && (
-                              <span className="text-xs text-gray-500">{labelTamano(m)}</span>
+                            {marcaYTamano(m) && (
+                              <span className="text-xs text-gray-500">{marcaYTamano(m)}</span>
                             )}
                           </span>
                         </button>

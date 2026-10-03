@@ -23,10 +23,7 @@
  * servidor lo vuelve a comprobar al guardar.
  */
 
-// Etiqueta de tamaño de una máquina: solo aplica a lavadoras (Mediana/Jumbo).
-// La secadora es de un solo tamaño, así que no muestra ninguna.
-const TAMANO_LABEL = { lavadora_mediana: 'Mediana', lavadora_jumbo: 'Jumbo' };
-const labelTamano = (m) => (m.tipo === 'secadora' ? null : TAMANO_LABEL[m.tipo] ?? null);
+import { marcaYTamano } from '../lib/estadoMaquina';
 
 // Casilla de selección, igual que la del modal de Salidas.
 function SelCheck({ on }) {
@@ -44,7 +41,8 @@ function SelCheck({ on }) {
 }
 
 function FilaMaquina({ maquina, seleccionada, onToggle }) {
-  const tamano = labelTamano(maquina);
+  // "LG · Mediana": con la marca se distingue qué máquina es de un vistazo.
+  const tamano = marcaYTamano(maquina);
   return (
     <button
       type="button"

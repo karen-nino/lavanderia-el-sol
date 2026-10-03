@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { estadoVisual, contarPorEstado, filtrarPorEstado } from './estadoMaquina';
+import { estadoVisual, contarPorEstado, filtrarPorEstado, marcaYTamano } from './estadoMaquina';
 
 // El chip "Reservada" de Gestión de Máquinas. No sale de `maquinas.estado`
 // —ahí no existe ese valor— sino de la marca `reservada` que calcula el
@@ -38,5 +38,20 @@ describe('estado visible de una máquina', () => {
 
   it('"todos" no filtra nada', () => {
     expect(filtrarPorEstado(maquinas, 'todos')).toHaveLength(4);
+  });
+});
+
+describe('marcaYTamano', () => {
+  it('junta marca y tamaño con un punto medio', () => {
+    expect(marcaYTamano({ marca: 'LG', tamano: 'mediana', tipo: 'lavadora_mediana' })).toBe('LG · Mediana');
+    expect(marcaYTamano({ marca: 'Speed Queen', tamano: 'jumbo', tipo: 'secadora' })).toBe('Speed Queen · Jumbo');
+  });
+  it('sin columna tamano lo saca del tipo de lavadora', () => {
+    expect(marcaYTamano({ marca: 'Samsung', tipo: 'lavadora_jumbo' })).toBe('Samsung · Jumbo');
+  });
+  it('omite lo que falta', () => {
+    expect(marcaYTamano({ tipo: 'lavadora_mediana' })).toBe('Mediana');
+    expect(marcaYTamano({ marca: 'LG', tipo: 'secadora' })).toBe('LG');
+    expect(marcaYTamano({ tipo: 'secadora' })).toBeNull();
   });
 });
