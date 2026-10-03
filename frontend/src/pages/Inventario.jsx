@@ -1424,51 +1424,56 @@ function MovimientosDiaModal({ producto, tipo, fecha, onClose }) {
           ) : movs.length === 0 ? (
             <p className="text-center text-gray-400 text-sm py-10">Sin movimientos</p>
           ) : movs.map(m => {
-            // Título: quién y a qué hora (2026-10-03). Si la salida trae nota
-            // (migs. 142-143), un botón "Nota" la despliega. Si vino de una
-            // nota de venta, debajo va esa nota y lleva a ella.
+            // Título: quién y a qué hora (2026-10-03). Si vino de una nota de
+            // venta, el título es esa nota (lleva a ella) y quién y la hora
+            // bajan a subtítulo. Si la salida manual trae nota (migs. 142-143),
+            // un botón "Nota" la despliega.
             const abierta = notaAbierta === m.id;
             const deNota = m.tipo === 'venta' || m.tipo === 'liberacion';
             const irANota = m.nota_id && m.nota_folio ? () => { onClose(); navigate(`/notas/${m.nota_id}`); } : null;
+            const quienHora = `${m.usuario_nombre || 'Usuario eliminado'} · ${formatHora12(m.created_at)}`;
+            const tituloNota = irANota
+              ? (m.tipo === 'liberacion' ? `Devuelto · Nota ${m.nota_folio}` : `Nota ${m.nota_folio}`)
+              // La nota ya no existe (se borró): se dice qué fue, sin enlace.
+              : (m.tipo === 'liberacion' ? 'Devuelto (se anuló la venta)' : 'Venta en nota');
             return (
               <div key={m.id} className="px-5 py-2.5 border-b border-gray-50 last:border-0">
                 <div className="flex items-center justify-between gap-3">
-                  <div className="min-w-0 flex items-center gap-2">
-                    <p className="min-w-0 text-sm text-gray-800 truncate">
-                      {m.usuario_nombre || 'Usuario eliminado'} · {formatHora12(m.created_at)}
-                    </p>
-                    {m.nota && (
-                      <button
-                        type="button"
-                        onClick={() => setNotaAbierta(abierta ? null : m.id)}
-                        aria-expanded={abierta}
-                        className={`flex-shrink-0 text-xs font-medium px-2 py-0.5 rounded-full border transition-colors ${
-                          abierta ? 'border-blue bg-light-blue text-blue' : 'border-gray-300 text-gray-600 hover:bg-gray-50'
-                        }`}
-                      >
-                        Nota
-                      </button>
-                    )}
-                  </div>
+                  {deNota ? (
+                    <div className="min-w-0">
+                      {irANota ? (
+                        <button type="button" onClick={irANota}
+                          className="block max-w-full text-sm font-medium text-blue hover:underline underline-offset-2 truncate text-left">
+                          {tituloNota}
+                        </button>
+                      ) : (
+                        <p className="text-sm text-gray-800 truncate">{tituloNota}</p>
+                      )}
+                      <p className="text-xs text-gray-400 truncate">{quienHora}</p>
+                    </div>
+                  ) : (
+                    <div className="min-w-0 flex items-center gap-2">
+                      <p className="min-w-0 text-sm text-gray-800 truncate">{quienHora}</p>
+                      {m.nota && (
+                        <button
+                          type="button"
+                          onClick={() => setNotaAbierta(abierta ? null : m.id)}
+                          aria-expanded={abierta}
+                          className={`flex-shrink-0 text-xs font-medium px-2 py-0.5 rounded-full border transition-colors ${
+                            abierta ? 'border-blue bg-light-blue text-blue' : 'border-gray-300 text-gray-600 hover:bg-gray-50'
+                          }`}
+                        >
+                          Nota
+                        </button>
+                      )}
+                    </div>
+                  )}
                   <span className={`text-sm font-medium whitespace-nowrap ${
                     m.tipo === 'liberacion' ? 'text-green-700' : m.tipo === 'rellenar' ? 'text-gray-400' : 'text-gray-700'
                   }`}>
                     {m.tipo === 'liberacion' ? '+ ' : ''}{cantidadMovimiento(m, producto, esMarca, tipo)}
                   </span>
                 </div>
-                {deNota && (
-                  irANota ? (
-                    <button type="button" onClick={irANota}
-                      className="text-xs font-medium text-blue hover:underline underline-offset-2 text-left">
-                      {m.tipo === 'liberacion' ? `Devuelto · Nota ${m.nota_folio} (se anuló la venta)` : `Nota ${m.nota_folio}`}
-                    </button>
-                  ) : (
-                    // La nota ya no existe (se borró): se dice qué fue, sin enlace.
-                    <p className="text-xs text-gray-400">
-                      {m.tipo === 'liberacion' ? 'Devuelto (se anuló la venta)' : 'Venta en nota'}
-                    </p>
-                  )
-                )}
                 {abierta && (
                   <p className="mt-2 rounded-lg bg-gray-50 px-3 py-2 text-sm text-gray-700 whitespace-pre-line break-words">
                     {m.nota}
