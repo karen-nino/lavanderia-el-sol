@@ -1381,8 +1381,9 @@ export default function Ajustes() {
     // Jumbo ya no se captura: Por Encargo vende Chico, Mediano, Grande y Edredón. La
     // columna se conserva para las notas viejas que sí eligieron ese tamaño,
     // así que no se manda —ni se borra— desde aquí.
-    // El edredón ya no tiene precio ni tiempo de máquina propios (2026-10-02):
-    // se cobra y se cronometra como cualquier carga de la lavadora jumbo.
+    // El edredón no tiene tiempo de máquina propio: usa el tope de la jumbo.
+    // La tarifa del edredón en lavadora jumbo volvió el 2026-10-02.
+    precio_edredon_jumbo:  Number(config.precio_edredon_jumbo),
     tiempo_carga_mediana:  Number(config.tiempo_carga_mediana),
     tiempo_carga_jumbo:    Number(config.tiempo_carga_jumbo),
     tiempo_carga_secadora: Number(config.tiempo_carga_secadora),
@@ -1662,6 +1663,14 @@ export default function Ajustes() {
       {campoPrecio('precio_carga_jumbo', 'Aplica a lavadoras jumbo en autoservicio y por encargo.')}
       {campoTiempo('tiempo_carga_jumbo', 'Si nadie finaliza la máquina, a estos minutos se le corta la luz. Para las lavadoras jumbo cuyo modelo no tenga tope propio.')}
       {camposTiempoMarca('lavadora', 'jumbo')}
+
+      <div className="border-t border-gray-100" />
+
+      {/* El edredón tiene su propia tarifa de lavadora jumbo, sin tiempo propio
+          (usa el tope de la máquina). Se quitó el 2026-10-02 y volvió el mismo
+          día a pedido del negocio. */}
+      {subTitulo('Edredón')}
+      {campoPrecio('precio_edredon_jumbo', 'Tarifa fija por edredón lavado en máquina jumbo.')}
     </Section>
 
     {/* La secadora va separada en Mediana y Jumbo igual que la lavadora. El
@@ -2418,6 +2427,10 @@ export default function Ajustes() {
           {campoPrecioM('precio_carga_jumbo', 'Aplica a lavadoras jumbo (autoservicio y por encargo).')}
           {campoTiempoM('tiempo_carga_jumbo', 'Si nadie finaliza la máquina, a estos minutos se le corta la luz. Para las lavadoras jumbo cuyo modelo no tenga tope propio.')}
           {camposTiempoMarcaM('lavadora', 'jumbo')}
+        </TarjetaMobile>
+        {/* La tarifa del edredón en lavadora jumbo (volvió el 2026-10-02). */}
+        <TarjetaMobile titulo="Edredón">
+          {campoPrecioM('precio_edredon_jumbo', 'Tarifa fija por edredón lavado en máquina jumbo.')}
         </TarjetaMobile>
         </div>
       </div>

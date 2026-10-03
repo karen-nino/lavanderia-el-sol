@@ -478,7 +478,7 @@ async function desmarcarPagoPorCambio(client, nota, antes, ahora, usuarioId, suc
 async function tarifasCarga(client) {
   const { rows } = await client.query(
     `SELECT precio_carga_mediana, precio_carga_jumbo,
-            precio_carga_secadora, precio_secadora_jumbo,
+            precio_carga_secadora, precio_secadora_jumbo, precio_edredon_jumbo,
             tope_carga_chico, tope_carga_mediano, tope_carga_grande, tope_carga_jumbo, tope_carga_edredon
        FROM ajustes WHERE id = 1`
   );
@@ -489,6 +489,10 @@ async function tarifasCarga(client) {
     // Secado por categoría. La columna plana precio_carga_secadora es la Mediana.
     secadora:        c.precio_carga_secadora   != null ? Number(c.precio_carga_secadora)   : 45,
     secadoraJumbo:   c.precio_secadora_jumbo   != null ? Number(c.precio_secadora_jumbo)   : 45,
+    // Tarifa propia del edredón en lavadora jumbo (Ajustes → Máquinas →
+    // Lavadora → Edredón). Se quitó el 2026-10-02 y volvió ese mismo día a
+    // pedido del negocio.
+    edredonJumbo:    c.precio_edredon_jumbo    != null ? Number(c.precio_edredon_jumbo)    : 80,
     // Topes por tamaño de carga (Por Encargo). NULL = sin tope configurado.
     topeChico:       c.tope_carga_chico   != null ? Number(c.tope_carga_chico)   : null,
     topeMediano:     c.tope_carga_mediano != null ? Number(c.tope_carga_mediano) : null,
@@ -551,7 +555,7 @@ const esServicioQueSeVende = (prenda, tamano) =>
 //
 // Jumbo de ropa ya no se vende; se conserva para las notas que lo eligieron.
 function costoMaquinasDeServicio(prenda, tamano, t) {
-  if (String(prenda ?? '').toUpperCase() === 'EDREDON') return Number(t.jumbo) || 0;
+  if (String(prenda ?? '').toUpperCase() === 'EDREDON') return Number(t.edredonJumbo) || 0;
   if (tamano === 'jumbo')  return (Number(t.jumbo)   || 0) + (Number(t.secadora) || 0);
   if (['chico', 'mediano', 'grande'].includes(tamano)) {
     return (Number(t.mediana) || 0) + (Number(t.secadora) || 0);
@@ -603,9 +607,11 @@ async function tiemposCarga(client) {
 }
 
 function tarifaLavadora(tipoMaquina, tipoPrenda, t) {
-  // El edredón se cobra como cualquier carga jumbo: ya no tiene tarifa propia
-  // de máquina (2026-10-02); su precio Por Encargo es el del servicio.
-  if (tipoMaquina === 'lavadora_jumbo') return t.jumbo;
+  // El edredón en lavadora jumbo tiene su propia tarifa (Ajustes → Máquinas →
+  // Lavadora → Edredón): se quitó el 2026-10-02 y volvió el mismo día.
+  if (tipoMaquina === 'lavadora_jumbo') {
+    return String(tipoPrenda).toUpperCase() === 'EDREDON' ? t.edredonJumbo : t.jumbo;
+  }
   return t.mediana;
 }
 

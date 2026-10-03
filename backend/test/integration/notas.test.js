@@ -1744,11 +1744,11 @@ describe('edredón (lavadora jumbo)', () => {
       estado_pago: 'PENDIENTE', cargas: [{ lavadora_tipo: 'jumbo' }],
     });
     expect(res.status).toBe(201);
-    // El edredón ya no tiene tarifa de máquina propia: la carga guarda la de la
-    // lavadora jumbo (70), pero lo que se COBRA es el precio del servicio
-    // Edredón (180): el tope manda sobre la suma de las máquinas.
+    // El edredón tiene su tarifa propia de lavadora jumbo (precio_edredon_jumbo,
+    // 80 por defecto; se quitó y volvió el 2026-10-02), pero lo que se COBRA es
+    // el precio del servicio Edredón (180): el tope manda sobre las máquinas.
     expect(Number(res.body.precio_total)).toBe(180);
-    expect(Number(res.body.cargas[0].precio_lavadora)).toBe(70);
+    expect(Number(res.body.cargas[0].precio_lavadora)).toBe(80);
   });
 
   it('rechaza edredón con tipo de lavado que no es jumbo', async () => {
