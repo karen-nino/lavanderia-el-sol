@@ -364,8 +364,9 @@ export const getUsoMaquina = async (req, res) => {
           _usos: [],               // { id, folio, tipo_servicio, estado, cliente, precio }
           _cargas: [],             // { folio, descripcion, precio }
           _empleados: new Map(),   // usuario_id -> { nombre, usos }
-          _clientesReg: new Map(), // cliente_id -> nombre
+          _clientesReg: new Map(), // cliente_id -> { nombre, folios }
           _autoservicios: [],      // { folio }
+          _mostrador: [],          // { folio }: Por Encargo sin cliente
         });
       }
       return buckets.get(k);
@@ -389,11 +390,18 @@ export const getUsoMaquina = async (req, res) => {
         e.usos += 1;
         b._empleados.set(n.usuario_id, e);
       }
-      // Clientes: autoservicio = 1 cliente cada uno; el resto, por cliente.
+      // Clientes: autoservicio = 1 cliente cada uno; el resto, por cliente,
+      // con las notas que trajo (2026-10-03: antes el registrado iba sin nota).
+      // Por Encargo de mostrador no tiene cliente: cuenta como uno, igual que
+      // el autoservicio.
       if (n.tipo_servicio === 'AUTOSERVICIO') {
         b._autoservicios.push({ folio: n.folio });
       } else if (n.cliente_id) {
-        b._clientesReg.set(n.cliente_id, clienteNombre || 'Cliente');
+        const cl = b._clientesReg.get(n.cliente_id) ?? { nombre: clienteNombre || 'Cliente', folios: [] };
+        cl.folios.push(n.folio);
+        b._clientesReg.set(n.cliente_id, cl);
+      } else {
+        b._mostrador.push({ folio: n.folio });
       }
     }
 
@@ -428,8 +436,9 @@ export const getUsoMaquina = async (req, res) => {
       .map((b) => {
         const empleados = [...b._empleados.values()].map((e) => ({ nombre: e.nombre, usos: e.usos }));
         const clientes  = [
-          ...b._autoservicios.map((a) => ({ nombre: 'Autoservicio', folio: a.folio })),
-          ...[...b._clientesReg.values()].map((nombre) => ({ nombre, folio: null })),
+          ...b._autoservicios.map((a) => ({ nombre: 'Autoservicio', folios: [a.folio] })),
+          ...b._mostrador.map((m) => ({ nombre: 'Mostrador', folios: [m.folio] })),
+          ...[...b._clientesReg.values()].map((cl) => ({ nombre: cl.nombre, folios: cl.folios })),
         ];
         return {
           fecha:     b.fecha,

@@ -179,7 +179,11 @@ function MetricaModal({ metrica, fecha, count, items, onClose }) {
             ))
           ) : (
             items.map((cl, i) => (
-              <FilaModal key={i} left={cl.nombre} sub={cl.folio ? `Nota ${cl.folio}` : null} />
+              <FilaModal key={i} left={cl.nombre}
+                // La nota (o notas) que trajo ese cliente ese día.
+                sub={(cl.folios ?? []).length > 0
+                  ? `${cl.folios.length === 1 ? 'Nota' : 'Notas'} ${cl.folios.join(', ')}`
+                  : null} />
             ))
           )}
         </div>
@@ -329,8 +333,8 @@ export default function MaquinaUso() {
                   <thead className="bg-gray-50 text-gray-500 text-xs uppercase">
                     <tr>
                       <th className="text-left px-4 py-2.5 font-medium">Fecha</th>
-                      <th className="text-right px-4 py-2.5 font-medium">Notas</th>
                       <th className="text-right px-4 py-2.5 font-medium">Generado</th>
+                      <th className="text-right px-4 py-2.5 font-medium">Notas</th>
                       <th className="text-right px-4 py-2.5 font-medium">Ciclos</th>
                       <th className="text-right px-4 py-2.5 font-medium">Empleados</th>
                       <th className="text-right px-4 py-2.5 font-medium">Clientes</th>
@@ -346,10 +350,10 @@ export default function MaquinaUso() {
                     ) : diasPagina.map((d) => (
                       <tr key={d.fecha} className="hover:bg-gray-50">
                         <td className="px-4 py-2.5 text-gray-700 whitespace-nowrap">{fmtFecha(d.fecha)}</td>
+                        <td className="px-4 py-2.5 text-right font-medium text-dark-blue">{fmtMoneda(d.generado)}</td>
                         <td className="px-4 py-2.5 text-right">
                           <CeldaNumero value={d.usos} onClick={() => setModal({ dia: d, metrica: 'usos' })} />
                         </td>
-                        <td className="px-4 py-2.5 text-right font-medium text-dark-blue">{fmtMoneda(d.generado)}</td>
                         <td className="px-4 py-2.5 text-right">
                           <CeldaNumero value={d.cargas} onClick={() => setModal({ dia: d, metrica: 'cargas' })} />
                         </td>
