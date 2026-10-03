@@ -274,7 +274,7 @@ export const getUsoMaquina = async (req, res) => {
     // Una pasada cuenta si la máquina arrancó: tiene su encendido sellado
     // (mig. 140) o la carga arrancó ese hueco (mig. 097).
     const PASADAS_DE_LA_MAQUINA = `
-      SELECT ncm.carga_id, ncm.slot, nc.nota_id
+      SELECT ncm.id, ncm.carga_id, ncm.slot, ncm.asignada_at, nc.nota_id
         FROM nota_carga_maquinas ncm
         JOIN nota_cargas nc ON nc.id = ncm.carga_id
        WHERE ncm.maquina_id = $1
@@ -296,14 +296,18 @@ export const getUsoMaquina = async (req, res) => {
       [id, TZ_NEGOCIO]
     );
 
-    // Cargas de esta máquina: una fila por carga (aunque haya corrido varias
-    // pasadas en ella). El precio atribuido es el del hueco en que participó
-    // (lavado o secado), y la descripción, las máquinas que usó la carga
-    // (*_usada_id, que no se borra al finalizar).
+    // Ciclos de esta máquina: una fila por PASADA, así que una carga que se
+    // relavó o se secó de más en ella cuenta cada vuelta (2026-10-03). El
+    // precio del hueco (lavado o secado) se atribuye solo a la primera vuelta
+    // de la carga: las siguientes no se cobran aparte. La descripción son las
+    // máquinas que usó la carga (*_usada_id, que no se borra al finalizar).
     const { rows: cargas } = await pool.query(
-      `SELECT nc.nota_id, nc.precio_lavadora, nc.precio_secadora,
-              bool_or(p.slot = 'lavadora') AS es_lav,
-              bool_or(p.slot = 'secadora') AS es_sec,
+      `SELECT nc.nota_id, p.slot,
+              CASE WHEN ROW_NUMBER() OVER (PARTITION BY p.carga_id, p.slot
+                                           ORDER BY p.asignada_at, p.id) = 1
+                   THEN CASE WHEN p.slot = 'lavadora' THEN nc.precio_lavadora
+                             ELSE nc.precio_secadora END
+                   ELSE 0 END AS precio,
               ml.nombre AS lav_nombre, ms.nombre AS sec_nombre
          FROM (${PASADAS_DE_LA_MAQUINA}) p
          JOIN nota_cargas nc ON nc.id = p.carga_id
@@ -311,8 +315,7 @@ export const getUsoMaquina = async (req, res) => {
          LEFT JOIN maquinas ml ON ml.id = COALESCE(nc.lavadora_id, nc.lavadora_usada_id)
          LEFT JOIN maquinas ms ON ms.id = COALESCE(nc.secadora_id, nc.secadora_usada_id)
         WHERE n.estado <> 'CANCELADA'
-        GROUP BY nc.id, ml.nombre, ms.nombre
-        ORDER BY nc.nota_id, nc.orden`,
+        ORDER BY nc.nota_id, nc.orden, p.asignada_at, p.id`,
       [id]
     );
 
@@ -365,13 +368,11 @@ export const getUsoMaquina = async (req, res) => {
       const n = notaPorId.get(c.nota_id);
       if (!n) continue;
       const b = getBucket(n.fecha);
-      const esLav = c.es_lav;
-      const esSec = c.es_sec;
       const partes = [c.lav_nombre, c.sec_nombre].filter(Boolean);
       b._cargas.push({
         folio: n.folio,
         descripcion: partes.join(' + ') || maq[0].nombre,
-        precio: (esLav ? Number(c.precio_lavadora) || 0 : 0) + (esSec ? Number(c.precio_secadora) || 0 : 0),
+        precio: Number(c.precio) || 0,
       });
     }
 

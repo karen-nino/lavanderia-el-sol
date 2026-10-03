@@ -124,8 +124,10 @@ function EstadoBadge({ estado, tipoServicio }) {
 }
 
 const METRICA_TITULO = {
-  usos:      'Usos',
-  cargas:    'Cargas',
+  // Cada nota que corrió en la máquina (antes se decía "usos", 2026-10-03).
+  usos:      'Notas',
+  // Cada vez que la máquina corrió (antes "cargas", 2026-10-03).
+  cargas:    'Ciclos',
   empleados: 'Empleados',
   clientes:  'Clientes',
 };
@@ -133,7 +135,7 @@ const METRICA_TITULO = {
 // Modal con el detalle de una métrica de un día.
 function MetricaModal({ metrica, fecha, count, items, onClose }) {
   const navigate = useNavigate();
-  const noun = { usos: 'uso', cargas: 'carga', empleados: 'empleado', clientes: 'cliente' }[metrica];
+  const noun = { usos: 'nota', cargas: 'ciclo', empleados: 'empleado', clientes: 'cliente' }[metrica];
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
       <div
@@ -169,7 +171,7 @@ function MetricaModal({ metrica, fecha, count, items, onClose }) {
             ))
           ) : metrica === 'empleados' ? (
             items.map((e, i) => (
-              <FilaModal key={i} left={e.nombre} right={`${e.usos} ${e.usos === 1 ? 'uso' : 'usos'}`} />
+              <FilaModal key={i} left={e.nombre} right={`${e.usos} ${e.usos === 1 ? 'nota' : 'notas'}`} />
             ))
           ) : (
             items.map((cl, i) => (
@@ -270,9 +272,9 @@ export default function MaquinaUso() {
             {/* Resumen */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <ResumenCard label="Días usada" value={data.resumen.dias_usada} />
-              <ResumenCard label="Usos" value={data.resumen.usos} />
+              <ResumenCard label="Notas" value={data.resumen.usos} />
               <ResumenCard label="Generado" value={fmtMoneda(data.resumen.generado)} />
-              <ResumenCard label="Cargas" value={data.resumen.cargas} />
+              <ResumenCard label="Ciclos" value={data.resumen.cargas} />
             </div>
 
             {/* Tabla por día */}
@@ -323,9 +325,9 @@ export default function MaquinaUso() {
                   <thead className="bg-gray-50 text-gray-500 text-xs uppercase">
                     <tr>
                       <th className="text-left px-4 py-2.5 font-medium">Fecha</th>
-                      <th className="text-right px-4 py-2.5 font-medium">Usos</th>
+                      <th className="text-right px-4 py-2.5 font-medium">Notas</th>
                       <th className="text-right px-4 py-2.5 font-medium">Generado</th>
-                      <th className="text-right px-4 py-2.5 font-medium">Cargas</th>
+                      <th className="text-right px-4 py-2.5 font-medium">Ciclos</th>
                       <th className="text-right px-4 py-2.5 font-medium">Empleados</th>
                       <th className="text-right px-4 py-2.5 font-medium">Clientes</th>
                     </tr>
