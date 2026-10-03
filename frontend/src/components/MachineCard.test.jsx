@@ -259,4 +259,27 @@ describe('MachineCard', () => {
     await userEvent.click(screen.getByRole('button'));
     expect(onClick).toHaveBeenCalledTimes(1);
   });
+  // Lavadora con cronómetro (mig. 137): cuenta hacia arriba y el botón para
+  // finalizarla está siempre a la vista.
+  describe('con cronómetro', () => {
+    const lg = { id: 7, nombre: 'L1', estado: 'en_uso', tipo: 'lavadora_mediana', cronometro: true, tiempo_restante: '03:20', progreso: 0.1 };
+
+    it('muestra el tiempo que lleva y el botón de finalizar', async () => {
+      const onTerminarCiclo = vi.fn();
+      render(<MachineCard maquina={lg} nota={{ id: 1, tipo_servicio: 'POR_ENCARGO' }} onTerminarCiclo={onTerminarCiclo} />);
+      expect(screen.getByText('03:20')).toBeInTheDocument();
+      await userEvent.click(screen.getByRole('button', { name: 'FINALIZAR' }));
+      expect(onTerminarCiclo).toHaveBeenCalledTimes(1);
+    });
+
+    it('si su carga encadena secado, el botón lleva al secado', () => {
+      render(<MachineCard maquina={lg} nota={{ id: 1, tipo_servicio: 'AUTOSERVICIO', lavadoras_con_secado_ids: [7] }} />);
+      expect(screen.getByRole('button', { name: 'INICIAR SECADO' })).toBeInTheDocument();
+    });
+
+    it('al llegar al tope dice que se le cortó la luz', () => {
+      render(<MachineCard maquina={{ ...lg, tope_alcanzado: true }} nota={{ id: 1, tipo_servicio: 'POR_ENCARGO' }} />);
+      expect(screen.getByText(/se le cortó la luz/)).toBeInTheDocument();
+    });
+  });
 });

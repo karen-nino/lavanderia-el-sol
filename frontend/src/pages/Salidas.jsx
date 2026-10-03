@@ -244,6 +244,8 @@ export default function Salidas() {
         api.patch(`/notas/${id}/encender-maquina`, { maquina_id: maq.id }),
         new Promise((r) => setTimeout(r, 1800)),
       ]);
+      // La de cronómetro no tiene paso siguiente: ya quedó corriendo.
+      if (maq.cronometro) setMaquinaModalId(null);
       await cargarDatos();
     } catch (err) {
       setErrorAccion(err.message);
@@ -750,6 +752,9 @@ export default function Salidas() {
             // corriente (mig. 122): entonces encender e iniciar son lo mismo y
             // el paso de "Encender máquina" sobra.
             arrancaSola: Boolean(u.marca_opciones?.arranca_sola),
+            // Lavadora con cronómetro (mig. 137): encenderla ya arranca su
+            // carga, no hay "Iniciar" y se finaliza a mano cuando termine.
+            cronometro: Boolean(u.marca_opciones?.cronometro),
             ...(esLav ? {} : { tamano: u.tamano }),
             // La pasada viva muestra el estado real de su máquina; una ya
             // cerrada cumplió su parte (verde).
@@ -1174,7 +1179,9 @@ export default function Salidas() {
                 // Lavadora que ya cumplió su ciclo (terminó el lavado): se
                 // muestra en verde y sin botón; el secado se inicia aparte
                 // desde la secadora de la carga.
-                const lavadoTerminado = m.estado === 'en_uso' && m.tipo !== 'secadora' && cicloCumplido(m);
+                // La de cronómetro no "cumple" nada: corre hasta que la finalizan.
+                const lavadoTerminado = m.estado === 'en_uso' && m.tipo !== 'secadora'
+                  && !m.cronometro && cicloCumplido(m);
                 // ¿Se le puede dar otra vuelta a ESTA máquina? Solo en Por
                 // Encargo, sobre la ÚLTIMA pasada de su hueco —las anteriores
                 // son historial—, con el hueco libre (ya se soltó al terminar),
@@ -1214,6 +1221,11 @@ export default function Salidas() {
                       {m.esperandoArranque && (
                         <span className="text-xs font-medium text-green-700 basis-full">
                           Encendida. Carga la ropa, arráncala y dale a Iniciar.
+                        </span>
+                      )}
+                      {m.cronometro && m.estado === 'en_uso' && !m.tomadaPor && (
+                        <span className="text-xs font-medium text-green-700 basis-full">
+                          Encendida. Arráncala con su botón y finalízala cuando termine.
                         </span>
                       )}
                     </div>
@@ -1260,7 +1272,7 @@ export default function Salidas() {
                       </button>
                     )}
                     {m.estado === 'en_uso' && !m.esperandoArranque && (
-                      cicloCumplido(m) ? (
+                      (m.cronometro || cicloCumplido(m)) ? (
                         // Ya cumplió su ciclo: cerrar la carga de esa máquina.
                         // La única que no lo ofrece es la lavadora que encadena
                         // secado (Autoservicio): ahí el paso es pasar la ropa a
@@ -1796,6 +1808,14 @@ export default function Salidas() {
                   botón: lo que tardes de más se le descuenta al {accion}.
                 </p>
               )
+            ) : maqModal.cronometro ? (
+              /* Cronómetro (mig. 137): no hay segundo paso. */
+              <p className="text-sm text-gray-500">
+                Se le da corriente a{' '}
+                <span className="font-semibold text-gray-800">{maqModal.nombre}</span> y empieza a
+                correr el cronómetro. Carga la ropa, arráncala con su botón y, cuando termine,
+                finalízala desde su tarjeta: ahí se le corta la luz.
+              </p>
             ) : preguntaSuTiempo && minElegidos != null ? (
               <p className="text-sm text-gray-500">
                 Se le da corriente a{' '}

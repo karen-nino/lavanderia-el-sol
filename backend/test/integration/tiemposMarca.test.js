@@ -82,11 +82,11 @@ async function arrancar(lavadoraId, extraCarga = {}) {
 }
 
 describe('sellado del ciclo — manda la marca de la máquina', () => {
-  it('una LG mediana toma los 45 min de su marca, no los 30 de su tamaño', async () => {
-    const lg = await seedMarca('LG');
+  it('una Whirlpool mediana toma los 45 min de su marca, no los 30 de su tamaño', async () => {
+    const lg = await seedMarca('Whirlpool');
     await tiempoDe(lg, 'lavadora', 'mediana', 45);
     const lavadoraId = await seedMaquina({ nombre: 'L1', tipo: 'lavadora_mediana', tamano: 'mediana' });
-    await ponerMarca(lavadoraId, 'LG');
+    await ponerMarca(lavadoraId, 'Whirlpool');
 
     await arrancar(lavadoraId);
 
@@ -129,11 +129,11 @@ describe('sellado del ciclo — manda la marca de la máquina', () => {
   });
 
   it('con marca pero sin esa combinación configurada, cae al tamaño', async () => {
-    const lg = await seedMarca('LG');
+    const lg = await seedMarca('Whirlpool');
     // Configurada la jumbo, pero la máquina es mediana.
     await tiempoDe(lg, 'lavadora', 'jumbo', 45);
     const lavadoraId = await seedMaquina({ nombre: 'L3', tipo: 'lavadora_mediana', tamano: 'mediana' });
-    await ponerMarca(lavadoraId, 'LG');
+    await ponerMarca(lavadoraId, 'Whirlpool');
 
     await arrancar(lavadoraId);
 
@@ -141,10 +141,10 @@ describe('sellado del ciclo — manda la marca de la máquina', () => {
   });
 
   it('el edredón ya no tiene tiempo propio: usa el de su máquina', async () => {
-    const lg = await seedMarca('LG');
+    const lg = await seedMarca('Whirlpool');
     await tiempoDe(lg, 'lavadora', 'jumbo', 45);
     const lavadoraId = await seedMaquina({ nombre: 'L9', tipo: 'lavadora_jumbo', tamano: 'jumbo' });
-    await ponerMarca(lavadoraId, 'LG');
+    await ponerMarca(lavadoraId, 'Whirlpool');
 
     const clienteId = await seedCliente();
     const creada = await request(app).post('/api/notas').set(auth(admin.token)).send({
@@ -171,13 +171,13 @@ describe('GET/PUT /api/etiquetas/tiempos-marca', () => {
   // respaldo de las máquinas sin modelo, y se puede seguir escribiendo por su
   // endpoint para corregir uno heredado.
   it('el listado ya no trae la marca suelta, pero su tiempo se puede escribir', async () => {
-    const lg = await seedMarca('LG');
+    const lg = await seedMarca('Whirlpool');
     const lavadoraId = await seedMaquina({ nombre: 'L1', tipo: 'lavadora_mediana', tamano: 'mediana' });
-    await ponerMarca(lavadoraId, 'LG');
+    await ponerMarca(lavadoraId, 'Whirlpool');
 
     const lista = await request(app).get('/api/etiquetas/tiempos-marca').set(auth(admin.token));
     expect(lista.status).toBe(200);
-    expect(lista.body.some(t => t.marca === 'LG' && t.modelo_id == null)).toBe(false);
+    expect(lista.body.some(t => t.marca === 'Whirlpool' && t.modelo_id == null)).toBe(false);
 
     await request(app).put('/api/etiquetas/tiempos-marca').set(auth(admin.token))
       .send({ marca_id: lg, tipo: 'lavadora', tamano: 'mediana', minutos: 45 }).expect(200);
@@ -187,10 +187,10 @@ describe('GET/PUT /api/etiquetas/tiempos-marca', () => {
   });
 
   it('vaciar el tiempo lo borra y la máquina vuelve al respaldo por tamaño', async () => {
-    const lg = await seedMarca('LG');
+    const lg = await seedMarca('Whirlpool');
     await tiempoDe(lg, 'lavadora', 'mediana', 45);
     const lavadoraId = await seedMaquina({ nombre: 'L1', tipo: 'lavadora_mediana', tamano: 'mediana' });
-    await ponerMarca(lavadoraId, 'LG');
+    await ponerMarca(lavadoraId, 'Whirlpool');
 
     await request(app).put('/api/etiquetas/tiempos-marca').set(auth(admin.token))
       .send({ marca_id: lg, tipo: 'lavadora', tamano: 'mediana', minutos: '' }).expect(200);
@@ -200,7 +200,7 @@ describe('GET/PUT /api/etiquetas/tiempos-marca', () => {
   });
 
   it('un operador no puede cambiar los tiempos', async () => {
-    const lg = await seedMarca('LG');
+    const lg = await seedMarca('Whirlpool');
     const operador = await seedUsuario({ rol: 'operador', sucursal: 'centro', nombre: 'Opé' });
 
     await request(app).put('/api/etiquetas/tiempos-marca').set(auth(operador.token))
@@ -208,7 +208,7 @@ describe('GET/PUT /api/etiquetas/tiempos-marca', () => {
   });
 
   it('rechaza minutos no positivos', async () => {
-    const lg = await seedMarca('LG');
+    const lg = await seedMarca('Whirlpool');
     const res = await request(app).put('/api/etiquetas/tiempos-marca').set(auth(admin.token))
       .send({ marca_id: lg, tipo: 'lavadora', tamano: 'mediana', minutos: 0 });
     expect(res.status).toBe(400);

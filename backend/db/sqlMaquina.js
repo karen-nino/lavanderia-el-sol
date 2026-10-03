@@ -45,16 +45,36 @@ export const MINUTOS_CONFIGURADOS = `COALESCE(
   )
 )`;
 
+// Lavadoras que corren con CRONÓMETRO en vez de temporizador (mig. 137): al
+// encenderlas empieza a contar hacia arriba, el empleado las arranca con su
+// botón y la carga termina cuando alguien la finaliza. Un solo ciclo.
+//
+// Va fijo en el código, por nombre de marca, a petición del negocio: es una
+// prueba con LG y Samsung y se extiende a otras marcas cuando se confirme.
+// Las secadoras nunca: siguen con su temporizador.
+export const MARCAS_CRONOMETRO = ['lg', 'samsung'];
+
+export const esCronometro = (maq) =>
+  Boolean(maq) && maq.tipo !== 'secadora'
+  && MARCAS_CRONOMETRO.includes(String(maq.marca ?? '').trim().toLowerCase());
+
+// La misma regla en SQL, para la fila de `maquinas` con el alias que se pase.
+export const esCronometroSql = (alias) =>
+  `(${alias}.tipo <> 'secadora' AND lower(btrim(COALESCE(${alias}.marca, ''))) IN (${
+    MARCAS_CRONOMETRO.map((x) => `'${x}'`).join(', ')}))`;
+
 // Cómo se comporta esta máquina, según su catálogo:
 //   · `arranca_sola` lo declara la MARCA (mig. 122): empieza al recibir
 //     corriente, así que el flujo de dos pasos sobra.
 //   · `dos_ciclos` lo declara el MODELO (mig. 123): una carga corre DOS vueltas
 //     en ese aparato. Sin modelo capturado va en FALSE y la carga corre una
 //     sola, que es lo normal.
+//   · `cronometro` sale de MARCAS_CRONOMETRO (mig. 137).
 // Mismo alias `m` que MINUTOS_CONFIGURADOS.
 export const OPCIONES_DE_MARCA = `(
   SELECT json_build_object(
            'arranca_sola', mm.arranca_sola,
+           'cronometro', ${esCronometroSql('m')},
            'dos_ciclos', COALESCE((
              SELECT mo.dos_ciclos
                FROM modelos_maquina mo

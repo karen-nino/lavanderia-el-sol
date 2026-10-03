@@ -337,6 +337,26 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
     // configuración del servidor— y aquí solo se cuenta hacia atrás.
     const habilitaEn = m.otro_ciclo_desde ? new Date(m.otro_ciclo_desde).getTime() : null;
     const esperaSeg = habilitaEn ? Math.max(0, Math.ceil((habilitaEn - now) / 1000)) : 0;
+    // Lavadora con cronómetro (mig. 137): cuenta hacia ARRIBA desde que se
+    // encendió y termina cuando alguien la finaliza, así que nunca se pone
+    // verde sola. Su `ciclo_minutos` es el tope de Ajustes: al llegar ahí el
+    // corte le quita la luz y el reloj se queda parado en el tope.
+    if (m.marca_opciones?.cronometro && !soloManual) {
+      const contadoSeg = duracionSeg > 0 ? Math.min(transcurridoSeg, duracionSeg) : transcurridoSeg;
+      return {
+        nota: notaRel,
+        maquina: {
+          ...m,
+          cronometro: true,
+          progreso: duracionSeg > 0 ? contadoSeg / duracionSeg : 1,
+          tiempo_restante: inicio ? formatMMSS(contadoSeg) : '—:—',
+          tope_alcanzado: inicio != null && duracionSeg > 0 && restanteSeg <= 0,
+          necesita_terminar_ciclo: false,
+          puede_otro_ciclo: false,
+          espera_otro_ciclo: 0,
+        },
+      };
+    }
     return {
       nota: notaRel,
       maquina: {
@@ -564,7 +584,7 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
       {confirmTerminar && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
-            <h3 className="text-base font-bold text-gray-900">{terminaLavado ? 'Iniciar secado' : 'Terminar ciclo'}</h3>
+            <h3 className="text-base font-bold text-gray-900">{terminaLavado ? 'Iniciar secado' : confirmTerminar.cronometro ? 'Finalizar y apagar' : 'Terminar ciclo'}</h3>
             {terminaLavado ? (
               <>
                 <p className="text-sm text-gray-500">
@@ -598,7 +618,9 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
             ) : (
               <>
                 <p className="text-sm text-gray-500">
-                  ¿Confirmar que la carga de <span className="font-semibold text-gray-800">{confirmTerminar.nombre}</span> ya terminó? La máquina pasará a disponible.
+                  ¿Confirmar que la carga de <span className="font-semibold text-gray-800">{confirmTerminar.nombre}</span> ya terminó? {confirmTerminar.cronometro
+                    ? 'Se le cortará la luz y pasará a disponible.'
+                    : 'La máquina pasará a disponible.'}
                 </p>
                 {notaParaTerminar && (
                   sigueEnProceso ? (

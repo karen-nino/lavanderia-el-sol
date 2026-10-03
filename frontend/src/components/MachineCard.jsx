@@ -227,6 +227,42 @@ export default function MachineCard({
     );
   }
 
+  // Lavadora con cronómetro (mig. 137): el reloj cuenta hacia arriba desde que
+  // se encendió y el botón para finalizarla está siempre a la vista, porque
+  // aquí nadie avisa que el lavado terminó: lo decide quien tiene la ropa
+  // enfrente. Finalizar le corta la luz. Si llegó al tope sin que nadie la
+  // finalizara, el corte ya se la quitó y se dice en rojo.
+  if (maquina.cronometro && nota) {
+    const debeSecar = Array.isArray(nota?.lavadoras_con_secado_ids)
+      && nota.lavadoras_con_secado_ids.some(mid => String(mid) === String(maquina.id));
+    return (
+      <div {...containerProps} className={`rounded-card bg-white shadow-card overflow-hidden ${interactivoCls}`}>
+        <div className={`${headerCls} ${header.cls}`}>
+          <span className={nombreCls}>{maquina.nombre}</span>
+        </div>
+        <div className="px-card-pad pt-5 pb-6 flex flex-col items-center gap-3">
+          <CircularTimer
+            progress={maquina.progreso ?? 0}
+            label={maquina.tiempo_restante ?? '—:—'}
+            color={maquina.tope_alcanzado ? 'red' : 'blue'}
+          />
+          {maquina.tope_alcanzado && (
+            <p className="text-kpi-label text-red text-sm text-center">
+              Llegó al tope y se le cortó la luz.
+            </p>
+          )}
+          {infoNota}
+          <button
+            onClick={(e) => { e.stopPropagation(); onTerminarCiclo?.(maquina); }}
+            className="w-full bg-green ring ring-green-700 text-white text-section py-6 rounded-card-sm shadow-card hover:opacity-90 transition-opacity mt-1"
+          >
+            {debeSecar ? 'INICIAR SECADO' : 'FINALIZAR'}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   // Temporizador en marcha. La secadora en uso va en tonos rojos (encabezado
   // y aro del contador); las lavadoras conservan el azul.
   const esSecadora = maquina.tipo === 'secadora';

@@ -180,11 +180,11 @@ describe('el siguiente ciclo repite los mismos dos pasos', () => {
   // solo ciclo, y este describe es justo el del segundo.
   async function arrancada(nombre) {
     await seedMarca({
-      nombre: 'LG', tipo: 'lavadora', tamano: 'mediana', minutos: 15,
+      nombre: 'Whirlpool', tipo: 'lavadora', tamano: 'mediana', minutos: 15,
       modelo: 'WM-2C', dos_ciclos: true,
     });
     const id = await seedMaquina({
-      nombre, tipo: 'lavadora_mediana', tamano: 'mediana', marca: 'LG', modelo: 'WM-2C',
+      nombre, tipo: 'lavadora_mediana', tamano: 'mediana', marca: 'Whirlpool', modelo: 'WM-2C',
     });
     const notaId = await notaConLavadora(id);
     await iniciar(notaId, id).expect(200);

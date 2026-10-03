@@ -16,6 +16,12 @@ import { COMODINES_WHATSAPP, armarMensajeWhatsapp } from '../lib/mensajeWhatsapp
 // (controllers/ajustes.controller.js), esto es solo no ofrecerlos.
 const NOTA_DEMO = 'En la demostración este dato no se cambia.';
 
+// Ayuda del tope de las lavadoras con cronómetro (mig. 137); va igual en las
+// dos versiones de la pantalla.
+const TEXTO_TOPE_CRONOMETRO =
+  'Las LG y Samsung no tienen tiempo de ciclo: el cronómetro corre hasta que las finalizan. '
+  + 'Si nadie lo hace, al llegar a este tope se les corta la luz y se avisa en la campana.';
+
 const INPUT_CLS =
   'w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent transition';
 
@@ -1379,6 +1385,7 @@ export default function Ajustes() {
     tiempo_carga_jumbo:    Number(config.tiempo_carga_jumbo),
     tiempo_carga_secadora: Number(config.tiempo_carga_secadora),
     tiempo_secadora_jumbo: Number(config.tiempo_secadora_jumbo),
+    tope_cronometro_minutos: Number(config.tope_cronometro_minutos),
     // Los textos con los que se identifica el negocio no se mandan en la demo:
     // el backend los ignora igualmente, pero así el payload dice lo mismo que
     // la pantalla, donde van deshabilitados.
@@ -1599,8 +1606,8 @@ export default function Ajustes() {
       </div>
     </Field>
   );
-  const campoTiempo = (name, hint) => (
-    <Field label="Tiempo de carga" hint={hint}>
+  const campoTiempo = (name, hint, label = 'Tiempo de carga') => (
+    <Field label={label} hint={hint}>
       <div className="flex items-center gap-2">
         <input
           type="number" name={name} min="1" step="1" required
@@ -1654,6 +1661,13 @@ export default function Ajustes() {
       {campoPrecio('precio_carga_jumbo', 'Aplica a lavadoras jumbo en autoservicio y por encargo.')}
       {campoTiempo('tiempo_carga_jumbo', 'Se usa en las lavadoras jumbo cuyo modelo no tenga tiempo propio.')}
       {camposTiempoMarca('lavadora', 'jumbo')}
+
+      <div className="border-t border-gray-100" />
+
+      {/* Las LG y Samsung corren con cronómetro (mig. 137): no tienen tiempo de
+          ciclo, solo este tope por si nadie las finaliza. */}
+      {subTitulo('LG y Samsung')}
+      {campoTiempo('tope_cronometro_minutos', TEXTO_TOPE_CRONOMETRO, 'Tope del cronómetro')}
     </Section>
 
     {/* La secadora va separada en Mediana y Jumbo igual que la lavadora. El
@@ -2361,8 +2375,8 @@ export default function Ajustes() {
       </div>
     </MobileField>
   );
-  const campoTiempoM = (name, hint) => (
-    <MobileField label="Tiempo de carga" hint={hint}>
+  const campoTiempoM = (name, hint, label = 'Tiempo de carga') => (
+    <MobileField label={label} hint={hint}>
       <div className="flex items-center gap-2">
         <input
           type="number" name={name} min="1" step="1" required
@@ -2410,6 +2424,9 @@ export default function Ajustes() {
           {campoPrecioM('precio_carga_jumbo', 'Aplica a lavadoras jumbo (autoservicio y por encargo).')}
           {campoTiempoM('tiempo_carga_jumbo', 'Se usa en las lavadoras jumbo cuyo modelo no tenga tiempo propio.')}
           {camposTiempoMarcaM('lavadora', 'jumbo')}
+        </TarjetaMobile>
+        <TarjetaMobile titulo="LG y Samsung">
+          {campoTiempoM('tope_cronometro_minutos', TEXTO_TOPE_CRONOMETRO, 'Tope del cronómetro')}
         </TarjetaMobile>
         </div>
       </div>

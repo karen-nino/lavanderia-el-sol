@@ -34,6 +34,7 @@
 import pool from '../db/pool.js';
 import * as dispositivos from './dispositivos/index.js';
 import { resumirMotivo } from './dispositivos/mensajes.js';
+import { esCronometro } from '../db/sqlMaquina.js';
 
 // Cuánto vale un encendido manual antes de caducar (mig. 104). Un ciclo largo
 // no pasa de una hora; el margen es para que nadie se quede sin máquina porque
@@ -122,10 +123,13 @@ export const MAX_CICLOS_POR_CARGA = (() => {
 // regla. Los demás candados siguen mandando por encima: una secadora corre uno,
 // una máquina sin tiempo configurado también (no se le puede encadenar nada a
 // un tiempo supuesto) y la vuelta extra de la mig. 115 se marca en la carga.
+// La lavadora con cronómetro (mig. 137) también corre uno: termina cuando
+// alguien la finaliza, así que no hay segunda vuelta que ofrecer.
 export const maxCiclosDeMaquina = (maq) =>
   maq?.tipo === 'secadora'
   || maq?.minutos_ciclo == null
   || maq?.ciclo_unico
+  || maq?.marca_opciones?.cronometro
   || !maq?.marca_opciones?.dos_ciclos
     ? 1 : MAX_CICLOS_POR_CARGA;
 
@@ -395,6 +399,30 @@ async function liberarEsperaArranque(id) {
   return rows[0] ?? null;
 }
 
+// Avisa en la campana que a una lavadora con cronómetro (mig. 137) se le cortó
+// la luz por llegar al tope: nadie la finalizó y su carga sigue abierta. Una
+// sola vez por encendido —el barrido pasa cada pocos minutos y llenaría la
+// campana—, contando desde `en_uso_desde`, que es cuando empezó el cronómetro.
+async function avisarTopeCronometro(maq) {
+  try {
+    await pool.query(
+      `INSERT INTO notificaciones (tipo, mensaje, maquina_id, sucursal)
+       SELECT 'tope_cronometro', $1, $2, $3
+        WHERE NOT EXISTS (
+          SELECT 1 FROM notificaciones
+           WHERE tipo = 'tope_cronometro' AND maquina_id = $2 AND created_at >= $4
+        )`,
+      [
+        `${maq.nombre} llegó a ${maq.ciclo_minutos} min sin que nadie la finalizara: se le cortó la luz. Finaliza su carga.`,
+        maq.id, maq.sucursal, maq.en_uso_desde,
+      ]
+    );
+  } catch (err) {
+    // El aviso es un extra: que falle no debe impedir el corte.
+    console.error('[sonoff] no se pudo avisar del tope del cronómetro:', err.message);
+  }
+}
+
 // Sincroniza UNA máquina (por id). Devuelve la fila actualizada, o null si no
 // existe. No lanza.
 //
@@ -404,7 +432,7 @@ async function liberarEsperaArranque(id) {
 export async function sincronizarSonoff(maquinaId, { reconciliando = false } = {}) {
   try {
     const { rows } = await pool.query(
-      `SELECT id, nombre, estado, sucursal, device_id, device_canal, sonoff_estado,
+      `SELECT id, nombre, tipo, marca, estado, sucursal, device_id, device_canal, sonoff_estado,
               encendida_manual_at, en_uso_desde, ciclo_minutos,
               encendida_sin_iniciar_at, encendida_para_nota_id
          FROM maquinas WHERE id = $1`,
@@ -442,6 +470,12 @@ export async function sincronizarSonoff(maquinaId, { reconciliando = false } = {
     }
 
     const deseado = estadoDeseado(maq);
+
+    // En la lavadora con cronómetro el "fin de ciclo" es el tope (mig. 137):
+    // si el corte llega, es que nadie la finalizó.
+    if (deseado === 'off' && maq.estado === 'en_uso' && esCronometro(maq) && cicloVencido(maq)) {
+      await avisarTopeCronometro(maq);
+    }
 
     // El barrido NO vuelve a encender una máquina que quedó apagada si la
     // última orden que le mandamos sí se aplicó ('enlazada'): en ese caso el

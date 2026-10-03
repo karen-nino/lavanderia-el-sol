@@ -85,7 +85,7 @@ describe('GET /api/maquinas — lo que declaran marca y modelo', () => {
     const res = await request(app).get('/api/maquinas').set(auth(admin.token));
     expect(res.status).toBe(200);
     const m = res.body.find(x => x.id === maquinaId);
-    expect(m.marca_opciones).toEqual({ arranca_sola: true, dos_ciclos: true });
+    expect(m.marca_opciones).toEqual({ arranca_sola: true, cronometro: false, dos_ciclos: true });
   });
 
   it('el modelo marcado con 2 ciclos sube el tope a 2', async () => {
@@ -102,18 +102,18 @@ describe('GET /api/maquinas — lo que declaran marca y modelo', () => {
 
   it('una máquina SIN modelo capturado corre un solo ciclo', async () => {
     await request(app).post('/api/etiquetas/marcas-maquina')
-      .set(auth(admin.token)).send({ nombre: 'LG' }).expect(201);
-    const { rows: marca } = await pool.query("SELECT id FROM marcas_maquina WHERE nombre = 'LG'");
+      .set(auth(admin.token)).send({ nombre: 'Whirlpool' }).expect(201);
+    const { rows: marca } = await pool.query("SELECT id FROM marcas_maquina WHERE nombre = 'Whirlpool'");
     await pool.query(
       `INSERT INTO tiempos_marca (marca_id, tipo, tamano, minutos) VALUES ($1, 'lavadora', 'mediana', 45)`,
       [marca[0].id]
     );
     const maquinaId = await seedMaquina({
-      nombre: 'L-LG', tipo: 'lavadora_mediana', tamano: 'mediana', marca: 'LG',
+      nombre: 'L-WH', tipo: 'lavadora_mediana', tamano: 'mediana', marca: 'Whirlpool',
     });
     const res = await request(app).get('/api/maquinas').set(auth(admin.token));
     const m = res.body.find(x => x.id === maquinaId);
-    expect(m.marca_opciones).toEqual({ arranca_sola: false, dos_ciclos: false });
+    expect(m.marca_opciones).toEqual({ arranca_sola: false, cronometro: false, dos_ciclos: false });
     // Lo decidido el 2026-09-25: los dos ciclos se declaran en el modelo, así
     // que una máquina sin modelo no los ofrece.
     expect(m.ciclos_max).toBe(1);
