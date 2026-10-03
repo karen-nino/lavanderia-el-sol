@@ -234,6 +234,18 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
   // prometerlo confunde. Lo calcula el servidor con el mismo criterio con el
   // que cierra la nota.
   const sigueEnProceso = otrasEnUso || Boolean(notaParaTerminar?.trabajo_pendiente);
+  // Qué le pasa a la nota cuando esta máquina era lo último (la regla de
+  // `estadoAlTerminarCargas` en el servidor, igual que en Salidas):
+  //   · Autoservicio cobrado → se finaliza sola: el cliente se lleva su ropa.
+  //   · Autoservicio que debe → "Por Cobrar", donde se liquida.
+  //   · Por Encargo → NO avanza sola: espera a que la marquen como Procesado
+  //     (2026-09-28). Antes este aviso prometía "Por Entregar" en todos.
+  //   · Cualquier otro (Edredón) → "Por Entregar".
+  const tipoTerminar = notaParaTerminar?.tipo_servicio;
+  const esAutoservicioTerminar = tipoTerminar === 'AUTOSERVICIO';
+  const estadoAlCerrar = tipoTerminar === 'POR_ENCARGO' ? null
+    : !esAutoservicioTerminar ? 'Por Entregar'
+    : notaParaTerminar?.estado_pago === 'PAGADO' ? 'Finalizada' : 'Por Cobrar';
 
   const confirmarTerminarCiclo = async (minutosElegidos = null) => {
     if (!confirmTerminar) return;
@@ -631,11 +643,17 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
                       La nota <span className="font-semibold text-gray-800">{notaParaTerminar.folio ?? `#${notaParaTerminar.id}`}</span> sigue en proceso
                       {otrasEnUso
                         ? ': sus demás cargas todavía están en máquina.'
-                        : ': le queda otra máquina por asignar o por arrancar.'} Aún no pasa a "Por Entregar".
+                        : ': le queda otra máquina por asignar o por arrancar.'}
+                      {estadoAlCerrar && ` Aún no pasa a "${estadoAlCerrar}".`}
+                    </p>
+                  ) : estadoAlCerrar ? (
+                    <p className="text-sm text-gray-500">
+                      La nota <span className="font-semibold text-gray-800">{notaParaTerminar.folio ?? `#${notaParaTerminar.id}`}</span> pasará a estado <span className="font-semibold text-gray-800">"{estadoAlCerrar}"</span>
+                      {esAutoservicioTerminar && ` ya que es de autoservicio${estadoAlCerrar === 'Finalizada' ? ' y ya está cobrada' : ''}`}.
                     </p>
                   ) : (
                     <p className="text-sm text-gray-500">
-                      La nota <span className="font-semibold text-gray-800">{notaParaTerminar.folio ?? `#${notaParaTerminar.id}`}</span> pasará a estado <span className="font-semibold text-gray-800">"Por Entregar"</span>.
+                      La nota <span className="font-semibold text-gray-800">{notaParaTerminar.folio ?? `#${notaParaTerminar.id}`}</span> se queda en espera hasta que la marques como <span className="font-semibold text-gray-800">Procesado</span> en su detalle.
                     </p>
                   )
                 )}
