@@ -213,6 +213,19 @@ export async function getResumen(req, res) {
               ) t
           ), '[]'::json)                               AS maquinas,
           NULLIF(TRIM(u.nombre || ' ' || COALESCE(u.apellido, '')), '') AS atendio,
+          -- Abonos de la nota (mig. 121), del más viejo al más nuevo: Ventas
+          -- los enseña al tocar su forma de pago. Los revertidos no: ese dinero
+          -- volvió.
+          COALESCE((
+            SELECT json_agg(json_build_object(
+                     'id', ab.id, 'monto', ab.monto, 'forma_pago', ab.forma_pago,
+                     'creado_en', ab.created_at,
+                     'recibio', NULLIF(TRIM(ua.nombre || ' ' || COALESCE(ua.apellido, '')), '')
+                   ) ORDER BY ab.created_at, ab.id)
+              FROM nota_abonos ab
+              LEFT JOIN usuarios ua ON ua.id = ab.usuario_id
+             WHERE ab.nota_id = o.id AND ab.revertido_at IS NULL
+          ), '[]'::json)                               AS abonos,
           (SELECT COUNT(*) FROM nota_cargas nc WHERE nc.nota_id = o.id)::int AS cargas,
           COALESCE(np_t.total_productos, 0)            AS total_productos,
           o.precio_total                               AS total
@@ -342,6 +355,7 @@ export async function getResumen(req, res) {
         tipo_servicio:   r.tipo_servicio,
         motivo_cancelacion: r.motivo_cancelacion,
         maquinas:        r.maquinas ?? [],
+        abonos:          (r.abonos ?? []).map((a) => ({ ...a, monto: parseFloat(a.monto) })),
         atendio:         r.atendio,
         cargas:          parseInt(r.cargas, 10),
         total_productos: parseFloat(r.total_productos),

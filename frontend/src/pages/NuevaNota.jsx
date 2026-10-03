@@ -3,8 +3,9 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { api } from '../lib/api';
 import { etiquetaProducto, ordenProducto, seVendePorUnidad, esPolvo } from '../lib/formatoInventario';
 import { capitalizarNombre } from '../lib/texto';
-import { FORMAS_PAGO } from '../lib/formasPago';
+import { FORMAS_PAGO, formaPagoLabel } from '../lib/formasPago';
 import AbrirCajaModal from '../components/AbrirCajaModal';
+import ModalCobrar from '../components/ModalCobrar';
 import ElegirMaquinasModal, { SELECCION_EDREDON } from '../components/ElegirMaquinasModal';
 import Selector from '../components/Selector';
 
@@ -141,6 +142,9 @@ const ENCARGO_INIT = {
   cliente_id:      '',
   pago_anticipado: '',
   forma_pago:      '',
+  // Cuánto se cobró por adelantado (modal de Cobrar). Menos que el total deja
+  // la nota abonada; el total o más, pagada.
+  monto_anticipo:  '',
   fecha_entrega:   '',
   tiempo_entrega:  '',
   instrucciones:   '',
@@ -232,6 +236,11 @@ export default function NuevaNota() {
   // ningún corte (van con caja_id nulo, mig. 101). Se avisa, no se bloquea.
   const [cajaAbierta, setCajaAbierta] = useState(null);
   const [modalCajaOpen, setModalCajaOpen] = useState(false);
+  // Pago anticipado de Por Encargo (2026-10-03): "Sí" abre el mismo modal de
+  // Cobrar del detalle. Lo capturado se guarda al crear la nota.
+  const [anticipoOpen,  setAnticipoOpen]  = useState(false);
+  const [anticipoMonto, setAnticipoMonto] = useState('');
+  const [anticipoForma, setAnticipoForma] = useState('');
   const [form,              setForm]              = useState(FORM_INIT);
   const [productosLista,    setProductosLista]    = useState([]);
   const [error,             setError]             = useState('');
@@ -1101,6 +1110,31 @@ export default function NuevaNota() {
   const pagoCapturado = Boolean(encargoForm.pago_anticipado)
     && (encargoForm.pago_anticipado !== 'SI' || Boolean(encargoForm.forma_pago));
 
+  // El anticipo se compara contra el total de AHORA: si después de cobrar se
+  // cambiaron servicios, lo cobrado puede ya no cubrir todo y queda de abono.
+  const anticipoNum = Number(encargoForm.monto_anticipo);
+  const anticipoParcial = !esEdicion && encargoForm.pago_anticipado === 'SI'
+    && encargoForm.monto_anticipo !== ''
+    && Number.isFinite(anticipoNum) && anticipoNum > 0
+    && anticipoNum < encargoPrecioTotal - 1e-9;
+
+  // "Sí" en Pago anticipado: abre el cobro con "¿Cuánto recibes?" vacío para
+  // teclear lo que da el cliente; al reabrirlo (Cambiar) trae lo ya capturado.
+  const abrirAnticipo = () => {
+    setAnticipoMonto(encargoForm.monto_anticipo !== ''
+      ? String(Math.min(Number(encargoForm.monto_anticipo), encargoPrecioTotal))
+      : '');
+    setAnticipoForma(encargoForm.forma_pago || '');
+    setAnticipoOpen(true);
+  };
+
+  const confirmarAnticipo = () => {
+    setEncargoForm(f => ({
+      ...f, pago_anticipado: 'SI', forma_pago: anticipoForma, monto_anticipo: anticipoMonto,
+    }));
+    setAnticipoOpen(false);
+  };
+
   const handleEncargoSubmit = async () => {
     setError('');
     if (!pagoCapturado) {
@@ -1178,9 +1212,14 @@ export default function NuevaNota() {
         productos:      productosLista
           .filter(p => p.producto_id && p.cantidad)
           .map(p => ({ producto_id: Number(p.producto_id), cantidad: Number(p.cantidad) })),
-        estado_pago:    encargoForm.pago_anticipado === 'SI' ? 'PAGADO' : 'PENDIENTE',
+        // Un anticipo que no cubre el total no paga la nota: nace debiendo y
+        // con ese dinero como su primer abono.
+        estado_pago:    encargoForm.pago_anticipado === 'SI' && !anticipoParcial ? 'PAGADO' : 'PENDIENTE',
         // Forma de pago solo si pagó anticipado; si queda a deber, va null.
-        forma_pago:     encargoForm.pago_anticipado === 'SI' ? (encargoForm.forma_pago || null) : null,
+        forma_pago:     encargoForm.pago_anticipado === 'SI' && !anticipoParcial ? (encargoForm.forma_pago || null) : null,
+        ...(anticipoParcial && {
+          abono_inicial: { monto: anticipoNum, forma_pago: encargoForm.forma_pago },
+        }),
         // Si no se eligió fecha, la entrega se da por hecho para hoy.
         fecha_entrega:  fechaSegunDiaPrometido(encargoForm.tiempo_entrega, encargoForm.fecha_entrega),
         tiempo_entrega: encargoForm.tiempo_entrega || null,
@@ -1696,6 +1735,26 @@ export default function NuevaNota() {
         </div>
       )}
 
+      {/* Pago anticipado de Por Encargo: el mismo cobro del detalle. Va antes
+          del modal de caja para que "Abrir caja" quede encima de él. */}
+      {anticipoOpen && (
+        <ModalCobrar
+          titulo="Pago anticipado"
+          saldo={encargoPrecioTotal}
+          total={encargoPrecioTotal}
+          monto={anticipoMonto}
+          onMonto={setAnticipoMonto}
+          formaPago={anticipoForma}
+          onFormaPago={setAnticipoForma}
+          onCancelar={() => setAnticipoOpen(false)}
+          onConfirmar={confirmarAnticipo}
+          loading={false}
+          error=""
+          cajaAbierta={cajaAbierta}
+          onAbrirCaja={() => setModalCajaOpen(true)}
+        />
+      )}
+
       <AbrirCajaModal
         open={modalCajaOpen}
         onClose={() => setModalCajaOpen(false)}
@@ -2142,9 +2201,13 @@ export default function NuevaNota() {
                   {encargoForm.pago_anticipado === 'SI' && encargoForm.forma_pago && (
                     <div className="flex justify-between">
                       <span>Forma de pago</span>
-                      <span className="font-medium">
-                        {encargoForm.forma_pago === 'EFECTIVO' ? 'Efectivo' : 'Transferencia'}
-                      </span>
+                      <span className="font-medium">{formaPagoLabel(encargoForm.forma_pago)}</span>
+                    </div>
+                  )}
+                  {anticipoParcial && (
+                    <div className="flex justify-between">
+                      <span>Abono</span>
+                      <span className="font-medium">${anticipoNum.toFixed(2)}</span>
                     </div>
                   )}
                   {encargoForm.tiempo_entrega && (
@@ -2236,7 +2299,15 @@ export default function NuevaNota() {
                         key={opt.v}
                         type="button"
                         disabled={cobroBloqueado}
-                        onClick={() => setEncargoForm(f => ({ ...f, pago_anticipado: opt.v, forma_pago: opt.v === 'SI' ? f.forma_pago : '' }))}
+                        onClick={() => {
+                          // Al crear, "Sí" es cobrar: abre el modal de Cobrar.
+                          if (opt.v === 'SI' && !esEdicion) { abrirAnticipo(); return; }
+                          setEncargoForm(f => ({
+                            ...f, pago_anticipado: opt.v,
+                            forma_pago: opt.v === 'SI' ? f.forma_pago : '',
+                            monto_anticipo: opt.v === 'SI' ? f.monto_anticipo : '',
+                          }));
+                        }}
                         className={`py-8 px-2 border-2 rounded-xl font-semibold text-lg truncate transition-colors ${
                           selected ? 'border-blue bg-light-blue text-blue-700' : 'border-gray-300 bg-white text-gray-700 hover:border-blue-300'
                         } ${cobroBloqueado ? 'opacity-60 cursor-not-allowed' : ''}`}
@@ -2263,7 +2334,32 @@ export default function NuevaNota() {
 
                 {/* Forma de pago: solo si pagó anticipado (si queda a deber, aún
                     no hay pago). */}
-                {encargoForm.pago_anticipado === 'SI' && (
+                {/* Al crear, lo cobrado en el modal: cuánto, cómo y si queda
+                    debiendo. Tocarlo vuelve a abrir el cobro para cambiarlo. */}
+                {!esEdicion && encargoForm.pago_anticipado === 'SI' && (
+                  <button
+                    type="button"
+                    onClick={abrirAnticipo}
+                    className="w-full text-left rounded-xl border border-blue-200 bg-light-blue px-4 py-3 hover:border-blue-300 transition-colors"
+                  >
+                    <span className="flex items-center justify-between gap-3 text-sm text-blue-700">
+                      <span>
+                        {anticipoParcial ? 'Abono' : 'Cobrado'} · {formaPagoLabel(encargoForm.forma_pago)}
+                      </span>
+                      <span className="font-semibold">
+                        ${(anticipoParcial ? anticipoNum : encargoPrecioTotal).toFixed(2)}
+                      </span>
+                    </span>
+                    {anticipoParcial && (
+                      <span className="block text-xs text-blue-700 mt-0.5">
+                        Queda debiendo ${(encargoPrecioTotal - anticipoNum).toFixed(2)}
+                      </span>
+                    )}
+                    <span className="block text-xs text-blue underline underline-offset-2 mt-1">Cambiar</span>
+                  </button>
+                )}
+
+                {esEdicion && encargoForm.pago_anticipado === 'SI' && (
                   <div className="space-y-3 pt-2">
                     <h2 className="text-base font-semibold text-gray-900">Forma de pago</h2>
                     <div className="grid grid-cols-3 gap-3">

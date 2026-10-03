@@ -1836,6 +1836,7 @@ export const createNota = async (req, res) => {
     cargas,         // [{ lavadora_id, secadora_id, activar, ... }] por carga
     insumos   = [], // [{ insumo_id, cantidad }]  → movimientos_insumos
     productos = [], // [{ producto_id, cantidad }] → nota_productos
+    abono_inicial,  // { monto, forma_pago }: pago anticipado PARCIAL (Por Encargo)
   } = req.body;
 
   if (!TIPOS_SERVICIO_VALIDOS.includes(tipo_servicio)) {
@@ -1852,6 +1853,25 @@ export const createNota = async (req, res) => {
     return res.status(400).json({
       message: `Indica si la nota queda ${enPalabras(ESTADOS_PAGO_VALIDOS)}.`,
     });
+  }
+  // Pago anticipado que no cubre todo (2026-10-03): la nota nace debiendo y
+  // con su primer abono, en la misma transacción para que no quede una nota
+  // creada sin el dinero que ya se recibió. Si cubre todo, no es abono: la nota
+  // se manda PAGADO como siempre.
+  let abonoInicial = null;
+  if (abono_inicial != null) {
+    const importe = Number(abono_inicial.monto);
+    const forma = normalizarFormaPago(abono_inicial.forma_pago);
+    if (estado_pago !== 'PENDIENTE' || tipo_servicio !== 'POR_ENCARGO') {
+      return res.status(400).json({ message: 'El abono al crear solo aplica a una nota Por Encargo que queda debiendo.' });
+    }
+    if (!Number.isFinite(importe) || importe <= 0) {
+      return res.status(400).json({ message: 'El abono tiene que ser mayor a $0.' });
+    }
+    if (!forma) {
+      return res.status(400).json({ message: `Indica la forma de pago: ${enPalabras(FORMAS_PAGO_VALIDAS)}.` });
+    }
+    abonoInicial = { importe, forma };
   }
   // Por Encargo SÍ puede venir sin cliente: es la nota de mostrador, la del que
   // deja ropa de paso y no se registra (2026-09-29). Antes esto era un 400
@@ -2074,6 +2094,27 @@ export const createNota = async (req, res) => {
           FROM nota_productos np
           WHERE np.nota_id = $1 AND np.producto_id = a.id`,
         [nota.id]
+      );
+    }
+
+    // El pago anticipado parcial entra como primer abono, igual que en
+    // abonarNota: a la caja abierta (o fuera de corte si no hay).
+    if (abonoInicial) {
+      const total = Number(nota.precio_total ?? 0);
+      if (abonoInicial.importe >= total - 1e-9) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({
+          message: `El abono cubre todo ($${total.toFixed(2)}): cobra la nota completa en lugar de abonar.`,
+        });
+      }
+      const { rows: cajaRows } = await client.query(
+        `SELECT id FROM cajas WHERE estado = 'abierta' AND sucursal = $1 LIMIT 1`,
+        [req.sucursal]
+      );
+      await client.query(
+        `INSERT INTO nota_abonos (nota_id, caja_id, usuario_id, monto, forma_pago)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [nota.id, cajaRows[0]?.id ?? null, req.user?.id ?? null, abonoInicial.importe, abonoInicial.forma]
       );
     }
 

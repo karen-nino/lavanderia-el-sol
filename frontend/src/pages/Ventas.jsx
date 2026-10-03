@@ -70,6 +70,16 @@ const fmtEncendida = (segundos) => {
   return `${Math.floor(min / 60)} h ${String(min % 60).padStart(2, '0')} min`;
 };
 
+// Forma de pago de una nota con abonos. Si se pagó con más de una forma
+// (efectivo y luego transferencia) dice "Varios" y el detalle está al tocarla;
+// si no, la suya o, si aún debe, la de sus abonos, para que haya qué tocar.
+const formaPagoDeNota = (nota) => {
+  const formas = new Set((nota.abonos ?? []).map(a => a.forma_pago).filter(Boolean));
+  if (nota.forma_pago) formas.add(nota.forma_pago);
+  if (formas.size > 1) return 'Varios';
+  return formaPagoLabel([...formas][0]) || 'Abonos';
+};
+
 // Cómo se lee el servicio de la nota en la tabla (mismas palabras que Notas).
 const SERVICIO_LABEL = {
   AUTOSERVICIO: 'Autoservicio',
@@ -160,6 +170,7 @@ export default function Ventas() {
   // Nota cuyas máquinas se ven completas en el modal (cuando son demasiadas).
   const [maquinasModal, setMaquinasModal] = useState(null); // { folio, maquinas }
   const [motivoModal,   setMotivoModal]   = useState(null); // { folio, motivo }
+  const [abonosModal,   setAbonosModal]   = useState(null); // { folio, total, abonos }
   // En pantallas angostas (mobile) los nombres de los días se abrevian para que
   // los 7 quepan sin encimarse en el eje X de la gráfica semanal.
   const [esAngosto, setEsAngosto] = useState(
@@ -684,29 +695,6 @@ export default function Ventas() {
                   </p>
                 </div>
               )}
-              {/* Abonos del período (mig. 121): pagos parciales, con quién los
-                  recibió. Parte del dinero de arriba viene de aquí, así que se
-                  detalla; sin abonos el bloque no aparece. */}
-              {(data.abonos ?? []).length > 0 && (
-                <div className="px-4 py-3 bg-teal-50 border-t border-teal-100">
-                  <p className="text-xs font-semibold text-teal-800 uppercase tracking-wide mb-2">
-                    Abonos recibidos ({data.abonos.length}) ·{' '}
-                    {fmt(data.abonos.reduce((t, a) => t + a.monto, 0))}
-                  </p>
-                  <ul className="space-y-1.5">
-                    {data.abonos.map(a => (
-                      <li key={a.id} className="text-xs text-teal-900">
-                        <span className="font-semibold">{a.folio}</span> · {fmt(a.monto)} ·{' '}
-                        {formaPagoLabel(a.forma_pago)}
-                        <span className="block text-teal-700">
-                          Recibió {a.recibio ?? 'Usuario eliminado'} · {formatFechaHora12(a.creado_en)}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
               {/* Correcciones de forma de pago del período (mig. 102). Van aquí
                   porque explican por qué el desglose de arriba puede no cuadrar
                   con lo que se recordaba: el dinero cambió de columna. */}
@@ -804,7 +792,17 @@ export default function Ventas() {
                           </td>
                           <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{nota.atendio ?? <span className="text-gray-400">—</span>}</td>
                           <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
-                            {formaPagoLabel(nota.forma_pago) || <span className="text-gray-400">—</span>}
+                            {(nota.abonos?.length ?? 0) > 0 ? (
+                              <button
+                                type="button"
+                                onClick={() => setAbonosModal({ folio: nota.folio, total: nota.total, abonos: nota.abonos })}
+                                className="text-blue hover:text-blue-700 hover:underline underline-offset-2 transition-colors"
+                              >
+                                {formaPagoDeNota(nota)}
+                              </button>
+                            ) : (
+                              formaPagoLabel(nota.forma_pago) || <span className="text-gray-400">—</span>
+                            )}
                           </td>
                           <td className="px-4 py-3 text-right text-gray-600">{fmt(nota.total_productos)}</td>
                           <td className="px-4 py-3 text-right font-semibold text-gray-800">{fmt(nota.total)}</td>
@@ -878,6 +876,53 @@ export default function Ventas() {
                 </li>
               ))}
             </ul>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: abonos recibidos de una nota (mig. 121) */}
+      {abonosModal && (
+        <div
+          className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
+          onClick={() => setAbonosModal(null)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-xl w-full max-w-sm max-h-[80vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-gray-100">
+              <h3 className="text-base font-semibold text-gray-900">
+                Abonos · <span className="font-mono text-sm text-gray-500">{abonosModal.folio}</span>
+              </h3>
+              <button
+                onClick={() => setAbonosModal(null)}
+                aria-label="Cerrar"
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <ul className="p-4 space-y-1.5 overflow-y-auto">
+              {abonosModal.abonos.map(a => (
+                <li key={a.id} className="px-3 py-2 rounded-lg bg-gray-50 text-sm">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-gray-700">{formaPagoLabel(a.forma_pago) || '—'}</span>
+                    <span className="font-semibold text-gray-800">{fmt(a.monto)}</span>
+                  </div>
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    Recibió {a.recibio ?? 'Usuario eliminado'} · {formatFechaHora12(a.creado_en)}
+                  </p>
+                </li>
+              ))}
+            </ul>
+            <div className="flex justify-between px-5 py-3 border-t border-gray-100 text-sm">
+              <span className="text-gray-500">Abonado</span>
+              <span className="font-semibold text-gray-800">
+                {fmt(abonosModal.abonos.reduce((t, a) => t + a.monto, 0))} de {fmt(abonosModal.total)}
+              </span>
+            </div>
           </div>
         </div>
       )}
