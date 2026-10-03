@@ -55,18 +55,31 @@ export function textoGranel(medidasGranel, medidasPorBidon, medidasPorBotella) {
 
 // Un movimiento del día en el Reporte diario (2026-10-03), en líneas: lo que
 // se cuenta por unidad, una sola; el granel, lo de botellas y lo del bidón,
-// solo las que tuvieron algo. Sin movimiento, un guion.
-function lineasMovimiento(p, porUnidad, bot, gra) {
+// solo las que tuvieron algo. Sin movimiento, un guion. `textoBot` escribe lo
+// de botellas (por omisión, en botellas y medidas).
+function lineasMovimiento(p, porUnidad, bot, gra, textoBot = (n) => textoBotellas(n, p?.medidas_por_botella)) {
   if (bot <= 0 && gra <= 0) return ['—'];
   if (porUnidad) return [textoBotellas(bot + gra, p?.medidas_por_botella, { marca: true })];
   if (bot > 0 && gra > 0) {
     return [
-      `Rellenadas: ${textoBotellas(bot, p?.medidas_por_botella)}`,
+      `Rellenadas: ${textoBot(bot)}`,
       `A granel: ${textoGranel(gra, p?.medidas_por_bidon, p?.medidas_por_botella)}`,
     ];
   }
   if (gra > 0) return [`A granel: ${textoGranel(gra, p?.medidas_por_bidon, p?.medidas_por_botella)}`];
-  return [textoBotellas(bot, p?.medidas_por_botella)];
+  return [textoBot(bot)];
+}
+
+// Medidas sueltas dichas como medidas, y su equivalencia en botellas cuando
+// llegan a una: "1 medida", "2 medidas = 1 botella", "3 medidas = 1 botella y
+// 1 medida". Para Salidas (2026-10-03): lo que sale en las notas son medidas,
+// no botellas, y escribirlo solo en botellas parecía que salió una entera.
+export function textoMedidasEquivalencia(medidas, medidasPorBotella) {
+  const n = Math.max(0, Math.round(Number(medidas) || 0));
+  const mpb = Number(medidasPorBotella) || 0;
+  const enMedidas = plural(n, 'medida', 'medidas');
+  if (mpb <= 1 || n < mpb) return enMedidas;
+  return `${enMedidas} = ${textoBotellas(n, mpb)}`;
 }
 
 // Lo que entró ese día (Inventario → Entradas y la existencia del alta).
@@ -82,7 +95,8 @@ export function lineasEntradas(p, porUnidad) {
 export function lineasSalidas(p, porUnidad) {
   const vendido = (Number(p?.vendido_medidas) || 0) + (Number(p?.devuelto_medidas) || 0);
   const bot = vendido + (Number(p?.salida_botellas_medidas) || 0);
-  return lineasMovimiento(p, porUnidad, Math.max(0, bot), Number(p?.salida_granel_medidas) || 0);
+  return lineasMovimiento(p, porUnidad, Math.max(0, bot), Number(p?.salida_granel_medidas) || 0,
+    (n) => textoMedidasEquivalencia(n, p?.medidas_por_botella));
 }
 
 // Lo que regresó ese día al estante porque se anuló la venta (nota cancelada
