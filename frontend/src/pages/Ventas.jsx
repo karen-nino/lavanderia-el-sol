@@ -648,11 +648,15 @@ export default function Ventas() {
                 <p className="text-xs font-medium uppercase tracking-wide text-gray-400">Por concepto</p>
               </div>
               <div className="flex justify-between px-4 py-3 text-sm text-gray-600 border-t-0">
+                <span>Servicios Por Encargo</span>
+                <span>{fmt(data.corte.total_servicios ?? 0)}</span>
+              </div>
+              <div className="flex justify-between px-4 py-3 text-sm text-gray-600">
                 <span>Cargas de lavado</span>
                 <span>{fmt(data.corte.total_cargas)}</span>
               </div>
               <div className="flex justify-between px-4 py-3 text-sm text-gray-600">
-                <span>Artículos vendidos</span>
+                <span>Productos vendidos</span>
                 <span>{fmt(data.corte.total_productos)}</span>
               </div>
               <div className="flex justify-between px-4 py-3 text-sm text-gray-600">
@@ -684,14 +688,15 @@ export default function Ventas() {
                 <span>TOTAL COBRADO</span>
                 <span className="text-lg">{fmt(data.corte.total_cobrado)}</span>
               </div>
-              {/* Los dos totales difieren cuando el tope fija el precio de la
-                  carga en Por Encargo: sin esta nota parecería un descuadre. */}
+              {/* Los conceptos ya cuadran con el precio de cada nota (2026-10-03),
+                  así que solo difieren por los abonos: la nota cuenta completa
+                  el día que se liquida y el dinero, el día que entró cada pago. */}
               {Math.abs((data.corte.total_cobrado ?? 0) - data.corte.total_general) >= 0.005 && (
                 <div className="px-4 py-3 bg-amber-50">
                   <p className="text-xs text-amber-800">
                     La diferencia de {fmt(Math.abs(data.corte.total_cobrado - data.corte.total_general))} entre
-                    ambos totales viene del precio fijo por carga en Por Encargo: se cobra el precio topado,
-                    no la suma de los conceptos.
+                    ambos totales viene de los abonos: el total cobrado cuenta cada pago el día que entró,
+                    aunque la nota aún deba, y los conceptos cuentan la nota completa el día que se liquida.
                   </p>
                 </div>
               )}

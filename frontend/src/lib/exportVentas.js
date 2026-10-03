@@ -3,7 +3,7 @@
 //
 // Recibe el objeto que devuelve GET /ventas/resumen:
 //   { tarjetas: { total_cobrado, notas_pagadas, productos_consumidos, notas_pendientes },
-//     corte:    { total_cargas, total_productos, total_ajustes,
+//     corte:    { total_servicios, total_cargas, total_productos, total_ajustes,
 //                 total_efectivo, total_transferencia, total_tarjeta,
 //                 total_general (suma de conceptos), total_cobrado },
 //     lista_notas: [{ folio, fecha, creado_en, estado, maquinas:[{nombre,cargas}],
@@ -113,8 +113,9 @@ const bloqueCorte = (c) => `
   <table class="desglose">
     <tbody>
       <tr class="sub"><td colspan="2">Por concepto</td></tr>
+      ${filaCorte('Servicios Por Encargo', c?.total_servicios ?? 0)}
       ${filaCorte('Cargas de lavado', c?.total_cargas)}
-      ${filaCorte('Artículos vendidos', c?.total_productos)}
+      ${filaCorte('Productos vendidos', c?.total_productos)}
       ${filaCorte('Ajustes', c?.total_ajustes)}
       ${filaCorte('Suma de conceptos', c?.total_general)}
       <tr class="sub"><td colspan="2">Cómo se cobró</td></tr>
@@ -123,7 +124,7 @@ const bloqueCorte = (c) => `
       ${filaCorte('Tarjeta', c?.total_tarjeta)}
       ${filaCorte('Total cobrado', c?.total_cobrado, true)}
       ${Math.abs((c?.total_cobrado ?? 0) - (c?.total_general ?? 0)) >= 0.005
-        ? `<tr class="nota"><td colspan="2">La diferencia entre ambos totales viene del precio fijo por carga en Por Encargo: se cobra el precio topado, no la suma de los conceptos.</td></tr>`
+        ? `<tr class="nota"><td colspan="2">La diferencia entre ambos totales viene de los abonos: el total cobrado cuenta cada pago el día que entró, aunque la nota aún deba, y los conceptos cuentan la nota completa el día que se liquida.</td></tr>`
         : ''}
     </tbody>
   </table>`;

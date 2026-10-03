@@ -231,43 +231,67 @@ export async function getResumen(req, res) {
           o.precio_total                               AS total
         FROM notas o
         LEFT JOIN usuarios u ON u.id = o.usuario_id
+        -- Productos cobrados APARTE, con la regla del corte: en Por Encargo el
+        -- material del servicio (granel, bolsa) ya va en su precio.
         LEFT JOIN (
-          SELECT nota_id, SUM(cantidad * precio_unitario) AS total_productos
-          FROM nota_productos
-          GROUP BY nota_id
+          SELECT np.nota_id, SUM(np.cantidad * np.precio_unitario) AS total_productos
+          FROM nota_productos np
+          JOIN notas n2    ON n2.id = np.nota_id
+          JOIN productos a ON a.id = np.producto_id
+          LEFT JOIN nota_cargas nc ON nc.id = np.carga_id
+          WHERE n2.tipo_servicio <> 'POR_ENCARGO'
+             OR a.se_vende_por_unidad
+             OR (np.carga_id IS NOT NULL AND nc.precio_tope IS NULL)
+          GROUP BY np.nota_id
         ) np_t ON np_t.nota_id = o.id
         WHERE ${whereLista}
         ORDER BY o.created_at DESC`,
         params
       ),
 
-      // Corte de caja
+      // Corte de caja: por concepto, con la MISMA regla con que se cobra la
+      // nota (recalcularPrecioTotal), para que la suma cuadre con lo cobrado.
+      //   · Por Encargo con precio de servicio (tope): se cobra ese precio, que
+      //     ya incluye el material —granel y bolsa—; encima solo lo que se
+      //     vende por unidad (marca, polvo).
+      //   · Los demás (y Por Encargo viejo sin tope): máquinas + productos.
+      // El ajuste de cada carga va con el de la nota.
       pool.query(
-        `SELECT
-          COALESCE(SUM(nc_t.total_cargas), 0)                              AS total_cargas,
-          COALESCE(SUM(np_t.total_art), 0)                                  AS total_productos,
-          COALESCE(SUM(o.ajuste), 0)                                        AS total_ajustes,
-          -- Las notas viejas sin forma_pago cuentan como efectivo (mig. 090),
-          -- así que los tres totales suman siempre el total cobrado.
-          COALESCE(SUM(CASE WHEN COALESCE(o.forma_pago, 'EFECTIVO') = 'EFECTIVO' THEN o.precio_total ELSE 0 END), 0) AS total_efectivo,
-          COALESCE(SUM(CASE WHEN o.forma_pago = 'TRANSFERENCIA' THEN o.precio_total ELSE 0 END), 0) AS total_transferencia,
-          COALESCE(SUM(CASE WHEN o.forma_pago = 'TARJETA'       THEN o.precio_total ELSE 0 END), 0) AS total_tarjeta,
-          -- Lo realmente cobrado. No tiene por qué coincidir con la suma de
-          -- conceptos: en Por Encargo el tope fija el precio de la carga, así
-          -- que precio_total puede quedar por encima o por debajo del desglose.
-          COALESCE(SUM(o.precio_total), 0) AS total_cobrado
-        FROM notas o
-        LEFT JOIN (
-          SELECT nota_id, SUM(precio_lavadora + precio_secadora) AS total_cargas
-          FROM nota_cargas
-          GROUP BY nota_id
-        ) nc_t ON nc_t.nota_id = o.id
-        LEFT JOIN (
-          SELECT nota_id, SUM(cantidad * precio_unitario) AS total_art
-          FROM nota_productos
-          GROUP BY nota_id
-        ) np_t ON np_t.nota_id = o.id
-        WHERE ${whereBase}`,
+        `WITH conceptos AS (
+           SELECT o.id,
+                  o.ajuste,
+                  COALESCE(SUM(CASE WHEN o.tipo_servicio = 'POR_ENCARGO' AND nc.precio_tope IS NOT NULL
+                                    THEN nc.precio_tope END), 0)                       AS servicios,
+                  COALESCE(SUM(CASE WHEN NOT (o.tipo_servicio = 'POR_ENCARGO' AND nc.precio_tope IS NOT NULL)
+                                    THEN nc.precio_lavadora + nc.precio_secadora END), 0) AS cargas,
+                  COALESCE(SUM(nc.ajuste), 0)                                         AS ajuste_cargas
+             FROM notas o
+             LEFT JOIN nota_cargas nc ON nc.nota_id = o.id
+            WHERE ${whereBase}
+            GROUP BY o.id
+         ),
+         productos_aparte AS (
+           -- Solo lo que se cobró ENCIMA: en Por Encargo, lo que se vende por
+           -- unidad (o todo, si su carga no tiene precio de servicio); en los
+           -- demás servicios, todo producto es venta.
+           SELECT np.nota_id, SUM(np.cantidad * np.precio_unitario) AS total
+             FROM nota_productos np
+             JOIN notas o     ON o.id = np.nota_id
+             JOIN productos a ON a.id = np.producto_id
+             LEFT JOIN nota_cargas nc ON nc.id = np.carga_id
+            WHERE ${whereBase}
+              AND (o.tipo_servicio <> 'POR_ENCARGO'
+                   OR a.se_vende_por_unidad
+                   OR (np.carga_id IS NOT NULL AND nc.precio_tope IS NULL))
+            GROUP BY np.nota_id
+         )
+         SELECT
+          COALESCE(SUM(c.servicios), 0)                    AS total_servicios,
+          COALESCE(SUM(c.cargas), 0)                       AS total_cargas,
+          COALESCE(SUM(pa.total), 0)                       AS total_productos,
+          COALESCE(SUM(c.ajuste + c.ajuste_cargas), 0)     AS total_ajustes
+        FROM conceptos c
+        LEFT JOIN productos_aparte pa ON pa.nota_id = c.id`,
         params
       ),
       // Correcciones de forma de pago hechas en el período. Explican por qué el
@@ -321,6 +345,7 @@ export async function getResumen(req, res) {
     const pendientesRow = pendientesRes.rows[0];
     const corte = corteRes.rows[0];
 
+    const total_servicios = parseFloat(corte.total_servicios);
     const total_cargas    = parseFloat(corte.total_cargas);
     const total_productos = parseFloat(corte.total_productos);
     const total_ajustes   = parseFloat(corte.total_ajustes);
@@ -362,11 +387,12 @@ export async function getResumen(req, res) {
         total:           parseFloat(r.total),
       })),
       corte: {
+        total_servicios,
         total_cargas,
         total_productos,
         total_ajustes,
         // Suma de los conceptos facturados; se conserva el nombre histórico.
-        total_general: total_cargas + total_productos + total_ajustes,
+        total_general: total_servicios + total_cargas + total_productos + total_ajustes,
         total_efectivo,
         total_transferencia,
         total_tarjeta,
