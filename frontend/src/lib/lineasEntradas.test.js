@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { lineasEntradas, lineasSalidas } from './formatoInventario';
+import { lineasEntradas, lineasSalidas, lineasDevuelto } from './formatoInventario';
 
 const granel = { medidas_por_botella: 2, medidas_por_bidon: 50 };
 
@@ -26,7 +26,13 @@ describe('lineasSalidas (Reporte diario)', () => {
     expect(lineasSalidas({ ...granel, vendido_medidas: 2, salida_granel_medidas: 50 }, false))
       .toEqual(['Rellenadas: 1 botella', 'A granel: 1 bidón']);
   });
-  it('lo devuelto no la deja en negativo', () => {
-    expect(lineasSalidas({ ...granel, vendido_medidas: -4 }, false)).toEqual(['—']);
+  it('cuenta lo vendido completo: lo devuelto va en su columna', () => {
+    // El servidor manda lo vendido neto (venta − devuelto).
+    expect(lineasSalidas({ ...granel, vendido_medidas: 0, devuelto_medidas: 2 }, false)).toEqual(['1 botella']);
+    expect(lineasSalidas({ ...granel, vendido_medidas: -4, devuelto_medidas: 4 }, false)).toEqual(['—']);
+  });
+  it('lo devuelto tiene su propia línea', () => {
+    expect(lineasDevuelto({ ...granel, devuelto_medidas: 2 }, false)).toEqual(['1 botella']);
+    expect(lineasDevuelto({ ...granel }, false)).toEqual(['—']);
   });
 });

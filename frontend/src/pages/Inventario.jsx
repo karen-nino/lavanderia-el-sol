@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { esAdmin as esAdminFn } from '../lib/roles';
-import { textoBotellas, textoGranel as textoGranelFmt, lineasEntradas, lineasSalidas } from '../lib/formatoInventario';
+import { textoBotellas, textoGranel as textoGranelFmt, lineasEntradas, lineasSalidas, lineasDevuelto } from '../lib/formatoInventario';
 import { imprimirReporte, descargarReporteCSV } from '../lib/exportReporteInventario';
 import { fechaLarga } from '../lib/exportUtils';
 import { formatHora12 } from '../lib/fecha';
@@ -1382,6 +1382,8 @@ function cantidadMovimiento(m, p, esMarca, tipo) {
   return textoBotellas(n, p.medidas_por_botella);
 }
 
+const TITULO_MOVIMIENTOS = { entradas: 'Entradas', salidas: 'Salidas', devueltos: 'Devuelto' };
+
 // Detalle de las entradas o salidas de un producto en un día (2026-10-03):
 // quién hizo cada movimiento, a qué hora y cuánto. Lo que vino de una nota
 // lleva a esa nota.
@@ -1407,7 +1409,7 @@ function MovimientosDiaModal({ producto, tipo, fecha, onClose }) {
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
         <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-3 border-b border-gray-100">
           <div className="min-w-0">
-            <h3 className="text-base font-semibold text-gray-900">{tipo === 'entradas' ? 'Entradas' : 'Salidas'}</h3>
+            <h3 className="text-base font-semibold text-gray-900">{TITULO_MOVIMIENTOS[tipo] ?? 'Movimientos'}</h3>
             <p className="text-xs text-gray-500 truncate">{nombre} · {fechaLarga(fechaLocalISO(fecha))}</p>
           </div>
           <button onClick={onClose} aria-label="Cerrar" className="text-gray-400 hover:text-gray-600 flex-shrink-0">
@@ -1551,6 +1553,7 @@ function ReporteDiario() {
                 <th className="px-4 py-3 text-left">Producto</th>
                 <th className="px-4 py-3 text-left">Entradas</th>
                 <th className="px-4 py-3 text-left">Salidas</th>
+                <th className="px-4 py-3 text-left">Devuelto</th>
                 <th className="px-4 py-3 text-left">Había al inicio</th>
                 <th className="px-4 py-3 text-left">Queda al final</th>
               </tr>
@@ -1570,16 +1573,13 @@ function ReporteDiario() {
                     </td>
                     <td className="px-4 py-3 text-gray-700">
                       {/* Por notas más las salidas manuales (merma, dañado…). */}
-                      <CeldaMovimiento lineas={lineasSalidas(p, esMarca)} hayAlgo={p.devuelto_medidas > 0 || p.rellenado_medidas > 0}
+                      <CeldaMovimiento lineas={lineasSalidas(p, esMarca)} hayAlgo={p.rellenado_medidas > 0}
                         onClick={() => setDetalle({ producto: p, tipo: 'salidas' })} />
-                      {/* Ventas anuladas ese día: el producto volvió al estante,
-                          así que ya viene restado de la línea de arriba. Se dice
-                          aparte para que nadie lo lea como una venta perdida. */}
-                      {p.devuelto_medidas > 0 && (
-                        <span className="block text-xs text-gray-500">
-                          Devuelto: {textoBotellas(p.devuelto_medidas, p.medidas_por_botella, { marca: esMarca })}
-                        </span>
-                      )}
+                    </td>
+                    <td className="px-4 py-3 text-gray-700">
+                      {/* Ventas anuladas ese día: el producto volvió al estante. */}
+                      <CeldaMovimiento lineas={lineasDevuelto(p, esMarca)}
+                        onClick={() => setDetalle({ producto: p, tipo: 'devueltos' })} />
                     </td>
                     <td className="px-4 py-3 text-gray-700">{inicioCelda(p)}</td>
                     <td className="px-4 py-3 text-gray-700">{quedaCelda(p)}</td>

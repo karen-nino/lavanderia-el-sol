@@ -75,12 +75,20 @@ export function lineasEntradas(p, porUnidad) {
     Number(p?.entrada_botellas_medidas) || 0, Number(p?.entrada_granel_medidas) || 0);
 }
 
-// Lo que salió ese día: por notas (venta menos lo devuelto, siempre de
-// botellas) más las salidas manuales de Inventario (merma, dañado…). Lo
-// devuelto puede dejarlo en negativo; se lee como sin movimiento.
+// Lo que salió ese día: todo lo que se usó o vendió en notas (siempre de
+// botellas) más las salidas manuales de Inventario. Lo devuelto ya NO se le
+// resta: tiene su propia columna (2026-10-03), así que aquí va lo vendido
+// completo (el servidor lo manda neto: se le suma lo devuelto).
 export function lineasSalidas(p, porUnidad) {
-  const bot = (Number(p?.vendido_medidas) || 0) + (Number(p?.salida_botellas_medidas) || 0);
+  const vendido = (Number(p?.vendido_medidas) || 0) + (Number(p?.devuelto_medidas) || 0);
+  const bot = vendido + (Number(p?.salida_botellas_medidas) || 0);
   return lineasMovimiento(p, porUnidad, Math.max(0, bot), Number(p?.salida_granel_medidas) || 0);
+}
+
+// Lo que regresó ese día al estante porque se anuló la venta (nota cancelada
+// o borrada). Siempre vuelve a botellas.
+export function lineasDevuelto(p, porUnidad) {
+  return lineasMovimiento(p, porUnidad, Number(p?.devuelto_medidas) || 0, 0);
 }
 
 // Nombre del producto con lo que lo distingue de otro que se llame igual: el

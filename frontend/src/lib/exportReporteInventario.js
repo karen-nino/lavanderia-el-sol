@@ -4,7 +4,7 @@
 // Recibe { fecha: 'YYYY-MM-DD', productos: [...] } de GET /productos/reporte-diario.
 
 import { slug, esc, descargarCSV, imprimirDocumento, fechaLarga } from './exportUtils';
-import { textoBotellas, textoGranel, seVendePorUnidad, esPolvo, lineasEntradas, lineasSalidas } from './formatoInventario';
+import { textoBotellas, textoGranel, seVendePorUnidad, esPolvo, lineasEntradas, lineasSalidas, lineasDevuelto } from './formatoInventario';
 
 // 'YYYY-MM-DD' → Date local (sin corrimiento por zona horaria).
 const fechaLocal = (iso) => {
@@ -20,10 +20,9 @@ const nombreProd = (p) => (esMarca(p) && p.marca ? `${p.marca} · ${p.nombre}` :
 const entradasLineas = (p) => lineasEntradas(p, esMarca(p));
 // Salidas: por notas más las manuales (merma, dañado…).
 const salidasLineas = (p) => lineasSalidas(p, esMarca(p));
-// Ventas anuladas ese día (ya restadas de "Salidas"): van en su propia columna
+// Ventas anuladas ese día: van en su propia columna (Salidas ya no las resta)
 // para que el total no parezca un error de captura.
-const devueltoTexto = (p) =>
-  (p.devuelto_medidas > 0 ? textoBotellas(p.devuelto_medidas, p.medidas_por_botella, { marca: esMarca(p) }) : '');
+const devueltoTexto = (p) => lineasDevuelto(p, esMarca(p)).join(' · ');
 const inicioRellenadas = (p) => textoBotellas(p.inicio_botellas_medidas, p.medidas_por_botella, { marca: esMarca(p) });
 const inicioGranel = (p) => (esMarca(p) ? '' : textoGranel(p.inicio_granel_medidas, p.medidas_por_bidon, p.medidas_por_botella));
 const rellenadasTexto = (p) => textoBotellas(p.fin_botellas_medidas, p.medidas_por_botella, { marca: esMarca(p) });
@@ -66,7 +65,8 @@ const seccion = (titulo, productos) => {
     <tr>
       <td>${esc(nombreProd(p))}</td>
       <td>${entradasLineas(p).map(esc).join('<br>')}</td>
-      <td>${salidasLineas(p).map(esc).join('<br>')}${p.devuelto_medidas > 0 ? `<br><small>Devuelto: ${esc(devueltoTexto(p))}</small>` : ''}</td>
+      <td>${salidasLineas(p).map(esc).join('<br>')}</td>
+      <td>${esc(devueltoTexto(p))}</td>
       <td>${inicioCelda(p)}</td>
       <td>${quedaCelda(p)}</td>
     </tr>`).join('');
@@ -74,7 +74,7 @@ const seccion = (titulo, productos) => {
     <div class="seccion">${esc(titulo)}</div>
     <table class="resumen">
       <thead>
-        <tr><th>Producto</th><th>Entradas</th><th>Salidas</th><th>Había al inicio</th><th>Queda al final</th></tr>
+        <tr><th>Producto</th><th>Entradas</th><th>Salidas</th><th>Devuelto</th><th>Había al inicio</th><th>Queda al final</th></tr>
       </thead>
       <tbody>${filas}</tbody>
     </table>`;

@@ -629,13 +629,14 @@ export const crearMovimiento = async (req, res) => {
 // ── GET /productos/:id/movimientos ──────────────────────────────
 // Historial de movimientos de un producto (más reciente primero).
 // Filtros opcionales (Reporte diario, 2026-10-03): `fecha` acota a ese día
-// local y `tipo` a las entradas o a las salidas (por notas —venta y lo
-// devuelto— y manuales). Rellenar va en las dos: pasa producto del bidón a
+// local y `tipo` a las entradas, a las salidas (por notas y manuales) o a lo
+// devuelto (ventas anuladas). Rellenar va en las dos: pasa producto del bidón a
 // las botellas, así que no entra ni sale, pero explica por qué cambió cada
 // existencia. Sin filtros, el historial de siempre.
 const TIPOS_MOVIMIENTO = {
   entradas: ['entrada', 'rellenar'],
-  salidas:  ['venta', 'liberacion', 'salida', 'rellenar'],
+  salidas:  ['venta', 'salida', 'rellenar'],
+  devueltos: ['liberacion'],
 };
 
 export const getMovimientos = async (req, res) => {
