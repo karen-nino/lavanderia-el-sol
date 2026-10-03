@@ -267,8 +267,20 @@ export const getUsoMaquina = async (req, res) => {
     );
     if (maq.length === 0) return res.status(404).json({ message: 'Máquina no encontrada.' });
 
-    // Una nota "usó" la máquina si la tiene en alguna de sus cargas
-    // (tabla nota_cargas).
+    // Una nota "usó" la máquina si alguna de sus cargas corrió en ella. Se lee
+    // del historial de pasadas (mig. 114) y no de lavadora_id / secadora_id:
+    // esos se vacían al finalizar, así que solo veían la máquina mientras
+    // seguía corriendo y el historial de uso quedaba vacío (2026-10-03).
+    // Una pasada cuenta si la máquina arrancó: tiene su encendido sellado
+    // (mig. 140) o la carga arrancó ese hueco (mig. 097).
+    const PASADAS_DE_LA_MAQUINA = `
+      SELECT ncm.carga_id, ncm.slot, nc.nota_id
+        FROM nota_carga_maquinas ncm
+        JOIN nota_cargas nc ON nc.id = ncm.carga_id
+       WHERE ncm.maquina_id = $1
+         AND (ncm.encendida_at IS NOT NULL
+              OR (ncm.slot = 'lavadora' AND nc.lavadora_iniciada_at IS NOT NULL)
+              OR (ncm.slot = 'secadora' AND nc.secadora_iniciada_at IS NOT NULL))`;
     const { rows: notas } = await pool.query(
       `SELECT n.id, to_char(n.created_at AT TIME ZONE $2, 'YYYY-MM-DD') AS fecha,
               n.folio, n.tipo_servicio, n.estado,
@@ -278,30 +290,28 @@ export const getUsoMaquina = async (req, res) => {
          FROM notas n
          LEFT JOIN usuarios u ON u.id = n.usuario_id
          LEFT JOIN clientes c ON c.id = n.cliente_id
-        WHERE EXISTS (
-                SELECT 1 FROM nota_cargas nc
-                 WHERE nc.nota_id = n.id
-                   AND ((nc.lavadora_id = $1 AND nc.lavadora_iniciada_at IS NOT NULL)
-                     OR (nc.secadora_id = $1 AND nc.secadora_iniciada_at IS NOT NULL))
-              )
+        WHERE n.id IN (SELECT p.nota_id FROM (${PASADAS_DE_LA_MAQUINA}) p)
           AND n.estado <> 'CANCELADA'
         ORDER BY n.created_at DESC`,
       [id, TZ_NEGOCIO]
     );
 
-    // Cargas de esta máquina (autoservicio): cada fila es una carga. El precio
-    // atribuido es el del rol en que participó esta máquina (lavado o secado).
+    // Cargas de esta máquina: una fila por carga (aunque haya corrido varias
+    // pasadas en ella). El precio atribuido es el del hueco en que participó
+    // (lavado o secado), y la descripción, las máquinas que usó la carga
+    // (*_usada_id, que no se borra al finalizar).
     const { rows: cargas } = await pool.query(
       `SELECT nc.nota_id, nc.precio_lavadora, nc.precio_secadora,
-              nc.lavadora_id, ml.nombre AS lav_nombre,
-              nc.secadora_id, ms.nombre AS sec_nombre
-         FROM nota_cargas nc
+              bool_or(p.slot = 'lavadora') AS es_lav,
+              bool_or(p.slot = 'secadora') AS es_sec,
+              ml.nombre AS lav_nombre, ms.nombre AS sec_nombre
+         FROM (${PASADAS_DE_LA_MAQUINA}) p
+         JOIN nota_cargas nc ON nc.id = p.carga_id
          JOIN notas n ON n.id = nc.nota_id
-         LEFT JOIN maquinas ml ON ml.id = nc.lavadora_id
-         LEFT JOIN maquinas ms ON ms.id = nc.secadora_id
-        WHERE ((nc.lavadora_id = $1 AND nc.lavadora_iniciada_at IS NOT NULL)
-            OR (nc.secadora_id = $1 AND nc.secadora_iniciada_at IS NOT NULL))
-          AND n.estado <> 'CANCELADA'
+         LEFT JOIN maquinas ml ON ml.id = COALESCE(nc.lavadora_id, nc.lavadora_usada_id)
+         LEFT JOIN maquinas ms ON ms.id = COALESCE(nc.secadora_id, nc.secadora_usada_id)
+        WHERE n.estado <> 'CANCELADA'
+        GROUP BY nc.id, ml.nombre, ms.nombre
         ORDER BY nc.nota_id, nc.orden`,
       [id]
     );
@@ -355,8 +365,8 @@ export const getUsoMaquina = async (req, res) => {
       const n = notaPorId.get(c.nota_id);
       if (!n) continue;
       const b = getBucket(n.fecha);
-      const esLav = c.lavadora_id === id;
-      const esSec = c.secadora_id === id;
+      const esLav = c.es_lav;
+      const esSec = c.es_sec;
       const partes = [c.lav_nombre, c.sec_nombre].filter(Boolean);
       b._cargas.push({
         folio: n.folio,
