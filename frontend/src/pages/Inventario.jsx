@@ -1418,18 +1418,6 @@ function cantidadMovimiento(m, p, esMarca, tipo) {
   return textoBotellas(n, p.medidas_por_botella);
 }
 
-// Cuánto había y cuánto quedó en la existencia que tocó el movimiento.
-function antesDespues(m, p, esMarca, tipo) {
-  const bidon = !esMarca && enBidon(m, tipo);
-  const fmt = (v) => {
-    const n = Math.max(0, Number(v) || 0);
-    if (esMarca) return textoBotellas(n, p.medidas_por_botella, { marca: true });
-    return bidon ? textoGranelFmt(n, p.medidas_por_bidon, p.medidas_por_botella) : textoBotellas(n, p.medidas_por_botella);
-  };
-  const [antes, despues] = bidon ? [m.granel_antes, m.granel_despues] : [m.botellas_antes, m.botellas_despues];
-  return `Había ${fmt(antes)} → quedó ${fmt(despues)}`;
-}
-
 // Detalle de las entradas o salidas de un producto en un día (2026-10-03):
 // quién hizo cada movimiento, a qué hora y cuánto. Lo que vino de una nota
 // lleva a esa nota.
@@ -1484,7 +1472,6 @@ function MovimientosDiaModal({ producto, tipo, fecha, onClose }) {
                   <p className="text-xs text-gray-400 truncate">
                     {m.usuario_nombre || 'Usuario eliminado'} · {formatHora12(m.created_at)}
                   </p>
-                  <p className="text-xs text-gray-500">{antesDespues(m, producto, esMarca, tipo)}</p>
                   {m.tipo === 'rellenar' && (
                     <p className="text-xs text-gray-400">No suma en {tipo === 'entradas' ? 'Entradas' : 'Salidas'}: solo cambia de lugar.</p>
                   )}
@@ -1538,16 +1525,19 @@ function ReporteDiario() {
   const polvo  = productos.filter(esPolvo);
   const marca  = productos.filter(p => p.tipo_liquido === 'marca');
 
-  // Celda "Queda al final": por unidad = una línea; granel = rellenadas + a granel.
-  const quedaCelda = (p) => {
-    if (porUnidad(p)) return <span>{textoBotellas(p.fin_botellas_medidas, p.medidas_por_botella, { marca: true })}</span>;
+  // Celdas "Había al inicio" y "Queda al final": por unidad = una línea;
+  // granel = rellenadas + a granel.
+  const existenciaCelda = (p, botellas, granel) => {
+    if (porUnidad(p)) return <span>{textoBotellas(botellas, p.medidas_por_botella, { marca: true })}</span>;
     return (
       <span className="block">
-        <span className="block">Rellenadas: {textoBotellas(p.fin_botellas_medidas, p.medidas_por_botella)}</span>
-        <span className="block text-gray-500">A granel: {textoGranelFmt(p.fin_granel_medidas, p.medidas_por_bidon, p.medidas_por_botella)}</span>
+        <span className="block">Rellenadas: {textoBotellas(botellas, p.medidas_por_botella)}</span>
+        <span className="block text-gray-500">A granel: {textoGranelFmt(granel, p.medidas_por_bidon, p.medidas_por_botella)}</span>
       </span>
     );
   };
+  const inicioCelda = (p) => existenciaCelda(p, p.inicio_botellas_medidas, p.inicio_granel_medidas);
+  const quedaCelda  = (p) => existenciaCelda(p, p.fin_botellas_medidas, p.fin_granel_medidas);
 
   const grupo = (titulo, lista) => {
     if (lista.length === 0) return null;
@@ -1563,6 +1553,7 @@ function ReporteDiario() {
                 <th className="px-4 py-3 text-left">Producto</th>
                 <th className="px-4 py-3 text-left">Entradas</th>
                 <th className="px-4 py-3 text-left">Salidas</th>
+                <th className="px-4 py-3 text-left">Había al inicio</th>
                 <th className="px-4 py-3 text-left">Queda al final</th>
               </tr>
             </thead>
@@ -1592,6 +1583,7 @@ function ReporteDiario() {
                         </span>
                       )}
                     </td>
+                    <td className="px-4 py-3 text-gray-700">{inicioCelda(p)}</td>
                     <td className="px-4 py-3 text-gray-700">{quedaCelda(p)}</td>
                   </tr>
                 );

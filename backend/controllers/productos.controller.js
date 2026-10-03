@@ -646,64 +646,22 @@ export const getMovimientos = async (req, res) => {
   const fecha = esFechaISO(req.query.fecha) ? req.query.fecha : null;
   const tipos = TIPOS_MOVIMIENTO[req.query.tipo] ?? null;
   try {
-    // Cada movimiento dice cuánto había ANTES y cuánto quedó DESPUÉS en las
-    // dos existencias (botellas = stock_actual, bidón = stock_granel_medidas).
-    // No hay foto de cada momento: se parte de la existencia actual y se
-    // deshace, hacia atrás, el efecto de los movimientos posteriores —la misma
-    // regla con que el Reporte diario reconstruye "Queda al final"—.
     const { rows } = await pool.query(
-      `WITH prod AS (
-         SELECT stock_actual, stock_granel_medidas FROM productos
-          WHERE id = $1 AND sucursal = $2
-       ),
-       mov AS (
-         SELECT m.*,
-                CASE WHEN m.tipo IN ('entrada', 'liberacion') AND m.destino <> 'granel' THEN  m.cantidad_medidas
-                     WHEN m.tipo IN ('salida', 'venta')       AND m.destino <> 'granel' THEN -m.cantidad_medidas
-                     WHEN m.tipo = 'rellenar'                                          THEN  m.cantidad_medidas
-                     ELSE 0 END AS efecto_botellas,
-                CASE WHEN m.tipo = 'entrada' AND m.destino = 'granel' THEN  m.cantidad_medidas
-                     WHEN m.tipo = 'salida'  AND m.destino = 'granel' THEN -m.cantidad_medidas
-                     WHEN m.tipo = 'rellenar'                         THEN -m.cantidad_medidas
-                     ELSE 0 END AS efecto_granel
-           FROM producto_movimientos m
-          WHERE m.producto_id = $1 AND m.sucursal = $2
-       ),
-       acum AS (
-         SELECT mov.*,
-                COALESCE(SUM(efecto_botellas) OVER w, 0) AS botellas_posterior,
-                COALESCE(SUM(efecto_granel)   OVER w, 0) AS granel_posterior
-           FROM mov
-         WINDOW w AS (ORDER BY created_at DESC, id DESC
-                      ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING)
-       )
-       SELECT a.id, a.producto_id, a.sucursal, a.usuario_id, a.tipo, a.destino,
-              a.cantidad_medidas, a.descripcion, a.nota_id, a.motivo, a.created_at,
-              TRIM(u.nombre || ' ' || COALESCE(u.apellido, '')) AS usuario_nombre,
-              n.folio AS nota_folio,
-              p.stock_actual         - a.botellas_posterior                     AS botellas_despues,
-              p.stock_actual         - a.botellas_posterior - a.efecto_botellas AS botellas_antes,
-              p.stock_granel_medidas - a.granel_posterior                       AS granel_despues,
-              p.stock_granel_medidas - a.granel_posterior   - a.efecto_granel   AS granel_antes
-         FROM acum a
-         CROSS JOIN prod p
-         LEFT JOIN usuarios u ON u.id = a.usuario_id
-         LEFT JOIN notas n    ON n.id = a.nota_id
-        WHERE ($3::date IS NULL OR (
-                a.created_at >= ($3::date)::timestamp     AT TIME ZONE 'America/Mexico_City'
-            AND a.created_at <  ($3::date + 1)::timestamp AT TIME ZONE 'America/Mexico_City'))
-          AND ($4::text[] IS NULL OR a.tipo = ANY($4))
-        ORDER BY a.created_at DESC, a.id DESC
+      `SELECT m.*, TRIM(u.nombre || ' ' || COALESCE(u.apellido, '')) AS usuario_nombre,
+              n.folio AS nota_folio
+         FROM producto_movimientos m
+         LEFT JOIN usuarios u ON u.id = m.usuario_id
+         LEFT JOIN notas n    ON n.id = m.nota_id
+        WHERE m.producto_id = $1 AND m.sucursal = $2
+          AND ($3::date IS NULL OR (
+                m.created_at >= ($3::date)::timestamp     AT TIME ZONE 'America/Mexico_City'
+            AND m.created_at <  ($3::date + 1)::timestamp AT TIME ZONE 'America/Mexico_City'))
+          AND ($4::text[] IS NULL OR m.tipo = ANY($4))
+        ORDER BY m.created_at DESC, m.id DESC
         LIMIT 200`,
       [id, req.sucursal, fecha, tipos]
     );
-    res.json(rows.map((r) => ({
-      ...r,
-      botellas_antes:  Number(r.botellas_antes),
-      botellas_despues: Number(r.botellas_despues),
-      granel_antes:    Number(r.granel_antes),
-      granel_despues:  Number(r.granel_despues),
-    })));
+    res.json(rows);
   } catch (err) {
     console.error('getMovimientos error:', err);
     res.status(500).json({ message: 'No se pudo cargar el historial del producto. Intenta de nuevo.' });
@@ -797,6 +755,28 @@ export const getReporteDiario = async (req, res) => {
             WHERE m.producto_id = p.id AND m.tipo = 'liberacion'
               AND m.created_at >= bounds.inicio AND m.created_at < bounds.cierre
          ), 0) AS devuelto_medidas,
+         -- Lo mismo desde el INICIO del día: con eso se sabe cuánto había al
+         -- abrir (columna "Había al inicio", 2026-10-03).
+         COALESCE((
+           SELECT SUM(CASE
+             WHEN m.tipo = 'entrada'    AND m.destino = 'botellas' THEN  m.cantidad_medidas
+             WHEN m.tipo = 'salida'     AND m.destino = 'botellas' THEN -m.cantidad_medidas
+             WHEN m.tipo = 'rellenar'                              THEN  m.cantidad_medidas
+             WHEN m.tipo = 'venta'      AND m.destino = 'botellas' THEN -m.cantidad_medidas
+             WHEN m.tipo = 'liberacion' AND m.destino = 'botellas' THEN  m.cantidad_medidas
+             ELSE 0 END)
+            FROM producto_movimientos m, bounds
+            WHERE m.producto_id = p.id AND m.created_at >= bounds.inicio
+         ), 0) AS efecto_botellas_desde_inicio,
+         COALESCE((
+           SELECT SUM(CASE
+             WHEN m.tipo = 'entrada' AND m.destino = 'granel' THEN  m.cantidad_medidas
+             WHEN m.tipo = 'salida'  AND m.destino = 'granel' THEN -m.cantidad_medidas
+             WHEN m.tipo = 'rellenar'                         THEN -m.cantidad_medidas
+             ELSE 0 END)
+            FROM producto_movimientos m, bounds
+            WHERE m.producto_id = p.id AND m.created_at >= bounds.inicio
+         ), 0) AS efecto_granel_desde_inicio,
          -- Efecto sobre botellas de lo ocurrido DESPUÉS del cierre (para revertir).
          COALESCE((
            SELECT SUM(CASE
@@ -845,6 +825,8 @@ export const getReporteDiario = async (req, res) => {
         salida_granel_medidas:    int(r.salida_granel_medidas),
         rellenado_medidas:        int(r.rellenado_medidas),
         // La existencia no puede ser negativa; se acota a 0 por si hay datos raros.
+        inicio_botellas_medidas: Math.max(0, int(r.stock_actual) - int(r.efecto_botellas_desde_inicio)),
+        inicio_granel_medidas:   Math.max(0, int(r.stock_granel_medidas) - int(r.efecto_granel_desde_inicio)),
         fin_botellas_medidas: Math.max(0, int(r.stock_actual) - int(r.efecto_botellas_post)),
         fin_granel_medidas:   Math.max(0, int(r.stock_granel_medidas) - int(r.efecto_granel_post)),
       })),

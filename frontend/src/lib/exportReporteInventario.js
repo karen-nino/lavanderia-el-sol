@@ -24,11 +24,13 @@ const salidasLineas = (p) => lineasSalidas(p, esMarca(p));
 // para que el total no parezca un error de captura.
 const devueltoTexto = (p) =>
   (p.devuelto_medidas > 0 ? textoBotellas(p.devuelto_medidas, p.medidas_por_botella, { marca: esMarca(p) }) : '');
+const inicioRellenadas = (p) => textoBotellas(p.inicio_botellas_medidas, p.medidas_por_botella, { marca: esMarca(p) });
+const inicioGranel = (p) => (esMarca(p) ? '' : textoGranel(p.inicio_granel_medidas, p.medidas_por_bidon, p.medidas_por_botella));
 const rellenadasTexto = (p) => textoBotellas(p.fin_botellas_medidas, p.medidas_por_botella, { marca: esMarca(p) });
 const granelTexto = (p) => (esMarca(p) ? '' : textoGranel(p.fin_granel_medidas, p.medidas_por_bidon, p.medidas_por_botella));
 
 // ── CSV ─────────────────────────────────────────────────────
-const ENCABEZADOS_CSV = ['Tipo', 'Marca', 'Producto', 'Entradas', 'Salidas', 'Devuelto', 'Queda (rellenadas)', 'Queda (a granel)'];
+const ENCABEZADOS_CSV = ['Tipo', 'Marca', 'Producto', 'Entradas', 'Salidas', 'Devuelto', 'Había (rellenadas)', 'Había (a granel)', 'Queda (rellenadas)', 'Queda (a granel)'];
 
 const filaCSV = (p) => [
   esPolvo(p) ? 'Polvo' : esMarca(p) ? 'Marca' : 'Granel',
@@ -37,6 +39,8 @@ const filaCSV = (p) => [
   entradasLineas(p).join(' · '),
   salidasLineas(p).join(' · '),
   devueltoTexto(p),
+  inicioRellenadas(p),
+  inicioGranel(p),
   rellenadasTexto(p),
   granelTexto(p),
 ];
@@ -51,6 +55,10 @@ const quedaCelda = (p) =>
   esMarca(p)
     ? esc(rellenadasTexto(p))
     : `Rellenadas: ${esc(rellenadasTexto(p))}<br>A granel: ${esc(granelTexto(p))}`;
+const inicioCelda = (p) =>
+  esMarca(p)
+    ? esc(inicioRellenadas(p))
+    : `Rellenadas: ${esc(inicioRellenadas(p))}<br>A granel: ${esc(inicioGranel(p))}`;
 
 const seccion = (titulo, productos) => {
   if (productos.length === 0) return '';
@@ -59,13 +67,14 @@ const seccion = (titulo, productos) => {
       <td>${esc(nombreProd(p))}</td>
       <td>${entradasLineas(p).map(esc).join('<br>')}</td>
       <td>${salidasLineas(p).map(esc).join('<br>')}${p.devuelto_medidas > 0 ? `<br><small>Devuelto: ${esc(devueltoTexto(p))}</small>` : ''}</td>
+      <td>${inicioCelda(p)}</td>
       <td>${quedaCelda(p)}</td>
     </tr>`).join('');
   return `
     <div class="seccion">${esc(titulo)}</div>
     <table class="resumen">
       <thead>
-        <tr><th>Producto</th><th>Entradas</th><th>Salidas</th><th>Queda al final</th></tr>
+        <tr><th>Producto</th><th>Entradas</th><th>Salidas</th><th>Había al inicio</th><th>Queda al final</th></tr>
       </thead>
       <tbody>${filas}</tbody>
     </table>`;
