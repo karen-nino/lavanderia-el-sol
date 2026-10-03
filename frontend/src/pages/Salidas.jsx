@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { etiquetaEstadoLista } from '../lib/estadoNota';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
-import { tituloProducto, subtituloProducto, etiquetaProducto, plural, seVendePorUnidad, esPolvo } from '../lib/formatoInventario';
+import { tituloProducto, etiquetaProducto, plural, seVendePorUnidad, esPolvo } from '../lib/formatoInventario';
 import { guardarAvisoCobro } from '../lib/avisoCobro';
 import { useAuth } from '../context/AuthContext';
 import { esAdmin as esAdminFn } from '../lib/roles';
@@ -15,6 +15,16 @@ import { marcaYTamano } from '../lib/estadoMaquina';
 
 function fmtMonto(n) {
   return n != null ? `$${Number(n).toFixed(2)}` : '—';
+}
+
+// Palabra de la unidad en que se vendió un producto de la nota, para el
+// "$28.00/unidad" del renglón: medida (Por Encargo), bolsa, unidad (marca y
+// polvo) o botella (granel líquido). Las mismas que usa Nueva Nota.
+function unidadDeRenglon(p) {
+  if (p.unidad === 'medida') return 'medida';
+  if (p.clase === 'bolsa') return 'bolsa';
+  if (seVendePorUnidad(p)) return 'unidad';
+  return 'botella';
 }
 
 // "Detener Lavado"/"Detener Secado": detener el ciclo libera la máquina en la
@@ -1391,58 +1401,62 @@ export default function Salidas() {
           <p className="px-4 py-4 text-sm text-gray-400 italic">Sin productos agregados</p>
         ) : (
           <div className="divide-y divide-gray-50">
+            {/* Mismo renglón que en Nueva Nota (2026-10-02): nombre y precio
+                por unidad arriba; abajo la cantidad, el importe y el bote. */}
             {productosNota.map(p => (
-              <div key={p.producto_id} className="px-4 py-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-3">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-gray-800 truncate">{tituloProducto(p)}</p>
-                  {subtituloProducto(p) && (
-                    <p className="text-xs text-gray-400">{subtituloProducto(p)}</p>
-                  )}
-                  <p className="text-xs text-gray-400">
-                    Cant. {p.cantidad} × {fmtMonto(p.precio_unitario)} = {fmtMonto(p.subtotal)}
+              <div key={p.producto_id} className="flex flex-wrap items-center gap-x-2 gap-y-4 px-3 py-4">
+                <div className="flex-1 min-w-[10rem]">
+                  <p className="text-sm font-semibold text-gray-900">{etiquetaProducto(p)}</p>
+                  <p className="text-xs text-gray-500 tabular-nums">
+                    {fmtMonto(p.precio_unitario)}/{unidadDeRenglon(p)}
                   </p>
                 </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
+
+                <div className="flex flex-1 items-center justify-between gap-2">
                   {/* Servir más o menos sin borrar el renglón. El − se detiene
                       en 1: quitarlo del todo es otra cosa, y tiene su bote de
                       basura (que además es de admin). */}
-                  {puedeTocarProductos && (
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        onClick={() => cambiarCantidadProducto(p.producto_id, Number(p.cantidad) - 1)}
-                        disabled={Number(p.cantidad) <= 1 || loadingProducto != null}
-                        aria-label={`Servir menos ${tituloProducto(p)}`}
-                        className="w-9 h-9 flex items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-700 text-base font-semibold hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                      >
-                        −
-                      </button>
-                      <span className="w-7 text-center text-sm font-semibold text-gray-900 tabular-nums">
-                        {p.cantidad}
-                      </span>
-                      <button
-                        onClick={() => cambiarCantidadProducto(p.producto_id, Number(p.cantidad) + 1)}
-                        disabled={loadingProducto != null}
-                        aria-label={`Servir más ${tituloProducto(p)}`}
-                        className="w-9 h-9 flex items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-700 text-base font-semibold hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                      >
-                        +
-                      </button>
-                    </div>
-                  )}
-                  {esAdmin && !cobroCongelado && (
+                  <div className="flex items-center gap-1.5">
                     <button
-                      onClick={() => setConfirmQuitarProd(p)}
-                      disabled={loadingProducto === p.producto_id}
-                      className="text-red-400 hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50 transition-colors disabled:opacity-40 flex-shrink-0"
-                      title="Quitar producto"
-                      aria-label={`Quitar ${tituloProducto(p)}`}
+                      onClick={() => cambiarCantidadProducto(p.producto_id, Number(p.cantidad) - 1)}
+                      disabled={!puedeTocarProductos || Number(p.cantidad) <= 1 || loadingProducto != null}
+                      aria-label={`Servir menos ${tituloProducto(p)}`}
+                      className="w-9 h-9 flex items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-700 text-base font-semibold hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                     >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
+                      −
                     </button>
-                  )}
+                    <span className="w-7 text-center text-sm font-semibold text-gray-900 tabular-nums">
+                      {p.cantidad}
+                    </span>
+                    <button
+                      onClick={() => cambiarCantidadProducto(p.producto_id, Number(p.cantidad) + 1)}
+                      disabled={!puedeTocarProductos || loadingProducto != null}
+                      aria-label={`Servir más ${tituloProducto(p)}`}
+                      className="w-9 h-9 flex items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-700 text-base font-semibold hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    >
+                      +
+                    </button>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="w-16 text-right text-base font-bold text-blue-700 tabular-nums">
+                      {fmtMonto(p.subtotal)}
+                    </span>
+                    {esAdmin && !cobroCongelado && (
+                      <button
+                        onClick={() => setConfirmQuitarProd(p)}
+                        disabled={loadingProducto === p.producto_id}
+                        className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-40"
+                        title="Quitar producto"
+                        aria-label={`Quitar ${tituloProducto(p)}`}
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
+                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             ))}
