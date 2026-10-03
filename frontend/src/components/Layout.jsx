@@ -6,6 +6,7 @@ import { api } from '../lib/api';
 import { formatHora12, formatFechaHora12 } from '../lib/fecha';
 import SucursalSelector from './SucursalSelector';
 import LogoSol from './LogoSol';
+import { useAvisoTopeMaquinas } from '../lib/avisoTope';
 
 const navIconCls = 'w-6 h-6';
 
@@ -681,6 +682,8 @@ export default function Layout() {
   const navigate = useNavigate();
   const location = useLocation();
   const now = useClock();
+  // Suena en cualquier pantalla cuando una máquina llega a su tope.
+  useAvisoTopeMaquinas();
   const [menuOpen, setMenuOpen] = useState(false);
   const [alertsOpen, setAlertsOpen] = useState(false);
   const [confirmLogout, setConfirmLogout] = useState(false);
