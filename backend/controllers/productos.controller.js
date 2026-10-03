@@ -75,13 +75,13 @@ function medidasDeUnidad(unidad, p) {
 // Inserta una fila en el historial de movimientos de stock.
 async function registrarMovimiento(client, {
   productoId, sucursal, usuarioId, tipo, destino, cantidadMedidas,
-  descripcion = null, notaId = null,
+  descripcion = null, notaId = null, motivo = null,
 }) {
   await client.query(
     `INSERT INTO producto_movimientos
-       (producto_id, sucursal, usuario_id, tipo, destino, cantidad_medidas, descripcion, nota_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-    [productoId, sucursal, usuarioId ?? null, tipo, destino, cantidadMedidas, descripcion, notaId]
+       (producto_id, sucursal, usuario_id, tipo, destino, cantidad_medidas, descripcion, nota_id, motivo)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+    [productoId, sucursal, usuarioId ?? null, tipo, destino, cantidadMedidas, descripcion, notaId, motivo]
   );
 }
 
@@ -535,6 +535,12 @@ export const crearMovimiento = async (req, res) => {
   if (!['entrada', 'salida'].includes(tipo)) {
     return res.status(400).json({ message: 'El movimiento debe ser una entrada o una salida.' });
   }
+  // Una salida manual dice por qué salió (mig. 142): sin eso el Reporte diario
+  // no distingue una merma de un regalo. La entrada no lleva motivo.
+  const motivo = tipo === 'salida' ? String(req.body.motivo ?? '').trim().slice(0, 100) : null;
+  if (tipo === 'salida' && !motivo) {
+    return res.status(400).json({ message: 'Indica por qué sale el producto.' });
+  }
   if (!['granel', 'botellas', 'piezas'].includes(destino)) {
     return res.status(400).json({ message: 'Indica a dónde va el movimiento: granel, botellas o piezas.' });
   }
@@ -610,6 +616,7 @@ export const crearMovimiento = async (req, res) => {
       productoId: p.id, sucursal: req.sucursal, usuarioId: req.user?.id,
       tipo, destino, cantidadMedidas: medidas,
       descripcion: `${cant} ${unidadTxt}`,
+      motivo,
     });
     await client.query('COMMIT');
     res.json(upd[0]);
@@ -626,10 +633,12 @@ export const crearMovimiento = async (req, res) => {
 // Historial de movimientos de un producto (más reciente primero).
 // Filtros opcionales (Reporte diario, 2026-10-03): `fecha` acota a ese día
 // local y `tipo` a las entradas o a las salidas (por notas —venta y lo
-// devuelto— y manuales). Sin filtros, el historial de siempre.
+// devuelto— y manuales). Rellenar va en las dos: pasa producto del bidón a
+// las botellas, así que no entra ni sale, pero explica por qué cambió cada
+// existencia. Sin filtros, el historial de siempre.
 const TIPOS_MOVIMIENTO = {
-  entradas: ['entrada'],
-  salidas:  ['venta', 'liberacion', 'salida'],
+  entradas: ['entrada', 'rellenar'],
+  salidas:  ['venta', 'liberacion', 'salida', 'rellenar'],
 };
 
 export const getMovimientos = async (req, res) => {
@@ -637,22 +646,64 @@ export const getMovimientos = async (req, res) => {
   const fecha = esFechaISO(req.query.fecha) ? req.query.fecha : null;
   const tipos = TIPOS_MOVIMIENTO[req.query.tipo] ?? null;
   try {
+    // Cada movimiento dice cuánto había ANTES y cuánto quedó DESPUÉS en las
+    // dos existencias (botellas = stock_actual, bidón = stock_granel_medidas).
+    // No hay foto de cada momento: se parte de la existencia actual y se
+    // deshace, hacia atrás, el efecto de los movimientos posteriores —la misma
+    // regla con que el Reporte diario reconstruye "Queda al final"—.
     const { rows } = await pool.query(
-      `SELECT m.*, TRIM(u.nombre || ' ' || COALESCE(u.apellido, '')) AS usuario_nombre,
-              n.folio AS nota_folio
-         FROM producto_movimientos m
-         LEFT JOIN usuarios u ON u.id = m.usuario_id
-         LEFT JOIN notas n    ON n.id = m.nota_id
-        WHERE m.producto_id = $1 AND m.sucursal = $2
-          AND ($3::date IS NULL OR (
-                m.created_at >= ($3::date)::timestamp     AT TIME ZONE 'America/Mexico_City'
-            AND m.created_at <  ($3::date + 1)::timestamp AT TIME ZONE 'America/Mexico_City'))
-          AND ($4::text[] IS NULL OR m.tipo = ANY($4))
-        ORDER BY m.created_at DESC, m.id DESC
+      `WITH prod AS (
+         SELECT stock_actual, stock_granel_medidas FROM productos
+          WHERE id = $1 AND sucursal = $2
+       ),
+       mov AS (
+         SELECT m.*,
+                CASE WHEN m.tipo IN ('entrada', 'liberacion') AND m.destino <> 'granel' THEN  m.cantidad_medidas
+                     WHEN m.tipo IN ('salida', 'venta')       AND m.destino <> 'granel' THEN -m.cantidad_medidas
+                     WHEN m.tipo = 'rellenar'                                          THEN  m.cantidad_medidas
+                     ELSE 0 END AS efecto_botellas,
+                CASE WHEN m.tipo = 'entrada' AND m.destino = 'granel' THEN  m.cantidad_medidas
+                     WHEN m.tipo = 'salida'  AND m.destino = 'granel' THEN -m.cantidad_medidas
+                     WHEN m.tipo = 'rellenar'                         THEN -m.cantidad_medidas
+                     ELSE 0 END AS efecto_granel
+           FROM producto_movimientos m
+          WHERE m.producto_id = $1 AND m.sucursal = $2
+       ),
+       acum AS (
+         SELECT mov.*,
+                COALESCE(SUM(efecto_botellas) OVER w, 0) AS botellas_posterior,
+                COALESCE(SUM(efecto_granel)   OVER w, 0) AS granel_posterior
+           FROM mov
+         WINDOW w AS (ORDER BY created_at DESC, id DESC
+                      ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING)
+       )
+       SELECT a.id, a.producto_id, a.sucursal, a.usuario_id, a.tipo, a.destino,
+              a.cantidad_medidas, a.descripcion, a.nota_id, a.motivo, a.created_at,
+              TRIM(u.nombre || ' ' || COALESCE(u.apellido, '')) AS usuario_nombre,
+              n.folio AS nota_folio,
+              p.stock_actual         - a.botellas_posterior                     AS botellas_despues,
+              p.stock_actual         - a.botellas_posterior - a.efecto_botellas AS botellas_antes,
+              p.stock_granel_medidas - a.granel_posterior                       AS granel_despues,
+              p.stock_granel_medidas - a.granel_posterior   - a.efecto_granel   AS granel_antes
+         FROM acum a
+         CROSS JOIN prod p
+         LEFT JOIN usuarios u ON u.id = a.usuario_id
+         LEFT JOIN notas n    ON n.id = a.nota_id
+        WHERE ($3::date IS NULL OR (
+                a.created_at >= ($3::date)::timestamp     AT TIME ZONE 'America/Mexico_City'
+            AND a.created_at <  ($3::date + 1)::timestamp AT TIME ZONE 'America/Mexico_City'))
+          AND ($4::text[] IS NULL OR a.tipo = ANY($4))
+        ORDER BY a.created_at DESC, a.id DESC
         LIMIT 200`,
       [id, req.sucursal, fecha, tipos]
     );
-    res.json(rows);
+    res.json(rows.map((r) => ({
+      ...r,
+      botellas_antes:  Number(r.botellas_antes),
+      botellas_despues: Number(r.botellas_despues),
+      granel_antes:    Number(r.granel_antes),
+      granel_despues:  Number(r.granel_despues),
+    })));
   } catch (err) {
     console.error('getMovimientos error:', err);
     res.status(500).json({ message: 'No se pudo cargar el historial del producto. Intenta de nuevo.' });
@@ -733,6 +784,13 @@ export const getReporteDiario = async (req, res) => {
             WHERE m.producto_id = p.id AND m.tipo = 'salida' AND m.destino = 'granel'
               AND m.created_at >= bounds.inicio AND m.created_at < bounds.cierre
          ), 0) AS salida_granel_medidas,
+         -- Rellenado ese día (del bidón a botellas). No entra ni sale, pero
+         -- deja ver el detalle aunque no haya otro movimiento.
+         COALESCE((
+           SELECT SUM(m.cantidad_medidas) FROM producto_movimientos m, bounds
+            WHERE m.producto_id = p.id AND m.tipo = 'rellenar'
+              AND m.created_at >= bounds.inicio AND m.created_at < bounds.cierre
+         ), 0) AS rellenado_medidas,
          -- Devuelto ese día (ventas anuladas), para poder explicarlo aparte.
          COALESCE((
            SELECT SUM(m.cantidad_medidas) FROM producto_movimientos m, bounds
@@ -785,6 +843,7 @@ export const getReporteDiario = async (req, res) => {
         entrada_granel_medidas:   int(r.entrada_granel_medidas),
         salida_botellas_medidas:  int(r.salida_botellas_medidas),
         salida_granel_medidas:    int(r.salida_granel_medidas),
+        rellenado_medidas:        int(r.rellenado_medidas),
         // La existencia no puede ser negativa; se acota a 0 por si hay datos raros.
         fin_botellas_medidas: Math.max(0, int(r.stock_actual) - int(r.efecto_botellas_post)),
         fin_granel_medidas:   Math.max(0, int(r.stock_granel_medidas) - int(r.efecto_granel_post)),

@@ -872,6 +872,10 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = 
   );
 }
 
+// Por qué sale el producto en una salida manual (mig. 142). "Otro" pide el
+// texto: lo que no entra en los demás también se tiene que poder decir.
+const MOTIVOS_SALIDA = ['Merma', 'Dañado', 'Uso interno', 'Regalo', 'Otro'];
+
 // ── Modal Entrada / Salida ──────────────────────────────────────
 function ModalMovimiento({ producto, tipo, onClose, onDone }) {
   const esGranel = esGranelLiquido(producto);
@@ -882,10 +886,15 @@ function ModalMovimiento({ producto, tipo, onClose, onDone }) {
   const porRollo = Number(producto.bolsas_por_rollo) > 0;
   const [unidadBolsa, setUnidadBolsa] = useState(porRollo ? 'rollo' : 'pieza');
   const [cantidad, setCantidad] = useState('');
+  const [motivoSel, setMotivoSel]   = useState('');
+  const [motivoOtro, setMotivoOtro] = useState('');
   const [error, setError]     = useState('');
   const [loading, setLoading] = useState(false);
 
   const esEntrada = tipo === 'entrada';
+  // La salida no se registra sin su motivo; la entrada no lleva.
+  const motivo = motivoSel === 'Otro' ? motivoOtro.trim() : motivoSel;
+  const faltaMotivo = !esEntrada && !motivo;
   // Unidad: bolsas = rollo/pieza; granel = bidones/botellas por destino; marca = botella.
   const unidad = esBolsa ? unidadBolsa : (destino === 'granel' ? 'bidon' : 'botella');
   const unidadTxt = esBolsa
@@ -898,6 +907,7 @@ function ModalMovimiento({ producto, tipo, onClose, onDone }) {
     try {
       const resp = await api.post(`/productos/${producto.id}/movimiento`, {
         tipo, destino, unidad, cantidad: Number(cantidad),
+        ...(!esEntrada && { motivo }),
       });
       onDone(resp);
     } catch (err) {
@@ -962,6 +972,32 @@ function ModalMovimiento({ producto, tipo, onClose, onDone }) {
           />
         </div>
 
+        {!esEntrada && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">¿Por qué sale?</label>
+            <div className="flex flex-wrap gap-2">
+              {MOTIVOS_SALIDA.map(m => (
+                <button
+                  key={m} type="button" onClick={() => setMotivoSel(m)}
+                  className={`py-2.5 px-3 rounded-lg border text-sm font-medium transition-colors ${
+                    motivoSel === m ? 'border-blue bg-light-blue text-blue' : 'border-gray-300 bg-white text-gray-600 hover:bg-gray-50'
+                  }`}
+                >
+                  {m}
+                </button>
+              ))}
+            </div>
+            {motivoSel === 'Otro' && (
+              <input
+                type="text" value={motivoOtro} maxLength={100} autoFocus
+                onChange={(e) => setMotivoOtro(e.target.value)}
+                placeholder="Escribe el motivo"
+                className={`${INPUT_CLS} mt-2`}
+              />
+            )}
+          </div>
+        )}
+
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">{error}</div>
         )}
@@ -974,7 +1010,7 @@ function ModalMovimiento({ producto, tipo, onClose, onDone }) {
             Cancelar
           </button>
           <button
-            type="button" onClick={enviar} disabled={loading || !(Number(cantidad) > 0)}
+            type="button" onClick={enviar} disabled={loading || !(Number(cantidad) > 0) || faltaMotivo}
             className={`flex-1 text-white font-medium py-3.5 rounded-lg text-base transition-colors disabled:opacity-60 ${
               esEntrada ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'
             }`}
@@ -1117,6 +1153,8 @@ function ModalHistorial({ producto, onClose }) {
                       {m.destino === 'granel' ? 'A granel' : 'Botellas'}
                       {m.usuario_nombre ? ` · ${m.usuario_nombre}` : ''}
                     </p>
+                    {/* Por qué salió (salidas manuales, mig. 142). */}
+                    {m.motivo && <p className="text-xs text-gray-500 mt-0.5">Motivo: {m.motivo}</p>}
                   </div>
                   <span className="text-xs text-gray-400 flex-shrink-0 whitespace-nowrap">{fechaHoraCorta(m.created_at)}</span>
                 </li>
@@ -1357,7 +1395,8 @@ function CeldaMovimiento({ lineas, hayAlgo = false, onClick }) {
 function etiquetaMovimiento(m) {
   const nota = m.nota_folio ? `Nota ${m.nota_folio}` : null;
   if (m.tipo === 'entrada')    return 'Entrada';
-  if (m.tipo === 'salida')     return 'Salida manual';
+  if (m.tipo === 'salida')     return m.motivo ? `Salida manual · ${m.motivo}` : 'Salida manual';
+  if (m.tipo === 'rellenar')   return 'Rellenado: del bidón a botellas';
   if (m.tipo === 'venta')      return nota ?? 'Venta en nota';
   if (m.tipo === 'liberacion') return `Devuelto${nota ? ` · ${nota}` : ''} (se anuló la venta)`;
   return m.tipo;
@@ -1366,11 +1405,29 @@ function etiquetaMovimiento(m) {
 // Cuánto movió, en las mismas unidades que la tabla: lo que va por unidad en
 // unidades; el granel, en botellas o en bidón según de dónde salió o a dónde
 // entró.
-function cantidadMovimiento(m, p, esMarca) {
+// Rellenar se cuenta del lado que se está viendo: en Entradas, las botellas
+// que se llenaron; en Salidas, lo que bajó el bidón.
+function enBidon(m, tipo) {
+  return m.tipo === 'rellenar' ? tipo === 'salidas' : m.destino === 'granel';
+}
+
+function cantidadMovimiento(m, p, esMarca, tipo) {
   const n = Number(m.cantidad_medidas) || 0;
   if (esMarca) return textoBotellas(n, p.medidas_por_botella, { marca: true });
-  if (m.destino === 'granel') return `A granel: ${textoGranelFmt(n, p.medidas_por_bidon, p.medidas_por_botella)}`;
+  if (enBidon(m, tipo)) return `A granel: ${textoGranelFmt(n, p.medidas_por_bidon, p.medidas_por_botella)}`;
   return textoBotellas(n, p.medidas_por_botella);
+}
+
+// Cuánto había y cuánto quedó en la existencia que tocó el movimiento.
+function antesDespues(m, p, esMarca, tipo) {
+  const bidon = !esMarca && enBidon(m, tipo);
+  const fmt = (v) => {
+    const n = Math.max(0, Number(v) || 0);
+    if (esMarca) return textoBotellas(n, p.medidas_por_botella, { marca: true });
+    return bidon ? textoGranelFmt(n, p.medidas_por_bidon, p.medidas_por_botella) : textoBotellas(n, p.medidas_por_botella);
+  };
+  const [antes, despues] = bidon ? [m.granel_antes, m.granel_despues] : [m.botellas_antes, m.botellas_despues];
+  return `Había ${fmt(antes)} → quedó ${fmt(despues)}`;
 }
 
 // Detalle de las entradas o salidas de un producto en un día (2026-10-03):
@@ -1427,9 +1484,15 @@ function MovimientosDiaModal({ producto, tipo, fecha, onClose }) {
                   <p className="text-xs text-gray-400 truncate">
                     {m.usuario_nombre || 'Usuario eliminado'} · {formatHora12(m.created_at)}
                   </p>
+                  <p className="text-xs text-gray-500">{antesDespues(m, producto, esMarca, tipo)}</p>
+                  {m.tipo === 'rellenar' && (
+                    <p className="text-xs text-gray-400">No suma en {tipo === 'entradas' ? 'Entradas' : 'Salidas'}: solo cambia de lugar.</p>
+                  )}
                 </div>
-                <span className={`text-sm font-medium whitespace-nowrap ${m.tipo === 'liberacion' ? 'text-green-700' : 'text-gray-700'}`}>
-                  {m.tipo === 'liberacion' ? '+ ' : ''}{cantidadMovimiento(m, producto, esMarca)}
+                <span className={`text-sm font-medium whitespace-nowrap ${
+                  m.tipo === 'liberacion' ? 'text-green-700' : m.tipo === 'rellenar' ? 'text-gray-400' : 'text-gray-700'
+                }`}>
+                  {m.tipo === 'liberacion' ? '+ ' : ''}{cantidadMovimiento(m, producto, esMarca, tipo)}
                 </span>
               </div>
             );
@@ -1513,12 +1576,12 @@ function ReporteDiario() {
                       {esMarca && p.marca && <p className="text-xs text-gray-400">{p.nombre}</p>}
                     </td>
                     <td className="px-4 py-3 text-gray-700">
-                      <CeldaMovimiento lineas={lineasEntradas(p, esMarca)}
+                      <CeldaMovimiento lineas={lineasEntradas(p, esMarca)} hayAlgo={p.rellenado_medidas > 0}
                         onClick={() => setDetalle({ producto: p, tipo: 'entradas' })} />
                     </td>
                     <td className="px-4 py-3 text-gray-700">
                       {/* Por notas más las salidas manuales (merma, dañado…). */}
-                      <CeldaMovimiento lineas={lineasSalidas(p, esMarca)} hayAlgo={p.devuelto_medidas > 0}
+                      <CeldaMovimiento lineas={lineasSalidas(p, esMarca)} hayAlgo={p.devuelto_medidas > 0 || p.rellenado_medidas > 0}
                         onClick={() => setDetalle({ producto: p, tipo: 'salidas' })} />
                       {/* Ventas anuladas ese día: el producto volvió al estante,
                           así que ya viene restado de la línea de arriba. Se dice
