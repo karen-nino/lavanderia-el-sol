@@ -113,6 +113,34 @@ async function faseProcesoDeNota(client, notaId) {
   return 'EN_ESPERA';
 }
 
+// ¿Alguna lavadora de la nota ya terminó? Es lo que habilita "Procesado" en el
+// detalle (2026-10-02): antes de que la ropa salga de una lavadora no hay nada
+// que doblar ni empacar. Una lavadora que ESTA nota arrancó cuenta como
+// terminada si:
+//   · ya la soltó (la carga quedó sin lavadora), o ya no está corriendo, o
+//   · sigue puesta con temporizador y su tiempo ya se cumplió.
+// La de cronómetro (LG y Samsung, mig. 137) no tiene tiempo que cumplir: cuenta
+// solo cuando alguien la finaliza.
+async function algunaLavadoraTermino(client, notaId) {
+  const { rows } = await client.query(
+    `SELECT EXISTS (
+       SELECT 1 FROM nota_cargas nc
+         LEFT JOIN maquinas m ON m.id = nc.lavadora_id
+        WHERE nc.nota_id = $1
+          AND nc.lavadora_iniciada_at IS NOT NULL
+          AND (
+            nc.lavadora_id IS NULL
+            OR m.estado <> 'en_uso'
+            OR (m.en_uso_desde IS NOT NULL AND m.ciclo_minutos IS NOT NULL
+                AND NOT ${esCronometroSql('m')}
+                AND m.en_uso_desde + make_interval(mins => m.ciclo_minutos) <= NOW())
+          )
+     ) AS termino`,
+    [notaId]
+  );
+  return rows[0].termino;
+}
+
 // ¿A la nota le falta trabajo por hacer? Una carga cuenta como PENDIENTE si:
 //   · tiene una máquina asignada o corriendo, o
 //   · se pidió lavado (lavadora_tipo) que nunca arrancó, o
@@ -1733,6 +1761,7 @@ export const getNotaById = async (req, res) => {
       historial_estados: historial, historial_forma_pago: historialPago,
       abonos,
       abonado,
+      lavadora_terminada: await algunaLavadoraTermino(pool, id),
       // Lo que falta por cobrar. Una nota ya pagada no debe nada.
       saldo: rows[0].estado_pago === 'PAGADO'
         ? 0
@@ -2701,7 +2730,7 @@ export const cambiarEstadoNota = async (req, res) => {
     await client.query('BEGIN');
 
     const { rows: notaRows } = await client.query(
-      'SELECT estado, estado_pago FROM notas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
+      'SELECT estado, estado_pago, tipo_servicio FROM notas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
       [id, req.sucursal]
     );
     if (notaRows.length === 0) {
@@ -2742,6 +2771,18 @@ export const cambiarEstadoNota = async (req, res) => {
       await client.query('ROLLBACK');
       return res.status(400).json({
         message: `Una nota ${palabra(estadoActual)} no puede pasar a ${palabra(estado)}. Desde aquí solo puede pasar a: ${permitidos.map(palabra).join(', ') || 'ningún otro estado'}.`,
+      });
+    }
+
+    // "Procesado" (Por Encargo → Por Entregar) exige que al menos una lavadora
+    // haya terminado (2026-10-02): antes no hay ropa que doblar ni empacar. El
+    // detalle ya esconde el botón; esto cubre una pantalla vieja, otro
+    // dispositivo que cambió la nota mientras tanto o una llamada directa.
+    if (estado === 'LISTA' && notaRows[0].tipo_servicio === 'POR_ENCARGO'
+        && !(await algunaLavadoraTermino(client, id))) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({
+        message: 'Todavía no termina ninguna lavadora de esta nota: no se puede marcar como procesada.',
       });
     }
 

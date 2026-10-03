@@ -942,6 +942,31 @@ describe('servicios Por Encargo (sin tipo de máquina)', () => {
       return { notaId, estado: res.body.estado, lav };
     }
 
+    it('sin ninguna lavadora terminada, "Procesado" se rechaza', async () => {
+      const clienteId = await seedCliente();
+      const lav = await seedMaquina({ nombre: 'L-sin-terminar', tipo: 'lavadora_mediana', tamano: 'mediana' });
+      const nota = await request(app).post('/api/notas').set(auth(admin.token)).send({
+        tipo_servicio: 'POR_ENCARGO', cliente_id: clienteId, tipo_prenda: 'ROPA',
+        estado_pago: 'PENDIENTE', cargas: [{ tamano: 'chico', tipo_prenda: 'ROPA' }],
+      });
+      const notaId = nota.body.id;
+      const procesar = () => request(app).patch(`/api/notas/${notaId}/estado`)
+        .set(auth(admin.token)).send({ estado: 'LISTA' });
+
+      // Sin máquina…
+      let res = await procesar();
+      expect(res.status).toBe(409);
+      expect(res.body.message).toMatch(/ninguna lavadora/i);
+
+      // …ni con la lavadora todavía lavando.
+      await request(app).patch(`/api/notas/${notaId}/asignar-maquina`)
+        .set(auth(admin.token)).send({ maquina_ids: [lav], cobrar: false }).expect(200);
+      await request(app).patch(`/api/notas/${notaId}/activar-pendientes`)
+        .set(auth(admin.token)).send({ maquina_id: lav }).expect(200);
+      res = await procesar();
+      expect(res.status).toBe(409);
+    });
+
     it('terminar la última máquina NO la pasa a Por Entregar', async () => {
       const { estado } = await trasLavar('proc');
       expect(estado).toBe('EN_ESPERA');
@@ -1229,7 +1254,9 @@ describe('handlers de máquina — ciclo de vida', () => {
     await request(app).patch(`/api/notas/${notaId}/activar-pendientes`)
       .set(auth(admin.token)).send({ maquina_id: lavadoraId }).expect(200);
 
-    // LAVANDO → LISTA (transición válida sin pasar por secado).
+    // LAVANDO → LISTA (transición válida sin pasar por secado). "Procesado"
+    // exige una lavadora terminada: se da su tiempo por cumplido.
+    await pool.query(`UPDATE maquinas SET en_uso_desde = NOW() - interval '2 hours' WHERE id = $1`, [lavadoraId]);
     await request(app).patch(`/api/notas/${notaId}/estado`)
       .set(auth(admin.token)).send({ estado: 'LISTA' }).expect(200);
 
@@ -1849,6 +1876,8 @@ describe('productos por medida', () => {
       .set(auth(admin.token)).send({ carga_id: creada.body.cargas[0].id, slot: 'lavadora', maquina_id: lavadoraId });
     await request(app).patch(`/api/notas/${notaId}/activar-pendientes`)
       .set(auth(admin.token)).send({ maquina_id: lavadoraId }).expect(200);
+    // "Procesado" exige una lavadora terminada: se da su tiempo por cumplido.
+    await pool.query(`UPDATE maquinas SET en_uso_desde = NOW() - interval '2 hours' WHERE id = $1`, [lavadoraId]);
     await request(app).patch(`/api/notas/${notaId}/estado`).set(auth(admin.token)).send({ estado: 'LISTA' }).expect(200);
     await request(app).patch(`/api/notas/${notaId}/estado-pago`).set(auth(admin.token))
       .send({ estado_pago: 'PAGADO', forma_pago: 'EFECTIVO' }).expect(200);
@@ -2670,6 +2699,14 @@ describe('PATCH /api/notas/:id/reabrir', () => {
     });
     expect(crea.status).toBe(201);
     const notaId = crea.body.id;
+    // Lavada y terminada: sin eso no se puede marcar "Procesado".
+    const lav = await seedMaquina({ nombre: `L-entrega-${notaId}`, tipo: 'lavadora_mediana', tamano: 'mediana' });
+    await request(app).patch(`/api/notas/${notaId}/asignar-carga-maquina`).set(auth(admin.token))
+      .send({ carga_id: crea.body.cargas[0].id, slot: 'lavadora', maquina_id: lav }).expect(200);
+    await request(app).patch(`/api/notas/${notaId}/activar-pendientes`)
+      .set(auth(admin.token)).send({ maquina_id: lav }).expect(200);
+    await request(app).patch(`/api/notas/${notaId}/terminar-lavado-final`)
+      .set(auth(admin.token)).send({ lavadora_id: lav }).expect(200);
     // Lista → cobrada → entregada.
     await request(app).patch(`/api/notas/${notaId}/estado`)
       .set(auth(admin.token)).send({ estado: 'LISTA' }).expect(200);

@@ -984,7 +984,10 @@ export default function DetalleNota() {
   // teléfono ya capturado no tenía a dónde mandar nada.
   const telefonoAviso = telefonoWhatsapp(nota.cliente_telefono || nota.telefono);
   const yaProcesada = nota.estado === 'LISTA';
-  const botonProcesado = nota.tipo_servicio === 'POR_ENCARGO' && !esTerminal(nota) && (
+  // No sale hasta que al menos una lavadora terminó (2026-10-02): antes no hay
+  // ropa que procesar. Ya procesada se queda, para poder repetir el aviso.
+  const botonProcesado = nota.tipo_servicio === 'POR_ENCARGO' && !esTerminal(nota)
+    && (yaProcesada || nota.lavadora_terminada) && (
     <AccionCircular
       label={yaProcesada ? 'Avisar' : 'Procesado'}
       title={yaProcesada ? 'Volver a avisarle al cliente' : 'Marcar la nota como procesada'}

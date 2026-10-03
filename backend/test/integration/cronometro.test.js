@@ -209,3 +209,41 @@ describe('el tope', () => {
     expect(rows[0].tope_cronometro_minutos).toBe(90);
   });
 });
+
+// "Procesado" solo sale cuando al menos una lavadora de la nota terminó: el
+// detalle lo lee de `lavadora_terminada` (2026-10-02).
+describe('GET /notas/:id — lavadora_terminada', () => {
+  const terminada = async (notaId) =>
+    (await request(app).get(`/api/notas/${notaId}`).set(auth(admin.token)).expect(200)).body.lavadora_terminada;
+
+  it('sin arrancar no hay ninguna terminada', async () => {
+    const id = await lavadora('LG');
+    const notaId = await notaCon(id);
+    expect(await terminada(notaId)).toBe(false);
+  });
+
+  it('la de cronómetro corriendo no cuenta; finalizada, sí', async () => {
+    const id = await lavadora('LG');
+    const notaId = await notaCon(id);
+    await encender(notaId, id).expect(200);
+    // Aunque lleve horas: solo cuenta al finalizarla.
+    await pool.query(`UPDATE maquinas SET en_uso_desde = NOW() - interval '3 hours' WHERE id = $1`, [id]);
+    expect(await terminada(notaId)).toBe(false);
+
+    await request(app).patch(`/api/notas/${notaId}/terminar-lavado-final`)
+      .set(auth(admin.token)).send({ lavadora_id: id }).expect(200);
+    expect(await terminada(notaId)).toBe(true);
+  });
+
+  it('la de temporizador cuenta en cuanto se cumple su tiempo', async () => {
+    const id = await lavadora('Whirlpool');
+    const notaId = await notaCon(id);
+    await encender(notaId, id).expect(200);
+    await request(app).patch(`/api/notas/${notaId}/activar-pendientes`).set(auth(admin.token))
+      .send({ maquina_id: id }).expect(200);
+    expect(await terminada(notaId)).toBe(false);
+
+    await pool.query(`UPDATE maquinas SET en_uso_desde = NOW() - interval '16 minutes' WHERE id = $1`, [id]);
+    expect(await terminada(notaId)).toBe(true);
+  });
+});
