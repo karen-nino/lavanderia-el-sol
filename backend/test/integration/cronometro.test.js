@@ -116,6 +116,8 @@ describe('encender', () => {
     expect(nota.body.estado).toBe('LAVANDO');
     expect(nota.body.cargas[0].lavadora_iniciada_at).not.toBeNull();
     expect(nota.body.cargas[0].maquinas_usadas[0].cronometro).toBe(true);
+    // Salidas lo usa para avisar que llegó al tope.
+    expect(nota.body.cargas[0].lavadora_ciclo_minutos).toBe(15);
   });
 
   it('sin tiempo de modelo ni de marca, el tope es el de su tamaño en Ajustes', async () => {

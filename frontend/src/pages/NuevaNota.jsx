@@ -100,6 +100,10 @@ const serviciosDe = (tamanosEdredon) => [
   ...tamanosEdredon.map(e => ({
     v:              servicioEdredon(e.nombre),
     label:          `Edredón ${e.nombre}`,
+    // Título corto del renglón en la lista de servicios: "Edredón Matrimonial"
+    // no cabía junto a los botones y se cortaba (2026-10-02). En avisos y
+    // resúmenes sigue el nombre completo.
+    titulo:         `E. ${e.nombre}`,
     tamano:         'jumbo',
     tipo_prenda:    'EDREDON',
     tamano_edredon: e.nombre,
@@ -1810,7 +1814,7 @@ export default function NuevaNota() {
                               caía sola al siguiente renglón. */}
                           <div className="flex-1 min-w-0">
                             <p className="text-base font-semibold text-gray-900 truncate">
-                              {s.label}
+                              {s.titulo ?? s.label}
                               {s.legado && (
                                 <span className="ml-2 text-xs font-normal text-gray-400">ya no se vende</span>
                               )}

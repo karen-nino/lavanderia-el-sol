@@ -1367,12 +1367,16 @@ async function cargasDeNota(client, notaId) {
             nc.secadora_tipo AS secadora_tipo_previsto,
             ml.nombre AS lavadora_nombre, ml.tipo AS lavadora_tipo, ml.estado AS lavadora_estado,
             ml.en_uso_desde AS lavadora_en_uso_desde,
+            -- Su tope sellado: con él Salidas sabe si la de cronómetro ya
+            -- llegó al tope y se quedó sin luz (2026-10-02).
+            ml.ciclo_minutos AS lavadora_ciclo_minutos,
             -- Encendida por ESTA nota y todavía sin arrancar (mig. 110): es lo
             -- que hace que el botón diga "Iniciar" en vez de "Encender".
             (ml.estado = 'en_uso' AND ml.en_uso_desde IS NULL
              AND ml.encendida_para_nota_id = nc.nota_id) AS lavadora_esperando_arranque,
             ms.nombre AS secadora_nombre, ms.tipo AS secadora_tipo, ms.estado AS secadora_estado,
             ms.tamano AS secadora_tamano, ms.en_uso_desde AS secadora_en_uso_desde,
+            ms.ciclo_minutos AS secadora_ciclo_minutos,
             (ms.estado = 'en_uso' AND ms.en_uso_desde IS NULL
              AND ms.encendida_para_nota_id = nc.nota_id) AS secadora_esperando_arranque,
             nc.lavadora_usada_id, nc.secadora_usada_id,

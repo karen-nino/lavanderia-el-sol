@@ -737,6 +737,7 @@ export default function Salidas() {
               ? (esLav ? c.lavadora_estado : c.secadora_estado)
               : 'terminado',
             en_uso_desde: u.actual ? (esLav ? c.lavadora_en_uso_desde : c.secadora_en_uso_desde) : null,
+            ciclo_minutos: u.actual ? (esLav ? c.lavadora_ciclo_minutos : c.secadora_ciclo_minutos) : null,
             esperandoArranque: Boolean(u.actual
               && (esLav ? c.lavadora_esperando_arranque : c.secadora_esperando_arranque)),
             tomadaPor: u.actual && u.maquina_id ? usadaPorOtra(u.maquina_id) : null,
@@ -871,6 +872,11 @@ export default function Salidas() {
                   : tiempos.mediana;
     return now - new Date(m.en_uso_desde).getTime() >= Math.max(0, Number(minutos) || 0) * 60000;
   };
+
+  // ¿La de cronómetro ya pasó su tope? Es su `ciclo_minutos` sellado al
+  // encender, contado desde que arrancó: el mismo cálculo de la tarjeta.
+  const topeAlcanzado = (m) => Boolean(m.cronometro && m.en_uso_desde && m.ciclo_minutos)
+    && now - new Date(m.en_uso_desde).getTime() >= Number(m.ciclo_minutos) * 60000;
 
   // Lavadora y secadora se asignan igual: en cuanto la nota existe. La
   // secadora esperaba a que terminara el lavado para no quedarse con una
@@ -1204,9 +1210,17 @@ export default function Salidas() {
                         </span>
                       )}
                       {m.cronometro && m.estado === 'en_uso' && !m.tomadaPor && (
-                        <span className="text-xs font-medium text-green-700 basis-full">
-                          Encendida. Arráncala con su botón y finalízala cuando termine.
-                        </span>
+                        // Mismo aviso que la tarjeta de Máquinas: pasado su
+                        // tope, el corte ya le quitó la luz y falta finalizarla.
+                        topeAlcanzado(m) ? (
+                          <span className="text-xs font-medium text-red-600 basis-full">
+                            Llegó al tope y se le cortó la luz.
+                          </span>
+                        ) : (
+                          <span className="text-xs font-medium text-green-700 basis-full">
+                            Encendida. Arráncala con su botón y finalízala cuando termine.
+                          </span>
+                        )
                       )}
                     </div>
                     {/* Otra nota se la ganó al iniciar: aquí no hay nada que
