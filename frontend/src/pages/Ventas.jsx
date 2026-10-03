@@ -868,10 +868,7 @@ export default function Ventas() {
                     {m.nombre}
                   </span>
                   <span className="text-right text-gray-500">
-                    {m.cargas} {m.cargas === 1 ? 'carga' : 'cargas'}
-                    {fmtEncendida(m.segundos) && (
-                      <span className="block text-xs text-gray-400">Encendida {fmtEncendida(m.segundos)}</span>
-                    )}
+                    {fmtEncendida(m.segundos) ?? <span className="text-gray-400">—</span>}
                   </span>
                 </li>
               ))}
