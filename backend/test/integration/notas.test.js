@@ -248,6 +248,8 @@ describe('lecturas del modelo por cargas (invariantes que deben sobrevivir el re
     expect(res.body[0].hay_lavadora_activa).toBe(true);
     expect(res.body[0].hay_secadora_activa).toBe(false);
     expect(res.body[0].maquinas_nombres).toContain('Lavadora 1');
+    // La tarjeta de la lista dice qué máquina está usando (2026-10-03).
+    expect(res.body[0].maquinas_en_uso).toEqual(['Lavadora 1']);
   });
 
   it('PATCH edita un campo simple conservando las cargas', async () => {

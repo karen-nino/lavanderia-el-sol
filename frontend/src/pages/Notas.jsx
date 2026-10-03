@@ -178,13 +178,15 @@ function etiquetaFechaEntrega(fecha) {
   return fmtFechaEntrega(fecha);
 }
 
-// Fecha con día de la semana: "Miércoles, 29 Jul 2026".
+// Fecha con día de la semana: "Sábado, 03/10/26" (2026-10-03; antes
+// "Sábado, 03 Oct 2026").
 function fmtFechaDia(iso) {
   const d = new Date(iso);
   const diaSem = DIAS_SEMANA[d.getDay()];
   const dia  = String(d.getDate()).padStart(2, '0');
-  const mes  = MESES_ABR[d.getMonth()];
-  return `${diaSem}, ${dia} ${mes} ${d.getFullYear()}`;
+  const mes  = String(d.getMonth() + 1).padStart(2, '0');
+  const anio = String(d.getFullYear()).slice(-2);
+  return `${diaSem}, ${dia}/${mes}/${anio}`;
 }
 
 function fmtMonto(n) {
@@ -841,11 +843,27 @@ export default function Notas() {
                     <p className="text-xl font-bold">{fmtMonto(n.precio_total)}</p>
                   </div>
 
-                  {/* Estado de pago (la fecha/hora/máquinas viven ahora en el
-                      Detalle de nota, a un toque). */}
-                  {badgePago && (
+                  {/* Máquinas que la nota tiene corriendo ahora mismo (las que
+                      usó y ya terminaron están en el Detalle de nota). */}
+                  {(n.maquinas_en_uso?.length ?? 0) > 0 && (
                     <>
                       <div className="border-t border-dashed border-gray-300 my-4" />
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-sm text-dark-grey">
+                          {n.maquinas_en_uso.length === 1 ? 'Usando máquina' : 'Usando máquinas'}
+                        </span>
+                        <span className="text-sm font-bold text-blue-700 text-right">
+                          {[...n.maquinas_en_uso].sort((a, b) => a.localeCompare(b, 'es', { numeric: true })).join(', ')}
+                        </span>
+                      </div>
+                    </>
+                  )}
+
+                  {/* Estado de pago (la fecha/hora viven en el Detalle de nota,
+                      a un toque). */}
+                  {badgePago && (
+                    <>
+                      <div className={`border-t border-dashed border-gray-300 ${(n.maquinas_en_uso?.length ?? 0) > 0 ? 'my-3' : 'my-4'}`} />
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-sm text-dark-grey">Estado de pago</span>
                         <span className={`text-sm font-bold ${n.estado_pago === 'PENDIENTE' ? 'text-red' : 'text-dark-grey'}`}>

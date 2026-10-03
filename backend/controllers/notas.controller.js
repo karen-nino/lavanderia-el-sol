@@ -1617,6 +1617,15 @@ export const getNotas = async (req, res) => {
                    UNION SELECT nc.secadora_usada_id  FROM nota_cargas nc WHERE nc.nota_id = n.id
                  ) xm
                  JOIN maquinas mm ON mm.id = xm.mid) AS maquinas_nombres,
+              -- Máquinas que la nota tiene CORRIENDO ahora (arrancadas por ella
+              -- y en uso): la tarjeta de la lista lo dice (2026-10-03). Una
+              -- solo asignada no cuenta: otra nota puede arrancarla antes.
+              (SELECT COALESCE(json_agg(DISTINCT mm.nombre), '[]'::json)
+                 FROM nota_cargas nc
+                 JOIN maquinas mm
+                   ON (mm.id = nc.lavadora_id AND nc.lavadora_iniciada_at IS NOT NULL)
+                   OR (mm.id = nc.secadora_id AND nc.secadora_iniciada_at IS NOT NULL)
+                WHERE nc.nota_id = n.id AND mm.estado = 'en_uso') AS maquinas_en_uso,
               -- Fases vivas de la nota: si tiene lavadora(s) y/o secadora(s)
               -- realmente EN USO ahora mismo (no solo asignadas: una máquina
               -- asignada pero sin iniciar no cuenta). Con varias cargas puede
