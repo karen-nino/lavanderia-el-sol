@@ -628,6 +628,19 @@ export const crearMovimiento = async (req, res) => {
 
 // ── GET /productos/:id/movimientos ──────────────────────────────
 // Historial de movimientos de un producto (más reciente primero).
+// ¿Esta venta (alias `m`) se devolvió después? Se empata con su devolución por
+// la nota —viva (nota_id) o borrada (folio copiado, migs. 144-145)— y el
+// producto. Una venta devuelta no cuenta en Salidas: solo aparece en Devuelto
+// (2026-10-03).
+const VENTA_DEVUELTA_SQL = `EXISTS (
+  SELECT 1 FROM producto_movimientos l
+   WHERE l.tipo = 'liberacion'
+     AND l.producto_id = m.producto_id
+     AND l.sucursal    = m.sucursal
+     AND l.created_at >= m.created_at
+     AND ((m.nota_id    IS NOT NULL AND l.nota_id    = m.nota_id)
+       OR (m.nota_folio IS NOT NULL AND l.nota_folio = m.nota_folio)))`;
+
 // Filtros opcionales (Reporte diario, 2026-10-03): `fecha` acota a ese día
 // local y `tipo` a las entradas, a las salidas (por notas y manuales) o a lo
 // devuelto (ventas anuladas). Rellenar va en las dos: pasa producto del bidón a
@@ -658,9 +671,11 @@ export const getMovimientos = async (req, res) => {
                 m.created_at >= ($3::date)::timestamp     AT TIME ZONE 'America/Mexico_City'
             AND m.created_at <  ($3::date + 1)::timestamp AT TIME ZONE 'America/Mexico_City'))
           AND ($4::text[] IS NULL OR m.tipo = ANY($4))
+          -- En Salidas, la venta que se devolvió ya no aparece (va en Devuelto).
+          AND NOT ($5 AND m.tipo = 'venta' AND ${VENTA_DEVUELTA_SQL})
         ORDER BY m.created_at DESC, m.id DESC
         LIMIT 200`,
-      [id, req.sucursal, fecha, tipos]
+      [id, req.sucursal, fecha, tipos, req.query.tipo === 'salidas']
     );
     res.json(rows);
   } catch (err) {
@@ -750,6 +765,14 @@ export const getReporteDiario = async (req, res) => {
             WHERE m.producto_id = p.id AND m.tipo = 'rellenar'
               AND m.created_at >= bounds.inicio AND m.created_at < bounds.cierre
          ), 0) AS rellenado_medidas,
+         -- Lo vendido ese día que NO se devolvió después: es lo que cuenta en
+         -- Salidas. Lo devuelto se borra de ahí y queda solo en Devuelto.
+         COALESCE((
+           SELECT SUM(m.cantidad_medidas) FROM producto_movimientos m, bounds
+            WHERE m.producto_id = p.id AND m.tipo = 'venta'
+              AND m.created_at >= bounds.inicio AND m.created_at < bounds.cierre
+              AND NOT ${VENTA_DEVUELTA_SQL}
+         ), 0) AS vendido_vigente_medidas,
          -- Devuelto ese día (ventas anuladas), para poder explicarlo aparte.
          COALESCE((
            SELECT SUM(m.cantidad_medidas) FROM producto_movimientos m, bounds
@@ -820,6 +843,7 @@ export const getReporteDiario = async (req, res) => {
         medidas_por_bidon:   r.medidas_por_bidon != null ? int(r.medidas_por_bidon) : null,
         vendido_medidas:     int(r.vendido_medidas),
         devuelto_medidas:    int(r.devuelto_medidas),
+        vendido_vigente_medidas: int(r.vendido_vigente_medidas),
         entrada_botellas_medidas: int(r.entrada_botellas_medidas),
         entrada_granel_medidas:   int(r.entrada_granel_medidas),
         salida_botellas_medidas:  int(r.salida_botellas_medidas),

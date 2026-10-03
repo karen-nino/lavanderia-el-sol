@@ -20,16 +20,16 @@ describe('lineasEntradas (Reporte diario)', () => {
 
 describe('lineasSalidas (Reporte diario)', () => {
   it('suma lo que salió por notas y las salidas manuales', () => {
-    expect(lineasSalidas({ ...granel, vendido_medidas: 2, salida_botellas_medidas: 2 }, false)).toEqual(['4 medidas = 2 botellas']);
+    expect(lineasSalidas({ ...granel, vendido_vigente_medidas: 2, salida_botellas_medidas: 2 }, false)).toEqual(['4 medidas = 2 botellas']);
   });
   it('la salida manual del bidón va aparte', () => {
-    expect(lineasSalidas({ ...granel, vendido_medidas: 2, salida_granel_medidas: 50 }, false))
+    expect(lineasSalidas({ ...granel, vendido_vigente_medidas: 2, salida_granel_medidas: 50 }, false))
       .toEqual(['Rellenadas: 2 medidas = 1 botella', 'A granel: 1 bidón']);
   });
-  it('cuenta lo vendido completo: lo devuelto va en su columna', () => {
-    // El servidor manda lo vendido neto (venta − devuelto).
-    expect(lineasSalidas({ ...granel, vendido_medidas: 0, devuelto_medidas: 2 }, false)).toEqual(['2 medidas = 1 botella']);
-    expect(lineasSalidas({ ...granel, vendido_medidas: -4, devuelto_medidas: 4 }, false)).toEqual(['—']);
+  it('lo que se devolvió no cuenta: solo lo dice Devuelto', () => {
+    // Todo lo vendido se devolvió: Salidas queda sin movimiento.
+    expect(lineasSalidas({ ...granel, vendido_medidas: 0, vendido_vigente_medidas: 0, devuelto_medidas: 2 }, false)).toEqual(['—']);
+    expect(lineasDevuelto({ ...granel, devuelto_medidas: 2 }, false)).toEqual(['1 botella']);
   });
   it('lo devuelto tiene su propia línea', () => {
     expect(lineasDevuelto({ ...granel, devuelto_medidas: 2 }, false)).toEqual(['1 botella']);

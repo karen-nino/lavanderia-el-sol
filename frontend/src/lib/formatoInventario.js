@@ -88,13 +88,11 @@ export function lineasEntradas(p, porUnidad) {
     Number(p?.entrada_botellas_medidas) || 0, Number(p?.entrada_granel_medidas) || 0);
 }
 
-// Lo que salió ese día: todo lo que se usó o vendió en notas (siempre de
-// botellas) más las salidas manuales de Inventario. Lo devuelto ya NO se le
-// resta: tiene su propia columna (2026-10-03), así que aquí va lo vendido
-// completo (el servidor lo manda neto: se le suma lo devuelto).
+// Lo que salió ese día: lo usado o vendido en notas que NO se devolvió
+// después (siempre de botellas) más las salidas manuales de Inventario. Lo
+// que se devolvió se borra de aquí y solo lo dice Devuelto (2026-10-03).
 export function lineasSalidas(p, porUnidad) {
-  const vendido = (Number(p?.vendido_medidas) || 0) + (Number(p?.devuelto_medidas) || 0);
-  const bot = vendido + (Number(p?.salida_botellas_medidas) || 0);
+  const bot = (Number(p?.vendido_vigente_medidas) || 0) + (Number(p?.salida_botellas_medidas) || 0);
   return lineasMovimiento(p, porUnidad, Math.max(0, bot), Number(p?.salida_granel_medidas) || 0,
     (n) => textoMedidasEquivalencia(n, p?.medidas_por_botella));
 }
