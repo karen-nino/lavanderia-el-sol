@@ -6,6 +6,7 @@ import MaquinaCicloOverlay from './MaquinaCicloOverlay';
 import { prepararAviso, reproducirAvisoCiclo } from '../lib/avisoSonoro';
 import ElegirTiempoModal from './ElegirTiempoModal';
 import { preguntaTiempo, tiemposDeMaquina } from '../lib/tiemposModelo';
+import { marcaYTamano } from '../lib/estadoMaquina';
 
 // Cada cuánto se re-consultan notas y máquinas en segundo plano.
 const REFRESCO_MS = 15000;
@@ -608,7 +609,9 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
                           }`}
                         >
                           <span className="font-medium text-gray-800">{m.nombre}</span>
-                          <span className="text-xs text-gray-500">Secadora</span>
+                          {/* "Marca · Tamaño", como en todas las listas para
+                              elegir máquina; sin datos, al menos qué es. */}
+                          <span className="text-xs text-gray-500">{marcaYTamano(m) ?? 'Secadora'}</span>
                         </button>
                       );
                     })}
