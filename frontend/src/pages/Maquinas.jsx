@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import MaquinasEnUso from '../components/MaquinasEnUso';
 import SucursalBar from '../components/SucursalBar';
 
@@ -50,8 +51,9 @@ export default function Maquinas() {
 
       <SucursalBar />
 
-      {/* Contenido */}
-      <div className="max-w-7xl mx-auto px-6 md:px-8 py-6">
+      {/* Contenido. El espacio de abajo es para que el botón flotante de
+          nueva nota no tape el Finalizar de la última tarjeta. */}
+      <div className="max-w-7xl mx-auto px-6 md:px-8 pt-6 pb-28">
         <MaquinasEnUso
           ref={monitorRef}
           showHeader={false}
@@ -59,6 +61,18 @@ export default function Maquinas() {
           onErrorRefresco={setErrorRefresco}
         />
       </div>
+
+      {/* Crear nota desde aquí, el mismo botón flotante del Dashboard: en el
+          mostrador se pasa de ver las máquinas a hacer la nota del cliente. */}
+      <Link
+        to="/notas/nueva"
+        aria-label="Nueva nota"
+        className="fixed bottom-fab-safe right-4 md:bottom-8 md:right-8 w-16 h-16 rounded-pill bg-blue text-white shadow-card flex items-center justify-center hover:opacity-90 transition duration-200 ease-out active:scale-[1.3] active:shadow-lg z-40"
+      >
+        <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+        </svg>
+      </Link>
     </div>
   );
 }
