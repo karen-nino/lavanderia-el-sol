@@ -359,11 +359,12 @@ export default function NuevaNota() {
     if (partes.length === 0 && c.secadora_tipo) partes.push('Secadora (sin asignar)');
     return partes.join(' + ');
   };
-  // Nombre corto de lo que lleva un renglón: "L3 · Lavadora Mediana". En la
-  // lista de arriba SÍ se nombra la máquina: es la que hay que ir a cargar.
+  // Título del renglón: "L3 · Mediana". En la lista de arriba SÍ se nombra la
+  // máquina: es la que hay que ir a cargar. Solo el tamaño: la L del nombre ya
+  // dice que es lavadora (2026-10-02).
   const etiquetaRenglon = (c) => {
     const partes = [];
-    if (c.lavadora) partes.push(`${c.lavadora.nombre} · Lavadora${c.lavadora.tipo === 'lavadora_jumbo' ? ' Jumbo' : ' Mediana'}`);
+    if (c.lavadora) partes.push(`${c.lavadora.nombre} · ${c.lavadora.tipo === 'lavadora_jumbo' ? 'Jumbo' : 'Mediana'}`);
     if (c.secadora) partes.push(`${c.secadora.nombre} · Secadora`);
     if (partes.length === 0 && c.lavadora_tipo) partes.push('Lavadora (sin asignar)');
     if (partes.length === 0 && c.secadora_tipo) partes.push('Secadora (sin asignar)');
@@ -2377,8 +2378,7 @@ export default function NuevaNota() {
               {cargasAuto.map((c, i) => (
                   <div key={i} className={`flex items-center gap-x-2 px-3 py-4 ${i > 0 ? 'border-t border-gray-100' : ''}`}>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-gray-900">Máquina {i + 1}</p>
-                      <p className="text-xs text-gray-500 truncate">{etiquetaRenglon(c) || '—'}</p>
+                      <p className="text-sm font-semibold text-gray-900 truncate">{etiquetaRenglon(c) || `Máquina ${i + 1}`}</p>
                     </div>
                     <span className="w-16 text-right text-base font-bold text-blue-700 tabular-nums">
                       ${subtotalDeCarga(c).toFixed(2)}
