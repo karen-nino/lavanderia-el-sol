@@ -177,7 +177,7 @@ export default function GranelPorServicio({ nota, puedeEditar, onCambio }) {
                           onClick={abrir}
                           disabled={deshabilitado}
                           aria-label={`Elegir ${nombreTipo(r.tipoId).toLowerCase()} de ${etiqueta}`}
-                          className="h-9 px-5 rounded-full bg-light-blue text-blue text-sm font-semibold hover:bg-blue hover:text-white disabled:opacity-40 transition-colors flex-shrink-0"
+                          className="h-9 px-4 bg-blue hover:opacity-90 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors flex-shrink-0"
                         >
                           Elegir
                         </button>
