@@ -1456,18 +1456,26 @@ export default function NuevaNota() {
       <div className="bg-white border border-gray-200 rounded-xl overflow-hidden mb-3">
         {servicios.map((sv, i) => (
           <div key={sv.idx} className={`px-3 py-4 space-y-1.5 ${i > 0 ? 'border-t border-gray-100' : ''}`}>
-            <p className="text-sm font-semibold text-gray-900">{sv.etiqueta}</p>
+            {/* "Medidas" encima de los botones: el número es cuántas medidas
+                de cada granel lleva el servicio, no piezas ni botellas. El
+                ancho es el del control (− número +) para quedar centrado. */}
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm font-semibold text-gray-900">{sv.etiqueta}</p>
+              <span className="w-[7rem] text-center text-xs font-medium text-gray-500 uppercase tracking-wide">
+                Medidas
+              </span>
+            </div>
             {sv.renglones.map(r => (
               <div key={r.tipoId} className="flex items-center justify-between gap-2">
                 <span className="text-sm text-gray-600">{r.nombre}</span>
                 <div className="flex items-center gap-1.5">
                   <button type="button" className={btn} disabled={r.medidas <= 0}
                     onClick={() => setMedidasGranel(sv.idx, r.tipoId, r.medidas - 1)}
-                    aria-label={`Menos ${r.nombre.toLowerCase()} en ${sv.etiqueta}`}>−</button>
+                    aria-label={`Una medida menos de ${r.nombre.toLowerCase()} en ${sv.etiqueta}`}>−</button>
                   <span className="w-7 text-center text-sm font-semibold text-gray-900 tabular-nums">{r.medidas}</span>
                   <button type="button" className={btn}
                     onClick={() => setMedidasGranel(sv.idx, r.tipoId, r.medidas + 1)}
-                    aria-label={`Más ${r.nombre.toLowerCase()} en ${sv.etiqueta}`}>+</button>
+                    aria-label={`Una medida más de ${r.nombre.toLowerCase()} en ${sv.etiqueta}`}>+</button>
                 </div>
               </div>
             ))}
@@ -1478,7 +1486,7 @@ export default function NuevaNota() {
           <div className="px-3 py-3 border-t border-gray-100 bg-amber-50 space-y-0.5">
             {noAlcanza.map(t => (
               <p key={t.tipoId} className="text-xs font-semibold text-amber-700">
-                No alcanza el {t.nombre.toLowerCase()}: se necesitan {t.total} y quedan {t.quedan}.
+                No alcanza el {t.nombre.toLowerCase()}: se necesitan {t.total} {t.total === 1 ? 'medida' : 'medidas'} y quedan {t.quedan}.
               </p>
             ))}
             <p className="text-xs text-amber-700">La nota se crea igual.</p>
@@ -1867,40 +1875,6 @@ export default function NuevaNota() {
                   )}
                 </div>
 
-                {/* Ajuste de la nota */}
-                <Separador />
-                <div>
-                  <label className={LABEL_CLS}>Ajuste ($)</label>
-                  <div className="flex items-center gap-2">
-                    <div className="relative flex-1">
-                      <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 text-base">$</span>
-                      <input
-                        type="number" name="ajuste" step="any"
-                        value={encargoForm.ajuste} onChange={handleEncargoChange}
-                        placeholder="Ej. -10 para descuento, 20 para cargo extra"
-                        className={`${INPUT_CLS} pl-8 text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`}
-                      />
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setEncargoForm(f => ({ ...f, ajuste: String((Number(f.ajuste) || 0) - 10) }))}
-                      aria-label="Disminuir ajuste"
-                      className="flex-shrink-0 w-14 py-3.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-xl font-semibold hover:bg-gray-50 transition-colors"
-                    >
-                      −
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setEncargoForm(f => ({ ...f, ajuste: String((Number(f.ajuste) || 0) + 10) }))}
-                      aria-label="Aumentar ajuste"
-                      className="flex-shrink-0 w-14 py-3.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-xl font-semibold hover:bg-gray-50 transition-colors"
-                    >
-                      +
-                    </button>
-                  </div>
-                  <p className="text-xs text-gray-400 mt-1.5">Descuento (negativo) o cargo extra (positivo)</p>
-                </div>
-
                 {/* Escondido por ahora, a petición del negocio: la tela y el
                     tamaño del edredón son opcionales y el mostrador no los está
                     capturando. Se vuelve a enseñar poniendo la bandera en true;
@@ -1975,6 +1949,41 @@ export default function NuevaNota() {
                     </div>
                   );
                 })}
+
+                {/* Ajuste de la nota: debajo de los productos, junto al tope y al
+                    total, que es lo que mueve. */}
+                <Separador />
+                <div>
+                  <label className={LABEL_CLS}>Ajuste ($)</label>
+                  <div className="flex items-center gap-2">
+                    <div className="relative flex-1">
+                      <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 text-base">$</span>
+                      <input
+                        type="number" name="ajuste" step="any"
+                        value={encargoForm.ajuste} onChange={handleEncargoChange}
+                        placeholder="Ej. -10 para descuento, 20 para cargo extra"
+                        className={`${INPUT_CLS} pl-8 text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`}
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setEncargoForm(f => ({ ...f, ajuste: String((Number(f.ajuste) || 0) - 10) }))}
+                      aria-label="Disminuir ajuste"
+                      className="flex-shrink-0 w-14 py-3.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-xl font-semibold hover:bg-gray-50 transition-colors"
+                    >
+                      −
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEncargoForm(f => ({ ...f, ajuste: String((Number(f.ajuste) || 0) + 10) }))}
+                      aria-label="Aumentar ajuste"
+                      className="flex-shrink-0 w-14 py-3.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-xl font-semibold hover:bg-gray-50 transition-colors"
+                    >
+                      +
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-400 mt-1.5">Descuento (negativo) o cargo extra (positivo)</p>
+                </div>
 
                 {/* El tope, siempre a la vista: cuánto se cobra, cuánto lleva
                     gastado el material y cuánto queda. Es lo que deja servir
