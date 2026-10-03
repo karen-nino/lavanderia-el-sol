@@ -12,11 +12,15 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import request from 'supertest';
 import app from '../../app.js';
 import {
-  pool, limpiarBase, seedSucursal, seedUsuario, seedMaquina, seedMarca, seedAjustes, auth,
+  pool, limpiarBase, seedSucursal, seedUsuario, seedMaquina, seedMarca, seedAjustes, auth, conTemporizador,
 } from '../helpers.js';
 import {
   MAX_CICLOS_POR_CARGA, MARGEN_CORTE_SEGUNDOS, PAUSA_OTRO_CICLO_SEGUNDOS,
 } from '../../services/sincronizarSonoff.js';
+
+// Prueba la mecánica del TEMPORIZADOR (dos pasos, otro ciclo): desde el
+// 2026-10-02 vive detrás de MAQUINAS_CRONOMETRO=off.
+conTemporizador();
 
 // Cuánto hay que envejecer el arranque para que el siguiente ciclo esté
 // permitido: el ciclo entero, más el margen de corriente que se le concede,

@@ -5,6 +5,19 @@ import bcrypt from 'bcrypt';
 import request from 'supertest';
 import app from '../app.js';
 import pool from '../db/pool.js';
+import { beforeAll, afterAll } from 'vitest';
+
+// Corre el bloque (archivo o describe) con las máquinas en TEMPORIZADOR, como
+// eran antes del cronómetro general (2026-10-02). La mecánica sigue viva detrás
+// del interruptor `MAQUINAS_CRONOMETRO=off`, y sus pruebas la cuidan.
+export function conTemporizador() {
+  let antes;
+  beforeAll(() => { antes = process.env.MAQUINAS_CRONOMETRO; process.env.MAQUINAS_CRONOMETRO = 'off'; });
+  afterAll(() => {
+    if (antes === undefined) delete process.env.MAQUINAS_CRONOMETRO;
+    else process.env.MAQUINAS_CRONOMETRO = antes;
+  });
+}
 
 // Vacía todas las tablas de negocio (menos el registro de migraciones) y
 // reinicia los SERIAL. Se llama en beforeEach para que cada test parta limpio.

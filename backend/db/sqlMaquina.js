@@ -45,23 +45,38 @@ export const MINUTOS_CONFIGURADOS = `COALESCE(
   )
 )`;
 
-// Lavadoras que corren con CRONÓMETRO en vez de temporizador (mig. 137): al
-// encenderlas empieza a contar hacia arriba, el empleado las arranca con su
-// botón y la carga termina cuando alguien la finaliza. Un solo ciclo.
+// Máquinas que corren con CRONÓMETRO en vez de temporizador.
 //
-// Va fijo en el código, por nombre de marca, a petición del negocio: es una
-// prueba con LG y Samsung y se extiende a otras marcas cuando se confirme.
-// Las secadoras nunca: siguen con su temporizador.
-export const MARCAS_CRONOMETRO = ['lg', 'samsung'];
+// Al encenderlas empieza a contar hacia ARRIBA, el empleado las arranca con su
+// botón y la carga termina cuando alguien la finaliza; un solo ciclo. Los
+// minutos de su modelo o de su tamaño dejan de ser "lo que dura" y pasan a ser
+// su TOPE: si nadie la finaliza, al cumplirse se le corta la luz y se avisa.
+//
+// Se probó primero con las lavadoras LG y Samsung (mig. 137) y el 2026-10-02 el
+// negocio lo extendió a TODAS, lavadoras y secadoras. La única excepción es el
+// modelo que PREGUNTA su tiempo al iniciar (la secadora Speed Queen Sec49, mig.
+// 120): ahí el empleado elige el programa en la pantalla de la máquina y ese
+// tiempo sí es su duración, así que conserva su temporizador.
+//
+// Interruptor general: `MAQUINAS_CRONOMETRO=off` en el servidor devuelve TODAS
+// las máquinas al temporizador sin tocar código (ver
+// info/Temporizador/Máquinas - flujo con temporizador.md). Se lee en cada
+// llamada para que las pruebas del temporizador lo puedan apagar.
+export const cronometroActivo = () =>
+  String(process.env.MAQUINAS_CRONOMETRO ?? '').toLowerCase() !== 'off';
 
-export const esCronometro = (maq) =>
-  Boolean(maq) && maq.tipo !== 'secadora'
-  && MARCAS_CRONOMETRO.includes(String(maq.marca ?? '').trim().toLowerCase());
-
-// La misma regla en SQL, para la fila de `maquinas` con el alias que se pase.
-export const esCronometroSql = (alias) =>
-  `(${alias}.tipo <> 'secadora' AND lower(btrim(COALESCE(${alias}.marca, ''))) IN (${
-    MARCAS_CRONOMETRO.map((x) => `'${x}'`).join(', ')}))`;
+// La regla en SQL, para la fila de `maquinas` con el alias que se pase. El
+// modelo que pregunta su tiempo solo cuenta como tal si de verdad tiene más de
+// uno que ofrecer: con uno solo, preguntar no tiene sentido (lib/tiemposModelo).
+export const esCronometroSql = (alias) => (cronometroActivo() ? `NOT EXISTS (
+  SELECT 1
+    FROM marcas_maquina mmc
+    JOIN modelos_maquina moc ON moc.marca_id = mmc.id
+   WHERE mmc.nombre = ${alias}.marca
+     AND moc.nombre = ${alias}.modelo
+     AND moc.pregunta_tiempo
+     AND cardinality(ARRAY_REMOVE(ARRAY[moc.minutos, moc.minutos_2, moc.minutos_3], NULL)) > 1
+)` : 'FALSE');
 
 // Cómo se comporta esta máquina, según su catálogo:
 //   · `arranca_sola` lo declara la MARCA (mig. 122): empieza al recibir
@@ -69,12 +84,10 @@ export const esCronometroSql = (alias) =>
 //   · `dos_ciclos` lo declara el MODELO (mig. 123): una carga corre DOS vueltas
 //     en ese aparato. Sin modelo capturado va en FALSE y la carga corre una
 //     sola, que es lo normal.
-//   · `cronometro` sale de MARCAS_CRONOMETRO (mig. 137).
 // Mismo alias `m` que MINUTOS_CONFIGURADOS.
 export const OPCIONES_DE_MARCA = `(
   SELECT json_build_object(
            'arranca_sola', mm.arranca_sola,
-           'cronometro', ${esCronometroSql('m')},
            'dos_ciclos', COALESCE((
              SELECT mo.dos_ciclos
                FROM modelos_maquina mo

@@ -71,7 +71,6 @@ export const updateAjustes = async (req, res) => {
     tiempo_carga_jumbo,
     tiempo_carga_secadora,
     tiempo_secadora_jumbo,
-    tope_cronometro_minutos,
     precarga_medidas_chico,
     precarga_medidas_mediano,
     precarga_medidas_grande,
@@ -118,7 +117,6 @@ export const updateAjustes = async (req, res) => {
     tiempo_carga_jumbo:      'El tiempo de la carga jumbo',
     tiempo_carga_secadora:   'El tiempo del secado',
     tiempo_secadora_jumbo:   'El tiempo del secado jumbo',
-    tope_cronometro_minutos: 'El tope del cronómetro',
   };
   const nombreDe = (campo) => ETIQUETA[campo] ?? `El ajuste "${campo}"`;
 
@@ -155,9 +153,8 @@ export const updateAjustes = async (req, res) => {
 
   // El edredón ya no tiene tiempo propio (mig. 107): usa el de su tamaño. Su
   // precio sí se conserva, que es lo que distingue el servicio.
-  // El tope del cronómetro (mig. 137) se valida igual: minutos enteros, 1 o más.
   const tiempos = { tiempo_carga_mediana, tiempo_carga_jumbo,
-                    tiempo_carga_secadora, tiempo_secadora_jumbo, tope_cronometro_minutos };
+                    tiempo_carga_secadora, tiempo_secadora_jumbo };
   for (const [campo, valor] of Object.entries(tiempos)) {
     if (valor !== undefined && (!esNumero(valor) || !Number.isInteger(Number(valor)) || Number(valor) < 1)) {
       return res.status(400).json({ message: `${nombreDe(campo)} debe ser un número entero de 1 minuto o más.` });
@@ -226,7 +223,6 @@ export const updateAjustes = async (req, res) => {
   if (tiempo_carga_jumbo    !== undefined) { updates.push(`tiempo_carga_jumbo = $${i++}`);    values.push(tiempo_carga_jumbo); }
   if (tiempo_carga_secadora !== undefined) { updates.push(`tiempo_carga_secadora = $${i++}`); values.push(tiempo_carga_secadora); }
   if (tiempo_secadora_jumbo   !== undefined) { updates.push(`tiempo_secadora_jumbo = $${i++}`);   values.push(tiempo_secadora_jumbo); }
-  if (tope_cronometro_minutos !== undefined) { updates.push(`tope_cronometro_minutos = $${i++}`); values.push(tope_cronometro_minutos); }
   for (const [campo, valor] of Object.entries(precargas)) {
     if (valor !== undefined) { updates.push(`${campo} = $${i++}`); values.push(Number(valor)); }
   }

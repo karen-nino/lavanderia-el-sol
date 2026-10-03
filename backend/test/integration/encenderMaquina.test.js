@@ -13,9 +13,14 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import request from 'supertest';
 import app from '../../app.js';
 import {
-  pool, limpiarBase, seedSucursal, seedUsuario, seedMaquina, seedMarca, seedAjustes, auth,
+  pool, limpiarBase, seedSucursal, seedUsuario, seedMaquina, seedMarca, seedAjustes, auth, conTemporizador,
 } from '../helpers.js';
 import { esperandoArranque, ESPERA_ARRANQUE_MINUTOS } from '../../services/sincronizarSonoff.js';
+
+// Prueba la mecánica del TEMPORIZADOR (dos pasos, otro ciclo): desde el
+// 2026-10-02 vive detrás de MAQUINAS_CRONOMETRO=off.
+conTemporizador();
+
 
 let admin;
 

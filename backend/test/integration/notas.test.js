@@ -1254,9 +1254,10 @@ describe('handlers de máquina — ciclo de vida', () => {
     await request(app).patch(`/api/notas/${notaId}/activar-pendientes`)
       .set(auth(admin.token)).send({ maquina_id: lavadoraId }).expect(200);
 
-    // LAVANDO → LISTA (transición válida sin pasar por secado). "Procesado"
-    // exige una lavadora terminada: se da su tiempo por cumplido.
-    await pool.query(`UPDATE maquinas SET en_uso_desde = NOW() - interval '2 hours' WHERE id = $1`, [lavadoraId]);
+    // → LISTA (Procesado). Exige una lavadora terminada: con el cronómetro
+    // eso es finalizarla.
+    await request(app).patch(`/api/notas/${notaId}/terminar-lavado-final`)
+      .set(auth(admin.token)).send({ lavadora_id: lavadoraId }).expect(200);
     await request(app).patch(`/api/notas/${notaId}/estado`)
       .set(auth(admin.token)).send({ estado: 'LISTA' }).expect(200);
 
@@ -1876,8 +1877,9 @@ describe('productos por medida', () => {
       .set(auth(admin.token)).send({ carga_id: creada.body.cargas[0].id, slot: 'lavadora', maquina_id: lavadoraId });
     await request(app).patch(`/api/notas/${notaId}/activar-pendientes`)
       .set(auth(admin.token)).send({ maquina_id: lavadoraId }).expect(200);
-    // "Procesado" exige una lavadora terminada: se da su tiempo por cumplido.
-    await pool.query(`UPDATE maquinas SET en_uso_desde = NOW() - interval '2 hours' WHERE id = $1`, [lavadoraId]);
+    // "Procesado" exige una lavadora terminada: con el cronómetro, finalizarla.
+    await request(app).patch(`/api/notas/${notaId}/terminar-lavado-final`)
+      .set(auth(admin.token)).send({ lavadora_id: lavadoraId }).expect(200);
     await request(app).patch(`/api/notas/${notaId}/estado`).set(auth(admin.token)).send({ estado: 'LISTA' }).expect(200);
     await request(app).patch(`/api/notas/${notaId}/estado-pago`).set(auth(admin.token))
       .send({ estado_pago: 'PAGADO', forma_pago: 'EFECTIVO' }).expect(200);

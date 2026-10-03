@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import request from 'supertest';
 import app from '../../app.js';
-import { pool, limpiarBase, seedSucursal, seedUsuario, seedMaquina, seedCliente, seedAjustes, auth } from '../helpers.js';
+import { pool, limpiarBase, seedSucursal, seedUsuario, seedMaquina, seedCliente, seedAjustes, auth, conTemporizador } from '../helpers.js';
 
 let admin;
 
@@ -272,6 +272,9 @@ describe('GET /api/maquinas — marca de apartada', () => {
 });
 
 describe('GET /api/maquinas — quién tiene la máquina en uso', () => {
+  // Usa los dos pasos del temporizador (encender, luego iniciar).
+  conTemporizador();
+
   // Asignar no aparta: varias notas pueden tener la misma lavadora asignada y
   // se la queda la que le dé a Iniciar primero. "en_uso_folio" es lo único que
   // dice cuál fue, y resolverlo por la nota más ANTIGUA con la máquina asignada

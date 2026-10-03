@@ -1,21 +1,21 @@
-// Lavadoras LG y Samsung con CRONÓMETRO (mig. 137).
+// Máquinas con CRONÓMETRO: todas, lavadoras y secadoras (2026-10-02).
 //
-// Al encenderlas empieza a contar hacia arriba —no hay paso de "Iniciar"—, la
-// carga corre un solo ciclo y termina cuando alguien la finaliza. Lo único que
-// las apaga solas es el tope de Ajustes, y entonces se avisa en la campana.
+// Se probó primero con las lavadoras LG y Samsung (mig. 137) y se extendió a
+// todas. Al encenderlas empieza a contar hacia arriba —no hay paso de
+// "Iniciar"—, la carga corre un solo ciclo y termina cuando alguien la
+// finaliza. Los minutos de su modelo, su marca o su tamaño son su TOPE: si
+// nadie la finaliza, el corte le quita la luz y se avisa en la campana.
 //
-// Lo que se fija aquí: que encender arranque la carga en el acto con el tope
-// sellado como ciclo, que solo aplique a lavadoras de esas marcas, que no se
-// ofrezca segunda vuelta, que se puedan finalizar en cualquier momento, y que
-// el aviso del tope salga una sola vez.
-import { describe, it, expect, beforeEach } from 'vitest';
+// La excepción es el modelo que PREGUNTA su tiempo al iniciar (la Sec49): ese
+// conserva su temporizador. Y `MAQUINAS_CRONOMETRO=off` devuelve todas al
+// temporizador.
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import request from 'supertest';
 import app from '../../app.js';
 import {
   pool, limpiarBase, seedSucursal, seedUsuario, seedMaquina, seedMarca, seedAjustes, auth,
 } from '../helpers.js';
 import { sincronizarSonoff, cancelarCortesProgramados } from '../../services/sincronizarSonoff.js';
-import { esCronometro } from '../../db/sqlMaquina.js';
 
 let admin;
 
@@ -24,10 +24,14 @@ beforeEach(async () => {
   await limpiarBase();
   await seedSucursal('centro');
   admin = await seedUsuario({ rol: 'admin', sucursal: 'centro' });
-  await seedAjustes({
-    tiempo_carga_mediana: 15, tiempo_carga_jumbo: 45, tiempo_carga_secadora: 30,
-    tope_cronometro_minutos: 50,
-  });
+  await seedAjustes({ tiempo_carga_mediana: 30, tiempo_carga_jumbo: 45, tiempo_carga_secadora: 40 });
+});
+
+// Algunas pruebas apagan el interruptor; se restaura siempre.
+const interruptorAntes = process.env.MAQUINAS_CRONOMETRO;
+afterEach(() => {
+  if (interruptorAntes === undefined) delete process.env.MAQUINAS_CRONOMETRO;
+  else process.env.MAQUINAS_CRONOMETRO = interruptorAntes;
 });
 
 // Nota de autoservicio pagada con la máquina asignada en el hueco que toca.
@@ -42,7 +46,7 @@ async function notaCon(maquinaId, slot = 'lavadora') {
   expect(creada.status).toBe(201);
   await request(app).patch(`/api/notas/${creada.body.id}/asignar-carga-maquina`).set(auth(admin.token))
     .send({ carga_id: creada.body.cargas[0].id, slot, maquina_id: maquinaId }).expect(200);
-  return creada.body.id;
+  return { notaId: creada.body.id, cargaId: creada.body.cargas[0].id };
 }
 
 const maquina = async (id) => {
@@ -54,25 +58,51 @@ const encender = (notaId, maquinaId) =>
   request(app).patch(`/api/notas/${notaId}/encender-maquina`).set(auth(admin.token))
     .send({ maquina_id: maquinaId });
 
-async function lavadora(marca, nombre = 'L1') {
-  await seedMarca({ nombre: marca, tipo: 'lavadora', tamano: 'mediana', minutos: 15 });
+async function lavadora(marca = 'LG', nombre = 'L1', minutos = 15) {
+  await seedMarca({ nombre: marca, tipo: 'lavadora', tamano: 'mediana', minutos });
   return seedMaquina({ nombre, tipo: 'lavadora_mediana', tamano: 'mediana', marca });
 }
 
+// Secadora de un modelo que PREGUNTA su tiempo (como la Sec49), con tres.
+async function secadoraQuePregunta(nombre = 'S49') {
+  await seedMarca({ nombre: 'Speed Queen', tipo: 'secadora', tamano: 'mediana' });
+  await pool.query(
+    `INSERT INTO modelos_maquina (marca_id, nombre, tipo, tamano, minutos, minutos_2, minutos_3, pregunta_tiempo)
+     SELECT id, 'Sec49', 'secadora', 'mediana', 10, 20, 30, TRUE FROM marcas_maquina WHERE nombre = 'Speed Queen'`
+  );
+  return seedMaquina({ nombre, tipo: 'secadora', tamano: 'mediana', marca: 'Speed Queen', modelo: 'Sec49' });
+}
+
+const cronometroDe = async (id) => {
+  const res = await request(app).get('/api/maquinas').set(auth(admin.token)).expect(200);
+  return res.body.find(x => x.id === id).cronometro;
+};
+
 describe('qué máquinas van con cronómetro', () => {
-  it('LG y Samsung, sin importar mayúsculas ni espacios; solo lavadoras', () => {
-    expect(esCronometro({ tipo: 'lavadora_mediana', marca: 'LG' })).toBe(true);
-    expect(esCronometro({ tipo: 'lavadora_jumbo', marca: ' samsung ' })).toBe(true);
-    expect(esCronometro({ tipo: 'secadora', marca: 'Samsung' })).toBe(false);
-    expect(esCronometro({ tipo: 'lavadora_mediana', marca: 'Speed Queen' })).toBe(false);
-    expect(esCronometro({ tipo: 'lavadora_mediana', marca: null })).toBe(false);
+  it('todas: cualquier marca, sin marca y secadoras', async () => {
+    const lg = await lavadora('LG', 'L1');
+    const wh = await lavadora('Whirlpool', 'L2');
+    const sinMarca = await seedMaquina({ nombre: 'L3', tipo: 'lavadora_jumbo', tamano: 'jumbo' });
+    const sec = await seedMaquina({ nombre: 'S1', tipo: 'secadora', tamano: 'mediana', marca: 'Samsung' });
+    for (const id of [lg, wh, sinMarca, sec]) expect(await cronometroDe(id)).toBe(true);
+  });
+
+  it('menos el modelo que pregunta su tiempo al iniciar', async () => {
+    const id = await secadoraQuePregunta();
+    expect(await cronometroDe(id)).toBe(false);
+  });
+
+  it('con MAQUINAS_CRONOMETRO=off ninguna', async () => {
+    const id = await lavadora();
+    process.env.MAQUINAS_CRONOMETRO = 'off';
+    expect(await cronometroDe(id)).toBe(false);
   });
 });
 
-describe('encender una LG o Samsung', () => {
-  it('arranca la carga en el acto: cronómetro desde ya y el tope como ciclo', async () => {
-    const id = await lavadora('LG');
-    const notaId = await notaCon(id);
+describe('encender', () => {
+  it('arranca la carga en el acto: cronómetro desde ya y los minutos de su marca como tope', async () => {
+    const id = await lavadora('LG', 'L1', 15);
+    const { notaId } = await notaCon(id);
 
     await encender(notaId, id).expect(200);
 
@@ -80,23 +110,24 @@ describe('encender una LG o Samsung', () => {
     expect(m.estado).toBe('en_uso');
     expect(m.en_uso_desde).not.toBeNull();            // el cronómetro corre
     expect(m.encendida_sin_iniciar_at).toBeNull();    // no queda "esperando arranque"
-    expect(m.ciclo_minutos).toBe(50);                 // el tope, no los 15 de la marca
+    expect(m.ciclo_minutos).toBe(15);                 // su tope
 
     const nota = await request(app).get(`/api/notas/${notaId}`).set(auth(admin.token)).expect(200);
     expect(nota.body.estado).toBe('LAVANDO');
     expect(nota.body.cargas[0].lavadora_iniciada_at).not.toBeNull();
+    expect(nota.body.cargas[0].maquinas_usadas[0].cronometro).toBe(true);
   });
 
-  it('Samsung igual', async () => {
-    const id = await lavadora('Samsung');
-    const notaId = await notaCon(id);
+  it('sin tiempo de modelo ni de marca, el tope es el de su tamaño en Ajustes', async () => {
+    const id = await seedMaquina({ nombre: 'L9', tipo: 'lavadora_mediana', tamano: 'mediana' });
+    const { notaId } = await notaCon(id);
     await encender(notaId, id).expect(200);
-    expect((await maquina(id)).en_uso_desde).not.toBeNull();
+    expect((await maquina(id)).ciclo_minutos).toBe(30);
   });
 
   it('pulsado dos veces no reinicia el cronómetro', async () => {
-    const id = await lavadora('LG');
-    const notaId = await notaCon(id);
+    const id = await lavadora();
+    const { notaId } = await notaCon(id);
     await encender(notaId, id).expect(200);
     const antes = (await maquina(id)).en_uso_desde;
 
@@ -105,32 +136,31 @@ describe('encender una LG o Samsung', () => {
   });
 
   it('otra nota no la puede tomar mientras corre', async () => {
-    const id = await lavadora('LG');
-    const notaA = await notaCon(id);
-    const notaB = await notaCon(id);
-    await encender(notaA, id).expect(200);
-
-    const r = await encender(notaB, id);
-    expect(r.status).toBe(409);
+    const id = await lavadora();
+    const a = await notaCon(id);
+    const b = await notaCon(id);
+    await encender(a.notaId, id).expect(200);
+    expect((await encender(b.notaId, id)).status).toBe(409);
   });
 
-  it('las demás marcas siguen con los dos pasos de siempre', async () => {
-    const id = await lavadora('Whirlpool');
-    const notaId = await notaCon(id);
+  it('una secadora también arranca en el acto', async () => {
+    const id = await seedMaquina({ nombre: 'S1', tipo: 'secadora', tamano: 'mediana' });
+    const { notaId } = await notaCon(id, 'secadora');
+    await encender(notaId, id).expect(200);
+
+    const m = await maquina(id);
+    expect(m.en_uso_desde).not.toBeNull();
+    expect(m.ciclo_minutos).toBe(40);
+  });
+
+  it('el modelo que pregunta su tiempo sigue con sus dos pasos', async () => {
+    const id = await secadoraQuePregunta();
+    const { notaId } = await notaCon(id, 'secadora');
     await encender(notaId, id).expect(200);
 
     const m = await maquina(id);
     expect(m.en_uso_desde).toBeNull();
     expect(m.encendida_sin_iniciar_at).not.toBeNull();
-  });
-
-  it('una secadora Samsung sigue con temporizador', async () => {
-    await seedMarca({ nombre: 'Samsung', tipo: 'secadora', tamano: 'mediana', minutos: 30 });
-    const id = await seedMaquina({ nombre: 'S1', tipo: 'secadora', tamano: 'mediana', marca: 'Samsung' });
-    const notaId = await notaCon(id, 'secadora');
-    await encender(notaId, id).expect(200);
-
-    expect((await maquina(id)).en_uso_desde).toBeNull();
   });
 });
 
@@ -138,19 +168,19 @@ describe('un solo ciclo, se finaliza a mano', () => {
   it('no ofrece segunda vuelta aunque su modelo diga dos ciclos', async () => {
     await seedMarca({ nombre: 'LG', tipo: 'lavadora', tamano: 'mediana', minutos: 15, modelo: 'WM-2C', dos_ciclos: true });
     const id = await seedMaquina({ nombre: 'L1', tipo: 'lavadora_mediana', tamano: 'mediana', marca: 'LG', modelo: 'WM-2C' });
-    const notaId = await notaCon(id);
+    const { notaId } = await notaCon(id);
     await encender(notaId, id).expect(200);
 
     const res = await request(app).get('/api/maquinas').set(auth(admin.token)).expect(200);
     const m = res.body.find(x => x.id === id);
-    expect(m.marca_opciones.cronometro).toBe(true);
+    expect(m.cronometro).toBe(true);
     expect(m.ciclos_max).toBe(1);
     expect(m.otro_ciclo_desde).toBeNull();
   });
 
   it('se puede finalizar en cualquier momento y queda libre', async () => {
-    const id = await lavadora('LG');
-    const notaId = await notaCon(id);
+    const id = await lavadora();
+    const { notaId } = await notaCon(id);
     await encender(notaId, id).expect(200);
 
     const res = await request(app).patch(`/api/notas/${notaId}/terminar-lavado-final`)
@@ -159,12 +189,32 @@ describe('un solo ciclo, se finaliza a mano', () => {
     expect(res.body.estado).not.toBe('LAVANDO');   // la carga ya cerró
     expect((await maquina(id)).estado).toBe('disponible');
   });
+
+  it('encender la secadora de la carga suelta la lavadora que seguía apartada', async () => {
+    const lav = await lavadora();
+    const sec = await seedMaquina({ nombre: 'S1', tipo: 'secadora', tamano: 'mediana' });
+    const creada = await request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PAGADO', forma_pago: 'EFECTIVO',
+      cargas: [{ lavadora_tipo: 'mediana', secadora_tipo: 'mediana' }],
+    });
+    const notaId = creada.body.id;
+    const cargaId = creada.body.cargas[0].id;
+    for (const [slot, maquinaId] of [['lavadora', lav], ['secadora', sec]]) {
+      await request(app).patch(`/api/notas/${notaId}/asignar-carga-maquina`).set(auth(admin.token))
+        .send({ carga_id: cargaId, slot, maquina_id: maquinaId }).expect(200);
+    }
+    await encender(notaId, lav).expect(200);
+    await encender(notaId, sec).expect(200);
+
+    expect((await maquina(lav)).estado).toBe('disponible');
+    expect((await maquina(sec)).estado).toBe('en_uso');
+  });
 });
 
 describe('el tope', () => {
-  // Una LG con Sonoff cuyo cronómetro empezó hace `minutos`.
-  async function lgCorriendoDesde(minutos) {
-    const id = await lavadora('LG');
+  // Una máquina con Sonoff cuyo cronómetro empezó hace `minutos`, con tope 50.
+  async function corriendoDesde(minutos) {
+    const id = await lavadora();
     await pool.query(
       `UPDATE maquinas
           SET estado = 'en_uso', device_id = 'dev-test', ciclo_minutos = 50,
@@ -183,7 +233,7 @@ describe('el tope', () => {
   };
 
   it('al pasarlo avisa en la campana, una sola vez', async () => {
-    const id = await lgCorriendoDesde(51);
+    const id = await corriendoDesde(51);
     await sincronizarSonoff(id);
     await sincronizarSonoff(id, { reconciliando: true });
 
@@ -195,38 +245,28 @@ describe('el tope', () => {
   });
 
   it('antes del tope no avisa nada', async () => {
-    const id = await lgCorriendoDesde(20);
+    const id = await corriendoDesde(20);
     await sincronizarSonoff(id);
     expect(await avisos(id)).toHaveLength(0);
-  });
-
-  it('se configura en Ajustes y no acepta menos de 1 minuto', async () => {
-    await request(app).patch('/api/ajustes').set(auth(admin.token))
-      .send({ tope_cronometro_minutos: 0 }).expect(400);
-    await request(app).patch('/api/ajustes').set(auth(admin.token))
-      .send({ tope_cronometro_minutos: 90 }).expect(200);
-    const { rows } = await pool.query('SELECT tope_cronometro_minutos FROM ajustes WHERE id = 1');
-    expect(rows[0].tope_cronometro_minutos).toBe(90);
   });
 });
 
 // "Procesado" solo sale cuando al menos una lavadora de la nota terminó: el
-// detalle lo lee de `lavadora_terminada` (2026-10-02).
+// detalle lo lee de `lavadora_terminada`.
 describe('GET /notas/:id — lavadora_terminada', () => {
   const terminada = async (notaId) =>
     (await request(app).get(`/api/notas/${notaId}`).set(auth(admin.token)).expect(200)).body.lavadora_terminada;
 
   it('sin arrancar no hay ninguna terminada', async () => {
-    const id = await lavadora('LG');
-    const notaId = await notaCon(id);
+    const id = await lavadora();
+    const { notaId } = await notaCon(id);
     expect(await terminada(notaId)).toBe(false);
   });
 
-  it('la de cronómetro corriendo no cuenta; finalizada, sí', async () => {
-    const id = await lavadora('LG');
-    const notaId = await notaCon(id);
+  it('con cronómetro corriendo no cuenta aunque lleve horas; finalizada, sí', async () => {
+    const id = await lavadora();
+    const { notaId } = await notaCon(id);
     await encender(notaId, id).expect(200);
-    // Aunque lleve horas: solo cuenta al finalizarla.
     await pool.query(`UPDATE maquinas SET en_uso_desde = NOW() - interval '3 hours' WHERE id = $1`, [id]);
     expect(await terminada(notaId)).toBe(false);
 
@@ -235,9 +275,10 @@ describe('GET /notas/:id — lavadora_terminada', () => {
     expect(await terminada(notaId)).toBe(true);
   });
 
-  it('la de temporizador cuenta en cuanto se cumple su tiempo', async () => {
-    const id = await lavadora('Whirlpool');
-    const notaId = await notaCon(id);
+  it('con temporizador cuenta en cuanto se cumple su tiempo', async () => {
+    process.env.MAQUINAS_CRONOMETRO = 'off';
+    const id = await lavadora('Whirlpool', 'L1', 15);
+    const { notaId } = await notaCon(id);
     await encender(notaId, id).expect(200);
     await request(app).patch(`/api/notas/${notaId}/activar-pendientes`).set(auth(admin.token))
       .send({ maquina_id: id }).expect(200);

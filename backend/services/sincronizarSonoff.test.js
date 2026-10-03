@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, beforeAll, afterAll, vi } from 'vitest';
 
 // La base y el driver se sustituyen: aquí se prueba la REGLA de sincronización,
 // no Postgres ni la nube de eWeLink.
@@ -405,6 +405,21 @@ describe('relojes del ciclo (mig. 108)', () => {
 
 describe('tope de ciclos por máquina', () => {
   const cargar = () => import('./sincronizarSonoff.js');
+  // Los dos ciclos son del temporizador: con el cronómetro (2026-10-02) toda
+  // carga corre uno. Aquí se prueba la regla con el interruptor apagado.
+  let antes;
+  beforeAll(() => { antes = process.env.MAQUINAS_CRONOMETRO; process.env.MAQUINAS_CRONOMETRO = 'off'; });
+  afterAll(() => {
+    if (antes === undefined) delete process.env.MAQUINAS_CRONOMETRO;
+    else process.env.MAQUINAS_CRONOMETRO = antes;
+  });
+
+  it('con el cronómetro encendido, ninguna carga corre dos ciclos', async () => {
+    const { maxCiclosDeMaquina } = await cargar();
+    process.env.MAQUINAS_CRONOMETRO = 'on';
+    expect(maxCiclosDeMaquina({ tipo: 'lavadora_mediana', minutos_ciclo: 15, marca_opciones: { dos_ciclos: true } })).toBe(1);
+    process.env.MAQUINAS_CRONOMETRO = 'off';
+  });
 
   it('una lavadora sin tiempo de marca corre un solo ciclo', async () => {
     const { maxCiclosDeMaquina } = await cargar();

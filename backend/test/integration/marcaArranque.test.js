@@ -2,8 +2,13 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import request from 'supertest';
 import app from '../../app.js';
 import {
-  pool, limpiarBase, seedSucursal, seedUsuario, seedMaquina, seedAjustes, auth,
+  pool, limpiarBase, seedSucursal, seedUsuario, seedMaquina, seedAjustes, auth, conTemporizador,
 } from '../helpers.js';
+
+// Prueba la mecánica del TEMPORIZADOR (dos pasos, otro ciclo): desde el
+// 2026-10-02 vive detrás de MAQUINAS_CRONOMETRO=off.
+conTemporizador();
+
 
 // La marca declara si sus máquinas arrancan solas al recibir corriente
 // (mig. 122) y el MODELO si una carga corre dos ciclos (mig. 123). Sin eso
@@ -85,7 +90,7 @@ describe('GET /api/maquinas — lo que declaran marca y modelo', () => {
     const res = await request(app).get('/api/maquinas').set(auth(admin.token));
     expect(res.status).toBe(200);
     const m = res.body.find(x => x.id === maquinaId);
-    expect(m.marca_opciones).toEqual({ arranca_sola: true, cronometro: false, dos_ciclos: true });
+    expect(m.marca_opciones).toEqual({ arranca_sola: true, dos_ciclos: true });
   });
 
   it('el modelo marcado con 2 ciclos sube el tope a 2', async () => {
@@ -113,7 +118,7 @@ describe('GET /api/maquinas — lo que declaran marca y modelo', () => {
     });
     const res = await request(app).get('/api/maquinas').set(auth(admin.token));
     const m = res.body.find(x => x.id === maquinaId);
-    expect(m.marca_opciones).toEqual({ arranca_sola: false, cronometro: false, dos_ciclos: false });
+    expect(m.marca_opciones).toEqual({ arranca_sola: false, dos_ciclos: false });
     // Lo decidido el 2026-09-25: los dos ciclos se declaran en el modelo, así
     // que una máquina sin modelo no los ofrece.
     expect(m.ciclos_max).toBe(1);

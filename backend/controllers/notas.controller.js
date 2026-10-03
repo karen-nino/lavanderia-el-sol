@@ -6,7 +6,7 @@ import { tarifaSecadora, precioProductoEnNota, unidadDeVenta, medidasPorUnidad, 
 // acción que el empleado está mirando: no debe depender de que el listener esté
 // vivo. Es idempotente, así que el aviso del trigger llegando después no molesta.
 import { sincronizarSonoff, maxCiclosDeMaquina } from '../services/sincronizarSonoff.js';
-import { MINUTOS_CONFIGURADOS, OPCIONES_DE_MARCA, esCronometro, esCronometroSql } from '../db/sqlMaquina.js';
+import { MINUTOS_CONFIGURADOS, OPCIONES_DE_MARCA, esCronometroSql } from '../db/sqlMaquina.js';
 
 const ESTADOS_VALIDOS     = ['EN_ESPERA', 'LAVANDO', 'SECANDO', 'LISTA', 'PAGADA', 'FINALIZADA', 'CANCELADA'];
 // PRODUCTOS es la venta de mostrador (mig. 112): productos sueltos, sin lavado
@@ -119,7 +119,7 @@ async function faseProcesoDeNota(client, notaId) {
 // terminada si:
 //   · ya la soltó (la carga quedó sin lavadora), o ya no está corriendo, o
 //   · sigue puesta con temporizador y su tiempo ya se cumplió.
-// La de cronómetro (LG y Samsung, mig. 137) no tiene tiempo que cumplir: cuenta
+// La de cronómetro (todas desde el 2026-10-02) no tiene tiempo que cumplir: cuenta
 // solo cuando alguien la finaliza.
 async function algunaLavadoraTermino(client, notaId) {
   const { rows } = await client.query(
@@ -587,8 +587,7 @@ function nombreServicio(prenda, tamano, tamanoEdredon) {
 async function tiemposCarga(client) {
   const { rows } = await client.query(
     `SELECT tiempo_carga_mediana, tiempo_carga_jumbo,
-            tiempo_carga_secadora, tiempo_secadora_jumbo,
-            tope_cronometro_minutos
+            tiempo_carga_secadora, tiempo_secadora_jumbo
        FROM ajustes WHERE id = 1`
   );
   const c = rows[0] ?? {};
@@ -600,7 +599,6 @@ async function tiemposCarga(client) {
     jumbo:      c.tiempo_carga_jumbo    != null ? Number(c.tiempo_carga_jumbo)    : 45,
     secMediana,
     secJumbo:   c.tiempo_secadora_jumbo != null ? Number(c.tiempo_secadora_jumbo) : secMediana,
-    topeCronometro: c.tope_cronometro_minutos != null ? Number(c.tope_cronometro_minutos) : 60,
   };
 }
 
@@ -632,9 +630,8 @@ function tarifaLavadora(tipoMaquina, tipoPrenda, t) {
 // en el modal del modelo que pregunta (mig. 120): se escribe encima de lo que
 // resolvió la cadena, y solo para esa máquina.
 //
-// La lavadora con cronómetro (mig. 137) no tiene ciclo que medir: se le sella
-// el TOPE de Ajustes, y así el mismo corte por fin de ciclo es el que la apaga
-// si nadie la finaliza.
+// En la máquina con cronómetro (2026-10-02) estos minutos son su TOPE: el mismo
+// corte por fin de ciclo es el que la apaga si nadie la finaliza.
 async function sellarCicloMaquinas(client, notaId, elegido = null) {
   const ti = await tiemposCarga(client);
   await client.query(
@@ -643,11 +640,11 @@ async function sellarCicloMaquinas(client, notaId, elegido = null) {
        FROM (
          -- Lavadoras de la nota
          SELECT nc.lavadora_id AS mid,
-                CASE WHEN ${esCronometroSql('ml')} THEN $6::int ELSE COALESCE(
+                COALESCE(
                   COALESCE(mo.minutos_3, mo.minutos_2, mo.minutos),
                   tm.minutos,
                   CASE WHEN ml.tipo = 'lavadora_jumbo' THEN $2::int ELSE $3::int END
-                ) END AS minutos
+                ) AS minutos
            FROM nota_cargas nc
            JOIN maquinas ml ON ml.id = nc.lavadora_id
            -- La máquina guarda el NOMBRE de la marca y del modelo (migs. 106 y
@@ -680,7 +677,7 @@ async function sellarCicloMaquinas(client, notaId, elegido = null) {
             AND nc.secadora_iniciada_at IS NOT NULL
        ) ciclos
       WHERE m.id = ciclos.mid AND m.estado = 'en_uso'`,
-    [notaId, ti.jumbo, ti.mediana, ti.secMediana, ti.secJumbo, ti.topeCronometro]
+    [notaId, ti.jumbo, ti.mediana, ti.secMediana, ti.secJumbo]
   );
 
   if (elegido) {
@@ -1411,8 +1408,6 @@ async function cargasDeNota(client, notaId) {
                         -- corre dos ciclos (mig. 123).
                         (SELECT json_build_object(
                                   'arranca_sola', mmk2.arranca_sola,
-                                  -- Cronómetro en vez de temporizador (mig. 137).
-                                  'cronometro', ${esCronometroSql('mm3')},
                                   'dos_ciclos', COALESCE((
                                     SELECT mo2.dos_ciclos FROM modelos_maquina mo2
                                      WHERE mo2.marca_id = mmk2.id AND mo2.nombre = mm3.modelo
@@ -1420,6 +1415,11 @@ async function cargasDeNota(client, notaId) {
                            FROM maquinas mm3
                            JOIN marcas_maquina mmk2 ON mmk2.nombre = mm3.marca
                           WHERE mm3.id = ncm.maquina_id) AS marca_opciones,
+                        -- Cronómetro en vez de temporizador (2026-10-02). Va
+                        -- aparte de la marca: también aplica a la máquina que
+                        -- no tiene marca de catálogo.
+                        (SELECT ${esCronometroSql('mm4')} FROM maquinas mm4
+                          WHERE mm4.id = ncm.maquina_id) AS cronometro,
                         -- Actual = la ÚLTIMA pasada del hueco, y solo si esa
                         -- máquina sigue puesta. Con la comparación a secas, una
                         -- carga relavada en la misma lavadora marcaba las dos.
@@ -2917,7 +2917,7 @@ async function cargaConCiclosDisponibles(client, notaId, maquinaId) {
 // un `ciclo_minutos` viejo arme un corte que no toca. La espera caduca sola
 // (ESPERA_ARRANQUE_MINUTOS) para que un descuido no deje la máquina prendida.
 //
-// La lavadora con cronómetro (mig. 137) no tiene esos dos pasos: encenderla ES
+// La máquina con cronómetro (2026-10-02) no tiene esos dos pasos: encenderla ES
 // arrancar su carga. El cronómetro empieza con la corriente, el empleado la
 // arranca con su botón cuando quiera y la carga termina al finalizarla.
 export const encenderMaquinaDeNota = async (req, res) => {
@@ -2956,8 +2956,9 @@ export const encenderMaquinaDeNota = async (req, res) => {
     // FOR UPDATE: dos empleados que le den a la vez a la misma máquina se
     // serializan aquí, igual que al iniciar.
     const { rows: maqRows } = await client.query(
-      `SELECT id, nombre, tipo, marca, estado, en_uso_desde, encendida_para_nota_id
-         FROM maquinas WHERE id = $1 AND sucursal = $2 FOR UPDATE`,
+      `SELECT m.id, m.nombre, m.tipo, m.marca, m.estado, m.en_uso_desde, m.encendida_para_nota_id,
+              ${esCronometroSql('m')} AS cronometro
+         FROM maquinas m WHERE m.id = $1 AND m.sucursal = $2 FOR UPDATE OF m`,
       [maquina_id, req.sucursal]
     );
     if (maqRows.length === 0) {
@@ -3003,11 +3004,13 @@ export const encenderMaquinaDeNota = async (req, res) => {
     }
 
     // Cronómetro ya corriendo para esta misma nota: el botón pulsado dos veces.
-    const cronometro = esCronometro(maq);
+    const cronometro = Boolean(maq.cronometro);
     if (cronometro && maq.estado === 'en_uso' && maq.en_uso_desde != null) {
       const { rowCount: yaEsDeEstaNota } = await client.query(
         `SELECT 1 FROM nota_cargas
-          WHERE nota_id = $1 AND lavadora_id = $2 AND lavadora_iniciada_at IS NOT NULL`,
+          WHERE nota_id = $1
+            AND ((lavadora_id = $2 AND lavadora_iniciada_at IS NOT NULL)
+              OR (secadora_id = $2 AND secadora_iniciada_at IS NOT NULL))`,
         [id, maquina_id]
       );
       if (yaEsDeEstaNota > 0) {
@@ -3031,7 +3034,19 @@ export const encenderMaquinaDeNota = async (req, res) => {
     if (cronometro) {
       // Lo mismo que "Iniciar Lavado" (activar-pendientes) pero en el acto de
       // encender: el cronómetro cuenta desde aquí, y el ciclo que se sella es
-      // el tope de Ajustes.
+      // el tope de su modelo o de su tamaño.
+      //
+      // Igual que allá, si es la SECADORA de una carga cuya lavadora seguía
+      // apartada, esa lavadora ya cumplió: se suelta (la carga la conserva en
+      // lavadora_usada_id como historial).
+      const { rows: lavASoltar } = await client.query(
+        `SELECT nc.id AS carga_id, nc.lavadora_id
+           FROM nota_cargas nc
+           JOIN maquinas ml ON ml.id = nc.lavadora_id
+          WHERE nc.nota_id = $1 AND nc.secadora_id = $2 AND ml.estado = 'en_uso'
+            AND nc.lavadora_iniciada_at IS NOT NULL`,
+        [id, maquina_id]
+      );
       const { rows: arr } = await client.query(
         `UPDATE maquinas
             SET estado = 'en_uso',
@@ -3042,11 +3057,23 @@ export const encenderMaquinaDeNota = async (req, res) => {
         [maquina_id]
       );
       await marcarMaquinasIniciadas(client, id, [Number(maquina_id)]);
+      if (lavASoltar.length > 0) {
+        await client.query(
+          `UPDATE maquinas SET estado = 'disponible', en_uso_desde = NULL WHERE id = ANY($1)`,
+          [lavASoltar.map(r => r.lavadora_id)]
+        );
+        await client.query(
+          'UPDATE nota_cargas SET lavadora_id = NULL WHERE id = ANY($1)',
+          [lavASoltar.map(r => r.carga_id)]
+        );
+      }
       await sellarCicloMaquinas(client, id);
       const fase = await faseProcesoDeNota(client, id);
       await client.query(`UPDATE notas SET estado = $1 WHERE id = $2`, [fase, id]);
       await client.query('COMMIT');
       await sincronizarSonoff(Number(maquina_id));
+      // Las lavadoras soltadas se apagan ya; el trigger también lo haría.
+      for (const r of lavASoltar) await sincronizarSonoff(Number(r.lavadora_id));
       return res.json({
         message: `${maq.nombre} encendida. Carga la ropa y arráncala con su botón; finalízala desde su tarjeta cuando termine.`,
         maquina: arr[0],

@@ -227,24 +227,26 @@ export default function MachineCard({
     );
   }
 
-  // Lavadora con cronómetro (mig. 137): el reloj cuenta hacia arriba desde que
+  // Máquina con cronómetro (2026-10-02): el reloj cuenta hacia arriba desde que
   // se encendió y el botón para finalizarla está siempre a la vista, porque
   // aquí nadie avisa que el lavado terminó: lo decide quien tiene la ropa
   // enfrente. Finalizar le corta la luz. Si llegó al tope sin que nadie la
   // finalizara, el corte ya se la quitó y se dice en rojo.
   if (maquina.cronometro && nota) {
-    const debeSecar = Array.isArray(nota?.lavadoras_con_secado_ids)
+    // La secadora conserva su rojo, igual que con temporizador.
+    const esSecadoraCrono = maquina.tipo === 'secadora';
+    const debeSecar = !esSecadoraCrono && Array.isArray(nota?.lavadoras_con_secado_ids)
       && nota.lavadoras_con_secado_ids.some(mid => String(mid) === String(maquina.id));
     return (
       <div {...containerProps} className={`rounded-card bg-white shadow-card overflow-hidden ${interactivoCls}`}>
-        <div className={`${headerCls} ${header.cls}`}>
+        <div className={`${headerCls} ${esSecadoraCrono ? 'bg-red text-white' : header.cls}`}>
           <span className={nombreCls}>{maquina.nombre}</span>
         </div>
         <div className="px-card-pad pt-5 pb-6 flex flex-col items-center gap-3">
           <CircularTimer
             progress={maquina.progreso ?? 0}
             label={maquina.tiempo_restante ?? '—:—'}
-            color={maquina.tope_alcanzado ? 'red' : 'blue'}
+            color={maquina.tope_alcanzado || esSecadoraCrono ? 'red' : 'blue'}
           />
           {maquina.tope_alcanzado && (
             <p className="text-kpi-label text-red text-sm text-center">

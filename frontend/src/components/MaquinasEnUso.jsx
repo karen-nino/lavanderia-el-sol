@@ -350,11 +350,12 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
     // configuración del servidor— y aquí solo se cuenta hacia atrás.
     const habilitaEn = m.otro_ciclo_desde ? new Date(m.otro_ciclo_desde).getTime() : null;
     const esperaSeg = habilitaEn ? Math.max(0, Math.ceil((habilitaEn - now) / 1000)) : 0;
-    // Lavadora con cronómetro (mig. 137): cuenta hacia ARRIBA desde que se
-    // encendió y termina cuando alguien la finaliza, así que nunca se pone
-    // verde sola. Su `ciclo_minutos` es el tope de Ajustes: al llegar ahí el
-    // corte le quita la luz y el reloj se queda parado en el tope.
-    if (m.marca_opciones?.cronometro && !soloManual) {
+    // Máquina con cronómetro (todas menos el modelo que pregunta su tiempo,
+    // 2026-10-02): cuenta hacia ARRIBA desde que se encendió y termina cuando
+    // alguien la finaliza, así que nunca se pone verde sola. Su
+    // `ciclo_minutos` es su tope: al llegar ahí el corte le quita la luz y el
+    // reloj se queda parado en el tope.
+    if (m.cronometro && !soloManual) {
       const contadoSeg = duracionSeg > 0 ? Math.min(transcurridoSeg, duracionSeg) : transcurridoSeg;
       return {
         nota: notaRel,

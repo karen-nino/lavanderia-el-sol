@@ -17,12 +17,6 @@ import Selector from '../components/Selector';
 // (controllers/ajustes.controller.js), esto es solo no ofrecerlos.
 const NOTA_DEMO = 'En la demostración este dato no se cambia.';
 
-// Ayuda del tope de las lavadoras con cronómetro (mig. 137); va igual en las
-// dos versiones de la pantalla.
-const TEXTO_TOPE_CRONOMETRO =
-  'Las LG y Samsung no tienen tiempo de ciclo: el cronómetro corre hasta que las finalizan. '
-  + 'Si nadie lo hace, al llegar a este tope se les corta la luz y se avisa en la campana.';
-
 const INPUT_CLS =
   'w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent transition';
 
@@ -707,10 +701,12 @@ const CAMPOS_MODELO = [
   // carguen con campos que no usan.
   { name: 'pregunta_tiempo', defecto: false, tipo: 'check',
     label: 'Varios tiempos: se elige cuál al iniciar', chip: 'varios tiempos' },
-  // La segunda vuelta de la carga (migs. 108 y 123). Va al revés de como nació:
-  // lo normal es un ciclo y los dos son la excepción de un aparato concreto.
-  { name: 'dos_ciclos', defecto: false, tipo: 'check',
-    label: 'Una carga corre 2 ciclos', chip: '2 ciclos' },
+  // La casilla "Una carga corre 2 ciclos" (migs. 108 y 123) se escondió el
+  // 2026-10-02: con el cronómetro la máquina termina cuando la finalizan y
+  // ninguna carga corre dos. El dato sigue en la base; para volver a mostrarla
+  // (si se regresa al temporizador) se repone aquí:
+  //   { name: 'dos_ciclos', defecto: false, tipo: 'check',
+  //     label: 'Una carga corre 2 ciclos', chip: '2 ciclos' },
 ];
 
 // Lo que una MARCA dice de cómo se comportan sus máquinas (mig. 122): que
@@ -780,7 +776,7 @@ function MarcasYModelos({ movil = false, onMensaje }) {
       <div className={divisorCls}>
         <Campo
           label="Modelos"
-          hint="Los modelos de la marca elegida. Su tiempo de ciclo se configura arriba, en el bloque de Lavadora o Secadora que les toque. Marca «2 ciclos» solo en los aparatos cuyo programa no alcanza para una carga: sin eso, cada carga corre uno."
+          hint="Los modelos de la marca elegida. Su tope de carga se configura arriba, en el bloque de Lavadora o Secadora que les toque."
         >
           {marcas.length === 0 ? (
             <p className="text-sm text-gray-400">Primero agrega una marca.</p>
@@ -1149,12 +1145,15 @@ export default function Ajustes() {
   // es el modelo. Lo que quede vacío cae al tiempo general de arriba.
   const claveTiempo = (t) => `modelo|${t.modelo_id}`;
   const etiquetaTiempo = (t) => `${t.marca} · ${t.modelo}`;
+  // Desde el 2026-10-02 las máquinas corren con cronómetro y estos minutos son
+  // su TOPE. La excepción es el modelo que pregunta su tiempo (Sec49): ese
+  // conserva su temporizador y sus minutos siguen siendo lo que dura.
   const ayudaTiempo = (t) => (
     t?.pregunta_tiempo
-      ? 'Al iniciar una máquina de este modelo se pregunta con cuál de sus tiempos correr. Vacío = usa el tiempo de arriba.'
+      ? 'Al iniciar una máquina de este modelo se pregunta con cuál de sus tiempos correr, y ese es lo que dura (cuenta regresiva). Vacío = usa el de arriba.'
       : t?.minutos_2 != null || t?.minutos_3 != null
-        ? 'Duración del ciclo de este modelo. Con el interruptor apagado manda el último, que es el más largo.'
-        : 'Duración del ciclo de este modelo. Vacío = usa el tiempo de arriba.'
+        ? 'Tope de carga de este modelo: a estos minutos se le corta la luz si nadie la finaliza. Manda el último, que es el más largo.'
+        : 'Tope de carga de este modelo: a estos minutos se le corta la luz si nadie la finaliza. Vacío = usa el tope de arriba.'
   );
 
   // Un modelo puede llevar hasta TRES tiempos (mig. 120): la Sec49 no tiene
@@ -1388,7 +1387,6 @@ export default function Ajustes() {
     tiempo_carga_jumbo:    Number(config.tiempo_carga_jumbo),
     tiempo_carga_secadora: Number(config.tiempo_carga_secadora),
     tiempo_secadora_jumbo: Number(config.tiempo_secadora_jumbo),
-    tope_cronometro_minutos: Number(config.tope_cronometro_minutos),
     // Los textos con los que se identifica el negocio no se mandan en la demo:
     // el backend los ignora igualmente, pero así el payload dice lo mismo que
     // la pantalla, donde van deshabilitados.
@@ -1609,7 +1607,7 @@ export default function Ajustes() {
       </div>
     </Field>
   );
-  const campoTiempo = (name, hint, label = 'Tiempo de carga') => (
+  const campoTiempo = (name, hint, label = 'Tope de carga') => (
     <Field label={label} hint={hint}>
       <div className="flex items-center gap-2">
         <input
@@ -1655,22 +1653,15 @@ export default function Ajustes() {
     <Section titulo="Lavadora">
       {subTitulo('Mediana')}
       {campoPrecio('precio_carga_mediana', 'Aplica a lavadoras medianas en autoservicio y por encargo.')}
-      {campoTiempo('tiempo_carga_mediana', 'Se usa en las lavadoras medianas cuyo modelo no tenga tiempo propio.')}
+      {campoTiempo('tiempo_carga_mediana', 'Si nadie finaliza la máquina, a estos minutos se le corta la luz. Para las lavadoras medianas cuyo modelo no tenga tope propio.')}
       {camposTiempoMarca('lavadora', 'mediana')}
 
       <div className="border-t border-gray-100" />
 
       {subTitulo('Jumbo')}
       {campoPrecio('precio_carga_jumbo', 'Aplica a lavadoras jumbo en autoservicio y por encargo.')}
-      {campoTiempo('tiempo_carga_jumbo', 'Se usa en las lavadoras jumbo cuyo modelo no tenga tiempo propio.')}
+      {campoTiempo('tiempo_carga_jumbo', 'Si nadie finaliza la máquina, a estos minutos se le corta la luz. Para las lavadoras jumbo cuyo modelo no tenga tope propio.')}
       {camposTiempoMarca('lavadora', 'jumbo')}
-
-      <div className="border-t border-gray-100" />
-
-      {/* Las LG y Samsung corren con cronómetro (mig. 137): no tienen tiempo de
-          ciclo, solo este tope por si nadie las finaliza. */}
-      {subTitulo('LG y Samsung')}
-      {campoTiempo('tope_cronometro_minutos', TEXTO_TOPE_CRONOMETRO, 'Tope del cronómetro')}
     </Section>
 
     {/* La secadora va separada en Mediana y Jumbo igual que la lavadora. El
@@ -1680,14 +1671,14 @@ export default function Ajustes() {
     <Section titulo="Secadora">
       {subTitulo('Mediana')}
       {campoPrecio('precio_carga_secadora', 'Precio del secado de una carga mediana.')}
-      {campoTiempo('tiempo_carga_secadora', 'Se usa en las secadoras medianas cuyo modelo no tenga tiempo propio.')}
+      {campoTiempo('tiempo_carga_secadora', 'Si nadie finaliza la máquina, a estos minutos se le corta la luz. Para las secadoras medianas cuyo modelo no tenga tope propio.')}
       {camposTiempoMarca('secadora', 'mediana')}
 
       <div className="border-t border-gray-100" />
 
       {subTitulo('Jumbo')}
       {campoPrecio('precio_secadora_jumbo', 'Precio del secado de una carga jumbo.')}
-      {campoTiempo('tiempo_secadora_jumbo', 'Se usa en las secadoras jumbo cuyo modelo no tenga tiempo propio.')}
+      {campoTiempo('tiempo_secadora_jumbo', 'Si nadie finaliza la máquina, a estos minutos se le corta la luz. Para las secadoras jumbo cuyo modelo no tenga tope propio.')}
       {camposTiempoMarca('secadora', 'jumbo')}
     </Section>
 
@@ -2378,7 +2369,7 @@ export default function Ajustes() {
       </div>
     </MobileField>
   );
-  const campoTiempoM = (name, hint, label = 'Tiempo de carga') => (
+  const campoTiempoM = (name, hint, label = 'Tope de carga') => (
     <MobileField label={label} hint={hint}>
       <div className="flex items-center gap-2">
         <input
@@ -2420,16 +2411,13 @@ export default function Ajustes() {
         <div className="space-y-4">
         <TarjetaMobile titulo="Mediana">
           {campoPrecioM('precio_carga_mediana', 'Aplica a lavadoras medianas (autoservicio y por encargo).')}
-          {campoTiempoM('tiempo_carga_mediana', 'Se usa en las lavadoras medianas cuyo modelo no tenga tiempo propio.')}
+          {campoTiempoM('tiempo_carga_mediana', 'Si nadie finaliza la máquina, a estos minutos se le corta la luz. Para las lavadoras medianas cuyo modelo no tenga tope propio.')}
           {camposTiempoMarcaM('lavadora', 'mediana')}
         </TarjetaMobile>
         <TarjetaMobile titulo="Jumbo">
           {campoPrecioM('precio_carga_jumbo', 'Aplica a lavadoras jumbo (autoservicio y por encargo).')}
-          {campoTiempoM('tiempo_carga_jumbo', 'Se usa en las lavadoras jumbo cuyo modelo no tenga tiempo propio.')}
+          {campoTiempoM('tiempo_carga_jumbo', 'Si nadie finaliza la máquina, a estos minutos se le corta la luz. Para las lavadoras jumbo cuyo modelo no tenga tope propio.')}
           {camposTiempoMarcaM('lavadora', 'jumbo')}
-        </TarjetaMobile>
-        <TarjetaMobile titulo="LG y Samsung">
-          {campoTiempoM('tope_cronometro_minutos', TEXTO_TOPE_CRONOMETRO, 'Tope del cronómetro')}
         </TarjetaMobile>
         </div>
       </div>
@@ -2439,12 +2427,12 @@ export default function Ajustes() {
         <div className="space-y-4">
         <TarjetaMobile titulo="Mediana">
           {campoPrecioM('precio_carga_secadora', 'Precio del secado de una carga mediana.')}
-          {campoTiempoM('tiempo_carga_secadora', 'Se usa en las secadoras medianas cuyo modelo no tenga tiempo propio.')}
+          {campoTiempoM('tiempo_carga_secadora', 'Si nadie finaliza la máquina, a estos minutos se le corta la luz. Para las secadoras medianas cuyo modelo no tenga tope propio.')}
           {camposTiempoMarcaM('secadora', 'mediana')}
         </TarjetaMobile>
         <TarjetaMobile titulo="Jumbo">
           {campoPrecioM('precio_secadora_jumbo', 'Precio del secado de una carga jumbo.')}
-          {campoTiempoM('tiempo_secadora_jumbo', 'Se usa en las secadoras jumbo cuyo modelo no tenga tiempo propio.')}
+          {campoTiempoM('tiempo_secadora_jumbo', 'Si nadie finaliza la máquina, a estos minutos se le corta la luz. Para las secadoras jumbo cuyo modelo no tenga tope propio.')}
           {camposTiempoMarcaM('secadora', 'jumbo')}
         </TarjetaMobile>
         </div>
