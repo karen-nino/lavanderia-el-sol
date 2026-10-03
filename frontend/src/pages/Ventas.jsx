@@ -67,6 +67,14 @@ const fmtEncendida = (segundos) => {
   return `${Math.floor(min / 60)} h ${String(min % 60).padStart(2, '0')} min`;
 };
 
+// Cómo se lee el servicio de la nota en la tabla (mismas palabras que Notas).
+const SERVICIO_LABEL = {
+  AUTOSERVICIO: 'Autoservicio',
+  POR_ENCARGO:  'Por Encargo',
+  EDREDON:      'Edredón',
+  PRODUCTOS:    'Productos',
+};
+
 const ESTADO_BADGE = {
   EN_ESPERA:  { label: 'En Espera',    cls: 'bg-gray-100 text-gray-600'     },
   LAVANDO:    { label: 'Lavando',      cls: 'bg-light-blue text-blue-700'   },
@@ -736,6 +744,7 @@ export default function Ventas() {
                     <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wide">
                       <tr>
                         <th className="px-4 py-3 text-left">Folio</th>
+                        <th className="px-4 py-3 text-left">Servicio</th>
                         {periodo === 'semana' && <th className="px-4 py-3 text-left">Día</th>}
                         {periodo !== 'hoy' && <th className="px-4 py-3 text-left">Fecha</th>}
                         {periodo === 'hoy' && <th className="px-4 py-3 text-left">Hora</th>}
@@ -758,6 +767,9 @@ export default function Ventas() {
                             >
                               {nota.folio}
                             </button>
+                          </td>
+                          <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
+                            {SERVICIO_LABEL[nota.tipo_servicio] ?? <span className="text-gray-400">—</span>}
                           </td>
                           {periodo === 'semana' && <td className="px-4 py-3 text-gray-600">{fmtDiaSemana(nota.fecha)}</td>}
                           {periodo !== 'hoy' && <td className="px-4 py-3 text-gray-600">{fmtFecha(nota.fecha)}</td>}
