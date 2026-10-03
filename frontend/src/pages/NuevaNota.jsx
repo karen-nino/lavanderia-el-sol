@@ -5,7 +5,7 @@ import { etiquetaProducto, ordenProducto, seVendePorUnidad, esPolvo } from '../l
 import { capitalizarNombre } from '../lib/texto';
 import { FORMAS_PAGO } from '../lib/formasPago';
 import AbrirCajaModal from '../components/AbrirCajaModal';
-import ElegirMaquinasModal from '../components/ElegirMaquinasModal';
+import ElegirMaquinasModal, { SELECCION_EDREDON } from '../components/ElegirMaquinasModal';
 import Selector from '../components/Selector';
 
 const INPUT_CLS =
@@ -217,7 +217,7 @@ export default function NuevaNota() {
   const [productosCatalogo, setProductosCatalogo] = useState([]);
   const [telas,             setTelas]             = useState([]);
   const [tamanosEdredon,    setTamanosEdredon]    = useState([]);
-  const [precios,           setPrecios]           = useState({ mediana: 70, jumbo: 70, secadora: 45, secadoraJumbo: 45 });
+  const [precios,           setPrecios]           = useState({ mediana: 70, jumbo: 70, secadora: 45, secadoraJumbo: 45, edredon: 80 });
   // Tope de precio por carga (Ajustes); null = sin tope. `edredon` es un tope
   // por prenda que manda sobre el del tamaño para las cargas de edredón.
   const [topes,             setTopes]             = useState({ chico: null, mediano: null, grande: null, jumbo: null, edredon: null });
@@ -342,8 +342,11 @@ export default function NuevaNota() {
     return precioPorTipo(m.tipo === 'lavadora_jumbo' ? 'lavadora_jumbo' : 'lavadora_mediana', 'ROPA');
   };
   // Un renglón es una máquina; las notas viejas pueden traer las dos.
-  const subtotalDeCarga = (c) =>
-    precioDeMaquina(c.lavadora) + precioDeMaquina(c.secadora)
+  // El renglón "Edredón" (2026-10-02) cobra su tarifa, con lavadora o sin ella.
+  const esEdredonAuto = (c) => String(c?.tipo_prenda ?? '').toUpperCase() === 'EDREDON';
+  const subtotalDeCarga = (c) => esEdredonAuto(c)
+    ? (Number(precios.edredon) || 0) + precioDeMaquina(c.secadora)
+    : precioDeMaquina(c.lavadora) + precioDeMaquina(c.secadora)
     // Nota vieja cuya carga se quedó en TIPO sin máquina: se cobra por su tipo,
     // como se cobraba entonces, para no cambiarle el total al editarla.
     + (c.lavadora ? 0 : precioLavadoTipo(c.lavadora_tipo, 'ROPA'))
@@ -356,6 +359,7 @@ export default function NuevaNota() {
   // cuesta, se llame L1 o L8—, así que ahí no pinta el nombre de la máquina ni
   // el número de renglón: es ruido entre el concepto y su importe.
   const tipoDeRenglon = (c) => {
+    if (esEdredonAuto(c)) return 'Edredón';
     const partes = [];
     if (c.lavadora) partes.push(`Lavadora ${c.lavadora.tipo === 'lavadora_jumbo' ? 'Jumbo' : 'Mediana'}`);
     if (c.secadora) partes.push('Secadora');
@@ -367,6 +371,9 @@ export default function NuevaNota() {
   // máquina: es la que hay que ir a cargar. Solo el tamaño: la L del nombre ya
   // dice que es lavadora (2026-10-02).
   const etiquetaRenglon = (c) => {
+    // El Edredón: "Edredón" hasta que en Salidas se le asigne lavadora, y
+    // después con su nombre ("L8 · Edredón").
+    if (esEdredonAuto(c)) return c.lavadora ? `${c.lavadora.nombre} · Edredón` : 'Edredón';
     const partes = [];
     if (c.lavadora) partes.push(`${c.lavadora.nombre} · ${c.lavadora.tipo === 'lavadora_jumbo' ? 'Jumbo' : 'Mediana'}`);
     if (c.secadora) partes.push(`${c.secadora.nombre} · Secadora`);
@@ -489,6 +496,9 @@ export default function NuevaNota() {
             // Secado por categoría; el precio plano (precio_carga_secadora) es Mediana.
             secadora:        cfg.precio_carga_secadora   != null ? Number(cfg.precio_carga_secadora)   : 45,
             secadoraJumbo:   cfg.precio_secadora_jumbo   != null ? Number(cfg.precio_secadora_jumbo)   : 45,
+            // El "Edredón" de Autoservicio (2026-10-02): su tarifa de Ajustes,
+            // en la lavadora que sea.
+            edredon:         cfg.precio_edredon_jumbo    != null ? Number(cfg.precio_edredon_jumbo)    : 80,
           });
           setTopes({
             chico:   cfg.tope_carga_chico   != null ? Number(cfg.tope_carga_chico)   : null,
@@ -629,6 +639,8 @@ export default function NuevaNota() {
                                     'secadora'),
               lavadora_tipo:  c.lavadora_tipo_previsto ?? '',
               secadora_tipo:  c.secadora_tipo_previsto ?? '',
+              // El Edredón (2026-10-02) se reconoce por su prenda.
+              tipo_prenda:    c.tipo_prenda ?? null,
             }));
             setCargasAuto(cargasNota);
             setProductosLista(prods);
@@ -693,11 +705,16 @@ export default function NuevaNota() {
   // añadido a la de al lado.
   const confirmarMaquinas = () => {
     const elegidas = maqModalSel
-      .map(id => maquinasLibres.find(m => String(m.id) === String(id)))
+      .map(id => (String(id) === SELECCION_EDREDON
+        // El Edredón entra sin máquina: se cobra su tarifa y la lavadora se
+        // le asigna en Salidas (2026-10-02).
+        ? { lavadora: null, secadora: null, lavadora_tipo: 'jumbo', secadora_tipo: '', tipo_prenda: 'EDREDON' }
+        : maquinasLibres.find(m => String(m.id) === String(id))))
       .filter(Boolean)
-      .map(m => (m.tipo === 'secadora'
-        ? { lavadora: null, secadora: m }
-        : { lavadora: m, secadora: null }));
+      .map(m => (m.tipo_prenda ? m
+        : m.tipo === 'secadora'
+          ? { lavadora: null, secadora: m }
+          : { lavadora: m, secadora: null }));
     setCargasAuto(prev => [...prev, ...elegidas].slice(0, MAX_CARGAS));
     setMaqModalOpen(false);
     setMaqModalSel([]);
@@ -1269,7 +1286,7 @@ export default function NuevaNota() {
         secadora_id:    c.secadora?.id ?? null,
         lavadora_tipo:  c.lavadora ? null : (c.lavadora_tipo || null),
         secadora_tipo:  c.secadora ? null : (c.secadora_tipo || null),
-        tipo_prenda:    'ROPA',
+        tipo_prenda:    esEdredonAuto(c) ? 'EDREDON' : 'ROPA',
       })),
       // Autoservicio ya no tiene Ajuste (2026-09-25).
       ajuste:          0,
@@ -2649,6 +2666,7 @@ export default function NuevaNota() {
         onToggle={toggleMaquinaSel}
         onConfirmar={confirmarMaquinas}
         onCancelar={() => { setMaqModalOpen(false); setMaqModalSel([]); }}
+        ofrecerEdredon
       />
 
       {/* Modal — cobro al momento (Autoservicio y venta de Productos) */}

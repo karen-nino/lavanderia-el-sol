@@ -40,6 +40,11 @@ function SelCheck({ on }) {
   );
 }
 
+// Valor con que el renglón "Edredón" entra a la selección (2026-10-02). No es
+// una máquina: es una carga de edredón que se cobra con su tarifa y cuya
+// lavadora —la que esté libre— se asigna después, en Salidas.
+export const SELECCION_EDREDON = 'edredon';
+
 function FilaMaquina({ maquina, seleccionada, onToggle }) {
   // "LG · Mediana": con la marca se distingue qué máquina es de un vistazo.
   const tamano = marcaYTamano(maquina);
@@ -71,12 +76,14 @@ export default function ElegirMaquinasModal({
   onToggle,
   onConfirmar,
   onCancelar,
+  ofrecerEdredon = false,
 }) {
   if (!abierto) return null;
 
   const lavadoras = maquinas.filter(m => m.tipo !== 'secadora');
   const secadoras = maquinas.filter(m => m.tipo === 'secadora');
   const marcada = (m) => seleccion.some(id => String(id) === String(m.id));
+  const edredonMarcado = seleccion.some(id => String(id) === SELECCION_EDREDON);
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
@@ -100,7 +107,7 @@ export default function ElegirMaquinasModal({
           <div className="flex justify-center py-6">
             <div className="animate-spin rounded-full h-7 w-7 border-b-2 border-blue" />
           </div>
-        ) : lavadoras.length === 0 && secadoras.length === 0 ? (
+        ) : lavadoras.length === 0 && secadoras.length === 0 && !ofrecerEdredon ? (
           <p className="text-sm text-gray-400 text-center py-6">No hay máquinas disponibles.</p>
         ) : (
           <div className="space-y-4">
@@ -114,6 +121,15 @@ export default function ElegirMaquinasModal({
                     key={m.id} maquina={m} seleccionada={marcada(m)} onToggle={onToggle}
                   />
                 ))
+              )}
+              {/* Hasta abajo de las lavadoras: el Edredón se vende con su
+                  tarifa y su lavadora se asigna en Salidas (2026-10-02). */}
+              {ofrecerEdredon && (
+                <FilaMaquina
+                  maquina={{ id: SELECCION_EDREDON, nombre: 'Edredón', tipo: 'edredon' }}
+                  seleccionada={edredonMarcado}
+                  onToggle={onToggle}
+                />
               )}
             </div>
 

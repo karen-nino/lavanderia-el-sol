@@ -930,8 +930,9 @@ export default function Salidas() {
       // carga esperando una mediana con dos jumbos libres al lado.
       //
       // La única excepción es física y no de tarifa: un edredón no cabe en una
-      // mediana. El backend la vuelve a comprobar al asignar.
-      return esEdredonCarga(carga) ? m.tipo === 'lavadora_jumbo' : true;
+      // mediana. El backend la vuelve a comprobar al asignar. En Autoservicio
+      // no aplica (2026-10-02): el edredón va en la lavadora que esté libre.
+      return esEdredonCarga(carga) && !esAutoservicio ? m.tipo === 'lavadora_jumbo' : true;
     }
     // La secadora es de un solo tamaño: cualquier secadora disponible sirve.
     return m.tipo === 'secadora';
@@ -1319,9 +1320,12 @@ export default function Salidas() {
                     const opciones = maquinasParaSlot(slot, cargaSlot);
                     // El tamaño solo se nombra donde todavía manda: el edredón.
                     const queFalta = slot !== 'lavadora' ? 'secadoras'
-                      : esEdredonCarga(cargaSlot) ? 'lavadoras Jumbo'
+                      : esEdredonCarga(cargaSlot) && !esAutoservicio ? 'lavadoras Jumbo'
                       : 'lavadoras';
                     const esLavadora = slot === 'lavadora';
+                    // El "Edredón" que se vende en Autoservicio (2026-10-02):
+                    // ya está cobrado y espera su lavadora, la que esté libre.
+                    const edredonAuto = esLavadora && esAutoservicio && esEdredonCarga(cargaSlot);
                     return (
                       <div key={slot} className="flex flex-wrap items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
                         {/* Solo "Lavadora": el tamaño dejó de decidir cuál se
@@ -1329,7 +1333,7 @@ export default function Salidas() {
                             sobraba. Donde sigue mandando —el edredón— lo dice
                             el aviso de al lado. */}
                         <span className="text-sm font-medium text-gray-700">
-                          {esLavadora ? 'Lavadora' : 'Secadora'}
+                          {edredonAuto ? 'Edredón' : esLavadora ? 'Lavadora' : 'Secadora'}
                         </span>
                         {opciones.length === 0 ? (
                           <span className="text-sm text-red-600">No hay {queFalta} disponibles</span>
@@ -1344,7 +1348,7 @@ export default function Salidas() {
                             disabled={loadingMaquina}
                             className="w-full min-[360px]:w-auto px-4 py-3 bg-blue hover:opacity-90 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors whitespace-nowrap"
                           >
-                            {esLavadora ? 'Asignar Lav.' : 'Asignar Sec.'}
+                            {edredonAuto ? 'Asignar' : esLavadora ? 'Asignar Lav.' : 'Asignar Sec.'}
                           </button>
                         )}
                       </div>
@@ -2000,7 +2004,7 @@ export default function Salidas() {
                           (2026-09-26). El edredón es la excepción, y ahí sí se
                           nombra porque la lista solo trae jumbos. */}
                       {asignarSlot.slot === 'lavadora'
-                        ? (esEdredonCarga(asignarSlot.carga) ? 'lavadora Jumbo' : 'lavadora')
+                        ? (esEdredonCarga(asignarSlot.carga) && !esAutoservicio ? 'lavadora Jumbo' : 'lavadora')
                         : 'secadora'}
                     </span> que le falta a la {Renglon} {numeroDeCarga(cargaDestino)}. Queda asignada; la inicias después con su botón.</>
                   : cargaDestino
