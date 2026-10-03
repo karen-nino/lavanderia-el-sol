@@ -35,26 +35,11 @@ const BADGE_MAQUINA_ESTADO = {
   mantenimiento: { label: 'Mantenimiento', cls: 'bg-red-100 text-red-700',     dot: 'bg-red-500'   },
 };
 
-const MAQUINA_TIPO_LABEL = {
-  lavadora_mediana: 'Mediana',
-  lavadora_jumbo:   'Jumbo',
-  secadora:         'Secadora',
-};
-
 // ¿La carga lleva un edredón? Es lo único que sigue atando una carga a un
 // tamaño de lavadora: no cabe en una mediana. El resto de tamaños dejó de
 // filtrar al asignar (2026-09-26).
 const esEdredonCarga = (c) => String(c?.tipo_prenda ?? '').toUpperCase() === 'EDREDON';
 
-
-// Abreviatura del tamaño en la lista de máquinas: Mediana → M, Jumbo → J,
-// Edredón → E. Otros valores se muestran tal cual.
-const TAMANO_ABBR = { Mediana: 'M', Jumbo: 'J', Edredón: 'E' };
-
-// Etiqueta de tamaño de una máquina: solo aplica a lavadoras (Mediana/Jumbo).
-// La secadora es de un solo tamaño, así que no muestra tamaño (null).
-const labelTamano = (m) =>
-  m.tipo === 'secadora' ? null : MAQUINA_TIPO_LABEL[m.tipo];
 
 // Casilla de selección (multiselección de máquinas al asignar).
 function SelCheck({ on }) {
