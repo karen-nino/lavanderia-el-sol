@@ -76,10 +76,6 @@ export default function Salidas() {
   const [loadingCatalogo, setLoadingCatalogo] = useState(false);
 
   const [confirmQuitarCarga, setConfirmQuitarCarga] = useState(null);
-  // Ajuste de la nota (2026-09-25): descuento o cargo extra. Se captura aquí y
-  // sale impreso en el ticket.
-  const [ajusteTxt, setAjusteTxt] = useState('');
-  const [guardandoAjuste, setGuardandoAjuste] = useState(false);
   const [errorAccion,      setErrorAccion]      = useState('');
   const [confirmDetener,   setConfirmDetener]   = useState(null); // máquina a detener
   // Máquina cuyo modal de arranque está abierto. Se guarda el ID y no el
@@ -159,8 +155,6 @@ export default function Salidas() {
         });
       }
       setNota(notaData);
-      // El campo del ajuste refleja lo que la nota tiene guardado.
-      setAjusteTxt(notaData?.ajuste != null ? String(Number(notaData.ajuste)) : '0');
       if (Array.isArray(maquinasData)) setTodasMaquinas(maquinasData);
       if (ajustes) {
         setTiempos({
@@ -646,22 +640,6 @@ export default function Salidas() {
   // Quita una carga que el cliente ya no va a usar (trajo menos ropa de la
   // prevista). Solo se ofrece en las cargas sin máquina: las que ya lavaron son
   // historial y el servidor las rechaza.
-  // Guarda el ajuste de la nota. El servidor recalcula el total y, si la nota ya
-  // estaba cobrada y el importe cambió, la deja pendiente por el nuevo — de ahí
-  // que se relea completa.
-  async function guardarAjuste() {
-    setGuardandoAjuste(true);
-    setErrorAccion('');
-    try {
-      await api.patch(`/notas/${id}/ajuste`, { ajuste: Number(ajusteTxt) || 0 });
-      await cargarDatos();
-    } catch (err) {
-      setErrorAccion(err.message);
-    } finally {
-      setGuardandoAjuste(false);
-    }
-  }
-
   // Devuelve si se pudo: quien la llama cierra su modal solo cuando salió bien,
   // para que un rechazo se lea ahí mismo y no en un aviso fuera de pantalla.
   async function quitarCarga(carga) {
@@ -1385,75 +1363,12 @@ export default function Salidas() {
         </div>
       </div>
 
-      {/* Sección 2 — Ajuste de la nota (2026-09-25). Un descuento (negativo) o un
-          cargo extra (positivo) sobre el total, capturado donde se atiende la
-          nota. Sale impreso en el ticket. Solo en Por Encargo: en Autoservicio
-          el ajuste se quitó del formulario y no se repone por aquí. */}
-      {esEncargo && !notaCerrada && !cobroCongelado && (
-        <div className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
-          <div className="px-4 py-3 border-b border-gray-50">
-            <h2 className="text-sm font-semibold text-gray-700">Ajuste</h2>
-          </div>
-          <div className="px-4 py-4 space-y-3">
-            <p className="text-xs text-gray-500">
-              Descuento o cargo extra sobre el total de la nota. Sale en el ticket.
-            </p>
-            <div className="flex items-center gap-2">
-              <div className="relative flex-1">
-                <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 text-base">$</span>
-                <input
-                  type="number" step="any"
-                  value={ajusteTxt}
-                  onChange={e => setAjusteTxt(e.target.value)}
-                  className="w-full pl-8 pr-4 py-3.5 text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue focus:border-blue [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                />
-              </div>
-              {/* Los saltos de $10 son los del formulario: el mostrador ajusta
-                  en redondo, no al centavo. */}
-              <button
-                type="button"
-                onClick={() => setAjusteTxt(String((Number(ajusteTxt) || 0) - 10))}
-                aria-label="Disminuir ajuste"
-                className="flex-shrink-0 w-14 py-3.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-xl font-semibold hover:bg-gray-50 transition-colors"
-              >
-                −
-              </button>
-              <button
-                type="button"
-                onClick={() => setAjusteTxt(String((Number(ajusteTxt) || 0) + 10))}
-                aria-label="Aumentar ajuste"
-                className="flex-shrink-0 w-14 py-3.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-xl font-semibold hover:bg-gray-50 transition-colors"
-              >
-                +
-              </button>
-            </div>
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-xs text-gray-500">
-                {Number(nota?.ajuste) !== 0
-                  ? `Guardado: ${Number(nota.ajuste) > 0 ? '+' : ''}${fmtMonto(nota.ajuste)}`
-                  : 'Sin ajuste'}
-              </p>
-              <button
-                type="button"
-                onClick={guardarAjuste}
-                disabled={guardandoAjuste
-                  || Number(ajusteTxt || 0) === Number(nota?.ajuste || 0)
-                  || !Number.isFinite(Number(ajusteTxt || 0))}
-                className="px-4 py-2 bg-blue hover:opacity-90 disabled:opacity-40 text-white text-sm font-medium rounded-lg transition-colors"
-              >
-                {guardandoAjuste ? 'Guardando…' : 'Guardar ajuste'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Granel de cada servicio Por Encargo (migs. 132-134): qué jabón y qué
           suavizante usa cada uno. Se elige aquí, y sin elegir no arranca la
           lavadora. Se esconde sola si la nota no lleva granel por servicio. */}
       <GranelPorServicio nota={nota} puedeEditar={puedeTocarProductos} onCambio={cargarDatos} />
 
-      {/* Sección 3 — Productos de la nota. Se capturan al hacerla, pero también
+      {/* Sección 2 — Productos de la nota. Se capturan al hacerla, pero también
           se pueden agregar aquí (2026-09-25): el cliente pide el jabón ya
           estando en la máquina. El admin además puede quitar uno mal capturado. */}
       <div className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">

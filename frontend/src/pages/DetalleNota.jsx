@@ -298,6 +298,13 @@ const IconoCobrar = (
   </svg>
 );
 
+const IconoAjuste = (
+  <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    {/* Más y menos: descuento o cargo extra sobre el total. */}
+    <path strokeLinecap="round" strokeWidth={2} d="M12 4v8M8 8h8M8 18h8" />
+  </svg>
+);
+
 const IconoCancelar = (
   <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     {/* Círculo tachado: la nota se anula. */}
@@ -486,6 +493,72 @@ function ModalCobrar({ saldo, folio, monto, onMonto, formaPago, onFormaPago,
   );
 }
 
+// Ajuste de la nota (2026-09-25): un descuento (negativo) o un cargo extra
+// (positivo) sobre el total, que sale en el ticket. Vivía como sección en
+// Salidas y se pasó aquí, a un botón junto a Cobrar (2026-10-02): es dinero, y
+// el dinero de la nota se toca en esta pantalla. Los saltos de $10 son los del
+// formulario: el mostrador ajusta en redondo, no al centavo.
+function ModalAjuste({ folio, guardado, valor, onValor, onCancelar, onGuardar, loading, error }) {
+  const n = Number(valor || 0);
+  const valido = Number.isFinite(n);
+  const sinCambio = valido && n === Number(guardado || 0);
+  const btn = 'flex-shrink-0 w-14 py-3.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-xl font-semibold hover:bg-gray-50 transition-colors';
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+        <div>
+          <h3 className="text-base font-bold text-gray-900">Ajuste</h3>
+          <p className="text-sm text-gray-500">Nota {folio}</p>
+        </div>
+        <p className="text-sm text-gray-500">
+          Descuento (negativo) o cargo extra (positivo) sobre el total de la nota. Sale en el ticket.
+        </p>
+
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">{error}</div>
+        )}
+
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1">
+            <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 text-base">$</span>
+            <input
+              type="number" step="any"
+              value={valor}
+              onChange={e => onValor(e.target.value)}
+              aria-label="Ajuste"
+              className="w-full pl-8 pr-4 py-3.5 text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue focus:border-blue [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+            />
+          </div>
+          <button type="button" onClick={() => onValor(String(n - 10))} aria-label="Disminuir ajuste" className={btn}>−</button>
+          <button type="button" onClick={() => onValor(String(n + 10))} aria-label="Aumentar ajuste" className={btn}>+</button>
+        </div>
+        <p className="text-xs text-gray-500">
+          {Number(guardado) !== 0
+            ? `Guardado: ${Number(guardado) > 0 ? '+' : ''}${fmtMonto(guardado)}`
+            : 'Sin ajuste'}
+        </p>
+
+        <div className="flex gap-3 pt-4 border-t border-gray-100">
+          <button
+            onClick={onCancelar}
+            disabled={loading}
+            className="flex-1 border border-gray-300 text-gray-700 font-medium py-3.5 rounded-lg text-base hover:bg-gray-50 disabled:opacity-60 transition-colors"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={onGuardar}
+            disabled={loading || !valido || sinCambio}
+            className="flex-1 bg-blue hover:opacity-90 text-white font-medium py-3.5 rounded-lg text-base transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {loading ? 'Guardando...' : 'Guardar'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function DetalleNota() {
   const { id }   = useParams();
   const navigate = useNavigate();
@@ -513,6 +586,9 @@ export default function DetalleNota() {
   const [cobroOpen,        setCobroOpen]        = useState(false);
   const [cobroMonto,       setCobroMonto]       = useState('');
   const [cobroForma,       setCobroForma]       = useState('');
+  // Ajuste de la nota: su propio modal, junto a Cobrar.
+  const [ajusteOpen,       setAjusteOpen]       = useState(false);
+  const [ajusteTxt,        setAjusteTxt]        = useState('');
   const [confirmRevertirAbono, setConfirmRevertirAbono] = useState(null);
   const [motivoAbono,      setMotivoAbono]      = useState('');
   const [corrigiendoPago,  setCorrigiendoPago]  = useState(false);
@@ -547,6 +623,30 @@ export default function DetalleNota() {
     api.get('/caja/actual')
       .then(r => setCajaAbierta(Boolean(r?.abierta)))
       .catch(() => setCajaAbierta(null));
+  }
+
+  function abrirAjuste() {
+    setErrorAccion('');
+    setAjusteTxt(String(Number(nota?.ajuste ?? 0)));
+    setAjusteOpen(true);
+  }
+
+  // Guarda el ajuste. El servidor recalcula el total y, si la nota ya estaba
+  // cobrada y el importe cambió, la deja pendiente por el nuevo — de ahí que se
+  // relea completa.
+  async function guardarAjuste() {
+    setLoadingAccion(true);
+    setErrorAccion('');
+    try {
+      await api.patch(`/notas/${id}/ajuste`, { ajuste: Number(ajusteTxt) || 0 });
+      setNota(await api.get(`/notas/${id}`));
+      setAjusteOpen(false);
+    } catch (err) {
+      // Dentro del modal, igual que el cobro.
+      setErrorAccion(err.message);
+    } finally {
+      setLoadingAccion(false);
+    }
   }
 
   // Deshace la entrega: la nota finalizada vuelve a "Por Entregar", como antes
@@ -905,6 +1005,19 @@ export default function DetalleNota() {
       disabled={loadingAccion}
     />
   );
+  // Solo Por Encargo (en Autoservicio el ajuste se quitó el 2026-09-25), con la
+  // nota viva y sin el cobro en un corte cerrado, donde el total ya no se
+  // puede mover. Es la misma condición que tenía la sección en Salidas.
+  const botonAjuste = esEncargoNota && !esTerminal(nota) && !nota.cobro_congelado && (
+    <AccionCircular
+      label="Ajuste"
+      title="Descuento o cargo extra"
+      icono={IconoAjuste}
+      color="bg-blue group-hover:bg-blue-700"
+      onClick={abrirAjuste}
+      disabled={loadingAccion}
+    />
+  );
   const badgeTipoServicio    = BADGE_TIPO_SERVICIO[nota.tipo_servicio] ?? BADGE_TIPO_SERVICIO.AUTOSERVICIO;
   const badgePago     = BADGE_PAGO[nota.estado_pago];
   const barcodeValue  = nota.folio ?? String(nota.id);
@@ -988,6 +1101,7 @@ export default function DetalleNota() {
             />
           )}
           {botonCobrar}
+          {botonAjuste}
           <AccionCircular
             label="Salidas"
             icono={IconoSalidas}
@@ -1816,6 +1930,19 @@ export default function DetalleNota() {
           error={errorAccion}
           cajaAbierta={cajaAbierta}
           onAbrirCaja={() => setModalCajaOpen(true)}
+        />
+      )}
+
+      {ajusteOpen && (
+        <ModalAjuste
+          folio={nota.folio ?? `#${nota.id}`}
+          guardado={nota.ajuste ?? 0}
+          valor={ajusteTxt}
+          onValor={setAjusteTxt}
+          onCancelar={() => { setAjusteOpen(false); setErrorAccion(''); }}
+          onGuardar={guardarAjuste}
+          loading={loadingAccion}
+          error={errorAccion}
         />
       )}
 
