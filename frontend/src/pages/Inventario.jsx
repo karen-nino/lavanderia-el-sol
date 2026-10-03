@@ -1401,13 +1401,13 @@ function ReporteDiario() {
                     </td>
                     <td className="px-4 py-3 text-gray-700">
                       {lineasEntradas(p, esMarca).map((l, i) => (
-                        <span key={i} className={`block ${i > 0 ? 'text-gray-500' : ''}`}>{l}</span>
+                        <span key={i} className={`block ${l === '—' ? 'text-gray-400' : i > 0 ? 'text-gray-500' : ''}`}>{l}</span>
                       ))}
                     </td>
                     <td className="px-4 py-3 text-gray-700">
                       {/* Por notas más las salidas manuales (merma, dañado…). */}
                       {lineasSalidas(p, esMarca).map((l, i) => (
-                        <span key={i} className={`block ${i > 0 ? 'text-gray-500' : ''}`}>{l}</span>
+                        <span key={i} className={`block ${l === '—' ? 'text-gray-400' : i > 0 ? 'text-gray-500' : ''}`}>{l}</span>
                       ))}
                       {/* Ventas anuladas ese día: el producto volvió al estante,
                           así que ya viene restado de la línea de arriba. Se dice

@@ -4,8 +4,9 @@ import { lineasEntradas, lineasSalidas } from './formatoInventario';
 const granel = { medidas_por_botella: 2, medidas_por_bidon: 50 };
 
 describe('lineasEntradas (Reporte diario)', () => {
-  it('sin entradas dice 0', () => {
-    expect(lineasEntradas({ ...granel }, false)).toEqual(['0 botellas']);
+  it('sin entradas lleva guion', () => {
+    expect(lineasEntradas({ ...granel }, false)).toEqual(['—']);
+    expect(lineasEntradas({ medidas_por_botella: 1 }, true)).toEqual(['—']);
   });
   it('lo que se cuenta por unidad va en una línea', () => {
     expect(lineasEntradas({ medidas_por_botella: 1, entrada_botellas_medidas: 3 }, true)).toEqual(['3 unidades']);
@@ -26,6 +27,6 @@ describe('lineasSalidas (Reporte diario)', () => {
       .toEqual(['Rellenadas: 1 botella', 'A granel: 1 bidón']);
   });
   it('lo devuelto no la deja en negativo', () => {
-    expect(lineasSalidas({ ...granel, vendido_medidas: -4 }, false)).toEqual(['0 botellas']);
+    expect(lineasSalidas({ ...granel, vendido_medidas: -4 }, false)).toEqual(['—']);
   });
 });
