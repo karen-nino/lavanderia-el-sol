@@ -297,21 +297,35 @@ export const getUsoMaquina = async (req, res) => {
     );
 
     // Ciclos de esta máquina: una fila por PASADA, así que una carga que se
-    // relavó o se secó de más en ella cuenta cada vuelta (2026-10-03). El
-    // precio del hueco (lavado o secado) se atribuye solo a la primera vuelta
-    // de la carga: las siguientes no se cobran aparte. La descripción son las
-    // máquinas que usó la carga (*_usada_id, que no se borra al finalizar).
+    // relavó o se secó de más en ella cuenta cada vuelta (2026-10-03).
+    //
+    // Lo generado es lo que vale CADA vez que se usó la máquina, no el total
+    // de la nota (que en Por Encargo paga el servicio entero, con todas sus
+    // máquinas). El primer ciclo de la carga vale lo que se le cobró a ese
+    // hueco; si no se le cobró aparte (Por Encargo, que va con precio de
+    // servicio) o es una vuelta más, vale la tarifa de la máquina en Ajustes.
+    // La descripción son las máquinas que usó la carga (*_usada_id).
     const { rows: cargas } = await pool.query(
       `SELECT nc.nota_id, p.slot,
               CASE WHEN ROW_NUMBER() OVER (PARTITION BY p.carga_id, p.slot
                                            ORDER BY p.asignada_at, p.id) = 1
+                        AND (CASE WHEN p.slot = 'lavadora' THEN nc.precio_lavadora
+                                  ELSE nc.precio_secadora END) > 0
                    THEN CASE WHEN p.slot = 'lavadora' THEN nc.precio_lavadora
                              ELSE nc.precio_secadora END
-                   ELSE 0 END AS precio,
+                   ELSE CASE
+                          WHEN mx.tipo = 'secadora' AND mx.tamano = 'jumbo' THEN aj.precio_secadora_jumbo
+                          WHEN mx.tipo = 'secadora'                         THEN aj.precio_carga_secadora
+                          WHEN mx.tipo = 'lavadora_jumbo'                   THEN aj.precio_carga_jumbo
+                          ELSE aj.precio_carga_mediana
+                        END
+              END AS precio,
               ml.nombre AS lav_nombre, ms.nombre AS sec_nombre
          FROM (${PASADAS_DE_LA_MAQUINA}) p
          JOIN nota_cargas nc ON nc.id = p.carga_id
          JOIN notas n ON n.id = nc.nota_id
+         JOIN maquinas mx ON mx.id = $1
+         LEFT JOIN ajustes aj ON aj.id = 1
          LEFT JOIN maquinas ml ON ml.id = COALESCE(nc.lavadora_id, nc.lavadora_usada_id)
          LEFT JOIN maquinas ms ON ms.id = COALESCE(nc.secadora_id, nc.secadora_usada_id)
         WHERE n.estado <> 'CANCELADA'
@@ -339,7 +353,6 @@ export const getUsoMaquina = async (req, res) => {
 
     for (const n of notas) {
       const b = getBucket(n.fecha);
-      if (n.estado_pago === 'PAGADO') b.generado += Number(n.precio_total) || 0;
       const clienteNombre = `${n.cliente_nombre ?? ''}${n.cliente_apellido ? ' ' + n.cliente_apellido : ''}`.trim();
       // Cada nota que usó la máquina cuenta como un uso.
       b._usos.push({
@@ -369,11 +382,23 @@ export const getUsoMaquina = async (req, res) => {
       if (!n) continue;
       const b = getBucket(n.fecha);
       const partes = [c.lav_nombre, c.sec_nombre].filter(Boolean);
+      // Lo generado suma cada ciclo de las notas ya cobradas.
+      if (n.estado_pago === 'PAGADO') b.generado += Number(c.precio) || 0;
       b._cargas.push({
         folio: n.folio,
         descripcion: partes.join(' + ') || maq[0].nombre,
         precio: Number(c.precio) || 0,
       });
+    }
+
+    // En el detalle de notas, cada nota vale lo que generó EN ESTA MÁQUINA (sus
+    // ciclos), no su total: así cuadra con la columna Generado.
+    const generadoPorNota = new Map();
+    for (const c of cargas) {
+      generadoPorNota.set(c.nota_id, (generadoPorNota.get(c.nota_id) ?? 0) + (Number(c.precio) || 0));
+    }
+    for (const b of buckets.values()) {
+      for (const u of b._usos) u.precio = generadoPorNota.get(u.id) ?? 0;
     }
 
     const diasFmt = [...buckets.values()]
