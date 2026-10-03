@@ -4,7 +4,7 @@
 // Recibe { fecha: 'YYYY-MM-DD', productos: [...] } de GET /productos/reporte-diario.
 
 import { slug, esc, descargarCSV, imprimirDocumento, fechaLarga } from './exportUtils';
-import { textoBotellas, textoGranel, seVendePorUnidad, esPolvo } from './formatoInventario';
+import { textoBotellas, textoGranel, seVendePorUnidad, esPolvo, lineasEntradas } from './formatoInventario';
 
 // 'YYYY-MM-DD' → Date local (sin corrimiento por zona horaria).
 const fechaLocal = (iso) => {
@@ -17,8 +17,9 @@ const fechaLocal = (iso) => {
 const esMarca  = (p) => seVendePorUnidad(p);
 const nombreProd = (p) => (esMarca(p) && p.marca ? `${p.marca} · ${p.nombre}` : p.nombre);
 
+const entradasLineas = (p) => lineasEntradas(p, esMarca(p));
 const salioTexto = (p) => textoBotellas(p.vendido_medidas, p.medidas_por_botella, { marca: esMarca(p) });
-// Ventas anuladas ese día (ya restadas de "Salió"): van en su propia columna
+// Ventas anuladas ese día (ya restadas de "Salidas"): van en su propia columna
 // para que el total no parezca un error de captura.
 const devueltoTexto = (p) =>
   (p.devuelto_medidas > 0 ? textoBotellas(p.devuelto_medidas, p.medidas_por_botella, { marca: esMarca(p) }) : '');
@@ -26,12 +27,13 @@ const rellenadasTexto = (p) => textoBotellas(p.fin_botellas_medidas, p.medidas_p
 const granelTexto = (p) => (esMarca(p) ? '' : textoGranel(p.fin_granel_medidas, p.medidas_por_bidon, p.medidas_por_botella));
 
 // ── CSV ─────────────────────────────────────────────────────
-const ENCABEZADOS_CSV = ['Tipo', 'Marca', 'Producto', 'Salió', 'Devuelto', 'Queda (rellenadas)', 'Queda (a granel)'];
+const ENCABEZADOS_CSV = ['Tipo', 'Marca', 'Producto', 'Entradas', 'Salidas', 'Devuelto', 'Queda (rellenadas)', 'Queda (a granel)'];
 
 const filaCSV = (p) => [
   esPolvo(p) ? 'Polvo' : esMarca(p) ? 'Marca' : 'Granel',
   p.marca ?? '',
   p.nombre ?? '',
+  entradasLineas(p).join(' · '),
   salioTexto(p),
   devueltoTexto(p),
   rellenadasTexto(p),
@@ -54,6 +56,7 @@ const seccion = (titulo, productos) => {
   const filas = productos.map((p) => `
     <tr>
       <td>${esc(nombreProd(p))}</td>
+      <td>${entradasLineas(p).map(esc).join('<br>')}</td>
       <td>${esc(salioTexto(p))}${p.devuelto_medidas > 0 ? `<br><small>Devuelto: ${esc(devueltoTexto(p))}</small>` : ''}</td>
       <td>${quedaCelda(p)}</td>
     </tr>`).join('');
@@ -61,7 +64,7 @@ const seccion = (titulo, productos) => {
     <div class="seccion">${esc(titulo)}</div>
     <table class="resumen">
       <thead>
-        <tr><th>Producto</th><th>Salió</th><th>Queda al final</th></tr>
+        <tr><th>Producto</th><th>Entradas</th><th>Salidas</th><th>Queda al final</th></tr>
       </thead>
       <tbody>${filas}</tbody>
     </table>`;

@@ -53,6 +53,23 @@ export function textoGranel(medidasGranel, medidasPorBidon, medidasPorBotella) {
   return partes.join(' y ');
 }
 
+// Lo que entró un día al producto (Reporte diario, 2026-10-03), en líneas. Lo
+// que se cuenta por unidad, una sola; el granel, lo que entró a botellas y lo
+// que entró al bidón, solo las que tuvieron algo (sin nada: "0 botellas").
+export function lineasEntradas(p, porUnidad) {
+  const bot = Number(p?.entrada_botellas_medidas) || 0;
+  const gra = Number(p?.entrada_granel_medidas) || 0;
+  if (porUnidad) return [textoBotellas(bot + gra, p?.medidas_por_botella, { marca: true })];
+  if (bot > 0 && gra > 0) {
+    return [
+      `Rellenadas: ${textoBotellas(bot, p?.medidas_por_botella)}`,
+      `A granel: ${textoGranel(gra, p?.medidas_por_bidon, p?.medidas_por_botella)}`,
+    ];
+  }
+  if (gra > 0) return [`A granel: ${textoGranel(gra, p?.medidas_por_bidon, p?.medidas_por_botella)}`];
+  return [textoBotellas(bot, p?.medidas_por_botella)];
+}
+
 // Nombre del producto con lo que lo distingue de otro que se llame igual: el
 // tamaño en las bolsas y la marca en los productos de marca. Sin esto, tres
 // bolsas o dos suavizantes de distinta marca se ven idénticos en las listas.

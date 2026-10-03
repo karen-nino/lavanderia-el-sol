@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { esAdmin as esAdminFn } from '../lib/roles';
-import { textoBotellas, textoGranel as textoGranelFmt } from '../lib/formatoInventario';
+import { textoBotellas, textoGranel as textoGranelFmt, lineasEntradas } from '../lib/formatoInventario';
 import { imprimirReporte, descargarReporteCSV } from '../lib/exportReporteInventario';
 import SucursalBar from '../components/SucursalBar';
 import Selector from '../components/Selector';
@@ -1385,7 +1385,8 @@ function ReporteDiario() {
             <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wide">
               <tr>
                 <th className="px-4 py-3 text-left">Producto</th>
-                <th className="px-4 py-3 text-left">Salió</th>
+                <th className="px-4 py-3 text-left">Entradas</th>
+                <th className="px-4 py-3 text-left">Salidas</th>
                 <th className="px-4 py-3 text-left">Queda al final</th>
               </tr>
             </thead>
@@ -1397,6 +1398,11 @@ function ReporteDiario() {
                     <td className="px-4 py-3">
                       <p className="font-medium text-gray-800">{esMarca && p.marca ? p.marca : p.nombre}</p>
                       {esMarca && p.marca && <p className="text-xs text-gray-400">{p.nombre}</p>}
+                    </td>
+                    <td className="px-4 py-3 text-gray-700">
+                      {lineasEntradas(p, esMarca).map((l, i) => (
+                        <span key={i} className={`block ${i > 0 ? 'text-gray-500' : ''}`}>{l}</span>
+                      ))}
                     </td>
                     <td className="px-4 py-3 text-gray-700">
                       <span className="block">

@@ -678,7 +678,7 @@ export const getReporteDiario = async (req, res) => {
          -- Lo que SALIÓ de verdad ese día por notas (siempre sale de las
          -- botellas): lo vendido MENOS lo devuelto. Anular una venta —cancelar
          -- la nota o borrarla— regresa el producto al estante y deja un
-         -- movimiento 'liberacion'; sin restarlo, la columna "Salió" seguía
+         -- movimiento 'liberacion'; sin restarlo, la columna "Salidas" seguía
          -- contando una venta que se deshizo y contradecía a "Queda al final",
          -- que sí veía la devolución.
          --
@@ -691,6 +691,19 @@ export const getReporteDiario = async (req, res) => {
             WHERE m.producto_id = p.id AND m.tipo IN ('venta', 'liberacion')
               AND m.created_at >= bounds.inicio AND m.created_at < bounds.cierre
          ), 0) AS vendido_medidas,
+         -- Lo que ENTRÓ ese día (Inventario → Entradas, y la existencia
+         -- inicial al dar de alta), separado por dónde quedó: botellas o
+         -- bidón (2026-10-03).
+         COALESCE((
+           SELECT SUM(m.cantidad_medidas) FROM producto_movimientos m, bounds
+            WHERE m.producto_id = p.id AND m.tipo = 'entrada' AND m.destino = 'botellas'
+              AND m.created_at >= bounds.inicio AND m.created_at < bounds.cierre
+         ), 0) AS entrada_botellas_medidas,
+         COALESCE((
+           SELECT SUM(m.cantidad_medidas) FROM producto_movimientos m, bounds
+            WHERE m.producto_id = p.id AND m.tipo = 'entrada' AND m.destino = 'granel'
+              AND m.created_at >= bounds.inicio AND m.created_at < bounds.cierre
+         ), 0) AS entrada_granel_medidas,
          -- Devuelto ese día (ventas anuladas), para poder explicarlo aparte.
          COALESCE((
            SELECT SUM(m.cantidad_medidas) FROM producto_movimientos m, bounds
@@ -739,6 +752,8 @@ export const getReporteDiario = async (req, res) => {
         medidas_por_bidon:   r.medidas_por_bidon != null ? int(r.medidas_por_bidon) : null,
         vendido_medidas:     int(r.vendido_medidas),
         devuelto_medidas:    int(r.devuelto_medidas),
+        entrada_botellas_medidas: int(r.entrada_botellas_medidas),
+        entrada_granel_medidas:   int(r.entrada_granel_medidas),
         // La existencia no puede ser negativa; se acota a 0 por si hay datos raros.
         fin_botellas_medidas: Math.max(0, int(r.stock_actual) - int(r.efecto_botellas_post)),
         fin_granel_medidas:   Math.max(0, int(r.stock_granel_medidas) - int(r.efecto_granel_post)),
