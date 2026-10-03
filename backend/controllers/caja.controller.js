@@ -325,6 +325,22 @@ export async function cerrarCaja(req, res) {
     }
     const caja = cajaRes.rows[0];
 
+    // La caja funciona por TURNOS (2026-10-03): cada caja abierta es el turno
+    // de quien la abrió, y el corte lo hace esa misma persona —es la que
+    // responde por el cajón— o un administrador. Así nadie cierra el turno de
+    // otro y le deja la diferencia.
+    if (String(caja.usuario_apertura_id) !== String(req.user.id) && !esAdmin(req.user.rol)) {
+      await client.query('ROLLBACK');
+      const { rows: ab } = await client.query(
+        `SELECT TRIM(nombre || ' ' || COALESCE(apellido, '')) AS nombre FROM usuarios WHERE id = $1`,
+        [caja.usuario_apertura_id]
+      );
+      const quien = ab[0]?.nombre || 'otra persona';
+      return res.status(403).json({
+        message: `Este turno lo abrió ${quien}: solo esa persona o un administrador puede hacer el corte.`,
+      });
+    }
+
     const ventas = await ventasDeSesion(client, caja.id);
     const { entradas, salidas } = await totalesMovimientos(client, caja.id);
     const monto_inicial = parseFloat(caja.monto_inicial);

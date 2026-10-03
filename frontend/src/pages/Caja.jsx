@@ -370,6 +370,7 @@ function Movimientos({ data, onChange }) {
 
 // ── Corte ───────────────────────────────────────────────────
 function Corte({ data, onCerrar }) {
+  const { usuario } = useAuth();
   const [contado, setContado] = useState('');
   const [notas, setNotas] = useState('');
   const [saving, setSaving] = useState(false);
@@ -416,8 +417,22 @@ function Corte({ data, onCerrar }) {
     { label: 'Salidas',            value: totales.salidas,    sign: '−' },
   ];
 
+  // La caja funciona por turnos (2026-10-03): el corte lo hace quien abrió el
+  // turno o un administrador. El servidor también lo exige; aquí se dice antes
+  // de que alguien cuente el cajón para nada.
+  const esMiTurno = String(caja.usuario_apertura_id) === String(usuario?.id);
+  const puedeCerrar = esMiTurno || esAdminFn(usuario?.rol);
+
   return (
     <div className="space-y-6 max-w-md mx-auto">
+      {/* De quién es el turno que se está cortando. */}
+      <div className="rounded-xl bg-light-blue/60 border border-blue-100 px-4 py-3">
+        <p className="text-sm font-semibold text-dark-blue">
+          {esMiTurno ? 'Tu turno' : `Turno de ${caja.usuario_apertura || '—'}`}
+        </p>
+        <p className="text-xs text-gray-500 mt-0.5">Abierto desde las {fmtHora(caja.abierta_at)}</p>
+      </div>
+
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <div className="px-4 py-3 border-b border-gray-200">
           <h2 className="text-sm font-semibold text-gray-700">Desglose esperado</h2>
@@ -462,6 +477,14 @@ function Corte({ data, onCerrar }) {
         </div>
       )}
 
+      {!puedeCerrar ? (
+        <div className="rounded-lg bg-amber-50 border border-amber-200 px-4 py-3">
+          <p className="text-sm font-semibold text-amber-900">Este turno no es tuyo</p>
+          <p className="mt-0.5 text-sm text-amber-800">
+            Lo abrió {caja.usuario_apertura || 'otra persona'}: solo esa persona o un administrador puede hacer el corte.
+          </p>
+        </div>
+      ) : (
       <form onSubmit={submit} className="space-y-4">
         <ErrorBox message={error} />
         <div>
@@ -502,6 +525,7 @@ function Corte({ data, onCerrar }) {
           {saving ? 'Cerrando…' : 'Cerrar caja'}
         </button>
       </form>
+      )}
 
       {/* Animación de éxito al cerrar la caja */}
       {exito && (
@@ -661,8 +685,10 @@ function Historial({ onFiltroLabel }) {
 
   const rango = rangoDePeriodo(periodo, anioSel, mesSel, desde, hasta);
   const visibles = rango
+    // Cada turno es del día en que se ABRIÓ: el que se cierra solo a
+    // medianoche (o pasada) sigue siendo del día en que empezó.
     ? cortes.filter((c) => {
-        const f = new Date(c.cerrada_at);
+        const f = new Date(c.abierta_at);
         return f >= rango.desde && f < rango.hasta;
       })
     : cortes;
@@ -813,18 +839,26 @@ function Historial({ onFiltroLabel }) {
     </>
   );
 
-  // Tarjeta de un día: como hay un solo corte por día, la propia tarjeta ES el
-  // corte (sin tarjeta anidada). Si no hubo corte, se ve vacía.
+  // Tarjeta de un día (2026-10-03: la caja funciona por TURNOS). Un turno es
+  // una caja abierta, y un día puede tener varios. Antes se suponía uno por día
+  // y el segundo turno no se veía en ninguna parte.
+  //   · Un turno: la tarjeta del día ES ese turno, con su horario.
+  //   · Varios: el resumen del día arriba y cada turno en su propia tarjeta.
+  //   · Ninguno: la tarjeta vacía ("Sin corte" / "Pendiente").
   const renderDia = (dia) => {
-    const c = visibles.find((x) => mismoDia(x.cerrada_at, dia));
+    const turnos = visibles
+      .filter((x) => mismoDia(x.abierta_at, dia))
+      .sort((a, b) => new Date(a.abierta_at) - new Date(b.abierta_at));
     const hoy = mismoDia(dia, hoy0);
     const futuro = dia > hoy0;
+    const uno = turnos.length === 1 ? turnos[0] : null;
+    const horario = (c) => `${fmtHora(c.abierta_at)} – ${fmtHora(c.cerrada_at)}`;
     return (
       <div
         key={dia.toISOString()}
         className={`rounded-xl border p-4 ${
           hoy ? 'border-blue bg-light-blue/40'
-            : c ? 'border-gray-200 bg-white'
+            : turnos.length ? 'border-gray-200 bg-white'
             : 'border-dashed border-gray-300 bg-gray-50'
         }`}
       >
@@ -836,12 +870,67 @@ function Historial({ onFiltroLabel }) {
                 <span className="ml-2 text-[10px] font-bold uppercase tracking-wide text-blue">Hoy</span>
               )}
             </h4>
-            {c && <p className="text-sm text-gray-500 mt-0.5">{fmtHora(c.cerrada_at)}</p>}
+            {uno && <p className="text-sm text-gray-500 mt-0.5">{horario(uno)}</p>}
+            {turnos.length > 1 && <p className="text-sm text-gray-500 mt-0.5">{turnos.length} turnos</p>}
           </div>
-          {c && menuOpciones(c)}
+          {uno && menuOpciones(uno)}
         </div>
-        {c ? cuerpoCorte(c) : (
+        {turnos.length === 0 ? (
           <p className="text-sm text-gray-400 italic">{futuro ? 'Pendiente' : 'Sin corte'}</p>
+        ) : uno ? cuerpoCorte(uno) : (
+          <>
+            {resumenDia(turnos)}
+            <div className="mt-5 space-y-4">
+              {turnos.map((c, i) => (
+                <div key={c.id} className="rounded-lg border border-gray-200 bg-white p-4">
+                  <div className="flex items-start justify-between mb-3">
+                    <div>
+                      <p className="text-sm font-semibold text-gray-700">Turno {i + 1}</p>
+                      <p className="text-sm text-gray-500 mt-0.5">{horario(c)}</p>
+                    </div>
+                    {menuOpciones(c)}
+                  </div>
+                  {cuerpoCorte(c)}
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+    );
+  };
+
+  // Resumen de un día con varios turnos: lo que entró entre todos y cómo
+  // quedó el día. La diferencia suma solo los turnos que se contaron; uno que
+  // cerró el sistema a medianoche no tiene conteo y se avisa aparte.
+  const resumenDia = (turnos) => {
+    const suma = (f) => turnos.reduce((t, c) => t + (Number(f(c)) || 0), 0);
+    const efectivo = suma((c) => c.ventas_desglose?.efectivo ?? c.ventas);
+    const transferencia = suma((c) => c.ventas_desglose?.transferencia);
+    const tarjeta = suma((c) => c.ventas_desglose?.tarjeta);
+    const contados = turnos.filter((c) => c.diferencia != null);
+    const diferencia = contados.reduce((t, c) => t + c.diferencia, 0);
+    const sinConteo = turnos.some((c) => c.cierre_automatico);
+    const cuadra = Math.abs(diferencia) < 0.005;
+    return (
+      <div className="rounded-lg bg-gray-50 px-4 py-3">
+        <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-2">Resumen del día</p>
+        <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+          <span className="text-gray-500">Ventas en efectivo</span><span className="text-right text-gray-700">{fmt(efectivo)}</span>
+          {transferencia > 0 && (<><span className="text-gray-500">Transferencia</span><span className="text-right text-gray-500">{fmt(transferencia)}</span></>)}
+          {tarjeta > 0 && (<><span className="text-gray-500">Tarjeta</span><span className="text-right text-gray-500">{fmt(tarjeta)}</span></>)}
+          <span className="text-gray-500">Entradas</span><span className="text-right text-gray-700">{fmt(suma((c) => c.entradas))}</span>
+          <span className="text-gray-500">Salidas</span><span className="text-right text-gray-700">{fmt(suma((c) => c.salidas))}</span>
+          <span className="text-gray-500 font-medium">Diferencia del día</span>
+          <span className={`text-right font-medium ${
+            contados.length === 0 ? 'text-gray-500'
+              : cuadra ? 'text-blue-600' : diferencia < 0 ? 'text-red-600' : 'text-green-600'
+          }`}>
+            {contados.length === 0 ? '—' : cuadra ? 'Cuadra' : `${diferencia > 0 ? '+' : ''}${fmt(diferencia)}`}
+          </span>
+        </div>
+        {sinConteo && (
+          <p className="mt-2 text-xs text-amber-700">Un turno lo cerró el sistema sin conteo: no entra en la diferencia.</p>
         )}
       </div>
     );

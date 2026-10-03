@@ -45,9 +45,10 @@ export default function CashCutCard() {
       <div className="text-center">
         <p className="text-card-title text-dark-blue">{abierta ? 'Corte de Caja' : 'Abrir Caja'}</p>
         <p className="text-kpi-label text-grey mt-1">
+          {/* La caja funciona por turnos (2026-10-03). */}
           {abierta
-            ? 'Cerrar el día y revisar ventas'
-            : 'Registra el fondo inicial para empezar el día'}
+            ? 'Cerrar el turno y revisar ventas'
+            : 'Registra el fondo inicial para empezar tu turno'}
         </p>
       </div>
 

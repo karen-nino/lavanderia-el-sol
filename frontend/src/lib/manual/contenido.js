@@ -30,9 +30,11 @@ Si no encuentras tu nombre en la lista, avísale al administrador: puede que tu 
         claves: ['fondo', 'apertura', 'empezar', 'dinero inicial'],
         cuerpo: `Antes de cobrar la primera nota hay que abrir la caja. Ve a Caja y toca Abrir caja.
 
-El fondo NO se captura: la app lo trae del corte del día anterior, porque el dinero que quedó en el cajón es con el que se empieza hoy. Lo ves arriba ("Quedó del corte anterior") y el campo está bloqueado. Si el efectivo del cajón no coincide, un administrador es quien puede ajustarlo.
+La caja funciona por TURNOS: abrir la caja es empezar tu turno, y hacer el corte es terminarlo.
 
-Hay UNA caja abierta a la vez por sucursal, así que si un compañero ya la abrió, no tienes que abrir otra: todos cobran sobre la misma.
+El fondo NO se captura: la app lo trae del corte del turno anterior, porque el dinero que quedó en el cajón es con el que empiezas tú. Lo ves arriba ("Quedó del corte anterior") y el campo está bloqueado. Si el efectivo del cajón no coincide, un administrador es quien puede ajustarlo.
+
+Hay UNA caja abierta a la vez por sucursal: si un compañero ya la abrió, ese es SU turno y todos cobran sobre la misma. Para entregar el cajón, él hace su corte y luego tú abres el tuyo.
 
 Si se te olvida y empiezas una nota, la app te lo recuerda con un aviso amarillo que abre la caja ahí mismo, sin salirte de la nota.
 
@@ -277,6 +279,8 @@ Las bolsas se compran POR ROLLO y se cobran POR PIEZA en la nota. Hay tres tama�
         titulo: 'Hacer el corte de caja',
         claves: ['cierre', 'cuadrar', 'contar dinero', 'faltante', 'sobrante'],
         cuerpo: `Ve a Caja y toca Hacer corte. Cuenta el dinero FÍSICO del cajón y escribe esa cantidad en Efectivo contado.
+
+El corte lo hace QUIEN ABRIÓ EL TURNO (o un administrador): es quien responde por el cajón. Si el turno es de otra persona, la app te lo dice y no te deja cortarlo.
 
 La app compara lo que contaste contra lo que ESPERABA y te dice si sobra o falta.
 

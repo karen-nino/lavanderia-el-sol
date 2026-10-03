@@ -192,6 +192,43 @@ describe('POST /api/caja/cerrar', () => {
     expect(historial.body[0].diferencia).toBe(-10);
   });
 
+  // La caja funciona por turnos: el corte lo hace quien abrió el turno o un
+  // administrador (2026-10-03).
+  describe('turnos: quién puede hacer el corte', () => {
+    it('otro empleado no puede cerrar el turno ajeno', async () => {
+      const ana  = await seedUsuario({ rol: 'operador', sucursal: 'centro', nombre: 'Ana' });
+      const beto = await seedUsuario({ rol: 'operador', sucursal: 'centro', nombre: 'Beto' });
+      // El primer fondo lo captura un admin; luego el turno se entrega.
+      await request(app).post('/api/caja/abrir').set(auth(admin.token)).send({ monto_inicial: 100 }).expect(201);
+      await request(app).post('/api/caja/cerrar').set(auth(admin.token)).send({ monto_contado: 100 }).expect(200);
+      await request(app).post('/api/caja/abrir').set(auth(ana.token)).send({ monto_inicial: 100 }).expect(201);
+
+      const res = await request(app).post('/api/caja/cerrar').set(auth(beto.token)).send({ monto_contado: 100 });
+      expect(res.status).toBe(403);
+      expect(res.body.message).toMatch(/lo abrió Ana/);
+
+      // Sigue abierta: el intento no la tocó.
+      const actual = await request(app).get('/api/caja/actual').set(auth(beto.token));
+      expect(actual.body.abierta).toBe(true);
+    });
+
+    it('quien abrió el turno sí lo cierra', async () => {
+      const ana = await seedUsuario({ rol: 'operador', sucursal: 'centro', nombre: 'Ana' });
+      await request(app).post('/api/caja/abrir').set(auth(admin.token)).send({ monto_inicial: 100 }).expect(201);
+      await request(app).post('/api/caja/cerrar').set(auth(admin.token)).send({ monto_contado: 100 }).expect(200);
+      await request(app).post('/api/caja/abrir').set(auth(ana.token)).send({ monto_inicial: 100 }).expect(201);
+      await request(app).post('/api/caja/cerrar').set(auth(ana.token)).send({ monto_contado: 100 }).expect(200);
+    });
+
+    it('un administrador puede cerrar el turno de un empleado', async () => {
+      const ana = await seedUsuario({ rol: 'operador', sucursal: 'centro', nombre: 'Ana' });
+      await request(app).post('/api/caja/abrir').set(auth(admin.token)).send({ monto_inicial: 100 }).expect(201);
+      await request(app).post('/api/caja/cerrar').set(auth(admin.token)).send({ monto_contado: 100 }).expect(200);
+      await request(app).post('/api/caja/abrir').set(auth(ana.token)).send({ monto_inicial: 100 }).expect(201);
+      await request(app).post('/api/caja/cerrar').set(auth(admin.token)).send({ monto_contado: 100 }).expect(200);
+    });
+  });
+
   it('cerrar sin caja abierta responde 409', async () => {
     const res = await request(app)
       .post('/api/caja/cerrar')
