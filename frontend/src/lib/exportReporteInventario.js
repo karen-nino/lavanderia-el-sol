@@ -28,16 +28,24 @@ const inicioGranel = (p) => (esMarca(p) ? '' : textoGranel(p.inicio_granel_medid
 const rellenadasTexto = (p) => textoBotellas(p.fin_botellas_medidas, p.medidas_por_botella, { marca: esMarca(p) });
 const granelTexto = (p) => (esMarca(p) ? '' : textoGranel(p.fin_granel_medidas, p.medidas_por_bidon, p.medidas_por_botella));
 
-// ── CSV ─────────────────────────────────────────────────────
-const ENCABEZADOS_CSV = ['Tipo', 'Marca', 'Producto', 'Entradas', 'Salidas', 'Devuelto', 'Había (rellenadas)', 'Había (a granel)', 'Queda (rellenadas)', 'Queda (a granel)'];
+// Devuelto solo va el día que algún producto tuvo algo devuelto, igual que en
+// la pantalla.
+const hayDevuelto = (productos) => productos.some((p) => Number(p.devuelto_medidas) > 0);
 
-const filaCSV = (p) => [
+// ── CSV ─────────────────────────────────────────────────────
+const encabezadosCSV = (conDevuelto) => [
+  'Tipo', 'Marca', 'Producto', 'Entradas', 'Salidas',
+  ...(conDevuelto ? ['Devuelto'] : []),
+  'Había (rellenadas)', 'Había (a granel)', 'Queda (rellenadas)', 'Queda (a granel)',
+];
+
+const filaCSV = (p, conDevuelto) => [
   esPolvo(p) ? 'Polvo' : esMarca(p) ? 'Marca' : 'Granel',
   p.marca ?? '',
   p.nombre ?? '',
   entradasLineas(p).join(' · '),
   salidasLineas(p).join(' · '),
-  devueltoTexto(p),
+  ...(conDevuelto ? [devueltoTexto(p)] : []),
   inicioRellenadas(p),
   inicioGranel(p),
   rellenadasTexto(p),
@@ -46,7 +54,9 @@ const filaCSV = (p) => [
 
 export function descargarReporteCSV(data) {
   const productos = data?.productos ?? [];
-  descargarCSV(`inventario-${slug(data?.fecha)}`, ENCABEZADOS_CSV, productos.map(filaCSV));
+  const conDevuelto = hayDevuelto(productos);
+  descargarCSV(`inventario-${slug(data?.fecha)}`, encabezadosCSV(conDevuelto),
+    productos.map((p) => filaCSV(p, conDevuelto)));
 }
 
 // ── PDF (impresión del navegador) ───────────────────────────
@@ -59,14 +69,14 @@ const inicioCelda = (p) =>
     ? esc(inicioRellenadas(p))
     : `Rellenadas: ${esc(inicioRellenadas(p))}<br>A granel: ${esc(inicioGranel(p))}`;
 
-const seccion = (titulo, productos) => {
+const seccion = (titulo, productos, conDevuelto) => {
   if (productos.length === 0) return '';
   const filas = productos.map((p) => `
     <tr>
       <td>${esc(nombreProd(p))}</td>
       <td>${entradasLineas(p).map(esc).join('<br>')}</td>
       <td>${salidasLineas(p).map(esc).join('<br>')}</td>
-      <td>${esc(devueltoTexto(p))}</td>
+      ${conDevuelto ? `<td>${esc(devueltoTexto(p))}</td>` : ''}
       <td>${inicioCelda(p)}</td>
       <td>${quedaCelda(p)}</td>
     </tr>`).join('');
@@ -74,7 +84,7 @@ const seccion = (titulo, productos) => {
     <div class="seccion">${esc(titulo)}</div>
     <table class="resumen">
       <thead>
-        <tr><th>Producto</th><th>Entradas</th><th>Salidas</th><th>Devuelto</th><th>Había al inicio</th><th>Queda al final</th></tr>
+        <tr><th>Producto</th><th>Entradas</th><th>Salidas</th>${conDevuelto ? '<th>Devuelto</th>' : ''}<th>Había al inicio</th><th>Queda al final</th></tr>
       </thead>
       <tbody>${filas}</tbody>
     </table>`;
@@ -88,7 +98,11 @@ export function imprimirReporte(data) {
   const marca  = productos.filter((p) => esMarca(p) && !esPolvo(p));
   const cuerpo = productos.length === 0
     ? '<p>Sin productos líquidos en este período.</p>'
-    : seccion('Granel', granel) + seccion('Polvo', polvo) + seccion('Marca', marca);
+    : (() => {
+        const conDevuelto = hayDevuelto(productos);
+        return seccion('Granel', granel, conDevuelto) + seccion('Polvo', polvo, conDevuelto)
+          + seccion('Marca', marca, conDevuelto);
+      })();
   imprimirDocumento({
     titulo: 'Reporte diario de inventario',
     subtitulo: fechaLarga(fechaLocal(data.fecha)),

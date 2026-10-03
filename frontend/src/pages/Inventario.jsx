@@ -1529,6 +1529,9 @@ function ReporteDiario() {
   const granel = productos.filter(p => p.tipo_liquido === 'granel' && !esPolvo(p));
   const polvo  = productos.filter(esPolvo);
   const marca  = productos.filter(p => p.tipo_liquido === 'marca');
+  // La columna Devuelto solo aparece el día que algún producto tuvo algo
+  // devuelto; si no, sería una columna entera de guiones.
+  const hayDevuelto = productos.some(p => Number(p.devuelto_medidas) > 0);
 
   // Celdas "Había al inicio" y "Queda al final": por unidad = una línea;
   // granel = rellenadas + a granel.
@@ -1558,7 +1561,7 @@ function ReporteDiario() {
                 <th className="px-4 py-3 text-left">Producto</th>
                 <th className="px-4 py-3 text-left">Entradas</th>
                 <th className="px-4 py-3 text-left">Salidas</th>
-                <th className="px-4 py-3 text-left">Devuelto</th>
+                {hayDevuelto && <th className="px-4 py-3 text-left">Devuelto</th>}
                 <th className="px-4 py-3 text-left">Había al inicio</th>
                 <th className="px-4 py-3 text-left">Queda al final</th>
               </tr>
@@ -1581,11 +1584,13 @@ function ReporteDiario() {
                       <CeldaMovimiento lineas={lineasSalidas(p, esMarca)} hayAlgo={p.rellenado_medidas > 0}
                         onClick={() => setDetalle({ producto: p, tipo: 'salidas' })} />
                     </td>
-                    <td className="px-4 py-3 text-gray-700">
-                      {/* Ventas anuladas ese día: el producto volvió al estante. */}
-                      <CeldaMovimiento lineas={lineasDevuelto(p, esMarca)}
-                        onClick={() => setDetalle({ producto: p, tipo: 'devueltos' })} />
-                    </td>
+                    {hayDevuelto && (
+                      <td className="px-4 py-3 text-gray-700">
+                        {/* Ventas anuladas ese día: el producto volvió al estante. */}
+                        <CeldaMovimiento lineas={lineasDevuelto(p, esMarca)}
+                          onClick={() => setDetalle({ producto: p, tipo: 'devueltos' })} />
+                      </td>
+                    )}
                     <td className="px-4 py-3 text-gray-700">{inicioCelda(p)}</td>
                     <td className="px-4 py-3 text-gray-700">{quedaCelda(p)}</td>
                   </tr>
