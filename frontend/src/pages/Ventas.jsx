@@ -63,7 +63,9 @@ const MAQUINAS_VISIBLES = 2;
 // Si llegó al tope del cronómetro, el tiempo se paró ahí y se dice.
 const fmtEncendida = (segundos) => {
   if (segundos == null) return null;
-  const min = Math.max(0, Math.round(segundos / 60));
+  // Menos de un minuto se lee "-1 min" ("menos de 1"), no "0 min".
+  if (segundos < 60) return '-1 min';
+  const min = Math.round(segundos / 60);
   if (min < 60) return `${min} min`;
   return `${Math.floor(min / 60)} h ${String(min % 60).padStart(2, '0')} min`;
 };

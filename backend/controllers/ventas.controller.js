@@ -1,5 +1,6 @@
 import pool from '../db/pool.js';
 import { TZ_NEGOCIO, fechaLocal, esFechaISO } from '../utils/tz.js';
+import { esCronometroSql } from '../db/sqlMaquina.js';
 
 // El "día" de un reporte es el día del NEGOCIO (America/Mexico_City), no el del
 // servidor: en producción Postgres corre en UTC, así que `DATE(pagado_en)` metía
@@ -168,11 +169,28 @@ export async function getResumen(req, res) {
           -- desvinculadas (*_usada_id). "segundos" suma las pasadas que se
           -- finalizaron (mig. 140); NULL si ninguna lo tiene sellado. "tope"
           -- dice si alguna llegó al tope del cronómetro (mig. 141).
+          --
+          -- Una máquina que llegó al tope y aún no se finaliza no tiene nada
+          -- sellado, pero su reloj ya se paró: se cuenta en vivo ("tope_vivo")
+          -- para que Ventas lo diga en cuanto pasa, sin esperar al Finalizar.
+          -- Solo si ESTA nota la arrancó (iniciada_at) y la sigue ocupando.
           COALESCE((
-            SELECT json_agg(json_build_object('nombre', t.nombre, 'cargas', t.cargas,
-                                              'segundos', t.segundos, 'tope', t.tope) ORDER BY t.nombre)
+            SELECT json_agg(json_build_object(
+                     'nombre', t.nombre, 'cargas', t.cargas,
+                     'segundos', CASE WHEN t.tope_vivo
+                                      THEN COALESCE(t.segundos, 0) + t.ciclo_minutos * 60
+                                      ELSE t.segundos END,
+                     'tope', t.tope OR t.tope_vivo) ORDER BY t.nombre)
               FROM (
-                SELECT mm.nombre, COUNT(*)::int AS cargas,
+                SELECT mm.nombre, COUNT(*)::int AS cargas, mm.ciclo_minutos,
+                       (mm.en_uso_desde IS NOT NULL
+                        AND mm.ciclo_minutos > 0
+                        AND ${esCronometroSql('mm')}
+                        AND mm.en_uso_desde + make_interval(mins => mm.ciclo_minutos) <= NOW()
+                        AND COALESCE(bool_or(
+                              (nc.lavadora_id = mm.id AND nc.lavadora_iniciada_at IS NOT NULL)
+                           OR (nc.secadora_id = mm.id AND nc.secadora_iniciada_at IS NOT NULL)), FALSE)
+                       ) IS TRUE AS tope_vivo,
                        (SELECT ROUND(SUM(EXTRACT(EPOCH FROM ncm.finalizada_at - ncm.encendida_at)))::int
                           FROM nota_carga_maquinas ncm
                           JOIN nota_cargas c2 ON c2.id = ncm.carga_id
