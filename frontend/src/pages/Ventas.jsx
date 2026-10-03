@@ -58,6 +58,15 @@ const NOTAS_POR_PAGINA = 20;
 // el modal con la lista completa).
 const MAQUINAS_VISIBLES = 2;
 
+// Cuánto estuvo encendida una máquina de la nota, de que arrancó a que se le
+// dio Finalizar: "38 min", "1 h 05 min". Null si no se finalizó por ahí.
+const fmtEncendida = (segundos) => {
+  if (segundos == null) return null;
+  const min = Math.max(0, Math.round(segundos / 60));
+  if (min < 60) return `${min} min`;
+  return `${Math.floor(min / 60)} h ${String(min % 60).padStart(2, '0')} min`;
+};
+
 const ESTADO_BADGE = {
   EN_ESPERA:  { label: 'En Espera',    cls: 'bg-gray-100 text-gray-600'     },
   LAVANDO:    { label: 'Lavando',      cls: 'bg-light-blue text-blue-700'   },
@@ -846,7 +855,12 @@ export default function Ventas() {
                     <span className="w-1.5 h-1.5 rounded-full bg-blue flex-shrink-0" />
                     {m.nombre}
                   </span>
-                  <span className="text-gray-500">{m.cargas} {m.cargas === 1 ? 'carga' : 'cargas'}</span>
+                  <span className="text-right text-gray-500">
+                    {m.cargas} {m.cargas === 1 ? 'carga' : 'cargas'}
+                    {fmtEncendida(m.segundos) && (
+                      <span className="block text-xs text-gray-400">Encendida {fmtEncendida(m.segundos)}</span>
+                    )}
+                  </span>
                 </li>
               ))}
             </ul>

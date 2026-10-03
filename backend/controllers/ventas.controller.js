@@ -162,19 +162,29 @@ export async function getResumen(req, res) {
           -- los demás (2026-09-25).
           o.tipo_servicio,
           o.motivo_cancelacion,
-          -- Máquina(s) de la nota con su número de cargas: [{ nombre, cargas }].
-          -- Cuenta las cargas (nota_cargas) donde aparece cada máquina,
-          -- incluidas las ya desvinculadas (*_usada_id).
+          -- Máquina(s) de la nota con su número de cargas y cuánto estuvieron
+          -- encendidas: [{ nombre, cargas, segundos }]. Cuenta las cargas
+          -- (nota_cargas) donde aparece cada máquina, incluidas las ya
+          -- desvinculadas (*_usada_id). "segundos" suma las pasadas que se
+          -- finalizaron (mig. 140); NULL si ninguna lo tiene sellado.
           COALESCE((
-            SELECT json_agg(json_build_object('nombre', t.nombre, 'cargas', t.cargas) ORDER BY t.nombre)
+            SELECT json_agg(json_build_object('nombre', t.nombre, 'cargas', t.cargas,
+                                              'segundos', t.segundos) ORDER BY t.nombre)
               FROM (
-                SELECT mm.nombre, COUNT(*)::int AS cargas
+                SELECT mm.nombre, COUNT(*)::int AS cargas,
+                       (SELECT ROUND(SUM(EXTRACT(EPOCH FROM ncm.finalizada_at - ncm.encendida_at)))::int
+                          FROM nota_carga_maquinas ncm
+                          JOIN nota_cargas c2 ON c2.id = ncm.carga_id
+                         WHERE c2.nota_id = o.id
+                           AND ncm.maquina_id = mm.id
+                           AND ncm.encendida_at IS NOT NULL
+                           AND ncm.finalizada_at IS NOT NULL) AS segundos
                   FROM nota_cargas nc
                   JOIN maquinas mm
                     ON mm.id = ANY(ARRAY[nc.lavadora_id, nc.secadora_id,
                                          nc.lavadora_usada_id, nc.secadora_usada_id])
                  WHERE nc.nota_id = o.id
-                 GROUP BY mm.nombre
+                 GROUP BY mm.id, mm.nombre
               ) t
           ), '[]'::json)                               AS maquinas,
           NULLIF(TRIM(u.nombre || ' ' || COALESCE(u.apellido, '')), '') AS atendio,
@@ -304,6 +314,7 @@ export async function getResumen(req, res) {
         estado:          r.estado,
         estado_pago:     r.estado_pago,
         forma_pago:      r.forma_pago,
+        tipo_servicio:   r.tipo_servicio,
         motivo_cancelacion: r.motivo_cancelacion,
         maquinas:        r.maquinas ?? [],
         atendio:         r.atendio,

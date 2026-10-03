@@ -1219,6 +1219,34 @@ async function registrarMaquinaEnCarga(client, cargaId, slot, maquinaId, modo = 
   );
 }
 
+// Sella en la pasada en curso cuánto estuvo encendida la máquina (mig. 140):
+// desde que arrancó hasta este Finalizar. Se llama ANTES de soltarla, mientras
+// la carga aún la tiene en su hueco y `en_uso_desde` conserva el arranque. Si
+// la máquina no lo tiene (quedó en uso sin arrancar por aquí), se cae al
+// arranque de la carga. Solo toca la ÚLTIMA pasada de cada carga, y solo si es
+// de esta máquina y no estaba sellada.
+async function sellarFinDePasada(client, notaId, slot, maquinaId) {
+  const col = slot === 'secadora' ? 'secadora' : 'lavadora';
+  await client.query(
+    `UPDATE nota_carga_maquinas ncm
+        SET encendida_at  = COALESCE(m.en_uso_desde, nc.${col}_iniciada_at),
+            finalizada_at = NOW()
+       FROM nota_cargas nc, maquinas m
+      WHERE nc.nota_id = $1
+        AND nc.${col}_id = $3
+        AND m.id = $3
+        AND ncm.carga_id = nc.id
+        AND ncm.maquina_id = $3
+        AND ncm.finalizada_at IS NULL
+        AND ncm.id = (
+          SELECT x.id FROM nota_carga_maquinas x
+           WHERE x.carga_id = nc.id AND x.slot = $2
+           ORDER BY x.asignada_at DESC, x.id DESC LIMIT 1
+        )`,
+    [notaId, col, maquinaId]
+  );
+}
+
 // ── Granel por elegir de un servicio Por Encargo (migs. 132-134) ──────────
 // La clave con que el granel se liga a un servicio ('chico'… 'edredon'). Todos
 // los tamaños de edredón comparten la suya.
@@ -3981,6 +4009,10 @@ export const terminarLavado = async (req, res) => {
     // según el TAMAÑO de la secadora (prenda edredón manda sobre el tamaño). Se
     // tarifa aquí porque en Autoservicio la carga nace solo con lavadora
     // (precio_secadora en 0) y el secado se cobra al iniciarlo.
+    // El lavado se da por finalizado aquí: se sella su tiempo encendida antes de
+    // que la lavadora se suelte.
+    await sellarFinDePasada(client, id, 'lavadora', lavadora_id);
+
     const t = await tarifasCarga(client);
     const { rows: cargasMover } = await client.query(
       `SELECT nc.id, nc.tipo_prenda
@@ -4102,6 +4134,8 @@ export const terminarSecado = async (req, res) => {
       return res.status(400).json({ message: 'La secadora no está asignada a esta nota.' });
     }
 
+    await sellarFinDePasada(client, id, 'secadora', secadora_id);
+
     // Desvincular y liberar la secadora: queda libre para el siguiente
     // cliente y no debe re-liberarse si otra nota la toma.
     await client.query(
@@ -4198,6 +4232,8 @@ export const terminarLavadoFinal = async (req, res) => {
       await client.query('ROLLBACK');
       return res.status(400).json({ message: 'La lavadora no está asignada a esta nota.' });
     }
+
+    await sellarFinDePasada(client, id, 'lavadora', lavadora_id);
 
     // Desvincular y liberar la lavadora (queda libre para el siguiente cliente).
     await client.query(
