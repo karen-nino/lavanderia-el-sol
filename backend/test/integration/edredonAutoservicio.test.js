@@ -3,7 +3,7 @@
 // En "Agregar máquina" hay una casilla Edredón, hasta abajo de las lavadoras.
 // Entra a la nota SIN máquina física, cobrando su tarifa de Ajustes
 // (`precio_edredon_jumbo`, "Edredón $80"), y en Salidas se le asigna la
-// lavadora que esté libre —cualquiera, no solo jumbo— sin que el precio cambie.
+// lavadora que esté libre —cualquiera, no solo jumbo— sin que el precio cambie. Desde el mismo día el edredón tampoco exige jumbo en Por Encargo.
 import { describe, it, expect, beforeEach } from 'vitest';
 import request from 'supertest';
 import app from '../../app.js';
@@ -68,7 +68,7 @@ describe('Autoservicio: el Edredón', () => {
     expect(Number(rows[0].precio_lavadora)).toBe(80);
   });
 
-  it('en Por Encargo el edredón sigue exigiendo lavadora jumbo', async () => {
+  it('en Por Encargo el edredón tampoco exige jumbo', async () => {
     const mediana = await seedMaquina({ nombre: 'L1', tipo: 'lavadora_mediana', tamano: 'mediana' });
     const clienteId = await seedCliente();
     await seedAjustes({ tope_carga_edredon: 180 });
@@ -81,7 +81,7 @@ describe('Autoservicio: el Edredón', () => {
     const res = await request(app).patch(`/api/notas/${creada.body.id}/asignar-carga-maquina`)
       .set(auth(admin.token))
       .send({ carga_id: creada.body.cargas[0].id, slot: 'lavadora', maquina_id: mediana });
-    expect(res.status).toBe(400);
-    expect(res.body.message).toMatch(/jumbo/i);
+    expect(res.status).toBe(200);
+    expect(res.body.cargas[0].lavadora_id).toBe(mediana);
   });
 });

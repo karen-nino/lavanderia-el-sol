@@ -918,7 +918,7 @@ export default function Salidas() {
   // Se ofrecen todas las máquinas libres del tipo. Que otra nota ya tenga
   // asignada una de ellas no la descarta: asignar no aparta, se la queda quien
   // le dé a Iniciar primero. Eso sí, se avisa en la propia opción.
-  const maquinasParaSlot = (slot, carga) => todasMaquinas.filter(m => {
+  const maquinasParaSlot = (slot) => todasMaquinas.filter(m => {
     if (m.estado !== 'disponible') return false;
     if (slot === 'lavadora') {
       if (m.tipo === 'secadora') return false;
@@ -929,10 +929,9 @@ export default function Salidas() {
       // máquina que de verdad se asigne. Filtrar por tamaño solo dejaba a la
       // carga esperando una mediana con dos jumbos libres al lado.
       //
-      // La única excepción es física y no de tarifa: un edredón no cabe en una
-      // mediana. El backend la vuelve a comprobar al asignar. En Autoservicio
-      // no aplica (2026-10-02): el edredón va en la lavadora que esté libre.
-      return esEdredonCarga(carga) && !esAutoservicio ? m.tipo === 'lavadora_jumbo' : true;
+      // Tampoco el edredón exige jumbo desde el 2026-10-02: va en la que esté
+      // libre (decisión del negocio).
+      return true;
     }
     // La secadora es de un solo tamaño: cualquier secadora disponible sirve.
     return m.tipo === 'secadora';
@@ -945,14 +944,9 @@ export default function Salidas() {
     ? { lavadora: asignarSlot.slot === 'lavadora', secadora: asignarSlot.slot === 'secadora' }
     : cargaDestino ? huecosDeCarga(cargaDestino) : { lavadora: true, secadora: true };
   const maquinasModal = asignarSlot
-    ? maquinasParaSlot(asignarSlot.slot, asignarSlot.carga)
-    // Con carga destino vale la misma regla física que en el modo slot: un
-    // edredón no cabe en una mediana. Importa desde que Por Encargo dejó de
-    // elegir tipo de máquina al hacer la nota —sus cargas llegan aquí sin hueco
-    // previsto y entran por este camino—; el servidor lo vuelve a comprobar.
-    : cargaDestino && esEdredonCarga(cargaDestino)
-      ? maquinasDisp.filter(m => m.tipo === 'secadora' || m.tipo === 'lavadora_jumbo')
-      : maquinasDisp;
+    ? maquinasParaSlot(asignarSlot.slot)
+    // El edredón ya no exige jumbo (2026-10-02): todas las disponibles.
+    : maquinasDisp;
   // La que esta carga acabó de usar en ese hueco (mig. 114). Es la candidata
   // natural para la vuelta siguiente —relavar, secar de más—: la ropa ya está
   // adentro y la máquina acaba de quedar libre. Se sugiere de primera en la
@@ -1317,11 +1311,9 @@ export default function Salidas() {
                     cuenta. */}
                 <div>
                   {slots.map(({ slot, carga: cargaSlot }) => {
-                    const opciones = maquinasParaSlot(slot, cargaSlot);
+                    const opciones = maquinasParaSlot(slot);
                     // El tamaño solo se nombra donde todavía manda: el edredón.
-                    const queFalta = slot !== 'lavadora' ? 'secadoras'
-                      : esEdredonCarga(cargaSlot) && !esAutoservicio ? 'lavadoras Jumbo'
-                      : 'lavadoras';
+                    const queFalta = slot !== 'lavadora' ? 'secadoras' : 'lavadoras';
                     const esLavadora = slot === 'lavadora';
                     // El "Edredón" que se vende en Autoservicio (2026-10-02):
                     // ya está cobrado y espera su lavadora, la que esté libre.
@@ -2004,7 +1996,7 @@ export default function Salidas() {
                           (2026-09-26). El edredón es la excepción, y ahí sí se
                           nombra porque la lista solo trae jumbos. */}
                       {asignarSlot.slot === 'lavadora'
-                        ? (esEdredonCarga(asignarSlot.carga) && !esAutoservicio ? 'lavadora Jumbo' : 'lavadora')
+                        ? 'lavadora'
                         : 'secadora'}
                     </span> que le falta a la {Renglon} {numeroDeCarga(cargaDestino)}. Queda asignada; la inicias después con su botón.</>
                   : cargaDestino

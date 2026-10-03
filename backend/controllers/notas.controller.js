@@ -1016,9 +1016,8 @@ async function prepararCargas(client, cargas, tipoPrendaNota, sucursal, tipo_ser
       if (secadoraTipo && !TIPOS_MAQUINA_VALIDOS.includes(secadoraTipo)) {
         throw new Error(`Tipo de secadora inválido en la carga ${i + 1}.`);
       }
-      if (prendaCarga === 'EDREDON' && lavadoraTipo && lavadoraTipo !== 'jumbo') {
-        throw new Error(`Los edredones solo van en lavadora jumbo (carga ${i + 1}).`);
-      }
+      // El edredón ya no exige lavadora jumbo (2026-10-02, decisión del
+      // negocio): va en la que esté libre, en Autoservicio y en Por Encargo.
       // Por Encargo ya NO elige tipo de máquina: el servicio se vende por
       // tamaño (Chico, Mediano, Grande, Edredón) y la máquina —la que sea— se le asigna
       // en Salidas, sin que eso cambie el precio. Los tipos se siguen
@@ -1088,9 +1087,6 @@ async function prepararCargas(client, cargas, tipoPrendaNota, sucursal, tipo_ser
       }
       if (secadoraId && tipoPorId.get(secadoraId) !== 'secadora') {
         throw new Error(`La máquina de secado de la carga ${i + 1} no es una secadora.`);
-      }
-      if (prendaCarga === 'EDREDON' && lavadoraId && tipoPorId.get(lavadoraId) !== 'lavadora_jumbo') {
-        throw new Error(`Los edredones solo van en lavadora jumbo (carga ${i + 1}).`);
       }
       precioLavadora = lavadoraId ? tarifaLavadora(tipoPorId.get(lavadoraId), prendaCarga, t) : 0;
       precioSecadora = secadoraId ? tarifaSecadora(tamanoPorId.get(secadoraId), prendaCarga, t) : 0;
@@ -3359,15 +3355,8 @@ export const asignarCargaMaquina = async (req, res) => {
       // carga esperando una mediana con dos jumbos desocupadas al lado.
       //
       // Lo que sigue en pie es físico, no de tarifa: un edredón no cabe en una
-      // mediana. Antes lo tapaba el propio chequeo de tamaño —una carga de
-      // edredón se crea con lavadora_tipo 'jumbo'—, así que al quitarlo hay
-      // que decirlo aquí explícitamente.
-      // El edredón de Autoservicio va en cualquier lavadora libre (2026-10-02).
-      if (String(carga.tipo_prenda).toUpperCase() === 'EDREDON' && maq.tipo !== 'lavadora_jumbo'
-          && notaRows[0].tipo_servicio !== 'AUTOSERVICIO') {
-        await client.query('ROLLBACK');
-        return res.status(400).json({ message: `Los edredones solo van en lavadora jumbo (${maq.nombre} no lo es).` });
-      }
+      // mediana. Desde el 2026-10-02 tampoco eso: el negocio decidió que el
+      // edredón va en cualquier lavadora, en Autoservicio y en Por Encargo.
     } else {
       // La secadora es de un solo tamaño: cualquier secadora disponible sirve.
       if (maq.tipo !== 'secadora') {
@@ -3616,11 +3605,7 @@ export const asignarMaquina = async (req, res) => {
     const esEdredon  = String(tipoPrenda).toUpperCase() === 'EDREDON';
     const lavadoras  = maqRows.filter(m => m.tipo !== 'secadora');
     const secadoras  = maqRows.filter(m => m.tipo === 'secadora');
-    const lavNoJumbo = esEdredon && lavadoras.find(m => m.tipo !== 'lavadora_jumbo');
-    if (lavNoJumbo) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ message: 'Los edredones solo van en lavadora jumbo.' });
-    }
+    // El edredón ya no exige lavadora jumbo (2026-10-02).
 
     const { rows: [{ max_orden }] } = await client.query(
       'SELECT COALESCE(MAX(orden), 0)::int AS max_orden FROM nota_cargas WHERE nota_id = $1',
@@ -3680,10 +3665,6 @@ export const asignarMaquina = async (req, res) => {
       // orden, prenda y es_adicional originales; solo se le ponen las máquinas.
       if (cargaObjetivo && i === 0) {
         const prendaCarga = cargaObjetivo.tipo_prenda ?? tipoPrenda;
-        if (String(prendaCarga).toUpperCase() === 'EDREDON' && lavadora && lavadora.tipo !== 'lavadora_jumbo') {
-          await client.query('ROLLBACK');
-          return res.status(400).json({ message: 'Los edredones solo van en lavadora jumbo.' });
-        }
         // Solo se toca el hueco que se está llenando: si la carga ya traía la
         // otra máquina (o su precio), se conserva tal cual. Y si ese hueco YA
         // se había usado (segundo lavado, más secado), su precio tampoco se
@@ -3885,12 +3866,7 @@ export const cambiarMaquina = async (req, res) => {
       await client.query('ROLLBACK');
       return res.status(400).json({ message: 'Debes elegir una máquina del mismo tipo.' });
     }
-    // El edredón de Autoservicio va en cualquier lavadora libre (2026-10-02).
-    if (!esSecadora && String(carga.tipo_prenda).toUpperCase() === 'EDREDON' && nueva.tipo !== 'lavadora_jumbo'
-        && notaRows[0].tipo_servicio !== 'AUTOSERVICIO') {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ message: 'Los edredones solo van en lavadora jumbo.' });
-    }
+    // El edredón ya no exige lavadora jumbo (2026-10-02).
 
     const t = await tarifasCarga(client);
     const precio = esSecadora

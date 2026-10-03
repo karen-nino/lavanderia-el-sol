@@ -370,9 +370,9 @@ describe('POST /api/notas — Por Encargo', () => {
     expect(Number(ok.body.precio_total)).toBe(antes);
   });
 
-  // La excepción que sigue en pie, y que antes tapaba el chequeo de tamaño:
-  // un edredón no cabe en una mediana.
-  it('asignar-carga-maquina rechaza una mediana para un edredón', async () => {
+  // El edredón dejó de exigir jumbo el 2026-10-02 (decisión del negocio): va
+  // en la lavadora que esté libre, también en Por Encargo.
+  it('asignar-carga-maquina acepta una mediana para un edredón', async () => {
     const clienteId = await seedCliente();
     const lavMed = await seedMaquina({ nombre: 'Lav Mediana', tipo: 'lavadora_mediana', tamano: 'mediana' });
 
@@ -383,11 +383,11 @@ describe('POST /api/notas — Por Encargo', () => {
     });
     expect(nota.status).toBe(201);
 
-    const malo = await request(app).patch(`/api/notas/${nota.body.id}/asignar-carga-maquina`)
+    const res = await request(app).patch(`/api/notas/${nota.body.id}/asignar-carga-maquina`)
       .set(auth(admin.token))
       .send({ carga_id: nota.body.cargas[0].id, slot: 'lavadora', maquina_id: lavMed });
-    expect(malo.status).toBe(400);
-    expect(malo.body.message).toMatch(/edredones solo van en lavadora jumbo/i);
+    expect(res.status).toBe(200);
+    expect(res.body.cargas[0].lavadora_id).toBe(lavMed);
   });
 
   it('tiempo_entrega inválido → 400', async () => {
@@ -1751,14 +1751,13 @@ describe('edredón (lavadora jumbo)', () => {
     expect(Number(res.body.cargas[0].precio_lavadora)).toBe(80);
   });
 
-  it('rechaza edredón con tipo de lavado que no es jumbo', async () => {
+  it('acepta edredón con tipo de lavado mediano (ya no exige jumbo)', async () => {
     const clienteId = await seedCliente();
     const res = await request(app).post('/api/notas').set(auth(admin.token)).send({
       tipo_servicio: 'POR_ENCARGO', cliente_id: clienteId, tipo_prenda: 'EDREDON',
       estado_pago: 'PENDIENTE', cargas: [{ lavadora_tipo: 'mediana' }],
     });
-    expect(res.status).toBe(400);
-    expect(res.body.message).toMatch(/jumbo/i);
+    expect(res.status).toBe(201);
   });
 
   it('cobra el edredón con el precio de su tamaño (mig. 130)', async () => {
