@@ -316,10 +316,10 @@ const IconoCancelar = (
 
 const IconoProcesado = (
   <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    {/* Paquete cerrado con su cinta: la ropa ya doblada y empacada. */}
+    {/* Mano con el pulgar arriba: la ropa ya quedó lista (2026-10-03; antes
+        era un paquete). */}
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-      d="M3 8.5L12 4l9 4.5v7L12 20l-9-4.5v-7z" />
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8.5L12 13l9-4.5M12 13v7" />
+      d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5" />
   </svg>
 );
 
