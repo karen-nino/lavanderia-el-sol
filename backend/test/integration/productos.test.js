@@ -122,29 +122,28 @@ describe('movimientos de stock (rellenar / entrada / salida / historial)', () =>
     expect(Number(entrada.body.stock_granel_medidas)).toBe(100);
 
     const salida = await request(app).post(`/api/productos/${p.id}/movimiento`).set(auth(admin.token))
-      .send({ tipo: 'salida', destino: 'botellas', cantidad: 2, unidad: 'botella', motivo: 'Derrame' });
+      .send({ tipo: 'salida', destino: 'botellas', cantidad: 2, unidad: 'botella', nota: 'Derrame' });
     expect(salida.status).toBe(200);
     expect(Number(salida.body.stock_actual)).toBe(12); // 20 - 8
 
     const excede = await request(app).post(`/api/productos/${p.id}/movimiento`).set(auth(admin.token))
-      .send({ tipo: 'salida', destino: 'botellas', cantidad: 100, unidad: 'botella', motivo: 'Merma' });
+      .send({ tipo: 'salida', destino: 'botellas', cantidad: 100, unidad: 'botella', nota: 'Merma' });
     expect(excede.status).toBe(400);
     expect(excede.body.message).toMatch(/no hay suficiente/i);
   });
 
-  it('la salida manual pide su motivo y lo guarda en el historial', async () => {
+  it('la salida manual guarda su nota, que es opcional', async () => {
     const p = await crearGranel({ stock_bidones: 0, stock_botellas: 5 });
 
-    const sinMotivo = await request(app).post(`/api/productos/${p.id}/movimiento`).set(auth(admin.token))
-      .send({ tipo: 'salida', destino: 'botellas', cantidad: 1, unidad: 'botella' });
-    expect(sinMotivo.status).toBe(400);
-    expect(sinMotivo.body.message).toMatch(/por qué sale/i);
-
     await request(app).post(`/api/productos/${p.id}/movimiento`).set(auth(admin.token))
-      .send({ tipo: 'salida', destino: 'botellas', cantidad: 1, unidad: 'botella', motivo: 'Dañado' })
+      .send({ tipo: 'salida', destino: 'botellas', cantidad: 1, unidad: 'botella' })
+      .expect(200);
+    await request(app).post(`/api/productos/${p.id}/movimiento`).set(auth(admin.token))
+      .send({ tipo: 'salida', destino: 'botellas', cantidad: 1, unidad: 'botella', nota: 'Se rompió la botella' })
       .expect(200);
     const hist = await request(app).get(`/api/productos/${p.id}/movimientos?tipo=salidas`).set(auth(admin.token));
-    expect(hist.body[0].motivo).toBe('Dañado');
+    expect(hist.body[0].nota).toBe('Se rompió la botella');
+    expect(hist.body[1].nota).toBeNull();
   });
 
   it('el historial registra cada movimiento (más reciente primero)', async () => {
@@ -179,7 +178,7 @@ describe('bolsas (clase = bolsa)', () => {
     expect(Number(entrada.body.stock_actual)).toBe(200); // 2 rollos × 100
 
     const salida = await request(app).post(`/api/productos/${res.body.id}/movimiento`).set(auth(admin.token))
-      .send({ tipo: 'salida', destino: 'piezas', unidad: 'pieza', cantidad: 5, motivo: 'Uso interno' });
+      .send({ tipo: 'salida', destino: 'piezas', unidad: 'pieza', cantidad: 5, nota: 'Uso interno' });
     expect(salida.status).toBe(200);
     expect(Number(salida.body.stock_actual)).toBe(195);
     expect(salida.body.estado_stock).toBe('ok'); // 195 > 20

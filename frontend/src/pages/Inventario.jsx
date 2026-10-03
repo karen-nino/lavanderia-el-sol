@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { esAdmin as esAdminFn } from '../lib/roles';
@@ -872,10 +872,6 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = 
   );
 }
 
-// Por qué sale el producto en una salida manual (mig. 142). "Otro" pide el
-// texto: lo que no entra en los demás también se tiene que poder decir.
-const MOTIVOS_SALIDA = ['Merma', 'Dañado', 'Uso interno', 'Regalo', 'Otro'];
-
 // ── Modal Entrada / Salida ──────────────────────────────────────
 function ModalMovimiento({ producto, tipo, onClose, onDone }) {
   const esGranel = esGranelLiquido(producto);
@@ -886,15 +882,12 @@ function ModalMovimiento({ producto, tipo, onClose, onDone }) {
   const porRollo = Number(producto.bolsas_por_rollo) > 0;
   const [unidadBolsa, setUnidadBolsa] = useState(porRollo ? 'rollo' : 'pieza');
   const [cantidad, setCantidad] = useState('');
-  const [motivoSel, setMotivoSel]   = useState('');
-  const [motivoOtro, setMotivoOtro] = useState('');
+  // Nota libre de la salida (migs. 142-143), opcional.
+  const [nota, setNota] = useState('');
   const [error, setError]     = useState('');
   const [loading, setLoading] = useState(false);
 
   const esEntrada = tipo === 'entrada';
-  // La salida no se registra sin su motivo; la entrada no lleva.
-  const motivo = motivoSel === 'Otro' ? motivoOtro.trim() : motivoSel;
-  const faltaMotivo = !esEntrada && !motivo;
   // Unidad: bolsas = rollo/pieza; granel = bidones/botellas por destino; marca = botella.
   const unidad = esBolsa ? unidadBolsa : (destino === 'granel' ? 'bidon' : 'botella');
   const unidadTxt = esBolsa
@@ -907,7 +900,7 @@ function ModalMovimiento({ producto, tipo, onClose, onDone }) {
     try {
       const resp = await api.post(`/productos/${producto.id}/movimiento`, {
         tipo, destino, unidad, cantidad: Number(cantidad),
-        ...(!esEntrada && { motivo }),
+        ...(!esEntrada && nota.trim() && { nota: nota.trim() }),
       });
       onDone(resp);
     } catch (err) {
@@ -974,27 +967,12 @@ function ModalMovimiento({ producto, tipo, onClose, onDone }) {
 
         {!esEntrada && (
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">¿Por qué sale?</label>
-            <div className="flex flex-wrap gap-2">
-              {MOTIVOS_SALIDA.map(m => (
-                <button
-                  key={m} type="button" onClick={() => setMotivoSel(m)}
-                  className={`py-2.5 px-3 rounded-lg border text-sm font-medium transition-colors ${
-                    motivoSel === m ? 'border-blue bg-light-blue text-blue' : 'border-gray-300 bg-white text-gray-600 hover:bg-gray-50'
-                  }`}
-                >
-                  {m}
-                </button>
-              ))}
-            </div>
-            {motivoSel === 'Otro' && (
-              <input
-                type="text" value={motivoOtro} maxLength={100} autoFocus
-                onChange={(e) => setMotivoOtro(e.target.value)}
-                placeholder="Escribe el motivo"
-                className={`${INPUT_CLS} mt-2`}
-              />
-            )}
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Nota</label>
+            <textarea
+              value={nota} maxLength={1000} rows={4}
+              onChange={(e) => setNota(e.target.value)}
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg text-base resize-y focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent transition"
+            />
           </div>
         )}
 
@@ -1010,7 +988,7 @@ function ModalMovimiento({ producto, tipo, onClose, onDone }) {
             Cancelar
           </button>
           <button
-            type="button" onClick={enviar} disabled={loading || !(Number(cantidad) > 0) || faltaMotivo}
+            type="button" onClick={enviar} disabled={loading || !(Number(cantidad) > 0)}
             className={`flex-1 text-white font-medium py-3.5 rounded-lg text-base transition-colors disabled:opacity-60 ${
               esEntrada ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'
             }`}
@@ -1153,8 +1131,8 @@ function ModalHistorial({ producto, onClose }) {
                       {m.destino === 'granel' ? 'A granel' : 'Botellas'}
                       {m.usuario_nombre ? ` · ${m.usuario_nombre}` : ''}
                     </p>
-                    {/* Por qué salió (salidas manuales, mig. 142). */}
-                    {m.motivo && <p className="text-xs text-gray-500 mt-0.5">Motivo: {m.motivo}</p>}
+                    {/* Nota de la salida manual (migs. 142-143). */}
+                    {m.nota && <p className="text-xs text-gray-500 mt-0.5 whitespace-pre-line">Nota: {m.nota}</p>}
                   </div>
                   <span className="text-xs text-gray-400 flex-shrink-0 whitespace-nowrap">{fechaHoraCorta(m.created_at)}</span>
                 </li>
@@ -1391,20 +1369,6 @@ function CeldaMovimiento({ lineas, hayAlgo = false, onClick }) {
   );
 }
 
-// Qué fue cada movimiento, dicho para el mostrador.
-function etiquetaMovimiento(m) {
-  const nota = m.nota_folio ? `Nota ${m.nota_folio}` : null;
-  if (m.tipo === 'entrada')    return 'Entrada';
-  if (m.tipo === 'salida')     return m.motivo ? `Salida manual · ${m.motivo}` : 'Salida manual';
-  if (m.tipo === 'rellenar')   return 'Rellenado: del bidón a botellas';
-  if (m.tipo === 'venta')      return nota ?? 'Venta en nota';
-  if (m.tipo === 'liberacion') return `Devuelto${nota ? ` · ${nota}` : ''} (se anuló la venta)`;
-  return m.tipo;
-}
-
-// Cuánto movió, en las mismas unidades que la tabla: lo que va por unidad en
-// unidades; el granel, en botellas o en bidón según de dónde salió o a dónde
-// entró.
 // Rellenar se cuenta del lado que se está viendo: en Entradas, las botellas
 // que se llenaron; en Salidas, lo que bajó el bidón.
 function enBidon(m, tipo) {
@@ -1422,8 +1386,9 @@ function cantidadMovimiento(m, p, esMarca, tipo) {
 // quién hizo cada movimiento, a qué hora y cuánto. Lo que vino de una nota
 // lleva a esa nota.
 function MovimientosDiaModal({ producto, tipo, fecha, onClose }) {
-  const navigate = useNavigate();
   const [movs, setMovs] = useState(null);
+  // Movimiento con la nota desplegada (solo uno a la vez).
+  const [notaAbierta, setNotaAbierta] = useState(null);
   const [error, setError] = useState('');
   const esMarca = porUnidad(producto);
 
@@ -1458,29 +1423,40 @@ function MovimientosDiaModal({ producto, tipo, fecha, onClose }) {
           ) : movs.length === 0 ? (
             <p className="text-center text-gray-400 text-sm py-10">Sin movimientos</p>
           ) : movs.map(m => {
-            const irANota = m.nota_id && m.nota_folio ? () => { onClose(); navigate(`/notas/${m.nota_id}`); } : null;
+            // Título: quién y a qué hora, sin subtítulo (2026-10-03). Si la
+            // salida trae nota (migs. 142-143), un botón "Nota" la despliega.
+            const abierta = notaAbierta === m.id;
             return (
-              <div key={m.id} className="flex items-center justify-between gap-3 px-5 py-2.5 border-b border-gray-50 last:border-0">
-                <div className="min-w-0">
-                  {irANota ? (
-                    <button type="button" onClick={irANota} className="text-sm font-medium text-blue hover:underline underline-offset-2 truncate text-left">
-                      {etiquetaMovimiento(m)}
-                    </button>
-                  ) : (
-                    <p className="text-sm text-gray-800 truncate">{etiquetaMovimiento(m)}</p>
-                  )}
-                  <p className="text-xs text-gray-400 truncate">
-                    {m.usuario_nombre || 'Usuario eliminado'} · {formatHora12(m.created_at)}
-                  </p>
-                  {m.tipo === 'rellenar' && (
-                    <p className="text-xs text-gray-400">No suma en {tipo === 'entradas' ? 'Entradas' : 'Salidas'}: solo cambia de lugar.</p>
-                  )}
+              <div key={m.id} className="px-5 py-2.5 border-b border-gray-50 last:border-0">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0 flex items-center gap-2">
+                    <p className="min-w-0 text-sm text-gray-800 truncate">
+                      {m.usuario_nombre || 'Usuario eliminado'} · {formatHora12(m.created_at)}
+                    </p>
+                    {m.nota && (
+                      <button
+                        type="button"
+                        onClick={() => setNotaAbierta(abierta ? null : m.id)}
+                        aria-expanded={abierta}
+                        className={`flex-shrink-0 text-xs font-medium px-2 py-0.5 rounded-full border transition-colors ${
+                          abierta ? 'border-blue bg-light-blue text-blue' : 'border-gray-300 text-gray-600 hover:bg-gray-50'
+                        }`}
+                      >
+                        Nota
+                      </button>
+                    )}
+                  </div>
+                  <span className={`text-sm font-medium whitespace-nowrap ${
+                    m.tipo === 'liberacion' ? 'text-green-700' : m.tipo === 'rellenar' ? 'text-gray-400' : 'text-gray-700'
+                  }`}>
+                    {m.tipo === 'liberacion' ? '+ ' : ''}{cantidadMovimiento(m, producto, esMarca, tipo)}
+                  </span>
                 </div>
-                <span className={`text-sm font-medium whitespace-nowrap ${
-                  m.tipo === 'liberacion' ? 'text-green-700' : m.tipo === 'rellenar' ? 'text-gray-400' : 'text-gray-700'
-                }`}>
-                  {m.tipo === 'liberacion' ? '+ ' : ''}{cantidadMovimiento(m, producto, esMarca, tipo)}
-                </span>
+                {abierta && (
+                  <p className="mt-2 rounded-lg bg-gray-50 px-3 py-2 text-sm text-gray-700 whitespace-pre-line break-words">
+                    {m.nota}
+                  </p>
+                )}
               </div>
             );
           })}

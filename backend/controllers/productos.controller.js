@@ -75,13 +75,13 @@ function medidasDeUnidad(unidad, p) {
 // Inserta una fila en el historial de movimientos de stock.
 async function registrarMovimiento(client, {
   productoId, sucursal, usuarioId, tipo, destino, cantidadMedidas,
-  descripcion = null, notaId = null, motivo = null,
+  descripcion = null, notaId = null, nota = null,
 }) {
   await client.query(
     `INSERT INTO producto_movimientos
-       (producto_id, sucursal, usuario_id, tipo, destino, cantidad_medidas, descripcion, nota_id, motivo)
+       (producto_id, sucursal, usuario_id, tipo, destino, cantidad_medidas, descripcion, nota_id, nota)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-    [productoId, sucursal, usuarioId ?? null, tipo, destino, cantidadMedidas, descripcion, notaId, motivo]
+    [productoId, sucursal, usuarioId ?? null, tipo, destino, cantidadMedidas, descripcion, notaId, nota]
   );
 }
 
@@ -535,12 +535,9 @@ export const crearMovimiento = async (req, res) => {
   if (!['entrada', 'salida'].includes(tipo)) {
     return res.status(400).json({ message: 'El movimiento debe ser una entrada o una salida.' });
   }
-  // Una salida manual dice por qué salió (mig. 142): sin eso el Reporte diario
-  // no distingue una merma de un regalo. La entrada no lleva motivo.
-  const motivo = tipo === 'salida' ? String(req.body.motivo ?? '').trim().slice(0, 100) : null;
-  if (tipo === 'salida' && !motivo) {
-    return res.status(400).json({ message: 'Indica por qué sale el producto.' });
-  }
+  // Nota libre de una salida manual (migs. 142-143): lo que haga falta decir
+  // de por qué salió. Opcional; la entrada no lleva.
+  const nota = tipo === 'salida' ? (String(req.body.nota ?? '').trim().slice(0, 1000) || null) : null;
   if (!['granel', 'botellas', 'piezas'].includes(destino)) {
     return res.status(400).json({ message: 'Indica a dónde va el movimiento: granel, botellas o piezas.' });
   }
@@ -616,7 +613,7 @@ export const crearMovimiento = async (req, res) => {
       productoId: p.id, sucursal: req.sucursal, usuarioId: req.user?.id,
       tipo, destino, cantidadMedidas: medidas,
       descripcion: `${cant} ${unidadTxt}`,
-      motivo,
+      nota,
     });
     await client.query('COMMIT');
     res.json(upd[0]);
