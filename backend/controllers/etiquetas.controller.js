@@ -9,7 +9,7 @@ import { esAdmin } from '../middleware/roles.js';
 // `nombres` son las palabras con las que el usuario conoce el catálogo, para
 // que los mensajes hablen de "el tipo de tela" y no del nombre de la tabla.
 // `banderas` son columnas BOOLEAN propias de ese catálogo que se guardan junto
-// al nombre (mig. 122: `arranca_sola` de la marca de máquina).
+// al nombre (hoy ninguno: la `arranca_sola` de la mig. 122 se borró en la 139).
 // Se listan aquí y no se leen del body a lo que venga: los nombres entran en el
 // SQL, así que solo pueden ser los que el catálogo declara.
 // `alRenombrar(client, viejo, nuevo)` es para el catálogo cuyo nombre se copia
@@ -223,12 +223,10 @@ export const marcasProducto = crearControladorEtiqueta('marcas_producto', {
 export const envasesProducto = crearControladorEtiqueta('envases_producto', {
   singular: 'el envase', plural: 'los envases', uno: 'un envase',
 });
-// La marca de máquina declara además si sus aparatos **arrancan solos** al
-// recibir corriente (mig. 122): entonces Salidas ofrece "Iniciar" en un paso,
-// sin encender antes. Los dos ciclos por carga los declara el MODELO (mig. 123).
+// Marcas de máquina. Los dos ciclos por carga los declara el MODELO (mig. 123).
 export const marcasMaquina = crearControladorEtiqueta('marcas_maquina', {
   singular: 'la marca', plural: 'las marcas', uno: 'una marca',
-}, ['arranca_sola']);
+});
 // Los líquidos que se venden a granel (mig. 119): es el nombre del producto
 // cuando se rellena desde un bidón ("Jabón", "Suavizante").
 // El producto granel toma su nombre de aquí, así que renombrar el granel

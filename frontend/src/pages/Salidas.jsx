@@ -722,10 +722,6 @@ export default function Salidas() {
             // Los tiempos que ofrece su modelo: deciden si al iniciarla se
             // pregunta con cuál correr (mig. 120).
             modelo_tiempos: u.modelo_tiempos ?? null,
-            // Su marca puede declarar que la máquina ARRANCA SOLA al recibir
-            // corriente (mig. 122): entonces encender e iniciar son lo mismo y
-            // el paso de "Encender máquina" sobra.
-            arrancaSola: Boolean(u.marca_opciones?.arranca_sola),
             // Cronómetro (todas menos el modelo que pregunta su tiempo,
             // 2026-10-02): encenderla ya arranca su carga, no hay "Iniciar" y
             // se finaliza a mano cuando termine.
@@ -777,8 +773,7 @@ export default function Salidas() {
   // todavía va en 10 (2026-09-29).
   const preguntaSuTiempo = preguntaTiempo(maqModal);
   // La de cronómetro siempre entra por "Encender": ese paso ya la arranca.
-  const pasoModal = !maqModal?.cronometro
-    && (maqModal?.esperandoArranque || (maqModal?.arrancaSola && !preguntaSuTiempo))
+  const pasoModal = !maqModal?.cronometro && maqModal?.esperandoArranque
     ? 'iniciar' : 'encender';
   // Lo que se eligió al encender esta máquina, si sigue vivo.
   const minutosDeMaquina = (maq) => (maq ? minutosPorMaquina[maq.id] ?? null : null);
@@ -1249,11 +1244,7 @@ export default function Salidas() {
                         disabled={loadingMaquina || Boolean(encendiendo)}
                         className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
                       >
-                        {/* La que arranca sola no pasa por "Encender": se le da
-                            corriente y ya está lavando (mig. 122). */}
-                        {m.arrancaSola && !m.cronometro
-                          ? (m.tipo === 'secadora' ? 'Iniciar secado' : 'Iniciar lavado')
-                          : 'Encender máquina'}
+                        Encender máquina
                       </button>
                     )}
                     {m.esperandoArranque && (
@@ -1725,16 +1716,6 @@ export default function Salidas() {
                     : 'los minutos del ciclo'}, así que confírmalo solo cuando ya la hayas
                   arrancado con su botón.
                 </p>
-              ) : maqModal.arrancaSola ? (
-                /* La que arranca sola: al confirmar recibe corriente y empieza
-                   a lavar, así que no hay nada que apretar en la máquina ni
-                   tiempo que se descuente (mig. 122). */
-                <p className="text-sm text-gray-500">
-                  ¿Iniciar el {accion} de{' '}
-                  <span className="font-semibold text-gray-800">{maqModal.nombre}</span>? Esta máquina
-                  arranca sola al recibir corriente: al confirmar empieza el {accion} y el tiempo del
-                  ciclo corre desde ya.
-                </p>
               ) : (
                 <p className="text-sm text-gray-500">
                   ¿Iniciar el {accion} de{' '}
@@ -1744,14 +1725,11 @@ export default function Salidas() {
                 </p>
               )
             ) : maqModal.cronometro ? (
-              /* Cronómetro: no hay segundo paso. La que arranca sola (Speed
-                 Queen) no necesita que le aprieten nada. */
+              /* Cronómetro: no hay segundo paso. */
               <p className="text-sm text-gray-500">
                 Se le da corriente a{' '}
                 <span className="font-semibold text-gray-800">{maqModal.nombre}</span> y empieza a
-                correr el cronómetro.{maqModal.arrancaSola
-                  ? ' Arranca sola al recibir corriente.'
-                  : ' Carga la ropa y arráncala con su botón.'} Cuando termine, finalízala desde su
+                correr el cronómetro. Carga la ropa y arráncala; cuando termine, finalízala desde su
                 tarjeta: ahí se le corta la luz.
               </p>
             ) : preguntaSuTiempo && minElegidos != null ? (
@@ -1779,10 +1757,8 @@ export default function Salidas() {
 
             {/* Secundaria: cambiar esta máquina por otra. Solo mientras no
                 tenga corriente: una vez encendida el cliente ya le está
-                cargando la ropa, así que cambiarla deja de tener sentido. La
-                que arranca sola se salta el primer paso pero sigue estando
-                apagada hasta confirmar, así que ahí también se ofrece. */}
-            {(!esIniciar || (maqModal.arrancaSola && !maqModal.esperandoArranque)) && (
+                cargando la ropa, así que cambiarla deja de tener sentido. */}
+            {!esIniciar && (
               <button
                 type="button"
                 onClick={cambiarDesdeModal}

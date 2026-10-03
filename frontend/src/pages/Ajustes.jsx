@@ -709,17 +709,6 @@ const CAMPOS_MODELO = [
   //     label: 'Una carga corre 2 ciclos', chip: '2 ciclos' },
 ];
 
-// Lo que una MARCA dice de cómo se comportan sus máquinas (mig. 122): que
-// arrancan al recibir corriente. Va en la marca —y no en el modelo— porque es
-// lo que las ocho máquinas reales tienen capturado: marca sí, modelo todavía
-// no. Los dos ciclos por carga sí son del modelo (mig. 123): eso es del
-// aparato, no del fabricante.
-const CAMPOS_MARCA_MAQUINA = [
-  { name: 'arranca_sola', defecto: false, tipo: 'check',
-    label: 'Arranca sola al recibir corriente (no pasa por "Encender máquina")',
-    chip: 'arranca sola' },
-];
-
 // Marcas de máquina y, colgando de cada una, sus modelos (migs. 117 y 118).
 //
 // Van juntas porque se administran juntas: se da de alta la marca y enseguida
@@ -760,12 +749,11 @@ function MarcasYModelos({ movil = false, onMensaje }) {
     <>
       <Campo
         label="Marcas"
-        hint="Se eligen al dar de alta una máquina. La casilla dice si sus aparatos arrancan al recibir corriente: entonces Salidas ofrece «Iniciar» en un solo paso, sin encender antes. Desactivar una marca la quita de la lista sin tocar las máquinas que ya la tienen."
+        hint="Se eligen al dar de alta una máquina. Desactivar una marca la quita de la lista sin tocar las máquinas que ya la tienen."
       >
         <CatalogoEtiquetas
           endpoint="/etiquetas/marcas-maquina"
           singular="Marca"
-          extraCampos={CAMPOS_MARCA_MAQUINA}
           vacioTexto="Aún no hay marcas."
           inputCls={inputCls}
           onMensaje={onMensaje}

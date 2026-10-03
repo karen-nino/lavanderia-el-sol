@@ -66,13 +66,12 @@ export async function seedMarca({
   minutos = null,
   modelo = null,
   dos_ciclos = false,
-  arranca_sola = false,
 } = {}) {
   const { rows } = await pool.query(
-    `INSERT INTO marcas_maquina (nombre, arranca_sola) VALUES ($1, $2)
-       ON CONFLICT (nombre) DO UPDATE SET arranca_sola = EXCLUDED.arranca_sola
+    `INSERT INTO marcas_maquina (nombre) VALUES ($1)
+       ON CONFLICT (nombre) DO UPDATE SET nombre = EXCLUDED.nombre
      RETURNING id`,
-    [nombre, arranca_sola]
+    [nombre]
   );
   if (modelo) {
     await pool.query(
