@@ -15,6 +15,27 @@ function formatearCliente(nombre, apellido) {
   return `${n} ${a[0].toUpperCase()}.`;
 }
 
+// Tamaño dicho para el mostrador.
+const TAMANO_LABEL = { mediana: 'Mediana', jumbo: 'Jumbo' };
+
+// Nombre de la máquina en la cabecera y, debajo, su marca y tamaño
+// (2026-10-03): "LG · Mediana". Sin modelo, a pedido. Si no cabe se corta y el
+// texto completo queda en el title.
+function NombreMaquina({ maquina, className }) {
+  const tamano = TAMANO_LABEL[String(maquina.tamano ?? '').toLowerCase()] ?? null;
+  const detalle = [maquina.marca, tamano].filter(Boolean).join(' · ');
+  return (
+    <>
+      <span className={className}>{maquina.nombre}</span>
+      {detalle && (
+        <span className="max-w-full truncate text-xs font-medium opacity-90 leading-tight" title={detalle}>
+          {detalle}
+        </span>
+      )}
+    </>
+  );
+}
+
 export default function MachineCard({
   maquina,
   nota,
@@ -80,14 +101,14 @@ export default function MachineCard({
     ? { role: 'button', tabIndex: 0, onClick, onKeyDown: handleKeyDown }
     : {};
 
-  const headerCls = 'flex items-center justify-center px-3 py-2.5 rounded-t-card';
+  const headerCls = 'flex flex-col items-center justify-center px-3 py-2.5 rounded-t-card';
   const nombreCls = 'text-section uppercase tracking-wide';
 
   if (maquina.estado === 'disponible') {
     return (
       <div {...containerProps} className={`rounded-card bg-white shadow-card overflow-hidden ${interactivoCls}`}>
         <div className={`${headerCls} ${header.cls}`}>
-          <span className={nombreCls}>{maquina.nombre}</span>
+          <NombreMaquina maquina={maquina} className={nombreCls} />
         </div>
         <div className="px-card-pad pt-5 pb-6 flex flex-col items-center gap-4">
           <CircularTimer progress={0} label="00:00" />
@@ -101,7 +122,7 @@ export default function MachineCard({
     return (
       <div {...containerProps} className={`rounded-card bg-white shadow-card overflow-hidden ${interactivoCls}`}>
         <div className={`${headerCls} ${header.cls}`}>
-          <span className={nombreCls}>{maquina.nombre}</span>
+          <NombreMaquina maquina={maquina} className={nombreCls} />
         </div>
         <div className="px-card-pad pt-5 pb-6 flex flex-col items-center gap-4">
           <div className="w-28 h-28 rounded-pill bg-light-red flex items-center justify-center">
@@ -160,7 +181,7 @@ export default function MachineCard({
         className={`rounded-card ${c.fondo} ${c.aro} shadow-card overflow-hidden ring-2 ring-inset ${interactivoCls}`}
       >
         <div className={`${headerCls} ${c.cabecera} text-white`}>
-          <span className={nombreCls}>{maquina.nombre}</span>
+          <NombreMaquina maquina={maquina} className={nombreCls} />
         </div>
         <div className="px-card-pad pt-5 pb-6 flex flex-col items-center gap-3">
           <p className={`text-card-title ${c.titulo} text-center uppercase tracking-wide`}>
@@ -201,7 +222,7 @@ export default function MachineCard({
         className={`rounded-card bg-light-green ring-green shadow-card overflow-hidden ring-2 ring-inset ${interactivoCls}`}
       >
         <div className={`${headerCls} bg-green text-white`}>
-          <span className={nombreCls}>{maquina.nombre}</span>
+          <NombreMaquina maquina={maquina} className={nombreCls} />
         </div>
         <div className="px-card-pad pt-5 pb-6 flex flex-col items-center gap-3">
           <p className="text-card-title text-green text-center uppercase tracking-wide">
@@ -240,7 +261,7 @@ export default function MachineCard({
     return (
       <div {...containerProps} className={`rounded-card bg-white shadow-card overflow-hidden ${interactivoCls}`}>
         <div className={`${headerCls} ${esSecadoraCrono ? 'bg-red text-white' : header.cls}`}>
-          <span className={nombreCls}>{maquina.nombre}</span>
+          <NombreMaquina maquina={maquina} className={nombreCls} />
         </div>
         <div className="px-card-pad pt-5 pb-6 flex flex-col items-center gap-3">
           <CircularTimer
@@ -271,7 +292,7 @@ export default function MachineCard({
   return (
     <div {...containerProps} className={`rounded-card bg-white shadow-card overflow-hidden ${interactivoCls}`}>
       <div className={`${headerCls} ${esSecadora ? 'bg-red text-white' : header.cls}`}>
-        <span className={nombreCls}>{maquina.nombre}</span>
+        <NombreMaquina maquina={maquina} className={nombreCls} />
       </div>
       <div className="px-card-pad pt-5 pb-6 flex flex-col items-center gap-4">
         <CircularTimer
