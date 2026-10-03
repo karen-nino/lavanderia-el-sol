@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { esAdmin as esAdminFn } from '../lib/roles';
@@ -1386,6 +1386,7 @@ function cantidadMovimiento(m, p, esMarca, tipo) {
 // quién hizo cada movimiento, a qué hora y cuánto. Lo que vino de una nota
 // lleva a esa nota.
 function MovimientosDiaModal({ producto, tipo, fecha, onClose }) {
+  const navigate = useNavigate();
   const [movs, setMovs] = useState(null);
   // Movimiento con la nota desplegada (solo uno a la vez).
   const [notaAbierta, setNotaAbierta] = useState(null);
@@ -1423,9 +1424,12 @@ function MovimientosDiaModal({ producto, tipo, fecha, onClose }) {
           ) : movs.length === 0 ? (
             <p className="text-center text-gray-400 text-sm py-10">Sin movimientos</p>
           ) : movs.map(m => {
-            // Título: quién y a qué hora, sin subtítulo (2026-10-03). Si la
-            // salida trae nota (migs. 142-143), un botón "Nota" la despliega.
+            // Título: quién y a qué hora (2026-10-03). Si la salida trae nota
+            // (migs. 142-143), un botón "Nota" la despliega. Si vino de una
+            // nota de venta, debajo va esa nota y lleva a ella.
             const abierta = notaAbierta === m.id;
+            const deNota = m.tipo === 'venta' || m.tipo === 'liberacion';
+            const irANota = m.nota_id && m.nota_folio ? () => { onClose(); navigate(`/notas/${m.nota_id}`); } : null;
             return (
               <div key={m.id} className="px-5 py-2.5 border-b border-gray-50 last:border-0">
                 <div className="flex items-center justify-between gap-3">
@@ -1452,6 +1456,19 @@ function MovimientosDiaModal({ producto, tipo, fecha, onClose }) {
                     {m.tipo === 'liberacion' ? '+ ' : ''}{cantidadMovimiento(m, producto, esMarca, tipo)}
                   </span>
                 </div>
+                {deNota && (
+                  irANota ? (
+                    <button type="button" onClick={irANota}
+                      className="text-xs font-medium text-blue hover:underline underline-offset-2 text-left">
+                      {m.tipo === 'liberacion' ? `Devuelto · Nota ${m.nota_folio} (se anuló la venta)` : `Nota ${m.nota_folio}`}
+                    </button>
+                  ) : (
+                    // La nota ya no existe (se borró): se dice qué fue, sin enlace.
+                    <p className="text-xs text-gray-400">
+                      {m.tipo === 'liberacion' ? 'Devuelto (se anuló la venta)' : 'Venta en nota'}
+                    </p>
+                  )
+                )}
                 {abierta && (
                   <p className="mt-2 rounded-lg bg-gray-50 px-3 py-2 text-sm text-gray-700 whitespace-pre-line break-words">
                     {m.nota}
