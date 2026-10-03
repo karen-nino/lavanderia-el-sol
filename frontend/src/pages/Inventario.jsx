@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { esAdmin as esAdminFn } from '../lib/roles';
 import { textoBotellas, textoGranel as textoGranelFmt, lineasEntradas, lineasSalidas } from '../lib/formatoInventario';
 import { imprimirReporte, descargarReporteCSV } from '../lib/exportReporteInventario';
+import { fechaLarga } from '../lib/exportUtils';
+import { formatHora12 } from '../lib/fecha';
 import SucursalBar from '../components/SucursalBar';
 import Selector from '../components/Selector';
 
@@ -1329,6 +1331,115 @@ function fechaLegible(iso) {
 // ── Pestaña "Reporte diario" (solo admin) ───────────────────────
 // Por producto líquido (granel/marca): cuánto SALIÓ ese día (ventas/consumo en
 // notas) y cuánto QUEDA al cierre del día. Se puede elegir cualquier día pasado.
+// 'YYYY-MM-DD' → Date local, sin el corrimiento de un día que da new Date(iso).
+function fechaLocalISO(iso) {
+  const [y, m, d] = String(iso).split('-').map(Number);
+  return new Date(y, (m || 1) - 1, d || 1);
+}
+
+// Celda de Entradas o Salidas del Reporte diario: con movimiento es un botón
+// que abre quién lo hizo, a qué hora y cuánto; sin movimiento, el guion.
+// `hayAlgo` la vuelve botón aunque el neto sea guion (una devolución).
+function CeldaMovimiento({ lineas, hayAlgo = false, onClick }) {
+  const vacia = lineas.length === 1 && lineas[0] === '—';
+  if (vacia && !hayAlgo) return <span className="block text-gray-400">—</span>;
+  return (
+    <button type="button" onClick={onClick}
+      className="text-left text-blue hover:text-blue-700 hover:underline underline-offset-2 transition-colors">
+      {lineas.map((l, i) => (
+        <span key={i} className={`block ${l === '—' ? 'text-gray-400' : ''}`}>{l}</span>
+      ))}
+    </button>
+  );
+}
+
+// Qué fue cada movimiento, dicho para el mostrador.
+function etiquetaMovimiento(m) {
+  const nota = m.nota_folio ? `Nota ${m.nota_folio}` : null;
+  if (m.tipo === 'entrada')    return 'Entrada';
+  if (m.tipo === 'salida')     return 'Salida manual';
+  if (m.tipo === 'venta')      return nota ?? 'Venta en nota';
+  if (m.tipo === 'liberacion') return `Devuelto${nota ? ` · ${nota}` : ''} (se anuló la venta)`;
+  return m.tipo;
+}
+
+// Cuánto movió, en las mismas unidades que la tabla: lo que va por unidad en
+// unidades; el granel, en botellas o en bidón según de dónde salió o a dónde
+// entró.
+function cantidadMovimiento(m, p, esMarca) {
+  const n = Number(m.cantidad_medidas) || 0;
+  if (esMarca) return textoBotellas(n, p.medidas_por_botella, { marca: true });
+  if (m.destino === 'granel') return `A granel: ${textoGranelFmt(n, p.medidas_por_bidon, p.medidas_por_botella)}`;
+  return textoBotellas(n, p.medidas_por_botella);
+}
+
+// Detalle de las entradas o salidas de un producto en un día (2026-10-03):
+// quién hizo cada movimiento, a qué hora y cuánto. Lo que vino de una nota
+// lleva a esa nota.
+function MovimientosDiaModal({ producto, tipo, fecha, onClose }) {
+  const navigate = useNavigate();
+  const [movs, setMovs] = useState(null);
+  const [error, setError] = useState('');
+  const esMarca = porUnidad(producto);
+
+  useEffect(() => {
+    let activo = true;
+    api.get(`/productos/${producto.id}/movimientos?fecha=${fecha}&tipo=${tipo}`)
+      .then(d => { if (activo) setMovs(d ?? []); })
+      .catch(e => { if (activo) setError(e.message); });
+    return () => { activo = false; };
+  }, [producto.id, tipo, fecha]);
+
+  const nombre = esMarca && producto.marca ? `${producto.marca} · ${producto.nombre}` : producto.nombre;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-3 border-b border-gray-100">
+          <div className="min-w-0">
+            <h3 className="text-base font-semibold text-gray-900">{tipo === 'entradas' ? 'Entradas' : 'Salidas'}</h3>
+            <p className="text-xs text-gray-500 truncate">{nombre} · {fechaLarga(fechaLocalISO(fecha))}</p>
+          </div>
+          <button onClick={onClose} aria-label="Cerrar" className="text-gray-400 hover:text-gray-600 flex-shrink-0">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <div className="overflow-y-auto py-1">
+          {error ? (
+            <p className="text-center text-red-600 text-sm py-10 px-5">{error}</p>
+          ) : movs == null ? (
+            <p className="text-center text-gray-400 text-sm py-10">Cargando…</p>
+          ) : movs.length === 0 ? (
+            <p className="text-center text-gray-400 text-sm py-10">Sin movimientos</p>
+          ) : movs.map(m => {
+            const irANota = m.nota_id && m.nota_folio ? () => { onClose(); navigate(`/notas/${m.nota_id}`); } : null;
+            return (
+              <div key={m.id} className="flex items-center justify-between gap-3 px-5 py-2.5 border-b border-gray-50 last:border-0">
+                <div className="min-w-0">
+                  {irANota ? (
+                    <button type="button" onClick={irANota} className="text-sm font-medium text-blue hover:underline underline-offset-2 truncate text-left">
+                      {etiquetaMovimiento(m)}
+                    </button>
+                  ) : (
+                    <p className="text-sm text-gray-800 truncate">{etiquetaMovimiento(m)}</p>
+                  )}
+                  <p className="text-xs text-gray-400 truncate">
+                    {m.usuario_nombre || 'Usuario eliminado'} · {formatHora12(m.created_at)}
+                  </p>
+                </div>
+                <span className={`text-sm font-medium whitespace-nowrap ${m.tipo === 'liberacion' ? 'text-green-700' : 'text-gray-700'}`}>
+                  {m.tipo === 'liberacion' ? '+ ' : ''}{cantidadMovimiento(m, producto, esMarca)}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ReporteDiario() {
   const [fecha, setFecha]   = useState(hoyISO);
   const [data, setData]     = useState(null);
@@ -1336,6 +1447,8 @@ function ReporteDiario() {
   const [error, setError]   = useState('');
   const [exportOpen, setExportOpen] = useState(false);
   const exportRef = useRef(null);
+  // Detalle de una celda de Entradas o Salidas: { producto, tipo }.
+  const [detalle, setDetalle] = useState(null);
 
   useEffect(() => {
     let activo = true;
@@ -1400,15 +1513,13 @@ function ReporteDiario() {
                       {esMarca && p.marca && <p className="text-xs text-gray-400">{p.nombre}</p>}
                     </td>
                     <td className="px-4 py-3 text-gray-700">
-                      {lineasEntradas(p, esMarca).map((l, i) => (
-                        <span key={i} className={`block ${l === '—' ? 'text-gray-400' : i > 0 ? 'text-gray-500' : ''}`}>{l}</span>
-                      ))}
+                      <CeldaMovimiento lineas={lineasEntradas(p, esMarca)}
+                        onClick={() => setDetalle({ producto: p, tipo: 'entradas' })} />
                     </td>
                     <td className="px-4 py-3 text-gray-700">
                       {/* Por notas más las salidas manuales (merma, dañado…). */}
-                      {lineasSalidas(p, esMarca).map((l, i) => (
-                        <span key={i} className={`block ${l === '—' ? 'text-gray-400' : i > 0 ? 'text-gray-500' : ''}`}>{l}</span>
-                      ))}
+                      <CeldaMovimiento lineas={lineasSalidas(p, esMarca)} hayAlgo={p.devuelto_medidas > 0}
+                        onClick={() => setDetalle({ producto: p, tipo: 'salidas' })} />
                       {/* Ventas anuladas ese día: el producto volvió al estante,
                           así que ya viene restado de la línea de arriba. Se dice
                           aparte para que nadie lo lea como una venta perdida. */}
@@ -1497,6 +1608,15 @@ function ReporteDiario() {
           {grupo('Polvo', polvo)}
           {grupo('Marca', marca)}
         </>
+      )}
+
+      {detalle && (
+        <MovimientosDiaModal
+          producto={detalle.producto}
+          tipo={detalle.tipo}
+          fecha={fecha}
+          onClose={() => setDetalle(null)}
+        />
       )}
     </div>
   );

@@ -624,17 +624,33 @@ export const crearMovimiento = async (req, res) => {
 
 // ── GET /productos/:id/movimientos ──────────────────────────────
 // Historial de movimientos de un producto (más reciente primero).
+// Filtros opcionales (Reporte diario, 2026-10-03): `fecha` acota a ese día
+// local y `tipo` a las entradas o a las salidas (por notas —venta y lo
+// devuelto— y manuales). Sin filtros, el historial de siempre.
+const TIPOS_MOVIMIENTO = {
+  entradas: ['entrada'],
+  salidas:  ['venta', 'liberacion', 'salida'],
+};
+
 export const getMovimientos = async (req, res) => {
   const { id } = req.params;
+  const fecha = esFechaISO(req.query.fecha) ? req.query.fecha : null;
+  const tipos = TIPOS_MOVIMIENTO[req.query.tipo] ?? null;
   try {
     const { rows } = await pool.query(
-      `SELECT m.*, TRIM(u.nombre || ' ' || COALESCE(u.apellido, '')) AS usuario_nombre
+      `SELECT m.*, TRIM(u.nombre || ' ' || COALESCE(u.apellido, '')) AS usuario_nombre,
+              n.folio AS nota_folio
          FROM producto_movimientos m
          LEFT JOIN usuarios u ON u.id = m.usuario_id
+         LEFT JOIN notas n    ON n.id = m.nota_id
         WHERE m.producto_id = $1 AND m.sucursal = $2
+          AND ($3::date IS NULL OR (
+                m.created_at >= ($3::date)::timestamp     AT TIME ZONE 'America/Mexico_City'
+            AND m.created_at <  ($3::date + 1)::timestamp AT TIME ZONE 'America/Mexico_City'))
+          AND ($4::text[] IS NULL OR m.tipo = ANY($4))
         ORDER BY m.created_at DESC, m.id DESC
         LIMIT 200`,
-      [id, req.sucursal]
+      [id, req.sucursal, fecha, tipos]
     );
     res.json(rows);
   } catch (err) {
