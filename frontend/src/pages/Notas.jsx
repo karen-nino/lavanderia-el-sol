@@ -244,6 +244,26 @@ export default function Notas() {
       .finally(() => setLoading(false));
   }, []);
 
+  // Tocar "Notas" en el menú lleva a /notas a secas. Si ya se estaba en Notas
+  // la página no se vuelve a montar, así que conservaba los filtros y los
+  // reescribía en la URL (2026-10-03). La URL de la lista SIEMPRE trae `fecha`
+  // (la escribe el efecto de abajo); si llega sin ella es que se pidió la
+  // lista desde cero: vuelve a Hoy, sin estado, sin búsqueda y a la página 1.
+  // Si trae un estado (un KPI del Dashboard), se respeta como al entrar.
+  // Se ajusta durante el render, al cambiar la URL (patrón de React para
+  // reiniciar estado según una prop), no en un efecto.
+  const sinFecha = !searchParams.has('fecha');
+  const [sinFechaPrevio, setSinFechaPrevio] = useState(sinFecha);
+  if (sinFecha !== sinFechaPrevio) {
+    setSinFechaPrevio(sinFecha);
+    if (sinFecha) {
+      setFiltro(estadoInicial);
+      setRangoFecha(estadoInicial !== 'TODOS' ? 'TODAS' : 'HOY');
+      setBusqueda('');
+      setPagina(1);
+    }
+  }
+
   // Los filtros elegidos viven en la URL (sustituyendo la entrada actual, sin
   // llenar el historial). Así, al abrir una nota y volver con "atrás", la lista
   // reaparece con el mismo filtro en vez de reiniciarse en "Hoy".
