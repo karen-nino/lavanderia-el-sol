@@ -6,7 +6,7 @@ import { tarifaSecadora, precioProductoEnNota, unidadDeVenta, medidasPorUnidad, 
 // acción que el empleado está mirando: no debe depender de que el listener esté
 // vivo. Es idempotente, así que el aviso del trigger llegando después no molesta.
 import { sincronizarSonoff, maxCiclosDeMaquina } from '../services/sincronizarSonoff.js';
-import { MINUTOS_CONFIGURADOS, OPCIONES_DE_MARCA, esCronometroSql } from '../db/sqlMaquina.js';
+import { MINUTOS_CONFIGURADOS, OPCIONES_DE_MARCA, esCronometroSql, conIniciarSql } from '../db/sqlMaquina.js';
 
 const ESTADOS_VALIDOS     = ['EN_ESPERA', 'LAVANDO', 'SECANDO', 'LISTA', 'PAGADA', 'FINALIZADA', 'CANCELADA'];
 // PRODUCTOS es la venta de mostrador (mig. 112): productos sueltos, sin lavado
@@ -1468,6 +1468,9 @@ async function cargasDeNota(client, notaId) {
                         -- no tiene marca de catálogo.
                         (SELECT ${esCronometroSql('mm4')} FROM maquinas mm4
                           WHERE mm4.id = ncm.maquina_id) AS cronometro,
+                        -- Cronómetro que arranca con "Iniciar" y no al encender.
+                        (SELECT ${conIniciarSql('mm5')} FROM maquinas mm5
+                          WHERE mm5.id = ncm.maquina_id) AS con_iniciar,
                         -- Actual = la ÚLTIMA pasada del hueco, y solo si esa
                         -- máquina sigue puesta. Con la comparación a secas, una
                         -- carga relavada en la misma lavadora marcaba las dos.
@@ -2668,7 +2671,8 @@ export const encenderMaquinaDeNota = async (req, res) => {
     // serializan aquí, igual que al iniciar.
     const { rows: maqRows } = await client.query(
       `SELECT m.id, m.nombre, m.tipo, m.marca, m.estado, m.en_uso_desde, m.encendida_para_nota_id,
-              ${esCronometroSql('m')} AS cronometro
+              ${esCronometroSql('m')} AS cronometro,
+              ${conIniciarSql('m')} AS con_iniciar
          FROM maquinas m WHERE m.id = $1 AND m.sucursal = $2 FOR UPDATE OF m`,
       [maquina_id, req.sucursal]
     );
@@ -2742,7 +2746,9 @@ export const encenderMaquinaDeNota = async (req, res) => {
       });
     }
 
-    if (cronometro) {
+    // La de cronómetro con botón Iniciar (lavadora Speed Queen) sigue el camino
+    // de abajo: espera su "Iniciar Lavado" y ahí arranca el cronómetro.
+    if (cronometro && !maq.con_iniciar) {
       // Lo mismo que "Iniciar Lavado" (activar-pendientes) pero en el acto de
       // encender: el cronómetro cuenta desde aquí, y el ciclo que se sella es
       // el tope de su modelo o de su tamaño.

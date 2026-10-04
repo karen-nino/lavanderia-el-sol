@@ -2,7 +2,7 @@ import pool from '../db/pool.js';
 import { TZ_NEGOCIO } from '../utils/tz.js';
 import * as dispositivos from '../services/dispositivos/index.js';
 import { explicarFalla, resumirMotivo } from '../services/dispositivos/mensajes.js';
-import { MINUTOS_CONFIGURADOS, TIEMPOS_DEL_MODELO, OPCIONES_DE_MARCA, esCronometroSql } from '../db/sqlMaquina.js';
+import { MINUTOS_CONFIGURADOS, TIEMPOS_DEL_MODELO, OPCIONES_DE_MARCA, esCronometroSql, conIniciarSql } from '../db/sqlMaquina.js';
 import {
   HORAS_ENCENDIDO_MANUAL,
   PAUSA_OTRO_CICLO_SEGUNDOS,
@@ -168,6 +168,8 @@ export const getMaquinas = async (req, res) => {
               -- Cronómetro en vez de temporizador (2026-10-02): la tarjeta
               -- cuenta hacia arriba y ofrece Finalizar siempre.
               ${esCronometroSql('m')} AS cronometro,
+              -- Cronómetro que arranca con "Iniciar" y no al encender.
+              ${conIniciarSql('m')} AS con_iniciar,
               (r.folio IS NOT NULL) AS reservada,
               r.folio               AS reservada_folio,
               r.id                  AS reservada_nota_id,

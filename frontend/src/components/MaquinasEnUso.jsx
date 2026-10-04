@@ -391,7 +391,13 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
     setErrorOtroCiclo(null);
     setOtroCicloEnCurso(String(maquina.id));
     try {
-      const r = await api.patch(`/maquinas/${maquina.id}/otro-ciclo`, {});
+      // Cronómetro con botón Iniciar (lavadora Speed Queen) recién encendida:
+      // no es otro ciclo sino el primero, y ese lo arranca la nota.
+      const primerArranque = maquina.con_iniciar && maquina.esperando_arranque
+        && maquina.en_uso_nota_id && maquina.ciclos_carga == null;
+      const r = primerArranque
+        ? await api.patch(`/notas/${maquina.en_uso_nota_id}/activar-pendientes`, { maquina_id: maquina.id })
+        : await api.patch(`/maquinas/${maquina.id}/otro-ciclo`, {});
       // Sesión expirada: api redirige y devuelve undefined.
       if (r) await refrescarDatos();
     } catch (err) {

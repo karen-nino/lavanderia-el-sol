@@ -234,8 +234,9 @@ export default function Salidas() {
         api.patch(`/notas/${id}/encender-maquina`, { maquina_id: maq.id }),
         new Promise((r) => setTimeout(r, 1800)),
       ]);
-      // La de cronómetro no tiene paso siguiente: ya quedó corriendo.
-      if (maq.cronometro) setMaquinaModalId(null);
+      // La de cronómetro no tiene paso siguiente: ya quedó corriendo. La que
+      // arranca con "Iniciar" (lavadora Speed Queen) sí: el modal se queda.
+      if (maq.cronometro && !maq.con_iniciar) setMaquinaModalId(null);
       await cargarDatos();
     } catch (err) {
       setErrorAccion(err.message);
@@ -726,6 +727,9 @@ export default function Salidas() {
             // 2026-10-02): encenderla ya arranca su carga, no hay "Iniciar" y
             // se finaliza a mano cuando termine.
             cronometro: Boolean(u.cronometro),
+            // Cronómetro que arranca con "Iniciar" y no al encender (lavadora
+            // Speed Queen, 2026-10-04).
+            con_iniciar: Boolean(u.con_iniciar),
             ...(esLav ? {} : { tamano: u.tamano }),
             // La pasada viva muestra el estado real de su máquina; una ya
             // cerrada cumplió su parte (verde).
@@ -773,7 +777,8 @@ export default function Salidas() {
   // todavía va en 10 (2026-09-29).
   const preguntaSuTiempo = preguntaTiempo(maqModal);
   // La de cronómetro siempre entra por "Encender": ese paso ya la arranca.
-  const pasoModal = !maqModal?.cronometro && maqModal?.esperandoArranque
+  // Salvo la que arranca con "Iniciar" (lavadora Speed Queen).
+  const pasoModal = (!maqModal?.cronometro || maqModal?.con_iniciar) && maqModal?.esperandoArranque
     ? 'iniciar' : 'encender';
   // Lo que se eligió al encender esta máquina, si sigue vivo.
   const minutosDeMaquina = (maq) => (maq ? minutosPorMaquina[maq.id] ?? null : null);
@@ -1200,7 +1205,7 @@ export default function Salidas() {
                           Encendida. Carga la ropa, arráncala y dale a Iniciar.
                         </span>
                       )}
-                      {m.cronometro && m.estado === 'en_uso' && !m.tomadaPor && (
+                      {m.cronometro && m.estado === 'en_uso' && !m.esperandoArranque && !m.tomadaPor && (
                         // Mismo aviso que la tarjeta de Máquinas: pasado su
                         // tope, el corte ya le quitó la luz y falta finalizarla.
                         topeAlcanzado(m) ? (
@@ -1713,6 +1718,14 @@ export default function Salidas() {
                     : 'los minutos del ciclo'}, así que confírmalo solo cuando ya la hayas
                   arrancado con su botón.
                 </p>
+              ) : maqModal.cronometro ? (
+                /* Cronómetro con botón Iniciar (lavadora Speed Queen). */
+                <p className="text-sm text-gray-500">
+                  ¿Ya arrancaste{' '}
+                  <span className="font-semibold text-gray-800">{maqModal.nombre}</span> con su botón?
+                  Desde aquí empieza a correr el cronómetro; cuando termine, finalízala desde su
+                  tarjeta: ahí se le corta la luz.
+                </p>
               ) : (
                 <p className="text-sm text-gray-500">
                   ¿Iniciar el {accion} de{' '}
@@ -1721,7 +1734,7 @@ export default function Salidas() {
                   botón: lo que tardes de más se le descuenta al {accion}.
                 </p>
               )
-            ) : maqModal.cronometro ? (
+            ) : maqModal.cronometro && !maqModal.con_iniciar ? (
               /* Cronómetro: no hay segundo paso. */
               <p className="text-sm text-gray-500">
                 Se le da corriente a{' '}

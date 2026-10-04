@@ -58,11 +58,6 @@ export const MINUTOS_CONFIGURADOS = `COALESCE(
 // 120): ahí el empleado elige el programa en la pantalla de la máquina y ese
 // tiempo sí es su duración, así que conserva su temporizador.
 //
-// Las LAVADORAS Speed Queen también lo conservan (2026-10-04, a pedido del
-// negocio): después de "Encender máquina" aparece "Iniciar" para arrancar su
-// ciclo, que dura lo que diga su modelo o su tamaño. Sus secadoras siguen con
-// cronómetro salvo la que pregunta su tiempo.
-//
 // Interruptor general: `MAQUINAS_CRONOMETRO=off` en el servidor devuelve TODAS
 // las máquinas al temporizador sin tocar código (ver
 // info/Temporizador/Máquinas - flujo con temporizador.md). Se lee en cada
@@ -70,15 +65,10 @@ export const MINUTOS_CONFIGURADOS = `COALESCE(
 export const cronometroActivo = () =>
   String(process.env.MAQUINAS_CRONOMETRO ?? '').toLowerCase() !== 'off';
 
-// Marca cuyas lavadoras van con temporizador (encender → Iniciar), en minúsculas.
-export const MARCA_LAVADORA_CON_INICIAR = 'speed queen';
-
 // La regla en SQL, para la fila de `maquinas` con el alias que se pase. El
 // modelo que pregunta su tiempo solo cuenta como tal si de verdad tiene más de
 // uno que ofrecer: con uno solo, preguntar no tiene sentido (lib/tiemposModelo).
-export const esCronometroSql = (alias) => (cronometroActivo() ? `(NOT (
-  COALESCE(LOWER(TRIM(${alias}.marca)), '') = '${MARCA_LAVADORA_CON_INICIAR}' AND ${alias}.tipo <> 'secadora'
-) AND NOT EXISTS (
+export const esCronometroSql = (alias) => (cronometroActivo() ? `NOT EXISTS (
   SELECT 1
     FROM marcas_maquina mmc
     JOIN modelos_maquina moc ON moc.marca_id = mmc.id
@@ -86,7 +76,20 @@ export const esCronometroSql = (alias) => (cronometroActivo() ? `(NOT (
      AND moc.nombre = ${alias}.modelo
      AND moc.pregunta_tiempo
      AND cardinality(ARRAY_REMOVE(ARRAY[moc.minutos, moc.minutos_2, moc.minutos_3], NULL)) > 1
-))` : 'FALSE');
+)` : 'FALSE');
+
+// Cronómetro CON botón Iniciar: las LAVADORAS Speed Queen (2026-10-04, a
+// pedido del negocio). Son de cronómetro —cuenta hacia arriba, los minutos de
+// su modelo son su TOPE y la carga termina cuando alguien la finaliza— pero
+// "Encender máquina" solo les da corriente y el cronómetro arranca con
+// "Iniciar Lavado", igual que el paso de espera de la mig. 110 (si nadie la
+// inicia, se apaga a los ESPERA_ARRANQUE_MINUTOS). Sus secadoras no: arrancan
+// al encender como las demás.
+export const MARCA_LAVADORA_CON_INICIAR = 'speed queen';
+
+export const conIniciarSql = (alias) => (cronometroActivo() ? `(
+  COALESCE(LOWER(TRIM(${alias}.marca)), '') = '${MARCA_LAVADORA_CON_INICIAR}' AND ${alias}.tipo <> 'secadora'
+)` : 'FALSE');
 
 // Cómo se comporta esta máquina, según su catálogo:
 //   · `dos_ciclos` lo declara el MODELO (mig. 123): una carga corre DOS vueltas

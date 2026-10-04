@@ -92,11 +92,14 @@ describe('qué máquinas van con cronómetro', () => {
     expect(await cronometroDe(id)).toBe(false);
   });
 
-  it('menos las lavadoras Speed Queen; sus secadoras sí', async () => {
-    const sq = await lavadora('Speed Queen', 'L8', 35);
+  it('las lavadoras Speed Queen también, pero arrancan con Iniciar; sus secadoras no', async () => {
+    const sq = await lavadora('Speed Queen', 'L8', 45);
     const sec = await seedMaquina({ nombre: 'S1', tipo: 'secadora', tamano: 'mediana', marca: 'Speed Queen' });
-    expect(await cronometroDe(sq)).toBe(false);
-    expect(await cronometroDe(sec)).toBe(true);
+    const res = await request(app).get('/api/maquinas').set(auth(admin.token)).expect(200);
+    const lav = res.body.find(x => x.id === sq);
+    const seca = res.body.find(x => x.id === sec);
+    expect([lav.cronometro, lav.con_iniciar]).toEqual([true, true]);
+    expect([seca.cronometro, seca.con_iniciar]).toEqual([true, false]);
   });
 
   it('con MAQUINAS_CRONOMETRO=off ninguna', async () => {
@@ -174,14 +177,14 @@ describe('encender', () => {
 });
 
 describe('lavadora Speed Queen', () => {
-  it('encender solo da corriente y el ciclo arranca con Iniciar', async () => {
-    const id = await lavadora('Speed Queen', 'L8', 35);
+  it('encender solo da corriente; Iniciar arranca el cronómetro con su tope', async () => {
+    const id = await lavadora('Speed Queen', 'L8', 45);
     const { notaId } = await notaCon(id);
 
     await encender(notaId, id).expect(200);
     let m = await maquina(id);
     expect(m.estado).toBe('en_uso');
-    expect(m.en_uso_desde).toBeNull();
+    expect(m.en_uso_desde).toBeNull();                 // el cronómetro todavía no corre
     expect(m.encendida_sin_iniciar_at).not.toBeNull();
 
     await request(app).patch(`/api/notas/${notaId}/activar-pendientes`).set(auth(admin.token))
@@ -189,7 +192,23 @@ describe('lavadora Speed Queen', () => {
     m = await maquina(id);
     expect(m.en_uso_desde).not.toBeNull();
     expect(m.encendida_sin_iniciar_at).toBeNull();
-    expect(m.ciclo_minutos).toBe(35);
+    expect(m.ciclo_minutos).toBe(45);                  // su tope
+
+    const nota = await request(app).get(`/api/notas/${notaId}`).set(auth(admin.token)).expect(200);
+    const usada = nota.body.cargas[0].maquinas_usadas[0];
+    expect([usada.cronometro, usada.con_iniciar]).toEqual([true, true]);
+  });
+
+  it('ya iniciada se finaliza a mano como cualquier cronómetro', async () => {
+    const id = await lavadora('Speed Queen', 'L8', 45);
+    const { notaId } = await notaCon(id);
+    await encender(notaId, id).expect(200);
+    await request(app).patch(`/api/notas/${notaId}/activar-pendientes`).set(auth(admin.token))
+      .send({ maquina_id: id }).expect(200);
+
+    await request(app).patch(`/api/notas/${notaId}/terminar-lavado-final`)
+      .set(auth(admin.token)).send({ lavadora_id: id }).expect(200);
+    expect((await maquina(id)).estado).toBe('disponible');
   });
 });
 
