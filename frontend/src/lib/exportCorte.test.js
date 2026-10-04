@@ -33,6 +33,15 @@ describe('descargarCortesCSV', () => {
     expect(filas[5].slice(3)).toEqual(['Salida', 'Sueldo', 'Beto', '-300.00']);
   });
 
+  it('el turno en curso se exporta con su fecha de apertura y sin cierre', () => {
+    descargarCortesCSV([{ ...corte([]), en_curso: true, cerrada_at: null, contado: null, diferencia: null }], 'hoy');
+    const [fila] = capturado.filas;
+    expect(fila[0]).toBe('2026-10-04');
+    expect(fila[1]).toBe('en curso');
+    expect(fila[3]).toBe('En curso');
+    expect(fila[14]).toBe('En curso');
+  });
+
   it('sin movimientos no agrega la segunda tabla', () => {
     descargarCortesCSV([corte([])], 'hoy');
     expect(capturado.filas).toHaveLength(1);

@@ -17,8 +17,16 @@ import {
   descargarCSV, imprimirDocumento,
 } from './exportUtils';
 
+// El turno que sigue abierto también se exporta (2026-10-04, para el filtro
+// Hoy): no tiene cierre, así que su fecha es la de apertura y donde iría la
+// hora de cierre dice "en curso".
+const fechaCorte = (c) => c.cerrada_at ?? c.abierta_at;
+const horaCierre = (c) => (c.en_curso ? 'en curso' : formatHora12(c.cerrada_at));
+const quienCerro = (c) => (c.en_curso ? 'En curso' : (c.usuario_cierre || '—'));
+
 // Estado del corte según su diferencia.
 const estadoCorte = (c) => {
+  if (c.en_curso) return 'En curso';
   if (c.contado == null || c.diferencia == null) return '';
   if (Math.abs(c.diferencia) < 0.005) return 'Cuadra';
   return c.diferencia < 0 ? 'Faltante' : 'Sobrante';
@@ -36,7 +44,7 @@ const ENCABEZADOS_CSV = [
 const ENCABEZADOS_MOVS = ['Corte', 'Fecha', 'Hora', 'Tipo', 'Concepto', 'Registró', 'Monto'];
 
 const filasMovimientos = (c) => (c.movimientos ?? []).map((m) => [
-  `${fechaISO(c.cerrada_at)} ${formatHora12(c.cerrada_at)}`,
+  `${fechaISO(fechaCorte(c))} ${horaCierre(c)}`,
   fechaISO(m.created_at),
   formatHora12(m.created_at),
   m.tipo === 'salida' ? 'Salida' : 'Entrada',
@@ -46,10 +54,10 @@ const filasMovimientos = (c) => (c.movimientos ?? []).map((m) => [
 ]);
 
 const filaCSV = (c) => [
-  fechaISO(c.cerrada_at),
-  formatHora12(c.cerrada_at),
+  fechaISO(fechaCorte(c)),
+  horaCierre(c),
   c.usuario_apertura ?? '',
-  c.usuario_cierre ?? '',
+  c.en_curso ? 'En curso' : (c.usuario_cierre ?? ''),
   num(c.monto_inicial),
   num(c.ventas),
   num(c.ventas_desglose?.efectivo ?? c.ventas),
@@ -116,8 +124,8 @@ const tablaMovimientos = (c) => {
 const bloqueDetalle = (c) => `
   <section class="corte">
     <div class="corte-head">
-      <h2>${esc(fechaLarga(c.cerrada_at))}</h2>
-      <span class="hora">${esc(formatHora12(c.cerrada_at))}</span>
+      <h2>${esc(fechaLarga(fechaCorte(c)))}${c.en_curso ? ' · turno en curso' : ''}</h2>
+      <span class="hora">${esc(horaCierre(c))}</span>
     </div>
     <table class="desglose">
       <tbody>
@@ -139,7 +147,7 @@ const bloqueDetalle = (c) => `
     <div class="firmas">
       <div><span class="lbl">Abrió</span> ${esc(c.usuario_apertura || '—')}
         ${c.notas_apertura ? `<p class="nota">${esc(c.notas_apertura)}</p>` : ''}</div>
-      <div><span class="lbl">Cerró</span> ${esc(c.usuario_cierre || '—')}
+      <div><span class="lbl">Cerró</span> ${esc(quienCerro(c))}
         ${c.notas_cierre ? `<p class="nota">${esc(c.notas_cierre)}</p>` : ''}</div>
     </div>
     ${tablaMovimientos(c)}
@@ -156,8 +164,8 @@ const detalleNotas = (cortes) => {
     ${conAlgo.map((c) => `
       <section class="corte">
         <div class="corte-head">
-          <h2>${esc(fechaLarga(c.cerrada_at))}</h2>
-          <span class="hora">${esc(formatHora12(c.abierta_at))} – ${esc(formatHora12(c.cerrada_at))}</span>
+          <h2>${esc(fechaLarga(fechaCorte(c)))}</h2>
+          <span class="hora">${esc(formatHora12(c.abierta_at))} – ${esc(horaCierre(c))}</span>
         </div>
         ${c.notas_apertura || c.notas_cierre ? `
           <div class="firmas">
@@ -175,7 +183,7 @@ const tablaResumen = (cortes) => {
   const suma = (k) => cortes.reduce((a, c) => a + Number(c[k] ?? 0), 0);
   const filas = cortes.map((c) => `
     <tr>
-      <td>${esc(fechaLarga(c.cerrada_at))}</td>
+      <td>${esc(fechaLarga(fechaCorte(c)))}${c.en_curso ? ' (en curso)' : ''}</td>
       <td class="r">${fmtMoneda(c.monto_inicial)}</td>
       <td class="r">${fmtMoneda(c.ventas)}</td>
       <td class="r">${fmtMoneda(c.entradas)}</td>

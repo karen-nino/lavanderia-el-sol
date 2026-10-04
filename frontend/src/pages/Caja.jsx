@@ -731,6 +731,13 @@ function Historial({ onFiltroLabel }) {
       })
     : cortes;
 
+  // Lo que se exporta: los cortes del período y, si cae dentro, el turno que
+  // sigue abierto (2026-10-04). Sin él, "Hoy" casi nunca tenía qué exportar.
+  const enCursoVisible = enCurso && (!rango || (
+    new Date(enCurso.abierta_at) >= rango.desde && new Date(enCurso.abierta_at) < rango.hasta));
+  // Va primero: la lista viene de la más nueva a la más vieja.
+  const exportables = enCursoVisible ? [enCurso, ...visibles] : visibles;
+
   // Vista "Esta semana": los 7 días en curso (Lunes → Domingo) como contenedores,
   // para ver de un vistazo en qué días hubo o falta corte.
   const lunesSemana = inicioSemana(new Date());
@@ -1141,7 +1148,7 @@ function Historial({ onFiltroLabel }) {
             <button
               type="button"
               onClick={() => setExportOpen((v) => !v)}
-              disabled={visibles.length === 0}
+              disabled={exportables.length === 0}
               aria-haspopup="menu"
               aria-expanded={exportOpen}
               className="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-medium border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -1155,7 +1162,7 @@ function Historial({ onFiltroLabel }) {
               <div role="menu" className="absolute right-0 mt-1 z-20 w-48 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
                 <button
                   type="button"
-                  onClick={() => { setExportOpen(false); imprimirCortes(visibles, { titulo: 'Cortes de caja', subtitulo: filtroLabel }); }}
+                  onClick={() => { setExportOpen(false); imprimirCortes(exportables, { titulo: 'Cortes de caja', subtitulo: filtroLabel }); }}
                   className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm font-medium text-gray-700 hover:bg-gray-50"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
@@ -1165,7 +1172,7 @@ function Historial({ onFiltroLabel }) {
                 </button>
                 <button
                   type="button"
-                  onClick={() => { setExportOpen(false); descargarCortesCSV(visibles, filtroLabel); }}
+                  onClick={() => { setExportOpen(false); descargarCortesCSV(exportables, filtroLabel); }}
                   className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm font-medium text-gray-700 hover:bg-gray-50"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
