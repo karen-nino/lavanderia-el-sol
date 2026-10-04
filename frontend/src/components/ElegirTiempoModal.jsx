@@ -33,8 +33,10 @@ export default function ElegirTiempoModal({ maquina, tiempos, guardando = false,
         </div>
 
         <p className="text-sm text-gray-500">
-          Elige el programa con el que la arrancaste. La app cronometra ese tiempo y
-          le corta la corriente al terminar.
+          {maquina.cronometro
+            /* Con cronómetro (mig. 146) el programa solo avisa; el corte es el tope. */
+            ? 'Elige el programa con el que la arrancaste. La app te avisa cuando lo cumpla; la corriente se le corta hasta su tope si nadie la finaliza.'
+            : 'Elige el programa con el que la arrancaste. La app cronometra ese tiempo y le corta la corriente al terminar.'}
         </p>
 
         {error && (

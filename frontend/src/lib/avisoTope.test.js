@@ -25,6 +25,12 @@ describe('clavesEnTope', () => {
     expect(clavesEnTope([maq({ cronometro: false, ciclo_minutos: 45, en_uso_desde: hace(46) })], ahora)).toEqual([]);
     expect(clavesEnTope([maq({ cronometro: false, ciclo_minutos: 45, en_uso_desde: hace(20), en_uso_nota_id: 7 })], ahora)).toEqual([]);
   });
+  it('cronómetro con programa elegido: suena al cumplir el programa y otra vez en el tope', () => {
+    const m = maq({ cronometro: true, ciclo_minutos: 45, ciclo_elegido_minutos: 30, en_uso_desde: hace(31) });
+    expect(clavesEnTope([m], ahora)).toEqual([`1:${m.en_uso_desde}:programa`]);
+    const enTope = maq({ cronometro: true, ciclo_minutos: 45, ciclo_elegido_minutos: 30, en_uso_desde: hace(46) });
+    expect(clavesEnTope([enTope], ahora)).toEqual([`1:${enTope.en_uso_desde}`, `1:${enTope.en_uso_desde}:programa`]);
+  });
 });
 
 describe('hayTopeNuevo', () => {

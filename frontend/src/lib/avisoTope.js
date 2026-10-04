@@ -9,7 +9,9 @@
 //     vivía solo en la pantalla de Máquinas (MaquinasEnUso).
 //
 // En los dos casos el momento es el mismo: se cumplieron los minutos sellados
-// al arrancar (`ciclo_minutos`). Lo que suena es avisoSonoro.js.
+// al arrancar (`ciclo_minutos`). Además, con cronómetro, la máquina a la que se
+// le eligió un programa al iniciarla (mig. 146) suena también al cumplirlo:
+// ahí terminó su lavado y falta finalizarla. Lo que suena es avisoSonoro.js.
 import { useEffect, useRef, useState } from 'react';
 import { api } from './api';
 import { prepararAviso, reproducirAvisoCiclo } from './avisoSonoro';
@@ -23,12 +25,22 @@ const REVISION_MS = 5_000;  // cada cuánto se compara con el reloj
 // que cuidar; el temporizador, además, solo avisa si una nota la usa (es la
 // tarjeta verde de "terminar ciclo").
 export function clavesEnTope(maquinas, ahora = Date.now()) {
-  return (maquinas ?? [])
-    .filter(m => m.estado === 'en_uso' && m.en_uso_desde && Number(m.ciclo_minutos) > 0)
-    .filter(m => !(m.encendida_manual_at && !m.en_uso_nota_id))
+  const vivas = (maquinas ?? [])
+    .filter(m => m.estado === 'en_uso' && m.en_uso_desde)
+    .filter(m => !(m.encendida_manual_at && !m.en_uso_nota_id));
+  const cumplio = (m, minutos) =>
+    new Date(m.en_uso_desde).getTime() + Number(minutos) * 60_000 <= ahora;
+  const topes = vivas
+    .filter(m => Number(m.ciclo_minutos) > 0)
     .filter(m => m.cronometro || m.en_uso_nota_id)
-    .filter(m => new Date(m.en_uso_desde).getTime() + Number(m.ciclo_minutos) * 60_000 <= ahora)
+    .filter(m => cumplio(m, m.ciclo_minutos))
     .map(m => `${m.id}:${m.en_uso_desde}`);
+  // Programa cumplido: otra clave de la misma vuelta, así suena una vez por cada uno.
+  const programas = vivas
+    .filter(m => m.cronometro && Number(m.ciclo_elegido_minutos) > 0)
+    .filter(m => cumplio(m, m.ciclo_elegido_minutos))
+    .map(m => `${m.id}:${m.en_uso_desde}:programa`);
+  return [...topes, ...programas];
 }
 
 // ¿Llegó alguna máquina NUEVA al tope desde la revisión anterior? Sin revisión

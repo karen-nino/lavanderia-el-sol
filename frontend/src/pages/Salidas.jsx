@@ -245,13 +245,14 @@ export default function Salidas() {
     }
   }
 
-  // Encender desde el modal. En el modelo que pregunta su tiempo, la pregunta
-  // va ANTES de la corriente: así el empleado ya sabe con cuál va a correr
-  // cuando se pare frente a la pantalla de la máquina a marcarlo.
+  // Encender desde el modal. Con temporizador, en el modelo que pregunta su
+  // tiempo la pregunta va ANTES de la corriente: así el empleado ya sabe con
+  // cuál va a correr cuando se pare frente a la pantalla de la máquina. Con
+  // cronómetro (mig. 146) se pregunta al INICIAR, a pedido del negocio.
   function encenderDesdeModal() {
     const maq = maqModal;
     if (!maq) return;
-    if (preguntaTiempo(maq) && minutosDeMaquina(maq) == null) {
+    if (!maq.cronometro && preguntaTiempo(maq) && minutosDeMaquina(maq) == null) {
       setEligiendoTiempo({ maquina: maq, paso: 'encender' });
       return;
     }
@@ -738,6 +739,10 @@ export default function Salidas() {
               : 'terminado',
             en_uso_desde: u.actual ? (esLav ? c.lavadora_en_uso_desde : c.secadora_en_uso_desde) : null,
             ciclo_minutos: u.actual ? (esLav ? c.lavadora_ciclo_minutos : c.secadora_ciclo_minutos) : null,
+            // Programa elegido al iniciarla (mig. 146): con cronómetro avisa
+            // cuándo terminó; el corte sigue en el tope.
+            ciclo_elegido_minutos: u.actual
+              ? (esLav ? c.lavadora_ciclo_elegido_minutos : c.secadora_ciclo_elegido_minutos) : null,
             esperandoArranque: Boolean(u.actual
               && (esLav ? c.lavadora_esperando_arranque : c.secadora_esperando_arranque)),
             tomadaPor: u.actual && u.maquina_id ? usadaPorOtra(u.maquina_id) : null,
@@ -877,6 +882,10 @@ export default function Salidas() {
   // encender, contado desde que arrancó: el mismo cálculo de la tarjeta.
   const topeAlcanzado = (m) => Boolean(m.cronometro && m.en_uso_desde && m.ciclo_minutos)
     && now - new Date(m.en_uso_desde).getTime() >= Number(m.ciclo_minutos) * 60000;
+
+  // ¿Ya cumplió el programa que se eligió al iniciarla? (mig. 146)
+  const programaCumplido = (m) => Boolean(m.cronometro && m.en_uso_desde && m.ciclo_elegido_minutos)
+    && now - new Date(m.en_uso_desde).getTime() >= Number(m.ciclo_elegido_minutos) * 60000;
 
   // Lavadora y secadora se asignan igual: en cuanto la nota existe. La
   // secadora esperaba a que terminara el lavado para no quedarse con una
@@ -1211,6 +1220,10 @@ export default function Salidas() {
                         topeAlcanzado(m) ? (
                           <span className="text-xs font-medium text-red-600 basis-full">
                             Llegó al tope y se le cortó la luz.
+                          </span>
+                        ) : programaCumplido(m) ? (
+                          <span className="text-xs font-medium text-amber-600 basis-full">
+                            Terminó su programa de {m.ciclo_elegido_minutos} min. Finalízala.
                           </span>
                         ) : (
                           <span className="text-xs font-medium text-green-700 basis-full">
@@ -1708,7 +1721,14 @@ export default function Salidas() {
               /* El modelo que pregunta su tiempo se marca en SU pantalla, no
                  aquí: este botón solo confirma que ya está girando, que es
                  cuando el cronómetro debe empezar. */
-              preguntaSuTiempo ? (
+              preguntaSuTiempo && maqModal.cronometro ? (
+                <p className="text-sm text-gray-500">
+                  ¿Ya arrancaste{' '}
+                  <span className="font-semibold text-gray-800">{maqModal.nombre}</span> con su botón?
+                  En el paso siguiente eliges el programa con el que la arrancaste: el cronómetro
+                  empieza ahí y te avisa cuando lo cumpla. La luz se le corta hasta su tope.
+                </p>
+              ) : preguntaSuTiempo ? (
                 <p className="text-sm text-gray-500">
                   ¿Ya está girando{' '}
                   <span className="font-semibold text-gray-800">{maqModal.nombre}</span>? Desde aquí

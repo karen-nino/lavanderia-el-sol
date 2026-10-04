@@ -63,6 +63,9 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
   const [confirmTerminar, setConfirmTerminar] = useState(null);
   // Secadora esperando que se elija su tiempo antes de arrancar (mig. 120).
   const [eligiendoTiempo, setEligiendoTiempo] = useState(null);
+  // Máquina con cronómetro que arranca con Iniciar y pregunta su programa
+  // (mig. 146): espera a que se elija antes de arrancarla desde su tarjeta.
+  const [eligiendoArranque, setEligiendoArranque] = useState(null);
   // Secadora que arranca al terminar el lavado (para la animación de ciclo).
   const [iniciandoSecadora, setIniciandoSecadora] = useState(null);
   const [secadoraSel, setSecadoraSel] = useState('');
@@ -250,10 +253,13 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
     if (!confirmTerminar) return;
     if (terminaLavado && !secadoraSel) return;
     // La secadora que va a arrancar puede ser de un modelo con varios
-    // programas: se pregunta antes de tocar nada (mig. 120).
-    if (terminaLavado && minutosElegidos == null) {
-      const sec = secadorasDisponibles.find(m => String(m.id) === String(secadoraSel));
-      if (preguntaTiempo(sec)) { setEligiendoTiempo(sec); return; }
+    // programas: se pregunta antes de tocar nada (mig. 120). La que arranca
+    // con Iniciar (Speed Queen, Sec49) aquí solo se enciende: su programa se
+    // pregunta después, al darle Iniciar desde su tarjeta.
+    const secElegida = terminaLavado
+      ? secadorasDisponibles.find(m => String(m.id) === String(secadoraSel)) : null;
+    if (terminaLavado && minutosElegidos == null && !secElegida?.con_iniciar) {
+      if (preguntaTiempo(secElegida)) { setEligiendoTiempo(secElegida); return; }
     }
     setTerminando(true);
     setErrorTerminar('');
@@ -268,8 +274,7 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
         // otras cargas siguen en lavadora). Las demás cargas no se tocan.
         // Se muestra la animación de arranque de la secadora (como en Salidas),
         // con una duración mínima para que alcance a verse.
-        const secadora = secadorasDisponibles.find(m => String(m.id) === String(secadoraSel));
-        setIniciandoSecadora(secadora || null);
+        setIniciandoSecadora(secElegida || null);
         const [notaActualizada] = await Promise.all([
           api.patch(`/notas/${notaParaTerminar.id}/terminar-lavado`, {
             lavadora_id: Number(confirmTerminar.id),
@@ -337,10 +342,17 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
     const transcurridoSeg = inicio ? Math.max(0, Math.floor((now - inicio) / 1000)) : 0;
     const restanteSeg = Math.max(0, duracionSeg - transcurridoSeg);
     const progreso = duracionSeg > 0 ? restanteSeg / duracionSeg : 0;
-    const notaRel = notas
+    const notaEnProceso = notas
       .filter(n => notaUsaMaquina(n, m.id)
                 && ['LAVANDO', 'SECANDO'].includes(n.estado))
       .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
+    // Encendida esperando su Iniciar: su nota puede seguir "En espera" (la
+    // secadora encendida desde la tarjeta de la lavadora, 2026-10-04) y no
+    // entra en el filtro de arriba. La toma de lo que dice la máquina.
+    const notaRel = notaEnProceso ?? (m.esperando_arranque && m.en_uso_nota_id
+      ? (notas.find(n => String(n.id) === String(m.en_uso_nota_id))
+         ?? { id: m.en_uso_nota_id, folio: m.en_uso_folio })
+      : undefined);
     // Encendida a mano y sin nota (mig. 104): no hay ciclo que contar, así que
     // el contador mentiría con el tiempo de una carga que nadie pidió.
     const soloManual = Boolean(m.encendida_manual_at) && !notaRel;
@@ -349,13 +361,14 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
     // configuración del servidor— y aquí solo se cuenta hacia atrás.
     const habilitaEn = m.otro_ciclo_desde ? new Date(m.otro_ciclo_desde).getTime() : null;
     const esperaSeg = habilitaEn ? Math.max(0, Math.ceil((habilitaEn - now) / 1000)) : 0;
-    // Máquina con cronómetro (todas menos el modelo que pregunta su tiempo,
-    // 2026-10-02): cuenta hacia ARRIBA desde que se encendió y termina cuando
-    // alguien la finaliza, así que nunca se pone verde sola. Su
-    // `ciclo_minutos` es su tope: al llegar ahí el corte le quita la luz y el
-    // reloj se queda parado en el tope.
+    // Máquina con cronómetro (todas desde la mig. 146, 2026-10-04): cuenta
+    // hacia ARRIBA desde que arrancó y termina cuando alguien la finaliza, así
+    // que nunca se pone verde sola. Su `ciclo_minutos` es su tope: al llegar
+    // ahí el corte le quita la luz y el reloj se queda parado en el tope. Si se
+    // eligió un programa al iniciarla, al cumplirlo se avisa que ya terminó.
     if (m.cronometro && !soloManual) {
       const contadoSeg = duracionSeg > 0 ? Math.min(transcurridoSeg, duracionSeg) : transcurridoSeg;
+      const programaSeg = Math.max(0, Number(m.ciclo_elegido_minutos) || 0) * 60;
       return {
         nota: notaRel,
         maquina: {
@@ -364,6 +377,7 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
           progreso: duracionSeg > 0 ? contadoSeg / duracionSeg : 1,
           tiempo_restante: inicio ? formatMMSS(contadoSeg) : '—:—',
           tope_alcanzado: inicio != null && duracionSeg > 0 && restanteSeg <= 0,
+          programa_cumplido: inicio != null && programaSeg > 0 && transcurridoSeg >= programaSeg,
           necesita_terminar_ciclo: false,
           puede_otro_ciclo: false,
           espera_otro_ciclo: 0,
@@ -387,16 +401,24 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
   // pausa, así que aquí no hay confirmación: es una acción reversible (termina
   // en el mismo botón de Finalizar que ya estaba) y el empleado la da con la
   // máquina enfrente.
-  const pedirOtroCiclo = async (maquina) => {
+  const pedirOtroCiclo = async (maquina, minutos = null) => {
+    // Cronómetro con botón Iniciar (Speed Queen, Sec49) recién encendida: no
+    // es otro ciclo sino el primero, y ese lo arranca la nota. El modelo que
+    // pregunta su programa lo elige antes (mig. 146).
+    const primerArranque = maquina.con_iniciar && maquina.esperando_arranque
+      && maquina.en_uso_nota_id && maquina.ciclos_carga == null;
+    if (primerArranque && minutos == null && preguntaTiempo(maquina)) {
+      setEligiendoArranque(maquina);
+      return;
+    }
+    setEligiendoArranque(null);
     setErrorOtroCiclo(null);
     setOtroCicloEnCurso(String(maquina.id));
     try {
-      // Cronómetro con botón Iniciar (lavadora Speed Queen) recién encendida:
-      // no es otro ciclo sino el primero, y ese lo arranca la nota.
-      const primerArranque = maquina.con_iniciar && maquina.esperando_arranque
-        && maquina.en_uso_nota_id && maquina.ciclos_carga == null;
       const r = primerArranque
-        ? await api.patch(`/notas/${maquina.en_uso_nota_id}/activar-pendientes`, { maquina_id: maquina.id })
+        ? await api.patch(`/notas/${maquina.en_uso_nota_id}/activar-pendientes`, {
+            maquina_id: maquina.id, ...(minutos != null && { minutos }),
+          })
         : await api.patch(`/maquinas/${maquina.id}/otro-ciclo`, {});
       // Sesión expirada: api redirige y devuelve undefined.
       if (r) await refrescarDatos();
@@ -446,6 +468,15 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
       error={errorTerminar}
       onElegir={(min) => confirmarTerminarCiclo(min)}
       onCancelar={() => { setEligiendoTiempo(null); setErrorTerminar(''); }}
+    />
+  );
+
+  const modalElegirArranque = eligiendoArranque && (
+    <ElegirTiempoModal
+      maquina={eligiendoArranque}
+      tiempos={tiemposDeMaquina(eligiendoArranque)}
+      onElegir={(min) => pedirOtroCiclo(eligiendoArranque, min)}
+      onCancelar={() => setEligiendoArranque(null)}
     />
   );
 
@@ -570,6 +601,7 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
       )}
 
       {modalElegirTiempo}
+      {modalElegirArranque}
 
       {/* Corriente de vuelta para el siguiente ciclo: misma animación que el
           "Encender máquina" de Salidas, porque es exactamente el mismo paso. */}
@@ -579,7 +611,10 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
 
       {/* Animación de arranque de la secadora al terminar el lavado (como en Salidas) */}
       {iniciandoSecadora && (
-        <MaquinaCicloOverlay modo="iniciar" tipo={iniciandoSecadora.tipo} nombre={iniciandoSecadora.nombre} />
+        <MaquinaCicloOverlay
+          modo={iniciandoSecadora.con_iniciar ? 'encender' : 'iniciar'}
+          tipo={iniciandoSecadora.tipo} nombre={iniciandoSecadora.nombre}
+        />
       )}
 
       {confirmTerminar && (
@@ -616,6 +651,13 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
                       );
                     })}
                   </div>
+                )}
+                {secadorasDisponibles.find(m => String(m.id) === String(secadoraSel))?.con_iniciar && (
+                  <p className="text-sm text-gray-500">
+                    Esta secadora solo se enciende: cuando la arranques con su botón, dale a{' '}
+                    <span className="font-semibold text-gray-800">Iniciar ciclo</span> en su tarjeta
+                    para que empiece el cronómetro.
+                  </p>
                 )}
               </>
             ) : (

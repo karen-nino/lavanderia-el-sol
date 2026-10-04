@@ -503,7 +503,7 @@ export const getTiemposMarca = async (req, res) => {
       `SELECT mo.marca_id, mm.nombre AS marca,
               mo.id AS modelo_id, mo.nombre AS modelo,
               mo.tipo, mo.tamano,
-              mo.minutos, mo.minutos_2, mo.minutos_3, mo.pregunta_tiempo, mo.dos_ciclos
+              mo.minutos, mo.minutos_2, mo.minutos_3, mo.minutos_4, mo.pregunta_tiempo, mo.dos_ciclos
          FROM modelos_maquina mo
          JOIN marcas_maquina mm ON mm.id = mo.marca_id
         WHERE mo.activo AND mm.activo
@@ -539,13 +539,15 @@ export const guardarTiempoMarca = async (req, res) => {
     if (!/^\d+$/.test(String(modelo_id))) {
       return res.status(400).json({ message: 'Elige un modelo válido.' });
     }
-    // Un modelo puede llevar hasta tres tiempos y un interruptor (mig. 120).
+    // Un modelo lleva su tiempo (el tope, en el que pregunta) y hasta tres
+    // programas a elegir (migs. 120 y 146).
     // Se manda solo lo que cambió, así que cada campo se mira por separado.
     const updates = [];
     const values  = [];
     let i = 1;
     for (const [campo, valor] of [
       ['minutos', minutos], ['minutos_2', req.body.minutos_2], ['minutos_3', req.body.minutos_3],
+      ['minutos_4', req.body.minutos_4],
     ]) {
       if (valor === undefined) continue;
       const leido = leerMinutos(valor);
@@ -563,7 +565,7 @@ export const guardarTiempoMarca = async (req, res) => {
         `UPDATE modelos_maquina SET ${updates.join(', ')}
           WHERE id = $${i}
           RETURNING id AS modelo_id, marca_id, nombre AS modelo, tipo, tamano,
-                    minutos, minutos_2, minutos_3, pregunta_tiempo`,
+                    minutos, minutos_2, minutos_3, minutos_4, pregunta_tiempo`,
         values
       );
       if (rows.length === 0) {

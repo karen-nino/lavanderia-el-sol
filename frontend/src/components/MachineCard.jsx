@@ -269,11 +269,21 @@ export default function MachineCard({
             label={maquina.tiempo_restante ?? '—:—'}
             color={maquina.tope_alcanzado || esSecadoraCrono ? 'red' : 'blue'}
           />
-          {maquina.tope_alcanzado && (
+          {maquina.tope_alcanzado ? (
             <p className="text-kpi-label text-red text-sm text-center">
               Llegó al tope y se le cortó la luz.
             </p>
-          )}
+          ) : maquina.programa_cumplido ? (
+            /* Programa elegido al iniciarla (mig. 146): ya cumplió, falta
+               finalizarla; la luz se le corta hasta el tope. */
+            <p className="text-kpi-label text-amber-600 text-sm text-center">
+              Terminó su programa de {maquina.ciclo_elegido_minutos} min. Finalízala.
+            </p>
+          ) : maquina.ciclo_elegido_minutos ? (
+            <p className="text-kpi-label text-sm text-center text-gray-500">
+              Programa de {maquina.ciclo_elegido_minutos} min
+            </p>
+          ) : null}
           {infoNota}
           <button
             onClick={(e) => { e.stopPropagation(); onTerminarCiclo?.(maquina); }}

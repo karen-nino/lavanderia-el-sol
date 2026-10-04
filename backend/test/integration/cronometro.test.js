@@ -67,8 +67,8 @@ async function lavadora(marca = 'LG', nombre = 'L1', minutos = 15) {
 async function secadoraQuePregunta(nombre = 'S49') {
   await seedMarca({ nombre: 'Speed Queen', tipo: 'secadora', tamano: 'mediana' });
   await pool.query(
-    `INSERT INTO modelos_maquina (marca_id, nombre, tipo, tamano, minutos, minutos_2, minutos_3, pregunta_tiempo)
-     SELECT id, 'Sec49', 'secadora', 'mediana', 10, 20, 30, TRUE FROM marcas_maquina WHERE nombre = 'Speed Queen'`
+    `INSERT INTO modelos_maquina (marca_id, nombre, tipo, tamano, minutos, minutos_2, minutos_3, minutos_4, pregunta_tiempo)
+     SELECT id, 'Sec49', 'secadora', 'mediana', 45, 10, 20, 30, TRUE FROM marcas_maquina WHERE nombre = 'Speed Queen'`
   );
   return seedMaquina({ nombre, tipo: 'secadora', tamano: 'mediana', marca: 'Speed Queen', modelo: 'Sec49' });
 }
@@ -87,19 +87,20 @@ describe('qué máquinas van con cronómetro', () => {
     for (const id of [lg, wh, sinMarca, sec]) expect(await cronometroDe(id)).toBe(true);
   });
 
-  it('menos el modelo que pregunta su tiempo al iniciar', async () => {
+  it('también el modelo que pregunta su programa al iniciar (mig. 146)', async () => {
     const id = await secadoraQuePregunta();
-    expect(await cronometroDe(id)).toBe(false);
+    expect(await cronometroDe(id)).toBe(true);
   });
 
-  it('las lavadoras Speed Queen también, pero arrancan con Iniciar; sus secadoras no', async () => {
+  it('las Speed Queen también, pero arrancan con Iniciar; las demás marcas no', async () => {
     const sq = await lavadora('Speed Queen', 'L8', 45);
     const sec = await seedMaquina({ nombre: 'S1', tipo: 'secadora', tamano: 'mediana', marca: 'Speed Queen' });
+    const lg = await lavadora('LG', 'L1');
     const res = await request(app).get('/api/maquinas').set(auth(admin.token)).expect(200);
-    const lav = res.body.find(x => x.id === sq);
-    const seca = res.body.find(x => x.id === sec);
-    expect([lav.cronometro, lav.con_iniciar]).toEqual([true, true]);
-    expect([seca.cronometro, seca.con_iniciar]).toEqual([true, false]);
+    const de = (id) => { const m = res.body.find(x => x.id === id); return [m.cronometro, m.con_iniciar]; };
+    expect(de(sq)).toEqual([true, true]);
+    expect(de(sec)).toEqual([true, true]);
+    expect(de(lg)).toEqual([true, false]);
   });
 
   it('con MAQUINAS_CRONOMETRO=off ninguna', async () => {
@@ -256,6 +257,46 @@ describe('un solo ciclo, se finaliza a mano', () => {
 
     expect((await maquina(lav)).estado).toBe('disponible');
     expect((await maquina(sec)).estado).toBe('en_uso');
+  });
+});
+
+describe('secadora Speed Queen desde la tarjeta de la lavadora (Autoservicio)', () => {
+  it('INICIAR SECADO solo la enciende; el secado arranca con Iniciar', async () => {
+    const lav = await lavadora();
+    const sec = await seedMaquina({ nombre: 'S1', tipo: 'secadora', tamano: 'mediana', marca: 'Speed Queen' });
+    const { notaId } = await notaCon(lav);
+    await encender(notaId, lav).expect(200);
+
+    await request(app).patch(`/api/notas/${notaId}/terminar-lavado`).set(auth(admin.token))
+      .send({ lavadora_id: lav, secadora_id: sec }).expect(200);
+
+    let m = await maquina(sec);
+    expect(m.estado).toBe('en_uso');
+    expect(m.en_uso_desde).toBeNull();
+    expect(m.encendida_para_nota_id).toBe(notaId);
+    expect((await maquina(lav)).estado).toBe('disponible');
+    let nota = await request(app).get(`/api/notas/${notaId}`).set(auth(admin.token)).expect(200);
+    expect(nota.body.cargas[0].secadora_iniciada_at).toBeNull();
+    expect(nota.body.cargas[0].secadora_esperando_arranque).toBe(true);
+
+    await request(app).patch(`/api/notas/${notaId}/activar-pendientes`).set(auth(admin.token))
+      .send({ maquina_id: sec }).expect(200);
+    m = await maquina(sec);
+    expect(m.en_uso_desde).not.toBeNull();
+    expect(m.ciclo_minutos).toBe(40);
+    nota = await request(app).get(`/api/notas/${notaId}`).set(auth(admin.token)).expect(200);
+    expect(nota.body.estado).toBe('SECANDO');
+  });
+
+  it('una secadora de otra marca sigue arrancando en el acto', async () => {
+    const lav = await lavadora();
+    const sec = await seedMaquina({ nombre: 'S1', tipo: 'secadora', tamano: 'mediana', marca: 'Samsung' });
+    const { notaId } = await notaCon(lav);
+    await encender(notaId, lav).expect(200);
+
+    await request(app).patch(`/api/notas/${notaId}/terminar-lavado`).set(auth(admin.token))
+      .send({ lavadora_id: lav, secadora_id: sec }).expect(200);
+    expect((await maquina(sec)).en_uso_desde).not.toBeNull();
   });
 });
 

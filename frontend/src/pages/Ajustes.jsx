@@ -700,7 +700,7 @@ const CAMPOS_MODELO = [
   // bloque de tiempos para que los demás modelos —que son casi todos— no
   // carguen con campos que no usan.
   { name: 'pregunta_tiempo', defecto: false, tipo: 'check',
-    label: 'Varios tiempos: se elige cuál al iniciar', chip: 'varios tiempos' },
+    label: 'Varios programas: se elige cuál al iniciar', chip: 'varios programas' },
   // La casilla "Una carga corre 2 ciclos" (migs. 108 y 123) se escondió el
   // 2026-10-02: con el cronómetro la máquina termina cuando la finalizan y
   // ninguna carga corre dos. El dato sigue en la base; para volver a mostrarla
@@ -1134,30 +1134,26 @@ export default function Ajustes() {
   const claveTiempo = (t) => `modelo|${t.modelo_id}`;
   const etiquetaTiempo = (t) => `${t.marca} · ${t.modelo}`;
   // Desde el 2026-10-02 las máquinas corren con cronómetro y estos minutos son
-  // su TOPE. La excepción es el modelo que pregunta su tiempo (Sec49): ese
-  // conserva su temporizador y sus minutos siguen siendo lo que dura.
+  // su TOPE. También en el modelo que pregunta su programa (Sec49, mig. 146):
+  // el campo grande es su tope y los tres chicos, los programas a elegir.
   const ayudaTiempo = (t) => (
     t?.pregunta_tiempo
-      ? 'Al iniciar una máquina de este modelo se pregunta con cuál de sus tiempos correr, y ese es lo que dura (cuenta regresiva). Vacío = usa el de arriba.'
-      : t?.minutos_2 != null || t?.minutos_3 != null
-        ? 'Tope de carga de este modelo: a estos minutos se le corta la luz si nadie la finaliza. Manda el último, que es el más largo.'
-        : 'Tope de carga de este modelo: a estos minutos se le corta la luz si nadie la finaliza. Vacío = usa el tope de arriba.'
+      ? 'Arriba, el tope: a esos minutos se le corta la luz si nadie la finaliza. Abajo, los programas: al iniciarla se pregunta cuál corre y se avisa cuando lo cumpla. Tope vacío = el programa más largo.'
+      : 'Tope de carga de este modelo: a estos minutos se le corta la luz si nadie la finaliza. Vacío = usa el tope de arriba.'
   );
 
-  // Un modelo puede llevar hasta TRES tiempos (mig. 120): la Sec49 no tiene
-  // "un" ciclo, tiene tres programas y quien elige es el empleado con la ropa
-  // delante. Los dos campos extra salen SOLO en los modelos marcados como de
-  // varios tiempos (en Marcas y modelos) o que ya tengan alguno capturado —lo
-  // segundo para que apagar el interruptor no esconda un tiempo que sigue
-  // mandando—. El resto de modelos, que son casi todos, no los ven.
-  const tieneVariosTiempos = (t) =>
-    Boolean(t.pregunta_tiempo) || t.minutos_2 != null || t.minutos_3 != null;
+  // Un modelo puede llevar TRES programas además de su tope (migs. 120 y 146):
+  // la Sec49 no tiene "un" ciclo, tiene tres programas y quien elige es el
+  // empleado con la ropa delante. Los campos salen SOLO en los modelos marcados
+  // como de varios tiempos (en Marcas y modelos); el resto, que son casi todos,
+  // no los ven. Sin el interruptor los programas no mandan nada.
+  const tieneVariosTiempos = (t) => Boolean(t.pregunta_tiempo);
 
   const camposOtrosTiempos = (t, inputCls, unidadCls) => (
     tieneVariosTiempos(t) ? (
       <div className="mt-3 flex items-center gap-2">
         <span className={`${unidadCls} flex-shrink-0 w-24`}>Otros tiempos</span>
-        {['minutos_2', 'minutos_3'].map(campo => (
+        {['minutos_2', 'minutos_3', 'minutos_4'].map(campo => (
           <input
             key={campo}
             type="number" min="1" step="1" placeholder="—"
@@ -1214,10 +1210,10 @@ export default function Ajustes() {
   // temporizador.
   const guardarTiemposMarca = async () => {
     const aNumero = (v) => (v === '' || v == null ? null : Number(v));
-    // Un renglón puede cambiar por cualquiera de sus tres tiempos o por el
-    // interruptor, así que la comparación va campo por campo.
+    // Un renglón puede cambiar por su tope o por cualquiera de sus programas,
+    // así que la comparación va campo por campo.
     const foto = (t) => [
-      aNumero(t.minutos), aNumero(t.minutos_2), aNumero(t.minutos_3),
+      aNumero(t.minutos), aNumero(t.minutos_2), aNumero(t.minutos_3), aNumero(t.minutos_4),
     ].join('|');
     const antes = new Map(tiemposOrigRef.current.map(t => [claveTiempo(t), foto(t)]));
     const cambiados = tiemposMarca.filter(t => antes.get(claveTiempo(t)) !== foto(t));
@@ -1228,10 +1224,12 @@ export default function Ajustes() {
       minutos:   aNumero(t.minutos),
       minutos_2: aNumero(t.minutos_2),
       minutos_3: aNumero(t.minutos_3),
+      minutos_4: aNumero(t.minutos_4),
     })));
     tiemposOrigRef.current = tiemposMarca.map(t => ({
       ...t,
       minutos: aNumero(t.minutos), minutos_2: aNumero(t.minutos_2), minutos_3: aNumero(t.minutos_3),
+      minutos_4: aNumero(t.minutos_4),
     }));
   };
 

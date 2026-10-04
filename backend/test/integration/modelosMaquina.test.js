@@ -7,7 +7,7 @@
 // marca+tamaño (mig. 107) → tamaño (Ajustes)— porque es la que decide cuánto
 // corre el temporizador y, con el corte automático, cuándo se le va la luz a
 // una lavadora a media carga.
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import request from 'supertest';
 import app from '../../app.js';
 import {
@@ -356,10 +356,21 @@ describe('GET/PUT /api/etiquetas/tiempos-marca — el renglón dice marca y mode
 });
 
 // Tres tiempos por modelo y el interruptor que los pregunta (mig. 120).
+// Desde la mig. 146 el campo grande (`minutos`) del modelo que pregunta es su
+// TOPE y los tres programas a elegir van en minutos_2..4.
 describe('modelo con tres tiempos', () => {
-  // Una secadora con su modelo de tres tiempos, lista para arrancar dentro de
-  // una nota que ya tiene su lavadora corriendo.
-  async function conSecadoraDeTresTiempos({ pregunta = true } = {}) {
+  const interruptorAntes = process.env.MAQUINAS_CRONOMETRO;
+  afterEach(() => {
+    if (interruptorAntes === undefined) delete process.env.MAQUINAS_CRONOMETRO;
+    else process.env.MAQUINAS_CRONOMETRO = interruptorAntes;
+  });
+
+  const elegidoDe = async (id) =>
+    (await pool.query('SELECT ciclo_elegido_minutos FROM maquinas WHERE id = $1', [id])).rows[0].ciclo_elegido_minutos;
+
+  // Una secadora con su modelo de tres programas, lista para arrancar dentro
+  // de una nota que ya tiene su lavadora corriendo.
+  async function conSecadoraDeTresTiempos({ pregunta = true, tope = 75 } = {}) {
     const sq = await seedMarca('Speed Queen');
     // Que el modelo tenga varios tiempos se declara en su catálogo; los
     // minutos se escriben desde el bloque de tiempos.
@@ -369,7 +380,7 @@ describe('modelo con tres tiempos', () => {
     })).body;
     expect(modelo.pregunta_tiempo).toBe(pregunta);
     await request(app).put('/api/etiquetas/tiempos-marca').set(auth(admin.token))
-      .send({ modelo_id: modelo.id, minutos: 30, minutos_2: 45, minutos_3: 60 })
+      .send({ modelo_id: modelo.id, minutos: tope, minutos_2: 30, minutos_3: 45, minutos_4: 60 })
       .expect(200);
 
     const lavadoraId = await seedMaquina({ nombre: 'L1', tipo: 'lavadora_mediana', tamano: 'mediana' });
@@ -402,7 +413,18 @@ describe('modelo con tres tiempos', () => {
     expect(res.body.pregunta_tiempo).toBe(true);
   });
 
-  it('el tiempo elegido en el modal es el que se sella', async () => {
+  it('con cronómetro el programa elegido se guarda aparte y el tope es el campo grande', async () => {
+    const { notaId, secadoraId } = await conSecadoraDeTresTiempos();
+
+    await request(app).patch(`/api/notas/${notaId}/activar-pendientes`).set(auth(admin.token))
+      .send({ maquina_id: secadoraId, minutos: 30 }).expect(200);
+
+    expect(await cicloDe(secadoraId)).toBe(75);
+    expect(await elegidoDe(secadoraId)).toBe(30);
+  });
+
+  it('con temporizador el programa elegido es lo que dura', async () => {
+    process.env.MAQUINAS_CRONOMETRO = 'off';
     const { notaId, secadoraId } = await conSecadoraDeTresTiempos();
 
     await request(app).patch(`/api/notas/${notaId}/activar-pendientes`).set(auth(admin.token))
@@ -411,16 +433,26 @@ describe('modelo con tres tiempos', () => {
     expect(await cicloDe(secadoraId)).toBe(45);
   });
 
-  it('sin elegir nada manda el último de los tres, que es el más largo', async () => {
+  it('sin elegir nada manda el tope y no queda programa', async () => {
     const { notaId, secadoraId } = await conSecadoraDeTresTiempos();
 
     await request(app).patch(`/api/notas/${notaId}/activar-pendientes`).set(auth(admin.token))
       .send({ maquina_id: secadoraId }).expect(200);
 
+    expect(await cicloDe(secadoraId)).toBe(75);
+    expect(await elegidoDe(secadoraId)).toBeNull();
+  });
+
+  it('sin tope capturado manda el programa más largo', async () => {
+    const { notaId, secadoraId } = await conSecadoraDeTresTiempos({ tope: null });
+
+    await request(app).patch(`/api/notas/${notaId}/activar-pendientes`).set(auth(admin.token))
+      .send({ maquina_id: secadoraId, minutos: 30 }).expect(200);
+
     expect(await cicloDe(secadoraId)).toBe(60);
   });
 
-  it('con el interruptor apagado también manda el último, y no se acepta elegir', async () => {
+  it('con el interruptor apagado no se acepta elegir y manda el tope', async () => {
     const { notaId, secadoraId } = await conSecadoraDeTresTiempos({ pregunta: false });
 
     const res = await request(app).patch(`/api/notas/${notaId}/activar-pendientes`).set(auth(admin.token))
@@ -429,7 +461,7 @@ describe('modelo con tres tiempos', () => {
 
     await request(app).patch(`/api/notas/${notaId}/activar-pendientes`).set(auth(admin.token))
       .send({ maquina_id: secadoraId }).expect(200);
-    expect(await cicloDe(secadoraId)).toBe(60);
+    expect(await cicloDe(secadoraId)).toBe(75);
   });
 
   it('un tiempo que el modelo no ofrece se rechaza: es lo que corta la corriente', async () => {
@@ -447,5 +479,6 @@ describe('modelo con tres tiempos', () => {
     const { body } = await request(app).get('/api/maquinas').set(auth(admin.token));
     const secadora = body.find(m => m.id === secadoraId);
     expect(secadora.modelo_tiempos).toEqual({ pregunta: true, minutos: [30, 45, 60] });
+    expect([secadora.cronometro, secadora.con_iniciar]).toEqual([true, true]);
   });
 });
