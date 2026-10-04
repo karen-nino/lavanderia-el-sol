@@ -103,9 +103,10 @@ const fmtSemanaHeader = (fecha) => {
 
 // Filtro de fecha del historial, con las mismas opciones que Ventas. El "mes"
 // se elige de un dropdown (como el año), por eso no lleva etiqueta fija.
-// "Hoy" se combinó dentro de "Esta semana": los cortes de hoy se separan con su
-// propio subtítulo dentro de la semana.
+// "Hoy" volvió como filtro propio el 2026-10-04 (a pedido) y es el que se ve
+// al abrir; "Esta semana" sigue resaltando el día de hoy.
 const PERIODOS = [
+  { id: 'hoy',    label: 'Hoy' },
   { id: 'semana', label: 'Esta semana' },
   { id: 'mes',    label: 'Mes' },
   { id: 'anio',   label: 'Este año' },
@@ -561,9 +562,8 @@ function Historial({ onFiltroLabel }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Filtro de período (con mes y año en dropdown). "Hoy" ya no es un filtro
-  // aparte: vive dentro de "Esta semana".
-  const [periodo, setPeriodo] = useState('semana');
+  // Filtro de período (con mes y año en dropdown). Abre en "Hoy".
+  const [periodo, setPeriodo] = useState('hoy');
   const [anioSel, setAnioSel] = useState(() => new Date().getFullYear());
   const [mesSel, setMesSel] = useState(() => new Date().getMonth());
   const [desde, setDesde] = useState('');
@@ -676,6 +676,8 @@ function Historial({ onFiltroLabel }) {
   const filtroLabel = (() => {
     const hoyD = new Date();
     switch (periodo) {
+      case 'hoy':
+        return `Hoy, ${nombreDia(hoyD)} ${hoyD.getDate()} de ${MESES[hoyD.getMonth()]}`;
       case 'semana': {
         const lunes = inicioSemana(hoyD);
         const domingo = new Date(lunes); domingo.setDate(lunes.getDate() + 6);
@@ -1006,8 +1008,8 @@ function Historial({ onFiltroLabel }) {
 
   return (
     <div className="space-y-10">
-      {/* Filtro de período: Esta semana (incluye Hoy), Mes, Este año (con
-          selector) y Personalizado. */}
+      {/* Filtro de período: Hoy, Esta semana, Mes, Este año (con selector) y
+          Personalizado. */}
       <div className="space-y-3">
         <div className="flex flex-wrap gap-2">
           {PERIODOS.map((p) => {
@@ -1147,7 +1149,12 @@ function Historial({ onFiltroLabel }) {
         )}
       </div>
 
-      {periodo === 'semana' ? (
+      {periodo === 'hoy' ? (
+        // Solo la tarjeta de hoy, con sus turnos (y el que siga en curso).
+        <div className="space-y-4">
+          {renderDia(hoy0)}
+        </div>
+      ) : periodo === 'semana' ? (
         // Un contenedor por día de la semana (Lunes → Domingo). Los días sin
         // corte se ven como un espacio vacío; hoy va resaltado y los días que
         // aún no llegan quedan como "Pendiente".
