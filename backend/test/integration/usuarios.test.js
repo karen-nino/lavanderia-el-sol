@@ -61,6 +61,51 @@ describe('POST /api/usuarios — crear empleado', () => {
   });
 });
 
+// Dos usuarios activos no pueden llamarse igual: el login elige a la persona
+// por su nombre completo (2026-10-03).
+describe('nombre repetido', () => {
+  it('no se crea otro usuario con el mismo nombre completo, sin importar acentos ni mayúsculas', async () => {
+    await request(app).post('/api/usuarios').set(auth(admin.token))
+      .send({ nombre: 'Rebeca', password: 'clave1234', rol: 'admin' }).expect(201);
+
+    const res = await request(app).post('/api/usuarios').set(auth(admin.token))
+      .send({ nombre: '  rebéca ', password: 'clave1234', rol: 'operador', sucursal: 'centro' });
+    expect(res.status).toBe(409);
+    expect(res.body.message).toMatch(/Ya hay un usuario llamado "Rebeca"/);
+  });
+
+  it('con apellido distinto sí se puede', async () => {
+    await request(app).post('/api/usuarios').set(auth(admin.token))
+      .send({ nombre: 'Rebeca', password: 'clave1234', rol: 'admin' }).expect(201);
+    await request(app).post('/api/usuarios').set(auth(admin.token))
+      .send({ nombre: 'Rebeca', apellido: 'Ruiz', password: 'clave1234', rol: 'operador', sucursal: 'centro' })
+      .expect(201);
+  });
+
+  it('al editar tampoco puede quedar igual que otro', async () => {
+    await request(app).post('/api/usuarios').set(auth(admin.token))
+      .send({ nombre: 'Rebeca', password: 'clave1234', rol: 'operador', sucursal: 'centro' }).expect(201);
+    const otro = await request(app).post('/api/usuarios').set(auth(admin.token))
+      .send({ nombre: 'Ana', password: 'clave1234', rol: 'operador', sucursal: 'centro' }).expect(201);
+
+    const res = await request(app).patch(`/api/usuarios/${otro.body.id}`).set(auth(admin.token))
+      .send({ nombre: 'REBECA' });
+    expect(res.status).toBe(409);
+
+    // Guardarse a sí mismo con su propio nombre no choca consigo.
+    await request(app).patch(`/api/usuarios/${otro.body.id}`).set(auth(admin.token))
+      .send({ nombre: 'Ana' }).expect(200);
+  });
+
+  it('un usuario dado de baja no aparta su nombre', async () => {
+    const r = await request(app).post('/api/usuarios').set(auth(admin.token))
+      .send({ nombre: 'Rebeca', password: 'clave1234', rol: 'operador', sucursal: 'centro' }).expect(201);
+    await request(app).delete(`/api/usuarios/${r.body.id}`).set(auth(admin.token)).expect(200);
+    await request(app).post('/api/usuarios').set(auth(admin.token))
+      .send({ nombre: 'Rebeca', password: 'clave1234', rol: 'operador', sucursal: 'centro' }).expect(201);
+  });
+});
+
 describe('DELETE /api/usuarios/:id', () => {
   it('no puedes eliminar tu propio usuario (400)', async () => {
     const res = await request(app).delete(`/api/usuarios/${admin.id}`).set(auth(admin.token));

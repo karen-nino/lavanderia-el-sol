@@ -223,6 +223,30 @@ export const getDesempeno = async (req, res) => {
   }
 };
 
+// Dos usuarios activos no pueden llamarse igual (2026-10-03): en el login se
+// elige a la persona por su nombre, y con el nombre completo escrito se
+// selecciona sola. Se compara el nombre COMPLETO (nombre + apellido) sin
+// importar mayúsculas, acentos ni espacios de más, y contra todos los activos
+// —de cualquier sucursal y rol—, porque el login los busca a todos juntos.
+// Devuelve el nombre del que ya lo usa, o null.
+async function nombreEnUso(nombre, apellido, excluirId = null) {
+  const completo = `${nombre ?? ''} ${apellido ?? ''}`;
+  const clave = (expr) => `lower(unaccent(TRIM(regexp_replace(${expr}, '\\s+', ' ', 'g'))))`;
+  const { rows } = await pool.query(
+    `SELECT TRIM(nombre || ' ' || COALESCE(apellido, '')) AS nombre
+       FROM usuarios
+      WHERE activo = TRUE
+        AND ($2::int IS NULL OR id <> $2)
+        AND ${clave("nombre || ' ' || COALESCE(apellido, '')")} = ${clave('$1::text')}
+      LIMIT 1`,
+    [completo, excluirId]
+  );
+  return rows[0]?.nombre ?? null;
+}
+
+const mensajeNombreEnUso = (quien) =>
+  `Ya hay un usuario llamado "${quien}". Agrega el apellido u otro dato que los distinga.`;
+
 export const createEmpleado = async (req, res) => {
   const { nombre, apellido, password, rol, sucursal } = req.body;
 
@@ -260,6 +284,9 @@ export const createEmpleado = async (req, res) => {
     : (esAdmin(rolFinal) ? null : (sucursal?.trim() || req.sucursal));
 
   try {
+    const repetido = await nombreEnUso(capitalizarNombre(nombre), capitalizarNombre(apellido));
+    if (repetido) return res.status(409).json({ message: mensajeNombreEnUso(repetido) });
+
     const hashed = await bcrypt.hash(password, 10);
     const { rows } = await pool.query(
       `INSERT INTO usuarios (nombre, apellido, password, rol, sucursal, es_prueba)
@@ -282,7 +309,7 @@ export const updateEmpleado = async (req, res) => {
 
   try {
     const { rows: targetRows } = await pool.query(
-      'SELECT id, rol, es_prueba FROM usuarios WHERE id = $1 AND activo = TRUE',
+      'SELECT id, rol, es_prueba, nombre, apellido FROM usuarios WHERE id = $1 AND activo = TRUE',
       [targetId]
     );
     if (targetRows.length === 0) {
@@ -345,6 +372,14 @@ export const updateEmpleado = async (req, res) => {
 
     if (updates.length === 0) {
       return res.status(400).json({ message: 'No hay cambios que guardar.' });
+    }
+
+    // Cambiar el nombre tampoco puede dejarlo igual al de otro usuario.
+    if (nombre !== undefined || apellido !== undefined) {
+      const nuevoNombre   = nombre   !== undefined ? capitalizarNombre(nombre)   : target.nombre;
+      const nuevoApellido = apellido !== undefined ? capitalizarNombre(apellido) : target.apellido;
+      const repetido = await nombreEnUso(nuevoNombre, nuevoApellido, targetId);
+      if (repetido) return res.status(409).json({ message: mensajeNombreEnUso(repetido) });
     }
     values.push(targetId);
 
