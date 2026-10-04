@@ -92,6 +92,13 @@ describe('qué máquinas van con cronómetro', () => {
     expect(await cronometroDe(id)).toBe(false);
   });
 
+  it('menos las lavadoras Speed Queen; sus secadoras sí', async () => {
+    const sq = await lavadora('Speed Queen', 'L8', 35);
+    const sec = await seedMaquina({ nombre: 'S1', tipo: 'secadora', tamano: 'mediana', marca: 'Speed Queen' });
+    expect(await cronometroDe(sq)).toBe(false);
+    expect(await cronometroDe(sec)).toBe(true);
+  });
+
   it('con MAQUINAS_CRONOMETRO=off ninguna', async () => {
     const id = await lavadora();
     process.env.MAQUINAS_CRONOMETRO = 'off';
@@ -163,6 +170,26 @@ describe('encender', () => {
     const m = await maquina(id);
     expect(m.en_uso_desde).toBeNull();
     expect(m.encendida_sin_iniciar_at).not.toBeNull();
+  });
+});
+
+describe('lavadora Speed Queen', () => {
+  it('encender solo da corriente y el ciclo arranca con Iniciar', async () => {
+    const id = await lavadora('Speed Queen', 'L8', 35);
+    const { notaId } = await notaCon(id);
+
+    await encender(notaId, id).expect(200);
+    let m = await maquina(id);
+    expect(m.estado).toBe('en_uso');
+    expect(m.en_uso_desde).toBeNull();
+    expect(m.encendida_sin_iniciar_at).not.toBeNull();
+
+    await request(app).patch(`/api/notas/${notaId}/activar-pendientes`).set(auth(admin.token))
+      .send({ maquina_id: id }).expect(200);
+    m = await maquina(id);
+    expect(m.en_uso_desde).not.toBeNull();
+    expect(m.encendida_sin_iniciar_at).toBeNull();
+    expect(m.ciclo_minutos).toBe(35);
   });
 });
 
