@@ -1227,7 +1227,10 @@ export default function Salidas() {
                           </span>
                         ) : (
                           <span className="text-xs font-medium text-green-700 basis-full">
-                            Encendida. Arráncala con su botón y finalízala cuando termine.
+                            {/* Speed Queen y Sec49 (con_iniciar): mensaje corto, a pedido. */}
+                            {m.con_iniciar
+                              ? 'Encendida. Finalízala cuando termine.'
+                              : 'Encendida. Arráncala con su botón y finalízala cuando termine.'}
                           </span>
                         )
                       )}

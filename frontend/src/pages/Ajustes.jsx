@@ -2726,9 +2726,8 @@ export default function Ajustes() {
     <div className="bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-xl p-4">
       <p className="font-semibold">Entorno de pruebas</p>
       <p className="mt-1 text-amber-700">
-        Estás en la sucursal de pruebas: tus notas, caja e inventario son solo tuyos y no afectan al
-        negocio. La configuración (precios, tiempos, sucursales y catálogos) es la real y tu perfil es
-        compartido, así que aquí todo es solo de consulta.
+        Estás en la sucursal de pruebas: sus notas, caja e inventario están separados y no afectan al
+        negocio real.
       </p>
     </div>
   );
