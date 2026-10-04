@@ -1387,7 +1387,6 @@ export default function Ajustes() {
       ticket_nota_productos:    config.ticket_nota_productos ?? '',
       whatsapp_mensaje_encargo: config.whatsapp_mensaje_encargo ?? '',
     }),
-    stock_minimo_global:   Number(config.stock_minimo_global),
     alerta_ciclo_detenido: !!config.alerta_ciclo_detenido,
   });
 
@@ -1970,30 +1969,14 @@ export default function Ajustes() {
 
   const seccionAlertasDesktop = (
     <Section titulo="Alertas y Notificaciones">
-      <Field
-        label="Unidades mínimas para alerta de stock bajo"
-        hint="Los productos con stock igual o menor a este número se marcarán como 'Por agotarse'"
-      >
-        <input
-          type="number"
-          name="stock_minimo_global"
-          min="0"
-          step="1"
-          required
-          value={config.stock_minimo_global ?? ''}
-          onChange={handleChange}
-          className={INPUT_CLS}
-        />
-      </Field>
-
-      <div className="border-t border-gray-100 pt-4">
-        <ToggleRow
-          label="Avisar cuando se detenga un ciclo"
-          hint="Cuando alguien detenga una máquina con 'Detener ciclo', aparecerá una alerta en el Dashboard."
-          checked={!!config.alerta_ciclo_detenido}
-          onChange={(v) => setConfig(prev => ({ ...prev, alerta_ciclo_detenido: v }))}
-        />
-      </div>
+      {/* El mínimo global de stock se quitó (2026-10-03): cada producto lleva
+          el suyo en Inventario y el global ya no entraba en ningún cálculo. */}
+      <ToggleRow
+        label="Avisar cuando se detenga un ciclo"
+        hint="Cuando alguien detenga una máquina con 'Detener ciclo', aparecerá una alerta en el Dashboard."
+        checked={!!config.alerta_ciclo_detenido}
+        onChange={(v) => setConfig(prev => ({ ...prev, alerta_ciclo_detenido: v }))}
+      />
     </Section>
   );
 
@@ -2499,30 +2482,12 @@ export default function Ajustes() {
 
   const seccionAlertasMobile = (
     <div className="space-y-6">
-      <MobileField
-        label="Unidades mínimas para alerta de stock bajo"
-        hint="Los productos con stock igual o menor a este número se marcarán como 'Por agotarse'"
-      >
-        <input
-          type="number"
-          name="stock_minimo_global"
-          min="0"
-          step="1"
-          required
-          value={config.stock_minimo_global ?? ''}
-          onChange={handleChange}
-          className={MOBILE_INPUT_CLS}
-        />
-      </MobileField>
-
-      <div className="border-t border-light-blue/60 pt-5">
-        <ToggleRow
-          label="Avisar cuando se detenga un ciclo"
-          hint="Cuando alguien detenga una máquina con 'Detener ciclo', aparecerá una alerta en el Dashboard."
-          checked={!!config.alerta_ciclo_detenido}
-          onChange={(v) => setConfig(prev => ({ ...prev, alerta_ciclo_detenido: v }))}
-        />
-      </div>
+      <ToggleRow
+        label="Avisar cuando se detenga un ciclo"
+        hint="Cuando alguien detenga una máquina con 'Detener ciclo', aparecerá una alerta en el Dashboard."
+        checked={!!config.alerta_ciclo_detenido}
+        onChange={(v) => setConfig(prev => ({ ...prev, alerta_ciclo_detenido: v }))}
+      />
     </div>
   );
 

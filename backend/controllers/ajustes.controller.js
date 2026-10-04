@@ -85,7 +85,6 @@ export const updateAjustes = async (req, res) => {
     whatsapp_mensaje_encargo,
     direccion,
     telefono,
-    stock_minimo_global,
     alerta_ciclo_detenido,
   } = req.body;
 
@@ -168,10 +167,6 @@ export const updateAjustes = async (req, res) => {
       return res.status(400).json({ message: `${nombreDe(campo)} debe ser un número entero de 0 o más.` });
     }
   }
-  if (stock_minimo_global !== undefined &&
-      (!esNumero(stock_minimo_global) || !Number.isInteger(Number(stock_minimo_global)) || Number(stock_minimo_global) < 0)) {
-    return res.status(400).json({ message: 'La existencia mínima debe ser un número entero de 0 o más.' });
-  }
 
   // R.F.C.: texto libre (palabras, números y espacios, sin límite de largo),
   // siempre en MAYÚSCULAS y sin espacios sobrantes; vacío lo borra.
@@ -237,7 +232,6 @@ export const updateAjustes = async (req, res) => {
   if (editable('whatsapp_mensaje_encargo', whatsapp_mensaje_encargo)) { updates.push(`whatsapp_mensaje_encargo = $${i++}`); values.push(textoONull(whatsapp_mensaje_encargo)); }
   if (editable('direccion', direccion)) { updates.push(`direccion = $${i++}`); values.push(direccion); }
   if (editable('telefono', telefono)) { updates.push(`telefono = $${i++}`); values.push(telefono); }
-  if (stock_minimo_global   !== undefined) { updates.push(`stock_minimo_global = $${i++}`);   values.push(stock_minimo_global); }
   if (alerta_ciclo_detenido !== undefined) { updates.push(`alerta_ciclo_detenido = $${i++}`); values.push(Boolean(alerta_ciclo_detenido)); }
 
   if (updates.length === 0) {

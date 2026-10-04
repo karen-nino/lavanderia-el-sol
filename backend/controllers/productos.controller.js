@@ -2,17 +2,14 @@ import pool from '../db/pool.js';
 import { esAdmin } from '../middleware/roles.js';
 import { esFechaISO } from '../utils/tz.js';
 
-// Para productos por medida el mínimo se lleva por producto (en medidas);
-// para los demás se usa el mínimo global de Ajustes.
+// El mínimo es de cada producto (en medidas; en piezas para las bolsas). El
+// mínimo global de Ajustes se quitó (2026-10-03): todo producto que se puede
+// dar de alta es por medida o bolsa, así que ya no entraba en el cálculo.
 const ESTADO_STOCK_SQL = `
   CASE
     WHEN (stock_actual - stock_reservado) = 0
       THEN 'agotado'
-    WHEN (stock_actual - stock_reservado) <= (
-           CASE WHEN es_por_medida OR clase = 'bolsa'
-                THEN stock_minimo
-                ELSE (SELECT stock_minimo_global FROM ajustes WHERE id = 1)
-           END)
+    WHEN (stock_actual - stock_reservado) <= stock_minimo
       THEN 'por_agotarse'
     ELSE 'ok'
   END AS estado_stock
