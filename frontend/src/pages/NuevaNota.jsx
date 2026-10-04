@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import { etiquetaProducto, ordenProducto, seVendePorUnidad, esPolvo } from '../lib/formatoInventario';
 import { capitalizarNombre } from '../lib/texto';
@@ -113,19 +113,6 @@ const serviciosDe = (tamanosEdredon) => [
   })),
   ...SERVICIOS_LEGADO,
 ];
-// Qué servicio se vendió en una carga, leído de lo que quedó guardado. Las
-// claves de ropa son las mismas que las de los topes de Ajustes, así que el
-// precio del servicio se busca con este valor directamente.
-const servicioDeCarga = (c) => {
-  if (String(c?.tipo_prenda).toUpperCase() === 'EDREDON') {
-    return c?.tamano_edredon ? servicioEdredon(c.tamano_edredon) : 'edredon';
-  }
-  if (c?.tamano === 'chico')   return 'chico';
-  if (c?.tamano === 'mediano') return 'mediano';
-  if (c?.tamano === 'grande')  return 'grande';
-  if (c?.tamano === 'jumbo')  return 'jumbo';
-  return '';
-};
 // Cuántos servicios del mismo tipo caben en una nota.
 const MAX_SERVICIOS = 20;
 
@@ -209,13 +196,6 @@ const PASO_RESUMEN   = 4;
 
 export default function NuevaNota() {
   const navigate = useNavigate();
-  const { id } = useParams();
-  const esEdicion = Boolean(id);
-  // Nota que ya está cobrada y se está EDITANDO: el cobro no se deshace desde
-  // aquí. Ese camino vive en "Revertir pago" del detalle, que pide motivo y
-  // solo funciona con la caja de ese cobro abierta; tenerlo en dos sitios
-  // obligaba a escribir la misma regla dos veces (2026-09-22).
-  const [cobroBloqueado, setCobroBloqueado] = useState(false);
   // Máquinas LIBRES que ofrece el modal de elegir máquina. Se piden al abrirlo.
   const [maquinasLibres,    setMaquinasLibres]    = useState([]);
   const [productosCatalogo, setProductosCatalogo] = useState([]);
@@ -485,7 +465,8 @@ export default function NuevaNota() {
       api.get('/etiquetas/tamanos-edredon'),
       api.get('/etiquetas/tipos-granel'),
     ];
-    promesas.push(esEdicion ? api.get(`/notas/${id}`) : api.get('/notas/next-folio'));
+    // Esta pantalla solo CREA notas: la edición se quitó (2026-10-03).
+    promesas.push(api.get('/notas/next-folio'));
 
     Promise.all(promesas)
       .then((resultados) => {
@@ -493,8 +474,7 @@ export default function NuevaNota() {
         setTelas(telasCat || []);
         setTamanosEdredon(tamanosCat || []);
         setTiposGranel(tiposCat || []);
-        const nota = esEdicion ? extra : null;
-        setFolio(esEdicion ? (nota?.folio ?? '') : (extra?.folio ?? ''));
+        setFolio(extra?.folio ?? '');
         // La lista de máquinas la pide el modal al abrirse, no esta carga: lo
         // que importa es lo que está libre en el momento de elegir.
         setProductosCatalogo(prod);
@@ -522,142 +502,9 @@ export default function NuevaNota() {
           }])));
         }
         setClientes(cli);
-
-        if (esEdicion && nota) {
-          // Compat con notas viejas: tipo_servicio=EDREDON significa autoservicio+edredón
-          // si no tiene cliente_id, o por_encargo+edredón si lo tiene.
-          const esEncargoLegacy = nota.tipo_servicio === 'EDREDON' && nota.cliente_id;
-          const esEncargo  = nota.tipo_servicio === 'POR_ENCARGO' || esEncargoLegacy;
-          const prendaNota = nota.tipo_prenda
-            ?? (nota.tipo_servicio === 'EDREDON' ? 'EDREDON' : 'ROPA');
-
-          if (esEncargo) {
-            setTipoServicio('POR_ENCARGO');
-          } else {
-            setTipoServicio('AUTOSERVICIO');
-          }
-          const prods = (nota.productos || []).map(p => ({
-            producto_id: String(p.producto_id),
-            cantidad:    String(p.cantidad),
-          }));
-
-          if (esEncargo) {
-            // Ya cobrada: el toggle se enseña con lo que hay, pero no se cambia.
-            setCobroBloqueado(nota.estado_pago === 'PAGADO');
-            setEncargoForm({
-              // Sin cliente es de mostrador, no un hueco por llenar: si se
-              // dejara vacío, editar la nota no dejaría pasar del paso 1.
-              cliente_id:      nota.cliente_id ? String(nota.cliente_id) : CLIENTE_MOSTRADOR,
-              pago_anticipado: nota.estado_pago === 'PAGADO' ? 'SI' : 'NO',
-              forma_pago:      nota.forma_pago ?? '',
-              fecha_entrega:   nota.fecha_entrega  ? String(nota.fecha_entrega).slice(0, 10) : '',
-              // Una nota vieja con fecha pero sin día elegido se lee como "Otra".
-              tiempo_entrega:  nota.tiempo_entrega ?? (nota.fecha_entrega ? 'OTRA' : ''),
-              instrucciones:   nota.instrucciones  ?? '',
-              ajuste:          nota.ajuste != null ? String(nota.ajuste) : '0',
-            });
-            // Los productos de la nota, en UNA sola lista. Una nota hecha
-            // cuando el material vivía dentro de cada carga trae ahí su jabón y
-            // su bolsa: se suben aquí para que se vean y se puedan editar donde
-            // están todos los demás. Al guardar quedan a nivel nota, que para
-            // el cobro y para el tope es lo mismo.
-            // El granel con tipo no sube: es el de cada servicio y se edita
-            // en su bloque, por servicio (ver granel en las cargas).
-            const tipoDe = (productoId) => (prod ?? []).find(p => p.id === productoId)?.tipo_granel_id;
-            const materialDeCargas = [];
-            for (const c of nota.cargas ?? []) {
-              for (const pr of c.productos ?? []) {
-                if (tipoDe(pr.producto_id) != null) continue;
-                const fila = materialDeCargas.find(x => String(x.producto_id) === String(pr.producto_id));
-                if (fila) fila.cantidad = String((Number(fila.cantidad) || 0) + Number(pr.cantidad));
-                else materialDeCargas.push({ producto_id: String(pr.producto_id), cantidad: String(pr.cantidad) });
-              }
-            }
-            for (const m of materialDeCargas) {
-              const fila = prods.find(x => String(x.producto_id) === String(m.producto_id));
-              if (fila) fila.cantidad = String((Number(fila.cantidad) || 0) + Number(m.cantidad));
-              else prods.push(m);
-            }
-            setProductosLista(prods);
-            // Cargas de la nota; si es una nota vieja sin cargas, se arma una
-            // carga a partir de los campos legados a nivel nota.
-            const cargasNota = (nota.cargas ?? []).map(c => {
-              const prenda = c.tipo_prenda ?? prendaNota;
-              return {
-                // El id viaja de vuelta al guardar: es lo que permite al servidor
-                // reconocer las cargas que ya se lavaron y no rehacerlas.
-                id:                     c.id,
-                // Qué servicio se vendió, leído del tamaño y la prenda. Una nota
-                // vieja con carga Jumbo de ropa conserva su servicio: aparece con
-                // su contador, marcado como que ya no se vende.
-                servicio:               servicioDeCarga({ tipo_prenda: prenda, tamano: c.tamano, tamano_edredon: c.tamano_edredon }),
-                tipo_prenda:            prenda,
-                tipo_tela:              c.tipo_tela      ?? '',
-                tamano_edredon:         c.tamano_edredon ?? '',
-                // Las medidas de granel que ya lleva: lo que está por elegir y lo
-                // que ya se eligió en Salidas, por tipo.
-                granel: Object.fromEntries([
-                  ...(c.pendientes ?? []).map(pe => [pe.tipo_granel_id, Number(pe.cantidad)]),
-                  ...(c.productos ?? [])
-                    .map(np => [tipoDe(np.producto_id), Number(np.cantidad)])
-                    .filter(([t]) => t != null),
-                ]),
-                tamano:                 c.tamano         ?? '',
-                // El ajuste por carga ya no se captura, pero el de una nota hecha
-                // cuando existía se conserva para no cambiarle el precio al
-                // guardarla.
-                ajuste:                 c.ajuste != null ? String(c.ajuste) : '0',
-                // Sin productos: los que traía se subieron a la lista de la
-                // nota, que es donde se administran todos desde que son una
-                // sola lista.
-                productos:              [],
-              };
-            });
-            setEncargoCargas(cargasNota.length > 0 ? cargasNota : [{
-              ...CARGA_ENCARGO_INIT,
-              servicio:       servicioDeCarga({ tipo_prenda: prendaNota, tamano: nota.tamano, tamano_edredon: nota.tamano_edredon }),
-              tipo_prenda:    prendaNota,
-              tipo_tela:      nota.tipo_tela      ?? '',
-              tamano_edredon: nota.tamano_edredon ?? '',
-              tamano:         nota.tamano         ?? '',
-            }]);
-          } else {
-            // AUTOSERVICIO o EDREDON usan el mismo formulario
-            setForm({
-              tipo_tela:       nota.tipo_tela      ?? '',
-              tamano_edredon:  nota.tamano_edredon ?? '',
-              ajuste:          nota.ajuste         != null ? String(nota.ajuste) : '0',
-              instrucciones:   nota.instrucciones  ?? '',
-              forma_pago:      nota.forma_pago     ?? '',
-            });
-            // Cada renglón es una máquina de la nota. Se lee la que tiene
-            // puesta (o la que ya usó, si se liberó); una nota vieja que se
-            // quedó en TIPO sin máquina conserva su tipo, para que al guardarla
-            // no cambie de precio ni pierda lo que pidió.
-            const maqDe = (id, nombre, tipo) =>
-              (id && nombre ? { id, nombre, tipo } : null);
-            const cargasNota = (nota.cargas ?? []).map(c => ({
-              // Igual que en Por Encargo: el id identifica las cargas que ya
-              // se lavaron para que el servidor no las rehaga.
-              id:             c.id,
-              lavadora:       maqDe(c.lavadora_id ?? c.lavadora_usada_id,
-                                    c.lavadora_nombre ?? c.lavadora_usada_nombre,
-                                    c.lavadora_tipo ?? c.lavadora_usada_tipo ?? 'lavadora_mediana'),
-              secadora:       maqDe(c.secadora_id ?? c.secadora_usada_id,
-                                    c.secadora_nombre ?? c.secadora_usada_nombre,
-                                    'secadora'),
-              lavadora_tipo:  c.lavadora_tipo_previsto ?? '',
-              secadora_tipo:  c.secadora_tipo_previsto ?? '',
-              // El Edredón (2026-10-02) se reconoce por su prenda.
-              tipo_prenda:    c.tipo_prenda ?? null,
-            }));
-            setCargasAuto(cargasNota);
-            setProductosLista(prods);
-          }
-        }
       })
       .finally(() => setLoadingData(false));
-  }, [id, esEdicion]);
+  }, []);
 
   const agregarProducto = (productoId = '') =>
     setProductosLista(prev => [...prev, { producto_id: String(productoId), cantidad: '1' }]);
@@ -1113,7 +960,7 @@ export default function NuevaNota() {
   // El anticipo se compara contra el total de AHORA: si después de cobrar se
   // cambiaron servicios, lo cobrado puede ya no cubrir todo y queda de abono.
   const anticipoNum = Number(encargoForm.monto_anticipo);
-  const anticipoParcial = !esEdicion && encargoForm.pago_anticipado === 'SI'
+  const anticipoParcial = encargoForm.pago_anticipado === 'SI'
     && encargoForm.monto_anticipo !== ''
     && Number.isFinite(anticipoNum) && anticipoNum > 0
     && anticipoNum < encargoPrecioTotal - 1e-9;
@@ -1225,13 +1072,8 @@ export default function NuevaNota() {
         tiempo_entrega: encargoForm.tiempo_entrega || null,
         instrucciones:  encargoForm.instrucciones  || null,
       };
-      if (esEdicion) {
-        await api.patch(`/notas/${id}`, payload);
-        navigate(`/notas/${id}`);
-      } else {
-        const creada = await api.post('/notas', payload);
-        setNotaCreada(creada);
-      }
+      const creada = await api.post('/notas', payload);
+      setNotaCreada(creada);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -1306,11 +1148,8 @@ export default function NuevaNota() {
       // física se asigna después en Salidas (igual que Por Encargo).
       estado:          'EN_ESPERA',
       // El autoservicio ya no se cobra al crear la nota (2026-09-23): nace
-      // pendiente y se liquida desde el detalle, como Por Encargo. En edición
-      // no se manda nada de pago — el cobro tiene su propia puerta y mandar
-      // 'PENDIENTE' sobre una nota ya cobrada sería intentar revertirlo.
-      ...(esEdicion ? {} : { estado_pago: 'PENDIENTE' }),
-      // null (no undefined) para que al editar, limpiar un campo lo borre.
+      // pendiente y se liquida desde el detalle, como Por Encargo.
+      estado_pago:     'PENDIENTE',
       instrucciones:   form.instrucciones || null,
       tipo_tela:       null,
       tamano_edredon:  null,
@@ -1337,15 +1176,9 @@ export default function NuevaNota() {
     const payload = esVenta ? payloadVenta : payloadAutoservicio;
 
     try {
-      if (esEdicion) {
-        await api.patch(`/notas/${id}`, payload);
-        setCobroOpen(false);
-        navigate(`/notas/${id}`);
-      } else {
-        const creada = await api.post('/notas', payload);
-        setCobroOpen(false);
-        setNotaCreada(creada);
-      }
+      const creada = await api.post('/notas', payload);
+      setCobroOpen(false);
+      setNotaCreada(creada);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -1709,17 +1542,17 @@ export default function NuevaNota() {
         </button>
         <div>
           <h1 className="text-lg font-bold text-gray-900 leading-tight">
-            {esEdicion ? 'Editar Nota' : 'Nueva Nota'}
+            Nueva Nota
           </h1>
           <p className="text-sm text-gray-500">
-            {esEdicion ? 'Modifica los datos y guarda' : 'Crea una nueva nota'}
+            Crea una nueva nota
           </p>
         </div>
       </div>
 
       {/* Recordatorio de abrir caja: sin sesión abierta, lo que se cobre hoy
-          no queda en ningún corte. Solo al crear (al editar ya no aplica). */}
-      {!esEdicion && cajaAbierta === false && (
+          no queda en ningún corte. */}
+      {cajaAbierta === false && (
         <div className="mb-6 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
           <p className="text-sm font-semibold text-amber-900">La caja del día no está abierta</p>
           <p className="mt-0.5 text-sm text-amber-800">
@@ -2298,10 +2131,9 @@ export default function NuevaNota() {
                       <button
                         key={opt.v}
                         type="button"
-                        disabled={cobroBloqueado}
                         onClick={() => {
-                          // Al crear, "Sí" es cobrar: abre el modal de Cobrar.
-                          if (opt.v === 'SI' && !esEdicion) { abrirAnticipo(); return; }
+                          // "Sí" es cobrar: abre el modal de Cobrar.
+                          if (opt.v === 'SI') { abrirAnticipo(); return; }
                           setEncargoForm(f => ({
                             ...f, pago_anticipado: opt.v,
                             forma_pago: opt.v === 'SI' ? f.forma_pago : '',
@@ -2310,7 +2142,7 @@ export default function NuevaNota() {
                         }}
                         className={`py-8 px-2 border-2 rounded-xl font-semibold text-lg truncate transition-colors ${
                           selected ? 'border-blue bg-light-blue text-blue-700' : 'border-gray-300 bg-white text-gray-700 hover:border-blue-300'
-                        } ${cobroBloqueado ? 'opacity-60 cursor-not-allowed' : ''}`}
+                        }`}
                       >
                         {opt.label}
                       </button>
@@ -2318,25 +2150,9 @@ export default function NuevaNota() {
                   })}
                 </div>
 
-                {/* La nota ya se cobró: deshacerlo es una decisión de dinero y
-                    vive en su propia puerta, con motivo y con la regla de la
-                    caja. Se deja ver que está pagada, pero no se cambia desde
-                    aquí (2026-09-22). */}
-                {cobroBloqueado && (
-                  <p className="text-sm text-gray-500">
-                    Esta nota ya está cobrada, así que el cobro no se toca desde aquí: para
-                    deshacerlo usa <span className="font-medium text-gray-700">Revertir pago</span> y
-                    para corregir cómo se pagó,{' '}
-                    <span className="font-medium text-gray-700">Corregir forma de pago</span>, los dos
-                    en el detalle de la nota.
-                  </p>
-                )}
-
-                {/* Forma de pago: solo si pagó anticipado (si queda a deber, aún
-                    no hay pago). */}
-                {/* Al crear, lo cobrado en el modal: cuánto, cómo y si queda
-                    debiendo. Tocarlo vuelve a abrir el cobro para cambiarlo. */}
-                {!esEdicion && encargoForm.pago_anticipado === 'SI' && (
+                {/* Lo cobrado en el modal: cuánto, cómo y si queda debiendo.
+                    Tocarlo vuelve a abrir el cobro para cambiarlo. */}
+                {encargoForm.pago_anticipado === 'SI' && (
                   <button
                     type="button"
                     onClick={abrirAnticipo}
@@ -2357,34 +2173,6 @@ export default function NuevaNota() {
                     )}
                     <span className="block text-xs text-blue underline underline-offset-2 mt-1">Cambiar</span>
                   </button>
-                )}
-
-                {esEdicion && encargoForm.pago_anticipado === 'SI' && (
-                  <div className="space-y-3 pt-2">
-                    <h2 className="text-base font-semibold text-gray-900">Forma de pago</h2>
-                    <div className="grid grid-cols-3 gap-3">
-                      {FORMAS_PAGO.map(opt => {
-                        const selected = encargoForm.forma_pago === opt.v;
-                        return (
-                          <button
-                            key={opt.v}
-                            type="button"
-                            // En una nota ya cobrada el servidor ignora lo que
-                            // se mande aquí (conserva la forma con la que se
-                            // cobró): corregirla tiene su propio botón en el
-                            // detalle, con la regla de la caja.
-                            disabled={cobroBloqueado}
-                            onClick={() => setEncargoForm(f => ({ ...f, forma_pago: opt.v }))}
-                            className={`py-6 px-2 border-2 rounded-xl font-semibold text-base truncate transition-colors ${
-                              selected ? 'border-blue bg-light-blue text-blue-700' : 'border-gray-300 bg-white text-gray-700 hover:border-blue-300'
-                            } ${cobroBloqueado ? 'opacity-60 cursor-not-allowed' : ''}`}
-                          >
-                            {opt.label}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
                 )}
               </div>
             )}
@@ -2425,8 +2213,8 @@ export default function NuevaNota() {
                   className="flex-1 bg-blue hover:opacity-90 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
                 >
                   {encargoLoading
-                    ? (esEdicion ? 'Guardando...' : 'Creando...')
-                    : (esEdicion ? 'Guardar cambios' : 'Crear nota')}
+                    ? 'Creando...'
+                    : 'Crear nota'}
                 </button>
               )}
             </div>
@@ -2633,8 +2421,8 @@ export default function NuevaNota() {
             className="flex-1 bg-blue hover:opacity-90 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
           >
             {loading
-              ? (esEdicion ? 'Guardando...' : 'Creando...')
-              : (esEdicion ? 'Guardar cambios' : 'Aceptar')}
+              ? 'Creando...'
+              : 'Aceptar'}
           </button>
         </div>
         </div>
@@ -2832,8 +2620,8 @@ export default function NuevaNota() {
                 className="flex-1 bg-blue hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed text-white font-medium py-3.5 rounded-lg text-base transition-colors"
               >
                 {loading
-                  ? (esEdicion ? 'Guardando...' : 'Creando...')
-                  : (esEdicion ? 'Guardar cambios' : 'Crear nota')}
+                  ? 'Creando...'
+                  : 'Crear nota'}
               </button>
             </div>
           </div>

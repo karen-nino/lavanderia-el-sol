@@ -8,7 +8,6 @@ import {
   getNotaById,
   getNextFolio,
   createNota,
-  updateNota,
   eliminarNota,
   quitarCarga,
   cambiarEstadoNota,
@@ -50,7 +49,6 @@ router.get('/',           getNotas);
 router.get('/next-folio', getNextFolio);
 router.post('/',          createNota);
 router.get('/:id',        getNotaById);
-router.patch('/:id', updateNota);
 router.delete('/:id', eliminarNota);
 // La máquina/carga agregada de más la quita quien se equivocó, sin esperar a
 // un admin (2026-09-25). El controlador sigue siendo el que manda: solo se

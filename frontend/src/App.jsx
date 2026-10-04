@@ -44,7 +44,6 @@ export default function App() {
             <Route path="notas/nueva" element={<NuevaNota />} />
             <Route path="notas/:id" element={<DetalleNota />} />
             <Route path="notas/:id/ticket" element={<TicketNota />} />
-            <Route path="notas/:id/editar" element={<NuevaNota />} />
             <Route path="notas/:id/salidas" element={<Salidas />} />
             <Route path="clientes" element={<Clientes />} />
             <Route path="maquinas" element={<Maquinas />} />

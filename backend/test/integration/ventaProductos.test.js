@@ -138,13 +138,4 @@ describe('POST /api/notas — venta de Productos', () => {
     expect(Number(rows[0].stock_reservado)).toBe(0);
   });
 
-  it('una venta no se edita: ya está finalizada', async () => {
-    const jabon = await seedJabon();
-    const res = await venta({ productos: [{ producto_id: jabon, cantidad: 1 }] });
-
-    const patch = await request(app).patch(`/api/notas/${res.body.id}`)
-      .set(auth(admin.token)).send({ ajuste: -5 });
-    expect(patch.status).toBe(400);
-    expect(patch.body.message).toMatch(/finalizada/i);
-  });
 });
