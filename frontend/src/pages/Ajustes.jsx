@@ -352,9 +352,13 @@ function MobileSectionButton({ label, icon, onClick }) {
 // `onCambio` avisa la lista fresca a quien envuelve el catálogo (lo usa el
 // desplegable de marcas, que tiene que enterarse de las que se agregan aquí).
 // Tiene que ser estable (useCallback): entra en las dependencias de la carga.
+// `soloConsulta` deja la lista a la vista sin alta, edición, desactivar ni
+// arrastre: es lo que ven los usuarios de prueba, a quienes el backend no les
+// deja cambiar los catálogos (son del negocio entero).
 function CatalogoEtiquetas({
   endpoint, singular, inputCls, onMensaje,
   extra = null, extraCampos = [], vacioTexto = 'Aún no hay etiquetas.', onCambio,
+  soloConsulta = false,
 }) {
   const [items,      setItems]      = useState([]);
   const [nuevo,      setNuevo]      = useState('');
@@ -525,6 +529,7 @@ function CatalogoEtiquetas({
           clase y sin esto se apilan uno por renglón en móvil. Con desplegables
           el nombre se lleva el primer renglón (`basis-full`) y ellos bajan al
           segundo junto al botón, que es lo que cabe en un teléfono. */}
+      {!soloConsulta && (
       <div className="flex flex-wrap gap-2">
         <div className={`flex-1 min-w-0 ${extraCampos.length > 0 ? 'basis-full' : ''}`}>
           <input
@@ -550,6 +555,7 @@ function CatalogoEtiquetas({
           Agregar
         </button>
       </div>
+      )}
 
       {items.length === 0 ? (
         <p className="text-sm text-gray-400">{vacioTexto}</p>
@@ -585,6 +591,7 @@ function CatalogoEtiquetas({
                 </>
               ) : (
                 <>
+                  {!soloConsulta && (
                   <span
                     onPointerDown={(e) => onHandleDown(e, item.id)}
                     onPointerMove={onHandleMove}
@@ -599,6 +606,7 @@ function CatalogoEtiquetas({
                       <path d="M7 4a1 1 0 100 2 1 1 0 000-2zM7 9a1 1 0 100 2 1 1 0 000-2zM7 14a1 1 0 100 2 1 1 0 000-2zM13 4a1 1 0 100 2 1 1 0 000-2zM13 9a1 1 0 100 2 1 1 0 000-2zM13 14a1 1 0 100 2 1 1 0 000-2z" />
                     </svg>
                   </span>
+                  )}
                   {/* El nombre y sus datos van en columna: los nombres de
                       modelo son largos y en una sola línea el renglón se
                       partía en dos en el teléfono. */}
@@ -618,6 +626,7 @@ function CatalogoEtiquetas({
                       Guardado
                     </span>
                   )}
+                  {!soloConsulta && (<>
                   <button
                     type="button"
                     onClick={() => {
@@ -638,6 +647,7 @@ function CatalogoEtiquetas({
                   >
                     {item.activo ? 'Desactivar' : 'Activar'}
                   </button>
+                  </>)}
                 </>
               )}
             </li>
@@ -725,7 +735,7 @@ const CAMPOS_MODELO = [
 // Las dos versiones de Ajustes (escritorio y móvil) pintan lo mismo y solo
 // cambian de estilo, así que `movil` elige el renglón y las clases en vez de
 // duplicar la sección entera.
-function MarcasYModelos({ movil = false, onMensaje }) {
+function MarcasYModelos({ movil = false, onMensaje, soloConsulta = false }) {
   const Campo      = movil ? MobileField : Field;
   const inputCls   = movil ? MOBILE_INPUT_CLS : INPUT_CLS;
   const divisorCls = movil
@@ -758,6 +768,7 @@ function MarcasYModelos({ movil = false, onMensaje }) {
           inputCls={inputCls}
           onMensaje={onMensaje}
           onCambio={recibirMarcas}
+          soloConsulta={soloConsulta}
         />
       </Campo>
 
@@ -794,6 +805,7 @@ function MarcasYModelos({ movil = false, onMensaje }) {
                   vacioTexto="Esta marca todavía no tiene modelos."
                   inputCls={inputCls}
                   onMensaje={onMensaje}
+                  soloConsulta={soloConsulta}
                 />
               )}
             </div>
@@ -1679,7 +1691,7 @@ export default function Ajustes() {
     {/* El catálogo va al final: los tiempos de arriba son del día a día y esto
         se toca cuando entra una máquina nueva. */}
     <Section titulo="Marcas y modelos">
-      <MarcasYModelos onMensaje={setMensaje} />
+      <MarcasYModelos onMensaje={setMensaje} soloConsulta={soloGuardaPerfil} />
     </Section>
     </>
   );
@@ -1981,11 +1993,11 @@ export default function Ajustes() {
   const seccionEtiquetasDesktop = (
     <Section titulo="Etiquetas de encargo">
       <Field label="Tipos de tela" hint="Se ofrecen al crear un encargo de Ropa. Solo son etiquetas internas; no cambian el precio.">
-        <CatalogoEtiquetas endpoint="/etiquetas/tipos-tela" singular="Tela" inputCls={INPUT_CLS} onMensaje={setMensaje} />
+        <CatalogoEtiquetas endpoint="/etiquetas/tipos-tela" singular="Tela" inputCls={INPUT_CLS} onMensaje={setMensaje} soloConsulta={soloGuardaPerfil} />
       </Field>
       <div className="border-t border-gray-100 pt-4">
         <Field label="Tamaños de edredón" hint="Cada tamaño es un servicio Edredón con su propio precio, que se captura en Servicios Por Encargo.">
-          <CatalogoEtiquetas endpoint="/etiquetas/tamanos-edredon" singular="Tamaño" inputCls={INPUT_CLS} onMensaje={setMensaje} />
+          <CatalogoEtiquetas endpoint="/etiquetas/tamanos-edredon" singular="Tamaño" inputCls={INPUT_CLS} onMensaje={setMensaje} soloConsulta={soloGuardaPerfil} />
         </Field>
       </div>
     </Section>
@@ -1997,26 +2009,26 @@ export default function Ajustes() {
   const seccionInventarioDesktop = (
     <Section titulo="Inventario">
       <Field label="Marcas" hint="Se ofrecen al crear un producto. Desactivar una opción la quita de la lista sin afectar a los productos que ya la usan.">
-        <CatalogoEtiquetas endpoint="/etiquetas/marcas-producto" singular="Marca" inputCls={INPUT_CLS} onMensaje={setMensaje} />
+        <CatalogoEtiquetas endpoint="/etiquetas/marcas-producto" singular="Marca" inputCls={INPUT_CLS} onMensaje={setMensaje} soloConsulta={soloGuardaPerfil} />
       </Field>
       <div className="border-t border-gray-100 pt-4">
         <Field label="Envases" hint="Se ofrecen al capturar el envase de un producto por medida.">
-          <CatalogoEtiquetas endpoint="/etiquetas/envases-producto" singular="Envase" inputCls={INPUT_CLS} onMensaje={setMensaje} />
+          <CatalogoEtiquetas endpoint="/etiquetas/envases-producto" singular="Envase" inputCls={INPUT_CLS} onMensaje={setMensaje} soloConsulta={soloGuardaPerfil} />
         </Field>
       </div>
       <div className="border-t border-gray-100 pt-4">
         <Field label="Tipos de granel" hint={AYUDA_TIPOS}>
-          <CatalogoEtiquetas endpoint="/etiquetas/tipos-granel" singular="Tipo" inputCls={INPUT_CLS} onMensaje={setMensaje} />
+          <CatalogoEtiquetas endpoint="/etiquetas/tipos-granel" singular="Tipo" inputCls={INPUT_CLS} onMensaje={setMensaje} soloConsulta={soloGuardaPerfil} />
         </Field>
       </div>
       <div className="border-t border-gray-100 pt-4">
         <Field label="Granel" hint={AYUDA_GRANEL}>
-          <CatalogoEtiquetas endpoint="/etiquetas/graneles-producto" singular="Granel" inputCls={INPUT_CLS} onMensaje={setMensaje} />
+          <CatalogoEtiquetas endpoint="/etiquetas/graneles-producto" singular="Granel" inputCls={INPUT_CLS} onMensaje={setMensaje} soloConsulta={soloGuardaPerfil} />
         </Field>
       </div>
       <div className="border-t border-gray-100 pt-4">
         <Field label="Bolsas" hint="Los tamaños de bolsa. A qué servicios va ligada cada bolsa se elige en Inventario, y cuántas trae cada servicio en Servicios Por Encargo; cualquier otra bolsa se puede agregar a mano en la nota.">
-          <CatalogoEtiquetas endpoint="/etiquetas/tamanos-bolsa" singular="Tamaño" inputCls={INPUT_CLS} onMensaje={setMensaje} />
+          <CatalogoEtiquetas endpoint="/etiquetas/tamanos-bolsa" singular="Tamaño" inputCls={INPUT_CLS} onMensaje={setMensaje} soloConsulta={soloGuardaPerfil} />
         </Field>
       </div>
     </Section>
@@ -2425,7 +2437,7 @@ export default function Ajustes() {
       <div className="border-t border-light-blue/60 pt-8 space-y-6">
         <TituloGrupoMobile>Marcas y modelos</TituloGrupoMobile>
         <TarjetaMobile>
-          <MarcasYModelos movil onMensaje={setMensaje} />
+          <MarcasYModelos movil onMensaje={setMensaje} soloConsulta={soloGuardaPerfil} />
         </TarjetaMobile>
       </div>
     </div>
@@ -2495,7 +2507,7 @@ export default function Ajustes() {
         label="Tipos de tela"
         hint="Se ofrecen al crear un encargo de Ropa. Solo son etiquetas internas; no cambian el precio."
       >
-        <CatalogoEtiquetas endpoint="/etiquetas/tipos-tela" singular="Tela" inputCls={MOBILE_INPUT_CLS} onMensaje={setMensaje} />
+        <CatalogoEtiquetas endpoint="/etiquetas/tipos-tela" singular="Tela" inputCls={MOBILE_INPUT_CLS} onMensaje={setMensaje} soloConsulta={soloGuardaPerfil} />
       </MobileField>
 
       <div className="border-t border-light-blue/60 pt-5">
@@ -2503,7 +2515,7 @@ export default function Ajustes() {
           label="Tamaños de edredón"
           hint="Cada tamaño es un servicio Edredón con su propio precio, que se captura en Servicios Por Encargo."
         >
-          <CatalogoEtiquetas endpoint="/etiquetas/tamanos-edredon" singular="Tamaño" inputCls={MOBILE_INPUT_CLS} onMensaje={setMensaje} />
+          <CatalogoEtiquetas endpoint="/etiquetas/tamanos-edredon" singular="Tamaño" inputCls={MOBILE_INPUT_CLS} onMensaje={setMensaje} soloConsulta={soloGuardaPerfil} />
         </MobileField>
       </div>
     </div>
@@ -2515,7 +2527,7 @@ export default function Ajustes() {
         label="Marcas"
         hint="Se ofrecen al crear un producto. Desactivar una opción la quita de la lista sin afectar a los productos que ya la usan."
       >
-        <CatalogoEtiquetas endpoint="/etiquetas/marcas-producto" singular="Marca" inputCls={MOBILE_INPUT_CLS} onMensaje={setMensaje} />
+        <CatalogoEtiquetas endpoint="/etiquetas/marcas-producto" singular="Marca" inputCls={MOBILE_INPUT_CLS} onMensaje={setMensaje} soloConsulta={soloGuardaPerfil} />
       </MobileField>
 
       <div className="border-t border-light-blue/60 pt-5">
@@ -2523,19 +2535,19 @@ export default function Ajustes() {
           label="Envases"
           hint="Se ofrecen al capturar el envase de un producto por medida."
         >
-          <CatalogoEtiquetas endpoint="/etiquetas/envases-producto" singular="Envase" inputCls={MOBILE_INPUT_CLS} onMensaje={setMensaje} />
+          <CatalogoEtiquetas endpoint="/etiquetas/envases-producto" singular="Envase" inputCls={MOBILE_INPUT_CLS} onMensaje={setMensaje} soloConsulta={soloGuardaPerfil} />
         </MobileField>
       </div>
 
       <div className="border-t border-light-blue/60 pt-5">
         <MobileField label="Tipos de granel" hint={AYUDA_TIPOS}>
-          <CatalogoEtiquetas endpoint="/etiquetas/tipos-granel" singular="Tipo" inputCls={MOBILE_INPUT_CLS} onMensaje={setMensaje} />
+          <CatalogoEtiquetas endpoint="/etiquetas/tipos-granel" singular="Tipo" inputCls={MOBILE_INPUT_CLS} onMensaje={setMensaje} soloConsulta={soloGuardaPerfil} />
         </MobileField>
       </div>
 
       <div className="border-t border-light-blue/60 pt-5">
         <MobileField label="Granel" hint={AYUDA_GRANEL}>
-          <CatalogoEtiquetas endpoint="/etiquetas/graneles-producto" singular="Granel" inputCls={MOBILE_INPUT_CLS} onMensaje={setMensaje} />
+          <CatalogoEtiquetas endpoint="/etiquetas/graneles-producto" singular="Granel" inputCls={MOBILE_INPUT_CLS} onMensaje={setMensaje} soloConsulta={soloGuardaPerfil} />
         </MobileField>
       </div>
 
@@ -2544,7 +2556,7 @@ export default function Ajustes() {
           label="Bolsas"
           hint="Los tamaños de bolsa. A qué servicios va ligada cada bolsa se elige en Inventario, y cuántas trae cada servicio en Servicios Por Encargo; cualquier otra bolsa se puede agregar a mano en la nota."
         >
-          <CatalogoEtiquetas endpoint="/etiquetas/tamanos-bolsa" singular="Tamaño" inputCls={MOBILE_INPUT_CLS} onMensaje={setMensaje} />
+          <CatalogoEtiquetas endpoint="/etiquetas/tamanos-bolsa" singular="Tamaño" inputCls={MOBILE_INPUT_CLS} onMensaje={setMensaje} soloConsulta={soloGuardaPerfil} />
         </MobileField>
       </div>
     </div>
@@ -2715,8 +2727,7 @@ export default function Ajustes() {
   // rechazar (o peor, que diga "¡Guardado!" sin haber guardado) engaña más de
   // lo que ayuda.
   const seccionDeConsulta = soloGuardaPerfil
-    && activeSection && activeSection.id !== 'perfil'
-    && !SECCIONES_SIN_GUARDAR.includes(activeSection.id);
+    && activeSection && activeSection.id !== 'perfil' && activeSection.id !== 'instalar';
 
   // Aviso fijo del entorno de pruebas, arriba de la lista de ajustes.
   const avisoPruebas = soloGuardaPerfil && (
