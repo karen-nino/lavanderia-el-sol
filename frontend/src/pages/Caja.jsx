@@ -573,6 +573,14 @@ function Historial({ onFiltroLabel }) {
   const anioRef = useRef(null);
   const mesRef = useRef(null);
 
+  // Cortes con su lista de entradas y salidas desplegada (por id).
+  const [movsAbiertos, setMovsAbiertos] = useState(() => new Set());
+  const alternarMovs = (id) => setMovsAbiertos((prev) => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+
   // Menú de opciones (⋮) por corte y confirmación de borrado.
   const [menuCorte, setMenuCorte] = useState(null);       // id del corte con el menú abierto
   const [confirmEliminar, setConfirmEliminar] = useState(null); // corte a eliminar
@@ -605,6 +613,8 @@ function Historial({ onFiltroLabel }) {
           ventas_desglose: totales.ventas_desglose,
           entradas: totales.entradas,
           salidas: totales.salidas,
+          // /actual las trae de la más nueva a la más vieja; aquí van en orden.
+          movimientos: [...(d.movimientos ?? [])].reverse(),
           esperado: totales.esperado,
           contado: null,
           diferencia: null,
@@ -847,6 +857,40 @@ function Historial({ onFiltroLabel }) {
             : c.diferencia < 0 ? 'text-red-600' : 'text-green-600'
         }`}>{c.contado != null ? fmt(c.contado) : '—'}</span>
       </div>
+      {/* Entradas y salidas del turno con su concepto (2026-10-04). Plegadas
+          para que la tarjeta no crezca; se abren con un toque. */}
+      {c.movimientos?.length > 0 && (
+        <div className="mt-4">
+          <button
+            type="button"
+            onClick={() => alternarMovs(c.id)}
+            className="flex items-center gap-1 text-sm font-medium text-blue hover:underline"
+          >
+            {movsAbiertos.has(c.id) ? 'Ocultar' : 'Ver'} entradas y salidas ({c.movimientos.length})
+            <svg className={`w-4 h-4 transition-transform ${movsAbiertos.has(c.id) ? 'rotate-180' : ''}`}
+              fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          {movsAbiertos.has(c.id) && (
+            <div className="mt-2 rounded-lg border border-gray-200 divide-y divide-gray-100">
+              {c.movimientos.map((m) => (
+                <div key={m.id} className="flex items-center justify-between gap-3 px-3 py-2.5">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-gray-800 break-words">{m.concepto}</p>
+                    <p className="text-xs text-gray-400">
+                      {m.tipo === 'salida' ? 'Salida' : 'Entrada'} · {m.usuario} · {fmtHora(m.created_at)}
+                    </p>
+                  </div>
+                  <span className={`flex-shrink-0 text-sm font-semibold ${m.tipo === 'salida' ? 'text-red-600' : 'text-green-600'}`}>
+                    {m.tipo === 'salida' ? '−' : '+'}{fmt(m.monto)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
       <div className="mt-5 pt-5 border-t border-gray-100 divide-y divide-gray-100">
         <div className="py-6 first:pt-0 last:pb-0">
           <div className="flex items-center gap-2 text-sm">

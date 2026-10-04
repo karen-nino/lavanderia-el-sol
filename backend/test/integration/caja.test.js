@@ -190,6 +190,9 @@ describe('POST /api/caja/cerrar', () => {
     expect(historial.status).toBe(200);
     expect(historial.body).toHaveLength(1);
     expect(historial.body[0].diferencia).toBe(-10);
+    // Cada entrada y salida viaja con su concepto para la tarjeta y la exportación.
+    expect(historial.body[0].movimientos).toHaveLength(1);
+    expect(historial.body[0].movimientos[0]).toMatchObject({ tipo: 'entrada', concepto: 'Extra', monto: 100 });
   });
 
   // La caja funciona por turnos: el corte lo hace quien abrió el turno o un

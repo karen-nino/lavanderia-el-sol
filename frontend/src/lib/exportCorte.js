@@ -4,7 +4,12 @@
 // La forma de cada `corte` es la que devuelve GET /caja/historial:
 //   { usuario_apertura, usuario_cierre, abierta_at, cerrada_at,
 //     notas_apertura, notas_cierre, monto_inicial, ventas, entradas,
-//     salidas, esperado, contado, diferencia }
+//     salidas, esperado, contado, diferencia,
+//     movimientos: [{ tipo, concepto, monto, usuario, created_at }] }
+//
+// Las entradas y salidas van con su concepto en todas las exportaciones
+// (2026-10-04): en el CSV como una segunda tabla debajo de los cortes, una fila
+// por movimiento, y en el PDF como tabla.
 
 import { formatHora12 } from './fecha';
 import {
@@ -25,6 +30,20 @@ const ENCABEZADOS_CSV = [
   'Entradas', 'Salidas', 'Esperado', 'Contado', 'Diferencia',
   'Estado', 'Nota apertura', 'Nota cierre',
 ];
+
+// Segunda tabla del CSV: una fila por entrada o salida, con el corte al que
+// pertenece. La salida va en negativo para que en Excel se pueda sumar.
+const ENCABEZADOS_MOVS = ['Corte', 'Fecha', 'Hora', 'Tipo', 'Concepto', 'Registró', 'Monto'];
+
+const filasMovimientos = (c) => (c.movimientos ?? []).map((m) => [
+  `${fechaISO(c.cerrada_at)} ${formatHora12(c.cerrada_at)}`,
+  fechaISO(m.created_at),
+  formatHora12(m.created_at),
+  m.tipo === 'salida' ? 'Salida' : 'Entrada',
+  m.concepto ?? '',
+  m.usuario ?? '',
+  num(m.tipo === 'salida' ? -m.monto : m.monto),
+]);
 
 const filaCSV = (c) => [
   fechaISO(c.cerrada_at),
@@ -49,7 +68,11 @@ const filaCSV = (c) => [
 // Descarga uno o varios cortes como CSV. `sufijo` va en el nombre del archivo.
 export function descargarCortesCSV(cortes, sufijo) {
   const lista = Array.isArray(cortes) ? cortes : [cortes];
-  descargarCSV(`cortes-${slug(sufijo)}`, ENCABEZADOS_CSV, lista.map(filaCSV));
+  const movs = lista.flatMap(filasMovimientos);
+  const filas = lista.map(filaCSV);
+  // Debajo de los cortes, separada por una fila vacía, la tabla de movimientos.
+  if (movs.length > 0) filas.push([], ['Entradas y salidas'], ENCABEZADOS_MOVS, ...movs);
+  descargarCSV(`cortes-${slug(sufijo)}`, ENCABEZADOS_CSV, filas);
 }
 
 // ── PDF (impresión del navegador) ───────────────────────────
@@ -65,6 +88,28 @@ const textoDif = (c) => {
   const signo = c.diferencia > 0 ? '+' : '';
   const etiqueta = c.diferencia < 0 ? 'faltante' : 'sobrante';
   return `${signo}${fmtMoneda(c.diferencia)} (${etiqueta})`;
+};
+
+// Tabla de entradas y salidas de un corte, o '' si no hubo ninguna.
+const tablaMovimientos = (c) => {
+  const movs = c.movimientos ?? [];
+  if (movs.length === 0) return '';
+  return `
+    <p class="seccion">Entradas y salidas</p>
+    <table class="resumen">
+      <thead>
+        <tr><th>Hora</th><th>Tipo</th><th>Concepto</th><th>Registró</th><th class="r">Monto</th></tr>
+      </thead>
+      <tbody>${movs.map((m) => `
+        <tr>
+          <td>${esc(formatHora12(m.created_at))}</td>
+          <td>${m.tipo === 'salida' ? 'Salida' : 'Entrada'}</td>
+          <td>${esc(m.concepto)}</td>
+          <td>${esc(m.usuario || '—')}</td>
+          <td class="r ${m.tipo === 'salida' ? 'neg' : 'pos'}">${m.tipo === 'salida' ? '−' : '+'}${fmtMoneda(m.monto)}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>`;
 };
 
 // Bloque detallado de un corte (encabezado + desglose + firmas).
@@ -97,7 +142,33 @@ const bloqueDetalle = (c) => `
       <div><span class="lbl">Cerró</span> ${esc(c.usuario_cierre || '—')}
         ${c.notas_cierre ? `<p class="nota">${esc(c.notas_cierre)}</p>` : ''}</div>
     </div>
+    ${tablaMovimientos(c)}
   </section>`;
+
+// Con varios cortes, después de la tabla resumen: las notas y las entradas y
+// salidas de cada corte que tenga alguna, para que ninguna quede fuera.
+const detalleNotas = (cortes) => {
+  const conAlgo = cortes.filter((c) =>
+    c.notas_apertura || c.notas_cierre || (c.movimientos ?? []).length > 0);
+  if (conAlgo.length === 0) return '';
+  return `
+    <p class="seccion">Notas, entradas y salidas</p>
+    ${conAlgo.map((c) => `
+      <section class="corte">
+        <div class="corte-head">
+          <h2>${esc(fechaLarga(c.cerrada_at))}</h2>
+          <span class="hora">${esc(formatHora12(c.abierta_at))} – ${esc(formatHora12(c.cerrada_at))}</span>
+        </div>
+        ${c.notas_apertura || c.notas_cierre ? `
+          <div class="firmas">
+            ${c.notas_apertura ? `<div><span class="lbl">Nota al abrir · ${esc(c.usuario_apertura || '—')}</span>
+              <p class="nota">${esc(c.notas_apertura)}</p></div>` : ''}
+            ${c.notas_cierre ? `<div><span class="lbl">Nota al cerrar · ${esc(c.usuario_cierre || '—')}</span>
+              <p class="nota">${esc(c.notas_cierre)}</p></div>` : ''}
+          </div>` : ''}
+        ${tablaMovimientos(c)}
+      </section>`).join('')}`;
+};
 
 // Tabla resumen (una fila por corte) + totales, para varios cortes.
 const tablaResumen = (cortes) => {
@@ -147,6 +218,6 @@ const tablaResumen = (cortes) => {
 export function imprimirCortes(cortes, { titulo, subtitulo } = {}) {
   const lista = Array.isArray(cortes) ? cortes : [cortes];
   if (lista.length === 0) return;
-  const cuerpo = lista.length === 1 ? bloqueDetalle(lista[0]) : tablaResumen(lista);
+  const cuerpo = lista.length === 1 ? bloqueDetalle(lista[0]) : tablaResumen(lista) + detalleNotas(lista);
   imprimirDocumento({ titulo: titulo || 'Corte de caja', subtitulo, cuerpo });
 }

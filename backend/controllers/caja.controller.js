@@ -446,7 +446,17 @@ export async function getHistorial(req, res) {
           COALESCE(c.total_salidas, (
             SELECT COALESCE(SUM(monto), 0) FROM movimientos_caja
              WHERE caja_id = c.id AND tipo = 'salida'
-          )) AS salidas
+          )) AS salidas,
+          -- Cada entrada y salida del turno con su concepto (2026-10-04): la
+          -- tarjeta del corte las enseña y van en las exportaciones.
+          (SELECT COALESCE(json_agg(json_build_object(
+                    'id', mc.id, 'tipo', mc.tipo, 'concepto', mc.concepto,
+                    'monto', mc.monto, 'created_at', mc.created_at,
+                    'usuario', TRIM(um.nombre || ' ' || COALESCE(um.apellido, ''))
+                  ) ORDER BY mc.created_at), '[]'::json)
+             FROM movimientos_caja mc
+             JOIN usuarios um ON um.id = mc.usuario_id
+            WHERE mc.caja_id = c.id) AS movimientos
         FROM cajas c
         JOIN usuarios ua ON ua.id = c.usuario_apertura_id
         LEFT JOIN usuarios uc ON uc.id = c.usuario_cierre_id
@@ -488,6 +498,7 @@ export async function getHistorial(req, res) {
           esperado,
           contado,
           diferencia: contado != null ? contado - esperado : null,
+          movimientos: (r.movimientos ?? []).map((m) => ({ ...m, monto: parseFloat(m.monto) })),
         };
       })
     );
