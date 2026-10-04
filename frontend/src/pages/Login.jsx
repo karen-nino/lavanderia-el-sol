@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../lib/api';
+import { mismoNombre } from '../lib/texto';
 import { APP_VERSION, versionEsNueva } from '../lib/version';
 import { hayQueActualizar, versionPublicada, aplicarActualizacion } from '../lib/actualizacion';
 import LogoSol from '../components/LogoSol';
@@ -73,6 +74,15 @@ export default function Login() {
   const consulta = query.trim();
   const termino = consulta.startsWith('***') ? consulta.slice(3).trim() : consulta;
 
+  const elegirUsuario = (u) => {
+    setSeleccionado(u);
+    setQuery(u.nombre);
+    cerradaPorElUsuario.current = true;
+    setMostrarLista(false);
+    setError('');
+    setTimeout(() => passwordRef.current?.focus(), 0);
+  };
+
   // Debounce de la búsqueda de sugerencias
   useEffect(() => {
     if (seleccionado) return;
@@ -90,7 +100,17 @@ export default function Login() {
       setBuscando(true);
       try {
         const data = await api.get(`/auth/buscar-usuarios?q=${encodeURIComponent(consulta)}`);
-        setSugerencias(data ?? []);
+        const lista = data ?? [];
+        // Si se escribió el nombre COMPLETO de alguien y es la única opción,
+        // se elige solo y se pasa a la contraseña (2026-10-03). Solo con el
+        // nombre completo: con uno a medias la persona podría seguir
+        // escribiendo y las letras caerían en la contraseña.
+        if (lista.length === 1 && mismoNombre(termino, lista[0].nombre)) {
+          setSugerencias(lista);
+          elegirUsuario(lista[0]);
+          return;
+        }
+        setSugerencias(lista);
         // Se vuelve a mirar aquí, no solo arriba: la respuesta tarda más que el
         // debounce y el usuario puede haber cerrado la lista mientras llegaba.
         if (!cerradaPorElUsuario.current) setMostrarLista(true);
@@ -114,15 +134,6 @@ export default function Login() {
     document.addEventListener('mousedown', onClick);
     return () => document.removeEventListener('mousedown', onClick);
   }, []);
-
-  const elegirUsuario = (u) => {
-    setSeleccionado(u);
-    setQuery(u.nombre);
-    cerradaPorElUsuario.current = true;
-    setMostrarLista(false);
-    setError('');
-    setTimeout(() => passwordRef.current?.focus(), 0);
-  };
 
   const cambiarUsuario = () => {
     setSeleccionado(null);

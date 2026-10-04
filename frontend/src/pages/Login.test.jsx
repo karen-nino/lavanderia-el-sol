@@ -47,6 +47,30 @@ describe('Login', () => {
     );
   });
 
+  it('con el nombre completo y una sola opción, elige solo y pasa a la contraseña', async () => {
+    const user = userEvent.setup();
+    api.get.mockResolvedValue([{ id: 13, nombre: 'Rebeca' }]);
+    render(<Login />);
+
+    await user.type(screen.getByPlaceholderText('Escribe tu nombre...'), 'rebeca');
+
+    const password = screen.getByPlaceholderText('••••••••');
+    await waitFor(() => expect(password).not.toBeDisabled());
+    await waitFor(() => expect(password).toHaveFocus());
+    expect(screen.getByPlaceholderText('Escribe tu nombre...')).toHaveValue('Rebeca');
+  });
+
+  it('con un nombre a medias no elige solo, aunque haya una sola opción', async () => {
+    const user = userEvent.setup();
+    api.get.mockResolvedValue([{ id: 7, nombre: 'Juan Pérez' }]);
+    render(<Login />);
+
+    await user.type(screen.getByPlaceholderText('Escribe tu nombre...'), 'Juan');
+
+    expect(await screen.findByRole('button', { name: 'Juan Pérez' })).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('••••••••')).toBeDisabled();
+  });
+
   it('no busca con menos de 3 letras y avisa cuántas faltan', async () => {
     const user = userEvent.setup();
     render(<Login />);
