@@ -20,12 +20,18 @@ import { ENTORNO_DEMO } from '../utils/entorno.js';
 //     abrir esa puerta;
 //   · dos limitadores por IP en la ruta: uno por minuto y otro por hora, este
 //     último contra el barrido lento y sostenido.
+// Por el momento (2026-10-04, a pedido) los usuarios de prueba salen en la
+// búsqueda normal, sin el prefijo ***, para que cualquiera pueda entrar con
+// ellos escribiendo su nombre. Para volver a ocultarlos, ponerlo en false.
+const PRUEBA_VISIBLE_EN_LOGIN = true;
+
 export const buscarUsuarios = async (req, res) => {
   const raw = (req.query.q ?? '').trim();
   if (!raw) return res.json([]);
 
   // El prefijo *** revela los usuarios ocultos: el admin_main y los usuarios
-  // de prueba. Sin él, esos usuarios no aparecen en la búsqueda normal.
+  // de prueba. Sin él, esos usuarios no aparecen en la búsqueda normal (los de
+  // prueba sí, mientras PRUEBA_VISIBLE_EN_LOGIN esté encendido).
   const mostrarOcultos = raw.startsWith('***');
   const q = mostrarOcultos ? raw.slice(3).trim() : raw;
 
@@ -50,7 +56,8 @@ export const buscarUsuarios = async (req, res) => {
         ORDER BY nombre ASC
         LIMIT 5`
     : `SELECT id, ${nombreCompleto} AS nombre FROM usuarios
-        WHERE activo = TRUE AND rol <> 'admin_main' AND es_prueba = FALSE
+        WHERE activo = TRUE AND rol <> 'admin_main'
+          AND (es_prueba = FALSE OR ${PRUEBA_VISIBLE_EN_LOGIN ? 'TRUE' : 'FALSE'})
           AND ${coincide}
         ORDER BY nombre ASC
         LIMIT 5`;
