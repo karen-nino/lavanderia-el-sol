@@ -75,6 +75,20 @@ describe('GET /api/auth/me', () => {
   });
 });
 
+describe('PATCH /api/auth/me', () => {
+  it('un usuario de prueba no puede cambiar su perfil (cuenta compartida)', async () => {
+    const u = await seedLogin({ rol: 'admin', password: 'secret123' });
+    await pool.query('UPDATE usuarios SET es_prueba = TRUE WHERE id = $1', [u.id]);
+    const { body } = await login(u.id, 'secret123');
+
+    const res = await request(app).patch('/api/auth/me').set(auth(body.token))
+      .send({ nombre: 'Otro', password: 'nueva123' });
+    expect(res.status).toBe(403);
+    const { rows } = await pool.query('SELECT nombre FROM usuarios WHERE id = $1', [u.id]);
+    expect(rows[0].nombre).not.toBe('Otro');
+  });
+});
+
 describe('GET /api/auth/buscar-usuarios', () => {
   it('encuentra por nombre a un empleado normal, con mínimo 3 caracteres', async () => {
     await seedLogin({ nombre: 'Juan', rol: 'operador' });

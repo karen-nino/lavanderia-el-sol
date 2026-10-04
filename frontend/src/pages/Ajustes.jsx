@@ -966,11 +966,12 @@ export default function Ajustes() {
   // Los usuarios de prueba operan en una sucursal aislada, pero los ajustes son
   // del negocio entero (tarifas, tiempos, sucursales, catálogos). VEN toda la
   // configuración —para eso está el entorno: para conocer la app entera—, pero
-  // lo único que pueden guardar es su propio perfil. No es una cortesía del
-  // frontend: el backend rechaza el resto con 403 (bloquearPruebaGlobal), así
-  // que en vez de ofrecer un "Guardar" que va a fallar, no se ofrece.
+  // no pueden guardar nada, ni siquiera su perfil: las cuentas de prueba son
+  // compartidas (2026-10-04). No es una cortesía del frontend: el backend
+  // rechaza todo con 403, así que en vez de ofrecer un "Guardar" que va a
+  // fallar, no se ofrece.
   // En la demo la configuración es de juguete y se puede tocar entera.
-  const soloGuardaPerfil = usuario?.es_prueba === true && !ES_DEMO;
+  const soloConsultaPruebas = usuario?.es_prueba === true && !ES_DEMO;
 
   const [tiemposMarca, setTiemposMarca] = useState([]);
   const [edredones, setEdredones] = useState([]);
@@ -1284,6 +1285,7 @@ export default function Ajustes() {
   };
 
   const handleSubmitMobile = (e) => {
+    if (soloConsultaPruebas) { e.preventDefault(); return; }
     if (mobileSection === 'perfil') return handleGuardarPerfil(e);
     if (mobileSection === 'negocio') return handleGuardarNegocioMobile(e);
     return handleGuardar(e);
@@ -1400,25 +1402,6 @@ export default function Ajustes() {
     alerta_ciclo_detenido: !!config.alerta_ciclo_detenido,
   });
 
-  // Guarda únicamente el perfil (nombre y contraseña), sin tocar la
-  // configuración del negocio. Es lo único que puede guardar un usuario de prueba.
-  const handleGuardarPerfilSolo = async () => {
-    setSaving(true);
-    setMensaje(null);
-    try {
-      const payload = { nombre: perfilForm.nombre.trim(), apellido: perfilForm.apellido.trim() };
-      if (perfilForm.password) payload.password = perfilForm.password;
-      const updated = await api.patch('/auth/me', payload);
-      updateUsuario({ nombre: updated.nombre, apellido: updated.apellido, rol: updated.rol });
-      setPerfilForm(f => ({ ...f, password: '' }));
-      marcarGuardado('todo');
-    } catch (err) {
-      setMensaje({ tipo: 'error', texto: err.message });
-    } finally {
-      setSaving(false);
-    }
-  };
-
   const handleGuardarTodo = async () => {
     const nombreCompleto = `${perfilForm.nombre} ${perfilForm.apellido}`.trim();
     if (!nombreCompleto) {
@@ -1427,8 +1410,8 @@ export default function Ajustes() {
     if (perfilForm.password && perfilForm.password.length < 6) {
       return setMensaje({ tipo: 'error', texto: 'La contraseña debe tener al menos 6 caracteres.' });
     }
-    // Un usuario de prueba solo puede guardar su perfil: nada de lo global.
-    if (soloGuardaPerfil) return handleGuardarPerfilSolo();
+    // Un usuario de prueba no guarda nada (ni su perfil).
+    if (soloConsultaPruebas) return;
 
     const sucursalActualEdit = sucursales.find(x => x.slug === sucursalSel);
     if (sucursalActualEdit && !String(sucursalActualEdit.nombre ?? '').trim()) {
@@ -1553,7 +1536,8 @@ export default function Ajustes() {
           name="nombre"
           value={perfilForm.nombre}
           onChange={handlePerfilChange}
-          className={INPUT_CLS}
+          readOnly={soloConsultaPruebas}
+          className={soloConsultaPruebas ? `${INPUT_CLS} bg-gray-50 text-gray-500` : INPUT_CLS}
         />
       </Field>
 
@@ -1563,10 +1547,13 @@ export default function Ajustes() {
           name="apellido"
           value={perfilForm.apellido}
           onChange={handlePerfilChange}
-          className={INPUT_CLS}
+          readOnly={soloConsultaPruebas}
+          className={soloConsultaPruebas ? `${INPUT_CLS} bg-gray-50 text-gray-500` : INPUT_CLS}
         />
       </Field>
 
+      {/* La contraseña no se consulta: en pruebas no hay nada que enseñar. */}
+      {!soloConsultaPruebas && (
       <Field label="Contraseña">
         <div className="relative">
           <input
@@ -1587,6 +1574,7 @@ export default function Ajustes() {
           </button>
         </div>
       </Field>
+      )}
     </Section>
   );
 
@@ -1691,7 +1679,7 @@ export default function Ajustes() {
     {/* El catálogo va al final: los tiempos de arriba son del día a día y esto
         se toca cuando entra una máquina nueva. */}
     <Section titulo="Marcas y modelos">
-      <MarcasYModelos onMensaje={setMensaje} soloConsulta={soloGuardaPerfil} />
+      <MarcasYModelos onMensaje={setMensaje} soloConsulta={soloConsultaPruebas} />
     </Section>
     </>
   );
@@ -1993,11 +1981,11 @@ export default function Ajustes() {
   const seccionEtiquetasDesktop = (
     <Section titulo="Etiquetas de encargo">
       <Field label="Tipos de tela" hint="Se ofrecen al crear un encargo de Ropa. Solo son etiquetas internas; no cambian el precio.">
-        <CatalogoEtiquetas endpoint="/etiquetas/tipos-tela" singular="Tela" inputCls={INPUT_CLS} onMensaje={setMensaje} soloConsulta={soloGuardaPerfil} />
+        <CatalogoEtiquetas endpoint="/etiquetas/tipos-tela" singular="Tela" inputCls={INPUT_CLS} onMensaje={setMensaje} soloConsulta={soloConsultaPruebas} />
       </Field>
       <div className="border-t border-gray-100 pt-4">
         <Field label="Tamaños de edredón" hint="Cada tamaño es un servicio Edredón con su propio precio, que se captura en Servicios Por Encargo.">
-          <CatalogoEtiquetas endpoint="/etiquetas/tamanos-edredon" singular="Tamaño" inputCls={INPUT_CLS} onMensaje={setMensaje} soloConsulta={soloGuardaPerfil} />
+          <CatalogoEtiquetas endpoint="/etiquetas/tamanos-edredon" singular="Tamaño" inputCls={INPUT_CLS} onMensaje={setMensaje} soloConsulta={soloConsultaPruebas} />
         </Field>
       </div>
     </Section>
@@ -2009,26 +1997,26 @@ export default function Ajustes() {
   const seccionInventarioDesktop = (
     <Section titulo="Inventario">
       <Field label="Marcas" hint="Se ofrecen al crear un producto. Desactivar una opción la quita de la lista sin afectar a los productos que ya la usan.">
-        <CatalogoEtiquetas endpoint="/etiquetas/marcas-producto" singular="Marca" inputCls={INPUT_CLS} onMensaje={setMensaje} soloConsulta={soloGuardaPerfil} />
+        <CatalogoEtiquetas endpoint="/etiquetas/marcas-producto" singular="Marca" inputCls={INPUT_CLS} onMensaje={setMensaje} soloConsulta={soloConsultaPruebas} />
       </Field>
       <div className="border-t border-gray-100 pt-4">
         <Field label="Envases" hint="Se ofrecen al capturar el envase de un producto por medida.">
-          <CatalogoEtiquetas endpoint="/etiquetas/envases-producto" singular="Envase" inputCls={INPUT_CLS} onMensaje={setMensaje} soloConsulta={soloGuardaPerfil} />
+          <CatalogoEtiquetas endpoint="/etiquetas/envases-producto" singular="Envase" inputCls={INPUT_CLS} onMensaje={setMensaje} soloConsulta={soloConsultaPruebas} />
         </Field>
       </div>
       <div className="border-t border-gray-100 pt-4">
         <Field label="Tipos de granel" hint={AYUDA_TIPOS}>
-          <CatalogoEtiquetas endpoint="/etiquetas/tipos-granel" singular="Tipo" inputCls={INPUT_CLS} onMensaje={setMensaje} soloConsulta={soloGuardaPerfil} />
+          <CatalogoEtiquetas endpoint="/etiquetas/tipos-granel" singular="Tipo" inputCls={INPUT_CLS} onMensaje={setMensaje} soloConsulta={soloConsultaPruebas} />
         </Field>
       </div>
       <div className="border-t border-gray-100 pt-4">
         <Field label="Granel" hint={AYUDA_GRANEL}>
-          <CatalogoEtiquetas endpoint="/etiquetas/graneles-producto" singular="Granel" inputCls={INPUT_CLS} onMensaje={setMensaje} soloConsulta={soloGuardaPerfil} />
+          <CatalogoEtiquetas endpoint="/etiquetas/graneles-producto" singular="Granel" inputCls={INPUT_CLS} onMensaje={setMensaje} soloConsulta={soloConsultaPruebas} />
         </Field>
       </div>
       <div className="border-t border-gray-100 pt-4">
         <Field label="Bolsas" hint="Los tamaños de bolsa. A qué servicios va ligada cada bolsa se elige en Inventario, y cuántas trae cada servicio en Servicios Por Encargo; cualquier otra bolsa se puede agregar a mano en la nota.">
-          <CatalogoEtiquetas endpoint="/etiquetas/tamanos-bolsa" singular="Tamaño" inputCls={INPUT_CLS} onMensaje={setMensaje} soloConsulta={soloGuardaPerfil} />
+          <CatalogoEtiquetas endpoint="/etiquetas/tamanos-bolsa" singular="Tamaño" inputCls={INPUT_CLS} onMensaje={setMensaje} soloConsulta={soloConsultaPruebas} />
         </Field>
       </div>
     </Section>
@@ -2104,7 +2092,8 @@ export default function Ajustes() {
           name="nombre"
           value={perfilForm.nombre}
           onChange={handlePerfilChange}
-          className={MOBILE_INPUT_CLS}
+          readOnly={soloConsultaPruebas}
+          className={soloConsultaPruebas ? `${MOBILE_INPUT_CLS} bg-light-blue/20 text-grey` : MOBILE_INPUT_CLS}
         />
       </MobileField>
 
@@ -2114,10 +2103,12 @@ export default function Ajustes() {
           name="apellido"
           value={perfilForm.apellido}
           onChange={handlePerfilChange}
-          className={MOBILE_INPUT_CLS}
+          readOnly={soloConsultaPruebas}
+          className={soloConsultaPruebas ? `${MOBILE_INPUT_CLS} bg-light-blue/20 text-grey` : MOBILE_INPUT_CLS}
         />
       </MobileField>
 
+      {!soloConsultaPruebas && (
       <MobileField label="Contraseña">
         <div className="relative">
           <input
@@ -2138,6 +2129,7 @@ export default function Ajustes() {
           </button>
         </div>
       </MobileField>
+      )}
     </div>
   );
 
@@ -2437,7 +2429,7 @@ export default function Ajustes() {
       <div className="border-t border-light-blue/60 pt-8 space-y-6">
         <TituloGrupoMobile>Marcas y modelos</TituloGrupoMobile>
         <TarjetaMobile>
-          <MarcasYModelos movil onMensaje={setMensaje} soloConsulta={soloGuardaPerfil} />
+          <MarcasYModelos movil onMensaje={setMensaje} soloConsulta={soloConsultaPruebas} />
         </TarjetaMobile>
       </div>
     </div>
@@ -2507,7 +2499,7 @@ export default function Ajustes() {
         label="Tipos de tela"
         hint="Se ofrecen al crear un encargo de Ropa. Solo son etiquetas internas; no cambian el precio."
       >
-        <CatalogoEtiquetas endpoint="/etiquetas/tipos-tela" singular="Tela" inputCls={MOBILE_INPUT_CLS} onMensaje={setMensaje} soloConsulta={soloGuardaPerfil} />
+        <CatalogoEtiquetas endpoint="/etiquetas/tipos-tela" singular="Tela" inputCls={MOBILE_INPUT_CLS} onMensaje={setMensaje} soloConsulta={soloConsultaPruebas} />
       </MobileField>
 
       <div className="border-t border-light-blue/60 pt-5">
@@ -2515,7 +2507,7 @@ export default function Ajustes() {
           label="Tamaños de edredón"
           hint="Cada tamaño es un servicio Edredón con su propio precio, que se captura en Servicios Por Encargo."
         >
-          <CatalogoEtiquetas endpoint="/etiquetas/tamanos-edredon" singular="Tamaño" inputCls={MOBILE_INPUT_CLS} onMensaje={setMensaje} soloConsulta={soloGuardaPerfil} />
+          <CatalogoEtiquetas endpoint="/etiquetas/tamanos-edredon" singular="Tamaño" inputCls={MOBILE_INPUT_CLS} onMensaje={setMensaje} soloConsulta={soloConsultaPruebas} />
         </MobileField>
       </div>
     </div>
@@ -2527,7 +2519,7 @@ export default function Ajustes() {
         label="Marcas"
         hint="Se ofrecen al crear un producto. Desactivar una opción la quita de la lista sin afectar a los productos que ya la usan."
       >
-        <CatalogoEtiquetas endpoint="/etiquetas/marcas-producto" singular="Marca" inputCls={MOBILE_INPUT_CLS} onMensaje={setMensaje} soloConsulta={soloGuardaPerfil} />
+        <CatalogoEtiquetas endpoint="/etiquetas/marcas-producto" singular="Marca" inputCls={MOBILE_INPUT_CLS} onMensaje={setMensaje} soloConsulta={soloConsultaPruebas} />
       </MobileField>
 
       <div className="border-t border-light-blue/60 pt-5">
@@ -2535,19 +2527,19 @@ export default function Ajustes() {
           label="Envases"
           hint="Se ofrecen al capturar el envase de un producto por medida."
         >
-          <CatalogoEtiquetas endpoint="/etiquetas/envases-producto" singular="Envase" inputCls={MOBILE_INPUT_CLS} onMensaje={setMensaje} soloConsulta={soloGuardaPerfil} />
+          <CatalogoEtiquetas endpoint="/etiquetas/envases-producto" singular="Envase" inputCls={MOBILE_INPUT_CLS} onMensaje={setMensaje} soloConsulta={soloConsultaPruebas} />
         </MobileField>
       </div>
 
       <div className="border-t border-light-blue/60 pt-5">
         <MobileField label="Tipos de granel" hint={AYUDA_TIPOS}>
-          <CatalogoEtiquetas endpoint="/etiquetas/tipos-granel" singular="Tipo" inputCls={MOBILE_INPUT_CLS} onMensaje={setMensaje} soloConsulta={soloGuardaPerfil} />
+          <CatalogoEtiquetas endpoint="/etiquetas/tipos-granel" singular="Tipo" inputCls={MOBILE_INPUT_CLS} onMensaje={setMensaje} soloConsulta={soloConsultaPruebas} />
         </MobileField>
       </div>
 
       <div className="border-t border-light-blue/60 pt-5">
         <MobileField label="Granel" hint={AYUDA_GRANEL}>
-          <CatalogoEtiquetas endpoint="/etiquetas/graneles-producto" singular="Granel" inputCls={MOBILE_INPUT_CLS} onMensaje={setMensaje} soloConsulta={soloGuardaPerfil} />
+          <CatalogoEtiquetas endpoint="/etiquetas/graneles-producto" singular="Granel" inputCls={MOBILE_INPUT_CLS} onMensaje={setMensaje} soloConsulta={soloConsultaPruebas} />
         </MobileField>
       </div>
 
@@ -2556,7 +2548,7 @@ export default function Ajustes() {
           label="Bolsas"
           hint="Los tamaños de bolsa. A qué servicios va ligada cada bolsa se elige en Inventario, y cuántas trae cada servicio en Servicios Por Encargo; cualquier otra bolsa se puede agregar a mano en la nota."
         >
-          <CatalogoEtiquetas endpoint="/etiquetas/tamanos-bolsa" singular="Tamaño" inputCls={MOBILE_INPUT_CLS} onMensaje={setMensaje} soloConsulta={soloGuardaPerfil} />
+          <CatalogoEtiquetas endpoint="/etiquetas/tamanos-bolsa" singular="Tamaño" inputCls={MOBILE_INPUT_CLS} onMensaje={setMensaje} soloConsulta={soloConsultaPruebas} />
         </MobileField>
       </div>
     </div>
@@ -2726,17 +2718,17 @@ export default function Ajustes() {
   // entera, pero sin el pie de Cancelar/Guardar. Un botón que el backend va a
   // rechazar (o peor, que diga "¡Guardado!" sin haber guardado) engaña más de
   // lo que ayuda.
-  const seccionDeConsulta = soloGuardaPerfil
-    && activeSection && activeSection.id !== 'perfil' && activeSection.id !== 'instalar';
+  const seccionDeConsulta = soloConsultaPruebas
+    && activeSection && activeSection.id !== 'instalar';
 
   // Aviso fijo del entorno de pruebas, arriba de la lista de ajustes.
-  const avisoPruebas = soloGuardaPerfil && (
+  const avisoPruebas = soloConsultaPruebas && (
     <div className="bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-xl p-4">
       <p className="font-semibold">Entorno de pruebas</p>
       <p className="mt-1 text-amber-700">
         Estás en la sucursal de pruebas: tus notas, caja e inventario son solo tuyos y no afectan al
-        negocio. La configuración (precios, tiempos, sucursales y catálogos) es la real, así que aquí
-        no se puede cambiar; solo tus datos de acceso.
+        negocio. La configuración (precios, tiempos, sucursales y catálogos) es la real y tu perfil es
+        compartido, así que aquí todo es solo de consulta.
       </p>
     </div>
   );
@@ -2795,8 +2787,9 @@ export default function Ajustes() {
               <div className="bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-xl p-4">
                 <p className="font-semibold">Solo de consulta</p>
                 <p className="mt-1 text-amber-700">
-                  Esta configuración es la del negocio real y no se cambia desde el
-                  entorno de pruebas.
+                  {activeSection.id === 'perfil'
+                    ? 'Las cuentas de prueba son compartidas, así que su perfil no se cambia.'
+                    : 'Esta configuración es la del negocio real y no se cambia desde el entorno de pruebas.'}
                 </p>
               </div>
             )}
@@ -2894,6 +2887,7 @@ export default function Ajustes() {
 
         <InstalarApp />
 
+        {!soloConsultaPruebas && (
         <div className="space-y-3">
           {mensajeBanner}
           <div className="flex justify-end">
@@ -2907,6 +2901,7 @@ export default function Ajustes() {
             </button>
           </div>
         </div>
+        )}
         </div>
       </div>
 

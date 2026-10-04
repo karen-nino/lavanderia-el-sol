@@ -17,6 +17,13 @@ if (ENTORNO_DEMO) router.post('/demo-login', demoLoginLimiter, demoLogin);
 router.get('/buscar-usuarios', busquedaLimiter, busquedaLimiterHora, buscarUsuarios);
 router.post('/logout',         verifyToken, logout);
 router.get('/me',              verifyToken, getMe);
-router.patch('/me',            verifyToken, updateMe);
+// Las cuentas de prueba son compartidas: su perfil es solo de consulta para
+// que nadie le cambie el nombre o la contraseña a los demás (2026-10-04).
+const perfilDePruebaFijo = (req, res, next) => (
+  req.user?.es_prueba && !ENTORNO_DEMO
+    ? res.status(403).json({ message: 'El perfil de un usuario de prueba no se puede cambiar.' })
+    : next()
+);
+router.patch('/me',            verifyToken, perfilDePruebaFijo, updateMe);
 
 export default router;
