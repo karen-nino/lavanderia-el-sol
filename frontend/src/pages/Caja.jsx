@@ -554,6 +554,10 @@ function Historial({ onFiltroLabel }) {
   const esAdminMain = esAdminMainFn(usuario?.rol);
 
   const [cortes, setCortes] = useState([]);
+  // El turno que sigue abierto (2026-10-03): se ve en su día, marcado "En
+  // curso", con lo que lleva hasta ahora. No es un corte: no tiene conteo, ni
+  // menú, ni entra en las exportaciones.
+  const [enCurso, setEnCurso] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -585,6 +589,28 @@ function Historial({ onFiltroLabel }) {
       .then((data) => { if (activo) setCortes(data ?? []); })
       .catch((e) => { if (activo) setError(e.message); })
       .finally(() => { if (activo) setLoading(false); });
+    // Si falla, el historial se ve igual, solo sin el turno abierto.
+    api.get('/caja/actual')
+      .then((d) => {
+        if (!activo || !d?.abierta) return;
+        const { caja, totales } = d;
+        setEnCurso({
+          id: `en-curso-${caja.id}`,
+          en_curso: true,
+          abierta_at: caja.abierta_at,
+          usuario_apertura: caja.usuario_apertura,
+          notas_apertura: caja.notas_apertura,
+          monto_inicial: caja.monto_inicial,
+          ventas: totales.ventas,
+          ventas_desglose: totales.ventas_desglose,
+          entradas: totales.entradas,
+          salidas: totales.salidas,
+          esperado: totales.esperado,
+          contado: null,
+          diferencia: null,
+        });
+      })
+      .catch(() => {});
     return () => { activo = false; };
   }, []);
 
@@ -677,7 +703,7 @@ function Historial({ onFiltroLabel }) {
 
   if (loading) return <Spinner />;
   if (error) return <ErrorBox message={error} />;
-  if (cortes.length === 0) return <EmptyState>Aún no hay cortes registrados.</EmptyState>;
+  if (cortes.length === 0 && !enCurso) return <EmptyState>Aún no hay cortes registrados.</EmptyState>;
 
   // Años disponibles a partir de los cortes (más el actual), de mayor a menor.
   const anios = [...new Set([new Date().getFullYear(), ...cortes.map((c) => new Date(c.cerrada_at).getFullYear())])]
@@ -707,6 +733,13 @@ function Historial({ onFiltroLabel }) {
   // Menú de opciones (badge de diferencia + ⋮ para eliminar). Solo Admin Main
   // ve el menú de opciones.
   const menuOpciones = (c) => {
+    if (c.en_curso) {
+      return (
+        <span className="flex-shrink-0 text-sm font-semibold px-2.5 py-1 rounded-full bg-green-50 text-green-700">
+          En curso
+        </span>
+      );
+    }
     const cuadra = c.diferencia != null && Math.abs(c.diferencia) < 0.005;
     return (
       <div className="flex items-center gap-2 flex-shrink-0">
@@ -805,7 +838,7 @@ function Historial({ onFiltroLabel }) {
         )}
         <span className="text-gray-500">Entradas</span><span className="text-right text-gray-700">{fmt(c.entradas)}</span>
         <span className="text-gray-500">Salidas</span><span className="text-right text-gray-700">{fmt(c.salidas)}</span>
-        <span className="text-gray-500 font-medium">Esperado</span><span className="text-right font-medium text-gray-800">{fmt(c.esperado)}</span>
+        <span className="text-gray-500 font-medium">{c.en_curso ? 'Esperado hasta ahora' : 'Esperado'}</span><span className="text-right font-medium text-gray-800">{fmt(c.esperado)}</span>
         <span className="text-gray-500 font-medium">Contado</span><span className={`text-right font-medium ${
           c.contado == null || c.diferencia == null ? 'text-gray-800'
             : Math.abs(c.diferencia) < 0.005 ? 'text-blue-600'
@@ -827,8 +860,10 @@ function Historial({ onFiltroLabel }) {
           <div className="flex items-center gap-2 text-sm">
             <IconSalida className="w-5 h-5 text-orange-500 flex-shrink-0" />
             <span className="font-medium text-orange-600 w-12">Cerró</span>
-            <span className={`font-medium ${c.cierre_automatico ? 'text-amber-700' : 'text-gray-700'}`}>
-              {c.cierre_automatico ? 'El sistema, al cerrar el día' : (c.usuario_cierre ?? '—')}
+            <span className={`font-medium ${
+              c.en_curso ? 'text-green-700' : c.cierre_automatico ? 'text-amber-700' : 'text-gray-700'
+            }`}>
+              {c.en_curso ? 'Sigue abierto' : c.cierre_automatico ? 'El sistema, al cerrar el día' : (c.usuario_cierre ?? '—')}
             </span>
           </div>
           {c.notas_cierre && (
@@ -846,13 +881,13 @@ function Historial({ onFiltroLabel }) {
   //   · Varios: el resumen del día arriba y cada turno en su propia tarjeta.
   //   · Ninguno: la tarjeta vacía ("Sin corte" / "Pendiente").
   const renderDia = (dia) => {
-    const turnos = visibles
+    const turnos = [...visibles, ...(enCurso ? [enCurso] : [])]
       .filter((x) => mismoDia(x.abierta_at, dia))
       .sort((a, b) => new Date(a.abierta_at) - new Date(b.abierta_at));
     const hoy = mismoDia(dia, hoy0);
     const futuro = dia > hoy0;
     const uno = turnos.length === 1 ? turnos[0] : null;
-    const horario = (c) => `${fmtHora(c.abierta_at)} – ${fmtHora(c.cerrada_at)}`;
+    const horario = (c) => `${fmtHora(c.abierta_at)} – ${c.en_curso ? 'en curso' : fmtHora(c.cerrada_at)}`;
     return (
       <div
         key={dia.toISOString()}
@@ -882,7 +917,7 @@ function Historial({ onFiltroLabel }) {
             {resumenDia(turnos)}
             <div className="mt-5 space-y-4">
               {turnos.map((c, i) => (
-                <div key={c.id} className="rounded-lg border border-gray-200 bg-white p-4">
+                <div key={c.id} className={`rounded-lg border p-4 ${c.en_curso ? 'border-green-200 bg-green-50/40' : 'border-gray-200 bg-white'}`}>
                   <div className="flex items-start justify-between mb-3">
                     <div>
                       <p className="text-sm font-semibold text-gray-700">Turno {i + 1}</p>
@@ -931,6 +966,9 @@ function Historial({ onFiltroLabel }) {
         </div>
         {sinConteo && (
           <p className="mt-2 text-xs text-amber-700">Un turno lo cerró el sistema sin conteo: no entra en la diferencia.</p>
+        )}
+        {turnos.some((c) => c.en_curso) && (
+          <p className="mt-2 text-xs text-green-700">Hay un turno en curso: sus ventas ya suman, pero aún no tiene conteo.</p>
         )}
       </div>
     );
