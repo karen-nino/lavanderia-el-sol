@@ -2790,14 +2790,18 @@ export default function Ajustes() {
             </div>
 
             <div className="px-6 py-6 space-y-6">
-            {mobileSectionContent[activeSection.id]}
-
+            {/* Arriba y con el estilo del aviso de pruebas: abajo se perdía. */}
             {seccionDeConsulta && (
-              <p className="text-sm text-grey pt-4">
-                Solo de consulta: esta configuración es la del negocio real y no
-                se cambia desde el entorno de pruebas.
-              </p>
+              <div className="bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-xl p-4">
+                <p className="font-semibold">Solo de consulta</p>
+                <p className="mt-1 text-amber-700">
+                  Esta configuración es la del negocio real y no se cambia desde el
+                  entorno de pruebas.
+                </p>
+              </div>
             )}
+
+            {mobileSectionContent[activeSection.id]}
 
             {!seccionDeConsulta && !SECCIONES_SIN_GUARDAR.includes(activeSection.id) && (
             <div className="grid grid-cols-2 gap-3 pt-8">
