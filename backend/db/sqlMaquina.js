@@ -79,11 +79,11 @@ export const cronometroActivo = () =>
 // haber excepciones.
 export const esCronometroSql = () => (cronometroActivo() ? 'TRUE' : 'FALSE');
 
-// Cronómetro CON botón Iniciar (2026-10-04, a pedido del negocio). Son de
+// Cronómetro CON botón Iniciar (a pedido del negocio). Son de
 // cronómetro —cuenta hacia arriba, los minutos de su modelo son su TOPE y la
-// carga termina cuando alguien la finaliza— pero "Encender máquina" solo les da
-// corriente y el cronómetro arranca con "Iniciar", igual que el paso de espera
-// de la mig. 110 (si nadie la inicia, se apaga a los ESPERA_ARRANQUE_MINUTOS):
+// carga termina cuando alguien la finaliza— pero no llevan "Encender máquina":
+// su único botón es "Iniciar", que les da corriente y arranca el cronómetro en
+// el mismo paso (2026-10-04; antes iban en dos pasos, como la espera de la mig. 110):
 //   · todas las Speed Queen, lavadoras y secadoras;
 //   · el modelo que pregunta su programa (mig. 146), sea de la marca que sea:
 //     la pregunta sale al iniciar, cuando ya la están programando.

@@ -253,12 +253,11 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
     if (!confirmTerminar) return;
     if (terminaLavado && !secadoraSel) return;
     // La secadora que va a arrancar puede ser de un modelo con varios
-    // programas: se pregunta antes de tocar nada (mig. 120). La que arranca
-    // con Iniciar (Speed Queen, Sec49) aquí solo se enciende: su programa se
-    // pregunta después, al darle Iniciar desde su tarjeta.
+    // programas: se pregunta antes de tocar nada (mig. 120). Desde 2026-10-04
+    // la Sec49 tampoco tiene paso de encender: aquí mismo elige y arranca.
     const secElegida = terminaLavado
       ? secadorasDisponibles.find(m => String(m.id) === String(secadoraSel)) : null;
-    if (terminaLavado && minutosElegidos == null && !secElegida?.con_iniciar) {
+    if (terminaLavado && minutosElegidos == null) {
       if (preguntaTiempo(secElegida)) { setEligiendoTiempo(secElegida); return; }
     }
     setTerminando(true);
@@ -611,10 +610,7 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
 
       {/* Animación de arranque de la secadora al terminar el lavado (como en Salidas) */}
       {iniciandoSecadora && (
-        <MaquinaCicloOverlay
-          modo={iniciandoSecadora.con_iniciar ? 'encender' : 'iniciar'}
-          tipo={iniciandoSecadora.tipo} nombre={iniciandoSecadora.nombre}
-        />
+        <MaquinaCicloOverlay modo="iniciar" tipo={iniciandoSecadora.tipo} nombre={iniciandoSecadora.nombre} />
       )}
 
       {confirmTerminar && (
@@ -651,13 +647,6 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
                       );
                     })}
                   </div>
-                )}
-                {secadorasDisponibles.find(m => String(m.id) === String(secadoraSel))?.con_iniciar && (
-                  <p className="text-sm text-gray-500">
-                    Esta secadora solo se enciende: cuando la arranques con su botón, dale a{' '}
-                    <span className="font-semibold text-gray-800">Iniciar ciclo</span> en su tarjeta
-                    para que empiece el cronómetro.
-                  </p>
                 )}
               </>
             ) : (

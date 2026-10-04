@@ -234,9 +234,8 @@ export default function Salidas() {
         api.patch(`/notas/${id}/encender-maquina`, { maquina_id: maq.id }),
         new Promise((r) => setTimeout(r, 1800)),
       ]);
-      // La de cronómetro no tiene paso siguiente: ya quedó corriendo. La que
-      // arranca con "Iniciar" (lavadora Speed Queen) sí: el modal se queda.
-      if (maq.cronometro && !maq.con_iniciar) setMaquinaModalId(null);
+      // La de cronómetro no tiene paso siguiente: ya quedó corriendo.
+      if (maq.cronometro) setMaquinaModalId(null);
       await cargarDatos();
     } catch (err) {
       setErrorAccion(err.message);
@@ -728,8 +727,8 @@ export default function Salidas() {
             // 2026-10-02): encenderla ya arranca su carga, no hay "Iniciar" y
             // se finaliza a mano cuando termine.
             cronometro: Boolean(u.cronometro),
-            // Cronómetro que arranca con "Iniciar" y no al encender (lavadora
-            // Speed Queen, 2026-10-04).
+            // Cronómetro sin "Encender": su único botón es "Iniciar", que le da
+            // corriente y arranca el cronómetro (Speed Queen y Sec49, 2026-10-04).
             con_iniciar: Boolean(u.con_iniciar),
             ...(esLav ? {} : { tamano: u.tamano }),
             // La pasada viva muestra el estado real de su máquina; una ya
@@ -782,9 +781,10 @@ export default function Salidas() {
   // todavía va en 10 (2026-09-29).
   const preguntaSuTiempo = preguntaTiempo(maqModal);
   // La de cronómetro siempre entra por "Encender": ese paso ya la arranca.
-  // Salvo la que arranca con "Iniciar" (lavadora Speed Queen).
-  const pasoModal = (!maqModal?.cronometro || maqModal?.con_iniciar) && maqModal?.esperandoArranque
-    ? 'iniciar' : 'encender';
+  // Salvo la que arranca con "Iniciar" (Speed Queen, Sec49): esa no tiene
+  // "Encender" y entra directo al de iniciar, que también le da corriente.
+  const pasoModal = maqModal?.cronometro && maqModal?.con_iniciar ? 'iniciar'
+    : !maqModal?.cronometro && maqModal?.esperandoArranque ? 'iniciar' : 'encender';
   // Lo que se eligió al encender esta máquina, si sigue vivo.
   const minutosDeMaquina = (maq) => (maq ? minutosPorMaquina[maq.id] ?? null : null);
 
@@ -1252,7 +1252,9 @@ export default function Salidas() {
                         Los dos botones abren el MISMO modal: el paso que
                         muestra lo decide el estado de la máquina, así que la
                         que ya está encendida entra directo al de iniciar. */}
-                    {m.estado === 'disponible' && (
+                    {/* La Speed Queen y la Sec49 no llevan "Encender": su
+                        "Iniciar" le da corriente y arranca el cronómetro. */}
+                    {m.estado === 'disponible' && !(m.cronometro && m.con_iniciar) && (
                       <button
                         onClick={() => abrirModalMaquina(m)}
                         disabled={loadingMaquina || Boolean(encendiendo)}
@@ -1261,7 +1263,8 @@ export default function Salidas() {
                         Encender máquina
                       </button>
                     )}
-                    {m.esperandoArranque && (
+                    {(m.esperandoArranque
+                      || (m.estado === 'disponible' && m.cronometro && m.con_iniciar)) && (
                       <button
                         onClick={() => abrirModalMaquina(m)}
                         disabled={loadingMaquina}
@@ -1718,15 +1721,14 @@ export default function Salidas() {
             </div>
 
             {esIniciar ? (
-              /* El modelo que pregunta su tiempo se marca en SU pantalla, no
-                 aquí: este botón solo confirma que ya está girando, que es
-                 cuando el cronómetro debe empezar. */
+              /* Speed Queen y Sec49: "Iniciar" le da corriente y arranca el
+                 cronómetro de una vez; la Sec49 pregunta antes su programa. */
               preguntaSuTiempo && maqModal.cronometro ? (
                 <p className="text-sm text-gray-500">
-                  ¿Ya arrancaste{' '}
-                  <span className="font-semibold text-gray-800">{maqModal.nombre}</span> con su botón?
-                  En el paso siguiente eliges el programa con el que la arrancaste: el cronómetro
-                  empieza ahí y te avisa cuando lo cumpla. La luz se le corta hasta su tope.
+                  En el paso siguiente eliges el programa de{' '}
+                  <span className="font-semibold text-gray-800">{maqModal.nombre}</span>: al elegirlo se
+                  le da corriente y empieza el cronómetro, que te avisa cuando lo cumpla. Arráncala con
+                  su botón con ese programa. La luz se le corta hasta su tope.
                 </p>
               ) : preguntaSuTiempo ? (
                 <p className="text-sm text-gray-500">
@@ -1739,12 +1741,12 @@ export default function Salidas() {
                   arrancado con su botón.
                 </p>
               ) : maqModal.cronometro ? (
-                /* Cronómetro con botón Iniciar (lavadora Speed Queen). */
+                /* Cronómetro con botón Iniciar (Speed Queen). */
                 <p className="text-sm text-gray-500">
-                  ¿Ya arrancaste{' '}
-                  <span className="font-semibold text-gray-800">{maqModal.nombre}</span> con su botón?
-                  Desde aquí empieza a correr el cronómetro; cuando termine, finalízala desde su
-                  tarjeta: ahí se le corta la luz.
+                  Se le da corriente a{' '}
+                  <span className="font-semibold text-gray-800">{maqModal.nombre}</span> y empieza a
+                  correr el cronómetro. Carga la ropa y arráncala con su botón; cuando termine,
+                  finalízala desde su tarjeta: ahí se le corta la luz.
                 </p>
               ) : (
                 <p className="text-sm text-gray-500">
@@ -1788,7 +1790,7 @@ export default function Salidas() {
             {/* Secundaria: cambiar esta máquina por otra. Solo mientras no
                 tenga corriente: una vez encendida el cliente ya le está
                 cargando la ropa, así que cambiarla deja de tener sentido. */}
-            {!esIniciar && (
+            {!maqModal.esperandoArranque && (
               <button
                 type="button"
                 onClick={cambiarDesdeModal}

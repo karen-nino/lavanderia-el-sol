@@ -3677,7 +3677,7 @@ export const terminarLavado = async (req, res) => {
     }
 
     const { rows: maqRows } = await client.query(
-      `SELECT m.tipo, m.tamano, m.estado, ${conIniciarSql('m')} AS con_iniciar
+      `SELECT m.tipo, m.tamano, m.estado
          FROM maquinas m WHERE m.id = $1 AND m.sucursal = $2 FOR UPDATE OF m`,
       [secadora_id, req.sucursal]
     );
@@ -3741,40 +3741,24 @@ export const terminarLavado = async (req, res) => {
       [lavadora_id]
     );
 
-    if (maqRows[0].con_iniciar) {
-      // Secadora que arranca con "Iniciar" (Speed Queen, Sec49; 2026-10-04):
-      // aquí solo se ENCIENDE, igual que "Encender máquina" en Salidas (mig.
-      // 110). Queda apartada para esta nota y con corriente, sin cronómetro, y
-      // el secado arranca cuando alguien le da a Iniciar desde su tarjeta o
-      // desde Salidas; ahí se pregunta el programa si su modelo lo pide.
-      await client.query(
-        `UPDATE maquinas
-            SET estado = 'en_uso',
-                encendida_sin_iniciar_at = NOW(),
-                encendida_para_nota_id   = $2,
-                en_uso_desde  = NULL,
-                ciclo_minutos = NULL
-          WHERE id = $1`,
-        [secadora_id, id]
-      );
-    } else {
-      // La secadora entra en uso y su ciclo arranca ahora. Se sella su ciclo
-      // según la categoría de la carga (la lavadora que la lavó, ya en
-      // lavadora_usada_id, define mediana/jumbo; la prenda, edredón).
-      await client.query(
-        `UPDATE maquinas SET estado = 'en_uso', en_uso_desde = NOW() WHERE id = $1`,
-        [secadora_id]
-      );
-      await marcarMaquinasIniciadas(client, id, [secadora_id]);
-      // La secadora puede ser de un modelo que pregunta su duración (mig. 120):
-      // este es el otro camino que la arranca, así que también la acepta.
-      const leido = await tiempoElegidoDeMaquina(client, secadora_id, minutos);
-      if (leido?.error) {
-        await client.query('ROLLBACK');
-        return res.status(400).json({ message: leido.error });
-      }
-      await sellarCicloMaquinas(client, id, leido ? { maquinaId: secadora_id, minutos: leido.minutos } : null);
+    // La secadora entra en uso y su ciclo arranca ahora, también la que arranca
+    // con "Iniciar" (Speed Queen, Sec49): desde 2026-10-04 no hay paso de
+    // encender, este botón ya es su Iniciar. Se sella su ciclo según la
+    // categoría de la carga (la lavadora que la lavó, ya en lavadora_usada_id,
+    // define mediana/jumbo; la prenda, edredón).
+    await client.query(
+      `UPDATE maquinas SET estado = 'en_uso', en_uso_desde = NOW() WHERE id = $1`,
+      [secadora_id]
+    );
+    await marcarMaquinasIniciadas(client, id, [secadora_id]);
+    // La secadora puede ser de un modelo que pregunta su duración (mig. 120):
+    // este es el otro camino que la arranca, así que también la acepta.
+    const leido = await tiempoElegidoDeMaquina(client, secadora_id, minutos);
+    if (leido?.error) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: leido.error });
     }
+    await sellarCicloMaquinas(client, id, leido ? { maquinaId: secadora_id, minutos: leido.minutos } : null);
     // Si era la última lavadora, la nota pasa a SECANDO; si otras cargas
     // siguen en lavadora, continúa LAVANDO.
     const fase = await faseProcesoDeNota(client, id);

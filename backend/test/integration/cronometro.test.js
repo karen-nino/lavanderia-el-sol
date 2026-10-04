@@ -178,19 +178,15 @@ describe('encender', () => {
 });
 
 describe('lavadora Speed Queen', () => {
-  it('encender solo da corriente; Iniciar arranca el cronómetro con su tope', async () => {
+  // Sin paso de encender (2026-10-04): Iniciar le da corriente y arranca.
+  it('Iniciar sin encender antes arranca el cronómetro con su tope', async () => {
     const id = await lavadora('Speed Queen', 'L8', 45);
     const { notaId } = await notaCon(id);
 
-    await encender(notaId, id).expect(200);
-    let m = await maquina(id);
-    expect(m.estado).toBe('en_uso');
-    expect(m.en_uso_desde).toBeNull();                 // el cronómetro todavía no corre
-    expect(m.encendida_sin_iniciar_at).not.toBeNull();
-
     await request(app).patch(`/api/notas/${notaId}/activar-pendientes`).set(auth(admin.token))
       .send({ maquina_id: id }).expect(200);
-    m = await maquina(id);
+    const m = await maquina(id);
+    expect(m.estado).toBe('en_uso');
     expect(m.en_uso_desde).not.toBeNull();
     expect(m.encendida_sin_iniciar_at).toBeNull();
     expect(m.ciclo_minutos).toBe(45);                  // su tope
@@ -203,7 +199,6 @@ describe('lavadora Speed Queen', () => {
   it('ya iniciada se finaliza a mano como cualquier cronómetro', async () => {
     const id = await lavadora('Speed Queen', 'L8', 45);
     const { notaId } = await notaCon(id);
-    await encender(notaId, id).expect(200);
     await request(app).patch(`/api/notas/${notaId}/activar-pendientes`).set(auth(admin.token))
       .send({ maquina_id: id }).expect(200);
 
@@ -261,7 +256,7 @@ describe('un solo ciclo, se finaliza a mano', () => {
 });
 
 describe('secadora Speed Queen desde la tarjeta de la lavadora (Autoservicio)', () => {
-  it('INICIAR SECADO solo la enciende; el secado arranca con Iniciar', async () => {
+  it('INICIAR SECADO la arranca en el acto, sin paso de encender', async () => {
     const lav = await lavadora();
     const sec = await seedMaquina({ nombre: 'S1', tipo: 'secadora', tamano: 'mediana', marca: 'Speed Queen' });
     const { notaId } = await notaCon(lav);
@@ -270,22 +265,29 @@ describe('secadora Speed Queen desde la tarjeta de la lavadora (Autoservicio)', 
     await request(app).patch(`/api/notas/${notaId}/terminar-lavado`).set(auth(admin.token))
       .send({ lavadora_id: lav, secadora_id: sec }).expect(200);
 
-    let m = await maquina(sec);
+    const m = await maquina(sec);
     expect(m.estado).toBe('en_uso');
-    expect(m.en_uso_desde).toBeNull();
-    expect(m.encendida_para_nota_id).toBe(notaId);
-    expect((await maquina(lav)).estado).toBe('disponible');
-    let nota = await request(app).get(`/api/notas/${notaId}`).set(auth(admin.token)).expect(200);
-    expect(nota.body.cargas[0].secadora_iniciada_at).toBeNull();
-    expect(nota.body.cargas[0].secadora_esperando_arranque).toBe(true);
-
-    await request(app).patch(`/api/notas/${notaId}/activar-pendientes`).set(auth(admin.token))
-      .send({ maquina_id: sec }).expect(200);
-    m = await maquina(sec);
     expect(m.en_uso_desde).not.toBeNull();
     expect(m.ciclo_minutos).toBe(40);
-    nota = await request(app).get(`/api/notas/${notaId}`).set(auth(admin.token)).expect(200);
+    expect((await maquina(lav)).estado).toBe('disponible');
+    const nota = await request(app).get(`/api/notas/${notaId}`).set(auth(admin.token)).expect(200);
+    expect(nota.body.cargas[0].secadora_iniciada_at).not.toBeNull();
     expect(nota.body.estado).toBe('SECANDO');
+  });
+
+  it('la Sec49 arranca con el programa elegido y corta en su tope', async () => {
+    const lav = await lavadora();
+    const sec = await secadoraQuePregunta();
+    const { notaId } = await notaCon(lav);
+    await encender(notaId, lav).expect(200);
+
+    await request(app).patch(`/api/notas/${notaId}/terminar-lavado`).set(auth(admin.token))
+      .send({ lavadora_id: lav, secadora_id: sec, minutos: 20 }).expect(200);
+
+    const m = await maquina(sec);
+    expect(m.en_uso_desde).not.toBeNull();
+    expect(m.ciclo_minutos).toBe(45);
+    expect(m.ciclo_elegido_minutos).toBe(20);
   });
 
   it('una secadora de otra marca sigue arrancando en el acto', async () => {
