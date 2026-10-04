@@ -1057,9 +1057,10 @@ export default function Salidas() {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
           </svg>
         </button>
-        <div>
-          <h1 className="text-lg font-bold text-gray-900 leading-tight">Salidas</h1>
-          <p className="text-xs text-gray-500">{nota?.folio ?? `Nota #${id}`}</p>
+        {/* Mismo tamaño que la cabecera del Detalle de nota. */}
+        <div className="min-w-0">
+          <h1 className="text-xl font-bold text-gray-900 leading-tight truncate">Salidas</h1>
+          <p className="text-sm text-gray-500 leading-tight truncate">{nota?.folio ?? `Nota #${id}`}</p>
         </div>
       </div>
 
