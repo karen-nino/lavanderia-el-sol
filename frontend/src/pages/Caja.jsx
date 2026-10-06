@@ -147,8 +147,10 @@ const rangoDePeriodo = (periodo, anio, mes, desde, hasta) => {
   }
 };
 
+// Apertura y Corte son una sola pestaña desde el 2026-10-06: "Corte" enseña el
+// formulario para abrir la caja cuando está cerrada y el corte cuando está
+// abierta.
 const TABS = [
-  { id: 'apertura',    label: 'Apertura' },
   { id: 'movimientos', label: 'Movimientos' },
   { id: 'corte',       label: 'Corte' },
   { id: 'historial',   label: 'Historial' },
@@ -175,7 +177,7 @@ function EmptyState({ children }) {
   return <p className="text-sm text-gray-400 text-center py-10">{children}</p>;
 }
 
-// ── Apertura ────────────────────────────────────────────────
+// ── Apertura (se ve dentro de Corte con la caja cerrada) ───────
 function Apertura({ data, onAbrir }) {
   const { usuario } = useAuth();
   const admin = esAdminFn(usuario?.rol);
@@ -199,36 +201,6 @@ function Apertura({ data, onAbrir }) {
   if (claveSugerida && claveSugerida !== claveAplicada) {
     setClaveAplicada(claveSugerida);
     setMonto(String(sugerida.monto));
-  }
-
-  if (data?.abierta) {
-    const { caja, totales } = data;
-    return (
-      <div className="space-y-4 max-w-md mx-auto">
-        <div className="bg-green-50 border border-green-200 rounded-xl p-4">
-          <p className="text-xs font-medium uppercase tracking-wide text-green-700">Caja abierta</p>
-          <p className="mt-1 text-2xl font-bold text-green-700">{fmt(caja.monto_inicial)}</p>
-          <p className="mt-0.5 text-xs text-green-700/70">Fondo inicial</p>
-        </div>
-        <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100 text-sm">
-          <div className="flex justify-between px-4 py-3 text-gray-600">
-            <span>Abierta por</span><span className="font-medium text-gray-800">{caja.usuario_apertura}</span>
-          </div>
-          <div className="flex justify-between px-4 py-3 text-gray-600">
-            <span>Desde</span><span className="font-medium text-gray-800">{fmtFechaHora(caja.abierta_at)}</span>
-          </div>
-          <div className="flex justify-between px-4 py-3 text-gray-600">
-            <span>Esperado en caja</span><span className="font-bold text-gray-900">{fmt(totales.esperado)}</span>
-          </div>
-        </div>
-        {caja.notas_apertura && (
-          <div className="bg-white rounded-xl border border-gray-200 px-4 py-3">
-            <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Nota</p>
-            <p className="mt-2.5 text-sm text-gray-800">{caja.notas_apertura}</p>
-          </div>
-        )}
-      </div>
-    );
   }
 
   const submit = async (e) => {
@@ -277,7 +249,7 @@ function Movimientos({ data, onChange }) {
   const [error, setError] = useState(null);
 
   if (!data?.abierta) {
-    return <EmptyState>Abre la caja primero para registrar movimientos.</EmptyState>;
+    return <EmptyState>Abre la caja en Corte para registrar movimientos.</EmptyState>;
   }
 
   const submit = async (e) => {
@@ -370,7 +342,7 @@ function Movimientos({ data, onChange }) {
 }
 
 // ── Corte ───────────────────────────────────────────────────
-function Corte({ data, onCerrar }) {
+function Corte({ data, onCerrar, onAbrir }) {
   const { usuario } = useAuth();
   const [contado, setContado] = useState('');
   const [notas, setNotas] = useState('');
@@ -378,8 +350,9 @@ function Corte({ data, onCerrar }) {
   const [error, setError] = useState(null);
   const [exito, setExito] = useState(false); // animación de "caja cerrada"
 
+  // Con la caja cerrada, la pestaña sirve para abrirla.
   if (!data?.abierta) {
-    return <EmptyState>Abre la caja primero para hacer el corte.</EmptyState>;
+    return <Apertura data={data} onAbrir={onAbrir} />;
   }
 
   const { caja, totales } = data;
@@ -432,6 +405,10 @@ function Corte({ data, onCerrar }) {
           {esMiTurno ? 'Tu turno' : `Turno de ${caja.usuario_apertura || '—'}`}
         </p>
         <p className="text-xs text-gray-500 mt-0.5">Abierto desde las {fmtHora(caja.abierta_at)}</p>
+        {/* La nota que se dejó al abrir (antes vivía en la pestaña Apertura). */}
+        {caja.notas_apertura && (
+          <p className="text-xs text-gray-600 mt-1.5">Nota de apertura: {caja.notas_apertura}</p>
+        )}
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
@@ -1287,17 +1264,18 @@ export default function Caja() {
 
   // Se puede entrar directo a una pestaña con ?tab=... (ej. desde la tarjeta
   // de Corte del Dashboard, que enlaza a /caja?tab=corte). Sin ?tab, los admins
-  // abren en Historial y los demás en Apertura.
+  // abren en Historial y los demás en Corte. Un enlace viejo a ?tab=apertura
+  // cae en Corte, que es donde vive ahora la apertura.
   const [searchParams] = useSearchParams();
   const [tab, setTab] = useState(() => {
-    const req = searchParams.get('tab');
-    return tabs.some((t) => t.id === req) ? req : (esAdmin ? 'historial' : 'apertura');
+    const req = searchParams.get('tab') === 'apertura' ? 'corte' : searchParams.get('tab');
+    return tabs.some((t) => t.id === req) ? req : (esAdmin ? 'historial' : 'corte');
   });
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Menú de acciones (⋮) para admins: Apertura, Movimientos y Corte pasan aquí
+  // Menú de acciones (⋮) para admins: Movimientos y Corte pasan aquí
   // como secundarias; el Historial es la página principal.
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
@@ -1330,7 +1308,7 @@ export default function Caja() {
 
   // Tras abrir/cerrar caja conviene mostrar el estado más relevante.
   const handleAbrir = () => { fetchActual(); setTab('movimientos'); };
-  const handleCerrar = () => { fetchActual(); setTab(esAdmin ? 'historial' : 'apertura'); };
+  const handleCerrar = () => { fetchActual(); setTab(esAdmin ? 'historial' : 'corte'); };
 
   // Cierra el menú de acciones (⋮) al hacer clic fuera.
   useEffect(() => {
@@ -1360,7 +1338,7 @@ export default function Caja() {
             )}
           </div>
 
-          {/* Menú de acciones (⋮): Apertura / Movimientos / Corte como secundarias. */}
+          {/* Menú de acciones (⋮): Movimientos / Corte como secundarias. */}
           {esAdmin && (
             <div ref={menuRef} className="relative flex-shrink-0">
               <button
@@ -1439,9 +1417,8 @@ export default function Caja() {
 
       {!loading && !error && (
         <>
-          {tab === 'apertura'    && <Apertura data={data} onAbrir={handleAbrir} />}
           {tab === 'movimientos' && <Movimientos data={data} onChange={fetchActual} />}
-          {tab === 'corte'       && <Corte data={data} onCerrar={handleCerrar} />}
+          {tab === 'corte'       && <Corte data={data} onCerrar={handleCerrar} onAbrir={handleAbrir} />}
         </>
       )}
       {tab === 'historial' && <Historial onFiltroLabel={setHistorialFiltro} />}

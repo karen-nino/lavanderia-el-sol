@@ -28,7 +28,7 @@ Si no encuentras tu nombre en la lista, avísale al administrador: puede que tu 
         id: 'abrir-la-caja',
         titulo: 'Abrir la caja',
         claves: ['fondo', 'apertura', 'empezar', 'dinero inicial'],
-        cuerpo: `Antes de crear la primera nota hay que abrir la caja: SIN CAJA ABIERTA NO SE PUEDE CREAR NINGUNA NOTA. Ve a Caja y toca Abrir caja.
+        cuerpo: `Antes de crear la primera nota hay que abrir la caja: SIN CAJA ABIERTA NO SE PUEDE CREAR NINGUNA NOTA. Ve a Caja → Corte y toca Abrir caja.
 
 La caja funciona por TURNOS: abrir la caja es empezar tu turno, y hacer el corte es terminarlo.
 
