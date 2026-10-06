@@ -81,6 +81,25 @@ async function crearNota(token, { nombreMaquina, estado_pago = 'PENDIENTE', form
   return creada;
 }
 
+describe('GET /api/ventas/resumen — detalle de productos de cada nota', () => {
+  it('cada nota trae sus productos con cantidad, subtotal y si van incluidos', async () => {
+    const creada = await crearNota(admin.token, { nombreMaquina: 'L1', estado_pago: 'PENDIENTE' });
+    const persil = await seedProducto({ nombre: 'PERSIL', tipo_liquido: 'granel' });
+    await pool.query(
+      `INSERT INTO nota_productos (nota_id, producto_id, cantidad, precio_unitario, unidad)
+       VALUES ($1, $2, 2, 10, 'medida')`,
+      [creada.body.id, persil]
+    );
+
+    const res = await request(app).get('/api/ventas/resumen?periodo=hoy').set(auth(admin.token));
+    const nota = res.body.lista_notas.find((n) => n.id === creada.body.id);
+    expect(nota.productos).toHaveLength(1);
+    expect(nota.productos[0]).toMatchObject({
+      nombre: 'PERSIL', tipo_liquido: 'granel', cantidad: 2, subtotal: 20, incluido: false,
+    });
+  });
+});
+
 describe('GET /api/ventas/resumen — tarjetas y período', () => {
   it('total_cobrado solo cuenta las pagadas; las pendientes van a notas_pendientes y a la lista', async () => {
     await crearNota(admin.token, { nombreMaquina: 'L1', estado_pago: 'PAGADO' });   // 70, cuenta

@@ -228,6 +228,25 @@ export async function getResumen(req, res) {
           ), '[]'::json)                               AS abonos,
           (SELECT COUNT(*) FROM nota_cargas nc WHERE nc.nota_id = o.id)::int AS cargas,
           COALESCE(np_t.total_productos, 0)            AS total_productos,
+          -- Detalle de los productos de la nota (2026-10-06): Ventas los enseña
+          -- al tocar la columna Productos. "incluido" marca el material que ya
+          -- va en el precio del servicio (misma regla que total_productos).
+          COALESCE((
+            SELECT json_agg(json_build_object(
+                     'nombre', a.nombre, 'marca', a.marca, 'clase', a.clase,
+                     'tamano_bolsa', a.tamano_bolsa, 'tipo_liquido', a.tipo_liquido,
+                     'forma', a.forma, 'se_vende_por_unidad', a.se_vende_por_unidad,
+                     'unidad', np.unidad, 'cantidad', np.cantidad,
+                     'subtotal', np.cantidad * np.precio_unitario,
+                     'incluido', NOT (o.tipo_servicio <> 'POR_ENCARGO'
+                                      OR a.se_vende_por_unidad
+                                      OR (np.carga_id IS NOT NULL AND nc.precio_tope IS NULL))
+                   ) ORDER BY np.created_at, np.id)
+              FROM nota_productos np
+              JOIN productos a ON a.id = np.producto_id
+              LEFT JOIN nota_cargas nc ON nc.id = np.carga_id
+             WHERE np.nota_id = o.id
+          ), '[]'::json)                               AS productos,
           o.precio_total                               AS total
         FROM notas o
         LEFT JOIN usuarios u ON u.id = o.usuario_id
@@ -384,6 +403,9 @@ export async function getResumen(req, res) {
         atendio:         r.atendio,
         cargas:          parseInt(r.cargas, 10),
         total_productos: parseFloat(r.total_productos),
+        productos:       (r.productos ?? []).map((p) => ({
+          ...p, cantidad: Number(p.cantidad), subtotal: parseFloat(p.subtotal),
+        })),
         total:           parseFloat(r.total),
       })),
       corte: {

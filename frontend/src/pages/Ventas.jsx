@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import { formaPagoLabel } from '../lib/formasPago';
 import { fmtEncendidaConTope } from '../lib/tiempoEncendida';
+import { etiquetaProducto, seVendePorUnidad, esPolvo } from '../lib/formatoInventario';
 import { formatHora12, formatFechaHora12 } from '../lib/fecha';
 import { imprimirVentas, descargarVentasCSV } from '../lib/exportVentas';
 import SucursalBar from '../components/SucursalBar';
@@ -57,6 +58,22 @@ const NOTAS_POR_PAGINA = 20;
 
 // Cuántas máquinas se muestran en la celda antes de resumir con "+N" (que abre
 // el modal con la lista completa).
+// Nombre y unidad de un producto en el modal de Productos (mismas reglas que
+// el ticket): el granel líquido lleva "· Granel"; marca y polvo se cuentan
+// por unidad entera, el granel por botella o por medida, la bolsa por pieza.
+function nombreProductoVenta(p) {
+  return etiquetaProducto(p) + (p.tipo_liquido === 'granel' && !esPolvo(p) ? ' · Granel' : '');
+}
+function unidadProductoVenta(p) {
+  const uno = Number(p.cantidad) === 1;
+  if (p.unidad === 'pieza') return uno ? 'pieza' : 'piezas';
+  if (p.unidad === 'botella') {
+    if (seVendePorUnidad(p)) return uno ? 'unidad' : 'unidades';
+    return uno ? 'botella' : 'botellas';
+  }
+  return uno ? 'medida' : 'medidas';
+}
+
 const MAQUINAS_VISIBLES = 2;
 
 // Forma de pago de una nota con abonos. Si se pagó con más de una forma
@@ -160,6 +177,7 @@ export default function Ventas() {
   const [maquinasModal, setMaquinasModal] = useState(null); // { folio, maquinas }
   const [motivoModal,   setMotivoModal]   = useState(null); // { folio, motivo }
   const [abonosModal,   setAbonosModal]   = useState(null); // { folio, total, abonos }
+  const [productosModal, setProductosModal] = useState(null); // { folio, total, productos }
   // En pantallas angostas (mobile) los nombres de los días se abrevian para que
   // los 7 quepan sin encimarse en el eje X de la gráfica semanal.
   const [esAngosto, setEsAngosto] = useState(
@@ -802,7 +820,19 @@ export default function Ventas() {
                               formaPagoLabel(nota.forma_pago) || <span className="text-gray-400">—</span>
                             )}
                           </td>
-                          <td className="px-4 py-3 text-right text-gray-600">{fmt(nota.total_productos)}</td>
+                          <td className="px-4 py-3 text-right text-gray-600">
+                            {(nota.productos?.length ?? 0) > 0 ? (
+                              <button
+                                type="button"
+                                onClick={() => setProductosModal({ folio: nota.folio, total: nota.total_productos, productos: nota.productos })}
+                                className="text-blue hover:text-blue-700 hover:underline underline-offset-2 transition-colors"
+                              >
+                                {fmt(nota.total_productos)}
+                              </button>
+                            ) : (
+                              fmt(nota.total_productos)
+                            )}
+                          </td>
                           <td className="px-4 py-3 text-right font-semibold text-gray-800">{fmt(nota.total)}</td>
                         </tr>
                       ))}
@@ -872,6 +902,52 @@ export default function Ventas() {
                 </li>
               ))}
             </ul>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: productos de una nota (2026-10-06). Lo que ya va en el precio
+          del servicio (granel y bolsa de Por Encargo) dice "Incluido" y no
+          suma al total de la columna. */}
+      {productosModal && (
+        <div
+          className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
+          onClick={() => setProductosModal(null)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-xl w-full max-w-sm max-h-[80vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-gray-100">
+              <h3 className="text-base font-semibold text-gray-900">
+                Productos · <span className="font-mono text-sm text-gray-500">{productosModal.folio}</span>
+              </h3>
+              <button
+                onClick={() => setProductosModal(null)}
+                aria-label="Cerrar"
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <ul className="p-4 space-y-1.5 overflow-y-auto">
+              {productosModal.productos.map((p, i) => (
+                <li key={i} className="flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-gray-50 text-sm">
+                  <span className="min-w-0">
+                    <span className="block text-gray-700 truncate">{nombreProductoVenta(p)}</span>
+                    <span className="block text-xs text-gray-400">{p.cantidad} {unidadProductoVenta(p)}</span>
+                  </span>
+                  <span className="text-right text-gray-600 whitespace-nowrap">
+                    {p.incluido ? <span className="text-gray-400">Incluido</span> : fmt(p.subtotal)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <div className="flex justify-between px-5 py-3 border-t border-gray-100 text-sm font-semibold text-gray-800">
+              <span>Total</span><span>{fmt(productosModal.total)}</span>
+            </div>
           </div>
         </div>
       )}
