@@ -298,7 +298,7 @@ Una vez cerrado el corte, sus cifras quedan congeladas: aunque después se corri
 
 Tu cierre de sesión queda registrado como tu HORA DE SALIDA del día.
 
-Si dejas la caja abierta, la app te avisa antes de dejarte salir y te ofrece ir a hacer el corte. Puedes salir de todos modos, pero lo correcto es cortar antes.
+Si abriste la caja, NO PUEDES CERRAR SESIÓN hasta hacer el corte: la app te avisa y te lleva a Caja. Solo un administrador puede salir sin cortar.
 
 Cada cuenta puede tener UNA sesión a la vez: si entras en otro aparato, la sesión anterior se cierra.`,
       },

@@ -964,13 +964,15 @@ export default function Layout() {
                     d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
                 </svg>
                 <p className="text-sm text-amber-800">
-                  Abriste la caja y aún se ha cerrado. Realiza el corte antes de salir.
+                  {isAdmin
+                    ? 'Abriste la caja y aún no se ha cerrado. Realiza el corte antes de salir.'
+                    : 'Abriste la caja y aún no se ha cerrado. Haz el corte para poder cerrar sesión.'}
                 </p>
               </div>
             ) : (
               <p className="text-sm text-gray-500">¿Seguro que quieres cerrar sesión?</p>
             )}
-            {!isAdmin && (
+            {!isAdmin && !cajaSinCerrar && (
               <div className="flex items-start gap-2 bg-light-blue/50 border border-blue/20 rounded-lg p-3">
                 <svg className="w-4 h-4 text-blue flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <circle cx="12" cy="12" r="9" strokeWidth={2} />
@@ -983,7 +985,9 @@ export default function Layout() {
             )}
             {cajaSinCerrar ? (
               // Con caja abierta se apilan: la acción recomendada (ir a Caja)
-              // arriba, luego salir de todos modos y cancelar.
+              // arriba, luego salir de todos modos y cancelar. El EMPLEADO no
+              // puede salir sin cortar (2026-10-06): su única salida es hacer
+              // el corte; "de todos modos" queda solo para un administrador.
               <div className="space-y-2.5">
                 <button
                   onClick={irACaja}
@@ -991,12 +995,14 @@ export default function Layout() {
                 >
                   Ir a Caja
                 </button>
-                <button
-                  onClick={confirmarLogout}
-                  className="w-full bg-red-600 hover:bg-red-700 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
-                >
-                  Cerrar sesión de todos modos
-                </button>
+                {isAdmin && (
+                  <button
+                    onClick={confirmarLogout}
+                    className="w-full bg-red-600 hover:bg-red-700 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
+                  >
+                    Cerrar sesión de todos modos
+                  </button>
+                )}
                 <button
                   onClick={() => setConfirmLogout(false)}
                   className="w-full border border-gray-300 text-gray-700 font-medium py-3.5 rounded-lg text-base hover:bg-gray-50 transition-colors"
