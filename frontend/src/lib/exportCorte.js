@@ -77,10 +77,16 @@ const filaCSV = (c) => [
 export function descargarCortesCSV(cortes, sufijo) {
   const lista = Array.isArray(cortes) ? cortes : [cortes];
   const movs = lista.flatMap(filasMovimientos);
-  const filas = lista.map(filaCSV);
+  // Tarjeta ya no se ofrece al cobrar (2026-10-06): su columna solo sale si
+  // algún corte exportado trae cobros viejos con tarjeta.
+  const conTarjeta = lista.some((c) => (c.ventas_desglose?.tarjeta ?? 0) > 0);
+  const iTarjeta = ENCABEZADOS_CSV.indexOf('Tarjeta');
+  const sinTarjeta = (fila) => fila.filter((_, i) => i !== iTarjeta);
+  const encabezados = conTarjeta ? ENCABEZADOS_CSV : sinTarjeta(ENCABEZADOS_CSV);
+  const filas = lista.map((c) => (conTarjeta ? filaCSV(c) : sinTarjeta(filaCSV(c))));
   // Debajo de los cortes, separada por una fila vacía, la tabla de movimientos.
   if (movs.length > 0) filas.push([], ['Entradas y salidas'], ENCABEZADOS_MOVS, ...movs);
-  descargarCSV(`cortes-${slug(sufijo)}`, ENCABEZADOS_CSV, filas);
+  descargarCSV(`cortes-${slug(sufijo)}`, encabezados, filas);
 }
 
 // ── PDF (impresión del navegador) ───────────────────────────

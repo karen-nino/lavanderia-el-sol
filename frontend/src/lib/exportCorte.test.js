@@ -39,7 +39,19 @@ describe('descargarCortesCSV', () => {
     expect(fila[0]).toBe('2026-10-04');
     expect(fila[1]).toBe('en curso');
     expect(fila[3]).toBe('En curso');
-    expect(fila[14]).toBe('En curso');
+    expect(fila[13]).toBe('En curso'); // Estado (sin la columna Tarjeta)
+  });
+
+  it('la columna Tarjeta solo sale si algún corte trae cobros con tarjeta', () => {
+    descargarCortesCSV([corte([])], 'hoy');
+    expect(capturado.encabezados).not.toContain('Tarjeta');
+    expect(capturado.filas[0]).toHaveLength(capturado.encabezados.length);
+
+    const conTarjeta = { ...corte([]), ventas_desglose: { efectivo: 0, transferencia: 0, tarjeta: 50 } };
+    descargarCortesCSV([corte([]), conTarjeta], 'hoy');
+    const i = capturado.encabezados.indexOf('Tarjeta');
+    expect(i).toBeGreaterThan(-1);
+    expect(capturado.filas[1][i]).toBe('50.00');
   });
 
   it('sin movimientos no agrega la segunda tabla', () => {

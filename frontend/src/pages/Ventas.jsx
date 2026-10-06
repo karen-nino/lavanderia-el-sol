@@ -669,10 +669,14 @@ export default function Ventas() {
                 <span>Transferencia</span>
                 <span>{fmt(data.corte.total_transferencia)}</span>
               </div>
-              <div className="flex justify-between px-4 py-3 text-sm text-gray-600">
-                <span>Tarjeta</span>
-                <span>{fmt(data.corte.total_tarjeta)}</span>
-              </div>
+              {/* Tarjeta ya no se ofrece al cobrar (2026-10-06): el renglón
+                  solo sale si en el período hubo cobros viejos con tarjeta. */}
+              {(data.corte.total_tarjeta ?? 0) > 0 && (
+                <div className="flex justify-between px-4 py-3 text-sm text-gray-600">
+                  <span>Tarjeta</span>
+                  <span>{fmt(data.corte.total_tarjeta)}</span>
+                </div>
+              )}
               <div className="flex justify-between px-4 py-4 text-base font-bold text-gray-900 bg-gray-50">
                 <span>TOTAL COBRADO</span>
                 <span className="text-lg">{fmt(data.corte.total_cobrado)}</span>

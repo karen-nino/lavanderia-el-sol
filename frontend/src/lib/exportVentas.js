@@ -121,7 +121,7 @@ const bloqueCorte = (c) => `
       <tr class="sub"><td colspan="2">Cómo se cobró</td></tr>
       ${filaCorte('Efectivo', c?.total_efectivo)}
       ${filaCorte('Transferencia', c?.total_transferencia)}
-      ${filaCorte('Tarjeta', c?.total_tarjeta)}
+      ${(c?.total_tarjeta ?? 0) > 0 ? filaCorte('Tarjeta', c.total_tarjeta) : ''}
       ${filaCorte('Total cobrado', c?.total_cobrado, true)}
       ${Math.abs((c?.total_cobrado ?? 0) - (c?.total_general ?? 0)) >= 0.005
         ? `<tr class="nota"><td colspan="2">La diferencia entre ambos totales viene de los abonos: el total cobrado cuenta cada pago el día que entró, aunque la nota aún deba, y los conceptos cuentan la nota completa el día que se liquida.</td></tr>`

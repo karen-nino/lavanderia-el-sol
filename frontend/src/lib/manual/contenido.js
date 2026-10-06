@@ -284,7 +284,7 @@ El corte lo hace QUIEN ABRIÓ EL TURNO (o un administrador): es quien responde p
 
 La app compara lo que contaste contra lo que ESPERABA y te dice si sobra o falta.
 
-Lo cobrado por transferencia y tarjeta se muestra aparte, en "Cobrado fuera del cajón": ese dinero NO está en el cajón, así que no lo sumes a lo que cuentas.
+Lo cobrado por transferencia se muestra aparte, en "Cobrado fuera del cajón": ese dinero NO está en el cajón, así que no lo sumes a lo que cuentas.
 
 Ahí está la razón de marcar bien la forma de pago al cobrar: una transferencia registrada como efectivo aparece como faltante al final del día.
 
