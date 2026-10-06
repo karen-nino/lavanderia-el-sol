@@ -10,6 +10,11 @@ export const FORMAS_PAGO = [
   { v: 'TARJETA',       label: 'Tarjeta',       enCajon: false },
 ];
 
+// Las que se ofrecen al COBRAR (pago anticipado, cobrar y el cobro de Nueva
+// nota). Tarjeta se ocultó el 2026-10-06 a pedido del negocio: sigue en
+// FORMAS_PAGO para que las notas viejas cobradas con tarjeta se lean bien.
+export const FORMAS_PAGO_COBRO = FORMAS_PAGO.filter((f) => f.v !== 'TARJETA');
+
 // Etiqueta legible; cadena vacía si no hay forma de pago (nota sin cobrar).
 export const formaPagoLabel = (fp) =>
   FORMAS_PAGO.find((f) => f.v === fp)?.label ?? '';

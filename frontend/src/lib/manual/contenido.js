@@ -111,9 +111,9 @@ Si te equivocaste, la venta no se edita ni se cancela: un administrador la ELIMI
         id: 'cobrar-una-nota',
         titulo: 'Cobrar una nota (liquidar)',
         claves: ['cobrar', 'pagar', 'liquidar', 'efectivo', 'transferencia', 'tarjeta'],
-        cuerpo: `Abre la nota y toca Liquidar nota. Elige cómo te pagó: Efectivo, Transferencia o Tarjeta.
+        cuerpo: `Abre la nota y toca Liquidar nota. Elige cómo te pagó: Efectivo o Transferencia.
 
-LA FORMA DE PAGO ES OBLIGATORIA y no es un trámite: el corte del día separa el dinero del cajón de lo que entró por transferencia y tarjeta. Si la marcas mal, al hacer el corte va a aparecer un faltante que no existe.
+LA FORMA DE PAGO ES OBLIGATORIA y no es un trámite: el corte del día separa el dinero del cajón de lo que entró por transferencia. Si la marcas mal, al hacer el corte va a aparecer un faltante que no existe.
 
 Si te equivocaste al registrarla, un administrador puede corregirla con "Corregir forma de pago" en la nota, PERO solo mientras la caja donde se cobró siga abierta. Una vez hecho el corte, las cifras quedan congeladas y ya no se puede.
 

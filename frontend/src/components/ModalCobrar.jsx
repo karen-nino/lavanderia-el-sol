@@ -1,4 +1,4 @@
-import { FORMAS_PAGO } from '../lib/formasPago';
+import { FORMAS_PAGO_COBRO } from '../lib/formasPago';
 
 function fmtMonto(n) {
   return n != null ? `$${Number(n).toFixed(2)}` : '—';
@@ -103,8 +103,8 @@ export default function ModalCobrar({ saldo, folio, titulo = 'Cobrar nota', mont
             forma de pago en el mismo gesto en las dos pantallas. */}
         <div className="space-y-2">
           <p className="text-sm font-semibold text-gray-900">Método de pago:</p>
-          <div className="grid grid-cols-3 gap-3">
-            {FORMAS_PAGO.map(opt => {
+          <div className="grid grid-cols-2 gap-3">
+            {FORMAS_PAGO_COBRO.map(opt => {
               const selected = formaPago === opt.v;
               return (
                 <button

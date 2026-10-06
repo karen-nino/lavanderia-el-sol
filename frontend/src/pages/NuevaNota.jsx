@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import { etiquetaProducto, ordenProducto, seVendePorUnidad, esPolvo } from '../lib/formatoInventario';
 import { capitalizarNombre } from '../lib/texto';
-import { FORMAS_PAGO, formaPagoLabel } from '../lib/formasPago';
+import { FORMAS_PAGO, FORMAS_PAGO_COBRO, formaPagoLabel } from '../lib/formasPago';
 import AbrirCajaModal from '../components/AbrirCajaModal';
 import ModalCobrar from '../components/ModalCobrar';
 import ElegirMaquinasModal, { SELECCION_EDREDON } from '../components/ElegirMaquinasModal';
@@ -2579,8 +2579,8 @@ export default function NuevaNota() {
                 <span className="text-2xl font-bold text-blue-700 tabular-nums">${(esVenta ? totalVenta : precioTotal).toFixed(2)}</span>
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
-                {FORMAS_PAGO.map(opt => {
+              <div className="grid grid-cols-2 gap-3">
+                {FORMAS_PAGO_COBRO.map(opt => {
                   const selected = form.forma_pago === opt.v;
                   return (
                     <button
