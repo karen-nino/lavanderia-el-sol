@@ -153,14 +153,47 @@ describe('GET /api/usuarios/:id/desempeno', () => {
         .send({ carga_id: crea.body.cargas[0].id, slot: 'lavadora', maquina_id: lav }).expect(200);
       await request(app).patch(`/api/notas/${crea.body.id}/estado-pago`).set(auth(emp.token))
         .send({ estado_pago: 'PAGADO', forma_pago: 'EFECTIVO' }).expect(200);
+      // Un ciclo cuenta cuando la máquina arranca (2026-10-06).
+      await request(app).patch(`/api/notas/${crea.body.id}/activar-pendientes`).set(auth(emp.token))
+        .send({ maquina_id: lav }).expect(200);
+      if (i === 0) {
+        await request(app).patch(`/api/notas/${crea.body.id}/terminar-lavado-final`).set(auth(emp.token))
+          .send({ lavadora_id: lav }).expect(200);
+      }
     }
 
     const res = await request(app).get(`/api/usuarios/${emp.id}/desempeno`).set(auth(admin.token));
     expect(res.status).toBe(200);
     expect(res.body.resumen.notas).toBe(2);
     expect(res.body.resumen.vendido).toBe(140); // 70 + 70
-    expect(res.body.resumen.cargas).toBe(2);
+    expect(res.body.resumen.cargas).toBe(2);    // ciclos
     expect(res.body.dias).toHaveLength(1);
+
+    // Cada ciclo trae su máquina, lo cobrado y su horario: el finalizado con
+    // inicio, fin y tiempo encendida; el que sigue corriendo, solo su inicio.
+    const ciclos = res.body.dias[0].detalle.cargas;
+    const fin = ciclos.find((c) => c.descripcion === 'Lavadora 1');
+    const vivo = ciclos.find((c) => c.descripcion === 'Lavadora 2');
+    expect(fin.precio).toBe(70);
+    expect(fin.inicio_at).toBeTruthy();
+    expect(fin.fin_at).toBeTruthy();
+    expect(fin.segundos).toBeGreaterThanOrEqual(0);
+    expect(vivo.inicio_at).toBeTruthy();
+    expect(vivo.fin_at).toBeNull();
+  });
+
+  it('una máquina asignada que nunca arrancó no cuenta como ciclo', async () => {
+    const emp = await seedUsuario({ rol: 'operador', sucursal: 'centro', nombre: 'SinArrancar' });
+    const lav = await seedMaquina({ nombre: 'Lavadora X', tipo: 'lavadora_mediana' });
+    const crea = await request(app).post('/api/notas').set(auth(emp.token)).send({
+      tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE',
+      cargas: [{ lavadora_tipo: 'mediana' }],
+    }).expect(201);
+    await request(app).patch(`/api/notas/${crea.body.id}/asignar-carga-maquina`).set(auth(emp.token))
+      .send({ carga_id: crea.body.cargas[0].id, slot: 'lavadora', maquina_id: lav }).expect(200);
+
+    const res = await request(app).get(`/api/usuarios/${emp.id}/desempeno`).set(auth(admin.token));
+    expect(res.body.resumen.cargas).toBe(0);
   });
 
   it('el check-in registra la entrada al primer login y la salida al cerrar sesión', async () => {

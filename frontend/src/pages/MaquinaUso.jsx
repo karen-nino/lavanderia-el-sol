@@ -3,8 +3,7 @@ import { etiquetaEstadoNota } from '../lib/estadoNota';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import SucursalBar from '../components/SucursalBar';
-import { fmtEncendidaConTope } from '../lib/tiempoEncendida';
-import { formatHora12 } from '../lib/fecha';
+import { fmtEncendidaConTope, horarioCiclo } from '../lib/tiempoEncendida';
 
 const fmtMoneda = (n) =>
   '$' + Number(n ?? 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -49,14 +48,6 @@ function calcularRangoFecha(rango) {
 const RANGO_LABEL = Object.fromEntries(RANGOS_FECHA.map(r => [r.value, r.label]));
 
 const POR_PAGINA = 20;
-
-// "09:05 am – 09:52 am" de un ciclo; "Desde 09:05 am" si sigue corriendo.
-// Null si no hay hora de arranque (pasadas anteriores a la mig. 140).
-function horarioCiclo(c) {
-  if (!c.inicio_at) return null;
-  const inicio = formatHora12(c.inicio_at);
-  return c.fin_at ? `${inicio} – ${formatHora12(c.fin_at)}` : `Desde ${inicio}`;
-}
 
 function ResumenCard({ label, value }) {
   return (

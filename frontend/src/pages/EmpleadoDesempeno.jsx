@@ -8,6 +8,7 @@ import SucursalBar from '../components/SucursalBar';
 import EmpleadoEditModal from '../components/EmpleadoEditModal';
 import EmpleadoDeleteModal from '../components/EmpleadoDeleteModal';
 import NombreEmpleado from '../components/NombreEmpleado';
+import { fmtEncendidaConTope, horarioCiclo } from '../lib/tiempoEncendida';
 
 const fmtMoneda = (n) =>
   '$' + Number(n ?? 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -96,12 +97,14 @@ function CeldaNumero({ value, onClick }) {
   );
 }
 
-function FilaModal({ left, sub, right, rightSub, onClick }) {
+// `sub2` es una segunda línea gris debajo de `sub` (el horario de un ciclo).
+function FilaModal({ left, sub, sub2, right, rightSub, onClick }) {
   const contenido = (
     <>
       <div className="min-w-0">
         <p className={`text-sm truncate ${onClick ? 'text-blue font-medium' : 'text-gray-800'}`}>{left}</p>
         {sub && <p className="text-xs text-gray-400 truncate">{sub}</p>}
+        {sub2 && <p className="text-xs text-gray-400 truncate">{sub2}</p>}
       </div>
       {(right != null || rightSub) && (
         <div className="flex flex-col items-end gap-1 flex-shrink-0">
@@ -132,7 +135,7 @@ const tipoMaquinaLabel = (tipo) =>
 const METRICA_TITULO = {
   notas:     'Notas',
   maquinas:  'Máquinas',
-  cargas:    'Cargas',
+  cargas:    'Ciclos',
   productos: 'Productos',
   clientes:  'Clientes',
 };
@@ -167,7 +170,7 @@ function EstadoBadge({ estado, tipoServicio }) {
 // Modal con el detalle de una métrica de un día.
 function MetricaModal({ metrica, fecha, count, items, onClose }) {
   const navigate = useNavigate();
-  const noun = { notas: 'nota', maquinas: 'máquina', cargas: 'carga', productos: 'producto', clientes: 'cliente' }[metrica];
+  const noun = { notas: 'nota', maquinas: 'máquina', cargas: 'ciclo', productos: 'producto', clientes: 'cliente' }[metrica];
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
       <div
@@ -203,7 +206,11 @@ function MetricaModal({ metrica, fecha, count, items, onClose }) {
             ))
           ) : metrica === 'cargas' ? (
             items.map((c, i) => (
+              // Un ciclo por máquina (2026-10-06): la nota y, abajo, a qué
+              // hora arrancó y terminó y cuánto estuvo encendida.
               <FilaModal key={i} left={c.descripcion} sub={c.folio ? `Nota ${c.folio}` : null}
+                sub2={[horarioCiclo(c), fmtEncendidaConTope(c.segundos, c.tope)]
+                  .filter(Boolean).join(' · ') || null}
                 right={fmtMoneda(c.precio)} />
             ))
           ) : metrica === 'productos' ? (
@@ -444,7 +451,7 @@ export default function EmpleadoDesempeno() {
               <ResumenCard label="Días activos" value={data.resumen.dias_activos} />
               <ResumenCard label="Notas" value={data.resumen.notas} />
               <ResumenCard label="Vendido" value={fmtMoneda(data.resumen.vendido)} />
-              <ResumenCard label="Cargas" value={data.resumen.cargas} />
+              <ResumenCard label="Ciclos" value={data.resumen.cargas} />
             </div>
 
             {/* Tabla por día */}
@@ -523,7 +530,7 @@ export default function EmpleadoDesempeno() {
                       <th className="text-right px-4 py-2.5 font-medium">Notas</th>
                       <th className="text-right px-4 py-2.5 font-medium">Vendido</th>
                       <th className="text-right px-4 py-2.5 font-medium">Máquinas</th>
-                      <th className="text-right px-4 py-2.5 font-medium">Cargas</th>
+                      <th className="text-right px-4 py-2.5 font-medium">Ciclos</th>
                       <th className="text-right px-4 py-2.5 font-medium">Productos</th>
                       <th className="text-right px-4 py-2.5 font-medium">Clientes</th>
                     </tr>
