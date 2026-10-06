@@ -223,6 +223,36 @@ describe('GET /api/maquinas/:id/uso — solo cuenta el uso real', () => {
     expect(uso.body.resumen.cargas).toBe(1);
     expect(uso.body.resumen.generado).toBe(70);   // no 210
   });
+
+  it('cada ciclo trae a qué hora arrancó y, al finalizar, a qué hora terminó', async () => {
+    await seedAjustes({ precio_carga_mediana: 70 });
+    const lav = await seedMaquina({ nombre: 'L-horas', tipo: 'lavadora_mediana' });
+    const nota = (await request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE',
+      cargas: [{ lavadora_tipo: 'mediana' }],
+    })).body;
+    await request(app).patch(`/api/notas/${nota.id}/asignar-carga-maquina`).set(auth(admin.token))
+      .send({ carga_id: nota.cargas[0].id, slot: 'lavadora', maquina_id: lav }).expect(200);
+    await request(app).patch(`/api/notas/${nota.id}/estado-pago`).set(auth(admin.token))
+      .send({ estado_pago: 'PAGADO', forma_pago: 'EFECTIVO' }).expect(200);
+    await request(app).patch(`/api/notas/${nota.id}/activar-pendientes`).set(auth(admin.token))
+      .send({ maquina_id: lav }).expect(200);
+
+    const ciclo = async () => {
+      const uso = await request(app).get(`/api/maquinas/${lav}/uso`).set(auth(admin.token));
+      return uso.body.dias[0].detalle.cargas[0];
+    };
+    // Corriendo: ya tiene arranque y todavía no tiene fin.
+    const corriendo = await ciclo();
+    expect(corriendo.inicio_at).toBeTruthy();
+    expect(corriendo.fin_at).toBeNull();
+
+    await request(app).patch(`/api/notas/${nota.id}/terminar-lavado-final`).set(auth(admin.token))
+      .send({ lavadora_id: lav }).expect(200);
+    const terminado = await ciclo();
+    expect(new Date(terminado.inicio_at).getTime()).toBe(new Date(corriendo.inicio_at).getTime());
+    expect(new Date(terminado.fin_at).getTime()).toBeGreaterThanOrEqual(new Date(terminado.inicio_at).getTime());
+  });
 });
 
 // La marca `reservada` del listado avisa que otra nota ya tiene apartada esa

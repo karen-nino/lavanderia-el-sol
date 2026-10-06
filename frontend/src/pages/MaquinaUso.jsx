@@ -4,6 +4,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import SucursalBar from '../components/SucursalBar';
 import { fmtEncendidaConTope } from '../lib/tiempoEncendida';
+import { formatHora12 } from '../lib/fecha';
 
 const fmtMoneda = (n) =>
   '$' + Number(n ?? 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -49,6 +50,14 @@ const RANGO_LABEL = Object.fromEntries(RANGOS_FECHA.map(r => [r.value, r.label])
 
 const POR_PAGINA = 20;
 
+// "09:05 am – 09:52 am" de un ciclo; "Desde 09:05 am" si sigue corriendo.
+// Null si no hay hora de arranque (pasadas anteriores a la mig. 140).
+function horarioCiclo(c) {
+  if (!c.inicio_at) return null;
+  const inicio = formatHora12(c.inicio_at);
+  return c.fin_at ? `${inicio} – ${formatHora12(c.fin_at)}` : `Desde ${inicio}`;
+}
+
 function ResumenCard({ label, value }) {
   return (
     <div className="bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-3 text-center">
@@ -71,12 +80,14 @@ function CeldaNumero({ value, onClick }) {
   );
 }
 
-function FilaModal({ left, sub, right, rightSub, onClick }) {
+// `sub2` es una segunda línea gris debajo de `sub` (el horario de un ciclo).
+function FilaModal({ left, sub, sub2, right, rightSub, onClick }) {
   const contenido = (
     <>
       <div className="min-w-0">
         <p className={`text-sm truncate ${onClick ? 'text-blue font-medium' : 'text-gray-800'}`}>{left}</p>
         {sub && <p className="text-xs text-gray-400 truncate">{sub}</p>}
+        {sub2 && <p className="text-xs text-gray-400 truncate">{sub2}</p>}
       </div>
       {(right != null || rightSub) && (
         <div className="flex flex-col items-end gap-1 flex-shrink-0">
@@ -168,8 +179,10 @@ function MetricaModal({ metrica, fecha, count, items, onClose }) {
           ) : metrica === 'cargas' ? (
             items.map((c, i) => (
               <FilaModal key={i} left={c.descripcion}
-                // Nota y cuánto estuvo encendida en ese ciclo (si se finalizó).
-                sub={[c.folio ? `Nota ${c.folio}` : null, fmtEncendidaConTope(c.segundos, c.tope)]
+                // La nota arriba; abajo, a qué hora arrancó y terminó y cuánto
+                // estuvo encendida en ese ciclo (si se finalizó).
+                sub={c.folio ? `Nota ${c.folio}` : null}
+                sub2={[horarioCiclo(c), fmtEncendidaConTope(c.segundos, c.tope)]
                   .filter(Boolean).join(' · ') || null}
                 right={fmtMoneda(c.precio)} />
             ))

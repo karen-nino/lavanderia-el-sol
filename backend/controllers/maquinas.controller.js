@@ -332,6 +332,16 @@ export const getUsoMaquina = async (req, res) => {
                    WHEN vivo.al_tope THEN mx.ciclo_minutos * 60
               END AS segundos,
               p.llego_tope OR (p.finalizada_at IS NULL AND vivo.al_tope) AS tope,
+              -- A qué hora arrancó y terminó ese ciclo (2026-10-06). La pasada
+              -- los sella al finalizar; la que sigue corriendo toma el arranque
+              -- de la máquina, y si ya pasó su tope, el fin es el tope.
+              COALESCE(p.encendida_at,
+                       CASE WHEN (CASE WHEN p.slot = 'lavadora' THEN nc.lavadora_id
+                                       ELSE nc.secadora_id END) = $1
+                            THEN mx.en_uso_desde END) AS inicio_at,
+              COALESCE(p.finalizada_at,
+                       CASE WHEN vivo.al_tope
+                            THEN mx.en_uso_desde + make_interval(mins => mx.ciclo_minutos) END) AS fin_at,
               ml.nombre AS lav_nombre, ms.nombre AS sec_nombre
          FROM (${PASADAS_DE_LA_MAQUINA}) p
          JOIN nota_cargas nc ON nc.id = p.carga_id
@@ -420,6 +430,8 @@ export const getUsoMaquina = async (req, res) => {
         precio: Number(c.precio) || 0,
         segundos: c.segundos,
         tope: Boolean(c.tope),
+        inicio_at: c.inicio_at,
+        fin_at: c.fin_at,
       });
     }
 
