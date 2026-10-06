@@ -102,6 +102,18 @@ export const conIniciarSql = (alias) => (cronometroActivo() ? `(
   )
 )` : 'FALSE');
 
+// Minutos que da cada moneda en las secadoras de monedas (mig. 147), o NULL
+// si la máquina es normal. Con valor, su Sonoff no da corriente: cada pulso es
+// una moneda (ver `sincronizarSonoff`). Mismo alias `m` que
+// MINUTOS_CONFIGURADOS.
+export const MINUTOS_POR_MONEDA = `(
+  SELECT mo.minutos_por_moneda
+    FROM marcas_maquina mm
+    JOIN modelos_maquina mo ON mo.marca_id = mm.id
+   WHERE mm.nombre = m.marca
+     AND mo.nombre = m.modelo
+)`;
+
 // Cómo se comporta esta máquina, según su catálogo:
 //   · `dos_ciclos` lo declara el MODELO (mig. 123): una carga corre DOS vueltas
 //     en ese aparato. Sin modelo capturado va en FALSE y la carga corre una

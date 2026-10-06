@@ -34,7 +34,7 @@
 import pool from '../db/pool.js';
 import * as dispositivos from './dispositivos/index.js';
 import { resumirMotivo } from './dispositivos/mensajes.js';
-import { cronometroActivo, esCronometroSql } from '../db/sqlMaquina.js';
+import { cronometroActivo, esCronometroSql, MINUTOS_POR_MONEDA } from '../db/sqlMaquina.js';
 
 // Cuánto vale un encendido manual antes de caducar (mig. 104). Un ciclo largo
 // no pasa de una hora; el margen es para que nadie se quede sin máquina porque
@@ -424,6 +424,72 @@ async function avisarTopeCronometro(maq) {
   }
 }
 
+// ── Secadoras de monedas (mig. 147) ──
+//
+// Su Sonoff va en modo pulso: cada "on" se apaga solo a los 0.5 s y la
+// secadora lo cuenta como UNA moneda. No hay corriente que dar ni que quitar
+// —están siempre alimentadas—, así que lo único que la app le manda son las
+// monedas del arranque: las que pida el programa elegido (Sec49) o, si el
+// modelo no pregunta, su tope (Sec50). Redondeado hacia arriba: quedarse
+// corto deja la ropa mojada.
+export const monedasParaArranque = (maq) => {
+  const porMoneda = Number(maq?.minutos_por_moneda);
+  if (!Number.isFinite(porMoneda) || porMoneda <= 0) return 0;
+  const minutos = Number(maq.ciclo_elegido_minutos ?? maq.ciclo_minutos);
+  if (!Number.isFinite(minutos) || minutos <= 0) return 1;
+  return Math.max(1, Math.ceil(minutos / porMoneda));
+};
+
+// Pausa entre una moneda y la siguiente: el pulso dura 0.5 s y la secadora
+// necesita ver el relé abrirse antes de contar otra.
+export const PAUSA_ENTRE_MONEDAS_MS = (() => {
+  const ms = Number(process.env.SONOFF_PAUSA_ENTRE_MONEDAS_MS);
+  return Number.isFinite(ms) && ms >= 0 ? ms : 2000;
+})();
+
+const AVISO_MONEDAS = 'Solo entraron';
+
+const esperarMs = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Mete las monedas del arranque en curso, UNA sola vez por arranque. La
+// sincronización corre varias veces por cada arranque (el aviso del trigger,
+// la llamada explícita del controlador, el barrido) y cada pulso de más es
+// tiempo regalado, así que el arranque se reclama con un UPDATE atómico: solo
+// quien lo gana manda pulsos. Si falla a medias NO se reintenta —no se sabe
+// cuántas contó la secadora y reintentar podría regalar tiempo—: queda en
+// 'error' con cuántas se mandaron, para que el empleado complete en la
+// máquina o desde eWeLink.
+async function meterMonedas(maq) {
+  const { rows } = await pool.query(
+    `UPDATE maquinas SET monedas_para_uso = en_uso_desde
+      WHERE id = $1 AND estado = 'en_uso' AND en_uso_desde IS NOT NULL
+        AND encendida_manual_at IS NULL
+        AND monedas_para_uso IS DISTINCT FROM en_uso_desde
+      RETURNING id`,
+    [maq.id]
+  );
+  if (rows.length === 0) return maq;
+
+  const total = monedasParaArranque(maq);
+  console.log(`[sonoff] ${maq.nombre ?? maq.id}: se meten ${total} moneda(s).`);
+  for (let i = 1; i <= total; i++) {
+    const res = await dispositivos.encender(maq);
+    if (!res.ok) {
+      console.warn(`[sonoff] ${maq.nombre ?? maq.id}: falló la moneda ${i} de ${total} (${res.motivo}).`);
+      if (dispositivos.esSimulacion()) return maq;
+      const { rows: upd } = await pool.query(
+        `UPDATE maquinas SET sonoff_estado = 'error', sonoff_detalle = $1, sonoff_sync_at = NOW()
+          WHERE id = $2 RETURNING *`,
+        [`${AVISO_MONEDAS} ${i - 1} de ${total} monedas: completa en la máquina. ${resumirMotivo(res.motivo)}`, maq.id]
+      );
+      return upd[0] ?? maq;
+    }
+    if (i < total) await esperarMs(PAUSA_ENTRE_MONEDAS_MS);
+  }
+  if (dispositivos.esSimulacion()) return maq;
+  return marcar(maq.id, 'enlazada');
+}
+
 // Sincroniza UNA máquina (por id). Devuelve la fila actualizada, o null si no
 // existe. No lanza.
 //
@@ -434,8 +500,10 @@ export async function sincronizarSonoff(maquinaId, { reconciliando = false } = {
   try {
     const { rows } = await pool.query(
       `SELECT m.id, m.nombre, m.tipo, m.marca, m.estado, m.sucursal, m.device_id, m.device_canal,
-              m.sonoff_estado, m.encendida_manual_at, m.en_uso_desde, m.ciclo_minutos,
+              m.sonoff_estado, m.sonoff_detalle, m.encendida_manual_at, m.en_uso_desde, m.ciclo_minutos,
               m.encendida_sin_iniciar_at, m.encendida_para_nota_id,
+              m.ciclo_elegido_minutos, m.monedas_para_uso,
+              ${MINUTOS_POR_MONEDA} AS minutos_por_moneda,
               ${esCronometroSql('m')} AS cronometro
          FROM maquinas m WHERE m.id = $1`,
       [maquinaId]
@@ -477,6 +545,26 @@ export async function sincronizarSonoff(maquinaId, { reconciliando = false } = {
     // llega, es que nadie la finalizó.
     if (deseado === 'off' && maq.estado === 'en_uso' && maq.cronometro && cicloVencido(maq)) {
       await avisarTopeCronometro(maq);
+    }
+
+    // Secadora de monedas (mig. 147): fuera de las monedas del arranque no se
+    // le manda nada. Un "on" de más sería otra moneda; un "off" no le quita
+    // nada; y el barrido la vería encendida medio segundo y la adoptaría como
+    // encendida a mano. El barrido solo lee su estado, para el indicador.
+    if (maq.minutos_por_moneda != null) {
+      if (!reconciliando) {
+        if (maq.estado === 'en_uso' && maq.en_uso_desde && !maq.encendida_manual_at) {
+          return meterMonedas(maq);
+        }
+        return maq;
+      }
+      const real = await dispositivos.estado(maq);
+      if (dispositivos.esSimulacion()) return maq;
+      // Un aviso de monedas incompletas se queda a la vista mientras siga su
+      // carga: el barrido no lo borra.
+      if (real.ok && maq.estado === 'en_uso'
+          && String(maq.sonoff_detalle ?? '').startsWith(AVISO_MONEDAS)) return maq;
+      return marcar(maq.id, real.ok ? 'enlazada' : 'error', real.motivo);
     }
 
     // El barrido NO vuelve a encender una máquina que quedó apagada si la

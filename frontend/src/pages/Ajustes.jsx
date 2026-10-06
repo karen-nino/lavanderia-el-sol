@@ -1149,11 +1149,13 @@ export default function Ajustes() {
   // Desde el 2026-10-02 las máquinas corren con cronómetro y estos minutos son
   // su TOPE. También en el modelo que pregunta su programa (Sec49, mig. 146):
   // el campo grande es su tope y los tres chicos, los programas a elegir.
-  const ayudaTiempo = (t) => (
-    t?.pregunta_tiempo
+  const ayudaTiempo = (t) => {
+    const base = t?.pregunta_tiempo
       ? 'Arriba, el tope: a esos minutos se le corta la luz si nadie la finaliza. Abajo, los programas: al iniciarla se pregunta cuál corre y se avisa cuando lo cumpla. Tope vacío = el programa más largo.'
-      : 'Tope de carga de este modelo: a estos minutos se le corta la luz si nadie la finaliza. Vacío = usa el tope de arriba.'
-  );
+      : 'Tope de carga de este modelo: a estos minutos se le corta la luz si nadie la finaliza. Vacío = usa el tope de arriba.';
+    if (t?.tipo !== 'secadora') return base;
+    return `${base} Cada moneda: solo si es de monedas; al iniciarla se le mete una moneda por cada tantos minutos ${t?.pregunta_tiempo ? 'del programa elegido' : 'del tope'}. Vacío = no es de monedas.`;
+  };
 
   // Un modelo puede llevar TRES programas además de su tope (migs. 120 y 146):
   // la Sec49 no tiene "un" ciclo, tiene tres programas y quien elige es el
@@ -1162,22 +1164,44 @@ export default function Ajustes() {
   // no los ven. Sin el interruptor los programas no mandan nada.
   const tieneVariosTiempos = (t) => Boolean(t.pregunta_tiempo);
 
-  const camposOtrosTiempos = (t, inputCls, unidadCls) => (
-    tieneVariosTiempos(t) ? (
+  // Secadoras de monedas (mig. 147): su Sonoff mete monedas en vez de dar
+  // corriente. Con este campo lleno, al iniciarla la app manda una moneda por
+  // cada tantos minutos del programa elegido (o del tope, si no pregunta).
+  // Solo en secadoras: las lavadoras no tienen monedero conectado.
+  const campoMoneda = (t, inputCls, unidadCls) => (
+    t.tipo === 'secadora' ? (
       <div className="mt-3 flex items-center gap-2">
-        <span className={`${unidadCls} flex-shrink-0 w-24`}>Otros tiempos</span>
-        {['minutos_2', 'minutos_3', 'minutos_4'].map(campo => (
-          <input
-            key={campo}
-            type="number" min="1" step="1" placeholder="—"
-            value={t[campo] ?? ''}
-            onChange={e => setMinutosMarca(claveTiempo(t), e.target.value, campo)}
-            className={`${inputCls} text-center`}
-          />
-        ))}
+        <span className={`${unidadCls} flex-shrink-0 w-24`}>Cada moneda</span>
+        <input
+          type="number" min="1" step="1" placeholder="—"
+          value={t.minutos_por_moneda ?? ''}
+          onChange={e => setMinutosMarca(claveTiempo(t), e.target.value, 'minutos_por_moneda')}
+          className={`${inputCls} text-center`}
+        />
         <span className={`${unidadCls} flex-shrink-0`}>min</span>
       </div>
     ) : null
+  );
+
+  const camposOtrosTiempos = (t, inputCls, unidadCls) => (
+    <>
+      {tieneVariosTiempos(t) ? (
+        <div className="mt-3 flex items-center gap-2">
+          <span className={`${unidadCls} flex-shrink-0 w-24`}>Otros tiempos</span>
+          {['minutos_2', 'minutos_3', 'minutos_4'].map(campo => (
+            <input
+              key={campo}
+              type="number" min="1" step="1" placeholder="—"
+              value={t[campo] ?? ''}
+              onChange={e => setMinutosMarca(claveTiempo(t), e.target.value, campo)}
+              className={`${inputCls} text-center`}
+            />
+          ))}
+          <span className={`${unidadCls} flex-shrink-0`}>min</span>
+        </div>
+      ) : null}
+      {campoMoneda(t, inputCls, unidadCls)}
+    </>
   );
   const tiemposDe = (tipo, tamano) =>
     tiemposMarca.filter(t => t.tipo === tipo && t.tamano === tamano);
@@ -1227,6 +1251,7 @@ export default function Ajustes() {
     // así que la comparación va campo por campo.
     const foto = (t) => [
       aNumero(t.minutos), aNumero(t.minutos_2), aNumero(t.minutos_3), aNumero(t.minutos_4),
+      aNumero(t.minutos_por_moneda),
     ].join('|');
     const antes = new Map(tiemposOrigRef.current.map(t => [claveTiempo(t), foto(t)]));
     const cambiados = tiemposMarca.filter(t => antes.get(claveTiempo(t)) !== foto(t));
@@ -1238,11 +1263,13 @@ export default function Ajustes() {
       minutos_2: aNumero(t.minutos_2),
       minutos_3: aNumero(t.minutos_3),
       minutos_4: aNumero(t.minutos_4),
+      // Solo las secadoras lo enseñan.
+      ...(t.tipo === 'secadora' ? { minutos_por_moneda: aNumero(t.minutos_por_moneda) } : {}),
     })));
     tiemposOrigRef.current = tiemposMarca.map(t => ({
       ...t,
       minutos: aNumero(t.minutos), minutos_2: aNumero(t.minutos_2), minutos_3: aNumero(t.minutos_3),
-      minutos_4: aNumero(t.minutos_4),
+      minutos_4: aNumero(t.minutos_4), minutos_por_moneda: aNumero(t.minutos_por_moneda),
     }));
   };
 
