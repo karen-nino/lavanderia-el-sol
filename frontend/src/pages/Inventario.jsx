@@ -1005,7 +1005,9 @@ function ModalMovimiento({ producto, tipo, onClose, onDone }) {
 function ModalRellenar({ producto, onClose, onDone }) {
   const tpb = medidasPorBotella(producto);
   const maxBotellas = tpb > 0 ? Math.floor(Number(producto.stock_granel_medidas) / tpb) : 0;
-  const [botellas, setBotellas] = useState(String(Math.min(maxBotellas, botellasPorBidon(producto) || maxBotellas)));
+  // Nace vacío (2026-10-06): con un número sugerido se rellenaba lo que
+  // decía la app y no lo que de verdad se rellenó.
+  const [botellas, setBotellas] = useState('');
   const [error, setError]   = useState('');
   const [loading, setLoading] = useState(false);
 
