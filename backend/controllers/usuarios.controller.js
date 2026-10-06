@@ -97,16 +97,29 @@ export const getDesempeno = async (req, res) => {
     // secadora): una fila por PASADA de una máquina (mig. 114), como en
     // Información de uso de la máquina, con a qué hora arrancó y terminó y
     // cuánto estuvo encendida (migs. 140-141). Cuenta si la máquina arrancó.
-    // Lo cobrado es lo de ese hueco en su primera pasada; una vuelta más va
-    // sin cobro. La que sigue corriendo toma el arranque de la máquina y, si
+    // La que sigue corriendo toma el arranque de la máquina y, si
     // ya pasó su tope, el reloj se paró ahí.
     const { rows: ciclos } = await pool.query(
       `SELECT nc.nota_id, p.maquina_nombre,
+              -- Lo que vale el ciclo en ESA máquina, con la misma regla que
+              -- Información de uso: lo cobrado a ese hueco en su primera
+              -- pasada; si no se cobró aparte (Por Encargo, con precio de
+              -- servicio) o es una vuelta más, la tarifa de la máquina en
+              -- Ajustes. Manda el tipo congelado en la pasada; sin él, el de la máquina.
               CASE WHEN ROW_NUMBER() OVER (PARTITION BY p.carga_id, p.slot
                                            ORDER BY p.asignada_at, p.id) = 1
-                   THEN COALESCE(CASE WHEN p.slot = 'lavadora' THEN nc.precio_lavadora
-                                      ELSE nc.precio_secadora END, 0)
-                   ELSE 0 END AS precio,
+                        AND (CASE WHEN p.slot = 'lavadora' THEN nc.precio_lavadora
+                                  ELSE nc.precio_secadora END) > 0
+                   THEN CASE WHEN p.slot = 'lavadora' THEN nc.precio_lavadora
+                             ELSE nc.precio_secadora END
+                   ELSE CASE
+                          WHEN COALESCE(p.maquina_tipo, mx.tipo::text) = 'secadora'
+                               AND COALESCE(p.maquina_tamano, mx.tamano::text) = 'jumbo'         THEN aj.precio_secadora_jumbo
+                          WHEN COALESCE(p.maquina_tipo, mx.tipo::text) = 'secadora'          THEN aj.precio_carga_secadora
+                          WHEN COALESCE(p.maquina_tipo, mx.tipo::text) = 'lavadora_jumbo'    THEN aj.precio_carga_jumbo
+                          ELSE aj.precio_carga_mediana
+                        END
+              END AS precio,
               CASE WHEN p.finalizada_at IS NOT NULL
                    THEN ROUND(EXTRACT(EPOCH FROM p.finalizada_at - p.encendida_at))::int
                    WHEN vivo.al_tope THEN mx.ciclo_minutos * 60
@@ -120,6 +133,7 @@ export const getDesempeno = async (req, res) => {
          JOIN nota_cargas nc ON nc.id = p.carga_id
          JOIN notas n ON n.id = nc.nota_id
          LEFT JOIN maquinas mx ON mx.id = p.maquina_id
+         LEFT JOIN ajustes aj ON aj.id = 1
          CROSS JOIN LATERAL (
            SELECT (CASE WHEN p.slot = 'lavadora' THEN nc.lavadora_id
                         ELSE nc.secadora_id END) IS NOT DISTINCT FROM p.maquina_id
@@ -147,7 +161,9 @@ export const getDesempeno = async (req, res) => {
     );
 
     const { rows: productos } = await pool.query(
-      `SELECT np.nota_id, np.cantidad, np.precio_unitario, p.nombre, p.marca
+      `SELECT np.nota_id, np.cantidad, np.precio_unitario, p.nombre,
+              -- El granel no tiene marca: se dice "Granel" (2026-10-06).
+              CASE WHEN p.tipo_liquido = 'granel' THEN 'Granel' ELSE p.marca END AS marca
          FROM nota_productos np
          JOIN notas n ON n.id = np.nota_id
          JOIN productos p ON p.id = np.producto_id

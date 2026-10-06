@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import request from 'supertest';
 import app from '../../app.js';
-import { limpiarBase, seedSucursal, seedUsuario, seedLogin, seedMaquina, auth } from '../helpers.js';
+import pool from '../../db/pool.js';
+import { limpiarBase, seedSucursal, seedUsuario, seedLogin, seedMaquina, seedCliente, seedAjustes, seedProducto, auth } from '../helpers.js';
 
 let admin;
 
@@ -180,6 +181,41 @@ describe('GET /api/usuarios/:id/desempeno', () => {
     expect(fin.segundos).toBeGreaterThanOrEqual(0);
     expect(vivo.inicio_at).toBeTruthy();
     expect(vivo.fin_at).toBeNull();
+  });
+
+  it('el ciclo de Por Encargo vale la tarifa de la máquina, como en Información de uso', async () => {
+    await seedAjustes({ precio_carga_mediana: 55 });
+    const emp = await seedUsuario({ rol: 'operador', sucursal: 'centro', nombre: 'Encargos' });
+    const lav = await seedMaquina({ nombre: 'Lavadora E', tipo: 'lavadora_mediana' });
+    const crea = await request(app).post('/api/notas').set(auth(emp.token)).send({
+      tipo_servicio: 'POR_ENCARGO', tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE',
+      cliente_id: await seedCliente(),
+      cargas: [{ lavadora_tipo: 'mediana', tamano: 'chico' }],
+    }).expect(201);
+    await request(app).patch(`/api/notas/${crea.body.id}/asignar-carga-maquina`).set(auth(emp.token))
+      .send({ carga_id: crea.body.cargas[0].id, slot: 'lavadora', maquina_id: lav }).expect(200);
+    await request(app).patch(`/api/notas/${crea.body.id}/activar-pendientes`).set(auth(emp.token))
+      .send({ maquina_id: lav }).expect(200);
+
+    const res = await request(app).get(`/api/usuarios/${emp.id}/desempeno`).set(auth(admin.token));
+    expect(res.body.dias[0].detalle.cargas[0].precio).toBe(55);
+  });
+
+  it('en Productos, el granel dice "Granel" en la marca', async () => {
+    const emp = await seedUsuario({ rol: 'operador', sucursal: 'centro', nombre: 'Granelero' });
+    const granel = await seedProducto({ nombre: 'PERSIL', tipo_liquido: 'granel' });
+    const crea = await request(app).post('/api/notas').set(auth(emp.token)).send({
+      tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE',
+      cargas: [{ lavadora_tipo: 'mediana' }],
+    }).expect(201);
+    await pool.query(
+      'INSERT INTO nota_productos (nota_id, producto_id, cantidad, precio_unitario) VALUES ($1, $2, 1, 10)',
+      [crea.body.id, granel]
+    );
+
+    const res = await request(app).get(`/api/usuarios/${emp.id}/desempeno`).set(auth(admin.token));
+    const persil = res.body.dias[0].detalle.productos.find((p) => p.nombre === 'PERSIL');
+    expect(persil.marca).toBe('Granel');
   });
 
   it('una máquina asignada que nunca arrancó no cuenta como ciclo', async () => {
