@@ -81,6 +81,20 @@ async function crearNota(token, { nombreMaquina, estado_pago = 'PENDIENTE', form
   return creada;
 }
 
+describe('GET /api/ventas/resumen — ciclos de cada nota', () => {
+  it('cada nota trae un ciclo por máquina arrancada, con precio y horario', async () => {
+    const creada = await crearNota(admin.token, { nombreMaquina: 'L1', estado_pago: 'PENDIENTE' });
+
+    const res = await request(app).get('/api/ventas/resumen?periodo=hoy').set(auth(admin.token));
+    const nota = res.body.lista_notas.find((n) => n.id === creada.body.id);
+    expect(nota.ciclos).toHaveLength(1);
+    expect(nota.ciclos[0].nombre).toBe('L1');
+    expect(nota.ciclos[0].precio).toBe(70);
+    expect(nota.ciclos[0].inicio_at).toBeTruthy();
+    expect(nota.ciclos[0].fin_at).toBeNull(); // sigue corriendo
+  });
+});
+
 describe('GET /api/ventas/resumen — detalle de productos de cada nota', () => {
   it('cada nota trae sus productos con cantidad, subtotal y si van incluidos', async () => {
     const creada = await crearNota(admin.token, { nombreMaquina: 'L1', estado_pago: 'PENDIENTE' });

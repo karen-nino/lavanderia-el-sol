@@ -3,7 +3,7 @@ import { etiquetaEstadoNota } from '../lib/estadoNota';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import { formaPagoLabel } from '../lib/formasPago';
-import { fmtEncendidaConTope } from '../lib/tiempoEncendida';
+import { fmtEncendidaConTope, horarioCiclo } from '../lib/tiempoEncendida';
 import { etiquetaProducto, seVendePorUnidad, esPolvo } from '../lib/formatoInventario';
 import { formatHora12, formatFechaHora12 } from '../lib/fecha';
 import { imprimirVentas, descargarVentasCSV } from '../lib/exportVentas';
@@ -174,7 +174,7 @@ export default function Ventas() {
   const [error, setError] = useState(null);
   const [paginaNotas, setPaginaNotas] = useState(1);
   // Nota cuyas máquinas se ven completas en el modal (cuando son demasiadas).
-  const [maquinasModal, setMaquinasModal] = useState(null); // { folio, maquinas }
+  const [maquinasModal, setMaquinasModal] = useState(null); // { folio, maquinas, ciclos }
   const [motivoModal,   setMotivoModal]   = useState(null); // { folio, motivo }
   const [abonosModal,   setAbonosModal]   = useState(null); // { folio, total, abonos }
   const [productosModal, setProductosModal] = useState(null); // { folio, total, productos }
@@ -796,7 +796,7 @@ export default function Ventas() {
                             ) : (
                               <button
                                 type="button"
-                                onClick={() => setMaquinasModal({ folio: nota.folio, maquinas: nota.maquinas })}
+                                onClick={() => setMaquinasModal({ folio: nota.folio, maquinas: nota.maquinas, ciclos: nota.ciclos ?? [] })}
                                 className="text-blue hover:text-blue-700 hover:underline underline-offset-2 transition-colors"
                               >
                                 {nota.maquinas.slice(0, MAQUINAS_VISIBLES).map(m => m.nombre).join(', ')}
@@ -872,7 +872,7 @@ export default function Ventas() {
           onClick={() => setMaquinasModal(null)}
         >
           <div
-            className="bg-white rounded-2xl shadow-xl w-full max-w-xs max-h-[80vh] flex flex-col"
+            className="bg-white rounded-2xl shadow-xl w-full max-w-sm max-h-[80vh] flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-gray-100">
@@ -889,19 +889,44 @@ export default function Ventas() {
                 </svg>
               </button>
             </div>
-            <ul className="p-4 space-y-1.5 overflow-y-auto">
-              {maquinasModal.maquinas.map((m, i) => (
-                <li key={i} className="flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-gray-50 text-sm">
-                  <span className="flex items-center gap-2 text-gray-700">
-                    <span className="w-1.5 h-1.5 rounded-full bg-blue flex-shrink-0" />
-                    {m.nombre}
-                  </span>
-                  <span className="text-right text-gray-500">
-                    {fmtEncendidaConTope(m.segundos, m.tope) ?? <span className="text-gray-400">—</span>}
-                  </span>
-                </li>
-              ))}
-            </ul>
+            {maquinasModal.ciclos.length > 0 ? (
+              // Un renglón por ciclo (2026-10-06), como en Información de uso:
+              // la máquina y lo que vale; abajo, a qué hora arrancó y terminó
+              // y cuánto estuvo encendida.
+              <ul className="p-4 space-y-1.5 overflow-y-auto">
+                {maquinasModal.ciclos.map((c, i) => {
+                  const detalle = [horarioCiclo(c), fmtEncendidaConTope(c.segundos, c.tope)]
+                    .filter(Boolean).join(' · ');
+                  return (
+                    <li key={i} className="flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-gray-50 text-sm">
+                      <span className="min-w-0">
+                        <span className="flex items-center gap-2 text-gray-700">
+                          <span className="w-1.5 h-1.5 rounded-full bg-blue flex-shrink-0" />
+                          {c.nombre}
+                        </span>
+                        {detalle && <span className="block text-xs text-gray-400 mt-0.5 pl-3.5">{detalle}</span>}
+                      </span>
+                      <span className="text-right text-gray-700 whitespace-nowrap">{fmt(c.precio)}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              // Notas sin historial de pasadas: el resumen por máquina de antes.
+              <ul className="p-4 space-y-1.5 overflow-y-auto">
+                {maquinasModal.maquinas.map((m, i) => (
+                  <li key={i} className="flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-gray-50 text-sm">
+                    <span className="flex items-center gap-2 text-gray-700">
+                      <span className="w-1.5 h-1.5 rounded-full bg-blue flex-shrink-0" />
+                      {m.nombre}
+                    </span>
+                    <span className="text-right text-gray-500">
+                      {fmtEncendidaConTope(m.segundos, m.tope) ?? <span className="text-gray-400">—</span>}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         </div>
       )}

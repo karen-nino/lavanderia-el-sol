@@ -5,7 +5,7 @@ import { SUCURSAL_PRUEBAS } from '../middleware/sucursalActiva.js';
 import { ENTORNO_DEMO } from '../utils/entorno.js';
 import { capitalizarNombre } from '../utils/nombres.js';
 import { TZ_NEGOCIO } from '../utils/tz.js';
-import { esCronometroSql } from '../db/sqlMaquina.js';
+import { CICLOS_DE_PASADAS } from '../db/sqlMaquina.js';
 
 const ROL_VALIDOS = ['admin_main', 'admin', 'operador'];
 
@@ -94,69 +94,11 @@ export const getDesempeno = async (req, res) => {
     );
 
     // Ciclos (2026-10-06; antes "Cargas", una por carga juntando lavadora y
-    // secadora): una fila por PASADA de una máquina (mig. 114), como en
-    // Información de uso de la máquina, con a qué hora arrancó y terminó y
-    // cuánto estuvo encendida (migs. 140-141). Cuenta si la máquina arrancó.
-    // La que sigue corriendo toma el arranque de la máquina y, si
-    // ya pasó su tope, el reloj se paró ahí.
+    // secadora): una fila por pasada que arrancó, con su precio, horario y
+    // tiempo encendida. Las reglas viven en CICLOS_DE_PASADAS.
     const { rows: ciclos } = await pool.query(
-      `SELECT nc.nota_id, p.maquina_nombre,
-              -- Lo que vale el ciclo en ESA máquina, con la misma regla que
-              -- Información de uso: lo cobrado a ese hueco en su primera
-              -- pasada; si no se cobró aparte (Por Encargo, con precio de
-              -- servicio) o es una vuelta más, la tarifa de la máquina en
-              -- Ajustes. Manda el tipo congelado en la pasada; sin él, el de la máquina.
-              CASE WHEN ROW_NUMBER() OVER (PARTITION BY p.carga_id, p.slot
-                                           ORDER BY p.asignada_at, p.id) = 1
-                        AND (CASE WHEN p.slot = 'lavadora' THEN nc.precio_lavadora
-                                  ELSE nc.precio_secadora END) > 0
-                   THEN CASE WHEN p.slot = 'lavadora' THEN nc.precio_lavadora
-                             ELSE nc.precio_secadora END
-                   ELSE CASE
-                          WHEN COALESCE(p.maquina_tipo, mx.tipo::text) = 'secadora'
-                               AND COALESCE(p.maquina_tamano, mx.tamano::text) = 'jumbo'         THEN aj.precio_secadora_jumbo
-                          WHEN COALESCE(p.maquina_tipo, mx.tipo::text) = 'secadora'          THEN aj.precio_carga_secadora
-                          WHEN COALESCE(p.maquina_tipo, mx.tipo::text) = 'lavadora_jumbo'    THEN aj.precio_carga_jumbo
-                          ELSE aj.precio_carga_mediana
-                        END
-              END AS precio,
-              CASE WHEN p.finalizada_at IS NOT NULL
-                   THEN ROUND(EXTRACT(EPOCH FROM p.finalizada_at - p.encendida_at))::int
-                   WHEN vivo.al_tope THEN mx.ciclo_minutos * 60
-              END AS segundos,
-              p.llego_tope OR (p.finalizada_at IS NULL AND vivo.al_tope) AS tope,
-              COALESCE(p.encendida_at, CASE WHEN vivo.corriendo THEN mx.en_uso_desde END) AS inicio_at,
-              COALESCE(p.finalizada_at,
-                       CASE WHEN vivo.al_tope
-                            THEN mx.en_uso_desde + make_interval(mins => mx.ciclo_minutos) END) AS fin_at
-         FROM nota_carga_maquinas p
-         JOIN nota_cargas nc ON nc.id = p.carga_id
-         JOIN notas n ON n.id = nc.nota_id
-         LEFT JOIN maquinas mx ON mx.id = p.maquina_id
-         LEFT JOIN ajustes aj ON aj.id = 1
-         CROSS JOIN LATERAL (
-           SELECT (CASE WHEN p.slot = 'lavadora' THEN nc.lavadora_id
-                        ELSE nc.secadora_id END) IS NOT DISTINCT FROM p.maquina_id
-                  AND p.finalizada_at IS NULL
-                  -- Solo la última pasada de su hueco puede estar corriendo.
-                  AND p.id = (SELECT x.id FROM nota_carga_maquinas x
-                               WHERE x.carga_id = p.carga_id AND x.slot = p.slot
-                               ORDER BY x.asignada_at DESC, x.id DESC LIMIT 1) AS corriendo
-         ) c0
-         CROSS JOIN LATERAL (
-           SELECT c0.corriendo,
-                  COALESCE(c0.corriendo
-                    AND mx.en_uso_desde IS NOT NULL
-                    AND mx.ciclo_minutos > 0
-                    AND ${esCronometroSql('mx')}
-                    AND mx.en_uso_desde + make_interval(mins => mx.ciclo_minutos) <= NOW(),
-                  FALSE) AS al_tope
-         ) vivo
-        WHERE n.usuario_id = $1 AND n.estado <> 'CANCELADA'
-          AND (p.encendida_at IS NOT NULL
-               OR (p.slot = 'lavadora' AND nc.lavadora_iniciada_at IS NOT NULL)
-               OR (p.slot = 'secadora' AND nc.secadora_iniciada_at IS NOT NULL))
-        ORDER BY nc.nota_id, nc.orden, p.asignada_at, p.id`,
+      `SELECT * FROM (${CICLOS_DE_PASADAS("n.usuario_id = $1 AND n.estado <> 'CANCELADA'")}) c
+        ORDER BY c.nota_id, c.carga_orden, c.asignada_at, c.pasada_id`,
       [id]
     );
 

@@ -146,3 +146,73 @@ export const TIEMPOS_DEL_MODELO = `(
    WHERE mm.nombre = m.marca
      AND mo.nombre = m.modelo
 )`;
+
+// Los CICLOS de una o varias notas: una fila por PASADA de una máquina
+// (mig. 114) que de verdad arrancó, con lo que vale, a qué hora arrancó y
+// terminó y cuánto estuvo encendida (migs. 140-141). Lo usan el desempeño del
+// empleado y Ventas, y sigue las mismas reglas que Información de uso:
+//   · precio: lo cobrado a ese hueco en su primera pasada; si no se cobró
+//     aparte (Por Encargo, con precio de servicio) o es una vuelta más, la
+//     tarifa de la máquina en Ajustes;
+//   · la pasada que sigue corriendo toma el arranque de la máquina y, si ya
+//     pasó su tope, el reloj se paró ahí.
+// `filtro` es una condición SQL sobre `n` (la nota), p. ej. 'n.id = o.id' o
+// 'n.usuario_id = $1'. Sin ORDER BY: lo pone quien la usa (carga_orden,
+// asignada_at, pasada_id).
+export const CICLOS_DE_PASADAS = (filtro) => `SELECT nc.nota_id, nc.orden AS carga_orden, p.id AS pasada_id, p.asignada_at,
+              p.maquina_nombre,
+              -- Lo que vale el ciclo en ESA máquina, con la misma regla que
+              -- Información de uso: lo cobrado a ese hueco en su primera
+              -- pasada; si no se cobró aparte (Por Encargo, con precio de
+              -- servicio) o es una vuelta más, la tarifa de la máquina en
+              -- Ajustes. Manda el tipo congelado en la pasada; sin él, el de la máquina.
+              CASE WHEN ROW_NUMBER() OVER (PARTITION BY p.carga_id, p.slot
+                                           ORDER BY p.asignada_at, p.id) = 1
+                        AND (CASE WHEN p.slot = 'lavadora' THEN nc.precio_lavadora
+                                  ELSE nc.precio_secadora END) > 0
+                   THEN CASE WHEN p.slot = 'lavadora' THEN nc.precio_lavadora
+                             ELSE nc.precio_secadora END
+                   ELSE CASE
+                          WHEN COALESCE(p.maquina_tipo, mx.tipo::text) = 'secadora'
+                               AND COALESCE(p.maquina_tamano, mx.tamano::text) = 'jumbo'         THEN aj.precio_secadora_jumbo
+                          WHEN COALESCE(p.maquina_tipo, mx.tipo::text) = 'secadora'          THEN aj.precio_carga_secadora
+                          WHEN COALESCE(p.maquina_tipo, mx.tipo::text) = 'lavadora_jumbo'    THEN aj.precio_carga_jumbo
+                          ELSE aj.precio_carga_mediana
+                        END
+              END AS precio,
+              CASE WHEN p.finalizada_at IS NOT NULL
+                   THEN ROUND(EXTRACT(EPOCH FROM p.finalizada_at - p.encendida_at))::int
+                   WHEN vivo.al_tope THEN mx.ciclo_minutos * 60
+              END AS segundos,
+              p.llego_tope OR (p.finalizada_at IS NULL AND vivo.al_tope) AS tope,
+              COALESCE(p.encendida_at, CASE WHEN vivo.corriendo THEN mx.en_uso_desde END) AS inicio_at,
+              COALESCE(p.finalizada_at,
+                       CASE WHEN vivo.al_tope
+                            THEN mx.en_uso_desde + make_interval(mins => mx.ciclo_minutos) END) AS fin_at
+         FROM nota_carga_maquinas p
+         JOIN nota_cargas nc ON nc.id = p.carga_id
+         JOIN notas n ON n.id = nc.nota_id
+         LEFT JOIN maquinas mx ON mx.id = p.maquina_id
+         LEFT JOIN ajustes aj ON aj.id = 1
+         CROSS JOIN LATERAL (
+           SELECT (CASE WHEN p.slot = 'lavadora' THEN nc.lavadora_id
+                        ELSE nc.secadora_id END) IS NOT DISTINCT FROM p.maquina_id
+                  AND p.finalizada_at IS NULL
+                  -- Solo la última pasada de su hueco puede estar corriendo.
+                  AND p.id = (SELECT x.id FROM nota_carga_maquinas x
+                               WHERE x.carga_id = p.carga_id AND x.slot = p.slot
+                               ORDER BY x.asignada_at DESC, x.id DESC LIMIT 1) AS corriendo
+         ) c0
+         CROSS JOIN LATERAL (
+           SELECT c0.corriendo,
+                  COALESCE(c0.corriendo
+                    AND mx.en_uso_desde IS NOT NULL
+                    AND mx.ciclo_minutos > 0
+                    AND ${esCronometroSql('mx')}
+                    AND mx.en_uso_desde + make_interval(mins => mx.ciclo_minutos) <= NOW(),
+                  FALSE) AS al_tope
+         ) vivo
+        WHERE (${filtro})
+          AND (p.encendida_at IS NOT NULL
+               OR (p.slot = 'lavadora' AND nc.lavadora_iniciada_at IS NOT NULL)
+               OR (p.slot = 'secadora' AND nc.secadora_iniciada_at IS NOT NULL))`;

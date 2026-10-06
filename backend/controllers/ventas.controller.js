@@ -1,6 +1,6 @@
 import pool from '../db/pool.js';
 import { TZ_NEGOCIO, fechaLocal, esFechaISO } from '../utils/tz.js';
-import { esCronometroSql } from '../db/sqlMaquina.js';
+import { esCronometroSql, CICLOS_DE_PASADAS } from '../db/sqlMaquina.js';
 
 // El "día" de un reporte es el día del NEGOCIO (America/Mexico_City), no el del
 // servidor: en producción Postgres corre en UTC, así que `DATE(pagado_en)` metía
@@ -212,6 +212,17 @@ export async function getResumen(req, res) {
                  GROUP BY mm.id, mm.nombre
               ) t
           ), '[]'::json)                               AS maquinas,
+          -- Un renglón por ciclo (2026-10-06), como en Información de uso:
+          -- máquina, lo que vale, a qué hora arrancó y terminó y cuánto estuvo
+          -- encendida. El modal de Máquinas de Ventas lo enseña.
+          COALESCE((
+            SELECT json_agg(json_build_object(
+                     'nombre', c.maquina_nombre, 'precio', c.precio,
+                     'segundos', c.segundos, 'tope', c.tope,
+                     'inicio_at', c.inicio_at, 'fin_at', c.fin_at
+                   ) ORDER BY c.carga_orden, c.asignada_at, c.pasada_id)
+              FROM (${CICLOS_DE_PASADAS('n.id = o.id')}) c
+          ), '[]'::json)                               AS ciclos,
           NULLIF(TRIM(u.nombre || ' ' || COALESCE(u.apellido, '')), '') AS atendio,
           -- Abonos de la nota (mig. 121), del más viejo al más nuevo: Ventas
           -- los enseña al tocar su forma de pago. Los revertidos no: ese dinero
@@ -399,6 +410,7 @@ export async function getResumen(req, res) {
         tipo_servicio:   r.tipo_servicio,
         motivo_cancelacion: r.motivo_cancelacion,
         maquinas:        r.maquinas ?? [],
+        ciclos:          (r.ciclos ?? []).map((c) => ({ ...c, precio: parseFloat(c.precio) || 0 })),
         abonos:          (r.abonos ?? []).map((a) => ({ ...a, monto: parseFloat(a.monto) })),
         atendio:         r.atendio,
         cargas:          parseInt(r.cargas, 10),
