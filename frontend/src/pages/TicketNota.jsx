@@ -252,9 +252,6 @@ function armarTextoTicket(nota, rfc, notaPie) {
     L.push(`Abonado: ${fmtMonto(abonado)}`);
     L.push(`*Resta: ${fmtMonto(Math.max(0, Number(nota.precio_total) - abonado))}*`);
   }
-  if (nota.fecha_entrega) {
-    L.push(`Entrega: ${fmtFecha(nota.fecha_entrega)}`);
-  }
   L.push('', '¡Gracias por su preferencia!');
   if (notaPie) L.push('', notaPie);
   return L.join('\n');
@@ -584,10 +581,10 @@ export default function TicketNota() {
 
           {/* Datos generales. El número de nota encabeza el bloque: es el dato
               con el que el cliente reclama su ropa. Sin cliente no se imprime
-              la línea: al que viene de paso no le aporta nada leer "Mostrador". */}
+              la línea: al que viene de paso no le aporta nada leer "Mostrador".
+              La fecha de entrega no va en ningún servicio (2026-10-06). */}
           <div className="space-y-1 py-1">
             <Linea label="Nota" value={nota.folio ?? `#${nota.id}`} fuerte />
-            {nota.fecha_entrega && <Linea label="Entrega" value={fmtFecha(nota.fecha_entrega).toUpperCase()} />}
             {nota.cliente_nombre && (
               <Linea
                 label="Cliente"
