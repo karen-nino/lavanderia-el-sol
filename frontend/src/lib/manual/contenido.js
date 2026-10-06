@@ -28,7 +28,7 @@ Si no encuentras tu nombre en la lista, avísale al administrador: puede que tu 
         id: 'abrir-la-caja',
         titulo: 'Abrir la caja',
         claves: ['fondo', 'apertura', 'empezar', 'dinero inicial'],
-        cuerpo: `Antes de cobrar la primera nota hay que abrir la caja. Ve a Caja y toca Abrir caja.
+        cuerpo: `Antes de crear la primera nota hay que abrir la caja: SIN CAJA ABIERTA NO SE PUEDE CREAR NINGUNA NOTA. Ve a Caja y toca Abrir caja.
 
 La caja funciona por TURNOS: abrir la caja es empezar tu turno, y hacer el corte es terminarlo.
 
@@ -36,7 +36,7 @@ El fondo NO se captura: la app lo trae del corte del turno anterior, porque el d
 
 Hay UNA caja abierta a la vez por sucursal: si un compañero ya la abrió, ese es SU turno y todos cobran sobre la misma. Para entregar el cajón, él hace su corte y luego tú abres el tuyo.
 
-Si se te olvida y empiezas una nota, la app te lo recuerda con un aviso amarillo que abre la caja ahí mismo, sin salirte de la nota.
+Si se te olvida y entras a Nueva nota, en lugar del formulario sale un aviso amarillo con el botón Abrir caja; al abrirla aparece el formulario.
 
 Si nadie cerró la caja de ayer, la app la cierra sola a medianoche y la deja marcada como "Sin conteo". Eso no es un error: es para que hoy puedas abrir la tuya y las ventas no se revuelvan con las del día anterior. En ese caso el fondo que propone es el que DEBERÍA haber en el cajón (nadie lo contó), así que cuenta el efectivo antes de abrir.`,
       },

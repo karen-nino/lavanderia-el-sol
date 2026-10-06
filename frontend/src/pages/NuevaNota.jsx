@@ -1077,6 +1077,8 @@ export default function NuevaNota() {
       const creada = await api.post('/notas', payload);
       setNotaCreada(creada);
     } catch (err) {
+      // Alguien cerró la caja mientras se llenaba la nota: vuelve el aviso.
+      if (err.data?.code === 'CAJA_CERRADA') setCajaAbierta(false);
       setError(err.message);
     } finally {
       setEncargoLoading(false);
@@ -1182,6 +1184,8 @@ export default function NuevaNota() {
       setCobroOpen(false);
       setNotaCreada(creada);
     } catch (err) {
+      // Alguien cerró la caja mientras se llenaba la nota: vuelve el aviso.
+      if (err.data?.code === 'CAJA_CERRADA') setCajaAbierta(false);
       setError(err.message);
     } finally {
       setLoading(false);
@@ -1552,13 +1556,14 @@ export default function NuevaNota() {
         </div>
       </div>
 
-      {/* Recordatorio de abrir caja: sin sesión abierta, lo que se cobre hoy
-          no queda en ningún corte. */}
+      {/* Sin caja abierta no hay nota (2026-10-06): antes solo se avisaba y
+          lo cobrado quedaba fuera de todo corte. El formulario se esconde y el
+          servidor también lo rechaza (409 CAJA_CERRADA). */}
       {cajaAbierta === false && (
         <div className="mb-6 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
-          <p className="text-sm font-semibold text-amber-900">La caja del día no está abierta</p>
+          <p className="text-sm font-semibold text-amber-900">La caja está cerrada</p>
           <p className="mt-0.5 text-sm text-amber-800">
-            Puedes hacer la nota, pero lo que cobres no va a aparecer en el corte de hoy.
+            Ábrela para poder crear la nota.
           </p>
           <button
             type="button"
@@ -1596,7 +1601,7 @@ export default function NuevaNota() {
         onAbierta={() => { setModalCajaOpen(false); setCajaAbierta(true); }} // el aviso desaparece
       />
 
-      <form onSubmit={handleSubmit} className="space-y-8">
+      <form onSubmit={handleSubmit} className={`space-y-8 ${cajaAbierta === false ? 'hidden' : ''}`}>
 
         {/* ── # Nota ──────────────────────────────────────── */}
         <div>

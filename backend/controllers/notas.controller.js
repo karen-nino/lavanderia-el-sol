@@ -1850,6 +1850,14 @@ export const getNotaById = async (req, res) => {
 };
 
 // ── POST /notas ─────────────────────────────────────────────
+// Ninguna nota se crea con la caja cerrada (2026-10-06, a pedido del
+// negocio): antes solo se avisaba, y lo cobrado quedaba fuera de todo corte.
+// Aplica a todos los servicios, también a la venta de productos. Se lee en
+// cada llamada para que las pruebas que no tratan de caja lo puedan apagar
+// (`NOTA_REQUIERE_CAJA=off`, ver vitest.integration.config.js).
+const notaRequiereCaja = () =>
+  String(process.env.NOTA_REQUIERE_CAJA ?? '').toLowerCase() !== 'off';
+
 export const createNota = async (req, res) => {
   const {
     cliente_id,
@@ -1870,6 +1878,19 @@ export const createNota = async (req, res) => {
     productos = [], // [{ producto_id, cantidad }] → nota_productos
     abono_inicial,  // { monto, forma_pago }: pago anticipado PARCIAL (Por Encargo)
   } = req.body;
+
+  if (notaRequiereCaja()) {
+    const { rows: cajaRows } = await pool.query(
+      `SELECT 1 FROM cajas WHERE estado = 'abierta' AND sucursal = $1 LIMIT 1`,
+      [req.sucursal]
+    );
+    if (cajaRows.length === 0) {
+      return res.status(409).json({
+        code: 'CAJA_CERRADA',
+        message: 'La caja está cerrada. Ábrela para poder crear la nota.',
+      });
+    }
+  }
 
   if (!TIPOS_SERVICIO_VALIDOS.includes(tipo_servicio)) {
     return res.status(400).json({
