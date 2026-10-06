@@ -278,11 +278,13 @@ export default function NuevaNota() {
     if (!notaCreada) return;
     // El Autoservicio va directo a SALIDAS (2026-09-29): el cliente está
     // enfrente con su ropa y lo siguiente es encender su máquina, no mirar la
-    // nota. Los demás servicios sí van al detalle: ahí es donde siguen sus
-    // acciones (cobrar, ticket, avisar que está listo).
+    // nota. Por Encargo también desde el 2026-10-06: lo siguiente es asignarle
+    // máquina y elegir su granel, que se hace en Salidas. La venta de
+    // productos sí va al detalle: no tiene máquinas.
+    const SERVICIOS_A_SALIDAS = ['AUTOSERVICIO', 'POR_ENCARGO'];
     const destino = !notaCreada.id
       ? '/notas'
-      : notaCreada.tipo_servicio === 'AUTOSERVICIO'
+      : SERVICIOS_A_SALIDAS.includes(notaCreada.tipo_servicio)
         ? `/notas/${notaCreada.id}/salidas`
         : `/notas/${notaCreada.id}`;
     const t = setTimeout(() => {
