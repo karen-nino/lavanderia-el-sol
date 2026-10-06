@@ -33,4 +33,17 @@ describe('CircularTimer', () => {
     const { container } = render(<CircularTimer progress={1} label="00:00" ticks={10} color="green" />);
     expect(contarLlenas(container, '#2F9F58')).toBe(10);
   });
+
+  it('se llena desde las 12 en el sentido del reloj', () => {
+    const { container } = render(<CircularTimer progress={0.25} label="00:15" ticks={4} size={100} />);
+    const llenas = [...container.querySelectorAll('line')].filter(
+      (l) => l.getAttribute('stroke') === '#0272C0'
+    );
+    // Con 4 marcas y 25%, la única encendida es la de las 12 (arriba)…
+    expect(llenas).toHaveLength(1);
+    expect(Number(llenas[0].getAttribute('y1'))).toBeLessThan(50);
+    // …y la siguiente marca, la de las 3, queda a la derecha del centro.
+    const segunda = container.querySelectorAll('line')[1];
+    expect(Number(segunda.getAttribute('x1'))).toBeGreaterThan(50);
+  });
 });

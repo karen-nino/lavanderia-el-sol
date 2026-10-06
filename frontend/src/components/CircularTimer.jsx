@@ -22,7 +22,9 @@ export default function CircularTimer({
 
   const tickEls = [];
   for (let i = 0; i < ticks; i++) {
-    const angle = -(i / ticks) * 2 * Math.PI - Math.PI / 2;
+    // Desde las 12 y en el sentido del reloj (en SVG la y crece hacia abajo,
+    // así que un ángulo que crece gira a la derecha).
+    const angle = (i / ticks) * 2 * Math.PI - Math.PI / 2;
     const x1 = c + innerR * Math.cos(angle);
     const y1 = c + innerR * Math.sin(angle);
     const x2 = c + outerR * Math.cos(angle);
