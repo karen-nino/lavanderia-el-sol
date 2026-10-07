@@ -1264,12 +1264,15 @@ export default function Caja() {
 
   // Se puede entrar directo a una pestaña con ?tab=... (ej. desde la tarjeta
   // de Corte del Dashboard, que enlaza a /caja?tab=corte). Sin ?tab, los admins
-  // abren en Historial y los demás en Corte. Un enlace viejo a ?tab=apertura
+  // abren en Historial y los demás según la caja. Un enlace viejo a ?tab=apertura
   // cae en Corte, que es donde vive ahora la apertura.
   const [searchParams] = useSearchParams();
+  // Para los demás, sin ?tab la pestaña queda "por defecto" (null) y se decide
+  // con el estado de la caja: abierta → Movimientos, cerrada → Corte
+  // (2026-10-06). Ver `tabActiva`.
   const [tab, setTab] = useState(() => {
     const req = searchParams.get('tab') === 'apertura' ? 'corte' : searchParams.get('tab');
-    return tabs.some((t) => t.id === req) ? req : (esAdmin ? 'historial' : 'corte');
+    return tabs.some((t) => t.id === req) ? req : (esAdmin ? 'historial' : null);
   });
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -1320,7 +1323,14 @@ export default function Caja() {
     return () => document.removeEventListener('mousedown', onDown);
   }, [menuOpen]);
 
-  const seccionLabel = tabs.find((t) => t.id === tab)?.label ?? '';
+  // Con la caja cerrada no hay movimientos que registrar (2026-10-06): la
+  // pestaña se esconde y, si alguien estaba en ella cuando se cerró la caja,
+  // se ve Corte (que ahí sirve para abrirla).
+  const tabVisible = (t) => t.id !== 'movimientos' || Boolean(data?.abierta);
+  const tabActiva = tab == null
+    ? (data?.abierta ? 'movimientos' : 'corte')
+    : tab === 'movimientos' && data && !data.abierta ? 'corte' : tab;
+  const seccionLabel = tabs.find((t) => t.id === tabActiva)?.label ?? '';
 
   return (
     <div className="min-h-full bg-slate-100">
@@ -1356,13 +1366,13 @@ export default function Caja() {
               </button>
               {menuOpen && (
                 <div role="menu" className="absolute right-0 top-12 z-20 bg-white border border-gray-200 rounded-xl shadow-lg p-1 w-44">
-                  {TABS.filter((t) => t.id !== 'historial').map((t) => (
+                  {TABS.filter((t) => t.id !== 'historial' && tabVisible(t)).map((t) => (
                     <button
                       key={t.id}
                       role="menuitem"
                       onClick={() => { setTab(t.id); setMenuOpen(false); }}
                       className={`w-full text-left text-sm px-3 py-2.5 rounded-lg transition-colors ${
-                        tab === t.id ? 'bg-light-blue text-blue-700 font-medium' : 'text-gray-700 hover:bg-gray-50'
+                        tabActiva === t.id ? 'bg-light-blue text-blue-700 font-medium' : 'text-gray-700 hover:bg-gray-50'
                       }`}
                     >
                       {t.label}
@@ -1383,12 +1393,12 @@ export default function Caja() {
       {/* No-admins conservan las pestañas (no tienen Historial). */}
       {!esAdmin && (
         <div className="flex flex-wrap gap-2">
-          {tabs.map((t) => (
+          {tabs.filter(tabVisible).map((t) => (
             <button
               key={t.id}
               onClick={() => setTab(t.id)}
               className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                tab === t.id
+                tabActiva === t.id
                   ? 'bg-blue text-white'
                   : 'bg-white text-gray-600 border border-gray-300 hover:bg-gray-50'
               }`}
@@ -1417,8 +1427,8 @@ export default function Caja() {
 
       {!loading && !error && (
         <>
-          {tab === 'movimientos' && <Movimientos data={data} onChange={fetchActual} />}
-          {tab === 'corte'       && <Corte data={data} onCerrar={handleCerrar} onAbrir={handleAbrir} />}
+          {tabActiva === 'movimientos' && <Movimientos data={data} onChange={fetchActual} />}
+          {tabActiva === 'corte'       && <Corte data={data} onCerrar={handleCerrar} onAbrir={handleAbrir} />}
         </>
       )}
       {tab === 'historial' && <Historial onFiltroLabel={setHistorialFiltro} />}
