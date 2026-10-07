@@ -64,6 +64,28 @@ const seed = (script, args = []) =>
 
 await db.connect();
 try {
+  // La base tiene que estar al día con las migraciones de ESTE código antes de
+  // tocar nada: el seeder escribe las columnas que traen. Las migraciones de la
+  // demo solo corren al desplegar su backend (release_command de
+  // fly.demo.toml), y si nadie lo despliega la base se queda atrás. Pasó el
+  // 2026-10-07: la base seguía en la 107, la limpieza borró todo y la siembra
+  // falló, así que la demo quedó vacía. Ahora se aborta antes de borrar.
+  const enCodigo = fs.readdirSync(path.join(BACKEND, 'db', 'migrations'))
+    .filter((f) => f.endsWith('.sql'));
+  const { rows: aplicadas } = await db.query('SELECT name FROM schema_migrations');
+  const yaAplicadas = new Set(aplicadas.map((r) => r.name));
+  const pendientes = enCodigo.filter((f) => !yaAplicadas.has(f)).sort();
+  if (pendientes.length > 0) {
+    console.error(
+      `ABORTADO: a la base de la demo le faltan ${pendientes.length} migración(es) ` +
+      `(${pendientes[0]} … ${pendientes.at(-1)}). No se borró nada.\n` +
+      'Despliega el backend de la demo, que las corre al publicar:\n' +
+      '  cd backend && fly deploy -c fly.demo.toml --ha=false\n' +
+      'y vuelve a lanzar este script (o el workflow "Restaurar la demo").'
+    );
+    process.exit(1);
+  }
+
   // Mismo criterio que el resto: notas fuera de la sucursal de pruebas = base
   // con operación real. Aquí importa el doble, porque esto borra a conciencia.
   const { rows: reales } = await db.query(
