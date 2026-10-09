@@ -19,6 +19,7 @@ import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { limpiarOperacion, borrarUsuariosDeVisitantes, borrarCatalogos } from './lib/limpiarDemo.js';
 import { sembrarMaquinasDemo, preciosEdredonDemo } from './lib/maquinasDemo.js';
+import { sembrarProductosMarcaDemo } from './lib/productosDemo.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const BACKEND = path.resolve(__dirname, '..');
@@ -116,6 +117,8 @@ try {
   await sembrarMaquinasDemo(db, SUCURSAL);
   // Y los servicios de edredón con precio: sin él no se puede vender ninguno.
   await preciosEdredonDemo(db);
+  // Más productos de marca en el inventario de exhibición (2026-10-08).
+  await sembrarProductosMarcaDemo(db, SUCURSAL);
   // Al final: las sucursales que un visitante creara solo se sueltan cuando ya
   // no les cuelga nada (usuarios, productos, máquinas e insumos).
   const { rowCount: sucursalesBorradas } = await db.query(
