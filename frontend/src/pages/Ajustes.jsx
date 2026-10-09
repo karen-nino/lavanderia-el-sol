@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, mensajeDeError } from '../lib/api';
 import InstalarApp from '../components/InstalarApp';
-import { useInstalacion } from '../lib/useInstalacion';
 import { formatTelefono } from '../lib/telefono';
 import { useAuth } from '../context/AuthContext';
 import { esAdminMain as esAdminMainFn } from '../lib/roles';
@@ -223,7 +222,8 @@ const SECCION_MANUAL = {
 
 // Instalar la app no es configuración del negocio, sino una acción del equipo
 // que se está usando: se ofrece aparte de MOBILE_SECTIONS porque aparece
-// también en el entorno de pruebas, y solo si el navegador la admite.
+// también en el entorno de pruebas. Está siempre, aunque ya esté instalada o el
+// navegador no avise: la sección explica en cada caso qué hacer.
 const SECCION_INSTALAR = {
   id: 'instalar', label: 'Instalar la app', subtitle: 'Tenerla en la pantalla de inicio',
   icon: SectionIcon.instalar,
@@ -941,9 +941,6 @@ export default function Ajustes() {
   const [mensaje,       setMensaje]       = useState(null);
   const [mobileSection, setMobileSection] = useState(null);
   const navigate = useNavigate();
-  // Decide si el menú lleva la fila "Instalar la app": depende del equipo, no
-  // de la configuración del negocio.
-  const { sePuedeInstalar } = useInstalacion();
   const [perfilForm,    setPerfilForm]    = useState(() => ({
     nombre: usuario?.nombre ?? '',
     apellido: usuario?.apellido ?? '',
@@ -2770,7 +2767,7 @@ export default function Ajustes() {
   const seccionesMobile = [
     ...MOBILE_SECTIONS,
     SECCION_MANUAL,
-    ...(sePuedeInstalar ? [SECCION_INSTALAR] : []),
+    SECCION_INSTALAR,
   ];
   const activeSection = seccionesMobile.find((s) => s.id === mobileSection);
 

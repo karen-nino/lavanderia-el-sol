@@ -10,8 +10,9 @@ import { useInstalacion } from '../lib/useInstalacion';
 //     tocar el botón.
 //   · iPhone/iPad → Safari NO deja instalar por código. Lo único posible es
 //     explicar la ruta manual, así que el botón abre esa ayuda.
-// Si la app ya está instalada (se abrió desde su ícono), no se muestra nada:
-// ofrecer "instalar" a alguien que ya la tiene solo confunde.
+//   · Cualquier otro caso (el aviso ya se descartó, o el navegador no lo da)
+//     → el botón explica cómo hacerlo desde el menú del navegador.
+// Se muestra siempre; si la app ya está instalada solo lo dice, sin botón.
 
 const IconoInstalar = (
   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -74,31 +75,88 @@ function AyudaIPhone({ onClose }) {
   );
 }
 
+function AyudaNavegador({ onClose }) {
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div
+        className="bg-white rounded-2xl shadow-xl w-full max-w-sm max-h-[90vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="p-6">
+          <h3 className="text-base font-bold text-gray-900 mb-1">Instalar desde el navegador</h3>
+          <p className="text-sm text-gray-500 mb-4">
+            Este navegador no ofreció instalarla solo, pero se puede hacer desde su menú:
+          </p>
+          <ol className="space-y-3 text-sm text-gray-700">
+            <li className="flex gap-3">
+              <span className="flex-shrink-0 w-6 h-6 rounded-full bg-light-blue/60 text-blue font-bold text-xs flex items-center justify-center">1</span>
+              <span>
+                Abre esta página en <span className="font-semibold">Chrome</span> o{' '}
+                <span className="font-semibold">Edge</span> y toca el menú{' '}
+                <span className="font-semibold">⋮</span>, arriba a la derecha.
+              </span>
+            </li>
+            <li className="flex gap-3">
+              <span className="flex-shrink-0 w-6 h-6 rounded-full bg-light-blue/60 text-blue font-bold text-xs flex items-center justify-center">2</span>
+              <span>
+                Elige <span className="font-semibold">"Instalar app"</span> o{' '}
+                <span className="font-semibold">"Agregar a la pantalla de inicio"</span>.
+              </span>
+            </li>
+            <li className="flex gap-3">
+              <span className="flex-shrink-0 w-6 h-6 rounded-full bg-light-blue/60 text-blue font-bold text-xs flex items-center justify-center">3</span>
+              <span>
+                Confirma con <span className="font-semibold">Instalar</span>. La app queda con su
+                ícono y se abre sin la barra del navegador.
+              </span>
+            </li>
+          </ol>
+          <button
+            type="button"
+            onClick={onClose}
+            className="mt-6 w-full bg-blue hover:opacity-90 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
+          >
+            Entendido
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function InstalarApp({ variant = 'desktop' }) {
-  const { comoInstalar, sePuedeInstalar, marcarInstalada } = useInstalacion();
-  const [ayudaIOS, setAyudaIOS] = useState(false);
+  const { comoInstalar, instalada, marcarInstalada } = useInstalacion();
+  // 'ios' | 'manual' | null: qué ayuda está abierta.
+  const [ayuda, setAyuda] = useState(null);
 
   const handleInstalar = async () => {
-    if (comoInstalar === 'ios') { setAyudaIOS(true); return; }
+    if (comoInstalar !== 'prompt') { setAyuda(comoInstalar); return; }
     const r = await lanzarInstalacion();
     if (r === 'aceptada') marcarInstalada();
   };
 
-  if (!sePuedeInstalar) return null;
+  const descripcion = instalada
+    ? 'La app ya está instalada en este equipo: ábrela desde su ícono en la pantalla de inicio.'
+    : comoInstalar === 'prompt'
+      ? 'Queda con su ícono en la pantalla de inicio y se abre sin la barra del navegador, como cualquier app.'
+      : 'Queda con su ícono en la pantalla de inicio y se abre sin la barra del navegador. Te explicamos cómo.';
 
-  const descripcion = comoInstalar === 'ios'
-    ? 'Queda con su ícono en la pantalla de inicio y se abre sin la barra del navegador. Te explicamos cómo.'
-    : 'Queda con su ícono en la pantalla de inicio y se abre sin la barra del navegador, como cualquier app.';
-
-  const boton = (
+  const boton = !instalada && (
     <button
       type="button"
       onClick={handleInstalar}
       className="flex items-center justify-center gap-2 w-full md:w-auto px-6 py-3.5 bg-blue hover:opacity-90 text-white text-base font-medium rounded-lg transition-colors"
     >
       {IconoInstalar}
-      {comoInstalar === 'ios' ? 'Cómo instalarla' : 'Instalar app'}
+      {comoInstalar === 'prompt' ? 'Instalar app' : 'Cómo instalarla'}
     </button>
+  );
+
+  const modalAyuda = (
+    <>
+      {ayuda === 'ios' && <AyudaIPhone onClose={() => setAyuda(null)} />}
+      {ayuda === 'manual' && <AyudaNavegador onClose={() => setAyuda(null)} />}
+    </>
   );
 
   // Móvil: el contenido de su propia sección de Ajustes, que ya pone el título
@@ -108,7 +166,7 @@ export default function InstalarApp({ variant = 'desktop' }) {
       <>
         <p className="text-base text-grey leading-relaxed">{descripcion}</p>
         {boton}
-        {ayudaIOS && <AyudaIPhone onClose={() => setAyudaIOS(false)} />}
+        {modalAyuda}
       </>
     );
   }
@@ -124,7 +182,7 @@ export default function InstalarApp({ variant = 'desktop' }) {
           {boton}
         </div>
       </div>
-      {ayudaIOS && <AyudaIPhone onClose={() => setAyudaIOS(false)} />}
+      {modalAyuda}
     </>
   );
 }

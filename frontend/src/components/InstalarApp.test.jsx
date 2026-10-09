@@ -32,13 +32,14 @@ describe('InstalarApp', () => {
     expect(lanzarInstalacion).toHaveBeenCalledTimes(1);
   });
 
-  it('tras aceptar la instalación, el botón desaparece', async () => {
+  it('tras aceptar la instalación, avisa que ya está instalada', async () => {
     leerEstadoInstalacion.mockReturnValue({ disponible: true, comoInstalar: 'prompt' });
     render(<InstalarApp />);
 
     await userEvent.click(screen.getByRole('button', { name: /instalar app/i }));
 
     expect(screen.queryByRole('button', { name: /instalar app/i })).not.toBeInTheDocument();
+    expect(screen.getByText(/ya está instalada/i)).toBeInTheDocument();
   });
 
   it('en iPhone explica los pasos en vez de intentar instalar', async () => {
@@ -52,16 +53,21 @@ describe('InstalarApp', () => {
     expect(screen.getByText(/Agregar a inicio/i)).toBeInTheDocument();
   });
 
-  it('no se muestra si la app ya está instalada', () => {
+  it('si ya está instalada, lo dice y no ofrece botón', () => {
     estaInstalada.mockReturnValue(true);
-    leerEstadoInstalacion.mockReturnValue({ disponible: true, comoInstalar: 'prompt' });
-    const { container } = render(<InstalarApp />);
-    expect(container).toBeEmptyDOMElement();
+    leerEstadoInstalacion.mockReturnValue({ disponible: false, comoInstalar: null });
+    render(<InstalarApp />);
+    expect(screen.getByText(/ya está instalada/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 
-  it('no se muestra en un navegador que no la admite', () => {
+  it('sin aviso del navegador, explica cómo instalarla desde su menú', async () => {
     leerEstadoInstalacion.mockReturnValue({ disponible: false, comoInstalar: null });
-    const { container } = render(<InstalarApp />);
-    expect(container).toBeEmptyDOMElement();
+    render(<InstalarApp />);
+
+    await userEvent.click(screen.getByRole('button', { name: /cómo instalarla/i }));
+
+    expect(lanzarInstalacion).not.toHaveBeenCalled();
+    expect(screen.getByText(/Instalar desde el navegador/i)).toBeInTheDocument();
   });
 });
