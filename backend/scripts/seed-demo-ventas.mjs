@@ -162,6 +162,7 @@ async function sembrar(db) {
   // 2026-10-08): sin medianas, todas las cargas van en jumbo y se secan con la
   // tarifa jumbo. Con medianas (la base local) todo sigue como siempre.
   const soloJumbo = lavMedianas.length === 0 && lavJumbo.length > 0;
+  const maquinaPorId = new Map(maquinas.map(m => [m.id, m]));
   if ((!lavMedianas.length && !soloJumbo) || !secadoras.length) throw new Error('Faltan máquinas en la sucursal pruebas.');
 
   const { rows: t } = await db.query('SELECT * FROM ajustes WHERE id = 1');
@@ -171,9 +172,17 @@ async function sembrar(db) {
     secadoraEdredon: Number(t[0].precio_secadora_edredon ?? t[0].precio_carga_secadora),
     secadoraJumbo: Number(t[0].precio_secadora_jumbo ?? t[0].precio_carga_secadora),
   };
+  // Precio de los servicios Por Encargo (mig. 096): lo que se cobra por la
+  // carga. Sin él, la nota se siembra con el modelo viejo (cobrando máquinas).
+  const servicios = Object.fromEntries(
+    [['chico', t[0].tope_carga_chico], ['mediano', t[0].tope_carga_mediano], ['grande', t[0].tope_carga_grande]]
+      .filter(([, v]) => v != null).map(([k, v]) => [k, Number(v)]));
+  const tamanosServicio = Object.keys(servicios);
+  const { rows: edredones } = await db.query(
+    'SELECT nombre, precio FROM tamanos_edredon WHERE activo AND precio IS NOT NULL ORDER BY orden NULLS LAST, nombre');
 
   const { rows: productos } = await db.query(
-    `SELECT id, nombre, marca, clase, precio_unitario, precio_botella, botella_ml, medida_ml
+    `SELECT id, nombre, marca, clase, precio_unitario, precio_botella, botella_ml, medida_ml, se_vende_por_unidad
        FROM productos WHERE sucursal = $1 AND archivado = false`, [SUCURSAL]);
   const liquidos = productos.filter(p => p.clase === 'liquido');
   const bolsas   = productos.filter(p => p.clase === 'bolsa');
@@ -245,8 +254,16 @@ async function sembrar(db) {
       const stamp = `${dia.getFullYear()}-${String(dia.getMonth() + 1).padStart(2, '0')}-${String(dia.getDate()).padStart(2, '0')} ${String(hora).padStart(2, '0')}:${String(minuto).padStart(2, '0')}:00`;
       const folio = `${String(consecutivo++).padStart(4, '0')}-${String(dia.getDate()).padStart(2, '0')}${String(dia.getMonth() + 1).padStart(2, '0')}${String(dia.getFullYear()).slice(-2)}`;
 
-      const servicio = pesado([['AUTOSERVICIO', 60], ['POR_ENCARGO', 32], ['EDREDON', 8]]);
-      const esEdredon = servicio === 'EDREDON';
+      // Por Encargo vende SERVICIOS (Chico, Mediano, Grande, Edredón): es lo
+      // que se cobra, y las máquinas van sin cobro (2026-10-08, como la app).
+      // Sin precios de servicio configurados se cae al modelo viejo.
+      const conServicios = tamanosServicio.length > 0;
+      const servicio = conServicios
+        ? pesado([['AUTOSERVICIO', 60], ['POR_ENCARGO', 40]])
+        : pesado([['AUTOSERVICIO', 60], ['POR_ENCARGO', 32], ['EDREDON', 8]]);
+      const porServicio = conServicios && servicio === 'POR_ENCARGO';
+      const edredon = porServicio && edredones.length && rnd() < 0.2 ? elige(edredones) : null;
+      const esEdredon = servicio === 'EDREDON' || Boolean(edredon);
       const prenda = esEdredon ? 'EDREDON' : 'ROPA';
       const usuario = pesado([[admin, 7], [empleado, 3]]);
 
@@ -278,7 +295,7 @@ async function sembrar(db) {
           pagado ? 'PAGADO' : 'PENDIENTE', SUCURSAL, prenda, formaPago,
           servicio === 'POR_ENCARGO' ? elige(['MANANA', 'TARDE', 'NOCHE']) : null,
           stamp,
-          esEdredon ? elige(['matrimonial', 'king size', 'individual']) : null,
+          servicio === 'EDREDON' ? elige(['matrimonial', 'king size', 'individual']) : null,
           cancelada ? elige(['El cliente ya no quiso el servicio', 'Se capturó por equivocación']) : null,
         ]);
 
@@ -289,28 +306,65 @@ async function sembrar(db) {
       const nCargas = esEdredon ? 1 : (servicio === 'AUTOSERVICIO' ? pesado([[1, 5], [2, 4], [3, 2]]) : pesado([[1, 6], [2, 3]]));
       let totalCargas = 0;
       const cargaIds = [];
+      // Hora del ciclo: cada carga arranca unos minutos después de la nota.
+      let reloj = new Date(stamp.replace(' ', 'T'));
+      const masMin = (f, min) => new Date(f.getTime() + min * 60000);
+      const aStamp = (f) => `${f.getFullYear()}-${String(f.getMonth() + 1).padStart(2, '0')}-${String(f.getDate()).padStart(2, '0')} `
+        + `${String(f.getHours()).padStart(2, '0')}:${String(f.getMinutes()).padStart(2, '0')}:00`;
       for (let c = 1; c <= nCargas; c++) {
         const usaJumbo = !esEdredon && (soloJumbo || (rnd() < 0.3 && lavJumbo.length));
         const lavId = esEdredon ? (lavJumbo[0] ?? elige(lavMedianas)) : (usaJumbo ? elige(lavJumbo) : elige(lavMedianas));
         const conSecadora = esEdredon ? true : rnd() < 0.8;
         const secId = conSecadora ? elige(secadoras) : null;
-        const precioLav = esEdredon ? tarifa.edredon : (usaJumbo ? tarifa.jumbo : tarifa.mediana);
-        const precioSec = conSecadora
-          ? (esEdredon ? tarifa.secadoraEdredon : soloJumbo ? tarifa.secadoraJumbo : tarifa.secadora) : 0;
-        totalCargas += precioLav + precioSec;
+        // Por Encargo con servicios: se cobra el servicio y las máquinas no.
+        const tamanoServicio = porServicio ? (edredon ? 'jumbo' : elige(tamanosServicio)) : null;
+        const precioServicio = porServicio ? (edredon ? Number(edredon.precio) : servicios[tamanoServicio]) : null;
+        const precioLav = porServicio ? 0 : esEdredon ? tarifa.edredon : (usaJumbo ? tarifa.jumbo : tarifa.mediana);
+        const precioSec = porServicio || !conSecadora ? 0
+          : (esEdredon ? tarifa.secadoraEdredon : soloJumbo ? tarifa.secadoraJumbo : tarifa.secadora);
+        totalCargas += porServicio ? precioServicio : precioLav + precioSec;
         const { rows: cRows } = await db.query(
           `INSERT INTO nota_cargas (nota_id, orden, lavadora_usada_id, secadora_usada_id,
                                     precio_lavadora, precio_secadora, tipo_prenda, tamano,
-                                    lavadora_tipo, secadora_tipo, ajuste, created_at)
+                                    lavadora_tipo, secadora_tipo, ajuste, created_at,
+                                    precio_tope, tamano_edredon, lavadora_iniciada_at, secadora_iniciada_at)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 0,
-                   $11::timestamp AT TIME ZONE 'America/Mexico_City')
+                   $11::timestamp AT TIME ZONE 'America/Mexico_City', $12, $13,
+                   $14::timestamp AT TIME ZONE 'America/Mexico_City',
+                   $15::timestamp AT TIME ZONE 'America/Mexico_City')
            RETURNING id`,
           [notaId, c, lavId, secId, precioLav, precioSec, prenda,
-           servicio === 'POR_ENCARGO' ? elige(['chico', 'grande', 'jumbo']) : null,
+           porServicio ? tamanoServicio : servicio === 'POR_ENCARGO' ? elige(['chico', 'grande', 'jumbo']) : null,
            esEdredon ? 'edredon' : (usaJumbo ? 'jumbo' : 'mediana'),
            conSecadora ? (esEdredon ? 'edredon' : soloJumbo ? 'jumbo' : 'mediana') : null,
-           stamp]);
+           stamp, precioServicio, edredon ? edredon.nombre : null,
+           cancelada ? null : stamp, cancelada || !conSecadora ? null : stamp]);
         cargaIds.push(cRows[0].id);
+
+        // Los CICLOS de la carga (mig. 114, horario y tiempo de las migs. 140-141):
+        // una pasada por máquina, con su encendido y su fin. Sin esto Ventas →
+        // Máquinas, el desempeño y la Información de uso salían vacíos. Una nota
+        // cancelada no llegó a correr ninguna.
+        if (!cancelada) {
+          const pasada = async (slot, mid, minutos) => {
+            const m = maquinaPorId.get(mid);
+            const inicio = masMin(reloj, entre(2, 8));
+            const fin = masMin(inicio, minutos);
+            await db.query(
+              `INSERT INTO nota_carga_maquinas (carga_id, slot, maquina_id, maquina_nombre, maquina_tipo,
+                                                maquina_tamano, asignada_at, encendida_at, finalizada_at)
+               VALUES ($1, $2, $3, $4, $5, $6,
+                       $7::timestamp AT TIME ZONE 'America/Mexico_City',
+                       $8::timestamp AT TIME ZONE 'America/Mexico_City',
+                       $9::timestamp AT TIME ZONE 'America/Mexico_City')`,
+              [cRows[0].id, slot, mid, m?.nombre ?? 'Máquina', m?.tipo ?? null, m?.tamano ?? null,
+               aStamp(reloj), aStamp(inicio), aStamp(fin)]);
+            reloj = fin;
+          };
+          const minLav = maquinaPorId.get(lavId)?.tipo === 'lavadora_jumbo' ? 45 : 35;
+          await pasada('lavadora', lavId, minLav);
+          if (secId) await pasada('secadora', secId, 40);
+        }
       }
 
       // --- productos ---
@@ -327,7 +381,9 @@ async function sembrar(db) {
             const medidas = porBotella
               ? Math.max(1, Math.floor(Number(p.botella_ml || 0) / Number(p.medida_ml || 1)) || 1)
               : cant;
-            totalProductos += precio * cant;
+            // Dentro de un servicio Por Encargo lo servido por medida ya lo
+            // paga el servicio; solo lo que se vende por unidad va encima.
+            if (!porServicio || p.se_vende_por_unidad) totalProductos += precio * cant;
             await db.query(
               `INSERT INTO nota_productos (nota_id, producto_id, cantidad, precio_unitario, unidad, cantidad_medidas, carga_id, created_at)
                VALUES ($1, $2, $3, $4, $5, $6, $7, $8::timestamp AT TIME ZONE 'America/Mexico_City')`,
@@ -340,11 +396,13 @@ async function sembrar(db) {
         const precio = Number(b.precio_unitario ?? 0);
         if (precio) {
           const cant = entre(1, 2);
-          totalProductos += precio * cant;
+          // En un servicio la bolsa va dentro de él (la paga el servicio); en
+          // Autoservicio se vende suelta.
+          if (!porServicio) totalProductos += precio * cant;
           await db.query(
             `INSERT INTO nota_productos (nota_id, producto_id, cantidad, precio_unitario, unidad, cantidad_medidas, carga_id, created_at)
-             VALUES ($1, $2, $3, $4, 'pieza', $3, NULL, $5::timestamp AT TIME ZONE 'America/Mexico_City')`,
-            [notaId, b.id, cant, precio, stamp]);
+             VALUES ($1, $2, $3, $4, 'pieza', $3, $6, $5::timestamp AT TIME ZONE 'America/Mexico_City')`,
+            [notaId, b.id, cant, precio, stamp, porServicio ? cargaIds[0] : null]);
         }
       }
 

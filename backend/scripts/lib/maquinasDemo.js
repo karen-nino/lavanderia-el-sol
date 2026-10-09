@@ -60,3 +60,17 @@ export async function sembrarMaquinasDemo(db, sucursal) {
   }
   return creadas;
 }
+
+// Precios de los servicios de edredón de la demo (catálogo tamanos_edredon,
+// mig. 130). El reset no restaura ese catálogo y en la demo estaban vacíos, así
+// que una nota Por Encargo de edredón no se podía crear (2026-10-08). Solo se
+// ponen a los tamaños que existen; los demás no se tocan.
+export const PRECIOS_EDREDON_DEMO = {
+  'cubre colchón': 120, individual: 150, matrimonial: 180, king: 220, queen: 200,
+};
+
+export async function preciosEdredonDemo(db) {
+  for (const [nombre, precio] of Object.entries(PRECIOS_EDREDON_DEMO)) {
+    await db.query('UPDATE tamanos_edredon SET precio = $2 WHERE lower(nombre) = $1', [nombre, precio]);
+  }
+}

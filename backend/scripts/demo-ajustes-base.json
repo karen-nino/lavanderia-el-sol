@@ -12,8 +12,8 @@
   "tiempo_carga_secadora": 30,
   "precio_edredon_jumbo": "80.00",
   "alerta_ciclo_detenido": false,
-  "tope_carga_chico": null,
-  "tope_carga_grande": null,
+  "tope_carga_chico": "120.00",
+  "tope_carga_grande": "150.00",
   "tope_carga_jumbo": null,
   "precio_secadora_jumbo": "45.00",
   "precio_secadora_edredon": "45.00",
@@ -21,5 +21,6 @@
   "tope_carga_edredon": null,
   "rfc": null,
   "ticket_nota_autoservicio": null,
-  "ticket_nota_encargo": null
+  "ticket_nota_encargo": null,
+  "tope_carga_mediano": "135.00"
 }
