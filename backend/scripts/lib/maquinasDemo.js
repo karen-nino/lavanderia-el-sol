@@ -40,7 +40,7 @@ export async function sembrarMaquinasDemo(db, sucursal) {
        VALUES ($1, $2, $3, $4, $5)
        ON CONFLICT (marca_id, nombre) DO UPDATE
          SET tipo = EXCLUDED.tipo, tamano = EXCLUDED.tamano, minutos = EXCLUDED.minutos,
-             activo = TRUE, pregunta_tiempo = FALSE, dos_ciclos = FALSE, minutos_por_moneda = NULL`,
+             activo = TRUE, pregunta_tiempo = FALSE, dos_ciclos = FALSE, minutos_por_ficha = NULL`,
       [marca.id, mo.nombre, mo.tipo, mo.tamano, mo.minutos]
     );
   }

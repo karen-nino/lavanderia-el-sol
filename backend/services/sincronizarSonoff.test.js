@@ -21,12 +21,12 @@ vi.mock('../db/pool.js', () => ({
         return { rows: [] };
       }
 
-      // Reclamo atómico de las monedas del arranque (mig. 147).
-      if (/SET monedas_para_uso = en_uso_desde/.test(s)) {
+      // Reclamo atómico de las fichas del arranque (mig. 147).
+      if (/SET fichas_para_uso = en_uso_desde/.test(s)) {
         const m = filas.maquina;
         if (m.estado !== 'en_uso' || !m.en_uso_desde || m.encendida_manual_at
-            || m.monedas_para_uso === m.en_uso_desde) return { rows: [] };
-        filas.maquina = { ...m, monedas_para_uso: m.en_uso_desde };
+            || m.fichas_para_uso === m.en_uso_desde) return { rows: [] };
+        filas.maquina = { ...m, fichas_para_uso: m.en_uso_desde };
         return { rows: [{ id: m.id }] };
       }
       if (/sonoff_estado = 'error', sonoff_detalle = \$1/.test(s)) {
@@ -71,9 +71,9 @@ vi.mock('./dispositivos/index.js', () => ({
   esSimulacion: (...a) => driver.esSimulacion(...a),
 }));
 
-// Sin pausa entre monedas: las pruebas no esperan los 2 s del relé.
-process.env.SONOFF_PAUSA_ENTRE_MONEDAS_MS = '0';
-const { sincronizarSonoff, HORAS_ENCENDIDO_MANUAL, monedasParaArranque } = await import('./sincronizarSonoff.js');
+// Sin pausa entre fichas: las pruebas no esperan los 2 s del relé.
+process.env.SONOFF_PAUSA_ENTRE_FICHAS_MS = '0';
+const { sincronizarSonoff, HORAS_ENCENDIDO_MANUAL, fichasParaArranque } = await import('./sincronizarSonoff.js');
 
 const maquinaEnUso = (sonoff_estado) => ({
   id: 1, nombre: 'L8', estado: 'en_uso', sucursal: 'centro',
@@ -482,42 +482,42 @@ describe('tope de ciclos por máquina', () => {
   });
 });
 
-// Secadoras de monedas (mig. 147): S4 (Sec49) da 10 min por moneda y pregunta
+// Secadoras de fichas (mig. 147): S4 (Sec49) da 10 min por ficha y pregunta
 // el programa; S2 (Sec50) da 30 y usa su tope.
-describe('secadoras de monedas', () => {
+describe('secadoras de fichas', () => {
   const desde = '2026-10-06T18:00:00.000Z';
   const secadora = (extra = {}) => ({
     ...maquinaEnUso('enlazada'), nombre: 'S4', tipo: 'secadora',
     en_uso_desde: desde, ciclo_minutos: 40, ciclo_elegido_minutos: 30,
-    minutos_por_moneda: 10, monedas_para_uso: null, ...extra,
+    minutos_por_ficha: 10, fichas_para_uso: null, ...extra,
   });
 
-  it('cuántas monedas: programa elegido entre minutos por moneda, hacia arriba', () => {
-    expect(monedasParaArranque({ minutos_por_moneda: 10, ciclo_elegido_minutos: 10, ciclo_minutos: 40 })).toBe(1);
-    expect(monedasParaArranque({ minutos_por_moneda: 10, ciclo_elegido_minutos: 20, ciclo_minutos: 40 })).toBe(2);
-    expect(monedasParaArranque({ minutos_por_moneda: 10, ciclo_elegido_minutos: 30, ciclo_minutos: 40 })).toBe(3);
-    // Sin programa elegido manda el tope (Sec50: 30 min, 30 por moneda).
-    expect(monedasParaArranque({ minutos_por_moneda: 30, ciclo_elegido_minutos: null, ciclo_minutos: 30 })).toBe(1);
-    expect(monedasParaArranque({ minutos_por_moneda: 30, ciclo_elegido_minutos: null, ciclo_minutos: 40 })).toBe(2);
-    expect(monedasParaArranque({ minutos_por_moneda: null, ciclo_minutos: 30 })).toBe(0);
+  it('cuántas fichas: programa elegido entre minutos por ficha, hacia arriba', () => {
+    expect(fichasParaArranque({ minutos_por_ficha: 10, ciclo_elegido_minutos: 10, ciclo_minutos: 40 })).toBe(1);
+    expect(fichasParaArranque({ minutos_por_ficha: 10, ciclo_elegido_minutos: 20, ciclo_minutos: 40 })).toBe(2);
+    expect(fichasParaArranque({ minutos_por_ficha: 10, ciclo_elegido_minutos: 30, ciclo_minutos: 40 })).toBe(3);
+    // Sin programa elegido manda el tope (Sec50: 30 min, 30 por ficha).
+    expect(fichasParaArranque({ minutos_por_ficha: 30, ciclo_elegido_minutos: null, ciclo_minutos: 30 })).toBe(1);
+    expect(fichasParaArranque({ minutos_por_ficha: 30, ciclo_elegido_minutos: null, ciclo_minutos: 40 })).toBe(2);
+    expect(fichasParaArranque({ minutos_por_ficha: null, ciclo_minutos: 30 })).toBe(0);
   });
 
-  it('al arrancar mete una moneda por pulso, y nunca manda apagar', async () => {
+  it('al arrancar mete una ficha por pulso, y nunca manda apagar', async () => {
     filas.maquina = secadora();
     await sincronizarSonoff(1);
     expect(driver.encender).toHaveBeenCalledTimes(3);
     expect(driver.apagar).not.toHaveBeenCalled();
   });
 
-  it('el mismo arranque no vuelve a meter monedas aunque se sincronice otra vez', async () => {
+  it('el mismo arranque no vuelve a meter fichas aunque se sincronice otra vez', async () => {
     filas.maquina = secadora();
     await sincronizarSonoff(1);
     await sincronizarSonoff(1);
     expect(driver.encender).toHaveBeenCalledTimes(3);
   });
 
-  it('un arranque nuevo sí lleva sus monedas', async () => {
-    filas.maquina = secadora({ monedas_para_uso: '2026-10-06T17:00:00.000Z', ciclo_elegido_minutos: 10 });
+  it('un arranque nuevo sí lleva sus fichas', async () => {
+    filas.maquina = secadora({ fichas_para_uso: '2026-10-06T17:00:00.000Z', ciclo_elegido_minutos: 10 });
     await sincronizarSonoff(1);
     expect(driver.encender).toHaveBeenCalledTimes(1);
   });
@@ -541,7 +541,7 @@ describe('secadoras de monedas', () => {
     expect(filas.maquina.estado).toBe('disponible');
   });
 
-  it('si una moneda falla, se detiene y avisa cuántas entraron', async () => {
+  it('si una ficha falla, se detiene y avisa cuántas entraron', async () => {
     filas.maquina = secadora();
     driver.encender
       .mockResolvedValueOnce({ ok: true, estado: 'on' })
@@ -549,6 +549,6 @@ describe('secadoras de monedas', () => {
     await sincronizarSonoff(1);
     expect(driver.encender).toHaveBeenCalledTimes(2);
     expect(filas.maquina.sonoff_estado).toBe('error');
-    expect(filas.maquina.sonoff_detalle).toMatch(/^Solo entraron 1 de 3 monedas/);
+    expect(filas.maquina.sonoff_detalle).toMatch(/^Solo entraron 1 de 3 fichas/);
   });
 });

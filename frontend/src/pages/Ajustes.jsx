@@ -715,7 +715,7 @@ const CAMPOS_MODELO = [
   // carguen con campos que no usan.
   { name: 'pregunta_tiempo', defecto: false, tipo: 'check', excluye: 'solo_fichas',
     label: 'Varios programas: se elige cuál al iniciar', chip: 'varios programas' },
-  // Sin Sonoff (mig. 149): no pide tiempos —ni tope ni moneda— y su "Iniciar"
+  // Sin Sonoff (mig. 149): no pide tiempos —ni tope ni ficha— y su "Iniciar"
   // solo arranca el cronómetro. No puede ir con varios programas.
   { name: 'solo_fichas', defecto: false, tipo: 'check', excluye: 'pregunta_tiempo',
     label: 'Trabaja con fichas: sin Sonoff y sin tiempos', chip: 'fichas' },
@@ -1162,7 +1162,7 @@ export default function Ajustes() {
       ? 'Arriba, el tope: a esos minutos se le corta la luz si nadie la finaliza. Abajo, los programas: al iniciarla se pregunta cuál corre y se avisa cuando lo cumpla. Tope vacío = el programa más largo.'
       : 'Tope de carga de este modelo: a estos minutos se le corta la luz si nadie la finaliza. Vacío = usa el tope de arriba.';
     if (t?.tipo !== 'secadora') return base;
-    return `${base} Cada moneda: solo si es de monedas; al iniciarla se le mete una moneda por cada tantos minutos ${t?.pregunta_tiempo ? 'del programa elegido' : 'del tope'}. Vacío = no es de monedas.`;
+    return `${base} Cada ficha: solo si es de fichas con Sonoff; al iniciarla se le mete una ficha por cada tantos minutos ${t?.pregunta_tiempo ? 'del programa elegido' : 'del tope'}. Vacío = no es de fichas.`;
   };
 
   // Un modelo puede llevar TRES programas además de su tope (migs. 120 y 146):
@@ -1172,18 +1172,18 @@ export default function Ajustes() {
   // no los ven. Sin el interruptor los programas no mandan nada.
   const tieneVariosTiempos = (t) => Boolean(t.pregunta_tiempo);
 
-  // Secadoras de monedas (mig. 147): su Sonoff mete monedas en vez de dar
-  // corriente. Con este campo lleno, al iniciarla la app manda una moneda por
+  // Secadoras de fichas (mig. 147): su Sonoff mete fichas en vez de dar
+  // corriente. Con este campo lleno, al iniciarla la app manda una ficha por
   // cada tantos minutos del programa elegido (o del tope, si no pregunta).
-  // Solo en secadoras: las lavadoras no tienen monedero conectado.
-  const campoMoneda = (t, inputCls, unidadCls) => (
+  // Solo en secadoras: a las lavadoras no se les meten fichas con el Sonoff.
+  const campoFicha = (t, inputCls, unidadCls) => (
     t.tipo === 'secadora' ? (
       <div className="mt-3 flex items-center gap-2">
-        <span className={`${unidadCls} flex-shrink-0 w-24`}>Cada moneda</span>
+        <span className={`${unidadCls} flex-shrink-0 w-24`}>Cada ficha</span>
         <input
           type="number" min="1" step="1" placeholder="—"
-          value={t.minutos_por_moneda ?? ''}
-          onChange={e => setMinutosMarca(claveTiempo(t), e.target.value, 'minutos_por_moneda')}
+          value={t.minutos_por_ficha ?? ''}
+          onChange={e => setMinutosMarca(claveTiempo(t), e.target.value, 'minutos_por_ficha')}
           className={`${inputCls} text-center`}
         />
         <span className={`${unidadCls} flex-shrink-0`}>min</span>
@@ -1232,8 +1232,8 @@ export default function Ajustes() {
         </div>
       ) : null}
       {avisoProgramasSobreTope(t)}
-      {/* Sin Sonoff en la demo (2026-10-08): no hay monedero que manejar. */}
-      {!ES_DEMO && campoMoneda(t, inputCls, unidadCls)}
+      {/* Sin Sonoff en la demo (2026-10-08): no hay fichas que meter. */}
+      {!ES_DEMO && campoFicha(t, inputCls, unidadCls)}
     </>
   );
   const tiemposDe = (tipo, tamano) =>
@@ -1284,7 +1284,7 @@ export default function Ajustes() {
     // así que la comparación va campo por campo.
     const foto = (t) => [
       aNumero(t.minutos), aNumero(t.minutos_2), aNumero(t.minutos_3), aNumero(t.minutos_4),
-      aNumero(t.minutos_por_moneda),
+      aNumero(t.minutos_por_ficha),
     ].join('|');
     const antes = new Map(tiemposOrigRef.current.map(t => [claveTiempo(t), foto(t)]));
     const cambiados = tiemposMarca.filter(t => antes.get(claveTiempo(t)) !== foto(t));
@@ -1297,12 +1297,12 @@ export default function Ajustes() {
       minutos_3: aNumero(t.minutos_3),
       minutos_4: aNumero(t.minutos_4),
       // Solo las secadoras lo enseñan.
-      ...(t.tipo === 'secadora' ? { minutos_por_moneda: aNumero(t.minutos_por_moneda) } : {}),
+      ...(t.tipo === 'secadora' ? { minutos_por_ficha: aNumero(t.minutos_por_ficha) } : {}),
     })));
     tiemposOrigRef.current = tiemposMarca.map(t => ({
       ...t,
       minutos: aNumero(t.minutos), minutos_2: aNumero(t.minutos_2), minutos_3: aNumero(t.minutos_3),
-      minutos_4: aNumero(t.minutos_4), minutos_por_moneda: aNumero(t.minutos_por_moneda),
+      minutos_4: aNumero(t.minutos_4), minutos_por_ficha: aNumero(t.minutos_por_ficha),
     }));
   };
 

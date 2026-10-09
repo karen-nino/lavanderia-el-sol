@@ -2,7 +2,7 @@ import pool from '../db/pool.js';
 import { TZ_NEGOCIO } from '../utils/tz.js';
 import * as dispositivos from '../services/dispositivos/index.js';
 import { explicarFalla, resumirMotivo } from '../services/dispositivos/mensajes.js';
-import { MINUTOS_CONFIGURADOS, TIEMPOS_DEL_MODELO, OPCIONES_DE_MARCA, MINUTOS_POR_MONEDA, TOPE_RELOJ, esCronometroSql, conIniciarSql, soloFichasSql } from '../db/sqlMaquina.js';
+import { MINUTOS_CONFIGURADOS, TIEMPOS_DEL_MODELO, OPCIONES_DE_MARCA, MINUTOS_POR_FICHA, TOPE_RELOJ, esCronometroSql, conIniciarSql, soloFichasSql } from '../db/sqlMaquina.js';
 import {
   HORAS_ENCENDIDO_MANUAL,
   PAUSA_OTRO_CICLO_SEGUNDOS,
@@ -13,7 +13,7 @@ import {
   sincronizarSonoff,
   opcionesMasTiempo,
   programaTerminado,
-  meterMonedasExtra,
+  meterFichasExtra,
 } from '../services/sincronizarSonoff.js';
 import { esAdmin } from '../middleware/roles.js';
 
@@ -123,7 +123,7 @@ const mensajeDeviceDuplicado = (nombre, deviceCanal) =>
 //   otro_ciclo_desde    → cuándo se le puede devolver la corriente (ISO)
 //   esperando_arranque  → ya tiene corriente y falta que la arranquen (mig. 110)
 //   opciones_mas_tiempo → programas que aún se le pueden sumar a la secadora
-//                         de monedas que pregunta (Sec49, 2026-10-08)
+//                         de fichas que pregunta (Sec49, 2026-10-08)
 //
 // Los dos últimos son los que parten el botón en dos pasos: primero "Encender
 // máquina" —que no se habilita hasta pasada la pausa sin corriente— y después
@@ -177,8 +177,11 @@ export const getMaquinas = async (req, res) => {
               ${esCronometroSql('m')} AS cronometro,
               -- Cronómetro que arranca con "Iniciar" y no al encender.
               ${conIniciarSql('m')} AS con_iniciar,
-              -- Secadora de monedas (mig. 147): su "Otro ciclo" suma programas.
-              ${MINUTOS_POR_MONEDA} AS minutos_por_moneda,
+              -- Secadora de fichas (mig. 147): su "Otro ciclo" suma programas.
+              ${MINUTOS_POR_FICHA} AS minutos_por_ficha,
+              -- Nombre de antes de la mig. 152, para las tablets con la versión
+              -- anterior de la app. Se puede quitar cuando todas se actualicen.
+              ${MINUTOS_POR_FICHA} AS minutos_por_moneda,
               -- Solo fichas (mig. 149): sin Sonoff ni tope.
               ${soloFichasSql('m')} AS solo_fichas,
               (r.folio IS NOT NULL) AS reservada,
@@ -1184,9 +1187,9 @@ export const otroCiclo = async (req, res) => {
 };
 
 // ── PATCH /maquinas/:id/mas-tiempo ──────────────────────────
-// "Otro ciclo" de la secadora de monedas que pregunta su programa (la Sec49,
+// "Otro ciclo" de la secadora de fichas que pregunta su programa (la Sec49,
 // 2026-10-08). Cuando se le acaba el programa elegido, el empleado le puede
-// sumar otro: se le meten las monedas de esos minutos y la carga sigue
+// sumar otro: se le meten las fichas de esos minutos y la carga sigue
 // abierta. Nunca se pasa del tope en minutos metidos (mig. 148): con tope 30
 // y 20 metidos solo cabe 10. El precio no cambia (se cobra por tamaño).
 //
@@ -1205,7 +1208,7 @@ export const masTiempo = async (req, res) => {
     // mismo cupo y pasarse del tope.
     const { rows } = await client.query(
       `SELECT m.*, ${TIEMPOS_DEL_MODELO} AS modelo_tiempos,
-              ${MINUTOS_POR_MONEDA} AS minutos_por_moneda,
+              ${MINUTOS_POR_FICHA} AS minutos_por_ficha,
               ${esCronometroSql('m')} AS cronometro
          FROM maquinas m WHERE m.id = $1 AND m.sucursal = $2 FOR UPDATE OF m`,
       [id, req.sucursal]
@@ -1246,8 +1249,8 @@ export const masTiempo = async (req, res) => {
     );
     await client.query('COMMIT');
 
-    // Fuera de la transacción: los pulsos tardan (2 s entre moneda y moneda).
-    await meterMonedasExtra(maq.id, minutos);
+    // Fuera de la transacción: los pulsos tardan (2 s entre ficha y ficha).
+    await meterFichasExtra(maq.id, minutos);
 
     res.json({
       message: `${maq.nombre}: +${minutos} min (${upd[0].minutos_pagados} de ${maq.ciclo_minutos}). Dale START en la máquina.`,

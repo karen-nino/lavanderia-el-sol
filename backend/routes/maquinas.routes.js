@@ -36,7 +36,7 @@ router.patch('/:id/detener-ciclo', detenerCiclo);
 // Sin requireAdmin a propósito: el segundo ciclo lo da quien está en el
 // mostrador cuando termina el primero, y ese es el empleado (mig. 108).
 router.patch('/:id/otro-ciclo', otroCiclo);
-// "Otro ciclo" de la secadora de monedas que pregunta (Sec49): suma minutos.
+// "Otro ciclo" de la secadora de fichas que pregunta (Sec49): suma minutos.
 router.patch('/:id/mas-tiempo', masTiempo);
 router.post('/:id/probar-sonoff', requireAdmin, probarSonoff);
 router.post('/:id/apagar-sonoff', requireAdmin, apagarSonoff);

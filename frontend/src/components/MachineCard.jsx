@@ -277,9 +277,9 @@ export default function MachineCard({
             /* Programa elegido al iniciarla (mig. 146): ya cumplió, falta
                finalizarla; la luz se le corta hasta el tope. */
             <p className="text-kpi-label text-amber-600 text-sm text-center">
-              {/* La de monedas (Sec49) puede llevar tiempo sumado en Salidas
+              {/* La de fichas (Sec49) puede llevar tiempo sumado en Salidas
                   (mig. 148): ahí el fin ya no es "un programa". */}
-              {maquina.de_monedas
+              {maquina.de_fichas
                 ? 'Se le acabó el tiempo. Finalízala.'
                 : `Terminó su programa de ${maquina.ciclo_elegido_minutos} min. Finalízala.`}
             </p>

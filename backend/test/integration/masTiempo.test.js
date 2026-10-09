@@ -1,4 +1,4 @@
-// "Otro ciclo" de la secadora de monedas que pregunta su programa (la Sec49,
+// "Otro ciclo" de la secadora de fichas que pregunta su programa (la Sec49,
 // 2026-10-08): al terminar su programa se le suma otro sin pasarse del tope
 // en minutos METIDOS (mig. 148). Tope 30: con 20 metidos solo cabe 10; con
 // 10, caben 10 y 20. Si el empleado tarda, el fin nuevo cuenta desde ahora.
@@ -20,14 +20,14 @@ beforeEach(async () => {
   await seedAjustes({ tiempo_carga_mediana: 30, tiempo_carga_jumbo: 45, tiempo_carga_secadora: 40 });
 });
 
-async function sec49({ porMoneda = 10 } = {}) {
+async function sec49({ porFicha = 10 } = {}) {
   await seedMarca({ nombre: 'Speed Queen', tipo: 'secadora', tamano: 'mediana' });
   await pool.query(
     `INSERT INTO modelos_maquina (marca_id, nombre, tipo, tamano, minutos, minutos_2, minutos_3, minutos_4,
-                                  pregunta_tiempo, minutos_por_moneda)
+                                  pregunta_tiempo, minutos_por_ficha)
      SELECT id, 'Sec49', 'secadora', 'mediana', 30, 10, 20, 30, TRUE, $1
        FROM marcas_maquina WHERE nombre = 'Speed Queen'`,
-    [porMoneda]
+    [porFicha]
   );
   return seedMaquina({ nombre: 'S4', tipo: 'secadora', tamano: 'mediana', marca: 'Speed Queen', modelo: 'Sec49' });
 }
@@ -87,8 +87,8 @@ describe('opciones de Otro ciclo', () => {
     expect(await opciones(id)).toEqual([]);
   });
 
-  it('un modelo que pregunta pero no es de monedas no lo ofrece', async () => {
-    const id = await sec49({ porMoneda: null });
+  it('un modelo que pregunta pero no es de fichas no lo ofrece', async () => {
+    const id = await sec49({ porFicha: null });
     await arrancada(id, 10);
     expect(await opciones(id)).toEqual([]);
   });

@@ -512,7 +512,7 @@ export const getTiemposMarca = async (req, res) => {
               mo.id AS modelo_id, mo.nombre AS modelo,
               mo.tipo, mo.tamano,
               mo.minutos, mo.minutos_2, mo.minutos_3, mo.minutos_4, mo.pregunta_tiempo, mo.dos_ciclos,
-              mo.minutos_por_moneda
+              mo.minutos_por_ficha
          FROM modelos_maquina mo
          JOIN marcas_maquina mm ON mm.id = mo.marca_id
         -- El de fichas no pide tiempos (mig. 149): no tiene renglón aquí.
@@ -550,15 +550,16 @@ export const guardarTiempoMarca = async (req, res) => {
       return res.status(400).json({ message: 'Elige un modelo válido.' });
     }
     // Un modelo lleva su tiempo (el tope, en el que pregunta), hasta tres
-    // programas a elegir (migs. 120 y 146) y, si es secadora de monedas, los
-    // minutos que da cada moneda (mig. 147).
+    // programas a elegir (migs. 120 y 146) y, si es secadora de fichas, los
+    // minutos que da cada ficha (mig. 147).
     // Se manda solo lo que cambió, así que cada campo se mira por separado.
     const updates = [];
     const values  = [];
     let i = 1;
     for (const [campo, valor] of [
       ['minutos', minutos], ['minutos_2', req.body.minutos_2], ['minutos_3', req.body.minutos_3],
-      ['minutos_4', req.body.minutos_4], ['minutos_por_moneda', req.body.minutos_por_moneda],
+      ['minutos_4', req.body.minutos_4], // `minutos_por_moneda`: nombre de antes de la mig. 152 (tablets sin actualizar).
+      ['minutos_por_ficha', req.body.minutos_por_ficha ?? req.body.minutos_por_moneda],
     ]) {
       if (valor === undefined) continue;
       const leido = leerMinutos(valor);
@@ -576,7 +577,7 @@ export const guardarTiempoMarca = async (req, res) => {
         `UPDATE modelos_maquina SET ${updates.join(', ')}
           WHERE id = $${i}
           RETURNING id AS modelo_id, marca_id, nombre AS modelo, tipo, tamano,
-                    minutos, minutos_2, minutos_3, minutos_4, pregunta_tiempo, minutos_por_moneda`,
+                    minutos, minutos_2, minutos_3, minutos_4, pregunta_tiempo, minutos_por_ficha`,
         values
       );
       if (rows.length === 0) {

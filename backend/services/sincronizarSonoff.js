@@ -34,7 +34,7 @@
 import pool from '../db/pool.js';
 import * as dispositivos from './dispositivos/index.js';
 import { resumirMotivo } from './dispositivos/mensajes.js';
-import { cronometroActivo, esCronometroSql, MINUTOS_POR_MONEDA, soloFichasSql } from '../db/sqlMaquina.js';
+import { cronometroActivo, esCronometroSql, MINUTOS_POR_FICHA, soloFichasSql } from '../db/sqlMaquina.js';
 
 // Cuánto vale un encendido manual antes de caducar (mig. 104). Un ciclo largo
 // no pasa de una hora; el margen es para que nadie se quede sin máquina porque
@@ -424,34 +424,34 @@ async function avisarTopeCronometro(maq) {
   }
 }
 
-// ── Secadoras de monedas (mig. 147) ──
+// ── Secadoras de fichas (mig. 147) ──
 //
 // Su Sonoff va en modo pulso: cada "on" se apaga solo a los 0.5 s y la
-// secadora lo cuenta como UNA moneda. No hay corriente que dar ni que quitar
+// secadora lo cuenta como UNA ficha. No hay corriente que dar ni que quitar
 // —están siempre alimentadas—, así que lo único que la app le manda son las
-// monedas del arranque: las que pida el programa elegido (Sec49) o, si el
+// fichas del arranque: las que pida el programa elegido (Sec49) o, si el
 // modelo no pregunta, su tope (Sec50). Redondeado hacia arriba: quedarse
 // corto deja la ropa mojada.
-export const monedasParaArranque = (maq) => {
-  const porMoneda = Number(maq?.minutos_por_moneda);
-  if (!Number.isFinite(porMoneda) || porMoneda <= 0) return 0;
+export const fichasParaArranque = (maq) => {
+  const porFicha = Number(maq?.minutos_por_ficha);
+  if (!Number.isFinite(porFicha) || porFicha <= 0) return 0;
   const minutos = Number(maq.ciclo_elegido_minutos ?? maq.ciclo_minutos);
   if (!Number.isFinite(minutos) || minutos <= 0) return 1;
-  return Math.max(1, Math.ceil(minutos / porMoneda));
+  return Math.max(1, Math.ceil(minutos / porFicha));
 };
 
-// Pausa entre una moneda y la siguiente: el pulso dura 0.5 s y la secadora
+// Pausa entre una ficha y la siguiente: el pulso dura 0.5 s y la secadora
 // necesita ver el relé abrirse antes de contar otra.
-export const PAUSA_ENTRE_MONEDAS_MS = (() => {
-  const ms = Number(process.env.SONOFF_PAUSA_ENTRE_MONEDAS_MS);
+export const PAUSA_ENTRE_FICHAS_MS = (() => {
+  const ms = Number(process.env.SONOFF_PAUSA_ENTRE_FICHAS_MS);
   return Number.isFinite(ms) && ms >= 0 ? ms : 2000;
 })();
 
-const AVISO_MONEDAS = 'Solo entraron';
+const AVISO_FICHAS = 'Solo entraron';
 
 const esperarMs = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// Mete las monedas del arranque en curso, UNA sola vez por arranque. La
+// Mete las fichas del arranque en curso, UNA sola vez por arranque. La
 // sincronización corre varias veces por cada arranque (el aviso del trigger,
 // la llamada explícita del controlador, el barrido) y cada pulso de más es
 // tiempo regalado, así que el arranque se reclama con un UPDATE atómico: solo
@@ -459,51 +459,51 @@ const esperarMs = (ms) => new Promise((r) => setTimeout(r, ms));
 // cuántas contó la secadora y reintentar podría regalar tiempo—: queda en
 // 'error' con cuántas se mandaron, para que el empleado complete en la
 // máquina o desde eWeLink.
-async function meterMonedas(maq) {
+async function meterFichas(maq) {
   const { rows } = await pool.query(
-    `UPDATE maquinas SET monedas_para_uso = en_uso_desde
+    `UPDATE maquinas SET fichas_para_uso = en_uso_desde
       WHERE id = $1 AND estado = 'en_uso' AND en_uso_desde IS NOT NULL
         AND encendida_manual_at IS NULL
-        AND monedas_para_uso IS DISTINCT FROM en_uso_desde
+        AND fichas_para_uso IS DISTINCT FROM en_uso_desde
       RETURNING id`,
     [maq.id]
   );
   if (rows.length === 0) return maq;
-  return mandarMonedas(maq, monedasParaArranque(maq));
+  return mandarFichas(maq, fichasParaArranque(maq));
 }
 
-// Manda `total` pulsos (monedas) seguidos. Si una falla, se detiene sin
-// reintentar y deja el aviso de cuántas entraron (ver meterMonedas).
-async function mandarMonedas(maq, total) {
-  console.log(`[sonoff] ${maq.nombre ?? maq.id}: se meten ${total} moneda(s).`);
+// Manda `total` pulsos (fichas) seguidos. Si una falla, se detiene sin
+// reintentar y deja el aviso de cuántas entraron (ver meterFichas).
+async function mandarFichas(maq, total) {
+  console.log(`[sonoff] ${maq.nombre ?? maq.id}: se meten ${total} ficha(s).`);
   for (let i = 1; i <= total; i++) {
     const res = await dispositivos.encender(maq);
     if (!res.ok) {
-      console.warn(`[sonoff] ${maq.nombre ?? maq.id}: falló la moneda ${i} de ${total} (${res.motivo}).`);
+      console.warn(`[sonoff] ${maq.nombre ?? maq.id}: falló la ficha ${i} de ${total} (${res.motivo}).`);
       if (dispositivos.esSimulacion(maq)) return maq;
       const { rows: upd } = await pool.query(
         `UPDATE maquinas SET sonoff_estado = 'error', sonoff_detalle = $1, sonoff_sync_at = NOW()
           WHERE id = $2 RETURNING *`,
-        [`${AVISO_MONEDAS} ${i - 1} de ${total} monedas: completa en la máquina. ${resumirMotivo(res.motivo)}`, maq.id]
+        [`${AVISO_FICHAS} ${i - 1} de ${total} fichas: completa en la máquina. ${resumirMotivo(res.motivo)}`, maq.id]
       );
       return upd[0] ?? maq;
     }
-    if (i < total) await esperarMs(PAUSA_ENTRE_MONEDAS_MS);
+    if (i < total) await esperarMs(PAUSA_ENTRE_FICHAS_MS);
   }
   if (dispositivos.esSimulacion(maq)) return maq;
   return marcar(maq.id, 'enlazada');
 }
 
-// "Otro ciclo" de la secadora de monedas que pregunta su programa (la Sec49,
+// "Otro ciclo" de la secadora de fichas que pregunta su programa (la Sec49,
 // 2026-10-08): al terminar su programa, el empleado le suma otro sin pasarse
-// del tope. Lo que cuenta contra el tope son los minutos METIDOS en monedas
+// del tope. Lo que cuenta contra el tope son los minutos METIDOS en fichas
 // (`minutos_pagados`, mig. 148), no el reloj: con tope 30 y 20 metidos solo
 // cabe 10; con 10, caben 10 y 20. Fuera de ese modelo, lista vacía.
 // No mira la hora: si ya terminó el programa lo decide quien lo muestra (y el
 // endpoint lo revalida), para que la pantalla no tenga que recargar la lista.
 export const opcionesMasTiempo = (maq) => {
   if (!maq || maq.estado !== 'en_uso' || !maq.en_uso_desde || !maq.cronometro) return [];
-  if (!(Number(maq.minutos_por_moneda) > 0)) return [];
+  if (!(Number(maq.minutos_por_ficha) > 0)) return [];
   const programas = (maq.modelo_tiempos?.minutos ?? []).map(Number).filter(n => Number.isInteger(n) && n > 0);
   if (!maq.modelo_tiempos?.pregunta || programas.length < 2) return [];
   const pagados = Number(maq.minutos_pagados ?? maq.ciclo_elegido_minutos);
@@ -517,24 +517,24 @@ export const programaTerminado = (maq, ahora = Date.now()) =>
   Boolean(maq?.en_uso_desde) && Number(maq.ciclo_elegido_minutos) > 0
   && new Date(maq.en_uso_desde).getTime() + Number(maq.ciclo_elegido_minutos) * 60_000 <= ahora;
 
-// Las monedas de los minutos que se le sumaron con "Otro ciclo". El cupo ya
+// Las fichas de los minutos que se le sumaron con "Otro ciclo". El cupo ya
 // lo reservó el controlador (subió `ciclo_elegido_minutos` dentro de su
 // transacción), así que aquí solo se mandan los pulsos. No lanza.
-export async function meterMonedasExtra(maquinaId, minutos) {
+export async function meterFichasExtra(maquinaId, minutos) {
   try {
     const { rows } = await pool.query(
       `SELECT m.id, m.nombre, m.sucursal, m.device_id, m.device_canal,
-              ${MINUTOS_POR_MONEDA} AS minutos_por_moneda
+              ${MINUTOS_POR_FICHA} AS minutos_por_ficha
          FROM maquinas m WHERE m.id = $1`,
       [maquinaId]
     );
     const maq = rows[0];
     if (!maq || !dispositivos.tieneDispositivo(maq)) return maq ?? null;
-    const porMoneda = Number(maq.minutos_por_moneda);
-    if (!(porMoneda > 0)) return maq;
-    return await mandarMonedas(maq, Math.max(1, Math.ceil(Number(minutos) / porMoneda)));
+    const porFicha = Number(maq.minutos_por_ficha);
+    if (!(porFicha > 0)) return maq;
+    return await mandarFichas(maq, Math.max(1, Math.ceil(Number(minutos) / porFicha)));
   } catch (err) {
-    console.error(`meterMonedasExtra(${maquinaId}) error:`, err);
+    console.error(`meterFichasExtra(${maquinaId}) error:`, err);
     return null;
   }
 }
@@ -551,8 +551,8 @@ export async function sincronizarSonoff(maquinaId, { reconciliando = false } = {
       `SELECT m.id, m.nombre, m.tipo, m.marca, m.estado, m.sucursal, m.device_id, m.device_canal,
               m.sonoff_estado, m.sonoff_detalle, m.encendida_manual_at, m.en_uso_desde, m.ciclo_minutos,
               m.encendida_sin_iniciar_at, m.encendida_para_nota_id,
-              m.ciclo_elegido_minutos, m.monedas_para_uso,
-              ${MINUTOS_POR_MONEDA} AS minutos_por_moneda,
+              m.ciclo_elegido_minutos, m.fichas_para_uso,
+              ${MINUTOS_POR_FICHA} AS minutos_por_ficha,
               ${esCronometroSql('m')} AS cronometro,
               ${soloFichasSql('m')} AS solo_fichas
          FROM maquinas m WHERE m.id = $1`,
@@ -595,30 +595,30 @@ export async function sincronizarSonoff(maquinaId, { reconciliando = false } = {
 
     // En la máquina con cronómetro el "fin de ciclo" es su tope: si el corte
     // llega, es que nadie la finalizó.
-    // A la de monedas no: nunca se le corta nada y el tope solo limita las
-    // monedas que se le meten.
+    // A la de fichas no: nunca se le corta nada y el tope solo limita las
+    // fichas que se le meten.
     if (deseado === 'off' && maq.estado === 'en_uso' && maq.cronometro && cicloVencido(maq)
-        && maq.minutos_por_moneda == null) {
+        && maq.minutos_por_ficha == null) {
       await avisarTopeCronometro(maq);
     }
 
-    // Secadora de monedas (mig. 147): fuera de las monedas del arranque no se
-    // le manda nada. Un "on" de más sería otra moneda; un "off" no le quita
+    // Secadora de fichas (mig. 147): fuera de las fichas del arranque no se
+    // le manda nada. Un "on" de más sería otra ficha; un "off" no le quita
     // nada; y el barrido la vería encendida medio segundo y la adoptaría como
     // encendida a mano. El barrido solo lee su estado, para el indicador.
-    if (maq.minutos_por_moneda != null) {
+    if (maq.minutos_por_ficha != null) {
       if (!reconciliando) {
         if (maq.estado === 'en_uso' && maq.en_uso_desde && !maq.encendida_manual_at) {
-          return meterMonedas(maq);
+          return meterFichas(maq);
         }
         return maq;
       }
       const real = await dispositivos.estado(maq);
       if (dispositivos.esSimulacion(maq)) return maq;
-      // Un aviso de monedas incompletas se queda a la vista mientras siga su
+      // Un aviso de fichas incompletas se queda a la vista mientras siga su
       // carga: el barrido no lo borra.
       if (real.ok && maq.estado === 'en_uso'
-          && String(maq.sonoff_detalle ?? '').startsWith(AVISO_MONEDAS)) return maq;
+          && String(maq.sonoff_detalle ?? '').startsWith(AVISO_FICHAS)) return maq;
       return marcar(maq.id, real.ok ? 'enlazada' : 'error', real.motivo);
     }
 

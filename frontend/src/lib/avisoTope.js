@@ -32,9 +32,9 @@ export function clavesEnTope(maquinas, ahora = Date.now()) {
     new Date(m.en_uso_desde).getTime() + Number(minutos) * 60_000 <= ahora;
   const topes = vivas
     .filter(m => Number(m.ciclo_minutos) > 0)
-    // La secadora de monedas (mig. 147) no tiene corte: su tope solo limita
-    // las monedas. Lo que avisa es que se le acabó el tiempo (abajo).
-    .filter(m => !(Number(m.minutos_por_moneda) > 0))
+    // La secadora de fichas (mig. 147) no tiene corte: su tope solo limita
+    // las fichas. Lo que avisa es que se le acabó el tiempo (abajo).
+    .filter(m => !(Number(m.minutos_por_ficha) > 0))
     .filter(m => m.cronometro || m.en_uso_nota_id)
     .filter(m => cumplio(m, m.ciclo_minutos))
     .map(m => `${m.id}:${m.en_uso_desde}`);

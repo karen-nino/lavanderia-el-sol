@@ -116,7 +116,7 @@ export const conIniciarSql = (alias) => (cronometroActivo() ? `(
 )` : 'FALSE');
 
 // Dónde se para el reloj de una máquina con cronómetro (alias que se pase): su
-// tope, `ciclo_minutos`. Excepción: a la secadora de monedas que recibió
+// tope, `ciclo_minutos`. Excepción: a la secadora de fichas que recibió
 // "Otro ciclo" (mig. 148, `minutos_pagados` con valor) nunca se le corta la
 // luz, y si el empleado tardó en sumarle puede secar más allá del tope; ahí el
 // reloj llega hasta que se le acaba el tiempo (`ciclo_elegido_minutos`).
@@ -124,12 +124,12 @@ export const TOPE_RELOJ = (a) => `(CASE WHEN ${a}.minutos_pagados IS NOT NULL
   THEN GREATEST(${a}.ciclo_minutos, COALESCE(${a}.ciclo_elegido_minutos, 0))
   ELSE ${a}.ciclo_minutos END)`;
 
-// Minutos que da cada moneda en las secadoras de monedas (mig. 147), o NULL
+// Minutos que da cada ficha en las secadoras de fichas (mig. 147), o NULL
 // si la máquina es normal. Con valor, su Sonoff no da corriente: cada pulso es
-// una moneda (ver `sincronizarSonoff`). Mismo alias `m` que
+// una ficha (ver `sincronizarSonoff`). Mismo alias `m` que
 // MINUTOS_CONFIGURADOS.
-export const MINUTOS_POR_MONEDA = `(
-  SELECT mo.minutos_por_moneda
+export const MINUTOS_POR_FICHA = `(
+  SELECT mo.minutos_por_ficha
     FROM marcas_maquina mm
     JOIN modelos_maquina mo ON mo.marca_id = mm.id
    WHERE mm.nombre = m.marca
