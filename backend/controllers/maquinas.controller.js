@@ -2,7 +2,7 @@ import pool from '../db/pool.js';
 import { TZ_NEGOCIO } from '../utils/tz.js';
 import * as dispositivos from '../services/dispositivos/index.js';
 import { explicarFalla, resumirMotivo } from '../services/dispositivos/mensajes.js';
-import { MINUTOS_CONFIGURADOS, TIEMPOS_DEL_MODELO, OPCIONES_DE_MARCA, esCronometroSql, conIniciarSql } from '../db/sqlMaquina.js';
+import { MINUTOS_CONFIGURADOS, TIEMPOS_DEL_MODELO, OPCIONES_DE_MARCA, MINUTOS_POR_MONEDA, esCronometroSql, conIniciarSql } from '../db/sqlMaquina.js';
 import {
   HORAS_ENCENDIDO_MANUAL,
   PAUSA_OTRO_CICLO_SEGUNDOS,
@@ -11,6 +11,8 @@ import {
   finCiclo,
   esperandoArranque,
   sincronizarSonoff,
+  opcionesMasTiempo,
+  meterMonedasExtra,
 } from '../services/sincronizarSonoff.js';
 import { esAdmin } from '../middleware/roles.js';
 
@@ -118,6 +120,8 @@ const mensajeDeviceDuplicado = (nombre, deviceCanal) =>
 //   ciclos_max          → el tope, para poder decir "ciclo 1 de 2"
 //   otro_ciclo_desde    → cuándo se le puede devolver la corriente (ISO)
 //   esperando_arranque  → ya tiene corriente y falta que la arranquen (mig. 110)
+//   opciones_mas_tiempo → programas que aún se le pueden sumar a la secadora
+//                         de monedas que pregunta (Sec49, 2026-10-08)
 //
 // Los dos últimos son los que parten el botón en dos pasos: primero "Encender
 // máquina" —que no se habilita hasta pasada la pausa sin corriente— y después
@@ -136,6 +140,7 @@ const conDatosDeOtroCiclo = (m) => {
     ciclos_carga: ciclos,
     ciclos_max: maxCiclos,
     esperando_arranque: esperandoArranque(m),
+    opciones_mas_tiempo: opcionesMasTiempo(m),
     otro_ciclo_desde:
       ciclos != null && ciclos < maxCiclos && desde != null
         ? new Date(desde).toISOString()
@@ -170,6 +175,8 @@ export const getMaquinas = async (req, res) => {
               ${esCronometroSql('m')} AS cronometro,
               -- Cronómetro que arranca con "Iniciar" y no al encender.
               ${conIniciarSql('m')} AS con_iniciar,
+              -- Secadora de monedas (mig. 147): su "Otro ciclo" suma programas.
+              ${MINUTOS_POR_MONEDA} AS minutos_por_moneda,
               (r.folio IS NOT NULL) AS reservada,
               r.folio               AS reservada_folio,
               r.id                  AS reservada_nota_id,
@@ -1143,6 +1150,68 @@ export const otroCiclo = async (req, res) => {
     await client.query('ROLLBACK').catch(() => {});
     console.error('otroCiclo error:', err);
     res.status(500).json({ message: 'No se pudo iniciar el siguiente ciclo. Intenta de nuevo.' });
+  } finally {
+    client.release();
+  }
+};
+
+// ── PATCH /maquinas/:id/mas-tiempo ──────────────────────────
+// "Otro ciclo" de la secadora de monedas que pregunta su programa (la Sec49,
+// 2026-10-08). Con la carga corriendo, el empleado le suma otro de sus
+// programas: el cronómetro sigue igual, el programa elegido crece y se le
+// meten las monedas de esos minutos. Nunca se pasa del tope: con tope 30 y 20
+// elegidos solo cabe 10. El precio no cambia (se cobra por tamaño de carga).
+export const masTiempo = async (req, res) => {
+  const { id } = req.params;
+  const minutos = Number(req.body?.minutos);
+  if (!Number.isInteger(minutos) || minutos <= 0) {
+    return res.status(400).json({ message: 'Elige cuántos minutos le sumas.' });
+  }
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    // Se bloquea la fila: dos clics seguidos no pueden sumar dos veces el
+    // mismo cupo y pasarse del tope.
+    const { rows } = await client.query(
+      `SELECT m.*, ${TIEMPOS_DEL_MODELO} AS modelo_tiempos,
+              ${MINUTOS_POR_MONEDA} AS minutos_por_moneda,
+              ${esCronometroSql('m')} AS cronometro
+         FROM maquinas m WHERE m.id = $1 AND m.sucursal = $2 FOR UPDATE OF m`,
+      [id, req.sucursal]
+    );
+    if (rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: 'Máquina no encontrada.' });
+    }
+    const maq = rows[0];
+    const opciones = opcionesMasTiempo(maq);
+    if (!opciones.includes(minutos)) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        message: opciones.length > 0
+          ? `A ${maq.nombre} solo le puedes sumar ${opciones.join(' o ')} min.`
+          : `${maq.nombre} ya no admite más tiempo: llegó a su tope de ${maq.ciclo_minutos} min.`,
+      });
+    }
+    const { rows: upd } = await client.query(
+      `UPDATE maquinas SET ciclo_elegido_minutos = ciclo_elegido_minutos + $2
+        WHERE id = $1 RETURNING ciclo_elegido_minutos`,
+      [maq.id, minutos]
+    );
+    await client.query('COMMIT');
+
+    // Fuera de la transacción: los pulsos tardan (2 s entre moneda y moneda).
+    await meterMonedasExtra(maq.id, minutos);
+
+    const total = upd[0].ciclo_elegido_minutos;
+    res.json({
+      message: `${maq.nombre}: +${minutos} min, programa de ${total} min. Dale START en la máquina si se detuvo.`,
+      ciclo_elegido_minutos: total,
+    });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('masTiempo error:', err);
+    res.status(500).json({ message: 'No se pudo sumar el tiempo. Intenta de nuevo.' });
   } finally {
     client.release();
   }

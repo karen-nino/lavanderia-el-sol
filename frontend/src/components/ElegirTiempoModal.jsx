@@ -10,7 +10,12 @@
  * Sale solo cuando el modelo lo pide y tiene más de un tiempo configurado; con
  * uno solo no hay nada que preguntar.
  */
-export default function ElegirTiempoModal({ maquina, tiempos, guardando = false, error = '', onElegir, onCancelar }) {
+// `titulo`, `descripcion` y `etiqueta` dejan reusarlo para sumar tiempo con
+// "Otro ciclo" (Sec49, 2026-10-08).
+export default function ElegirTiempoModal({
+  maquina, tiempos, guardando = false, error = '', onElegir, onCancelar,
+  titulo = '¿Con cuánto tiempo?', descripcion = null, etiqueta = (min) => `${min} min`,
+}) {
   if (!maquina) return null;
   return (
     <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
@@ -24,7 +29,7 @@ export default function ElegirTiempoModal({ maquina, tiempos, guardando = false,
             </svg>
           </span>
           <div>
-            <h3 className="text-base font-bold text-gray-900">¿Con cuánto tiempo?</h3>
+            <h3 className="text-base font-bold text-gray-900">{titulo}</h3>
             <p className="text-sm text-gray-500 mt-0.5">
               <span className="font-semibold text-gray-700">{maquina.nombre}</span>
               {maquina.modelo ? ` · ${maquina.modelo}` : ''}
@@ -33,10 +38,10 @@ export default function ElegirTiempoModal({ maquina, tiempos, guardando = false,
         </div>
 
         <p className="text-sm text-gray-500">
-          {maquina.cronometro
+          {descripcion ?? (maquina.cronometro
             /* Con cronómetro (mig. 146) el programa solo avisa; el corte es el tope. */
             ? 'Elige el programa con el que la arrancaste. La app te avisa cuando lo cumpla; la corriente se le corta hasta su tope si nadie la finaliza.'
-            : 'Elige el programa con el que la arrancaste. La app cronometra ese tiempo y le corta la corriente al terminar.'}
+            : 'Elige el programa con el que la arrancaste. La app cronometra ese tiempo y le corta la corriente al terminar.')}
         </p>
 
         {error && (
@@ -54,7 +59,7 @@ export default function ElegirTiempoModal({ maquina, tiempos, guardando = false,
               onClick={() => onElegir(min)}
               className="w-full py-3.5 rounded-lg border border-gray-300 text-gray-800 font-medium text-base hover:border-blue hover:bg-light-blue hover:text-blue disabled:opacity-60 transition-colors"
             >
-              {min} min
+              {etiqueta(min)}
             </button>
           ))}
         </div>

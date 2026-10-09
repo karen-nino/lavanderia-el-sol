@@ -469,8 +469,12 @@ async function meterMonedas(maq) {
     [maq.id]
   );
   if (rows.length === 0) return maq;
+  return mandarMonedas(maq, monedasParaArranque(maq));
+}
 
-  const total = monedasParaArranque(maq);
+// Manda `total` pulsos (monedas) seguidos. Si una falla, se detiene sin
+// reintentar y deja el aviso de cuántas entraron (ver meterMonedas).
+async function mandarMonedas(maq, total) {
   console.log(`[sonoff] ${maq.nombre ?? maq.id}: se meten ${total} moneda(s).`);
   for (let i = 1; i <= total; i++) {
     const res = await dispositivos.encender(maq);
@@ -488,6 +492,44 @@ async function meterMonedas(maq) {
   }
   if (dispositivos.esSimulacion()) return maq;
   return marcar(maq.id, 'enlazada');
+}
+
+// "Otro ciclo" de la secadora de monedas que pregunta su programa (la Sec49,
+// 2026-10-08): con la carga corriendo, el empleado le suma otro de sus
+// programas sin pasarse del tope. Las opciones son los programas que todavía
+// caben: con tope 30 y 20 ya elegidos, solo 10; con 10 elegidos, 10 y 20.
+// Fuera de ese modelo, lista vacía (la tarjeta no ofrece el botón).
+export const opcionesMasTiempo = (maq) => {
+  if (!maq || maq.estado !== 'en_uso' || !maq.en_uso_desde || !maq.cronometro) return [];
+  if (!(Number(maq.minutos_por_moneda) > 0)) return [];
+  const programas = (maq.modelo_tiempos?.minutos ?? []).map(Number).filter(n => Number.isInteger(n) && n > 0);
+  if (!maq.modelo_tiempos?.pregunta || programas.length < 2) return [];
+  const elegido = Number(maq.ciclo_elegido_minutos);
+  const tope = Number(maq.ciclo_minutos);
+  if (!(elegido > 0) || !(tope > 0)) return [];
+  return [...new Set(programas)].filter(p => elegido + p <= tope).sort((a, b) => a - b);
+};
+
+// Las monedas de los minutos que se le sumaron con "Otro ciclo". El cupo ya
+// lo reservó el controlador (subió `ciclo_elegido_minutos` dentro de su
+// transacción), así que aquí solo se mandan los pulsos. No lanza.
+export async function meterMonedasExtra(maquinaId, minutos) {
+  try {
+    const { rows } = await pool.query(
+      `SELECT m.id, m.nombre, m.device_id, m.device_canal,
+              ${MINUTOS_POR_MONEDA} AS minutos_por_moneda
+         FROM maquinas m WHERE m.id = $1`,
+      [maquinaId]
+    );
+    const maq = rows[0];
+    if (!maq || !dispositivos.tieneDispositivo(maq)) return maq ?? null;
+    const porMoneda = Number(maq.minutos_por_moneda);
+    if (!(porMoneda > 0)) return maq;
+    return await mandarMonedas(maq, Math.max(1, Math.ceil(Number(minutos) / porMoneda)));
+  } catch (err) {
+    console.error(`meterMonedasExtra(${maquinaId}) error:`, err);
+    return null;
+  }
 }
 
 // Sincroniza UNA máquina (por id). Devuelve la fila actualizada, o null si no

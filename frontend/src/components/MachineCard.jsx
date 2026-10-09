@@ -41,6 +41,7 @@ export default function MachineCard({
   nota,
   onTerminarCiclo,
   onOtroCiclo,
+  onMasTiempo,
   onEncender,
   otroCicloEnCurso = false,
   errorOtroCiclo = null,
@@ -285,12 +286,26 @@ export default function MachineCard({
             </p>
           ) : null}
           {infoNota}
+          {/* Secadora de monedas que pregunta (Sec49, 2026-10-08): mientras
+              le quepa otro programa sin pasarse del tope, se le puede sumar. */}
+          {!maquina.tope_alcanzado && maquina.opciones_mas_tiempo?.length > 0 && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onMasTiempo?.(maquina); }}
+              disabled={otroCicloEnCurso}
+              className="w-full bg-white ring ring-blue text-blue text-section py-4 rounded-card-sm shadow-card hover:bg-light-blue transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {otroCicloEnCurso ? 'METIENDO MONEDAS…' : 'OTRO CICLO'}
+            </button>
+          )}
           <button
             onClick={(e) => { e.stopPropagation(); onTerminarCiclo?.(maquina); }}
             className="w-full bg-green ring ring-green-700 text-white text-section py-6 rounded-card-sm shadow-card hover:opacity-90 transition-opacity mt-1"
           >
             {debeSecar ? 'INICIAR SECADO' : 'FINALIZAR'}
           </button>
+          {errorOtroCiclo && (
+            <p className="text-kpi-label text-red text-sm text-center">{errorOtroCiclo}</p>
+          )}
         </div>
       </div>
     );
