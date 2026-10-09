@@ -32,6 +32,10 @@ export default defineConfig({
   plugins: [react(), versionJson()],
   define: {
     __APP_VERSION__: JSON.stringify(version),
+    // Vercel Web Analytics solo funciona servido desde Vercel (la demo). En
+    // Netlify —producción— su script no existe y daría 404 en cada página, así
+    // que se enciende solo si el build corre en Vercel, que pone VERCEL=1.
+    __EN_VERCEL__: JSON.stringify(process.env.VERCEL === '1'),
   },
   server: {
     proxy: {

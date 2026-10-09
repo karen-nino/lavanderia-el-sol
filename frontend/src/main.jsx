@@ -2,11 +2,18 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.jsx'
+import { Analytics } from '@vercel/analytics/react'
 import { ajustarOrientacion } from './lib/orientacion'
+
+// Vercel Web Analytics (2026-10-08): visitas de la demo publicada en Vercel.
+// Solo en los builds de Vercel (ver __EN_VERCEL__ en vite.config.js); en
+// Netlify y en desarrollo no se monta.
+const EN_VERCEL = typeof __EN_VERCEL__ === 'boolean' && __EN_VERCEL__;
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <App />
+    {EN_VERCEL && <Analytics />}
   </StrictMode>,
 )
 
