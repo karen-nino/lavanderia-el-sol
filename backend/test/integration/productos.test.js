@@ -308,6 +308,20 @@ describe('DELETE múltiple /api/productos/eliminar-multiples', () => {
     expect(rows).toHaveLength(1);
   });
 
+  it('borrar UNO que ya se usó en notas responde el motivo (antes 500) y no lo borra', async () => {
+    const usado = await productoUsadoEnNota();
+    const res = await request(app).delete(`/api/productos/${usado}`).set(auth(admin.token));
+    expect(res.status).toBe(409);
+    expect(res.body.message).toMatch(/Desactívalo/);
+    const { rows } = await pool.query('SELECT id FROM productos WHERE id = $1', [usado]);
+    expect(rows).toHaveLength(1);
+  });
+
+  it('borrar uno sin notas sí lo borra', async () => {
+    const libre = await seedProducto({ nombre: 'Libre' });
+    await request(app).delete(`/api/productos/${libre}`).set(auth(admin.token)).expect(204);
+  });
+
   it('sin ids → 400', async () => {
     const res = await request(app).post('/api/productos/eliminar-multiples').set(auth(admin.token))
       .send({ ids: [], confirmar: false });

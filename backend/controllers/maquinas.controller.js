@@ -626,10 +626,24 @@ export const updateMaquina = async (req, res) => {
 export const deleteMaquina = async (req, res) => {
   const { id } = req.params;
   try {
+    // Una máquina EN USO no se borra (2026-10-08): la carga que la corre se
+    // quedaba sin máquina —la nota podía darse por terminada a media lavada— y,
+    // si tiene Sonoff, ya nadie le mandaba apagar: el relé se quedaba cerrado.
     const { rowCount } = await pool.query(
-      'DELETE FROM maquinas WHERE id = $1 AND sucursal = $2',
+      `DELETE FROM maquinas WHERE id = $1 AND sucursal = $2 AND estado <> 'en_uso'`,
       [id, req.sucursal]
     );
+    if (rowCount === 0) {
+      const { rows: enUso } = await pool.query(
+        `SELECT nombre FROM maquinas WHERE id = $1 AND sucursal = $2 AND estado = 'en_uso'`,
+        [id, req.sucursal]
+      );
+      if (enUso.length > 0) {
+        return res.status(409).json({
+          message: `${enUso[0].nombre} está en uso. Finaliza su carga (o apágala desde Gestión) antes de eliminarla.`,
+        });
+      }
+    }
     if (rowCount === 0) {
       return res.status(404).json({ message: 'Máquina no encontrada.' });
     }

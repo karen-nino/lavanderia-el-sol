@@ -94,6 +94,16 @@ describe('DELETE /api/maquinas/:id', () => {
     expect(rows).toHaveLength(0);
   });
 
+  it('una máquina EN USO no se elimina: responde el motivo y la deja', async () => {
+    const id = await seedMaquina({ nombre: 'L1' });
+    await pool.query("UPDATE maquinas SET estado = 'en_uso', en_uso_desde = NOW() WHERE id = $1", [id]);
+    const res = await request(app).delete(`/api/maquinas/${id}`).set(auth(admin.token));
+    expect(res.status).toBe(409);
+    expect(res.body.message).toMatch(/está en uso/);
+    const { rows } = await pool.query('SELECT id FROM maquinas WHERE id = $1', [id]);
+    expect(rows).toHaveLength(1);
+  });
+
   it('una máquina de otra sucursal → 404', async () => {
     await seedSucursal('norte', 'Norte');
     const ajena = await seedMaquina({ nombre: 'Ajena', sucursal: 'norte' });

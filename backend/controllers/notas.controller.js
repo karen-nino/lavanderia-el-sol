@@ -4028,6 +4028,29 @@ export const cambiarEstadoPago = async (req, res) => {
       }
     }
 
+    // Cobrar lo que falta mete dinero al cajón: sin caja abierta no se recibe
+    // (2026-10-08, mismo candado que /abonos y crear nota). Una nota que ya no
+    // debe nada (saldo $0) se puede marcar pagada sin caja: no entra dinero.
+    if (estado_pago === 'PAGADO' && actual.estado_pago !== 'PAGADO' && notaRequiereCaja()) {
+      const { rows: [{ total }] } = await client.query(
+        'SELECT precio_total AS total FROM notas WHERE id = $1', [id]
+      );
+      const saldo = Number(total) - await totalAbonado(client, id);
+      if (saldo > 1e-9) {
+        const { rows: abierta } = await client.query(
+          `SELECT 1 FROM cajas WHERE estado = 'abierta' AND sucursal = $1 LIMIT 1`,
+          [req.sucursal]
+        );
+        if (abierta.length === 0) {
+          await client.query('ROLLBACK');
+          return res.status(409).json({
+            code: 'CAJA_CERRADA',
+            message: 'La caja está cerrada. Ábrela para poder recibir el pago.',
+          });
+        }
+      }
+    }
+
     const esReversion = actual.estado_pago === 'PAGADO' && estado_pago === 'PENDIENTE';
     if (esReversion && !esAdmin(req.user.rol)) {
       await client.query('ROLLBACK');

@@ -47,6 +47,24 @@ describe('con el candado de caja encendido', () => {
     expect(rows).toHaveLength(0);
   });
 
+  it('tampoco se puede marcar pagada una nota que debe, sin caja', async () => {
+    await abrirCaja();
+    const id = await notaEncargo();
+    await pool.query("UPDATE cajas SET estado = 'cerrada', cerrada_at = NOW()");
+    const res = await api('patch', `/api/notas/${id}/estado-pago`, { estado_pago: 'PAGADO', forma_pago: 'EFECTIVO' });
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe('CAJA_CERRADA');
+  });
+
+  it('una nota que ya no debe nada sí se marca pagada sin caja', async () => {
+    await abrirCaja();
+    const id = await notaEncargo();
+    await api('post', `/api/notas/${id}/abonos`, { monto: 30, forma_pago: 'EFECTIVO' }).expect(201);
+    await api('patch', `/api/notas/${id}/ajuste`, { ajuste: -40 }).expect(200);   // total 30 = abonado
+    await pool.query("UPDATE cajas SET estado = 'cerrada', cerrada_at = NOW()");
+    await api('patch', `/api/notas/${id}/estado-pago`, { estado_pago: 'PAGADO', forma_pago: 'EFECTIVO' }).expect(200);
+  });
+
   it('con la caja abierta el abono entra a esa caja', async () => {
     await abrirCaja();
     const id = await notaEncargo();

@@ -928,6 +928,21 @@ export const deleteProductosMultiples = async (req, res) => {
 export const deleteProducto = async (req, res) => {
   const { id } = req.params;
   try {
+    // Uno que ya se usó en notas es historia de ventas: la llave foránea no deja
+    // borrarlo y tronaba con un 500 de "intenta de nuevo" (2026-10-08). Se dice
+    // por qué y qué hacer, igual que el borrado múltiple.
+    const { rows: usado } = await pool.query(
+      `SELECT 1 FROM nota_productos np
+         JOIN productos p ON p.id = np.producto_id
+        WHERE np.producto_id = $1 AND p.sucursal = $2 LIMIT 1`,
+      [id, req.sucursal]
+    );
+    if (usado.length > 0) {
+      return res.status(409).json({
+        message: 'Este producto ya se usó en notas, así que no se puede eliminar. '
+               + 'Desactívalo para ocultarlo del inventario.',
+      });
+    }
     const { rowCount } = await pool.query(
       'DELETE FROM productos WHERE id = $1 AND sucursal = $2',
       [id, req.sucursal]
