@@ -874,10 +874,14 @@ export default function Layout() {
   };
 
   // Si su caja está en otra sucursal, se cambia a esa antes de ir al corte.
+  // Con carga completa, como cualquier cambio de sucursal: las pantallas ya
+  // montadas (la propia Caja incluida) no vuelven a pedir sus datos solas.
   const irACaja = () => {
     setConfirmLogout(false);
     if (cajaSinCerrar?.sucursal && cajaSinCerrar.sucursal !== sucursalSlug) {
       setSucursalActiva(cajaSinCerrar.sucursal, { reload: false });
+      window.location.assign('/caja?tab=corte');
+      return;
     }
     navigate('/caja?tab=corte');
   };

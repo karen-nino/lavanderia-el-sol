@@ -102,3 +102,26 @@ describe('revertir un abono', () => {
     await api('patch', `/api/notas/${id}/abonos/${ab.id}/revertir`, { motivo: 'error' }).expect(200);
   });
 });
+
+// El cierre automático de medianoche congela las ventas con el MISMO cálculo
+// que el corte normal (2026-10-09). Antes sumaba el precio completo de la
+// nota liquidada y volvía a contar lo abonado en un turno anterior.
+describe('cierre automático con abonos', () => {
+  it('solo cuenta lo que entró en ese turno', async () => {
+    const { cerrarCajasAbiertas } = await import('../../jobs/cierreDelDia.js');
+    await abrirCaja();
+    const id = await notaEncargo();                       // total 70
+    await api('post', `/api/notas/${id}/abonos`, { monto: 30, forma_pago: 'EFECTIVO' }).expect(201);
+    await api('post', '/api/caja/cerrar', { monto_contado: 30, monto_caja_final: 30, monto_sobre: 0 }).expect(200);
+
+    await abrirCaja();
+    await api('patch', `/api/notas/${id}/estado-pago`, { estado_pago: 'PAGADO', forma_pago: 'EFECTIVO' }).expect(200);
+    await cerrarCajasAbiertas();
+
+    const { rows: [c] } = await pool.query(
+      "SELECT ventas_efectivo, ventas_total FROM cajas WHERE cierre_automatico ORDER BY id DESC LIMIT 1"
+    );
+    expect(Number(c.ventas_efectivo)).toBe(40);
+    expect(Number(c.ventas_total)).toBe(40);
+  });
+});

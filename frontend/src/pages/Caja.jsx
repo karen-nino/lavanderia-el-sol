@@ -1049,6 +1049,8 @@ function Historial({ onFiltroLabel }) {
           {tarjeta > 0 && (<><span className="text-gray-500">Tarjeta</span><span className="text-right text-gray-500">{fmt(tarjeta)}</span></>)}
           <span className="text-gray-500">Entradas</span><span className="text-right text-gray-700">{fmt(suma((c) => c.entradas))}</span>
           <span className="text-gray-500">Salidas</span><span className="text-right text-gray-700">{fmt(suma((c) => c.salidas))}</span>
+          {/* Lo apartado en sobres por todos los turnos del día (mig. 151). */}
+          {suma((c) => c.sobre) > 0 && (<><span className="text-gray-500">Sobres</span><span className="text-right text-gray-700">{fmt(suma((c) => c.sobre))}</span></>)}
           <span className="text-gray-500 font-medium">Diferencia del día</span>
           <span className={`text-right font-medium ${
             contados.length === 0 ? 'text-gray-500'

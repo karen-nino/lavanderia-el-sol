@@ -1,5 +1,6 @@
 import { randomUUID } from 'crypto';
 import pool from '../db/pool.js';
+import { ventasDeSesion, totalesMovimientos } from '../controllers/caja.controller.js';
 
 // Hora local del negocio en la que se hace el barrido de "cierre del día".
 // Configurable con CIERRE_HORA (0-23) y TZ_NEGOCIO; por defecto 00:00 en
@@ -144,49 +145,51 @@ export async function cerrarSesionesEmpleados() {
 // cerraba, momento en el que el esperado de dos días se comparaba contra el
 // efectivo de uno solo y aparecía un faltante inventado.
 //
-// Cierra las de TODAS las sucursales (el barrido es global). No lanza al
-// llamador: devuelve las cajas cerradas.
+// Cierra las de TODAS las sucursales (el barrido es global), todas o ninguna:
+// devuelve las cajas cerradas y, si algo falla, lanza (el scheduler lo atrapa).
 export async function cerrarCajasAbiertas() {
-  const { rows } = await pool.query(
-    `UPDATE cajas c
-        SET estado            = 'cerrada',
-            cerrada_at        = NOW(),
-            cierre_automatico = TRUE,
-            notas_cierre      = COALESCE(
-              notas_cierre,
-              'Cerrada automáticamente en el cierre del día. Nadie cerró la caja, así que no hubo conteo de efectivo.'
-            ),
-            ventas_total = (
-              SELECT COALESCE(SUM(precio_total), 0) FROM notas
-               WHERE caja_id = c.id AND estado_pago = 'PAGADO' AND estado <> 'CANCELADA'
-            ),
-            ventas_efectivo = (
-              SELECT COALESCE(SUM(precio_total), 0) FROM notas
-               WHERE caja_id = c.id AND estado_pago = 'PAGADO' AND estado <> 'CANCELADA'
-                 AND COALESCE(forma_pago, 'EFECTIVO') = 'EFECTIVO'
-            ),
-            ventas_transferencia = (
-              SELECT COALESCE(SUM(precio_total), 0) FROM notas
-               WHERE caja_id = c.id AND estado_pago = 'PAGADO' AND estado <> 'CANCELADA'
-                 AND forma_pago = 'TRANSFERENCIA'
-            ),
-            ventas_tarjeta = (
-              SELECT COALESCE(SUM(precio_total), 0) FROM notas
-               WHERE caja_id = c.id AND estado_pago = 'PAGADO' AND estado <> 'CANCELADA'
-                 AND forma_pago = 'TARJETA'
-            ),
-            total_entradas = (
-              SELECT COALESCE(SUM(monto), 0) FROM movimientos_caja
-               WHERE caja_id = c.id AND tipo = 'entrada'
-            ),
-            total_salidas = (
-              SELECT COALESCE(SUM(monto), 0) FROM movimientos_caja
-               WHERE caja_id = c.id AND tipo = 'salida'
-            )
-      WHERE c.estado = 'abierta'
-      RETURNING c.id, c.sucursal`
-  );
-  return rows;
+  // Las cifras se congelan con el MISMO cálculo que el corte normal
+  // (`ventasDeSesion` / `totalesMovimientos`). Antes este barrido sumaba el
+  // precio completo de las notas pagadas en la caja y no veía los abonos
+  // (mig. 121): contaba otra vez lo abonado en días anteriores y se le
+  // escapaba lo abonado hoy a notas aún no liquidadas. Como nadie contó, ese
+  // esperado es el fondo con el que abre el día siguiente (2026-10-09).
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows: abiertas } = await client.query(
+      `SELECT id, sucursal FROM cajas WHERE estado = 'abierta' FOR UPDATE`
+    );
+    for (const c of abiertas) {
+      const ventas = await ventasDeSesion(client, c.id);
+      const { entradas, salidas } = await totalesMovimientos(client, c.id);
+      await client.query(
+        `UPDATE cajas
+            SET estado            = 'cerrada',
+                cerrada_at        = NOW(),
+                cierre_automatico = TRUE,
+                notas_cierre      = COALESCE(
+                  notas_cierre,
+                  'Cerrada automáticamente en el cierre del día. Nadie cerró la caja, así que no hubo conteo de efectivo.'
+                ),
+                ventas_total         = $2,
+                ventas_efectivo      = $3,
+                ventas_transferencia = $4,
+                ventas_tarjeta       = $5,
+                total_entradas       = $6,
+                total_salidas        = $7
+          WHERE id = $1`,
+        [c.id, ventas.total, ventas.efectivo, ventas.transferencia, ventas.tarjeta, entradas, salidas]
+      );
+    }
+    await client.query('COMMIT');
+    return abiertas;
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 // Scheduler ligero (sin dependencias): revisa cada pocos minutos y ejecuta el
