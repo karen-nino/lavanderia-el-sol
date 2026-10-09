@@ -1183,6 +1183,29 @@ export default function Ajustes() {
     ) : null
   );
 
+  // Un programa más largo que el tope no se puede cumplir: el tope llega
+  // antes (2026-10-08). No se bloquea al guardar —los campos se corrigen uno
+  // por uno y una regla dura trabaría a quien está a medio cambio—; se avisa
+  // mientras se escribe.
+  const programasSobreTope = (t) => {
+    const tope = Number(t.minutos);
+    if (!tieneVariosTiempos(t) || !(tope > 0)) return [];
+    return ['minutos_2', 'minutos_3', 'minutos_4']
+      .map(c => Number(t[c]))
+      .filter(n => Number.isFinite(n) && n > tope);
+  };
+  const avisoProgramasSobreTope = (t) => {
+    const largos = programasSobreTope(t);
+    if (largos.length === 0) return null;
+    const lista = largos.map(n => `${n} min`).join(' y ');
+    return (
+      <p className="mt-2 text-xs font-medium text-amber-700" role="alert">
+        {largos.length === 1 ? `El programa de ${lista} es más largo` : `Los programas de ${lista} son más largos`}
+        {` que el tope (${Number(t.minutos)} min): el tope llega antes de que termine. Sube el tope o acorta el programa.`}
+      </p>
+    );
+  };
+
   const camposOtrosTiempos = (t, inputCls, unidadCls) => (
     <>
       {tieneVariosTiempos(t) ? (
@@ -1200,6 +1223,7 @@ export default function Ajustes() {
           <span className={`${unidadCls} flex-shrink-0`}>min</span>
         </div>
       ) : null}
+      {avisoProgramasSobreTope(t)}
       {campoMoneda(t, inputCls, unidadCls)}
     </>
   );
