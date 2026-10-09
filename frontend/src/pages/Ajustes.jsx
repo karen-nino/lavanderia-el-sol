@@ -348,7 +348,8 @@ function MobileSectionButton({ label, icon, onClick }) {
 // `extraCampos` son los campos que lleva cada renglón además del nombre (el
 // modelo dice si es lavadora o secadora y de qué tamaño): se describen como
 // { name, defecto, opciones: [{ v, label }] } para un desplegable, o con
-// `tipo: 'check'` y `label` para un sí/no.
+// `tipo: 'check'` y `label` para un sí/no. Un sí/no con `excluye` apaga ese
+// otro campo al marcarse (dos casillas que no pueden ir juntas).
 // `onCambio` avisa la lista fresca a quien envuelve el catálogo (lo usa el
 // desplegable de marcas, que tiene que enterarse de las que se agregan aquí).
 // Tiene que ser estable (useCallback): entra en las dependencias de la carga.
@@ -374,6 +375,9 @@ function CatalogoEtiquetas({
   const porDefecto = () => Object.fromEntries(extraCampos.map(c => [c.name, c.defecto]));
   const [nuevoExtra, setNuevoExtra] = useState(porDefecto);
   const [editExtra,  setEditExtra]  = useState({});
+  const conCambio = (prev, campo, v) => ({
+    ...prev, [campo.name]: v, ...(campo.excluye && v ? { [campo.excluye]: false } : {}),
+  });
 
   // En el subtítulo del renglón un sí/no se resume (`chip`); la frase larga es
   // para la casilla, que es donde hay que entender qué se está marcando.
@@ -544,7 +548,7 @@ function CatalogoEtiquetas({
         {extraCampos.map(campo => campoExtra(
           campo,
           nuevoExtra[campo.name] ?? campo.defecto,
-          (v) => setNuevoExtra(prev => ({ ...prev, [campo.name]: v })),
+          (v) => setNuevoExtra(prev => conCambio(prev, campo, v)),
         ))}
         <button
           type="button"
@@ -582,7 +586,7 @@ function CatalogoEtiquetas({
                   {extraCampos.map(campo => campoExtra(
                     campo,
                     editExtra[campo.name] ?? campo.defecto,
-                    (v) => setEditExtra(prev => ({ ...prev, [campo.name]: v })),
+                    (v) => setEditExtra(prev => conCambio(prev, campo, v)),
                   ))}
                   <button type="button" onClick={() => guardarNombre(item.id)}
                     className="text-sm font-medium text-blue px-2">Guardar</button>
@@ -709,8 +713,12 @@ const CAMPOS_MODELO = [
   // Los modelos con varios programas (mig. 120). Se declara aquí y no en el
   // bloque de tiempos para que los demás modelos —que son casi todos— no
   // carguen con campos que no usan.
-  { name: 'pregunta_tiempo', defecto: false, tipo: 'check',
+  { name: 'pregunta_tiempo', defecto: false, tipo: 'check', excluye: 'solo_fichas',
     label: 'Varios programas: se elige cuál al iniciar', chip: 'varios programas' },
+  // Sin Sonoff (mig. 149): no pide tiempos —ni tope ni moneda— y su "Iniciar"
+  // solo arranca el cronómetro. No puede ir con varios programas.
+  { name: 'solo_fichas', defecto: false, tipo: 'check', excluye: 'pregunta_tiempo',
+    label: 'Trabaja con fichas: sin Sonoff y sin tiempos', chip: 'fichas' },
   // La casilla "Una carga corre 2 ciclos" (migs. 108 y 123) se escondió el
   // 2026-10-02: con el cronómetro la máquina termina cuando la finalizan y
   // ninguna carga corre dos. El dato sigue en la base; para volver a mostrarla

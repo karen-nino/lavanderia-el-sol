@@ -704,6 +704,9 @@ export default function Salidas() {
             // Cronómetro sin "Encender": su único botón es "Iniciar", que le da
             // corriente y arranca el cronómetro (Speed Queen y Sec49, 2026-10-04).
             con_iniciar: Boolean(u.con_iniciar),
+            // Solo fichas (mig. 149): sin Sonoff ni tope; su Iniciar solo
+            // arranca el cronómetro.
+            solo_fichas: Boolean(u.solo_fichas),
             ...(esLav ? {} : { tamano: u.tamano }),
             // La pasada viva muestra el estado real de su máquina; una ya
             // cerrada cumplió su parte (verde).
@@ -1235,7 +1238,9 @@ export default function Salidas() {
                         ) : (
                           <span className="text-xs font-medium text-green-700 basis-full">
                             {/* Speed Queen y Sec49 (con_iniciar): mensaje corto, a pedido. */}
-                            {m.con_iniciar
+                            {m.solo_fichas
+                              ? 'Corriendo. Finalízala cuando termine.'
+                              : m.con_iniciar
                               ? 'Encendida. Finalízala cuando termine.'
                               : 'Encendida. Arráncala con su botón y finalízala cuando termine.'}
                           </span>
@@ -1749,7 +1754,14 @@ export default function Salidas() {
             {esIniciar ? (
               /* Speed Queen y Sec49: "Iniciar" le da corriente y arranca el
                  cronómetro de una vez; la Sec49 pregunta antes su programa. */
-              preguntaSuTiempo && maqModal.cronometro ? (
+              maqModal.solo_fichas ? (
+                /* Fichas (mig. 149): la app no la enciende; solo cuenta. */
+                <p className="text-sm text-gray-500">
+                  <span className="font-semibold text-gray-800">{maqModal.nombre}</span> trabaja con
+                  fichas: arráncala con su ficha y aquí solo empieza a correr el cronómetro. Cuando
+                  termine, finalízala.
+                </p>
+              ) : preguntaSuTiempo && maqModal.cronometro ? (
                 <p className="text-sm text-gray-500">
                   En el paso siguiente eliges el programa de{' '}
                   <span className="font-semibold text-gray-800">{maqModal.nombre}</span>: al elegirlo se

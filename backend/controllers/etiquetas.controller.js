@@ -323,7 +323,7 @@ export const crearModeloMaquina = async (req, res) => {
   if (!nombre) {
     return res.status(400).json({ message: 'El nombre es requerido.' });
   }
-  const { tipo, tamano, pregunta_tiempo, dos_ciclos } = req.body;
+  const { tipo, tamano, pregunta_tiempo, dos_ciclos, solo_fichas } = req.body;
   if (!TIPOS_TIEMPO.includes(tipo)) {
     return res.status(400).json({ message: 'El tipo de máquina debe ser lavadora o secadora.' });
   }
@@ -336,11 +336,13 @@ export const crearModeloMaquina = async (req, res) => {
   try {
     // El orden se cuenta dentro de la marca: cada marca tiene su propia lista.
     const { rows } = await pool.query(
-      `INSERT INTO modelos_maquina (marca_id, nombre, tipo, tamano, minutos, pregunta_tiempo, dos_ciclos, orden)
-       VALUES ($1, $2, $3, $4, $5, $6, $7,
+      `INSERT INTO modelos_maquina (marca_id, nombre, tipo, tamano, minutos, pregunta_tiempo, dos_ciclos, solo_fichas, orden)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8,
                (SELECT COALESCE(MAX(orden), 0) + 1 FROM modelos_maquina WHERE marca_id = $1))
        RETURNING *`,
-      [marcaId, nombre, tipo, tamano, minutos.valor, Boolean(pregunta_tiempo), Boolean(dos_ciclos)]
+      // El de fichas no tiene programas que elegir (mig. 149).
+      [marcaId, nombre, tipo, tamano, minutos.valor,
+       Boolean(pregunta_tiempo) && !solo_fichas, Boolean(dos_ciclos), Boolean(solo_fichas)]
     );
     res.status(201).json(rows[0]);
   } catch (err) {
@@ -363,7 +365,7 @@ export const actualizarModeloMaquina = async (req, res) => {
   if (!/^\d+$/.test(String(id))) {
     return res.status(404).json({ message: 'No se encontró el modelo.' });
   }
-  const { nombre, activo, tipo, tamano, minutos, pregunta_tiempo, dos_ciclos } = req.body;
+  const { nombre, activo, tipo, tamano, minutos, pregunta_tiempo, dos_ciclos, solo_fichas } = req.body;
 
   const updates = [];
   const values  = [];
@@ -398,9 +400,15 @@ export const actualizarModeloMaquina = async (req, res) => {
   // Que el modelo tenga varios tiempos y pregunte cuál usar es parte de lo que
   // ES el modelo (mig. 120), igual que su tipo: se declara aquí, y el bloque de
   // tiempos enseña los campos extra solo a los modelos que lo tienen.
-  if (pregunta_tiempo !== undefined) {
+  // El de fichas (mig. 149) no tiene programas que elegir: marcarlo apaga
+  // "Varios programas".
+  if (pregunta_tiempo !== undefined || solo_fichas) {
     updates.push(`pregunta_tiempo = $${i++}`);
-    values.push(Boolean(pregunta_tiempo));
+    values.push(Boolean(pregunta_tiempo) && !solo_fichas);
+  }
+  if (solo_fichas !== undefined) {
+    updates.push(`solo_fichas = $${i++}`);
+    values.push(Boolean(solo_fichas));
   }
   // Mig. 123: la segunda vuelta de la carga se declara en el modelo.
   if (dos_ciclos !== undefined) {
@@ -507,7 +515,8 @@ export const getTiemposMarca = async (req, res) => {
               mo.minutos_por_moneda
          FROM modelos_maquina mo
          JOIN marcas_maquina mm ON mm.id = mo.marca_id
-        WHERE mo.activo AND mm.activo
+        -- El de fichas no pide tiempos (mig. 149): no tiene renglón aquí.
+        WHERE mo.activo AND mm.activo AND NOT mo.solo_fichas
         ORDER BY mo.tipo, CASE mo.tamano WHEN 'mediana' THEN 0 ELSE 1 END,
                  mm.orden NULLS LAST, mm.id, mo.orden NULLS LAST, mo.id`
     );

@@ -332,7 +332,9 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
     // El ciclo se sella al arrancar (ciclo_minutos): imprescindible para el
     // secado, cuya duración depende del tipo de carga, no del tipo de máquina.
     // Fallback por tipo para máquinas puestas en uso antes de la migración.
-    const minutos = m.ciclo_minutos != null ? m.ciclo_minutos
+    // La de fichas (mig. 149) no tiene tope: su reloj solo cuenta hacia arriba.
+    const minutos = m.solo_fichas ? 0
+                  : m.ciclo_minutos != null ? m.ciclo_minutos
                   : m.tipo === 'secadora'       ? tiempos.secadora
                   : m.tipo === 'lavadora_jumbo' ? tiempos.jumbo
                   : tiempos.mediana;
@@ -623,7 +625,7 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
       {confirmTerminar && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
-            <h3 className="text-base font-bold text-gray-900">{terminaLavado ? 'Iniciar secado' : confirmTerminar.cronometro ? 'Finalizar y apagar' : 'Terminar ciclo'}</h3>
+            <h3 className="text-base font-bold text-gray-900">{terminaLavado ? 'Iniciar secado' : confirmTerminar.cronometro && !confirmTerminar.solo_fichas ? 'Finalizar y apagar' : confirmTerminar.cronometro ? 'Finalizar' : 'Terminar ciclo'}</h3>
             {terminaLavado ? (
               <>
                 <p className="text-sm text-gray-500">
@@ -659,7 +661,7 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
             ) : (
               <>
                 <p className="text-sm text-gray-500">
-                  ¿Confirmar que la carga de <span className="font-semibold text-gray-800">{confirmTerminar.nombre}</span> ya terminó? {confirmTerminar.cronometro
+                  ¿Confirmar que la carga de <span className="font-semibold text-gray-800">{confirmTerminar.nombre}</span> ya terminó? {confirmTerminar.cronometro && !confirmTerminar.solo_fichas
                     ? 'Se le cortará la luz y pasará a disponible.'
                     : 'La máquina pasará a disponible.'}
                 </p>

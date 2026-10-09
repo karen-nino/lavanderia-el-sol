@@ -8,7 +8,7 @@ import { tarifaSecadora, precioProductoEnNota, unidadDeVenta, medidasPorUnidad, 
 import { sincronizarSonoff, maxCiclosDeMaquina } from '../services/sincronizarSonoff.js';
 import {
   MINUTOS_CONFIGURADOS, MINUTOS_DEL_MODELO, PROGRAMAS_DEL_MODELO, OPCIONES_DE_MARCA,
-  esCronometroSql, conIniciarSql, cronometroActivo, TOPE_RELOJ,
+  esCronometroSql, conIniciarSql, soloFichasSql, cronometroActivo, TOPE_RELOJ,
 } from '../db/sqlMaquina.js';
 
 const ESTADOS_VALIDOS     = ['EN_ESPERA', 'LAVANDO', 'SECANDO', 'LISTA', 'PAGADA', 'FINALIZADA', 'CANCELADA'];
@@ -700,11 +700,15 @@ async function sellarCicloMaquinas(client, notaId, elegido = null) {
        FROM (
          -- Lavadoras de la nota
          SELECT nc.lavadora_id AS mid,
-                COALESCE(
-                  ${MINUTOS_DEL_MODELO('mo')},
-                  tm.minutos,
-                  CASE WHEN ml.tipo = 'lavadora_jumbo' THEN $2::int ELSE $3::int END
-                ) AS minutos
+                -- El modelo de fichas no tiene tope (mig. 149): sin minutos
+                -- no hay corte ni aviso, y el cronómetro corre hasta que la finalizan.
+                CASE WHEN COALESCE(mo.solo_fichas, FALSE) THEN NULL
+                     ELSE COALESCE(
+                       ${MINUTOS_DEL_MODELO('mo')},
+                       tm.minutos,
+                       CASE WHEN ml.tipo = 'lavadora_jumbo' THEN $2::int ELSE $3::int END
+                     )
+                END AS minutos
            FROM nota_cargas nc
            JOIN maquinas ml ON ml.id = nc.lavadora_id
            -- La máquina guarda el NOMBRE de la marca y del modelo (migs. 106 y
@@ -722,10 +726,14 @@ async function sellarCicloMaquinas(client, notaId, elegido = null) {
          -- Secadoras de la nota. Mismo criterio, y el respaldo también va por
          -- tamaño desde que la secadora se da de alta como mediana o jumbo.
          SELECT nc.secadora_id AS mid,
-                COALESCE(
-                  ${MINUTOS_DEL_MODELO('mo')}, tm.minutos,
-                  CASE WHEN ms.tamano = 'jumbo' THEN $5::int ELSE $4::int END
-                ) AS minutos
+                -- El modelo de fichas no tiene tope (mig. 149): sin minutos
+                -- no hay corte ni aviso, y el cronómetro corre hasta que la finalizan.
+                CASE WHEN COALESCE(mo.solo_fichas, FALSE) THEN NULL
+                     ELSE COALESCE(
+                       ${MINUTOS_DEL_MODELO('mo')}, tm.minutos,
+                       CASE WHEN ms.tamano = 'jumbo' THEN $5::int ELSE $4::int END
+                     )
+                END AS minutos
            FROM nota_cargas nc
            JOIN maquinas ms ON ms.id = nc.secadora_id
            LEFT JOIN marcas_maquina mm ON mm.nombre = ms.marca
@@ -1543,6 +1551,9 @@ async function cargasDeNota(client, notaId) {
                         -- Cronómetro que arranca con "Iniciar" y no al encender.
                         (SELECT ${conIniciarSql('mm5')} FROM maquinas mm5
                           WHERE mm5.id = ncm.maquina_id) AS con_iniciar,
+                        -- Solo fichas (mig. 149): su Iniciar no enciende nada.
+                        (SELECT ${soloFichasSql('mm6')} FROM maquinas mm6
+                          WHERE mm6.id = ncm.maquina_id) AS solo_fichas,
                         -- Actual = la ÚLTIMA pasada del hueco, y solo si esa
                         -- máquina sigue puesta. Con la comparación a secas, una
                         -- carga relavada en la misma lavadora marcaba las dos.

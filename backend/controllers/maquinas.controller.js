@@ -2,7 +2,7 @@ import pool from '../db/pool.js';
 import { TZ_NEGOCIO } from '../utils/tz.js';
 import * as dispositivos from '../services/dispositivos/index.js';
 import { explicarFalla, resumirMotivo } from '../services/dispositivos/mensajes.js';
-import { MINUTOS_CONFIGURADOS, TIEMPOS_DEL_MODELO, OPCIONES_DE_MARCA, MINUTOS_POR_MONEDA, TOPE_RELOJ, esCronometroSql, conIniciarSql } from '../db/sqlMaquina.js';
+import { MINUTOS_CONFIGURADOS, TIEMPOS_DEL_MODELO, OPCIONES_DE_MARCA, MINUTOS_POR_MONEDA, TOPE_RELOJ, esCronometroSql, conIniciarSql, soloFichasSql } from '../db/sqlMaquina.js';
 import {
   HORAS_ENCENDIDO_MANUAL,
   PAUSA_OTRO_CICLO_SEGUNDOS,
@@ -178,6 +178,8 @@ export const getMaquinas = async (req, res) => {
               ${conIniciarSql('m')} AS con_iniciar,
               -- Secadora de monedas (mig. 147): su "Otro ciclo" suma programas.
               ${MINUTOS_POR_MONEDA} AS minutos_por_moneda,
+              -- Solo fichas (mig. 149): sin Sonoff ni tope.
+              ${soloFichasSql('m')} AS solo_fichas,
               (r.folio IS NOT NULL) AS reservada,
               r.folio               AS reservada_folio,
               r.id                  AS reservada_nota_id,

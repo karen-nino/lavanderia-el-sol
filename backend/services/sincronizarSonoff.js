@@ -34,7 +34,7 @@
 import pool from '../db/pool.js';
 import * as dispositivos from './dispositivos/index.js';
 import { resumirMotivo } from './dispositivos/mensajes.js';
-import { cronometroActivo, esCronometroSql, MINUTOS_POR_MONEDA } from '../db/sqlMaquina.js';
+import { cronometroActivo, esCronometroSql, MINUTOS_POR_MONEDA, soloFichasSql } from '../db/sqlMaquina.js';
 
 // Cuánto vale un encendido manual antes de caducar (mig. 104). Un ciclo largo
 // no pasa de una hora; el margen es para que nadie se quede sin máquina porque
@@ -553,14 +553,17 @@ export async function sincronizarSonoff(maquinaId, { reconciliando = false } = {
               m.encendida_sin_iniciar_at, m.encendida_para_nota_id,
               m.ciclo_elegido_minutos, m.monedas_para_uso,
               ${MINUTOS_POR_MONEDA} AS minutos_por_moneda,
-              ${esCronometroSql('m')} AS cronometro
+              ${esCronometroSql('m')} AS cronometro,
+              ${soloFichasSql('m')} AS solo_fichas
          FROM maquinas m WHERE m.id = $1`,
       [maquinaId]
     );
     if (rows.length === 0) return null;
     let maq = rows[0];
 
-    if (!dispositivos.tieneDispositivo(maq)) {
+    // Solo fichas (mig. 149): no tiene Sonoff. Aunque le hayan enlazado uno
+    // por error, no se le manda nada.
+    if (maq.solo_fichas || !dispositivos.tieneDispositivo(maq)) {
       return marcar(maq.id, 'sin_enlazar');
     }
 

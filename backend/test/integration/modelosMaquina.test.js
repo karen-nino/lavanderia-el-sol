@@ -482,3 +482,32 @@ describe('modelo con tres tiempos', () => {
     expect([secadora.cronometro, secadora.con_iniciar]).toEqual([true, true]);
   });
 });
+
+// Modelo que trabaja SOLO CON FICHAS (mig. 149): sin Sonoff y sin tiempos.
+describe('modelo de fichas', () => {
+  it('no pide tiempos, arranca con Iniciar y no tiene tope', async () => {
+    const marca = await seedMarca('Fichera');
+    await tiempoDeMarca(marca, 'lavadora', 'mediana', 40);
+    const res = await crearModelo(admin.token, {
+      marca_id: marca, nombre: 'F1', solo_fichas: true, pregunta_tiempo: true,
+    });
+    expect(res.status).toBe(201);
+    expect(res.body.solo_fichas).toBe(true);
+    // No puede ir con varios programas.
+    expect(res.body.pregunta_tiempo).toBe(false);
+
+    // No sale en los bloques de tiempo de Ajustes.
+    const tiempos = await request(app).get('/api/etiquetas/tiempos-marca').set(auth(admin.token));
+    expect(tiempos.body.some(t => t.modelo_id === res.body.id)).toBe(false);
+
+    const lav = await seedMaquina({ nombre: 'L1', marca: 'Fichera', modelo: 'F1' });
+    const maqs = await request(app).get('/api/maquinas').set(auth(admin.token));
+    const fila = maqs.body.find(m => m.id === lav);
+    expect(fila.solo_fichas).toBe(true);
+    expect(fila.con_iniciar).toBe(true);
+
+    // Ni el tiempo de su marca ni el de su tamaño: corre sin tope.
+    await arrancar(lav);
+    expect(await cicloDe(lav)).toBeNull();
+  });
+});

@@ -86,8 +86,21 @@ export const esCronometroSql = () => (cronometroActivo() ? 'TRUE' : 'FALSE');
 // el mismo paso (2026-10-04; antes iban en dos pasos, como la espera de la mig. 110):
 //   · todas las Speed Queen, lavadoras y secadoras;
 //   · el modelo que pregunta su programa (mig. 146), sea de la marca que sea:
-//     la pregunta sale al iniciar, cuando ya la están programando.
+//     la pregunta sale al iniciar, cuando ya la están programando;
+//   · el modelo de FICHAS (mig. 149): no tiene Sonoff, así que su "Iniciar"
+//     solo arranca el cronómetro.
 export const MARCA_CON_INICIAR = 'speed queen';
+
+// ¿El modelo de esta máquina trabaja solo con fichas? (mig. 149). Sin Sonoff
+// y sin tiempos: no se enciende, no tiene tope y su cronómetro corre hasta que
+// la finalizan. Alias de `maquinas` que se pase.
+export const soloFichasSql = (alias) => `COALESCE((
+  SELECT mof.solo_fichas
+    FROM marcas_maquina mmf
+    JOIN modelos_maquina mof ON mof.marca_id = mmf.id
+   WHERE mmf.nombre = ${alias}.marca
+     AND mof.nombre = ${alias}.modelo
+), FALSE)`;
 
 export const conIniciarSql = (alias) => (cronometroActivo() ? `(
   COALESCE(LOWER(TRIM(${alias}.marca)), '') = '${MARCA_CON_INICIAR}'
@@ -97,8 +110,8 @@ export const conIniciarSql = (alias) => (cronometroActivo() ? `(
       JOIN modelos_maquina moc ON moc.marca_id = mmc.id
      WHERE mmc.nombre = ${alias}.marca
        AND moc.nombre = ${alias}.modelo
-       AND moc.pregunta_tiempo
-       AND cardinality(${PROGRAMAS_DEL_MODELO('moc')}) > 1
+       AND ((moc.pregunta_tiempo AND cardinality(${PROGRAMAS_DEL_MODELO('moc')}) > 1)
+            OR moc.solo_fichas)
   )
 )` : 'FALSE');
 
