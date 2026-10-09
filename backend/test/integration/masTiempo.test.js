@@ -34,6 +34,10 @@ async function sec49({ porMoneda = 10 } = {}) {
 
 // Nota de autoservicio con la secadora arrancada con el programa `minutos`.
 async function arrancada(secId, minutos) {
+  return (await arrancadaConCarga(secId, minutos)).notaId;
+}
+
+async function arrancadaConCarga(secId, minutos) {
   const creada = await request(app).post('/api/notas').set(auth(admin.token)).send({
     tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PAGADO', forma_pago: 'EFECTIVO',
     cargas: [{ secadora_tipo: 'mediana' }],
@@ -43,7 +47,7 @@ async function arrancada(secId, minutos) {
     .send({ carga_id: creada.body.cargas[0].id, slot: 'secadora', maquina_id: secId }).expect(200);
   await request(app).patch(`/api/notas/${creada.body.id}/activar-pendientes`).set(auth(admin.token))
     .send({ maquina_id: secId, minutos }).expect(200);
-  return creada.body.id;
+  return { notaId: creada.body.id, cargaId: creada.body.cargas[0].id };
 }
 
 const opciones = async (id) => {
@@ -171,5 +175,38 @@ describe('PATCH /maquinas/:id/mas-tiempo', () => {
     await arrancada(id, 20);
     expect(await pagados(id)).toBeNull();
     expect(await opciones(id)).toEqual([10]);
+  });
+});
+
+describe('el reloj de la que recibió Otro ciclo (Ventas, Información de uso)', () => {
+  it('si secó más allá del tope, al finalizar cuenta hasta el fin real y no marca tope', async () => {
+    const id = await sec49();
+    const { notaId, cargaId } = await arrancadaConCarga(id, 10);
+    await llevaSecando(id, 15);
+    await sumar(id, 20).expect(200);       // seca hasta el 35
+    // Mover también el arranque de la pasada, como si hubiera pasado el tiempo.
+    await llevaSecando(id, 34);
+
+    await request(app).patch(`/api/notas/${notaId}/terminar-secado`).set(auth(admin.token))
+      .send({ secadora_id: id }).expect(200);
+
+    const { rows } = await pool.query(
+      `SELECT llego_tope, EXTRACT(EPOCH FROM finalizada_at - encendida_at) AS seg
+         FROM nota_carga_maquinas WHERE carga_id = $1 AND slot = 'secadora'`, [cargaId]);
+    expect(rows[0].llego_tope).toBe(false);
+    expect(Number(rows[0].seg)).toBeGreaterThan(33 * 60);  // no se cortó en 30
+  });
+
+  it('sin Otro ciclo el reloj se sigue parando en el tope', async () => {
+    const id = await sec49();
+    const { notaId, cargaId } = await arrancadaConCarga(id, 10);
+    await llevaSecando(id, 34);
+    await request(app).patch(`/api/notas/${notaId}/terminar-secado`).set(auth(admin.token))
+      .send({ secadora_id: id }).expect(200);
+    const { rows } = await pool.query(
+      `SELECT llego_tope, EXTRACT(EPOCH FROM finalizada_at - encendida_at) AS seg
+         FROM nota_carga_maquinas WHERE carga_id = $1 AND slot = 'secadora'`, [cargaId]);
+    expect(rows[0].llego_tope).toBe(true);
+    expect(Math.round(Number(rows[0].seg))).toBe(30 * 60);
   });
 });

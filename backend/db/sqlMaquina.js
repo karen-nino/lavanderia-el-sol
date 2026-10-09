@@ -102,6 +102,15 @@ export const conIniciarSql = (alias) => (cronometroActivo() ? `(
   )
 )` : 'FALSE');
 
+// Dónde se para el reloj de una máquina con cronómetro (alias que se pase): su
+// tope, `ciclo_minutos`. Excepción: a la secadora de monedas que recibió
+// "Otro ciclo" (mig. 148, `minutos_pagados` con valor) nunca se le corta la
+// luz, y si el empleado tardó en sumarle puede secar más allá del tope; ahí el
+// reloj llega hasta que se le acaba el tiempo (`ciclo_elegido_minutos`).
+export const TOPE_RELOJ = (a) => `(CASE WHEN ${a}.minutos_pagados IS NOT NULL
+  THEN GREATEST(${a}.ciclo_minutos, COALESCE(${a}.ciclo_elegido_minutos, 0))
+  ELSE ${a}.ciclo_minutos END)`;
+
 // Minutos que da cada moneda en las secadoras de monedas (mig. 147), o NULL
 // si la máquina es normal. Con valor, su Sonoff no da corriente: cada pulso es
 // una moneda (ver `sincronizarSonoff`). Mismo alias `m` que
@@ -182,13 +191,13 @@ export const CICLOS_DE_PASADAS = (filtro) => `SELECT nc.nota_id, nc.orden AS car
               END AS precio,
               CASE WHEN p.finalizada_at IS NOT NULL
                    THEN ROUND(EXTRACT(EPOCH FROM p.finalizada_at - p.encendida_at))::int
-                   WHEN vivo.al_tope THEN mx.ciclo_minutos * 60
+                   WHEN vivo.al_tope THEN ${TOPE_RELOJ('mx')} * 60
               END AS segundos,
               p.llego_tope OR (p.finalizada_at IS NULL AND vivo.al_tope) AS tope,
               COALESCE(p.encendida_at, CASE WHEN vivo.corriendo THEN mx.en_uso_desde END) AS inicio_at,
               COALESCE(p.finalizada_at,
                        CASE WHEN vivo.al_tope
-                            THEN mx.en_uso_desde + make_interval(mins => mx.ciclo_minutos) END) AS fin_at
+                            THEN mx.en_uso_desde + make_interval(mins => ${TOPE_RELOJ('mx')}) END) AS fin_at
          FROM nota_carga_maquinas p
          JOIN nota_cargas nc ON nc.id = p.carga_id
          JOIN notas n ON n.id = nc.nota_id
@@ -209,7 +218,7 @@ export const CICLOS_DE_PASADAS = (filtro) => `SELECT nc.nota_id, nc.orden AS car
                     AND mx.en_uso_desde IS NOT NULL
                     AND mx.ciclo_minutos > 0
                     AND ${esCronometroSql('mx')}
-                    AND mx.en_uso_desde + make_interval(mins => mx.ciclo_minutos) <= NOW(),
+                    AND mx.en_uso_desde + make_interval(mins => ${TOPE_RELOJ('mx')}) <= NOW(),
                   FALSE) AS al_tope
          ) vivo
         WHERE (${filtro})

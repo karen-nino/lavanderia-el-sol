@@ -2,7 +2,7 @@ import pool from '../db/pool.js';
 import { TZ_NEGOCIO } from '../utils/tz.js';
 import * as dispositivos from '../services/dispositivos/index.js';
 import { explicarFalla, resumirMotivo } from '../services/dispositivos/mensajes.js';
-import { MINUTOS_CONFIGURADOS, TIEMPOS_DEL_MODELO, OPCIONES_DE_MARCA, MINUTOS_POR_MONEDA, esCronometroSql, conIniciarSql } from '../db/sqlMaquina.js';
+import { MINUTOS_CONFIGURADOS, TIEMPOS_DEL_MODELO, OPCIONES_DE_MARCA, MINUTOS_POR_MONEDA, TOPE_RELOJ, esCronometroSql, conIniciarSql } from '../db/sqlMaquina.js';
 import {
   HORAS_ENCENDIDO_MANUAL,
   PAUSA_OTRO_CICLO_SEGUNDOS,
@@ -337,7 +337,7 @@ export const getUsoMaquina = async (req, res) => {
               p.finalizada_at IS NULL AND vivo.al_tope AS tope_vivo,
               CASE WHEN p.finalizada_at IS NOT NULL
                    THEN ROUND(EXTRACT(EPOCH FROM p.finalizada_at - p.encendida_at))::int
-                   WHEN vivo.al_tope THEN mx.ciclo_minutos * 60
+                   WHEN vivo.al_tope THEN ${TOPE_RELOJ('mx')} * 60
               END AS segundos,
               p.llego_tope OR (p.finalizada_at IS NULL AND vivo.al_tope) AS tope,
               -- A qué hora arrancó y terminó ese ciclo (2026-10-06). La pasada
@@ -349,7 +349,7 @@ export const getUsoMaquina = async (req, res) => {
                             THEN mx.en_uso_desde END) AS inicio_at,
               COALESCE(p.finalizada_at,
                        CASE WHEN vivo.al_tope
-                            THEN mx.en_uso_desde + make_interval(mins => mx.ciclo_minutos) END) AS fin_at,
+                            THEN mx.en_uso_desde + make_interval(mins => ${TOPE_RELOJ('mx')}) END) AS fin_at,
               ml.nombre AS lav_nombre, ms.nombre AS sec_nombre
          FROM (${PASADAS_DE_LA_MAQUINA}) p
          JOIN nota_cargas nc ON nc.id = p.carga_id
@@ -362,7 +362,7 @@ export const getUsoMaquina = async (req, res) => {
                     mx.en_uso_desde IS NOT NULL
                     AND mx.ciclo_minutos > 0
                     AND ${esCronometroSql('mx')}
-                    AND mx.en_uso_desde + make_interval(mins => mx.ciclo_minutos) <= NOW()
+                    AND mx.en_uso_desde + make_interval(mins => ${TOPE_RELOJ('mx')}) <= NOW()
                     AND (CASE WHEN p.slot = 'lavadora' THEN nc.lavadora_id ELSE nc.secadora_id END) = $1,
                   FALSE) AS al_tope
          ) vivo
@@ -1189,7 +1189,9 @@ export const masTiempo = async (req, res) => {
     }
     const maq = rows[0];
     const opciones = opcionesMasTiempo(maq);
-    if (opciones.length > 0 && !programaTerminado(maq)) {
+    // Un minuto de gracia: el botón lo muestra la tablet con SU reloj, que
+    // puede ir unos segundos adelantado al del servidor.
+    if (opciones.length > 0 && !programaTerminado(maq, Date.now() + 60_000)) {
       await client.query('ROLLBACK');
       return res.status(400).json({
         message: `${maq.nombre} sigue en su programa de ${maq.ciclo_elegido_minutos} min. Súmale tiempo cuando termine.`,

@@ -8,7 +8,7 @@ import { tarifaSecadora, precioProductoEnNota, unidadDeVenta, medidasPorUnidad, 
 import { sincronizarSonoff, maxCiclosDeMaquina } from '../services/sincronizarSonoff.js';
 import {
   MINUTOS_CONFIGURADOS, MINUTOS_DEL_MODELO, PROGRAMAS_DEL_MODELO, OPCIONES_DE_MARCA,
-  esCronometroSql, conIniciarSql, cronometroActivo,
+  esCronometroSql, conIniciarSql, cronometroActivo, TOPE_RELOJ,
 } from '../db/sqlMaquina.js';
 
 const ESTADOS_VALIDOS     = ['EN_ESPERA', 'LAVANDO', 'SECANDO', 'LISTA', 'PAGADA', 'FINALIZADA', 'CANCELADA'];
@@ -1260,8 +1260,9 @@ async function sellarFinDePasada(client, notaId, slot, maquinaId) {
        FROM nota_cargas nc, maquinas m,
             LATERAL (
               SELECT COALESCE(m.en_uso_desde, nc.${col}_iniciada_at) AS inicio,
+                     -- Con "Otro ciclo" (mig. 148) el reloj llega al fin real.
                      CASE WHEN ${esCronometroSql('m')} AND m.ciclo_minutos > 0
-                          THEN make_interval(mins => m.ciclo_minutos) END AS tope
+                          THEN make_interval(mins => ${TOPE_RELOJ('m')}) END AS tope
             ) t
       WHERE nc.nota_id = $1
         AND nc.${col}_id = $3

@@ -1,6 +1,6 @@
 import pool from '../db/pool.js';
 import { TZ_NEGOCIO, fechaLocal, esFechaISO } from '../utils/tz.js';
-import { esCronometroSql, CICLOS_DE_PASADAS } from '../db/sqlMaquina.js';
+import { esCronometroSql, CICLOS_DE_PASADAS, TOPE_RELOJ } from '../db/sqlMaquina.js';
 
 // El "día" de un reporte es el día del NEGOCIO (America/Mexico_City), no el del
 // servidor: en producción Postgres corre en UTC, así que `DATE(pagado_en)` metía
@@ -182,11 +182,13 @@ export async function getResumen(req, res) {
                                       ELSE t.segundos END,
                      'tope', t.tope OR t.tope_vivo) ORDER BY t.nombre)
               FROM (
-                SELECT mm.nombre, COUNT(*)::int AS cargas, mm.ciclo_minutos,
+                SELECT mm.nombre, COUNT(*)::int AS cargas,
+                       -- Dónde se para su reloj (con "Otro ciclo", mig. 148, el fin real).
+                       ${TOPE_RELOJ('mm')} AS ciclo_minutos,
                        (mm.en_uso_desde IS NOT NULL
                         AND mm.ciclo_minutos > 0
                         AND ${esCronometroSql('mm')}
-                        AND mm.en_uso_desde + make_interval(mins => mm.ciclo_minutos) <= NOW()
+                        AND mm.en_uso_desde + make_interval(mins => ${TOPE_RELOJ('mm')}) <= NOW()
                         AND COALESCE(bool_or(
                               (nc.lavadora_id = mm.id AND nc.lavadora_iniciada_at IS NOT NULL)
                            OR (nc.secadora_id = mm.id AND nc.secadora_iniciada_at IS NOT NULL)), FALSE)
