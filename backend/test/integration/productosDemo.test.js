@@ -27,4 +27,13 @@ describe('sembrarProductosMarcaDemo', () => {
     const { rows } = await pool.query("SELECT 1 FROM marcas_producto WHERE nombre IN ('Ariel', 'Ensueño')");
     expect(rows).toHaveLength(2);
   });
+
+  it('quita del catálogo los nombres que no son marcas, salvo si un producto los usa', async () => {
+    await pool.query("INSERT INTO marcas_producto (nombre) VALUES ('Detergente'), ('Otro')");
+    await pool.query(
+      "INSERT INTO productos (nombre, clase, unidad, marca, tipo_liquido, sucursal) VALUES ('X', 'liquido', 'Medidas', 'Otro', 'marca', 'pruebas')");
+    await sembrarProductosMarcaDemo(pool, 'pruebas');
+    const { rows } = await pool.query("SELECT nombre FROM marcas_producto WHERE nombre IN ('Detergente', 'Otro')");
+    expect(rows.map((r) => r.nombre)).toEqual(['Otro']);
+  });
 });

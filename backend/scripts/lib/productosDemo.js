@@ -21,8 +21,20 @@ export const PRODUCTOS_MARCA_DEMO = [
 // editar un producto). Incluye Ensueño, que siembra db/seed_pruebas.js.
 export const MARCAS_DEMO = [...new Set([...PRODUCTOS_MARCA_DEMO.map((p) => p.marca), 'Ensueño'])];
 
+// La mig. 071 sembró en el catálogo de marcas unos nombres que no son marcas
+// sino tipos de producto. En la demo se quitan (2026-10-08, a pedido), salvo
+// que algún producto los use.
+export const NO_MARCAS_DEMO = ['Detergente', 'Suavizante', 'Blanqueador', 'Otro'];
+
 // Idempotente: cada marca y cada producto solo se crean si faltan.
 export async function sembrarProductosMarcaDemo(db, sucursal) {
+  await db.query(
+    `DELETE FROM marcas_producto mp
+      WHERE mp.nombre = ANY($1)
+        AND NOT EXISTS (SELECT 1 FROM productos p WHERE lower(p.marca) = lower(mp.nombre))`,
+    [NO_MARCAS_DEMO]
+  );
+
   for (const marca of MARCAS_DEMO) {
     const { rowCount } = await db.query('SELECT 1 FROM marcas_producto WHERE lower(nombre) = lower($1)', [marca]);
     if (rowCount === 0) await db.query('INSERT INTO marcas_producto (nombre) VALUES ($1)', [marca]);
