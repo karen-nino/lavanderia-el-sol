@@ -1,6 +1,7 @@
 // "Otro ciclo" de la secadora de monedas que pregunta su programa (la Sec49,
-// 2026-10-08): con la carga corriendo se le suma otro programa sin pasarse
-// del tope. Tope 30: con 20 elegidos solo cabe 10; con 10, caben 10 y 20.
+// 2026-10-08): al terminar su programa se le suma otro sin pasarse del tope
+// en minutos METIDOS (mig. 148). Tope 30: con 20 metidos solo cabe 10; con
+// 10, caben 10 y 20. Si el empleado tarda, el fin nuevo cuenta desde ahora.
 import { describe, it, expect, beforeEach } from 'vitest';
 import request from 'supertest';
 import app from '../../app.js';
@@ -53,6 +54,13 @@ const opciones = async (id) => {
 const sumar = (id, minutos) =>
   request(app).patch(`/api/maquinas/${id}/mas-tiempo`).set(auth(admin.token)).send({ minutos });
 
+// Atrasa el arranque `min` minutos: como si llevara ese rato secando.
+const llevaSecando = (id, min) =>
+  pool.query(`UPDATE maquinas SET en_uso_desde = NOW() - make_interval(mins => $2) WHERE id = $1`, [id, min]);
+
+const pagados = async (id) =>
+  (await pool.query('SELECT minutos_pagados FROM maquinas WHERE id = $1', [id])).rows[0].minutos_pagados;
+
 const elegido = async (id) =>
   (await pool.query('SELECT ciclo_elegido_minutos FROM maquinas WHERE id = $1', [id])).rows[0].ciclo_elegido_minutos;
 
@@ -88,40 +96,80 @@ describe('opciones de Otro ciclo', () => {
 });
 
 describe('PATCH /maquinas/:id/mas-tiempo', () => {
-  it('suma al programa sin reiniciar el cronómetro', async () => {
+  it('no deja sumar mientras sigue su programa', async () => {
     const id = await sec49();
     await arrancada(id, 20);
+    await llevaSecando(id, 5);
+    const res = await sumar(id, 10);
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/cuando termine/);
+    expect(await elegido(id)).toBe(20);
+  });
+
+  it('al terminar el programa suma sin reiniciar el cronómetro', async () => {
+    const id = await sec49();
+    await arrancada(id, 20);
+    await llevaSecando(id, 20);
     const antes = (await pool.query('SELECT en_uso_desde FROM maquinas WHERE id = $1', [id])).rows[0];
 
     await sumar(id, 10).expect(200);
 
+    expect(await pagados(id)).toBe(30);
     expect(await elegido(id)).toBe(30);
     const despues = (await pool.query('SELECT en_uso_desde FROM maquinas WHERE id = $1', [id])).rows[0];
     expect(despues.en_uso_desde).toEqual(antes.en_uso_desde);
     expect(await opciones(id)).toEqual([]);
   });
 
+  it('si tarda 5 min en decidirse, el fin nuevo cuenta desde ahora y el tope desde lo metido', async () => {
+    const id = await sec49();
+    await arrancada(id, 10);
+    await llevaSecando(id, 15);          // se acabó al 10, decide al 15
+
+    await sumar(id, 20).expect(200);
+
+    expect(await pagados(id)).toBe(30);  // 10 + 20 metidos: llegó al tope
+    expect(await elegido(id)).toBe(35);  // seca hasta el minuto 35
+    expect(await opciones(id)).toEqual([]);
+  });
+
   it('no deja pasarse del tope', async () => {
     const id = await sec49();
     await arrancada(id, 20);
+    await llevaSecando(id, 20);
     const res = await sumar(id, 20);
     expect(res.status).toBe(400);
     expect(await elegido(id)).toBe(20);
   });
 
-  it('con 10 elegidos se pueden sumar 10 y luego otros 10', async () => {
+  it('con 10 metidos se pueden sumar 10 y, al terminar esos, otros 10', async () => {
     const id = await sec49();
     await arrancada(id, 10);
+    await llevaSecando(id, 10);
     await sumar(id, 10).expect(200);
     expect(await opciones(id)).toEqual([10]);
+    await llevaSecando(id, 20);
     await sumar(id, 10).expect(200);
-    expect(await elegido(id)).toBe(30);
+    expect(await pagados(id)).toBe(30);
   });
 
   it('rechaza minutos que no son uno de sus programas', async () => {
     const id = await sec49();
     await arrancada(id, 10);
+    await llevaSecando(id, 10);
     expect((await sumar(id, 5)).status).toBe(400);
     expect((await sumar(id, 'x')).status).toBe(400);
+  });
+
+  it('un arranque nuevo empieza sin minutos sumados', async () => {
+    const id = await sec49();
+    await arrancada(id, 10);
+    await llevaSecando(id, 10);
+    await sumar(id, 10).expect(200);
+    // Se libera tal cual (finalizar es otro flujo) y la arranca otra nota.
+    await pool.query(`UPDATE maquinas SET estado = 'disponible', en_uso_desde = NULL WHERE id = $1`, [id]);
+    await arrancada(id, 20);
+    expect(await pagados(id)).toBeNull();
+    expect(await opciones(id)).toEqual([10]);
   });
 });

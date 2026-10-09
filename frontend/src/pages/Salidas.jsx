@@ -857,6 +857,13 @@ export default function Salidas() {
   const topeAlcanzado = (m) => Boolean(m.cronometro && m.en_uso_desde && m.ciclo_minutos)
     && now - new Date(m.en_uso_desde).getTime() >= Number(m.ciclo_minutos) * 60000;
 
+  // La máquina física si es secadora de monedas (mig. 147), o null. A esa
+  // nunca se le corta la luz: su tope solo limita las monedas que se le meten.
+  const deMonedas = (m) => {
+    const fisica = todasMaquinas.find(x => String(x.id) === String(m.id));
+    return Number(fisica?.minutos_por_moneda) > 0 ? fisica : null;
+  };
+
   // ¿Ya cumplió el programa que se eligió al iniciarla? (mig. 146)
   const programaCumplido = (m) => Boolean(m.cronometro && m.en_uso_desde && m.ciclo_elegido_minutos)
     && now - new Date(m.en_uso_desde).getTime() >= Number(m.ciclo_elegido_minutos) * 60000;
@@ -864,10 +871,12 @@ export default function Salidas() {
   // "Otro ciclo" de la secadora de monedas que pregunta (Sec49, 2026-10-08):
   // los programas que aún le caben sin pasarse del tope. Los calcula el
   // backend en /maquinas; solo cuentan si la máquina sigue corriendo ESTA nota.
+  // Solo sale cuando se le acaba el programa elegido (o lo ya sumado): mientras
+  // seca no hay nada que decidir.
   const opcionesMasTiempo = (m) => {
     if (!m.actual || m.estado !== 'en_uso' || m.esperandoArranque || m.tomadaPor) return [];
-    if (!m.cronometro || topeAlcanzado(m)) return [];
-    const fisica = todasMaquinas.find(x => String(x.id) === String(m.id));
+    if (!m.cronometro || !programaCumplido(m)) return [];
+    const fisica = deMonedas(m);
     if (!fisica || String(fisica.en_uso_nota_id) !== String(nota?.id)) return [];
     return fisica.opciones_mas_tiempo ?? [];
   };
@@ -1207,9 +1216,17 @@ export default function Salidas() {
                       {m.cronometro && m.estado === 'en_uso' && !m.esperandoArranque && !m.tomadaPor && (
                         // Mismo aviso que la tarjeta de Máquinas: pasado su
                         // tope, el corte ya le quitó la luz y falta finalizarla.
-                        topeAlcanzado(m) ? (
+                        topeAlcanzado(m) && !deMonedas(m) ? (
                           <span className="text-xs font-medium text-red-600 basis-full">
                             Llegó al tope y se le cortó la luz.
+                          </span>
+                        ) : programaCumplido(m) && deMonedas(m) ? (
+                          // Sec49: se le acabaron las monedas; si aún le cabe
+                          // tiempo, se le puede dar Otro ciclo.
+                          <span className="text-xs font-medium text-amber-600 basis-full">
+                            {opcionesMasTiempo(m).length > 0
+                              ? 'Se le acabó el tiempo. Dale otro ciclo o finalízala.'
+                              : 'Se le acabó el tiempo. Finalízala.'}
                           </span>
                         ) : programaCumplido(m) ? (
                           <span className="text-xs font-medium text-amber-600 basis-full">
@@ -1284,7 +1301,11 @@ export default function Salidas() {
                             {/* Sec49, después de Finalizar: sumarle otro programa sin pasarse del tope. */}
                             {opcionesMasTiempo(m).length > 0 && (
                               <button
-                                onClick={() => { setErrorAccion(''); setMasTiempo({ maquina: m, opciones: opcionesMasTiempo(m) }); }}
+                                onClick={() => { setErrorAccion(''); setMasTiempo({
+                                  maquina: m,
+                                  opciones: opcionesMasTiempo(m),
+                                  pagados: deMonedas(m)?.minutos_pagados ?? m.ciclo_elegido_minutos,
+                                }); }}
                                 disabled={loadingMaquina}
                                 className="px-4 py-2 bg-white border border-blue text-blue hover:bg-light-blue disabled:opacity-60 text-sm font-medium rounded-lg transition-colors"
                               >
@@ -1679,7 +1700,7 @@ export default function Salidas() {
           maquina={masTiempo.maquina}
           tiempos={masTiempo.opciones}
           titulo="¿Cuánto tiempo más?"
-          descripcion={`Lleva un programa de ${masTiempo.maquina.ciclo_elegido_minutos} min y su tope es de ${masTiempo.maquina.ciclo_minutos} min. Se le meten las monedas de los minutos que elijas.`}
+          descripcion={`Lleva ${masTiempo.pagados} min metidos y su tope es de ${masTiempo.maquina.ciclo_minutos} min. Se le meten las monedas de los minutos que elijas; después dale START en la máquina.`}
           etiqueta={(min) => `+${min} min`}
           guardando={loadingMaquina}
           error={errorAccion}

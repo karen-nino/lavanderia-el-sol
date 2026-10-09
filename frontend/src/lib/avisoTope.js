@@ -32,6 +32,9 @@ export function clavesEnTope(maquinas, ahora = Date.now()) {
     new Date(m.en_uso_desde).getTime() + Number(minutos) * 60_000 <= ahora;
   const topes = vivas
     .filter(m => Number(m.ciclo_minutos) > 0)
+    // La secadora de monedas (mig. 147) no tiene corte: su tope solo limita
+    // las monedas. Lo que avisa es que se le acabó el tiempo (abajo).
+    .filter(m => !(Number(m.minutos_por_moneda) > 0))
     .filter(m => m.cronometro || m.en_uso_nota_id)
     .filter(m => cumplio(m, m.ciclo_minutos))
     .map(m => `${m.id}:${m.en_uso_desde}`);
@@ -39,7 +42,9 @@ export function clavesEnTope(maquinas, ahora = Date.now()) {
   const programas = vivas
     .filter(m => m.cronometro && Number(m.ciclo_elegido_minutos) > 0)
     .filter(m => cumplio(m, m.ciclo_elegido_minutos))
-    .map(m => `${m.id}:${m.en_uso_desde}:programa`);
+    // Con "Otro ciclo" (Sec49) el fin se mueve: el fin nuevo vuelve a sonar.
+    .map(m => `${m.id}:${m.en_uso_desde}:programa`
+      + (m.minutos_pagados ? `:${m.ciclo_elegido_minutos}` : ''));
   return [...topes, ...programas];
 }
 

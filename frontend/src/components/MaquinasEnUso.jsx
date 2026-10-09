@@ -366,16 +366,23 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
     // ahí el corte le quita la luz y el reloj se queda parado en el tope. Si se
     // eligió un programa al iniciarla, al cumplirlo se avisa que ya terminó.
     if (m.cronometro && !soloManual) {
-      const contadoSeg = duracionSeg > 0 ? Math.min(transcurridoSeg, duracionSeg) : transcurridoSeg;
       const programaSeg = Math.max(0, Number(m.ciclo_elegido_minutos) || 0) * 60;
+      // Secadora de monedas (mig. 147): nunca se le corta la luz; su tope solo
+      // limita las monedas. Con "Otro ciclo" puede secar más allá del tope en
+      // el reloj (el empleado tardó en sumarle), así que el reloj llega hasta
+      // donde se le acaba el tiempo.
+      const deMonedas = Number(m.minutos_por_moneda) > 0;
+      const limiteSeg = deMonedas ? Math.max(duracionSeg, programaSeg) : duracionSeg;
+      const contadoSeg = limiteSeg > 0 ? Math.min(transcurridoSeg, limiteSeg) : transcurridoSeg;
       return {
         nota: notaRel,
         maquina: {
           ...m,
           cronometro: true,
-          progreso: duracionSeg > 0 ? contadoSeg / duracionSeg : 1,
+          progreso: limiteSeg > 0 ? contadoSeg / limiteSeg : 1,
           tiempo_restante: inicio ? formatMMSS(contadoSeg) : '—:—',
-          tope_alcanzado: inicio != null && duracionSeg > 0 && restanteSeg <= 0,
+          de_monedas: deMonedas,
+          tope_alcanzado: !deMonedas && inicio != null && duracionSeg > 0 && restanteSeg <= 0,
           programa_cumplido: inicio != null && programaSeg > 0 && transcurridoSeg >= programaSeg,
           necesita_terminar_ciclo: false,
           puede_otro_ciclo: false,

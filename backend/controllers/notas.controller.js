@@ -653,7 +653,10 @@ async function sellarCicloMaquinas(client, notaId, elegido = null) {
             -- en_uso_desde) empieza sin programa elegido: el de su carga
             -- anterior no es el suyo. El elegido, si lo hay, se escribe abajo.
             ciclo_elegido_minutos = CASE WHEN m.en_uso_desde = NOW() THEN NULL
-                                         ELSE m.ciclo_elegido_minutos END
+                                         ELSE m.ciclo_elegido_minutos END,
+            -- Lo sumado con "Otro ciclo" (mig. 148) era de la vuelta anterior.
+            minutos_pagados = CASE WHEN m.en_uso_desde = NOW() THEN NULL
+                                   ELSE m.minutos_pagados END
        FROM (
          -- Lavadoras de la nota
          SELECT nc.lavadora_id AS mid,

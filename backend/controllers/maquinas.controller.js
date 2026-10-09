@@ -12,6 +12,7 @@ import {
   esperandoArranque,
   sincronizarSonoff,
   opcionesMasTiempo,
+  programaTerminado,
   meterMonedasExtra,
 } from '../services/sincronizarSonoff.js';
 import { esAdmin } from '../middleware/roles.js';
@@ -1157,10 +1158,13 @@ export const otroCiclo = async (req, res) => {
 
 // ── PATCH /maquinas/:id/mas-tiempo ──────────────────────────
 // "Otro ciclo" de la secadora de monedas que pregunta su programa (la Sec49,
-// 2026-10-08). Con la carga corriendo, el empleado le suma otro de sus
-// programas: el cronómetro sigue igual, el programa elegido crece y se le
-// meten las monedas de esos minutos. Nunca se pasa del tope: con tope 30 y 20
-// elegidos solo cabe 10. El precio no cambia (se cobra por tamaño de carga).
+// 2026-10-08). Cuando se le acaba el programa elegido, el empleado le puede
+// sumar otro: se le meten las monedas de esos minutos y la carga sigue
+// abierta. Nunca se pasa del tope en minutos metidos (mig. 148): con tope 30
+// y 20 metidos solo cabe 10. El precio no cambia (se cobra por tamaño).
+//
+// El nuevo fin cuenta desde AHORA si el empleado tardó en decidirse: eligió
+// 10, se acabaron al minuto 10 y le suma 20 al minuto 15 → seca hasta el 35.
 export const masTiempo = async (req, res) => {
   const { id } = req.params;
   const minutos = Number(req.body?.minutos);
@@ -1185,6 +1189,12 @@ export const masTiempo = async (req, res) => {
     }
     const maq = rows[0];
     const opciones = opcionesMasTiempo(maq);
+    if (opciones.length > 0 && !programaTerminado(maq)) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        message: `${maq.nombre} sigue en su programa de ${maq.ciclo_elegido_minutos} min. Súmale tiempo cuando termine.`,
+      });
+    }
     if (!opciones.includes(minutos)) {
       await client.query('ROLLBACK');
       return res.status(400).json({
@@ -1194,8 +1204,15 @@ export const masTiempo = async (req, res) => {
       });
     }
     const { rows: upd } = await client.query(
-      `UPDATE maquinas SET ciclo_elegido_minutos = ciclo_elegido_minutos + $2
-        WHERE id = $1 RETURNING ciclo_elegido_minutos`,
+      `UPDATE maquinas
+          SET minutos_pagados = COALESCE(minutos_pagados, ciclo_elegido_minutos) + $2,
+              -- El fin nuevo: desde ahora (al minuto más cercano) o desde el
+              -- fin anterior si todavía no llegaba.
+              ciclo_elegido_minutos = GREATEST(
+                ciclo_elegido_minutos,
+                ROUND(EXTRACT(EPOCH FROM (NOW() - en_uso_desde)) / 60)::int
+              ) + $2
+        WHERE id = $1 RETURNING ciclo_elegido_minutos, minutos_pagados`,
       [maq.id, minutos]
     );
     await client.query('COMMIT');
@@ -1203,10 +1220,10 @@ export const masTiempo = async (req, res) => {
     // Fuera de la transacción: los pulsos tardan (2 s entre moneda y moneda).
     await meterMonedasExtra(maq.id, minutos);
 
-    const total = upd[0].ciclo_elegido_minutos;
     res.json({
-      message: `${maq.nombre}: +${minutos} min, programa de ${total} min. Dale START en la máquina si se detuvo.`,
-      ciclo_elegido_minutos: total,
+      message: `${maq.nombre}: +${minutos} min (${upd[0].minutos_pagados} de ${maq.ciclo_minutos}). Dale START en la máquina.`,
+      ciclo_elegido_minutos: upd[0].ciclo_elegido_minutos,
+      minutos_pagados: upd[0].minutos_pagados,
     });
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});

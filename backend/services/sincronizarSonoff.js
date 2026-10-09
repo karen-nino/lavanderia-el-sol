@@ -495,20 +495,27 @@ async function mandarMonedas(maq, total) {
 }
 
 // "Otro ciclo" de la secadora de monedas que pregunta su programa (la Sec49,
-// 2026-10-08): con la carga corriendo, el empleado le suma otro de sus
-// programas sin pasarse del tope. Las opciones son los programas que todavía
-// caben: con tope 30 y 20 ya elegidos, solo 10; con 10 elegidos, 10 y 20.
-// Fuera de ese modelo, lista vacía (la tarjeta no ofrece el botón).
+// 2026-10-08): al terminar su programa, el empleado le suma otro sin pasarse
+// del tope. Lo que cuenta contra el tope son los minutos METIDOS en monedas
+// (`minutos_pagados`, mig. 148), no el reloj: con tope 30 y 20 metidos solo
+// cabe 10; con 10, caben 10 y 20. Fuera de ese modelo, lista vacía.
+// No mira la hora: si ya terminó el programa lo decide quien lo muestra (y el
+// endpoint lo revalida), para que la pantalla no tenga que recargar la lista.
 export const opcionesMasTiempo = (maq) => {
   if (!maq || maq.estado !== 'en_uso' || !maq.en_uso_desde || !maq.cronometro) return [];
   if (!(Number(maq.minutos_por_moneda) > 0)) return [];
   const programas = (maq.modelo_tiempos?.minutos ?? []).map(Number).filter(n => Number.isInteger(n) && n > 0);
   if (!maq.modelo_tiempos?.pregunta || programas.length < 2) return [];
-  const elegido = Number(maq.ciclo_elegido_minutos);
+  const pagados = Number(maq.minutos_pagados ?? maq.ciclo_elegido_minutos);
   const tope = Number(maq.ciclo_minutos);
-  if (!(elegido > 0) || !(tope > 0)) return [];
-  return [...new Set(programas)].filter(p => elegido + p <= tope).sort((a, b) => a - b);
+  if (!(pagados > 0) || !(tope > 0)) return [];
+  return [...new Set(programas)].filter(p => pagados + p <= tope).sort((a, b) => a - b);
 };
+
+// ¿Ya se le acabó el tiempo elegido? Contado desde que arrancó.
+export const programaTerminado = (maq, ahora = Date.now()) =>
+  Boolean(maq?.en_uso_desde) && Number(maq.ciclo_elegido_minutos) > 0
+  && new Date(maq.en_uso_desde).getTime() + Number(maq.ciclo_elegido_minutos) * 60_000 <= ahora;
 
 // Las monedas de los minutos que se le sumaron con "Otro ciclo". El cupo ya
 // lo reservó el controlador (subió `ciclo_elegido_minutos` dentro de su
@@ -585,7 +592,10 @@ export async function sincronizarSonoff(maquinaId, { reconciliando = false } = {
 
     // En la máquina con cronómetro el "fin de ciclo" es su tope: si el corte
     // llega, es que nadie la finalizó.
-    if (deseado === 'off' && maq.estado === 'en_uso' && maq.cronometro && cicloVencido(maq)) {
+    // A la de monedas no: nunca se le corta nada y el tope solo limita las
+    // monedas que se le meten.
+    if (deseado === 'off' && maq.estado === 'en_uso' && maq.cronometro && cicloVencido(maq)
+        && maq.minutos_por_moneda == null) {
       await avisarTopeCronometro(maq);
     }
 
