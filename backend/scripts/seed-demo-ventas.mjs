@@ -154,17 +154,22 @@ async function sembrar(db) {
   if (!admin) throw new Error('No encontré al usuario "Prueba Admin" en la sucursal pruebas.');
 
   const { rows: maquinas } = await db.query(
-    `SELECT id, nombre, tipo FROM maquinas WHERE sucursal = $1`, [SUCURSAL]);
+    `SELECT id, nombre, tipo, tamano FROM maquinas WHERE sucursal = $1`, [SUCURSAL]);
   const lavMedianas = maquinas.filter(m => m.tipo === 'lavadora_mediana').map(m => m.id);
   const lavJumbo    = maquinas.filter(m => m.tipo === 'lavadora_jumbo').map(m => m.id);
   const secadoras   = maquinas.filter(m => m.tipo === 'secadora').map(m => m.id);
-  if (!lavMedianas.length || !secadoras.length) throw new Error('Faltan máquinas en la sucursal pruebas.');
+  // La demo pública tiene solo Speed Queen jumbo (scripts/lib/maquinasDemo.js,
+  // 2026-10-08): sin medianas, todas las cargas van en jumbo y se secan con la
+  // tarifa jumbo. Con medianas (la base local) todo sigue como siempre.
+  const soloJumbo = lavMedianas.length === 0 && lavJumbo.length > 0;
+  if ((!lavMedianas.length && !soloJumbo) || !secadoras.length) throw new Error('Faltan máquinas en la sucursal pruebas.');
 
   const { rows: t } = await db.query('SELECT * FROM ajustes WHERE id = 1');
   const tarifa = {
     mediana: Number(t[0].precio_carga_mediana), jumbo: Number(t[0].precio_carga_jumbo),
     secadora: Number(t[0].precio_carga_secadora), edredon: Number(t[0].precio_edredon_jumbo),
     secadoraEdredon: Number(t[0].precio_secadora_edredon ?? t[0].precio_carga_secadora),
+    secadoraJumbo: Number(t[0].precio_secadora_jumbo ?? t[0].precio_carga_secadora),
   };
 
   const { rows: productos } = await db.query(
@@ -285,12 +290,13 @@ async function sembrar(db) {
       let totalCargas = 0;
       const cargaIds = [];
       for (let c = 1; c <= nCargas; c++) {
-        const usaJumbo = !esEdredon && rnd() < 0.3 && lavJumbo.length;
+        const usaJumbo = !esEdredon && (soloJumbo || (rnd() < 0.3 && lavJumbo.length));
         const lavId = esEdredon ? (lavJumbo[0] ?? elige(lavMedianas)) : (usaJumbo ? elige(lavJumbo) : elige(lavMedianas));
         const conSecadora = esEdredon ? true : rnd() < 0.8;
         const secId = conSecadora ? elige(secadoras) : null;
         const precioLav = esEdredon ? tarifa.edredon : (usaJumbo ? tarifa.jumbo : tarifa.mediana);
-        const precioSec = conSecadora ? (esEdredon ? tarifa.secadoraEdredon : tarifa.secadora) : 0;
+        const precioSec = conSecadora
+          ? (esEdredon ? tarifa.secadoraEdredon : soloJumbo ? tarifa.secadoraJumbo : tarifa.secadora) : 0;
         totalCargas += precioLav + precioSec;
         const { rows: cRows } = await db.query(
           `INSERT INTO nota_cargas (nota_id, orden, lavadora_usada_id, secadora_usada_id,
@@ -302,7 +308,7 @@ async function sembrar(db) {
           [notaId, c, lavId, secId, precioLav, precioSec, prenda,
            servicio === 'POR_ENCARGO' ? elige(['chico', 'grande', 'jumbo']) : null,
            esEdredon ? 'edredon' : (usaJumbo ? 'jumbo' : 'mediana'),
-           conSecadora ? (esEdredon ? 'edredon' : 'mediana') : null,
+           conSecadora ? (esEdredon ? 'edredon' : soloJumbo ? 'jumbo' : 'mediana') : null,
            stamp]);
         cargaIds.push(cRows[0].id);
       }

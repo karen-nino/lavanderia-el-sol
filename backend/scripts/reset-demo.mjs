@@ -18,6 +18,7 @@ import { execFileSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { limpiarOperacion, borrarUsuariosDeVisitantes, borrarCatalogos } from './lib/limpiarDemo.js';
+import { sembrarMaquinasDemo } from './lib/maquinasDemo.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const BACKEND = path.resolve(__dirname, '..');
@@ -110,6 +111,9 @@ try {
   await limpiarOperacion(db);
   const usuariosBorrados = await borrarUsuariosDeVisitantes(db);
   await borrarCatalogos(db);
+  // Las máquinas de la demo son solo Speed Queen jumbo (2026-10-08). Van antes
+  // que db/seed_pruebas.js, que al ver L1…S2 ya puestas no siembra las suyas.
+  await sembrarMaquinasDemo(db, SUCURSAL);
   // Al final: las sucursales que un visitante creara solo se sueltan cuando ya
   // no les cuelga nada (usuarios, productos, máquinas e insumos).
   const { rowCount: sucursalesBorradas } = await db.query(

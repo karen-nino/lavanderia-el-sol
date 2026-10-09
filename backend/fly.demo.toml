@@ -26,6 +26,10 @@ primary_region = "ord"
   CIERRE_HORA = "0"
   TZ_NEGOCIO = "America/Mexico_City"
   ENTORNO_DEMO = "1"
+  # La demo corre con TEMPORIZADOR (2026-10-08, a pedido): sus máquinas son
+  # Speed Queen jumbo (scripts/lib/maquinasDemo.js). Producción usa fly.toml y
+  # no lleva esta variable, así que sigue con cronómetro.
+  MAQUINAS_CRONOMETRO = "off"
 
 [http_service]
   internal_port = 4000
