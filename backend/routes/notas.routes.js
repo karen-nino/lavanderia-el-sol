@@ -16,7 +16,6 @@ import {
   asignarMaquina,
   asignarCargaMaquina,
   cambiarMaquina,
-  asignarSecadora,
   terminarLavado,
   terminarLavadoFinal,
   terminarSecado,
@@ -63,7 +62,6 @@ router.patch('/:id/activar-pendientes', activarMaquinasPendientes);
 router.patch('/:id/asignar-maquina', asignarMaquina);
 router.patch('/:id/asignar-carga-maquina', asignarCargaMaquina);
 router.patch('/:id/cambiar-maquina', cambiarMaquina);
-router.patch('/:id/asignar-secadora', asignarSecadora);
 router.patch('/:id/terminar-lavado', terminarLavado);
 router.patch('/:id/terminar-lavado-final', terminarLavadoFinal);
 router.patch('/:id/terminar-secado', terminarSecado);

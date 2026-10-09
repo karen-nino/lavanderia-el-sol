@@ -1456,27 +1456,6 @@ describe('handlers de máquina — asignar / cambiar / quitar', () => {
     expect(res.body.message).toMatch(/se cobra/i);
   });
 
-  it('asignar-secadora agrega el secado a la carga y ocupa la secadora', async () => {
-    const lavadoraId = await seedMaquina({ nombre: 'Lavadora 1', tipo: 'lavadora_mediana' });
-    const secadoraId = await seedMaquina({ nombre: 'Secadora 1', tipo: 'secadora', tamano: 'mediana' });
-    const creada = await request(app).post('/api/notas').set(auth(admin.token)).send({
-      tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA',
-      estado_pago: 'PAGADO', forma_pago: 'EFECTIVO',
-      cargas: [{ lavadora_tipo: 'mediana' }],
-    });
-    await request(app).patch(`/api/notas/${creada.body.id}/asignar-carga-maquina`).set(auth(admin.token))
-      .send({ carga_id: creada.body.cargas[0].id, slot: 'lavadora', maquina_id: lavadoraId });
-    await request(app).patch(`/api/notas/${creada.body.id}/activar-pendientes`).set(auth(admin.token))
-      .send({ maquina_id: lavadoraId });
-    const res = await request(app).patch(`/api/notas/${creada.body.id}/asignar-secadora`)
-      .set(auth(admin.token)).send({ secadora_id: secadoraId });
-    expect(res.status).toBe(200);
-    expect(Number(res.body.precio_total)).toBe(115); // 70 lavado + 45 secado
-    expect(res.body.cargas[0].secadora_id).toBe(secadoraId);
-    const { rows } = await pool.query('SELECT estado FROM maquinas WHERE id = $1', [secadoraId]);
-    expect(rows[0].estado).toBe('en_uso');
-  });
-
   it('cambiar-maquina reemplaza una lavadora sin iniciar por otra disponible', async () => {
     const { notaId, lavadoraId } = await porEncargoEnEspera();
     const nueva = await seedMaquina({ nombre: 'Lavadora 2', tipo: 'lavadora_mediana' });
