@@ -345,6 +345,10 @@ function Movimientos({ data, onChange }) {
 function Corte({ data, onCerrar, onAbrir }) {
   const { usuario } = useAuth();
   const [contado, setContado] = useState('');
+  // Reparto de lo contado (mig. 151): lo que se queda en el cajón —el fondo
+  // del siguiente turno— y lo que se aparta en el sobre.
+  const [cajaFinal, setCajaFinal] = useState('');
+  const [sobre, setSobre] = useState('');
   const [notas, setNotas] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -359,13 +363,37 @@ function Corte({ data, onCerrar, onAbrir }) {
   const contadoNum = Number(contado);
   const diferencia = contado === '' ? null : contadoNum - totales.esperado;
 
+  // Caja final y sobre suman lo contado: al escribir uno, el otro se calcula
+  // con lo que falta. Si cambia lo contado, se respeta la caja final (es el
+  // fondo que se quiere dejar) y se ajusta el sobre.
+  const centavos = (n) => Math.round(n * 100) / 100;
+  const resto = (total, parte) => (
+    total === '' || parte === '' ? '' : String(centavos(Number(total) - Number(parte)))
+  );
+  const cambiarContado = (v) => {
+    setContado(v);
+    if (cajaFinal !== '') setSobre(resto(v, cajaFinal));
+  };
+  const cambiarCajaFinal = (v) => { setCajaFinal(v); setSobre(resto(contado, v)); };
+  const cambiarSobre     = (v) => { setSobre(v); setCajaFinal(resto(contado, v)); };
+  const repartoFalta = contado !== '' && (cajaFinal === '' || sobre === '');
+  const repartoMal = contado !== '' && !repartoFalta && (
+    Number(cajaFinal) < 0 || Number(sobre) < 0
+    || Math.abs(Number(cajaFinal) + Number(sobre) - contadoNum) >= 0.005
+  );
+
   const submit = async (e) => {
     e.preventDefault();
     setSaving(true);
     setError(null);
     try {
-      await api.post('/caja/cerrar', { monto_contado: contadoNum, notas_cierre: notas });
+      await api.post('/caja/cerrar', {
+        monto_contado: contadoNum, notas_cierre: notas,
+        monto_caja_final: Number(cajaFinal), monto_sobre: Number(sobre),
+      });
       setContado('');
+      setCajaFinal('');
+      setSobre('');
       setNotas('');
       // Se muestra la animación de éxito un momento antes de salir del corte.
       setExito(true);
@@ -468,7 +496,7 @@ function Corte({ data, onCerrar, onAbrir }) {
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Efectivo contado</label>
           <input
-            type="number" min="0" step="0.01" required value={contado} onChange={(e) => setContado(e.target.value)}
+            type="number" min="0" step="0.01" required value={contado} onChange={(e) => cambiarContado(e.target.value)}
             placeholder="0.00"
             className={`w-full border border-gray-300 rounded-lg px-3 py-2.5 text-base font-medium ${
               diferencia === null ? 'text-gray-900'
@@ -489,6 +517,34 @@ function Corte({ data, onCerrar, onAbrir }) {
             {Math.abs(diferencia) < 0.005 ? ' (cuadra)' : (diferencia > 0 ? ' (sobrante)' : ' (faltante)')}
           </div>
         )}
+        {/* Reparto de lo contado (mig. 151). */}
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label htmlFor="caja-final" className="block text-sm font-medium text-gray-700 mb-1">Caja final</label>
+            <input
+              id="caja-final"
+              type="number" min="0" step="0.01" required value={cajaFinal}
+              onChange={(e) => cambiarCajaFinal(e.target.value)}
+              placeholder="0.00"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-base font-medium"
+            />
+          </div>
+          <div>
+            <label htmlFor="sobre" className="block text-sm font-medium text-gray-700 mb-1">Sobre</label>
+            <input
+              id="sobre"
+              type="number" min="0" step="0.01" required value={sobre}
+              onChange={(e) => cambiarSobre(e.target.value)}
+              placeholder="0.00"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-base font-medium"
+            />
+          </div>
+          <p className={`col-span-2 -mt-1 text-xs ${repartoMal ? 'text-red-600 font-medium' : 'text-gray-500'}`}>
+            {repartoMal
+              ? `La caja final y el sobre tienen que sumar lo contado (${fmt(contadoNum)}), sin números negativos.`
+              : 'Reparte lo contado: la caja final se queda en el cajón y con ella abre el siguiente turno; el sobre se aparta.'}
+          </p>
+        </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Nota de cierre (opcional)</label>
           <textarea
@@ -497,7 +553,7 @@ function Corte({ data, onCerrar, onAbrir }) {
           />
         </div>
         <button
-          type="submit" disabled={saving}
+          type="submit" disabled={saving || repartoFalta || repartoMal}
           className="w-full bg-red-600 hover:bg-red-700 text-white font-medium py-3.5 rounded-lg text-base transition-colors disabled:opacity-60"
         >
           {saving ? 'Cerrando…' : 'Cerrar caja'}
@@ -840,6 +896,13 @@ function Historial({ onFiltroLabel }) {
             : Math.abs(c.diferencia) < 0.005 ? 'text-blue-600'
             : c.diferencia < 0 ? 'text-red-600' : 'text-green-600'
         }`}>{c.contado != null ? fmt(c.contado) : '—'}</span>
+        {/* Reparto de lo contado (mig. 151). Los cortes de antes no lo tienen. */}
+        {c.caja_final != null && (
+          <>
+            <span className="text-gray-500">Caja final</span><span className="text-right text-gray-700">{fmt(c.caja_final)}</span>
+            <span className="text-gray-500">Sobre</span><span className="text-right text-gray-700">{fmt(c.sobre)}</span>
+          </>
+        )}
       </div>
       {/* Entradas y salidas del turno con su concepto (2026-10-04). Plegadas
           para que la tarjeta no crezca; se abren con un toque. */}

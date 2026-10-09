@@ -35,7 +35,7 @@ const estadoCorte = (c) => {
 // ── CSV ─────────────────────────────────────────────────────
 const ENCABEZADOS_CSV = [
   'Fecha', 'Hora', 'Abrió', 'Cerró', 'Fondo inicial', 'Ventas', 'Ventas efectivo', 'Transferencia', 'Tarjeta',
-  'Entradas', 'Salidas', 'Esperado', 'Contado', 'Diferencia',
+  'Entradas', 'Salidas', 'Esperado', 'Contado', 'Diferencia', 'Caja final', 'Sobre',
   'Estado', 'Nota apertura', 'Nota cierre',
 ];
 
@@ -68,6 +68,9 @@ const filaCSV = (c) => [
   num(c.esperado),
   c.contado != null ? num(c.contado) : '',
   c.diferencia != null ? num(c.diferencia) : '',
+  // Reparto de lo contado (mig. 151); vacío en cortes de antes.
+  c.caja_final != null ? num(c.caja_final) : '',
+  c.sobre != null ? num(c.sobre) : '',
   estadoCorte(c),
   c.notas_apertura ?? '',
   c.notas_cierre ?? '',
@@ -148,6 +151,9 @@ const bloqueDetalle = (c) => `
         <tr class="tot"><td>Esperado en caja</td><td class="r">${fmtMoneda(c.esperado)}</td></tr>
         <tr><td>Efectivo contado</td><td class="r">${c.contado != null ? fmtMoneda(c.contado) : '—'}</td></tr>
         <tr class="dif ${claseDif(c)}"><td>Diferencia</td><td class="r">${textoDif(c)}</td></tr>
+        ${c.caja_final != null ? `
+        <tr><td>Caja final (queda en el cajón)</td><td class="r">${fmtMoneda(c.caja_final)}</td></tr>
+        <tr><td>Sobre</td><td class="r">${fmtMoneda(c.sobre)}</td></tr>` : ''}
       </tbody>
     </table>
     <div class="firmas">

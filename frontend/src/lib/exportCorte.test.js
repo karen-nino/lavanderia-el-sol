@@ -39,7 +39,14 @@ describe('descargarCortesCSV', () => {
     expect(fila[0]).toBe('2026-10-04');
     expect(fila[1]).toBe('en curso');
     expect(fila[3]).toBe('En curso');
-    expect(fila[13]).toBe('En curso'); // Estado (sin la columna Tarjeta)
+    expect(fila[15]).toBe('En curso'); // Estado (sin Tarjeta; después de Caja final y Sobre)
+  });
+
+  it('exporta la caja final y el sobre del corte', () => {
+    descargarCortesCSV([{ ...corte([]), caja_final: 300, sobre: 200 }], 'hoy');
+    const { encabezados, filas: [fila] } = capturado;
+    expect(fila[encabezados.indexOf('Caja final')]).toBe('300.00');
+    expect(fila[encabezados.indexOf('Sobre')]).toBe('200.00');
   });
 
   it('la columna Tarjeta solo sale si algún corte trae cobros con tarjeta', () => {

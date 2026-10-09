@@ -85,7 +85,7 @@ async function totalesMovimientos(client, cajaId) {
 // que arrastrar y el fondo lo captura un administrador.
 async function aperturaSugerida(client, sucursal) {
   const { rows } = await client.query(
-    `SELECT c.id, c.monto_inicial, c.monto_contado, c.cerrada_at, c.cierre_automatico,
+    `SELECT c.id, c.monto_inicial, c.monto_contado, c.monto_caja_final, c.cerrada_at, c.cierre_automatico,
             -- Igual que el historial: las cifras congeladas (mig. 101) y, para
             -- los cortes anteriores a esa migración, el cálculo en vivo.
             COALESCE(c.ventas_efectivo, (
@@ -116,11 +116,14 @@ async function aperturaSugerida(client, sucursal) {
                  - parseFloat(c.total_salidas);
   const contado = c.monto_contado != null ? parseFloat(c.monto_contado) : null;
   const sinConteo = contado == null;
+  // Lo que se quedó en el cajón (mig. 151): lo contado menos el sobre. Los
+  // cortes de antes no lo tienen y arrastran todo lo contado.
+  const cajaFinal = c.monto_caja_final != null ? parseFloat(c.monto_caja_final) : contado;
 
   return {
     // Nunca negativo: un cierre con más salidas que efectivo dejaría el cajón
     // en rojo, y un fondo negativo no existe.
-    monto:  Math.max(0, sinConteo ? esperado : contado),
+    monto:  Math.max(0, sinConteo ? esperado : cajaFinal),
     origen: sinConteo ? 'cierre_automatico' : 'corte',
     corte: {
       id:            c.id,
@@ -302,11 +305,27 @@ export async function registrarMovimiento(req, res) {
 }
 
 export async function cerrarCaja(req, res) {
-  const { monto_contado, notas_cierre } = req.body;
+  const { monto_contado, notas_cierre, monto_caja_final, monto_sobre } = req.body;
   const contado = Number(monto_contado);
 
   if (!Number.isFinite(contado) || contado < 0) {
     return res.status(400).json({ message: 'El monto contado debe ser un número mayor o igual a 0.' });
+  }
+
+  // Lo contado se reparte en CAJA FINAL (se queda en el cajón y es el fondo
+  // del siguiente turno) y SOBRE (sale del cajón), mig. 151. Una tablet con la
+  // versión de antes no manda ninguno de los dos: todo se queda en el cajón,
+  // que es lo que pasaba hasta ahora.
+  const sinReparto = monto_caja_final == null && monto_sobre == null;
+  const cajaFinal = sinReparto ? contado : Number(monto_caja_final);
+  const sobre     = sinReparto ? 0 : Number(monto_sobre);
+  if (!Number.isFinite(cajaFinal) || cajaFinal < 0 || !Number.isFinite(sobre) || sobre < 0) {
+    return res.status(400).json({ message: 'La caja final y el sobre deben ser números mayores o iguales a 0.' });
+  }
+  if (Math.abs(cajaFinal + sobre - contado) >= 0.005) {
+    return res.status(400).json({
+      message: 'La caja final más el sobre tienen que sumar el efectivo contado.',
+    });
   }
 
   const client = await pool.connect();
@@ -364,11 +383,13 @@ export async function cerrarCaja(req, res) {
               ventas_transferencia = $7,
               ventas_tarjeta       = $8,
               total_entradas       = $9,
-              total_salidas        = $10
+              total_salidas        = $10,
+              monto_caja_final     = $11,
+              monto_sobre          = $12
         WHERE id = $4 AND estado = 'abierta'`,
       [req.user.id, contado, notas_cierre?.trim() || null, caja.id,
        ventas.total, ventas.efectivo, ventas.transferencia, ventas.tarjeta,
-       entradas, salidas]
+       entradas, salidas, cajaFinal, sobre]
     );
     if (upd.rowCount === 0) {
       await client.query('ROLLBACK');
@@ -388,6 +409,8 @@ export async function cerrarCaja(req, res) {
         esperado,
         contado,
         diferencia,
+        caja_final: cajaFinal,
+        sobre,
       },
     });
   } catch (err) {
@@ -406,6 +429,8 @@ export async function getHistorial(req, res) {
           c.id,
           c.monto_inicial,
           c.monto_contado,
+          c.monto_caja_final,
+          c.monto_sobre,
           c.notas_apertura,
           c.notas_cierre,
           c.abierta_at,
@@ -498,6 +523,10 @@ export async function getHistorial(req, res) {
           esperado,
           contado,
           diferencia: contado != null ? contado - esperado : null,
+          // Reparto de lo contado (mig. 151); null en cortes de antes y en
+          // cierres automáticos.
+          caja_final: r.monto_caja_final != null ? parseFloat(r.monto_caja_final) : null,
+          sobre:      r.monto_sobre != null ? parseFloat(r.monto_sobre) : null,
           movimientos: (r.movimientos ?? []).map((m) => ({ ...m, monto: parseFloat(m.monto) })),
         };
       })

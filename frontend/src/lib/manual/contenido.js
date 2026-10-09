@@ -277,12 +277,14 @@ Las bolsas se compran POR ROLLO y se cobran POR PIEZA en la nota. Hay tres tama�
       {
         id: 'hacer-el-corte',
         titulo: 'Hacer el corte de caja',
-        claves: ['cierre', 'cuadrar', 'contar dinero', 'faltante', 'sobrante'],
+        claves: ['cierre', 'cuadrar', 'contar dinero', 'faltante', 'sobrante', 'sobre', 'caja final'],
         cuerpo: `Ve a Caja y toca Hacer corte. Cuenta el dinero FÍSICO del cajón y escribe esa cantidad en Efectivo contado.
 
 El corte lo hace QUIEN ABRIÓ EL TURNO (o un administrador): es quien responde por el cajón. Si el turno es de otra persona, la app te lo dice y no te deja cortarlo.
 
 La app compara lo que contaste contra lo que ESPERABA y te dice si sobra o falta.
+
+Después REPARTE lo contado en dos: Caja final (lo que se queda en el cajón) y Sobre (lo que apartas). Al escribir uno, la app calcula el otro; los dos tienen que sumar lo contado. Con la Caja final abre el siguiente turno.
 
 Lo cobrado por transferencia se muestra aparte, en "Cobrado fuera del cajón": ese dinero NO está en el cajón, así que no lo sumes a lo que cuentas.
 

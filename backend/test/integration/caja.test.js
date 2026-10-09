@@ -435,3 +435,36 @@ describe('un corte cerrado no cambia después (mig. 101)', () => {
     expect(actual.body.totales.ventas).toBe(0);
   });
 });
+
+// Caja final y sobre (mig. 151): lo contado se reparte y el siguiente turno
+// abre con la caja final.
+describe('caja final y sobre', () => {
+  const abrir = () => request(app).post('/api/caja/abrir').set(auth(admin.token)).send({ monto_inicial: 500 });
+  const cerrar = (body) => request(app).post('/api/caja/cerrar').set(auth(admin.token)).send(body);
+
+  it('el siguiente turno abre con la caja final y el historial guarda el reparto', async () => {
+    await abrir().expect(201);
+    await cerrar({ monto_contado: 500, monto_caja_final: 300, monto_sobre: 200 }).expect(200);
+
+    const actual = await request(app).get('/api/caja/actual').set(auth(admin.token));
+    expect(actual.body.apertura_sugerida.monto).toBe(300);
+
+    const hist = await request(app).get('/api/caja/historial').set(auth(admin.token));
+    expect(hist.body[0]).toMatchObject({ contado: 500, caja_final: 300, sobre: 200 });
+  });
+
+  it('rechaza un reparto que no suma lo contado', async () => {
+    await abrir().expect(201);
+    const res = await cerrar({ monto_contado: 500, monto_caja_final: 300, monto_sobre: 100 });
+    expect(res.status).toBe(400);
+  });
+
+  it('sin reparto (versión anterior de la app) todo se queda en la caja', async () => {
+    await abrir().expect(201);
+    await cerrar({ monto_contado: 450 }).expect(200);
+    const actual = await request(app).get('/api/caja/actual').set(auth(admin.token));
+    expect(actual.body.apertura_sugerida.monto).toBe(450);
+    const hist = await request(app).get('/api/caja/historial').set(auth(admin.token));
+    expect(hist.body[0]).toMatchObject({ caja_final: 450, sobre: 0 });
+  });
+});
