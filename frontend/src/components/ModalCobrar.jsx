@@ -13,10 +13,10 @@ function fmtMonto(n) {
 // Con saldo 0 no hay importe que teclear —no se puede abonar $0— y el modal se
 // queda en confirmar el cobro y su forma, como hacía Liquidar.
 //
-// `cajaAbierta === false` avisa que el dinero se va a quedar fuera del corte
-// del día. El aviso vivía solo en Nueva Nota, que era donde se cobraba el
-// autoservicio; desde que el cobro se hace aquí (2026-09-23) se vino con él, o
-// el dinero se salía del corte sin que nadie se enterara.
+// `cajaAbierta === false`: desde el 2026-10-08 sin caja abierta no se recibe
+// dinero (el backend responde 409 CAJA_CERRADA), así que el aviso ofrece
+// abrirla y el botón espera. Liquidar con saldo $0 no mueve dinero y sigue
+// permitido.
 //
 // También lo abre Nueva Nota al elegir "Sí" en Pago anticipado de Por Encargo
 // (2026-10-03): la nota aún no existe, así que va sin folio y con su título.
@@ -26,7 +26,8 @@ export default function ModalCobrar({ saldo, folio, titulo = 'Cobrar nota', mont
   const sinSaldo = saldo <= 1e-9;
   const importe = Number(monto);
   const montoOk = Number.isFinite(importe) && importe > 0 && importe <= saldo + 1e-9;
-  const valido = sinSaldo || montoOk;
+  const sinCaja = cajaAbierta === false && !sinSaldo;
+  const valido = (sinSaldo || montoOk) && !sinCaja;
   // Lo que pasa al confirmar, dicho antes de confirmar: es lo que antes
   // elegías al escoger entre los dos botones.
   const liquida = sinSaldo || (montoOk && importe >= saldo - 1e-9);
@@ -63,7 +64,9 @@ export default function ModalCobrar({ saldo, folio, titulo = 'Cobrar nota', mont
           <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
             <p className="text-sm font-semibold text-amber-900">La caja del día no está abierta</p>
             <p className="mt-0.5 text-sm text-amber-800">
-              Puedes cobrar, pero este dinero no va a aparecer en el corte de hoy.
+              {sinSaldo
+                ? 'No hay dinero que recibir, así que puedes liquidarla igual.'
+                : 'Ábrela para poder recibir el pago: así entra en el corte de hoy.'}
             </p>
             <button
               type="button"

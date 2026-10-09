@@ -4695,14 +4695,22 @@ export const abonarNota = async (req, res) => {
       });
     }
 
-    // La caja abierta de la sucursal, que es donde entra este dinero. Sin caja
-    // abierta el abono se registra igual (queda fuera de todo corte, como un
-    // cobro sin caja).
+    // La caja abierta de la sucursal, que es donde entra este dinero. Desde el
+    // 2026-10-08 sin caja abierta no se recibe (mismo candado que crear nota,
+    // `NOTA_REQUIERE_CAJA`): ese dinero no entraba en ningún corte, y revertir
+    // después un abono así podía contar dos veces la liquidación de la nota.
     const { rows: cajaRows } = await client.query(
       `SELECT id FROM cajas WHERE estado = 'abierta' AND sucursal = $1 LIMIT 1`,
       [req.sucursal]
     );
     const cajaId = cajaRows[0]?.id ?? null;
+    if (!cajaId && notaRequiereCaja()) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({
+        code: 'CAJA_CERRADA',
+        message: 'La caja está cerrada. Ábrela para poder recibir el pago.',
+      });
+    }
 
     const { rows: abonoRows } = await client.query(
       `INSERT INTO nota_abonos (nota_id, caja_id, usuario_id, monto, forma_pago)
@@ -4760,7 +4768,8 @@ export const revertirAbono = async (req, res) => {
     await client.query('BEGIN');
 
     const { rows } = await client.query(
-      `SELECT ab.id, ab.monto, ab.caja_id, ab.revertido_at, n.estado_pago, n.id AS nota_id
+      `SELECT ab.id, ab.monto, ab.caja_id, ab.revertido_at, n.estado_pago, n.id AS nota_id,
+              n.caja_id AS nota_caja_id
          FROM nota_abonos ab
          JOIN notas n ON n.id = ab.nota_id
         WHERE ab.id = $1 AND ab.nota_id = $2 AND n.sucursal = $3
@@ -4785,6 +4794,22 @@ export const revertirAbono = async (req, res) => {
         return res.status(409).json({
           message: 'El corte de caja de ese abono ya se cerró: solo se puede revertir '
                  + 'mientras esa caja siga abierta.',
+        });
+      }
+    }
+
+    // Si la nota se LIQUIDÓ en un corte que ya se cerró, revertir este abono la
+    // devolvería a deber y volver a cobrarla contaría otra vez lo que aquel
+    // corte ya contó (2026-10-08). Misma regla que revertir el pago.
+    if (abono.estado_pago === 'PAGADO' && abono.nota_caja_id) {
+      const { rows: cjNota } = await client.query(
+        'SELECT estado FROM cajas WHERE id = $1', [abono.nota_caja_id]
+      );
+      if (cjNota[0]?.estado !== 'abierta') {
+        await client.query('ROLLBACK');
+        return res.status(409).json({
+          message: 'Esta nota se terminó de cobrar en un corte de caja que ya se cerró: '
+                 + 'sus abonos ya no se pueden revertir.',
         });
       }
     }
