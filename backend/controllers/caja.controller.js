@@ -123,7 +123,9 @@ async function aperturaSugerida(client, sucursal) {
   return {
     // Nunca negativo: un cierre con más salidas que efectivo dejaría el cajón
     // en rojo, y un fondo negativo no existe.
-    monto:  Math.max(0, sinConteo ? esperado : cajaFinal),
+    // A centavos: el esperado sale de sumar flotantes (145.30000000000001) y
+    // el campo bloqueado del empleado lo enseña tal cual.
+    monto:  Math.max(0, Math.round((sinConteo ? esperado : cajaFinal) * 100) / 100),
     origen: sinConteo ? 'cierre_automatico' : 'corte',
     corte: {
       id:            c.id,
