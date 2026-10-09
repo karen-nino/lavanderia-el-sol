@@ -523,4 +523,22 @@ describe('modelo de fichas', () => {
     expect(rows[0].estado).toBe('disponible');
     expect(rows[0].encendida_manual_at).toBeNull();
   });
+
+  it('no se enciende desde la nota: su único paso es Iniciar', async () => {
+    const marca = await seedMarca('Fichera');
+    await crearModelo(admin.token, { marca_id: marca, nombre: 'F3', solo_fichas: true }).expect(201);
+    const lav = await seedMaquina({ nombre: 'L3', marca: 'Fichera', modelo: 'F3' });
+    const creada = await request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PAGADO', forma_pago: 'EFECTIVO',
+      cargas: [{ lavadora_tipo: 'mediana' }],
+    }).expect(201);
+    await request(app).patch(`/api/notas/${creada.body.id}/asignar-carga-maquina`).set(auth(admin.token))
+      .send({ carga_id: creada.body.cargas[0].id, slot: 'lavadora', maquina_id: lav }).expect(200);
+
+    const res = await request(app).patch(`/api/notas/${creada.body.id}/encender-maquina`)
+      .set(auth(admin.token)).send({ maquina_id: lav });
+    expect(res.status).toBe(400);
+    const { rows } = await pool.query('SELECT estado, encendida_sin_iniciar_at FROM maquinas WHERE id = $1', [lav]);
+    expect(rows[0]).toMatchObject({ estado: 'disponible', encendida_sin_iniciar_at: null });
+  });
 });

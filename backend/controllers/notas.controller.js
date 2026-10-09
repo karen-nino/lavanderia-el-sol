@@ -2794,7 +2794,8 @@ export const encenderMaquinaDeNota = async (req, res) => {
     const { rows: maqRows } = await client.query(
       `SELECT m.id, m.nombre, m.tipo, m.marca, m.estado, m.en_uso_desde, m.encendida_para_nota_id,
               ${esCronometroSql('m')} AS cronometro,
-              ${conIniciarSql('m')} AS con_iniciar
+              ${conIniciarSql('m')} AS con_iniciar,
+              ${soloFichasSql('m')} AS solo_fichas
          FROM maquinas m WHERE m.id = $1 AND m.sucursal = $2 FOR UPDATE OF m`,
       [maquina_id, req.sucursal]
     );
@@ -2803,6 +2804,16 @@ export const encenderMaquinaDeNota = async (req, res) => {
       return res.status(404).json({ message: 'Máquina no encontrada.' });
     }
     const maq = maqRows[0];
+
+    // La de fichas (mig. 149) no se enciende: no tiene Sonoff, y su espera de
+    // arranque nunca caducaría (la sincronización no la toca). Su único paso
+    // es "Iniciar", que arranca el cronómetro.
+    if (maq.solo_fichas) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        message: `${maq.nombre} trabaja con fichas: no se enciende. Arráncala con su ficha y dale a Iniciar.`,
+      });
+    }
 
     // Ya encendida por esta misma nota: no es un error, es el botón pulsado dos
     // veces. Se responde ok para que la pantalla quede en el estado correcto.
