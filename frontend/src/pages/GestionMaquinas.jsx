@@ -320,6 +320,10 @@ export default function GestionMaquinas() {
   // no tiene modelos. Se deja abierto si la máquina ya trae modelo, para que
   // editar cualquier otra cosa no se lo borre en silencio.
   const modeloBloqueado = modelosVisibles.length === 0 && !form.modelo;
+  // El modelo elegido trabaja con fichas (mig. 149): no lleva Sonoff.
+  const modeloDeFichas = Boolean(form.modelo) && modelos.some(mo => (
+    mo.marca === form.marca && mo.nombre === form.modelo && mo.solo_fichas
+  ));
 
   const handleChange = e => setForm(f => ({ ...f, [e.target.name]: e.target.value }));
 
@@ -935,8 +939,15 @@ export default function GestionMaquinas() {
 
               {/* Enlace con el Sonoff (eWeLink). Vacío = máquina sin control
                   remoto; el sistema la sigue manejando de forma manual. */}
-              {CON_SONOFF && (<>
+              {/* El modelo de fichas no lleva Sonoff: el campo solo sigue a
+                  la vista si quedó uno enlazado, para poder quitarlo. */}
+              {CON_SONOFF && (!modeloDeFichas || form.device_id.trim() !== '') && (<>
               <div>
+                {modeloDeFichas && (
+                  <p className="mb-1.5 text-xs font-medium text-amber-700">
+                    Este modelo trabaja con fichas: la app no usará este Sonoff. Borra el ID para desenlazarlo.
+                  </p>
+                )}
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
                   Sonoff — ID del dispositivo
                   <span className="ml-1 font-normal text-gray-400">(opcional)</span>
