@@ -678,7 +678,7 @@ function MobileBottomNav({ items, onMenu }) {
 }
 
 export default function Layout() {
-  const { usuario, logout, sucursalActiva } = useAuth();
+  const { usuario, logout, sucursalActiva, setSucursalActiva } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const now = useClock();
@@ -688,7 +688,7 @@ export default function Layout() {
   const [alertsOpen, setAlertsOpen] = useState(false);
   const [confirmLogout, setConfirmLogout] = useState(false);
   // true si el usuario que quiere salir es quien abrió la caja y sigue abierta.
-  const [cajaSinCerrar, setCajaSinCerrar] = useState(false);
+  const [cajaSinCerrar, setCajaSinCerrar] = useState(null); // { sucursal, sucursal_nombre } de su caja abierta
   const [productos, setProductos] = useState([]);
   const [notificaciones, setNotificaciones] = useState([]);
   const [sucursales, setSucursales] = useState([]);
@@ -849,13 +849,19 @@ export default function Layout() {
 
   const handleLogout = async () => {
     setMenuOpen(false);
-    setCajaSinCerrar(false);
-    // Si el propio usuario abrió la caja y sigue abierta, se le advierte antes
-    // de cerrar sesión. Si la consulta falla, no se bloquea el cierre.
+    setCajaSinCerrar(null);
+    // Si el propio usuario abrió una caja y sigue abierta, no puede cerrar
+    // sesión sin hacer su corte —empleado o admin (2026-10-09)—. El servidor
+    // la busca en CUALQUIER sucursal (`mi_caja_abierta`): un admin puede
+    // abrirla en una y cambiarse a otra. Si la consulta falla, no se bloquea.
     try {
       const data = await api.get('/caja/actual');
-      if (data?.abierta && String(data.caja?.usuario_apertura_id) === String(usuario?.id)) {
-        setCajaSinCerrar(true);
+      if (data?.mi_caja_abierta) {
+        setCajaSinCerrar(data.mi_caja_abierta);
+      } else if (data?.mi_caja_abierta === undefined && data?.abierta
+                 && String(data.caja?.usuario_apertura_id) === String(usuario?.id)) {
+        // Servidor de antes, sin `mi_caja_abierta`: solo la sucursal activa.
+        setCajaSinCerrar({ sucursal: sucursalSlug });
       }
     } catch { /* ignorar */ }
     setConfirmLogout(true);
@@ -867,8 +873,12 @@ export default function Layout() {
     navigate('/login');
   };
 
+  // Si su caja está en otra sucursal, se cambia a esa antes de ir al corte.
   const irACaja = () => {
     setConfirmLogout(false);
+    if (cajaSinCerrar?.sucursal && cajaSinCerrar.sucursal !== sucursalSlug) {
+      setSucursalActiva(cajaSinCerrar.sucursal, { reload: false });
+    }
     navigate('/caja?tab=corte');
   };
 
@@ -964,8 +974,8 @@ export default function Layout() {
                     d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
                 </svg>
                 <p className="text-sm text-amber-800">
-                  {isAdmin
-                    ? 'Abriste la caja y aún no se ha cerrado. Realiza el corte antes de salir.'
+                  {cajaSinCerrar.sucursal && cajaSinCerrar.sucursal !== sucursalSlug
+                    ? `Abriste la caja de ${cajaSinCerrar.sucursal_nombre ?? cajaSinCerrar.sucursal} y aún no se ha cerrado. Haz el corte para poder cerrar sesión.`
                     : 'Abriste la caja y aún no se ha cerrado. Haz el corte para poder cerrar sesión.'}
                 </p>
               </div>
@@ -984,10 +994,9 @@ export default function Layout() {
               </div>
             )}
             {cajaSinCerrar ? (
-              // Con caja abierta se apilan: la acción recomendada (ir a Caja)
-              // arriba, luego salir de todos modos y cancelar. El EMPLEADO no
-              // puede salir sin cortar (2026-10-06): su única salida es hacer
-              // el corte; "de todos modos" queda solo para un administrador.
+              // Con caja abierta: ir a Caja o cancelar. Nadie sale sin hacer
+              // su corte: el empleado desde el 2026-10-06 y el admin desde el
+              // 2026-10-09 (antes tenía "Cerrar sesión de todos modos").
               <div className="space-y-2.5">
                 <button
                   onClick={irACaja}
@@ -995,14 +1004,6 @@ export default function Layout() {
                 >
                   Ir a Caja
                 </button>
-                {isAdmin && (
-                  <button
-                    onClick={confirmarLogout}
-                    className="w-full bg-red-600 hover:bg-red-700 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
-                  >
-                    Cerrar sesión de todos modos
-                  </button>
-                )}
                 <button
                   onClick={() => setConfirmLogout(false)}
                   className="w-full border border-gray-300 text-gray-700 font-medium py-3.5 rounded-lg text-base hover:bg-gray-50 transition-colors"

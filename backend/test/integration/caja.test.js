@@ -31,7 +31,7 @@ describe('GET /api/caja/actual', () => {
   it('sin caja abierta devuelve { abierta: false }', async () => {
     const res = await request(app).get('/api/caja/actual').set(auth(admin.token));
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ abierta: false, apertura_sugerida: null });
+    expect(res.body).toEqual({ abierta: false, apertura_sugerida: null, mi_caja_abierta: null });
   });
 });
 
@@ -466,5 +466,17 @@ describe('caja final y sobre', () => {
     expect(actual.body.apertura_sugerida.monto).toBe(450);
     const hist = await request(app).get('/api/caja/historial').set(auth(admin.token));
     expect(hist.body[0]).toMatchObject({ caja_final: 450, sobre: 0 });
+  });
+});
+
+// Cerrar sesión con la caja propia abierta (2026-10-09): la pantalla pregunta
+// por `mi_caja_abierta`, que la busca en cualquier sucursal.
+describe('mi_caja_abierta', () => {
+  it('la encuentra aunque el admin esté viendo otra sucursal', async () => {
+    await seedSucursal('norte');
+    await request(app).post('/api/caja/abrir').set(auth(admin.token)).send({ monto_inicial: 100 }).expect(201);
+    const res = await request(app).get('/api/caja/actual').set(auth(admin.token)).set('X-Sucursal', 'norte');
+    expect(res.body.abierta).toBe(false);
+    expect(res.body.mi_caja_abierta).toMatchObject({ sucursal: 'centro' });
   });
 });

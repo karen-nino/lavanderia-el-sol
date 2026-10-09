@@ -134,9 +134,26 @@ async function aperturaSugerida(client, sucursal) {
   };
 }
 
+// La caja que ESTE usuario abrió y sigue abierta, en cualquier sucursal (o
+// null). Con ella se le impide cerrar sesión sin hacer su corte: un admin
+// puede abrir caja en una sucursal y cambiarse a otra, y mirar solo la
+// sucursal activa lo dejaba salir con el turno abierto (2026-10-09).
+async function miCajaAbierta(client, usuarioId) {
+  const { rows } = await client.query(
+    `SELECT c.sucursal, COALESCE(s.nombre, c.sucursal) AS sucursal_nombre
+       FROM cajas c
+       LEFT JOIN sucursales s ON s.slug = c.sucursal
+      WHERE c.estado = 'abierta' AND c.usuario_apertura_id = $1
+      LIMIT 1`,
+    [usuarioId]
+  );
+  return rows[0] ?? null;
+}
+
 export async function getCajaActual(req, res) {
   const client = await pool.connect();
   try {
+    const mi_caja_abierta = await miCajaAbierta(client, req.user.id);
     const cajaRes = await client.query(
       `SELECT c.*, TRIM(u.nombre || ' ' || COALESCE(u.apellido, '')) AS usuario_apertura
          FROM cajas c
@@ -148,7 +165,11 @@ export async function getCajaActual(req, res) {
 
     if (cajaRes.rowCount === 0) {
       // Sin caja abierta, lo que importa es con cuánto se abre la siguiente.
-      return res.json({ abierta: false, apertura_sugerida: await aperturaSugerida(client, req.sucursal) });
+      return res.json({
+        abierta: false,
+        apertura_sugerida: await aperturaSugerida(client, req.sucursal),
+        mi_caja_abierta,
+      });
     }
 
     const caja = cajaRes.rows[0];
@@ -171,6 +192,7 @@ export async function getCajaActual(req, res) {
 
     res.json({
       abierta: true,
+      mi_caja_abierta,
       caja: {
         id:               caja.id,
         usuario_apertura_id: caja.usuario_apertura_id,
