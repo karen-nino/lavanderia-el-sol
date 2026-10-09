@@ -922,11 +922,13 @@ async function reservarProducto(client, notaId, cargaId, productoId, cantidad, s
     const { rows } = await client.query(
       `UPDATE nota_productos
           SET cantidad       = cantidad + $4,
-              cantidad_medidas = cantidad_medidas + $5,
-              precio_unitario = $6
+              cantidad_medidas = cantidad_medidas + $5
         WHERE nota_id = $1 AND producto_id = $3 AND carga_id IS NOT DISTINCT FROM $2
      RETURNING *`,
-      [notaId, cargaId, productoId, cantidad, cantidadMedidas, precioUnit]
+      // El precio del renglón NO se toca: es el que se congeló al ponerlo. Si
+      // el catálogo cambió entretanto, re-tarifarlo cobraba de nuevo las
+      // unidades que ya estaban (y una nota pagada volvía a deber, 2026-10-08).
+      [notaId, cargaId, productoId, cantidad, cantidadMedidas]
     );
     npRows.push(rows[0]);
   }
@@ -4466,7 +4468,11 @@ export const removeProductoFromNota = async (req, res) => {
     const { rows: npRows } = await client.query(
       `SELECT np.*, n.estado AS nota_estado FROM nota_productos np
        JOIN notas n ON n.id = np.nota_id AND n.sucursal = $3
-       WHERE np.nota_id = $1 AND np.producto_id = $2`,
+       WHERE np.nota_id = $1 AND np.producto_id = $2
+         -- Solo el producto SUELTO de la nota, que es el de los botones de
+         -- Salidas. El mismo producto puede ir también dentro de un servicio
+         -- (Por Encargo) y ese no se toca desde aquí (2026-10-08).
+         AND np.carga_id IS NULL`,
       [id, productoId, req.sucursal]
     );
     if (npRows.length === 0) {
@@ -4482,8 +4488,8 @@ export const removeProductoFromNota = async (req, res) => {
     }
 
     await client.query(
-      'DELETE FROM nota_productos WHERE nota_id = $1 AND producto_id = $2',
-      [id, productoId]
+      'DELETE FROM nota_productos WHERE id = $1',
+      [np.id]
     );
 
     await client.query(
@@ -4534,7 +4540,11 @@ export const cambiarCantidadProducto = async (req, res) => {
     const { rows: npRows } = await client.query(
       `SELECT np.*, n.estado AS nota_estado FROM nota_productos np
        JOIN notas n ON n.id = np.nota_id AND n.sucursal = $3
-       WHERE np.nota_id = $1 AND np.producto_id = $2`,
+       WHERE np.nota_id = $1 AND np.producto_id = $2
+         -- Solo el producto SUELTO de la nota, que es el de los botones de
+         -- Salidas. El mismo producto puede ir también dentro de un servicio
+         -- (Por Encargo) y ese no se toca desde aquí (2026-10-08).
+         AND np.carga_id IS NULL`,
       [id, productoId, req.sucursal]
     );
     if (npRows.length === 0) {
@@ -4573,8 +4583,8 @@ export const cambiarCantidadProducto = async (req, res) => {
     }
 
     await client.query(
-      'UPDATE nota_productos SET cantidad = $1, cantidad_medidas = $2 WHERE nota_id = $3 AND producto_id = $4',
-      [cantidad, medidasNuevas, id, productoId]
+      'UPDATE nota_productos SET cantidad = $1, cantidad_medidas = $2 WHERE id = $3',
+      [cantidad, medidasNuevas, np.id]
     );
     await client.query(
       'UPDATE productos SET stock_reservado = stock_reservado + $1 WHERE id = $2',
