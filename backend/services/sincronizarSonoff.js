@@ -480,7 +480,7 @@ async function mandarMonedas(maq, total) {
     const res = await dispositivos.encender(maq);
     if (!res.ok) {
       console.warn(`[sonoff] ${maq.nombre ?? maq.id}: falló la moneda ${i} de ${total} (${res.motivo}).`);
-      if (dispositivos.esSimulacion()) return maq;
+      if (dispositivos.esSimulacion(maq)) return maq;
       const { rows: upd } = await pool.query(
         `UPDATE maquinas SET sonoff_estado = 'error', sonoff_detalle = $1, sonoff_sync_at = NOW()
           WHERE id = $2 RETURNING *`,
@@ -490,7 +490,7 @@ async function mandarMonedas(maq, total) {
     }
     if (i < total) await esperarMs(PAUSA_ENTRE_MONEDAS_MS);
   }
-  if (dispositivos.esSimulacion()) return maq;
+  if (dispositivos.esSimulacion(maq)) return maq;
   return marcar(maq.id, 'enlazada');
 }
 
@@ -523,7 +523,7 @@ export const programaTerminado = (maq, ahora = Date.now()) =>
 export async function meterMonedasExtra(maquinaId, minutos) {
   try {
     const { rows } = await pool.query(
-      `SELECT m.id, m.nombre, m.device_id, m.device_canal,
+      `SELECT m.id, m.nombre, m.sucursal, m.device_id, m.device_canal,
               ${MINUTOS_POR_MONEDA} AS minutos_por_moneda
          FROM maquinas m WHERE m.id = $1`,
       [maquinaId]
@@ -614,7 +614,7 @@ export async function sincronizarSonoff(maquinaId, { reconciliando = false } = {
         return maq;
       }
       const real = await dispositivos.estado(maq);
-      if (dispositivos.esSimulacion()) return maq;
+      if (dispositivos.esSimulacion(maq)) return maq;
       // Un aviso de monedas incompletas se queda a la vista mientras siga su
       // carga: el barrido no lo borra.
       if (real.ok && maq.estado === 'en_uso'
@@ -632,7 +632,7 @@ export async function sincronizarSonoff(maquinaId, { reconciliando = false } = {
     // ahí sí se reintenta, que es para lo que existe el reconciliador.
     if (deseado === 'on' && reconciliando && maq.sonoff_estado === 'enlazada') {
       const real = await dispositivos.estado(maq);
-      if (dispositivos.esSimulacion()) return maq;
+      if (dispositivos.esSimulacion(maq)) return maq;
       if (real.ok && real.estado === 'off') {
         // Si lo único que la tenía ocupada era un encendido manual y el relé ya
         // está abierto, quien la prendió la apagó: se suelta en el acto. Sin
@@ -677,7 +677,7 @@ export async function sincronizarSonoff(maquinaId, { reconciliando = false } = {
     if (deseado === 'off' && reconciliando && !liberadaPorCaducidad && !esperaCaducada
         && !cicloVencido(maq) && maq.sonoff_estado === 'enlazada') {
       const real = await dispositivos.estado(maq);
-      if (dispositivos.esSimulacion()) return maq;
+      if (dispositivos.esSimulacion(maq)) return maq;
       if (real.ok && real.estado === 'on') {
         return adoptarEncendidoManual(maq);
       }
@@ -697,7 +697,7 @@ export async function sincronizarSonoff(maquinaId, { reconciliando = false } = {
     // En simulación el driver siempre responde ok: marcar 'enlazada' pintaría
     // el indicador en verde sin que exista ningún Sonoff detrás. Se deja el
     // estado como estaba (la operación simulada ya quedó en el log).
-    if (dispositivos.esSimulacion()) return maq;
+    if (dispositivos.esSimulacion(maq)) return maq;
 
     return marcar(maq.id, res.ok ? 'enlazada' : 'error', res.motivo);
   } catch (err) {

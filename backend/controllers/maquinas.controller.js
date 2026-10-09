@@ -66,12 +66,13 @@ const buscarMaquinaConMismoDevice = async (deviceId, deviceCanal, excluirId = nu
 // El driver 'null' simula todo en memoria: responde ok a cualquier device_id,
 // sin tocar hardware. Mientras esté activo, las pruebas de enlace no prueban
 // nada y hay que decirlo en pantalla en vez de pintar una palomita verde.
-const simulacionActiva = () => dispositivos.esSimulacion();
+const simulacionActiva = (maq) => dispositivos.esSimulacion(maq);
 
 const MSG_SIMULACION =
   'Modo simulación: la app no está conectada a los Sonoff reales, así que esta ' +
   'prueba no comprueba nada y las máquinas tampoco van a encender ni apagar solas. ' +
-  'Para activarlo hay que configurar eWeLink en el servidor (DISPOSITIVOS_DRIVER=ewelink).';
+  'Para activarlo hay que configurar eWeLink en el servidor (DISPOSITIVOS_DRIVER=ewelink) ' +
+  'y, si se limita por sucursal, incluir esta en DISPOSITIVOS_SUCURSALES.';
 
 // Guarda cómo quedó el enlace y, si falló, POR QUÉ: así la tarjeta explica el
 // problema sin que nadie tenga que apretar "Probar" para enterarse.
@@ -798,10 +799,10 @@ export const probarSonoff = async (req, res) => {
     // Con el driver de simulación CUALQUIER device_id responde ok, así que una
     // prueba "exitosa" no significa nada: no se guarda el resultado (marcar
     // 'enlazada' sería mentir en la tarjeta) y se avisa a quien la ejecutó.
-    if (simulacionActiva()) {
+    if (simulacionActiva(maq)) {
       return res.json({
         simulado: true,
-        driver: dispositivos.nombreDriver(),
+        driver: dispositivos.nombreDriver(maq),
         message: MSG_SIMULACION,
         maquina: maq,
       });
@@ -855,8 +856,8 @@ export const apagarSonoff = async (req, res) => {
         message: explicarFalla('sin_enlazar', 'No se pudo apagar la máquina'),
       });
     }
-    if (simulacionActiva()) {
-      return res.json({ simulado: true, driver: dispositivos.nombreDriver(), message: MSG_SIMULACION, maquina: maq });
+    if (simulacionActiva(maq)) {
+      return res.json({ simulado: true, driver: dispositivos.nombreDriver(maq), message: MSG_SIMULACION, maquina: maq });
     }
 
     const apagado = await apagarConReintentos(maq);
@@ -943,8 +944,8 @@ export const encenderSonoff = async (req, res) => {
         message: explicarFalla('sin_enlazar', 'No se pudo encender la máquina'),
       });
     }
-    if (simulacionActiva()) {
-      return res.json({ simulado: true, driver: dispositivos.nombreDriver(), message: MSG_SIMULACION, maquina: maq });
+    if (simulacionActiva(maq)) {
+      return res.json({ simulado: true, driver: dispositivos.nombreDriver(maq), message: MSG_SIMULACION, maquina: maq });
     }
 
     const encendido = await dispositivos.encender(maq);

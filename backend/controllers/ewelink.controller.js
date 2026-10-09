@@ -34,8 +34,10 @@ export const getEstado = async (req, res) => {
     res.json({
       // Sin App ID/Secret en el servidor no hay nada que conectar.
       configurado: oauth.configCompleta(),
-      driver: dispositivos.nombreDriver(),
-      simulado: dispositivos.esSimulacion(),
+      // De la sucursal que se está viendo: con DISPOSITIVOS_SUCURSALES una
+      // puede usar los Sonoff reales y otra seguir simulada.
+      driver: dispositivos.nombreDriver({ sucursal: req.sucursal }),
+      simulado: dispositivos.esSimulacion({ sucursal: req.sucursal }),
       conectada: cuentaStore.estaConectada(cuenta),
       cuenta: cuenta?.cuenta ?? null,
       region: cuenta?.region ?? null,

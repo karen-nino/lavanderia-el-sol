@@ -27,7 +27,7 @@ const SUCURSAL = 'pruebas';
 
 // Slugs que existen de fábrica (migraciones + seed_pruebas). Todo lo que no
 // esté aquí lo creó un visitante y se va.
-const SUCURSALES_BASE = ['lopez_cotilla', 'retiro', 'pruebas'];
+const SUCURSALES_BASE = ['zapopan', 'retiro', 'pruebas'];
 
 // --forzar: limpiar aunque la base tenga notas FUERA de la sucursal de pruebas.
 // Sin la bandera eso aborta, porque es la señal de "esta base tiene operación

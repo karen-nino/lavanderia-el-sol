@@ -53,3 +53,42 @@ describe('nullDriver (simulación en memoria)', () => {
     expect(await nullDriver.estado({ device_id: 'nunca-usado' })).toEqual({ ok: true, estado: 'off' });
   });
 });
+
+// DISPOSITIVOS_SUCURSALES (2026-10-09): con el driver real, solo las
+// sucursales de la lista hablan con los Sonoff; las demás siguen simuladas.
+describe('driver real limitado por sucursal', () => {
+  const cargar = async (sucursales) => {
+    vi.resetModules();
+    vi.stubEnv('DISPOSITIVOS_DRIVER', 'ewelink');
+    vi.stubEnv('DISPOSITIVOS_SUCURSALES', sucursales);
+    const mod = await import('./index.js');
+    const ewe = await import('./ewelinkDriver.js');
+    const nul = await import('./nullDriver.js');
+    return { mod, ewe, nul };
+  };
+
+  it('la sucursal de la lista usa eWeLink y la otra el nullDriver', async () => {
+    const { mod, ewe, nul } = await cargar('zapopan');
+    const real = vi.spyOn(ewe, 'encender').mockResolvedValue({ ok: true, estado: 'on' });
+    const sim  = vi.spyOn(nul, 'encender');
+
+    await mod.encender({ device_id: 'z1', sucursal: 'zapopan' });
+    await mod.encender({ device_id: 'r1', sucursal: 'retiro' });
+
+    expect(real).toHaveBeenCalledTimes(1);
+    expect(real.mock.calls[0][0].device_id).toBe('z1');
+    expect(sim).toHaveBeenCalledTimes(1);
+    expect(sim.mock.calls[0][0].device_id).toBe('r1');
+    expect(mod.esSimulacion({ sucursal: 'zapopan' })).toBe(false);
+    expect(mod.esSimulacion({ sucursal: 'retiro' })).toBe(true);
+    expect(mod.nombreDriver({ sucursal: 'retiro' })).toBe('null');
+    vi.unstubAllEnvs();
+  });
+
+  it('sin lista, todas las sucursales usan el driver real', async () => {
+    const { mod } = await cargar('');
+    expect(mod.esSimulacion({ sucursal: 'retiro' })).toBe(false);
+    expect(mod.esSimulacion({ sucursal: 'zapopan' })).toBe(false);
+    vi.unstubAllEnvs();
+  });
+});

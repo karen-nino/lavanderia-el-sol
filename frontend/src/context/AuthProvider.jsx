@@ -3,12 +3,20 @@ import { AuthContext } from './AuthContext';
 import { api } from '../lib/api';
 import { almacenSesion } from '../lib/sesion';
 
+// Slugs renombrados (mig. 150): la sesión guardada en la tablet puede traer el
+// de antes. El backend también lo traduce; esto es para que la pantalla
+// (selector, barra de sucursal) reconozca la sucursal sin volver a entrar.
+const SLUGS_RENOMBRADOS = { lopez_cotilla: 'zapopan' };
+const slugVigente = (slug) => SLUGS_RENOMBRADOS[slug] ?? slug;
+
 export function AuthProvider({ children }) {
   const [token, setToken] = useState(() => almacenSesion.getItem('token'));
   const [usuario, setUsuario] = useState(() => {
     try {
       const u = almacenSesion.getItem('usuario');
-      return u ? JSON.parse(u) : null;
+      if (!u) return null;
+      const parsed = JSON.parse(u);
+      return parsed?.sucursal ? { ...parsed, sucursal: slugVigente(parsed.sucursal) } : parsed;
     } catch {
       return null;
     }
@@ -17,7 +25,7 @@ export function AuthProvider({ children }) {
   // un admin puede cambiarla con el selector. Se persiste para que api.js la
   // envíe en el header X-Sucursal en cada petición.
   const [sucursalActiva, setSucursalActivaState] = useState(
-    () => almacenSesion.getItem('sucursalActiva') || null
+    () => slugVigente(almacenSesion.getItem('sucursalActiva')) || null
   );
 
   const persistSucursal = (slug) => {

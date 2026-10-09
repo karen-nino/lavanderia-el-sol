@@ -31,6 +31,12 @@ export function refrescarSlugsSucursales() {
   slugsCache = null;
 }
 
+// Slugs renombrados (mig. 150): una tablet con la sesión o el bundle de antes
+// sigue mandando el viejo en X-Sucursal, y sin esto se le ignoraría en
+// silencio y caería a la sucursal propia del admin.
+const SLUGS_RENOMBRADOS = { lopez_cotilla: 'zapopan' };
+export const slugVigente = (slug) => SLUGS_RENOMBRADOS[slug] ?? slug;
+
 // Resuelve la sucursal activa de la petición en req.sucursal.
 //   - Usuario de prueba: SIEMPRE la sucursal de pruebas, sin importar su rol
 //     ni lo que mande el cliente. Es un entorno cerrado: no puede salir a una
@@ -47,11 +53,11 @@ export const sucursalActiva = async (req, res, next) => {
       return next();
     }
 
-    const propia = req.user?.sucursal || 'lopez_cotilla';
+    const propia = req.user?.sucursal || 'zapopan';
     let activa = propia;
 
     if (esAdmin(req.user?.rol)) {
-      const pedida = req.headers['x-sucursal'] || req.query.sucursal;
+      const pedida = slugVigente(req.headers['x-sucursal'] || req.query.sucursal);
       if (pedida && (await esSlugElegible(pedida))) {
         activa = pedida;
       }

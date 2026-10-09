@@ -88,7 +88,7 @@ async function seedVisitanteContaminando(sucursal = 'centro') {
 }
 
 // Mismo orden que reset-demo.mjs, incluido el borrado de sucursales.
-const SUCURSALES_BASE = ['lopez_cotilla', 'retiro', 'pruebas', 'centro'];
+const SUCURSALES_BASE = ['zapopan', 'retiro', 'pruebas', 'centro'];
 
 async function correrLimpieza() {
   await pool.query('BEGIN');
