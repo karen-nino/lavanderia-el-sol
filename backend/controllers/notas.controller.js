@@ -1232,6 +1232,16 @@ async function registrarMaquinaEnCarga(client, cargaId, slot, maquinaId, modo = 
     if (String(enElHueco) === String(m.id)) return;
   }
 
+  // Otra vuelta del mismo hueco (relavado, secado de más): la marca de arranque
+  // de la carga (mig. 097) era de la vuelta anterior y se borra hasta que esta
+  // arranque. Si se quedaba, la máquina nueva contaba como "arrancada por esta
+  // nota" sin que nadie le diera Iniciar: cancelar la nota la soltaba aunque
+  // otra nota la estuviera usando, y Ventas la contaba como ciclo (2026-10-08).
+  if (ultima) {
+    const col = slot === 'secadora' ? 'secadora_iniciada_at' : 'lavadora_iniciada_at';
+    await client.query(`UPDATE nota_cargas SET ${col} = NULL WHERE id = $1`, [cargaId]);
+  }
+
   await client.query(
     `INSERT INTO nota_carga_maquinas
        (carga_id, slot, maquina_id, maquina_nombre, maquina_tipo, maquina_tamano, ciclo_unico)
