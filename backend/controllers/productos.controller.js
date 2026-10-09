@@ -867,6 +867,13 @@ export const getReporteDiario = async (req, res) => {
 //     transacción.
 // Un producto referenciado en nota_productos (con ventas) no se puede borrar
 // por la restricción de llave foránea. Todo acotado a la sucursal.
+// ¿El producto (alias que se pase) tiene historia? Usado en alguna nota o con
+// algún movimiento de inventario (entrada, salida, rellenado, venta).
+const CON_HISTORIA = (p) => `(
+  EXISTS (SELECT 1 FROM nota_productos np WHERE np.producto_id = ${p}.id)
+  OR EXISTS (SELECT 1 FROM producto_movimientos pm WHERE pm.producto_id = ${p}.id)
+)`;
+
 export const deleteProductosMultiples = async (req, res) => {
   const { ids, confirmar } = req.body;
 
@@ -888,14 +895,15 @@ export const deleteProductosMultiples = async (req, res) => {
     );
     const idsValidos = productos.map((p) => p.id);
 
-    // Productos con ventas registradas: no se pueden borrar.
+    // Productos con historia (notas o movimientos): no se borran, igual que
+    // el borrado individual.
     let bloqueadosSet = new Set();
     if (idsValidos.length > 0) {
       const { rows } = await client.query(
-        'SELECT DISTINCT producto_id FROM nota_productos WHERE producto_id = ANY($1)',
+        `SELECT p.id FROM productos p WHERE p.id = ANY($1) AND ${CON_HISTORIA('p')}`,
         [idsValidos]
       );
-      bloqueadosSet = new Set(rows.map((r) => r.producto_id));
+      bloqueadosSet = new Set(rows.map((r) => r.id));
     }
 
     const bloqueados  = productos.filter((p) => bloqueadosSet.has(p.id));
@@ -928,19 +936,20 @@ export const deleteProductosMultiples = async (req, res) => {
 export const deleteProducto = async (req, res) => {
   const { id } = req.params;
   try {
-    // Uno que ya se usó en notas es historia de ventas: la llave foránea no deja
-    // borrarlo y tronaba con un 500 de "intenta de nuevo" (2026-10-08). Se dice
-    // por qué y qué hacer, igual que el borrado múltiple.
-    const { rows: usado } = await pool.query(
-      `SELECT 1 FROM nota_productos np
-         JOIN productos p ON p.id = np.producto_id
-        WHERE np.producto_id = $1 AND p.sucursal = $2 LIMIT 1`,
+    // Uno con HISTORIA no se borra: si se usó en notas, la llave foránea no
+    // deja (tronaba con un 500 de "intenta de nuevo"); si tiene entradas o
+    // salidas, el CASCADE se llevaba su historial y el Reporte diario de días
+    // pasados perdía esas filas (2026-10-08). Se desactiva en su lugar. Solo se
+    // borra de verdad uno recién creado por error.
+    const { rows: [h] } = await pool.query(
+      `SELECT ${CON_HISTORIA('p')} AS con_historia
+         FROM productos p WHERE p.id = $1 AND p.sucursal = $2`,
       [id, req.sucursal]
     );
-    if (usado.length > 0) {
+    if (h?.con_historia) {
       return res.status(409).json({
-        message: 'Este producto ya se usó en notas, así que no se puede eliminar. '
-               + 'Desactívalo para ocultarlo del inventario.',
+        message: 'Este producto ya tiene movimientos o se usó en notas, así que no se puede '
+               + 'eliminar. Desactívalo para ocultarlo del inventario.',
       });
     }
     const { rowCount } = await pool.query(

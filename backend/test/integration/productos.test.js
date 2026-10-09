@@ -317,9 +317,30 @@ describe('DELETE múltiple /api/productos/eliminar-multiples', () => {
     expect(rows).toHaveLength(1);
   });
 
-  it('borrar uno sin notas sí lo borra', async () => {
+  it('borrar uno recién creado, sin notas ni movimientos, sí lo borra', async () => {
     const libre = await seedProducto({ nombre: 'Libre' });
     await request(app).delete(`/api/productos/${libre}`).set(auth(admin.token)).expect(204);
+  });
+
+  // Con entradas o salidas registradas, borrarlo se llevaba su historial
+  // (CASCADE) y el Reporte diario de días pasados perdía esas filas.
+  it('uno con movimientos no se borra (individual ni múltiple) y conserva su historial', async () => {
+    const conMov = await seedProducto({ nombre: 'Con entrada' });
+    await request(app).post(`/api/productos/${conMov}/movimiento`).set(auth(admin.token))
+      .send({ tipo: 'entrada', destino: 'botellas', cantidad: 1, unidad: 'botella' }).expect(200);
+
+    const uno = await request(app).delete(`/api/productos/${conMov}`).set(auth(admin.token));
+    expect(uno.status).toBe(409);
+    expect(uno.body.message).toMatch(/movimientos/);
+
+    const libre = await seedProducto({ nombre: 'Libre' });
+    const varios = await request(app).post('/api/productos/eliminar-multiples').set(auth(admin.token))
+      .send({ ids: [libre, conMov], confirmar: true });
+    expect(varios.body.eliminados).toEqual([libre]);
+    expect(varios.body.bloqueados.map((b) => b.id)).toEqual([conMov]);
+
+    const { rows } = await pool.query('SELECT 1 FROM producto_movimientos WHERE producto_id = $1', [conMov]);
+    expect(rows).toHaveLength(1);
   });
 
   it('sin ids → 400', async () => {

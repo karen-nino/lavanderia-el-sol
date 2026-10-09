@@ -2491,7 +2491,7 @@ export default function Inventario() {
         />
       )}
 
-      {/* Modal: Eliminar varios (con advertencia de ventas registradas) */}
+      {/* Modal: Eliminar varios (con advertencia de los que tienen historia) */}
       {bulkOpen && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
@@ -2526,8 +2526,8 @@ export default function Inventario() {
                       <div className="bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-lg p-3 mb-3">
                         <p className="font-medium mb-1">
                           {todosBloqueados
-                            ? 'Ninguno se puede eliminar porque tiene ventas registradas:'
-                            : 'Estos tienen ventas registradas y no se eliminarán:'}
+                            ? 'Ninguno se puede eliminar porque tiene movimientos o se usó en notas (desactívalos para ocultarlos):'
+                            : 'Estos tienen movimientos o se usaron en notas y no se eliminarán (desactívalos para ocultarlos):'}
                         </p>
                         <ul className="list-disc list-inside space-y-0.5">
                           {bloqueados.map(p => <li key={p.id}>{p.nombre}</li>)}
