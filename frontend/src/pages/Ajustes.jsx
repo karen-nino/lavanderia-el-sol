@@ -1224,7 +1224,8 @@ export default function Ajustes() {
         </div>
       ) : null}
       {avisoProgramasSobreTope(t)}
-      {campoMoneda(t, inputCls, unidadCls)}
+      {/* Sin Sonoff en la demo (2026-10-08): no hay monedero que manejar. */}
+      {!ES_DEMO && campoMoneda(t, inputCls, unidadCls)}
     </>
   );
   const tiemposDe = (tipo, tamano) =>

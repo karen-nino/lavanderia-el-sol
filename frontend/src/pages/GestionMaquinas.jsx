@@ -7,6 +7,11 @@ import { estadoVisual, contarPorEstado, filtrarPorEstado } from '../lib/estadoMa
 import SucursalBar from '../components/SucursalBar';
 import ConfirmacionModal from '../components/ConfirmacionModal';
 import Selector from '../components/Selector';
+import { ES_DEMO } from '../lib/entorno';
+
+// En la demo pública no hay Sonoff (2026-10-08, a pedido): todo es simulado,
+// así que se esconden la pastilla, el ID del dispositivo y el Encender a mano.
+const CON_SONOFF = !ES_DEMO;
 
 const ESTADO_CFG = {
   disponible:    { label: 'Disponible',    cls: 'bg-green-100 text-green-700', clsActive: 'bg-green-600 text-white', dot: 'bg-green-500' },
@@ -476,7 +481,7 @@ export default function GestionMaquinas() {
         <div>
           <h1 className="text-xl font-bold text-gray-900">Gestión de máquinas</h1>
           <p className="text-sm text-gray-500">{maquinas.length} equipo(s) registrado(s)</p>
-          {esAdmin && maquinas.length > 0 && (
+          {esAdmin && CON_SONOFF && maquinas.length > 0 && (
             <p className="text-xs text-gray-400 mt-0.5">
               Sonoff: {conDeviceId} de {maquinas.length} con ID asignado
               {conDeviceId > 0 && ` · ${confirmadas} con enlace confirmado`}
@@ -510,7 +515,7 @@ export default function GestionMaquinas() {
           ve al probar una máquina ("no respondió") no deja adivinar que lo que
           falta es autorizar la cuenta. Se oculta en simulación, donde no hay
           cuenta que conectar. */}
-      {esAdmin && cuentaSonoff && !cuentaSonoff.simulado && (
+      {esAdmin && CON_SONOFF && cuentaSonoff && !cuentaSonoff.simulado && (
         cuentaSonoff.conectada ? (
           <div className="flex items-center justify-between gap-3 bg-white border border-gray-200 rounded-lg px-4 py-2.5">
             <p className="text-sm text-gray-600">
@@ -681,6 +686,7 @@ export default function GestionMaquinas() {
                         </svg>
                         Editar
                       </button>
+                      {CON_SONOFF && (
                       <button
                         type="button"
                         onClick={() => { setAccionesMenuId(null); setPorConfirmar({ tipo: 'encender', maquina: m }); }}
@@ -692,6 +698,7 @@ export default function GestionMaquinas() {
                         </svg>
                         {prendiendo ? 'Encendiendo…' : 'Encender'}
                       </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => { setAccionesMenuId(null); setPorConfirmar({ tipo: 'eliminar', maquina: m }); }}
@@ -744,7 +751,7 @@ export default function GestionMaquinas() {
                       ) : m.reservada_folio}
                     </p>
                   )}
-                  {esAdmin && sonoffCfg && (
+                  {esAdmin && CON_SONOFF && sonoffCfg && (
                     <div className="mt-2">
                       <span
                         title={m.device_id ? `Sonoff ${m.device_id}` : 'Sin Sonoff asignado'}
@@ -922,6 +929,7 @@ export default function GestionMaquinas() {
 
               {/* Enlace con el Sonoff (eWeLink). Vacío = máquina sin control
                   remoto; el sistema la sigue manejando de forma manual. */}
+              {CON_SONOFF && (<>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
                   Sonoff — ID del dispositivo
@@ -988,6 +996,7 @@ export default function GestionMaquinas() {
                   />
                 </div>
               )}
+              </>)}
 
               {editandoId != null && (
                 <div className="flex items-center justify-between">
