@@ -301,10 +301,30 @@ async function marcarMaquinasIniciadas(client, notaId, maquinaIds) {
   );
 }
 
+// Máquinas que ESTA nota ENCENDIÓ y nadie arrancó (mig. 110): se apagan y se
+// sueltan. La nota es lo único que dice por qué ese relé está cerrado, así que
+// sin ella quedaría encendida sin nota. El guardo de `en_uso_desde IS NULL`
+// es por si entretanto alguien inició el lavado: esa ya está lavando y la
+// suelta el camino de siempre. La usan eliminar, cancelar y Por Entregar.
+async function apagarEncendidasSinArrancar(client, notaId) {
+  await client.query(
+    `UPDATE maquinas
+        SET encendida_sin_iniciar_at = NULL,
+            encendida_para_nota_id   = NULL,
+            estado = CASE WHEN estado = 'en_uso' AND en_uso_desde IS NULL
+                          THEN 'disponible'::estado_maquina ELSE estado END
+      WHERE encendida_para_nota_id = $1`,
+    [notaId]
+  );
+}
+
 // Libera (pasa a disponible) las máquinas que ESTA nota arrancó y siguen en
 // uso. Las que solo tiene asignadas no se tocan: pueden estar corriendo para
 // otra nota que se le adelantó al iniciar, y apagarlas la dejaría a medias.
+// También apaga las que encendió sin arrancar (antes se quedaban apartadas
+// hasta que caducara la espera, 5 min; 2026-10-08).
 async function liberarMaquinasDeNota(client, notaId) {
+  await apagarEncendidasSinArrancar(client, notaId);
   const { rows } = await client.query(
     `SELECT DISTINCT mid FROM (
        SELECT lavadora_id AS mid FROM nota_cargas
@@ -2421,15 +2441,7 @@ export const eliminarNota = async (req, res) => {
     // que nunca iba a funcionar. El guardo de `en_uso_desde IS NULL` es por si
     // entretanto alguien inició el lavado: esa ya está lavando y la suelta el
     // camino de siempre, unas líneas más abajo.
-    await client.query(
-      `UPDATE maquinas
-          SET encendida_sin_iniciar_at = NULL,
-              encendida_para_nota_id   = NULL,
-              estado = CASE WHEN estado = 'en_uso' AND en_uso_desde IS NULL
-                            THEN 'disponible'::estado_maquina ELSE estado END
-        WHERE encendida_para_nota_id = $1`,
-      [id]
-    );
+    await apagarEncendidasSinArrancar(client, id);
     // Se recolectan antes del DELETE: el CASCADE borra nota_cargas.
     // Solo las que ESTA nota arrancó: las que únicamente tenía asignadas
     // pueden estar corriendo para otra nota (mig. 097).

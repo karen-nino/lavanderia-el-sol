@@ -64,4 +64,19 @@ describe('quitar una carga', () => {
     const res = await api('delete', `/api/notas/${a.id}/cargas/${c.id}`);
     expect(res.status).toBe(409);
   });
+
+  it('cancelar la nota apaga en el acto la que encendió y no arrancó', async () => {
+    process.env.MAQUINAS_CRONOMETRO = 'off';
+    try {
+      const l1 = await seedMaquina({ nombre: 'L1', tipo: 'lavadora_mediana', tamano: 'mediana' });
+      const a = await notaAuto(1);
+      await asignar(a, a.cargas[0], l1);
+      await api('patch', `/api/notas/${a.id}/encender-maquina`, { maquina_id: l1 }).expect(200);
+      expect(await estado(l1)).toBe('en_uso');
+      await api('patch', `/api/notas/${a.id}/estado`, { estado: 'CANCELADA' }).expect(200);
+      const { rows } = await pool.query(
+        'SELECT estado, encendida_para_nota_id FROM maquinas WHERE id = $1', [l1]);
+      expect(rows[0]).toEqual({ estado: 'disponible', encendida_para_nota_id: null });
+    } finally { delete process.env.MAQUINAS_CRONOMETRO; }
+  });
 });
