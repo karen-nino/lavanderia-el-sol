@@ -510,4 +510,17 @@ describe('modelo de fichas', () => {
     await arrancar(lav);
     expect(await cicloDe(lav)).toBeNull();
   });
+
+  it('no se enciende a mano desde Gestión aunque tenga un Sonoff enlazado', async () => {
+    const marca = await seedMarca('Fichera');
+    await crearModelo(admin.token, { marca_id: marca, nombre: 'F2', solo_fichas: true }).expect(201);
+    const lav = await seedMaquina({ nombre: 'L2', marca: 'Fichera', modelo: 'F2' });
+    await pool.query("UPDATE maquinas SET device_id = 'abc123' WHERE id = $1", [lav]);
+
+    const res = await request(app).post(`/api/maquinas/${lav}/encender-sonoff`).set(auth(admin.token));
+    expect(res.status).toBe(400);
+    const { rows } = await pool.query('SELECT estado, encendida_manual_at FROM maquinas WHERE id = $1', [lav]);
+    expect(rows[0].estado).toBe('disponible');
+    expect(rows[0].encendida_manual_at).toBeNull();
+  });
 });

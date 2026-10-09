@@ -920,13 +920,23 @@ export const encenderSonoff = async (req, res) => {
   const { id } = req.params;
   try {
     const { rows } = await pool.query(
-      'SELECT * FROM maquinas WHERE id = $1 AND sucursal = $2',
+      `SELECT m.*, ${soloFichasSql('m')} AS solo_fichas
+         FROM maquinas m WHERE m.id = $1 AND m.sucursal = $2`,
       [id, req.sucursal]
     );
     if (rows.length === 0) {
       return res.status(404).json({ message: 'Máquina no encontrada.' });
     }
     const maq = rows[0];
+
+    // La de fichas (mig. 149) no tiene Sonoff. Aunque le hayan dejado uno
+    // enlazado, encenderla la dejaría 'en_uso' para siempre: la sincronización
+    // no la toca, así que su encendido manual nunca caducaría.
+    if (maq.solo_fichas) {
+      return res.status(400).json({
+        message: `${maq.nombre} trabaja con fichas: no tiene Sonoff que encender.`,
+      });
+    }
 
     if (!dispositivos.tieneDispositivo(maq)) {
       return res.status(400).json({

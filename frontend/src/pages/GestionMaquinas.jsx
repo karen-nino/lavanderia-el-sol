@@ -459,11 +459,13 @@ export default function GestionMaquinas() {
 
   // Avance del enlace con los Sonoff: al configurarlos por primera vez es fácil
   // saltarse una máquina, y sin este conteo no hay forma de notarlo.
-  const conDeviceId  = maquinas.filter(m => m.device_id).length;
-  const confirmadas  = maquinas.filter(m => m.sonoff_estado === 'enlazada').length;
+  // Las de fichas (mig. 149) no llevan Sonoff: no son una máquina por enlazar.
+  const conControl   = maquinas.filter(m => !m.solo_fichas);
+  const conDeviceId  = conControl.filter(m => m.device_id).length;
+  const confirmadas  = conControl.filter(m => m.sonoff_estado === 'enlazada').length;
   // Las que están fallando se cuentan aparte: es lo que hay que atender hoy,
   // y en una lista larga se pierden entre las que sí responden.
-  const conFalla     = maquinas.filter(m => m.device_id && m.sonoff_estado === 'error').length;
+  const conFalla     = conControl.filter(m => m.device_id && m.sonoff_estado === 'error').length;
 
   if (loading) {
     return (
@@ -481,9 +483,9 @@ export default function GestionMaquinas() {
         <div>
           <h1 className="text-xl font-bold text-gray-900">Gestión de máquinas</h1>
           <p className="text-sm text-gray-500">{maquinas.length} equipo(s) registrado(s)</p>
-          {esAdmin && CON_SONOFF && maquinas.length > 0 && (
+          {esAdmin && CON_SONOFF && conControl.length > 0 && (
             <p className="text-xs text-gray-400 mt-0.5">
-              Sonoff: {conDeviceId} de {maquinas.length} con ID asignado
+              Sonoff: {conDeviceId} de {conControl.length} con ID asignado
               {conDeviceId > 0 && ` · ${confirmadas} con enlace confirmado`}
               {conFalla > 0 && (
                 <span className="text-red-600 font-medium"> · {conFalla} sin conexión</span>
@@ -689,7 +691,8 @@ export default function GestionMaquinas() {
                         </svg>
                         Editar
                       </button>
-                      {CON_SONOFF && (
+                      {/* La de fichas no tiene Sonoff que encender (mig. 149). */}
+                      {CON_SONOFF && !m.solo_fichas && (
                       <button
                         type="button"
                         onClick={() => { setAccionesMenuId(null); setPorConfirmar({ tipo: 'encender', maquina: m }); }}
