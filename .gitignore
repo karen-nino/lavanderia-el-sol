@@ -60,3 +60,6 @@ frontend/public/_redirects
 
 # Logos subidos desde Ajustes (los crea el backend al arrancar)
 backend/uploads/
+
+# Contexto técnico para Claude (documento local, no se versiona)
+CONTEXTO_PROYECTO.md
