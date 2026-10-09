@@ -526,3 +526,43 @@ describe('tipo de granel en el producto (mig. 136)', () => {
     expect(res.status).toBe(400);
   });
 });
+
+// La existencia vive en MEDIDAS y se lee con los tamaños del producto: con
+// existencia o algo apartado, los tamaños no se cambian (2026-10-08).
+describe('editar los tamaños de un producto con existencia', () => {
+  const datos = (extra = {}) => ({
+    nombre: 'OXXI', tipo_liquido: 'granel', forma: 'liquido',
+    volumen_envase_ml: 20000, botella_ml: 800, medida_ml: 200, ...extra,
+  });
+  async function conBotellas(n) {
+    const res = await request(app).post('/api/productos').set(auth(admin.token)).send(datos({ stock_botellas: n }));
+    expect(res.status).toBe(201);
+    return res.body.id;
+  }
+  const stock = async (id) =>
+    Number((await pool.query('SELECT stock_actual FROM productos WHERE id = $1', [id])).rows[0].stock_actual);
+
+  it('con existencia, cambiar la medida se rechaza y la existencia no se mueve', async () => {
+    const id = await conBotellas(10);
+    const antes = await stock(id);
+    const res = await request(app).put(`/api/productos/${id}`).set(auth(admin.token)).send(datos({ medida_ml: 100 }));
+    expect(res.status).toBe(409);
+    expect(res.body.message).toMatch(/Registra una salida/);
+    expect(await stock(id)).toBe(antes);
+  });
+
+  it('con existencia sí se cambian el nombre y los precios', async () => {
+    const id = await conBotellas(10);
+    const res = await request(app).put(`/api/productos/${id}`).set(auth(admin.token))
+      .send(datos({ nombre: 'OXXI PLUS', precio_unitario: 9 }));
+    expect(res.status).toBe(200);
+    expect(res.body.nombre).toBe('OXXI PLUS');
+  });
+
+  it('sin existencia los tamaños se pueden corregir', async () => {
+    const id = await conBotellas(0);
+    const res = await request(app).put(`/api/productos/${id}`).set(auth(admin.token)).send(datos({ medida_ml: 100 }));
+    expect(res.status).toBe(200);
+    expect(Number(res.body.medida_ml)).toBe(100);
+  });
+});

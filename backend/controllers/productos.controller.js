@@ -430,6 +430,39 @@ export const updateProducto = async (req, res) => {
     ? Math.floor(bidonMl / medidaMl)
     : Math.floor(botellaMl / medidaMl);
 
+  // La existencia se guarda en MEDIDAS y la pantalla la convierte con estos
+  // tamaños: cambiarlos con existencia le cambiaba el significado (medida de
+  // 200 a 100 mL y 10 botellas pasaban a verse como 5) y descuadraba lo
+  // apartado en notas. Decisión de la usuaria (2026-10-08): con existencia o
+  // con algo apartado, los tamaños no se tocan.
+  const { rows: actualRows } = await pool.query(
+    `SELECT tipo_liquido, COALESCE(forma, 'liquido') AS forma, botella_ml, medida_ml,
+            volumen_envase_ml, stock_actual, stock_granel_medidas, stock_reservado
+       FROM productos WHERE id = $1 AND sucursal = $2`,
+    [id, req.sucursal]
+  );
+  const actual = actualRows[0];
+  if (actual) {
+    const distinto = (a, b) => (a == null ? null : Number(a)) !== (b == null ? null : Number(b));
+    const cambiaTamano = actual.tipo_liquido !== tipo_liquido
+      || actual.forma !== forma
+      || distinto(actual.botella_ml, botellaMl)
+      || distinto(actual.medida_ml, medidaMl)
+      || (conBidon && distinto(actual.volumen_envase_ml, bidonMl));
+    const conExistencia = Number(actual.stock_actual) > 0
+      || Number(actual.stock_granel_medidas) > 0
+      || Number(actual.stock_reservado) > 0;
+    if (cambiaTamano && conExistencia) {
+      return res.status(409).json({
+        message: Number(actual.stock_reservado) > 0
+          ? 'No se pueden cambiar los tamaños ni el tipo: este producto está apartado en notas abiertas. '
+            + 'Espera a que se cierren o quítalo de ellas.'
+          : 'No se pueden cambiar los tamaños ni el tipo con existencia: la existencia se calcula con '
+            + 'ellos y se descuadraría. Registra una salida de todo, corrige el producto y vuelve a dar entrada.',
+      });
+    }
+  }
+
   try {
     const { rows } = await pool.query(
       `UPDATE productos

@@ -664,6 +664,16 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = 
                 </div>
               </div>
             )}
+            {/* La existencia se guarda en medidas y se lee con estos tamaños: con
+                existencia o algo apartado no se dejan cambiar (2026-10-08). Se
+                avisa antes de guardar para no llenar todo y chocar al final. */}
+            {esEdicion && (Number(producto?.stock_actual) > 0 || Number(producto?.stock_granel_medidas) > 0
+              || Number(producto?.stock_reservado) > 0) && (
+              <p className="text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                Este producto tiene existencia: sus tamaños y su tipo no se pueden cambiar. Para corregirlos,
+                registra una salida de todo, edítalo y vuelve a dar entrada.
+              </p>
+            )}
             {esGranelLiq && (
               <div>
                 <p className="text-sm font-medium text-gray-700 mb-1.5">
