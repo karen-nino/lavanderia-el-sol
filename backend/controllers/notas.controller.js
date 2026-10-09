@@ -1986,6 +1986,14 @@ export const createNota = async (req, res) => {
   if (cliente_id && !(await perteneceASucursal('clientes', cliente_id, req.sucursal))) {
     return res.status(400).json({ message: 'El cliente seleccionado no existe en esta sucursal.' });
   }
+  // Un cliente eliminado con historial queda oculto (activo = FALSE,
+  // 2026-10-08): una pantalla abierta desde antes todavía podría mandarlo.
+  if (cliente_id) {
+    const { rows: act } = await pool.query('SELECT activo FROM clientes WHERE id = $1', [cliente_id]);
+    if (act[0] && act[0].activo === false) {
+      return res.status(400).json({ message: 'Ese cliente se eliminó. Elige otro o regístralo de nuevo.' });
+    }
+  }
 
   const ajusteNum = Number(ajuste) || 0;
 

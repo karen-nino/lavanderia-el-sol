@@ -94,8 +94,23 @@ export const deleteCliente = async (req, res) => {
       return res.status(400).json({ message: 'No se puede eliminar un cliente con notas activas.' });
     }
 
+    // Con notas ya cerradas el cliente es historia de ventas: la base no deja
+    // borrarlo (notas.cliente_id es ON DELETE RESTRICT) y tronaba con 500
+    // (2026-10-08). Se oculta (activo = FALSE): sale de la lista y sus notas
+    // conservan el nombre. Sin ninguna nota, se borra de verdad.
     const { rows } = await pool.query(
-      'DELETE FROM clientes WHERE id = $1 AND sucursal = $2 RETURNING id',
+      `WITH conHistorial AS (SELECT EXISTS (SELECT 1 FROM notas WHERE cliente_id = $1) AS si),
+            ocultado AS (
+              UPDATE clientes SET activo = FALSE
+               WHERE id = $1 AND sucursal = $2 AND (SELECT si FROM conHistorial)
+               RETURNING id
+            ),
+            borrado AS (
+              DELETE FROM clientes
+               WHERE id = $1 AND sucursal = $2 AND NOT (SELECT si FROM conHistorial)
+               RETURNING id
+            )
+       SELECT id FROM ocultado UNION ALL SELECT id FROM borrado`,
       [id, req.sucursal]
     );
     if (rows.length === 0) {
@@ -158,13 +173,26 @@ export const deleteClientesMultiples = async (req, res) => {
       return res.json({ bloqueados, eliminables: eliminables.map((c) => c.id) });
     }
 
+    // Los que tienen notas ya cerradas se ocultan en vez de borrarse (ver
+    // deleteCliente); uno solo así tumbaba el borrado de todos.
     let eliminados = [];
     if (eliminables.length > 0) {
-      const { rows } = await client.query(
-        'DELETE FROM clientes WHERE id = ANY($1) AND sucursal = $2 RETURNING id',
-        [eliminables.map((c) => c.id), req.sucursal]
+      const ids = eliminables.map((c) => c.id);
+      const { rows: ocultados } = await client.query(
+        `UPDATE clientes SET activo = FALSE
+          WHERE id = ANY($1) AND sucursal = $2
+            AND EXISTS (SELECT 1 FROM notas WHERE cliente_id = clientes.id)
+          RETURNING id`,
+        [ids, req.sucursal]
       );
-      eliminados = rows.map((r) => r.id);
+      const { rows: borrados } = await client.query(
+        `DELETE FROM clientes
+          WHERE id = ANY($1) AND sucursal = $2
+            AND NOT EXISTS (SELECT 1 FROM notas WHERE cliente_id = clientes.id)
+          RETURNING id`,
+        [ids, req.sucursal]
+      );
+      eliminados = [...ocultados, ...borrados].map((r) => r.id).sort((a, b) => a - b);
     }
     await client.query('COMMIT');
     res.json({ eliminados, bloqueados });
