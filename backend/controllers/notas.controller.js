@@ -362,6 +362,19 @@ async function liberarMaquinasDeNota(client, notaId) {
 // a cobrar la nota el mismo dinero entraría otra vez en la caja de hoy. Es el
 // mismo motivo por el que la reversión manual solo se permite con la caja
 // abierta; aquí lo medida por el lado automático (2026-09-22).
+// Un cambio que dejaría el total de la nota POR DEBAJO de lo que el cliente ya
+// abonó (2026-10-08, decisión de la usuaria: se bloquea). Si se dejaba, la nota
+// se liquidaba por el total nuevo y el corte esperaba menos dinero del que
+// entró: un sobrante que nadie sabía que había que devolver. Para bajar el
+// total, primero se revierte el abono (admin) y se devuelve el dinero.
+class TotalBajoAbonosError extends Error {
+  constructor(abonado, total) {
+    super(`El cliente ya abonó $${abonado.toFixed(2)}: el total no puede quedar en `
+        + `$${total.toFixed(2)}. Si hay que devolverle dinero, revierte primero su abono.`);
+    this.name = 'TotalBajoAbonosError';
+  }
+}
+
 class CorteCerradoError extends Error {
   constructor(folio) {
     // Ojo con lo que se promete: un corte cerrado NO se reabre (caja solo pasa
@@ -379,7 +392,7 @@ class CorteCerradoError extends Error {
 // "intenta de nuevo": es una regla de negocio, no una falla, y reintentar no
 // la va a arreglar. Devuelve true si ya respondió.
 function respondioCorteCerrado(res, err) {
-  if (!(err instanceof CorteCerradoError)) return false;
+  if (!(err instanceof CorteCerradoError) && !(err instanceof TotalBajoAbonosError)) return false;
   res.status(409).json({ message: err.message });
   return true;
 }
@@ -462,6 +475,13 @@ async function recalcularPrecioTotal(client, notaId, opciones = {}) {
     [notaId]
   );
   const nuevo = rows[0]?.precio_total ?? null;
+
+  // Nunca por debajo de lo ya abonado (ver TotalBajoAbonosError). Quien llama
+  // está en una transacción y su catch la deshace.
+  const abonado = await totalAbonado(client, notaId);
+  if (abonado > 0 && Number(nuevo) < abonado - 1e-9) {
+    throw new TotalBajoAbonosError(abonado, Number(nuevo));
+  }
 
   const antes = previas[0];
   if (antes && antes.estado_pago === 'PAGADO' && Number(nuevo) !== Number(antes.precio_total)) {
@@ -2217,6 +2237,7 @@ export const createNota = async (req, res) => {
     res.status(201).json({ ...nota, cargas: cargasInsertadas, productos: productosInsertados });
   } catch (err) {
     await client.query('ROLLBACK');
+    if (respondioCorteCerrado(res, err)) return;
     console.error('createNota error:', err);
     if (err.code === '23503') {
       return res.status(400).json({ message: 'El cliente o la máquina seleccionada no existe en esta sucursal.' });
@@ -3200,6 +3221,7 @@ export const asignarCargaMaquina = async (req, res) => {
     res.json({ ...rows[0], cargas: await cargasDeNota(pool, id) });
   } catch (err) {
     await client.query('ROLLBACK');
+    if (respondioCorteCerrado(res, err)) return;
     console.error('asignarCargaMaquina error:', err);
     res.status(500).json({ message: 'No se pudo asignar la máquina a la carga. Intenta de nuevo.' });
   } finally {
@@ -3741,6 +3763,7 @@ export const terminarLavado = async (req, res) => {
     res.json({ ...rows[0], cargas: await cargasDeNota(pool, id) });
   } catch (err) {
     await client.query('ROLLBACK');
+    if (respondioCorteCerrado(res, err)) return;
     console.error('terminarLavado error:', err);
     res.status(500).json({ message: 'No se pudo terminar el lavado. Intenta de nuevo.' });
   } finally {
