@@ -2247,8 +2247,17 @@ export const quitarCarga = async (req, res) => {
     const carga = cargaRows[0];
 
     // Una carga que ya pasó por una máquina es historial: quitarla borraría el
-    // registro de un lavado que sí ocurrió (y de lo que se cobró por él).
-    if (carga.lavadora_iniciada_at || carga.secadora_iniciada_at) {
+    // registro de un lavado que sí ocurrió (y de lo que se cobró por él). La
+    // marca de arranque es de la vuelta EN CURSO (se limpia al pedir otra, ver
+    // registrarMaquinaEnCarga), así que una carga que ya lavó y espera su
+    // relavado se reconoce por sus vueltas ya corridas.
+    const { rows: [{ corrio }] } = await client.query(
+      `SELECT EXISTS (SELECT 1 FROM nota_carga_maquinas
+                       WHERE carga_id = $1
+                         AND (encendida_at IS NOT NULL OR finalizada_at IS NOT NULL)) AS corrio`,
+      [cargaId]
+    );
+    if (carga.lavadora_iniciada_at || carga.secadora_iniciada_at || corrio) {
       await client.query('ROLLBACK');
       return res.status(409).json({
         message: 'Esa carga ya se procesó y no se puede quitar. Solo se quitan las que nunca arrancaron.',
@@ -2275,13 +2284,21 @@ export const quitarCarga = async (req, res) => {
       [cargaId]
     );
 
-    // Si tenía máquinas apenas asignadas (nunca arrancadas), quedan libres.
+    // Sus máquinas nunca arrancaron, así que asignarlas no las apartó: si una
+    // está en uso es porque OTRA nota la arrancó, y no se toca (soltarla le
+    // cortaba el ciclo a esa otra nota, 2026-10-08). La única que es de esta
+    // carga es la que ESTA nota encendió esperando arranque (mig. 110): esa se
+    // apaga y se suelta, igual que al eliminar la nota.
     const asignadas = [carga.lavadora_id, carga.secadora_id].filter(Boolean);
     if (asignadas.length > 0) {
       await client.query(
-        `UPDATE maquinas SET estado = 'disponible', en_uso_desde = NULL
-          WHERE id = ANY($1) AND estado = 'en_uso'`,
-        [asignadas]
+        `UPDATE maquinas
+            SET encendida_sin_iniciar_at = NULL,
+                encendida_para_nota_id   = NULL,
+                estado = CASE WHEN estado = 'en_uso' AND en_uso_desde IS NULL
+                              THEN 'disponible'::estado_maquina ELSE estado END
+          WHERE id = ANY($1) AND encendida_para_nota_id = $2`,
+        [asignadas, id]
       );
     }
 
@@ -3482,7 +3499,8 @@ export const cambiarMaquina = async (req, res) => {
 
     // La carga que usa esa máquina.
     const { rows: cargaRows } = await client.query(
-      `SELECT id, tipo_prenda FROM nota_cargas WHERE nota_id = $1 AND ${cargaCol} = $2 FOR UPDATE`,
+      `SELECT id, tipo_prenda, ${precioCol} AS precio_actual
+         FROM nota_cargas WHERE nota_id = $1 AND ${cargaCol} = $2 FOR UPDATE`,
       [id, maquina_actual_id]
     );
     if (cargaRows.length === 0) {
@@ -3511,10 +3529,15 @@ export const cambiarMaquina = async (req, res) => {
     }
     // El edredón ya no exige lavadora jumbo (2026-10-02).
 
+    // Se re-tarifa con la máquina nueva SOLO si ese hueco se estaba cobrando
+    // (p. ej. secadora mediana→jumbo en Autoservicio). Una máquina puesta "sin
+    // cobro" —las de Por Encargo, que cobran el servicio, o una extra— sigue
+    // sin cobro: antes cambiarla le ponía precio y subía la nota (2026-10-08).
     const t = await tarifasCarga(client);
-    const precio = esSecadora
-      ? tarifaSecadora(nueva.tamano, carga.tipo_prenda, t)
-      : tarifaLavadora(nueva.tipo, carga.tipo_prenda, t);
+    const precio = !(Number(carga.precio_actual) > 0) ? carga.precio_actual
+      : esSecadora
+        ? tarifaSecadora(nueva.tamano, carga.tipo_prenda, t)
+        : tarifaLavadora(nueva.tipo, carga.tipo_prenda, t);
 
     await registrarMaquinaEnCarga(client, carga.id, esSecadora ? 'secadora' : 'lavadora',
       maquina_nueva_id, 'reemplazo');
