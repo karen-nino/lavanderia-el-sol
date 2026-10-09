@@ -633,7 +633,10 @@ export default function GestionMaquinas() {
             // información útil, no ruido. (Antes se ocultaba mientras ninguna
             // máquina tuviera ID; eso dejaba el dato invisible justo cuando
             // faltaban todas, y ahora este es su único sitio en la app.)
-            const sonoffCfg = SONOFF_CFG[m.device_id ? (m.sonoff_estado ?? 'sin_probar') : 'sin_enlazar'];
+            // Salvo la de un modelo de fichas (mig. 149): no lleva Sonoff, así
+            // que "Sin Sonoff" no es algo que falte, y ni pastilla ni texto.
+            const sonoffCfg = m.solo_fichas ? null
+              : SONOFF_CFG[m.device_id ? (m.sonoff_estado ?? 'sin_probar') : 'sin_enlazar'];
 
             // Toda la tarjeta abre la información de uso de la máquina (igual que
             // la tarjeta de empleados abre su desempeño). Solo Admin, y con
