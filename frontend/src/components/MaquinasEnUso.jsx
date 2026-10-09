@@ -66,9 +66,6 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
   // Máquina con cronómetro que arranca con Iniciar y pregunta su programa
   // (mig. 146): espera a que se elija antes de arrancarla desde su tarjeta.
   const [eligiendoArranque, setEligiendoArranque] = useState(null);
-  // Secadora de monedas que pregunta (Sec49) a la que se le suma otro
-  // programa con "Otro ciclo" (2026-10-08).
-  const [eligiendoMasTiempo, setEligiendoMasTiempo] = useState(null);
   // Secadora que arranca al terminar el lavado (para la animación de ciclo).
   const [iniciandoSecadora, setIniciandoSecadora] = useState(null);
   const [secadoraSel, setSecadoraSel] = useState('');
@@ -434,26 +431,6 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
     }
   };
 
-  // "Otro ciclo" de la Sec49: le suma uno de sus programas sin pasarse del
-  // tope. El backend revalida las opciones y mete las monedas.
-  const pedirMasTiempo = async (maquina, minutos) => {
-    setErrorOtroCiclo(null);
-    setOtroCicloEnCurso(String(maquina.id));
-    try {
-      const r = await api.patch(`/maquinas/${maquina.id}/mas-tiempo`, { minutos });
-      setEligiendoMasTiempo(null);
-      if (r) await refrescarDatos();
-    } catch (err) {
-      setEligiendoMasTiempo(null);
-      setErrorOtroCiclo({
-        id: String(maquina.id),
-        mensaje: err?.message || 'No se pudo sumar el tiempo.',
-      });
-    } finally {
-      setOtroCicloEnCurso(null);
-    }
-  };
-
   // Paso previo del siguiente ciclo: le devuelve la corriente sin arrancar el
   // cronómetro. Va contra el endpoint de la nota, igual que "Encender máquina"
   // en Salidas, porque es exactamente el mismo estado de la mig. 110.
@@ -502,19 +479,6 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
     />
   );
 
-  const modalMasTiempo = eligiendoMasTiempo && (
-    <ElegirTiempoModal
-      maquina={eligiendoMasTiempo}
-      tiempos={eligiendoMasTiempo.opciones_mas_tiempo ?? []}
-      titulo="¿Cuánto tiempo más?"
-      descripcion={`Lleva un programa de ${eligiendoMasTiempo.ciclo_elegido_minutos} min y su tope es de ${eligiendoMasTiempo.ciclo_minutos} min. Se le meten las monedas de los minutos que elijas.`}
-      etiqueta={(min) => `+${min} min`}
-      guardando={otroCicloEnCurso === String(eligiendoMasTiempo.id)}
-      onElegir={(min) => pedirMasTiempo(eligiendoMasTiempo, min)}
-      onCancelar={() => setEligiendoMasTiempo(null)}
-    />
-  );
-
   const renderCard = (m) => {
     const { maquina: maquinaAumentada, nota: notaRel } = datosDeCiclo(m);
     return (
@@ -524,7 +488,6 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
         nota={notaRel}
         onTerminarCiclo={() => { setSecadoraSel(''); setConfirmTerminar(maquinaAumentada); }}
         onOtroCiclo={() => pedirOtroCiclo(maquinaAumentada)}
-        onMasTiempo={() => { setErrorOtroCiclo(null); setEligiendoMasTiempo(maquinaAumentada); }}
         onEncender={() => encenderParaOtroCiclo(maquinaAumentada, notaRel)}
         otroCicloEnCurso={otroCicloEnCurso === String(m.id)}
         errorOtroCiclo={errorOtroCiclo?.id === String(m.id) ? errorOtroCiclo.mensaje : null}
@@ -638,7 +601,6 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
 
       {modalElegirTiempo}
       {modalElegirArranque}
-      {modalMasTiempo}
 
       {/* Corriente de vuelta para el siguiente ciclo: misma animación que el
           "Encender máquina" de Salidas, porque es exactamente el mismo paso. */}

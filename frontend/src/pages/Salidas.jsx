@@ -105,6 +105,9 @@ export default function Salidas() {
   const [minutosPorMaquina, setMinutosPorMaquina] = useState({});
   const [encendiendo,      setEncendiendo]      = useState(null); // máquina recibiendo corriente (mig. 110)
   const [deteniendo,       setDeteniendo]       = useState(null); // máquina deteniéndose (animación)
+  // "Otro ciclo" de la Sec49 (2026-10-08): `{ maquina, opciones }` mientras se
+  // elige cuántos minutos sumarle sin pasarse de su tope.
+  const [masTiempo,        setMasTiempo]        = useState(null);
 
   // Máquinas disponibles para los modales de asignar/cambiar máquina.
   const [maquinasDisp,     setMaquinasDisp]     = useState([]);
@@ -858,6 +861,34 @@ export default function Salidas() {
   const programaCumplido = (m) => Boolean(m.cronometro && m.en_uso_desde && m.ciclo_elegido_minutos)
     && now - new Date(m.en_uso_desde).getTime() >= Number(m.ciclo_elegido_minutos) * 60000;
 
+  // "Otro ciclo" de la secadora de monedas que pregunta (Sec49, 2026-10-08):
+  // los programas que aún le caben sin pasarse del tope. Los calcula el
+  // backend en /maquinas; solo cuentan si la máquina sigue corriendo ESTA nota.
+  const opcionesMasTiempo = (m) => {
+    if (!m.actual || m.estado !== 'en_uso' || m.esperandoArranque || m.tomadaPor) return [];
+    if (!m.cronometro || topeAlcanzado(m)) return [];
+    const fisica = todasMaquinas.find(x => String(x.id) === String(m.id));
+    if (!fisica || String(fisica.en_uso_nota_id) !== String(nota?.id)) return [];
+    return fisica.opciones_mas_tiempo ?? [];
+  };
+
+  const sumarTiempo = async (minutos) => {
+    if (!masTiempo) return;
+    setLoadingMaquina(true);
+    setErrorAccion('');
+    try {
+      const r = await api.patch(`/maquinas/${masTiempo.maquina.id}/mas-tiempo`, { minutos });
+      if (r) {
+        setMasTiempo(null);
+        await cargarDatos();
+      }
+    } catch (err) {
+      setErrorAccion(err.message || 'No se pudo sumar el tiempo.');
+    } finally {
+      setLoadingMaquina(false);
+    }
+  };
+
   // Lavadora y secadora se asignan igual: en cuanto la nota existe. La
   // secadora esperaba a que terminara el lavado para no quedarse con una
   // máquina parada, pero asignar no la aparta —se la queda quien le dé a
@@ -1242,13 +1273,25 @@ export default function Salidas() {
                         // secado (Autoservicio): ahí el paso es pasar la ropa a
                         // la secadora, desde la tarjeta de Máquinas.
                         !m.encadenaSecado ? (
-                          <button
-                            onClick={() => setConfirmTerminarMaq(m)}
-                            disabled={loadingMaquina}
-                            className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
-                          >
-                            Finalizar Carga
-                          </button>
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              onClick={() => setConfirmTerminarMaq(m)}
+                              disabled={loadingMaquina}
+                              className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
+                            >
+                              Finalizar Carga
+                            </button>
+                            {/* Sec49, después de Finalizar: sumarle otro programa sin pasarse del tope. */}
+                            {opcionesMasTiempo(m).length > 0 && (
+                              <button
+                                onClick={() => { setErrorAccion(''); setMasTiempo({ maquina: m, opciones: opcionesMasTiempo(m) }); }}
+                                disabled={loadingMaquina}
+                                className="px-4 py-2 bg-white border border-blue text-blue hover:bg-light-blue disabled:opacity-60 text-sm font-medium rounded-lg transition-colors"
+                              >
+                                Otro ciclo
+                              </button>
+                            )}
+                          </div>
                         ) : null
                       ) : (
                         // Solo un admin puede detener una LAVADORA; la secadora
@@ -1628,6 +1671,20 @@ export default function Salidas() {
           error={errorAccion}
           onElegir={elegirTiempo}
           onCancelar={() => { setEligiendoTiempo(null); setErrorAccion(''); }}
+        />
+      )}
+
+      {masTiempo && (
+        <ElegirTiempoModal
+          maquina={masTiempo.maquina}
+          tiempos={masTiempo.opciones}
+          titulo="¿Cuánto tiempo más?"
+          descripcion={`Lleva un programa de ${masTiempo.maquina.ciclo_elegido_minutos} min y su tope es de ${masTiempo.maquina.ciclo_minutos} min. Se le meten las monedas de los minutos que elijas.`}
+          etiqueta={(min) => `+${min} min`}
+          guardando={loadingMaquina}
+          error={errorAccion}
+          onElegir={sumarTiempo}
+          onCancelar={() => { setMasTiempo(null); setErrorAccion(''); }}
         />
       )}
 
