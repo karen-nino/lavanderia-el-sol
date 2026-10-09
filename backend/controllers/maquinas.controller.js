@@ -1,4 +1,5 @@
 import pool from '../db/pool.js';
+import { sellarPasadasVivas } from '../db/pasadas.js';
 import { TZ_NEGOCIO } from '../utils/tz.js';
 import * as dispositivos from '../services/dispositivos/index.js';
 import { explicarFalla, resumirMotivo } from '../services/dispositivos/mensajes.js';
@@ -688,6 +689,8 @@ export const detenerCiclo = async (req, res) => {
     }
     const estabaEnUso = maq.estado === 'en_uso';
 
+    // Su uso queda con hora de fin antes de soltarla.
+    await sellarPasadasVivas(client, [maq.id]);
     const { rows: upd } = await client.query(
       `UPDATE maquinas SET estado = 'disponible', en_uso_desde = NULL WHERE id = $1 RETURNING *`,
       [id]

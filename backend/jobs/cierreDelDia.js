@@ -1,5 +1,6 @@
 import { randomUUID } from 'crypto';
 import pool from '../db/pool.js';
+import { sellarPasadasVivas } from '../db/pasadas.js';
 import { ventasDeSesion, totalesMovimientos } from '../controllers/caja.controller.js';
 
 // Hora local del negocio en la que se hace el barrido de "cierre del día".
@@ -25,6 +26,12 @@ export async function liberarMaquinasCierreDelDia() {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    // Antes de soltar nada, cada máquina en marcha cierra su uso con hora de
+    // fin (o la de su tope): mientras la carga todavía la tiene en su hueco.
+    const { rows: enMarcha } = await client.query(
+      `SELECT id FROM maquinas WHERE estado = 'en_uso' AND en_uso_desde IS NOT NULL`
+    );
+    await sellarPasadasVivas(client, enMarcha.map(r => r.id));
     // Se cierran TODAS las notas en proceso (no solo las de la columna legada
     // maquina_id): con varias cargas la(s) máquina(s) puede(n) vivir solo en
     // nota_cargas. Se guardan sus IDs para limpiar sus cargas.

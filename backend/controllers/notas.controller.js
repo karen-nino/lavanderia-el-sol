@@ -6,6 +6,7 @@ import { tarifaSecadora, precioProductoEnNota, unidadDeVenta, medidasPorUnidad, 
 // acción que el empleado está mirando: no debe depender de que el listener esté
 // vivo. Es idempotente, así que el aviso del trigger llegando después no molesta.
 import { sincronizarSonoff, maxCiclosDeMaquina } from '../services/sincronizarSonoff.js';
+import { sellarPasadasVivas } from '../db/pasadas.js';
 import {
   MINUTOS_CONFIGURADOS, MINUTOS_DEL_MODELO, PROGRAMAS_DEL_MODELO, OPCIONES_DE_MARCA,
   esCronometroSql, conIniciarSql, soloFichasSql, cronometroActivo, TOPE_RELOJ,
@@ -337,6 +338,8 @@ async function liberarMaquinasDeNota(client, notaId) {
   );
   const ids = rows.map(r => r.mid);
   if (ids.length === 0) return;
+  // Su uso queda con hora de fin, como si la hubieran finalizado.
+  await sellarPasadasVivas(client, ids);
   await client.query(
     `UPDATE maquinas SET estado = 'disponible', en_uso_desde = NULL
       WHERE id = ANY($1) AND estado = 'en_uso'`,
@@ -2908,6 +2911,8 @@ export const encenderMaquinaDeNota = async (req, res) => {
       );
       await marcarMaquinasIniciadas(client, id, [Number(maquina_id)]);
       if (lavASoltar.length > 0) {
+        // La lavadora cumplió: su uso se cierra antes de soltarla.
+        await sellarPasadasVivas(client, lavASoltar.map(r => r.lavadora_id));
         await client.query(
           `UPDATE maquinas SET estado = 'disponible', en_uso_desde = NULL WHERE id = ANY($1)`,
           [lavASoltar.map(r => r.lavadora_id)]
@@ -3081,6 +3086,8 @@ export const activarMaquinasPendientes = async (req, res) => {
     if (lavASoltar.length > 0) {
       const lavIds   = lavASoltar.map(r => r.lavadora_id);
       const cargaIds = lavASoltar.map(r => r.carga_id);
+      // La lavadora cumplió: su uso se cierra antes de soltarla.
+      await sellarPasadasVivas(client, lavIds);
       await client.query(
         `UPDATE maquinas SET estado = 'disponible', en_uso_desde = NULL WHERE id = ANY($1)`,
         [lavIds]
