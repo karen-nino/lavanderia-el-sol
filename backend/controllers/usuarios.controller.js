@@ -6,6 +6,7 @@ import { ENTORNO_DEMO } from '../utils/entorno.js';
 import { capitalizarNombre } from '../utils/nombres.js';
 import { TZ_NEGOCIO } from '../utils/tz.js';
 import { CICLOS_DE_PASADAS } from '../db/sqlMaquina.js';
+import { ventasDeSesion, totalesMovimientos } from './caja.controller.js';
 
 const ROL_VALIDOS = ['admin_main', 'admin', 'operador'];
 
@@ -127,6 +128,7 @@ export const getDesempeno = async (req, res) => {
           _productos: new Map(),   // nombre -> cantidad
           _clientesReg: new Map(), // cliente_id -> nombre
           _autoservicios: [],      // { folio }
+          _cajas: [],              // turnos de caja que abrió ese día
         });
       }
       return buckets.get(k);
@@ -197,6 +199,60 @@ export const getDesempeno = async (req, res) => {
       b._productos.set(p.nombre, acc);
     }
 
+    // Turnos de caja que ABRIÓ el empleado (2026-10-09), en el día en que los
+    // abrió. Un corte cerrado usa sus cifras congeladas (mig. 101); el turno
+    // en curso, o un corte de antes de esa migración, se calcula en vivo con
+    // las mismas funciones que la pantalla de Caja.
+    const { rows: cajas } = await pool.query(
+      `SELECT c.*, s.nombre AS sucursal_nombre,
+              to_char(c.abierta_at AT TIME ZONE $2, 'YYYY-MM-DD') AS fecha,
+              to_char(c.abierta_at AT TIME ZONE $2, 'HH12:MI am') AS hora_apertura,
+              to_char(c.cerrada_at AT TIME ZONE $2, 'HH12:MI am') AS hora_cierre,
+              CASE WHEN c.usuario_cierre_id IS DISTINCT FROM c.usuario_apertura_id
+                   THEN TRIM(uc.nombre || ' ' || COALESCE(uc.apellido, '')) END AS cerro_otro
+         FROM cajas c
+         LEFT JOIN sucursales s ON s.slug = c.sucursal
+         LEFT JOIN usuarios uc ON uc.id = c.usuario_cierre_id
+        WHERE c.usuario_apertura_id = $1
+        ORDER BY c.abierta_at`,
+      [id, TZ_NEGOCIO]
+    );
+    const num = (v) => (v == null ? null : parseFloat(v));
+    for (const c of cajas) {
+      const congelada = c.estado === 'cerrada' && c.ventas_efectivo != null;
+      const ventas = congelada
+        ? { efectivo: num(c.ventas_efectivo), transferencia: num(c.ventas_transferencia) ?? 0, tarjeta: num(c.ventas_tarjeta) ?? 0 }
+        : await ventasDeSesion(pool, c.id);
+      const mov = congelada
+        ? { entradas: num(c.total_entradas) ?? 0, salidas: num(c.total_salidas) ?? 0 }
+        : await totalesMovimientos(pool, c.id);
+      const inicial  = num(c.monto_inicial);
+      const esperado = inicial + ventas.efectivo + mov.entradas - mov.salidas;
+      const contado  = num(c.monto_contado);
+      getBucket(c.fecha)._cajas.push({
+        id:            c.id,
+        sucursal:      c.sucursal_nombre ?? c.sucursal,
+        en_curso:      c.estado === 'abierta',
+        cierre_automatico: Boolean(c.cierre_automatico),
+        apertura:      c.hora_apertura,
+        cierre:        c.hora_cierre,
+        cerro_otro:    c.cerro_otro,
+        monto_inicial: inicial,
+        ventas_efectivo:      ventas.efectivo,
+        ventas_transferencia: ventas.transferencia,
+        ventas_tarjeta:       ventas.tarjeta,
+        entradas:      mov.entradas,
+        salidas:       mov.salidas,
+        esperado,
+        contado,
+        diferencia:    contado != null ? contado - esperado : null,
+        caja_final:    num(c.monto_caja_final),
+        sobre:         num(c.monto_sobre),
+        notas_apertura: c.notas_apertura,
+        notas_cierre:   c.notas_cierre,
+      });
+    }
+
     // Hora de entrada por día. Un check-in sin notas crea su propio bucket con
     // métricas en 0, para que el día de asistencia aparezca igual en la tabla.
     for (const ci of checkins) {
@@ -224,7 +280,7 @@ export const getDesempeno = async (req, res) => {
           cargas:    b._cargas.length,
           productos: productos.reduce((s, p) => s + p.cantidad, 0),
           clientes:  clientes.length,
-          detalle:   { notas: b._notas, maquinas, cargas: b._cargas, productos, clientes },
+          detalle:   { notas: b._notas, maquinas, cargas: b._cargas, productos, clientes, cajas: b._cajas },
         };
       });
 

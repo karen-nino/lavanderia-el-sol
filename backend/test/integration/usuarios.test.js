@@ -251,3 +251,25 @@ describe('GET /api/usuarios/:id/desempeno', () => {
     expect(res.body.dias[0].salida).toMatch(/^\d{1,2}:\d{2} (am|pm)$/);
   });
 });
+
+// Columna "Caja" (2026-10-09): los turnos que abrió el empleado, por día.
+describe('desempeño: turnos de caja', () => {
+  it('trae el turno cerrado con su reparto y el que sigue abierto', async () => {
+    await request(app).post('/api/caja/abrir').set(auth(admin.token)).send({ monto_inicial: 500 }).expect(201);
+    await request(app).post('/api/caja/movimientos').set(auth(admin.token))
+      .send({ tipo: 'salida', concepto: 'Garrafón', monto: 40 });
+    await request(app).post('/api/caja/cerrar').set(auth(admin.token))
+      .send({ monto_contado: 450, monto_caja_final: 300, monto_sobre: 150 }).expect(200);
+    await request(app).post('/api/caja/abrir').set(auth(admin.token)).send({ monto_inicial: 300 }).expect(201);
+
+    const res = await request(app).get(`/api/usuarios/${admin.id}/desempeno`).set(auth(admin.token));
+    expect(res.status).toBe(200);
+    const cajas = res.body.dias[0].detalle.cajas;
+    expect(cajas).toHaveLength(2);
+    expect(cajas[0]).toMatchObject({
+      en_curso: false, monto_inicial: 500, esperado: 460, contado: 450, diferencia: -10,
+      caja_final: 300, sobre: 150,
+    });
+    expect(cajas[1]).toMatchObject({ en_curso: true, monto_inicial: 300, esperado: 300, contado: null });
+  });
+});

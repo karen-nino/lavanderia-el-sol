@@ -97,6 +97,105 @@ function CeldaNumero({ value, onClick }) {
   );
 }
 
+// Celda "Caja" (2026-10-09): cómo quedaron los turnos de caja que el empleado
+// abrió ese día. Sin turnos, un guion; con alguno, un botón que abre el detalle.
+function resumenCaja(cajas) {
+  if (cajas.some((c) => c.en_curso)) return { texto: 'En curso', cls: 'text-blue' };
+  if (cajas.some((c) => c.contado == null)) return { texto: 'Sin conteo', cls: 'text-amber-600' };
+  const dif = cajas.reduce((a, c) => a + c.diferencia, 0);
+  if (Math.abs(dif) < 0.005) return { texto: 'Cuadra', cls: 'text-blue' };
+  return dif < 0
+    ? { texto: `−${fmtMoneda(Math.abs(dif))}`, cls: 'text-red-600' }
+    : { texto: `+${fmtMoneda(dif)}`, cls: 'text-green-600' };
+}
+
+function CeldaCaja({ cajas, onClick }) {
+  if (!cajas?.length) return <span className="text-gray-400">—</span>;
+  const { texto, cls } = resumenCaja(cajas);
+  return (
+    <button
+      onClick={onClick}
+      className={`font-medium whitespace-nowrap hover:underline underline-offset-2 ${cls}`}
+    >
+      {texto}{cajas.length > 1 ? ` · ${cajas.length} turnos` : ''}
+    </button>
+  );
+}
+
+// Detalle de los turnos de caja de un día: el mismo desglose que el corte.
+function CajaModal({ fecha, cajas, onClose }) {
+  const fila = (label, valor, cls = 'text-gray-700') => (
+    <div className="flex justify-between gap-3 py-1 text-sm">
+      <span className="text-gray-500">{label}</span>
+      <span className={`text-right font-medium ${cls}`}>{valor}</span>
+    </div>
+  );
+  const claseDif = (d) => (Math.abs(d) < 0.005 ? 'text-blue' : d < 0 ? 'text-red-600' : 'text-green-600');
+  const textoDif = (d) => (Math.abs(d) < 0.005
+    ? 'Cuadra'
+    : `${d < 0 ? '−' : '+'}${fmtMoneda(Math.abs(d))} (${d < 0 ? 'faltante' : 'sobrante'})`);
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div
+        className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[85vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-gray-100 flex-shrink-0">
+          <div>
+            <h2 className="text-base font-semibold text-gray-900">Caja</h2>
+            <p className="text-xs text-gray-500">
+              {fecha} · {cajas.length} {cajas.length === 1 ? 'turno' : 'turnos'}
+            </p>
+          </div>
+          <button onClick={onClose} aria-label="Cerrar" className="text-gray-400 hover:text-gray-600">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <div className="overflow-y-auto divide-y divide-gray-100">
+          {cajas.map((c) => (
+            <div key={c.id} className="px-5 py-4">
+              <div className="flex items-baseline justify-between gap-3 mb-2">
+                <p className="text-sm font-semibold text-gray-800">
+                  {c.apertura} – {c.en_curso ? 'en curso' : (c.cierre ?? '—')}
+                </p>
+                <span className="text-xs text-gray-400 truncate">{c.sucursal}</span>
+              </div>
+              {c.cierre_automatico && (
+                <p className="mb-2 text-xs font-medium text-amber-700">
+                  La app la cerró sola a medianoche: nadie contó el cajón.
+                </p>
+              )}
+              {c.cerro_otro && (
+                <p className="mb-2 text-xs text-gray-500">Cerró: {c.cerro_otro}</p>
+              )}
+              {fila('Fondo inicial', fmtMoneda(c.monto_inicial))}
+              {fila('Ventas en efectivo', `+${fmtMoneda(c.ventas_efectivo)}`)}
+              {fila('Entradas', `+${fmtMoneda(c.entradas)}`)}
+              {fila('Salidas', `−${fmtMoneda(c.salidas)}`)}
+              {fila(c.en_curso ? 'Esperado hasta ahora' : 'Esperado en caja', fmtMoneda(c.esperado), 'text-gray-900')}
+              {c.contado != null && fila('Efectivo contado', fmtMoneda(c.contado), 'text-gray-900')}
+              {c.diferencia != null && fila('Diferencia', textoDif(c.diferencia), claseDif(c.diferencia))}
+              {c.caja_final != null && fila('Caja final', fmtMoneda(c.caja_final))}
+              {c.sobre != null && fila('Sobre', fmtMoneda(c.sobre))}
+              {(c.ventas_transferencia > 0 || c.ventas_tarjeta > 0) && (
+                <div className="mt-2 pt-2 border-t border-dashed border-gray-200">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Fuera del cajón</p>
+                  {c.ventas_transferencia > 0 && fila('Transferencia', fmtMoneda(c.ventas_transferencia), 'text-gray-500')}
+                  {c.ventas_tarjeta > 0 && fila('Tarjeta', fmtMoneda(c.ventas_tarjeta), 'text-gray-500')}
+                </div>
+              )}
+              {c.notas_apertura && <p className="mt-2 text-xs text-gray-500">Nota al abrir: {c.notas_apertura}</p>}
+              {c.notas_cierre && <p className="mt-1 text-xs text-gray-500">Nota al cerrar: {c.notas_cierre}</p>}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // `sub2` es una segunda línea gris debajo de `sub` (el horario de un ciclo).
 function FilaModal({ left, sub, sub2, right, rightSub, onClick }) {
   const contenido = (
@@ -250,6 +349,7 @@ export default function EmpleadoDesempeno() {
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState('');
   const [modal,        setModal]        = useState(null); // { dia, metrica }
+  const [modalCaja,    setModalCaja]    = useState(null); // día cuyos turnos de caja se ven
   const [rangoFecha,   setRangoFecha]   = useState('TODAS');
   const [mostrarFecha, setMostrarFecha] = useState(false);
   const [modalFecha,   setModalFecha]   = useState(null); // 'MES' | 'ANIO' | null
@@ -533,12 +633,13 @@ export default function EmpleadoDesempeno() {
                       <th className="text-right px-4 py-2.5 font-medium">Ciclos</th>
                       <th className="text-right px-4 py-2.5 font-medium">Productos</th>
                       <th className="text-right px-4 py-2.5 font-medium">Clientes</th>
+                      <th className="text-right px-4 py-2.5 font-medium">Caja</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
                     {diasPagina.length === 0 ? (
                       <tr>
-                        <td colSpan={9} className="px-4 py-10 text-center text-gray-400 text-sm">
+                        <td colSpan={10} className="px-4 py-10 text-center text-gray-400 text-sm">
                           No hay días en el rango seleccionado.
                         </td>
                       </tr>
@@ -562,6 +663,9 @@ export default function EmpleadoDesempeno() {
                         </td>
                         <td className="px-4 py-2.5 text-right">
                           <CeldaNumero value={d.clientes} onClick={() => setModal({ dia: d, metrica: 'clientes' })} />
+                        </td>
+                        <td className="px-4 py-2.5 text-right">
+                          <CeldaCaja cajas={d.detalle?.cajas} onClick={() => setModalCaja(d)} />
                         </td>
                       </tr>
                     ))}
@@ -594,6 +698,14 @@ export default function EmpleadoDesempeno() {
             fecha completo sin que lo tape la barra inferior. */}
         {mostrarFecha && <div className="h-80" aria-hidden />}
       </div>
+
+      {modalCaja && (
+        <CajaModal
+          fecha={fmtFecha(modalCaja.fecha)}
+          cajas={modalCaja.detalle?.cajas ?? []}
+          onClose={() => setModalCaja(null)}
+        />
+      )}
 
       {modal && (
         <MetricaModal

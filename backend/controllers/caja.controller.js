@@ -14,7 +14,7 @@ import { esAdmin } from '../middleware/roles.js';
 // cuentan como efectivo (mig. 090 ya las rellenó; el COALESCE cubre cualquier
 // fila que se cuele después). Una nota cancelada no es una venta: su dinero se
 // devolvió.
-async function ventasDeSesion(client, cajaId) {
+export async function ventasDeSesion(client, cajaId) {
   // Con abonos (mig. 121) el dinero de una nota puede llegar en varios días, así
   // que cada peso se cuenta en la caja donde entró:
   //   · de una nota cobrada aquí, lo que faltaba = precio_total − lo ya abonado;
@@ -58,7 +58,7 @@ async function ventasDeSesion(client, cajaId) {
 }
 
 // Totales de movimientos (entradas/salidas) de una caja.
-async function totalesMovimientos(client, cajaId) {
+export async function totalesMovimientos(client, cajaId) {
   const { rows } = await client.query(
     `SELECT
         COALESCE(SUM(CASE WHEN tipo = 'entrada' THEN monto ELSE 0 END), 0) AS entradas,
