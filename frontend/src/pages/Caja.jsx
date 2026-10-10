@@ -422,7 +422,7 @@ function Corte({ data, onCerrar, onAbrir }) {
     { label: 'Lavadoras Jumbo',    value: ingresos.lavadoras_jumbo },
     { label: 'Secadoras',          value: ingresos.secadoras },
     { label: 'Productos',          value: ingresos.productos },
-    { label: 'Por Encargo',        value: ingresos.por_encargo },
+    { label: 'SPE',                value: ingresos.por_encargo },  // Servicios Por Encargo
     // Servicios Por Encargo de Edredón, con sus tamaños (incluye Cubre Colchón).
     { label: 'Edredón',            value: ingresos.edredon ?? 0 },
   ] : [];
