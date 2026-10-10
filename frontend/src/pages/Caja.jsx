@@ -413,9 +413,10 @@ function Corte({ data, onCerrar, onAbrir }) {
   const noEnCajon = desglose.transferencia + desglose.tarjeta;
 
   // Ingresos del turno (2026-10-10). Las líneas de máquina, productos y Por
-  // Encargo son el DETALLE de las ventas en efectivo (el backend reparte cada
-  // cobro por nota), así que van con sangría y no se suman otra vez. La
-  // transferencia se informa pero no entra al cajón ni al total.
+  // Encargo son el DESGLOSE de las ventas en efectivo (el backend reparte cada
+  // cobro por nota): van en su propio renglón, antes de "Ventas en efectivo",
+  // y no se suman otra vez al total. La transferencia se informa pero no
+  // entra al cajón ni al total.
   const ingresos = totales.ingresos;
   const detalleEfectivo = ingresos ? [
     { label: 'Lavadoras Medianas', value: ingresos.lavadoras_medianas },
@@ -428,7 +429,8 @@ function Corte({ data, onCerrar, onAbrir }) {
   ] : [];
   const filasIngresos = [
     { label: 'Caja inicial',       value: caja.monto_inicial, sign: '' },
-    { label: 'Ventas en efectivo', value: desglose.efectivo,  sign: '+', detalle: detalleEfectivo },
+    ...detalleEfectivo.map((d) => ({ ...d, sign: '' })),
+    { label: 'Ventas en efectivo', value: desglose.efectivo,  sign: '+' },
     { label: 'Ventas por transferencia', value: desglose.transferencia, sign: '', nota: 'No entra al cajón' },
     { label: 'Entradas',           value: totales.entradas,   sign: '+' },
   ];
@@ -481,24 +483,12 @@ function Corte({ data, onCerrar, onAbrir }) {
         </div>
         <div className="divide-y divide-gray-100">
           {filasIngresos.map((r) => (
-            <div key={r.label} className="px-4 py-3 text-sm text-gray-600">
-              <div className="flex justify-between">
-                <span>
-                  {r.label}
-                  {r.nota && <span className="block text-xs text-gray-400">{r.nota}</span>}
-                </span>
-                <span>{r.sign}{fmt(r.value)}</span>
-              </div>
-              {r.detalle?.length > 0 && (
-                <div className="mt-2 space-y-1.5 pl-4 text-xs text-gray-500">
-                  {r.detalle.map((d) => (
-                    <div key={d.label} className="flex justify-between">
-                      <span>{d.label}</span>
-                      <span>{fmt(d.value)}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
+            <div key={r.label} className="flex justify-between px-4 py-3 text-sm text-gray-600">
+              <span>
+                {r.label}
+                {r.nota && <span className="block text-xs text-gray-400">{r.nota}</span>}
+              </span>
+              <span>{r.sign}{fmt(r.value)}</span>
             </div>
           ))}
           <div className="flex justify-between px-4 py-4 text-base font-bold text-gray-900 bg-gray-50">
