@@ -413,7 +413,7 @@ function Corte({ data, onCerrar, onAbrir }) {
   const noEnCajon = desglose.transferencia + desglose.tarjeta;
 
   const rows = [
-    { label: 'Fondo inicial',      value: caja.monto_inicial, sign: '' },
+    { label: 'Caja inicial',       value: caja.monto_inicial, sign: '' },
     { label: 'Ventas en efectivo', value: desglose.efectivo,  sign: '+' },
     { label: 'Entradas',           value: totales.entradas,   sign: '+' },
     { label: 'Salidas',            value: totales.salidas,    sign: '−' },
@@ -880,7 +880,7 @@ function Historial({ onFiltroLabel }) {
   const cuerpoCorte = (c) => (
     <>
       <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-base">
-        <span className="text-gray-500">Fondo</span><span className="text-right text-gray-700">{fmt(c.monto_inicial)}</span>
+        <span className="text-gray-500">Caja inicial</span><span className="text-right text-gray-700">{fmt(c.monto_inicial)}</span>
         <span className="text-gray-500">Ventas en efectivo</span><span className="text-right text-gray-700">{fmt(c.ventas_desglose?.efectivo ?? c.ventas)}</span>
         {(c.ventas_desglose?.transferencia ?? 0) > 0 && (
           <>

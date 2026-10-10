@@ -36,7 +36,7 @@ export default function FondoApertura({ sugerida, admin, monto, onMonto }) {
     return (
       <div>
         <label htmlFor="fondo-apertura" className="block text-sm font-medium text-gray-700 mb-1">
-          Fondo inicial
+          Caja inicial
         </label>
         <input
           id="fondo-apertura"
@@ -80,7 +80,7 @@ export default function FondoApertura({ sugerida, admin, monto, onMonto }) {
 
       <div>
         <label htmlFor="fondo-apertura" className="block text-sm font-medium text-gray-700 mb-1">
-          Fondo inicial
+          Caja inicial
         </label>
         <input
           id="fondo-apertura"

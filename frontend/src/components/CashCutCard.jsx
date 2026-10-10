@@ -48,7 +48,7 @@ export default function CashCutCard() {
           {/* La caja funciona por turnos (2026-10-03). */}
           {abierta
             ? 'Cerrar el turno y revisar ventas'
-            : 'Registra el fondo inicial para empezar tu turno'}
+            : 'Registra la caja inicial para empezar tu turno'}
         </p>
       </div>
 

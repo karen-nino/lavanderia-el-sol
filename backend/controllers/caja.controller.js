@@ -249,7 +249,7 @@ export async function abrirCaja(req, res) {
         ? sugerida?.monto
         : Number(monto_inicial);
       if (monto == null) {
-        return res.status(400).json({ message: 'Captura el fondo inicial para abrir la caja.' });
+        return res.status(400).json({ message: 'Captura la caja inicial para abrir la caja.' });
       }
     } else {
       if (!sugerida) {

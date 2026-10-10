@@ -170,7 +170,7 @@ function CajaModal({ fecha, cajas, onClose }) {
               {c.cerro_otro && (
                 <p className="mb-2 text-xs text-gray-500">Cerró: {c.cerro_otro}</p>
               )}
-              {fila('Fondo inicial', fmtMoneda(c.monto_inicial))}
+              {fila('Caja inicial', fmtMoneda(c.monto_inicial))}
               {fila('Ventas en efectivo', `+${fmtMoneda(c.ventas_efectivo)}`)}
               {fila('Entradas', `+${fmtMoneda(c.entradas)}`)}
               {fila('Salidas', `−${fmtMoneda(c.salidas)}`)}

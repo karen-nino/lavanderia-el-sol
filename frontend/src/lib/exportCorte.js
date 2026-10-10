@@ -34,7 +34,7 @@ const estadoCorte = (c) => {
 
 // ── CSV ─────────────────────────────────────────────────────
 const ENCABEZADOS_CSV = [
-  'Fecha', 'Hora', 'Abrió', 'Cerró', 'Fondo inicial', 'Ventas', 'Ventas efectivo', 'Transferencia', 'Tarjeta',
+  'Fecha', 'Hora', 'Abrió', 'Cerró', 'Caja inicial', 'Ventas', 'Ventas efectivo', 'Transferencia', 'Tarjeta',
   'Entradas', 'Salidas', 'Esperado', 'Contado', 'Diferencia', 'Caja final', 'Sobre',
   'Estado', 'Nota apertura', 'Nota cierre',
 ];
@@ -138,7 +138,7 @@ const bloqueDetalle = (c) => `
     </div>
     <table class="desglose">
       <tbody>
-        <tr><td>Fondo inicial</td><td class="r">${fmtMoneda(c.monto_inicial)}</td></tr>
+        <tr><td>Caja inicial</td><td class="r">${fmtMoneda(c.monto_inicial)}</td></tr>
         <tr><td>Ventas en efectivo</td><td class="r">${fmtMoneda(c.ventas_desglose?.efectivo ?? c.ventas)}</td></tr>
         ${(c.ventas_desglose?.transferencia ?? 0) > 0
           ? `<tr><td>Cobrado por transferencia (fuera del cajón)</td><td class="r">${fmtMoneda(c.ventas_desglose.transferencia)}</td></tr>`
@@ -211,7 +211,7 @@ const tablaResumen = (cortes) => {
     <table class="resumen">
       <thead>
         <tr>
-          <th>Fecha</th><th class="r">Fondo</th><th class="r">Ventas</th>
+          <th>Fecha</th><th class="r">Caja inicial</th><th class="r">Ventas</th>
           <th class="r">Entradas</th><th class="r">Salidas</th><th class="r">Esperado</th>
           <th class="r">Contado</th><th class="r">Diferencia</th>
         </tr>

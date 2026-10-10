@@ -66,7 +66,7 @@ describe('CashCutCard', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Abrir caja' }));
 
     // El fondo viene puesto y bloqueado: el empleado solo confirma.
-    const monto = await screen.findByLabelText('Fondo inicial');
+    const monto = await screen.findByLabelText('Caja inicial');
     expect(monto).toHaveValue(742.5);
     expect(monto).toHaveAttribute('readonly');
 

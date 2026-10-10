@@ -27,12 +27,12 @@ Si no encuentras tu nombre en la lista, avísale al administrador: puede que tu 
       {
         id: 'abrir-la-caja',
         titulo: 'Abrir la caja',
-        claves: ['fondo', 'apertura', 'empezar', 'dinero inicial'],
+        claves: ['fondo', 'caja inicial', 'apertura', 'empezar', 'dinero inicial'],
         cuerpo: `Antes de crear la primera nota hay que abrir la caja: SIN CAJA ABIERTA NO SE PUEDE CREAR NINGUNA NOTA NI RECIBIR PAGOS O ABONOS. Ve a Caja → Corte y toca Abrir caja.
 
 La caja funciona por TURNOS: abrir la caja es empezar tu turno, y hacer el corte es terminarlo.
 
-El fondo NO se captura: la app lo trae del corte del turno anterior, porque el dinero que quedó en el cajón es con el que empiezas tú. Lo ves arriba ("Quedó del corte anterior") y el campo está bloqueado. Si el efectivo del cajón no coincide, un administrador es quien puede ajustarlo.
+La caja inicial NO se captura: la app la trae del corte del turno anterior, porque el dinero que quedó en el cajón es con el que empiezas tú. La ves arriba ("Quedó del corte anterior") y el campo está bloqueado. Si el efectivo del cajón no coincide, un administrador es quien puede ajustarlo.
 
 Hay UNA caja abierta a la vez por sucursal: si un compañero ya la abrió, ese es SU turno y todos cobran sobre la misma. Para entregar el cajón, él hace su corte y luego tú abres el tuyo.
 
