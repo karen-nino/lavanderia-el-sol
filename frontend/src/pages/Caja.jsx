@@ -440,7 +440,7 @@ function Corte({ data, onCerrar, onAbrir }) {
   const pendienteEncargo = totales.egresos?.por_encargo_pendiente;
   const filasEgresos = [
     ...(pendienteEncargo != null ? [{
-      label: 'Servicios por encargo pendientes', value: pendienteEncargo, sign: '', nota: 'No sale del cajón',
+      label: 'SPE Debe', value: pendienteEncargo, sign: '', nota: 'No sale del cajón',
     }] : []),
     { label: 'Gastos', value: totales.salidas, sign: '−' },
   ];
