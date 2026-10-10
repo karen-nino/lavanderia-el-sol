@@ -57,6 +57,99 @@ export async function ventasDeSesion(client, cajaId) {
   };
 }
 
+// De dónde salió el EFECTIVO que entró en una caja, para el recuadro Ingresos
+// del corte (2026-10-10). Cada cobro en efectivo (lo que faltaba de una nota
+// cobrada aquí, o un abono hecho aquí; mismas reglas que `ventasDeSesion`) se
+// reparte entre las partes de su nota, en proporción a lo que vale cada una:
+//   · Por Encargo → todo a `por_encargo` (se cobra por servicio, no por máquina);
+//   · lo demás → lavadoras medianas / jumbo (por el tipo de la primera máquina
+//     del hueco; sin ella, por el tamaño pedido), secadoras y productos.
+// La proporción absorbe los descuentos de la nota. Se trabaja en centavos y el
+// residuo del redondeo va a la parte más grande, así que la suma de las
+// líneas es exactamente `ventasDeSesion(...).efectivo`.
+export async function ingresosDeSesion(client, cajaId) {
+  const { rows } = await client.query(
+    `WITH cobros AS (
+        SELECT n.id AS nota_id,
+               n.precio_total - COALESCE((
+                 SELECT SUM(ab.monto) FROM nota_abonos ab
+                  WHERE ab.nota_id = n.id AND ab.revertido_at IS NULL
+               ), 0) AS monto
+          FROM notas n
+         WHERE n.caja_id = $1
+           AND n.estado_pago = 'PAGADO'
+           AND n.estado <> 'CANCELADA'
+           AND COALESCE(n.forma_pago, 'EFECTIVO') = 'EFECTIVO'
+        UNION ALL
+        SELECT ab.nota_id, ab.monto
+          FROM nota_abonos ab
+          JOIN notas n ON n.id = ab.nota_id
+         WHERE ab.caja_id = $1
+           AND ab.revertido_at IS NULL
+           AND n.estado <> 'CANCELADA'
+           AND COALESCE(ab.forma_pago, 'EFECTIVO') = 'EFECTIVO'
+     ),
+     por_nota AS (
+        SELECT nota_id, SUM(monto) AS monto FROM cobros GROUP BY nota_id
+     )
+     SELECT pn.monto, n.tipo_servicio,
+            COALESCE(c.lav_mediana, 0) AS lavadoras_medianas,
+            COALESCE(c.lav_jumbo, 0)   AS lavadoras_jumbo,
+            COALESCE(c.secadoras, 0)   AS secadoras,
+            COALESCE(c.productos, 0) + COALESCE(sueltos.total, 0) AS productos
+       FROM por_nota pn
+       JOIN notas n ON n.id = pn.nota_id
+       LEFT JOIN LATERAL (
+         SELECT SUM(nc.precio_lavadora) FILTER (WHERE NOT t.jumbo) AS lav_mediana,
+                SUM(nc.precio_lavadora) FILTER (WHERE t.jumbo)     AS lav_jumbo,
+                SUM(nc.precio_secadora)                            AS secadoras,
+                SUM((SELECT COALESCE(SUM(np.cantidad * np.precio_unitario), 0)
+                       FROM nota_productos np WHERE np.carga_id = nc.id)) AS productos
+           FROM nota_cargas nc
+           LEFT JOIN maquinas ml ON ml.id = nc.lavadora_id
+           CROSS JOIN LATERAL (
+             SELECT COALESCE(
+                      (SELECT p.maquina_tipo = 'lavadora_jumbo'
+                         FROM nota_carga_maquinas p
+                        WHERE p.carga_id = nc.id AND p.slot = 'lavadora'
+                          AND p.maquina_tipo IS NOT NULL
+                        ORDER BY p.asignada_at, p.id LIMIT 1),
+                      ml.tipo::text = 'lavadora_jumbo',
+                      nc.lavadora_tipo IN ('jumbo', 'edredon'),
+                      FALSE) AS jumbo
+           ) t
+          WHERE nc.nota_id = n.id
+       ) c ON TRUE
+       LEFT JOIN LATERAL (
+         SELECT SUM(np.cantidad * np.precio_unitario) AS total
+           FROM nota_productos np
+          WHERE np.nota_id = n.id AND np.carga_id IS NULL
+       ) sueltos ON TRUE`,
+    [cajaId]
+  );
+
+  const LINEAS = ['lavadoras_medianas', 'lavadoras_jumbo', 'secadoras', 'productos'];
+  const cent = { lavadoras_medianas: 0, lavadoras_jumbo: 0, secadoras: 0, productos: 0, por_encargo: 0 };
+  for (const r of rows) {
+    const monto = Math.round(parseFloat(r.monto) * 100);
+    if (r.tipo_servicio === 'POR_ENCARGO') { cent.por_encargo += monto; continue; }
+    const partes = LINEAS.map((k) => Math.max(0, parseFloat(r[k])));
+    const valor = partes.reduce((a, b) => a + b, 0);
+    // Sin partes con precio (solo un ajuste): no hay a qué atribuirlo; va a
+    // productos para que la suma siga cuadrando con el efectivo.
+    if (valor <= 0) { cent.productos += monto; continue; }
+    let repartido = 0;
+    const asignado = partes.map((p) => {
+      const c = Math.round((monto * p) / valor);
+      repartido += c;
+      return c;
+    });
+    asignado[partes.indexOf(Math.max(...partes))] += monto - repartido;
+    LINEAS.forEach((k, i) => { cent[k] += asignado[i]; });
+  }
+  return Object.fromEntries(Object.entries(cent).map(([k, v]) => [k, v / 100]));
+}
+
 // Totales de movimientos (entradas/salidas) de una caja.
 export async function totalesMovimientos(client, cajaId) {
   const { rows } = await client.query(
@@ -203,7 +296,10 @@ export async function getCajaActual(req, res) {
         notas_apertura:   caja.notas_apertura,
         abierta_at:       caja.abierta_at,
       },
-      totales: { ventas: ventas.total, ventas_desglose: ventas, entradas, salidas, esperado },
+      totales: {
+        ventas: ventas.total, ventas_desglose: ventas, entradas, salidas, esperado,
+        ingresos: await ingresosDeSesion(client, caja.id),
+      },
       movimientos: movsRes.rows.map((m) => ({
         id:         m.id,
         tipo:       m.tipo,

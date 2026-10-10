@@ -419,6 +419,19 @@ function Corte({ data, onCerrar, onAbrir }) {
     { label: 'Salidas',            value: totales.salidas,    sign: '−' },
   ];
 
+  // De dónde salió el efectivo del turno (2026-10-10). El backend lo reparte
+  // por nota; sin el dato (backend viejo) el recuadro no se muestra.
+  const ingresos = totales.ingresos;
+  const filasIngresos = ingresos ? [
+    { label: 'Caja inicial',       value: caja.monto_inicial },
+    { label: 'Lavadoras Medianas', value: ingresos.lavadoras_medianas },
+    { label: 'Lavadoras Jumbo',    value: ingresos.lavadoras_jumbo },
+    { label: 'Secadoras',          value: ingresos.secadoras },
+    { label: 'Productos',          value: ingresos.productos },
+    { label: 'Por Encargo',        value: ingresos.por_encargo },
+  ] : [];
+  const totalIngresos = filasIngresos.reduce((s, r) => s + Number(r.value || 0), 0);
+
   // La caja funciona por turnos (2026-10-03): el corte lo hace quien abrió el
   // turno o un administrador. El servidor también lo exige; aquí se dice antes
   // de que alguien cuente el cajón para nada.
@@ -441,6 +454,26 @@ function Corte({ data, onCerrar, onAbrir }) {
           <p className="text-xs text-gray-600 mt-1.5">Nota de apertura: {caja.notas_apertura}</p>
         )}
       </div>
+
+      {ingresos && (
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div className="px-4 py-3 border-b border-gray-200">
+            <h2 className="text-sm font-semibold text-gray-700">Ingresos</h2>
+          </div>
+          <div className="divide-y divide-gray-100">
+            {filasIngresos.map((r) => (
+              <div key={r.label} className="flex justify-between px-4 py-3 text-sm text-gray-600">
+                <span>{r.label}</span>
+                <span>{fmt(r.value)}</span>
+              </div>
+            ))}
+            <div className="flex justify-between px-4 py-4 text-base font-bold text-gray-900 bg-gray-50">
+              <span>TOTAL INGRESOS</span>
+              <span className="text-lg">{fmt(totalIngresos)}</span>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <div className="px-4 py-3 border-b border-gray-200">

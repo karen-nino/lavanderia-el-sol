@@ -52,6 +52,7 @@ describe('POST /api/caja/abrir', () => {
     expect(actual.body.totales).toEqual({
       ventas: 0, entradas: 0, salidas: 0, esperado: 500,
       ventas_desglose: { efectivo: 0, transferencia: 0, tarjeta: 0, total: 0 },
+      ingresos: { lavadoras_medianas: 0, lavadoras_jumbo: 0, secadoras: 0, productos: 0, por_encargo: 0 },
     });
   });
 
