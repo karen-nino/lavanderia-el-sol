@@ -5,7 +5,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import request from 'supertest';
 import app from '../../app.js';
 import {
-  limpiarBase, seedSucursal, seedUsuario, seedMaquina, seedAjustes, seedCliente, seedProducto, auth,
+  pool, limpiarBase, seedSucursal, seedUsuario, seedMaquina, seedAjustes, seedCliente, seedProducto, auth,
 } from '../helpers.js';
 
 let admin;
@@ -60,9 +60,30 @@ describe('GET /api/caja/actual — ingresos', () => {
 
     const { totales } = (await api('get', '/api/caja/actual')).body;
     expect(totales.ingresos).toEqual({
-      lavadoras_medianas: 70, lavadoras_jumbo: 90, secadoras: 50, productos: 27, por_encargo: 30,
+      lavadoras_medianas: 70, lavadoras_jumbo: 90, secadoras: 50, productos: 27, edredon: 0, por_encargo: 30,
     });
     const suma = Object.values(totales.ingresos).reduce((a, b) => a + b, 0);
     expect(suma).toBeCloseTo(totales.ventas_desglose.efectivo, 2);
+  });
+
+  it('en Por Encargo, el edredón y el cubre colchón van a Edredón y lo demás a Por Encargo', async () => {
+    await pool.query(
+      `INSERT INTO tamanos_edredon (nombre, precio, orden) VALUES ('Cubre Colchón', 130, 1)
+       ON CONFLICT (nombre) DO UPDATE SET precio = EXCLUDED.precio`
+    );
+    const cli = await seedCliente();
+    const nota = await api('post', '/api/notas', {
+      tipo_servicio: 'POR_ENCARGO', cliente_id: cli, tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE',
+      cargas: [
+        { lavadora_tipo: 'mediana' },                                                // 70
+        { tamano: 'jumbo', tipo_prenda: 'EDREDON', tamano_edredon: 'Cubre Colchón' }, // 130
+      ],
+    }).expect(201);
+    expect(Number(nota.body.precio_total)).toBe(200);
+    await api('patch', `/api/notas/${nota.body.id}/estado-pago`,
+      { estado_pago: 'PAGADO', forma_pago: 'EFECTIVO' }).expect(200);
+
+    const { totales } = (await api('get', '/api/caja/actual')).body;
+    expect(totales.ingresos).toMatchObject({ edredon: 130, por_encargo: 70 });
   });
 });

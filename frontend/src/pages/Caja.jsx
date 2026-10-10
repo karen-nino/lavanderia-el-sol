@@ -429,6 +429,8 @@ function Corte({ data, onCerrar, onAbrir }) {
     { label: 'Secadoras',          value: ingresos.secadoras },
     { label: 'Productos',          value: ingresos.productos },
     { label: 'Por Encargo',        value: ingresos.por_encargo },
+    // Servicios Por Encargo de Edredón, con sus tamaños (incluye Cubre Colchón).
+    { label: 'Edredón',            value: ingresos.edredon ?? 0 },
   ] : [];
   const totalIngresos = filasIngresos.reduce((s, r) => s + Number(r.value || 0), 0);
 

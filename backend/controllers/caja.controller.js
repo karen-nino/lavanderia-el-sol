@@ -61,7 +61,9 @@ export async function ventasDeSesion(client, cajaId) {
 // del corte (2026-10-10). Cada cobro en efectivo (lo que faltaba de una nota
 // cobrada aquí, o un abono hecho aquí; mismas reglas que `ventasDeSesion`) se
 // reparte entre las partes de su nota, en proporción a lo que vale cada una:
-//   · Por Encargo → todo a `por_encargo` (se cobra por servicio, no por máquina);
+//   · Por Encargo → se cobra por servicio, no por máquina: los servicios de
+//     Edredón (sus tamaños incluyen el Cubre Colchón, mig. 130) van a
+//     `edredon` y los demás a `por_encargo`;
 //   · lo demás → lavadoras medianas / jumbo (por el tipo de la primera máquina
 //     del hueco; sin ella, por el tamaño pedido), secadoras y productos.
 // La proporción absorbe los descuentos de la nota. Se trabaja en centavos y el
@@ -93,6 +95,8 @@ export async function ingresosDeSesion(client, cajaId) {
         SELECT nota_id, SUM(monto) AS monto FROM cobros GROUP BY nota_id
      )
      SELECT pn.monto, n.tipo_servicio,
+            COALESCE(c.encargo_edredon, 0) AS edredon,
+            COALESCE(c.encargo_otros, 0) + COALESCE(sueltos.marca, 0) AS por_encargo,
             COALESCE(c.lav_mediana, 0) AS lavadoras_medianas,
             COALESCE(c.lav_jumbo, 0)   AS lavadoras_jumbo,
             COALESCE(c.secadoras, 0)   AS secadoras,
@@ -103,9 +107,29 @@ export async function ingresosDeSesion(client, cajaId) {
          SELECT SUM(nc.precio_lavadora) FILTER (WHERE NOT t.jumbo) AS lav_mediana,
                 SUM(nc.precio_lavadora) FILTER (WHERE t.jumbo)     AS lav_jumbo,
                 SUM(nc.precio_secadora)                            AS secadoras,
-                SUM((SELECT COALESCE(SUM(np.cantidad * np.precio_unitario), 0)
-                       FROM nota_productos np WHERE np.carga_id = nc.id)) AS productos
+                SUM(pc.todos)                                      AS productos,
+                -- Lo que vale el servicio en Por Encargo, con la misma regla
+                -- que recalcularPrecioTotal: el tope paga lo servido por
+                -- medidas; lo de marca va encima.
+                SUM(v.encargo) FILTER (WHERE UPPER(COALESCE(nc.tipo_prenda, '')) = 'EDREDON')
+                                                                   AS encargo_edredon,
+                SUM(v.encargo) FILTER (WHERE UPPER(COALESCE(nc.tipo_prenda, '')) <> 'EDREDON')
+                                                                   AS encargo_otros
            FROM nota_cargas nc
+           CROSS JOIN LATERAL (
+             SELECT COALESCE(SUM(np.cantidad * np.precio_unitario), 0) AS todos,
+                    COALESCE(SUM(np.cantidad * np.precio_unitario)
+                               FILTER (WHERE a.se_vende_por_unidad), 0) AS marca
+               FROM nota_productos np
+               JOIN productos a ON a.id = np.producto_id
+              WHERE np.carga_id = nc.id
+           ) pc
+           CROSS JOIN LATERAL (
+             SELECT GREATEST(0, CASE WHEN nc.precio_tope IS NOT NULL
+                                     THEN nc.precio_tope + pc.marca
+                                     ELSE nc.precio_lavadora + nc.precio_secadora + pc.todos
+                                END + nc.ajuste) AS encargo
+           ) v
            LEFT JOIN maquinas ml ON ml.id = nc.lavadora_id
            CROSS JOIN LATERAL (
              SELECT COALESCE(
@@ -121,23 +145,29 @@ export async function ingresosDeSesion(client, cajaId) {
           WHERE nc.nota_id = n.id
        ) c ON TRUE
        LEFT JOIN LATERAL (
-         SELECT SUM(np.cantidad * np.precio_unitario) AS total
+         SELECT SUM(np.cantidad * np.precio_unitario) AS total,
+                SUM(np.cantidad * np.precio_unitario) FILTER (WHERE a.se_vende_por_unidad) AS marca
            FROM nota_productos np
+           JOIN productos a ON a.id = np.producto_id
           WHERE np.nota_id = n.id AND np.carga_id IS NULL
        ) sueltos ON TRUE`,
     [cajaId]
   );
 
-  const LINEAS = ['lavadoras_medianas', 'lavadoras_jumbo', 'secadoras', 'productos'];
-  const cent = { lavadoras_medianas: 0, lavadoras_jumbo: 0, secadoras: 0, productos: 0, por_encargo: 0 };
+  const MOSTRADOR = ['productos', 'lavadoras_medianas', 'lavadoras_jumbo', 'secadoras'];
+  const ENCARGO = ['por_encargo', 'edredon'];
+  const cent = {
+    lavadoras_medianas: 0, lavadoras_jumbo: 0, secadoras: 0, productos: 0, edredon: 0, por_encargo: 0,
+  };
   for (const r of rows) {
     const monto = Math.round(parseFloat(r.monto) * 100);
-    if (r.tipo_servicio === 'POR_ENCARGO') { cent.por_encargo += monto; continue; }
+    const LINEAS = r.tipo_servicio === 'POR_ENCARGO' ? ENCARGO : MOSTRADOR;
     const partes = LINEAS.map((k) => Math.max(0, parseFloat(r[k])));
     const valor = partes.reduce((a, b) => a + b, 0);
-    // Sin partes con precio (solo un ajuste): no hay a qué atribuirlo; va a
-    // productos para que la suma siga cuadrando con el efectivo.
-    if (valor <= 0) { cent.productos += monto; continue; }
+    // Sin partes con precio (solo un ajuste): no hay a qué atribuirlo; va a la
+    // primera línea del servicio (Por Encargo, o Productos) para que
+    // la suma siga cuadrando con el efectivo.
+    if (valor <= 0) { cent[LINEAS[0]] += monto; continue; }
     let repartido = 0;
     const asignado = partes.map((p) => {
       const c = Math.round((monto * p) / valor);
