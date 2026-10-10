@@ -433,6 +433,14 @@ function Corte({ data, onCerrar, onAbrir }) {
     { label: 'Edredón',            value: ingresos.edredon ?? 0 },
   ] : [];
   const totalIngresos = filasIngresos.reduce((s, r) => s + Number(r.value || 0), 0);
+  // Lo que el turno dejó por cobrar en Por Encargo (saldo de las notas creadas
+  // en el turno sin liquidar) y las salidas de Movimientos.
+  const egresos = totales.egresos;
+  const filasEgresos = egresos ? [
+    { label: 'Servicios por encargo pendientes', value: egresos.por_encargo_pendiente },
+    { label: 'Salidas',                          value: egresos.salidas },
+  ] : [];
+  const totalEgresos = filasEgresos.reduce((s, r) => s + Number(r.value || 0), 0);
 
   // La caja funciona por turnos (2026-10-03): el corte lo hace quien abrió el
   // turno o un administrador. El servidor también lo exige; aquí se dice antes
@@ -472,6 +480,26 @@ function Corte({ data, onCerrar, onAbrir }) {
             <div className="flex justify-between px-4 py-4 text-base font-bold text-gray-900 bg-gray-50">
               <span>TOTAL INGRESOS</span>
               <span className="text-lg">{fmt(totalIngresos)}</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {egresos && (
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div className="px-4 py-3 border-b border-gray-200">
+            <h2 className="text-sm font-semibold text-gray-700">Egresos</h2>
+          </div>
+          <div className="divide-y divide-gray-100">
+            {filasEgresos.map((r) => (
+              <div key={r.label} className="flex justify-between px-4 py-3 text-sm text-gray-600">
+                <span>{r.label}</span>
+                <span>{fmt(r.value)}</span>
+              </div>
+            ))}
+            <div className="flex justify-between px-4 py-4 text-base font-bold text-gray-900 bg-gray-50">
+              <span>TOTAL EGRESOS</span>
+              <span className="text-lg">{fmt(totalEgresos)}</span>
             </div>
           </div>
         </div>

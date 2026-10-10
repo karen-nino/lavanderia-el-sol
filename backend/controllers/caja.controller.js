@@ -180,6 +180,28 @@ export async function ingresosDeSesion(client, cajaId) {
   return Object.fromEntries(Object.entries(cent).map(([k, v]) => [k, v / 100]));
 }
 
+// Lo que el turno dejó por cobrar en Por Encargo, para el recuadro Egresos del
+// corte (2026-10-10): las notas Por Encargo dadas de alta en la sucursal
+// durante el turno que siguen sin liquidar, por su saldo (total − abonos
+// vivos). Las canceladas no cuentan.
+export async function porEncargoPendienteDeSesion(client, caja) {
+  const { rows } = await client.query(
+    `SELECT COALESCE(SUM(n.precio_total - COALESCE((
+              SELECT SUM(ab.monto) FROM nota_abonos ab
+               WHERE ab.nota_id = n.id AND ab.revertido_at IS NULL
+            ), 0)), 0) AS saldo
+       FROM notas n
+      WHERE n.sucursal = $1
+        AND n.tipo_servicio = 'POR_ENCARGO'
+        AND n.estado <> 'CANCELADA'
+        AND n.estado_pago <> 'PAGADO'
+        AND n.created_at >= $2
+        AND n.created_at <= COALESCE($3, NOW())`,
+    [caja.sucursal, caja.abierta_at, caja.cerrada_at ?? null]
+  );
+  return Math.max(0, parseFloat(rows[0].saldo));
+}
+
 // Totales de movimientos (entradas/salidas) de una caja.
 export async function totalesMovimientos(client, cajaId) {
   const { rows } = await client.query(
@@ -329,6 +351,10 @@ export async function getCajaActual(req, res) {
       totales: {
         ventas: ventas.total, ventas_desglose: ventas, entradas, salidas, esperado,
         ingresos: await ingresosDeSesion(client, caja.id),
+        egresos: {
+          por_encargo_pendiente: await porEncargoPendienteDeSesion(client, caja),
+          salidas,
+        },
       },
       movimientos: movsRes.rows.map((m) => ({
         id:         m.id,

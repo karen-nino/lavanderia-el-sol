@@ -1,6 +1,7 @@
-// Recuadro Ingresos del corte (2026-10-10): de dónde salió el efectivo del
-// turno — lavadoras medianas, jumbo, secadoras, productos y Por Encargo. Solo
-// cuenta el efectivo y la suma de las líneas es la de ventas en efectivo.
+// Recuadros Ingresos y Egresos del corte (2026-10-10). Ingresos: de dónde salió
+// el efectivo del turno — lavadoras medianas, jumbo, secadoras, productos, Por
+// Encargo y Edredón; solo efectivo, y la suma es la de ventas en efectivo.
+// Egresos: lo que el turno dejó por cobrar en Por Encargo y las salidas.
 import { describe, it, expect, beforeEach } from 'vitest';
 import request from 'supertest';
 import app from '../../app.js';
@@ -85,5 +86,27 @@ describe('GET /api/caja/actual — ingresos', () => {
 
     const { totales } = (await api('get', '/api/caja/actual')).body;
     expect(totales.ingresos).toMatchObject({ edredon: 130, por_encargo: 70 });
+  });
+
+  it('egresos: saldo de los Por Encargo del turno sin liquidar, y las salidas', async () => {
+    const cli = await seedCliente();
+    const encargo = () => api('post', '/api/notas', {
+      tipo_servicio: 'POR_ENCARGO', cliente_id: cli, tipo_prenda: 'ROPA',
+      estado_pago: 'PENDIENTE', cargas: [{ lavadora_tipo: 'mediana' }],
+    }).expect(201);                                                          // 70 c/u
+
+    const conAbono = await encargo();
+    await api('post', `/api/notas/${conAbono.body.id}/abonos`, { monto: 30, forma_pago: 'EFECTIVO' }).expect(201);
+    await encargo();                                                         // debe 70
+    const pagada = await encargo();
+    await api('patch', `/api/notas/${pagada.body.id}/estado-pago`,
+      { estado_pago: 'PAGADO', forma_pago: 'EFECTIVO' }).expect(200);       // ya no debe
+    const vieja = await encargo();                                           // de antes del turno
+    await pool.query("UPDATE notas SET created_at = NOW() - INTERVAL '2 days' WHERE id = $1", [vieja.body.id]);
+
+    await api('post', '/api/caja/movimientos', { tipo: 'salida', concepto: 'Gas', monto: 45 }).expect(201);
+
+    const { totales } = (await api('get', '/api/caja/actual')).body;
+    expect(totales.egresos).toEqual({ por_encargo_pendiente: 110, salidas: 45 }); // 40 + 70
   });
 });
