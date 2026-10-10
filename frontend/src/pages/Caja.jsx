@@ -412,13 +412,6 @@ function Corte({ data, onCerrar, onAbrir }) {
   };
   const noEnCajon = desglose.transferencia + desglose.tarjeta;
 
-  // Las ventas y entradas viven en Ingresos (2026-10-10): aquí solo queda lo
-  // que la usuaria pidió; el esperado se sigue calculando completo.
-  const rows = [
-    { label: 'Caja inicial',       value: caja.monto_inicial, sign: '' },
-    { label: 'Salidas',            value: totales.salidas,    sign: '−' },
-  ];
-
   // Ingresos del turno (2026-10-10). Las líneas de máquina, productos y Por
   // Encargo son el DETALLE de las ventas en efectivo (el backend reparte cada
   // cobro por nota), así que van con sangría y no se suman otra vez. La
@@ -440,14 +433,24 @@ function Corte({ data, onCerrar, onAbrir }) {
     { label: 'Entradas',           value: totales.entradas,   sign: '+' },
   ];
   const totalIngresos = caja.monto_inicial + desglose.efectivo + totales.entradas;
-  // Lo que el turno dejó por cobrar en Por Encargo (saldo de las notas creadas
-  // en el turno sin liquidar) y las salidas de Movimientos.
-  const egresos = totales.egresos;
-  const filasEgresos = egresos ? [
-    { label: 'Servicios por encargo pendientes', value: egresos.por_encargo_pendiente },
-    { label: 'Salidas',                          value: egresos.salidas },
-  ] : [];
-  const totalEgresos = filasEgresos.reduce((s, r) => s + Number(r.value || 0), 0);
+  // Egresos: las salidas de Movimientos y, informativo, lo que el turno dejó
+  // por cobrar en Por Encargo (saldo de las notas creadas en el turno sin
+  // liquidar). Eso nunca entró al cajón, así que no sale de él: no cuenta en
+  // el total, igual que la transferencia en Ingresos.
+  const pendienteEncargo = totales.egresos?.por_encargo_pendiente;
+  const filasEgresos = [
+    ...(pendienteEncargo != null ? [{
+      label: 'Servicios por encargo pendientes', value: pendienteEncargo, sign: '', nota: 'No sale del cajón',
+    }] : []),
+    { label: 'Salidas', value: totales.salidas, sign: '−' },
+  ];
+  const totalEgresos = totales.salidas;
+
+  // Desglose final: Ingresos − Egresos = lo que debe haber en el cajón.
+  const rows = [
+    { label: 'Ingresos', value: totalIngresos, sign: '' },
+    { label: 'Egresos',  value: totalEgresos,  sign: '−' },
+  ];
 
   // La caja funciona por turnos (2026-10-03): el corte lo hace quien abrió el
   // turno o un administrador. El servidor también lo exige; aquí se dice antes
@@ -505,25 +508,26 @@ function Corte({ data, onCerrar, onAbrir }) {
         </div>
       </div>
 
-      {egresos && (
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div className="px-4 py-3 border-b border-gray-200">
-            <h2 className="text-sm font-semibold text-gray-700">Egresos</h2>
-          </div>
-          <div className="divide-y divide-gray-100">
-            {filasEgresos.map((r) => (
-              <div key={r.label} className="flex justify-between px-4 py-3 text-sm text-gray-600">
-                <span>{r.label}</span>
-                <span>{fmt(r.value)}</span>
-              </div>
-            ))}
-            <div className="flex justify-between px-4 py-4 text-base font-bold text-gray-900 bg-gray-50">
-              <span>TOTAL EGRESOS</span>
-              <span className="text-lg">{fmt(totalEgresos)}</span>
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div className="px-4 py-3 border-b border-gray-200">
+          <h2 className="text-sm font-semibold text-gray-700">Egresos</h2>
+        </div>
+        <div className="divide-y divide-gray-100">
+          {filasEgresos.map((r) => (
+            <div key={r.label} className="flex justify-between px-4 py-3 text-sm text-gray-600">
+              <span>
+                {r.label}
+                {r.nota && <span className="block text-xs text-gray-400">{r.nota}</span>}
+              </span>
+              <span>{r.sign}{fmt(r.value)}</span>
             </div>
+          ))}
+          <div className="flex justify-between px-4 py-4 text-base font-bold text-gray-900 bg-gray-50">
+            <span>TOTAL EGRESOS</span>
+            <span className="text-lg">{fmt(totalEgresos)}</span>
           </div>
         </div>
-      )}
+      </div>
 
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <div className="px-4 py-3 border-b border-gray-200">
