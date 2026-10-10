@@ -284,7 +284,7 @@ El corte lo hace QUIEN ABRIÓ EL TURNO (o un administrador): es quien responde p
 
 La app compara lo que contaste contra lo que ESPERABA y te dice si sobra o falta.
 
-Después REPARTE lo contado en dos: Caja final (lo que se queda en el cajón) y Sobre (lo que apartas). Al escribir uno, la app calcula el otro; los dos tienen que sumar lo contado. Con la Caja final abre el siguiente turno.
+Después REPARTE lo contado en dos: Caja final (lo que se queda en el cajón) y Sobre (lo que apartas). Tú escribes la Caja final y la app calcula el Sobre con lo que sobra (solo un administrador puede escribir el Sobre a mano); los dos suman lo contado. Con la Caja final abre el siguiente turno.
 
 Lo cobrado por transferencia se muestra aparte, en "Cobrado fuera del cajón": ese dinero NO está en el cajón, así que no lo sumes a lo que cuentas.
 

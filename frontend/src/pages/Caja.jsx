@@ -424,6 +424,9 @@ function Corte({ data, onCerrar, onAbrir }) {
   // de que alguien cuente el cajón para nada.
   const esMiTurno = String(caja.usuario_apertura_id) === String(usuario?.id);
   const puedeCerrar = esMiTurno || esAdminFn(usuario?.rol);
+  // El empleado escribe lo contado y la caja final; el sobre se calcula solo
+  // (lo que sobra) y solo un administrador lo escribe a mano.
+  const sobreEditable = esAdminFn(usuario?.rol);
 
   return (
     <div className="space-y-6 max-w-md mx-auto">
@@ -535,14 +538,17 @@ function Corte({ data, onCerrar, onAbrir }) {
               id="sobre"
               type="number" min="0" step="0.01" required value={sobre}
               onChange={(e) => cambiarSobre(e.target.value)}
+              disabled={!sobreEditable}
               placeholder="0.00"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-base font-medium"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-base font-medium disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed"
             />
           </div>
           <p className={`col-span-2 -mt-1 text-xs ${repartoMal ? 'text-red-600 font-medium' : 'text-gray-500'}`}>
             {repartoMal
               ? `La caja final y el sobre tienen que sumar lo contado (${fmt(contadoNum)}), sin números negativos.`
-              : 'Reparte lo contado: la caja final se queda en el cajón y con ella abre el siguiente turno; el sobre se aparta.'}
+              : sobreEditable
+                ? 'Reparte lo contado: la caja final se queda en el cajón y con ella abre el siguiente turno; el sobre se aparta.'
+                : 'Escribe la caja final: se queda en el cajón y con ella abre el siguiente turno. El sobre es lo que sobra y se calcula solo.'}
           </p>
         </div>
         <div>
