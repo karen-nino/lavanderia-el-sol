@@ -412,21 +412,19 @@ function Corte({ data, onCerrar, onAbrir }) {
   };
   const noEnCajon = desglose.transferencia + desglose.tarjeta;
 
+  // Las ventas y entradas viven en Ingresos (2026-10-10): aquí solo queda lo
+  // que la usuaria pidió; el esperado se sigue calculando completo.
   const rows = [
     { label: 'Caja inicial',       value: caja.monto_inicial, sign: '' },
-    { label: 'Ventas en efectivo', value: desglose.efectivo,  sign: '+' },
-    // Informativa: la transferencia no llega al cajón, así que no se suma al
-    // esperado (2026-10-10).
-    { label: 'Ventas por transferencia', value: desglose.transferencia, sign: '', nota: 'No entra al cajón' },
-    { label: 'Entradas',           value: totales.entradas,   sign: '+' },
     { label: 'Salidas',            value: totales.salidas,    sign: '−' },
   ];
 
-  // De dónde salió el efectivo del turno (2026-10-10). El backend lo reparte
-  // por nota; sin el dato (backend viejo) el recuadro no se muestra.
+  // Ingresos del turno (2026-10-10). Las líneas de máquina, productos y Por
+  // Encargo son el DETALLE de las ventas en efectivo (el backend reparte cada
+  // cobro por nota), así que van con sangría y no se suman otra vez. La
+  // transferencia se informa pero no entra al cajón ni al total.
   const ingresos = totales.ingresos;
-  const filasIngresos = ingresos ? [
-    { label: 'Caja inicial',       value: caja.monto_inicial },
+  const detalleEfectivo = ingresos ? [
     { label: 'Lavadoras Medianas', value: ingresos.lavadoras_medianas },
     { label: 'Lavadoras Jumbo',    value: ingresos.lavadoras_jumbo },
     { label: 'Secadoras',          value: ingresos.secadoras },
@@ -435,7 +433,13 @@ function Corte({ data, onCerrar, onAbrir }) {
     // Servicios Por Encargo de Edredón, con sus tamaños (incluye Cubre Colchón).
     { label: 'Edredón',            value: ingresos.edredon ?? 0 },
   ] : [];
-  const totalIngresos = filasIngresos.reduce((s, r) => s + Number(r.value || 0), 0);
+  const filasIngresos = [
+    { label: 'Caja inicial',       value: caja.monto_inicial, sign: '' },
+    { label: 'Ventas en efectivo', value: desglose.efectivo,  sign: '+', detalle: detalleEfectivo },
+    { label: 'Ventas por transferencia', value: desglose.transferencia, sign: '', nota: 'No entra al cajón' },
+    { label: 'Entradas',           value: totales.entradas,   sign: '+' },
+  ];
+  const totalIngresos = caja.monto_inicial + desglose.efectivo + totales.entradas;
   // Lo que el turno dejó por cobrar en Por Encargo (saldo de las notas creadas
   // en el turno sin liquidar) y las salidas de Movimientos.
   const egresos = totales.egresos;
@@ -468,25 +472,38 @@ function Corte({ data, onCerrar, onAbrir }) {
         )}
       </div>
 
-      {ingresos && (
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div className="px-4 py-3 border-b border-gray-200">
-            <h2 className="text-sm font-semibold text-gray-700">Ingresos</h2>
-          </div>
-          <div className="divide-y divide-gray-100">
-            {filasIngresos.map((r) => (
-              <div key={r.label} className="flex justify-between px-4 py-3 text-sm text-gray-600">
-                <span>{r.label}</span>
-                <span>{fmt(r.value)}</span>
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div className="px-4 py-3 border-b border-gray-200">
+          <h2 className="text-sm font-semibold text-gray-700">Ingresos</h2>
+        </div>
+        <div className="divide-y divide-gray-100">
+          {filasIngresos.map((r) => (
+            <div key={r.label} className="px-4 py-3 text-sm text-gray-600">
+              <div className="flex justify-between">
+                <span>
+                  {r.label}
+                  {r.nota && <span className="block text-xs text-gray-400">{r.nota}</span>}
+                </span>
+                <span>{r.sign}{fmt(r.value)}</span>
               </div>
-            ))}
-            <div className="flex justify-between px-4 py-4 text-base font-bold text-gray-900 bg-gray-50">
-              <span>TOTAL INGRESOS</span>
-              <span className="text-lg">{fmt(totalIngresos)}</span>
+              {r.detalle?.length > 0 && (
+                <div className="mt-2 space-y-1.5 pl-4 text-xs text-gray-500">
+                  {r.detalle.map((d) => (
+                    <div key={d.label} className="flex justify-between">
+                      <span>{d.label}</span>
+                      <span>{fmt(d.value)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
+          ))}
+          <div className="flex justify-between px-4 py-4 text-base font-bold text-gray-900 bg-gray-50">
+            <span>TOTAL INGRESOS</span>
+            <span className="text-lg">{fmt(totalIngresos)}</span>
           </div>
         </div>
-      )}
+      </div>
 
       {egresos && (
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
@@ -515,10 +532,7 @@ function Corte({ data, onCerrar, onAbrir }) {
         <div className="divide-y divide-gray-100">
           {rows.map((r) => (
             <div key={r.label} className="flex justify-between px-4 py-3 text-sm text-gray-600">
-              <span>
-                {r.label}
-                {r.nota && <span className="block text-xs text-gray-400">{r.nota}</span>}
-              </span>
+              <span>{r.label}</span>
               <span>{r.sign}{fmt(r.value)}</span>
             </div>
           ))}
