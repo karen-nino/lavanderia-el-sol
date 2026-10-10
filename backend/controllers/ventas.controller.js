@@ -1,6 +1,7 @@
 import pool from '../db/pool.js';
 import { TZ_NEGOCIO, fechaLocal, esFechaISO } from '../utils/tz.js';
 import { esCronometroSql, CICLOS_DE_PASADAS, TOPE_RELOJ } from '../db/sqlMaquina.js';
+import { leerCortes } from './caja.controller.js';
 
 // El "día" de un reporte es el día del NEGOCIO (America/Mexico_City), no el del
 // servidor: en producción Postgres corre en UTC, así que `DATE(pagado_en)` metía
@@ -62,6 +63,9 @@ export async function getResumen(req, res) {
   // entra solo lo que faltaba, así que ningún peso se cuenta dos veces y estos
   // totales cuadran con el corte de caja de esos días.
   const periodCobroSQL = buildPeriodSQL(periodo, 'c.momento', anioSel != null, mesSel != null);
+  // Turnos de caja del período (2026-10-10): por CUÁNDO se abrieron, con sus
+  // Ingresos, Egresos y Desglose, uno por tarjeta.
+  const periodTurnoSQL = buildPeriodSQL(periodo, 'c.abierta_at', anioSel != null, mesSel != null);
 
   if (isCustom && (!desde || !hasta)) {
     return res.status(400).json({ message: 'Elige la fecha de inicio y la de fin del período.' });
@@ -390,6 +394,8 @@ export async function getResumen(req, res) {
     const total_tarjeta       = parseFloat(cobrado.total_tarjeta);
     const total_cobrado       = parseFloat(cobrado.total_cobrado);
 
+    const turnos = await leerCortes(pool, `c.sucursal = $${sucIdx} AND ${periodTurnoSQL}`, params);
+
     res.json({
       tarjetas: {
         total_cobrado:       total_cobrado,
@@ -456,6 +462,8 @@ export async function getResumen(req, res) {
         usuario:        r.usuario_nombre,
         fecha:          r.created_at,
       })),
+      // Del más viejo al más nuevo, como se leen en el día.
+      turnos: turnos.reverse(),
     });
   } catch (err) {
     console.error('Error en ventas/resumen:', err);

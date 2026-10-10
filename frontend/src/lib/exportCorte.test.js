@@ -39,7 +39,31 @@ describe('descargarCortesCSV', () => {
     expect(fila[0]).toBe('2026-10-04');
     expect(fila[1]).toBe('en curso');
     expect(fila[3]).toBe('En curso');
-    expect(fila[15]).toBe('En curso'); // Estado (sin Tarjeta; después de Caja final y Sobre)
+    expect(fila[capturado.encabezados.indexOf('Estado')]).toBe('En curso');
+  });
+
+  it('exporta los ingresos por concepto, el SPE Debe y los totales (2026-10-10)', () => {
+    descargarCortesCSV([{
+      ...corte([]),
+      ventas_desglose: { efectivo: 210, transferencia: 70, tarjeta: 0 },
+      ingresos: { lavadoras_medianas: 70, lavadoras_jumbo: 90, secadoras: 50, productos: 0, por_encargo: 0, edredon: 0 },
+      spe_debe: 40,
+    }], 'hoy');
+    const { encabezados, filas: [fila] } = capturado;
+    const col = (k) => fila[encabezados.indexOf(k)];
+    expect(col('Lavadoras Medianas')).toBe('70.00');
+    expect(col('Lavadoras Jumbo')).toBe('90.00');
+    expect(col('Secadoras')).toBe('50.00');
+    expect(col('SPE Debe')).toBe('40.00');
+    expect(col('Total ingresos')).toBe('810.00'); // 500 inicial + 210 efectivo + 100 entradas
+    expect(col('Total egresos')).toBe('300.00');  // solo los gastos
+  });
+
+  it('un corte sin reparto ni SPE Debe (anterior a la mig. 153) deja esas columnas vacías', () => {
+    descargarCortesCSV([corte([])], 'hoy');
+    const { encabezados, filas: [fila] } = capturado;
+    expect(fila[encabezados.indexOf('Lavadoras Medianas')]).toBe('');
+    expect(fila[encabezados.indexOf('SPE Debe')]).toBe('');
   });
 
   it('exporta la caja final y el sobre del corte', () => {

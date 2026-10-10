@@ -543,6 +543,10 @@ export async function cerrarCaja(req, res) {
     // tarjetas se informan aparte para cuadrar el total del día.
     const esperado = monto_inicial + ventas.efectivo + entradas - salidas;
     const diferencia = contado - esperado;
+    // Reparto del efectivo y lo que el turno dejó por cobrar en Por Encargo
+    // (mig. 153): se congelan con lo demás.
+    const ingresos = await ingresosDeSesion(client, caja.id);
+    const speDebe  = await porEncargoPendienteDeSesion(client, caja);
 
     // Las cifras se COPIAN al corte (mig. 101). A partir de aquí el historial
     // las lee tal cual: lo que pase después con esas notas —revertir un pago,
@@ -561,11 +565,13 @@ export async function cerrarCaja(req, res) {
               total_entradas       = $9,
               total_salidas        = $10,
               monto_caja_final     = $11,
-              monto_sobre          = $12
+              monto_sobre          = $12,
+              ingresos_detalle     = $13,
+              spe_debe             = $14
         WHERE id = $4 AND estado = 'abierta'`,
       [req.user.id, contado, notas_cierre?.trim() || null, caja.id,
        ventas.total, ventas.efectivo, ventas.transferencia, ventas.tarjeta,
-       entradas, salidas, cajaFinal, sobre]
+       entradas, salidas, cajaFinal, sobre, JSON.stringify(ingresos), speDebe]
     );
     if (upd.rowCount === 0) {
       await client.query('ROLLBACK');
@@ -598,10 +604,17 @@ export async function cerrarCaja(req, res) {
   }
 }
 
-export async function getHistorial(req, res) {
-  try {
-    const { rows } = await pool.query(
-      `SELECT
+// Los cortes (turnos de caja) que cumplen `where`, con sus cifras listas para
+// pintar y exportar. Lo usan el historial de Caja y Ventas (2026-10-10).
+//   · Un turno CERRADO lee lo congelado al cerrar (migs. 101 y 153); los de
+//     antes de la 153 recalculan el reparto del efectivo (el dinero de una caja
+//     cerrada ya no se mueve) y se quedan sin SPE Debe.
+//   · Un turno ABIERTO (solo si `where` lo deja pasar) se calcula en vivo, con
+//     las mismas funciones que el corte: `en_curso: true`.
+// `where` es SQL sobre `c` (cajas) con sus `params`.
+export async function leerCortes(client, where, params) {
+  const { rows } = await client.query(
+    `SELECT
           c.id,
           c.monto_inicial,
           c.monto_contado,
@@ -612,6 +625,10 @@ export async function getHistorial(req, res) {
           c.abierta_at,
           c.cerrada_at,
           c.cierre_automatico,
+          c.estado,
+          c.sucursal,
+          c.ingresos_detalle,
+          c.spe_debe,
           TRIM(ua.nombre || ' ' || COALESCE(ua.apellido, '')) AS usuario_apertura,
           TRIM(uc.nombre || ' ' || COALESCE(uc.apellido, '')) AS usuario_cierre,
           -- Cifras CONGELADAS al cerrar (mig. 101). Un corte cerrado ya no
@@ -661,52 +678,76 @@ export async function getHistorial(req, res) {
         FROM cajas c
         JOIN usuarios ua ON ua.id = c.usuario_apertura_id
         LEFT JOIN usuarios uc ON uc.id = c.usuario_cierre_id
-       WHERE c.estado = 'cerrada' AND c.sucursal = $1
-       ORDER BY c.cerrada_at DESC`,
-      [req.sucursal]
-    );
+       WHERE ${where}
+       ORDER BY COALESCE(c.cerrada_at, NOW()) DESC`,
+    params
+  );
 
-    res.json(
-      rows.map((r) => {
-        const monto_inicial = parseFloat(r.monto_inicial);
-        const ventas        = parseFloat(r.ventas);
-        const ventas_desglose = {
-          total:         ventas,
-          efectivo:      parseFloat(r.ventas_efectivo),
-          transferencia: parseFloat(r.ventas_transferencia),
-          tarjeta:       parseFloat(r.ventas_tarjeta),
-        };
-        const entradas      = parseFloat(r.entradas);
-        const salidas       = parseFloat(r.salidas);
-        const esperado      = monto_inicial + ventas_desglose.efectivo + entradas - salidas;
-        const contado       = r.monto_contado != null ? parseFloat(r.monto_contado) : null;
-        return {
-          id:               r.id,
-          usuario_apertura: r.usuario_apertura,
-          usuario_cierre:   r.usuario_cierre,
-          abierta_at:        r.abierta_at,
-          cerrada_at:        r.cerrada_at,
-          // Cerrada por el barrido de medianoche, sin que nadie contara el
-          // cajón: no es un corte, y la pantalla debe decirlo.
-          cierre_automatico: r.cierre_automatico,
-          notas_apertura:   r.notas_apertura,
-          notas_cierre:     r.notas_cierre,
-          monto_inicial,
-          ventas,
-          ventas_desglose,
-          entradas,
-          salidas,
-          esperado,
-          contado,
-          diferencia: contado != null ? contado - esperado : null,
-          // Reparto de lo contado (mig. 151); null en cortes de antes y en
-          // cierres automáticos.
-          caja_final: r.monto_caja_final != null ? parseFloat(r.monto_caja_final) : null,
-          sobre:      r.monto_sobre != null ? parseFloat(r.monto_sobre) : null,
-          movimientos: (r.movimientos ?? []).map((m) => ({ ...m, monto: parseFloat(m.monto) })),
-        };
-      })
-    );
+  const cortes = [];
+  for (const r of rows) {
+    const en_curso = r.estado === 'abierta';
+    const monto_inicial = parseFloat(r.monto_inicial);
+    let ventas_desglose;
+    let entradas;
+    let salidas;
+    if (en_curso) {
+      ventas_desglose = await ventasDeSesion(client, r.id);
+      ({ entradas, salidas } = await totalesMovimientos(client, r.id));
+    } else {
+      ventas_desglose = {
+        total:         parseFloat(r.ventas),
+        efectivo:      parseFloat(r.ventas_efectivo),
+        transferencia: parseFloat(r.ventas_transferencia),
+        tarjeta:       parseFloat(r.ventas_tarjeta),
+      };
+      entradas = parseFloat(r.entradas);
+      salidas  = parseFloat(r.salidas);
+    }
+    const ventas   = ventas_desglose.total;
+    const esperado = monto_inicial + ventas_desglose.efectivo + entradas - salidas;
+    const contado  = r.monto_contado != null ? parseFloat(r.monto_contado) : null;
+    const ingresos = !en_curso && r.ingresos_detalle
+      ? r.ingresos_detalle
+      : await ingresosDeSesion(client, r.id);
+    const spe_debe = en_curso
+      ? await porEncargoPendienteDeSesion(client, r)
+      : (r.spe_debe != null ? parseFloat(r.spe_debe) : null);
+    cortes.push({
+      id:               r.id,
+      en_curso,
+      usuario_apertura: r.usuario_apertura,
+      usuario_cierre:   r.usuario_cierre,
+      abierta_at:        r.abierta_at,
+      cerrada_at:        r.cerrada_at,
+      // Cerrada por el barrido de medianoche, sin que nadie contara el
+      // cajón: no es un corte, y la pantalla debe decirlo.
+      cierre_automatico: r.cierre_automatico,
+      notas_apertura:   r.notas_apertura,
+      notas_cierre:     r.notas_cierre,
+      monto_inicial,
+      ventas,
+      ventas_desglose,
+      entradas,
+      salidas,
+      esperado,
+      contado,
+      diferencia: contado != null ? contado - esperado : null,
+      // Reparto de lo contado (mig. 151); null en cortes de antes y en
+      // cierres automáticos.
+      caja_final: r.monto_caja_final != null ? parseFloat(r.monto_caja_final) : null,
+      sobre:      r.monto_sobre != null ? parseFloat(r.monto_sobre) : null,
+      // Ingresos por concepto y SPE Debe (mig. 153).
+      ingresos,
+      spe_debe,
+      movimientos: (r.movimientos ?? []).map((m) => ({ ...m, monto: parseFloat(m.monto) })),
+    });
+  }
+  return cortes;
+}
+
+export async function getHistorial(req, res) {
+  try {
+    res.json(await leerCortes(pool, `c.estado = 'cerrada' AND c.sucursal = $1`, [req.sucursal]));
   } catch (err) {
     console.error('Error en caja/historial:', err);
     res.status(500).json({ message: 'No se pudo cargar el historial de cortes. Intenta de nuevo.' });

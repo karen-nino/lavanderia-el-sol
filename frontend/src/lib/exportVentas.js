@@ -7,7 +7,11 @@
 //                 total_efectivo, total_transferencia, total_tarjeta,
 //                 total_general (suma de conceptos), total_cobrado },
 //     lista_notas: [{ folio, fecha, creado_en, estado, maquinas:[{nombre,cargas}],
-//                     atendio, forma_pago, total_productos, total }] }
+//                     atendio, forma_pago, total_productos, total }],
+//     turnos: [cortes de caja del período, con la forma de /caja/historial] }
+//
+// Los turnos de caja (2026-10-10) salen con sus Ingresos, Egresos y Desglose,
+// con las mismas piezas que la exportación de Caja (exportCorte.js).
 
 import { formatHora12 } from './fecha';
 import { formaPagoLabel } from './formasPago';
@@ -16,6 +20,7 @@ import {
   descargarCSV, imprimirDocumento,
 } from './exportUtils';
 import { etiquetaEstadoNota } from './estadoNota';
+import { tablaCortesCSV, bloqueDetalle } from './exportCorte';
 
 // Etiquetas de estado (iguales a las de la tabla de Ventas).
 const ESTADO_LABEL = {
@@ -87,6 +92,13 @@ export function descargarVentasCSV(data, sufijo) {
         num(a.monto),
       ]),
     );
+  }
+  // Los turnos de caja, también en su propio archivo: una fila por turno con
+  // sus Ingresos y Egresos, y debajo sus entradas y salidas.
+  const turnos = data?.turnos ?? [];
+  if (turnos.length > 0) {
+    const { encabezados, filas } = tablaCortesCSV(turnos);
+    descargarCSV(`turnos-caja-${slug(sufijo)}`, encabezados, filas);
   }
 }
 
@@ -198,12 +210,18 @@ const bloqueAbonos = (abonos) => {
     </table>`;
 };
 
+// Un bloque por turno de caja del período, con Ingresos, Egresos y Desglose.
+const bloqueTurnos = (turnos) => (turnos.length === 0 ? '' : `
+  <p class="seccion">Turnos de caja (${turnos.length})</p>
+  ${turnos.map(bloqueDetalle).join('')}`);
+
 // Abre una ventana con el reporte de ventas y lanza la impresión (Guardar PDF).
 export function imprimirVentas(data, { titulo, subtitulo } = {}) {
   if (!data) return;
   const cuerpo =
     bloqueTarjetas(data.tarjetas) +
     bloqueCorte(data.corte) +
+    bloqueTurnos(data.turnos ?? []) +
     bloqueAbonos(data.abonos ?? []) +
     bloqueNotas(data.lista_notas ?? []);
   imprimirDocumento({ titulo: titulo || 'Ventas', subtitulo, cuerpo });

@@ -4,6 +4,7 @@ import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { esAdmin as esAdminFn, esAdminMain as esAdminMainFn } from '../lib/roles';
 import FondoApertura from '../components/FondoApertura';
+import RecuadrosCaja from '../components/RecuadrosCaja';
 import { formatHora12 } from '../lib/fecha';
 import { imprimirCortes, descargarCortesCSV } from '../lib/exportCorte';
 import SucursalBar from '../components/SucursalBar';
@@ -412,47 +413,16 @@ function Corte({ data, onCerrar, onAbrir }) {
   };
   const noEnCajon = desglose.transferencia + desglose.tarjeta;
 
-  // Ingresos del turno (2026-10-10). Las líneas de máquina, productos y Por
-  // Encargo son el DESGLOSE de las ventas en efectivo (el backend reparte cada
-  // cobro por nota): van en su propio renglón, antes de "Ventas en efectivo",
-  // y no se suman otra vez al total. La transferencia se informa pero no
-  // entra al cajón ni al total.
-  const ingresos = totales.ingresos;
-  const detalleEfectivo = ingresos ? [
-    { label: 'Lavadoras Medianas', value: ingresos.lavadoras_medianas },
-    { label: 'Lavadoras Jumbo',    value: ingresos.lavadoras_jumbo },
-    { label: 'Secadoras',          value: ingresos.secadoras },
-    { label: 'Productos',          value: ingresos.productos },
-    { label: 'SPE',                value: ingresos.por_encargo },  // Servicios Por Encargo
-    // Servicios Por Encargo de Edredón, con sus tamaños (incluye Cubre Colchón).
-    { label: 'Edredón',            value: ingresos.edredon ?? 0 },
-  ] : [];
-  const filasIngresos = [
-    { label: 'Caja inicial',       value: caja.monto_inicial, sign: '' },
-    { label: 'Entradas',           value: totales.entradas,   sign: '+' },
-    ...detalleEfectivo.map((d) => ({ ...d, sign: '' })),
-    { label: 'Ventas en efectivo', value: desglose.efectivo,  sign: '+' },
-    { label: 'Ventas por transferencia', value: desglose.transferencia, sign: '', nota: 'No entra al cajón' },
-  ];
-  const totalIngresos = caja.monto_inicial + desglose.efectivo + totales.entradas;
-  // Egresos: las salidas de Movimientos y, informativo, lo que el turno dejó
-  // por cobrar en Por Encargo (saldo de las notas creadas en el turno sin
-  // liquidar). Eso nunca entró al cajón, así que no sale de él: no cuenta en
-  // el total, igual que la transferencia en Ingresos.
-  const pendienteEncargo = totales.egresos?.por_encargo_pendiente;
-  const filasEgresos = [
-    ...(pendienteEncargo != null ? [{
-      label: 'SPE Debe', value: pendienteEncargo, sign: '', nota: 'No sale del cajón',
-    }] : []),
-    { label: 'Gastos', value: totales.salidas, sign: '−' },
-  ];
-  const totalEgresos = totales.salidas;
-
-  // Desglose final: Ingresos − Egresos = lo que debe haber en el cajón.
-  const rows = [
-    { label: 'Ingresos', value: totalIngresos, sign: '' },
-    { label: 'Egresos',  value: totalEgresos,  sign: '−' },
-  ];
+  // Ingresos, Egresos y Desglose (2026-10-10): mismas líneas que Ventas y las
+  // exportaciones (lib/desgloseCaja.js).
+  const turno = {
+    monto_inicial:   caja.monto_inicial,
+    entradas:        totales.entradas,
+    salidas:         totales.salidas,
+    ventas_desglose: desglose,
+    ingresos:        totales.ingresos ?? null,
+    spe_debe:        totales.egresos?.por_encargo_pendiente ?? null,
+  };
 
   // La caja funciona por turnos (2026-10-03): el corte lo hace quien abrió el
   // turno o un administrador. El servidor también lo exige; aquí se dice antes
@@ -477,65 +447,7 @@ function Corte({ data, onCerrar, onAbrir }) {
         )}
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div className="px-4 py-3 border-b border-gray-200">
-          <h2 className="text-sm font-semibold text-gray-700">Ingresos</h2>
-        </div>
-        <div className="divide-y divide-gray-100">
-          {filasIngresos.map((r) => (
-            <div key={r.label} className="flex justify-between px-4 py-3 text-sm text-gray-600">
-              <span>
-                {r.label}
-                {r.nota && <span className="block text-xs text-gray-400">{r.nota}</span>}
-              </span>
-              <span>{r.sign}{fmt(r.value)}</span>
-            </div>
-          ))}
-          <div className="flex justify-between px-4 py-4 text-base font-bold text-gray-900 bg-gray-50">
-            <span>TOTAL INGRESOS</span>
-            <span className="text-lg">{fmt(totalIngresos)}</span>
-          </div>
-        </div>
-      </div>
-
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div className="px-4 py-3 border-b border-gray-200">
-          <h2 className="text-sm font-semibold text-gray-700">Egresos</h2>
-        </div>
-        <div className="divide-y divide-gray-100">
-          {filasEgresos.map((r) => (
-            <div key={r.label} className="flex justify-between px-4 py-3 text-sm text-gray-600">
-              <span>
-                {r.label}
-                {r.nota && <span className="block text-xs text-gray-400">{r.nota}</span>}
-              </span>
-              <span>{r.sign}{fmt(r.value)}</span>
-            </div>
-          ))}
-          <div className="flex justify-between px-4 py-4 text-base font-bold text-gray-900 bg-gray-50">
-            <span>TOTAL EGRESOS</span>
-            <span className="text-lg">{fmt(totalEgresos)}</span>
-          </div>
-        </div>
-      </div>
-
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div className="px-4 py-3 border-b border-gray-200">
-          <h2 className="text-sm font-semibold text-gray-700">Desglose esperado</h2>
-        </div>
-        <div className="divide-y divide-gray-100">
-          {rows.map((r) => (
-            <div key={r.label} className="flex justify-between px-4 py-3 text-sm text-gray-600">
-              <span>{r.label}</span>
-              <span>{r.sign}{fmt(r.value)}</span>
-            </div>
-          ))}
-          <div className="flex justify-between px-4 py-4 text-base font-bold text-gray-900 bg-gray-50">
-            <span>ESPERADO EN CAJA</span>
-            <span className="text-lg">{fmt(totales.esperado)}</span>
-          </div>
-        </div>
-      </div>
+      <RecuadrosCaja turno={turno} />
 
       {noEnCajon > 0 && (
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
@@ -734,6 +646,9 @@ function Historial({ onFiltroLabel }) {
           esperado: totales.esperado,
           contado: null,
           diferencia: null,
+          // Ingresos por concepto y SPE Debe, para las exportaciones (2026-10-10).
+          ingresos: totales.ingresos ?? null,
+          spe_debe: totales.egresos?.por_encargo_pendiente ?? null,
         });
       })
       .catch(() => {});

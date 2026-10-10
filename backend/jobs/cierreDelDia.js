@@ -1,7 +1,9 @@
 import { randomUUID } from 'crypto';
 import pool from '../db/pool.js';
 import { sellarPasadasVivas } from '../db/pasadas.js';
-import { ventasDeSesion, totalesMovimientos } from '../controllers/caja.controller.js';
+import {
+  ventasDeSesion, totalesMovimientos, ingresosDeSesion, porEncargoPendienteDeSesion,
+} from '../controllers/caja.controller.js';
 
 // Hora local del negocio en la que se hace el barrido de "cierre del día".
 // Configurable con CIERRE_HORA (0-23) y TZ_NEGOCIO; por defecto 00:00 en
@@ -165,11 +167,13 @@ export async function cerrarCajasAbiertas() {
   try {
     await client.query('BEGIN');
     const { rows: abiertas } = await client.query(
-      `SELECT id, sucursal FROM cajas WHERE estado = 'abierta' FOR UPDATE`
+      `SELECT id, sucursal, abierta_at FROM cajas WHERE estado = 'abierta' FOR UPDATE`
     );
     for (const c of abiertas) {
       const ventas = await ventasDeSesion(client, c.id);
       const { entradas, salidas } = await totalesMovimientos(client, c.id);
+      const ingresos = await ingresosDeSesion(client, c.id);
+      const speDebe  = await porEncargoPendienteDeSesion(client, c);
       await client.query(
         `UPDATE cajas
             SET estado            = 'cerrada',
@@ -184,9 +188,12 @@ export async function cerrarCajasAbiertas() {
                 ventas_transferencia = $4,
                 ventas_tarjeta       = $5,
                 total_entradas       = $6,
-                total_salidas        = $7
+                total_salidas        = $7,
+                ingresos_detalle     = $8,
+                spe_debe             = $9
           WHERE id = $1`,
-        [c.id, ventas.total, ventas.efectivo, ventas.transferencia, ventas.tarjeta, entradas, salidas]
+        [c.id, ventas.total, ventas.efectivo, ventas.transferencia, ventas.tarjeta, entradas, salidas,
+         JSON.stringify(ingresos), speDebe]
       );
     }
     await client.query('COMMIT');

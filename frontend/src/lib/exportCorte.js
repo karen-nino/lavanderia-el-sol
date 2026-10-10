@@ -10,8 +10,14 @@
 // Las entradas y salidas van con su concepto en todas las exportaciones
 // (2026-10-04): en el CSV como una segunda tabla debajo de los cortes, una fila
 // por movimiento, y en el PDF como tabla.
+//
+// Desde el 2026-10-10 cada turno lleva también sus Ingresos (por máquina,
+// productos, SPE y edredón), Egresos (SPE Debe y gastos) y el Desglose, con las
+// mismas líneas que la pantalla (lib/desgloseCaja.js). Ventas reutiliza estas
+// piezas para sus propias exportaciones.
 
 import { formatHora12 } from './fecha';
+import { desgloseCaja } from './desgloseCaja';
 import {
   fmtMoneda, num, fechaLarga, fechaISO, slug, esc,
   descargarCSV, imprimirDocumento,
@@ -35,7 +41,9 @@ const estadoCorte = (c) => {
 // ── CSV ─────────────────────────────────────────────────────
 const ENCABEZADOS_CSV = [
   'Fecha', 'Hora', 'Abrió', 'Cerró', 'Caja inicial', 'Ventas', 'Ventas efectivo', 'Transferencia', 'Tarjeta',
-  'Entradas', 'Salidas', 'Esperado', 'Contado', 'Diferencia', 'Caja final', 'Sobre',
+  'Lavadoras Medianas', 'Lavadoras Jumbo', 'Secadoras', 'Productos', 'SPE', 'Edredón',
+  'Entradas', 'Salidas', 'Total ingresos', 'SPE Debe', 'Total egresos',
+  'Esperado', 'Contado', 'Diferencia', 'Caja final', 'Sobre',
   'Estado', 'Nota apertura', 'Nota cierre',
 ];
 
@@ -53,6 +61,9 @@ const filasMovimientos = (c) => (c.movimientos ?? []).map((m) => [
   num(m.tipo === 'salida' ? -m.monto : m.monto),
 ]);
 
+// Un importe del reparto del efectivo, vacío si el corte no lo trae.
+const ing = (c, k) => (c.ingresos ? num(c.ingresos[k] ?? 0) : '');
+
 const filaCSV = (c) => [
   fechaISO(fechaCorte(c)),
   horaCierre(c),
@@ -63,8 +74,18 @@ const filaCSV = (c) => [
   num(c.ventas_desglose?.efectivo ?? c.ventas),
   num(c.ventas_desglose?.transferencia ?? 0),
   num(c.ventas_desglose?.tarjeta ?? 0),
+  ing(c, 'lavadoras_medianas'),
+  ing(c, 'lavadoras_jumbo'),
+  ing(c, 'secadoras'),
+  ing(c, 'productos'),
+  ing(c, 'por_encargo'),
+  ing(c, 'edredon'),
   num(c.entradas),
   num(c.salidas),
+  num(desgloseCaja(c).totalIngresos),
+  // Sin dato en los cortes anteriores a la mig. 153.
+  c.spe_debe != null ? num(c.spe_debe) : '',
+  num(desgloseCaja(c).totalEgresos),
   num(c.esperado),
   c.contado != null ? num(c.contado) : '',
   c.diferencia != null ? num(c.diferencia) : '',
@@ -76,8 +97,9 @@ const filaCSV = (c) => [
   c.notas_cierre ?? '',
 ];
 
-// Descarga uno o varios cortes como CSV. `sufijo` va en el nombre del archivo.
-export function descargarCortesCSV(cortes, sufijo) {
+// La tabla de cortes del CSV: encabezados y una fila por corte, más la tabla
+// de entradas y salidas debajo. Ventas la reutiliza para sus turnos.
+export function tablaCortesCSV(cortes) {
   const lista = Array.isArray(cortes) ? cortes : [cortes];
   const movs = lista.flatMap(filasMovimientos);
   // Tarjeta ya no se ofrece al cobrar (2026-10-06): su columna solo sale si
@@ -89,6 +111,12 @@ export function descargarCortesCSV(cortes, sufijo) {
   const filas = lista.map((c) => (conTarjeta ? filaCSV(c) : sinTarjeta(filaCSV(c))));
   // Debajo de los cortes, separada por una fila vacía, la tabla de movimientos.
   if (movs.length > 0) filas.push([], ['Entradas y salidas'], ENCABEZADOS_MOVS, ...movs);
+  return { encabezados, filas };
+}
+
+// Descarga uno o varios cortes como CSV. `sufijo` va en el nombre del archivo.
+export function descargarCortesCSV(cortes, sufijo) {
+  const { encabezados, filas } = tablaCortesCSV(cortes);
   descargarCSV(`cortes-${slug(sufijo)}`, encabezados, filas);
 }
 
@@ -129,26 +157,36 @@ const tablaMovimientos = (c) => {
     </table>`;
 };
 
-// Bloque detallado de un corte (encabezado + desglose + firmas).
-const bloqueDetalle = (c) => `
+// Una tabla de Ingresos, Egresos o Desglose con su renglón de total.
+const tablaLineas = (titulo, lineas, totalLabel, total) => `
+    <p class="seccion">${esc(titulo)}</p>
+    <table class="desglose">
+      <tbody>
+        ${lineas.map((l) => `
+        <tr><td>${esc(l.label)}${l.nota ? ` <span class="nota">(${esc(l.nota)})</span>` : ''}</td>
+          <td class="r">${l.sign}${fmtMoneda(l.value)}</td></tr>`).join('')}
+        <tr class="tot"><td>${esc(totalLabel)}</td><td class="r">${fmtMoneda(total)}</td></tr>
+      </tbody>
+    </table>`;
+
+// Bloque detallado de un corte (encabezado + Ingresos, Egresos y Desglose +
+// conteo + firmas + entradas y salidas). Ventas lo reutiliza por turno.
+export const bloqueDetalle = (c) => {
+  const d = desgloseCaja(c);
+  return `
   <section class="corte">
     <div class="corte-head">
       <h2>${esc(fechaLarga(fechaCorte(c)))}${c.en_curso ? ' · turno en curso' : ''}</h2>
-      <span class="hora">${esc(horaCierre(c))}</span>
+      <span class="hora">${esc(formatHora12(c.abierta_at))} – ${esc(horaCierre(c))}</span>
     </div>
+    ${tablaLineas('Ingresos', d.ingresos, 'Total ingresos', d.totalIngresos)}
+    ${(c.ventas_desglose?.tarjeta ?? 0) > 0
+      ? `<p class="nota">Además, cobrado con tarjeta (fuera del cajón): ${fmtMoneda(c.ventas_desglose.tarjeta)}</p>`
+      : ''}
+    ${tablaLineas('Egresos', d.egresos, 'Total egresos', d.totalEgresos)}
+    ${tablaLineas('Desglose esperado', d.desglose, c.en_curso ? 'Esperado hasta ahora' : 'Esperado en caja', c.esperado)}
     <table class="desglose">
       <tbody>
-        <tr><td>Caja inicial</td><td class="r">${fmtMoneda(c.monto_inicial)}</td></tr>
-        <tr><td>Ventas en efectivo</td><td class="r">${fmtMoneda(c.ventas_desglose?.efectivo ?? c.ventas)}</td></tr>
-        ${(c.ventas_desglose?.transferencia ?? 0) > 0
-          ? `<tr><td>Cobrado por transferencia (fuera del cajón)</td><td class="r">${fmtMoneda(c.ventas_desglose.transferencia)}</td></tr>`
-          : ''}
-        ${(c.ventas_desglose?.tarjeta ?? 0) > 0
-          ? `<tr><td>Cobrado con tarjeta (fuera del cajón)</td><td class="r">${fmtMoneda(c.ventas_desglose.tarjeta)}</td></tr>`
-          : ''}
-        <tr><td>Entradas</td><td class="r">${fmtMoneda(c.entradas)}</td></tr>
-        <tr><td>Salidas</td><td class="r">${fmtMoneda(c.salidas)}</td></tr>
-        <tr class="tot"><td>Esperado en caja</td><td class="r">${fmtMoneda(c.esperado)}</td></tr>
         <tr><td>Efectivo contado</td><td class="r">${c.contado != null ? fmtMoneda(c.contado) : '—'}</td></tr>
         <tr class="dif ${claseDif(c)}"><td>Diferencia</td><td class="r">${textoDif(c)}</td></tr>
         ${c.caja_final != null ? `
@@ -164,31 +202,14 @@ const bloqueDetalle = (c) => `
     </div>
     ${tablaMovimientos(c)}
   </section>`;
-
-// Con varios cortes, después de la tabla resumen: las notas y las entradas y
-// salidas de cada corte que tenga alguna, para que ninguna quede fuera.
-const detalleNotas = (cortes) => {
-  const conAlgo = cortes.filter((c) =>
-    c.notas_apertura || c.notas_cierre || (c.movimientos ?? []).length > 0);
-  if (conAlgo.length === 0) return '';
-  return `
-    <p class="seccion">Notas, entradas y salidas</p>
-    ${conAlgo.map((c) => `
-      <section class="corte">
-        <div class="corte-head">
-          <h2>${esc(fechaLarga(fechaCorte(c)))}</h2>
-          <span class="hora">${esc(formatHora12(c.abierta_at))} – ${esc(horaCierre(c))}</span>
-        </div>
-        ${c.notas_apertura || c.notas_cierre ? `
-          <div class="firmas">
-            ${c.notas_apertura ? `<div><span class="lbl">Nota al abrir · ${esc(c.usuario_apertura || '—')}</span>
-              <p class="nota">${esc(c.notas_apertura)}</p></div>` : ''}
-            ${c.notas_cierre ? `<div><span class="lbl">Nota al cerrar · ${esc(c.usuario_cierre || '—')}</span>
-              <p class="nota">${esc(c.notas_cierre)}</p></div>` : ''}
-          </div>` : ''}
-        ${tablaMovimientos(c)}
-      </section>`).join('')}`;
 };
+
+// Con varios cortes, después de la tabla resumen: el detalle completo de cada
+// uno (Ingresos, Egresos, Desglose, notas, entradas y salidas), para que
+// ninguno quede fuera.
+const detallePorCorte = (cortes) => `
+    <p class="seccion">Detalle por turno</p>
+    ${cortes.map(bloqueDetalle).join('')}`;
 
 // Tabla resumen (una fila por corte) + totales, para varios cortes.
 const tablaResumen = (cortes) => {
@@ -238,6 +259,6 @@ const tablaResumen = (cortes) => {
 export function imprimirCortes(cortes, { titulo, subtitulo } = {}) {
   const lista = Array.isArray(cortes) ? cortes : [cortes];
   if (lista.length === 0) return;
-  const cuerpo = lista.length === 1 ? bloqueDetalle(lista[0]) : tablaResumen(lista) + detalleNotas(lista);
+  const cuerpo = lista.length === 1 ? bloqueDetalle(lista[0]) : tablaResumen(lista) + detallePorCorte(lista);
   imprimirDocumento({ titulo: titulo || 'Corte de caja', subtitulo, cuerpo });
 }

@@ -109,4 +109,32 @@ describe('GET /api/caja/actual — ingresos', () => {
     const { totales } = (await api('get', '/api/caja/actual')).body;
     expect(totales.egresos).toEqual({ por_encargo_pendiente: 110, salidas: 45 }); // 40 + 70
   });
+
+  it('al cerrar se congelan los ingresos y el SPE Debe, y Ventas trae el turno', async () => {
+    await autoservicio({ tipo: 'lavadora_mediana' });                        // 70 efectivo
+    const cli = await seedCliente();
+    const encargo = await api('post', '/api/notas', {
+      tipo_servicio: 'POR_ENCARGO', cliente_id: cli, tipo_prenda: 'ROPA',
+      estado_pago: 'PENDIENTE', cargas: [{ lavadora_tipo: 'mediana' }],
+    }).expect(201);                                                          // debe 70
+
+    await api('post', '/api/caja/cerrar', { monto_contado: 270, monto_caja_final: 270, monto_sobre: 0 }).expect(200);
+    // Pagarla DESPUÉS del corte no cambia lo que el corte dice que se debía.
+    await api('post', '/api/caja/abrir', { monto_inicial: 270 }).expect(201);
+    await api('patch', `/api/notas/${encargo.body.id}/estado-pago`,
+      { estado_pago: 'PAGADO', forma_pago: 'EFECTIVO' }).expect(200);
+
+    const historial = (await api('get', '/api/caja/historial')).body;
+    expect(historial).toHaveLength(1);
+    expect(historial[0].ingresos).toMatchObject({ lavadoras_medianas: 70, por_encargo: 0 });
+    expect(historial[0].spe_debe).toBe(70);
+
+    const ventas = (await api('get', '/api/ventas/resumen?periodo=hoy')).body;
+    expect(ventas.turnos).toHaveLength(2);
+    const [cerrado, abierto] = ventas.turnos;
+    expect(cerrado).toMatchObject({ en_curso: false, spe_debe: 70, esperado: 270 });
+    expect(abierto).toMatchObject({ en_curso: true, spe_debe: 0, monto_inicial: 270 });
+    expect(abierto.ingresos.por_encargo).toBe(70);
+  });
 });
+

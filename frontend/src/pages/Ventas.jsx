@@ -7,6 +7,7 @@ import { fmtEncendidaConTope, horarioCiclo } from '../lib/tiempoEncendida';
 import { etiquetaProducto, seVendePorUnidad, esPolvo } from '../lib/formatoInventario';
 import { formatHora12, formatFechaHora12 } from '../lib/fecha';
 import { imprimirVentas, descargarVentasCSV } from '../lib/exportVentas';
+import TurnosCaja from '../components/TurnosCaja';
 import SucursalBar from '../components/SucursalBar';
 import {
   BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -734,6 +735,9 @@ export default function Ventas() {
               )}
             </div>
           </div>
+
+          {/* Turnos de caja del período, con sus Ingresos y Egresos (2026-10-10). */}
+          <TurnosCaja turnos={data.turnos ?? []} />
 
           {/* Lista de notas */}
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
