@@ -442,7 +442,7 @@ function Corte({ data, onCerrar, onAbrir }) {
     ...(pendienteEncargo != null ? [{
       label: 'Servicios por encargo pendientes', value: pendienteEncargo, sign: '', nota: 'No sale del cajón',
     }] : []),
-    { label: 'Salidas', value: totales.salidas, sign: '−' },
+    { label: 'Gastos', value: totales.salidas, sign: '−' },
   ];
   const totalEgresos = totales.salidas;
 
