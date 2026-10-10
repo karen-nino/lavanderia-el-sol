@@ -415,6 +415,9 @@ function Corte({ data, onCerrar, onAbrir }) {
   const rows = [
     { label: 'Caja inicial',       value: caja.monto_inicial, sign: '' },
     { label: 'Ventas en efectivo', value: desglose.efectivo,  sign: '+' },
+    // Informativa: la transferencia no llega al cajón, así que no se suma al
+    // esperado (2026-10-10).
+    { label: 'Ventas por transferencia', value: desglose.transferencia, sign: '', nota: 'No entra al cajón' },
     { label: 'Entradas',           value: totales.entradas,   sign: '+' },
     { label: 'Salidas',            value: totales.salidas,    sign: '−' },
   ];
@@ -512,7 +515,10 @@ function Corte({ data, onCerrar, onAbrir }) {
         <div className="divide-y divide-gray-100">
           {rows.map((r) => (
             <div key={r.label} className="flex justify-between px-4 py-3 text-sm text-gray-600">
-              <span>{r.label}</span>
+              <span>
+                {r.label}
+                {r.nota && <span className="block text-xs text-gray-400">{r.nota}</span>}
+              </span>
               <span>{r.sign}{fmt(r.value)}</span>
             </div>
           ))}
