@@ -429,10 +429,10 @@ function Corte({ data, onCerrar, onAbrir }) {
   ] : [];
   const filasIngresos = [
     { label: 'Caja inicial',       value: caja.monto_inicial, sign: '' },
+    { label: 'Entradas',           value: totales.entradas,   sign: '+' },
     ...detalleEfectivo.map((d) => ({ ...d, sign: '' })),
     { label: 'Ventas en efectivo', value: desglose.efectivo,  sign: '+' },
     { label: 'Ventas por transferencia', value: desglose.transferencia, sign: '', nota: 'No entra al cajón' },
-    { label: 'Entradas',           value: totales.entradas,   sign: '+' },
   ];
   const totalIngresos = caja.monto_inicial + desglose.efectivo + totales.entradas;
   // Egresos: las salidas de Movimientos y, informativo, lo que el turno dejó
