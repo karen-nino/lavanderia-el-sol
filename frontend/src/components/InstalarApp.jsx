@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { lanzarInstalacion } from '../lib/pwa';
 import { useInstalacion } from '../lib/useInstalacion';
+import { APP_VERSION } from '../lib/version';
 
 // Botón para instalar la app en el teléfono o la tablet, desde Ajustes.
 //
@@ -152,6 +153,11 @@ export default function InstalarApp({ variant = 'desktop' }) {
     </button>
   );
 
+  // La versión que corre en este equipo, la misma del login (2026-10-11).
+  const version = (
+    <p className="text-sm text-gray-500">Versión {APP_VERSION}</p>
+  );
+
   const modalAyuda = (
     <>
       {ayuda === 'ios' && <AyudaIPhone onClose={() => setAyuda(null)} />}
@@ -166,6 +172,7 @@ export default function InstalarApp({ variant = 'desktop' }) {
       <>
         <p className="text-base text-grey leading-relaxed">{descripcion}</p>
         {boton}
+        {version}
         {modalAyuda}
       </>
     );
@@ -178,7 +185,10 @@ export default function InstalarApp({ variant = 'desktop' }) {
           <h2 className="text-base font-bold text-dark-blue">Instalar la app</h2>
         </div>
         <div className="px-5 py-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <p className="text-sm text-gray-600 max-w-md">{descripcion}</p>
+          <div className="space-y-1 max-w-md">
+            <p className="text-sm text-gray-600">{descripcion}</p>
+            {version}
+          </div>
           {boton}
         </div>
       </div>
