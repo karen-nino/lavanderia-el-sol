@@ -159,7 +159,7 @@ const tablaMovimientos = (c) => {
 
 // Una tabla de Ingresos, Egresos o Desglose con su renglón de total. `aparte`
 // ({ titulo, lineas }) son renglones informativos que no se suman (Cómo se
-// cobró), con su subtítulo debajo del total.
+// cobró), con su subtítulo; el total va hasta abajo.
 const filaLinea = (l) => `
         <tr><td>${esc(l.label)}${l.nota ? ` <span class="nota">(${esc(l.nota)})</span>` : ''}</td>
           <td class="r">${l.sign}${fmtMoneda(l.value)}</td></tr>`;
@@ -168,8 +168,8 @@ const tablaLineas = (titulo, lineas, totalLabel, total, aparte = null) => `
     <table class="desglose">
       <tbody>
         ${lineas.map(filaLinea).join('')}
-        <tr class="tot"><td>${esc(totalLabel)}</td><td class="r">${fmtMoneda(total)}</td></tr>
         ${aparte ? `<tr class="sub"><td colspan="2">${esc(aparte.titulo)}</td></tr>${aparte.lineas.map(filaLinea).join('')}` : ''}
+        <tr class="tot"><td>${esc(totalLabel)}</td><td class="r">${fmtMoneda(total)}</td></tr>
       </tbody>
     </table>`;
 

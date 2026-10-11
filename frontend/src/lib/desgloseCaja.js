@@ -51,7 +51,7 @@ export function desgloseCaja(t) {
   // Informativo, como "Cómo se cobró" de Ventas: no se suma.
   const comoSeCobro = [
     { label: 'Efectivo',      value: efectivo, sign: '' },
-    { label: 'Transferencia', value: num(t.ventas_desglose?.transferencia), sign: '', nota: 'No entra al cajón' },
+    { label: 'Transferencia', value: num(t.ventas_desglose?.transferencia), sign: '' },
   ];
   const totalIngresos = num(t.monto_inicial) + efectivo + num(t.entradas);
 
