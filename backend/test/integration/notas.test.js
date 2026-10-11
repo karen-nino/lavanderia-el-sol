@@ -923,6 +923,39 @@ describe('servicios Por Encargo (sin tipo de máquina)', () => {
       expect(res.status).toBe(409);
     });
 
+    // "Doblado" (2026-10-11): en la lista, la Por Encargo que ya lavó Y secó
+    // y espera "Procesado". En la base sigue EN_ESPERA.
+    const dobladoEnLista = async (notaId) => {
+      const lista = await request(app).get('/api/notas').set(auth(admin.token));
+      return lista.body.find(x => x.id === notaId).doblado;
+    };
+    const secar = async (notaId, nombre) => {
+      const sec = await seedMaquina({ nombre: `S-${nombre}`, tipo: 'secadora', tamano: 'mediana' });
+      await request(app).patch(`/api/notas/${notaId}/asignar-maquina`)
+        .set(auth(admin.token)).send({ maquina_ids: [sec], cobrar: false }).expect(200);
+      await request(app).patch(`/api/notas/${notaId}/activar-pendientes`)
+        .set(auth(admin.token)).send({ maquina_id: sec }).expect(200);
+      await request(app).patch(`/api/notas/${notaId}/terminar-secado`)
+        .set(auth(admin.token)).send({ secadora_id: sec }).expect(200);
+    };
+
+    it('solo lavada todavía no es "Doblado" (falta secar)', async () => {
+      const { notaId } = await trasLavar('dob1');
+      expect(await dobladoEnLista(notaId)).toBe(false);
+    });
+
+    it('lavada y secada es "Doblado"; ya procesada, no', async () => {
+      const { notaId } = await trasLavar('dob2');
+      await secar(notaId, 'dob2');
+      const det = await request(app).get(`/api/notas/${notaId}`).set(auth(admin.token));
+      expect(det.body.estado).toBe('EN_ESPERA');
+      expect(await dobladoEnLista(notaId)).toBe(true);
+
+      await request(app).patch(`/api/notas/${notaId}/estado`)
+        .set(auth(admin.token)).send({ estado: 'LISTA' }).expect(200);
+      expect(await dobladoEnLista(notaId)).toBe(false);
+    });
+
     it('terminar la última máquina NO la pasa a Por Entregar', async () => {
       const { estado } = await trasLavar('proc');
       expect(estado).toBe('EN_ESPERA');

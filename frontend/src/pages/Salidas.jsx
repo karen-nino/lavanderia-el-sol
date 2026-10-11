@@ -269,9 +269,11 @@ export default function Salidas() {
   // botón solo CONFIRMA que la máquina ya está girando, que es cuando el
   // cronómetro tiene que empezar. Si la elección se perdió (recarga en medio),
   // se vuelve a preguntar antes de arrancar.
-  function iniciarMaquina() {
-    const maq = maqModal;
+  // También directo desde el botón "Iniciar Lavado/Secado" del renglón, sin el
+  // modal de confirmación (2026-10-11); la Sec49 igual pregunta su programa.
+  function iniciarMaquina(maq = maqModal) {
     if (!maq) return;
+    setErrorAccion('');
     if (preguntaTiempo(maq)) {
       const min = minutosDeMaquina(maq);
       if (min != null) return arrancarMaquina(maq, min);
@@ -331,11 +333,8 @@ export default function Salidas() {
     iniciarCambiar(m);
   }
 
-  // Abre el modal de arranque de una máquina, sin arrastrar el error anterior.
-  function abrirModalMaquina(m) {
-    setErrorAccion('');
-    setMaquinaModalId(m.id);
-  }
+  // El modal de arranque ya no se abre desde ningún botón (2026-10-11):
+  // Encender, Iniciar Lavado e Iniciar Secado actúan al tocarlos.
 
   // Asigna una máquina física a una carga de Por Encargo creada con TIPO (la
   // máquina queda asignada En Espera; se arranca con "Iniciar" de arriba).
@@ -1285,7 +1284,7 @@ export default function Salidas() {
                     {(m.esperandoArranque
                       || (m.estado === 'disponible' && m.cronometro && m.con_iniciar)) && (
                       <button
-                        onClick={() => abrirModalMaquina(m)}
+                        onClick={() => iniciarMaquina(m)}
                         disabled={loadingMaquina}
                         className="px-4 py-2 bg-blue hover:opacity-90 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
                       >
@@ -1871,7 +1870,7 @@ export default function Salidas() {
               {esIniciar ? (
                 <button
                   type="button"
-                  onClick={iniciarMaquina}
+                  onClick={() => iniciarMaquina()}
                   disabled={loadingMaquina}
                   className="w-full bg-blue hover:opacity-90 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
                 >

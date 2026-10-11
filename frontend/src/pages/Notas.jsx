@@ -143,6 +143,10 @@ const BADGE_ESTADO = {
   CANCELADA:  { label: 'Cancelada',  cls: 'bg-red-100 text-red-700'         },
 };
 
+// Por Encargo ya lavada y secada, esperando "Procesado" (2026-10-11). En la
+// base sigue EN_ESPERA; el backend la marca con `doblado`.
+const BADGE_DOBLADO = { label: 'Doblado', cls: 'bg-purple-100 text-purple-700' };
+
 const BADGE_TIPO_SERVICIO = {
   AUTOSERVICIO: { label: 'Autoservicio', cls: 'bg-light-blue text-blue-700' },
   EDREDON:      { label: 'Edredón',      cls: 'bg-sky-100 text-sky-700'       },
@@ -676,7 +680,7 @@ export default function Notas() {
                   </thead>
                   <tbody className="divide-y divide-gray-50">
                     {paginadas.map(n => {
-                      const badgeEstado    = BADGE_ESTADO[n.estado]       ?? BADGE_ESTADO.LAVANDO;
+                      const badgeEstado    = n.doblado ? BADGE_DOBLADO : (BADGE_ESTADO[n.estado] ?? BADGE_ESTADO.LAVANDO);
                       const badgeTipoServicio = BADGE_TIPO_SERVICIO[n.tipo_servicio] ?? BADGE_TIPO_SERVICIO.AUTOSERVICIO;
                       // Cancelada no tiene estado de pago: no se va a cobrar.
                       const badgePago      = n.estado === 'CANCELADA' ? null : BADGE_PAGO[n.estado_pago];
@@ -821,7 +825,7 @@ export default function Notas() {
                 <h3 className="text-sm font-bold text-dark-blue px-1">{grupo.fecha}</h3>
                 <div className="space-y-4">
                   {grupo.notas.map(n => {
-              const badgeEstado    = BADGE_ESTADO[n.estado]       ?? BADGE_ESTADO.LAVANDO;
+              const badgeEstado    = n.doblado ? BADGE_DOBLADO : (BADGE_ESTADO[n.estado] ?? BADGE_ESTADO.LAVANDO);
               // Cancelada no tiene estado de pago: no se va a cobrar.
               const badgePago      = n.estado === 'CANCELADA' ? null : BADGE_PAGO[n.estado_pago];
               // Sin cliente la tarjeta dice Mostrador, igual que la tabla y que

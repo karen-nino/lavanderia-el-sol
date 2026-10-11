@@ -1728,6 +1728,28 @@ export const getNotas = async (req, res) => {
                           WHERE nc.nota_id = n.id
                  ) xm
                  JOIN maquinas mm ON mm.id = xm.mid) AS maquinas_nombres,
+              -- "Doblado" (2026-10-11): Por Encargo que ya LAVÓ Y SECÓ y no le
+              -- queda ninguna carga pendiente (misma regla que
+              -- hayCargasPendientes), esperando a que la marquen como
+              -- Procesado. Se exige la secadora porque el servicio no dice si
+              -- lleva secado: con solo la lavadora saldría antes de secar.
+              -- Sigue EN_ESPERA en la base; solo cambia cómo se enseña.
+              (n.tipo_servicio = 'POR_ENCARGO' AND n.estado = 'EN_ESPERA'
+                AND EXISTS (SELECT 1 FROM nota_cargas nc
+                             WHERE nc.nota_id = n.id
+                               AND (nc.lavadora_usada_id IS NOT NULL OR nc.lavadora_iniciada_at IS NOT NULL))
+                AND EXISTS (SELECT 1 FROM nota_cargas nc
+                             WHERE nc.nota_id = n.id
+                               AND (nc.secadora_usada_id IS NOT NULL OR nc.secadora_iniciada_at IS NOT NULL))
+                AND NOT EXISTS (SELECT 1 FROM nota_cargas nc
+                                 WHERE nc.nota_id = n.id
+                                   AND (nc.lavadora_id IS NOT NULL
+                                     OR nc.secadora_id IS NOT NULL
+                                     OR (nc.lavadora_tipo IS NOT NULL AND nc.lavadora_iniciada_at IS NULL
+                                         AND nc.lavadora_usada_id IS NULL)
+                                     OR (nc.secadora_tipo IS NOT NULL AND nc.secadora_iniciada_at IS NULL
+                                         AND nc.secadora_usada_id IS NULL)))
+              ) AS doblado,
               -- Máquinas que la nota tiene CORRIENDO ahora (arrancadas por ella
               -- y en uso): la tarjeta de la lista lo dice (2026-10-03). Una
               -- solo asignada no cuenta: otra nota puede arrancarla antes.
