@@ -46,10 +46,30 @@ describe('GET /api/ventas/resumen', () => {
     expect(res.body.lista_notas[0].maquinas).toEqual([{ nombre: 'Lavadora 1', cargas: 1, segundos: null, tope: false }]);
   });
 
-  it('requiere rol admin (un operador recibe 403)', async () => {
+  it('un operador ve el MISMO total de hoy que el admin, y nada más', async () => {
     const operador = await seedUsuario({ rol: 'operador', sucursal: 'centro', nombre: 'Empleado' });
-    const res = await request(app).get('/api/ventas/resumen?periodo=hoy').set(auth(operador.token));
-    expect(res.status).toBe(403);
+    const lavadoraId = await seedMaquina({ nombre: 'Lavadora 1', tipo: 'lavadora_mediana' });
+    const creada = await request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE',
+      cargas: [{ lavadora_id: lavadoraId }],
+    });
+    expect(creada.status).toBe(201);
+    await request(app).patch(`/api/notas/${creada.body.id}/estado-pago`).set(auth(admin.token))
+      .send({ estado_pago: 'PAGADO', forma_pago: 'EFECTIVO' }).expect(200);
+
+    const delAdmin = await request(app).get('/api/ventas/resumen?periodo=hoy').set(auth(admin.token));
+    const delOperador = await request(app).get('/api/ventas/resumen?periodo=hoy').set(auth(operador.token));
+    expect(delOperador.status).toBe(200);
+    expect(delAdmin.body.tarjetas.total_cobrado).toBeGreaterThan(0);
+    expect(delOperador.body).toEqual({ tarjetas: { total_cobrado: delAdmin.body.tarjetas.total_cobrado } });
+  });
+
+  it('otros periodos siguen siendo solo de admin (un operador recibe 403)', async () => {
+    const operador = await seedUsuario({ rol: 'operador', sucursal: 'centro', nombre: 'Empleado' });
+    for (const qs of ['periodo=semana', 'periodo=mes', 'periodo=custom&desde=2026-01-01&hasta=2026-01-31', 'periodo=hoy&year=2025']) {
+      const res = await request(app).get(`/api/ventas/resumen?${qs}`).set(auth(operador.token));
+      expect(res.status).toBe(403);
+    }
   });
 });
 

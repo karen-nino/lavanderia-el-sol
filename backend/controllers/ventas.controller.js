@@ -416,6 +416,9 @@ export async function getResumen(req, res) {
            AND o.sucursal = $${sucIdx} AND ${buildPeriodSQL(periodo, 'ab.created_at', anioSel != null, mesSel != null)}`,
       params);
 
+    // Empleado en el Dashboard: solo el total de hoy (ver ventas.routes.js).
+    if (req.soloTotal) return res.json({ tarjetas: { total_cobrado } });
+
     res.json({
       tarjetas: {
         total_cobrado:       total_cobrado,
