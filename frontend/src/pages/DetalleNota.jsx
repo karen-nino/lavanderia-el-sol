@@ -889,9 +889,8 @@ export default function DetalleNota() {
       label={yaProcesada ? 'Avisar' : 'Procesado'}
       title={yaProcesada ? 'Volver a avisarle al cliente' : 'Marcar la nota como procesada'}
       icono={yaProcesada ? IconoAvisar : IconoProcesado}
-      color={yaProcesada
-        ? 'bg-green-500 group-hover:bg-green-600'
-        : 'bg-blue group-hover:bg-blue-700'}
+      // Azul también ya procesada: el verde pasó a Entregar (2026-10-11).
+      color="bg-blue group-hover:bg-blue-700"
       onClick={() => { setErrorAccion(''); setProcesadoOpen(true); }}
       disabled={loadingAccion}
     />
@@ -1016,7 +1015,8 @@ export default function DetalleNota() {
             <AccionCircular
               label={esEncargoNota ? 'Entregar' : 'Finalizar'}
               icono={IconoEntregar}
-              color="bg-blue group-hover:bg-emerald-700"
+              // Entregar va en verde (antes lo llevaba Avisar, 2026-10-11).
+              color={esEncargoNota ? 'bg-green-500 group-hover:bg-green-600' : 'bg-blue group-hover:bg-emerald-700'}
               onClick={() => setConfirmFinalizar(true)}
               disabled={loadingAccion}
             />
