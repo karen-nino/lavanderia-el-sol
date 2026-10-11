@@ -409,11 +409,11 @@ function Corte({ data, onCerrar, onAbrir }) {
 
   // Solo el efectivo entra al cajón. Transferencias y tarjetas se cobran de
   // verdad, pero contarlas aquí haría que el conteo físico saliera con un
-  // faltante que nadie se llevó, así que se informan por separado.
+  // faltante que nadie se llevó: se informan en "Cómo se cobró" de Ingresos
+  // (el recuadro aparte "Cobrado fuera del cajón" se quitó el 2026-10-10).
   const desglose = totales.ventas_desglose ?? {
     total: totales.ventas, efectivo: totales.ventas, transferencia: 0, tarjeta: 0,
   };
-  const noEnCajon = desglose.transferencia + desglose.tarjeta;
 
   // Ingresos, Egresos y Desglose (2026-10-10): mismas líneas que Ventas y las
   // exportaciones (lib/desgloseCaja.js).
@@ -473,32 +473,6 @@ function Corte({ data, onCerrar, onAbrir }) {
       </div>
 
       <RecuadrosCaja turno={turno} />
-
-      {noEnCajon > 0 && (
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div className="px-4 py-3 border-b border-gray-200">
-            <h2 className="text-sm font-semibold text-gray-700">Cobrado fuera del cajón</h2>
-            <p className="mt-0.5 text-xs text-gray-500">
-              Se cobró, pero no es dinero que debas contar.
-            </p>
-          </div>
-          <div className="divide-y divide-gray-100">
-            {desglose.transferencia > 0 && (
-              <div className="flex justify-between px-4 py-3 text-sm text-gray-600">
-                <span>Transferencia</span><span>{fmt(desglose.transferencia)}</span>
-              </div>
-            )}
-            {desglose.tarjeta > 0 && (
-              <div className="flex justify-between px-4 py-3 text-sm text-gray-600">
-                <span>Tarjeta</span><span>{fmt(desglose.tarjeta)}</span>
-              </div>
-            )}
-            <div className="flex justify-between px-4 py-3 text-sm font-medium text-gray-800 bg-gray-50">
-              <span>Total cobrado en el turno</span><span>{fmt(desglose.total)}</span>
-            </div>
-          </div>
-        </div>
-      )}
 
       {!puedeCerrar ? (
         <div className="rounded-lg bg-amber-50 border border-amber-200 px-4 py-3">
