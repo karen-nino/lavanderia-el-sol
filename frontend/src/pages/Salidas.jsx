@@ -251,9 +251,11 @@ export default function Salidas() {
   // tiempo la pregunta va ANTES de la corriente: así el empleado ya sabe con
   // cuál va a correr cuando se pare frente a la pantalla de la máquina. Con
   // cronómetro (mig. 146) se pregunta al INICIAR, a pedido del negocio.
-  function encenderDesdeModal() {
-    const maq = maqModal;
+  // También se llama directo desde el botón del renglón: "Encender máquina" ya
+  // no pasa por el modal de confirmación (2026-10-11), enciende al tocarlo.
+  function encenderDesdeModal(maq = maqModal) {
     if (!maq) return;
+    setErrorAccion('');
     if (!maq.cronometro && preguntaTiempo(maq) && minutosDeMaquina(maq) == null) {
       setEligiendoTiempo({ maquina: maq, paso: 'encender' });
       return;
@@ -1269,9 +1271,11 @@ export default function Salidas() {
                         que ya está encendida entra directo al de iniciar. */}
                     {/* La Speed Queen y la Sec49 no llevan "Encender": su
                         "Iniciar" le da corriente y arranca el cronómetro. */}
+                    {(m.estado === 'disponible' || m.esperandoArranque) && (
+                    <div className="flex items-center gap-2">
                     {m.estado === 'disponible' && !(m.cronometro && m.con_iniciar) && (
                       <button
-                        onClick={() => abrirModalMaquina(m)}
+                        onClick={() => encenderDesdeModal(m)}
                         disabled={loadingMaquina || Boolean(encendiendo)}
                         className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors"
                       >
@@ -1287,6 +1291,24 @@ export default function Salidas() {
                       >
                         {m.tipo === 'secadora' ? 'Iniciar Secado' : 'Iniciar Lavado'}
                       </button>
+                    )}
+                    {/* Cambiar por otra, a un toque y solo con ícono, mientras
+                        no tenga corriente (igual que en el modal). */}
+                    {m.estado === 'disponible' && !m.esperandoArranque && (
+                      <button
+                        onClick={() => iniciarCambiar(m)}
+                        disabled={loadingMaquina}
+                        aria-label="Cambiar máquina"
+                        title="Cambiar máquina"
+                        className="w-9 h-9 flex items-center justify-center border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-60 transition-colors"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                            d="M8 7h12m0 0l-4-4m4 4l-4 4M16 17H4m0 0l4 4m-4-4l4-4" />
+                        </svg>
+                      </button>
+                    )}
+                    </div>
                     )}
                     {m.estado === 'en_uso' && !m.esperandoArranque && (
                       (m.cronometro || cicloCumplido(m)) ? (
@@ -1860,7 +1882,7 @@ export default function Salidas() {
               ) : (
                 <button
                   type="button"
-                  onClick={encenderDesdeModal}
+                  onClick={() => encenderDesdeModal()}
                   disabled={loadingMaquina}
                   className="w-full bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
                 >
