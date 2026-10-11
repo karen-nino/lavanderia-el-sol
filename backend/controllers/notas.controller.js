@@ -2623,6 +2623,18 @@ export const cambiarEstadoNota = async (req, res) => {
       });
     }
 
+    // Tampoco la que tiene abonos vivos: ese dinero ya entró a la caja y la
+    // nota cancelada lo dejaría huérfano. Primero se revierten los abonos.
+    if (estado === 'CANCELADA') {
+      const abonado = await totalAbonado(client, id);
+      if (abonado > 0) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({
+          message: `La nota tiene $${abonado.toFixed(2)} abonados. Para cancelarla, primero revierte los abonos.`,
+        });
+      }
+    }
+
     if (['FINALIZADA', 'CANCELADA'].includes(estadoActual)) {
       await client.query('ROLLBACK');
       return res.status(400).json({

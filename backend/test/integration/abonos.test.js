@@ -96,6 +96,26 @@ describe('POST /api/notas/:id/abonos', () => {
   });
 });
 
+describe('cancelar una nota con abonos', () => {
+  it('no se cancela mientras tenga abonos; revertidos, sí', async () => {
+    await request(app).post('/api/caja/abrir').set(auth(admin.token))
+      .send({ monto_inicial: 0 }).expect(201);
+    const id = await notaDe100();
+    const abono = await request(app).post(`/api/notas/${id}/abonos`)
+      .set(auth(admin.token)).send({ monto: 40, forma_pago: 'EFECTIVO' });
+
+    const res = await request(app).patch(`/api/notas/${id}/estado`)
+      .set(auth(admin.token)).send({ estado: 'CANCELADA' });
+    expect(res.status).toBe(409);
+    expect(res.body.message).toMatch(/revierte los abonos/i);
+
+    await request(app).patch(`/api/notas/${id}/abonos/${abono.body.id}/revertir`)
+      .set(auth(admin.token)).send({ motivo: 'se canceló' }).expect(200);
+    await request(app).patch(`/api/notas/${id}/estado`)
+      .set(auth(admin.token)).send({ estado: 'CANCELADA' }).expect(200);
+  });
+});
+
 describe('el abono entra en el corte del día que se hizo', () => {
   it('el corte cuenta el abono y, al liquidar, solo lo que faltaba', async () => {
     await request(app).post('/api/caja/abrir').set(auth(admin.token))

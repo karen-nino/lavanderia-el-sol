@@ -678,7 +678,8 @@ export default function Notas() {
                     {paginadas.map(n => {
                       const badgeEstado    = BADGE_ESTADO[n.estado]       ?? BADGE_ESTADO.LAVANDO;
                       const badgeTipoServicio = BADGE_TIPO_SERVICIO[n.tipo_servicio] ?? BADGE_TIPO_SERVICIO.AUTOSERVICIO;
-                      const badgePago      = BADGE_PAGO[n.estado_pago];
+                      // Cancelada no tiene estado de pago: no se va a cobrar.
+                      const badgePago      = n.estado === 'CANCELADA' ? null : BADGE_PAGO[n.estado_pago];
                       // Lavando y secando a la vez (cargas en distinta fase).
                       const lavandoYSecando = ['LAVANDO', 'SECANDO'].includes(n.estado)
                         && n.hay_lavadora_activa && n.hay_secadora_activa;
@@ -821,7 +822,8 @@ export default function Notas() {
                 <div className="space-y-4">
                   {grupo.notas.map(n => {
               const badgeEstado    = BADGE_ESTADO[n.estado]       ?? BADGE_ESTADO.LAVANDO;
-              const badgePago      = BADGE_PAGO[n.estado_pago];
+              // Cancelada no tiene estado de pago: no se va a cobrar.
+              const badgePago      = n.estado === 'CANCELADA' ? null : BADGE_PAGO[n.estado_pago];
               // Sin cliente la tarjeta dice Mostrador, igual que la tabla y que
               // el detalle. Antes caía al tipo de servicio ("Por Encargo"), que
               // en el renglón del cliente se leía como si ese fuera su nombre.

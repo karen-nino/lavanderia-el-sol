@@ -785,9 +785,11 @@ export default function DetalleNota() {
   // Cancelar: solo admin y solo mientras la nota NO esté cobrada. Después del
   // cobro habría que devolver dinero, y eso descuadra el corte del día; para
   // eso está la reversión de pago.
+  // Con abonos tampoco: ese dinero ya está en la caja (2026-10-11).
   const puedeCancelar = esAdmin
     && !['CANCELADA', 'PAGADA'].includes(nota.estado)
-    && nota.estado_pago !== 'PAGADO';
+    && nota.estado_pago !== 'PAGADO'
+    && Number(nota.abonado ?? 0) === 0;
   // Cobrar se puede desde que la nota existe, no solo cuando ya está lista: en
   // Por Encargo el cliente suele pagar al dejar la ropa, y hasta hace poco el
   // botón no aparecía hasta el final, cuando ese dinero ya se había cobrado en
@@ -1037,7 +1039,7 @@ export default function DetalleNota() {
 
             {/* Un cambio hecho en Salidas movió el total y dejó sin efecto el cobro:
           la nota volvió a Pendiente y hay que cobrarla por el importe nuevo. */}
-      {avisoCobro && nota.estado_pago === 'PENDIENTE' && (
+      {avisoCobro && nota.estado_pago === 'PENDIENTE' && nota.estado !== 'CANCELADA' && (
         <div className="bg-amber-50 border border-amber-300 rounded-xl p-4 flex items-start gap-3">
           <svg className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -1247,11 +1249,14 @@ export default function DetalleNota() {
               <span className="text-sm font-medium text-gray-800">{nota.tamano_edredon}</span>
             </FilaDetalle>
           )}
-          <FilaDetalle label="Estado de pago">
-            {badgePago
-              ? <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${badgePago.cls}`}>{badgePago.label}</span>
-              : <span className="text-gray-400">—</span>}
-          </FilaDetalle>
+          {/* Una nota cancelada no tiene estado de pago: no se va a cobrar. */}
+          {nota.estado !== 'CANCELADA' && (
+            <FilaDetalle label="Estado de pago">
+              {badgePago
+                ? <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${badgePago.cls}`}>{badgePago.label}</span>
+                : <span className="text-gray-400">—</span>}
+            </FilaDetalle>
+          )}
           {nota.forma_pago && (
             <FilaDetalle label="Forma de pago">
               <span className="text-gray-700">{formaPagoLabel(nota.forma_pago)}</span>
