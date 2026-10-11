@@ -107,7 +107,7 @@ export default function GranelPorServicio({ nota, puedeEditar, onCambio }) {
           detalle: quedanDe(p) > 0 ? `quedan ${quedanDe(p)}` : 'agotado',
           deshabilitado: elegido !== p.id && quedanDe(p) < r.cantidad,
         })),
-        { valor: DEL_CLIENTE, etiqueta: 'Producto del cliente', detalle: 'no usa inventario' },
+        { valor: DEL_CLIENTE, etiqueta: 'PROD. CLIENTE', detalle: 'no usa inventario' },
       ]}
       disparador={disparador}
     />

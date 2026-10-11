@@ -903,17 +903,15 @@ function Historial({ onFiltroLabel }) {
       <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-base">
         <span className="text-gray-500">Ingresos</span><span className="text-right text-gray-700">{fmt(d.totalIngresos)}</span>
         <span className="text-gray-500">Egresos</span><span className="text-right text-gray-700">−{fmt(d.totalEgresos)}</span>
-        <span className="text-gray-500 font-medium">{c.en_curso ? 'Esperado hasta ahora' : 'Esperado'}</span><span className="text-right font-medium text-gray-800">{fmt(c.esperado)}</span>
-        <span className="text-gray-500 font-medium">Contado</span><span className={`text-right font-medium ${
-          c.contado == null || c.diferencia == null ? 'text-gray-800'
-            : Math.abs(c.diferencia) < 0.005 ? 'text-blue-600'
-            : c.diferencia < 0 ? 'text-red-600' : 'text-green-600'
-        }`}>{c.contado != null ? fmt(c.contado) : '—'}</span>
-        {/* Reparto de lo contado (mig. 151). Los cortes de antes no lo tienen. */}
+        <span className="text-gray-500">{c.en_curso ? 'Esperado hasta ahora' : 'Esperado'}</span><span className="text-right text-gray-700">{fmt(c.esperado)}</span>
+        <span className="text-gray-500">Contado</span><span className="text-right text-gray-700">{c.contado != null ? fmt(c.contado) : '—'}</span>
+        {/* Reparto de lo contado (mig. 151). Los cortes de antes no lo tienen.
+            Lo que se resalta es la caja final (azul) y el sobre (negritas),
+            2026-10-10; si cuadró o no ya lo dice la etiqueta de arriba. */}
         {c.caja_final != null && (
           <>
-            <span className="text-gray-500">Caja final</span><span className="text-right text-gray-700">{fmt(c.caja_final)}</span>
-            <span className="text-gray-500">Sobre</span><span className="text-right text-gray-700">{fmt(c.sobre)}</span>
+            <span className="text-gray-500 font-medium">Caja final</span><span className="text-right font-medium text-blue-600">{fmt(c.caja_final)}</span>
+            <span className="text-gray-500 font-medium">Sobre</span><span className="text-right font-medium text-gray-800">{fmt(c.sobre)}</span>
           </>
         )}
       </div>
