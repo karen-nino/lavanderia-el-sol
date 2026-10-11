@@ -17,6 +17,23 @@
 
 const num = (v) => Number(v ?? 0) || 0;
 
+// Los conceptos en que se reparte lo cobrado, en el orden en que se leen. Los
+// usan Ingresos (efectivo de un turno) y Ventas → Corte de caja → Por concepto
+// (todos los cobros del período).
+export const CONCEPTOS = [
+  { key: 'lavadoras_medianas', label: 'Lavadoras Medianas' },
+  { key: 'lavadoras_jumbo',    label: 'Lavadoras Jumbo' },
+  { key: 'secadoras',          label: 'Secadoras' },
+  { key: 'productos',          label: 'Productos' },
+  { key: 'por_encargo',        label: 'SPE' },     // Servicios Por Encargo
+  // Servicios Por Encargo de Edredón, con sus tamaños (incluye Cubre Colchón).
+  { key: 'edredon',            label: 'Edredón' },
+];
+
+// Renglones { label, value } de un reparto por concepto.
+export const lineasConcepto = (reparto) =>
+  CONCEPTOS.map(({ key, label }) => ({ label, value: num(reparto?.[key]) }));
+
 export function desgloseCaja(t) {
   const efectivo = num(t.ventas_desglose?.efectivo);
   const ing = t.ingresos;
@@ -24,15 +41,7 @@ export function desgloseCaja(t) {
   const ingresos = [
     { label: 'Caja inicial', value: num(t.monto_inicial), sign: '' },
     { label: 'Entradas',     value: num(t.entradas),      sign: '+' },
-    ...(ing ? [
-      { label: 'Lavadoras Medianas', value: num(ing.lavadoras_medianas), sign: '' },
-      { label: 'Lavadoras Jumbo',    value: num(ing.lavadoras_jumbo),    sign: '' },
-      { label: 'Secadoras',          value: num(ing.secadoras),          sign: '' },
-      { label: 'Productos',          value: num(ing.productos),          sign: '' },
-      { label: 'SPE',                value: num(ing.por_encargo),        sign: '' }, // Servicios Por Encargo
-      // Servicios Por Encargo de Edredón, con sus tamaños (incluye Cubre Colchón).
-      { label: 'Edredón',            value: num(ing.edredon),            sign: '' },
-    ] : []),
+    ...(ing ? lineasConcepto(ing).map((l) => ({ ...l, sign: '' })) : []),
     { label: 'Ventas en efectivo', value: efectivo, sign: '+' },
     {
       label: 'Ventas por transferencia', value: num(t.ventas_desglose?.transferencia),

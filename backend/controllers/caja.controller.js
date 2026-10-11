@@ -70,8 +70,7 @@ export async function ventasDeSesion(client, cajaId) {
 // residuo del redondeo va a la parte más grande, así que la suma de las
 // líneas es exactamente `ventasDeSesion(...).efectivo`.
 export async function ingresosDeSesion(client, cajaId) {
-  const { rows } = await client.query(
-    `WITH cobros AS (
+  return repartirCobros(client, `
         SELECT n.id AS nota_id,
                n.precio_total - COALESCE((
                  SELECT SUM(ab.monto) FROM nota_abonos ab
@@ -89,7 +88,16 @@ export async function ingresosDeSesion(client, cajaId) {
          WHERE ab.caja_id = $1
            AND ab.revertido_at IS NULL
            AND n.estado <> 'CANCELADA'
-           AND COALESCE(ab.forma_pago, 'EFECTIVO') = 'EFECTIVO'
+           AND COALESCE(ab.forma_pago, 'EFECTIVO') = 'EFECTIVO'`, [cajaId]);
+}
+
+// El reparto por concepto de un conjunto de cobros. `cobrosSql` es un SELECT
+// de (nota_id, monto), un renglón por cobro; Caja le pasa el efectivo de un
+// turno y Ventas todos los cobros de su período (2026-10-10). Las reglas del
+// reparto están arriba, en `ingresosDeSesion`.
+export async function repartirCobros(client, cobrosSql, params) {
+  const { rows } = await client.query(
+    `WITH cobros AS (${cobrosSql}
      ),
      por_nota AS (
         SELECT nota_id, SUM(monto) AS monto FROM cobros GROUP BY nota_id
@@ -151,7 +159,7 @@ export async function ingresosDeSesion(client, cajaId) {
            JOIN productos a ON a.id = np.producto_id
           WHERE np.nota_id = n.id AND np.carga_id IS NULL
        ) sueltos ON TRUE`,
-    [cajaId]
+    params
   );
 
   const MOSTRADOR = ['productos', 'lavadoras_medianas', 'lavadoras_jumbo', 'secadoras'];

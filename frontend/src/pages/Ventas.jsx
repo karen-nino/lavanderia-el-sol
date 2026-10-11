@@ -8,6 +8,7 @@ import { etiquetaProducto, seVendePorUnidad, esPolvo } from '../lib/formatoInven
 import { formatHora12, formatFechaHora12 } from '../lib/fecha';
 import { imprimirVentas, descargarVentasCSV } from '../lib/exportVentas';
 import TurnosCaja from '../components/TurnosCaja';
+import { lineasConcepto } from '../lib/desgloseCaja';
 import SucursalBar from '../components/SucursalBar';
 import {
   BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -232,6 +233,10 @@ export default function Ventas() {
   //  - "semana": los 7 días de la semana en curso (Lunes a Domingo).
   //  - "mes": todos los días del mes seleccionado (1 … último).
   //  - otros períodos: la gráfica tal cual la manda el backend.
+  // Corte de caja → Por concepto (2026-10-10): mismas líneas que el corte de Caja.
+  const conceptos = lineasConcepto(data?.corte?.conceptos);
+  const sumaConceptos = conceptos.reduce((a, l) => a + l.value, 0);
+
   const graficaData = useMemo(() => {
     const g = data?.grafica ?? [];
     if (periodo === 'semana') {
@@ -651,32 +656,25 @@ export default function Ventas() {
               <h2 className="text-sm font-semibold text-gray-700">Corte de caja</h2>
             </div>
             <div className="divide-y divide-gray-100">
-              {/* Qué se facturó, por concepto. */}
+              {/* Qué se cobró, por concepto. */}
               <div className="px-4 pt-3 pb-1">
                 <p className="text-xs font-medium uppercase tracking-wide text-gray-400">Por concepto</p>
               </div>
-              <div className="flex justify-between px-4 py-3 text-sm text-gray-600 border-t-0">
-                <span>Servicios Por Encargo</span>
-                <span>{fmt(data.corte.total_servicios ?? 0)}</span>
-              </div>
-              <div className="flex justify-between px-4 py-3 text-sm text-gray-600">
-                <span>Cargas de lavado</span>
-                <span>{fmt(data.corte.total_cargas)}</span>
-              </div>
-              <div className="flex justify-between px-4 py-3 text-sm text-gray-600">
-                <span>Productos vendidos</span>
-                <span>{fmt(data.corte.total_productos)}</span>
-              </div>
-              <div className="flex justify-between px-4 py-3 text-sm text-gray-600">
-                <span>Ajustes</span>
-                <span>{fmt(data.corte.total_ajustes)}</span>
-              </div>
+              {/* Lo cobrado en el período repartido con las mismas líneas que el
+                  corte de Caja (2026-10-10): efectivo y transferencia, cada pago
+                  el día que entró, así que la suma es el total cobrado. */}
+              {conceptos.map((l) => (
+                <div key={l.label} className="flex justify-between px-4 py-3 text-sm text-gray-600">
+                  <span>{l.label}</span>
+                  <span>{fmt(l.value)}</span>
+                </div>
+              ))}
               <div className="flex justify-between px-4 py-3 text-sm font-medium text-gray-800">
                 <span>Suma de conceptos</span>
-                <span>{fmt(data.corte.total_general)}</span>
+                <span>{fmt(sumaConceptos)}</span>
               </div>
 
-              {/* Cómo entró el dinero. Puede no coincidir con lo de arriba. */}
+              {/* Cómo entró el dinero. Suma lo mismo que los conceptos. */}
               <div className="px-4 pt-3 pb-1 bg-gray-50/60">
                 <p className="text-xs font-medium uppercase tracking-wide text-gray-400">Cómo se cobró</p>
               </div>
@@ -700,18 +698,6 @@ export default function Ventas() {
                 <span>TOTAL COBRADO</span>
                 <span className="text-lg">{fmt(data.corte.total_cobrado)}</span>
               </div>
-              {/* Los conceptos ya cuadran con el precio de cada nota (2026-10-03),
-                  así que solo difieren por los abonos: la nota cuenta completa
-                  el día que se liquida y el dinero, el día que entró cada pago. */}
-              {Math.abs((data.corte.total_cobrado ?? 0) - data.corte.total_general) >= 0.005 && (
-                <div className="px-4 py-3 bg-amber-50">
-                  <p className="text-xs text-amber-800">
-                    La diferencia de {fmt(Math.abs(data.corte.total_cobrado - data.corte.total_general))} entre
-                    ambos totales viene de los abonos: el total cobrado cuenta cada pago el día que entró,
-                    aunque la nota aún deba, y los conceptos cuentan la nota completa el día que se liquida.
-                  </p>
-                </div>
-              )}
               {/* Correcciones de forma de pago del período (mig. 102). Van aquí
                   porque explican por qué el desglose de arriba puede no cuadrar
                   con lo que se recordaba: el dinero cambió de columna. */}

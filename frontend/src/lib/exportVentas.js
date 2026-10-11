@@ -21,6 +21,7 @@ import {
 } from './exportUtils';
 import { etiquetaEstadoNota } from './estadoNota';
 import { tablaCortesCSV, bloqueDetalle } from './exportCorte';
+import { lineasConcepto } from './desgloseCaja';
 
 // Etiquetas de estado (iguales a las de la tabla de Ventas).
 const ESTADO_LABEL = {
@@ -120,26 +121,26 @@ const filaCorte = (etiqueta, valor, total = false) => `
     <td>${esc(etiqueta)}</td><td class="r">${fmtMoneda(valor)}</td>
   </tr>`;
 
-const bloqueCorte = (c) => `
+// Por concepto (2026-10-10): lo cobrado en el período repartido con las mismas
+// líneas que el corte de Caja; suma el total cobrado.
+const bloqueCorte = (c) => {
+  const conceptos = lineasConcepto(c?.conceptos);
+  const suma = conceptos.reduce((a, l) => a + l.value, 0);
+  return `
   <div class="seccion">Corte de caja</div>
   <table class="desglose">
     <tbody>
       <tr class="sub"><td colspan="2">Por concepto</td></tr>
-      ${filaCorte('Servicios Por Encargo', c?.total_servicios ?? 0)}
-      ${filaCorte('Cargas de lavado', c?.total_cargas)}
-      ${filaCorte('Productos vendidos', c?.total_productos)}
-      ${filaCorte('Ajustes', c?.total_ajustes)}
-      ${filaCorte('Suma de conceptos', c?.total_general)}
+      ${conceptos.map((l) => filaCorte(l.label, l.value)).join('')}
+      ${filaCorte('Suma de conceptos', suma)}
       <tr class="sub"><td colspan="2">Cómo se cobró</td></tr>
       ${filaCorte('Efectivo', c?.total_efectivo)}
       ${filaCorte('Transferencia', c?.total_transferencia)}
       ${(c?.total_tarjeta ?? 0) > 0 ? filaCorte('Tarjeta', c.total_tarjeta) : ''}
       ${filaCorte('Total cobrado', c?.total_cobrado, true)}
-      ${Math.abs((c?.total_cobrado ?? 0) - (c?.total_general ?? 0)) >= 0.005
-        ? `<tr class="nota"><td colspan="2">La diferencia entre ambos totales viene de los abonos: el total cobrado cuenta cada pago el día que entró, aunque la nota aún deba, y los conceptos cuentan la nota completa el día que se liquida.</td></tr>`
-        : ''}
     </tbody>
   </table>`;
+};
 
 const bloqueNotas = (notas) => {
   if (notas.length === 0) return '<div class="seccion">Notas</div><p>Sin notas en este período.</p>';

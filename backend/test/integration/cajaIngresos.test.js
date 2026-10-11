@@ -136,5 +136,23 @@ describe('GET /api/caja/actual — ingresos', () => {
     expect(abierto).toMatchObject({ en_curso: true, spe_debe: 0, monto_inicial: 270 });
     expect(abierto.ingresos.por_encargo).toBe(70);
   });
+
+  it('Ventas reparte por concepto TODOS los cobros del período (también transferencia)', async () => {
+    await autoservicio({ tipo: 'lavadora_mediana', secadora: true });              // 70 + 50
+    await autoservicio({ tipo: 'lavadora_jumbo', forma_pago: 'TRANSFERENCIA' });   // 90
+    const cli = await seedCliente();
+    const encargo = await api('post', '/api/notas', {
+      tipo_servicio: 'POR_ENCARGO', cliente_id: cli, tipo_prenda: 'ROPA',
+      estado_pago: 'PENDIENTE', cargas: [{ lavadora_tipo: 'mediana' }],
+    }).expect(201);
+    await api('post', `/api/notas/${encargo.body.id}/abonos`, { monto: 30, forma_pago: 'EFECTIVO' }).expect(201);
+
+    const { corte } = (await api('get', '/api/ventas/resumen?periodo=hoy')).body;
+    expect(corte.conceptos).toEqual({
+      lavadoras_medianas: 70, lavadoras_jumbo: 90, secadoras: 50, productos: 0, por_encargo: 30, edredon: 0,
+    });
+    const suma = Object.values(corte.conceptos).reduce((a, b) => a + b, 0);
+    expect(suma).toBeCloseTo(corte.total_cobrado, 2);
+  });
 });
 

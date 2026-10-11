@@ -1,7 +1,7 @@
 import pool from '../db/pool.js';
 import { TZ_NEGOCIO, fechaLocal, esFechaISO } from '../utils/tz.js';
 import { esCronometroSql, CICLOS_DE_PASADAS, TOPE_RELOJ } from '../db/sqlMaquina.js';
-import { leerCortes } from './caja.controller.js';
+import { leerCortes, repartirCobros } from './caja.controller.js';
 
 // El "día" de un reporte es el día del NEGOCIO (America/Mexico_City), no el del
 // servidor: en producción Postgres corre en UTC, así que `DATE(pagado_en)` metía
@@ -396,6 +396,26 @@ export async function getResumen(req, res) {
 
     const turnos = await leerCortes(pool, `c.sucursal = $${sucIdx} AND ${periodTurnoSQL}`, params);
 
+    // Por concepto (2026-10-10): cada cobro del período —efectivo y
+    // transferencia, liquidaciones y abonos, el día que entró— repartido con
+    // las mismas líneas que el corte de Caja. Suman el total cobrado.
+    const conceptos = await repartirCobros(pool, `
+        SELECT o.id AS nota_id,
+               o.precio_total - COALESCE((
+                 SELECT SUM(ab.monto) FROM nota_abonos ab
+                  WHERE ab.nota_id = o.id AND ab.revertido_at IS NULL
+               ), 0) AS monto
+          FROM notas o
+         WHERE o.estado_pago = 'PAGADO' AND o.estado <> 'CANCELADA'
+           AND o.sucursal = $${sucIdx} AND ${periodSQL}
+        UNION ALL
+        SELECT ab.nota_id, ab.monto
+          FROM nota_abonos ab
+          JOIN notas o ON o.id = ab.nota_id
+         WHERE ab.revertido_at IS NULL AND o.estado <> 'CANCELADA'
+           AND o.sucursal = $${sucIdx} AND ${buildPeriodSQL(periodo, 'ab.created_at', anioSel != null, mesSel != null)}`,
+      params);
+
     res.json({
       tarjetas: {
         total_cobrado:       total_cobrado,
@@ -429,6 +449,8 @@ export async function getResumen(req, res) {
         total:           parseFloat(r.total),
       })),
       corte: {
+        // Lavadoras medianas / jumbo, secadoras, productos, SPE y edredón.
+        conceptos,
         total_servicios,
         total_cargas,
         total_productos,
