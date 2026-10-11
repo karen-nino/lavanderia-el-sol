@@ -199,9 +199,13 @@ async function sembrar(db) {
     clientesIds.push(rows[0].id);
   }
 
-  // El folio es global y correlativo: arranca después del más alto que exista.
+  // El folio es correlativo POR SUCURSAL (mig. 155): arranca después del más
+  // alto de esta sucursal, y al final se deja su contador ahí.
   const { rows: maxFolio } = await db.query(
-    `SELECT COALESCE(MAX(NULLIF(split_part(folio, '-', 1), '')::int), 0) AS n FROM notas`);
+    `SELECT GREATEST(
+              COALESCE(MAX(NULLIF(split_part(folio, '-', 1), '')::int), 0),
+              COALESCE((SELECT ultimo FROM folios_sucursal WHERE sucursal = $1), 0)) AS n
+       FROM notas WHERE sucursal = $1`, [SUCURSAL]);
   let consecutivo = Number(maxFolio[0].n) + 1;
 
   const notasIds = [];
@@ -409,6 +413,13 @@ async function sembrar(db) {
       await db.query('UPDATE notas SET precio_total = $2 WHERE id = $1', [notaId, totalCargas + totalProductos]);
     }
   }
+
+  // El contador de la sucursal sigue después del último folio sembrado, para
+  // que la primera nota que se haga a mano no repita uno (mig. 155).
+  await db.query(
+    `INSERT INTO folios_sucursal (sucursal, ultimo) VALUES ($1, $2)
+     ON CONFLICT (sucursal) DO UPDATE SET ultimo = GREATEST(folios_sucursal.ultimo, EXCLUDED.ultimo)`,
+    [SUCURSAL, consecutivo - 1]);
 
   await db.query('COMMIT');
   fs.writeFileSync(REGISTRO, JSON.stringify(

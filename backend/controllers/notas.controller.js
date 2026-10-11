@@ -1668,13 +1668,27 @@ async function registrarEliminacionNota(client, nota, usuarioId, sucursal) {
   );
 }
 
+// El siguiente número de folio de una sucursal (mig. 155): cada sucursal lleva
+// su propio contador. Se reserva dentro de la transacción del alta, así que dos
+// altas a la vez no toman el mismo número y un alta que falla no lo gasta.
+async function tomarNumeroFolio(client, sucursal) {
+  const { rows } = await client.query(
+    `INSERT INTO folios_sucursal (sucursal, ultimo) VALUES ($1, 1)
+     ON CONFLICT (sucursal) DO UPDATE SET ultimo = folios_sucursal.ultimo + 1
+     RETURNING ultimo`,
+    [sucursal]
+  );
+  return rows[0].ultimo;
+}
+
 // ── GET /notas/next-folio ───────────────────────────────────
 export const getNextFolio = async (req, res) => {
   try {
     const { rows } = await pool.query(
-      'SELECT COALESCE(MAX(id), 0) + 1 AS next_id FROM notas'
+      'SELECT COALESCE((SELECT ultimo FROM folios_sucursal WHERE sucursal = $1), 0) + 1 AS siguiente',
+      [req.sucursal]
     );
-    const folio = generarFolio(rows[0].next_id, new Date());
+    const folio = generarFolio(rows[0].siguiente, new Date());
     res.json({ folio });
   } catch (err) {
     console.error('getNextFolio error:', err);
@@ -2121,7 +2135,8 @@ export const createNota = async (req, res) => {
     );
     const nota = notaRows[0];
 
-    const folio = generarFolio(nota.id, nota.created_at);
+    // Folio por sucursal (mig. 155), ya no el id de la nota.
+    const folio = generarFolio(await tomarNumeroFolio(client, req.sucursal), nota.created_at);
     await client.query('UPDATE notas SET folio = $1 WHERE id = $2', [folio, nota.id]);
     nota.folio = folio;
 

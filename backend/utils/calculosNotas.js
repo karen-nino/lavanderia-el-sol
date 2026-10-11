@@ -54,7 +54,8 @@ export function precioProductoEnNota(art, tipo_servicio) {
     : (art.precio_unitario ?? 0);
 }
 
-// Folio legible para el mostrador: SEQ-DDMMYY (id con padding a 4 + fecha).
+// Folio legible para el mostrador: SEQ-DDMMYY (consecutivo de la sucursal con
+// padding a 4 + fecha; mig. 155, antes era el id de la nota).
 // La fecha es el día del NEGOCIO (America/Mexico_City), no el del servidor: en
 // producción Node corre en UTC, así que una nota hecha a las 19:00 locales se
 // sellaba con la fecha del día siguiente y el folio del ticket no coincidía
