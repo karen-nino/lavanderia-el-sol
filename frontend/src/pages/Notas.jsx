@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { etiquetaEstadoNota } from '../lib/estadoNota';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../lib/api';
@@ -11,7 +11,11 @@ import SucursalBar from '../components/SucursalBar';
 // después de Por Entregar, las que están Por Cobrar — es el par que más se
 // consulta junto. Lavando y Secando salieron de aquí (2026-09-25): lo que está
 // corriendo se ve en Máquinas y en el Inicio, y la nota lo dice en su badge.
-const ESTADOS = ['TODOS', 'EN_ESPERA', 'POR_ENTREGAR', 'PENDIENTE', 'FINALIZADA', 'CANCELADA'];
+const ESTADOS = ['TODOS', 'EN_ESPERA', 'POR_ENTREGAR', 'PENDIENTE', 'FINALIZADA', 'CANCELADA',
+  'AUTOSERVICIO', 'POR_ENCARGO'];
+
+// Opciones del filtro que no son un estado sino el tipo de servicio de la nota.
+const FILTROS_SERVICIO = ['AUTOSERVICIO', 'POR_ENCARGO'];
 
 // Renglones por página en la tabla de escritorio.
 const POR_PAGINA = 15;
@@ -41,6 +45,8 @@ const FILTRO_LABEL = {
   PENDIENTE:    'Por Cobrar',
   FINALIZADA:   'Finalizadas',
   CANCELADA:    'Canceladas',
+  AUTOSERVICIO: 'Autoservicio',
+  POR_ENCARGO:  'Por Encargo',
 };
 
 // Mensaje del estado vacío según el filtro activo, para que el texto se
@@ -52,6 +58,8 @@ const FILTRO_VACIO = {
   FINALIZADA:   'No hay notas finalizadas',
   PENDIENTE:    'No hay notas por cobrar',
   CANCELADA:    'No hay notas canceladas',
+  AUTOSERVICIO: 'No hay notas de autoservicio',
+  POR_ENCARGO:  'No hay notas por encargo',
 };
 
 const RANGOS_FECHA = [
@@ -324,6 +332,8 @@ export default function Notas() {
       if (n.estado_pago !== 'PENDIENTE') return false;
     } else if (filtro === 'POR_ENTREGAR') {
       if (!ESTADOS_POR_ENTREGAR.includes(n.estado)) return false;
+    } else if (FILTROS_SERVICIO.includes(filtro)) {
+      if (n.tipo_servicio !== filtro) return false;
     } else if (filtro !== 'TODOS' && n.estado !== filtro) {
       return false;
     }
@@ -450,8 +460,12 @@ export default function Notas() {
                 <p className="text-xs font-semibold text-gray-500 uppercase mb-2 px-1">Estado</p>
                 <div className="flex flex-col gap-1">
                   {ESTADOS.map(e => (
+                    <Fragment key={e}>
+                    {/* Las de tipo de servicio van aparte, con su título. */}
+                    {e === FILTROS_SERVICIO[0] && (
+                      <p className="text-xs font-semibold text-gray-500 uppercase mt-2 mb-1 px-1 pt-2 border-t border-gray-100">Servicio</p>
+                    )}
                     <button
-                      key={e}
                       // Al elegir un estado se busca en TODAS las fechas, para no
                       // esconder notas de días anteriores (p. ej. las que están
                       // por cobrar de hace días). El filtro de fecha acota.
@@ -464,6 +478,7 @@ export default function Notas() {
                     >
                       {FILTRO_LABEL[e] ?? BADGE_ESTADO[e]?.label}
                     </button>
+                    </Fragment>
                   ))}
                 </div>
               </div>
