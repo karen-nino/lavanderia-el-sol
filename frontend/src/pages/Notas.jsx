@@ -193,8 +193,10 @@ function fmtMonto(n) {
   return n != null ? `$${Number(n).toFixed(2)}` : '—';
 }
 
+// Sin cliente del catálogo cae a la referencia libre del Autoservicio
+// (mig. 157); sin ninguna de las dos, quien llama pone "Mostrador".
 function fmtCliente(n) {
-  if (!n.cliente_nombre) return null;
+  if (!n.cliente_nombre) return n.referencia || null;
   const ap = (n.cliente_apellido ?? '').trim();
   return ap ? `${n.cliente_nombre} ${ap}` : n.cliente_nombre;
 }
@@ -334,7 +336,9 @@ export default function Notas() {
     const cliente  = normalizar(n.cliente_nombre);
     const apellido = normalizar(n.cliente_apellido);
     const telefono = normalizar(n.cliente_telefono);
-    return folio.includes(q) || cliente.includes(q) || apellido.includes(q) || telefono.includes(q);
+    const referencia = normalizar(n.referencia);
+    return folio.includes(q) || cliente.includes(q) || apellido.includes(q) || telefono.includes(q)
+      || referencia.includes(q);
   });
 
   // Paginación (solo escritorio): 15 renglones por página. `paginaActual` va
@@ -809,6 +813,11 @@ export default function Notas() {
               // estados apilados en lugar del único estado de la nota.
               const lavandoYSecando = ['LAVANDO', 'SECANDO'].includes(n.estado)
                 && n.hay_lavadora_activa && n.hay_secadora_activa;
+              // Máquinas asignadas o usadas por la nota (siempre visibles); las
+              // que la nota tiene corriendo ahora van resaltadas en azul.
+              const enUso    = new Set(n.maquinas_en_uso ?? []);
+              const maquinas = [...new Set([...(n.maquinas_nombres ?? []), ...enUso])]
+                .sort((a, b) => a.localeCompare(b, 'es', { numeric: true }));
               return (
                 <div
                   key={n.id}
@@ -843,17 +852,23 @@ export default function Notas() {
                     <p className="text-xl font-bold">{fmtMonto(n.precio_total)}</p>
                   </div>
 
-                  {/* Máquinas que la nota tiene corriendo ahora mismo (las que
-                      usó y ya terminaron están en el Detalle de nota). */}
-                  {(n.maquinas_en_uso?.length ?? 0) > 0 && (
+                  {/* Máquinas de la nota: las asignadas y las que ya usó.
+                      Mientras alguna corre, el rótulo dice "Usando". */}
+                  {maquinas.length > 0 && (
                     <>
                       <div className="border-t border-dashed border-gray-300 my-4" />
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-sm text-dark-grey">
-                          {n.maquinas_en_uso.length === 1 ? 'Usando máquina' : 'Usando máquinas'}
+                          {enUso.size > 0
+                            ? (maquinas.length === 1 ? 'Usando máquina' : 'Usando máquinas')
+                            : (maquinas.length === 1 ? 'Máquina' : 'Máquinas')}
                         </span>
-                        <span className="text-sm font-bold text-blue-700 text-right">
-                          {[...n.maquinas_en_uso].sort((a, b) => a.localeCompare(b, 'es', { numeric: true })).join(', ')}
+                        <span className="text-sm font-bold text-right">
+                          {maquinas.map((m, i) => (
+                            <span key={m} className={enUso.has(m) ? 'text-blue-700' : 'text-dark-grey'}>
+                              {m}{i < maquinas.length - 1 ? ', ' : ''}
+                            </span>
+                          ))}
                         </span>
                       </div>
                     </>
@@ -863,7 +878,7 @@ export default function Notas() {
                       a un toque). */}
                   {badgePago && (
                     <>
-                      <div className={`border-t border-dashed border-gray-300 ${(n.maquinas_en_uso?.length ?? 0) > 0 ? 'my-3' : 'my-4'}`} />
+                      <div className={`border-t border-dashed border-gray-300 ${maquinas.length > 0 ? 'my-3' : 'my-4'}`} />
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-sm text-dark-grey">Estado de pago</span>
                         <span className={`text-sm font-bold ${n.estado_pago === 'PENDIENTE' ? 'text-red' : 'text-dark-grey'}`}>

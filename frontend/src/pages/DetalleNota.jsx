@@ -1156,8 +1156,9 @@ export default function DetalleNota() {
             {nota.cliente_nombre
               ? `${nota.cliente_nombre}${nota.cliente_apellido ? ' ' + nota.cliente_apellido : ''}`
               // Mostrador se lee como un cliente más, con el mismo estilo
-              // (2026-10-03; antes iba gris y en cursiva).
-              : 'Mostrador'}
+              // (2026-10-03; antes iba gris y en cursiva). Antes de él va la
+              // referencia libre del Autoservicio (mig. 157).
+              : (nota.referencia || 'Mostrador')}
           </p>
         </div>
         <svg className="w-8 h-8 text-gray-300 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1487,8 +1488,9 @@ export default function DetalleNota() {
                   </div>
                 )
               // Mostrador se lee como un cliente más, con el mismo estilo
-              // (2026-10-03; antes iba gris y en cursiva).
-              : 'Mostrador'}
+              // (2026-10-03; antes iba gris y en cursiva). Antes de él va la
+              // referencia libre del Autoservicio (mig. 157).
+              : (nota.referencia || 'Mostrador')}
           </FilaDetalle>
           <FilaDetalle label="Ajuste">
             {nota.ajuste != null ? fmtMonto(nota.ajuste) : '—'}

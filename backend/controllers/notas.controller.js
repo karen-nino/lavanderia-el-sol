@@ -1713,13 +1713,19 @@ export const getNotas = async (req, res) => {
               -- Nombres de todas las máquinas que la nota usa o usó: además de
               -- las vinculadas, incluye las columnas *_usada_id de las cargas,
               -- que conservan la máquina aunque ya se haya desvinculado (p. ej.
-              -- tras pasar el lavado a la secadora).
+              -- tras pasar el lavado a la secadora), y el historial de pasadas
+              -- (nota_carga_maquinas), que guarda también las máquinas por las
+              -- que se cambió. La tarjeta de la lista lo enseña siempre.
               (SELECT COALESCE(json_agg(mm.nombre ORDER BY mm.nombre), '[]'::json)
                  FROM (
                    SELECT nc.lavadora_id       AS mid FROM nota_cargas nc WHERE nc.nota_id = n.id
                    UNION SELECT nc.secadora_id        FROM nota_cargas nc WHERE nc.nota_id = n.id
                    UNION SELECT nc.lavadora_usada_id  FROM nota_cargas nc WHERE nc.nota_id = n.id
                    UNION SELECT nc.secadora_usada_id  FROM nota_cargas nc WHERE nc.nota_id = n.id
+                   UNION SELECT ncm.maquina_id
+                           FROM nota_carga_maquinas ncm
+                           JOIN nota_cargas nc ON nc.id = ncm.carga_id
+                          WHERE nc.nota_id = n.id
                  ) xm
                  JOIN maquinas mm ON mm.id = xm.mid) AS maquinas_nombres,
               -- Máquinas que la nota tiene CORRIENDO ahora (arrancadas por ella
@@ -1955,6 +1961,7 @@ export const createNota = async (req, res) => {
     fecha_entrega,
     tiempo_entrega,
     instrucciones,
+    referencia,     // cliente / referencia libre (Autoservicio, mig. 157)
     tamano,
     tipo_tela,
     tamano_edredon,
@@ -2109,8 +2116,8 @@ export const createNota = async (req, res) => {
       `INSERT INTO notas
          (cliente_id, usuario_id, tipo_servicio, tipo_prenda, estado, estado_pago, sucursal,
           peso_kg, precio_total, fecha_entrega, tiempo_entrega, instrucciones,
-          tamano, tipo_tela, tamano_edredon, ajuste, forma_pago)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+          tamano, tipo_tela, tamano_edredon, ajuste, forma_pago, referencia)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
        RETURNING *`,
       [
         cliente_id   || null,
@@ -2131,6 +2138,7 @@ export const createNota = async (req, res) => {
         ajusteNum,
         // Forma de pago solo con pago anticipado (PAGADO); si no, null.
         estado_pago === 'PAGADO' ? normalizarFormaPago(forma_pago) : null,
+        String(referencia ?? '').trim().slice(0, 80) || null,
       ]
     );
     const nota = notaRows[0];

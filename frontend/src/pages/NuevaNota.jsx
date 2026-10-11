@@ -53,6 +53,7 @@ const FORM_INIT = {
   tamano_edredon: '',
   ajuste:         '0',
   instrucciones:  '',
+  referencia:     '',
   forma_pago:     '',
 };
 
@@ -1155,6 +1156,9 @@ export default function NuevaNota() {
       // pendiente y se liquida desde el detalle, como Por Encargo.
       estado_pago:     'PENDIENTE',
       instrucciones:   form.instrucciones || null,
+      // Cliente / referencia libre (mig. 157): la tarjeta de Notas lo enseña
+      // en lugar de "Mostrador".
+      referencia:      form.referencia.trim() || null,
       tipo_tela:       null,
       tamano_edredon:  null,
       // Cada renglón manda LA MÁQUINA elegida (2026-09-29). El servidor la
@@ -2235,6 +2239,22 @@ export default function NuevaNota() {
             marcan la separación. El contenedor propio evita depender del
             space-y del <form>, que dejaba el resumen más pegado que el resto. */}
         <div className="space-y-8">
+
+          {/* ── Cliente / referencia (opcional, mig. 157) ────
+              Autoservicio no lleva cliente del catálogo: este texto libre
+              dice de quién es la ropa en la tarjeta de Notas. */}
+          <div>
+            <label htmlFor="referencia" className={LABEL_CLS}>Cliente / referencia</label>
+            <input
+              id="referencia"
+              type="text"
+              maxLength={80}
+              value={form.referencia}
+              onChange={e => setForm(f => ({ ...f, referencia: e.target.value }))}
+              placeholder="Nombre o seña del cliente (opcional)"
+              className={INPUT_CLS}
+            />
+          </div>
 
           {/* ── Máquinas ─────────────────────────────────────
               La nota se arma eligiendo las máquinas que va a usar el cliente,
