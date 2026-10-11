@@ -65,7 +65,8 @@ export async function ventasDeSesion(client, cajaId) {
 //     Edredón (sus tamaños incluyen el Cubre Colchón, mig. 130) van a
 //     `edredon` y los demás a `por_encargo`;
 //   · lo demás → lavadoras medianas / jumbo (por el tipo de la primera máquina
-//     del hueco; sin ella, por el tamaño pedido), secadoras y productos.
+//     del hueco; sin ella, por el tamaño pedido; el edredón, siempre jumbo),
+//     secadoras y productos.
 // La proporción absorbe los descuentos de la nota. Se trabaja en centavos y el
 // residuo del redondeo va a la parte más grande, así que la suma de las
 // líneas es exactamente `ventasDeSesion(...).efectivo`.
@@ -140,7 +141,11 @@ export async function repartirCobros(client, cobrosSql, params) {
            ) v
            LEFT JOIN maquinas ml ON ml.id = nc.lavadora_id
            CROSS JOIN LATERAL (
+             -- El edredón se cobra con la tarifa de edredón jumbo aunque entre
+             -- en una lavadora mediana: cuenta como jumbo siempre.
              SELECT COALESCE(
+                      CASE WHEN UPPER(COALESCE(nc.tipo_prenda, '')) = 'EDREDON'
+                             OR nc.lavadora_tipo = 'edredon' THEN TRUE END,
                       (SELECT p.maquina_tipo = 'lavadora_jumbo'
                          FROM nota_carga_maquinas p
                         WHERE p.carga_id = nc.id AND p.slot = 'lavadora'

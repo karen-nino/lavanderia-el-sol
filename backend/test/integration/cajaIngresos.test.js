@@ -154,5 +154,21 @@ describe('GET /api/caja/actual — ingresos', () => {
     const suma = Object.values(corte.conceptos).reduce((a, b) => a + b, 0);
     expect(suma).toBeCloseTo(corte.total_cobrado, 2);
   });
+
+  it('el edredón de autoservicio cuenta como jumbo aunque entre en una mediana', async () => {
+    await seedAjustes({ precio_carga_mediana: 70, precio_carga_jumbo: 90, precio_edredon_jumbo: 80 });
+    const nota = await api('post', '/api/notas', {
+      tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'EDREDON', estado_pago: 'PENDIENTE',
+      cargas: [{ lavadora_tipo: 'jumbo', tipo_prenda: 'EDREDON' }],
+    }).expect(201);
+    const mediana = await seedMaquina({ nombre: 'L-med', tipo: 'lavadora_mediana' });
+    await api('patch', `/api/notas/${nota.body.id}/asignar-carga-maquina`,
+      { carga_id: nota.body.cargas[0].id, slot: 'lavadora', maquina_id: mediana }).expect(200);
+    await api('patch', `/api/notas/${nota.body.id}/estado-pago`,
+      { estado_pago: 'PAGADO', forma_pago: 'EFECTIVO' }).expect(200);
+
+    const { totales } = (await api('get', '/api/caja/actual')).body;
+    expect(totales.ingresos).toMatchObject({ lavadoras_jumbo: 80, lavadoras_medianas: 0 });
+  });
 });
 
