@@ -434,14 +434,21 @@ async function avisarTopeCronometro(maq) {
 // secadora lo cuenta como UNA ficha. No hay corriente que dar ni que quitar
 // —están siempre alimentadas—, así que lo único que la app le manda son las
 // fichas del arranque: las que pida el programa elegido (Sec49) o, si el
-// modelo no pregunta, su tope (Sec50). Redondeado hacia arriba: quedarse
-// corto deja la ropa mojada.
+// modelo no pregunta, las que QUEPAN en su tope (Sec50).
+//   · Programa elegido → hacia arriba: quedarse corto deja la ropa mojada.
+//   · Tope → hacia abajo: el tope es un máximo y suele llevar margen sobre la
+//     ficha (Sec50: tope 35, ficha de 30 → UNA ficha, no dos; 2026-10-11).
+// Siempre al menos una.
 export const fichasParaArranque = (maq) => {
   const porFicha = Number(maq?.minutos_por_ficha);
   if (!Number.isFinite(porFicha) || porFicha <= 0) return 0;
-  const minutos = Number(maq.ciclo_elegido_minutos ?? maq.ciclo_minutos);
-  if (!Number.isFinite(minutos) || minutos <= 0) return 1;
-  return Math.max(1, Math.ceil(minutos / porFicha));
+  const elegido = Number(maq.ciclo_elegido_minutos);
+  if (maq.ciclo_elegido_minutos != null && Number.isFinite(elegido) && elegido > 0) {
+    return Math.max(1, Math.ceil(elegido / porFicha));
+  }
+  const tope = Number(maq.ciclo_minutos);
+  if (!Number.isFinite(tope) || tope <= 0) return 1;
+  return Math.max(1, Math.floor(tope / porFicha));
 };
 
 // Pausa entre una ficha y la siguiente: el pulso dura 0.5 s y la secadora

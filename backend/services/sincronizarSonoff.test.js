@@ -492,13 +492,17 @@ describe('secadoras de fichas', () => {
     minutos_por_ficha: 10, fichas_para_uso: null, ...extra,
   });
 
-  it('cuántas fichas: programa elegido entre minutos por ficha, hacia arriba', () => {
+  it('cuántas fichas: programa elegido hacia arriba; tope hacia abajo', () => {
     expect(fichasParaArranque({ minutos_por_ficha: 10, ciclo_elegido_minutos: 10, ciclo_minutos: 40 })).toBe(1);
     expect(fichasParaArranque({ minutos_por_ficha: 10, ciclo_elegido_minutos: 20, ciclo_minutos: 40 })).toBe(2);
     expect(fichasParaArranque({ minutos_por_ficha: 10, ciclo_elegido_minutos: 30, ciclo_minutos: 40 })).toBe(3);
-    // Sin programa elegido manda el tope (Sec50: 30 min, 30 por ficha).
+    // Sin programa elegido manda las que caben en el tope, hacia abajo
+    // (Sec50: tope 35 con fichas de 30 → una sola).
     expect(fichasParaArranque({ minutos_por_ficha: 30, ciclo_elegido_minutos: null, ciclo_minutos: 30 })).toBe(1);
-    expect(fichasParaArranque({ minutos_por_ficha: 30, ciclo_elegido_minutos: null, ciclo_minutos: 40 })).toBe(2);
+    expect(fichasParaArranque({ minutos_por_ficha: 30, ciclo_elegido_minutos: null, ciclo_minutos: 35 })).toBe(1);
+    expect(fichasParaArranque({ minutos_por_ficha: 30, ciclo_elegido_minutos: null, ciclo_minutos: 60 })).toBe(2);
+    // Un tope menor que una ficha igual mete una.
+    expect(fichasParaArranque({ minutos_por_ficha: 30, ciclo_elegido_minutos: null, ciclo_minutos: 20 })).toBe(1);
     expect(fichasParaArranque({ minutos_por_ficha: null, ciclo_minutos: 30 })).toBe(0);
   });
 
