@@ -474,6 +474,11 @@ export async function registrarMovimiento(req, res) {
   if (tipo !== 'entrada' && tipo !== 'salida') {
     return res.status(400).json({ message: 'El movimiento debe ser una entrada o una salida.' });
   }
+  // El empleado solo registra gastos; meter dinero al cajón es cosa de un
+  // administrador (2026-10-10).
+  if (tipo === 'entrada' && !esAdmin(req.user.rol)) {
+    return res.status(403).json({ message: 'Solo un administrador puede registrar entradas.' });
+  }
   if (!concepto?.trim()) {
     return res.status(400).json({ message: 'El concepto es obligatorio.' });
   }

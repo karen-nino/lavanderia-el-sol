@@ -148,6 +148,18 @@ describe('POST /api/caja/movimientos', () => {
   });
 });
 
+describe('POST /api/caja/movimientos: entradas solo admin (2026-10-10)', () => {
+  it('un empleado registra gastos pero no entradas', async () => {
+    await request(app).post('/api/caja/abrir').set(auth(admin.token)).send({ monto_inicial: 500 }).expect(201);
+    const op = await seedUsuario({ rol: 'operador', sucursal: 'centro' });
+    await request(app).post('/api/caja/movimientos').set(auth(op.token))
+      .send({ tipo: 'salida', concepto: 'Gas', monto: 40 }).expect(201);
+    const entrada = await request(app).post('/api/caja/movimientos').set(auth(op.token))
+      .send({ tipo: 'entrada', concepto: 'Cambio', monto: 100 });
+    expect(entrada.status).toBe(403);
+  });
+});
+
 describe('POST /api/caja/movimientos sin caja abierta', () => {
   it('responde 409', async () => {
     const res = await request(app)

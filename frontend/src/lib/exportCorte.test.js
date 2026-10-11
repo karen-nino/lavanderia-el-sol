@@ -18,7 +18,7 @@ const corte = (movimientos) => ({
 });
 
 describe('descargarCortesCSV', () => {
-  it('pone las entradas y salidas debajo de los cortes, una fila por movimiento', () => {
+  it('pone las entradas y gastos debajo de los cortes, una fila por movimiento', () => {
     descargarCortesCSV([corte([
       { tipo: 'entrada', concepto: 'Cambio', monto: 100, usuario: 'Ana', created_at: '2026-10-04T16:00:00Z' },
       { tipo: 'salida', concepto: 'Sueldo', monto: 300, usuario: 'Beto', created_at: '2026-10-04T17:00:00Z' },
@@ -27,10 +27,10 @@ describe('descargarCortesCSV', () => {
     const { filas } = capturado;
     expect(filas).toHaveLength(1 + 1 + 1 + 1 + 2); // corte, vacía, título, encabezados, 2 movimientos
     expect(filas[1]).toEqual([]);
-    expect(filas[2]).toEqual(['Entradas y salidas']);
+    expect(filas[2]).toEqual(['Entradas y gastos']);
     expect(filas[3]).toEqual(['Corte', 'Fecha', 'Hora', 'Tipo', 'Concepto', 'Registró', 'Monto']);
     expect(filas[4].slice(3)).toEqual(['Entrada', 'Cambio', 'Ana', '100.00']);
-    expect(filas[5].slice(3)).toEqual(['Salida', 'Sueldo', 'Beto', '-300.00']);
+    expect(filas[5].slice(3)).toEqual(['Gasto', 'Sueldo', 'Beto', '-300.00']);
   });
 
   it('el turno en curso se exporta con su fecha de apertura y sin cierre', () => {

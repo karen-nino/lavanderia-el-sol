@@ -173,7 +173,7 @@ function CajaModal({ fecha, cajas, onClose }) {
               {fila('Caja inicial', fmtMoneda(c.monto_inicial))}
               {fila('Ventas en efectivo', `+${fmtMoneda(c.ventas_efectivo)}`)}
               {fila('Entradas', `+${fmtMoneda(c.entradas)}`)}
-              {fila('Salidas', `−${fmtMoneda(c.salidas)}`)}
+              {fila('Gastos', `−${fmtMoneda(c.salidas)}`)}
               {fila(c.en_curso ? 'Esperado hasta ahora' : 'Esperado en caja', fmtMoneda(c.esperado), 'text-gray-900')}
               {c.contado != null && fila('Efectivo contado', fmtMoneda(c.contado), 'text-gray-900')}
               {c.diferencia != null && fila('Diferencia', textoDif(c.diferencia), claseDif(c.diferencia))}

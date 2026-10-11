@@ -245,6 +245,10 @@ function Apertura({ data, onAbrir }) {
 
 // ── Movimientos ─────────────────────────────────────────────
 function Movimientos({ data, onChange }) {
+  const { usuario } = useAuth();
+  // El empleado solo registra gastos; la entrada es del administrador
+  // (2026-10-10, el servidor también lo exige).
+  const puedeEntrada = esAdminFn(usuario?.rol);
   const [tipo, setTipo] = useState('salida');
   const [concepto, setConcepto] = useState('');
   const [monto, setMonto] = useState('');
@@ -279,8 +283,8 @@ function Movimientos({ data, onChange }) {
         <ErrorBox message={error} />
         <div className="flex gap-2">
           {[
-            { id: 'salida',  label: 'Salida' },
-            { id: 'entrada', label: 'Entrada' },
+            { id: 'salida',  label: 'Gasto' },   // en la base sigue siendo 'salida'
+            ...(puedeEntrada ? [{ id: 'entrada', label: 'Entrada' }] : []),
           ].map((t) => (
             <button
               key={t.id} type="button" onClick={() => setTipo(t.id)}
@@ -954,7 +958,7 @@ function Historial({ onFiltroLabel }) {
             onClick={() => alternarMovs(c.id)}
             className="flex items-center gap-1 text-sm font-medium text-blue hover:underline"
           >
-            {movsAbiertos.has(c.id) ? 'Ocultar' : 'Ver'} entradas y salidas ({c.movimientos.length})
+            {movsAbiertos.has(c.id) ? 'Ocultar' : 'Ver'} entradas y gastos ({c.movimientos.length})
             <svg className={`w-4 h-4 transition-transform ${movsAbiertos.has(c.id) ? 'rotate-180' : ''}`}
               fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -967,7 +971,7 @@ function Historial({ onFiltroLabel }) {
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-gray-800 break-words">{m.concepto}</p>
                     <p className="text-xs text-gray-400">
-                      {m.tipo === 'salida' ? 'Salida' : 'Entrada'} · {m.usuario} · {fmtHora(m.created_at)}
+                      {m.tipo === 'salida' ? 'Gasto' : 'Entrada'} · {m.usuario} · {fmtHora(m.created_at)}
                     </p>
                   </div>
                   <span className={`flex-shrink-0 text-sm font-semibold ${m.tipo === 'salida' ? 'text-red-600' : 'text-green-600'}`}>

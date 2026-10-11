@@ -42,7 +42,7 @@ const estadoCorte = (c) => {
 const ENCABEZADOS_CSV = [
   'Fecha', 'Hora', 'Abrió', 'Cerró', 'Caja inicial', 'Ventas', 'Ventas efectivo', 'Transferencia', 'Tarjeta',
   'Lavadoras Medianas', 'Lavadoras Jumbo', 'Secadoras', 'SPE', 'Edredón', 'Productos',
-  'Entradas', 'Salidas', 'Total ingresos', 'SPE Debe', 'Total egresos',
+  'Entradas', 'Gastos', 'Total ingresos', 'SPE Debe', 'Total egresos',
   'Esperado', 'Contado', 'Diferencia', 'Caja final', 'Sobre',
   'Estado', 'Nota apertura', 'Nota cierre',
 ];
@@ -55,7 +55,7 @@ const filasMovimientos = (c) => (c.movimientos ?? []).map((m) => [
   `${fechaISO(fechaCorte(c))} ${horaCierre(c)}`,
   fechaISO(m.created_at),
   formatHora12(m.created_at),
-  m.tipo === 'salida' ? 'Salida' : 'Entrada',
+  m.tipo === 'salida' ? 'Gasto' : 'Entrada',
   m.concepto ?? '',
   m.usuario ?? '',
   num(m.tipo === 'salida' ? -m.monto : m.monto),
@@ -110,7 +110,7 @@ export function tablaCortesCSV(cortes) {
   const encabezados = conTarjeta ? ENCABEZADOS_CSV : sinTarjeta(ENCABEZADOS_CSV);
   const filas = lista.map((c) => (conTarjeta ? filaCSV(c) : sinTarjeta(filaCSV(c))));
   // Debajo de los cortes, separada por una fila vacía, la tabla de movimientos.
-  if (movs.length > 0) filas.push([], ['Entradas y salidas'], ENCABEZADOS_MOVS, ...movs);
+  if (movs.length > 0) filas.push([], ['Entradas y gastos'], ENCABEZADOS_MOVS, ...movs);
   return { encabezados, filas };
 }
 
@@ -140,7 +140,7 @@ const tablaMovimientos = (c) => {
   const movs = c.movimientos ?? [];
   if (movs.length === 0) return '';
   return `
-    <p class="seccion">Entradas y salidas</p>
+    <p class="seccion">Entradas y gastos</p>
     <table class="resumen">
       <thead>
         <tr><th>Hora</th><th>Tipo</th><th>Concepto</th><th>Registró</th><th class="r">Monto</th></tr>
@@ -148,7 +148,7 @@ const tablaMovimientos = (c) => {
       <tbody>${movs.map((m) => `
         <tr>
           <td>${esc(formatHora12(m.created_at))}</td>
-          <td>${m.tipo === 'salida' ? 'Salida' : 'Entrada'}</td>
+          <td>${m.tipo === 'salida' ? 'Gasto' : 'Entrada'}</td>
           <td>${esc(m.concepto)}</td>
           <td>${esc(m.usuario || '—')}</td>
           <td class="r ${m.tipo === 'salida' ? 'neg' : 'pos'}">${m.tipo === 'salida' ? '−' : '+'}${fmtMoneda(m.monto)}</td>
@@ -235,7 +235,7 @@ const tablaResumen = (cortes) => {
       <thead>
         <tr>
           <th>Fecha</th><th class="r">Caja inicial</th><th class="r">Ventas</th>
-          <th class="r">Entradas</th><th class="r">Salidas</th><th class="r">Esperado</th>
+          <th class="r">Entradas</th><th class="r">Gastos</th><th class="r">Esperado</th>
           <th class="r">Contado</th><th class="r">Diferencia</th>
         </tr>
       </thead>
