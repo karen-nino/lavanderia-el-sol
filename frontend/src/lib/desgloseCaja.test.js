@@ -20,7 +20,7 @@ describe('desgloseCaja', () => {
   it('lleva las líneas en el orden pedido', () => {
     expect(desgloseCaja(turno).ingresos.map((l) => l.label)).toEqual([
       'Caja inicial', 'Entradas', 'Lavadoras Medianas', 'Lavadoras Jumbo', 'Secadoras',
-      'Productos', 'SPE', 'Edredón', 'Ventas en efectivo', 'Ventas por transferencia',
+      'SPE', 'Edredón', 'Productos', 'Ventas en efectivo', 'Ventas por transferencia',
     ]);
     expect(desgloseCaja(turno).egresos.map((l) => l.label)).toEqual(['SPE Debe', 'Gastos']);
   });

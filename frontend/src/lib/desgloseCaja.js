@@ -24,10 +24,10 @@ export const CONCEPTOS = [
   { key: 'lavadoras_medianas', label: 'Lavadoras Medianas' },
   { key: 'lavadoras_jumbo',    label: 'Lavadoras Jumbo' },
   { key: 'secadoras',          label: 'Secadoras' },
-  { key: 'productos',          label: 'Productos' },
   { key: 'por_encargo',        label: 'SPE' },     // Servicios Por Encargo
   // Servicios Por Encargo de Edredón, con sus tamaños (incluye Cubre Colchón).
   { key: 'edredon',            label: 'Edredón' },
+  { key: 'productos',          label: 'Productos' },
 ];
 
 // Renglones { label, value } de un reparto por concepto.

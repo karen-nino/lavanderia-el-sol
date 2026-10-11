@@ -41,7 +41,7 @@ const estadoCorte = (c) => {
 // ── CSV ─────────────────────────────────────────────────────
 const ENCABEZADOS_CSV = [
   'Fecha', 'Hora', 'Abrió', 'Cerró', 'Caja inicial', 'Ventas', 'Ventas efectivo', 'Transferencia', 'Tarjeta',
-  'Lavadoras Medianas', 'Lavadoras Jumbo', 'Secadoras', 'Productos', 'SPE', 'Edredón',
+  'Lavadoras Medianas', 'Lavadoras Jumbo', 'Secadoras', 'SPE', 'Edredón', 'Productos',
   'Entradas', 'Salidas', 'Total ingresos', 'SPE Debe', 'Total egresos',
   'Esperado', 'Contado', 'Diferencia', 'Caja final', 'Sobre',
   'Estado', 'Nota apertura', 'Nota cierre',
@@ -77,9 +77,9 @@ const filaCSV = (c) => [
   ing(c, 'lavadoras_medianas'),
   ing(c, 'lavadoras_jumbo'),
   ing(c, 'secadoras'),
-  ing(c, 'productos'),
   ing(c, 'por_encargo'),
   ing(c, 'edredon'),
+  ing(c, 'productos'),
   num(c.entradas),
   num(c.salidas),
   num(desgloseCaja(c).totalIngresos),
