@@ -6,6 +6,7 @@ import { esAdmin as esAdminFn, esAdminMain as esAdminMainFn } from '../lib/roles
 import FondoApertura from '../components/FondoApertura';
 import RecuadrosCaja from '../components/RecuadrosCaja';
 import { desgloseCaja } from '../lib/desgloseCaja';
+import MenuExportar from '../components/MenuExportar';
 import { formatHora12 } from '../lib/fecha';
 import { imprimirCortes, descargarCortesCSV } from '../lib/exportCorte';
 import SucursalBar from '../components/SucursalBar';
@@ -424,6 +425,23 @@ function Corte({ data, onCerrar, onAbrir }) {
     ingresos:        totales.ingresos ?? null,
     spe_debe:        totales.egresos?.por_encargo_pendiente ?? null,
   };
+  // El turno abierto con la forma del historial, para exportarlo desde aquí
+  // (admin y empleados, 2026-10-10): sin conteo todavía, como "en curso".
+  const turnoExportable = {
+    ...turno,
+    id:               caja.id,
+    en_curso:         true,
+    abierta_at:       caja.abierta_at,
+    usuario_apertura: caja.usuario_apertura,
+    notas_apertura:   caja.notas_apertura,
+    ventas:           totales.ventas,
+    esperado:         totales.esperado,
+    contado:          null,
+    diferencia:       null,
+    // /actual las trae de la más nueva a la más vieja; el archivo, en orden.
+    movimientos:      [...(data.movimientos ?? [])].reverse(),
+  };
+  const sufijoExport = `turno-${fmtFechaCorta(caja.abierta_at)}`;
 
   // La caja funciona por turnos (2026-10-03): el corte lo hace quien abrió el
   // turno o un administrador. El servidor también lo exige; aquí se dice antes
@@ -436,6 +454,12 @@ function Corte({ data, onCerrar, onAbrir }) {
 
   return (
     <div className="space-y-6 max-w-md mx-auto">
+      <div className="flex justify-end">
+        <MenuExportar
+          onPdf={() => imprimirCortes(turnoExportable, { titulo: 'Corte de caja', subtitulo: `Turno en curso · ${caja.usuario_apertura || ''}` })}
+          onCsv={() => descargarCortesCSV(turnoExportable, sufijoExport)}
+        />
+      </div>
       {/* De quién es el turno que se está cortando. */}
       <div className="rounded-xl bg-light-blue/60 border border-blue-100 px-4 py-3">
         <p className="text-sm font-semibold text-dark-blue">
