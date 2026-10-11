@@ -765,7 +765,7 @@ export default function NuevaNota() {
 
   const crearCliente = async () => {
     const nombre = capitalizarNombre(nuevoCliente.nombre);
-    if (!nombre) return;
+    if (!nombre || !nuevoCliente.telefono.trim()) return;
     setCreandoCliente(true);
     setError('');
     try {
@@ -2815,7 +2815,9 @@ export default function NuevaNota() {
                 />
               </div>
               <div>
-                <label className={LABEL_CLS}>Teléfono</label>
+                <label className={LABEL_CLS}>
+                  Teléfono <span className="text-red-500">*</span>
+                </label>
                 <input
                   type="tel"
                   value={nuevoCliente.telefono}
@@ -2836,7 +2838,7 @@ export default function NuevaNota() {
                 <button
                   type="button"
                   onClick={crearCliente}
-                  disabled={creandoCliente || !nuevoCliente.nombre.trim()}
+                  disabled={creandoCliente || !nuevoCliente.nombre.trim() || !nuevoCliente.telefono.trim()}
                   className="flex-1 bg-blue hover:opacity-90 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
                 >
                   {creandoCliente ? 'Creando...' : 'Crear cliente'}

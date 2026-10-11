@@ -35,11 +35,11 @@ describe('POST /api/clientes — validaciones', () => {
     expect(res.body.message).toMatch(/nombre/i);
   });
 
-  it('sin apellido → 400', async () => {
+  it('sin apellido se crea igual (solo nombre y teléfono son forzosos)', async () => {
     const res = await request(app).post('/api/clientes').set(auth(admin.token))
-      .send({ nombre: 'Ana', telefono: '33' });
-    expect(res.status).toBe(400);
-    expect(res.body.message).toMatch(/apellido/i);
+      .send({ nombre: 'Ana', apellido: '   ', telefono: '3312345678' });
+    expect(res.status).toBe(201);
+    expect(res.body.apellido).toBeNull();
   });
 
   it('teléfono con letras → 400', async () => {

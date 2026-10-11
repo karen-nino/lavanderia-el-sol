@@ -46,9 +46,8 @@ export const createCliente = async (req, res) => {
     return res.status(400).json({ message: 'El nombre es requerido.' });
   }
 
-  if (!apellido || !String(apellido).trim()) {
-    return res.status(400).json({ message: 'El apellido es requerido.' });
-  }
+  // El apellido es opcional (2026-10-11): solo nombre y teléfono son forzosos.
+  const apellidoLimpio = String(apellido ?? '').trim() || null;
 
   const errorTelefono = validarTelefono(telefono);
   if (errorTelefono) {
@@ -60,7 +59,7 @@ export const createCliente = async (req, res) => {
       `INSERT INTO clientes (nombre, apellido, telefono, notas, sucursal)
        VALUES ($1, $2, $3, $4, $5)
        RETURNING *`,
-      [nombre, apellido, telefono, notas, req.sucursal]
+      [nombre, apellidoLimpio, telefono, notas, req.sucursal]
     );
     res.status(201).json(rows[0]);
   } catch (err) {

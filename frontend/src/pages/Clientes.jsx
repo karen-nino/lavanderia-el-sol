@@ -609,9 +609,9 @@ export default function Clientes() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                  Apellido <span className="text-red-500">*</span>
+                  Apellido
                 </label>
-                <input name="apellido" required value={form.apellido} onChange={handleChange}
+                <input name="apellido" value={form.apellido} onChange={handleChange}
                   placeholder="Apellido" className={INPUT_CLS} />
               </div>
               <div>
