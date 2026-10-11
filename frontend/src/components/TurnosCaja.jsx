@@ -24,9 +24,10 @@ function TarjetaTurno({ t }) {
       >
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-sm font-semibold text-gray-800 truncate">
-              {fechaLarga(t.abierta_at)} · {t.usuario_apertura || '—'}
-            </p>
+            <p className="text-sm font-semibold text-gray-800 truncate">{fechaLarga(t.abierta_at)}</p>
+            {/* Quién trabajó el turno: quien lo abrió, que es quien responde por
+                el cajón (la caja va por turnos). */}
+            <p className="text-sm font-semibold text-gray-800 mt-0.5 truncate">{t.usuario_apertura || '—'}</p>
             <p className="text-xs text-gray-500 mt-0.5">
               {horario}{t.cierre_automatico ? ' · cerrado por el sistema' : ''}
             </p>
@@ -45,15 +46,15 @@ function TarjetaTurno({ t }) {
           <span className="text-right text-gray-700">{fmt(d.totalIngresos)}</span>
           <span className="text-gray-500">Egresos</span>
           <span className="text-right text-gray-700">−{fmt(d.totalEgresos)}</span>
-          <span className="font-semibold text-gray-800">{t.en_curso ? 'Esperado hasta ahora' : 'Esperado en caja'}</span>
-          <span className="text-right font-semibold text-gray-900">{fmt(d.esperado)}</span>
+          <span className="text-gray-500">{t.en_curso ? 'Esperado hasta ahora' : 'Esperado en caja'}</span>
+          <span className="text-right text-gray-700">{fmt(d.esperado)}</span>
           {/* Lo que quedó en el cajón y lo que se apartó al cerrar (mig. 151).
               Sin dato en el turno abierto, en el cierre automático y en los
               cortes de antes: "—". */}
-          <span className="text-gray-500">Caja final</span>
-          <span className="text-right text-gray-700">{t.caja_final != null ? fmt(t.caja_final) : '—'}</span>
-          <span className="text-gray-500">Sobre</span>
-          <span className="text-right text-gray-700">{t.sobre != null ? fmt(t.sobre) : '—'}</span>
+          <span className="font-semibold text-gray-800">Caja final</span>
+          <span className="text-right font-semibold text-gray-900">{t.caja_final != null ? fmt(t.caja_final) : '—'}</span>
+          <span className="font-semibold text-gray-800">Sobre</span>
+          <span className="text-right font-semibold text-gray-900">{t.sobre != null ? fmt(t.sobre) : '—'}</span>
         </div>
       </button>
       {abierto && (
