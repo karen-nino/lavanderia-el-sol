@@ -442,6 +442,9 @@ export default function DetalleNota() {
   // Aviso de "ya está procesada" por WhatsApp (mig. 124). La plantilla la
   // escribe el negocio en Ajustes; aquí solo se rellena y se manda.
   const [procesadoOpen,    setProcesadoOpen]    = useState(false);
+  // Cambiar el cliente / referencia del Autoservicio (2026-10-11).
+  const [refOpen,          setRefOpen]          = useState(false);
+  const [refValor,         setRefValor]         = useState('');
   const [plantillaWa,      setPlantillaWa]      = useState('');
 
   // Cobro: uno solo para liquidar y para abonar (2026-09-26). Lo que se cobra
@@ -662,6 +665,21 @@ export default function DetalleNota() {
       .catch(() => { if (activo) setPlantillaWa(''); });
     return () => { activo = false; };
   }, [nota?.tipo_servicio]);
+
+  // Guarda el cliente / referencia libre del Autoservicio. Vacío = Mostrador.
+  async function guardarReferencia() {
+    setLoadingAccion(true);
+    setErrorAccion('');
+    try {
+      const upd = await api.patch(`/notas/${id}/referencia`, { referencia: refValor });
+      setNota(prev => ({ ...prev, referencia: upd.referencia }));
+      setRefOpen(false);
+    } catch (err) {
+      setErrorAccion(err.message);
+    } finally {
+      setLoadingAccion(false);
+    }
+  }
 
   async function cancelarNota() {
     setLoadingAccion(true);
@@ -1154,14 +1172,26 @@ export default function DetalleNota() {
           <p className="text-2xl font-bold text-gray-900 leading-tight mt-0.5 truncate">
             {nota.folio?.split('-')[0] ?? nota.id}
           </p>
-          <p className="text-sm text-gray-600 mt-1 truncate">
-            {nota.cliente_nombre
-              ? `${nota.cliente_nombre}${nota.cliente_apellido ? ' ' + nota.cliente_apellido : ''}`
-              // Mostrador se lee como un cliente más, con el mismo estilo
-              // (2026-10-03; antes iba gris y en cursiva). Antes de él va la
-              // referencia libre del Autoservicio (mig. 157).
-              : (nota.referencia || 'Mostrador')}
-          </p>
+          <div className="flex items-baseline gap-2 mt-1 min-w-0">
+            <p className="text-sm text-gray-600 truncate">
+              {nota.cliente_nombre
+                ? `${nota.cliente_nombre}${nota.cliente_apellido ? ' ' + nota.cliente_apellido : ''}`
+                // Mostrador se lee como un cliente más, con el mismo estilo
+                // (2026-10-03; antes iba gris y en cursiva). Antes de él va la
+                // referencia libre del Autoservicio (mig. 157).
+                : (nota.referencia || 'Mostrador')}
+            </p>
+            {/* Autoservicio: ponerle o cambiarle el nombre después de crearla. */}
+            {nota.tipo_servicio === 'AUTOSERVICIO' && nota.estado !== 'CANCELADA' && (
+              <button
+                type="button"
+                onClick={() => { setErrorAccion(''); setRefValor(nota.referencia ?? ''); setRefOpen(true); }}
+                className="flex-shrink-0 text-xs text-blue underline underline-offset-2"
+              >
+                Cambiar
+              </button>
+            )}
+          </div>
         </div>
         <svg className="w-8 h-8 text-gray-300 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -1668,6 +1698,49 @@ export default function DetalleNota() {
       )}
 
       {/* Modal del motivo de cancelación */}
+      {refOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
+          <form
+            className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-4"
+            onSubmit={e => { e.preventDefault(); guardarReferencia(); }}
+          >
+            <div>
+              <h3 className="text-base font-semibold text-gray-900">Cliente / referencia</h3>
+              <p className="text-sm text-gray-500 mt-0.5">Nombre o seña del cliente. Déjalo vacío para que diga Mostrador.</p>
+            </div>
+            <input
+              type="text"
+              autoFocus
+              maxLength={80}
+              value={refValor}
+              onChange={e => setRefValor(e.target.value)}
+              placeholder="Nombre o seña del cliente"
+              className="w-full px-4 py-3.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent transition"
+            />
+            {errorAccion && (
+              <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">{errorAccion}</div>
+            )}
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => { setRefOpen(false); setErrorAccion(''); }}
+                disabled={loadingAccion}
+                className="flex-1 border border-gray-300 text-gray-700 font-medium py-3.5 rounded-lg text-base hover:bg-gray-50 transition-colors disabled:opacity-60"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={loadingAccion}
+                className="flex-1 bg-blue hover:opacity-90 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
+              >
+                {loadingAccion ? 'Guardando...' : 'Guardar'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
       {motivoCancelarOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-4">

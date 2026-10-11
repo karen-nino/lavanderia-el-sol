@@ -2636,3 +2636,35 @@ describe('PATCH /api/notas/:id/ajuste', () => {
     expect(Number(res.body.precio_total)).toBe(130);
   });
 });
+
+// Cliente / referencia del Autoservicio editable desde el detalle (2026-10-11).
+describe('PATCH /api/notas/:id/referencia', () => {
+  it('cambia la referencia del Autoservicio; vacía vuelve a Mostrador', async () => {
+    const lav = await seedMaquina({ nombre: 'L-ref', tipo: 'lavadora_mediana', tamano: 'mediana' });
+    const nota = await request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE',
+      cargas: [{ lavadora_id: lav }],
+    });
+    expect(nota.status).toBe(201);
+    const id = nota.body.id;
+
+    let res = await request(app).patch(`/api/notas/${id}/referencia`)
+      .set(auth(admin.token)).send({ referencia: '  Señora del suéter rojo  ' });
+    expect(res.status).toBe(200);
+    expect(res.body.referencia).toBe('Señora del suéter rojo');
+
+    res = await request(app).patch(`/api/notas/${id}/referencia`)
+      .set(auth(admin.token)).send({ referencia: '   ' });
+    expect(res.body.referencia).toBeNull();
+  });
+
+  it('una nota Por Encargo no lleva referencia', async () => {
+    const nota = await request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'POR_ENCARGO', cliente_id: await seedCliente(), tipo_prenda: 'ROPA',
+      estado_pago: 'PENDIENTE', cargas: [{ tamano: 'chico', tipo_prenda: 'ROPA' }],
+    });
+    const res = await request(app).patch(`/api/notas/${nota.body.id}/referencia`)
+      .set(auth(admin.token)).send({ referencia: 'X' });
+    expect(res.status).toBe(400);
+  });
+});

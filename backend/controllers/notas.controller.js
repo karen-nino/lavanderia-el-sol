@@ -4363,6 +4363,35 @@ export const guardarTelefono = async (req, res) => {
   }
 };
 
+// ── PATCH /notas/:id/referencia ─────────────────────────────
+// Cambia el cliente / referencia libre de una nota de Autoservicio (mig. 157)
+// desde su detalle, igual que si se hubiera escrito al crearla. Vacío = vuelve
+// a "Mostrador". Solo Autoservicio: Por Encargo lleva cliente del catálogo.
+export const guardarReferencia = async (req, res) => {
+  const { id } = req.params;
+  const valor = String(req.body?.referencia ?? '').trim().slice(0, 80) || null;
+  try {
+    const { rows } = await pool.query(
+      'SELECT tipo_servicio FROM notas WHERE id = $1 AND sucursal = $2',
+      [id, req.sucursal]
+    );
+    if (rows.length === 0) {
+      return res.status(404).json({ message: 'Nota no encontrada.' });
+    }
+    if (rows[0].tipo_servicio !== 'AUTOSERVICIO') {
+      return res.status(400).json({ message: 'Solo las notas de Autoservicio llevan referencia.' });
+    }
+    const { rows: upd } = await pool.query(
+      'UPDATE notas SET referencia = $1 WHERE id = $2 RETURNING id, referencia',
+      [valor, id]
+    );
+    res.json(upd[0]);
+  } catch (err) {
+    console.error('guardarReferencia error:', err);
+    res.status(500).json({ message: 'No se pudo guardar el nombre. Intenta de nuevo.' });
+  }
+};
+
 // ── GET /notas/:id/productos ────────────────────────────────
 export const getNotaProductos = async (req, res) => {
   const { id } = req.params;

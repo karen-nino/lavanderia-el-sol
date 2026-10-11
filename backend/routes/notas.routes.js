@@ -25,7 +25,7 @@ import {
   abonarNota,
   revertirAbono,
   corregirFormaPago,
-  guardarTelefono,
+  guardarTelefono, guardarReferencia,
   getNotaProductos,
   addProductoToNota,
   cambiarCantidadProducto,
@@ -73,6 +73,7 @@ router.patch('/:id/abonos/:abonoId/revertir', requireAdmin, revertirAbono);
 // Corregir la forma de pago de una nota ya cobrada es cosa de admin.
 router.patch('/:id/forma-pago', requireAdmin, corregirFormaPago);
 router.patch('/:id/telefono', guardarTelefono);
+router.patch('/:id/referencia', guardarReferencia);
 // Ajuste de la nota (descuento o cargo extra) desde Salidas.
 router.patch('/:id/ajuste', ajustarNota);
 router.get('/:id/productos',    getNotaProductos);
