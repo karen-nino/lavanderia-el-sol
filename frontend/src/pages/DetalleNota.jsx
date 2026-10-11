@@ -388,6 +388,7 @@ function ModalAjuste({ folio, guardado, valor, onValor, onCancelar, onGuardar, l
               type="number" step="any"
               value={valor}
               onChange={e => onValor(e.target.value)}
+              placeholder="0"
               aria-label="Ajuste"
               className="w-full pl-8 pr-4 py-3.5 text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue focus:border-blue [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
             />
@@ -495,7 +496,9 @@ export default function DetalleNota() {
 
   function abrirAjuste() {
     setErrorAccion('');
-    setAjusteTxt(String(Number(nota?.ajuste ?? 0)));
+    // Sin ajuste el campo abre vacío y el 0 queda de placeholder (2026-10-11).
+    const actual = Number(nota?.ajuste ?? 0);
+    setAjusteTxt(actual ? String(actual) : '');
     setAjusteOpen(true);
   }
 

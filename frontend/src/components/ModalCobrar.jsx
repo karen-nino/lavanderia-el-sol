@@ -87,6 +87,8 @@ export default function ModalCobrar({ saldo, folio, titulo = 'Cobrar nota', mont
                 type="number" min="0" step="any" max={saldo}
                 value={monto}
                 onChange={e => onMonto(e.target.value)}
+                placeholder="0"
+                aria-label="¿Cuánto recibes?"
                 className="w-full pl-8 pr-4 py-3.5 text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue focus:border-blue [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
               />
             </div>
