@@ -1110,9 +1110,6 @@ function Historial({ onFiltroLabel }) {
         {sinConteo && (
           <p className="mt-2 text-xs text-amber-700">Un turno lo cerró el sistema sin conteo: no entra en la diferencia.</p>
         )}
-        {turnos.some((c) => c.en_curso) && (
-          <p className="mt-2 text-xs text-green-700">Hay un turno en curso: sus ventas ya suman, pero aún no tiene conteo.</p>
-        )}
       </div>
     );
   };
