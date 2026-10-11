@@ -16,8 +16,9 @@ const Fila = ({ r }) => (
 );
 
 // `aparte`: { titulo, filas } informativas que no se suman al total (como
-// "Cómo se cobró" en Ventas); van con su encabezado y el total queda hasta
-// abajo, como en Ventas (a pedido, 2026-10-10).
+// "Cómo se cobró" en Ventas); van con su encabezado DESPUÉS del total
+// (2026-10-11): debajo de Efectivo/Transferencia, el total se leía como su
+// suma y parecía contar la transferencia.
 function Recuadro({ titulo, filas, totalLabel, total, aparte }) {
   return (
     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
@@ -26,6 +27,10 @@ function Recuadro({ titulo, filas, totalLabel, total, aparte }) {
       </div>
       <div className="divide-y divide-gray-100">
         {filas.map((r) => <Fila key={r.label} r={r} />)}
+        <div className="flex justify-between px-4 py-4 text-base font-bold text-gray-900 bg-gray-50">
+          <span>{totalLabel}</span>
+          <span className="text-lg">{fmt(total)}</span>
+        </div>
         {aparte && (
           <>
             <div className="px-4 pt-3 pb-1 bg-gray-50/60">
@@ -34,10 +39,6 @@ function Recuadro({ titulo, filas, totalLabel, total, aparte }) {
             {aparte.filas.map((r) => <Fila key={r.label} r={r} />)}
           </>
         )}
-        <div className="flex justify-between px-4 py-4 text-base font-bold text-gray-900 bg-gray-50">
-          <span>{totalLabel}</span>
-          <span className="text-lg">{fmt(total)}</span>
-        </div>
       </div>
     </div>
   );

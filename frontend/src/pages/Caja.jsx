@@ -932,10 +932,12 @@ function Historial({ onFiltroLabel }) {
           <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
             {subtituloRejilla('Ingresos')}
             {filasRejilla(d.ingresos)}
-            {subtituloRejilla('Cómo se cobró')}
-            {filasRejilla(d.comoSeCobro)}
             <span className="font-medium text-gray-700">Total ingresos</span>
             <span className="text-right font-medium text-gray-800">{fmt(d.totalIngresos)}</span>
+            {/* Después del total (2026-10-11): debajo de Efectivo/Transferencia
+                se leía como su suma. Informativo, no se suma. */}
+            {subtituloRejilla('Cómo se cobró')}
+            {filasRejilla(d.comoSeCobro)}
             {subtituloRejilla('Egresos')}
             {filasRejilla(d.egresos)}
             <span className="font-medium text-gray-700">Total egresos</span>

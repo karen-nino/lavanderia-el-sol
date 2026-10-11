@@ -168,8 +168,8 @@ const tablaLineas = (titulo, lineas, totalLabel, total, aparte = null) => `
     <table class="desglose">
       <tbody>
         ${lineas.map(filaLinea).join('')}
-        ${aparte ? `<tr class="sub"><td colspan="2">${esc(aparte.titulo)}</td></tr>${aparte.lineas.map(filaLinea).join('')}` : ''}
         <tr class="tot"><td>${esc(totalLabel)}</td><td class="r">${fmtMoneda(total)}</td></tr>
+        ${aparte ? `<tr class="sub"><td colspan="2">${esc(aparte.titulo)}</td></tr>${aparte.lineas.map(filaLinea).join('')}` : ''}
       </tbody>
     </table>`;
 
