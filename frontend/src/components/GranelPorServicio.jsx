@@ -168,15 +168,17 @@ export default function GranelPorServicio({ nota, puedeEditar, onCambio }) {
                     )}
                     {resuelto && selectorDe(r, opciones, elegido, quedanDe, bloqueado, c, etiqueta,
                       ({ abrir, elegida, deshabilitado }) => (
-                        <p className="text-xs text-gray-500 truncate mt-0.5">
-                          {elegida?.etiqueta ?? r.producto?.nombre}
-                          {' · '}
+                        // Solo el nombre se recorta con "…": "Cambiar" no se
+                        // encoge, para que en móvil no se esconda (2026-10-10).
+                        <p className="flex items-baseline gap-1 text-xs text-gray-500 mt-0.5 min-w-0">
+                          <span className="truncate">{elegida?.etiqueta ?? r.producto?.nombre}</span>
+                          <span className="flex-shrink-0">·</span>
                           <button
                             type="button"
                             onClick={abrir}
                             disabled={deshabilitado}
                             aria-label={`Cambiar ${nombreTipo(r.tipoId).toLowerCase()} de ${etiqueta}`}
-                            className="font-medium text-blue hover:underline disabled:opacity-40 disabled:no-underline"
+                            className="flex-shrink-0 font-medium text-blue hover:underline disabled:opacity-40 disabled:no-underline"
                           >
                             Cambiar
                           </button>
