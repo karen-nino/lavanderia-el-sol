@@ -1099,11 +1099,16 @@ function Historial({ onFiltroLabel }) {
   // Resumen de un día con varios turnos: lo que entró entre todos y cómo
   // quedó el día. La diferencia suma solo los turnos que se contaron; uno que
   // cerró el sistema a medianoche no tiene conteo y se avisa aparte.
+  //
+  // Ingresos y Egresos (2026-10-10) con las reglas del corte. La caja inicial
+  // cuenta UNA vez, la del primer turno: cada turno siguiente abre con la caja
+  // final del anterior, que es dinero ya contado, y sumarlas lo repetiría.
   const resumenDia = (turnos) => {
     const suma = (f) => turnos.reduce((t, c) => t + (Number(f(c)) || 0), 0);
     const efectivo = suma((c) => c.ventas_desglose?.efectivo ?? c.ventas);
     const transferencia = suma((c) => c.ventas_desglose?.transferencia);
-    const tarjeta = suma((c) => c.ventas_desglose?.tarjeta);
+    const ingresos = (Number(turnos[0]?.monto_inicial) || 0) + suma((c) => c.entradas) + efectivo;
+    const egresos = suma((c) => desgloseCaja(c).totalEgresos);
     const contados = turnos.filter((c) => c.diferencia != null);
     const diferencia = contados.reduce((t, c) => t + c.diferencia, 0);
     const sinConteo = turnos.some((c) => c.cierre_automatico);
@@ -1112,13 +1117,10 @@ function Historial({ onFiltroLabel }) {
       <div className="rounded-lg bg-gray-50 px-4 py-3">
         <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-2">Resumen del día</p>
         <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+          <span className="text-gray-500">Ingresos</span><span className="text-right text-gray-700">{fmt(ingresos)}</span>
+          <span className="text-gray-500">Egresos</span><span className="text-right text-gray-700">−{fmt(egresos)}</span>
           <span className="text-gray-500">Ventas en efectivo</span><span className="text-right text-gray-700">{fmt(efectivo)}</span>
-          {transferencia > 0 && (<><span className="text-gray-500">Transferencia</span><span className="text-right text-gray-500">{fmt(transferencia)}</span></>)}
-          {tarjeta > 0 && (<><span className="text-gray-500">Tarjeta</span><span className="text-right text-gray-500">{fmt(tarjeta)}</span></>)}
-          <span className="text-gray-500">Entradas</span><span className="text-right text-gray-700">{fmt(suma((c) => c.entradas))}</span>
-          <span className="text-gray-500">Salidas</span><span className="text-right text-gray-700">{fmt(suma((c) => c.salidas))}</span>
-          {/* Lo apartado en sobres por todos los turnos del día (mig. 151). */}
-          {suma((c) => c.sobre) > 0 && (<><span className="text-gray-500">Sobres</span><span className="text-right text-gray-700">{fmt(suma((c) => c.sobre))}</span></>)}
+          <span className="text-gray-500">Ventas por transferencia</span><span className="text-right text-gray-700">{fmt(transferencia)}</span>
           <span className="text-gray-500 font-medium">Diferencia del día</span>
           <span className={`text-right font-medium ${
             contados.length === 0 ? 'text-gray-500'
