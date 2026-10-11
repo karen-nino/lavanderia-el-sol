@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { esAdmin as esAdminFn, esAdminMain as esAdminMainFn } from '../lib/roles';
 import FondoApertura from '../components/FondoApertura';
 import RecuadrosCaja from '../components/RecuadrosCaja';
+import { desgloseCaja } from '../lib/desgloseCaja';
 import { formatHora12 } from '../lib/fecha';
 import { imprimirCortes, descargarCortesCSV } from '../lib/exportCorte';
 import SucursalBar from '../components/SucursalBar';
@@ -608,6 +609,13 @@ function Historial({ onFiltroLabel }) {
     if (next.has(id)) next.delete(id); else next.add(id);
     return next;
   });
+  // Cortes con su detalle de Ingresos, Egresos y Desglose desplegado (por id).
+  const [detAbiertos, setDetAbiertos] = useState(() => new Set());
+  const alternarDet = (id) => setDetAbiertos((prev) => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
 
   // Menú de opciones (⋮) por corte y confirmación de borrado.
   const [menuCorte, setMenuCorte] = useState(null);       // id del corte con el menú abierto
@@ -869,25 +877,30 @@ function Historial({ onFiltroLabel }) {
 
   // Cuerpo del corte (montos + quién abrió/cerró). Sin contenedor propio: se
   // inserta dentro de la tarjeta del día o de la tarjeta de corte.
-  const cuerpoCorte = (c) => (
+  // Renglones { label, value, sign, nota } en la rejilla de la tarjeta.
+  const filasRejilla = (filas) => filas.map((r) => (
+    <div key={r.label} className="contents">
+      <span className="text-gray-500">
+        {r.label}
+        {r.nota && <span className="block text-xs text-gray-400">{r.nota}</span>}
+      </span>
+      <span className="text-right text-gray-700">{r.sign}{fmt(r.value)}</span>
+    </div>
+  ));
+  const subtituloRejilla = (texto) => (
+    <p className="col-span-2 pt-2 text-xs font-semibold uppercase tracking-wide text-gray-400">{texto}</p>
+  );
+
+  // Cuerpo del corte: lo mismo que la tarjeta de turno de Ventas (Ingresos,
+  // Egresos, Esperado y su detalle desplegable, 2026-10-10) con el diseño de
+  // siempre, más lo que solo tiene el corte: conteo, caja final y sobre.
+  const cuerpoCorte = (c) => {
+    const d = desgloseCaja(c);
+    return (
     <>
       <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-base">
-        <span className="text-gray-500">Caja inicial</span><span className="text-right text-gray-700">{fmt(c.monto_inicial)}</span>
-        <span className="text-gray-500">Ventas en efectivo</span><span className="text-right text-gray-700">{fmt(c.ventas_desglose?.efectivo ?? c.ventas)}</span>
-        {(c.ventas_desglose?.transferencia ?? 0) > 0 && (
-          <>
-            <span className="text-gray-500">Transferencia</span>
-            <span className="text-right text-gray-500">{fmt(c.ventas_desglose.transferencia)}</span>
-          </>
-        )}
-        {(c.ventas_desglose?.tarjeta ?? 0) > 0 && (
-          <>
-            <span className="text-gray-500">Tarjeta</span>
-            <span className="text-right text-gray-500">{fmt(c.ventas_desglose.tarjeta)}</span>
-          </>
-        )}
-        <span className="text-gray-500">Entradas</span><span className="text-right text-gray-700">{fmt(c.entradas)}</span>
-        <span className="text-gray-500">Salidas</span><span className="text-right text-gray-700">{fmt(c.salidas)}</span>
+        <span className="text-gray-500">Ingresos</span><span className="text-right text-gray-700">{fmt(d.totalIngresos)}</span>
+        <span className="text-gray-500">Egresos</span><span className="text-right text-gray-700">−{fmt(d.totalEgresos)}</span>
         <span className="text-gray-500 font-medium">{c.en_curso ? 'Esperado hasta ahora' : 'Esperado'}</span><span className="text-right font-medium text-gray-800">{fmt(c.esperado)}</span>
         <span className="text-gray-500 font-medium">Contado</span><span className={`text-right font-medium ${
           c.contado == null || c.diferencia == null ? 'text-gray-800'
@@ -900,6 +913,38 @@ function Historial({ onFiltroLabel }) {
             <span className="text-gray-500">Caja final</span><span className="text-right text-gray-700">{fmt(c.caja_final)}</span>
             <span className="text-gray-500">Sobre</span><span className="text-right text-gray-700">{fmt(c.sobre)}</span>
           </>
+        )}
+      </div>
+      {/* El detalle, plegado como en Ventas: las mismas líneas del corte. */}
+      <div className="mt-4">
+        <button
+          type="button"
+          onClick={() => alternarDet(c.id)}
+          className="flex items-center gap-1 text-sm font-medium text-blue hover:underline"
+        >
+          {detAbiertos.has(c.id) ? 'Ocultar' : 'Ver'} ingresos y egresos
+          <svg className={`w-4 h-4 transition-transform ${detAbiertos.has(c.id) ? 'rotate-180' : ''}`}
+            fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+        {detAbiertos.has(c.id) && (
+          <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+            {subtituloRejilla('Ingresos')}
+            {filasRejilla(d.ingresos)}
+            {subtituloRejilla('Cómo se cobró')}
+            {filasRejilla(d.comoSeCobro)}
+            <span className="font-medium text-gray-700">Total ingresos</span>
+            <span className="text-right font-medium text-gray-800">{fmt(d.totalIngresos)}</span>
+            {subtituloRejilla('Egresos')}
+            {filasRejilla(d.egresos)}
+            <span className="font-medium text-gray-700">Total egresos</span>
+            <span className="text-right font-medium text-gray-800">{fmt(d.totalEgresos)}</span>
+            {subtituloRejilla('Desglose esperado')}
+            {filasRejilla(d.desglose)}
+            <span className="font-medium text-gray-700">{c.en_curso ? 'Esperado hasta ahora' : 'Esperado en caja'}</span>
+            <span className="text-right font-medium text-gray-800">{fmt(c.esperado)}</span>
+          </div>
         )}
       </div>
       {/* Entradas y salidas del turno con su concepto (2026-10-04). Plegadas
@@ -963,7 +1008,8 @@ function Historial({ onFiltroLabel }) {
         </div>
       </div>
     </>
-  );
+    );
+  };
 
   // Tarjeta de un día (2026-10-03: la caja funciona por TURNOS). Un turno es
   // una caja abierta, y un día puede tener varios. Antes se suponía uno por día

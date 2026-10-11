@@ -185,9 +185,6 @@ export const bloqueDetalle = (c) => {
     </div>
     ${tablaLineas('Ingresos', d.ingresos, 'Total ingresos', d.totalIngresos,
     { titulo: 'Cómo se cobró', lineas: d.comoSeCobro })}
-    ${(c.ventas_desglose?.tarjeta ?? 0) > 0
-      ? `<p class="nota">Además, cobrado con tarjeta (fuera del cajón): ${fmtMoneda(c.ventas_desglose.tarjeta)}</p>`
-      : ''}
     ${tablaLineas('Egresos', d.egresos, 'Total egresos', d.totalEgresos)}
     ${tablaLineas('Desglose esperado', d.desglose, c.en_curso ? 'Esperado hasta ahora' : 'Esperado en caja', c.esperado)}
     <table class="desglose">

@@ -52,6 +52,10 @@ export function desgloseCaja(t) {
   const comoSeCobro = [
     { label: 'Efectivo',      value: efectivo, sign: '' },
     { label: 'Transferencia', value: num(t.ventas_desglose?.transferencia), sign: '' },
+    // Tarjeta ya no se ofrece al cobrar (2026-10-06): solo si hubo cobros viejos.
+    ...(num(t.ventas_desglose?.tarjeta) > 0
+      ? [{ label: 'Tarjeta', value: num(t.ventas_desglose.tarjeta), sign: '' }]
+      : []),
   ];
   const totalIngresos = num(t.monto_inicial) + efectivo + num(t.entradas);
 
