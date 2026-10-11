@@ -1436,6 +1436,7 @@ async function granelSinElegir(client, notaId, maquinaIds) {
        JOIN nota_cargas nc ON nc.id = pe.carga_id
        JOIN tipos_granel t ON t.id = pe.tipo_granel_id
       WHERE pe.nota_id = $1
+        AND NOT pe.del_cliente   -- el cliente trajo el suyo: ya está resuelto (mig. 154)
       GROUP BY nc.id
       ORDER BY nc.orden
       LIMIT 1`,
@@ -1590,9 +1591,10 @@ async function cargasDeNota(client, notaId) {
       ORDER BY np.created_at ASC`,
     [notaId]
   );
-  // Granel por elegir de cada servicio (mig. 134): "1 medida de Jabón".
+  // Granel por elegir de cada servicio (mig. 134): "1 medida de Jabón". Con
+  // `del_cliente` (mig. 154) no está por elegir: el cliente trajo el suyo.
   const { rows: pendientes } = await client.query(
-    `SELECT pe.id, pe.carga_id, pe.tipo_granel_id, t.nombre AS tipo_granel, pe.cantidad
+    `SELECT pe.id, pe.carga_id, pe.tipo_granel_id, t.nombre AS tipo_granel, pe.cantidad, pe.del_cliente
        FROM nota_carga_pendientes pe
        JOIN tipos_granel t ON t.id = pe.tipo_granel_id
       WHERE pe.nota_id = $1
@@ -4397,10 +4399,12 @@ export const addProductoToNota = async (req, res) => {
 // medidas. Sirve igual para el que está por elegir que para cambiar uno ya
 // elegido: lo que había de ese tipo en el servicio se suelta (devuelve lo
 // apartado) y se pone lo nuevo. Sin producto, el tipo vuelve a quedar por
-// elegir con la cantidad dada.
+// elegir con la cantidad dada. Con `del_cliente: true` (mig. 154) el cliente
+// trajo el suyo: no se usa inventario y ya no bloquea iniciar la lavadora.
 export const elegirGranelDeCarga = async (req, res) => {
   const { id, cargaId, tipoId } = req.params;
   const { producto_id } = req.body ?? {};
+  const delCliente = req.body?.del_cliente === true;
   const cantidad = Number(req.body?.cantidad);
   if (![id, cargaId, tipoId].every(v => /^\d+$/.test(String(v)))) {
     return res.status(404).json({ message: 'No se encontró el servicio.' });
@@ -4461,7 +4465,13 @@ export const elegirGranelDeCarga = async (req, res) => {
     );
 
     let fila = null;
-    if (producto_id) {
+    if (delCliente) {
+      await client.query(
+        `INSERT INTO nota_carga_pendientes (nota_id, carga_id, tipo_granel_id, cantidad, del_cliente)
+         VALUES ($1, $2, $3, $4, TRUE)`,
+        [id, cargaId, tipoId, cantidad]
+      );
+    } else if (producto_id) {
       // Solo un granel líquido de ESE tipo: es lo que el servicio pide.
       const { rows: ok } = await client.query(
         `SELECT 1 FROM productos p

@@ -9,6 +9,12 @@ import Selector from './Selector';
 // empleado, servicio por servicio. Elegir aparta la existencia; también puede
 // cambiar el producto o las medidas. Mientras algún servicio tenga algo por
 // elegir, el servidor no deja iniciar las lavadoras de la nota.
+//
+// "Producto del cliente" (mig. 154): el cliente dejó su propio jabón o
+// suavizante. Cuenta como elegido, pero no usa inventario.
+
+// Valor de la opción "Producto del cliente" en el selector.
+const DEL_CLIENTE = 'cliente';
 
 const NOMBRE_TAMANO = { chico: 'Chico', mediano: 'Mediano', grande: 'Grande', jumbo: 'Jumbo' };
 
@@ -46,7 +52,9 @@ export default function GranelPorServicio({ nota, puedeEditar, onCambio }) {
   const renglonesDe = (c) => {
     const renglones = new Map();
     for (const pe of (c.pendientes ?? [])) {
-      renglones.set(pe.tipo_granel_id, { tipoId: pe.tipo_granel_id, cantidad: Number(pe.cantidad), producto: null });
+      renglones.set(pe.tipo_granel_id, {
+        tipoId: pe.tipo_granel_id, cantidad: Number(pe.cantidad), producto: null, delCliente: pe.del_cliente === true,
+      });
     }
     for (const np of (c.productos ?? [])) {
       const tipoId = porId.get(np.producto_id)?.tipo_granel_id;
@@ -68,7 +76,7 @@ export default function GranelPorServicio({ nota, puedeEditar, onCambio }) {
 
   if (nota?.tipo_servicio !== 'POR_ENCARGO' || conGranel.length === 0) return null;
 
-  const porElegir = conGranel.some(s => s.renglones.some(r => !r.producto));
+  const porElegir = conGranel.some(s => s.renglones.some(r => !r.producto && !r.delCliente));
 
   // Opciones de un tipo: los graneles de ese tipo (sirven para cualquier
   // servicio, mig. 135), más el que ya tenga puesto aunque ya no sea de ese tipo.
@@ -86,27 +94,32 @@ export default function GranelPorServicio({ nota, puedeEditar, onCambio }) {
   const selectorDe = (r, opciones, elegido, quedanDe, bloqueado, c, etiqueta, disparador) => (
     <Selector
       valor={elegido ?? ''}
-      onChange={(v) => guardar(c, r.tipoId, Number(v), r.cantidad)}
+      onChange={(v) => (v === DEL_CLIENTE
+        ? guardar(c, r.tipoId, null, r.cantidad, true)
+        : guardar(c, r.tipoId, Number(v), r.cantidad))}
       deshabilitado={bloqueado}
       titulo={`${nombreTipo(r.tipoId)} · ${etiqueta}`}
-      opciones={opciones.map(p => ({
-        valor: p.id,
-        etiqueta: p.nombre,
-        // Lo que queda, en medidas; el que no alcanza no se elige.
-        detalle: quedanDe(p) > 0 ? `quedan ${quedanDe(p)}` : 'agotado',
-        deshabilitado: elegido !== p.id && quedanDe(p) < r.cantidad,
-      }))}
+      opciones={[
+        ...opciones.map(p => ({
+          valor: p.id,
+          etiqueta: p.nombre,
+          // Lo que queda, en medidas; el que no alcanza no se elige.
+          detalle: quedanDe(p) > 0 ? `quedan ${quedanDe(p)}` : 'agotado',
+          deshabilitado: elegido !== p.id && quedanDe(p) < r.cantidad,
+        })),
+        { valor: DEL_CLIENTE, etiqueta: 'Producto del cliente', detalle: 'no usa inventario' },
+      ]}
       disparador={disparador}
     />
   );
 
-  const guardar = async (c, tipoId, productoId, cantidad) => {
+  const guardar = async (c, tipoId, productoId, cantidad, delCliente = false) => {
     if (cantidad < 1) return;
     setOcupado(`${c.id}-${tipoId}`);
     setError('');
     try {
       await api.put(`/notas/${nota.id}/cargas/${c.id}/granel/${tipoId}`, {
-        producto_id: productoId ?? null, cantidad,
+        producto_id: productoId ?? null, cantidad, del_cliente: delCliente,
       });
       await onCambio?.();
     } catch (err) {
@@ -136,7 +149,8 @@ export default function GranelPorServicio({ nota, puedeEditar, onCambio }) {
             {renglones.map(r => {
               const opciones = opcionesDe(r.tipoId, r.producto);
               const bloqueado = !puedeEditar || ocupado != null;
-              const elegido = r.producto?.producto_id ?? null;
+              const elegido = r.delCliente ? DEL_CLIENTE : (r.producto?.producto_id ?? null);
+              const resuelto = r.producto || r.delCliente;
               // Lo que queda de un producto no cuenta lo que este mismo
               // servicio ya tiene apartado de él.
               const quedanDe = (p) => disponible(p) + (elegido === p.id ? r.cantidad : 0);
@@ -147,14 +161,15 @@ export default function GranelPorServicio({ nota, puedeEditar, onCambio }) {
                       "Cambiar") y a la derecha las medidas (2026-10-02). */}
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-gray-800">{nombreTipo(r.tipoId)}</p>
-                    {opciones.length === 0 ? (
+                    {opciones.length === 0 && !resuelto && (
                       <p className="text-xs text-gray-400 mt-0.5">
                         No hay {nombreTipo(r.tipoId).toLowerCase()} en Inventario: dalo de alta o asígnale su tipo al producto.
                       </p>
-                    ) : r.producto && selectorDe(r, opciones, elegido, quedanDe, bloqueado, c, etiqueta,
+                    )}
+                    {resuelto && selectorDe(r, opciones, elegido, quedanDe, bloqueado, c, etiqueta,
                       ({ abrir, elegida, deshabilitado }) => (
                         <p className="text-xs text-gray-500 truncate mt-0.5">
-                          {elegida?.etiqueta ?? r.producto.nombre}
+                          {elegida?.etiqueta ?? r.producto?.nombre}
                           {' · '}
                           <button
                             type="button"
@@ -169,8 +184,9 @@ export default function GranelPorServicio({ nota, puedeEditar, onCambio }) {
                       ))}
                   </div>
 
-                  {!r.producto ? (
-                    opciones.length > 0 && selectorDe(r, opciones, elegido, quedanDe, bloqueado, c, etiqueta,
+                  {/* El producto del cliente no lleva medidas: no sale del inventario. */}
+                  {r.delCliente ? null : !r.producto ? (
+                    selectorDe(r, opciones, elegido, quedanDe, bloqueado, c, etiqueta,
                       ({ abrir, deshabilitado }) => (
                         <button
                           type="button"

@@ -179,3 +179,45 @@ describe('ninguna lavadora de la nota arranca con granel por elegir', () => {
     expect(despues.status).toBe(200);
   });
 });
+
+// Mig. 154: el cliente dejó su propio jabón o suavizante.
+describe('producto del cliente', () => {
+  it('no aparta inventario, devuelve lo que había y deja iniciar la lavadora', async () => {
+    const oxxi = await granel('OXXI MEJORADO', tipo.jabon);
+    await granel('PERSIL', tipo.jabon);
+    const lavadora = await seedMaquina({ nombre: 'L1', tipo: 'lavadora_mediana' });
+    const { notaId, carga } = await crearChico();
+    const url = `/api/notas/${notaId}/cargas/${carga.id}/granel/${tipo.jabon}`;
+    const precioAntes = Number((await pool.query('SELECT precio_total FROM notas WHERE id = $1', [notaId])).rows[0].precio_total);
+
+    // Primero se había elegido OXXI; luego resulta que el cliente trajo el suyo.
+    await request(app).put(url).set(auth(admin.token)).send({ producto_id: oxxi, cantidad: 1 }).expect(200);
+    const res = await request(app).put(url).set(auth(admin.token)).send({ del_cliente: true, cantidad: 1 });
+    expect(res.status).toBe(200);
+    const c = res.body.cargas[0];
+    expect(c.pendientes).toEqual([expect.objectContaining({ tipo_granel_id: tipo.jabon, del_cliente: true })]);
+    expect(c.productos.some(p => p.producto_id === oxxi)).toBe(false);
+    expect(await reservado(oxxi)).toBe(0);
+    // El precio del servicio no cambia.
+    const precioDespues = Number((await pool.query('SELECT precio_total FROM notas WHERE id = $1', [notaId])).rows[0].precio_total);
+    expect(precioDespues).toBe(precioAntes);
+
+    await request(app).patch(`/api/notas/${notaId}/asignar-maquina`).set(auth(admin.token))
+      .send({ maquina_ids: [lavadora], cobrar: false }).expect(200);
+    const encender = await request(app).patch(`/api/notas/${notaId}/encender-maquina`).set(auth(admin.token))
+      .send({ maquina_id: lavadora });
+    expect(encender.status).toBe(200);
+  });
+
+  it('se puede volver a elegir un producto del inventario', async () => {
+    const oxxi = await granel('OXXI MEJORADO', tipo.jabon);
+    await granel('PERSIL', tipo.jabon);
+    const { notaId, carga } = await crearChico();
+    const url = `/api/notas/${notaId}/cargas/${carga.id}/granel/${tipo.jabon}`;
+    await request(app).put(url).set(auth(admin.token)).send({ del_cliente: true, cantidad: 1 }).expect(200);
+    const res = await request(app).put(url).set(auth(admin.token)).send({ producto_id: oxxi, cantidad: 1 });
+    expect(res.status).toBe(200);
+    expect(res.body.cargas[0].pendientes).toHaveLength(0);
+    expect(await reservado(oxxi)).toBe(1);
+  });
+});
