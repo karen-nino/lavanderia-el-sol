@@ -419,9 +419,11 @@ export default function Salidas() {
     setLoadingMaquinas(true);
     try {
       const data = await api.get('/maquinas');
-      // Excluye las que ya están asignadas a la nota (no tiene sentido volver a asignarlas).
+      // Excluye las que ya están asignadas a la nota (no tiene sentido volver a
+      // asignarlas) y las asignadas a OTRA nota abierta (2026-10-11).
       setMaquinasDisp((data ?? []).filter(m =>
         m.estado === 'disponible'
+        && !m.reservada
         && !maquinasNota.some(mid => String(mid) === String(m.id))));
     } catch (err) {
       setErrorAccion(err.message);
@@ -499,9 +501,11 @@ export default function Salidas() {
     try {
       const data = await api.get('/maquinas');
       const esSecadora = m.tipo === 'secadora';
-      // Del mismo tipo, disponibles, y que no estén ya asignadas a la nota.
+      // Del mismo tipo, disponibles, y que no estén asignadas a esta ni a otra
+      // nota (2026-10-11).
       setMaquinasDisp((data ?? []).filter(x =>
         x.estado === 'disponible'
+        && !x.reservada
         && (esSecadora ? x.tipo === 'secadora' : x.tipo !== 'secadora')
         && !maquinasNota.some(mid => String(mid) === String(x.id))));
     } catch (err) {
@@ -944,11 +948,11 @@ export default function Salidas() {
   };
 
   // Máquinas disponibles que coinciden con un slot (lavadora/secadora) y su tipo.
-  // Se ofrecen todas las máquinas libres del tipo. Que otra nota ya tenga
-  // asignada una de ellas no la descarta: asignar no aparta, se la queda quien
-  // le dé a Iniciar primero. Eso sí, se avisa en la propia opción.
+  // Las asignadas a otra nota abierta YA NO se ofrecen (2026-10-11, a pedido):
+  // antes salían con el aviso "También en …" y se la quedaba quien iniciara
+  // primero.
   const maquinasParaSlot = (slot) => todasMaquinas.filter(m => {
-    if (m.estado !== 'disponible') return false;
+    if (m.estado !== 'disponible' || m.reservada) return false;
     if (slot === 'lavadora') {
       if (m.tipo === 'secadora') return false;
       // Se ofrecen TODAS las lavadoras libres, sin mirar el tamaño que eligió
