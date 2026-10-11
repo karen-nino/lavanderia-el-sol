@@ -1482,6 +1482,7 @@ export default function Ajustes() {
       ticket_nota_encargo:      config.ticket_nota_encargo ?? '',
       ticket_nota_productos:    config.ticket_nota_productos ?? '',
       whatsapp_mensaje_encargo: config.whatsapp_mensaje_encargo ?? '',
+      whatsapp_mensaje_reaviso: config.whatsapp_mensaje_reaviso ?? '',
     }),
     alerta_ciclo_detenido: !!config.alerta_ciclo_detenido,
     // Interruptores de alertas (mig. 156): sin dato, encendidos.
@@ -2675,6 +2676,16 @@ export default function Ajustes() {
     </>
   );
 
+
+  // Ayuda del recordatorio (mig. 158): mismos comodines que el de arriba.
+  const ayudaReaviso = (
+    <>
+      Se manda desde el botón <span className="font-medium">Avisar</span> de una nota ya
+      procesada, para recordarle al cliente que su ropa lo espera. Usa los mismos comodines.
+      Si lo dejas vacío, se manda el mensaje de Por Encargo.
+    </>
+  );
+
   const seccionWhatsappDesktop = (
     <Section titulo="WhatsApp">
       {ES_DEMO && <p className="text-xs text-gray-400 -mt-2">{NOTA_DEMO}</p>}
@@ -2690,6 +2701,18 @@ export default function Ajustes() {
         />
       </Field>
       <PreviaWhatsapp plantilla={config.whatsapp_mensaje_encargo} />
+      <Field label="Mensaje para volver a avisar" hint={ayudaReaviso}>
+        <textarea
+          name="whatsapp_mensaje_reaviso"
+          rows={6}
+          value={config.whatsapp_mensaje_reaviso ?? ''}
+          onChange={handleChange}
+          placeholder="Hola *Nombre*, te recordamos que tu ropa (nota *Clave*) ya está lista."
+          disabled={ES_DEMO}
+          className={`${INPUT_CLS} resize-y leading-relaxed disabled:bg-gray-50 disabled:text-gray-500 disabled:cursor-not-allowed`}
+        />
+      </Field>
+      {config.whatsapp_mensaje_reaviso?.trim() && <PreviaWhatsapp plantilla={config.whatsapp_mensaje_reaviso} />}
     </Section>
   );
 
@@ -2758,6 +2781,18 @@ export default function Ajustes() {
         />
       </MobileField>
       <PreviaWhatsapp plantilla={config.whatsapp_mensaje_encargo} />
+      <MobileField label="Mensaje para volver a avisar" hint={ayudaReaviso}>
+        <textarea
+          name="whatsapp_mensaje_reaviso"
+          rows={7}
+          value={config.whatsapp_mensaje_reaviso ?? ''}
+          onChange={handleChange}
+          placeholder="Hola *Nombre*, te recordamos que tu ropa (nota *Clave*) ya está lista."
+          disabled={ES_DEMO}
+          className={`${MOBILE_INPUT_CLS} resize-y leading-relaxed disabled:bg-gray-50 disabled:text-gray-500 disabled:cursor-not-allowed`}
+        />
+      </MobileField>
+      {config.whatsapp_mensaje_reaviso?.trim() && <PreviaWhatsapp plantilla={config.whatsapp_mensaje_reaviso} />}
     </div>
   );
 

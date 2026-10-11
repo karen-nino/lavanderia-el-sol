@@ -446,6 +446,8 @@ export default function DetalleNota() {
   const [refOpen,          setRefOpen]          = useState(false);
   const [refValor,         setRefValor]         = useState('');
   const [plantillaWa,      setPlantillaWa]      = useState('');
+  // Recordatorio (mig. 158): lo que manda "Avisar" en una nota ya procesada.
+  const [plantillaReaviso, setPlantillaReaviso] = useState('');
 
   // Cobro: uno solo para liquidar y para abonar (2026-09-26). Lo que se cobra
   // lo dice el importe, no dos botones distintos.
@@ -661,8 +663,12 @@ export default function DetalleNota() {
     if (nota?.tipo_servicio !== 'POR_ENCARGO') return undefined;
     let activo = true;
     api.get('/ajustes')
-      .then(cfg => { if (activo) setPlantillaWa(cfg?.whatsapp_mensaje_encargo ?? ''); })
-      .catch(() => { if (activo) setPlantillaWa(''); });
+      .then(cfg => {
+        if (!activo) return;
+        setPlantillaWa(cfg?.whatsapp_mensaje_encargo ?? '');
+        setPlantillaReaviso(cfg?.whatsapp_mensaje_reaviso ?? '');
+      })
+      .catch(() => { if (activo) { setPlantillaWa(''); setPlantillaReaviso(''); } });
     return () => { activo = false; };
   }, [nota?.tipo_servicio]);
 
@@ -860,13 +866,18 @@ export default function DetalleNota() {
   // El botón se enseña aunque falte el mensaje o el teléfono: es el modal quien
   // lo explica, y la nota tiene que poder avanzar aunque no haya a quién
   // avisarle.
-  const mensajeProcesado = armarMensajeWhatsapp(plantillaWa, nota);
+  const yaProcesada = nota.estado === 'LISTA';
+  // Ya procesada, "Avisar" manda el recordatorio (mig. 158); si no se escribió,
+  // el mensaje de Por Encargo de siempre.
+  const plantillaAviso = yaProcesada && hayMensajeWhatsapp(plantillaReaviso)
+    ? plantillaReaviso
+    : plantillaWa;
+  const mensajeProcesado = armarMensajeWhatsapp(plantillaAviso, nota);
   // A dónde se manda el aviso: el teléfono del cliente registrado o, en una
   // nota de mostrador, el que se capturó a mano para el ticket (nota.telefono).
   // Antes solo miraba el del cliente, así que una nota de mostrador con
   // teléfono ya capturado no tenía a dónde mandar nada.
   const telefonoAviso = telefonoWhatsapp(nota.cliente_telefono || nota.telefono);
-  const yaProcesada = nota.estado === 'LISTA';
   // No sale hasta que al menos una lavadora terminó (2026-10-02): antes no hay
   // ropa que procesar. Ya procesada se queda, para poder repetir el aviso.
   const botonProcesado = nota.tipo_servicio === 'POR_ENCARGO' && !esTerminal(nota)
@@ -1803,7 +1814,7 @@ export default function DetalleNota() {
               </p>
             </div>
 
-            {!hayMensajeWhatsapp(plantillaWa) ? (
+            {!hayMensajeWhatsapp(plantillaAviso) ? (
               <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
                 <p className="text-sm font-semibold text-amber-900">Todavía no hay mensaje escrito</p>
                 <p className="mt-0.5 text-sm text-amber-800">
@@ -1826,7 +1837,7 @@ export default function DetalleNota() {
               </div>
             )}
 
-            {hayMensajeWhatsapp(plantillaWa) && !telefonoAviso && (
+            {hayMensajeWhatsapp(plantillaAviso) && !telefonoAviso && (
               <div className="bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-lg p-3">
                 {nota.cliente_nombre
                   ? 'El cliente no tiene teléfono capturado, así que no hay a dónde mandarlo.'

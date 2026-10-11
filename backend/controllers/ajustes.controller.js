@@ -83,6 +83,7 @@ export const updateAjustes = async (req, res) => {
     ticket_nota_encargo,
     ticket_nota_productos,
     whatsapp_mensaje_encargo,
+    whatsapp_mensaje_reaviso,
     direccion,
     telefono,
     alerta_ciclo_detenido,
@@ -199,7 +200,8 @@ export const updateAjustes = async (req, res) => {
   // rechazarlos tumbaría también lo demás, que en la demo sí se puede cambiar.
   const IDENTIDAD_DEL_NEGOCIO = [
     'nombre_negocio', 'rfc', 'ticket_nota_autoservicio', 'ticket_nota_encargo',
-    'ticket_nota_productos', 'whatsapp_mensaje_encargo', 'direccion', 'telefono',
+    'ticket_nota_productos', 'whatsapp_mensaje_encargo', 'whatsapp_mensaje_reaviso',
+    'direccion', 'telefono',
   ];
   const editable = (campo, valor) =>
     valor !== undefined && !(ENTORNO_DEMO && IDENTIDAD_DEL_NEGOCIO.includes(campo));
@@ -235,6 +237,7 @@ export const updateAjustes = async (req, res) => {
   // negocio: es texto libre que sale del negocio hacia el cliente, igual que
   // las notas al pie del ticket, así que en la demo tampoco se toca.
   if (editable('whatsapp_mensaje_encargo', whatsapp_mensaje_encargo)) { updates.push(`whatsapp_mensaje_encargo = $${i++}`); values.push(textoONull(whatsapp_mensaje_encargo)); }
+  if (editable('whatsapp_mensaje_reaviso', whatsapp_mensaje_reaviso)) { updates.push(`whatsapp_mensaje_reaviso = $${i++}`); values.push(textoONull(whatsapp_mensaje_reaviso)); }
   if (editable('direccion', direccion)) { updates.push(`direccion = $${i++}`); values.push(direccion); }
   if (editable('telefono', telefono)) { updates.push(`telefono = $${i++}`); values.push(telefono); }
   if (alerta_ciclo_detenido !== undefined) { updates.push(`alerta_ciclo_detenido = $${i++}`); values.push(Boolean(alerta_ciclo_detenido)); }
