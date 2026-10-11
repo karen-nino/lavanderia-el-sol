@@ -683,7 +683,10 @@ export default function Layout() {
   const location = useLocation();
   const now = useClock();
   // Suena en cualquier pantalla cuando una máquina llega a su tope.
-  useAvisoTopeMaquinas();
+  // Interruptores de Ajustes → Alertas (mig. 156). Sin dato (aún no carga o
+  // falla), todo encendido, como antes.
+  const [ajustesAlertas, setAjustesAlertas] = useState(null);
+  useAvisoTopeMaquinas(ajustesAlertas?.aviso_sonoro_ciclo !== false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [alertsOpen, setAlertsOpen] = useState(false);
   const [confirmLogout, setConfirmLogout] = useState(false);
@@ -705,6 +708,9 @@ export default function Layout() {
         .catch(() => {});
       api.get('/notificaciones')
         .then(data => { if (activo) setNotificaciones(data ?? []); })
+        .catch(() => {});
+      api.get('/ajustes')
+        .then(data => { if (activo && data) setAjustesAlertas(data); })
         .catch(() => {});
     };
     cargar();
@@ -729,9 +735,12 @@ export default function Layout() {
   const sucursalNombre =
     sucursales.find(s => s.slug === sucursalSlug)?.nombre ?? sucursalSlug ?? '—';
 
+  // Con "Alertas de stock" apagado en Ajustes no se arman las de existencia
+  // ni las de granel; las demás de la campana siguen igual.
+  const conAlertaStock = ajustesAlertas?.alerta_stock !== false;
   const alertas = useMemo(() => {
     const orden = { agotado: 0, por_agotarse: 1 };
-    const stock = productos
+    const stock = (conAlertaStock ? productos : [])
       .filter(p => p.estado_stock && p.estado_stock !== 'ok')
       // Firma con el stock actual: si el stock cambia, la firma cambia y la
       // alerta vuelve a mostrarse aunque se hubiera ocultado.
@@ -758,7 +767,7 @@ export default function Layout() {
         };
       });
     // Alertas del líquido a granel (bidón) por acabarse o agotado.
-    const granel = productos
+    const granel = (conAlertaStock ? productos : [])
       // Solo el granel líquido tiene bidón que avisar: el polvo se cuenta en
       // unidades y ya sale en el aviso de existencia.
       .filter(p => p.tipo_liquido === 'granel' && p.forma !== 'polvo' && p.estado_granel && p.estado_granel !== 'ok')
@@ -818,7 +827,7 @@ export default function Layout() {
       };
     });
     return [...stock, ...granel, ...notifs];
-  }, [productos, notificaciones, stockOcultas]);
+  }, [productos, notificaciones, stockOcultas, conAlertaStock]);
 
   const handleDismissAlerta = async (a) => {
     // Alerta de stock (sin id): se oculta solo en esta sesión.

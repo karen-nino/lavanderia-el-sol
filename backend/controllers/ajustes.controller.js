@@ -86,6 +86,11 @@ export const updateAjustes = async (req, res) => {
     direccion,
     telefono,
     alerta_ciclo_detenido,
+    // Interruptores de alertas (mig. 156).
+    alerta_stock,
+    alerta_encendido_manual,
+    alerta_tope_maquina,
+    aviso_sonoro_ciclo,
   } = req.body;
 
   // Validación numérica: sin esto, un precio negativo o texto llega a la
@@ -233,6 +238,15 @@ export const updateAjustes = async (req, res) => {
   if (editable('direccion', direccion)) { updates.push(`direccion = $${i++}`); values.push(direccion); }
   if (editable('telefono', telefono)) { updates.push(`telefono = $${i++}`); values.push(telefono); }
   if (alerta_ciclo_detenido !== undefined) { updates.push(`alerta_ciclo_detenido = $${i++}`); values.push(Boolean(alerta_ciclo_detenido)); }
+  // Interruptores de alertas (mig. 156).
+  for (const [col, v] of [
+    ['alerta_stock', alerta_stock],
+    ['alerta_encendido_manual', alerta_encendido_manual],
+    ['alerta_tope_maquina', alerta_tope_maquina],
+    ['aviso_sonoro_ciclo', aviso_sonoro_ciclo],
+  ]) {
+    if (v !== undefined) { updates.push(`${col} = $${i++}`); values.push(Boolean(v)); }
+  }
 
   if (updates.length === 0) {
     return res.status(400).json({ message: 'No hay cambios que guardar.' });

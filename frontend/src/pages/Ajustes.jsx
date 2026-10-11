@@ -229,6 +229,33 @@ const SECCION_INSTALAR = {
   icon: SectionIcon.instalar,
 };
 
+// Alertas que se pueden apagar en Ajustes → Alertas y Notificaciones (mig. 156),
+// además de "ciclo detenido". Nacen encendidas. Las de dinero y borrados
+// (nota cancelada/eliminada, pago revertido o desmarcado) no se pueden apagar:
+// son el rastro de quién hizo qué.
+const ALERTAS_APAGABLES = [
+  {
+    campo: 'alerta_stock',
+    label: 'Avisar de stock bajo',
+    hint: 'Avisa en la campana cuando un producto se está acabando o se agotó, y cuando el granel del bidón está por terminarse.',
+  },
+  {
+    campo: 'alerta_encendido_manual',
+    label: 'Avisar de máquinas encendidas a mano',
+    hint: 'Avisa en la campana cuando el Sonoff encuentra una máquina prendida sin nota. La máquina se marca ocupada igual.',
+  },
+  {
+    campo: 'alerta_tope_maquina',
+    label: 'Avisar cuando una máquina llega a su tope',
+    hint: 'Avisa en la campana cuando a una máquina se le corta la luz por llegar a su tiempo máximo sin que nadie la finalizara. El corte ocurre igual.',
+  },
+  {
+    campo: 'aviso_sonoro_ciclo',
+    label: 'Sonido de fin de ciclo',
+    hint: 'Suena en cualquier pantalla cuando una máquina termina su ciclo o llega a su tope.',
+  },
+];
+
 // Secciones que no guardan nada: su contenido se administra solo.
 const SECCIONES_SIN_GUARDAR = ['etiquetas', 'inventario', 'instalar'];
 
@@ -1457,6 +1484,8 @@ export default function Ajustes() {
       whatsapp_mensaje_encargo: config.whatsapp_mensaje_encargo ?? '',
     }),
     alerta_ciclo_detenido: !!config.alerta_ciclo_detenido,
+    // Interruptores de alertas (mig. 156): sin dato, encendidos.
+    ...Object.fromEntries(ALERTAS_APAGABLES.map(({ campo }) => [campo, config[campo] !== false])),
   });
 
   const handleGuardarTodo = async () => {
@@ -2032,6 +2061,15 @@ export default function Ajustes() {
         checked={!!config.alerta_ciclo_detenido}
         onChange={(v) => setConfig(prev => ({ ...prev, alerta_ciclo_detenido: v }))}
       />
+      {ALERTAS_APAGABLES.map(({ campo, label, hint }) => (
+        <ToggleRow
+          key={campo}
+          label={label}
+          hint={hint}
+          checked={config[campo] !== false}
+          onChange={(v) => setConfig(prev => ({ ...prev, [campo]: v }))}
+        />
+      ))}
     </Section>
   );
 
@@ -2547,6 +2585,15 @@ export default function Ajustes() {
         checked={!!config.alerta_ciclo_detenido}
         onChange={(v) => setConfig(prev => ({ ...prev, alerta_ciclo_detenido: v }))}
       />
+      {ALERTAS_APAGABLES.map(({ campo, label, hint }) => (
+        <ToggleRow
+          key={campo}
+          label={label}
+          hint={hint}
+          checked={config[campo] !== false}
+          onChange={(v) => setConfig(prev => ({ ...prev, [campo]: v }))}
+        />
+      ))}
     </div>
   );
 

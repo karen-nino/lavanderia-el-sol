@@ -56,9 +56,14 @@ export function hayTopeNuevo(previas, actuales) {
   return actuales.some(c => !previas.has(c));
 }
 
-export function useAvisoTopeMaquinas() {
+// `sonar`: el interruptor "Sonido de fin de ciclo" de Ajustes (mig. 156). Apagado,
+// se siguen llevando las cuentas (para no sonar de golpe al volver a encenderlo
+// por algo que ya había pasado), pero no suena.
+export function useAvisoTopeMaquinas(sonar = true) {
   const [maquinas, setMaquinas] = useState(null); // null = aún no cargan
   const previasRef = useRef(null);
+  const sonarRef = useRef(sonar);
+  useEffect(() => { sonarRef.current = sonar; }, [sonar]);
 
   useEffect(() => {
     prepararAviso();
@@ -77,7 +82,7 @@ export function useAvisoTopeMaquinas() {
     if (maquinas == null) return;
     const revisar = () => {
       const actuales = clavesEnTope(maquinas);
-      if (hayTopeNuevo(previasRef.current, actuales)) reproducirAvisoCiclo();
+      if (hayTopeNuevo(previasRef.current, actuales) && sonarRef.current) reproducirAvisoCiclo();
       previasRef.current = new Set(actuales);
     };
     revisar();

@@ -356,8 +356,10 @@ async function adoptarEncendidoManual(maq) {
     console.warn(`[sonoff] ${maq.nombre ?? maq.id} apareció encendida sin nota: se prendió a mano. No se apaga.`);
     try {
       await pool.query(
+        // Se puede apagar en Ajustes → Alertas (mig. 156); la adopción no.
         `INSERT INTO notificaciones (tipo, mensaje, maquina_id, sucursal)
-         VALUES ('encendido_manual', $1, $2, $3)`,
+         SELECT 'encendido_manual', $1, $2, $3
+          WHERE COALESCE((SELECT alerta_encendido_manual FROM ajustes WHERE id = 1), TRUE)`,
         [`${maq.nombre} se encendió a mano y quedó ocupada`, maq.id, maq.sucursal]
       );
     } catch (err) {
@@ -409,7 +411,9 @@ async function avisarTopeCronometro(maq) {
     await pool.query(
       `INSERT INTO notificaciones (tipo, mensaje, maquina_id, sucursal)
        SELECT 'tope_cronometro', $1, $2, $3
-        WHERE NOT EXISTS (
+        -- Se puede apagar en Ajustes → Alertas (mig. 156); el corte no.
+        WHERE COALESCE((SELECT alerta_tope_maquina FROM ajustes WHERE id = 1), TRUE)
+          AND NOT EXISTS (
           SELECT 1 FROM notificaciones
            WHERE tipo = 'tope_cronometro' AND maquina_id = $2 AND created_at >= $4
         )`,
