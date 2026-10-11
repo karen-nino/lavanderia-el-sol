@@ -328,6 +328,9 @@ export default function Notas() {
   }, [notas, anioActual]);
 
   const filtradas = notas.filter(n => {
+    // Las canceladas solo salen en su propio filtro: en Todos, Por Cobrar o
+    // por servicio no hay nada que hacer con ellas.
+    if (n.estado === 'CANCELADA' && filtro !== 'CANCELADA') return false;
     if (filtro === 'PENDIENTE') {
       if (n.estado_pago !== 'PENDIENTE') return false;
     } else if (filtro === 'POR_ENTREGAR') {
