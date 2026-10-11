@@ -117,6 +117,17 @@ function calcularRangoFecha(rango) {
 // Sufijo del rango de fecha para el mensaje del estado vacío (p. ej. "de hoy"),
 // para que "No hay notas" también se relacione con el filtro de fecha. Con
 // 'TODAS' no agrega nada.
+// Nombre corto del filtro de fecha para su chip ("Hoy", "Marzo 2026", "2025").
+function etiquetaRangoFecha(rango) {
+  if (!rango || rango === 'TODAS') return null;
+  if (rango.startsWith('MES:')) {
+    const [y, m] = rango.slice(4).split('-').map(Number);
+    return `${MESES[m - 1]} ${y}`;
+  }
+  if (rango.startsWith('ANIO:')) return rango.slice(5);
+  return RANGOS_FECHA.find(r => r.value === rango)?.label ?? null;
+}
+
 function sufijoRangoFecha(rango) {
   if (!rango || rango === 'TODAS') return '';
   if (rango.startsWith('MES:')) {
@@ -211,6 +222,24 @@ function fmtCliente(n) {
   if (!n.cliente_nombre) return n.referencia || null;
   const ap = (n.cliente_apellido ?? '').trim();
   return ap ? `${n.cliente_nombre} ${ap}` : n.cliente_nombre;
+}
+
+function ChipFiltro({ label, onQuitar }) {
+  return (
+    <span className="inline-flex items-center gap-1 pl-3 pr-1 py-1 rounded-pill bg-light-blue text-blue-700 text-sm font-medium">
+      {label}
+      <button
+        type="button"
+        onClick={onQuitar}
+        aria-label={`Quitar filtro ${label}`}
+        className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-blue-100 transition-colors"
+      >
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+    </span>
+  );
 }
 
 export default function Notas() {
@@ -600,6 +629,25 @@ export default function Notas() {
           className="w-full pl-11 pr-4 py-3.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent bg-white transition"
         />
       </div>
+
+      {/* Filtros activos (2026-10-11): dicen qué se está viendo y se quitan
+          de un toque con su ✕, sin abrir el menú. Sin filtros, no se pintan. */}
+      {(filtro !== 'TODOS' || rangoFecha !== 'TODAS') && (
+        <div className="flex flex-wrap justify-center gap-2">
+          {filtro !== 'TODOS' && (
+            <ChipFiltro
+              label={FILTRO_LABEL[filtro] ?? BADGE_ESTADO[filtro]?.label}
+              onQuitar={() => { setFiltro('TODOS'); setPagina(1); }}
+            />
+          )}
+          {etiquetaRangoFecha(rangoFecha) && (
+            <ChipFiltro
+              label={etiquetaRangoFecha(rangoFecha)}
+              onQuitar={() => { setRangoFecha('TODAS'); setPagina(1); }}
+            />
+          )}
+        </div>
+      )}
 
       {loading && (
         <div className="flex justify-center py-12">
