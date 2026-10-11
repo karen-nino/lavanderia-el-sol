@@ -63,7 +63,8 @@ export async function ventasDeSesion(client, cajaId) {
 // reparte entre las partes de su nota, en proporción a lo que vale cada una:
 //   · Por Encargo → se cobra por servicio, no por máquina: los servicios de
 //     Edredón (sus tamaños incluyen el Cubre Colchón, mig. 130) van a
-//     `edredon` y los demás a `por_encargo`;
+//     `edredon`, los demás a `por_encargo`, y los productos de marca que se
+//     cobran encima del servicio a `productos`;
 //   · lo demás → lavadoras medianas / jumbo (por el tipo de la primera máquina
 //     del hueco; sin ella, por el tamaño pedido; el edredón, siempre jumbo),
 //     secadoras y productos.
@@ -105,11 +106,16 @@ export async function repartirCobros(client, cobrosSql, params) {
      )
      SELECT pn.monto, n.tipo_servicio,
             COALESCE(c.encargo_edredon, 0) AS edredon,
-            COALESCE(c.encargo_otros, 0) + COALESCE(sueltos.marca, 0) AS por_encargo,
+            COALESCE(c.encargo_otros, 0) AS por_encargo,
             COALESCE(c.lav_mediana, 0) AS lavadoras_medianas,
             COALESCE(c.lav_jumbo, 0)   AS lavadoras_jumbo,
             COALESCE(c.secadoras, 0)   AS secadoras,
-            COALESCE(c.productos, 0) + COALESCE(sueltos.total, 0) AS productos
+            -- En Por Encargo solo se cobra aparte lo que se vende por unidad
+            -- (marca y polvo); lo demás ya va en el precio del servicio.
+            CASE WHEN n.tipo_servicio = 'POR_ENCARGO'
+                 THEN COALESCE(c.encargo_productos, 0) + COALESCE(sueltos.marca, 0)
+                 ELSE COALESCE(c.productos, 0) + COALESCE(sueltos.total, 0)
+            END AS productos
        FROM por_nota pn
        JOIN notas n ON n.id = pn.nota_id
        LEFT JOIN LATERAL (
@@ -123,7 +129,8 @@ export async function repartirCobros(client, cobrosSql, params) {
                 SUM(v.encargo) FILTER (WHERE UPPER(COALESCE(nc.tipo_prenda, '')) = 'EDREDON')
                                                                    AS encargo_edredon,
                 SUM(v.encargo) FILTER (WHERE UPPER(COALESCE(nc.tipo_prenda, '')) <> 'EDREDON')
-                                                                   AS encargo_otros
+                                                                   AS encargo_otros,
+                SUM(v.encargo_productos)                           AS encargo_productos
            FROM nota_cargas nc
            CROSS JOIN LATERAL (
              SELECT COALESCE(SUM(np.cantidad * np.precio_unitario), 0) AS todos,
@@ -134,10 +141,14 @@ export async function repartirCobros(client, cobrosSql, params) {
               WHERE np.carga_id = nc.id
            ) pc
            CROSS JOIN LATERAL (
+             -- El servicio por un lado y, aparte, los productos que se cobran
+             -- encima de él (van a Productos, 2026-10-10).
              SELECT GREATEST(0, CASE WHEN nc.precio_tope IS NOT NULL
-                                     THEN nc.precio_tope + pc.marca
-                                     ELSE nc.precio_lavadora + nc.precio_secadora + pc.todos
-                                END + nc.ajuste) AS encargo
+                                     THEN nc.precio_tope
+                                     ELSE nc.precio_lavadora + nc.precio_secadora
+                                END + nc.ajuste) AS encargo,
+                    CASE WHEN nc.precio_tope IS NOT NULL THEN pc.marca ELSE pc.todos END
+                                                     AS encargo_productos
            ) v
            LEFT JOIN maquinas ml ON ml.id = nc.lavadora_id
            CROSS JOIN LATERAL (
@@ -168,7 +179,7 @@ export async function repartirCobros(client, cobrosSql, params) {
   );
 
   const MOSTRADOR = ['productos', 'lavadoras_medianas', 'lavadoras_jumbo', 'secadoras'];
-  const ENCARGO = ['por_encargo', 'edredon'];
+  const ENCARGO = ['por_encargo', 'edredon', 'productos'];
   const cent = {
     lavadoras_medianas: 0, lavadoras_jumbo: 0, secadoras: 0, productos: 0, edredon: 0, por_encargo: 0,
   };

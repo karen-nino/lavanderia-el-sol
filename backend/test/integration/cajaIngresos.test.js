@@ -170,5 +170,23 @@ describe('GET /api/caja/actual — ingresos', () => {
     const { totales } = (await api('get', '/api/caja/actual')).body;
     expect(totales.ingresos).toMatchObject({ lavadoras_jumbo: 80, lavadoras_medianas: 0 });
   });
+
+  it('en Por Encargo, el producto de marca cobrado aparte va a Productos, no a SPE', async () => {
+    const marca = await seedProducto({ nombre: 'ARIEL', precio_unitario: 25, precio_botella: 25, tipo_liquido: 'marca' });
+    const cli = await seedCliente();
+    const nota = await api('post', '/api/notas', {
+      tipo_servicio: 'POR_ENCARGO', cliente_id: cli, tipo_prenda: 'ROPA',
+      estado_pago: 'PENDIENTE', cargas: [{ lavadora_tipo: 'mediana' }],
+    }).expect(201);                                                           // servicio 70
+    await api('post', `/api/notas/${nota.body.id}/productos`, { producto_id: marca, cantidad: 1 }).expect(201);
+    const total = Number((await api('get', `/api/notas/${nota.body.id}`)).body.precio_total);
+    await api('patch', `/api/notas/${nota.body.id}/estado-pago`,
+      { estado_pago: 'PAGADO', forma_pago: 'EFECTIVO' }).expect(200);
+
+    const { totales } = (await api('get', '/api/caja/actual')).body;
+    expect(totales.ingresos.por_encargo).toBe(70);
+    expect(totales.ingresos.productos).toBe(total - 70);
+    expect(totales.ingresos.productos).toBeGreaterThan(0);
+  });
 });
 
