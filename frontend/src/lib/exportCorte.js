@@ -157,15 +157,19 @@ const tablaMovimientos = (c) => {
     </table>`;
 };
 
-// Una tabla de Ingresos, Egresos o Desglose con su renglón de total.
-const tablaLineas = (titulo, lineas, totalLabel, total) => `
+// Una tabla de Ingresos, Egresos o Desglose con su renglón de total. `aparte`
+// ({ titulo, lineas }) son renglones informativos que no se suman (Cómo se
+// cobró), con su subtítulo debajo del total.
+const filaLinea = (l) => `
+        <tr><td>${esc(l.label)}${l.nota ? ` <span class="nota">(${esc(l.nota)})</span>` : ''}</td>
+          <td class="r">${l.sign}${fmtMoneda(l.value)}</td></tr>`;
+const tablaLineas = (titulo, lineas, totalLabel, total, aparte = null) => `
     <p class="seccion">${esc(titulo)}</p>
     <table class="desglose">
       <tbody>
-        ${lineas.map((l) => `
-        <tr><td>${esc(l.label)}${l.nota ? ` <span class="nota">(${esc(l.nota)})</span>` : ''}</td>
-          <td class="r">${l.sign}${fmtMoneda(l.value)}</td></tr>`).join('')}
+        ${lineas.map(filaLinea).join('')}
         <tr class="tot"><td>${esc(totalLabel)}</td><td class="r">${fmtMoneda(total)}</td></tr>
+        ${aparte ? `<tr class="sub"><td colspan="2">${esc(aparte.titulo)}</td></tr>${aparte.lineas.map(filaLinea).join('')}` : ''}
       </tbody>
     </table>`;
 
@@ -179,7 +183,8 @@ export const bloqueDetalle = (c) => {
       <h2>${esc(fechaLarga(fechaCorte(c)))}${c.en_curso ? ' · turno en curso' : ''}</h2>
       <span class="hora">${esc(formatHora12(c.abierta_at))} – ${esc(horaCierre(c))}</span>
     </div>
-    ${tablaLineas('Ingresos', d.ingresos, 'Total ingresos', d.totalIngresos)}
+    ${tablaLineas('Ingresos', d.ingresos, 'Total ingresos', d.totalIngresos,
+    { titulo: 'Cómo se cobró', lineas: d.comoSeCobro })}
     ${(c.ventas_desglose?.tarjeta ?? 0) > 0
       ? `<p class="nota">Además, cobrado con tarjeta (fuera del cajón): ${fmtMoneda(c.ventas_desglose.tarjeta)}</p>`
       : ''}

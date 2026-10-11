@@ -9,6 +9,11 @@ const turno = {
 };
 
 describe('desgloseCaja', () => {
+  it('los renglones de Ingresos suman su total (Cómo se cobró va aparte)', () => {
+    const d = desgloseCaja(turno);
+    expect(d.ingresos.reduce((a, l) => a + l.value, 0)).toBe(d.totalIngresos);
+  });
+
   it('Ingresos − Egresos da el esperado; la transferencia y el SPE Debe no cuentan', () => {
     const d = desgloseCaja(turno);
     expect(d.totalIngresos).toBe(510);   // 200 + 210 + 100
@@ -20,7 +25,10 @@ describe('desgloseCaja', () => {
   it('lleva las líneas en el orden pedido', () => {
     expect(desgloseCaja(turno).ingresos.map((l) => l.label)).toEqual([
       'Caja inicial', 'Entradas', 'Lavadoras Medianas', 'Lavadoras Jumbo', 'Secadoras',
-      'SPE', 'Edredón', 'Productos', 'Ventas en efectivo', 'Ventas por transferencia',
+      'SPE', 'Edredón', 'Productos',
+    ]);
+    expect(desgloseCaja(turno).comoSeCobro.map((l) => [l.label, l.value])).toEqual([
+      ['Efectivo', 210], ['Transferencia', 70],
     ]);
     expect(desgloseCaja(turno).egresos.map((l) => l.label)).toEqual(['SPE Debe', 'Gastos']);
   });
@@ -28,6 +36,8 @@ describe('desgloseCaja', () => {
   it('sin reparto ni SPE Debe (corte viejo) omite esas líneas', () => {
     const d = desgloseCaja({ ...turno, ingresos: null, spe_debe: null });
     expect(d.ingresos.map((l) => l.label)).not.toContain('Lavadoras Medianas');
+    expect(d.ingresos.map((l) => l.label)).toContain('Ventas en efectivo');
+    expect(d.ingresos.reduce((a, l) => a + l.value, 0)).toBe(d.totalIngresos);
     expect(d.egresos.map((l) => l.label)).toEqual(['Gastos']);
     expect(d.esperado).toBe(465);
   });

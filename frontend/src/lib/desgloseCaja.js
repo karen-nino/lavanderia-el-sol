@@ -9,10 +9,11 @@
 //     spe_debe: number | null }
 //
 // Reglas (decisiones de la usuaria):
-//   · las líneas de máquina, productos, SPE y edredón son el DESGLOSE de las
-//     ventas en efectivo: van en su renglón pero no se suman otra vez;
-//   · la transferencia y el SPE Debe se informan, pero no entran ni salen del
-//     cajón, así que no cuentan en los totales;
+//   · las líneas de máquina, SPE, edredón y productos son las ventas en
+//     efectivo por concepto: ESAS se suman en Ingresos;
+//   · "Cómo se cobró" (efectivo y transferencia, como en Ventas) se informa
+//     aparte y no se suma; la transferencia y el SPE Debe no entran ni salen
+//     del cajón, así que no cuentan en los totales;
 //   · TOTAL INGRESOS − TOTAL EGRESOS = ESPERADO EN CAJA.
 
 const num = (v) => Number(v ?? 0) || 0;
@@ -41,12 +42,16 @@ export function desgloseCaja(t) {
   const ingresos = [
     { label: 'Caja inicial', value: num(t.monto_inicial), sign: '' },
     { label: 'Entradas',     value: num(t.entradas),      sign: '+' },
-    ...(ing ? lineasConcepto(ing).map((l) => ({ ...l, sign: '' })) : []),
-    { label: 'Ventas en efectivo', value: efectivo, sign: '+' },
-    {
-      label: 'Ventas por transferencia', value: num(t.ventas_desglose?.transferencia),
-      sign: '', nota: 'No entra al cajón',
-    },
+    // Sin reparto (respaldo por si faltara el dato) se suma el efectivo en un
+    // solo renglón, para que el total se siga viendo completo.
+    ...(ing
+      ? lineasConcepto(ing).map((l) => ({ ...l, sign: '' }))
+      : [{ label: 'Ventas en efectivo', value: efectivo, sign: '+' }]),
+  ];
+  // Informativo, como "Cómo se cobró" de Ventas: no se suma.
+  const comoSeCobro = [
+    { label: 'Efectivo',      value: efectivo, sign: '' },
+    { label: 'Transferencia', value: num(t.ventas_desglose?.transferencia), sign: '', nota: 'No entra al cajón' },
   ];
   const totalIngresos = num(t.monto_inicial) + efectivo + num(t.entradas);
 
@@ -61,6 +66,7 @@ export function desgloseCaja(t) {
 
   return {
     ingresos,
+    comoSeCobro,
     totalIngresos,
     egresos,
     totalEgresos,
