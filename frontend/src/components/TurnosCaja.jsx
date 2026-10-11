@@ -39,12 +39,21 @@ function TarjetaTurno({ t }) {
           </svg>
         </div>
         <div className="mt-3 grid grid-cols-[1fr_auto] gap-x-4 gap-y-1 text-sm">
+          <span className="text-gray-500">Caja inicial</span>
+          <span className="text-right text-gray-700">{fmt(t.monto_inicial)}</span>
           <span className="text-gray-500">Ingresos</span>
           <span className="text-right text-gray-700">{fmt(d.totalIngresos)}</span>
           <span className="text-gray-500">Egresos</span>
           <span className="text-right text-gray-700">−{fmt(d.totalEgresos)}</span>
           <span className="font-semibold text-gray-800">{t.en_curso ? 'Esperado hasta ahora' : 'Esperado en caja'}</span>
           <span className="text-right font-semibold text-gray-900">{fmt(d.esperado)}</span>
+          {/* Lo que quedó en el cajón y lo que se apartó al cerrar (mig. 151).
+              Sin dato en el turno abierto, en el cierre automático y en los
+              cortes de antes: "—". */}
+          <span className="text-gray-500">Caja final</span>
+          <span className="text-right text-gray-700">{t.caja_final != null ? fmt(t.caja_final) : '—'}</span>
+          <span className="text-gray-500">Sobre</span>
+          <span className="text-right text-gray-700">{t.sobre != null ? fmt(t.sobre) : '—'}</span>
         </div>
       </button>
       {abierto && (
