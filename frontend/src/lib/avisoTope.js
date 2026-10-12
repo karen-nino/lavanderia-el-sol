@@ -17,7 +17,9 @@ import { api } from './api';
 import { prepararAviso, reproducirAvisoCiclo } from './avisoSonoro';
 
 const REFRESCO_MS = 30_000; // cada cuánto se vuelve a pedir la lista de máquinas
-const REVISION_MS = 5_000;  // cada cuánto se compara con el reloj
+// Cada segundo (2026-10-11): la máquina se finaliza sola 1 s después de su
+// tope, y el sonido tiene que ganarle al refresco que la quita de la lista.
+const REVISION_MS = 1_000;  // cada cuánto se compara con el reloj
 
 // Máquinas que ya cumplieron su tiempo, como claves "id:en_uso_desde": la
 // misma máquina en otro encendido es otra clave, así que vuelve a sonar.

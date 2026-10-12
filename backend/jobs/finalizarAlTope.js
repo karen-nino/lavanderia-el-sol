@@ -10,16 +10,17 @@ import { terminarLavadoFinal, terminarSecado } from '../controllers/notas.contro
 // terminarSecado), así que pasa exactamente lo mismo: se libera la máquina, se
 // cierra la carga, la nota avanza (o se cierra) y el granel se descuenta.
 //
-// GRACIA: se espera medio minuto después del tope. El aviso sonoro de la app
-// (lib/avisoTope.js) suena con el reloj del equipo y la lista que pidió hace
-// como mucho 30 s; con ese margen siempre alcanza a sonar antes de que la
-// tarjeta desaparezca, y el sonido queda como "esta se finalizó por tope".
+// GRACIA: 1 s después del tope (a pedido, 2026-10-11; primero eran 30 s). El
+// aviso sonoro de la app (lib/avisoTope.js) suena con el reloj del equipo,
+// revisándolo cada segundo con la última lista que pidió: suena en el tope y
+// la tarjeta desaparece en el siguiente refresco. El sonido queda como "esta
+// se finalizó por tope".
 //
 // Solo con cronómetro (con temporizador la tarjeta de ciclo terminado espera
 // a la persona, como siempre). Las de solo fichas no tienen tope (mig. 149) y
 // la encendida a mano sin nota no tiene carga que cerrar.
-const INTERVALO_MS = 30 * 1000;
-const GRACIA_SEGUNDOS = 30;
+const INTERVALO_MS = 2 * 1000; // una consulta chica: cabe correrla seguido
+const GRACIA_SEGUNDOS = 1;
 
 export async function finalizarMaquinasAlTope() {
   const { rows } = await pool.query(

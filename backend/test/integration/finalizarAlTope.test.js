@@ -1,6 +1,5 @@
 // Máquina con nota que llega a su TOPE: se finaliza sola, igual que con el
-// botón FINALIZAR (2026-10-11). Medio minuto de gracia para que el aviso sonoro
-// de la app suene antes de que la tarjeta desaparezca.
+// botón FINALIZAR (2026-10-11), 1 s después del tope.
 import { describe, it, expect, beforeEach } from 'vitest';
 import request from 'supertest';
 import app from '../../app.js';
@@ -49,7 +48,7 @@ const estadoNota = async (id) => (await pool.query('SELECT estado FROM notas WHE
 
 describe('finalizar al llegar al tope', () => {
   it('lavadora pasada de su tope: se libera y la nota pagada se finaliza', async () => {
-    const { notaId, maq } = await corriendo('lavadora', { hace: 31 }); // tope 30 + gracia
+    const { notaId, maq } = await corriendo('lavadora', { hace: 31 });
     const hechas = await finalizarMaquinasAlTope();
     expect(hechas).toHaveLength(1);
     expect(await estadoMaquina(maq)).toBe('disponible');
@@ -69,15 +68,20 @@ describe('finalizar al llegar al tope', () => {
     expect(await estadoMaquina(maq)).toBe('disponible');
   });
 
-  it('antes del tope, o en la media minuto de gracia, no se toca', async () => {
+  it('antes del tope no se toca; pasado 1 s, sí', async () => {
     const antes = await corriendo('lavadora', { hace: 20 });
     expect(await finalizarMaquinasAlTope()).toHaveLength(0);
     expect(await estadoMaquina(antes.maq)).toBe('en_uso');
 
-    // Justo en el tope: todavía dentro de la gracia (para que suene el aviso).
-    await pool.query(`UPDATE maquinas SET en_uso_desde = NOW() - interval '30 minutes 10 seconds' WHERE id = $1`, [antes.maq]);
+    // A punto de llegar: todavía no.
+    await pool.query(`UPDATE maquinas SET en_uso_desde = NOW() - interval '29 minutes 58 seconds' WHERE id = $1`, [antes.maq]);
     expect(await finalizarMaquinasAlTope()).toHaveLength(0);
     expect(await estadoMaquina(antes.maq)).toBe('en_uso');
+
+    // 2 s pasado el tope: ya se finaliza.
+    await pool.query(`UPDATE maquinas SET en_uso_desde = NOW() - interval '30 minutes 2 seconds' WHERE id = $1`, [antes.maq]);
+    expect(await finalizarMaquinasAlTope()).toHaveLength(1);
+    expect(await estadoMaquina(antes.maq)).toBe('disponible');
   });
 
   it('la encendida a mano sin nota no se toca', async () => {
