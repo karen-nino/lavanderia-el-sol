@@ -48,7 +48,20 @@ export async function versionPublicada() {
 // Trae la versión nueva. Borra las cachés del service worker —ahí viven el
 // index.html y los archivos del build anterior— y recarga: al volver a pedir la
 // página, el HTML nuevo apunta a los archivos nuevos y el teléfono los baja.
+//
+// También se da de baja el service worker antes de recargar (2026-10-11): si
+// no, la recarga pasa todavía por el viejo y, en iPhone, con las cachés recién
+// borradas y la red lenta, la página se quedaba en blanco. main.jsx lo vuelve a
+// registrar al cargar la versión nueva.
 export async function aplicarActualizacion() {
+  try {
+    if ('serviceWorker' in navigator) {
+      const registros = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(registros.map(r => r.unregister()));
+    }
+  } catch {
+    // Sin permiso para tocarlo: se sigue con las cachés y la recarga.
+  }
   try {
     if ('caches' in window) {
       const claves = await caches.keys();

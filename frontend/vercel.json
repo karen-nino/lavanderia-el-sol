@@ -31,6 +31,6 @@
     { "source": "/api/:ruta*", "destination": "https://lavanderia-el-sol-demo.fly.dev/api/:ruta*" },
     { "source": "/uploads/:ruta*", "destination": "https://lavanderia-el-sol-demo.fly.dev/uploads/:ruta*" },
 
-    { "source": "/(.*)", "destination": "/index.html" }
+    { "source": "/((?!assets/).*)", "destination": "/index.html" }
   ]
 }

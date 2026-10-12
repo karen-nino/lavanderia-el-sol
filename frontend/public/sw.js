@@ -14,7 +14,11 @@
 // Tampoco intenta funcionar sin internet. La app entera vive del API: sin red
 // no hay nada útil que mostrar, y fingir lo contrario confunde.
 
-const VERSION = 'v1';
+// Subirla cambia el contenido de este archivo: así el navegador instala el
+// service worker nuevo y el `activate` borra las cachés anteriores. v2
+// (2026-10-11): limpia los archivos de la app que se guardaron con HTML
+// adentro y dejaban la pantalla en blanco (ver `esHtml`).
+const VERSION = 'v2';
 const CACHE = `el-sol-${VERSION}`;
 
 // El armazón mínimo para que la app arranque estando cacheada.
@@ -47,6 +51,12 @@ const esDatos = (url) => url.pathname.startsWith('/api/') || url.pathname.starts
 // existe, el contenido nunca cambia.
 const esAssetConHash = (url) => url.pathname.startsWith('/assets/');
 
+// Un archivo de la app que ya no existe (de un despliegue anterior) puede
+// volver como la página HTML de la SPA con 200. Guardarlo bajo el nombre del
+// .js dejaba a la app intentando correr HTML: pantalla en blanco, y para
+// siempre, porque se servía de la caché (2026-10-11). Eso no se guarda.
+const esHtml = (res) => (res.headers.get('content-type') || '').includes('text/html');
+
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   if (request.method !== 'GET') return;
@@ -58,7 +68,7 @@ self.addEventListener('fetch', (event) => {
   if (esAssetConHash(url)) {
     event.respondWith(
       caches.match(request).then((hit) => hit || fetch(request).then((res) => {
-        if (res.ok) {
+        if (res.ok && !esHtml(res)) {
           const copia = res.clone();
           caches.open(CACHE).then((cache) => cache.put(request, copia));
         }
