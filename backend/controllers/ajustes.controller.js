@@ -4,6 +4,7 @@ import path from 'path';
 import fs from 'fs';
 import { esAdmin } from '../middleware/roles.js';
 import { ENTORNO_DEMO } from '../utils/entorno.js';
+import { cronometroActivo } from '../db/sqlMaquina.js';
 
 // Crear carpeta uploads/logo/ si no existe
 const uploadsDir = './uploads/logo';
@@ -42,7 +43,10 @@ export const getAjustes = async (req, res) => {
     // En la DEMO el logo no se enseña nunca, ni aunque la columna traiga uno de
     // antes: su archivo vive en un disco que se recicla cada vez que la máquina
     // duerme, así que lo único que se vería es una imagen rota.
-    res.json(ENTORNO_DEMO ? { ...rows[0], logo_url: null } : rows[0]);
+    const ajustes = ENTORNO_DEMO ? { ...rows[0], logo_url: null } : rows[0];
+    // El modo de las máquinas (MAQUINAS_CRONOMETRO, sin columna): Ajustes
+    // esconde lo que solo sirve con temporizador (2026-10-11).
+    res.json({ ...ajustes, cronometro: cronometroActivo() });
   } catch (err) {
     console.error('getAjustes error:', err);
     res.status(500).json({ message: 'No se pudieron cargar los ajustes. Intenta de nuevo.' });

@@ -2139,12 +2139,16 @@ export default function Ajustes() {
     <Section titulo="Alertas y Notificaciones">
       {/* El mínimo global de stock se quitó (2026-10-03): cada producto lleva
           el suyo en Inventario y el global ya no entraba en ningún cálculo. */}
-      <ToggleRow
-        label="Avisar cuando se detenga un ciclo"
-        hint="Cuando alguien detenga una máquina con 'Detener ciclo', aparecerá una alerta en el Dashboard."
-        checked={!!config.alerta_ciclo_detenido}
-        onChange={(v) => setConfig(prev => ({ ...prev, alerta_ciclo_detenido: v }))}
-      />
+      {/* "Detener ciclo" solo existe con TEMPORIZADOR: con cronómetro se
+          esconde (2026-10-11), y vuelve solo en la demo o si se regresa a él. */}
+      {config.cronometro === false && (
+        <ToggleRow
+          label="Avisar cuando se detenga un ciclo"
+          hint="Cuando alguien detenga una máquina con 'Detener ciclo', aparecerá una alerta en el Dashboard."
+          checked={!!config.alerta_ciclo_detenido}
+          onChange={(v) => setConfig(prev => ({ ...prev, alerta_ciclo_detenido: v }))}
+        />
+      )}
       {ALERTAS_APAGABLES.map(({ campo, label, hint }) => (
         <ToggleRow
           key={campo}
@@ -2675,12 +2679,16 @@ export default function Ajustes() {
 
   const seccionAlertasMobile = (
     <div className="space-y-6">
-      <ToggleRow
-        label="Avisar cuando se detenga un ciclo"
-        hint="Cuando alguien detenga una máquina con 'Detener ciclo', aparecerá una alerta en el Dashboard."
-        checked={!!config.alerta_ciclo_detenido}
-        onChange={(v) => setConfig(prev => ({ ...prev, alerta_ciclo_detenido: v }))}
-      />
+      {/* "Detener ciclo" solo existe con TEMPORIZADOR: con cronómetro se
+          esconde (2026-10-11), y vuelve solo en la demo o si se regresa a él. */}
+      {config.cronometro === false && (
+        <ToggleRow
+          label="Avisar cuando se detenga un ciclo"
+          hint="Cuando alguien detenga una máquina con 'Detener ciclo', aparecerá una alerta en el Dashboard."
+          checked={!!config.alerta_ciclo_detenido}
+          onChange={(v) => setConfig(prev => ({ ...prev, alerta_ciclo_detenido: v }))}
+        />
+      )}
       {ALERTAS_APAGABLES.map(({ campo, label, hint }) => (
         <ToggleRow
           key={campo}

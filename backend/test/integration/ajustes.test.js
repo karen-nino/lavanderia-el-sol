@@ -14,6 +14,19 @@ beforeEach(async () => {
 });
 
 describe('GET /api/ajustes', () => {
+  it('dice si las máquinas van con cronómetro o temporizador (2026-10-11)', async () => {
+    const antes = process.env.MAQUINAS_CRONOMETRO;
+    try {
+      delete process.env.MAQUINAS_CRONOMETRO;
+      expect((await request(app).get('/api/ajustes').set(auth(admin.token))).body.cronometro).toBe(true);
+      process.env.MAQUINAS_CRONOMETRO = 'off';
+      expect((await request(app).get('/api/ajustes').set(auth(admin.token))).body.cronometro).toBe(false);
+    } finally {
+      if (antes === undefined) delete process.env.MAQUINAS_CRONOMETRO;
+      else process.env.MAQUINAS_CRONOMETRO = antes;
+    }
+  });
+
   it('devuelve la fila de ajustes', async () => {
     const res = await request(app).get('/api/ajustes').set(auth(admin.token));
     expect(res.status).toBe(200);
