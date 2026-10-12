@@ -15,25 +15,10 @@ function formatearCliente(nombre, apellido) {
   return `${n} ${a[0].toUpperCase()}.`;
 }
 
-// Tamaño dicho para el mostrador.
-const TAMANO_LABEL = { mediana: 'Mediana', jumbo: 'Jumbo' };
-
-// Nombre de la máquina en la cabecera y, debajo, su marca y tamaño
-// (2026-10-03): "LG · Mediana". Sin modelo, a pedido. Si no cabe se corta y el
-// texto completo queda en el title.
+// Solo el nombre de la máquina en la cabecera (2026-10-11, a pedido; desde el
+// 2026-10-03 llevaba debajo su marca y tamaño, "LG · Mediana").
 function NombreMaquina({ maquina, className }) {
-  const tamano = TAMANO_LABEL[String(maquina.tamano ?? '').toLowerCase()] ?? null;
-  const detalle = [maquina.marca, tamano].filter(Boolean).join(' · ');
-  return (
-    <>
-      <span className={className}>{maquina.nombre}</span>
-      {detalle && (
-        <span className="max-w-full truncate text-xs font-medium opacity-90 leading-tight" title={detalle}>
-          {detalle}
-        </span>
-      )}
-    </>
-  );
+  return <span className={className}>{maquina.nombre}</span>;
 }
 
 export default function MachineCard({

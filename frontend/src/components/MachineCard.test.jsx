@@ -10,11 +10,11 @@ describe('MachineCard', () => {
     expect(screen.getByText('Disponible')).toBeInTheDocument();
   });
 
-  it('debajo del nombre dice su marca y tamaño', () => {
+  it('solo dice el nombre: ni marca, ni tamaño, ni modelo', () => {
     render(<MachineCard maquina={{ nombre: 'L1', estado: 'disponible', marca: 'LG', modelo: 'WM22WV26SR', tamano: 'mediana' }} />);
-    const detalle = screen.getByText('LG · Mediana');
-    expect(detalle).toHaveAttribute('title', 'LG · Mediana');
-    // El modelo no se muestra.
+    expect(screen.getByText('L1')).toBeInTheDocument();
+    expect(screen.queryByText(/LG/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Mediana/)).not.toBeInTheDocument();
     expect(screen.queryByText(/WM22WV26SR/)).not.toBeInTheDocument();
   });
 
