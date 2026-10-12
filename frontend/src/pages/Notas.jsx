@@ -898,7 +898,7 @@ export default function Notas() {
                 >
                   {/* Folio + estado */}
                   <div className="flex items-start justify-between gap-2 pb-2">
-                    <p className="text-md font-bold text-dark-blue">#{n.folio?.split('-')[0] ?? n.id}</p>
+                    <p className="text-md font-bold text-dark-blue/70">#{n.folio?.split('-')[0] ?? n.id}</p>
                     {lavandoYSecando ? (
                       <div className="flex flex-col items-end gap-1">
                         <span className={`text-xs font-bold tracking-wide px-3 py-1 rounded-pill ${BADGE_ESTADO.LAVANDO.cls}`}>
