@@ -18,7 +18,7 @@ import { formatHora12 } from './fecha';
 export const COMODINES_WHATSAPP = [
   { clave: 'Nombre', descripcion: 'El nombre de pila del cliente, sin apellidos' },
   { clave: 'Tiempo', descripcion: 'La hora a la que se levantó la nota' },
-  { clave: 'Clave',  descripcion: 'El número de la nota, sin la fecha y con números anchos (１７９６ de 1796-260926)' },
+  { clave: 'Clave',  descripcion: 'El número de la nota, sin la fecha, con números anchos y en negritas (１７９６ de 1796-260926)' },
   { clave: 'ClaveEmoji', descripcion: 'La misma clave con emojis de números (1️⃣7️⃣9️⃣6️⃣)' },
   { clave: 'Horario', descripcion: 'La hora a la que cierra HOY la sucursal, según su horario (7:00 pm)' },
 ];
@@ -90,12 +90,23 @@ const normalizar = (s) =>
 //
 // Un comodín conocido pero sin dato (una nota sin cliente) se va en blanco: el
 // mensaje no puede decir "*Nombre*" a un cliente de verdad.
+// Comodines que salen SIEMPRE en negritas de WhatsApp (2026-10-11): la clave,
+// para que llame la atención sin tener que acordarse de los asteriscos.
+const EN_NEGRITAS = new Set(['clave']);
+
 // `ahora` decide el día de *Horario*; solo las pruebas lo pasan.
 export function armarMensajeWhatsapp(plantilla, nota, ahora = new Date()) {
   if (!plantilla) return '';
-  return String(plantilla).replace(/\*([^*\n]+)\*/g, (completo, dentro) => {
-    const valor = VALORES[normalizar(dentro)];
-    return valor ? valor(nota, ahora) : completo;
+  const texto = String(plantilla);
+  return texto.replace(/\*([^*\n]+)\*/g, (completo, dentro, pos) => {
+    const clave = normalizar(dentro);
+    const valor = VALORES[clave];
+    if (!valor) return completo;
+    const v = valor(nota, ahora);
+    // Si la plantilla ya lo rodea con otro par (**Clave**), esos asteriscos
+    // ya ponen las negritas: duplicarlos los dejaría visibles en el chat.
+    const yaRodeado = texto[pos - 1] === '*' && texto[pos + completo.length] === '*';
+    return EN_NEGRITAS.has(clave) && v && !yaRodeado ? `*${v}*` : v;
   });
 }
 

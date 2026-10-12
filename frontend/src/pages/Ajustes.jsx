@@ -172,7 +172,15 @@ function PreviaWhatsapp({ plantilla }) {
       <p className="text-xs font-semibold text-green-800 uppercase tracking-wide">
         Así le llegaría a Ana López
       </p>
-      <p className="mt-1.5 text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">{texto}</p>
+      {/* Las negritas de WhatsApp (*texto*) se ven como negritas, igual que
+          en el chat, en vez de enseñar los asteriscos (2026-10-11). */}
+      <p className="mt-1.5 text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">
+        {texto.split(/(\*[^*\n]+\*)/g).map((trozo, i) => (
+          /^\*[^*\n]+\*$/.test(trozo)
+            ? <strong key={i} className="font-bold">{trozo.slice(1, -1)}</strong>
+            : trozo
+        ))}
+      </p>
     </div>
   );
 }

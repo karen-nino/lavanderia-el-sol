@@ -30,11 +30,11 @@ describe('armarMensajeWhatsapp', () => {
 
   // La clave con la que el cliente recoge: el folio sin la fecha.
   it('*Clave* es el número de la nota, sin lo que va tras el guion', () => {
-    expect(armarMensajeWhatsapp('Tu clave es *Clave*.', nota)).toBe('Tu clave es １７９６.');
+    expect(armarMensajeWhatsapp('Tu clave es *Clave*.', nota)).toBe('Tu clave es *１７９６*.');
   });
 
   it('*Clave* se cae al id cuando la nota todavía no tiene folio', () => {
-    expect(armarMensajeWhatsapp('*Clave*', { id: 42 })).toBe('４２');
+    expect(armarMensajeWhatsapp('*Clave*', { id: 42 })).toBe('*４２*');
     expect(armarMensajeWhatsapp('*Clave*', {})).toBe('');
   });
 
@@ -122,6 +122,16 @@ describe('*Horario*', () => {
 describe('*ClaveEmoji*', () => {
   it('pone la clave con emojis de números y deja *Clave* con números anchos', () => {
     const nota = { folio: '1545-111026' };
-    expect(armarMensajeWhatsapp('*ClaveEmoji* / *Clave*', nota)).toBe('1️⃣5️⃣4️⃣5️⃣ / １５４５');
+    expect(armarMensajeWhatsapp('*ClaveEmoji* / *Clave*', nota)).toBe('1️⃣5️⃣4️⃣5️⃣ / *１５４５*');
+  });
+});
+
+describe('*Clave* en negritas', () => {
+  const nota = { folio: '1545-111026' };
+  it('sola sale en negritas de WhatsApp', () => {
+    expect(armarMensajeWhatsapp('Clave: *Clave*', nota)).toBe('Clave: *１５４５*');
+  });
+  it('con **Clave** en la plantilla no duplica los asteriscos', () => {
+    expect(armarMensajeWhatsapp('Clave: **Clave**.', nota)).toBe('Clave: *１５４５*.');
   });
 });
