@@ -18,7 +18,8 @@ import { formatHora12 } from './fecha';
 export const COMODINES_WHATSAPP = [
   { clave: 'Nombre', descripcion: 'El nombre de pila del cliente, sin apellidos' },
   { clave: 'Tiempo', descripcion: 'La hora a la que se levantó la nota' },
-  { clave: 'Clave',  descripcion: 'El número de la nota, sin la fecha (1796 de 1796-260926)' },
+  { clave: 'Clave',  descripcion: 'El número de la nota, sin la fecha y con números anchos (１７９６ de 1796-260926)' },
+  { clave: 'ClaveEmoji', descripcion: 'La misma clave con emojis de números (1️⃣7️⃣9️⃣6️⃣)' },
   { clave: 'Horario', descripcion: 'La hora a la que cierra HOY la sucursal, según su horario (7:00 pm)' },
 ];
 
@@ -61,10 +62,20 @@ const claveDeNota = (nota) => {
 
 // Cómo se resuelve cada comodín contra una nota. Añadir uno nuevo es añadirlo
 // aquí y en COMODINES_WHATSAPP; el resto de la pantalla se entera sola.
+// Números de ancho completo (１５４５) para la clave (2026-10-11, a pedido):
+// resaltan en el chat sin depender del formato de WhatsApp. Son caracteres
+// Unicode (U+FF10–FF19), así que se ven igual en cualquier teléfono.
+const anchos = (texto) => String(texto).replace(/[0-9]/g, (d) => String.fromCharCode(0xFF10 + Number(d)));
+
+// Emoji de tecla (2026-10-11): el dígito + selector de emoji (U+FE0F) + tecla
+// (U+20E3). Lo dibuja como 1️⃣ cualquier teléfono con emojis.
+const emojis = (texto) => String(texto).replace(/[0-9]/g, (d) => `${d}\uFE0F\u20E3`);
+
 const VALORES = {
   nombre:  (nota) => primerNombre(nota?.cliente_nombre),
   tiempo:  (nota) => formatHora12(nota?.created_at),
-  clave:   (nota) => claveDeNota(nota),
+  clave:   (nota) => anchos(claveDeNota(nota)),
+  claveemoji: (nota) => emojis(claveDeNota(nota)),
   horario: (nota, ahora) => cierreDeHoy(nota?.sucursal_horario_semana, ahora),
 };
 

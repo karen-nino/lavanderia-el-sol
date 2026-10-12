@@ -30,11 +30,11 @@ describe('armarMensajeWhatsapp', () => {
 
   // La clave con la que el cliente recoge: el folio sin la fecha.
   it('*Clave* es el número de la nota, sin lo que va tras el guion', () => {
-    expect(armarMensajeWhatsapp('Tu clave es *Clave*.', nota)).toBe('Tu clave es 1796.');
+    expect(armarMensajeWhatsapp('Tu clave es *Clave*.', nota)).toBe('Tu clave es １７９６.');
   });
 
   it('*Clave* se cae al id cuando la nota todavía no tiene folio', () => {
-    expect(armarMensajeWhatsapp('*Clave*', { id: 42 })).toBe('42');
+    expect(armarMensajeWhatsapp('*Clave*', { id: 42 })).toBe('４２');
     expect(armarMensajeWhatsapp('*Clave*', {})).toBe('');
   });
 
@@ -116,5 +116,12 @@ describe('*Horario*', () => {
 
   it('el día es el de México, no el del equipo (domingo 11 pm en México = lunes UTC)', () => {
     expect(cierreDeHoy(semana, new Date('2026-10-12T05:00:00Z'))).toBe('3:00 pm');
+  });
+});
+
+describe('*ClaveEmoji*', () => {
+  it('pone la clave con emojis de números y deja *Clave* con números anchos', () => {
+    const nota = { folio: '1545-111026' };
+    expect(armarMensajeWhatsapp('*ClaveEmoji* / *Clave*', nota)).toBe('1️⃣5️⃣4️⃣5️⃣ / １５４５');
   });
 });
