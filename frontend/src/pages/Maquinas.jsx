@@ -38,12 +38,16 @@ export default function Maquinas() {
             className="w-11 h-11 rounded-full bg-blue hover:opacity-90 text-white flex items-center justify-center disabled:opacity-60 transition-colors flex-shrink-0"
           >
             <svg
-              className={`w-5 h-5 ${refrescando ? 'animate-spin [animation-direction:reverse]' : ''}`}
+              className={`w-5 h-5 ${refrescando ? 'animate-spin' : ''}`}
               fill="none" stroke="currentColor" strokeWidth={2}
               strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"
             >
-              <path d="M20 11A8.1 8.1 0 004.5 9M4 5v4h4" />
-              <path d="M4 13a8.1 8.1 0 0015.5 2M20 19v-4h-4" />
+              {/* En espejo horizontal (2026-10-11): se voltea el dibujo y no el
+                  <svg>, para que el giro de animate-spin no lo deshaga. */}
+              <g transform="matrix(-1 0 0 1 24 0)">
+                <path d="M20 11A8.1 8.1 0 004.5 9M4 5v4h4" />
+                <path d="M4 13a8.1 8.1 0 0015.5 2M20 19v-4h-4" />
+              </g>
             </svg>
           </button>
         </div>
