@@ -26,7 +26,7 @@ export const getSucursales = async (req, res) => {
       todas ? null : 'activa = TRUE',
     ].filter(Boolean);
     const { rows } = await pool.query(
-      `SELECT slug, nombre, direccion, telefono, activa, orden
+      `SELECT slug, nombre, direccion, telefono, horario, activa, orden
          FROM sucursales
         WHERE ${filtros.join(' AND ')}
         ORDER BY activa DESC, orden ASC, nombre ASC`,
@@ -60,7 +60,7 @@ export const reordenarSucursales = async (req, res) => {
     }
     await client.query('COMMIT');
     const { rows } = await client.query(
-      `SELECT slug, nombre, direccion, telefono, activa, orden
+      `SELECT slug, nombre, direccion, telefono, horario, activa, orden
          FROM sucursales
         WHERE oculta = FALSE
         ORDER BY activa DESC, orden ASC, nombre ASC`
@@ -79,7 +79,7 @@ export const reordenarSucursales = async (req, res) => {
 // Crea una sucursal (admin). El slug se genera desde el nombre y se
 // hace único agregando un sufijo si ya existe.
 export const createSucursal = async (req, res) => {
-  const { nombre, direccion, telefono } = req.body;
+  const { nombre, direccion, telefono, horario } = req.body;
 
   if (!nombre || !String(nombre).trim()) {
     return res.status(400).json({ message: 'El nombre de la sucursal es requerido.' });
@@ -98,10 +98,11 @@ export const createSucursal = async (req, res) => {
     while (usados.has(slug)) slug = `${base}_${n++}`;
 
     const { rows } = await pool.query(
-      `INSERT INTO sucursales (slug, nombre, direccion, telefono, activa)
-       VALUES ($1, $2, $3, $4, TRUE)
-       RETURNING slug, nombre, direccion, telefono, activa`,
-      [slug, String(nombre).trim(), direccion || null, telefono || null]
+      `INSERT INTO sucursales (slug, nombre, direccion, telefono, horario, activa)
+       VALUES ($1, $2, $3, $4, $5, TRUE)
+       RETURNING slug, nombre, direccion, telefono, horario, activa`,
+      [slug, String(nombre).trim(), direccion || null, telefono || null,
+       String(horario ?? '').trim() || null]
     );
     refrescarSlugsSucursales();
     res.status(201).json(rows[0]);
@@ -112,10 +113,10 @@ export const createSucursal = async (req, res) => {
 };
 
 // ── PATCH /sucursales/:slug ─────────────────────────────────
-// Actualiza el nombre, dirección y teléfono de una sucursal (admin).
+// Actualiza el nombre, dirección, teléfono y horario de una sucursal (admin).
 export const updateSucursal = async (req, res) => {
   const { slug } = req.params;
-  const { nombre, direccion, telefono, orden } = req.body;
+  const { nombre, direccion, telefono, horario, orden } = req.body;
 
   // La sucursal de pruebas no se administra desde la app: no existe para nadie
   // más que sus usuarios.
@@ -137,6 +138,7 @@ export const updateSucursal = async (req, res) => {
   if (nombre    !== undefined) { updates.push(`nombre = $${i++}`);    values.push(String(nombre).trim()); }
   if (direccion !== undefined) { updates.push(`direccion = $${i++}`); values.push(direccion || null); }
   if (telefono  !== undefined) { updates.push(`telefono = $${i++}`);  values.push(telefono || null); }
+  if (horario   !== undefined) { updates.push(`horario = $${i++}`);   values.push(String(horario ?? '').trim() || null); }
   if (orden     !== undefined) { updates.push(`orden = $${i++}`);     values.push(Number(orden)); }
 
   if (updates.length === 0) {
@@ -148,7 +150,7 @@ export const updateSucursal = async (req, res) => {
     const { rows } = await pool.query(
       `UPDATE sucursales SET ${updates.join(', ')}
          WHERE slug = $${i}
-         RETURNING slug, nombre, direccion, telefono, activa, orden`,
+         RETURNING slug, nombre, direccion, telefono, horario, activa, orden`,
       values
     );
     if (rows.length === 0) {
@@ -194,7 +196,7 @@ export const setActivaSucursal = async (req, res) => {
 
     const { rows } = await pool.query(
       `UPDATE sucursales SET activa = $1 WHERE slug = $2
-         RETURNING slug, nombre, direccion, telefono, activa`,
+         RETURNING slug, nombre, direccion, telefono, horario, activa`,
       [activa, slug]
     );
     refrescarSlugsSucursales();

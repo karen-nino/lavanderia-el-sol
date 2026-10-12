@@ -989,7 +989,7 @@ export default function Ajustes() {
   const [cambiandoActiva, setCambiandoActiva] = useState(null); // slug activándose/desactivándose
   const [agregando,      setAgregando]      = useState(false);
   const [creando,        setCreando]        = useState(false);
-  const [nuevaSucursal,  setNuevaSucursal]  = useState({ nombre: '', direccion: '', telefono: '' });
+  const [nuevaSucursal,  setNuevaSucursal]  = useState({ nombre: '', direccion: '', telefono: '', horario: '' });
   const [confirmarDesactivar, setConfirmarDesactivar] = useState(null); // sucursal a desactivar
 
   // Solo el Admin Main puede desactivar/reactivar sucursales.
@@ -1078,6 +1078,7 @@ export default function Ajustes() {
       nombre:    s.nombre,
       direccion: s.direccion ?? '',
       telefono:  s.telefono  ?? '',
+      horario:   s.horario   ?? '',
     });
     setSucursales(prev => prev.map(x =>
       x.slug === updated.slug ? { ...updated, telefono: formatTelefono(updated.telefono ?? '') } : x
@@ -1101,11 +1102,12 @@ export default function Ajustes() {
         nombre:    nuevaSucursal.nombre.trim(),
         direccion: nuevaSucursal.direccion || '',
         telefono:  nuevaSucursal.telefono  || '',
+        horario:   nuevaSucursal.horario   || '',
       });
       const conFormato = { ...creada, telefono: formatTelefono(creada.telefono ?? '') };
       setSucursales(prev => [...prev, conFormato]);
       setSucursalSel(creada.slug);       // pasa a editar la recién creada
-      setNuevaSucursal({ nombre: '', direccion: '', telefono: '' });
+      setNuevaSucursal({ nombre: '', direccion: '', telefono: '', horario: '' });
       setAgregando(false);
       marcarGuardado(`sucursal:${creada.slug}`);
     } catch (err) {
@@ -1966,6 +1968,15 @@ export default function Ajustes() {
                 className={INPUT_CLS}
               />
             </Field>
+            <Field label="Horario">
+              <textarea
+                rows={3}
+                value={nuevaSucursal.horario}
+                onChange={(e) => (v) => handleNuevaChange('horario', v)(e.target.value)}
+                placeholder={"Ej. Lun a Sáb 8:00 a 20:00\nDom 9:00 a 14:00"}
+                className={`${INPUT_CLS} resize-y leading-relaxed`}
+              />
+            </Field>
             <div className="flex justify-end">
               <button
                 type="button"
@@ -2020,6 +2031,15 @@ export default function Ajustes() {
                 maxLength={12}
                 placeholder="33-1234-5678"
                 className={INPUT_CLS}
+              />
+            </Field>
+            <Field label="Horario">
+              <textarea
+                rows={3}
+                value={sucursalActual.horario ?? ''}
+                onChange={(e) => (v) => handleSucursalChange(sucursalActual.slug, 'horario', v)(e.target.value)}
+                placeholder={"Ej. Lun a Sáb 8:00 a 20:00\nDom 9:00 a 14:00"}
+                className={`${INPUT_CLS} resize-y leading-relaxed`}
               />
             </Field>
             {/* Los datos de la sucursal se guardan con "Guardar cambios" al pie.
@@ -2350,6 +2370,15 @@ export default function Ajustes() {
                 className={MOBILE_INPUT_CLS}
               />
             </MobileField>
+            <MobileField label="Horario">
+              <textarea
+                rows={3}
+                value={nuevaSucursal.horario}
+                onChange={(e) => (v) => handleNuevaChange('horario', v)(e.target.value)}
+                placeholder={"Ej. Lun a Sáb 8:00 a 20:00\nDom 9:00 a 14:00"}
+                className={`${MOBILE_INPUT_CLS} resize-y leading-relaxed`}
+              />
+            </MobileField>
             <button
               type="button"
               onClick={agregarSucursal}
@@ -2402,6 +2431,15 @@ export default function Ajustes() {
                 maxLength={12}
                 placeholder="33-1234-5678"
                 className={MOBILE_INPUT_CLS}
+              />
+            </MobileField>
+            <MobileField label="Horario">
+              <textarea
+                rows={3}
+                value={sucursalActual.horario ?? ''}
+                onChange={(e) => (v) => handleSucursalChange(sucursalActual.slug, 'horario', v)(e.target.value)}
+                placeholder={"Ej. Lun a Sáb 8:00 a 20:00\nDom 9:00 a 14:00"}
+                className={`${MOBILE_INPUT_CLS} resize-y leading-relaxed`}
               />
             </MobileField>
             {/* Los datos de la sucursal se guardan con el botón "Guardar" del pie. */}

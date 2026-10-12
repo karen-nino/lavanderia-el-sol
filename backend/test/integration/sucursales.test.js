@@ -57,6 +57,18 @@ describe('PATCH /api/sucursales/:slug', () => {
     expect(res.body.nombre).toBe('Centro Histórico');
   });
 
+  it('guarda el horario y vacío lo borra (mig. 159)', async () => {
+    let res = await request(app).patch('/api/sucursales/centro').set(auth(admin.token))
+      .send({ horario: '  Lun a Sáb 8:00 a 20:00\nDom 9:00 a 14:00  ' });
+    expect(res.status).toBe(200);
+    expect(res.body.horario).toBe('Lun a Sáb 8:00 a 20:00\nDom 9:00 a 14:00');
+    const lista = await request(app).get('/api/sucursales').set(auth(admin.token));
+    expect(lista.body.find(x => x.slug === 'centro').horario).toBe('Lun a Sáb 8:00 a 20:00\nDom 9:00 a 14:00');
+
+    res = await request(app).patch('/api/sucursales/centro').set(auth(admin.token)).send({ horario: '' });
+    expect(res.body.horario).toBeNull();
+  });
+
   it('un empleado no puede actualizar (403)', async () => {
     const empleado = await seedUsuario({ rol: 'operador', sucursal: 'centro', nombre: 'Empleado' });
     const res = await request(app).patch('/api/sucursales/centro').set(auth(empleado.token))
