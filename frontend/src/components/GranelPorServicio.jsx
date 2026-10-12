@@ -146,6 +146,8 @@ export default function GranelPorServicio({ nota, puedeEditar, onCambio }) {
         {conGranel.map(({ carga: c, etiqueta, renglones }) => (
           <div key={c.id} className="px-4 py-3 space-y-3">
             <p className="text-sm font-semibold text-gray-900">{etiqueta}</p>
+            {/* Más aire entre un tipo y otro (Jabón / Suavizante), 2026-10-11. */}
+            <div className="space-y-6">
             {renglones.map(r => {
               const opciones = opcionesDe(r.tipoId, r.producto);
               const bloqueado = !puedeEditar || ocupado != null;
@@ -227,6 +229,7 @@ export default function GranelPorServicio({ nota, puedeEditar, onCambio }) {
                 </div>
               );
             })}
+            </div>
           </div>
         ))}
       </div>

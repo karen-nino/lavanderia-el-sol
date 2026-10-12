@@ -955,11 +955,13 @@ export default function DetalleNota() {
             <h1 className="text-xl font-bold text-gray-900 leading-tight truncate">
               Detalles Nota
             </h1>
-            {/* El folio completo (0043-040926): su consecutivo y la fecha. En la
-                lista de notas solo se ve el consecutivo, así que este es el
-                único lugar de la app —fuera del ticket— donde se lee entero. */}
+            {/* El cliente (2026-10-11; antes el folio completo, que sigue en la
+                fila "# Nota" de Detalles). Igual que en la tarjeta: cliente del
+                catálogo, si no la referencia del Autoservicio, si no Mostrador. */}
             <p className="text-sm text-gray-500 leading-tight truncate">
-              {nota.folio ?? `#${nota.id}`}
+              {nota.cliente_nombre
+                ? `${nota.cliente_nombre}${nota.cliente_apellido ? ' ' + nota.cliente_apellido : ''}`
+                : (nota.referencia || 'Mostrador')}
             </p>
           </div>
         </div>
