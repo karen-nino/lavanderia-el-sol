@@ -809,6 +809,11 @@ export default function DetalleNota() {
   if (!nota) return null;
 
   const terminal     = esTerminal(nota);
+  // Máquinas de la nota para su recuadro: todas las asignadas o usadas, y cuáles
+  // corren ahora (mismos datos que la tarjeta de la lista de Notas).
+  const maquinasEnUso = new Set(nota.maquinas_en_uso ?? []);
+  const maquinasNota = [...new Set([...(nota.maquinas_nombres ?? []), ...maquinasEnUso])]
+    .sort((a, b) => a.localeCompare(b, 'es', { numeric: true }));
   // Cancelar: solo admin y solo mientras la nota NO esté cobrada. Después del
   // cobro habría que devolver dinero, y eso descuadra el corte del día; para
   // eso está la reversión de pago.
@@ -1212,6 +1217,24 @@ export default function DetalleNota() {
             d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
         </svg>
       </div>
+
+      {/* Máquinas de la nota (2026-10-11), con la misma lectura que la tarjeta
+          de la lista: en azul la que la nota tiene corriendo ahora; en gris
+          las asignadas o que ya se usaron. Sin máquinas no se pinta. */}
+      {maquinasNota.length > 0 && (
+        <div className="bg-white border border-gray-100 rounded-xl shadow-sm px-4 py-4">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+            {maquinasNota.length === 1 ? 'Máquina' : 'Máquinas'}
+          </p>
+          <p className="text-lg font-bold mt-0.5">
+            {maquinasNota.map((m, i) => (
+              <span key={m} className={maquinasEnUso.has(m) ? 'text-blue-700' : 'text-gray-500'}>
+                {m}{i < maquinasNota.length - 1 ? ', ' : ''}
+              </span>
+            ))}
+          </p>
+        </div>
+      )}
 
       {/* Código de barras: apagado, no borrado (ver MOSTRAR_CODIGO_BARRAS). */}
       {MOSTRAR_CODIGO_BARRAS && (

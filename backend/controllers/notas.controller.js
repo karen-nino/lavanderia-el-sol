@@ -1849,6 +1849,35 @@ export const getNotaById = async (req, res) => {
               su.direccion AS sucursal_direccion,
               -- Horario por día (mig. 160): el comodín *Horario* de WhatsApp.
               su.horario_semana AS sucursal_horario_semana,
+              -- Las mismas máquinas que la tarjeta de la lista (2026-10-11): el
+              -- detalle las enseña en su propio recuadro.
+              -- Nombres de todas las máquinas que la nota usa o usó: además de
+              -- las vinculadas, incluye las columnas *_usada_id de las cargas,
+              -- que conservan la máquina aunque ya se haya desvinculado (p. ej.
+              -- tras pasar el lavado a la secadora), y el historial de pasadas
+              -- (nota_carga_maquinas), que guarda también las máquinas por las
+              -- que se cambió. La tarjeta de la lista lo enseña siempre.
+              (SELECT COALESCE(json_agg(mm.nombre ORDER BY mm.nombre), '[]'::json)
+                 FROM (
+                   SELECT nc.lavadora_id       AS mid FROM nota_cargas nc WHERE nc.nota_id = n.id
+                   UNION SELECT nc.secadora_id        FROM nota_cargas nc WHERE nc.nota_id = n.id
+                   UNION SELECT nc.lavadora_usada_id  FROM nota_cargas nc WHERE nc.nota_id = n.id
+                   UNION SELECT nc.secadora_usada_id  FROM nota_cargas nc WHERE nc.nota_id = n.id
+                   UNION SELECT ncm.maquina_id
+                           FROM nota_carga_maquinas ncm
+                           JOIN nota_cargas nc ON nc.id = ncm.carga_id
+                          WHERE nc.nota_id = n.id
+                 ) xm
+                 JOIN maquinas mm ON mm.id = xm.mid) AS maquinas_nombres,
+              -- Máquinas que la nota tiene CORRIENDO ahora (arrancadas por ella
+              -- y en uso): la tarjeta de la lista lo dice (2026-10-03). Una
+              -- solo asignada no cuenta: otra nota puede arrancarla antes.
+              (SELECT COALESCE(json_agg(DISTINCT mm.nombre), '[]'::json)
+                 FROM nota_cargas nc
+                 JOIN maquinas mm
+                   ON (mm.id = nc.lavadora_id AND nc.lavadora_iniciada_at IS NOT NULL)
+                   OR (mm.id = nc.secadora_id AND nc.secadora_iniciada_at IS NOT NULL)
+                WHERE nc.nota_id = n.id AND mm.estado = 'en_uso') AS maquinas_en_uso,
               -- ¿Todavía se puede corregir la forma de pago? Solo mientras la
               -- caja donde se cobró siga ABIERTA: ahí el corte se calcula en
               -- vivo y se corrige solo. Con la caja cerrada las cifras quedaron
