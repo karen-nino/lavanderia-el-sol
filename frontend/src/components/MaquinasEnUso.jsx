@@ -570,7 +570,7 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
                 className="w-10 h-10 rounded-full border border-gray-300 flex items-center justify-center text-dark-blue hover:bg-gray-50 disabled:opacity-60 transition-colors"
               >
                 <svg
-                  className={`w-5 h-5 ${refrescando ? 'animate-spin' : ''}`}
+                  className={`w-5 h-5 ${refrescando ? 'animate-spin [animation-direction:reverse]' : ''}`}
                   fill="none" stroke="currentColor" strokeWidth={2}
                   strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"
                 >

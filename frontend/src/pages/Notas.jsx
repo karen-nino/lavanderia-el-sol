@@ -538,7 +538,13 @@ export default function Notas() {
                           : 'text-gray-700 hover:bg-gray-50'
                       }`}
                     >
-                      {FILTRO_LABEL[e] ?? BADGE_ESTADO[e]?.label}
+                      {FILTROS_SERVICIO.includes(e) ? (
+                        // Los de servicio resaltan con su color de siempre
+                        // (2026-10-11): no son un estado más de la lista.
+                        <span className={`inline-block text-sm font-semibold px-3 py-1 rounded-pill ${BADGE_TIPO_SERVICIO[e].cls}`}>
+                          {FILTRO_LABEL[e]}
+                        </span>
+                      ) : (FILTRO_LABEL[e] ?? BADGE_ESTADO[e]?.label)}
                     </button>
                     </Fragment>
                   ))}

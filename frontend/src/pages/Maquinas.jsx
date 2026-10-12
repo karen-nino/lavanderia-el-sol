@@ -38,7 +38,7 @@ export default function Maquinas() {
             className="w-11 h-11 rounded-full bg-blue hover:opacity-90 text-white flex items-center justify-center disabled:opacity-60 transition-colors flex-shrink-0"
           >
             <svg
-              className={`w-5 h-5 ${refrescando ? 'animate-spin' : ''}`}
+              className={`w-5 h-5 ${refrescando ? 'animate-spin [animation-direction:reverse]' : ''}`}
               fill="none" stroke="currentColor" strokeWidth={2}
               strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"
             >
