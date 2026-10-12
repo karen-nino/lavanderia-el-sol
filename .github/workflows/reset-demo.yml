@@ -4,7 +4,8 @@
 # administrador y puede borrar el inventario o poner cualquier cosa en el
 # nombre del negocio. Esto lo deshace y vuelve a sembrar los 90 días de datos.
 #
-# Necesita el secreto DEMO_DATABASE_URL (la cadena de Neon) en
+# Necesita los secretos DEMO_DATABASE_URL (la cadena de Neon) y FLY_API_TOKEN
+# (token de despliegue de la app de Fly de la demo) en
 # Settings → Secrets and variables → Actions.
 #
 # Si el job aborta con "la base tiene N notas fuera de pruebas", la base de la
@@ -31,6 +32,24 @@ jobs:
 
       - name: Instalar pnpm
         run: npm install -g pnpm@11
+
+      # Las migraciones de la demo solo corren al desplegar su backend
+      # (release_command de fly.demo.toml). Si nadie lo despliega, la base se
+      # queda atrás y el reset aborta (pasó del 10 al 12 de octubre de 2026).
+      # Desplegar aquí cada noche deja el backend y la base al día con main.
+      # Necesita el secreto FLY_API_TOKEN (fly tokens create deploy -a lavanderia-el-sol-demo).
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Desplegar el backend de la demo
+        working-directory: backend
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          if [ -z "$FLY_API_TOKEN" ]; then
+            echo "Falta el secreto FLY_API_TOKEN." >&2
+            exit 1
+          fi
+          flyctl deploy -c fly.demo.toml --ha=false --remote-only
 
       - name: Instalar dependencias del backend
         working-directory: backend
