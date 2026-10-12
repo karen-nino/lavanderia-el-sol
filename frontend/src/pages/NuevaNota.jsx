@@ -2254,7 +2254,8 @@ export default function NuevaNota() {
               value={form.referencia}
               onChange={e => setForm(f => ({ ...f, referencia: e.target.value }))}
               placeholder="Nombre o seña del cliente (opcional)"
-              className={INPUT_CLS}
+              // En azul, como "Elige lavadora o secadora" (2026-10-11).
+              className={`${INPUT_CLS} placeholder:text-blue`}
             />
           </div>
 

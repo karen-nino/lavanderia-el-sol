@@ -218,6 +218,12 @@ function fmtMonto(n) {
 
 // Sin cliente del catálogo cae a la referencia libre del Autoservicio
 // (mig. 157); sin ninguna de las dos, quien llama pone "Mostrador".
+function fmtClienteCatalogo(n) {
+  if (!n.cliente_nombre) return null;
+  const ap = (n.cliente_apellido ?? '').trim();
+  return ap ? `${n.cliente_nombre} ${ap}` : n.cliente_nombre;
+}
+
 function fmtCliente(n) {
   if (!n.cliente_nombre) return n.referencia || null;
   const ap = (n.cliente_apellido ?? '').trim();
@@ -726,6 +732,7 @@ export default function Notas() {
                       <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Fecha</th>
                       <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Tipo</th>
                       <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Cliente</th>
+                      <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Referencia</th>
                       <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Estado</th>
                       <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Pago</th>
                       <th className="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Total</th>
@@ -768,12 +775,20 @@ export default function Notas() {
                             {badgeTipoServicio.label}
                           </td>
                           <td className="px-4 py-3">
+                            {/* En la tabla el cliente es solo el del catálogo: la
+                                referencia del Autoservicio va en su columna
+                                (2026-10-11), así que una nota sin cliente sigue
+                                diciendo Mostrador. */}
                             <p className="font-medium text-gray-800">
-                              {fmtCliente(n) ?? <span className="text-gray-400 italic">Mostrador</span>}
+                              {fmtClienteCatalogo(n) ?? <span className="text-gray-400 italic">Mostrador</span>}
                             </p>
                             {n.cliente_telefono && (
                               <p className="text-xs text-gray-400">{n.cliente_telefono}</p>
                             )}
+                          </td>
+                          {/* Cliente / referencia libre del Autoservicio (mig. 157). */}
+                          <td className="px-4 py-3 text-gray-700">
+                            {n.referencia || <span className="text-gray-300">—</span>}
                           </td>
                           <td className="px-4 py-3">
                             {lavandoYSecando ? (

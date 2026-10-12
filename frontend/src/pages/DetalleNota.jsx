@@ -1754,7 +1754,7 @@ export default function DetalleNota() {
               value={refValor}
               onChange={e => setRefValor(e.target.value)}
               placeholder="Nombre o seña del cliente"
-              className="w-full px-4 py-3.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent transition"
+              className="w-full placeholder:text-blue px-4 py-3.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent transition"
             />
             {errorAccion && (
               <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">{errorAccion}</div>
