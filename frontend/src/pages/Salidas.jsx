@@ -2079,8 +2079,9 @@ export default function Salidas() {
       {/* Modal asignar máquina extra: elegir la máquina y a qué carga va */}
       {asignarOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4 max-h-[90vh] overflow-y-auto">
-            <div>
+          {/* Título y botones fijos; solo la lista se desplaza (2026-10-11). */}
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm max-h-[90vh] flex flex-col">
+            <div className="px-6 pt-6 pb-3 flex-shrink-0">
               <h3 className="text-base font-bold text-gray-900">
                 {/* Sin carga destino se abre una carga nueva: ahí se AGREGA
                     una máquina a la nota, no se asigna a algo que ya existe. */}
@@ -2110,6 +2111,7 @@ export default function Salidas() {
               </p>
             </div>
 
+            <div className="flex-1 min-h-0 overflow-y-auto px-6 py-1 space-y-4">
             {errorAccion && (
               <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">
                 {errorAccion}
@@ -2261,8 +2263,9 @@ export default function Salidas() {
                 )}
               </div>
             )}
+            </div>
 
-            <div className="flex gap-3">
+            <div className="flex gap-3 px-6 pt-4 pb-6 flex-shrink-0 border-t border-gray-100">
               <button
                 type="button"
                 onClick={cerrarAsignar}

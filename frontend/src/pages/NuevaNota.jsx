@@ -1420,10 +1420,12 @@ export default function NuevaNota() {
         onClick={() => setSelectorProducto({ ambito: ambitoProductosNota })}
         className="w-full px-4 py-3.5 mb-3 border border-gray-300 rounded-lg bg-white text-left flex items-center justify-between gap-2 hover:border-gray-400 transition-colors"
       >
-        <span className="text-gray-400 truncate">
+        {/* En azul (2026-10-11): llama la atención como acción, no se lee
+            como un campo vacío más. */}
+        <span className="text-blue truncate">
           {productosLista.length === 0 ? 'Elige un producto' : 'Agregar otro producto'}
         </span>
-        <svg className="w-5 h-5 flex-shrink-0 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-5 h-5 flex-shrink-0 text-blue" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
         </svg>
       </button>
@@ -2288,14 +2290,15 @@ export default function NuevaNota() {
                   : 'border-gray-300 hover:border-gray-400'
               }`}
             >
-              <span className="text-gray-400 truncate">
+              {/* En azul (2026-10-11, a pedido): antes iba en el gris del campo
+                  y se perdía; ahora llama la atención como acción. */}
+              <span className="text-blue truncate">
                 {cargasAuto.length === 0 ? 'Elige lavadora o secadora' : 'Agregar otra máquina'}
               </span>
               {/* Un + y no la flecha del desplegable: lo que hay detrás no es
                   una lista que se abre y se cierra en el propio campo, sino un
-                  modal donde se marcan varias. En el gris del campo, que es un
-                  signo de lo que se puede hacer, no una llamada de atención. */}
-              <svg className="w-5 h-5 flex-shrink-0 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  modal donde se marcan varias. */}
+              <svg className="w-5 h-5 flex-shrink-0 text-blue" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
               </svg>
             </button>

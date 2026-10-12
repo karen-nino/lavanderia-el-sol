@@ -87,8 +87,10 @@ export default function ElegirMaquinasModal({
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4 max-h-[90vh] overflow-y-auto">
-        <div>
+      {/* Título y botones fijos; solo la lista se desplaza (2026-10-11): con
+          muchas máquinas, Agregar se iba fuera de la pantalla. */}
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm max-h-[90vh] flex flex-col">
+        <div className="px-6 pt-6 pb-3 flex-shrink-0">
           <h3 className="text-base font-bold text-gray-900">Agregar máquina</h3>
           <p className="text-sm text-gray-500 mt-1">
             Elige las máquinas que va a usar el cliente. Cada una entra con{' '}
@@ -97,6 +99,7 @@ export default function ElegirMaquinasModal({
           </p>
         </div>
 
+        <div className="flex-1 min-h-0 overflow-y-auto px-6 py-1 space-y-4">
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">
             {error}
@@ -147,8 +150,9 @@ export default function ElegirMaquinasModal({
             </div>
           </div>
         )}
+        </div>
 
-        <div className="flex gap-3">
+        <div className="flex gap-3 px-6 pt-4 pb-6 flex-shrink-0 border-t border-gray-100">
           <button
             type="button"
             onClick={onCancelar}
