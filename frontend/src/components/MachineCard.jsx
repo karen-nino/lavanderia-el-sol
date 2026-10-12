@@ -49,8 +49,10 @@ export default function MachineCard({
   const folioTxt    = nota?.folio
     ? `#${String(nota.folio).split('-')[0]}`
     : (nota?.id != null ? `#${nota.id}` : null);
+  // Autoservicio: su Cliente / referencia (mig. 157) o, sin ella, Mostrador,
+  // como en la lista de Notas (2026-10-11; antes decía "Autoservicio").
   const clienteTxt  = nota?.tipo_servicio === 'AUTOSERVICIO'
-    ? 'Autoservicio'
+    ? (String(nota?.referencia ?? '').trim() || 'Mostrador')
     : formatearCliente(nota?.cliente_nombre, nota?.cliente_apellido);
   // Una máquina puede estar en uso sin nota: alguien la prendió a mano, con el
   // botón de Gestión o desde eWeLink (mig. 104). Sin decirlo, la tarjeta sale
@@ -58,11 +60,13 @@ export default function MachineCard({
   const encendidaAMano = Boolean(maquina.encendida_manual_at) && !nota;
   const infoNota = (folioTxt || clienteTxt) ? (
     <div className="w-full text-center">
-      {folioTxt && (
-        <p className="text-card-title text-dark-grey text-xl font-bold truncate">{folioTxt}</p>
-      )}
+      {/* El cliente en grande y el folio debajo, chico (2026-10-11, a pedido;
+          antes era al revés). */}
       {clienteTxt && (
-        <p className="text-kpi-label text-grey text-sm font-medium truncate">{clienteTxt}</p>
+        <p className="text-card-title text-dark-grey text-xl font-bold truncate">{clienteTxt}</p>
+      )}
+      {folioTxt && (
+        <p className="text-kpi-label text-grey text-sm font-medium truncate">{folioTxt}</p>
       )}
     </div>
   ) : encendidaAMano ? (

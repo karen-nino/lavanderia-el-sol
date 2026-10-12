@@ -39,14 +39,25 @@ describe('MachineCard', () => {
     expect(screen.getByText('Ana L.')).toBeInTheDocument();
   });
 
-  it('en uso con autoservicio muestra "Autoservicio"', () => {
+  it('en uso con autoservicio sin referencia muestra "Mostrador"', () => {
     render(
       <MachineCard
         maquina={{ nombre: 'L1', estado: 'en_uso', tipo: 'lavadora_mediana' }}
         nota={{ folio: '0200-080726', tipo_servicio: 'AUTOSERVICIO' }}
       />
     );
-    expect(screen.getByText('Autoservicio')).toBeInTheDocument();
+    expect(screen.getByText('Mostrador')).toBeInTheDocument();
+  });
+
+  it('en uso con autoservicio y referencia muestra la referencia', () => {
+    render(
+      <MachineCard
+        maquina={{ nombre: 'L1', estado: 'en_uso', tipo: 'lavadora_mediana' }}
+        nota={{ folio: '0200-080726', tipo_servicio: 'AUTOSERVICIO', referencia: 'Gorra' }}
+      />
+    );
+    expect(screen.getByText('Gorra')).toBeInTheDocument();
+    expect(screen.queryByText('Mostrador')).not.toBeInTheDocument();
   });
 
   // El siguiente paso lo marca el servidor en `lavadoras_con_secado_ids`: son
