@@ -16,6 +16,13 @@ const ESTADOS = ['TODOS', 'EN_ESPERA', 'POR_ENTREGAR', 'PENDIENTE', 'FINALIZADA'
 
 // Opciones del filtro que no son un estado sino el tipo de servicio de la nota.
 const FILTROS_SERVICIO = ['AUTOSERVICIO', 'POR_ENCARGO'];
+// Su franja de color a la izquierda, con los colores de cada servicio; el
+// texto en el gris de las demás opciones (2026-10-11).
+const FILTRO_SERVICIO_CLS = {
+  AUTOSERVICIO: 'border-l-4 border-blue-500 rounded-l-sm font-semibold text-gray-700',
+  // mt-2: más aire entre los dos servicios (2026-10-11).
+  POR_ENCARGO:  'mt-2 border-l-4 border-amber-500 rounded-l-sm font-semibold text-gray-700',
+};
 
 // Renglones por página en la tabla de escritorio.
 const POR_PAGINA = 15;
@@ -533,18 +540,18 @@ export default function Notas() {
                       // por cobrar de hace días). El filtro de fecha acota.
                       onClick={() => { setFiltro(e); setRangoFecha('TODAS'); setPagina(1); setMostrarEstado(false); }}
                       className={`text-left text-sm px-3 py-2 rounded-lg transition-colors ${
-                        filtro === e
-                          ? 'bg-light-blue text-blue-700 font-medium'
-                          : 'text-gray-700 hover:bg-gray-50'
+                        // Los de servicio resaltan con una franja de su color
+                        // y negritas (2026-10-11): no son un estado más.
+                        FILTRO_SERVICIO_CLS[e] ?? ''
+                      } ${
+                        FILTROS_SERVICIO.includes(e)
+                          ? (filtro === e ? 'bg-light-blue' : 'hover:bg-gray-50')
+                          : filtro === e
+                            ? 'bg-light-blue text-blue-700 font-medium'
+                            : 'text-gray-700 hover:bg-gray-50'
                       }`}
                     >
-                      {FILTROS_SERVICIO.includes(e) ? (
-                        // Los de servicio resaltan con su color de siempre
-                        // (2026-10-11): no son un estado más de la lista.
-                        <span className={`inline-block text-sm font-semibold px-3 py-1 rounded-pill ${BADGE_TIPO_SERVICIO[e].cls}`}>
-                          {FILTRO_LABEL[e]}
-                        </span>
-                      ) : (FILTRO_LABEL[e] ?? BADGE_ESTADO[e]?.label)}
+                      {FILTRO_LABEL[e] ?? BADGE_ESTADO[e]?.label}
                     </button>
                     </Fragment>
                   ))}
