@@ -16,6 +16,7 @@ import {
   encenderSonoff,
   otroCiclo,
   masTiempo,
+  revisarSonoff,
 } from '../controllers/maquinas.controller.js';
 
 const router = Router();
@@ -27,6 +28,8 @@ router.param('id', validarId('la máquina'));
 router.use(verifyToken, sucursalActiva);
 
 router.get('/', getMaquinas);
+// Antes de las rutas con :id (si no, 'revisar-sonoff' se tomaría por un id).
+router.post('/revisar-sonoff', revisarSonoff);
 router.get('/:id/uso', requireAdmin, getUsoMaquina);
 router.post('/', createMaquina);
 router.put('/:id', updateMaquina);

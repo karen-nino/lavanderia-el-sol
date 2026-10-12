@@ -1268,3 +1268,29 @@ export const masTiempo = async (req, res) => {
     client.release();
   }
 };
+
+// ── POST /maquinas/revisar-sonoff ───────────────────────────
+// Lo pide el botón de refrescar de Máquinas (2026-10-11): lee AHORA el estado
+// real de los Sonoff de las máquinas ocupadas de la sucursal, en vez de esperar
+// al revisor automático (cada SONOFF_RECONCILE_MINUTOS, 3 por defecto). Así una
+// máquina encendida a mano que alguien ya apagó se suelta en el acto y su
+// tarjeta desaparece al refrescar. Es el mismo paso del revisor
+// (`reconciliando`: no reenciende lo apagado a mano). Nunca falla: si un Sonoff
+// no responde, se sigue con los demás. En simulación no hay nada que leer.
+export const revisarSonoff = async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, sucursal FROM maquinas
+        WHERE sucursal = $1 AND device_id IS NOT NULL
+          AND (estado = 'en_uso' OR encendida_manual_at IS NOT NULL)
+        ORDER BY id`,
+      [req.sucursal]
+    );
+    const reales = rows.filter(m => !dispositivos.esSimulacion(m));
+    await Promise.all(reales.map(m => sincronizarSonoff(m.id, { reconciliando: true })));
+    res.json({ revisadas: reales.length });
+  } catch (err) {
+    console.error('revisarSonoff error:', err);
+    res.status(500).json({ message: 'No se pudieron revisar los Sonoff.' });
+  }
+};

@@ -111,7 +111,12 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
     setRefrescando(true);
     setErrorRefresco('');
     try {
-      const [ok] = await Promise.all([refrescarDatos(), esperar(GIRO_MIN_MS)]);
+      // Primero se le pide al servidor que lea los Sonoff AHORA (2026-10-11):
+      // si no, una máquina encendida a mano que ya apagaron seguía saliendo
+      // hasta que pasara el revisor automático (cada 3 min). Si falla, se
+      // refresca igual con lo que haya.
+      const leer = api.post('/maquinas/revisar-sonoff').catch(() => null);
+      const [ok] = await Promise.all([leer.then(() => refrescarDatos()), esperar(GIRO_MIN_MS)]);
       if (!ok) setErrorRefresco('No se pudo actualizar');
       return ok;
     } finally {
