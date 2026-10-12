@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { armarMensajeWhatsapp, hayMensajeWhatsapp, telefonoWhatsapp } from './mensajeWhatsapp';
+import { armarMensajeWhatsapp, cierreDeHoy, hayMensajeWhatsapp, telefonoWhatsapp } from './mensajeWhatsapp';
 
 // La plantilla de WhatsApp de Por Encargo (mig. 124). Lo que importa: que los
 // comodines se sustituyan, que un comodín inventado NO se borre —sería un
@@ -89,5 +89,32 @@ describe('telefonoWhatsapp', () => {
   it('sin teléfono devuelve cadena vacía', () => {
     expect(telefonoWhatsapp('')).toBe('');
     expect(telefonoWhatsapp(null)).toBe('');
+  });
+});
+
+// *Horario* (mig. 160): la hora a la que cierra HOY la sucursal de la nota.
+describe('*Horario*', () => {
+  const semana = Array.from({ length: 7 }, (_, dia) => (
+    dia === 2 ? { dia, abierto: false, abre: null, cierra: null }
+      : { dia, abierto: true, abre: '09:00', cierra: dia === 6 ? '15:00' : '19:00' }
+  ));
+  const nota = { cliente_nombre: 'Ana', sucursal_horario_semana: semana };
+  // Mediodía en México: el mismo día en cualquier zona del equipo.
+  const martes = new Date('2026-10-13T18:00:00Z');
+  const miercoles = new Date('2026-10-14T18:00:00Z');
+  const domingo = new Date('2026-10-11T18:00:00Z');
+
+  it('un martes dice 7:00 pm y un domingo 3:00 pm', () => {
+    expect(armarMensajeWhatsapp('Hoy cerramos a las *Horario*.', nota, martes)).toBe('Hoy cerramos a las 7:00 pm.');
+    expect(armarMensajeWhatsapp('Hoy cerramos a las *Horario*.', nota, domingo)).toBe('Hoy cerramos a las 3:00 pm.');
+  });
+
+  it('el día que no abre, o sin horario, se va en blanco', () => {
+    expect(cierreDeHoy(semana, miercoles)).toBe('');
+    expect(cierreDeHoy(null, martes)).toBe('');
+  });
+
+  it('el día es el de México, no el del equipo (domingo 11 pm en México = lunes UTC)', () => {
+    expect(cierreDeHoy(semana, new Date('2026-10-12T05:00:00Z'))).toBe('3:00 pm');
   });
 });

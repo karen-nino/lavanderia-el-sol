@@ -19,7 +19,28 @@ export const COMODINES_WHATSAPP = [
   { clave: 'Nombre', descripcion: 'El nombre de pila del cliente, sin apellidos' },
   { clave: 'Tiempo', descripcion: 'La hora a la que se levantó la nota' },
   { clave: 'Clave',  descripcion: 'El número de la nota, sin la fecha (1796 de 1796-260926)' },
+  { clave: 'Horario', descripcion: 'La hora a la que cierra HOY la sucursal, según su horario (7:00 pm)' },
 ];
+
+// Hora de cierre de HOY en la sucursal de la nota (mig. 160), "7:00 pm". El
+// día es el del negocio (America/Mexico_City), no el del equipo. Si ese día no
+// abre o no hay horario capturado, se va en blanco como cualquier dato que
+// falta.
+const TZ_NEGOCIO = 'America/Mexico_City';
+const DIA_SEMANA = { Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4, Sat: 5, Sun: 6 };
+const diaDeHoy = (ahora) => DIA_SEMANA[
+  new Intl.DateTimeFormat('en-US', { timeZone: TZ_NEGOCIO, weekday: 'short' }).format(ahora)
+];
+const hora12 = (hhmm) => {
+  const [h, m] = String(hhmm).split(':').map(Number);
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return '';
+  return `${h % 12 || 12}:${String(m).padStart(2, '0')} ${h < 12 ? 'am' : 'pm'}`;
+};
+export function cierreDeHoy(horarioSemana, ahora = new Date()) {
+  if (!Array.isArray(horarioSemana)) return '';
+  const hoy = horarioSemana.find(d => Number(d?.dia) === diaDeHoy(ahora));
+  return hoy?.abierto && hoy.cierra ? hora12(hoy.cierra) : '';
+}
 
 // Solo el nombre de pila: en un WhatsApp se saluda "Hola Ana", no "Hola Ana
 // López" (2026-09-26). Se toma la primera palabra, que es lo único que se
@@ -41,9 +62,10 @@ const claveDeNota = (nota) => {
 // Cómo se resuelve cada comodín contra una nota. Añadir uno nuevo es añadirlo
 // aquí y en COMODINES_WHATSAPP; el resto de la pantalla se entera sola.
 const VALORES = {
-  nombre: (nota) => primerNombre(nota?.cliente_nombre),
-  tiempo: (nota) => formatHora12(nota?.created_at),
-  clave:  (nota) => claveDeNota(nota),
+  nombre:  (nota) => primerNombre(nota?.cliente_nombre),
+  tiempo:  (nota) => formatHora12(nota?.created_at),
+  clave:   (nota) => claveDeNota(nota),
+  horario: (nota, ahora) => cierreDeHoy(nota?.sucursal_horario_semana, ahora),
 };
 
 // Quita acentos y baja a minúsculas para comparar el nombre del comodín.
@@ -57,11 +79,12 @@ const normalizar = (s) =>
 //
 // Un comodín conocido pero sin dato (una nota sin cliente) se va en blanco: el
 // mensaje no puede decir "*Nombre*" a un cliente de verdad.
-export function armarMensajeWhatsapp(plantilla, nota) {
+// `ahora` decide el día de *Horario*; solo las pruebas lo pasan.
+export function armarMensajeWhatsapp(plantilla, nota, ahora = new Date()) {
   if (!plantilla) return '';
   return String(plantilla).replace(/\*([^*\n]+)\*/g, (completo, dentro) => {
     const valor = VALORES[normalizar(dentro)];
-    return valor ? valor(nota) : completo;
+    return valor ? valor(nota, ahora) : completo;
   });
 }
 

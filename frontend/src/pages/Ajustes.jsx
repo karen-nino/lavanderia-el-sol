@@ -157,6 +157,11 @@ const NOTA_EJEMPLO = {
   cliente_nombre: 'Ana López',
   created_at: '2026-09-26T14:30:00',
   folio: '1796-260926',
+  // Para *Horario* en la vista previa: de lunes a sábado cierra a las 7:00 pm
+  // y el domingo a las 3:00 pm (el ejemplo de la usuaria, 2026-10-11).
+  sucursal_horario_semana: Array.from({ length: 7 }, (_, dia) => (
+    { dia, abierto: true, abre: '09:00', cierra: dia === 6 ? '15:00' : '19:00' }
+  )),
 };
 
 function PreviaWhatsapp({ plantilla }) {
@@ -180,8 +185,8 @@ const MOBILE_SECTIONS = [
   { id: 'alertas', label: 'Alertas y Notificaciones',  subtitle: 'Ajustes de alertas', icon: SectionIcon.alertas },
   { id: 'etiquetas', label: 'Etiquetas de encargo',    subtitle: 'Tipos de tela y tamaños de edredón', icon: SectionIcon.etiquetas },
   { id: 'inventario', label: 'Inventario',              subtitle: 'Marcas y envases de productos', icon: SectionIcon.inventario },
-  { id: 'ticket',   label: 'Ticket',                   subtitle: 'Notas al pie del ticket', icon: SectionIcon.ticket },
   { id: 'whatsapp', label: 'WhatsApp',                 subtitle: 'Mensaje para Por Encargo', icon: SectionIcon.whatsapp },
+  { id: 'ticket',   label: 'Ticket',                   subtitle: 'Notas al pie del ticket', icon: SectionIcon.ticket },
 ];
 
 // Los servicios fijos que vende Por Encargo, con el campo de Ajustes que lleva
@@ -3072,8 +3077,8 @@ export default function Ajustes() {
           {seccionAlertasDesktop}
           {seccionEtiquetasDesktop}
           {seccionInventarioDesktop}
-          {seccionTicketDesktop}
           {seccionWhatsappDesktop}
+          {seccionTicketDesktop}
         </div>
 
         {/* El manual y la instalación van al final: son acciones, no ajustes
