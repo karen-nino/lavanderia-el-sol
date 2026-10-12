@@ -57,16 +57,29 @@ describe('PATCH /api/sucursales/:slug', () => {
     expect(res.body.nombre).toBe('Centro Histórico');
   });
 
-  it('guarda el horario y vacío lo borra (mig. 159)', async () => {
+  it('guarda el horario por día y lo valida (mig. 160)', async () => {
+    const semana = Array.from({ length: 7 }, (_, dia) => (
+      dia === 6
+        ? { dia, abierto: false }
+        : { dia, abierto: true, abre: '10:00', cierra: dia === 5 ? '21:00' : '20:30' }
+    ));
     let res = await request(app).patch('/api/sucursales/centro').set(auth(admin.token))
-      .send({ horario: '  Lun a Sáb 8:00 a 20:00\nDom 9:00 a 14:00  ' });
+      .send({ horario_semana: semana });
     expect(res.status).toBe(200);
-    expect(res.body.horario).toBe('Lun a Sáb 8:00 a 20:00\nDom 9:00 a 14:00');
-    const lista = await request(app).get('/api/sucursales').set(auth(admin.token));
-    expect(lista.body.find(x => x.slug === 'centro').horario).toBe('Lun a Sáb 8:00 a 20:00\nDom 9:00 a 14:00');
+    expect(res.body.horario_semana).toHaveLength(7);
+    expect(res.body.horario_semana[5]).toEqual({ dia: 5, abierto: true, abre: '10:00', cierra: '21:00' });
+    expect(res.body.horario_semana[6]).toEqual({ dia: 6, abierto: false, abre: null, cierra: null });
 
-    res = await request(app).patch('/api/sucursales/centro').set(auth(admin.token)).send({ horario: '' });
-    expect(res.body.horario).toBeNull();
+    // Cierra antes de abrir → 400.
+    const mal = semana.map(d => (d.dia === 0 ? { ...d, abre: '20:00', cierra: '10:00' } : d));
+    res = await request(app).patch('/api/sucursales/centro').set(auth(admin.token)).send({ horario_semana: mal });
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/lunes/);
+
+    // Menos de 7 días → 400.
+    res = await request(app).patch('/api/sucursales/centro').set(auth(admin.token))
+      .send({ horario_semana: semana.slice(0, 3) });
+    expect(res.status).toBe(400);
   });
 
   it('un empleado no puede actualizar (403)', async () => {

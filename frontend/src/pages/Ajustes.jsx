@@ -339,6 +339,61 @@ function Toggle({ checked, onChange }) {
   );
 }
 
+// Horario por día de la sucursal (mig. 160), como el de Google Maps: cada día
+// abierto o cerrado, con su hora de abrir y de cerrar. `value` es la lista de
+// 7 días (lunes = 0) o null si nunca se capturó; entonces todos salen cerrados.
+const DIAS_SEMANA = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+const horarioCompleto = (value) => DIAS_SEMANA.map((_, dia) => {
+  const x = Array.isArray(value) ? value.find(r => Number(r?.dia) === dia) : null;
+  return { dia, abierto: Boolean(x?.abierto), abre: x?.abre ?? '', cierra: x?.cierra ?? '' };
+});
+
+function HorarioSemana({ value, onChange }) {
+  const dias = horarioCompleto(value);
+  const cambiar = (dia, cambios) =>
+    onChange(dias.map(d => (d.dia === dia ? { ...d, ...cambios } : d)));
+  // Lo del lunes a todos los días: casi siempre es el mismo horario.
+  const lunes = dias[0];
+  const copiarLunes = () =>
+    onChange(dias.map(d => ({ ...d, abierto: lunes.abierto, abre: lunes.abre, cierra: lunes.cierra })));
+  const HORA_CLS = 'w-full min-w-0 px-3 py-2.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent transition bg-white';
+  return (
+    <div className="space-y-1">
+      <div className="divide-y divide-gray-100 rounded-xl border border-gray-200 bg-white">
+        {dias.map(d => (
+          <div key={d.dia} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-3">
+            <span className="w-24 text-sm font-medium text-gray-800">{DIAS_SEMANA[d.dia]}</span>
+            <div className="flex items-center gap-2">
+              <Toggle
+                checked={d.abierto}
+                onChange={(abierto) => cambiar(d.dia, abierto
+                  // Al abrir un día sin horas se proponen las de siempre.
+                  ? { abierto, abre: d.abre || '09:00', cierra: d.cierra || '20:00' }
+                  : { abierto })}
+              />
+              <span className={`text-sm ${d.abierto ? 'text-gray-700' : 'text-gray-400'}`}>
+                {d.abierto ? 'Abierto' : 'Cerrado'}
+              </span>
+            </div>
+            {d.abierto && (
+              <div className="flex items-center gap-2 basis-full sm:basis-auto sm:flex-1 sm:justify-end">
+                <input type="time" value={d.abre} aria-label={`${DIAS_SEMANA[d.dia]}: abre`}
+                  onChange={(e) => cambiar(d.dia, { abre: e.target.value })} className={HORA_CLS} />
+                <span className="text-gray-400">–</span>
+                <input type="time" value={d.cierra} aria-label={`${DIAS_SEMANA[d.dia]}: cierra`}
+                  onChange={(e) => cambiar(d.dia, { cierra: e.target.value })} className={HORA_CLS} />
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+      <button type="button" onClick={copiarLunes} className="text-sm font-medium text-blue hover:underline">
+        Copiar el horario del lunes a todos los días
+      </button>
+    </div>
+  );
+}
+
 // Fila con etiqueta + descripción a la izquierda y el toggle a la derecha.
 function ToggleRow({ label, hint, checked, onChange }) {
   return (
@@ -989,7 +1044,7 @@ export default function Ajustes() {
   const [cambiandoActiva, setCambiandoActiva] = useState(null); // slug activándose/desactivándose
   const [agregando,      setAgregando]      = useState(false);
   const [creando,        setCreando]        = useState(false);
-  const [nuevaSucursal,  setNuevaSucursal]  = useState({ nombre: '', direccion: '', telefono: '', horario: '' });
+  const [nuevaSucursal,  setNuevaSucursal]  = useState({ nombre: '', direccion: '', telefono: '', horario_semana: null });
   const [confirmarDesactivar, setConfirmarDesactivar] = useState(null); // sucursal a desactivar
 
   // Solo el Admin Main puede desactivar/reactivar sucursales.
@@ -1078,7 +1133,8 @@ export default function Ajustes() {
       nombre:    s.nombre,
       direccion: s.direccion ?? '',
       telefono:  s.telefono  ?? '',
-      horario:   s.horario   ?? '',
+      // Solo si se capturó: null deja el que tenga (y no manda 7 días vacíos).
+      ...(s.horario_semana ? { horario_semana: s.horario_semana } : {}),
     });
     setSucursales(prev => prev.map(x =>
       x.slug === updated.slug ? { ...updated, telefono: formatTelefono(updated.telefono ?? '') } : x
@@ -1102,12 +1158,12 @@ export default function Ajustes() {
         nombre:    nuevaSucursal.nombre.trim(),
         direccion: nuevaSucursal.direccion || '',
         telefono:  nuevaSucursal.telefono  || '',
-        horario:   nuevaSucursal.horario   || '',
+        ...(nuevaSucursal.horario_semana ? { horario_semana: nuevaSucursal.horario_semana } : {}),
       });
       const conFormato = { ...creada, telefono: formatTelefono(creada.telefono ?? '') };
       setSucursales(prev => [...prev, conFormato]);
       setSucursalSel(creada.slug);       // pasa a editar la recién creada
-      setNuevaSucursal({ nombre: '', direccion: '', telefono: '', horario: '' });
+      setNuevaSucursal({ nombre: '', direccion: '', telefono: '', horario_semana: null });
       setAgregando(false);
       marcarGuardado(`sucursal:${creada.slug}`);
     } catch (err) {
@@ -1969,12 +2025,9 @@ export default function Ajustes() {
               />
             </Field>
             <Field label="Horario">
-              <textarea
-                rows={3}
-                value={nuevaSucursal.horario}
-                onChange={(e) => (v) => handleNuevaChange('horario', v)(e.target.value)}
-                placeholder={"Ej. Lun a Sáb 8:00 a 20:00\nDom 9:00 a 14:00"}
-                className={`${INPUT_CLS} resize-y leading-relaxed`}
+              <HorarioSemana
+                value={nuevaSucursal.horario_semana}
+                onChange={(v) => handleNuevaChange('horario_semana', v)}
               />
             </Field>
             <div className="flex justify-end">
@@ -2034,12 +2087,9 @@ export default function Ajustes() {
               />
             </Field>
             <Field label="Horario">
-              <textarea
-                rows={3}
-                value={sucursalActual.horario ?? ''}
-                onChange={(e) => (v) => handleSucursalChange(sucursalActual.slug, 'horario', v)(e.target.value)}
-                placeholder={"Ej. Lun a Sáb 8:00 a 20:00\nDom 9:00 a 14:00"}
-                className={`${INPUT_CLS} resize-y leading-relaxed`}
+              <HorarioSemana
+                value={sucursalActual.horario_semana}
+                onChange={(v) => handleSucursalChange(sucursalActual.slug, 'horario_semana', v)}
               />
             </Field>
             {/* Los datos de la sucursal se guardan con "Guardar cambios" al pie.
@@ -2371,12 +2421,9 @@ export default function Ajustes() {
               />
             </MobileField>
             <MobileField label="Horario">
-              <textarea
-                rows={3}
-                value={nuevaSucursal.horario}
-                onChange={(e) => (v) => handleNuevaChange('horario', v)(e.target.value)}
-                placeholder={"Ej. Lun a Sáb 8:00 a 20:00\nDom 9:00 a 14:00"}
-                className={`${MOBILE_INPUT_CLS} resize-y leading-relaxed`}
+              <HorarioSemana
+                value={nuevaSucursal.horario_semana}
+                onChange={(v) => handleNuevaChange('horario_semana', v)}
               />
             </MobileField>
             <button
@@ -2434,12 +2481,9 @@ export default function Ajustes() {
               />
             </MobileField>
             <MobileField label="Horario">
-              <textarea
-                rows={3}
-                value={sucursalActual.horario ?? ''}
-                onChange={(e) => (v) => handleSucursalChange(sucursalActual.slug, 'horario', v)(e.target.value)}
-                placeholder={"Ej. Lun a Sáb 8:00 a 20:00\nDom 9:00 a 14:00"}
-                className={`${MOBILE_INPUT_CLS} resize-y leading-relaxed`}
+              <HorarioSemana
+                value={sucursalActual.horario_semana}
+                onChange={(v) => handleSucursalChange(sucursalActual.slug, 'horario_semana', v)}
               />
             </MobileField>
             {/* Los datos de la sucursal se guardan con el botón "Guardar" del pie. */}

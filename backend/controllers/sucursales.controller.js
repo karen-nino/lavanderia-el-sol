@@ -26,7 +26,7 @@ export const getSucursales = async (req, res) => {
       todas ? null : 'activa = TRUE',
     ].filter(Boolean);
     const { rows } = await pool.query(
-      `SELECT slug, nombre, direccion, telefono, horario, activa, orden
+      `SELECT slug, nombre, direccion, telefono, horario_semana, activa, orden
          FROM sucursales
         WHERE ${filtros.join(' AND ')}
         ORDER BY activa DESC, orden ASC, nombre ASC`,
@@ -60,7 +60,7 @@ export const reordenarSucursales = async (req, res) => {
     }
     await client.query('COMMIT');
     const { rows } = await client.query(
-      `SELECT slug, nombre, direccion, telefono, horario, activa, orden
+      `SELECT slug, nombre, direccion, telefono, horario_semana, activa, orden
          FROM sucursales
         WHERE oculta = FALSE
         ORDER BY activa DESC, orden ASC, nombre ASC`
@@ -75,15 +75,45 @@ export const reordenarSucursales = async (req, res) => {
   }
 };
 
+// Horario por día (mig. 160), como en Google Maps: 7 días de lunes (0) a
+// domingo (6), cada uno abierto o cerrado y con su hora de abrir y cerrar
+// ("HH:MM", 24 h). Devuelve { valor } listo para guardar (JSON o null para
+// borrarlo; undefined = no se mandó) o { error }.
+const HORA_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+const DIAS = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'];
+function leerHorarioSemana(h) {
+  if (h === undefined) return { valor: undefined };
+  if (h === null) return { valor: null };
+  if (!Array.isArray(h) || h.length !== 7) return { error: 'El horario debe traer los 7 días.' };
+  const dias = [];
+  for (let d = 0; d < 7; d++) {
+    const x = h.find(r => Number(r?.dia) === d);
+    if (!x) return { error: 'El horario debe traer los 7 días.' };
+    const abierto = x.abierto === true;
+    if (abierto) {
+      if (!HORA_RE.test(String(x.abre)) || !HORA_RE.test(String(x.cierra))) {
+        return { error: `Pon la hora de abrir y de cerrar del ${DIAS[d]}.` };
+      }
+      if (String(x.cierra) <= String(x.abre)) {
+        return { error: `El ${DIAS[d]} la hora de cerrar tiene que ser después de la de abrir.` };
+      }
+    }
+    dias.push({ dia: d, abierto, abre: abierto ? x.abre : null, cierra: abierto ? x.cierra : null });
+  }
+  return { valor: JSON.stringify(dias) };
+}
+
 // ── POST /sucursales ────────────────────────────────────────
 // Crea una sucursal (admin). El slug se genera desde el nombre y se
 // hace único agregando un sufijo si ya existe.
 export const createSucursal = async (req, res) => {
-  const { nombre, direccion, telefono, horario } = req.body;
+  const { nombre, direccion, telefono, horario_semana } = req.body;
 
   if (!nombre || !String(nombre).trim()) {
     return res.status(400).json({ message: 'El nombre de la sucursal es requerido.' });
   }
+  const horario = leerHorarioSemana(horario_semana);
+  if (horario.error) return res.status(400).json({ message: horario.error });
 
   const base = slugify(nombre) || 'sucursal';
   try {
@@ -98,11 +128,11 @@ export const createSucursal = async (req, res) => {
     while (usados.has(slug)) slug = `${base}_${n++}`;
 
     const { rows } = await pool.query(
-      `INSERT INTO sucursales (slug, nombre, direccion, telefono, horario, activa)
+      `INSERT INTO sucursales (slug, nombre, direccion, telefono, horario_semana, activa)
        VALUES ($1, $2, $3, $4, $5, TRUE)
-       RETURNING slug, nombre, direccion, telefono, horario, activa`,
+       RETURNING slug, nombre, direccion, telefono, horario_semana, activa`,
       [slug, String(nombre).trim(), direccion || null, telefono || null,
-       String(horario ?? '').trim() || null]
+       horario.valor === undefined ? null : horario.valor]
     );
     refrescarSlugsSucursales();
     res.status(201).json(rows[0]);
@@ -113,10 +143,12 @@ export const createSucursal = async (req, res) => {
 };
 
 // ── PATCH /sucursales/:slug ─────────────────────────────────
-// Actualiza el nombre, dirección, teléfono y horario de una sucursal (admin).
+// Actualiza el nombre, dirección, teléfono y horario por día de una sucursal (admin).
 export const updateSucursal = async (req, res) => {
   const { slug } = req.params;
-  const { nombre, direccion, telefono, horario, orden } = req.body;
+  const { nombre, direccion, telefono, horario_semana, orden } = req.body;
+  const horario = leerHorarioSemana(horario_semana);
+  if (horario.error) return res.status(400).json({ message: horario.error });
 
   // La sucursal de pruebas no se administra desde la app: no existe para nadie
   // más que sus usuarios.
@@ -138,7 +170,7 @@ export const updateSucursal = async (req, res) => {
   if (nombre    !== undefined) { updates.push(`nombre = $${i++}`);    values.push(String(nombre).trim()); }
   if (direccion !== undefined) { updates.push(`direccion = $${i++}`); values.push(direccion || null); }
   if (telefono  !== undefined) { updates.push(`telefono = $${i++}`);  values.push(telefono || null); }
-  if (horario   !== undefined) { updates.push(`horario = $${i++}`);   values.push(String(horario ?? '').trim() || null); }
+  if (horario.valor !== undefined) { updates.push(`horario_semana = $${i++}`); values.push(horario.valor); }
   if (orden     !== undefined) { updates.push(`orden = $${i++}`);     values.push(Number(orden)); }
 
   if (updates.length === 0) {
@@ -150,7 +182,7 @@ export const updateSucursal = async (req, res) => {
     const { rows } = await pool.query(
       `UPDATE sucursales SET ${updates.join(', ')}
          WHERE slug = $${i}
-         RETURNING slug, nombre, direccion, telefono, horario, activa, orden`,
+         RETURNING slug, nombre, direccion, telefono, horario_semana, activa, orden`,
       values
     );
     if (rows.length === 0) {
@@ -196,7 +228,7 @@ export const setActivaSucursal = async (req, res) => {
 
     const { rows } = await pool.query(
       `UPDATE sucursales SET activa = $1 WHERE slug = $2
-         RETURNING slug, nombre, direccion, telefono, horario, activa`,
+         RETURNING slug, nombre, direccion, telefono, horario_semana, activa`,
       [activa, slug]
     );
     refrescarSlugsSucursales();
