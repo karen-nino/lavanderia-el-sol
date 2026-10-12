@@ -271,7 +271,7 @@ export default function MachineCard({
           />
           {maquina.tope_alcanzado ? (
             <p className="text-kpi-label text-red text-sm text-center">
-              Llegó al tope y se le cortó la luz.
+              Llegó al tope: se finaliza sola en unos segundos.
             </p>
           ) : maquina.programa_cumplido ? (
             /* Programa elegido al iniciarla (mig. 146): ya cumplió, falta

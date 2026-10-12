@@ -1226,7 +1226,7 @@ export default function Salidas() {
                         // tope, el corte ya le quitó la luz y falta finalizarla.
                         topeAlcanzado(m) && !deFichas(m) ? (
                           <span className="text-xs font-medium text-red-600 basis-full">
-                            Llegó al tope y se le cortó la luz.
+                            Llegó al tope: se finaliza sola en unos segundos.
                           </span>
                         ) : programaCumplido(m) && deFichas(m) ? (
                           // Sec49: se le acabaron las fichas; si aún le cabe

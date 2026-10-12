@@ -30,13 +30,18 @@ export function clavesEnTope(maquinas, ahora = Date.now()) {
     .filter(m => !(m.encendida_manual_at && !m.en_uso_nota_id));
   const cumplio = (m, minutos) =>
     new Date(m.en_uso_desde).getTime() + Number(minutos) * 60_000 <= ahora;
+  // El tope del reloj, igual que TOPE_RELOJ del backend: con "Otro ciclo" de
+  // la secadora de fichas (minutos_pagados) se recorre al fin elegido.
+  const tope = (m) => (m.minutos_pagados
+    ? Math.max(Number(m.ciclo_minutos), Number(m.ciclo_elegido_minutos) || 0)
+    : Number(m.ciclo_minutos));
+  // Desde el 2026-10-11 la máquina con nota se FINALIZA SOLA medio minuto
+  // después de su tope (backend, jobs/finalizarAlTope.js): este sonido es el
+  // aviso de que esa tarjeta se va. Por eso también suenan las de fichas.
   const topes = vivas
     .filter(m => Number(m.ciclo_minutos) > 0)
-    // La secadora de fichas (mig. 147) no tiene corte: su tope solo limita
-    // las fichas. Lo que avisa es que se le acabó el tiempo (abajo).
-    .filter(m => !(Number(m.minutos_por_ficha) > 0))
     .filter(m => m.cronometro || m.en_uso_nota_id)
-    .filter(m => cumplio(m, m.ciclo_minutos))
+    .filter(m => cumplio(m, tope(m)))
     .map(m => `${m.id}:${m.en_uso_desde}`);
   // Programa cumplido: otra clave de la misma vuelta, así suena una vez por cada uno.
   const programas = vivas

@@ -31,15 +31,22 @@ describe('clavesEnTope', () => {
     const enTope = maq({ cronometro: true, ciclo_minutos: 45, ciclo_elegido_minutos: 30, en_uso_desde: hace(46) });
     expect(clavesEnTope([enTope], ahora)).toEqual([`1:${enTope.en_uso_desde}`, `1:${enTope.en_uso_desde}:programa`]);
   });
-  it('secadora de fichas (Sec49): no suena por el tope, sí al acabarse su tiempo', () => {
-    const m = maq({ ciclo_minutos: 30, ciclo_elegido_minutos: 20, minutos_por_ficha: 10, en_uso_desde: hace(31) });
+  it('secadora de fichas (Sec49): suena al acabarse su tiempo y otra vez en el tope (se finaliza sola)', () => {
+    const m = maq({ ciclo_minutos: 30, ciclo_elegido_minutos: 20, minutos_por_ficha: 10, en_uso_desde: hace(21) });
     expect(clavesEnTope([m], ahora)).toEqual([`1:${m.en_uso_desde}:programa`]);
+    const enTope = { ...m, en_uso_desde: hace(31) };
+    expect(clavesEnTope([enTope], ahora)).toEqual([`1:${enTope.en_uso_desde}`, `1:${enTope.en_uso_desde}:programa`]);
+  });
+  it('con Otro ciclo el tope se recorre al fin elegido', () => {
+    const m = maq({ ciclo_minutos: 30, ciclo_elegido_minutos: 40, minutos_pagados: 40, minutos_por_ficha: 10, en_uso_desde: hace(35) });
+    expect(clavesEnTope([m], ahora).filter(c => !c.includes(':programa'))).toEqual([]);
   });
   it('secadora de fichas con Otro ciclo: el fin nuevo es otra clave y vuelve a sonar', () => {
     const antes = maq({ ciclo_minutos: 30, ciclo_elegido_minutos: 10, minutos_por_ficha: 10, en_uso_desde: hace(36) });
     const despues = { ...antes, ciclo_elegido_minutos: 35, minutos_pagados: 30 };
-    const [a] = clavesEnTope([antes], ahora);
-    const [b] = clavesEnTope([despues], ahora);
+    const programa = (m) => clavesEnTope([m], ahora).find(c => c.includes(':programa'));
+    const a = programa(antes);
+    const b = programa(despues);
     expect(b).not.toBe(a);
     expect(hayTopeNuevo(new Set([a]), [b])).toBe(true);
   });

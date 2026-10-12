@@ -290,9 +290,9 @@ describe('MachineCard', () => {
       expect(screen.getByRole('button', { name: 'INICIAR SECADO' })).toBeInTheDocument();
     });
 
-    it('al llegar al tope dice que se le cortó la luz', () => {
+    it('al llegar al tope avisa que se finaliza sola', () => {
       render(<MachineCard maquina={{ ...lg, tope_alcanzado: true }} nota={{ id: 1, tipo_servicio: 'POR_ENCARGO' }} />);
-      expect(screen.getByText(/se le cortó la luz/)).toBeInTheDocument();
+      expect(screen.getByText(/se finaliza sola/)).toBeInTheDocument();
     });
   });
 });

@@ -1,6 +1,7 @@
 import app from './app.js';
 import { iniciarCierreDelDia } from './jobs/cierreDelDia.js';
 import { iniciarLimpiezaNotificaciones } from './jobs/limpiezaNotificaciones.js';
+import { iniciarFinalizarAlTope } from './jobs/finalizarAlTope.js';
 import { iniciarListenerSonoff } from './jobs/listenerSonoff.js';
 import { iniciarReconciliadorSonoff } from './jobs/reconciliarSonoff.js';
 import { ENTORNO_DEMO, verificarEntornoDemo } from './utils/entorno.js';
@@ -16,6 +17,8 @@ app.listen(PORT, () => {
   // Barrido de cierre del día: libera máquinas que quedaron en uso.
   iniciarCierreDelDia();
   iniciarLimpiezaNotificaciones();
+  // Máquina con nota que llega a su tope: se finaliza sola (2026-10-11).
+  iniciarFinalizarAlTope();
   // Control Sonoff: listener por evento (enganche central) + reconciliador
   // periódico de respaldo. En la demo no se arrancan: no hay interruptores que
   // controlar, y el listener mantiene abierta una conexión permanente contra la
