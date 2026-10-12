@@ -221,3 +221,74 @@ describe('producto del cliente', () => {
     expect(await reservado(oxxi)).toBe(1);
   });
 });
+
+// Mig. 161 (2026-10-11): el granel del servicio se DESCUENTA al terminar la
+// primera lavadora de la nota; deja de salir como "apartado" en Inventario.
+describe('el granel sale del estante al terminar la lavadora', () => {
+  const stock = async (id) => {
+    const { rows } = await pool.query('SELECT stock_actual, stock_reservado FROM productos WHERE id = $1', [id]);
+    return { actual: Number(rows[0].stock_actual), reservado: Number(rows[0].stock_reservado) };
+  };
+  const movimientos = async (notaId) => (await pool.query(
+    'SELECT producto_id, tipo, cantidad_medidas::int AS m FROM producto_movimientos WHERE nota_id = $1 ORDER BY id', [notaId]
+  )).rows;
+
+  // Nota Chico con OXXI elegido (1 medida) y una lavadora que ya terminó.
+  async function lavadaConOxxi() {
+    const oxxi = await granel('OXXI MEJORADO', tipo.jabon, 50);
+    await granel('PERSIL', tipo.jabon, 50);
+    const lavadora = await seedMaquina({ nombre: 'L1', tipo: 'lavadora_mediana' });
+    const { notaId, carga } = await crearChico();
+    await request(app).put(`/api/notas/${notaId}/cargas/${carga.id}/granel/${tipo.jabon}`)
+      .set(auth(admin.token)).send({ producto_id: oxxi, cantidad: 1 }).expect(200);
+    expect(await stock(oxxi)).toEqual({ actual: 50, reservado: 1 }); // elegido = apartado
+    await request(app).patch(`/api/notas/${notaId}/asignar-maquina`).set(auth(admin.token))
+      .send({ maquina_ids: [lavadora], cobrar: false }).expect(200);
+    await request(app).patch(`/api/notas/${notaId}/activar-pendientes`).set(auth(admin.token))
+      .send({ maquina_id: lavadora }).expect(200);
+    await request(app).patch(`/api/notas/${notaId}/terminar-lavado-final`).set(auth(admin.token))
+      .send({ lavadora_id: lavadora }).expect(200);
+    return { notaId, carga, oxxi };
+  }
+
+  it('al terminar la lavadora se descuenta y deja de estar apartado', async () => {
+    const { notaId, oxxi } = await lavadaConOxxi();
+    expect(await stock(oxxi)).toEqual({ actual: 49, reservado: 0 });
+    expect(await movimientos(notaId)).toEqual([{ producto_id: oxxi, tipo: 'venta', m: 1 }]);
+  });
+
+  it('cobrar y entregar después no lo descuentan otra vez', async () => {
+    const { notaId, oxxi } = await lavadaConOxxi();
+    await request(app).patch(`/api/notas/${notaId}/estado`).set(auth(admin.token))
+      .send({ estado: 'LISTA' }).expect(200);
+    await request(app).patch(`/api/notas/${notaId}/estado-pago`).set(auth(admin.token))
+      .send({ estado_pago: 'PAGADO', forma_pago: 'EFECTIVO' }).expect(200);
+    await request(app).patch(`/api/notas/${notaId}/estado`).set(auth(admin.token))
+      .send({ estado: 'FINALIZADA' }).expect(200);
+    expect(await stock(oxxi)).toEqual({ actual: 49, reservado: 0 });
+    expect((await movimientos(notaId)).filter(m => m.tipo === 'venta')).toHaveLength(1);
+  });
+
+  it('cancelar la nota lo regresa al estante', async () => {
+    const { notaId, oxxi } = await lavadaConOxxi();
+    await request(app).patch(`/api/notas/${notaId}/estado`).set(auth(admin.token))
+      .send({ estado: 'CANCELADA' }).expect(200);
+    expect(await stock(oxxi)).toEqual({ actual: 50, reservado: 0 });
+    expect((await movimientos(notaId)).map(m => m.tipo)).toEqual(['venta', 'liberacion']);
+  });
+
+  it('cambiar de producto ya lavado regresa el anterior y descuenta el nuevo', async () => {
+    const { notaId, carga, oxxi } = await lavadaConOxxi();
+    const persil = (await pool.query("SELECT id FROM productos WHERE nombre = 'PERSIL'")).rows[0].id;
+    await request(app).put(`/api/notas/${notaId}/cargas/${carga.id}/granel/${tipo.jabon}`)
+      .set(auth(admin.token)).send({ producto_id: persil, cantidad: 1 }).expect(200);
+    expect(await stock(oxxi)).toEqual({ actual: 50, reservado: 0 });
+    expect(await stock(persil)).toEqual({ actual: 49, reservado: 0 });
+  });
+
+  it('eliminar la nota lo regresa al estante', async () => {
+    const { notaId, oxxi } = await lavadaConOxxi();
+    await request(app).delete(`/api/notas/${notaId}`).set(auth(admin.token)).expect(204);
+    expect(await stock(oxxi)).toEqual({ actual: 50, reservado: 0 });
+  });
+});

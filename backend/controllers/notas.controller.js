@@ -218,31 +218,10 @@ async function estadoAlTerminarCargas(client, notaId) {
 async function cerrarNotaSinCargasPendientes(client, notaId, { sucursal, usuarioId }) {
   const estado = await estadoAlTerminarCargas(client, notaId);
   if (estado === 'FINALIZADA') {
-    await registrarMovimientosProductosNota(client, notaId, sucursal, usuarioId, 'venta');
-    await client.query(
-      `UPDATE productos a
-          SET stock_actual    = stock_actual    - np.cantidad_medidas,
-              stock_reservado = stock_reservado - np.cantidad_medidas
-        FROM nota_productos np
-        WHERE np.nota_id = $1 AND np.producto_id = a.id`,
-      [notaId]
-    );
+    await consumirProductosDeNota(client, notaId, sucursal, usuarioId);
   }
   await client.query('UPDATE notas SET estado = $1 WHERE id = $2', [estado, notaId]);
   return estado;
-}
-
-// ¿El producto de esta nota ya se dio por VENDIDO? Se sabe por su movimiento de
-// inventario: entregar (o cobrar) lo saca del estante y deja la marca. Importa
-// porque una nota entregada se puede reabrir (2026-09-25) y volver a entregar:
-// sin esto, la segunda entrega descontaría el mismo producto otra vez.
-async function stockYaConsumido(client, notaId) {
-  const { rows } = await client.query(
-    `SELECT 1 FROM producto_movimientos
-      WHERE nota_id = $1 AND tipo = 'venta' LIMIT 1`,
-    [notaId]
-  );
-  return rows.length > 0;
 }
 
 // IDs (sin repetir) de todas las máquinas vinculadas a una nota.
@@ -967,7 +946,7 @@ async function liberarProductosDeNota(client, notaId) {
 // se devuelve al anular una venta. Una fila por producto de la nota. El folio
 // se copia (mig. 144): si la nota se borra, `nota_id` queda en NULL y sin la
 // copia la devolución ya no diría qué nota se anuló.
-async function registrarMovimientosProductosNota(client, notaId, sucursal, usuarioId, tipo) {
+async function registrarMovimientosProductosNota(client, notaId, sucursal, usuarioId, tipo, ids = null) {
   await client.query(
     `INSERT INTO producto_movimientos
        (producto_id, sucursal, usuario_id, tipo, destino, cantidad_medidas, descripcion, nota_id, nota_folio)
@@ -984,9 +963,88 @@ async function registrarMovimientosProductosNota(client, notaId, sucursal, usuar
        FROM nota_productos np
        JOIN productos a ON a.id = np.producto_id
        JOIN notas n     ON n.id = np.nota_id
-      WHERE np.nota_id = $1`,
-    [notaId, sucursal, usuarioId ?? null, tipo]
+      WHERE np.nota_id = $1
+        AND ($5::int[] IS NULL OR np.id = ANY($5::int[]))`,
+    [notaId, sucursal, usuarioId ?? null, tipo, ids]
   );
+}
+
+// ── Inventario de la nota, renglón por renglón (mig. 161) ──
+//
+// Cada renglón de nota_productos sabe si ya salió del estante (`consumido_at`)
+// o sigue apartado. Antes se movía la nota entera de una vez; desde que el
+// granel de los servicios se descuenta al terminar la primera lavadora
+// (2026-10-11), una misma nota puede tener renglones descontados y otros
+// apartados (las bolsas y los productos de marca, que salen al cobrar o
+// entregar).
+
+// El granel líquido que un SERVICIO lleva (el que se elige en Salidas). Es lo
+// que se descuenta al terminar la lavadora; el producto suelto no.
+const SQL_GRANEL_DE_SERVICIO = `np.carga_id IS NOT NULL AND a.tipo_liquido = 'granel'
+  AND COALESCE(a.forma, 'liquido') = 'liquido'`;
+
+// Suma por producto de unos renglones: un UPDATE ... FROM nota_productos con
+// dos renglones del mismo producto solo descontaría uno.
+const SQL_MEDIDAS_POR_PRODUCTO = `(SELECT producto_id, SUM(cantidad_medidas) AS medidas
+     FROM nota_productos WHERE id = ANY($1::int[]) GROUP BY producto_id)`;
+
+// Descuenta del estante lo que siga apartado: baja existencias y apartado, deja
+// el movimiento 'venta' (reporte diario) y marca el renglón. Lo ya descontado
+// no se toca, así que se puede llamar las veces que haga falta (cobrar y luego
+// entregar, reabrir y volver a entregar). Devuelve cuántos renglones descontó.
+async function consumirProductosDeNota(client, notaId, sucursal, usuarioId, { soloGranel = false } = {}) {
+  const { rows } = await client.query(
+    `SELECT np.id FROM nota_productos np
+       JOIN productos a ON a.id = np.producto_id
+      WHERE np.nota_id = $1 AND np.consumido_at IS NULL
+        ${soloGranel ? `AND ${SQL_GRANEL_DE_SERVICIO}` : ''}
+      FOR UPDATE OF np`,
+    [notaId]
+  );
+  const ids = rows.map(r => r.id);
+  if (ids.length === 0) return 0;
+  await registrarMovimientosProductosNota(client, notaId, sucursal, usuarioId, 'venta', ids);
+  await client.query(
+    `UPDATE productos a
+        SET stock_actual    = a.stock_actual - x.medidas,
+            stock_reservado = GREATEST(0, a.stock_reservado - x.medidas)
+       FROM ${SQL_MEDIDAS_POR_PRODUCTO} x
+      WHERE a.id = x.producto_id`,
+    [ids]
+  );
+  await client.query('UPDATE nota_productos SET consumido_at = NOW() WHERE id = ANY($1::int[])', [ids]);
+  return ids.length;
+}
+
+// Lo contrario, para cancelar, borrar o soltar renglones: lo ya descontado
+// vuelve al estante (con su movimiento 'liberacion') y lo apartado se suelta.
+// `ids` acota a esos renglones; sin él, la nota entera. Los renglones quedan
+// como apartados-y-soltados: quien llama decide si los borra.
+async function devolverProductosDeNota(client, notaId, sucursal, usuarioId, { ids = null } = {}) {
+  const { rows } = await client.query(
+    `SELECT id, consumido_at IS NOT NULL AS consumido FROM nota_productos
+      WHERE nota_id = $1 AND ($2::int[] IS NULL OR id = ANY($2::int[]))
+      FOR UPDATE`,
+    [notaId, ids]
+  );
+  const consumidos = rows.filter(r => r.consumido).map(r => r.id);
+  const apartados  = rows.filter(r => !r.consumido).map(r => r.id);
+  if (consumidos.length > 0) {
+    await registrarMovimientosProductosNota(client, notaId, sucursal, usuarioId, 'liberacion', consumidos);
+    await client.query(
+      `UPDATE productos a SET stock_actual = a.stock_actual + x.medidas
+         FROM ${SQL_MEDIDAS_POR_PRODUCTO} x WHERE a.id = x.producto_id`,
+      [consumidos]
+    );
+    await client.query('UPDATE nota_productos SET consumido_at = NULL WHERE id = ANY($1::int[])', [consumidos]);
+  }
+  if (apartados.length > 0) {
+    await client.query(
+      `UPDATE productos a SET stock_reservado = GREATEST(0, a.stock_reservado - x.medidas)
+         FROM ${SQL_MEDIDAS_POR_PRODUCTO} x WHERE a.id = x.producto_id`,
+      [apartados]
+    );
+  }
 }
 
 // Valida y tarifica las cargas recibidas en el body. Cada carga puede traer:
@@ -2297,15 +2355,7 @@ export const createNota = async (req, res) => {
     // hace cerrarNotaSinCargasPendientes cuando una nota de autoservicio se
     // cierra sola, y lo que haría cambiarEstadoNota al cobrar.
     if (esVenta(tipo_servicio)) {
-      await registrarMovimientosProductosNota(client, nota.id, req.sucursal, req.user.id, 'venta');
-      await client.query(
-        `UPDATE productos a
-            SET stock_actual    = stock_actual    - np.cantidad_medidas,
-                stock_reservado = stock_reservado - np.cantidad_medidas
-          FROM nota_productos np
-          WHERE np.nota_id = $1 AND np.producto_id = a.id`,
-        [nota.id]
-      );
+      await consumirProductosDeNota(client, nota.id, req.sucursal, req.user.id);
     }
 
     // El pago anticipado parcial entra como primer abono, igual que en
@@ -2413,13 +2463,16 @@ export const quitarCarga = async (req, res) => {
 
     // Devolver el stock que esta carga tenía reservado (el CASCADE borra las
     // filas de nota_productos pero no revierte stock_reservado).
-    await client.query(
-      `UPDATE productos a
-          SET stock_reservado = stock_reservado - np.cantidad_medidas
-        FROM nota_productos np
-        WHERE np.carga_id = $1 AND np.producto_id = a.id`,
-      [cargaId]
-    );
+    // Desde la mig. 161 su granel pudo haberse descontado ya (terminó otra
+    // lavadora de la nota): eso vuelve al estante; lo apartado se suelta.
+    {
+      const { rows: deLaCarga } = await client.query(
+        'SELECT id FROM nota_productos WHERE carga_id = $1', [cargaId]
+      );
+      if (deLaCarga.length > 0) {
+        await devolverProductosDeNota(client, id, req.sucursal, req.user?.id, { ids: deLaCarga.map(r => r.id) });
+      }
+    }
 
     // Sus máquinas nunca arrancaron, así que asignarlas no las apartó: si una
     // está en uso es porque OTRA nota la arrancó, y no se toca (soltarla le
@@ -2587,23 +2640,10 @@ export const eliminarNota = async (req, res) => {
     // deja el inventario corto sin forma de arreglarlo desde la nota. Y desde
     // que el Autoservicio se cierra al liquidarlo (2026-09-23), FINALIZADA es
     // el final normal de casi toda nota, no un caso raro.
-    if (['PAGADA', 'FINALIZADA'].includes(estadoNota)) {
-      await registrarMovimientosProductosNota(client, id, req.sucursal, req.user.id, 'liberacion');
-      await client.query(
-        `UPDATE productos a
-           SET stock_actual = stock_actual + np.cantidad_medidas
-         FROM nota_productos np
-         WHERE np.nota_id = $1 AND np.producto_id = a.id`,
-        [id]
-      );
-    } else if (!['FINALIZADA', 'CANCELADA'].includes(estadoNota)) {
-      await client.query(
-        `UPDATE productos a
-           SET stock_reservado = stock_reservado - np.cantidad_medidas
-         FROM nota_productos np
-         WHERE np.nota_id = $1 AND np.producto_id = a.id`,
-        [id]
-      );
+    // Desde la mig. 161 se decide por renglón: lo descontado vuelve al estante
+    // y lo apartado se suelta (una nota activa puede tener ya su granel fuera).
+    if (estadoNota !== 'CANCELADA') {
+      await devolverProductosDeNota(client, id, req.sucursal, req.user.id);
     }
 
     await client.query('DELETE FROM notas WHERE id = $1', [id]);
@@ -2726,41 +2766,15 @@ export const cambiarEstadoNota = async (req, res) => {
       });
     }
 
-    const consumido = await stockYaConsumido(client, id);
     if (estado === 'CANCELADA') {
-      if (consumido) {
-        // El producto ya se dio por vendido (se cobró o se entregó): al anular
-        // la venta vuelve al estante. La reserva ya se había liberado.
-        await registrarMovimientosProductosNota(client, id, req.sucursal, req.user.id, 'liberacion');
-        await client.query(
-          `UPDATE productos a
-             SET stock_actual = stock_actual + np.cantidad_medidas
-           FROM nota_productos np
-           WHERE np.nota_id = $1 AND np.producto_id = a.id`,
-          [id]
-        );
-      } else {
-        await client.query(
-          `UPDATE productos a
-             SET stock_reservado = stock_reservado - np.cantidad_medidas
-           FROM nota_productos np
-           WHERE np.nota_id = $1 AND np.producto_id = a.id`,
-          [id]
-        );
-      }
-    } else if (!consumido && (estado === 'PAGADA' || estado === 'FINALIZADA')) {
-      // Consumir stock al cobrar o al entregar, lo que ocurra primero, y solo
-      // una vez: ni PAGADA → FINALIZADA ni una nota reabierta y vuelta a
-      // entregar descuentan el mismo producto dos veces (2026-09-25).
-      await registrarMovimientosProductosNota(client, id, req.sucursal, req.user.id, 'venta');
-      await client.query(
-        `UPDATE productos a
-           SET stock_actual    = stock_actual    - np.cantidad_medidas,
-               stock_reservado = stock_reservado - np.cantidad_medidas
-         FROM nota_productos np
-         WHERE np.nota_id = $1 AND np.producto_id = a.id`,
-        [id]
-      );
+      // Lo que ya salió del estante (cobrado, entregado o el granel de una
+      // lavadora que terminó) vuelve; lo apartado se suelta (mig. 161).
+      await devolverProductosDeNota(client, id, req.sucursal, req.user.id);
+    } else if (estado === 'PAGADA' || estado === 'FINALIZADA') {
+      // Al cobrar o al entregar, lo que ocurra primero, sale lo que seguía
+      // apartado. Lo ya descontado no se repite (PAGADA → FINALIZADA, o una
+      // nota reabierta y vuelta a entregar).
+      await consumirProductosDeNota(client, id, req.sucursal, req.user.id);
     }
 
     // Al cancelar se guarda el motivo (opcional) capturado por el empleado.
@@ -3855,6 +3869,8 @@ export const terminarLavado = async (req, res) => {
       return res.status(400).json({ message: leido.error });
     }
     await sellarCicloMaquinas(client, id, leido ? { maquinaId: secadora_id, minutos: leido.minutos } : null);
+    // Terminó la lavadora: su granel ya se usó y sale del estante (mig. 161).
+    await consumirProductosDeNota(client, id, req.sucursal, req.user?.id, { soloGranel: true });
     // Si era la última lavadora, la nota pasa a SECANDO; si otras cargas
     // siguen en lavadora, continúa LAVANDO.
     const fase = await faseProcesoDeNota(client, id);
@@ -4044,6 +4060,10 @@ export const terminarLavadoFinal = async (req, res) => {
         WHERE id = $1 AND estado = 'en_uso'`,
       [lavadora_id]
     );
+
+    // Terminó una lavadora: el granel elegido de la nota ya se usó y sale del
+    // estante (mig. 161, 2026-10-11). Solo la primera vez descuenta algo.
+    await consumirProductosDeNota(client, id, req.sucursal, req.user?.id, { soloGranel: true });
 
     // ¿Quedan máquinas en uso? Si no, la nota está lista; si sí, se recalcula fase.
     const restantes = await maquinasDeNota(client, id);
@@ -4571,12 +4591,10 @@ export const elegirGranelDeCarga = async (req, res) => {
         FOR UPDATE OF np`,
       [id, cargaId, tipoId]
     );
-    for (const np of previos) {
-      await client.query(
-        'UPDATE productos SET stock_reservado = GREATEST(0, stock_reservado - $2) WHERE id = $1',
-        [np.producto_id, Number(np.cantidad_medidas) || 0]
-      );
-      await client.query('DELETE FROM nota_productos WHERE id = $1', [np.id]);
+    if (previos.length > 0) {
+      // Si ya se había descontado (terminó una lavadora), vuelve al estante.
+      await devolverProductosDeNota(client, id, req.sucursal, req.user?.id, { ids: previos.map(np => np.id) });
+      await client.query('DELETE FROM nota_productos WHERE id = ANY($1::int[])', [previos.map(np => np.id)]);
     }
     await client.query(
       'DELETE FROM nota_carga_pendientes WHERE carga_id = $1 AND tipo_granel_id = $2',
@@ -4607,6 +4625,11 @@ export const elegirGranelDeCarga = async (req, res) => {
       } catch (e) {
         await client.query('ROLLBACK');
         return res.status(400).json({ message: e.message });
+      }
+      // Elegido cuando ya terminó una lavadora de la nota: ya se usó, así que
+      // sale del estante de una vez, como el resto del granel (mig. 161).
+      if (await algunaLavadoraTermino(client, id)) {
+        await consumirProductosDeNota(client, id, req.sucursal, req.user?.id, { soloGranel: true });
       }
     } else {
       await client.query(
