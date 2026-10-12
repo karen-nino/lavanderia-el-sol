@@ -387,6 +387,26 @@ export default function Notas() {
       || referencia.includes(q);
   });
 
+  // Filtros activos (2026-10-11): dicen qué se está viendo y se quitan de un
+  // toque con su ✕, sin abrir el menú. Sin filtros, no se pintan. `display`
+  // decide dónde se ven (escritorio / móvil).
+  const chipsFiltros = (display) => (filtro !== 'TODOS' || rangoFecha !== 'TODAS') && (
+    <div className={`${display} flex-wrap justify-end gap-2`}>
+      {filtro !== 'TODOS' && (
+        <ChipFiltro
+          label={FILTRO_LABEL[filtro] ?? BADGE_ESTADO[filtro]?.label}
+          onQuitar={() => { setFiltro('TODOS'); setPagina(1); }}
+        />
+      )}
+      {etiquetaRangoFecha(rangoFecha) && (
+        <ChipFiltro
+          label={etiquetaRangoFecha(rangoFecha)}
+          onQuitar={() => { setRangoFecha('TODAS'); setPagina(1); }}
+        />
+      )}
+    </div>
+  );
+
   // Paginación (solo escritorio): 15 renglones por página. `paginaActual` va
   // acotada por si `pagina` quedó fuera de rango (al filtrar o borrar); los
   // botones operan sobre este valor ya acotado.
@@ -630,24 +650,10 @@ export default function Notas() {
         />
       </div>
 
-      {/* Filtros activos (2026-10-11): dicen qué se está viendo y se quitan
-          de un toque con su ✕, sin abrir el menú. Sin filtros, no se pintan. */}
-      {(filtro !== 'TODOS' || rangoFecha !== 'TODAS') && (
-        <div className="flex flex-wrap justify-center gap-2">
-          {filtro !== 'TODOS' && (
-            <ChipFiltro
-              label={FILTRO_LABEL[filtro] ?? BADGE_ESTADO[filtro]?.label}
-              onQuitar={() => { setFiltro('TODOS'); setPagina(1); }}
-            />
-          )}
-          {etiquetaRangoFecha(rangoFecha) && (
-            <ChipFiltro
-              label={etiquetaRangoFecha(rangoFecha)}
-              onQuitar={() => { setRangoFecha('TODAS'); setPagina(1); }}
-            />
-          )}
-        </div>
-      )}
+      {/* Aquí solo en escritorio, o en móvil cuando no hay tarjetas (para
+          poder quitar el filtro que dejó la lista vacía). Con tarjetas, en
+          móvil van dentro de su contenedor, arriba del primer día. */}
+      {chipsFiltros(filtradas.length > 0 ? 'hidden md:flex' : 'flex')}
 
       {loading && (
         <div className="flex justify-center py-12">
@@ -868,8 +874,9 @@ export default function Notas() {
           {/* Cards — mobile, agrupadas por día. El encabezado de fecha va
               arriba de cada grupo, así la tarjeta ya no repite la fecha. */}
           <div className="md:hidden pt-8 space-y-16">
-            {gruposMobile.map(grupo => (
+            {gruposMobile.map((grupo, iGrupo) => (
               <div key={grupo.clave} className="space-y-4">
+                {iGrupo === 0 && chipsFiltros('flex')}
                 <h3 className="text-sm font-bold text-dark-blue px-1">{grupo.fecha}</h3>
                 <div className="space-y-4">
                   {grupo.notas.map(n => {
