@@ -898,7 +898,7 @@ export default function Notas() {
                 >
                   {/* Folio + estado */}
                   <div className="flex items-start justify-between gap-2 pb-2">
-                    <p className="text-xl font-bold text-dark-blue">#{n.folio?.split('-')[0] ?? n.id}</p>
+                    <p className="text-md font-bold text-dark-blue">#{n.folio?.split('-')[0] ?? n.id}</p>
                     {lavandoYSecando ? (
                       <div className="flex flex-col items-end gap-1">
                         <span className={`text-xs font-bold tracking-wide px-3 py-1 rounded-pill ${BADGE_ESTADO.LAVANDO.cls}`}>
@@ -920,7 +920,7 @@ export default function Notas() {
                       llevaba el rótulo pasa aquí, para no perder el aire que
                       lo separa del folio. */}
                   <div className="flex items-center justify-between gap-2 mt-2">
-                    <p className="text-md font-semibold">{cliente}</p>
+                    <p className="text-xl font-semibold">{cliente}</p>
                     <p className="text-xl font-bold">{fmtMonto(n.precio_total)}</p>
                   </div>
 
