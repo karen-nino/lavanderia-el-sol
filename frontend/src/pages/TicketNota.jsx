@@ -227,7 +227,11 @@ function armarTextoTicket(nota, rfc, notaPie) {
     volcarBloque(adicionales);
   }
 
-  const productos = (nota.productos ?? []).filter(p => p.unidad !== 'medida')
+  // Mismo criterio que el recibo (prodsNota): en Por Encargo el granel y las
+  // bolsas sueltos los paga el servicio y el total no los cobra; listarlos con
+  // su importe hacía que el desglose sumara más que el total.
+  const productos = (nota.productos ?? []).filter(p => p.unidad !== 'medida'
+      && (!esEncargo || seVendePorUnidad(p)))
     .sort((a, b) => ordenProducto(a) - ordenProducto(b));
   if (productos.length > 0) {
     L.push('', '*Productos*');
