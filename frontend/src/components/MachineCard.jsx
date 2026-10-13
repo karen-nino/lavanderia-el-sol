@@ -91,7 +91,7 @@ export default function MachineCard({
     : {};
 
   const headerCls = 'flex flex-col items-center justify-center px-3 py-2.5 rounded-t-card';
-  const nombreCls = 'text-section uppercase tracking-wide';
+  const nombreCls = 'text-xl font-bold leading-tight uppercase tracking-wide';
 
   if (maquina.estado === 'disponible') {
     return (
