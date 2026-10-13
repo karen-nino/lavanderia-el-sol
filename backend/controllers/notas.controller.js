@@ -373,7 +373,22 @@ class CorteCerradoError extends Error {
 // Convierte ese tropiezo en un 409 con su motivo en vez del 500 genérico de
 // "intenta de nuevo": es una regla de negocio, no una falla, y reintentar no
 // la va a arreglar. Devuelve true si ya respondió.
+// Un descuento (ajuste) no puede dejar la nota en números rojos. `ajustarNota`
+// lo revisaba al ponerlo, pero el total también se recalcula al quitar o
+// reducir lo que la nota lleva, y ahí el descuento ya puesto la dejaba
+// negativa (2026-10-12). Por eso vive aquí, donde se calcula el total.
+class TotalNegativoError extends Error {
+  constructor() {
+    super('El total de la nota no puede ser negativo. Revisa el ajuste (descuento) antes de quitar o reducir algo.');
+    this.name = 'TotalNegativoError';
+  }
+}
+
 function respondioCorteCerrado(res, err) {
+  if (err instanceof TotalNegativoError) {
+    res.status(400).json({ message: err.message });
+    return true;
+  }
   if (!(err instanceof CorteCerradoError) && !(err instanceof TotalBajoAbonosError)) return false;
   res.status(409).json({ message: err.message });
   return true;
@@ -457,6 +472,8 @@ async function recalcularPrecioTotal(client, notaId, opciones = {}) {
     [notaId]
   );
   const nuevo = rows[0]?.precio_total ?? null;
+
+  if (nuevo != null && Number(nuevo) < 0) throw new TotalNegativoError();
 
   // Nunca por debajo de lo ya abonado (ver TotalBajoAbonosError). Quien llama
   // está en una transacción y su catch la deshace.
