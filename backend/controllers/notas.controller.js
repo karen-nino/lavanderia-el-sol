@@ -2584,6 +2584,26 @@ export const eliminarNota = async (req, res) => {
       }
     }
 
+    // Lo mismo con un ABONO vivo que entró en un corte ya cerrado: borrar la
+    // nota se lleva sus abonos (CASCADE) y Ventas dejaba de contar un dinero
+    // que el corte sí tiene (2026-10-12). Uno sin caja, o en la caja abierta,
+    // se borra como el cobro de arriba.
+    const { rows: abonoCerrado } = await client.query(
+      `SELECT 1 FROM nota_abonos ab
+         JOIN cajas c ON c.id = ab.caja_id
+        WHERE ab.nota_id = $1 AND ab.revertido_at IS NULL AND c.estado <> 'abierta'
+        LIMIT 1`,
+      [id]
+    );
+    if (abonoCerrado.length > 0) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({
+        message: `Un abono de la nota ${notaRows[0].folio} ya quedó en un corte cerrado, así que `
+               + 'la nota no se puede eliminar: ese dinero está contado ahí y el corte no se '
+               + 'reabre. Si hay que devolverlo, regístralo como salida de caja.',
+      });
+    }
+
     // Una máquina de esta nota CORRIENDO su ciclo (lavando o secando) no se
     // interrumpe por un borrado: hay ropa dentro y el ciclo va a medias. Se mide
     // por `en_uso_desde`, que es lo que separa "lavando" de "encendida
