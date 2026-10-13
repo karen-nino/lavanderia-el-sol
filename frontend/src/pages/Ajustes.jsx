@@ -10,10 +10,10 @@ import { almacenSesion } from '../lib/sesion';
 import { COMODINES_WHATSAPP, armarMensajeWhatsapp } from '../lib/mensajeWhatsapp';
 import Selector from '../components/Selector';
 
-// El nombre del negocio y el logo se quedan fuera de la DEMO: son de la
-// configuración global, los comparten todos los visitantes a la vez y se quedan
-// puestos hasta el reset de las 03:00. El backend los cierra por su cuenta
-// (controllers/ajustes.controller.js), esto es solo no ofrecerlos.
+/**
+ * En la demo, el nombre del negocio y el logo no se ofrecen (los comparten
+ * todos los visitantes; el backend también los bloquea).
+ */
 const NOTA_DEMO = 'En la demostración este dato no se cambia.';
 
 const INPUT_CLS =
@@ -22,8 +22,7 @@ const INPUT_CLS =
 const MOBILE_INPUT_CLS =
   'w-full px-4 py-3.5 border border-grey/30 rounded-lg text-base text-dark-blue placeholder-grey/60 focus:outline-none focus:border-blue transition';
 
-// Botones +/- de los campos numéricos (mismo estilo que el paso de cargas en
-// autoservicio), en tamaño desktop y móvil.
+/** Botones +/− de los campos numéricos, en tamaño escritorio y móvil. */
 const STEP_BTN_CLS =
   'flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-full border border-gray-300 bg-white text-gray-700 text-lg font-semibold leading-none hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors';
 const STEP_BTN_CLS_M =
@@ -44,15 +43,14 @@ const SectionIcon = {
         d="M3 9l1.5-4.5h15L21 9M3 9v10a1 1 0 001 1h16a1 1 0 001-1V9M3 9h18M9 14h6v6H9z" />
     </svg>
   ),
-  // Signo de dólar (sin círculo), para "Cargas y Precios". viewBox acercado al
-  // glifo para que se vea más grande, con el trazo ajustado a ese acercamiento.
+  // Signo de dólar, con el viewBox acercado para que se vea más grande.
   cargas: (
     <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="5.5 5.5 13 13">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.1}
         d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
     </svg>
   ),
-  // Lavadora, igual que el icono de "Máquinas" del nav inferior.
+  // Lavadora, como el ícono de Máquinas del menú inferior.
   maquinas: (
     <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <rect x="4" y="3" width="16" height="18" rx="2" strokeWidth={2} />
@@ -67,7 +65,7 @@ const SectionIcon = {
         d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
     </svg>
   ),
-  // Dos etiquetas (Lucide "tags"), acorde con "Etiquetas de encargo" (plural).
+  // Dos etiquetas (Lucide "tags").
   etiquetas: (
     <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -77,7 +75,7 @@ const SectionIcon = {
         d="m15 5 6.3 6.3a2.4 2.4 0 0 1 0 3.4L17 19" />
     </svg>
   ),
-  // Recibo con la esquina recortada (Lucide "receipt").
+  // Recibo (Lucide "receipt").
   ticket: (
     <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -85,8 +83,7 @@ const SectionIcon = {
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 8h8M8 12h8M8 16h5" />
     </svg>
   ),
-  // Globo de mensaje con un teléfono dentro: el WhatsApp de la app es un
-  // mensaje que sale del mostrador, no la marca (no se usa su logotipo).
+  // Globo de mensaje con un teléfono (no el logotipo de WhatsApp).
   whatsapp: (
     <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -107,7 +104,7 @@ const SectionIcon = {
         d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" />
     </svg>
   ),
-  // Caja de inventario (Lucide "package").
+  // Caja (Lucide "package").
   inventario: (
     <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -150,15 +147,15 @@ const SectionIcon = {
   ),
 };
 
-// Cómo se va a ver el mensaje. Se enseña con una nota de ejemplo porque la
-// regla de los asteriscos no se entiende leyéndola: se entiende viendo que
-// *Nombre* se convierte en un nombre y que *ya está* se queda en negritas.
+/**
+ * Nota de ejemplo para la vista previa del mensaje: así se ve que *Nombre* se
+ * sustituye y que *ya está* queda en negritas.
+ */
 const NOTA_EJEMPLO = {
   cliente_nombre: 'Ana López',
   created_at: '2026-09-26T14:30:00',
   folio: '1796-260926',
-  // Para *Horario* en la vista previa: de lunes a sábado cierra a las 7:00 pm
-  // y el domingo a las 3:00 pm (el ejemplo de la usuaria, 2026-10-11).
+  // Para *Horario*: lunes a sábado cierra 7:00 pm; domingo, 3:00 pm.
   sucursal_horario_semana: Array.from({ length: 7 }, (_, dia) => (
     { dia, abierto: true, abre: '09:00', cierra: dia === 6 ? '15:00' : '19:00' }
   )),
@@ -172,8 +169,7 @@ function PreviaWhatsapp({ plantilla }) {
       <p className="text-xs font-semibold text-green-800 uppercase tracking-wide">
         Así le llegaría a Ana López
       </p>
-      {/* Las negritas de WhatsApp (*texto*) se ven como negritas, igual que
-          en el chat, en vez de enseñar los asteriscos (2026-10-11). */}
+      {/* Las negritas de WhatsApp (*texto*) se ven como negritas. */}
       <p className="mt-1.5 text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">
         {texto.split(/(\*[^*\n]+\*)/g).map((trozo, i) => (
           /^\*[^*\n]+\*$/.test(trozo)
@@ -197,55 +193,50 @@ const MOBILE_SECTIONS = [
   { id: 'ticket',   label: 'Ticket',                   subtitle: 'Notas al pie del ticket', icon: SectionIcon.ticket },
 ];
 
-// Los servicios fijos que vende Por Encargo, con el campo de Ajustes que lleva
-// su precio. Las columnas siguen llamándose `tope_carga_*` porque nacieron como
-// topes (mig. 050 y 052), pero desde el rediseño del alta de Por Encargo ese
-// número ES el precio del servicio, no un máximo.
-// Jumbo no está: el tamaño dejó de venderse y su columna solo sobrevive para
-// las notas viejas que lo eligieron. El Edredón tampoco: se cobra según su
-// tamaño (mig. 130) y esos precios salen del catálogo de tamaños de edredón.
-// Cada servicio dice además cuántas medidas de cada granel ligado y cuántas
-// bolsas trae puestas (mig. 132): [precio, nombre, texto, medidas, bolsas].
-// Claves con que los datos de un tamaño de edredón entran a `config`.
+/** Claves con que los datos de un tamaño de edredón entran a `config`. */
 const claveEdredon         = (e) => `edredon_precio_${e.id}`;
 const claveEdredonMedidas  = (e) => `edredon_medidas_${e.id}`;
 const claveEdredonBolsas   = (e) => `edredon_bolsas_${e.id}`;
-// Lo que se guarda de un tamaño de edredón, con la clave que usa en `config`.
+/** Lo que se guarda de un tamaño de edredón, con su clave en `config`. */
 const camposEdredon = (e) => [
   [claveEdredon(e),        'precio',           e.precio ?? ''],
   [claveEdredonMedidas(e), 'precarga_medidas', e.precarga_medidas ?? 0],
   [claveEdredonBolsas(e),  'precarga_bolsas',  e.precarga_bolsas ?? 0],
 ];
 
+/**
+ * Servicios fijos de Por Encargo: [campo del precio, nombre, clave, campo de
+ * medidas, campo de bolsas]. Las columnas `tope_carga_*` guardan el precio del
+ * servicio. El Edredón se cobra por tamaño (su catálogo).
+ */
 const PRECIOS_SERVICIO = [
   ['tope_carga_chico',   'Servicio Chico',   'chico',   'precarga_medidas_chico',   'precarga_bolsas_chico'],
   ['tope_carga_mediano', 'Servicio Mediano', 'mediano', 'precarga_medidas_mediano', 'precarga_bolsas_mediano'],
   ['tope_carga_grande',  'Servicio Grande',  'grande',  'precarga_medidas_grande',  'precarga_bolsas_grande'],
 ];
-// Campos de precarga de los servicios fijos, para el payload de /ajustes.
+/** Campos de precarga de los servicios fijos, para el payload de /ajustes. */
 const CAMPOS_PRECARGA = PRECIOS_SERVICIO.flatMap(([, , , m, b]) => [m, b]);
 
-// El manual no es configuración: abre su propia página (/manual). Se ofrece
-// aparte de MOBILE_SECTIONS porque no tiene formulario que guardar y porque en
-// escritorio no es una sección más, sino un botón que lleva a la página.
+/** El manual abre su propia página (/manual); en escritorio es un botón aparte. */
 const SECCION_MANUAL = {
   id: 'manual', label: 'Manual de uso', subtitle: 'Cómo funciona la aplicación',
   icon: SectionIcon.manual,
 };
 
-// Instalar la app no es configuración del negocio, sino una acción del equipo
-// que se está usando: se ofrece aparte de MOBILE_SECTIONS porque aparece
-// también en el entorno de pruebas. Está siempre, aunque ya esté instalada o el
-// navegador no avise: la sección explica en cada caso qué hacer.
+/**
+ * Instalar la app es una acción del equipo, no un ajuste: va aparte y también
+ * en pruebas. La sección explica qué hacer en cada caso.
+ */
 const SECCION_INSTALAR = {
   id: 'instalar', label: 'Instalar la app', subtitle: 'Tenerla en la pantalla de inicio',
   icon: SectionIcon.instalar,
 };
 
-// Alertas que se pueden apagar en Ajustes → Alertas y Notificaciones (mig. 156),
-// además de "ciclo detenido". Nacen encendidas. Las de dinero y borrados
-// (nota cancelada/eliminada, pago revertido o desmarcado) no se pueden apagar:
-// son el rastro de quién hizo qué.
+/**
+ * Alertas que se pueden apagar en Ajustes → Alertas (además de "ciclo
+ * detenido"); nacen encendidas. Las de dinero y borrados no se apagan: son el
+ * rastro de quién hizo qué.
+ */
 const ALERTAS_APAGABLES = [
   {
     campo: 'alerta_stock',
@@ -269,25 +260,20 @@ const ALERTAS_APAGABLES = [
   },
 ];
 
-// Secciones que no guardan nada: su contenido se administra solo.
+/** Secciones sin nada que guardar con el botón general. */
 const SECCIONES_SIN_GUARDAR = ['etiquetas', 'inventario', 'instalar'];
 
-// Encabezado de un grupo de campos dentro de una sección. Va por encima de las
-// etiquetas de campo (que son bold), porque antes se perdía entre ellas: iba en
-// 12 px gris mientras cada campo pesaba más que el título de su propio grupo.
+/** Encabezado de un grupo de campos (por encima de las etiquetas, que son bold). */
 function TituloGrupo({ children }) {
   return <p className="text-sm font-bold text-dark-blue">{children}</p>;
 }
 
-// La escala de móvil es mayor (título de pantalla 20 px, etiqueta 16 px bold),
-// así que ahí el encabezado de grupo va en 18 px.
+/** Encabezado de grupo en móvil (18 px: ahí las etiquetas son de 16 px). */
 function TituloGrupoMobile({ children }) {
   return <p className="text-lg font-bold text-dark-blue">{children}</p>;
 }
 
-// Tarjeta de móvil equivalente a Section: el encabezado con fondo separa el
-// grupo de sus campos por estructura, no por tamaño de letra (las etiquetas de
-// campo en móvil ya son de 16 px bold).
+/** Tarjeta de móvil equivalente a Section: el encabezado con fondo separa el grupo. */
 function TarjetaMobile({ titulo, children }) {
   return (
     <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
@@ -352,9 +338,10 @@ function Toggle({ checked, onChange }) {
   );
 }
 
-// Horario por día de la sucursal (mig. 160), como el de Google Maps: cada día
-// abierto o cerrado, con su hora de abrir y de cerrar. `value` es la lista de
-// 7 días (lunes = 0) o null si nunca se capturó; entonces todos salen cerrados.
+/**
+ * Horario por día de la sucursal: cada día abierto o cerrado, con hora de abrir
+ * y cerrar. `value`: 7 días (lunes = 0) o null (todos cerrados).
+ */
 const DIAS_SEMANA = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
 const horarioCompleto = (value) => DIAS_SEMANA.map((_, dia) => {
   const x = Array.isArray(value) ? value.find(r => Number(r?.dia) === dia) : null;
@@ -365,7 +352,7 @@ function HorarioSemana({ value, onChange }) {
   const dias = horarioCompleto(value);
   const cambiar = (dia, cambios) =>
     onChange(dias.map(d => (d.dia === dia ? { ...d, ...cambios } : d)));
-  // Lo del lunes a todos los días: casi siempre es el mismo horario.
+  // Lo del lunes a todos los días.
   const lunes = dias[0];
   const copiarLunes = () =>
     onChange(dias.map(d => ({ ...d, abierto: lunes.abierto, abre: lunes.abre, cierra: lunes.cierra })));
@@ -407,7 +394,7 @@ function HorarioSemana({ value, onChange }) {
   );
 }
 
-// Fila con etiqueta + descripción a la izquierda y el toggle a la derecha.
+/** Fila con etiqueta y descripción a la izquierda y el interruptor a la derecha. */
 function ToggleRow({ label, hint, checked, onChange }) {
   return (
     <div className="flex items-start justify-between gap-4">
@@ -433,24 +420,17 @@ function MobileSectionButton({ label, icon, onClick }) {
   );
 }
 
-// Catálogo editable de etiquetas internas (tipos de tela, tamaños de edredón).
-// Cada cambio se guarda de inmediato contra su endpoint; no depende del botón
-// "Guardar" general de Ajustes. Las etiquetas se desactivan (no se borran) para
-// que las notas viejas conserven su valor.
-// `extra` son los campos fijos de un catálogo que cuelga de otro: los modelos
-// de máquina cuelgan de su marca (mig. 117), así que `{ marca_id }` filtra el
-// listado y viaja en el alta y en el reordenar.
-// `extraCampos` son los campos que lleva cada renglón además del nombre (el
-// modelo dice si es lavadora o secadora y de qué tamaño): se describen como
-// { name, defecto, opciones: [{ v, label }] } para un desplegable, o con
-// `tipo: 'check'` y `label` para un sí/no. Un sí/no con `excluye` apaga ese
-// otro campo al marcarse (dos casillas que no pueden ir juntas).
-// `onCambio` avisa la lista fresca a quien envuelve el catálogo (lo usa el
-// desplegable de marcas, que tiene que enterarse de las que se agregan aquí).
-// Tiene que ser estable (useCallback): entra en las dependencias de la carga.
-// `soloConsulta` deja la lista a la vista sin alta, edición, desactivar ni
-// arrastre: es lo que ven los usuarios de prueba, a quienes el backend no les
-// deja cambiar los catálogos (son del negocio entero).
+/**
+ * Catálogo editable de Ajustes. Cada cambio se guarda al momento en su endpoint;
+ * las etiquetas se desactivan (no se borran) para que las notas las conserven.
+ *
+ * @param extra campos fijos de un catálogo que cuelga de otro (`{ marca_id }`):
+ *   filtran el listado y viajan en el alta y el reordenar.
+ * @param extraCampos campos por renglón además del nombre: desplegable
+ *   ({ name, defecto, opciones }) o casilla ({ tipo: 'check', label, excluye? }).
+ * @param onCambio avisa la lista nueva; debe ser estable (useCallback).
+ * @param soloConsulta solo lectura (usuarios de prueba).
+ */
 function CatalogoEtiquetas({
   endpoint, singular, inputCls, onMensaje,
   extra = null, extraCampos = [], vacioTexto = 'Aún no hay etiquetas.', onCambio,
@@ -464,9 +444,7 @@ function CatalogoEtiquetas({
   const [editNombre, setEditNombre] = useState('');
   const [savedId,    setSavedId]    = useState(null);
 
-  // Los desplegables extra, tanto los del alta como los del renglón que se
-  // edita. Arrancan en su valor por defecto para que el alta nunca quede a
-  // medias: son datos obligatorios con un caso común claro.
+  // Los campos extra arrancan en su valor por defecto: son obligatorios.
   const porDefecto = () => Object.fromEntries(extraCampos.map(c => [c.name, c.defecto]));
   const [nuevoExtra, setNuevoExtra] = useState(porDefecto);
   const [editExtra,  setEditExtra]  = useState({});
@@ -474,15 +452,14 @@ function CatalogoEtiquetas({
     ...prev, [campo.name]: v, ...(campo.excluye && v ? { [campo.excluye]: false } : {}),
   });
 
-  // En el subtítulo del renglón un sí/no se resume (`chip`); la frase larga es
-  // para la casilla, que es donde hay que entender qué se está marcando.
+  // En el subtítulo, una casilla se resume con su `chip`.
   const etiquetaDe = (campo, valor) => (
     campo.tipo === 'check'
       ? (valor ? (campo.chip ?? campo.label) : null)
       : (campo.opciones.find(o => String(o.v) === String(valor))?.label ?? valor)
   );
 
-  // Un campo extra, igual en el alta que en la edición del renglón.
+  // Un campo extra, igual en el alta que en la edición.
   const campoExtra = (campo, valor, alCambiar) => (campo.tipo === 'check' ? (
     <label key={campo.name} className="flex items-center gap-2 text-sm text-gray-600 basis-full">
       <input
@@ -505,11 +482,10 @@ function CatalogoEtiquetas({
     </div>
   ));
 
-  // Los campos fijos viajan como filtro en el listado y en el cuerpo del resto.
+  // Los campos fijos van como filtro en el listado y en el cuerpo del resto.
   const extraQs = extra ? `?${new URLSearchParams(extra)}` : '';
 
-  // Reordenamiento con Pointer Events: funciona igual con mouse (desktop) y con
-  // el dedo (touch/móvil), a diferencia del arrastre nativo del navegador.
+  // Reordenar con Pointer Events: igual con mouse que con el dedo.
   const listRef      = useRef(null);
   const dragIdRef    = useRef(null);
   const [draggingId, setDraggingId] = useState(null);
@@ -520,7 +496,7 @@ function CatalogoEtiquetas({
       .catch(() => {});
   }, [endpoint, extraQs, onCambio]);
 
-  // Guarda el nuevo orden (lista de ids) en el servidor.
+  // Guarda el orden nuevo (lista de ids).
   const persistirOrden = async (lista) => {
     try {
       await api.patch(`${endpoint}/reordenar`, { ...extra, ids: lista.map(x => x.id) });
@@ -537,8 +513,7 @@ function CatalogoEtiquetas({
     try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* noop */ }
   };
 
-  // Al mover el puntero, se coloca el elemento arrastrado en la posición de la
-  // fila que está debajo (según su posición vertical).
+  // El elemento arrastrado toma el lugar de la fila que está debajo.
   const onHandleMove = (e) => {
     const id = dragIdRef.current;
     if (id == null || !listRef.current) return;
@@ -570,7 +545,7 @@ function CatalogoEtiquetas({
     setItems(prev => { persistirOrden(prev); return prev; });
   };
 
-  // Se pide confirmación antes de agregar.
+  // Se confirma antes de agregar.
   const pedirAgregar = () => {
     if (!nuevo.trim()) return;
     setConfirmar(true);
@@ -586,7 +561,7 @@ function CatalogoEtiquetas({
       setNuevo('');
       setNuevoExtra(porDefecto());
       setConfirmar(false);
-      // Confirmación como animación (palomita) en la fila recién agregada.
+      // Palomita en la fila recién agregada.
       setSavedId(creado.id);
       setTimeout(() => setSavedId(s => (s === creado.id ? null : s)), 1800);
     } catch (err) {
@@ -604,7 +579,7 @@ function CatalogoEtiquetas({
       const upd = await api.put(`${endpoint}/${id}`, { ...editExtra, nombre });
       setItems(prev => { const lista = prev.map(x => (x.id === id ? upd : x)); onCambio?.(lista); return lista; });
       setEditId(null);
-      // Confirmación como animación (palomita) en la fila, en vez de banner.
+      // Palomita en la fila guardada.
       setSavedId(id);
       setTimeout(() => setSavedId(s => (s === id ? null : s)), 1800);
     } catch (err) {
@@ -624,10 +599,8 @@ function CatalogoEtiquetas({
   return (
     <>
     <div className="space-y-3">
-      {/* El ancho lo ponen los envoltorios: los inputs llevan w-full en su
-          clase y sin esto se apilan uno por renglón en móvil. Con desplegables
-          el nombre se lleva el primer renglón (`basis-full`) y ellos bajan al
-          segundo junto al botón, que es lo que cabe en un teléfono. */}
+      {/* Los envoltorios ponen el ancho; con desplegables el nombre ocupa el primer
+          renglón y ellos bajan junto al botón. */}
       {!soloConsulta && (
       <div className="flex flex-wrap gap-2">
         <div className={`flex-1 min-w-0 ${extraCampos.length > 0 ? 'basis-full' : ''}`}>
@@ -706,9 +679,7 @@ function CatalogoEtiquetas({
                     </svg>
                   </span>
                   )}
-                  {/* El nombre y sus datos van en columna: los nombres de
-                      modelo son largos y en una sola línea el renglón se
-                      partía en dos en el teléfono. */}
+                  {/* Nombre y datos en columna: los nombres de modelo son largos. */}
                   <div className="flex-1 min-w-0">
                     <p className={`text-sm truncate ${item.activo ? 'text-gray-800' : 'text-gray-400 line-through'}`}>
                       {item.nombre}
@@ -793,9 +764,7 @@ function CatalogoEtiquetas({
   );
 }
 
-// Qué máquina es un modelo (mig. 118). Son los mismos dos ejes de la máquina y
-// de los tiempos; lo que hacen aquí es colocar al modelo en su bloque de
-// tiempos (Lavadora → Mediana, Secadora → Jumbo…).
+/** Qué máquina es un modelo (tipo y tamaño): lo ubica en su bloque de tiempos. */
 const CAMPOS_MODELO = [
   { name: 'tipo', defecto: 'lavadora', opciones: [
     { v: 'lavadora', label: 'Lavadora' },
@@ -805,39 +774,23 @@ const CAMPOS_MODELO = [
     { v: 'mediana', label: 'Mediana' },
     { v: 'jumbo',   label: 'Jumbo'   },
   ] },
-  // Los modelos con varios programas (mig. 120). Se declara aquí y no en el
-  // bloque de tiempos para que los demás modelos —que son casi todos— no
-  // carguen con campos que no usan.
+  // Modelos con varios programas: se declara aquí para no cargar a los demás.
   { name: 'pregunta_tiempo', defecto: false, tipo: 'check', excluye: 'solo_fichas',
     label: 'Varios programas: se elige cuál al iniciar', chip: 'varios programas' },
-  // Sin Sonoff (mig. 149): no pide tiempos —ni tope ni ficha— y su "Iniciar"
-  // solo arranca el cronómetro. No puede ir con varios programas.
+  // Solo fichas: sin Sonoff ni tiempos; no va con varios programas.
   { name: 'solo_fichas', defecto: false, tipo: 'check', excluye: 'pregunta_tiempo',
     label: 'Trabaja con fichas: sin Sonoff y sin tiempos', chip: 'fichas' },
-  // La casilla "Una carga corre 2 ciclos" (migs. 108 y 123) se escondió el
-  // 2026-10-02: con el cronómetro la máquina termina cuando la finalizan y
-  // ninguna carga corre dos. El dato sigue en la base; para volver a mostrarla
-  // (si se regresa al temporizador) se repone aquí:
+  // "Una carga corre 2 ciclos" no se muestra con cronómetro. Para el temporizador:
   //   { name: 'dos_ciclos', defecto: false, tipo: 'check',
   //     label: 'Una carga corre 2 ciclos', chip: '2 ciclos' },
 ];
 
-// Marcas de máquina y, colgando de cada una, sus modelos (migs. 117 y 118).
-//
-// Van juntas porque se administran juntas: se da de alta la marca y enseguida
-// sus modelos. El desplegable dice de qué marca es la lista de abajo, y el
-// catálogo de marcas avisa sus cambios para que una marca recién agregada
-// aparezca ahí sin recargar la pantalla.
-//
-// El modelo NO trae aquí su tiempo de ciclo: eso se escribe más arriba, en el
-// bloque de Lavadora o Secadora que le toca, junto a los demás tiempos. Lo que
-// se captura aquí es qué máquina es, que es justo lo que lo manda a ese bloque.
-// En el desplegable salen también las marcas desactivadas, porque sus máquinas
-// siguen dadas de alta y sus modelos se tienen que poder corregir.
-//
-// Las dos versiones de Ajustes (escritorio y móvil) pintan lo mismo y solo
-// cambian de estilo, así que `movil` elige el renglón y las clases en vez de
-// duplicar la sección entera.
+/**
+ * Marcas de máquina y sus modelos, juntos porque se dan de alta juntos. Aquí se
+ * captura qué máquina es el modelo; su tiempo va en el bloque de Lavadora o
+ * Secadora. El desplegable incluye marcas desactivadas (sus máquinas siguen).
+ * `movil` cambia solo el estilo.
+ */
 function MarcasYModelos({ movil = false, onMensaje, soloConsulta = false }) {
   const Campo      = movil ? MobileField : Field;
   const inputCls   = movil ? MOBILE_INPUT_CLS : INPUT_CLS;
@@ -848,14 +801,12 @@ function MarcasYModelos({ movil = false, onMensaje, soloConsulta = false }) {
   const [marcas,  setMarcas]  = useState([]);
   const [elegida, setElegida] = useState('');
 
-  // La marca elegida se deriva en vez de guardarse a secas: si deja de existir
-  // —o todavía no se elige ninguna— manda la primera de la lista, sin un efecto
-  // que encadene otra pintada.
+  // Si la marca elegida ya no existe, o no hay, manda la primera.
   const marcaId = marcas.some(m => String(m.id) === String(elegida))
     ? elegida
     : String(marcas[0]?.id ?? '');
 
-  // Estable a propósito: el catálogo la lleva en las dependencias de su carga.
+  // Estable: el catálogo la lleva en las dependencias de su carga.
   const recibirMarcas = useCallback((lista) => setMarcas(lista), []);
 
   return (
@@ -896,8 +847,7 @@ function MarcasYModelos({ movil = false, onMensaje, soloConsulta = false }) {
                   detalle: m.activo ? null : 'desactivada',
                 }))}
               />
-              {/* La `key` es a propósito: al cambiar de marca se vacía el
-                  formulario de alta y el renglón que se estaba editando. */}
+              {/* La `key` vacía el formulario al cambiar de marca. */}
               {marcaId && (
                 <CatalogoEtiquetas
                   key={marcaId}
@@ -919,8 +869,7 @@ function MarcasYModelos({ movil = false, onMensaje, soloConsulta = false }) {
   );
 }
 
-// Palomita animada (mismo trazo que el éxito de NuevaNota) para el estado
-// "guardado" de los botones de Ajustes.
+/** Palomita animada (como el éxito de Nueva Nota) para los botones guardados. */
 function IconoGuardado() {
   return (
     <svg className="w-5 h-5 animate-pop-in" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -930,7 +879,7 @@ function IconoGuardado() {
   );
 }
 
-// Contenido de un botón de guardar según su estado: cargando · guardado · reposo.
+/** Contenido de un botón de guardar: cargando · guardado · reposo. */
 function ContenidoGuardar({ saving, ok, children, guardando = 'Guardando...', okLabel = '¡Guardado!' }) {
   if (saving) {
     return (
@@ -944,8 +893,7 @@ function ContenidoGuardar({ saving, ok, children, guardando = 'Guardando...', ok
   return children;
 }
 
-// Lista de sucursales reordenable por arrastre (Pointer Events: mouse y touch).
-// Al soltar persiste el nuevo orden con PATCH /sucursales/reordenar { slugs }.
+/** Sucursales reordenables por arrastre; al soltar guarda con PATCH /sucursales/reordenar. */
 function SucursalesOrden({ sucursales, setSucursales, onMensaje }) {
   const listRef = useRef(null);
   const dragSlugRef = useRef(null);
@@ -1042,7 +990,7 @@ export default function Ajustes() {
     password: '',
   }));
   const [showPassword, setShowPassword] = useState(false);
-  // Clave del botón que acaba de guardar, para mostrarle la animación de palomita.
+  // El botón que acaba de guardar, para su palomita.
   const [guardadoOk, setGuardadoOk] = useState(null);
   const marcarGuardado = (clave) => {
     setGuardadoOk(clave);
@@ -1050,8 +998,7 @@ export default function Ajustes() {
   };
   const logoInputRef = useRef(null);
 
-  // Sucursales: cada una con su nombre, dirección y teléfono editables.
-  // sucursalSel = slug de la sucursal que se está editando en el selector.
+  // Sucursales editables; sucursalSel = slug de la que se edita.
   const [sucursales,     setSucursales]     = useState([]);
   const [sucursalSel,    setSucursalSel]    = useState('');
   const [cambiandoActiva, setCambiandoActiva] = useState(null); // slug activándose/desactivándose
@@ -1060,24 +1007,18 @@ export default function Ajustes() {
   const [nuevaSucursal,  setNuevaSucursal]  = useState({ nombre: '', direccion: '', telefono: '', horario_semana: null });
   const [confirmarDesactivar, setConfirmarDesactivar] = useState(null); // sucursal a desactivar
 
-  // Solo el Admin Main puede desactivar/reactivar sucursales.
+  // Solo el Admin Main activa o desactiva sucursales.
   const esMain = esAdminMainFn(usuario?.rol);
 
-  // Los usuarios de prueba operan en una sucursal aislada, pero los ajustes son
-  // del negocio entero (tarifas, tiempos, sucursales, catálogos). VEN toda la
-  // configuración —para eso está el entorno: para conocer la app entera—, pero
-  // no pueden guardar nada, ni siquiera su perfil: las cuentas de prueba son
-  // compartidas (2026-10-04). No es una cortesía del frontend: el backend
-  // rechaza todo con 403, así que en vez de ofrecer un "Guardar" que va a
-  // fallar, no se ofrece.
-  // En la demo la configuración es de juguete y se puede tocar entera.
+  // Los usuarios de prueba ven toda la configuración pero no guardan nada (ni su
+  // perfil: las cuentas son compartidas); el backend responde 403. En la demo sí.
   const soloConsultaPruebas = usuario?.es_prueba === true && !ES_DEMO;
 
   const [tiemposMarca, setTiemposMarca] = useState([]);
   const [edredones, setEdredones] = useState([]);
-  // Precios de edredón tal como vinieron, para mandar solo los que cambiaron.
+  // Precios de edredón como vinieron, para mandar solo los cambiados.
   const edredonOrigRef = useRef({});
-  // Lo que vino del servidor, para mandar solo lo que cambió al guardar.
+  // Lo que vino del servidor, para mandar solo lo cambiado.
   const tiemposOrigRef = useRef([]);
 
   useEffect(() => {
@@ -1090,13 +1031,8 @@ export default function Ajustes() {
       .finally(() => setLoading(false));
   }, []);
 
-  // Tiempos de ciclo por marca y tamaño (mig. 107). El backend solo devuelve
-  // las combinaciones que tienen sentido: las que existen en máquinas dadas de
-  // alta más las ya configuradas, así que la pantalla no se llena de campos
-  // vacíos por marcas que no están en ese tamaño.
-  // Precio de cada tamaño de edredón (mig. 130). Viven en su catálogo, pero se
-  // capturan junto a los demás servicios: entran a `config` con una clave por
-  // tamaño para usar los mismos campos, y al guardar van a su endpoint.
+  // Tiempos de ciclo y precios de cada tamaño de edredón (viven en su catálogo,
+  // pero entran a `config` para capturarse con los demás servicios).
   useEffect(() => {
     api.get('/etiquetas/tamanos-edredon')
       .then(d => {
@@ -1116,12 +1052,12 @@ export default function Ajustes() {
   }, []);
 
   useEffect(() => {
-    // ?todas=1 incluye inactivas para poder gestionarlas (reactivarlas).
+    // ?todas=1 incluye las inactivas, para reactivarlas.
     api.get('/sucursales?todas=1')
       .then(data => {
         const lista = (data ?? []).map(s => ({ ...s, telefono: formatTelefono(s.telefono ?? '') }));
         setSucursales(lista);
-        // Arranca en la sucursal activa del admin, o en la primera.
+        // Arranca en la sucursal activa, o en la primera.
         setSucursalSel(prev => prev || sucursalActiva || lista[0]?.slug || '');
       })
       .catch(() => {});
@@ -1132,10 +1068,8 @@ export default function Ajustes() {
     setSucursales(prev => prev.map(s => s.slug === slug ? { ...s, [field]: next } : s));
   };
 
-  // Valida y guarda la sucursal seleccionada. Devuelve la fila actualizada, o
-  // null si no hay ninguna cargada. Lanza si el nombre está vacío o falla la API.
-  // No maneja su propia animación de guardado: eso lo controla quien la llama
-  // (ahora es "Guardar cambios"), para que la sucursal se guarde junto con lo demás.
+  // Valida y guarda la sucursal seleccionada (la llama "Guardar cambios").
+  // Devuelve la fila o null; lanza si el nombre está vacío o falla la API.
   const patchSucursalActual = async () => {
     const s = sucursales.find(x => x.slug === sucursalSel);
     if (!s) return null;
@@ -1146,7 +1080,7 @@ export default function Ajustes() {
       nombre:    s.nombre,
       direccion: s.direccion ?? '',
       telefono:  s.telefono  ?? '',
-      // Solo si se capturó: null deja el que tenga (y no manda 7 días vacíos).
+      // Solo si se capturó.
       ...(s.horario_semana ? { horario_semana: s.horario_semana } : {}),
     });
     setSucursales(prev => prev.map(x =>
@@ -1213,16 +1147,15 @@ export default function Ajustes() {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    // El R.F.C. es texto libre (admite espacios y palabras), todo en mayúsculas.
+    // El R.F.C. es texto libre, en mayúsculas.
     const next = name === 'telefono' ? formatTelefono(value)
       : name === 'rfc' ? value.toUpperCase()
       : value;
     setConfig(prev => ({ ...prev, [name]: next }));
   };
 
-  // Suma/resta `delta` a un campo numérico (los botones +/-). Un campo vacío
-  // cuenta como 0; no baja de `min`. Redondea a 2 decimales para evitar
-  // arrastres de flotante (p. ej. 0.1 + 0.2).
+  // Suma `delta` a un campo numérico (vacío = 0), sin bajar de `min`, redondeado
+  // a 2 decimales.
   const stepCampo = (name, delta, min = 0) => {
     setConfig(prev => {
       const base = prev[name] === '' || prev[name] == null ? 0 : Number(prev[name]);
@@ -1233,7 +1166,7 @@ export default function Ajustes() {
     });
   };
 
-  // Par de botones − / + para un campo, en tamaño desktop o móvil.
+  // Botones − / + de un campo.
   const stepBtns = (name, step, min = 0, mobile = false) => {
     const cls = mobile ? STEP_BTN_CLS_M : STEP_BTN_CLS;
     return (
@@ -1244,14 +1177,12 @@ export default function Ajustes() {
     );
   };
 
-  // ── Tiempos de ciclo por modelo (mig. 118) ──
-  // Un renglón por modelo, "LG · WM22WV26SR": quien sabe cuánto dura un ciclo
-  // es el modelo. Lo que quede vacío cae al tiempo general de arriba.
+  // ── Tiempos de ciclo por modelo ──
+  // Un renglón por modelo ("LG · WM22WV26SR"); vacío cae al tiempo general.
   const claveTiempo = (t) => `modelo|${t.modelo_id}`;
   const etiquetaTiempo = (t) => `${t.marca} · ${t.modelo}`;
-  // Desde el 2026-10-02 las máquinas corren con cronómetro y estos minutos son
-  // su TOPE. También en el modelo que pregunta su programa (Sec49, mig. 146):
-  // el campo grande es su tope y los tres chicos, los programas a elegir.
+  // Con cronómetro estos minutos son el TOPE; en el modelo que pregunta, el campo
+  // grande es el tope y los tres chicos, sus programas.
   const ayudaTiempo = (t) => {
     const base = t?.pregunta_tiempo
       ? 'Arriba, el tope: a esos minutos se le corta la luz si nadie la finaliza. Abajo, los programas: al iniciarla se pregunta cuál corre y se avisa cuando lo cumpla. Tope vacío = el programa más largo.'
@@ -1260,17 +1191,11 @@ export default function Ajustes() {
     return `${base} Cada ficha: solo si es de fichas con Sonoff; al iniciarla se le mete una ficha por cada tantos minutos ${t?.pregunta_tiempo ? 'del programa elegido' : 'del tope'}. Vacío = no es de fichas.`;
   };
 
-  // Un modelo puede llevar TRES programas además de su tope (migs. 120 y 146):
-  // la Sec49 no tiene "un" ciclo, tiene tres programas y quien elige es el
-  // empleado con la ropa delante. Los campos salen SOLO en los modelos marcados
-  // como de varios tiempos (en Marcas y modelos); el resto, que son casi todos,
-  // no los ven. Sin el interruptor los programas no mandan nada.
+  // Los tres programas solo salen en los modelos marcados con varios programas.
   const tieneVariosTiempos = (t) => Boolean(t.pregunta_tiempo);
 
-  // Secadoras de fichas (mig. 147): su Sonoff mete fichas en vez de dar
-  // corriente. Con este campo lleno, al iniciarla la app manda una ficha por
-  // cada tantos minutos del programa elegido (o del tope, si no pregunta).
-  // Solo en secadoras: a las lavadoras no se les meten fichas con el Sonoff.
+  // Secadoras de fichas: al iniciarla se mete una ficha por cada tantos minutos
+  // del programa (o del tope). Solo secadoras.
   const campoFicha = (t, inputCls, unidadCls) => (
     t.tipo === 'secadora' ? (
       <div className="mt-3 flex items-center gap-2">
@@ -1286,10 +1211,8 @@ export default function Ajustes() {
     ) : null
   );
 
-  // Un programa más largo que el tope no se puede cumplir: el tope llega
-  // antes (2026-10-08). No se bloquea al guardar —los campos se corrigen uno
-  // por uno y una regla dura trabaría a quien está a medio cambio—; se avisa
-  // mientras se escribe.
+  // Un programa más largo que el tope no se cumple: se avisa sin bloquear el
+  // guardado (los campos se corrigen uno por uno).
   const programasSobreTope = (t) => {
     const tope = Number(t.minutos);
     if (!tieneVariosTiempos(t) || !(tope > 0)) return [];
@@ -1327,7 +1250,7 @@ export default function Ajustes() {
         </div>
       ) : null}
       {avisoProgramasSobreTope(t)}
-      {/* Sin Sonoff en la demo (2026-10-08): no hay fichas que meter. */}
+      {/* Sin Sonoff en la demo: no hay fichas. */}
       {!ES_DEMO && campoFicha(t, inputCls, unidadCls)}
     </>
   );
@@ -1354,8 +1277,7 @@ export default function Ajustes() {
     );
   };
 
-  // Solo se mandan los tamaños de edredón con algo cambiado (precio, medidas o
-  // bolsas), cada uno a su endpoint.
+  // Solo los tamaños de edredón cambiados, cada uno a su endpoint.
   const guardarPreciosEdredon = async () => {
     const distinto = (k) => String(config[k] ?? '') !== String(edredonOrigRef.current[k] ?? '');
     const cambiados = edredones.filter(e => camposEdredon(e).some(([k]) => distinto(k)));
@@ -1369,14 +1291,11 @@ export default function Ajustes() {
       edredones.flatMap(e => camposEdredon(e).map(([k]) => [k, config[k] ?? ''])));
   };
 
-  // Solo se mandan las combinaciones que cambiaron, cada una a su endpoint.
-  // Vaciar el campo borra el tiempo de esa marca: vuelve a mandar el de su
-  // tamaño, que es la forma de deshacer sin dejar un cero que pararía el
-  // temporizador.
+  // Solo los tiempos cambiados, cada uno a su endpoint. Vaciar uno lo borra: cae
+  // al respaldo en vez de dejar un cero.
   const guardarTiemposMarca = async () => {
     const aNumero = (v) => (v === '' || v == null ? null : Number(v));
-    // Un renglón puede cambiar por su tope o por cualquiera de sus programas,
-    // así que la comparación va campo por campo.
+    // Se compara campo por campo (tope y programas).
     const foto = (t) => [
       aNumero(t.minutos), aNumero(t.minutos_2), aNumero(t.minutos_3), aNumero(t.minutos_4),
       aNumero(t.minutos_por_ficha),
@@ -1391,7 +1310,7 @@ export default function Ajustes() {
       minutos_2: aNumero(t.minutos_2),
       minutos_3: aNumero(t.minutos_3),
       minutos_4: aNumero(t.minutos_4),
-      // Solo las secadoras lo enseñan.
+      // Solo en secadoras.
       ...(t.tipo === 'secadora' ? { minutos_por_ficha: aNumero(t.minutos_por_ficha) } : {}),
     })));
     tiemposOrigRef.current = tiemposMarca.map(t => ({
@@ -1446,9 +1365,7 @@ export default function Ajustes() {
     return handleGuardar(e);
   };
 
-  // Guardado de la sección "Sucursales" en móvil con el botón "Guardar" del pie:
-  // guarda tanto los datos del negocio (nombre_negocio; el logo va aparte) como
-  // la sucursal seleccionada, en una sola acción.
+  // Móvil, sección Sucursales: guarda el negocio y la sucursal en una acción.
   const handleGuardarNegocioMobile = async (e) => {
     e?.preventDefault();
     const s = sucursales.find(x => x.slug === sucursalSel);
@@ -1475,9 +1392,7 @@ export default function Ajustes() {
     }
   };
 
-  // Un servicio sin precio capturado. Pinta el campo en rojo y frena el guardado.
-  // Todos los precios de servicio que se capturan: los fijos y uno por cada
-  // tamaño de edredón activo.
+  // Precios de servicio que se capturan: los fijos y uno por tamaño de edredón activo.
   const preciosServicio = [
     ...PRECIOS_SERVICIO,
     ...edredones.filter(e => e.activo).map(e => [
@@ -1485,7 +1400,7 @@ export default function Ajustes() {
       claveEdredonMedidas(e), claveEdredonBolsas(e),
     ]),
   ];
-  // Medidas o bolsas vacías o que no son un entero de 0 o más.
+  // Medidas o bolsas vacías o que no son enteros de 0 o más.
   const precargaInvalida = (name) => {
     const v = config[name];
     return v === '' || v == null || !Number.isInteger(Number(v)) || Number(v) < 0;
@@ -1494,10 +1409,7 @@ export default function Ajustes() {
     const v = config[name];
     return v === '' || v == null;
   };
-  // Lo que le falta a la configuración para poder guardarse, o null si está
-  // completa. Los precios de los servicios Por Encargo son obligatorios: el
-  // backend también los exige, pero aquí se dice antes y con el nombre que se
-  // ve en la pantalla.
+  // Lo que impide guardar (o null). Los precios de servicio son obligatorios.
   const problemaDeAjustes = () => {
     const falta = preciosServicio.filter(([name]) => sinPrecioServicio(name));
     if (falta.length > 0) {
@@ -1512,15 +1424,10 @@ export default function Ajustes() {
     return null;
   };
 
-  // Precio de cada servicio Por Encargo: obligatorio. Es EL precio que se
-  // cobra (ya no un tope contra el que se compara lo que lleva la carga), así
-  // que un servicio sin precio no se puede vender: vacío se manda como null y
-  // el backend lo rechaza diciendo cuál falta.
+  // Precio de cada servicio: obligatorio; vacío va null y el backend lo rechaza.
   const precioServicioONull = (v) => (v === '' || v == null ? null : Number(v));
 
-  // Payload de configuración del negocio para PATCH /ajustes. Se arma con el
-  // estado completo de `config`, así que guardar desde cualquier sección envía
-  // todos los campos (los no editados van con su valor actual).
+  // Payload de PATCH /ajustes con todo `config` (lo no editado va con su valor).
   const buildConfigPayload = () => ({
     precio_carga_mediana:  Number(config.precio_carga_mediana),
     precio_carga_jumbo:    Number(config.precio_carga_jumbo),
@@ -1529,23 +1436,15 @@ export default function Ajustes() {
     tope_carga_chico:      precioServicioONull(config.tope_carga_chico),
     tope_carga_mediano:    precioServicioONull(config.tope_carga_mediano),
     tope_carga_grande:     precioServicioONull(config.tope_carga_grande),
-    // Lo que trae puesto cada servicio fijo (mig. 132).
+    // Lo que trae puesto cada servicio fijo.
     ...Object.fromEntries(CAMPOS_PRECARGA.map(c => [c, Number(config[c])])),
-    // El Edredón se cobra por tamaño (mig. 130): su precio va al catálogo, no
-    // aquí; `tope_carga_edredon` solo queda para cargas viejas sin tamaño.
-    // Jumbo ya no se captura: Por Encargo vende Chico, Mediano, Grande y Edredón. La
-    // columna se conserva para las notas viejas que sí eligieron ese tamaño,
-    // así que no se manda —ni se borra— desde aquí.
-    // El edredón no tiene tiempo de máquina propio: usa el tope de la jumbo.
-    // La tarifa del edredón en lavadora jumbo volvió el 2026-10-02.
+    // El Edredón se cobra por tamaño (catálogo). Jumbo de ropa no se captura.
     precio_edredon_jumbo:  Number(config.precio_edredon_jumbo),
     tiempo_carga_mediana:  Number(config.tiempo_carga_mediana),
     tiempo_carga_jumbo:    Number(config.tiempo_carga_jumbo),
     tiempo_carga_secadora: Number(config.tiempo_carga_secadora),
     tiempo_secadora_jumbo: Number(config.tiempo_secadora_jumbo),
-    // Los textos con los que se identifica el negocio no se mandan en la demo:
-    // el backend los ignora igualmente, pero así el payload dice lo mismo que
-    // la pantalla, donde van deshabilitados.
+    // En la demo no se mandan los textos del negocio (van deshabilitados).
     ...(ES_DEMO ? {} : {
       nombre_negocio:           config.nombre_negocio,
       rfc:                      config.rfc ?? '',
@@ -1556,7 +1455,7 @@ export default function Ajustes() {
       whatsapp_mensaje_reaviso: config.whatsapp_mensaje_reaviso ?? '',
     }),
     alerta_ciclo_detenido: !!config.alerta_ciclo_detenido,
-    // Interruptores de alertas (mig. 156): sin dato, encendidos.
+    // Interruptores de alertas; sin dato, encendidos.
     ...Object.fromEntries(ALERTAS_APAGABLES.map(({ campo }) => [campo, config[campo] !== false])),
   });
 
@@ -1568,7 +1467,7 @@ export default function Ajustes() {
     if (perfilForm.password && perfilForm.password.length < 6) {
       return setMensaje({ tipo: 'error', texto: 'La contraseña debe tener al menos 6 caracteres.' });
     }
-    // Un usuario de prueba no guarda nada (ni su perfil).
+    // Un usuario de prueba no guarda nada.
     if (soloConsultaPruebas) return;
 
     const sucursalActualEdit = sucursales.find(x => x.slug === sucursalSel);
@@ -1589,8 +1488,7 @@ export default function Ajustes() {
         api.patch('/ajustes', buildConfigPayload()),
         guardarTiemposMarca(),
         guardarPreciosEdredon(),
-        // La sucursal seleccionada se guarda junto con el resto. patchSucursalActual
-        // actualiza su estado por dentro; su resultado no se necesita aquí.
+        // La sucursal seleccionada se guarda junto con lo demás.
         patchSucursalActual(),
       ]);
 
@@ -1673,10 +1571,10 @@ export default function Ajustes() {
 
   if (!config) return null;
 
-  // Sucursal actualmente seleccionada para editar en el selector.
+  // Sucursal seleccionada.
   const sucursalActual = sucursales.find(s => s.slug === sucursalSel) || null;
 
-  // ── Desktop: secciones tipo card ──
+  // ── Escritorio: secciones en tarjetas ──
   const seccionPerfilDesktop = (
     <Section titulo="Mi Perfil">
       <Field label="Tipo de Cuenta">
@@ -1710,7 +1608,7 @@ export default function Ajustes() {
         />
       </Field>
 
-      {/* La contraseña no se consulta: en pruebas no hay nada que enseñar. */}
+      {/* En pruebas no hay contraseña que cambiar. */}
       {!soloConsultaPruebas && (
       <Field label="Contraseña">
         <div className="relative">
@@ -1736,8 +1634,7 @@ export default function Ajustes() {
     </Section>
   );
 
-  // Helpers de renglón (invocados como función, NO como <Componente/>, para
-  // no remontar los inputs y perder el foco al teclear).
+  // Renglones como funciones (no como <Componente/>) para no perder el foco al teclear.
   const campoPrecio = (name, hint, required = true) => (
     <Field label="Precio por carga" hint={hint}>
       <div className="flex items-center gap-2">
@@ -1763,10 +1660,7 @@ export default function Ajustes() {
       </div>
     </Field>
   );
-  // Un renglón por modelo de ese tipo+tamaño. Van debajo del tiempo general,
-  // que se queda de respaldo: la duración es de la MÁQUINA (una LG mediana
-  // tarda 45 y una Speed Queen jumbo 35), pero mientras una máquina no tenga
-  // modelo capturado no hay de dónde sacarla.
+  // Un renglón por modelo de ese tipo y tamaño, debajo del tiempo general (respaldo).
   const camposTiempoMarca = (tipo, tamano) => {
     const lista = tiemposDe(tipo, tamano);
     if (lista.length === 0) return null;
@@ -1809,17 +1703,12 @@ export default function Ajustes() {
 
       <div className="border-t border-gray-100" />
 
-      {/* El edredón tiene su propia tarifa de lavadora jumbo, sin tiempo propio
-          (usa el tope de la máquina). Se quitó el 2026-10-02 y volvió el mismo
-          día a pedido del negocio. */}
+      {/* Tarifa propia del edredón en lavadora (sin tiempo propio). */}
       {subTitulo('Edredón')}
       {campoPrecio('precio_edredon_jumbo', 'Tarifa fija por edredón lavado en máquina jumbo.')}
     </Section>
 
-    {/* La secadora va separada en Mediana y Jumbo igual que la lavadora. El
-        precio es de la CARGA (una carga jumbo se seca más cara aunque la
-        secadora sea la misma); el tiempo es de la MÁQUINA. Las dos columnas
-        existen desde la mig. 051. */}
+    {/* Secadora: Mediana y Jumbo. El precio es de la carga; el tiempo, de la máquina. */}
     <Section titulo="Secadora">
       {subTitulo('Mediana')}
       {campoPrecio('precio_carga_secadora', 'Precio del secado de una carga mediana.')}
@@ -1834,17 +1723,15 @@ export default function Ajustes() {
       {camposTiempoMarca('secadora', 'jumbo')}
     </Section>
 
-    {/* El catálogo va al final: los tiempos de arriba son del día a día y esto
-        se toca cuando entra una máquina nueva. */}
+    {/* El catálogo va al final: se toca solo cuando entra una máquina nueva. */}
     <Section titulo="Marcas y modelos">
       <MarcasYModelos onMensaje={setMensaje} soloConsulta={soloConsultaPruebas} />
     </Section>
     </>
   );
 
-  // Lo que el servicio trae puesto al agregarlo a una nota (mig. 132): medidas
-  // de cada granel ligado a él y bolsas. Qué granel y qué bolsa se ligan en
-  // Inventario; aquí solo cuántas.
+  // Lo que trae puesto el servicio: medidas de cada granel ligado y bolsas (qué
+  // granel y qué bolsa se ligan en Inventario).
   const camposPrecarga = (medidas, bolsas, mobile = false) => {
     const Campo = mobile ? MobileField : Field;
     const cls = mobile ? MOBILE_INPUT_CLS : INPUT_CLS;
@@ -1866,8 +1753,7 @@ export default function Ajustes() {
     );
   };
 
-  // Renglón del precio de un servicio Por Encargo. Es obligatorio: vacío se
-  // marca en rojo aquí y el backend lo rechaza al guardar.
+  // Precio de un servicio Por Encargo: obligatorio (vacío, en rojo).
   const campoPrecioServicio = (name, label, servicio) => (
     <Field
       label={<>{label} <span className="text-red-500">*</span></>}
@@ -2105,8 +1991,7 @@ export default function Ajustes() {
                 onChange={(v) => handleSucursalChange(sucursalActual.slug, 'horario_semana', v)}
               />
             </Field>
-            {/* Los datos de la sucursal se guardan con "Guardar cambios" al pie.
-                Aquí solo queda activar/desactivar (Admin Main). */}
+            {/* Los datos se guardan con "Guardar cambios"; aquí solo activar/desactivar (Admin Main). */}
             {esMain && (
               <div className="pt-1">
                 <button
@@ -2137,10 +2022,7 @@ export default function Ajustes() {
 
   const seccionAlertasDesktop = (
     <Section titulo="Alertas y Notificaciones">
-      {/* El mínimo global de stock se quitó (2026-10-03): cada producto lleva
-          el suyo en Inventario y el global ya no entraba en ningún cálculo. */}
-      {/* "Detener ciclo" solo existe con TEMPORIZADOR: con cronómetro se
-          esconde (2026-10-11), y vuelve solo en la demo o si se regresa a él. */}
+      {/* "Detener ciclo" solo existe con temporizador. */}
       {config.cronometro === false && (
         <ToggleRow
           label="Avisar cuando se detenga un ciclo"
@@ -2257,7 +2139,7 @@ export default function Ajustes() {
     </Section>
   );
 
-  // ── Mobile: contenido por sección ──
+  // ── Móvil: contenido por sección ──
   const seccionPerfilMobile = (
     <div className="space-y-5">
       <MobileField label="Tipo de Cuenta">
@@ -2503,7 +2385,7 @@ export default function Ajustes() {
                 onChange={(v) => handleSucursalChange(sucursalActual.slug, 'horario_semana', v)}
               />
             </MobileField>
-            {/* Los datos de la sucursal se guardan con el botón "Guardar" del pie. */}
+            {/* Los datos se guardan con "Guardar" del pie. */}
             {esMain && (
               <button
                 type="button"
@@ -2532,7 +2414,7 @@ export default function Ajustes() {
     </div>
   );
 
-  // Helpers de renglón móvil (invocados como función, no como <Componente/>).
+  // Renglones de móvil como funciones (no como <Componente/>).
   const campoPrecioM = (name, hint, required = true) => (
     <MobileField label="Precio por carga" hint={hint}>
       <div className="flex items-center gap-2">
@@ -2596,7 +2478,7 @@ export default function Ajustes() {
           {campoTiempoM('tiempo_carga_jumbo', 'Si nadie finaliza la máquina, a estos minutos se le corta la luz. Para las lavadoras jumbo cuyo modelo no tenga tope propio.')}
           {camposTiempoMarcaM('lavadora', 'jumbo')}
         </TarjetaMobile>
-        {/* La tarifa del edredón en lavadora jumbo (volvió el 2026-10-02). */}
+        {/* Tarifa propia del edredón en lavadora. */}
         <TarjetaMobile titulo="Edredón">
           {campoPrecioM('precio_edredon_jumbo', 'Tarifa fija por edredón lavado en máquina jumbo.')}
         </TarjetaMobile>
@@ -2619,8 +2501,7 @@ export default function Ajustes() {
         </div>
       </div>
 
-      {/* El catálogo va al final: los tiempos de arriba son del día a día y
-          esto se toca cuando entra una máquina nueva. */}
+      {/* El catálogo va al final: se toca solo cuando entra una máquina nueva. */}
       <div className="border-t border-light-blue/60 pt-8 space-y-6">
         <TituloGrupoMobile>Marcas y modelos</TituloGrupoMobile>
         <TarjetaMobile>
@@ -2662,8 +2543,7 @@ export default function Ajustes() {
             cliente compre aparte y el ajuste manual se suman encima.
           </p>
         </div>
-        {/* Una tarjeta por servicio: son precios independientes entre sí y
-            apelotonarlos en un bloque los hacía leer como una lista. */}
+        {/* Una tarjeta por servicio: son precios independientes. */}
         <div className="space-y-4">
           {preciosServicio.map(([name, label, servicio, medidas, bolsas]) => (
             <TarjetaMobile key={name}>
@@ -2679,8 +2559,7 @@ export default function Ajustes() {
 
   const seccionAlertasMobile = (
     <div className="space-y-6">
-      {/* "Detener ciclo" solo existe con TEMPORIZADOR: con cronómetro se
-          esconde (2026-10-11), y vuelve solo en la demo o si se regresa a él. */}
+      {/* "Detener ciclo" solo existe con temporizador. */}
       {config.cronometro === false && (
         <ToggleRow
           label="Avisar cuando se detenga un ciclo"
@@ -2762,9 +2641,7 @@ export default function Ajustes() {
     </div>
   );
 
-  // Ayuda de los comodines, compartida por escritorio y móvil: se escribe una
-  // vez y sale de COMODINES_WHATSAPP, así que añadir uno nuevo no obliga a
-  // tocar la pantalla.
+  // Ayuda de los comodines (escritorio y móvil), generada de COMODINES_WHATSAPP.
   const ayudaComodines = (
     <>
       Se manda desde el botón <span className="font-medium">Procesado</span> de una nota
@@ -2780,7 +2657,7 @@ export default function Ajustes() {
   );
 
 
-  // Ayuda del recordatorio (mig. 158): mismos comodines que el de arriba.
+  // Ayuda del recordatorio: mismos comodines.
   const ayudaReaviso = (
     <>
       Se manda desde el botón <span className="font-medium">Avisar</span> de una nota ya
@@ -2912,7 +2789,7 @@ export default function Ajustes() {
     instalar: <InstalarApp variant="mobile" />,
   };
 
-  // Éxitos: banner verde en línea. Errores: modal (igual que autoservicio).
+  // Éxitos: banner verde. Errores: modal.
   const mensajeBanner = mensaje?.tipo === 'ok' && (
     <div className="rounded-lg px-4 py-3 text-sm bg-green-50 border border-green-200 text-green-700">
       {mensaje.texto}
@@ -2956,10 +2833,7 @@ export default function Ajustes() {
   ];
   const activeSection = seccionesMobile.find((s) => s.id === mobileSection);
 
-  // En pruebas, toda sección que no sea "Mi Perfil" es de consulta: se ve
-  // entera, pero sin el pie de Cancelar/Guardar. Un botón que el backend va a
-  // rechazar (o peor, que diga "¡Guardado!" sin haber guardado) engaña más de
-  // lo que ayuda.
+  // En pruebas, toda sección salvo Mi Perfil es de consulta: sin Cancelar/Guardar.
   const seccionDeConsulta = soloConsultaPruebas
     && activeSection && activeSection.id !== 'instalar';
 
@@ -3023,7 +2897,7 @@ export default function Ajustes() {
             </div>
 
             <div className="px-6 py-6 space-y-6">
-            {/* Arriba y con el estilo del aviso de pruebas: abajo se perdía. */}
+            {/* Arriba, con el estilo del aviso de pruebas. */}
             {seccionDeConsulta && (
               <div className="bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-xl p-4">
                 <p className="font-semibold">Solo de consulta</p>
@@ -3097,9 +2971,7 @@ export default function Ajustes() {
           {seccionTicketDesktop}
         </div>
 
-        {/* El manual y la instalación van al final: son acciones, no ajustes
-            del negocio. Fuera del bloque de arriba porque también se ofrecen en
-            el entorno de pruebas. */}
+        {/* El manual y la instalación al final: son acciones, y también se ofrecen en pruebas. */}
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
           <div className="px-5 py-4 border-b border-gray-100">
             <h2 className="text-base font-bold text-dark-blue">Manual de uso</h2>
@@ -3114,8 +2986,7 @@ export default function Ajustes() {
               onClick={() => navigate('/manual')}
               className="flex items-center justify-center gap-2 w-full md:w-auto px-6 py-3.5 bg-blue hover:opacity-90 text-white text-base font-medium rounded-lg transition-colors whitespace-nowrap"
             >
-              {/* El ícono de la sección es de 28 px: aquí va uno de 20, o el
-                  texto del botón se parte en dos renglones. */}
+              {/* Ícono de 20 px para que el texto no se parta. */}
               <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                   d="M12 6.5C10.5 5.2 8.6 4.7 6 4.8A1 1 0 005 5.8v11.4a1 1 0 001.06 1c2.5-.1 4.4.4 5.94 1.7 1.54-1.3 3.44-1.8 5.94-1.7a1 1 0 001.06-1V5.8a1 1 0 00-1-1c-2.6-.1-4.5.4-6 1.7z" />

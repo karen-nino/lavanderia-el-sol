@@ -15,12 +15,12 @@ import AbrirCajaModal from '../components/AbrirCajaModal';
 import ModalCobrar from '../components/ModalCobrar';
 import { armarMensajeWhatsapp, hayMensajeWhatsapp, telefonoWhatsapp } from '../lib/mensajeWhatsapp';
 
-// Unidad de venta de un producto de la nota, en texto ("2 botellas" / "3 medidas").
+/** Unidad de un producto de la nota en texto ("2 botellas", "3 medidas"). */
 function unidadProdTxt(p) {
   const n = Number(p.cantidad);
   if (p.unidad === 'pieza') return n === 1 ? 'pieza' : 'piezas';
   if (p.unidad === 'botella') {
-    // Marca y polvo se cuentan por unidad entera; el granel líquido, por botella.
+    // Marca y polvo, por unidad; el granel líquido, por botella.
     if (seVendePorUnidad(p)) return n === 1 ? 'unidad' : 'unidades';
     return n === 1 ? 'botella' : 'botellas';
   }
@@ -38,14 +38,11 @@ const PRENDA_LABEL = {
   EDREDON: 'Edredón',
 };
 
-// Día que se le prometió al cliente, elegido en el paso de Entrega. Antes eran
-// horarios (mañana/tarde/noche); las notas viejas con esos valores se muestran
-// tal cual, sin etiqueta (2026-09-25).
+/** Día prometido al cliente. Valores viejos (mañana/tarde/noche) se muestran tal cual. */
 const TIEMPO_ENTREGA_LABEL = {
   MANANA:   'Mañana',
   DOS_DIAS: 'En 2 días',
-  // "Otra" no se enseña como palabra: lo que dice algo es su fecha, que va en
-  // la fila de abajo.
+  // "Otra" no se muestra: su fecha va en la fila de abajo.
   OTRA:     'Otra fecha',
 };
 
@@ -54,61 +51,38 @@ const BADGE_PAGO = {
   PAGADO: { label: 'Pagado', cls: 'bg-green-100 text-green-700'  },
 };
 
-// El código de barras del folio se apagó a petición de la clienta (2026-09-05),
-// pero el bloque se conserva porque puede volver a hacer falta para escanear
-// notas: basta poner esto en true para que reaparezca.
+/** Código de barras del folio: apagado; el bloque se conserva. */
 const MOSTRAR_CODIGO_BARRAS = false;
 
-// Ciclo de vida de la nota completa.
-//
-// LAVANDO y SECANDO van en UN SOLO paso, "En proceso" (2026-09-28). Son dos
-// estados en la base —y así se siguen guardando—, pero en la línea de tiempo
-// contaban una secuencia que el mostrador no vive: las máquinas van
-// independientes, una carga puede estar secando mientras otra lava, y el paso
-// que faltaba se quedaba en gris como si nunca hubiera pasado. Lo que de verdad
-// dice en qué va cada carga es el desglose de abajo (Lavado/Secado por carga),
-// que se conserva entero.
-//
-// `estados` son los estados de la nota que caen en ese paso; el paso se cuenta
-// como actual cuando el de la nota es cualquiera de ellos, y su fecha es la
-// PRIMERA de las que tenga (cuándo empezó a procesarse).
-// La tarjeta "Estado" —la línea de tiempo de la nota— está ESCONDIDA mientras
-// el negocio decide si la mantiene (2026-09-28). Se enseña otra vez poniendo
-// esto en true; la tarjeta sigue ahí, entera.
+/**
+ * Línea de tiempo de la nota: oculta. LAVANDO y SECANDO forman un solo paso,
+ * "En proceso" (las cargas corren por separado). `estados` son los de la nota
+ * que caen en el paso; su fecha es la primera de ellos.
+ */
 const MOSTRAR_ESTADO_NOTA = false;
 
 const PASOS_ESTADO = [
   { key: 'EN_ESPERA',  label: 'En Espera',    estados: ['EN_ESPERA'] },
   { key: 'PROCESO',    label: 'En proceso',   estados: ['LAVANDO', 'SECANDO'] },
-  // El label de LISTA lo pone etiquetaEstadoLista(): en Autoservicio esa nota
-  // no espera una entrega, espera su cobro.
+  // El label de LISTA lo pone etiquetaEstadoLista() (en Autoservicio, "Por Cobrar").
   { key: 'LISTA',      label: 'Por Entregar', estados: ['LISTA'] },
   { key: 'FINALIZADA', label: 'Finalizada',   estados: ['FINALIZADA'] },
 ];
 
-// Pasos que se dibujan para esta nota. En autoservicio el cliente se lleva su
-// ropa él mismo: la nota PAGADA se finaliza sola al terminar sus cargas y nunca
-// pasa por "Por Entregar", así que ese paso sobra. Se conserva en la nota de
-// autoservicio que sí lo vive: la que debe y espera ahí su cobro.
+/**
+ * Pasos de esta nota. El Autoservicio pagado se finaliza solo y no pasa por
+ * "Por Entregar"; el que debe sí, esperando su cobro.
+ */
 function pasosDeNota(nota) {
-  // La venta de Productos (mig. 112) nace finalizada: no hay lavado, ni secado,
-  // ni nada que entregar después. Su línea de tiempo es un solo punto; dibujar
-  // los cinco pasos contaría un proceso que esa nota nunca vivió.
+  // La venta de productos nace finalizada: un solo paso.
   if (nota.tipo_servicio === 'PRODUCTOS') return PASOS_ESTADO.filter(p => p.key === 'FINALIZADA');
   if (nota.tipo_servicio !== 'AUTOSERVICIO') return PASOS_ESTADO;
   const porEntregar = ['LISTA', 'PAGADA'].includes(nota.estado)
     || (nota.historial_estados ?? []).some(h => h.estado === 'LISTA')
-    // …y el que todavía DEBE va a pasar por ahí aunque aún no haya llegado:
-    // sin el cobro no se cierra solo, espera en "Por Entregar" a que lo
-    // liquiden (2026-09-23). Saltarse el paso prometía un final que esa nota
-    // no iba a tener.
+    // El que debe pasará por ahí, aunque aún no llegue.
     || nota.estado_pago === 'PENDIENTE';
-  // "Lavando" y "Secando" solo si esta nota los va a vivir. En Autoservicio hay
-  // notas de puro lavado y otras de puro secado, y dibujar el paso que falta
-  // prometía una fase que nunca iba a llegar (2026-09-25). Cuenta la máquina
-  // puesta, la que ya se usó y la que se eligió al hacer la nota y todavía no
-  // se asigna; y si la nota YA pasó por esa fase, el paso se queda aunque hoy
-  // no le quede ninguna máquina de ese tipo.
+  // Lavado y secado solo si la nota los va a vivir: una máquina puesta, usada o
+  // pedida, o si ya pasó por esa fase.
   const tieneFase = (estado, campos) =>
     nota.estado === estado
     || (nota.historial_estados ?? []).some(h => h.estado === estado)
@@ -117,31 +91,28 @@ function pasosDeNota(nota) {
   const conSecado = tieneFase('SECANDO', ['secadora_id', 'secadora_usada_id', 'secadora_tipo_previsto']);
   const fuera = new Set();
   if (!porEntregar) fuera.add('LISTA');
-  // Ahora es un solo paso: sobra únicamente si la nota no lava NI seca.
+  // Sobra solo si la nota no lava ni seca.
   if (!conLavado && !conSecado) fuera.add('PROCESO');
   return PASOS_ESTADO.filter(p => !fuera.has(p.key));
 }
 
-// Índice del paso ACTUAL dentro de los pasos que se dibujan. El estado de la
-// nota puede caer en un paso que agrupa varios (LAVANDO y SECANDO son los dos
-// "En proceso"), así que se busca por la lista de estados del paso.
+/** Índice del paso actual: se busca por la lista de estados de cada paso. */
 function progresoPasos(nota, pasos) {
   const clave = nota.estado === 'PAGADA' ? 'LISTA' : nota.estado;
   const i = pasos.findIndex(p => p.estados.includes(clave));
   return i === -1 ? 0 : i;
 }
 
-// Cuándo empezó este paso: la primera fecha de los estados que agrupa. "En
-// proceso" empieza cuando la nota empezó a lavar —o a secar, si arrancó por
-// ahí—, no cuando cambió de una fase a la otra.
+/** Cuándo empezó el paso: la primera fecha de los estados que agrupa. */
 function fechaDePaso(paso, fechaPorEstado) {
   const fechas = paso.estados.map(e => fechaPorEstado[e]).filter(Boolean);
   return fechas.length > 0 ? fechas.sort()[0] : undefined;
 }
 
-// Fase de una máquina dentro de su carga: en curso (asignada y EN USO), en
-// espera (asignada pero sin iniciar), listo (ya se usó y liberó) o pendiente
-// (nunca se asignó).
+/**
+ * Fase de una máquina en su carga: en curso (en uso), en espera (asignada sin
+ * iniciar), listo (ya se usó) o pendiente (sin asignar).
+ */
 const FASE_ESTILO = {
   curso:     { label: 'En curso',  cls: 'text-blue-700',  dot: 'bg-blue-500 animate-pulse' },
   espera:    { label: 'En espera', cls: 'text-gray-500',  dot: 'bg-gray-400' },
@@ -149,8 +120,7 @@ const FASE_ESTILO = {
   pendiente: { label: 'Pendiente', cls: 'text-gray-400',  dot: 'bg-gray-300' },
 };
 
-// `estado` es el de la máquina viva (en_uso / disponible). Una máquina asignada
-// pero no iniciada está "en espera", no "en curso".
+/** `estado` es el de la máquina viva: asignada sin iniciar = en espera. */
 function faseMaquina(liveId, usadaId, estado) {
   if (liveId) return estado === 'en_uso' ? 'curso' : 'espera';
   if (usadaId) return 'listo';
@@ -176,10 +146,10 @@ function subtituloEstado(estado, { done, current }, fechaEstado) {
 }
 
 const BADGE_MAQUINA_ESTADO = {
-  // "disponible" aquí = máquina asignada a la carga pero sin iniciar (En espera): gris.
+  // Asignada a la carga pero sin iniciar: gris.
   disponible:    { label: 'En espera',     cls: 'bg-gray-100 text-gray-600',   dot: 'bg-gray-400'  },
   en_uso:        { label: 'En uso',        cls: 'bg-blue-100 text-blue-700',   dot: 'bg-blue-500'  },
-  // "terminado" = la máquina ya cumplió su parte y se desvinculó de la carga: verde.
+  // Ya cumplió su parte y se soltó de la carga: verde.
   terminado:     { label: 'Terminó',       cls: 'bg-green-100 text-green-700', dot: 'bg-green-500' },
   mantenimiento: { label: 'Mantenimiento', cls: 'bg-red-100 text-red-700',     dot: 'bg-red-500'   },
 };
@@ -190,8 +160,7 @@ const MAQUINA_TIPO_LABEL = {
   secadora:         'Secadora',
 };
 
-// Abreviatura del tamaño para el desglose de cargas: Mediana → M, Jumbo → J,
-// Edredón → E. Otros valores se muestran tal cual.
+/** Abreviatura del tamaño para el desglose de cargas (M, J, E). */
 const TAMANO_ABBR = { Mediana: 'M', Jumbo: 'J', Edredón: 'E' };
 
 function fmtMonto(n) {
@@ -249,13 +218,10 @@ function ModalConfirmar({ titulo, mensaje, onCancelar, onConfirmar, loading, col
   );
 }
 
-// Acción en redondo: un círculo de color con su ícono y la palabra debajo
-// (2026-09-26, referencia en `info/`). Es el patrón de las apps de banco, y
-// aquí gana porque en el teléfono el ícono se reconoce de un vistazo mientras
-// que una hilera de píldoras de colores hay que leerla entera.
-//
-// El botón entero es el área que se toca —círculo y palabra—, no solo el
-// círculo: con el dedo, 44 px de círculo suelto se falla.
+/**
+ * Acción en redondo: círculo de color con su ícono y la palabra debajo. Toda el
+ * área (círculo y palabra) se puede tocar.
+ */
 function AccionCircular({ icono, label, onClick, color, disabled = false, title, className = 'flex' }) {
   return (
     <button
@@ -263,16 +229,14 @@ function AccionCircular({ icono, label, onClick, color, disabled = false, title,
       onClick={onClick}
       disabled={disabled}
       title={title}
-      // `className` trae cómo se MUESTRA (Eliminar se esconde en táctil), por
-      // eso el `flex` va ahí y no fijo: si no, no habría manera de ocultarlo.
+      // `className` decide cómo se muestra (Eliminar se esconde en táctil), por eso
+      // el `flex` va ahí.
       className={`${className} flex-col items-center gap-1.5 w-20 disabled:opacity-60 disabled:cursor-not-allowed group`}
     >
       <span className={`w-14 h-14 rounded-full flex items-center justify-center text-white transition-colors ${color}`}>
         {icono}
       </span>
-      {/* Versalitas apretadas contra el círculo: en mayúsculas y con aire
-          entre letras la palabra se lee como rótulo del ícono y no como un
-          botón de texto más (2026-09-26). */}
+      {/* Mayúsculas espaciadas: se lee como rótulo del ícono. */}
       <span className="text-[12px] font-bold uppercase tracking-wider text-gray-700 text-center leading-tight">
         {label}
       </span>
@@ -280,7 +244,7 @@ function AccionCircular({ icono, label, onClick, color, disabled = false, title,
   );
 }
 
-// Los íconos de esas acciones, en trazo blanco sobre el círculo.
+// Íconos de las acciones, en trazo blanco sobre el círculo.
 const IconoSalidas = (
   <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     {/* Puerta con una flecha que sale: la ropa que deja la lavandería. */}
@@ -316,8 +280,7 @@ const IconoCancelar = (
 
 const IconoProcesado = (
   <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    {/* Mano con el pulgar arriba: la ropa ya quedó lista (2026-10-03; antes
-        era un paquete). */}
+    {/* Pulgar arriba: la ropa ya quedó lista. */}
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
       d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5" />
   </svg>
@@ -356,11 +319,10 @@ const IconoEliminar = (
   </svg>
 );
 
-// Ajuste de la nota (2026-09-25): un descuento (negativo) o un cargo extra
-// (positivo) sobre el total, que sale en el ticket. Vivía como sección en
-// Salidas y se pasó aquí, a un botón junto a Cobrar (2026-10-02): es dinero, y
-// el dinero de la nota se toca en esta pantalla. Los saltos de $10 son los del
-// formulario: el mostrador ajusta en redondo, no al centavo.
+/**
+ * Ajuste de la nota: descuento (negativo) o cargo extra (positivo), sale en el
+ * ticket. Saltos de $10, como en el formulario.
+ */
 function ModalAjuste({ folio, guardado, valor, onValor, onCancelar, onGuardar, loading, error }) {
   const n = Number(valor || 0);
   const valido = Number.isFinite(n);
@@ -440,18 +402,16 @@ export default function DetalleNota() {
   const [confirmFinalizar,  setConfirmFinalizar]  = useState(false);
   // Deshacer la entrega (solo admin): la nota vuelve a Por Entregar.
   const [confirmReabrir,    setConfirmReabrir]    = useState(false);
-  // Aviso de "ya está procesada" por WhatsApp (mig. 124). La plantilla la
-  // escribe el negocio en Ajustes; aquí solo se rellena y se manda.
+  // Aviso de "ya está procesada" por WhatsApp; la plantilla se escribe en Ajustes.
   const [procesadoOpen,    setProcesadoOpen]    = useState(false);
-  // Cambiar el cliente / referencia del Autoservicio (2026-10-11).
+  // Cambiar el nombre (referencia) del Autoservicio.
   const [refOpen,          setRefOpen]          = useState(false);
   const [refValor,         setRefValor]         = useState('');
   const [plantillaWa,      setPlantillaWa]      = useState('');
-  // Recordatorio (mig. 158): lo que manda "Avisar" en una nota ya procesada.
+  // Recordatorio: lo que manda "Avisar" en una nota ya procesada.
   const [plantillaReaviso, setPlantillaReaviso] = useState('');
 
-  // Cobro: uno solo para liquidar y para abonar (2026-09-26). Lo que se cobra
-  // lo dice el importe, no dos botones distintos.
+  // Un solo cobro para liquidar y abonar: lo decide el importe.
   const [cobroOpen,        setCobroOpen]        = useState(false);
   const [cobroMonto,       setCobroMonto]       = useState('');
   const [cobroForma,       setCobroForma]       = useState('');
@@ -461,29 +421,20 @@ export default function DetalleNota() {
   const [confirmRevertirAbono, setConfirmRevertirAbono] = useState(null);
   const [motivoAbono,      setMotivoAbono]      = useState('');
   const [corrigiendoPago,  setCorrigiendoPago]  = useState(false);
-  // Reversión del cobro (solo admin, caja aún abierta): el motivo es
-  // obligatorio, así que el modal lleva su propio texto.
+  // Revertir el cobro (admin, caja abierta): el motivo es obligatorio.
   const [revirtiendoPago,  setRevirtiendoPago]  = useState(false);
   const [motivoReversion,  setMotivoReversion]  = useState('');
   const [formaPagoNueva,   setFormaPagoNueva]   = useState('');
   const [confirmEliminar,  setConfirmEliminar]  = useState(false);
-  // Un cambio hecho en Salidas movió el total de esta nota y dejó sin efecto su
-  // cobro (el backend la devolvió a PENDIENTE). Aquí, junto al estado de pago y
-  // al botón de cobrar, se explica cuánto falta cobrar o devolver.
+  // Un cambio en Salidas movió el total y dejó la nota PENDIENTE: aquí se
+  // explica cuánto falta cobrar o devolver.
   const [avisoCobro, setAvisoCobro] = useState(() => leerAvisoCobro(id));
-  // ¿Hay caja abierta? Solo se pregunta al ir a cobrar, que es cuando importa.
-  // null = todavía no se sabe (o falló la consulta): entonces no se avisa nada.
+  // ¿Hay caja abierta? Se pregunta al ir a cobrar; null = no se sabe (no se avisa).
   const [cajaAbierta,   setCajaAbierta]   = useState(null);
   const [modalCajaOpen, setModalCajaOpen] = useState(false);
 
-  // Abre el modal de cobro y, de paso, mira si hay caja abierta para poder
-  // avisar que ese dinero se quedaría fuera del corte del día.
-  //
-  // El importe arranca EN BLANCO y lo teclea quien cobra, con el dinero en la
-  // mano: es justo lo que trae el cliente, no un número que la app suponga
-  // (mismo criterio que tenía el abono desde el 2026-09-25). En blanco y no
-  // en '0' porque el cero había que borrarlo antes de teclear, y si se
-  // olvidaba quedaba pegado delante de la cifra.
+  // Abre el cobro y revisa la caja. El importe arranca vacío: lo teclea quien
+  // cobra con el dinero en la mano.
   function abrirCobro() {
     setErrorAccion('');
     setCobroMonto('');
@@ -496,15 +447,13 @@ export default function DetalleNota() {
 
   function abrirAjuste() {
     setErrorAccion('');
-    // Sin ajuste el campo abre vacío y el 0 queda de placeholder (2026-10-11).
+    // Sin ajuste el campo abre vacío, con el 0 de placeholder.
     const actual = Number(nota?.ajuste ?? 0);
     setAjusteTxt(actual ? String(actual) : '');
     setAjusteOpen(true);
   }
 
-  // Guarda el ajuste. El servidor recalcula el total y, si la nota ya estaba
-  // cobrada y el importe cambió, la deja pendiente por el nuevo — de ahí que se
-  // relea completa.
+  // Guarda el ajuste; se relee la nota (puede quedar pendiente por el importe nuevo).
   async function guardarAjuste() {
     setLoadingAccion(true);
     setErrorAccion('');
@@ -513,16 +462,14 @@ export default function DetalleNota() {
       setNota(await api.get(`/notas/${id}`));
       setAjusteOpen(false);
     } catch (err) {
-      // Dentro del modal, igual que el cobro.
+      // El error se ve dentro del modal.
       setErrorAccion(err.message);
     } finally {
       setLoadingAccion(false);
     }
   }
 
-  // Deshace la entrega: la nota finalizada vuelve a "Por Entregar", como antes
-  // de confirmarla. El inventario no se mueve —el producto ya se usó en esa
-  // nota— y el cobro se queda como estaba.
+  // Deshace la entrega: vuelve a "Por Entregar". No mueve inventario ni cobro.
   async function reabrirNota() {
     setLoadingAccion(true);
     setErrorAccion('');
@@ -539,19 +486,10 @@ export default function DetalleNota() {
     }
   }
 
-  // Confirma que la ropa ya se procesó: pasa la nota a POR ENTREGAR y le avisa
-  // al cliente. Es el único camino a ese estado en Por Encargo (2026-09-28).
-  //
-  // El aviso va por wa.me y no por la hoja de compartir: esto es TEXTO, así que
-  // sí se puede mandar a un número concreto —lo que el ticket no puede, por ser
-  // una imagen— y quien atiende no tiene que buscar el chat.
-  //
-  // El orden importa: primero el estado y después el WhatsApp. Si el aviso no
-  // se puede mandar (sin teléfono, sin mensaje escrito) la nota igual avanza;
-  // al revés, un fallo al guardar dejaría al cliente avisado de algo que la app
-  // sigue teniendo en proceso.
-  //
-  // Ya procesada, esto solo repite el aviso: el estado no se toca.
+  // "Procesado": pasa la nota a Por Entregar (el único camino en Por Encargo) y
+  // avisa por WhatsApp (wa.me: es texto, va directo al número). Primero el
+  // estado y luego el aviso: sin teléfono o sin mensaje, la nota igual avanza.
+  // Ya procesada, solo repite el aviso.
   async function enviarProcesado() {
     const avisar = () => {
       if (!mensajeProcesado.trim() || !telefonoAviso) return;
@@ -579,18 +517,9 @@ export default function DetalleNota() {
     }
   }
 
-  // Cobra la nota: un solo camino para liquidar y para abonar (2026-09-26).
-  //
-  // Todo entra por /abonos, que ya hacía las dos cosas: registra el pago y, si
-  // cubre lo que falta, marca la nota PAGADA con esa forma de pago y finaliza
-  // un Autoservicio que ya terminó sus cargas —exactamente lo que hacía
-  // Liquidar—. La excepción es una nota que no debe nada (total $0): ahí no
-  // hay abono que registrar, /abonos lo rechaza, y se marca cobrada por el
-  // camino de siempre.
-  //
-  // Después se relee la nota completa en vez de parchar el pago: el cobro
-  // puede haber cambiado el estado, y así los botones y la línea de tiempo
-  // cuentan lo mismo que el servidor.
+  // Cobra la nota por /abonos, que registra el pago y, si cubre el saldo, la
+  // marca PAGADA (y cierra un Autoservicio terminado). Con total $0 no hay abono:
+  // se marca cobrada directo. Luego se relee la nota completa.
   async function cobrarNota() {
     setLoadingAccion(true);
     setErrorAccion('');
@@ -606,8 +535,7 @@ export default function DetalleNota() {
       }
       const fresca = await api.get(`/notas/${id}`);
       setNota(fresca);
-      // Si el cobro la dejó pagada, el aviso de "cobra la diferencia" deja de
-      // aplicar. Un abono parcial no lo quita: la nota sigue debiendo.
+      // Si quedó pagada, el aviso de cobrar la diferencia ya no aplica.
       if (fresca?.estado_pago === 'PAGADO') {
         limpiarAvisoCobro(id);
         setAvisoCobro(null);
@@ -616,16 +544,14 @@ export default function DetalleNota() {
       setCobroMonto('');
       setCobroForma('');
     } catch (err) {
-      // El motivo se queda dentro del modal: el aviso de la página está arriba
-      // del todo y aquí no se vería.
+      // El error se ve dentro del modal.
       setErrorAccion(err.message);
     } finally {
       setLoadingAccion(false);
     }
   }
 
-  // Deshace un abono mal capturado (solo admin, con motivo). Si ese abono había
-  // dejado la nota pagada, vuelve a deber.
+  // Revierte un abono (admin, con motivo); si dejaba la nota pagada, vuelve a deber.
   async function revertirAbono(abonoId) {
     setLoadingAccion(true);
     setErrorAccion('');
@@ -648,7 +574,7 @@ export default function DetalleNota() {
       .then(data => {
         if (!activo) return;
         setNota(data);
-        // El aviso solo tiene sentido mientras la nota siga sin cobrarse.
+        // El aviso solo aplica mientras siga sin cobrarse.
         if (data?.estado_pago !== 'PENDIENTE') {
           limpiarAvisoCobro(id);
           setAvisoCobro(null);
@@ -659,9 +585,7 @@ export default function DetalleNota() {
     return () => { activo = false; };
   }, [id]);
 
-  // La plantilla del aviso por WhatsApp (mig. 124). Va aparte de la nota y sin
-  // bloquear: si los ajustes fallan, el detalle se muestra igual y el botón
-  // dirá que falta configurar el mensaje.
+  // Plantillas de WhatsApp, sin bloquear: si fallan, el botón dirá que falta el mensaje.
   useEffect(() => {
     if (nota?.tipo_servicio !== 'POR_ENCARGO') return undefined;
     let activo = true;
@@ -675,7 +599,7 @@ export default function DetalleNota() {
     return () => { activo = false; };
   }, [nota?.tipo_servicio]);
 
-  // Guarda el cliente / referencia libre del Autoservicio. Vacío = Mostrador.
+  // Guarda el nombre libre del Autoservicio; vacío = Mostrador.
   async function guardarReferencia() {
     setLoadingAccion(true);
     setErrorAccion('');
@@ -738,10 +662,8 @@ export default function DetalleNota() {
     }
   }
 
-  // Deshace el cobro de una nota (PAGADO → PENDIENTE) para poder cancelarla o
-  // volver a cobrarla bien. El servidor solo lo permite a un admin, con motivo
-  // y mientras la caja donde entró ese dinero siga abierta; además lo deja
-  // anotado en la campana del Dashboard.
+  // Revierte el cobro (PAGADO → PENDIENTE) para cancelar o volver a cobrar. Solo
+  // admin, con motivo y con su caja abierta; queda aviso en la campana.
   async function revertirPago() {
     const motivo = motivoReversion.trim();
     if (!motivo) return;
@@ -752,7 +674,7 @@ export default function DetalleNota() {
         estado_pago: 'PENDIENTE',
         motivo,
       });
-      // `pago_reversible` lo calcula el servidor: ya sin cobro, deja de aplicar.
+      // Ya sin cobro, no se puede revertir otra vez.
       setNota(prev => ({
         ...prev,
         estado_pago: updated.estado_pago,
@@ -769,10 +691,7 @@ export default function DetalleNota() {
     }
   }
 
-  // Corrige la forma de pago de una nota YA cobrada (el empleado registró
-  // efectivo y el cliente pagó por transferencia). El servidor solo lo permite
-  // mientras la caja donde se cobró siga abierta; ahí el corte y Ventas se
-  // recalculan solos.
+  // Corrige la forma de pago de una nota cobrada (admin, con su caja abierta).
   async function corregirFormaPago() {
     if (!formaPagoNueva) return;
     setLoadingAccion(true);
@@ -809,92 +728,51 @@ export default function DetalleNota() {
   if (!nota) return null;
 
   const terminal     = esTerminal(nota);
-  // Máquinas de la nota para su recuadro: todas las asignadas o usadas, y cuáles
-  // corren ahora (mismos datos que la tarjeta de la lista de Notas).
+  // Máquinas de la nota y cuáles corren ahora (como la tarjeta de Notas).
   const maquinasEnUso = new Set(nota.maquinas_en_uso ?? []);
   const maquinasNota = [...new Set([...(nota.maquinas_nombres ?? []), ...maquinasEnUso])]
     .sort((a, b) => a.localeCompare(b, 'es', { numeric: true }));
-  // Cancelar: solo admin y solo mientras la nota NO esté cobrada. Después del
-  // cobro habría que devolver dinero, y eso descuadra el corte del día; para
-  // eso está la reversión de pago.
-  // Con abonos tampoco: ese dinero ya está en la caja (2026-10-11).
+  // Cancelar: solo admin, sin cobro ni abonos (para eso está revertir).
   const puedeCancelar = esAdmin
     && !['CANCELADA', 'PAGADA'].includes(nota.estado)
     && nota.estado_pago !== 'PAGADO'
     && Number(nota.abonado ?? 0) === 0;
-  // Cobrar se puede desde que la nota existe, no solo cuando ya está lista: en
-  // Por Encargo el cliente suele pagar al dejar la ropa, y hasta hace poco el
-  // botón no aparecía hasta el final, cuando ese dinero ya se había cobrado en
-  // la vida real y no en el sistema. El servidor lo permite en cualquier estado
-  // menos CANCELADA.
-  //
-  // Va en una variable porque sale en los DOS bloques de acciones: el de la
-  // nota viva y el de la nota ya cerrada — una FINALIZADA a la que le
-  // revirtieron el pago vuelve a deber y también hay que poder cobrarla.
-  // En Por Encargo la ropa se entrega en mostrador, así que el último paso se
-  // llama ENTREGAR y un admin puede deshacerlo (2026-09-25).
+  // Cobrar se puede en cualquier estado menos cancelada (en Por Encargo suelen
+  // pagar al dejar la ropa); sale también con la nota cerrada si quedó debiendo.
+  // En Por Encargo el último paso es ENTREGAR y un admin lo puede deshacer.
   const esEncargoNota = nota.tipo_servicio === 'POR_ENCARGO';
 
-  // Cómo se llama un renglón de la nota, igual en la lista de Cargas que en la
-  // línea de tiempo. En Por Encargo hay dos clases y se numeran por separado:
-  // los que traen precio son los SERVICIOS vendidos y los demás son las
-  // MÁQUINAS que se agregaron en Salidas —la "Máquina 2" de aquí es la de esa
-  // pantalla, aunque sea el quinto renglón de la nota—.
+  // Nombre de un renglón. En Por Encargo, los que traen precio son SERVICIOS y
+  // los demás MÁQUINAS agregadas en Salidas; se numeran por separado.
   const nombreDeCarga = (cg) => {
     if (!esEncargoNota) return `Carga ${cg.orden}`;
     const esServicio = cg.tope_carga != null;
     const n = (nota.cargas ?? []).filter(x => (x.tope_carga != null) === esServicio).indexOf(cg) + 1;
     return `${esServicio ? 'Servicio' : 'Máquina'} ${n}`;
   };
-  // Lo abonado y lo que falta (mig. 121). El servidor los manda calculados; con
-  // notas viejas o sin abonos, `saldo` es el total de la nota.
+  // Abonado y saldo, calculados por el servidor.
   const abonosNota = nota.abonos ?? [];
   const abonadoNota = Number(nota.abonado ?? 0);
   const saldoNota = Number(nota.saldo ?? nota.precio_total ?? 0);
-  // UN solo botón de cobro (2026-09-26). Antes eran dos, "Abonar" —solo en Por
-  // Encargo, para el adelanto de quien deja la ropa— y "Liquidar". En el
-  // mostrador es el mismo gesto y la diferencia la decide el importe, así que
-  // se cobran desde el mismo sitio. La condición es la que ya tenía Liquidar:
-  // cubre a la de Abonar, que era un subconjunto suyo.
-  // "Procesado": lo que pasa una nota Por Encargo a POR ENTREGAR (2026-09-28).
-  //
-  // Es el ÚNICO camino. Que las máquinas terminen ya no la mueve: la ropa
-  // lavada todavía hay que doblarla, empacarla y revisarla, y eso lo dice una
-  // persona, no un temporizador. Al confirmarlo la nota suelta sus máquinas y
-  // —si hay mensaje y teléfono— se le avisa al cliente por WhatsApp (mig. 124),
-  // que es el mismo gesto del mostrador: "ya está, avísale".
-  //
-  // Ya marcada, el botón se queda para poder REPETIR el aviso (el cliente
-  // borró el mensaje, se mandó al número viejo): ahí ya no cambia el estado.
-  //
-  // Solo en Por Encargo: el autoservicio no captura cliente y su LISTA
-  // significa otra cosa ("Por Cobrar"). Una nota terminada o cancelada no lo
-  // ofrece.
-  //
-  // El botón se enseña aunque falte el mensaje o el teléfono: es el modal quien
-  // lo explica, y la nota tiene que poder avanzar aunque no haya a quién
-  // avisarle.
+  // "Procesado" (solo Por Encargo): el único camino a Por Entregar; suelta las
+  // máquinas y avisa por WhatsApp. Ya procesada, repite el aviso. Se muestra
+  // aunque falte mensaje o teléfono (lo explica el modal).
   const yaProcesada = nota.estado === 'LISTA';
-  // Ya procesada, "Avisar" manda el recordatorio (mig. 158); si no se escribió,
-  // el mensaje de Por Encargo de siempre.
+  // Ya procesada, "Avisar" manda el recordatorio (o, si no hay, el mensaje normal).
   const plantillaAviso = yaProcesada && hayMensajeWhatsapp(plantillaReaviso)
     ? plantillaReaviso
     : plantillaWa;
   const mensajeProcesado = armarMensajeWhatsapp(plantillaAviso, nota);
-  // A dónde se manda el aviso: el teléfono del cliente registrado o, en una
-  // nota de mostrador, el que se capturó a mano para el ticket (nota.telefono).
-  // Antes solo miraba el del cliente, así que una nota de mostrador con
-  // teléfono ya capturado no tenía a dónde mandar nada.
+  // Teléfono del aviso: el del cliente o el capturado en la nota.
   const telefonoAviso = telefonoWhatsapp(nota.cliente_telefono || nota.telefono);
-  // No sale hasta que al menos una lavadora terminó (2026-10-02): antes no hay
-  // ropa que procesar. Ya procesada se queda, para poder repetir el aviso.
+  // Aparece cuando terminó al menos una lavadora.
   const botonProcesado = nota.tipo_servicio === 'POR_ENCARGO' && !esTerminal(nota)
     && (yaProcesada || nota.lavadora_terminada) && (
     <AccionCircular
       label={yaProcesada ? 'Avisar' : 'Procesado'}
       title={yaProcesada ? 'Volver a avisarle al cliente' : 'Marcar la nota como procesada'}
       icono={yaProcesada ? IconoAvisar : IconoProcesado}
-      // Azul también ya procesada: el verde pasó a Entregar (2026-10-11).
+      // Azul (el verde es de Entregar).
       color="bg-blue group-hover:bg-blue-700"
       onClick={() => { setErrorAccion(''); setProcesadoOpen(true); }}
       disabled={loadingAccion}
@@ -909,9 +787,7 @@ export default function DetalleNota() {
       disabled={loadingAccion}
     />
   );
-  // Solo Por Encargo (en Autoservicio el ajuste se quitó el 2026-09-25), con la
-  // nota viva y sin el cobro en un corte cerrado, donde el total ya no se
-  // puede mover. Es la misma condición que tenía la sección en Salidas.
+  // Solo Por Encargo, con la nota viva y sin cobro congelado.
   const botonAjuste = esEncargoNota && !esTerminal(nota) && !nota.cobro_congelado && (
     <AccionCircular
       label="Ajuste"
@@ -955,9 +831,7 @@ export default function DetalleNota() {
             <h1 className="text-xl font-bold text-gray-900 leading-tight truncate">
               Detalles Nota
             </h1>
-            {/* El cliente (2026-10-11; antes el folio completo, que sigue en la
-                fila "# Nota" de Detalles). Igual que en la tarjeta: cliente del
-                catálogo, si no la referencia del Autoservicio, si no Mostrador. */}
+            {/* El cliente: el del catálogo, la referencia del Autoservicio o Mostrador. */}
             <p className="text-sm text-gray-500 leading-tight truncate">
               {nota.cliente_nombre
                 ? `${nota.cliente_nombre}${nota.cliente_apellido ? ' ' + nota.cliente_apellido : ''}`
@@ -972,7 +846,7 @@ export default function DetalleNota() {
             title="Ver el ticket para enviar por WhatsApp"
             className="w-11 h-11 hover:opacity-80 flex items-center justify-center transition-opacity"
           >
-            {/* El mismo recibo que la sección Ticket de Ajustes (Lucide "receipt"). */}
+            {/* El mismo recibo que Ajustes → Ticket (Lucide "receipt"). */}
             <svg className="w-7 h-7 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                 d="M4 2v20l2.5-1.5L9 22l2.5-1.5L14 22l2.5-1.5L19 22V2l-2.5 1.5L14 2l-2.5 1.5L9 2 6.5 3.5 4 2Z" />
@@ -1015,23 +889,19 @@ export default function DetalleNota() {
             onClick={() => navigate(`/notas/${id}/salidas`)}
           />
           {botonProcesado}
-          {/* Último paso, y sigue exigiendo el cobro: una nota pendiente no se
-              puede dar por entregada. En Por Encargo el botón dice ENTREGAR,
-              que es lo que de verdad se hace con la ropa (2026-09-25). */}
+          {/* Último paso; exige el cobro. En Por Encargo dice ENTREGAR. */}
           {puedeFinalizar(nota) && (
             <AccionCircular
               label={esEncargoNota ? 'Entregar' : 'Finalizar'}
               icono={IconoEntregar}
-              // Entregar va en verde (antes lo llevaba Avisar, 2026-10-11).
+              // Entregar en verde.
               color={esEncargoNota ? 'bg-green-500 group-hover:bg-green-600' : 'bg-blue group-hover:bg-emerald-700'}
               onClick={() => setConfirmFinalizar(true)}
               disabled={loadingAccion}
             />
           )}
-          {/* Mientras la nota vive, Eliminar solo se ve donde se apunta con mouse
-              o trackpad (`pointer: fine`). Con el dedo está pegado a Cancelar y
-              borrar no se deshace; por ancho no salía, porque una tablet grande
-              mide lo mismo que una laptop. En táctil el camino es cancelar. */}
+          {/* Con la nota viva, Eliminar solo se ve con mouse (`pointer: fine`): en
+              táctil queda pegado a Cancelar y borrar no se deshace. */}
           {puedeEliminar(nota, esAdmin) && (
             <AccionCircular
               label="Eliminar"
@@ -1044,14 +914,11 @@ export default function DetalleNota() {
           )}
         </div>
       )}
-      {/* Ya cerrada, el botón se ve en los dos tamaños. Y si quedó debiendo
-          —le revirtieron el pago—, sigue habiendo por dónde cobrarla. */}
+      {/* Ya cerrada se ve en todos los tamaños; si quedó debiendo, se puede cobrar. */}
       {terminal && (
         <div className="flex flex-wrap items-start gap-2">
           {botonCobrar}
-          {/* Deshacer la entrega: la nota vuelve a Por Entregar, como antes de
-              confirmarla. Para el error de mostrador —se entregó la nota
-              equivocada—, así que es de admin (2026-09-25). */}
+          {/* Deshacer la entrega (admin): vuelve a Por Entregar. */}
           {esAdmin && esEncargoNota && nota.estado === 'FINALIZADA' && (
             <AccionCircular
               label="Abrir"
@@ -1076,8 +943,7 @@ export default function DetalleNota() {
 
       <div className='space-y-6 mt-12'>
 
-            {/* Un cambio hecho en Salidas movió el total y dejó sin efecto el cobro:
-          la nota volvió a Pendiente y hay que cobrarla por el importe nuevo. */}
+            {/* Un cambio en Salidas dejó la nota pendiente: hay que cobrar el importe nuevo. */}
       {avisoCobro && nota.estado_pago === 'PENDIENTE' && nota.estado !== 'CANCELADA' && (
         <div className="bg-amber-50 border border-amber-300 rounded-xl p-4 flex items-start gap-3">
           <svg className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1109,17 +975,13 @@ export default function DetalleNota() {
         </div>
       )}
 
-      {/* Cuánto falta cobrar (o cuánto se cobró ya). Va arriba y en grande
-          porque es el dato que el empleado necesita al entregar la ropa; en el
-          bloque de Detalles el total quedaba como una fila más entre el ID y la
-          fecha. En notas canceladas no aplica: no hay nada que cobrar. */}
+      {/* Cuánto falta cobrar (o lo cobrado), arriba y en grande. No en canceladas. */}
       {nota.estado !== 'CANCELADA' && (
         nota.estado_pago === 'PENDIENTE' ? (
           <div className="rounded-xl border-2 border-amber-300 bg-amber-50 px-5 py-4 flex items-center justify-between gap-3">
             <div className="min-w-0">
               <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide">Pendiente de cobro</p>
-              {/* Con abonos, lo que falta NO es el total de la nota: el monto
-                  grande es el saldo y debajo se dice de cuánto viene. */}
+              {/* Con abonos, el monto grande es el saldo y debajo de cuánto viene. */}
               <p className="text-3xl font-bold text-amber-900 leading-tight mt-0.5">{fmtMonto(saldoNota)}</p>
               {abonadoNota > 0 && (
                 <p className="text-xs text-amber-800 mt-1">
@@ -1145,8 +1007,7 @@ export default function DetalleNota() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
               </svg>
             </div>
-            {/* Corregir la forma de pago solo mientras la caja donde se cobró
-                siga abierta: el servidor manda ese permiso ya calculado. */}
+            {/* Corregir la forma de pago, solo con su caja abierta (lo calcula el servidor). */}
             <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
               {esAdmin && nota.forma_pago_editable && (
                 <button
@@ -1157,8 +1018,7 @@ export default function DetalleNota() {
                   Corregir forma de pago
                 </button>
               )}
-              {/* Revertir deja la nota pendiente de cobro: desde ahí se puede
-                  cancelar o volver a cobrar con el importe correcto. */}
+              {/* Revertir deja la nota pendiente: luego se cancela o se cobra bien. */}
               {esAdmin && nota.pago_reversible && !terminal && (
                 <button
                   type="button"
@@ -1178,18 +1038,11 @@ export default function DetalleNota() {
 
       <div className='space-y-6 mt-6'>
 
-      {/* De quién es la nota y cuál es. Va en su propia tarjeta —como el
-          pendiente de cobro— porque es lo que se busca al abrirla desde el
-          mostrador: el folio que trae el cliente en su ticket y el nombre con
-          el que se le llama. Las filas de Detalles siguen ahí para quien lee la
-          nota entera; aquí van grandes y a la vista. */}
+      {/* De quién es y cuál es, en grande: lo que se busca desde el mostrador. */}
       <div className="bg-white border border-gray-100 rounded-xl shadow-sm px-5 py-4 flex items-center justify-between gap-3">
         <div className="min-w-0">
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide"># Nota</p>
-          {/* Solo el consecutivo (1806), no el folio entero (1806-280926): es
-              el número con el que se pide la nota en el mostrador, igual que en
-              la lista de Notas. La fecha del folio se lee completa en la
-              cabecera y en la fila # Nota de Detalles. */}
+          {/* Solo el consecutivo (1806): con él se pide la nota en el mostrador. */}
           <p className="text-2xl font-bold text-gray-900 leading-tight mt-0.5 truncate">
             {nota.folio?.split('-')[0] ?? nota.id}
           </p>
@@ -1197,12 +1050,10 @@ export default function DetalleNota() {
             <p className="text-sm text-gray-600 truncate">
               {nota.cliente_nombre
                 ? `${nota.cliente_nombre}${nota.cliente_apellido ? ' ' + nota.cliente_apellido : ''}`
-                // Mostrador se lee como un cliente más, con el mismo estilo
-                // (2026-10-03; antes iba gris y en cursiva). Antes de él va la
-                // referencia libre del Autoservicio (mig. 157).
+                // Mostrador se lee como un cliente más; antes va la referencia del Autoservicio.
                 : (nota.referencia || 'Mostrador')}
             </p>
-            {/* Autoservicio: ponerle o cambiarle el nombre después de crearla. */}
+            {/* Autoservicio: ponerle o cambiarle el nombre. */}
             {nota.tipo_servicio === 'AUTOSERVICIO' && nota.estado !== 'CANCELADA' && (
               <button
                 type="button"
@@ -1220,9 +1071,8 @@ export default function DetalleNota() {
         </svg>
       </div>
 
-      {/* Máquinas de la nota (2026-10-11), con la misma lectura que la tarjeta
-          de la lista: en azul la que la nota tiene corriendo ahora; en gris
-          las asignadas o que ya se usaron. Sin máquinas no se pinta. */}
+      {/* Máquinas de la nota: en azul la que corre ahora; en gris las asignadas o
+          ya usadas. */}
       {maquinasNota.length > 0 && (
         <div className="bg-white border border-gray-100 rounded-xl shadow-sm px-4 py-4">
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
@@ -1245,9 +1095,7 @@ export default function DetalleNota() {
         </div>
       )}
 
-      {/* Información de entrega (datos del paso de Entrega) — solo Por Encargo.
-          Ni el autoservicio ni la venta de mostrador dejan nada a cargo del
-          negocio: el cliente se lo lleva en el momento. */}
+      {/* Entrega: solo Por Encargo (lo demás se lo lleva el cliente en el momento). */}
       {!['AUTOSERVICIO', 'PRODUCTOS'].includes(nota.tipo_servicio) && (
         <div className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
           <div className="px-4 py-3 border-b border-gray-50">
@@ -1300,8 +1148,7 @@ export default function DetalleNota() {
               <span className="text-sm font-medium text-gray-800">{nota.sucursal_nombre}</span>
             </FilaDetalle>
           )}
-          {/* La venta de mostrador no recibe ropa: su tipo_prenda es solo el
-              valor por defecto de la columna, no un dato de la nota. */}
+          {/* La venta de productos no recibe ropa. */}
           {(nota.cargas ?? []).length === 0 && nota.tipo_servicio !== 'PRODUCTOS'
             && nota.tipo_prenda && PRENDA_LABEL[nota.tipo_prenda] && (
             <FilaDetalle label="Prenda">
@@ -1331,8 +1178,7 @@ export default function DetalleNota() {
               <span className="text-gray-700">{formaPagoLabel(nota.forma_pago)}</span>
             </FilaDetalle>
           )}
-          {/* Rastro de las correcciones (mig. 102): es dinero que se movió de
-              columna en el corte, así que se deja a la vista quién lo cambió. */}
+          {/* Correcciones de forma de pago: quién y cuándo. */}
           {(nota.historial_forma_pago ?? []).length > 0 && (
             <FilaDetalle label="Correcciones de pago">
               <div className="space-y-1.5">
@@ -1349,9 +1195,7 @@ export default function DetalleNota() {
               </div>
             </FilaDetalle>
           )}
-          {/* Abonos (mig. 121): cada pago parcial con su forma, quién lo tomó y
-              cuándo. Los revertidos se siguen viendo, tachados: el rastro del
-              dinero no se borra. */}
+          {/* Abonos con su forma, quién lo tomó y cuándo; los revertidos, tachados. */}
           {abonosNota.length > 0 && (
             <FilaDetalle label="Abonos">
               <div className="space-y-2">
@@ -1392,22 +1236,9 @@ export default function DetalleNota() {
             <FilaDetalle label="Cargas">
               <div className="space-y-3">
                 {nota.cargas.map(cg => {
-                  // Se muestran las máquinas USADAS (registro que persiste aunque
-                  // el ciclo ya haya terminado y la máquina se liberara). El badge
-                  // de estado en vivo solo aparece si la máquina sigue asignada a
-                  // esta carga (lavadora_id / secadora_id presentes).
-                  // Cada máquina muestra su costo real: la lavadora su
-                  // precio_lavadora (lavado) y la secadora su precio_secadora
-                  // (secado). Son cargos separados; no se reparte nada.
-                  // Si la máquina sigue vinculada (lavadora_id/secadora_id), su
-                  // estado en vivo (En espera / En uso); si ya se desvinculó,
-                  // cumplió su parte → "terminado" (verde).
-                  // Una línea POR PASADA (mig. 114): una carga que se relavó
-                  // lista su lavadora dos veces, aunque sea la misma máquina.
-                  // El importe va en la PRIMERA pasada de cada hueco, que es la
-                  // que se cobró (`precio_lavadora` / `precio_secadora`); las
-                  // vueltas siguientes van sin cobro, así que van sin cifra.
-                  // Repetirlo haría parecer que se cobraron dos lavados.
+                  // Una línea por vuelta (un relavado repite la máquina). La que sigue puesta
+                  // muestra su estado en vivo; las demás, "terminado". El importe va solo en la
+                  // primera vuelta de cada hueco (la cobrada).
                   const usadas = cg.maquinas_usadas ?? [];
                   const primeraDe = (slot) => usadas.find(u => u.slot === slot)?.id ?? null;
                   const primeraLav = primeraDe('lavadora');
@@ -1418,16 +1249,14 @@ export default function DetalleNota() {
                     const estadoVivo = esLav ? cg.lavadora_estado : cg.secadora_estado;
                     return {
                       nombre: u.nombre, tipo: u.tipo, tamano: esLav ? undefined : u.tamano,
-                      // La que sigue puesta muestra su estado en vivo; una pasada
-                      // ya cerrada cumplió su parte (verde).
+                      // Puesta: estado en vivo; cerrada: "terminado".
                       estado: u.actual ? estadoVivo : 'terminado',
                       precio: esPrimera
                         ? Number(esLav ? cg.precio_lavadora : cg.precio_secadora)
                         : null,
                     };
                   });
-                  // Por Encargo: slots con TIPO elegido pero sin máquina física
-                  // todavía (se asignan en Salidas). Se muestran como "sin asignar".
+                  // Por Encargo: huecos con tipo y sin máquina (se asignan en Salidas).
                   const TIPO_MAQ_LABEL = { mediana: 'Mediana', jumbo: 'Jumbo', edredon: 'Edredón' };
                   const hayDelSlot = (slot) => usadas.some(u => u.slot === slot);
                   const slotsPrevistos = [
@@ -1442,12 +1271,8 @@ export default function DetalleNota() {
                   ].filter(Boolean);
                   const prods = cg.productos ?? [];
                   const totalProds = prods.reduce((s, p) => s + Number(p.subtotal ?? 0), 0);
-                  // Lo que la carga le cobra a la nota. En Por Encargo es el
-                  // PRECIO DEL SERVICIO congelado en la carga (mig. 096), que ya
-                  // lleva dentro su material: sumar máquinas y productos daría
-                  // los $25 del jabón y la bolsa en vez de los $150 que se
-                  // cobran. Lo que va encima del servicio son los productos de
-                  // marca y el ajuste, igual que en el total de la nota.
+                  // Lo que la carga cobra: en Por Encargo, el precio del servicio + marca +
+                  // ajuste (como el total de la nota).
                   const marcaProds = prods
                     .filter(seVendePorUnidad)
                     .reduce((s, p) => s + Number(p.subtotal ?? 0), 0);
@@ -1455,16 +1280,12 @@ export default function DetalleNota() {
                     ? Number(cg.tope_carga) + marcaProds + Number(cg.ajuste ?? 0)
                     : Number(cg.precio_lavadora) + Number(cg.precio_secadora)
                       + Number(cg.ajuste ?? 0) + totalProds;
-                  // En Por Encargo el renglón con precio es un SERVICIO vendido;
-                  // el que no lo tiene es una máquina agregada en Salidas.
+                  // En Por Encargo, el renglón con precio es un servicio; sin él, una máquina de Salidas.
                   const esServicioEncargo = esEncargoNota && cg.tope_carga != null;
-                  // Y ese renglón de MÁQUINA no lleva importe: en Por Encargo lo
-                  // que se cobra es el servicio, y la máquina que lo lava no
-                  // suma nada. Enseñar "$0.00" dos veces por máquina hacía dudar
-                  // de si faltaba cobrar algo. En Autoservicio sí lo lleva: ahí
-                  // lo que se cobra ES la máquina.
+                  // La máquina de Por Encargo no lleva importe (lo cobrado es el servicio); en
+                  // Autoservicio sí.
                   const maquinaSinPrecio = esEncargoNota && !esServicioEncargo;
-                  // Autoservicio no maneja prenda/tela/tamaño: se omite esa línea.
+                  // Autoservicio no maneja prenda, tela ni tamaño.
                   const atributos = nota.tipo_servicio === 'AUTOSERVICIO' ? [] : [
                     PRENDA_LABEL[cg.tipo_prenda],
                     cg.tipo_tela,
@@ -1473,8 +1294,7 @@ export default function DetalleNota() {
                   ].filter(Boolean);
                   return (
                     <div key={cg.id} className="border border-gray-100 rounded-lg p-3 space-y-1.5">
-                      {/* Carga N en su propia línea; debajo, una línea por
-                          máquina (lavadora y secadora) con su costo. */}
+                      {/* Carga N y, debajo, una línea por máquina con su costo. */}
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-semibold text-gray-500">
                           {nombreDeCarga(cg)}
@@ -1484,23 +1304,20 @@ export default function DetalleNota() {
                         )}
                       </div>
                       {maquinasCarga.length === 0 && slotsPrevistos.length === 0 ? (
-                        // Un servicio no lleva máquina: las máquinas son de
-                        // Salidas y van en sus propios renglones, así que aquí
-                        // no hay nada que decir.
+                        // Un servicio no lleva máquina: van en sus renglones.
                         esServicioEncargo ? null : (
                           <span className="text-sm text-gray-400 italic">Sin máquinas</span>
                         )
                       ) : (
                         maquinasCarga.map((m, i) => {
                           const cfg = BADGE_MAQUINA_ESTADO[m.estado];
-                          // El tamaño (M/J) solo aplica a lavadoras; la secadora
-                          // es de un solo tamaño, así que va solo con su nombre.
+                          // El tamaño (M/J) solo en lavadoras.
                           const tamanoLabel = m.tipo === 'secadora' ? null : MAQUINA_TIPO_LABEL[m.tipo];
                           const tipoLabel = tamanoLabel ? (TAMANO_ABBR[tamanoLabel] ?? tamanoLabel) : null;
                           return (
                             <div key={i} className="flex items-start justify-between gap-2">
                               <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 min-w-0">
-                                {/* Estado: solo el punto de color al inicio */}
+                                {/* Estado: el punto de color */}
                                 {cfg && (
                                   <span
                                     className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${cfg.dot} ${m.estado === 'en_uso' ? 'animate-pulse' : ''}`}
@@ -1512,9 +1329,7 @@ export default function DetalleNota() {
                                   <span className="text-xs text-gray-500">— {tipoLabel}</span>
                                 )}
                               </div>
-                              {/* Sin importe: es una pasada anterior del mismo
-                                  hueco y no se cobró aparte, o es una máquina de
-                                  Por Encargo, que no cobra nada. */}
+                              {/* Sin importe: vuelta repetida o máquina de Por Encargo. */}
                               {m.precio != null && !maquinaSinPrecio && (
                                 <span className="flex-shrink-0 text-sm text-gray-600">{fmtMonto(m.precio)}</span>
                               )}
@@ -1561,9 +1376,7 @@ export default function DetalleNota() {
                     )}
                   </div>
                 )
-              // Mostrador se lee como un cliente más, con el mismo estilo
-              // (2026-10-03; antes iba gris y en cursiva). Antes de él va la
-              // referencia libre del Autoservicio (mig. 157).
+              // Mostrador se lee como un cliente más; antes va la referencia del Autoservicio.
               : (nota.referencia || 'Mostrador')}
           </FilaDetalle>
           <FilaDetalle label="Ajuste">
@@ -1575,10 +1388,8 @@ export default function DetalleNota() {
         </div>
       </div>
 
-      {/* Productos. Solo en la venta de mostrador (servicio Productos), que no
-          pasa por Salidas y cuyos productos SON la nota entera. En Autoservicio
-          y Por Encargo los productos se ven y se manejan en Salidas
-          (2026-09-25): ahí es donde se agregan y se quitan. */}
+      {/* Productos: solo en la venta de productos; en los demás servicios se ven
+          en Salidas. */}
       {nota.tipo_servicio === 'PRODUCTOS' && (
       <div className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
         <div className="px-4 py-3 border-b border-gray-50 flex items-center justify-between">
@@ -1624,11 +1435,7 @@ export default function DetalleNota() {
       </div>
 
 
-      {/* Estado: ESCONDIDO a la espera de que el negocio decida si lo
-          mantiene (2026-09-28). La línea de tiempo cuenta el proceso paso a
-          paso, y el mostrador ya lo sigue desde Salidas y desde la lista de
-          notas. Se vuelve a enseñar poniendo la bandera en true; lo que hay
-          debajo se conserva entero para eso. */}
+      {/* Estado: oculto (MOSTRAR_ESTADO_NOTA). */}
       {MOSTRAR_ESTADO_NOTA && (<>
       {/* Estado */}
       <div className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
@@ -1656,16 +1463,11 @@ export default function DetalleNota() {
                 const done    = i < pasoActual;
                 const current = i === pasoActual;
                 const isLast  = i === pasos.length - 1;
-                // Cargas con alguna máquina EN USO. Van todas bajo el mismo
-                // paso —lavando y secando son uno— y cada una enseña abajo la
-                // fase en la que va: una carga con lavadora y secadora
-                // corriendo a la vez lista las dos.
+                // Cargas con alguna máquina en uso, bajo el mismo paso, con su fase.
                 const cargasAqui = paso.key !== 'PROCESO' ? [] : (nota.cargas ?? []).filter(cg =>
                   (cg.lavadora_id && cg.lavadora_estado === 'en_uso')
                   || (cg.secadora_id && cg.secadora_estado === 'en_uso'));
-                // Un paso se resalta si ya se pasó, es el actual de la nota, o
-                // tiene alguna carga viviéndolo (p. ej. Secando con una carga
-                // adelantada mientras otra sigue en Lavando).
+                // Se resalta si ya pasó, es el actual o tiene una carga viviéndolo.
                 const activo  = done || current || cargasAqui.length > 0;
                 return (
                   <li key={paso.key} className="relative flex gap-3 pb-6 last:pb-0">
@@ -1695,9 +1497,7 @@ export default function DetalleNota() {
                       </p>
                       <p className="text-xs text-gray-400">{subtituloEstado(paso.key, { done, current }, fechaDePaso(paso, fechaPorEstado))}</p>
 
-                      {/* Desglose de las cargas que están en máquina, con la
-                          fase de cada una: el paso dice que la nota se está
-                          procesando y esto dice en qué va cada carga. */}
+                      {/* En qué fase va cada carga que está en máquina. */}
                       {cargasAqui.length > 0 && (
                         <div className="mt-2 space-y-1.5">
                           {cargasAqui.map(cg => (
@@ -1736,7 +1536,7 @@ export default function DetalleNota() {
         />
       )}
 
-      {/* Modal del motivo de cancelación */}
+      {/* Modal del nombre (referencia) del Autoservicio */}
       {refOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
           <form
@@ -1780,6 +1580,7 @@ export default function DetalleNota() {
         </div>
       )}
 
+      {/* Modal del motivo de cancelación */}
       {motivoCancelarOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-4">
@@ -1819,9 +1620,8 @@ export default function DetalleNota() {
         </div>
       )}
 
-      {/* Confirmar el aviso por WhatsApp. Enseña el mensaje YA armado, con el
-          nombre y la hora puestos: es lo que el cliente va a leer, y es la
-          última oportunidad de ver que un comodín quedó mal escrito. */}
+      {/* Confirmar el aviso por WhatsApp con el mensaje ya armado: última
+          oportunidad de ver un comodín mal escrito. */}
       {procesadoOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4 max-h-[90vh] overflow-y-auto">
@@ -1830,8 +1630,7 @@ export default function DetalleNota() {
                 {yaProcesada ? 'Volver a avisar al cliente' : 'Marcar la nota como procesada'}
               </h3>
               <p className="text-sm text-gray-500 mt-0.5">
-                {/* Lo primero es lo que hace: la nota avanza. El aviso es la
-                    segunda mitad del gesto, y puede no haber a quién mandarlo. */}
+                {/* Primero lo que hace (la nota avanza); el aviso puede no tener a quién. */}
                 {!yaProcesada && <>La nota pasa a <span className="font-medium text-gray-700">Por Entregar</span> y suelta sus máquinas. </>}
                 {nota.cliente_nombre
                   ? <>Se le avisa por WhatsApp a <span className="font-medium text-gray-700">{nota.cliente_nombre}</span>
@@ -1889,9 +1688,8 @@ export default function DetalleNota() {
               </button>
               <button
                 onClick={enviarProcesado}
-                // Marcar la nota no depende del aviso: sin mensaje escrito o sin
-                // teléfono, la nota igual avanza y el WhatsApp simplemente no
-                // sale. Solo el botón que ÚNICAMENTE avisa necesita las dos cosas.
+                // Marcar no depende del aviso; solo el botón que únicamente avisa necesita
+                // mensaje y teléfono.
                 disabled={loadingAccion || (yaProcesada && (!mensajeProcesado.trim() || !telefonoAviso))}
                 className="flex-1 bg-green-600 hover:bg-green-700 text-white font-medium py-3.5 rounded-lg text-base transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
               >
@@ -1902,7 +1700,7 @@ export default function DetalleNota() {
         </div>
       )}
 
-      {/* Modal de cobro: liquidar y abonar en el mismo (2026-09-26) */}
+      {/* Modal de cobro (liquidar o abonar) */}
       {cobroOpen && (
         <ModalCobrar
           folio={nota.folio ?? `#${nota.id}`}
@@ -1984,16 +1782,14 @@ export default function DetalleNota() {
         </div>
       )}
 
-      {/* Va DESPUÉS del modal de cobro: comparten z-index, así que el último
-          en el DOM es el que queda encima. */}
+      {/* Después del modal de cobro: con el mismo z-index, queda encima. */}
       <AbrirCajaModal
         open={modalCajaOpen}
         onClose={() => setModalCajaOpen(false)}
         onAbierta={() => { setModalCajaOpen(false); setCajaAbierta(true); }}
       />
 
-      {/* Modal revertir pago (solo admin, caja aún abierta). El motivo es
-          obligatorio: sin él el botón de confirmar queda apagado. */}
+      {/* Modal revertir pago (admin, caja abierta); el motivo es obligatorio. */}
       {revirtiendoPago && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-4">
@@ -2043,7 +1839,7 @@ export default function DetalleNota() {
         </div>
       )}
 
-      {/* Modal corregir forma de pago (solo admin, caja aún abierta) */}
+      {/* Modal corregir forma de pago (admin, caja abierta) */}
       {corrigiendoPago && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
@@ -2103,8 +1899,7 @@ export default function DetalleNota() {
         </div>
       )}
 
-      {/* Modal confirmar entrega. En Por Encargo un admin puede deshacerla
-          después con "Abrir nota", así que ya no se promete que no se pueda. */}
+      {/* Modal confirmar entrega (en Por Encargo un admin la puede deshacer). */}
       {confirmFinalizar && (
         <ModalConfirmar
           titulo={esEncargoNota ? 'Entregar nota' : 'Finalizar nota'}

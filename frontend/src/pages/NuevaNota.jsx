@@ -14,7 +14,7 @@ const INPUT_CLS =
 
 const LABEL_CLS = 'block text-sm font-semibold text-gray-900 mb-2';
 
-// Línea divisoria entre secciones de una misma pantalla.
+/** Línea divisoria entre secciones de una pantalla. */
 const Separador = () => (
   <div className="py-1"><div className="border-t border-gray-200" /></div>
 );
@@ -25,17 +25,15 @@ const INPUT_DISABLED_CLS =
 const TIPOS_SERVICIO = [
   { v: 'AUTOSERVICIO', label: 'Autoservicio' },
   { v: 'POR_ENCARGO',  label: 'Por Encargo'  },
-  // Venta de mostrador: productos sueltos, sin lavado ni secado. Se cobra al
-  // momento y la nota nace finalizada (mig. 112).
+  // Venta de productos: sin lavado; se cobra al momento y nace finalizada.
   { v: 'PRODUCTOS',    label: 'Productos'    },
 ];
 const TIPO_LABEL = Object.fromEntries(TIPOS_SERVICIO.map(t => [t.v, t.label]));
 
-// Cliente de mostrador: el que deja ropa Por Encargo de paso y no se registra
-// (2026-09-29). Ocupa el mismo hueco que el id de un cliente —así el paso 1
-// sigue midiendo "ya hay a nombre de quién" con un solo dato— y al armar la
-// nota se traduce a cliente_id: null, que es como el backend guarda una nota
-// sin cliente. No es un id posible: los ids son números.
+/**
+ * Cliente de mostrador (sin registrar): ocupa el lugar del id del cliente y al
+ * guardar se manda como cliente_id null.
+ */
 const CLIENTE_MOSTRADOR = 'MOSTRADOR';
 
 const TIPOS_PRENDA = [
@@ -44,9 +42,7 @@ const TIPOS_PRENDA = [
 ];
 const PRENDA_LABEL = Object.fromEntries(TIPOS_PRENDA.map(t => [t.v, t.label]));
 
-// Los tipos de tela y tamaños de edredón son catálogos editables por el admin
-// (Ajustes → Etiquetas de encargo). Se cargan desde el API; la nota guarda el
-// nombre de la etiqueta elegida como texto.
+// Tipos de tela y tamaños de edredón: catálogos de Ajustes; la nota guarda el nombre.
 
 const FORM_INIT = {
   tipo_tela:      '',
@@ -57,11 +53,10 @@ const FORM_INIT = {
   forma_pago:     '',
 };
 
-// Autoservicio elige LA MÁQUINA, no su tipo (2026-09-29): el mostrador la
-// escoge de la lista de máquinas libres, igual que en Salidas, y con la máquina
-// ya se sabe su tarifa —así el alta vuelve a enseñar el total de la nota—.
-// Cada renglón es una máquina; las notas viejas pueden traer lavadora y
-// secadora en el mismo renglón, y por eso caben las dos.
+/**
+ * Autoservicio elige la máquina (de las libres), así se sabe su tarifa y el
+ * total. Cada renglón es una máquina (las notas viejas pueden traer dos).
+ */
 const MAX_CARGAS  = 20;
 
 const TAMANOS = [
@@ -72,39 +67,32 @@ const TAMANOS = [
 ];
 const TAMANO_LABEL = Object.fromEntries(TAMANOS.map(t => [t.v, t.label]));
 
-// Los servicios que vende Por Encargo. El servicio es la unidad que se cobra:
-// su precio sale de Ajustes y ya lleva dentro el lavado, el secado, el jabón y
-// la bolsa. Cada servicio se guarda como una carga.
-//
-// Los de ropa son fijos (Chico, Mediano, Grande). El Edredón se vende uno por
-// tamaño (Individual, Matrimonial…, mig. 130): esos salen del catálogo de
-// tamaños de edredón con su precio, y se arman en la pantalla (serviciosDe).
-// Viajan como prenda EDREDON en tamaño jumbo, que es lo que los ata a la
-// lavadora jumbo cuando se les asigna máquina en Salidas.
+/**
+ * Servicios de Por Encargo: el precio de Ajustes ya incluye lavado, secado,
+ * jabón y bolsa; cada servicio se guarda como una carga. Los de ropa son fijos;
+ * los de edredón salen del catálogo de tamaños (serviciosDe).
+ */
 const SERVICIOS_ROPA = [
   { v: 'chico',   label: 'Chico',   tamano: 'chico',   tipo_prenda: 'ROPA' },
   { v: 'mediano', label: 'Mediano', tamano: 'mediano', tipo_prenda: 'ROPA' },
   { v: 'grande',  label: 'Grande',  tamano: 'grande',  tipo_prenda: 'ROPA' },
 ];
-// Ya no se venden. No tienen contador: solo aparecen al editar una nota que los
-// eligió cuando existían, para no cambiarle el servicio —ni el precio— a
-// espaldas de nadie. El Edredón sin tamaño es el de antes de la mig. 130.
+/** Ya no se venden: solo aparecen en notas que los traen, sin cambiarles precio. */
 const SERVICIOS_LEGADO = [
   { v: 'edredon', label: 'Edredón', tamano: 'jumbo', tipo_prenda: 'EDREDON', legado: true },
   { v: 'jumbo',   label: 'Jumbo',   tamano: 'jumbo', tipo_prenda: 'ROPA',    legado: true },
 ];
 const servicioEdredon = (nombre) => `edredon:${nombre}`;
-// La lista completa, en el orden en que se leen en la pantalla y en el ticket.
-// Un tamaño de edredón inactivo cuenta como legado: deja de ofrecerse, pero la
-// nota que ya lo trae lo conserva.
+/**
+ * Todos los servicios, en el orden de la pantalla y el ticket. Un tamaño de
+ * edredón inactivo cuenta como legado.
+ */
 const serviciosDe = (tamanosEdredon) => [
   ...SERVICIOS_ROPA,
   ...tamanosEdredon.map(e => ({
     v:              servicioEdredon(e.nombre),
     label:          `Edredón ${e.nombre}`,
-    // Título corto del renglón en la lista de servicios: "Edredón Matrimonial"
-    // no cabía junto a los botones y se cortaba (2026-10-02). En avisos y
-    // resúmenes sigue el nombre completo.
+    // Título corto para el renglón; en avisos y resúmenes, el nombre completo.
     titulo:         `E. ${e.nombre}`,
     tamano:         'jumbo',
     tipo_prenda:    'EDREDON',
@@ -117,21 +105,18 @@ const serviciosDe = (tamanosEdredon) => [
 // Cuántos servicios del mismo tipo caben en una nota.
 const MAX_SERVICIOS = 20;
 
-// El detalle por servicio —tipo de tela y tamaño del edredón— está ESCONDIDO a
-// petición del negocio (2026-09-28): los dos son opcionales y el mostrador no
-// los captura, así que el paso se lee más corto sin ellos. Se enseña otra vez
-// poniendo esto en true; el bloque sigue ahí, entero.
+/** Muestra el detalle por servicio (tipo de tela, tamaño de edredón); oculto. */
 const MOSTRAR_DETALLE_SERVICIO = false;
 
-// Datos a nivel nota. La prenda, el tamaño y los productos incluidos viven en
-// cada carga (encargoCargas); el ajuste y los productos que el cliente compra
-// aparte son de la nota, una sola vez.
+/**
+ * Datos de la nota. La prenda, el tamaño y el material de cada servicio viven
+ * en sus cargas (encargoCargas).
+ */
 const ENCARGO_INIT = {
   cliente_id:      '',
   pago_anticipado: '',
   forma_pago:      '',
-  // Cuánto se cobró por adelantado (modal de Cobrar). Menos que el total deja
-  // la nota abonada; el total o más, pagada.
+  // Anticipo: menos que el total deja la nota abonada; el total, pagada.
   monto_anticipo:  '',
   fecha_entrega:   '',
   tiempo_entrega:  '',
@@ -139,13 +124,10 @@ const ENCARGO_INIT = {
   ajuste:          '0',
 };
 
-// Un servicio de Por Encargo, que se guarda como una carga: qué servicio es
-// (de ahí salen su prenda y su tamaño), su tela o tamaño de edredón y el
-// material que lleva incluido.
-// Ya NO elige tipo de máquina: el servicio se cobra a su precio y la máquina
-// —la que esté libre— se le asigna en Salidas sin mover nada del cobro.
-// `ajuste` sobrevive en $0 para no borrar el de las notas que se hicieron
-// cuando el ajuste era por carga; el de hoy es el de la nota.
+/**
+ * Un servicio Por Encargo (se guarda como carga). La máquina se asigna en
+ * Salidas sin cambiar el cobro. `ajuste` va en 0: el ajuste es de la nota.
+ */
 const CARGA_ENCARGO_INIT = {
   servicio:               '',
   tipo_prenda:            '',
@@ -154,42 +136,34 @@ const CARGA_ENCARGO_INIT = {
   tamano:                 '',
   ajuste:                 '0',
   productos:              [],
-  // Medidas de cada tipo de granel que se cambiaron a mano: { tipoId: n }. Lo
-  // que no esté aquí lleva lo de Ajustes (ver medidasGranel).
+  // Medidas de granel cambiadas a mano: { tipoId: n }; las demás, de Ajustes.
   granel:                 {},
 };
 
-// Cuándo estará lista la ropa. Es el DÍA que se le promete al cliente, no una
-// hora del día (2026-09-25), y es opcional.
+/** Día en que estará lista la ropa (opcional). */
 const TIEMPOS_ENTREGA = [
   { v: 'MANANA',   label: 'Mañana'    },
   { v: 'DOS_DIAS', label: 'En 2 días' },
-  // "Otra" abre el calendario: la fecha se guarda en fecha_entrega.
+  // "Otra" abre el calendario: la fecha va en fecha_entrega.
   { v: 'OTRA',     label: 'Otra'      },
 ];
 const TIEMPO_ENTREGA_LABEL = Object.fromEntries(TIEMPOS_ENTREGA.map(t => [t.v, t.label]));
 
-// Fecha local en formato YYYY-MM-DD, tantos días después de hoy. Sin argumento
-// es hoy, que es la entrega por defecto cuando no se promete ningún día.
+/** Fecha local YYYY-MM-DD a `dias` de hoy (por defecto, hoy). */
 const fechaISOEnDias = (dias = 0) => {
   const d = new Date();
   d.setDate(d.getDate() + dias);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 const fechaHoyISO = () => fechaISOEnDias(0);
-// Qué fecha se guarda según el día prometido: mañana es hoy + 1, "en 2 días" es
-// hoy + 2 y "Otra" es la que se eligió en el calendario (2026-09-25). Así la
-// fecha de entrega de la nota dice lo mismo que se le prometió al cliente.
+/** Fecha de entrega según el día prometido: hoy + 1, hoy + 2 o la elegida. */
 const fechaSegunDiaPrometido = (tiempo, fechaElegida) => {
   if (tiempo === 'MANANA')   return fechaISOEnDias(1);
   if (tiempo === 'DOS_DIAS') return fechaISOEnDias(2);
   return fechaElegida || fechaHoyISO();
 };
 
-// Pasos del wizard: Cliente, Servicios (cantidades, ajuste y productos),
-// Entrega y Resumen (que incluye el pago). Son cuatro y siempre los mismos: la
-// pantalla por carga desapareció al vender por cantidad de servicios, y con
-// ella el paso que preguntaba cuántas cargas eran.
+/** Pasos: Cliente, Servicios, Entrega y Resumen (con el pago). */
 const ENCARGO_STEPS = 4;
 const PASO_SERVICIOS = 2;
 const PASO_ENTREGA   = 3;
@@ -197,28 +171,23 @@ const PASO_RESUMEN   = 4;
 
 export default function NuevaNota() {
   const navigate = useNavigate();
-  // Máquinas LIBRES que ofrece el modal de elegir máquina. Se piden al abrirlo.
+  // Máquinas libres del modal; se piden al abrirlo.
   const [maquinasLibres,    setMaquinasLibres]    = useState([]);
   const [productosCatalogo, setProductosCatalogo] = useState([]);
   const [telas,             setTelas]             = useState([]);
   const [tamanosEdredon,    setTamanosEdredon]    = useState([]);
   const [precios,           setPrecios]           = useState({ mediana: 70, jumbo: 70, secadora: 45, secadoraJumbo: 45, edredon: 80 });
-  // Tope de precio por carga (Ajustes); null = sin tope. `edredon` es un tope
-  // por prenda que manda sobre el del tamaño para las cargas de edredón.
+  // Precio de cada servicio (Ajustes); null = sin configurar.
   const [topes,             setTopes]             = useState({ chico: null, mediano: null, grande: null, jumbo: null, edredon: null });
-  // Lo que trae puesto cada servicio de ropa (mig. 132): medidas de cada granel
-  // ligado y bolsas. Los de edredón lo traen en su catálogo de tamaños.
+  // Lo que trae puesto cada servicio de ropa (los de edredón, en su catálogo).
   const [precargas,         setPrecargas]         = useState({});
-  // Tipos de granel (mig. 133): Jabón, Suavizante… para nombrar lo que lleva
-  // cada servicio y avisar si no alcanza.
+  // Tipos de granel (Jabón, Suavizante…).
   const [tiposGranel,       setTiposGranel]       = useState([]);
   const [loadingData,       setLoadingData]       = useState(true);
-  // Caja del día: si nadie la abrió, los cobros de esta nota no entran en
-  // ningún corte (van con caja_id nulo, mig. 101). Se avisa, no se bloquea.
+  // Caja del día: si no está abierta, se avisa.
   const [cajaAbierta, setCajaAbierta] = useState(null);
   const [modalCajaOpen, setModalCajaOpen] = useState(false);
-  // Pago anticipado de Por Encargo (2026-10-03): "Sí" abre el mismo modal de
-  // Cobrar del detalle. Lo capturado se guarda al crear la nota.
+  // Pago anticipado de Por Encargo: abre el modal de Cobrar.
   const [anticipoOpen,  setAnticipoOpen]  = useState(false);
   const [anticipoMonto, setAnticipoMonto] = useState('');
   const [anticipoForma, setAnticipoForma] = useState('');
@@ -227,37 +196,29 @@ export default function NuevaNota() {
   const [error,             setError]             = useState('');
   const [loading,           setLoading]           = useState(false);
   const [tipoServicio,      setTipoServicio]      = useState('');
-  // Venta de mostrador (mig. 112): sin cargas ni máquinas, se cobra al momento.
+  // Venta de productos: sin cargas, se cobra al momento.
   const esVenta = tipoServicio === 'PRODUCTOS';
   const [tipoOpen,          setTipoOpen]          = useState(false);
-  // Máquinas de la nota de Autoservicio. Cada renglón es una máquina elegida
-  // de la lista de libres: { id?, lavadora, secadora }, con `id` solo en las
-  // cargas de una nota que se está editando. Arranca vacío: el contador de
-  // "Cantidad de máquinas" se fue con el selector de tipo (2026-09-29), porque
-  // el número sale de lo que se elige en el modal.
+  // Máquinas de Autoservicio, una por renglón: { id?, lavadora, secadora }
+  // (`id` solo al editar). Se agregan desde el modal.
   const [cargasAuto,        setCargasAuto]        = useState([]);
-  // Modal de elegir máquinas (el mismo gesto que "Asignar máquina" de Salidas).
+  // Modal de elegir máquinas (como "Asignar máquina" de Salidas).
   const [maqModalOpen,      setMaqModalOpen]      = useState(false);
   const [maqModalSel,       setMaqModalSel]       = useState([]);
   const [maqModalError,     setMaqModalError]     = useState('');
   const [loadingMaquinas,   setLoadingMaquinas]   = useState(false);
   const [encargoStep,       setEncargoStep]       = useState(1);
   const [encargoForm,       setEncargoForm]       = useState(ENCARGO_INIT);
-  // Arranca SIN servicios: el mostrador dice cuántos son de cada tamaño en el
-  // paso 2, y cada uno nace ya con su material incluido.
+  // Arranca sin servicios; cada uno nace con su material.
   const [encargoCargas,     setEncargoCargas]     = useState([]);
   const [encargoLoading,    setEncargoLoading]    = useState(false);
   const [clientes,          setClientes]          = useState([]);
   const [clienteSearch,     setClienteSearch]     = useState('');
   const [nuevoClienteOpen,  setNuevoClienteOpen]  = useState(false);
-  // Selector para agregar un producto. `ambito` distingue los productos de la
-  // nota (Autoservicio, por botella) de los de una carga (Por Encargo, por
-  // medida); `carga` solo aplica al segundo. Un producto puesto no se cambia: se
-  // borra y se agrega el correcto.
+  // Selector de producto: `ambito` 'nota' (por botella) o 'carga' (por medida,
+  // con `carga`). Un producto puesto no se cambia: se borra y se agrega otro.
   const [selectorProducto,  setSelectorProducto]  = useState(null);
-  // La venta de mostrador se cobra al momento: "Aceptar" abre este modal, donde
-  // se elige la forma de pago y se confirma la creación de la nota. El
-  // Autoservicio ya no pasa por aquí (2026-09-23): nace pendiente.
+  // La venta de productos se cobra al momento: "Aceptar" abre este modal.
   const [cobroOpen,         setCobroOpen]         = useState(false);
   const [nuevoCliente,      setNuevoCliente]      = useState({ nombre: '', apellido: '', telefono: '' });
   const [creandoCliente,    setCreandoCliente]    = useState(false);
@@ -265,23 +226,12 @@ export default function NuevaNota() {
   const [notaCreada,        setNotaCreada]        = useState(null);
   const tipoRef           = useRef(null);
 
-  // El aviso de nota creada no pide confirmación: corre su animación y abre
-  // solo el detalle de la nota que se acaba de crear. Ya no había nada que
-  // decidir ahí —el botón Aceptar solo cerraba— y en el mostrador era un
-  // toque de más entre una nota y la siguiente. Va al detalle y no a la
-  // lista porque es donde siguen las acciones de esa nota (cobrar, salidas,
-  // ticket): buscarla otra vez en la lista era el paso que sobraba. Sin id
-  // —que no debería pasar, la API devuelve la nota completa— cae a la lista.
-  // El plazo cubre la animación completa (el círculo tarda 0.4s y la palomita
-  // 0.4s más con 0.2s de retraso, o sea 0.6s) y deja un momento para leer el
-  // folio.
+  // El aviso de nota creada corre su animación (~0.6 s) y, sin pedir confirmación,
+  // abre lo siguiente.
   useEffect(() => {
     if (!notaCreada) return;
-    // El Autoservicio va directo a SALIDAS (2026-09-29): el cliente está
-    // enfrente con su ropa y lo siguiente es encender su máquina, no mirar la
-    // nota. Por Encargo también desde el 2026-10-06: lo siguiente es asignarle
-    // máquina y elegir su granel, que se hace en Salidas. La venta de
-    // productos sí va al detalle: no tiene máquinas.
+    // Autoservicio y Por Encargo van a Salidas (encender máquina, elegir granel);
+    // la venta de productos, al detalle.
     const SERVICIOS_A_SALIDAS = ['AUTOSERVICIO', 'POR_ENCARGO'];
     const destino = !notaCreada.id
       ? '/notas'
@@ -290,10 +240,7 @@ export default function NuevaNota() {
         : `/notas/${notaCreada.id}`;
     const t = setTimeout(() => {
       setNotaCreada(null);
-      // replace: la pantalla de destino SUSTITUYE en el historial al
-      // formulario que acaba de enviarse, para que el gesto de atrás no
-      // devuelva a una nueva nota ya mandada —desde donde se podía crear la
-      // misma nota dos veces— sino a la pantalla anterior a empezarla.
+      // replace: "atrás" no regresa al formulario ya enviado (evita duplicar la nota).
       navigate(destino, { replace: true });
     }, 1600);
     return () => clearTimeout(t);
@@ -315,41 +262,34 @@ export default function NuevaNota() {
     if (tipoMaquina === 'lavadora_jumbo') return precios.jumbo;
     return precios.mediana;
   };
-  // La secadora es de un solo tamaño: precio único (ignora tamaño y prenda).
+  // Secado: precio único.
   const precioSecado = () => precios.secadora;
-  // Precio por TIPO de máquina en Por Encargo (mediana/jumbo), independiente de
-  // qué máquina física se asigne luego.
+  // Precio por tipo de lavadora en Por Encargo.
   const precioLavadoTipo = (tipo, prenda) =>
     tipo === 'jumbo'   ? precioPorTipo('lavadora_jumbo', prenda)
     : tipo === 'mediana' ? precioPorTipo('lavadora_mediana', prenda)
     : 0;
   const precioSecadoTipo = (tipo, prenda) => (tipo ? precioSecado(tipo, prenda) : 0);
-  // Lo que cobra una MÁQUINA en Autoservicio. Es la misma tarifa que aplica el
-  // servidor al crear la nota (`tarifaLavadora`/`tarifaSecadora`): la lavadora
-  // según su tipo —Mediana o Jumbo— y la secadora a precio único. Saberla aquí
-  // es lo que permite enseñar el total en el alta.
+  // Lo que cobra una máquina de Autoservicio, con la misma tarifa que el servidor.
   const precioDeMaquina = (m) => {
     if (!m) return 0;
     if (m.tipo === 'secadora') return precioSecado();
     return precioPorTipo(m.tipo === 'lavadora_jumbo' ? 'lavadora_jumbo' : 'lavadora_mediana', 'ROPA');
   };
-  // Un renglón es una máquina; las notas viejas pueden traer las dos.
-  // El renglón "Edredón" (2026-10-02) cobra su tarifa, con lavadora o sin ella.
+  // Un renglón es una máquina (las notas viejas pueden traer dos). El "Edredón"
+  // cobra su tarifa, con lavadora o sin ella.
   const esEdredonAuto = (c) => String(c?.tipo_prenda ?? '').toUpperCase() === 'EDREDON';
   const subtotalDeCarga = (c) => esEdredonAuto(c)
     ? (Number(precios.edredon) || 0) + precioDeMaquina(c.secadora)
     : precioDeMaquina(c.lavadora) + precioDeMaquina(c.secadora)
-    // Nota vieja cuya carga se quedó en TIPO sin máquina: se cobra por su tipo,
-    // como se cobraba entonces, para no cambiarle el total al editarla.
+    // Carga vieja con tipo y sin máquina: se cobra por su tipo.
     + (c.lavadora ? 0 : precioLavadoTipo(c.lavadora_tipo, 'ROPA'))
     + (c.secadora ? 0 : precioSecadoTipo(c.secadora_tipo, 'ROPA'));
-  // Ids de las máquinas que la nota ya tiene: no se vuelven a ofrecer.
+  // Máquinas que la nota ya tiene: no se vuelven a ofrecer.
   const maquinasElegidas = cargasAuto.flatMap(c =>
     [c.lavadora?.id, c.secadora?.id].filter(Boolean).map(String));
-  // Qué ES la máquina del renglón, sin nombrarla: "Lavadora Mediana".
-  // El resumen habla de lo que se cobra —una lavadora mediana cuesta lo que
-  // cuesta, se llame L1 o L8—, así que ahí no pinta el nombre de la máquina ni
-  // el número de renglón: es ruido entre el concepto y su importe.
+  // Qué es la máquina, sin nombrarla ("Lavadora Mediana"): el resumen habla de
+  // lo que se cobra.
   const tipoDeRenglon = (c) => {
     if (esEdredonAuto(c)) return 'Edredón';
     const partes = [];
@@ -359,12 +299,9 @@ export default function NuevaNota() {
     if (partes.length === 0 && c.secadora_tipo) partes.push('Secadora (sin asignar)');
     return partes.join(' + ');
   };
-  // Título del renglón: "L3 · Mediana". En la lista de arriba SÍ se nombra la
-  // máquina: es la que hay que ir a cargar. Solo el tamaño: la L del nombre ya
-  // dice que es lavadora (2026-10-02).
+  // Título del renglón con el nombre ("L3 · Mediana"): es la que hay que cargar.
   const etiquetaRenglon = (c) => {
-    // El Edredón: "Edredón" hasta que en Salidas se le asigne lavadora, y
-    // después con su nombre ("L8 · Edredón").
+    // Edredón: "Edredón" hasta tener lavadora; luego "L8 · Edredón".
     if (esEdredonAuto(c)) return c.lavadora ? `${c.lavadora.nombre} · Edredón` : 'Edredón';
     const partes = [];
     if (c.lavadora) partes.push(`${c.lavadora.nombre} · ${c.lavadora.tipo === 'lavadora_jumbo' ? 'Jumbo' : 'Mediana'}`);
@@ -373,12 +310,9 @@ export default function NuevaNota() {
     if (partes.length === 0 && c.secadora_tipo) partes.push('Secadora (sin asignar)');
     return partes.join(' + ');
   };
-  // Ajuste a nivel nota: ya no se captura en ningún lado (la venta de Productos
-  // perdió el campo el 2026-10-02). Solo se conserva el de una venta vieja que
-  // se reabra; fuera de la venta no suma nada aunque el form arrastre un valor.
+  // El ajuste de nota solo existe en una venta vieja que se reabra.
   const ajusteNum      = esVenta ? (Number(form.ajuste) || 0) : 0;
-  // Precio efectivo de un producto según la unidad de venta: en Autoservicio se
-  // vende por BOTELLA (precio_botella); en Por Encargo por MEDIDA (precio_unitario).
+  // Precio según la unidad: botella (precio_botella) o medida (precio_unitario).
   const precioProducto = (prod, unidad = 'medida') => {
     if (!prod) return 0;
     if (prod.clase === 'bolsa') return Number(prod.precio_unitario) || 0; // por pieza
@@ -386,29 +320,26 @@ export default function NuevaNota() {
       ? (Number(prod.precio_botella) || 0)
       : (Number(prod.precio_unitario) || 0);
   };
-  // Botellas disponibles de un producto (el stock viene en medidas).
+  // Botellas disponibles (la existencia viene en medidas).
   const botellasDisponibles = (prod) => {
     if (!prod) return 0;
     const tpb = Number(prod.medidas_por_botella) || 0;
     const disp = Number(prod.stock_disponible ?? prod.stock_actual) || 0;
     return tpb > 0 ? Math.floor(disp / tpb) : disp;
   };
-  // Palabra de la unidad vendida en Autoservicio: botella (granel líquido),
-  // unidad (marca y polvo) o bolsa (bolsa, por pieza).
+  // Unidad vendida en Autoservicio: botella (granel), unidad (marca y polvo) o bolsa.
   const unidadVentaNota = (prod, n = 2) => {
     if (prod?.clase === 'bolsa') return n === 1 ? 'bolsa' : 'bolsas';
     if (seVendePorUnidad(prod)) return n === 1 ? 'unidad' : 'unidades';
     return n === 1 ? 'botella' : 'botellas';
   };
-  // Granel de un servicio Por Encargo (migs. 132-134). El servicio lleva N
-  // medidas de CADA tipo (Jabón, Suavizante); cuál producto de ese tipo lo
-  // elige el empleado en Salidas, así que aquí no va a la lista de productos:
-  // lo pone el servidor al crear la nota. Aquí solo se dice qué lleva y se
-  // avisa si no alcanza.
+  // Granel de los servicios Por Encargo: N medidas de cada tipo; el producto se
+  // elige en Salidas y lo pone el servidor. Aquí solo se muestra y se avisa si
+  // no alcanza.
   const medidasDisponibles = (p) => Number(p.stock_disponible ?? p.stock_actual) || 0;
-  // Solo el granel LÍQUIDO con tipo: el polvo se vende por unidad.
+  // Solo el granel líquido con tipo (el polvo se vende por unidad).
   const granelServido = (p) => p.tipo_liquido === 'granel' && !esPolvo(p) && p.tipo_granel_id != null;
-  // Por tipo, los productos de ese tipo. Sirven para cualquier servicio (mig. 135).
+  // Productos por tipo de granel.
   const granelPorTipo = () => {
     const porTipo = new Map();
     for (const p of productosCatalogo) {
@@ -421,23 +352,19 @@ export default function NuevaNota() {
   const nombreTipo = (tipoId) => tiposGranel.find(t => t.id === tipoId)?.nombre ?? 'granel';
   const ordenTipo  = (tipoId) => tiposGranel.findIndex(t => t.id === tipoId);
   const subtotalCargas = cargasAuto.reduce((s, c) => s + subtotalDeCarga(c), 0);
-  // Ámbito de los productos a nivel nota: en Autoservicio y en la venta de
-  // mostrador se vende la pieza completa (botella, unidad o bolsa); en Por
-  // Encargo, el granel por medida.
+  // Productos de la nota: pieza completa en Autoservicio y venta; en Por Encargo,
+  // granel por medida.
   const ambitoProductosNota = tipoServicio === 'POR_ENCARGO' ? 'encargo' : 'nota';
-  // La unidad se resuelve aquí, y no con precioEnAmbito, porque esta suma se
-  // calcula más arriba de donde vive ese ayudante.
+  // La unidad se resuelve aquí: precioEnAmbito se define más abajo.
   const precioProductoNota = (prod) => precioProducto(
     prod,
     ambitoProductosNota === 'encargo' && prod?.tipo_liquido === 'granel'
       && prod?.clase !== 'bolsa' && !esPolvo(prod)
       ? 'medida' : 'botella'
   );
-  // En POR ENCARGO lo que el mostrador agrega se parte por cómo se vende: el
-  // granel líquido va por MEDIDA y las bolsas por pieza —es lo que se sirve dentro
-  // del servicio, así que su precio ya lo paga y gasta de su tope— y lo que se
-  // vende por UNIDAD (marca y polvo) se cobra encima: el cliente se lleva el
-  // envase entero. En los demás servicios todo producto es una venta.
+  // En Por Encargo, el granel (por medida) y las bolsas son material del servicio
+  // (gastan de su precio); marca y polvo se cobran encima. En los demás servicios
+  // todo producto se cobra.
   const esMaterialDeNota = (prod) =>
     tipoServicio === 'POR_ENCARGO' && !seVendePorUnidad(prod);
   const sumaProductosNota = (cuenta) => productosLista.reduce((sum, p) => {
@@ -445,12 +372,12 @@ export default function NuevaNota() {
     if (!prod || !cuenta(prod)) return sum;
     return sum + precioProductoNota(prod) * (Number(p.cantidad) || 0);
   }, 0);
-  // Lo que se COBRA de los productos de la nota.
+  // Lo que se cobra de los productos de la nota.
   const subtotalProductos = sumaProductosNota(prod => !esMaterialDeNota(prod));
-  // Lo que GASTA del presupuesto de los servicios.
+  // Lo que gasta del precio de los servicios.
   const materialProductosNota = sumaProductosNota(esMaterialDeNota);
   const precioTotal = subtotalCargas + ajusteNum + subtotalProductos;
-  // La venta de Productos no tiene cargas: su total son los productos y el ajuste.
+  // La venta de productos: sus productos y el ajuste.
   const totalVenta  = subtotalProductos + ajusteNum;
 
   useEffect(() => {
@@ -468,7 +395,7 @@ export default function NuevaNota() {
       api.get('/etiquetas/tamanos-edredon'),
       api.get('/etiquetas/tipos-granel'),
     ];
-    // Esta pantalla solo CREA notas: la edición se quitó (2026-10-03).
+    // Esta pantalla solo crea notas.
     promesas.push(api.get('/notas/next-folio'));
 
     Promise.all(promesas)
@@ -478,18 +405,16 @@ export default function NuevaNota() {
         setTamanosEdredon(tamanosCat || []);
         setTiposGranel(tiposCat || []);
         setFolio(extra?.folio ?? '');
-        // La lista de máquinas la pide el modal al abrirse, no esta carga: lo
-        // que importa es lo que está libre en el momento de elegir.
+        // La lista de máquinas la pide el modal al abrirse.
         setProductosCatalogo(prod);
         if (cfg) {
           setPrecios({
             mediana:         cfg.precio_carga_mediana    != null ? Number(cfg.precio_carga_mediana)    : 70,
             jumbo:           cfg.precio_carga_jumbo      != null ? Number(cfg.precio_carga_jumbo)      : 70,
-            // Secado por categoría; el precio plano (precio_carga_secadora) es Mediana.
+            // precio_carga_secadora es la secadora mediana.
             secadora:        cfg.precio_carga_secadora   != null ? Number(cfg.precio_carga_secadora)   : 45,
             secadoraJumbo:   cfg.precio_secadora_jumbo   != null ? Number(cfg.precio_secadora_jumbo)   : 45,
-            // El "Edredón" de Autoservicio (2026-10-02): su tarifa de Ajustes,
-            // en la lavadora que sea.
+            // El "Edredón" de Autoservicio: su tarifa, en cualquier lavadora.
             edredon:         cfg.precio_edredon_jumbo    != null ? Number(cfg.precio_edredon_jumbo)    : 80,
           });
           setTopes({
@@ -520,16 +445,12 @@ export default function NuevaNota() {
   const eliminarProducto = (i) =>
     setProductosLista(prev => prev.filter((_, idx) => idx !== i));
 
-  // Quita una máquina de la nota. La numeración sale del índice, así que las
-  // siguientes se recorren solas.
+  // Quita una máquina; la numeración sale del índice.
   const eliminarCargaAuto = (i) =>
     setCargasAuto(prev => prev.filter((_, idx) => idx !== i));
 
   // ── Elegir máquinas (modal) ─────────────────────────────
-  // Las máquinas de la nota se escogen de la lista de LIBRES, igual que en
-  // Salidas. Se piden al abrir el modal y no al cargar la pantalla: entre que
-  // se abre el formulario y se elige la máquina, otro compañero pudo haberla
-  // ocupado, y lo que importa es lo que está libre AHORA.
+  // Se piden al abrir el modal: importa lo que está libre ahora.
   const abrirSelectorMaquinas = async () => {
     setMaqModalSel([]);
     setMaqModalError('');
@@ -537,12 +458,8 @@ export default function NuevaNota() {
     setLoadingMaquinas(true);
     try {
       const data = await api.get('/maquinas');
-      // Solo las que están LIBRES DE VERDAD: ni en uso, ni en mantenimiento, ni
-      // apuntadas ya en otra nota abierta (`reservada`). En Salidas esas sí se
-      // ofrecen —ahí el empleado tiene la ropa delante y decide si se arriesga
-      // a que el otro inicie primero—, pero al dar de alta la nota no: se
-      // estaría vendiendo una máquina que otro cliente puede arrancar antes, y
-      // aquí ya se cobra por ella. Tampoco las que esta misma nota ya tiene.
+      // Solo las libres de verdad: ni en uso, ni en mantenimiento, ni apuntadas en
+      // otra nota abierta (aquí ya se cobra por ella), ni las que ya tiene esta nota.
       setMaquinasLibres((data ?? []).filter(m =>
         m.estado === 'disponible'
         && !m.reservada
@@ -559,14 +476,11 @@ export default function NuevaNota() {
       ? prev.filter(x => String(x) !== String(maquinaId))
       : [...prev, String(maquinaId)]));
 
-  // Cada máquina marcada entra como un renglón propio de la nota, con su
-  // tarifa. Igual que en Salidas: una máquina de más es una máquina más, no un
-  // añadido a la de al lado.
+  // Cada máquina marcada es un renglón propio, con su tarifa.
   const confirmarMaquinas = () => {
     const elegidas = maqModalSel
       .map(id => (String(id) === SELECCION_EDREDON
-        // El Edredón entra sin máquina: se cobra su tarifa y la lavadora se
-        // le asigna en Salidas (2026-10-02).
+        // El Edredón entra sin máquina: la lavadora se asigna en Salidas.
         ? { lavadora: null, secadora: null, lavadora_tipo: 'jumbo', secadora_tipo: '', tipo_prenda: 'EDREDON' }
         : maquinasLibres.find(m => String(m.id) === String(id))))
       .filter(Boolean)
@@ -588,25 +502,19 @@ export default function NuevaNota() {
   // ── Servicios de Por Encargo ────────────────────────────
   const SERVICIOS = serviciosDe(tamanosEdredon);
   const SERVICIO_POR_V = Object.fromEntries(SERVICIOS.map(s => [s.v, s]));
-  // Cuántos servicios de un tipo lleva la nota. La cuenta sale de las cargas:
-  // no hay un contador aparte que pueda acabar diciendo otra cosa.
+  // La cuenta sale de las cargas, no de un contador aparte.
   const cuentaServicio = (serv) => encargoCargas.filter(c => c.servicio === serv).length;
-  // Los que se enseñan con contador: los que se venden, más los de legado solo
-  // si la nota que se está editando los trae.
+  // Con contador: los que se venden, y los de legado si la nota los trae.
   const serviciosVisibles = SERVICIOS.filter(s => !s.legado || cuentaServicio(s.v) > 0);
-  // Lo que se cobra por un servicio, de Ajustes. null = sin precio configurado:
-  // entonces no se puede vender y la pantalla lo dice.
+  // Precio del servicio (Ajustes); null = sin precio, no se puede vender.
   const precioServicio = (serv) => {
     const s = SERVICIO_POR_V[serv];
     if (s && 'precio' in s) return s.precio;  // tamaño de edredón: su catálogo
     return topes[serv] ?? null;
   };
 
-  // Un servicio nuevo nace vacío: su material —jabón, suavizante y la bolsa que
-  // le toca— va a la LISTA DE PRODUCTOS de la nota, junto con lo que el cliente
-  // compre. Es una sola lista (2026-09-28): tener el material en un bloque y los
-  // productos en otro obligaba a mirar dos sitios para saber qué lleva la nota,
-  // y el de arriba contaba "por servicio" mientras el de abajo contaba piezas.
+  // Un servicio nace vacío: su material (bolsa) va a la lista de productos de la
+  // nota, junto con lo que compre el cliente.
   const nuevoServicio = (serv) => {
     const s = SERVICIO_POR_V[serv];
     return {
@@ -615,9 +523,8 @@ export default function NuevaNota() {
     };
   };
 
-  // Lo que un servicio pone en la lista de productos: la bolsa que le toca, en
-  // la cantidad que dice el servicio en Ajustes, si hay existencia (si quedan
-  // menos, las que haya). El granel no: se elige en Salidas (ver arriba).
+  // Material que pone un servicio: su bolsa, en la cantidad de Ajustes (o las que
+  // haya). El granel se elige en Salidas.
   const materialDeServicio = (serv) => {
     const s = SERVICIO_POR_V[serv];
     const { bolsas } = precargaDeServicio(s);
@@ -626,8 +533,7 @@ export default function NuevaNota() {
     return nBolsas > 0 ? [{ producto_id: String(bolsa.id), cantidad: String(nBolsas) }] : [];
   };
 
-  // Medidas de un tipo de granel en un servicio: las que se cambiaron aquí, o
-  // las de Ajustes. Solo los servicios que llevan granel (ropa y edredón).
+  // Medidas de un tipo de granel en un servicio: las cambiadas aquí o las de Ajustes.
   const llevaGranel = (c) => Boolean(SERVICIO_POR_V[c.servicio] && servicioBolsa(c));
   const medidasGranel = (c, tipoId) => {
     if (!llevaGranel(c)) return 0;
@@ -638,9 +544,8 @@ export default function NuevaNota() {
       ? { ...c, granel: { ...(c.granel ?? {}), [tipoId]: Math.max(0, n) } }
       : c)));
 
-  // El granel de la nota, por tipo: lo que lleva cada servicio, el total, las
-  // opciones que se elegirán en Salidas y si alcanzan. Se enseña en Productos.
-  // Que no alcance no impide crear la nota (decisión del negocio): se avisa.
+  // Granel de la nota por tipo: total, opciones y si alcanza. Que no alcance no
+  // impide crear la nota: solo se avisa.
   const resumenGranel = () => {
     const servicios = encargoCargas
       .map((c, idx) => ({ c, idx }))
@@ -660,8 +565,7 @@ export default function NuevaNota() {
         return { tipoId, nombre: nombreTipo(tipoId), filas, total, opciones, quedan };
       });
   };
-  // Cuántas medidas de granel y cuántas bolsas trae puestas un servicio, según
-  // Ajustes (mig. 132). Sin configurar, nada.
+  // Medidas de granel y bolsas que trae puestas un servicio (Ajustes).
   function precargaDeServicio(s) {
     if (s.tamano_edredon) {
       const e = tamanosEdredon.find(x => x.nombre === s.tamano_edredon);
@@ -670,9 +574,8 @@ export default function NuevaNota() {
     return precargas[s.v] ?? { medidas: 0, bolsas: 0 };
   }
 
-  // Suma (o resta, con `veces` negativo) el material de un servicio a la lista
-  // de productos de la nota. Al quitar un servicio se va lo que trajo; si el
-  // renglón se queda en cero, desaparece.
+  // Suma (o resta, con `veces` negativo) el material de un servicio a la lista;
+  // un renglón en cero desaparece.
   const ajustarMaterial = (serv, veces) => {
     if (veces === 0) return;
     const material = materialDeServicio(serv);
@@ -689,10 +592,8 @@ export default function NuevaNota() {
     });
   };
 
-  // Pone la nota en N servicios de un tipo, conservando los que ya estaban y
-  // dejándolos siempre en el orden de SERVICIOS, que es el que se lee en la
-  // pantalla y en el ticket. El material de los que entran (o salen) se suma o
-  // se resta de la lista de productos.
+  // Deja N servicios de un tipo, conservando los que estaban y en el orden de
+  // SERVICIOS; ajusta su material en la lista.
   const setCantidadServicio = (serv, n) => {
     const objetivo = Math.max(0, Math.min(MAX_SERVICIOS, n));
     const actuales = cuentaServicio(serv);
@@ -703,8 +604,7 @@ export default function NuevaNota() {
         ? mios.slice(0, objetivo)
         : [...mios, ...Array.from({ length: objetivo - mios.length }, () => nuevoServicio(serv))];
       const juntos = [...prev.filter(c => c.servicio !== serv), ...nuevos];
-      // Una carga sin servicio reconocible (nota muy vieja, sin tamaño) se
-      // queda al final en vez de desaparecer del formulario.
+      // Una carga sin servicio reconocible (muy vieja) se queda al final.
       return [
         ...SERVICIOS.flatMap(s => juntos.filter(c => c.servicio === s.v)),
         ...juntos.filter(c => !SERVICIO_POR_V[c.servicio]),
@@ -716,19 +616,13 @@ export default function NuevaNota() {
   const actualizarCargaEncargo = (i, cambios) =>
     setEncargoCargas(prev => prev.map((c, idx) => (idx === i ? { ...c, ...cambios } : c)));
 
-  // Diferencias entre los dos ámbitos, en un solo lugar: Por Encargo cobra por
-  // medida y solo admite granel; Autoservicio cobra por botella (o pieza) y admite
-  // todo el catálogo.
+  // Diferencias entre ámbitos: Por Encargo cobra por medida; Autoservicio por
+  // botella o pieza.
   const esCarga        = (ambito) => ambito === 'carga';
-  // Los productos que el cliente compra en una nota Por Encargo van a la nota
-  // (no a un servicio), pero se sirven como dentro de un servicio: el granel
-  // por medida y los de marca por unidad. El servidor los cobra con esa misma
-  // regla, así que la pantalla tiene que usarla o el total no cuadraría.
+  // Los productos de una nota Por Encargo se cobran con la regla de los servicios
+  // (granel por medida, marca por unidad), igual que en el servidor.
   const porMedidaEnAmbito = (ambito) => ambito === 'carga' || ambito === 'encargo';
-  // La marca y el polvo se venden por unidad (el envase completo) en todas
-  // partes: no se sirven por medidas como el granel líquido (2026-09-25). Así que
-  // dentro de una carga de Por Encargo el granel líquido va por medida y lo demás
-  // por unidad.
+  // Marca y polvo se venden por unidad en todas partes.
   const porMedida = (prod, ambito) =>
     porMedidaEnAmbito(ambito) && prod?.tipo_liquido === 'granel'
     && prod?.clase !== 'bolsa' && !esPolvo(prod);
@@ -736,8 +630,7 @@ export default function NuevaNota() {
   const unidadEnAmbito = (prod, ambito, n = 2) => (porMedida(prod, ambito)
     ? (n === 1 ? 'medida' : 'medidas')
     : unidadVentaNota(prod, n));
-  // Cuántas piezas se pueden vender: medidas si se sirve por medida, y envases
-  // completos (botellas o unidades) si se vende por unidad.
+  // Disponibles: medidas si se sirve por medida; envases si se vende por unidad.
   const disponiblesDe  = (prod, ambito) => {
     if (!prod) return 0;
     return porMedida(prod, ambito)
@@ -754,9 +647,8 @@ export default function NuevaNota() {
     return `${precioProductoTexto(prod, ambito)} · ${disp} ${unidadEnAmbito(prod, ambito, disp)}`;
   };
 
-  // Agrega a la nota el producto elegido en el modal. Los productos siempre van
-  // a la nota: en Por Encargo el material que va DENTRO del servicio no se elige
-  // aquí —lo pone el servicio— y lo que se elige es lo que el cliente compra.
+  // Agrega el producto elegido. En Por Encargo el material del servicio no se
+  // elige aquí: esto es lo que compra el cliente.
   const elegirProducto = (productoId) => {
     if (!selectorProducto) return;
     agregarProducto(productoId);
@@ -785,20 +677,14 @@ export default function NuevaNota() {
     }
   };
 
-  // Cliente → Servicios → Entrega → Resumen (con el pago debajo). El orden es el
-  // del mostrador (2026-09-25): se acuerda la entrega, se revisa lo que va a
-  // cobrarse y el pago se deja al final, que es cuando se cobra de verdad —y
-  // ahí mismo se crea la nota.
-  // Los servicios (cuántos de cada tamaño), el ajuste y los productos caben en
-  // una sola pantalla: antes eran el paso de "cuántas cargas" más una pantalla
-  // por cada una, y con tres cargas el mostrador pasaba por cinco.
+  // Cliente → Servicios → Entrega → Resumen (con el pago al final, que es cuando
+  // se cobra y se crea la nota). Servicios, ajuste y productos van en una pantalla.
   const nCargas     = encargoCargas.length;
   const pasoEntrega = PASO_ENTREGA;
   const pasoResumen = PASO_RESUMEN;
 
-  // Precio de un producto DENTRO de una carga: el granel se sirve por medida y los
-  // de marca por unidad, el envase completo (2026-09-25).
-  // Se cobra aparte, encima del tope: marca y polvo (se venden por unidad).
+  // Precio de un producto dentro de una carga: granel por medida; marca y polvo
+  // por unidad, cobrados encima del tope.
   const esProductoMarca = (prod) => seVendePorUnidad(prod);
   const precioProductoCarga = (prod) =>
     precioProducto(prod, esProductoMarca(prod) ? 'botella' : 'medida');
@@ -807,19 +693,14 @@ export default function NuevaNota() {
     if (!prod || !cuenta(prod)) return sum;
     return sum + precioProductoCarga(prod) * (Number(p.cantidad) || 0);
   }, 0);
-  // Contra el tope cuenta lo que se SIRVE dentro del servicio (granel y bolsa);
-  // los de MARCA se venden por unidad y van encima.
+  // Contra el tope cuenta lo servido dentro (granel y bolsa); la marca va encima.
   const subtotalAbsorbidoLista = (lista) => sumaProductosCarga(lista, p => !esProductoMarca(p));
   const subtotalMarcaLista     = (lista) => sumaProductosCarga(lista, esProductoMarca);
 
   // ── Bolsas (Por Encargo): la ligada al servicio, tantas como diga Ajustes ──
   const bolsasCatalogo = productosCatalogo.filter(p => p.clase === 'bolsa');
-  // Qué servicio es la carga. Cada bolsa dice a cuáles va ligada (mig. 125), así
-  // que el nombre de la bolsa ya no importa: manda lo que se eligió al darla de
-  // alta. El jumbo de ropa ya no se vende y no tiene bolsa propia.
-  // Clave con que la bolsa y el granel se ligan a un servicio. Distinta de
-  // servicioDeCarga: al ligue le da igual el tamaño del edredón, todos van al
-  // mismo servicio 'edredon'.
+  // Clave del servicio de la carga para ligar bolsa y granel (cada bolsa dice a
+  // qué servicios va). Todo edredón usa 'edredon'.
   const servicioBolsa = (c) => {
     if (String(c?.tipo_prenda).toUpperCase() === 'EDREDON') return 'edredon';
     if (c?.tamano === 'chico')   return 'chico';
@@ -832,20 +713,18 @@ export default function NuevaNota() {
     if (!servicio) return null;
     return bolsasCatalogo.find(b => (b.servicios_bolsa ?? []).includes(servicio)) ?? null;
   };
-  // Existencia disponible de una bolsa (piezas). Sin existencia no se incluye
-  // (para no bloquear la nota) y se avisa en la carga.
+  // Existencia de una bolsa (piezas); sin existencia no se incluye y se avisa.
   const bolsaTieneStock = (b) => b && Number(b.stock_disponible ?? b.stock_actual) > 0;
-  // La bolsa que le toca a la carga por su tamaño, si queda existencia.
+  // La bolsa del servicio de la carga, si queda existencia.
   const bolsaDeCargaConStock = (c) => {
     const b = bolsaDeCarga(c);
     return bolsaTieneStock(b) ? b : null;
   };
 
-  // Tope de la carga (Ajustes). Prenda edredón usa su tope dedicado (manda
-  // sobre el del tamaño). NULL = sin tope configurado.
+  // Precio (tope) de la carga según Ajustes; null = sin configurar.
   const topeDeCarga  = (c) => {
     if (String(c?.tipo_prenda).toUpperCase() === 'EDREDON') {
-      // Por tamaño (mig. 130); el de una carga vieja sin tamaño, el precio único.
+      // Por tamaño de edredón; sin tamaño, el precio único.
       if (!c.tamano_edredon) return topes.edredon ?? null;
       const nombre = String(c.tamano_edredon).trim().toLowerCase();
       const e = tamanosEdredon.find(x => String(x.nombre).trim().toLowerCase() === nombre);
@@ -854,11 +733,8 @@ export default function NuevaNota() {
     return c?.tamano ? (topes[c.tamano] ?? null) : null;
   };
 
-  // Lo que le cuesta al negocio la MÁQUINA de un servicio. La nota ya no elige
-  // tipo de máquina, pero el servicio sí sabe cuál le toca: Chico, Mediano y Grande van
-  // en lavadora y secadora medianas, y el Edredón en la lavadora jumbo —secarlo
-  // es una decisión aparte, así que no cuenta—. Jumbo de ropa ya no se vende;
-  // se conserva para las notas que lo eligieron.
+  // Costo de las máquinas de un servicio: Chico, Mediano y Grande usan lavadora y
+  // secadora medianas; el Edredón, la lavadora jumbo (su secado no cuenta).
   const costoMaquinasServicio = (c) => {
     if (String(c?.tipo_prenda).toUpperCase() === 'EDREDON') return precios.jumbo;
     if (c?.tamano === 'jumbo')  return precios.jumbo + precios.secadora;
@@ -866,13 +742,8 @@ export default function NuevaNota() {
     return 0;
   };
 
-  // Costo interno de la carga: la máquina que le toca + el material que se sirve
-  // dentro (granel y bolsa). Es lo que se compara contra el tope,
-  // porque el precio del servicio tiene que cubrir las dos cosas: si la máquina
-  // no contara, el tope dejaría servir hasta el último peso como si lavar fuera
-  // gratis. Solo el ajuste manual va aparte y no cuenta.
-  //
-  // Una nota vieja trae su máquina elegida y con precio: ahí manda el suyo.
+  // Costo interno de la carga: máquinas + material servido (granel y bolsa). Se
+  // compara contra el tope; el ajuste no cuenta. Una nota vieja usa su precio guardado.
   const usadoContraTope = (c) => {
     const elegidas = precioLavadoTipo(c.lavadora_tipo, c.tipo_prenda)
       + precioSecadoTipo(c.secadora_tipo, c.tipo_prenda);
@@ -880,37 +751,29 @@ export default function NuevaNota() {
       + subtotalAbsorbidoLista(c.productos);
   };
 
-  // Precio cobrado por una carga de encargo. Con tope configurado el precio ES
-  // el tope (precio fijo del servicio, aunque el material cueste menos); sin
-  // tope —notas viejas sin tamaño— es la suma real. En los dos casos se suman
-  // encima los productos de MARCA, que se venden por unidad, y el ajuste manual.
+  // Precio cobrado por una carga: el tope (o, sin tope, la suma real), más lo que
+  // se vende por unidad y el ajuste.
   const subtotalCargaEncargo = (c) => {
     const tope = topeDeCarga(c);
     const base = tope != null ? Number(tope) : usadoContraTope(c);
     return base + subtotalMarcaLista(c.productos) + (Number(c.ajuste) || 0);
   };
-  // Ajuste de la nota: descuento (negativo) o cargo extra (positivo). Es uno
-  // solo para toda la nota desde que los servicios se venden por cantidad. Va
-  // antes que las cuentas de abajo porque entra en el presupuesto del tope.
+  // Ajuste de la nota: descuento (negativo) o cargo extra (positivo). Va antes
+  // porque entra en el presupuesto.
   const ajusteEncargo       = Number(encargoForm.ajuste) || 0;
-  // Lo que suman los servicios, sin los productos sueltos ni el ajuste.
+  // Lo que suman los servicios, sin productos sueltos ni ajuste.
   const subtotalServicios   = encargoCargas.reduce((s, c) => s + subtotalCargaEncargo(c), 0);
   // Presupuesto de material de la nota: lo que se cobra por los servicios. Todo
-  // el material —el que va dentro de cada servicio y el que se agrega en
-  // Productos— sale de aquí, así que sirve para lo mismo que el tope de una
-  // carga: que no se regale más jabón del que el precio paga.
+  // el material sale de aquí.
   const presupuestoServicios = encargoCargas.reduce((s, c) => {
     const tope = topeDeCarga(c);
     return s + (tope != null ? Number(tope) : 0);
   }, 0);
   const materialUsado = encargoCargas.reduce((s, c) => s + usadoContraTope(c), 0)
     + materialProductosNota;
-  // El AJUSTE también entra en la cuenta, porque cambia lo que la nota cobra por
-  // esos servicios: un descuento de $20 deja $130 para pagar lo mismo, y un
-  // cargo extra da más aire. Se suma al presupuesto (con su signo), no al
-  // usado, que es lo que de verdad cuesta el servicio.
+  // El ajuste cambia lo que se cobra, así que se suma (con su signo) al presupuesto.
   const presupuestoConAjuste = presupuestoServicios + ajusteEncargo;
-  // Cuánto se pasa del presupuesto (0 o menos = cabe).
+  // Cuánto se pasa (0 o menos = cabe).
   const excesoDeLaNota = presupuestoServicios > 0 ? materialUsado - presupuestoConAjuste : 0;
   const encargoPrecioTotal  = subtotalServicios + subtotalProductos + ajusteEncargo;
 
@@ -922,8 +785,8 @@ export default function NuevaNota() {
   const clienteSeleccionado = clientes.find(c => String(c.id) === String(encargoForm.cliente_id));
   const sinAcentos = (s) => (s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   const clienteSearchQ    = sinAcentos(clienteSearch.trim());
-  // Coincide si alguna palabra del nombre/apellido EMPIEZA con la búsqueda (no
-  // subcadena: "ana" no debe traer "Pastrana"). El teléfono sí por subcadena.
+  // Coincide si una palabra del nombre o apellido EMPIEZA con la búsqueda; el
+  // teléfono, por subcadena.
   const empiezaAlgunaPalabra = (texto) =>
     sinAcentos(texto).split(/\s+/).some(w => w.startsWith(clienteSearchQ));
   const clientesFiltrados = clienteSearchQ
@@ -933,8 +796,7 @@ export default function NuevaNota() {
       )
     : clientes;
 
-  // Servicios sin precio configurado en Ajustes: no se pueden vender, porque el
-  // precio del servicio ES lo que se cobra (el servidor también los rechaza).
+  // Servicios sin precio en Ajustes: no se pueden vender (el servidor también los rechaza).
   const serviciosSinPrecio = SERVICIOS.filter(s => cuentaServicio(s.v) > 0 && precioServicio(s.v) == null);
 
   const encargoPuedeAvanzar = (() => {
@@ -942,11 +804,9 @@ export default function NuevaNota() {
     if (encargoStep === PASO_SERVICIOS) {
       if (nCargas < 1) return false;
       if (serviciosSinPrecio.length > 0) return false;
-      // Un servicio cuyo material incluido cuesta más de lo que se cobra por él
-      // se vendería en pérdida: se frena aquí, como lo frena el servidor.
+      // Material de un servicio que cuesta más de lo que se cobra (como el servidor).
       if (encargoCargas.some(c => excesoDeCarga(c) > 0)) return false;
-      // Y lo mismo con todo el material junto contra lo que cobran los
-      // servicios: los productos que se agregan abajo gastan del mismo bolsillo.
+      // Todo el material contra lo que cobran los servicios.
       if (excesoDeLaNota > 0) return false;
       // El ajuste no puede dejar la nota en negativo.
       if (encargoPrecioTotal < 0) return false;
@@ -955,21 +815,18 @@ export default function NuevaNota() {
     return true;
   })();
 
-  // El pago se captura debajo del resumen, en el último paso: sin él no se crea
-  // la nota. Si pagó anticipado, además hay que decir cómo pagó.
+  // El pago se captura en el último paso; si fue anticipado, hace falta la forma.
   const pagoCapturado = Boolean(encargoForm.pago_anticipado)
     && (encargoForm.pago_anticipado !== 'SI' || Boolean(encargoForm.forma_pago));
 
-  // El anticipo se compara contra el total de AHORA: si después de cobrar se
-  // cambiaron servicios, lo cobrado puede ya no cubrir todo y queda de abono.
+  // El anticipo se compara con el total actual: si ya no cubre, queda de abono.
   const anticipoNum = Number(encargoForm.monto_anticipo);
   const anticipoParcial = encargoForm.pago_anticipado === 'SI'
     && encargoForm.monto_anticipo !== ''
     && Number.isFinite(anticipoNum) && anticipoNum > 0
     && anticipoNum < encargoPrecioTotal - 1e-9;
 
-  // "Sí" en Pago anticipado: abre el cobro con "¿Cuánto recibes?" vacío para
-  // teclear lo que da el cliente; al reabrirlo (Cambiar) trae lo ya capturado.
+  // "Sí" abre el cobro vacío; "Cambiar" lo abre con lo capturado.
   const abrirAnticipo = () => {
     setAnticipoMonto(encargoForm.monto_anticipo !== ''
       ? String(Math.min(Number(encargoForm.monto_anticipo), encargoPrecioTotal))
@@ -993,15 +850,13 @@ export default function NuevaNota() {
         : 'Indica si hay pago anticipado.');
       return;
     }
-    // Servicio sin precio en Ajustes: no se puede vender. El servidor también lo
-    // rechaza, pero aquí se dice antes y con el nombre del servicio.
+    // Servicio sin precio: se dice antes y con su nombre.
     if (serviciosSinPrecio.length > 0) {
       setError(`Falta el precio de: ${serviciosSinPrecio.map(s => s.label).join(', ')}. `
         + 'Configúralo en Ajustes → Servicios Por Encargo.');
       return;
     }
-    // Todo el material contra lo que cobran los servicios. El servidor lo
-    // rechaza también; aquí se dice antes y con los números a la vista.
+    // Todo el material contra lo que cobran los servicios, con los números a la vista.
     if (excesoDeLaNota > 0) {
       setError(`El material de la nota suma $${materialUsado.toFixed(2)} y los servicios `
         + `se cobran en $${presupuestoConAjuste.toFixed(2)}`
@@ -1009,8 +864,7 @@ export default function NuevaNota() {
         + `Baja $${excesoDeLaNota.toFixed(2)}: quita productos o sirve menos.`);
       return;
     }
-    // Material incluido que cuesta más de lo que se cobra por el servicio: se
-    // vendería en pérdida. Igual que arriba, el servidor lo rechaza también.
+    // Material que cuesta más que su servicio.
     const idxExcedida = encargoCargas.findIndex(c => excesoDeCarga(c) > 0);
     if (idxExcedida >= 0) {
       const c = encargoCargas[idxExcedida];
@@ -1029,48 +883,41 @@ export default function NuevaNota() {
         tipo_tela:      c.tipo_prenda === 'ROPA'    ? (c.tipo_tela || null) : null,
         tamano_edredon: c.tipo_prenda === 'EDREDON' ? (c.tamano_edredon || null) : null,
         tamano:         c.tamano || null,
-        // Sin tipo de máquina: el servicio se cobra a su precio y la máquina se
-        // le asigna en Salidas, la que esté libre.
+        // Sin tipo de máquina: la máquina se asigna en Salidas.
         lavadora_tipo:  null,
         secadora_tipo:  null,
         activar:        false,
-        // El ajuste de hoy es el de la nota; aquí solo viaja el que traía una
-        // nota hecha cuando era por carga, para no borrárselo al editarla.
+        // Ajuste por carga: solo el de una nota vieja que lo traía.
         ajuste:         Number(c.ajuste) || 0,
-        // El material incluido (jabón, suavizante y bolsa) va dentro del
-        // servicio: ahí lo absorbe su precio en vez de cobrarse encima.
+        // El material va dentro del servicio: lo absorbe su precio.
         productos:      (c.productos ?? [])
           .filter(p => p.producto_id && p.cantidad)
           .map(p => ({ producto_id: Number(p.producto_id), cantidad: Number(p.cantidad) })),
-        // Medidas de cada tipo de granel, con los cambios hechos aquí. Cuál
-        // producto se elige en Salidas; el servidor deja el renglón pendiente.
+        // Medidas de cada tipo de granel; el producto se elige en Salidas.
         granel:         llevaGranel(c)
           ? [...granelPorTipo().keys()].map(t => ({ tipo_granel_id: t, cantidad: medidasGranel(c, t) }))
           : null,
       }));
       const payload = {
         tipo_servicio:      'POR_ENCARGO',
-        // Prenda a nivel nota (para lista/badge): la de la primera carga.
+        // Prenda de la nota (lista y etiqueta): la de la primera carga.
         tipo_prenda:    encargoCargas[0]?.tipo_prenda || 'ROPA',
-        // Mostrador va sin cliente: la nota queda a su nombre en pantalla y el
-        // teléfono, si hay que mandarle algo, se captura desde el ticket.
+        // Mostrador va sin cliente; el teléfono se captura desde el ticket si hace falta.
         cliente_id:     esClienteMostrador ? null : Number(encargoForm.cliente_id),
         cargas:         cargasPayload,
         ajuste:         ajusteEncargo,
-        // Lo que el cliente compra aparte: va a la nota y se cobra ENCIMA del
-        // precio de los servicios.
+        // Lo que el cliente compra aparte: va a la nota y se cobra encima.
         productos:      productosLista
           .filter(p => p.producto_id && p.cantidad)
           .map(p => ({ producto_id: Number(p.producto_id), cantidad: Number(p.cantidad) })),
-        // Un anticipo que no cubre el total no paga la nota: nace debiendo y
-        // con ese dinero como su primer abono.
+        // Un anticipo que no cubre el total es el primer abono.
         estado_pago:    encargoForm.pago_anticipado === 'SI' && !anticipoParcial ? 'PAGADO' : 'PENDIENTE',
-        // Forma de pago solo si pagó anticipado; si queda a deber, va null.
+        // Forma de pago solo si pagó anticipado.
         forma_pago:     encargoForm.pago_anticipado === 'SI' && !anticipoParcial ? (encargoForm.forma_pago || null) : null,
         ...(anticipoParcial && {
           abono_inicial: { monto: anticipoNum, forma_pago: encargoForm.forma_pago },
         }),
-        // Si no se eligió fecha, la entrega se da por hecho para hoy.
+        // Sin fecha, la entrega es hoy.
         fecha_entrega:  fechaSegunDiaPrometido(encargoForm.tiempo_entrega, encargoForm.fecha_entrega),
         tiempo_entrega: encargoForm.tiempo_entrega || null,
         instrucciones:  encargoForm.instrucciones  || null,
@@ -1078,7 +925,7 @@ export default function NuevaNota() {
       const creada = await api.post('/notas', payload);
       setNotaCreada(creada);
     } catch (err) {
-      // Alguien cerró la caja mientras se llenaba la nota: vuelve el aviso.
+      // Alguien cerró la caja mientras se llenaba la nota.
       if (err.data?.code === 'CAJA_CERRADA') setCajaAbierta(false);
       setError(err.message);
     } finally {
@@ -1086,9 +933,7 @@ export default function NuevaNota() {
     }
   };
 
-  // Lo que le falta a la nota para poder guardarse. Devuelve el problema o null
-  // si todo está en orden. Lo usan el Autoservicio (que guarda directo) y la
-  // venta de Productos (que antes de guardar pasa por el cobro).
+  // Lo que impide guardar la nota (o null). Lo usan Autoservicio y la venta de productos.
   const problemaDeLaNota = () => {
     if (esVenta) {
       return productosLista.some(p => p.producto_id && Number(p.cantidad) > 0)
@@ -1101,8 +946,8 @@ export default function NuevaNota() {
     return null;
   };
 
-  // "Aceptar" de la venta de mostrador: valida y abre el cobro. La nota se crea
-  // desde el modal, ya con la forma de pago elegida.
+  // "Aceptar" de la venta de productos: valida y abre el cobro; la nota se crea
+  // desde el modal.
   const abrirCobro = () => {
     const problema = problemaDeLaNota();
     setError(problema ?? '');
@@ -1121,8 +966,7 @@ export default function NuevaNota() {
       setCobroOpen(false);
       return;
     }
-    // Solo la venta de mostrador se cobra al momento: ahí sí hace falta la
-    // forma de pago. El autoservicio nace pendiente y se liquida en el detalle.
+    // Solo la venta de productos se cobra al crear; el Autoservicio nace pendiente.
     if (esVenta && !form.forma_pago) {
       setError('Elige la forma de pago.');
       return;
@@ -1130,9 +974,7 @@ export default function NuevaNota() {
 
     setLoading(true);
 
-    // La venta de mostrador no lleva cargas, ni máquinas, ni cliente: solo sus
-    // productos y el ajuste. Nace pagada y finalizada; el backend descuenta el
-    // inventario en el acto.
+    // La venta de productos: sin cargas, máquinas ni cliente; nace pagada y finalizada.
     const payloadVenta = {
       tipo_servicio:  'PRODUCTOS',
       tipo_prenda:    'ROPA',
@@ -1146,26 +988,19 @@ export default function NuevaNota() {
 
     const payloadAutoservicio = {
       tipo_servicio:       'AUTOSERVICIO',
-      // La prenda/tela ahora viven en cada carga; a nivel nota se guarda la de
-      // la primera carga solo para la lista/badge.
+      // Prenda de la nota (lista y etiqueta): la de la primera carga.
       tipo_prenda:     cargasAuto[0]?.tipo_prenda || 'ROPA',
-      // Autoservicio nace En Espera SIN máquina: se elige el tipo y la máquina
-      // física se asigna después en Salidas (igual que Por Encargo).
+      // Autoservicio nace En Espera, con sus máquinas asignadas sin arrancar.
       estado:          'EN_ESPERA',
-      // El autoservicio ya no se cobra al crear la nota (2026-09-23): nace
-      // pendiente y se liquida desde el detalle, como Por Encargo.
+      // Nace pendiente y se liquida desde el detalle.
       estado_pago:     'PENDIENTE',
       instrucciones:   form.instrucciones || null,
-      // Cliente / referencia libre (mig. 157): la tarjeta de Notas lo enseña
-      // en lugar de "Mostrador".
+      // Nombre libre del cliente: la tarjeta de Notas lo enseña en vez de "Mostrador".
       referencia:      form.referencia.trim() || null,
       tipo_tela:       null,
       tamano_edredon:  null,
-      // Cada renglón manda LA MÁQUINA elegida (2026-09-29). El servidor la
-      // valida, la deja asignada —sin arrancarla— y la tarifa, que es el precio
-      // que este formulario ya enseñó en el resumen. Los `*_tipo` solo viajan
-      // en las cargas de una nota vieja que se quedó sin máquina, para no
-      // perder lo que pidió ni cambiarle el precio.
+      // Cada renglón manda su máquina; el servidor la valida, la asigna sin arrancar y
+      // la cobra. `*_tipo` solo en una carga vieja sin máquina.
       cargas:          cargasAuto.map(c => ({
         id:             c.id ?? null,
         lavadora_id:    c.lavadora?.id ?? null,
@@ -1174,7 +1009,7 @@ export default function NuevaNota() {
         secadora_tipo:  c.secadora ? null : (c.secadora_tipo || null),
         tipo_prenda:    esEdredonAuto(c) ? 'EDREDON' : 'ROPA',
       })),
-      // Autoservicio ya no tiene Ajuste (2026-09-25).
+      // Autoservicio no lleva ajuste.
       ajuste:          0,
       productos:       productosLista
         .filter(p => p.producto_id && p.cantidad)
@@ -1188,7 +1023,7 @@ export default function NuevaNota() {
       setCobroOpen(false);
       setNotaCreada(creada);
     } catch (err) {
-      // Alguien cerró la caja mientras se llenaba la nota: vuelve el aviso.
+      // Alguien cerró la caja mientras se llenaba la nota.
       if (err.data?.code === 'CAJA_CERRADA') setCajaAbierta(false);
       setError(err.message);
     } finally {
@@ -1196,9 +1031,7 @@ export default function NuevaNota() {
     }
   };
 
-  // Buscador de cliente del paso 1 de Por Encargo, el único servicio que lleva
-  // cliente: ahí la ropa es de alguien que va a volver por ella. Autoservicio y
-  // la venta de Productos son de mostrador, y quedan a nombre de Mostrador.
+  // Buscador de cliente (solo Por Encargo, donde el cliente vuelve por su ropa).
   const bloqueCliente = () => (
     <div className="space-y-4">
       <h2 className="text-base font-semibold text-gray-900">Cliente</h2>
@@ -1304,9 +1137,7 @@ export default function NuevaNota() {
         </div>
       )}
 
-      {/* Mostrador va ARRIBA de crear cliente porque es la salida rápida: el
-          que deja ropa de paso no se registra, y darlo de alta para nunca
-          volver a buscarlo llenaba la libreta de clientes de una sola nota. */}
+      {/* Mostrador va arriba de crear cliente: es la salida rápida para quien no se registra. */}
       <button
         type="button"
         onClick={() => {
@@ -1339,18 +1170,13 @@ export default function NuevaNota() {
     </div>
   );
 
-  // Lista de productos a nivel nota. La comparten Autoservicio —donde acompañan
-  // al lavado—, la venta de Productos, donde son la nota entera, y Por Encargo,
-  // donde son lo que el cliente compra aparte del servicio. La unidad la pone el
-  // servicio: pieza completa en los dos primeros, granel por medida en Por Encargo.
-  // El granel de los servicios (Jabón, Suavizante…), arriba de lo que el cliente
-  // compra aparte: cuántas medidas lleva cada servicio, que aquí se cambian. El
-  // producto lo elige el empleado en Salidas.
+  // Lista de productos de la nota (Autoservicio, venta de productos y lo que se
+  // compra aparte en Por Encargo). Arriba, el granel de los servicios con sus
+  // medidas; el producto se elige en Salidas.
   const bloqueGranel = () => {
     const tipos = resumenGranel();
     if (tipos.length === 0) return null;
-    // Por servicio: cada uno con un renglón por tipo. Las filas de cada tipo
-    // vienen en el mismo orden de servicios, así que se leen por posición.
+    // Un renglón por servicio y tipo, en el mismo orden de servicios.
     const servicios = tipos[0].filas.map((f, k) => ({
       idx: f.idx, etiqueta: f.etiqueta,
       renglones: tipos.map(t => ({ tipoId: t.tipoId, nombre: t.nombre, medidas: t.filas[k].medidas })),
@@ -1361,9 +1187,7 @@ export default function NuevaNota() {
       <div className="bg-white border border-gray-200 rounded-xl overflow-hidden mb-3">
         {servicios.map((sv, i) => (
           <div key={sv.idx} className={`px-3 py-4 space-y-1.5 ${i > 0 ? 'border-t border-gray-100' : ''}`}>
-            {/* "Medidas" encima de los botones: el número es cuántas medidas
-                de cada granel lleva el servicio, no piezas ni botellas. El
-                ancho es el del control (− número +) para quedar centrado. */}
+            {/* "Medidas": cuántas medidas de cada granel lleva el servicio. */}
             <div className="flex items-center justify-between gap-2">
               <p className="text-sm font-semibold text-gray-900">{sv.etiqueta}</p>
               <span className="w-[7rem] text-center text-xs font-medium text-gray-500 uppercase tracking-wide">
@@ -1412,16 +1236,13 @@ export default function NuevaNota() {
         )}
       </div>
 
-      {/* Mismo campo que el de máquinas: se ve y se toca como los demás campos
-          del formulario, y lo que abre es el modal para elegir. Agregar vive
-          arriba de la lista para que no cambie de sitio conforme crece. */}
+      {/* Campo que abre el modal de elegir producto, arriba de la lista. */}
       <button
         type="button"
         onClick={() => setSelectorProducto({ ambito: ambitoProductosNota })}
         className="w-full px-4 py-3.5 mb-3 border border-gray-300 rounded-lg bg-white text-left flex items-center justify-between gap-2 hover:border-gray-400 transition-colors"
       >
-        {/* En azul (2026-10-11): llama la atención como acción, no se lee
-            como un campo vacío más. */}
+        {/* En azul: se lee como acción. */}
         <span className="text-blue truncate">
           {productosLista.length === 0 ? 'Elige un producto' : 'Agregar otro producto'}
         </span>
@@ -1434,24 +1255,20 @@ export default function NuevaNota() {
 
 
 
-      {/* Misma fila compacta que en Por Encargo. La diferencia es la unidad:
-          aquí se vende la pieza completa (botella, unidad o bolsa). Sin
-          productos no se pinta la caja: el campo de arriba ya dice que no hay
-          ninguno y qué hacer, igual que en Máquinas. */}
+      {/* Fila compacta, como en Por Encargo; aquí se vende la pieza completa. Sin
+          productos no se pinta la caja. */}
       {productosLista.length > 0 && (
       <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
         {productosLista.map((item, i) => {
             const prod = productosCatalogo.find(x => String(x.id) === String(item.producto_id));
             const cant = Number(item.cantidad) || 0;
             const subtotal = precioProductoNota(prod) * cant;
-            // En Por Encargo el granel y las bolsas son material del servicio:
-            // no se cobran, gastan de su presupuesto. Se dice en el renglón
-            // para que nadie piense que ese importe se le está cobrando.
+            // En Por Encargo el granel y las bolsas no se cobran: gastan del precio del
+            // servicio, y el renglón lo dice.
             const esMaterial = esMaterialDeNota(prod);
             return (
               <div key={i} className={`flex flex-wrap items-center gap-x-2 gap-y-4 px-3 py-4 ${i > 0 ? 'border-t border-gray-100' : ''}`}>
-                {/* Solo texto: el producto no se cambia, se borra el renglón y se
-                    agrega el correcto. */}
+                {/* El producto no se cambia: se borra el renglón y se agrega otro. */}
                 <div className="flex-1 min-w-[10rem]">
                   <p className={`text-sm font-semibold ${prod ? 'text-gray-900' : 'text-gray-400'}`}>
                     {prod ? etiquetaProducto(prod) : 'Producto no disponible'}
@@ -1464,8 +1281,7 @@ export default function NuevaNota() {
                   </p>
                 </div>
 
-                {/* Cantidad, importe y borrar viajan juntos: si no caben
-                    junto al nombre, bajan al siguiente renglón. */}
+                {/* Cantidad, importe y borrar bajan juntos si no caben. */}
                 <div className="flex flex-1 items-center justify-between gap-2">
                   <div className="flex items-center gap-1.5">
                     <button
@@ -1489,8 +1305,7 @@ export default function NuevaNota() {
                   </div>
 
                   <div className="flex items-center gap-2">
-                    {/* Siempre en azul (2026-10-03), también el material que va
-                        dentro del servicio: eso ya lo dice el renglón de arriba. */}
+                    {/* Siempre en azul. */}
                     <span className="w-16 text-right text-base font-bold tabular-nums text-blue-700">
                       ${subtotal.toFixed(2)}
                     </span>
@@ -1512,10 +1327,7 @@ export default function NuevaNota() {
         })}
 
         <div className="px-4 py-3 border-t border-gray-200 bg-gray-50 space-y-1.5">
-          {/* En Por Encargo puede no cobrarse nada —si todo lo agregado se
-              sirve dentro del servicio—, y un "Se cobra aparte $0.00" solo
-              hace dudar de si falta cobrar algo. Lo que gasta del tope se ve
-              en el renglón de abajo. */}
+          {/* En Por Encargo, sin nada que cobrar aparte no se muestra "$0.00". */}
           {(tipoServicio !== 'POR_ENCARGO' || subtotalProductos > 0) && (
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
@@ -1562,9 +1374,7 @@ export default function NuevaNota() {
         </div>
       </div>
 
-      {/* Sin caja abierta no hay nota (2026-10-06): antes solo se avisaba y
-          lo cobrado quedaba fuera de todo corte. El formulario se esconde y el
-          servidor también lo rechaza (409 CAJA_CERRADA). */}
+      {/* Sin caja abierta no hay nota (el servidor también lo rechaza con 409). */}
       {cajaAbierta === false && (
         <div className="mb-6 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
           <p className="text-sm font-semibold text-amber-900">La caja está cerrada</p>
@@ -1581,8 +1391,7 @@ export default function NuevaNota() {
         </div>
       )}
 
-      {/* Pago anticipado de Por Encargo: el mismo cobro del detalle. Va antes
-          del modal de caja para que "Abrir caja" quede encima de él. */}
+      {/* Antes del modal de caja, para que "Abrir caja" quede encima. */}
       {anticipoOpen && (
         <ModalCobrar
           titulo="Pago anticipado"
@@ -1702,10 +1511,8 @@ export default function NuevaNota() {
             {/* Paso 1 — Cliente */}
             {encargoStep === 1 && bloqueCliente()}
 
-            {/* Paso 2 — Servicios: cuántos de cada uno, su detalle, lo que
-                llevan incluido, el ajuste de la nota y los productos que el
-                cliente compra aparte. Antes esto eran dos pasos (cuántas
-                cargas y luego una pantalla por carga). */}
+            {/* Paso 2 — Servicios: cuántos de cada uno, su detalle, el material, el
+                ajuste y los productos aparte. */}
             {encargoStep === PASO_SERVICIOS && (
               <div className="space-y-8">
                 <div className="space-y-3">
@@ -1719,9 +1526,7 @@ export default function NuevaNota() {
                     </p>
                   </div>
 
-                  {/* Un renglón por servicio: su precio a la izquierda y el
-                      contador a la derecha, para leer de un tirón qué se vende
-                      y cuánto lleva la nota. */}
+                  {/* Un renglón por servicio: precio a la izquierda, contador a la derecha. */}
                   <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
                     {serviciosVisibles.map((s, i) => {
                       const cant   = cuentaServicio(s.v);
@@ -1731,9 +1536,7 @@ export default function NuevaNota() {
                           key={s.v}
                           className={`flex items-center gap-3 px-4 py-4 ${i > 0 ? 'border-t border-gray-100' : ''}`}
                         >
-                          {/* El importe del renglón va pegado al precio, no en
-                              una tercera columna: en el teléfono esa columna se
-                              caía sola al siguiente renglón. */}
+                          {/* El importe junto al precio (una tercera columna no cabe en el teléfono). */}
                           <div className="flex-1 min-w-0">
                             <p className="text-base font-semibold text-gray-900 truncate">
                               {s.titulo ?? s.label}
@@ -1803,14 +1606,9 @@ export default function NuevaNota() {
                   )}
                 </div>
 
-                {/* Escondido por ahora, a petición del negocio: la tela y el
-                    tamaño del edredón son opcionales y el mostrador no los está
-                    capturando. Se vuelve a enseñar poniendo la bandera en true;
-                    lo que hay debajo se conserva tal cual para eso. */}
+                {/* Oculto (MOSTRAR_DETALLE_SERVICIO): tela y tamaño de edredón son opcionales. */}
                 {MOSTRAR_DETALLE_SERVICIO && (<>
-                {/* Detalle de cada servicio: la tela de la ropa y el tamaño del
-                    edredón, los dos opcionales. Es un renglón por servicio, no
-                    una pantalla: con tres servicios son tres renglones. */}
+                {/* Detalle de cada servicio (opcional): tela de la ropa y tamaño del edredón. */}
                 {nCargas > 0 && (
                   <>
                     <Separador />
@@ -1821,16 +1619,14 @@ export default function NuevaNota() {
                       <div className="space-y-3">
                         {encargoCargas.map((c, idx) => {
                           const nombre = SERVICIO_POR_V[c.servicio]?.label ?? 'Servicio';
-                          // Cuántos van de este servicio para numerarlo: "Chico 1",
-                          // "Chico 2". Con uno solo no se numera.
+                          // Para numerarlo ("Chico 1", "Chico 2"); con uno solo no se numera.
                           const mismos = encargoCargas.filter(x => x.servicio === c.servicio);
                           const num    = mismos.indexOf(c) + 1;
                           const etiqueta = mismos.length > 1 ? `${nombre} ${num}` : nombre;
                           return (
                             <div key={idx} className="rounded-xl border border-gray-200 bg-white px-4 py-3.5 space-y-2.5">
                               <p className="text-sm font-semibold text-gray-900">{etiqueta}</p>
-                              {/* El tamaño del edredón ya es su servicio
-                                  (mig. 130): no se elige aparte. */}
+                              {/* El tamaño del edredón ya es su servicio. */}
                               {c.tipo_prenda === 'EDREDON' ? null : (
                                 <Selector
                                   claseCampo={INPUT_CLS}
@@ -1854,15 +1650,12 @@ export default function NuevaNota() {
 
                 </>)}
 
-                {/* Productos: UNA sola lista con lo que lleva la nota, el
-                    material que traen puestos los servicios incluido. Cada
-                    renglón dice si va dentro del servicio (granel y bolsas, que
-                    gastan de su precio) o si se cobra aparte (los de marca). */}
+                {/* Productos: una sola lista. Cada renglón dice si va dentro del servicio
+                    (granel y bolsas) o si se cobra aparte (marca y polvo). */}
                 <Separador />
                 {bloqueProductos()}
 
-                {/* Un servicio cuyo material cuesta más de lo que se cobra se
-                    vendería en pérdida: aquí se ve de cuál se trata. */}
+                {/* Un servicio cuyo material cuesta más de lo que se cobra. */}
                 {encargoCargas.map((c, idx) => {
                   const exceso = excesoDeCarga(c);
                   if (!(exceso > 0)) return null;
@@ -1879,8 +1672,7 @@ export default function NuevaNota() {
                   );
                 })}
 
-                {/* Ajuste de la nota: debajo de los productos, junto al tope y al
-                    total, que es lo que mueve. */}
+                {/* Ajuste de la nota, junto al tope y al total que mueve. */}
                 <Separador />
                 <div>
                   <label className={LABEL_CLS}>Ajuste ($)</label>
@@ -1914,9 +1706,7 @@ export default function NuevaNota() {
                   <p className="text-xs text-gray-400 mt-1.5">Descuento (negativo) o cargo extra (positivo)</p>
                 </div>
 
-                {/* El tope, siempre a la vista: cuánto se cobra, cuánto lleva
-                    gastado el material y cuánto queda. Es lo que deja servir
-                    con cabeza en vez de descubrir al final que no cabía. */}
+                {/* El tope a la vista: cuánto se cobra, cuánto lleva el material y cuánto queda. */}
                 {presupuestoServicios > 0 && (
                   excesoDeLaNota > 0 ? (
                     <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2.5">
@@ -1933,9 +1723,7 @@ export default function NuevaNota() {
                     <p className="text-xs text-gray-500 text-right tabular-nums">
                       {nCargas === 1 ? 'Tope del servicio' : 'Tope de los servicios'}: ${presupuestoServicios.toFixed(2)}
                       {' · '}usado ${materialUsado.toFixed(2)}
-                      {/* El ajuste se nombra aparte cuando lo hay: cambia lo que
-                          queda, y verlo restado sin decir de dónde sale hacía
-                          dudar de la cuenta. */}
+                      {/* El ajuste se nombra aparte cuando lo hay. */}
                       {ajusteEncargo !== 0 && (
                         <>{' · '}ajuste {ajusteEncargo < 0 ? '−' : '+'}${Math.abs(ajusteEncargo).toFixed(2)}</>
                       )}
@@ -1971,8 +1759,7 @@ export default function NuevaNota() {
                         <button
                           key={t.v}
                           type="button"
-                          // Al salir de "Otra" se limpia la fecha: quedaría una
-                          // fecha suelta contradiciendo lo que dice el botón.
+                          // Al salir de "Otra" se limpia la fecha.
                           onClick={() => setEncargoForm(f => {
                             const v = f.tiempo_entrega === t.v ? '' : t.v;
                             return { ...f, tiempo_entrega: v, ...(v === 'OTRA' ? {} : { fecha_entrega: '' }) };
@@ -1988,8 +1775,7 @@ export default function NuevaNota() {
                   </div>
                 </div>
 
-                {/* El calendario solo aparece con "Otra": mañana y en 2 días se
-                    explican solos (2026-09-25). */}
+                {/* El calendario solo aparece con "Otra". */}
                 {encargoForm.tiempo_entrega === 'OTRA' && (
                   <div>
                     <label className={LABEL_CLS}>Fecha de entrega</label>
@@ -1997,9 +1783,7 @@ export default function NuevaNota() {
                       <input
                         type="date" name="fecha_entrega"
                         value={encargoForm.fecha_entrega} onChange={handleEncargoChange}
-                        // Con appearance-none se oculta el ícono del calendario; al
-                        // hacer click se abre el selector nativo (showPicker) para que
-                        // se pueda elegir la fecha tocando cualquier parte del campo.
+                        // Sin el ícono nativo; showPicker abre el selector al tocar cualquier parte.
                         onClick={(e) => { try { e.currentTarget.showPicker?.(); } catch { /* no soportado */ } }}
                         className={`${INPUT_CLS} min-w-0 block bg-white h-[54px] cursor-pointer ${
                           encargoForm.fecha_entrega ? '' : 'text-transparent'
@@ -2067,10 +1851,8 @@ export default function NuevaNota() {
                     </div>
                   )}
                 </div>
-                {/* Un renglón por servicio con su precio, y debajo lo que va
-                    encima de ellos: los productos que el cliente compra y el
-                    ajuste. El material incluido no se lista aquí —ya está
-                    pagado en el precio del servicio— y se revisa en el paso 2. */}
+                {/* Un renglón por servicio y debajo lo que va encima: productos y ajuste. El
+                    material incluido no se lista: va en el precio del servicio. */}
                 <div className="space-y-2 mb-2 text-sm text-blue border-t border-blue-200 pt-4">
                   {encargoCargas.map((c, i) => {
                     const nombre = SERVICIO_POR_V[c.servicio]?.label ?? 'Servicio';
@@ -2101,8 +1883,7 @@ export default function NuevaNota() {
                       {productosLista.map((p, j) => {
                         const prod = productosCatalogo.find(x => String(x.id) === String(p.producto_id));
                         const cant = Number(p.cantidad) || 0;
-                        // El material no se cobra: va dentro del precio del
-                        // servicio, así que no es un renglón del resumen.
+                        // El material va dentro del precio del servicio: no es un renglón.
                         if (!prod || cant <= 0 || esMaterialDeNota(prod)) return null;
                         return (
                           <div key={j} className="flex justify-between gap-2">
@@ -2132,8 +1913,7 @@ export default function NuevaNota() {
               </div>
             )}
 
-            {/* Pago anticipado: va debajo del resumen, en el mismo paso, para
-                cobrar viendo lo que se cobra (2026-09-25). */}
+            {/* Pago anticipado, debajo del resumen: se cobra viendo lo que se cobra. */}
             {encargoStep === pasoResumen && (
               <div className="space-y-4">
                 <h2 className="text-base font-semibold text-gray-900">Pago Anticipado</h2>
@@ -2145,7 +1925,7 @@ export default function NuevaNota() {
                         key={opt.v}
                         type="button"
                         onClick={() => {
-                          // "Sí" es cobrar: abre el modal de Cobrar.
+                          // "Sí" abre el modal de Cobrar.
                           if (opt.v === 'SI') { abrirAnticipo(); return; }
                           setEncargoForm(f => ({
                             ...f, pago_anticipado: opt.v,
@@ -2163,8 +1943,7 @@ export default function NuevaNota() {
                   })}
                 </div>
 
-                {/* Lo cobrado en el modal: cuánto, cómo y si queda debiendo.
-                    Tocarlo vuelve a abrir el cobro para cambiarlo. */}
+                {/* Lo cobrado: cuánto, cómo y si queda debiendo. Tocarlo reabre el cobro. */}
                 {encargoForm.pago_anticipado === 'SI' && (
                   <button
                     type="button"
@@ -2236,15 +2015,11 @@ export default function NuevaNota() {
 
         {tipoServicio === 'AUTOSERVICIO' && (
         <div className="space-y-8">
-        {/* 32 px entre todas las secciones, de la captura al cobro: el mismo
-            aire que el paso de carga de Por Encargo, ahora que las líneas
-            marcan la separación. El contenedor propio evita depender del
-            space-y del <form>, que dejaba el resumen más pegado que el resto. */}
+        {/* 32 px entre secciones; contenedor propio para no depender del space-y del form. */}
         <div className="space-y-8">
 
-          {/* ── Cliente / referencia (opcional, mig. 157) ────
-              Autoservicio no lleva cliente del catálogo: este texto libre
-              dice de quién es la ropa en la tarjeta de Notas. */}
+          {/* ── Cliente / referencia (opcional) ──────────────
+              Texto libre: de quién es la ropa en la tarjeta de Notas. */}
           <div>
             <label htmlFor="referencia" className={LABEL_CLS}>Cliente / referencia</label>
             <input
@@ -2259,12 +2034,8 @@ export default function NuevaNota() {
           </div>
 
           {/* ── Máquinas ─────────────────────────────────────
-              La nota se arma eligiendo las máquinas que va a usar el cliente,
-              de la lista de libres y en el mismo modal que Salidas (2026-09-29).
-              Antes se decía "cuántas" y de qué tipo, y la máquina física se
-              elegía después: eran dos capturas para lo mismo, y hasta la segunda
-              la nota no valía nada. Ahora cada máquina entra con su tarifa, así
-              que el resumen ya puede decir lo que se va a cobrar. */}
+              Se eligen de las libres, en el mismo modal que Salidas; cada una entra con
+              su tarifa, así el resumen dice lo que se cobra. */}
           <div>
             <div className="flex items-baseline gap-2 min-w-0 mb-2">
               <h2 className={LABEL_CLS + ' mb-0'}>Máquinas <span className="text-red-500">*</span></h2>
@@ -2275,11 +2046,7 @@ export default function NuevaNota() {
               )}
             </div>
 
-            {/* El campo es un SELECTOR, no un botón de "agregar": se ve y se
-                toca como los demás campos del formulario —el mismo alto y el
-                mismo borde— y lo que despliega es el modal con las máquinas
-                libres. Elegir la máquina es capturar un dato de la
-                nota, no una acción aparte, y como campo se lee así. */}
+            {/* Se ve como un campo más; abre el modal de máquinas libres. */}
             <button
               type="button"
               onClick={abrirSelectorMaquinas}
@@ -2290,24 +2057,17 @@ export default function NuevaNota() {
                   : 'border-gray-300 hover:border-gray-400'
               }`}
             >
-              {/* En azul (2026-10-11, a pedido): antes iba en el gris del campo
-                  y se perdía; ahora llama la atención como acción. */}
+              {/* En azul: se lee como acción. */}
               <span className="text-blue truncate">
                 {cargasAuto.length === 0 ? 'Elige lavadora o secadora' : 'Agregar otra máquina'}
               </span>
-              {/* Un + y no la flecha del desplegable: lo que hay detrás no es
-                  una lista que se abre y se cierra en el propio campo, sino un
-                  modal donde se marcan varias. */}
+              {/* Un + porque abre un modal donde se marcan varias. */}
               <svg className="w-5 h-5 flex-shrink-0 text-blue" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
               </svg>
             </button>
 
-            {/* Misma fila compacta que los productos: qué es, qué cobra y el
-                tache para quitarla. Sin máquinas no se pinta la caja: el campo
-                de arriba ya dice que no hay ninguna y qué hacer, y un "No hay
-                máquinas en esta nota" debajo de "Elige lavadora o secadora" es
-                decir dos veces lo mismo. */}
+            {/* Fila compacta: qué es, qué cobra y quitarla. Sin máquinas no se pinta la caja. */}
             {cargasAuto.length > 0 && (
             <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
               {cargasAuto.map((c, i) => (
@@ -2370,9 +2130,7 @@ export default function NuevaNota() {
                 </div>
               </div>
 
-              {/* Cada máquina con lo que cobra (2026-09-29). Los precios
-                  volvieron al resumen en cuanto la máquina se elige aquí: ya se
-                  sabe cuál es y, con ella, su tarifa. */}
+              {/* Cada máquina con lo que cobra. */}
               {cargasAuto.length > 0 && (
                 <div className="space-y-1.5 mb-3 last:mb-0 text-sm text-blue border-t border-blue-200 pt-3">
                   {cargasAuto.map((c, i) => (
@@ -2404,8 +2162,7 @@ export default function NuevaNota() {
                       const cant = Number(item.cantidad) || 0;
                       return (
                         <div key={i} className="flex justify-between gap-2">
-                          {/* "· Granel" distingue el bidón del producto de marca
-                              que se llama igual (Suavizante vs. Ensueño). */}
+                          {/* "· Granel" distingue el bidón del producto de marca que se llama igual. */}
                           <span>
                             {etiquetaProducto(prod)}{prod.tipo_liquido === 'granel' && !esPolvo(prod) ? ' · Granel' : ''}
                             {' × '}{cant} {unidadVentaNota(prod, cant)}
@@ -2418,10 +2175,7 @@ export default function NuevaNota() {
                 </div>
               )}
 
-              {/* El Total vuelve (2026-09-29): con la máquina elegida aquí, el
-                  alta ya sabe lo que cuesta la nota. Lo que NO vuelve es el
-                  cobro: la nota nace pendiente y se liquida desde su detalle
-                  (2026-09-23), así que aquí no hay forma de pago. */}
+              {/* Total. No hay forma de pago: la nota nace pendiente y se liquida en su detalle. */}
               <div className="flex items-baseline justify-between border-t border-blue-200 pt-3">
                 <span className="text-sm font-medium text-blue">Total</span>
                 <span className="text-3xl font-bold text-blue-700 tabular-nums">${precioTotal.toFixed(2)}</span>
@@ -2444,8 +2198,7 @@ export default function NuevaNota() {
           >
             Cancelar
           </button>
-          {/* Sin paso de cobro: la nota se crea pendiente y se liquida desde su
-              detalle, igual que Por Encargo (2026-09-23). */}
+          {/* Sin cobro aquí: la nota nace pendiente y se liquida desde su detalle. */}
           <button
             type="button" onClick={() => handleSubmit()} disabled={loading}
             className="flex-1 bg-blue hover:opacity-90 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
@@ -2458,10 +2211,7 @@ export default function NuevaNota() {
         </div>
         )}
         {/* ── Venta de Productos ──────────────────────────────
-            Mostrador puro: qué se lleva y cuánto paga. Anónima como el
-            autoservicio —el que viene a comprar un jabón no se identifica—, sin
-            cargas, sin máquinas y sin nada que entregar después: al aceptar se
-            cobra y la nota queda finalizada. */}
+            Sin cliente, cargas ni máquinas: al aceptar se cobra y queda finalizada. */}
         {esVenta && (
         <div className="space-y-8">
 
@@ -2498,8 +2248,7 @@ export default function NuevaNota() {
                         const cant = Number(item.cantidad) || 0;
                         return (
                           <div key={i} className="flex justify-between gap-2">
-                            {/* "· Granel" distingue el bidón del producto de marca
-                                que se llama igual (Suavizante vs. Ensueño). */}
+                            {/* "· Granel" distingue el bidón del producto de marca que se llama igual. */}
                             <span>
                               {etiquetaProducto(prod)}{prod.tipo_liquido === 'granel' && !esPolvo(prod) ? ' · Granel' : ''}
                               {' × '}{cant} {unidadVentaNota(prod, cant)}
@@ -2694,9 +2443,7 @@ export default function NuevaNota() {
             <div className="p-3 overflow-y-auto">
               {(() => {
                 const { ambito } = selectorProducto;
-                // Todo el catálogo, en cualquier servicio (2026-09-25): el
-                // granel por medida, los de marca por unidad y las bolsas por
-                // pieza. Lo que cambia entre servicios es la unidad, no la lista.
+                // Todo el catálogo en cualquier servicio; lo que cambia es la unidad.
                 const lista = productosCatalogo;
                 if (lista.length === 0) {
                   return (
@@ -2705,8 +2452,7 @@ export default function NuevaNota() {
                     </p>
                   );
                 }
-                // Los ya puestos no se ofrecen otra vez: para llevar más se sube
-                // la cantidad del renglón que ya existe.
+                // Los ya puestos no se ofrecen: para llevar más se sube la cantidad.
                 const enUso = esCarga(ambito)
                   ? (encargoCargas[selectorProducto.carga]?.productos ?? [])
                   : productosLista;
