@@ -1,10 +1,8 @@
 import pool from '../db/pool.js';
 import { esAdmin } from '../middleware/roles.js';
 import { tarifaSecadora, precioProductoEnNota, unidadDeVenta, medidasPorUnidad, generarFolio } from '../utils/calculosNotas.js';
-// El resto del archivo se apoya en el trigger de LISTEN/NOTIFY (mig. 075) para
-// encender y apagar. Aquí se llama directo porque "Encender máquina" es la
-// acción que el empleado está mirando: no debe depender de que el listener esté
-// vivo. Es idempotente, así que el aviso del trigger llegando después no molesta.
+// Encender y apagar normalmente lo dispara el trigger LISTEN/NOTIFY. "Encender
+// máquina" llama directo para no depender del listener; es idempotente.
 import { sincronizarSonoff, maxCiclosDeMaquina } from '../services/sincronizarSonoff.js';
 import { sellarPasadasVivas } from '../db/pasadas.js';
 import {
@@ -13,19 +11,18 @@ import {
 } from '../db/sqlMaquina.js';
 
 const ESTADOS_VALIDOS     = ['EN_ESPERA', 'LAVANDO', 'SECANDO', 'LISTA', 'PAGADA', 'FINALIZADA', 'CANCELADA'];
-// PRODUCTOS es la venta de mostrador (mig. 112): productos sueltos, sin lavado
-// ni secado. No lleva cargas, y por eso varias reglas de abajo la tratan aparte.
+/** PRODUCTOS es la venta de mostrador: productos sueltos, sin cargas. */
 const TIPOS_SERVICIO_VALIDOS = ['AUTOSERVICIO', 'EDREDON', 'POR_ENCARGO', 'PRODUCTOS'];
 
-// ¿Es una venta de mostrador? Se pregunta lo bastante seguido como para tener
-// nombre propio.
 const esVenta = (tipo_servicio) => tipo_servicio === 'PRODUCTOS';
 const ESTADOS_PAGO_VALIDOS = ['PENDIENTE', 'PAGADO'];
-// Formas de pago (mig. 078/090). Para el corte de caja solo EFECTIVO es dinero
-// en el cajón; transferencia y tarjeta son cobros reales que no lo engrosan.
+/**
+ * Solo EFECTIVO entra al cajón; transferencia y tarjeta se cobran pero no
+ * cuentan en el esperado del corte.
+ */
 const FORMAS_PAGO_VALIDAS = ['EFECTIVO', 'TRANSFERENCIA', 'TARJETA'];
 
-// Normaliza la forma de pago recibida; devuelve null si no es una válida.
+/** Forma de pago en mayúsculas, o null si no es válida. */
 const normalizarFormaPago = (v) => {
   if (v == null) return null;
   const s = String(v).trim().toUpperCase();
@@ -33,18 +30,12 @@ const normalizarFormaPago = (v) => {
 };
 const TAMANOS_VALIDOS     = ['chico', 'mediano', 'grande', 'jumbo'];
 const TIPOS_PRENDA_VALIDOS = ['ROPA', 'EDREDON'];
-// Tipo de máquina previsto por carga en Por Encargo (define el precio; la
-// máquina física real se asigna después en Salidas).
+/** Tipo de máquina previsto por carga; la máquina física se asigna en Salidas. */
 const TIPOS_MAQUINA_VALIDOS = ['mediana', 'jumbo', 'edredon'];
-// Cuándo estará lista la ropa: mañana, en dos días, u OTRA fecha —que entonces
-// va en `fecha_entrega` (2026-09-25)—. Antes eran horarios del día
-// (mañana/tarde/noche), pero lo que el mostrador promete es el DÍA. Es
-// opcional: una nota puede no prometer nada.
+/** Día en que estará lista la ropa (opcional). OTRA usa `fecha_entrega`. */
 const TIEMPOS_ENTREGA_VALIDOS = ['MANANA', 'DOS_DIAS', 'OTRA'];
 
-// Los estados y catálogos se guardan en MAYÚSCULAS, pero nadie los lee así en
-// pantalla: los mensajes hablan de "por encargo" y "en espera", no de
-// POR_ENCARGO ni EN_ESPERA.
+/** Valores en MAYÚSCULAS → como se leen en los mensajes ("en espera"). */
 const PALABRA = {
   EN_ESPERA: 'en espera', LAVANDO: 'lavando', SECANDO: 'secando', LISTA: 'lista',
   PAGADA: 'pagada', FINALIZADA: 'finalizada', CANCELADA: 'cancelada',
@@ -56,27 +47,23 @@ const PALABRA = {
 };
 const palabra = (v) => PALABRA[v] ?? String(v ?? '').toLowerCase().replace(/_/g, ' ');
 
-// ['L1', 'S2'] → "L1 y S2". Hermano de enPalabras, pero para enumerar cosas
-// que pasan a la vez, no opciones entre las que se elige.
+/** ['L1', 'S2'] → "L1 y S2" */
 const listaY = (valores) => {
   if (valores.length <= 1) return valores.join('');
   return `${valores.slice(0, -1).join(', ')} y ${valores.at(-1)}`;
 };
 
-// ['chico', 'grande', 'jumbo'] → "chico, grande o jumbo"
+/** ['chico', 'grande', 'jumbo'] → "chico, grande o jumbo" */
 const enPalabras = (valores) => {
   const legibles = valores.map(palabra);
   if (legibles.length <= 1) return legibles.join('');
   return `${legibles.slice(0, -1).join(', ')} o ${legibles.at(-1)}`;
 };
 
-// Transiciones permitidas por estado actual
+/** Estados a los que puede pasar una nota desde cada estado. */
 const TRANSICIONES_VALIDAS = {
-  // EN_ESPERA → LISTA existe para poder cerrar a mano una nota cuyas cargas
-  // ya no se van a usar (el cliente trajo menos ropa de la prevista). Sin esa
-  // salida la nota se quedaba En Espera para siempre. Ojo: cierra la nota con
-  // las cargas tal como están, así que lo justo suele ser quitar antes la carga
-  // que no se usó, para no cobrarla.
+  // EN_ESPERA → LISTA cierra a mano una nota con cargas que ya no se usarán.
+  // Se cobra lo que tenga: conviene quitar antes la carga sin usar.
   EN_ESPERA:  ['LAVANDO', 'SECANDO', 'LISTA', 'CANCELADA'],
   LAVANDO:    ['SECANDO', 'LISTA',            'CANCELADA'],
   SECANDO:    ['LISTA',                       'CANCELADA'],
@@ -86,17 +73,16 @@ const TRANSICIONES_VALIDAS = {
   CANCELADA:  [],
 };
 
-// Subconsulta con los IDs de todas las máquinas vinculadas a la nota `n`
-// (las de sus cargas, tabla nota_cargas).
+/** Subconsulta: ids de las máquinas asignadas a las cargas de la nota `n`. */
 const SQL_MAQUINAS_DE_NOTA = `
   SELECT nc.lavadora_id AS mid FROM nota_cargas nc WHERE nc.nota_id = n.id
   UNION SELECT nc.secadora_id FROM nota_cargas nc WHERE nc.nota_id = n.id`;
 
-// Fase de proceso de una nota según las máquinas EN USO ahora mismo: LAVANDO si
-// alguna lavadora corre; si no, SECANDO si alguna secadora corre; y EN_ESPERA si
-// no hay ninguna máquina en uso (todas asignadas pero sin iniciar, o ya
-// detenidas). Solo cuentan las máquinas que ESTA nota arrancó (mig. 097): otra
-// nota puede tener la misma asignada, y su ciclo no es el nuestro.
+/**
+ * Fase según las máquinas que ESTA nota arrancó y siguen en uso: LAVANDO si
+ * corre una lavadora, si no SECANDO si corre una secadora, si no EN_ESPERA.
+ * Otra nota puede tener la misma máquina asignada; su ciclo no cuenta.
+ */
 async function faseProcesoDeNota(client, notaId) {
   const { rows } = await client.query(
     `SELECT
@@ -117,14 +103,11 @@ async function faseProcesoDeNota(client, notaId) {
   return 'EN_ESPERA';
 }
 
-// ¿Alguna lavadora de la nota ya terminó? Es lo que habilita "Procesado" en el
-// detalle (2026-10-02): antes de que la ropa salga de una lavadora no hay nada
-// que doblar ni empacar. Una lavadora que ESTA nota arrancó cuenta como
-// terminada si:
-//   · ya la soltó (la carga quedó sin lavadora), o ya no está corriendo, o
-//   · sigue puesta con temporizador y su tiempo ya se cumplió.
-// La de cronómetro (todas desde el 2026-10-02) no tiene tiempo que cumplir: cuenta
-// solo cuando alguien la finaliza.
+/**
+ * ¿Ya terminó alguna lavadora que arrancó esta nota? Habilita "Procesado".
+ * Terminó si la soltó, si ya no corre o, con temporizador, si cumplió su
+ * tiempo. Con cronómetro solo cuenta al finalizarla.
+ */
 async function algunaLavadoraTermino(client, notaId) {
   const { rows } = await client.query(
     `SELECT EXISTS (
@@ -145,22 +128,12 @@ async function algunaLavadoraTermino(client, notaId) {
   return rows[0].termino;
 }
 
-// ¿A la nota le falta trabajo por hacer? Una carga cuenta como PENDIENTE si:
-//   · tiene una máquina asignada o corriendo, o
-//   · se pidió lavado (lavadora_tipo) que nunca arrancó, o
-//   · se pidió secado (secadora_tipo) que nunca arrancó.
-// Haber usado ya la máquina no cuenta.
-//
-// Sin esto bastaba con que NINGUNA máquina estuviera en uso para dar la nota
-// por terminada, y una carga que todavía no arrancaba no tiene máquina en uso:
-// una nota de dos cargas pasaba a "Por entregar" —y se dejaba liquidar— con la
-// segunda carga sin lavar.
-//
-// Lo que NO cuenta es un SERVICIO de Por Encargo sin máquina. Ahí la nota
-// captura lo que se cobra —dos servicios Chico, un Edredón— y las máquinas se
-// manejan aparte, en Salidas: son independientes de lo que se vendió, así que
-// un servicio no es una máquina esperando turno. Lo que dice que a la nota le
-// falta trabajo son sus MÁQUINAS, puestas o corriendo.
+/**
+ * ¿A la nota le falta trabajo? Una carga está pendiente si tiene una máquina
+ * asignada o corriendo, o si pidió lavado o secado que nunca arrancó.
+ * Un servicio Por Encargo sin máquina no cuenta: sus máquinas se manejan
+ * aparte en Salidas.
+ */
 async function hayCargasPendientes(client, notaId) {
   const { rows } = await client.query(
     `SELECT EXISTS (
@@ -180,25 +153,14 @@ async function hayCargasPendientes(client, notaId) {
   return rows[0].pendientes;
 }
 
-// Estado en el que queda una nota a la que ya no le falta ninguna carga.
-//
-// Autoservicio PAGADO: el cliente está en el local y se lleva su ropa él mismo,
-// así que no hay nada "por entregar" — la nota se cierra sola. En Por Encargo y
-// Edredón sí pasa por Por Entregar: el negocio guarda la ropa hasta que la
-// recogen.
-//
-// Un autoservicio que todavía DEBE se queda en Por Entregar, porque FINALIZADA
-// es terminal y cerrarla ahí dejaría el cobro sin registrar y sin forma de
-// hacerlo desde la nota. Desde el 2026-09-23 ese es el caso normal —el cobro
-// dejó de ser obligatorio para arrancar—, y al liquidarla desde el detalle se
-// cierra sola (ver `cambiarEstadoPago`).
-//
-// POR ENCARGO ya no pasa sola a Por Entregar (2026-09-28). Que las máquinas
-// terminen no quiere decir que la ropa esté lista: falta doblarla, empacarla y
-// revisarla, y eso lo dice una persona con el botón **"Procesado"** del detalle
-// —que además es el que avisa al cliente—. Mientras tanto la nota se queda En
-// Espera, que es donde de verdad está. Es el ÚNICO camino a Por Entregar en
-// este servicio: ni terminar la última máquina ni el cierre del día la mueven.
+/**
+ * Estado de una nota a la que ya no le falta ninguna carga:
+ * - Autoservicio pagado → FINALIZADA (el cliente se lleva su ropa).
+ * - Autoservicio que debe → LISTA, hasta liquidarla (ver cambiarEstadoPago).
+ * - Por Encargo → sigue EN_ESPERA: solo "Procesado" la pasa a Por Entregar,
+ *   porque falta doblar y empacar.
+ * - Edredón y venta de productos → LISTA.
+ */
 async function estadoAlTerminarCargas(client, notaId) {
   const { rows } = await client.query(
     'SELECT tipo_servicio, estado_pago FROM notas WHERE id = $1',
@@ -211,10 +173,10 @@ async function estadoAlTerminarCargas(client, notaId) {
     : 'LISTA';
 }
 
-// Cierra la nota que ya no tiene cargas pendientes y devuelve el estado en que
-// quedó. Si se finaliza sola, consume el stock de sus productos igual que lo
-// haría el cierre a mano (cambiarEstadoNota): sin esto el producto se quedaría
-// reservado para siempre y el inventario descuadrado.
+/**
+ * Cierra la nota sin cargas pendientes y devuelve su estado. Si queda
+ * FINALIZADA, descuenta sus productos del inventario.
+ */
 async function cerrarNotaSinCargasPendientes(client, notaId, { sucursal, usuarioId }) {
   const estado = await estadoAlTerminarCargas(client, notaId);
   if (estado === 'FINALIZADA') {
@@ -224,7 +186,7 @@ async function cerrarNotaSinCargasPendientes(client, notaId, { sucursal, usuario
   return estado;
 }
 
-// IDs (sin repetir) de todas las máquinas vinculadas a una nota.
+/** Ids, sin repetir, de las máquinas asignadas a la nota. */
 async function maquinasDeNota(client, notaId) {
   const { rows } = await client.query(
     `SELECT DISTINCT x.mid
@@ -235,17 +197,11 @@ async function maquinasDeNota(client, notaId) {
   return rows.map(r => r.mid);
 }
 
-// De la lista `ids`, devuelve las máquinas (id, nombre) que ya tiene apartadas
-// OTRA nota abierta (En Espera / Lavando / Secando): asignadas a una carga o en
-// las cargas de otra nota abierta. `notaIdExcluir` omite la nota en curso
-// (edición/asignar). Se espera haber bloqueado antes las filas de maquinas
-// (FOR UPDATE) para que dos asignaciones simultáneas de la misma máquina no se
-// pisen.
-// Nota que tiene una máquina EN USO ahora mismo, si no es la que se indica.
-// Asignar una máquina no la aparta: varias notas pueden tenerla asignada
-// mientras nadie la arranque. La primera que le da a "Iniciar" se la queda, y
-// a partir de ahí las demás tienen que cambiarla. Sirve para decir en el aviso
-// quién la está usando.
+/**
+ * Nota (id, folio) que está usando la máquina ahora, sin contar
+ * `notaIdExcluir`. Asignar no aparta: la primera nota que le da a "Iniciar" se
+ * la queda y las demás tienen que cambiarla. Sirve para el aviso de quién la usa.
+ */
 async function notaQueUsaMaquina(client, maquinaId, notaIdExcluir = null) {
   const { rows } = await client.query(
     `SELECT n.id, n.folio
@@ -264,10 +220,11 @@ async function notaQueUsaMaquina(client, maquinaId, notaIdExcluir = null) {
   return rows[0] ?? null;
 }
 
-// Marca en la carga que SUS máquinas arrancaron de verdad (mig. 097). Tener
-// una máquina asignada ya no implica usarla: varias notas pueden tener la
-// misma y solo la que le da a Iniciar la usa. Esta marca es la que distingue
-// una cosa de la otra para liberar máquinas y para el reporte de uso.
+/**
+ * Marca en las cargas que ESTA nota arrancó esas máquinas. Distingue usar una
+ * máquina de solo tenerla asignada (varias notas pueden tener la misma); se usa
+ * para liberar máquinas y en el reporte de uso.
+ */
 async function marcarMaquinasIniciadas(client, notaId, maquinaIds) {
   if (!maquinaIds || maquinaIds.length === 0) return;
   await client.query(
@@ -281,11 +238,11 @@ async function marcarMaquinasIniciadas(client, notaId, maquinaIds) {
   );
 }
 
-// Máquinas que ESTA nota ENCENDIÓ y nadie arrancó (mig. 110): se apagan y se
-// sueltan. La nota es lo único que dice por qué ese relé está cerrado, así que
-// sin ella quedaría encendida sin nota. El guardo de `en_uso_desde IS NULL`
-// es por si entretanto alguien inició el lavado: esa ya está lavando y la
-// suelta el camino de siempre. La usan eliminar, cancelar y Por Entregar.
+/**
+ * Apaga y suelta las máquinas que esta nota encendió y nadie arrancó, para que
+ * no queden con corriente sin nota. Si ya arrancaron (`en_uso_desde`), no las
+ * toca. La usan eliminar, cancelar y pasar a Por Entregar.
+ */
 async function apagarEncendidasSinArrancar(client, notaId) {
   await client.query(
     `UPDATE maquinas
@@ -298,11 +255,11 @@ async function apagarEncendidasSinArrancar(client, notaId) {
   );
 }
 
-// Libera (pasa a disponible) las máquinas que ESTA nota arrancó y siguen en
-// uso. Las que solo tiene asignadas no se tocan: pueden estar corriendo para
-// otra nota que se le adelantó al iniciar, y apagarlas la dejaría a medias.
-// También apaga las que encendió sin arrancar (antes se quedaban apartadas
-// hasta que caducara la espera, 5 min; 2026-10-08).
+/**
+ * Pasa a disponible las máquinas que esta nota arrancó y siguen en uso, y apaga
+ * las que encendió sin arrancar. Las que solo tiene asignadas no se tocan:
+ * pueden estar corriendo para otra nota.
+ */
 async function liberarMaquinasDeNota(client, notaId) {
   await apagarEncendidasSinArrancar(client, notaId);
   const { rows } = await client.query(
@@ -326,29 +283,10 @@ async function liberarMaquinasDeNota(client, notaId) {
   );
 }
 
-// Recalcula precio_total de una nota.
-//
-// Precio cobrado por carga:
-//   - Por Encargo CON tope: el precio ES el tope (precio fijo de la carga),
-//     aunque el costo interno (máquinas + productos) sea menor. El granel y la
-//     bolsa quedan absorbidos en el tope; los productos de MARCA no: esos son
-//     un producto que el cliente compra y se cobran aparte, encima del tope
-//     (2026-09-25).
-//   - Por Encargo SIN tope, o Autoservicio: suma real = máquinas + productos
-//     de la carga.
-//   + el ajuste por carga (nota_cargas.ajuste), que va aparte del tope.
-// Más: productos a nivel nota (carga_id NULL, Autoservicio) + ajuste de nota.
-// Cambiar algo que mueve el total de una nota cobrada en un corte YA CERRADO
-// devolvería el pago a PENDIENTE, y eso descuadra: el corte cerrado tiene sus
-// cifras congeladas (mig. 101), así que seguiría contando esa venta y al volver
-// a cobrar la nota el mismo dinero entraría otra vez en la caja de hoy. Es el
-// mismo motivo por el que la reversión manual solo se permite con la caja
-// abierta; aquí lo medida por el lado automático (2026-09-22).
-// Un cambio que dejaría el total de la nota POR DEBAJO de lo que el cliente ya
-// abonó (2026-10-08, decisión de la usuaria: se bloquea). Si se dejaba, la nota
-// se liquidaba por el total nuevo y el corte esperaba menos dinero del que
-// entró: un sobrante que nadie sabía que había que devolver. Para bajar el
-// total, primero se revierte el abono (admin) y se devuelve el dinero.
+/**
+ * El total no puede quedar por debajo de lo ya abonado: el corte esperaría
+ * menos dinero del que entró. Para bajarlo, primero se revierte el abono.
+ */
 class TotalBajoAbonosError extends Error {
   constructor(abonado, total) {
     super(`El cliente ya abonó $${abonado.toFixed(2)}: el total no puede quedar en `
@@ -357,11 +295,13 @@ class TotalBajoAbonosError extends Error {
   }
 }
 
+/**
+ * El cobro de la nota ya está en un corte cerrado (con cifras congeladas): su
+ * total no se puede cambiar, o ese dinero se contaría dos veces. Un corte
+ * cerrado no se reabre; lo que falte se cobra o devuelve aparte.
+ */
 class CorteCerradoError extends Error {
   constructor(folio) {
-    // Ojo con lo que se promete: un corte cerrado NO se reabre (caja solo pasa
-    // a 'cerrada', nunca al revés), así que mandar a "abrir esa caja" sería
-    // mandar a la nada. Lo que sí se puede hacer es cobrar o devolver aparte.
     super(`El cobro de la nota ${folio} ya quedó en un corte cerrado, así que no se puede `
         + 'cambiar lo que cuesta: la nota volvería a pendiente y ese dinero ya está contado '
         + 'en aquel corte. Si falta cobrar algo, hazlo en una nota nueva; si hay que devolver, '
@@ -370,13 +310,7 @@ class CorteCerradoError extends Error {
   }
 }
 
-// Convierte ese tropiezo en un 409 con su motivo en vez del 500 genérico de
-// "intenta de nuevo": es una regla de negocio, no una falla, y reintentar no
-// la va a arreglar. Devuelve true si ya respondió.
-// Un descuento (ajuste) no puede dejar la nota en números rojos. `ajustarNota`
-// lo revisaba al ponerlo, pero el total también se recalcula al quitar o
-// reducir lo que la nota lleva, y ahí el descuento ya puesto la dejaba
-// negativa (2026-10-12). Por eso vive aquí, donde se calcula el total.
+/** Un descuento (ajuste) no puede dejar el total de la nota en negativo. */
 class TotalNegativoError extends Error {
   constructor() {
     super('El total de la nota no puede ser negativo. Revisa el ajuste (descuento) antes de quitar o reducir algo.');
@@ -384,6 +318,10 @@ class TotalNegativoError extends Error {
   }
 }
 
+/**
+ * Responde los errores de `recalcularPrecioTotal` como reglas de negocio (400 o
+ * 409 con su motivo) en vez de un 500. Devuelve true si ya respondió.
+ */
 function respondioCorteCerrado(res, err) {
   if (err instanceof TotalNegativoError) {
     res.status(400).json({ message: err.message });
@@ -394,13 +332,21 @@ function respondioCorteCerrado(res, err) {
   return true;
 }
 
-// Con `desmarcarPagoSiCambia`, una nota que ya estaba PAGADA vuelve a
-// PENDIENTE si el cambio movió su total: lo que se cobró ya no corresponde a lo
-// que cuesta la nota, así que el cobro se rehace por el importe nuevo. El
-// trigger de la migración 037 limpia `pagado_en` al salir de PAGADO, con lo que
-// la venta también sale del corte de caja hasta que se vuelva a cobrar.
-// Si el total no se movió (por ejemplo, una máquina asignada "sin cobro"), el
-// pago se respeta tal cual.
+/**
+ * Recalcula y guarda `precio_total`. Por carga:
+ * - Por Encargo con precio de servicio (tope): el tope + los productos que se
+ *   venden por unidad (marca y polvo). El granel y la bolsa ya van en el tope.
+ * - Lo demás: máquinas + productos de la carga.
+ * Más el ajuste de cada carga, los productos sueltos de la nota y el ajuste de
+ * la nota.
+ *
+ * Con `desmarcarPagoSiCambia`, una nota PAGADA cuyo total cambia vuelve a
+ * PENDIENTE para cobrarla por el importe nuevo (y deja aviso en la campana).
+ *
+ * @throws {TotalNegativoError} si el total queda negativo.
+ * @throws {TotalBajoAbonosError} si queda por debajo de lo abonado.
+ * @throws {CorteCerradoError} si el cobro ya está en un corte cerrado.
+ */
 async function recalcularPrecioTotal(client, notaId, opciones = {}) {
   const { desmarcarPagoSiCambia = false, usuarioId = null, sucursal = null } = opciones;
   const { rows: previas } = desmarcarPagoSiCambia
@@ -410,12 +356,9 @@ async function recalcularPrecioTotal(client, notaId, opciones = {}) {
       )
     : { rows: [] };
 
-  // El estado de su caja se lee APARTE y con candado: `cerrarCaja` toma esa
-  // fila con FOR UPDATE y congela las cifras desde su propia foto, así que un
-  // cierre que corra entre esta lectura y el COMMIT contaría la venta mientras
-  // aquí se deja la nota en PENDIENTE — justo el descuadre que esto evita.
-  // (Va en su propia consulta porque Postgres no deja bloquear el lado nulo de
-  // un LEFT JOIN.)
+  // Candado sobre su caja para que un cierre simultáneo no congele la venta
+  // mientras aquí la nota vuelve a PENDIENTE. Consulta aparte: Postgres no
+  // bloquea el lado nulo de un LEFT JOIN.
   if (previas[0]?.caja_id) {
     const { rows: cj } = await client.query(
       'SELECT estado FROM cajas WHERE id = $1 FOR SHARE', [previas[0].caja_id]
@@ -428,24 +371,18 @@ async function recalcularPrecioTotal(client, notaId, opciones = {}) {
           COALESCE((
             SELECT SUM(
               CASE
-                -- Por Encargo cobra el PRECIO DEL SERVICIO, que ya paga lo que
-                -- se sirve dentro: el granel (por medida) y la bolsa. Los de
-                -- MARCA no: esos se venden por unidad, así que van encima.
+                -- Por Encargo: el precio del servicio + lo que se vende por unidad.
                 WHEN n.tipo_servicio = 'POR_ENCARGO' AND carga.tope IS NOT NULL
                   THEN carga.tope + carga.productos_marca
                 ELSE carga.maquinas + carga.productos
               END
               + carga.ajuste)
             FROM (
-              -- El tope es el que se congeló en la carga (mig. 096), no el
-              -- vigente en Ajustes: cambiar los precios no re-tarifa notas
-              -- viejas ni descuadra lo que ya se cobró.
+              -- El tope congelado en la carga: cambiar Ajustes no re-tarifa notas.
               SELECT nc.ajuste, nc.precio_tope AS tope,
                      nc.precio_lavadora + nc.precio_secadora AS maquinas,
                      COALESCE((SELECT SUM(np.cantidad * np.precio_unitario)
                                  FROM nota_productos np WHERE np.carga_id = nc.id), 0) AS productos,
-                     -- Lo que se vende por unidad (marca y polvo) va encima
-                     -- del tope; lo servido por medidas ya lo paga el servicio.
                      COALESCE((SELECT SUM(np.cantidad * np.precio_unitario)
                                  FROM nota_productos np
                                  JOIN productos a ON a.id = np.producto_id
@@ -455,12 +392,8 @@ async function recalcularPrecioTotal(client, notaId, opciones = {}) {
                WHERE nc.nota_id = n.id
             ) carga
           ), 0)
-          -- Productos a nivel nota. En POR ENCARGO solo se cobra lo que se
-          -- vende POR UNIDAD (marca y polvo): el granel líquido y las bolsas son
-          -- material del servicio —el jabón con el que se lava— y su precio ya
-          -- los paga; lo que impide servirlos sin medida es el tope
-          -- (validarTopesCargas).
-          -- En los demás servicios el producto es una venta y se cobra todo.
+          -- Productos sueltos. En Por Encargo solo los que se venden por unidad:
+          -- el granel y las bolsas los paga el servicio.
           + COALESCE((SELECT SUM(np.cantidad * np.precio_unitario)
                         FROM nota_productos np
                         JOIN productos a ON a.id = np.producto_id
@@ -475,8 +408,7 @@ async function recalcularPrecioTotal(client, notaId, opciones = {}) {
 
   if (nuevo != null && Number(nuevo) < 0) throw new TotalNegativoError();
 
-  // Nunca por debajo de lo ya abonado (ver TotalBajoAbonosError). Quien llama
-  // está en una transacción y su catch la deshace.
+  // Quien llama está en una transacción: su catch la deshace.
   const abonado = await totalAbonado(client, notaId);
   if (abonado > 0 && Number(nuevo) < abonado - 1e-9) {
     throw new TotalBajoAbonosError(abonado, Number(nuevo));
@@ -484,8 +416,7 @@ async function recalcularPrecioTotal(client, notaId, opciones = {}) {
 
   const antes = previas[0];
   if (antes && antes.estado_pago === 'PAGADO' && Number(nuevo) !== Number(antes.precio_total)) {
-    // Un cobro sin caja (caja_id NULL) no entró en ningún corte: ese sí se puede
-    // deshacer. Lo que no se toca es el que quedó congelado en un corte cerrado.
+    // Un cobro sin caja no está en ningún corte y sí se puede deshacer.
     if (antes.caja_id && antes.caja_estado !== 'abierta') {
       throw new CorteCerradoError(antes.folio ?? `#${antes.id}`);
     }
@@ -494,10 +425,10 @@ async function recalcularPrecioTotal(client, notaId, opciones = {}) {
   return nuevo;
 }
 
-// Devuelve la nota a PENDIENTE porque su costo cambió: lo cobrado ya no
-// corresponde. Limpia la forma de pago (el trigger de la mig. 037 limpia
-// `pagado_en`) y deja aviso en la campana con los dos importes, para que se vea
-// cuánto falta cobrar o devolver.
+/**
+ * Devuelve a PENDIENTE una nota cuyo total cambió y deja aviso en la campana
+ * con los dos importes. Un trigger limpia `pagado_en`.
+ */
 async function desmarcarPagoPorCambio(client, nota, antes, ahora, usuarioId, sucursal) {
   await client.query(
     "UPDATE notas SET estado_pago = 'PENDIENTE', forma_pago = NULL WHERE id = $1",
@@ -516,7 +447,7 @@ async function desmarcarPagoPorCambio(client, nota, antes, ahora, usuarioId, suc
 }
 
 
-// Tarifas por carga desde ajustes (con los defaults de siempre).
+/** Tarifas y precios de servicio desde Ajustes, con valores por defecto. */
 async function tarifasCarga(client) {
   const { rows } = await client.query(
     `SELECT precio_carga_mediana, precio_carga_jumbo,
@@ -528,27 +459,25 @@ async function tarifasCarga(client) {
   return {
     mediana:         c.precio_carga_mediana    != null ? Number(c.precio_carga_mediana)    : 70,
     jumbo:           c.precio_carga_jumbo      != null ? Number(c.precio_carga_jumbo)      : 70,
-    // Secado por categoría. La columna plana precio_carga_secadora es la Mediana.
-    secadora:        c.precio_carga_secadora   != null ? Number(c.precio_carga_secadora)   : 45,
+    // precio_carga_secadora es la secadora mediana.
+    secadora:       c.precio_carga_secadora   != null ? Number(c.precio_carga_secadora)   : 45,
     secadoraJumbo:   c.precio_secadora_jumbo   != null ? Number(c.precio_secadora_jumbo)   : 45,
-    // Tarifa propia del edredón en lavadora jumbo (Ajustes → Máquinas →
-    // Lavadora → Edredón). Se quitó el 2026-10-02 y volvió ese mismo día a
-    // pedido del negocio.
-    edredonJumbo:    c.precio_edredon_jumbo    != null ? Number(c.precio_edredon_jumbo)    : 80,
-    // Topes por tamaño de carga (Por Encargo). NULL = sin tope configurado.
-    topeChico:       c.tope_carga_chico   != null ? Number(c.tope_carga_chico)   : null,
+    // Ajustes → Máquinas → Lavadora → Edredón.
+    edredonJumbo:   c.precio_edredon_jumbo    != null ? Number(c.precio_edredon_jumbo)    : 80,
+    // Precio de cada servicio Por Encargo. null = sin configurar.
+    topeChico:      c.tope_carga_chico   != null ? Number(c.tope_carga_chico)   : null,
     topeMediano:     c.tope_carga_mediano != null ? Number(c.tope_carga_mediano) : null,
     topeGrande:      c.tope_carga_grande  != null ? Number(c.tope_carga_grande)  : null,
     topeJumbo:       c.tope_carga_jumbo   != null ? Number(c.tope_carga_jumbo)   : null,
     topeEdredon:     c.tope_carga_edredon != null ? Number(c.tope_carga_edredon) : null,
-    // Precio de cada tamaño de edredón (mig. 130), por nombre en minúsculas.
-    preciosEdredon:  await preciosEdredon(client),
+    preciosEdredon: await preciosEdredon(client),
   };
 }
 
-// El precio de cada tamaño de edredón sale de su catálogo (mig. 130). Se
-// incluyen los inactivos: editar una nota que ya lo usa no debe quedarse sin
-// precio. NULL = el tamaño no tiene precio todavía.
+/**
+ * Precio de cada tamaño de edredón (nombre en minúsculas → precio o null).
+ * Incluye los inactivos, para que una nota que ya los usa conserve su precio.
+ */
 async function preciosEdredon(client) {
   const { rows } = await client.query('SELECT nombre, precio FROM tamanos_edredon');
   return new Map(rows.map(r => [
@@ -557,12 +486,11 @@ async function preciosEdredon(client) {
   ]));
 }
 
-// Tope vigente de una carga según su prenda y tamaño. En Por Encargo este tope
-// ES el precio de la carga, así que se congela en `nota_cargas.precio_tope` al
-// crearla (mig. 096): si el negocio cambia sus precios, las notas que ya
-// existen conservan el suyo. NULL = sin tope (se cobra la suma de lo que lleva).
-// El edredón se cobra según su tamaño (mig. 130); el de una carga vieja sin
-// tamaño conserva el precio único de antes.
+/**
+ * Precio del servicio (tope) según prenda y tamaño; el edredón, según su tamaño.
+ * Se congela en `nota_cargas.precio_tope` al crear la carga. null = sin tope:
+ * se cobra la suma de lo que lleva.
+ */
 function topeDeCarga(prenda, tamano, t, tamanoEdredon) {
   if (String(prenda ?? '').toUpperCase() === 'EDREDON') {
     const nombre = String(tamanoEdredon ?? '').trim().toLowerCase();
@@ -578,24 +506,19 @@ function topeDeCarga(prenda, tamano, t, tamanoEdredon) {
   }
 }
 
-// Los servicios que Por Encargo vende hoy: Chico, Mediano, Grande y Edredón
-// (uno por tamaño: Individual, Matrimonial, King, Cubre Colchón). El
-// edredón viaja como prenda EDREDON en tamaño jumbo (es lo que lo ata a la
-// lavadora jumbo), así que se reconoce por la prenda. Jumbo de ropa ya no se
-// vende: sigue siendo válido para las notas que lo eligieron cuando existía.
+/**
+ * Servicios Por Encargo a la venta: Chico, Mediano, Grande y Edredón (este se
+ * reconoce por la prenda). Jumbo de ropa no se vende, pero sigue siendo válido
+ * en notas existentes.
+ */
 const esServicioQueSeVende = (prenda, tamano) =>
   String(prenda ?? '').toUpperCase() === 'EDREDON' || ['chico', 'mediano', 'grande'].includes(tamano);
 
-// Lo que le cuesta al negocio la MÁQUINA de un servicio Por Encargo.
-//
-// La nota ya no elige tipo de máquina, pero el servicio sí sabe cuál le toca:
-// Chico, Mediano y Grande van en lavadora y secadora medianas, y el Edredón en la
-// lavadora jumbo —secarlo es una decisión aparte, así que no cuenta—. Ese costo
-// es parte de lo que el precio del servicio tiene que cubrir, así que gasta de
-// su tope igual que el jabón: si no, el tope solo cuidaba el material y se
-// podía servir hasta el último peso como si la lavadora fuera gratis.
-//
-// Jumbo de ropa ya no se vende; se conserva para las notas que lo eligieron.
+/**
+ * Costo de las máquinas de un servicio Por Encargo, que gasta de su tope igual
+ * que el material: Chico, Mediano y Grande usan lavadora y secadora medianas;
+ * el Edredón, la lavadora jumbo (su secado no cuenta).
+ */
 function costoMaquinasDeServicio(prenda, tamano, t) {
   if (String(prenda ?? '').toUpperCase() === 'EDREDON') return Number(t.edredonJumbo) || 0;
   if (tamano === 'jumbo')  return (Number(t.jumbo)   || 0) + (Number(t.secadora) || 0);
@@ -605,7 +528,7 @@ function costoMaquinasDeServicio(prenda, tamano, t) {
   return 0;
 }
 
-// Cómo se llama el servicio en la pantalla, para los mensajes de error.
+/** Nombre del servicio como se ve en pantalla, para los mensajes. */
 function nombreServicio(prenda, tamano, tamanoEdredon) {
   if (String(prenda ?? '').toUpperCase() === 'EDREDON') {
     return tamanoEdredon ? `Edredón ${String(tamanoEdredon).trim()}` : 'Edredón';
@@ -619,17 +542,10 @@ function nombreServicio(prenda, tamano, tamanoEdredon) {
   }
 }
 
-// Tiempos de ciclo (minutos) de RESPALDO, por tamaño de carga.
-//
-// Desde la mig. 107 el tiempo bueno sale de la marca de la máquina (una LG
-// mediana tarda 45 y una Speed Queen jumbo 35, al revés de lo que suponía el
-// eje del tamaño). Estos números solo se usan cuando la máquina no tiene marca
-// o esa combinación marca+tamaño no está configurada, para que nada se quede
-// sin temporizador.
-//
-// El edredón ya no aparece: dejó de tener tiempo propio y usa el de su tamaño
-// (decisión del negocio, 2026-09-11). Conserva su precio, que es lo que
-// distingue el servicio.
+/**
+ * Minutos de ciclo de respaldo por tamaño, desde Ajustes. Solo se usan si la
+ * máquina no tiene tiempo configurado por modelo o marca.
+ */
 async function tiemposCarga(client) {
   const { rows } = await client.query(
     `SELECT tiempo_carga_mediana, tiempo_carga_jumbo,
@@ -637,8 +553,8 @@ async function tiemposCarga(client) {
        FROM ajustes WHERE id = 1`
   );
   const c = rows[0] ?? {};
-  // La columna plana `tiempo_carga_secadora` es la secadora MEDIANA (mig. 051);
-  // la jumbo tiene la suya y cae en la mediana mientras no se configure.
+  // `tiempo_carga_secadora` es la secadora mediana; la jumbo cae en ella si no
+  // tiene tiempo propio.
   const secMediana = c.tiempo_carga_secadora != null ? Number(c.tiempo_carga_secadora) : 30;
   return {
     mediana:    c.tiempo_carga_mediana  != null ? Number(c.tiempo_carga_mediana)  : 30,
@@ -648,59 +564,37 @@ async function tiemposCarga(client) {
   };
 }
 
+/** Precio de lavadora. El edredón tiene tarifa propia en cualquier lavadora. */
 function tarifaLavadora(tipoMaquina, tipoPrenda, t) {
-  // El edredón tiene su propia tarifa (Ajustes → Máquinas → Lavadora →
-  // Edredón; se quitó y volvió el 2026-10-02) en CUALQUIER lavadora: en
-  // Autoservicio se vende como "Edredón $80" y se lava en la que esté libre.
   if (String(tipoPrenda).toUpperCase() === 'EDREDON') return t.edredonJumbo;
   if (tipoMaquina === 'lavadora_jumbo') return t.jumbo;
   return t.mediana;
 }
 
-// Sella maquinas.ciclo_minutos de TODAS las máquinas EN USO de la nota
-// (lavadoras y secadoras).
-//
-// La duración es de la MÁQUINA, no de la carga (mig. 107): sale de su marca y
-// su tamaño, porque una LG mediana tarda 45 min y una Speed Queen jumbo 35 —
-// al revés de lo que suponía el eje del tamaño, que daba por hecho que una
-// jumbo tarda más. Si la máquina no tiene marca, o esa combinación no está
-// configurada, cae al tiempo por tamaño de Ajustes: el comportamiento de
-// antes, para que ninguna máquina se quede sin temporizador.
-//
-// El edredón ya no se distingue: usa el tiempo de su tamaño como cualquier
-// otra carga de esa máquina.
-//
-// Idempotente; se llama tras poner máquinas en uso en cualquier flujo.
-// Solo se sella el ciclo de las máquinas que ESTA nota arrancó: otra nota
-// puede tener la misma máquina asignada, y resellarle el ciclo le movería el
-// temporizador a media lavada (mig. 097).
-// `elegido` es `{ maquinaId, minutos }` cuando el empleado escogió el programa
-// en el modal del modelo que pregunta (migs. 120 y 146). Con cronómetro se
-// guarda aparte, en `ciclo_elegido_minutos`: avisa cuándo terminó su programa,
-// y el corte sigue en el tope. Con temporizador se escribe encima de lo que
-// resolvió la cadena: ahí lo elegido es lo que dura.
-//
-// En la máquina con cronómetro (2026-10-02) estos minutos son su TOPE: el mismo
-// corte por fin de ciclo es el que la apaga si nadie la finaliza.
+/**
+ * Guarda `ciclo_minutos` en las máquinas que esta nota arrancó y siguen en uso.
+ * Los minutos son de la máquina: modelo, luego marca y tamaño, y si no, el
+ * respaldo de Ajustes. Con cronómetro son su tope. Idempotente.
+ *
+ * `elegido` ({ maquinaId, minutos }) es el programa escogido al iniciar un
+ * modelo que pregunta: con cronómetro se guarda en `ciclo_elegido_minutos` (el
+ * tope no cambia); con temporizador reemplaza la duración.
+ */
 async function sellarCicloMaquinas(client, notaId, elegido = null) {
   const ti = await tiemposCarga(client);
   await client.query(
     `UPDATE maquinas m
         SET ciclo_minutos = ciclos.minutos,
-            -- La máquina que arrancó EN ESTA transacción (NOW() es el inicio de
-            -- la transacción, el mismo instante que se le acaba de escribir en
-            -- en_uso_desde) empieza sin programa elegido: el de su carga
-            -- anterior no es el suyo. El elegido, si lo hay, se escribe abajo.
+            -- Si arrancó en esta transacción (en_uso_desde = NOW()), limpia el
+            -- programa y lo sumado de la vuelta anterior.
             ciclo_elegido_minutos = CASE WHEN m.en_uso_desde = NOW() THEN NULL
                                          ELSE m.ciclo_elegido_minutos END,
-            -- Lo sumado con "Otro ciclo" (mig. 148) era de la vuelta anterior.
             minutos_pagados = CASE WHEN m.en_uso_desde = NOW() THEN NULL
                                    ELSE m.minutos_pagados END
        FROM (
          -- Lavadoras de la nota
          SELECT nc.lavadora_id AS mid,
-                -- El modelo de fichas no tiene tope (mig. 149): sin minutos
-                -- no hay corte ni aviso, y el cronómetro corre hasta que la finalizan.
+                -- El modelo de solo fichas no tiene tope.
                 CASE WHEN COALESCE(mo.solo_fichas, FALSE) THEN NULL
                      ELSE COALESCE(
                        ${MINUTOS_DEL_MODELO('mo')},
@@ -710,11 +604,9 @@ async function sellarCicloMaquinas(client, notaId, elegido = null) {
                 END AS minutos
            FROM nota_cargas nc
            JOIN maquinas ml ON ml.id = nc.lavadora_id
-           -- La máquina guarda el NOMBRE de la marca y del modelo (migs. 106 y
-           -- 117), así que los catálogos se alcanzan por nombre y no por id.
+           -- La máquina guarda marca y modelo por nombre. Misma cadena que
+           -- MINUTOS_CONFIGURADOS: modelo, luego marca.
            LEFT JOIN marcas_maquina mm ON mm.nombre = ml.marca
-           -- Misma cadena que MINUTOS_CONFIGURADOS: manda el modelo, y si no
-           -- tiene tiempo propio manda su marca.
            LEFT JOIN modelos_maquina mo
                   ON mo.marca_id = mm.id AND mo.nombre = ml.modelo
            LEFT JOIN tiempos_marca tm
@@ -722,11 +614,8 @@ async function sellarCicloMaquinas(client, notaId, elegido = null) {
           WHERE nc.nota_id = $1 AND nc.lavadora_id IS NOT NULL
             AND nc.lavadora_iniciada_at IS NOT NULL
          UNION ALL
-         -- Secadoras de la nota. Mismo criterio, y el respaldo también va por
-         -- tamaño desde que la secadora se da de alta como mediana o jumbo.
+         -- Secadoras de la nota, con el mismo criterio.
          SELECT nc.secadora_id AS mid,
-                -- El modelo de fichas no tiene tope (mig. 149): sin minutos
-                -- no hay corte ni aviso, y el cronómetro corre hasta que la finalizan.
                 CASE WHEN COALESCE(mo.solo_fichas, FALSE) THEN NULL
                      ELSE COALESCE(
                        ${MINUTOS_DEL_MODELO('mo')}, tm.minutos,
@@ -757,11 +646,10 @@ async function sellarCicloMaquinas(client, notaId, elegido = null) {
   }
 }
 
-// El tiempo que llega del modal tiene que ser UNO DE LOS PROGRAMAS que ofrece
-// el modelo de esa máquina (mig. 146): decide cuándo se avisa que terminó (o,
-// con temporizador, cuándo se le corta la corriente), así que no se acepta un
-// número cualquiera del cliente. Devuelve `{ minutos }` si vale,
-// `{ error }` si no, y `null` si no llegó ninguno (el caso normal).
+/**
+ * Valida el programa elegido al iniciar: tiene que ser uno de los que ofrece el
+ * modelo de la máquina. Devuelve `{ minutos }`, `{ error }`, o null si no llegó.
+ */
 async function tiempoElegidoDeMaquina(client, maquinaId, minutos) {
   if (minutos === undefined || minutos === null || minutos === '') return null;
   const n = Number(minutos);
@@ -784,28 +672,23 @@ async function tiempoElegidoDeMaquina(client, maquinaId, minutos) {
   return { minutos: n };
 }
 
-// Tope de precio por tamaño de carga (Ajustes): ninguna carga con tamaño
-// puede rebasar su tope sumando lavadora + secadora + productos. El ajuste
-// manual va aparte por decisión del negocio y NO cuenta contra el tope.
-// Es tope duro para todos los roles (incluido admin); NULL en Ajustes =
-// sin tope. Aplica SOLO a Servicio por Encargo (tipo de servicio POR_ENCARGO): el
-// Autoservicio no captura tamaño y queda fuera; el filtro por tipo de servicio lo
-// hace explícito además del tamaño. Se llama antes del COMMIT en cada ruta
-// que pueda encarecer una carga (crear, editar, activar, asignar secadora).
-// Devuelve el mensaje de error o null si todas las cargas caben.
+/**
+ * Solo Por Encargo: lo que cuesta cada servicio (máquinas + material servido)
+ * no puede pasar de su precio (tope), y el material de toda la nota no puede
+ * pasar de lo que se cobra por sus servicios. Aplica a todos los roles.
+ * Se llama antes del COMMIT en las rutas que encarecen una carga.
+ *
+ * @returns {Promise<string|null>} el mensaje de error, o null si todo cabe.
+ */
 async function validarTopesCargas(client, notaId) {
   const { rows } = await client.query(
     `SELECT nc.orden, nc.tamano, nc.tipo_prenda,
             UPPER(COALESCE(nc.tipo_prenda, '')) = 'EDREDON' AS es_edredon,
             nc.tamano_edredon,
             nc.precio_lavadora + nc.precio_secadora AS maquinas,
-            -- Contra el tope cuenta lo que se SIRVE dentro del servicio: el
-            -- granel líquido (por medida) y la bolsa. Lo que se vende por unidad
-            -- —marca y polvo, que el cliente se lleva entero— se cobra aparte y
-            -- no gasta del presupuesto del servicio.
+            -- Cuenta lo servido (granel y bolsa); lo que se vende por unidad va aparte.
             COALESCE(SUM(CASE WHEN a.se_vende_por_unidad THEN 0
                               ELSE np.cantidad * np.precio_unitario END), 0) AS productos,
-            -- El tope congelado en la carga (mig. 096), que es su precio.
             nc.precio_tope AS tope
        FROM nota_cargas nc
        JOIN notas n ON n.id = nc.nota_id
@@ -819,16 +702,14 @@ async function validarTopesCargas(client, notaId) {
   );
   const fmt = (n) => `$${Number(n).toFixed(2)}`;
   const t = await tarifasCarga(client);
-  // Lo que cuesta la máquina del servicio. Las notas del modelo de servicios no
-  // guardan precio de máquina (lo que se cobra es el servicio), así que se
-  // deduce de lo que le toca; las viejas sí lo traen y se respeta el suyo.
+  // Costo de máquinas: el guardado en la carga o, si no tiene, el que le toca
+  // al servicio.
   const maquinasDe = (r) => {
     const guardado = Number(r.maquinas) || 0;
     return guardado > 0 ? guardado : costoMaquinasDeServicio(r.tipo_prenda, r.tamano, t);
   };
 
-  // Primero el servicio concreto: decir cuál se pasó y por cuánto es lo que
-  // deja arreglarlo.
+  // Primero cada servicio, para decir cuál se pasó y por cuánto.
   for (const r of rows) {
     if (r.tope == null) continue;
     const total = maquinasDe(r) + Number(r.productos);
@@ -841,21 +722,12 @@ async function validarTopesCargas(client, notaId) {
     }
   }
 
-  // Y después el techo de la NOTA: todo el material junto —el de cada servicio
-  // más el que se agregó a la nota— contra la suma de lo que se cobra por los
-  // servicios. Cuenta el granel y las bolsas, que es lo que se sirve dentro; los
-  // de marca se venden por unidad y van por su cuenta. Sin esto se podían
-  // servir $200 de jabón de bidón en una nota de $150 sin que nada avisara.
-  //
-  // Las máquinas que se cuentan son las de los SERVICIOS. Un renglón de máquina
-  // —los que abre Salidas— no trae presupuesto propio y en Por Encargo va sin
-  // cobro; sumar su tarifa aquí descontaría del bolsillo de los servicios algo
-  // que no salió de ahí.
+  // Después la nota completa: máquinas de los servicios + todo el material
+  // servido contra lo que se cobra por los servicios. Las máquinas agregadas en
+  // Salidas no cuentan: no cobran ni traen presupuesto.
   const { rows: totales } = await client.query(
     `SELECT
-       -- El AJUSTE de la nota entra en el presupuesto porque cambia lo que se
-       -- cobra por esos servicios: un descuento de $20 deja $20 menos para
-       -- pagar el mismo lavado, y un cargo extra da más aire.
+       -- El ajuste de la nota cambia lo que se cobra, así que entra al presupuesto.
        COALESCE((SELECT SUM(nc2.precio_tope) FROM nota_cargas nc2 WHERE nc2.nota_id = $1), 0)
          + n.ajuste AS presupuesto,
        COALESCE((SELECT SUM(np.cantidad * np.precio_unitario)
@@ -867,12 +739,9 @@ async function validarTopesCargas(client, notaId) {
     [notaId]
   );
   const tot = totales[0];
-  // El presupuesto se mira solo si hay servicios vendidos; un ajuste que lo deja
-  // en 0 o menos se trata como cualquier otro exceso.
+  // Solo si hay servicios con precio.
   const hayServicios = rows.some(r => r.tope != null);
   if (tot && hayServicios) {
-    // Las máquinas de los SERVICIOS (las de `rows`, que son los que traen tope);
-    // un renglón de máquina de Salidas no trae presupuesto propio ni cobra.
     const maquinas = rows.reduce((a, r) => a + (r.tope == null ? 0 : maquinasDe(r)), 0);
     const usado = maquinas + Number(tot.material);
     if (usado > Number(tot.presupuesto) + 1e-9) {
@@ -884,9 +753,12 @@ async function validarTopesCargas(client, notaId) {
   return null;
 }
 
-// Reserva un producto para una nota (o una carga): valida stock disponible,
-// inserta la fila en nota_productos y aumenta stock_reservado. Lanza Error con
-// el mensaje para el cliente si el producto no existe o no hay stock.
+/**
+ * Aparta un producto en la nota (o en una carga): valida existencia, suma al
+ * renglón si ya estaba o crea uno, y sube `stock_reservado`.
+ *
+ * @throws {Error} con el mensaje para el usuario si no existe o no alcanza.
+ */
 async function reservarProducto(client, notaId, cargaId, productoId, cantidad, sucursal, tipo_servicio) {
   const { rows: artRows } = await client.query(
     'SELECT * FROM productos WHERE id = $1 AND sucursal = $2 FOR UPDATE',
@@ -896,9 +768,8 @@ async function reservarProducto(client, notaId, cargaId, productoId, cantidad, s
     throw new Error(`Producto ${productoId} no encontrado.`);
   }
   const art = artRows[0];
-  // Bolsas: por pieza (precio por pieza). Granel: la unidad la define el
-  // servicio — botella (Autoservicio) o medida (Por Encargo). Los de marca van
-  // siempre por unidad, también dentro de una carga de Por Encargo.
+  // Bolsa: por pieza. Granel: botella en Autoservicio, medida en Por Encargo.
+  // Marca y polvo: siempre por unidad.
   const esBolsa = art.clase === 'bolsa';
   const unidad = esBolsa ? 'pieza' : unidadDeVenta(art, tipo_servicio);
   const tpu = esBolsa ? 1 : medidasPorUnidad(art, unidad);
@@ -907,14 +778,11 @@ async function reservarProducto(client, notaId, cargaId, productoId, cantidad, s
   const disponibleMedidas = Number(art.stock_actual) - Number(art.stock_reservado);
   if (disponibleMedidas < cantidadMedidas) {
     const dispUnidad = unidad === 'botella' ? Math.floor(disponibleMedidas / tpu) : disponibleMedidas;
-    // Nombre y unidad legibles para el aviso (la bolsa incluye su tamaño).
     const nombreArt = esBolsa && art.tamano_bolsa ? `Bolsa ${art.tamano_bolsa}` : art.nombre;
     const uni = esBolsa ? 'bolsa(s)' : unidad === 'botella' ? 'botella(s)' : 'medida(s)';
     throw new Error(`No hay suficiente existencia de "${nombreArt}": quedan ${dispUnidad} ${uni} y se necesitan ${cantidad}. Carga más en Inventario o quítalo de la nota.`);
   }
-  // Si el producto ya está en esta nota (y en la misma carga, si aplica) se le
-  // suma la cantidad en vez de abrir otro renglón igual: así se puede pedir más
-  // de lo mismo desde Salidas sin que la nota muestre el producto dos veces.
+  // Si ya está en la nota (y en la misma carga) se suma al mismo renglón.
   const { rows: npRows } = await client.query(
     `INSERT INTO nota_productos (nota_id, carga_id, producto_id, cantidad, unidad, precio_unitario, cantidad_medidas)
           SELECT $1, $2, $3, $4, $5, $6, $7
@@ -932,9 +800,7 @@ async function reservarProducto(client, notaId, cargaId, productoId, cantidad, s
               cantidad_medidas = cantidad_medidas + $5
         WHERE nota_id = $1 AND producto_id = $3 AND carga_id IS NOT DISTINCT FROM $2
      RETURNING *`,
-      // El precio del renglón NO se toca: es el que se congeló al ponerlo. Si
-      // el catálogo cambió entretanto, re-tarifarlo cobraba de nuevo las
-      // unidades que ya estaban (y una nota pagada volvía a deber, 2026-10-08).
+      // El precio del renglón no cambia: es el que se congeló al ponerlo.
       [notaId, cargaId, productoId, cantidad, cantidadMedidas]
     );
     npRows.push(rows[0]);
@@ -946,7 +812,7 @@ async function reservarProducto(client, notaId, cargaId, productoId, cantidad, s
   return { ...npRows[0], nombre: art.nombre, subtotal: Number(npRows[0].cantidad) * Number(npRows[0].precio_unitario) };
 }
 
-// Libera el stock reservado de los productos de una nota y los elimina.
+/** Suelta lo apartado por los productos de una nota y los borra. */
 async function liberarProductosDeNota(client, notaId) {
   await client.query(
     `UPDATE productos a
@@ -958,11 +824,11 @@ async function liberarProductosDeNota(client, notaId) {
   await client.query('DELETE FROM nota_productos WHERE nota_id = $1', [notaId]);
 }
 
-// Registra en el historial de inventario los movimientos de los productos de una
-// nota: 'venta' cuando se consume el stock (pago/entrega) o 'liberacion' cuando
-// se devuelve al anular una venta. Una fila por producto de la nota. El folio
-// se copia (mig. 144): si la nota se borra, `nota_id` queda en NULL y sin la
-// copia la devolución ya no diría qué nota se anuló.
+/**
+ * Registra en el historial de inventario un movimiento por renglón de la nota
+ * ('venta' al descontar, 'liberacion' al devolver), opcionalmente solo de `ids`.
+ * Copia el folio para que el movimiento lo conserve si la nota se borra.
+ */
 async function registrarMovimientosProductosNota(client, notaId, sucursal, usuarioId, tipo, ids = null) {
   await client.query(
     `INSERT INTO producto_movimientos
@@ -986,29 +852,30 @@ async function registrarMovimientosProductosNota(client, notaId, sucursal, usuar
   );
 }
 
-// ── Inventario de la nota, renglón por renglón (mig. 161) ──
-//
-// Cada renglón de nota_productos sabe si ya salió del estante (`consumido_at`)
-// o sigue apartado. Antes se movía la nota entera de una vez; desde que el
-// granel de los servicios se descuenta al terminar la primera lavadora
-// (2026-10-11), una misma nota puede tener renglones descontados y otros
-// apartados (las bolsas y los productos de marca, que salen al cobrar o
-// entregar).
+// ── Inventario de la nota, por renglón ──
+// `nota_productos.consumido_at`: NULL = apartado; con fecha = ya salió del
+// estante. El granel de los servicios sale al terminar la primera lavadora; lo
+// demás, al cobrar o entregar.
 
-// El granel líquido que un SERVICIO lleva (el que se elige en Salidas). Es lo
-// que se descuenta al terminar la lavadora; el producto suelto no.
+/** Condición SQL: granel líquido de un servicio (el que se elige en Salidas). */
 const SQL_GRANEL_DE_SERVICIO = `np.carga_id IS NOT NULL AND a.tipo_liquido = 'granel'
   AND COALESCE(a.forma, 'liquido') = 'liquido'`;
 
-// Suma por producto de unos renglones: un UPDATE ... FROM nota_productos con
-// dos renglones del mismo producto solo descontaría uno.
+/**
+ * Medidas por producto de los renglones `$1`. Se agrupa porque un UPDATE … FROM
+ * con dos renglones del mismo producto solo aplicaría uno.
+ */
 const SQL_MEDIDAS_POR_PRODUCTO = `(SELECT producto_id, SUM(cantidad_medidas) AS medidas
      FROM nota_productos WHERE id = ANY($1::int[]) GROUP BY producto_id)`;
 
-// Descuenta del estante lo que siga apartado: baja existencias y apartado, deja
-// el movimiento 'venta' (reporte diario) y marca el renglón. Lo ya descontado
-// no se toca, así que se puede llamar las veces que haga falta (cobrar y luego
-// entregar, reabrir y volver a entregar). Devuelve cuántos renglones descontó.
+/**
+ * Descuenta del inventario los renglones que siguen apartados (o solo el granel
+ * de servicio con `soloGranel`): baja existencia y apartado, registra la
+ * 'venta' y marca el renglón. Lo ya descontado no se repite, así que se puede
+ * llamar varias veces.
+ *
+ * @returns {Promise<number>} cuántos renglones descontó.
+ */
 async function consumirProductosDeNota(client, notaId, sucursal, usuarioId, { soloGranel = false } = {}) {
   const { rows } = await client.query(
     `SELECT np.id FROM nota_productos np
@@ -1033,10 +900,11 @@ async function consumirProductosDeNota(client, notaId, sucursal, usuarioId, { so
   return ids.length;
 }
 
-// Lo contrario, para cancelar, borrar o soltar renglones: lo ya descontado
-// vuelve al estante (con su movimiento 'liberacion') y lo apartado se suelta.
-// `ids` acota a esos renglones; sin él, la nota entera. Los renglones quedan
-// como apartados-y-soltados: quien llama decide si los borra.
+/**
+ * Lo contrario de `consumirProductosDeNota`, para cancelar, borrar o quitar: lo
+ * descontado vuelve al inventario (con su 'liberacion') y lo apartado se suelta.
+ * `ids` limita a esos renglones. No borra los renglones: eso lo decide quien llama.
+ */
 async function devolverProductosDeNota(client, notaId, sucursal, usuarioId, { ids = null } = {}) {
   const { rows } = await client.query(
     `SELECT id, consumido_at IS NOT NULL AS consumido FROM nota_productos
@@ -1064,13 +932,11 @@ async function devolverProductosDeNota(client, notaId, sucursal, usuarioId, { id
   }
 }
 
-// Un renglón ya descontado vuelve a quedar APARTADO: regresa al estante (con su
-// 'liberacion') y se aparta otra vez. Lo usan los botones de Salidas antes de
-// tocar un producto de una nota reabierta (Finalizada → Por Entregar): sin
-// esto, quitarlo dejaba lo apartado en negativo y la existencia sin volver, y
-// sumarle unidades las dejaba apartadas para siempre, porque al volver a
-// entregar el renglón ya contaba como vendido (2026-10-12). Si el renglón no
-// estaba descontado, no hace nada.
+/**
+ * Devuelve al inventario un renglón ya descontado y lo vuelve a apartar. Se usa
+ * antes de cambiar un producto de una nota reabierta, para que al entregarla de
+ * nuevo se descuente lo correcto. Si el renglón no estaba descontado, no hace nada.
+ */
 async function reabrirRenglonProducto(client, notaId, npId, sucursal, usuarioId) {
   const { rows } = await client.query(
     'SELECT producto_id, cantidad_medidas FROM nota_productos WHERE id = $1 AND consumido_at IS NOT NULL',
@@ -1084,11 +950,18 @@ async function reabrirRenglonProducto(client, notaId, npId, sucursal, usuarioId)
   );
 }
 
-// Valida y tarifica las cargas recibidas en el body. Cada carga puede traer:
-//   { lavadora_id, secadora_id, tipo_prenda, tipo_tela, tamano_edredon,
-//     tamano, ajuste, productos: [{ producto_id, cantidad }] }
-// (todo opcional salvo que el tipo de servicio lo exija). Devuelve las filas listas
-// para insertar o lanza un Error con el mensaje para el cliente.
+/**
+ * Valida y pone precio a las cargas del body. Cada carga puede traer
+ * { lavadora_id, secadora_id, lavadora_tipo, secadora_tipo, tipo_prenda,
+ *   tipo_tela, tamano, tamano_edredon, ajuste, productos, granel }.
+ *
+ * - Por Encargo vende servicios: sin máquina; el precio es el del servicio.
+ * - Autoservicio: se cobra la máquina elegida, que queda asignada sin arrancar.
+ * - Edredón (servicio aparte): máquina física desde el alta.
+ *
+ * @returns las filas listas para insertar.
+ * @throws {Error} con el mensaje para el usuario.
+ */
 async function prepararCargas(client, cargas, tipoPrendaNota, sucursal, tipo_servicio, notaIdExcluir = null) {
   if (!Array.isArray(cargas) || cargas.length === 0) {
     throw new Error('cargas debe ser una lista con al menos una carga.');
@@ -1096,15 +969,7 @@ async function prepararCargas(client, cargas, tipoPrendaNota, sucursal, tipo_ser
   if (cargas.length > 20) {
     throw new Error('Máximo 20 cargas por nota.');
   }
-  // Por Encargo vende SERVICIOS: sus cargas no traen máquina, se les asigna en
-  // Salidas sin que eso cambie el precio.
-  //
-  // AUTOSERVICIO sí trae máquina desde el alta otra vez (2026-09-29): ahí lo que
-  // se cobra ES la máquina, y elegirla en dos pasos —el tipo al hacer la nota,
-  // la física en Salidas— dejaba la nota en $0 hasta el segundo. Se elige de la
-  // lista de libres, se tarifa aquí y queda asignada sin arrancar. Las notas
-  // viejas que se quedaron a medias (tipo sin máquina) siguen entrando por el
-  // camino del tipo, para no cambiarles el precio al editarlas.
+  // Por Encargo y Autoservicio comparten el camino de "tipo de máquina".
   const esPorEncargo = tipo_servicio === 'POR_ENCARGO' || tipo_servicio === 'AUTOSERVICIO';
   const ids = tipo_servicio === 'POR_ENCARGO' ? [] : [...new Set(
     cargas.flatMap(c => [c.lavadora_id, c.secadora_id]).filter(Boolean).map(Number)
@@ -1125,13 +990,8 @@ async function prepararCargas(client, cargas, tipoPrendaNota, sucursal, tipo_ser
     const faltante = ids.find(id => !tipoPorId.has(id));
     if (faltante) throw new Error(`La máquina ${faltante} no existe.`);
 
-    // Máquinas que OTRA nota abierta ya tiene apuntadas (2026-09-29). En
-    // Autoservicio no se aceptan: la nota se cobra por esa máquina desde el
-    // alta, y venderla dos veces deja a un cliente esperando a que el otro
-    // termine. El formulario ya no las ofrece; esto lo sostiene cuando dos
-    // mostradores capturan a la vez y la lista de uno se quedó vieja.
-    // En Salidas sí se pueden asignar: ahí asignar no aparta y se la queda
-    // quien inicie primero, con la ropa delante.
+    // Autoservicio no acepta una máquina que otra nota abierta ya tiene: se
+    // cobra por ella desde el alta. Cubre dos mostradores capturando a la vez.
     if (tipo_servicio === 'AUTOSERVICIO') {
       const { rows: apartadas } = await client.query(
         `SELECT DISTINCT m.nombre, n.folio
@@ -1171,9 +1031,7 @@ async function prepararCargas(client, cargas, tipoPrendaNota, sucursal, tipo_ser
           .map(p => ({ producto_id: Number(p.producto_id), cantidad: Number(p.cantidad) }))
       : [];
 
-    // Por Encargo: la carga elige TIPO de máquina (no máquina física). El precio
-    // se deriva del tipo; lavadora_id/secadora_id quedan NULL hasta asignar en
-    // Salidas. La nota nace En Espera (activar=false, no hay máquina que iniciar).
+    // La nota nace sin arrancar (activar = false).
     let lavadoraId = null, secadoraId = null, lavadoraTipo = null, secadoraTipo = null;
     let precioLavadora = 0, precioSecadora = 0, activar;
     if (esPorEncargo) {
@@ -1185,17 +1043,8 @@ async function prepararCargas(client, cargas, tipoPrendaNota, sucursal, tipo_ser
       if (secadoraTipo && !TIPOS_MAQUINA_VALIDOS.includes(secadoraTipo)) {
         throw new Error(`Tipo de secadora inválido en la carga ${i + 1}.`);
       }
-      // El edredón ya no exige lavadora jumbo (2026-10-02, decisión del
-      // negocio): va en la que esté libre, en Autoservicio y en Por Encargo.
-      // Por Encargo ya NO elige tipo de máquina: el servicio se vende por
-      // tamaño (Chico, Mediano, Grande, Edredón) y la máquina —la que sea— se le asigna
-      // en Salidas, sin que eso cambie el precio. Los tipos se siguen
-      // aceptando porque las notas de antes los traen y editarlas los reenvía.
-      // AUTOSERVICIO: la máquina FÍSICA que eligió el mostrador (2026-09-29).
-      // Se valida como en Salidas —que sea del hueco que dice ser y que esté
-      // libre— y se tarifa con la tarifa de esa máquina, que es la que el
-      // formulario ya le enseñó al cliente en el resumen. Queda asignada, NO
-      // arrancada: la inicia una persona desde Salidas.
+      // Autoservicio: la máquina física elegida. Tiene que ser del tipo correcto
+      // y estar libre; queda asignada sin arrancar.
       if (tipo_servicio === 'AUTOSERVICIO') {
         lavadoraId = c.lavadora_id ? Number(c.lavadora_id) : null;
         secadoraId = c.secadora_id ? Number(c.secadora_id) : null;
@@ -1205,35 +1054,24 @@ async function prepararCargas(client, cargas, tipoPrendaNota, sucursal, tipo_ser
         if (secadoraId && tipoPorId.get(secadoraId) !== 'secadora') {
           throw new Error(`La máquina de secado de la máquina ${i + 1} no es una secadora.`);
         }
-        // Libre ahora mismo: entre que se abrió el formulario y se guardó la
-        // nota, otro compañero pudo haber arrancado esa máquina.
+        // Otro compañero pudo arrancarla mientras se llenaba el formulario.
         for (const mid of [lavadoraId, secadoraId].filter(Boolean)) {
           const m = estadoPorId.get(mid);
           if (m && m.estado !== 'disponible') {
             throw new Error(`La máquina ${m.nombre} ya no está disponible. Elige otra.`);
           }
         }
-        // El tipo se deriva de la máquina puesta: es lo que la nota pidió, y de
-        // ahí sale el desglose del ticket y el trabajo pendiente de la nota.
-        // El edredón de Autoservicio va en la lavadora que esté libre, sin
-        // exigir jumbo (decisión del negocio, 2026-10-02).
+        // El tipo sale de la máquina (para el ticket y el trabajo pendiente).
         if (lavadoraId) lavadoraTipo = tipoPorId.get(lavadoraId) === 'lavadora_jumbo' ? 'jumbo' : 'mediana';
         if (secadoraId) secadoraTipo = 'mediana';
       }
-      // Una máquina de autoservicio sin nada puesto no cobraría nada: ahí lo
-      // que se cobra ES la máquina.
+      // En Autoservicio se cobra la máquina: sin ella no hay nada que cobrar.
       if (tipo_servicio === 'AUTOSERVICIO' && !lavadoraId && !secadoraId && !lavadoraTipo && !secadoraTipo) {
         throw new Error(`La máquina ${i + 1} necesita ser una lavadora o una secadora.`);
       }
-      // Con máquina puesta se tarifa AL CREAR, con la tarifa de esa máquina.
-      // Sin ella —la nota vieja que se quedó en TIPO— se mantiene lo de antes:
-      // vale $0 hasta que se le asigne la física en Salidas (2026-09-25). Por
-      // Encargo se tarifa siempre aquí, porque lo que cobra es el precio del
-      // servicio y no depende de qué máquina le toque.
-      //
-      // El EDREDÓN de Autoservicio (2026-10-02) también se tarifa al crear,
-      // aunque nazca sin máquina: se vende como "Edredón $80" —su tarifa de
-      // Ajustes— y la lavadora, la que esté libre, se le asigna en Salidas.
+      // Se pone precio al crear, salvo un Autoservicio que solo trae el tipo
+      // (vale $0 hasta asignarle máquina en Salidas). El edredón de Autoservicio
+      // se cobra con su tarifa aunque no traiga máquina.
       const tarifaAlCrear = tipo_servicio !== 'AUTOSERVICIO' || Boolean(lavadoraId || secadoraId)
         || prendaCarga === 'EDREDON';
       if (lavadoraTipo && tarifaAlCrear) {
@@ -1246,9 +1084,7 @@ async function prepararCargas(client, cargas, tipoPrendaNota, sucursal, tipo_ser
       }
       activar = false;
     } else {
-      // Servicio legado EDREDON: es el único que sigue eligiendo la máquina
-      // física al crear la nota (Autoservicio y Por Encargo eligen tipo y la
-      // asignan después en Salidas).
+      // Servicio EDREDON: máquina física desde el alta.
       lavadoraId = c.lavadora_id ? Number(c.lavadora_id) : null;
       secadoraId = c.secadora_id ? Number(c.secadora_id) : null;
       if (lavadoraId && tipoPorId.get(lavadoraId) === 'secadora') {
@@ -1259,17 +1095,12 @@ async function prepararCargas(client, cargas, tipoPrendaNota, sucursal, tipo_ser
       }
       precioLavadora = lavadoraId ? tarifaLavadora(tipoPorId.get(lavadoraId), prendaCarga, t) : 0;
       precioSecadora = secadoraId ? tarifaSecadora(tamanoPorId.get(secadoraId), prendaCarga, t) : 0;
-      // Autoservicio arranca de inmediato; cada carga puede decidir con `activar`.
+      // Arranca de inmediato salvo `activar: false`.
       activar = c.activar !== false;
     }
 
-    // Precio del servicio Por Encargo. Sale de Ajustes y se congela en la
-    // carga (mig. 096). Desde el rediseño del alta ya no es un tope contra el
-    // que se compara lo que lleva la carga: ES lo que se cobra, así que un
-    // servicio de los que hoy se venden sin precio configurado no se acepta
-    // —la nota quedaría en $0 sin que nadie se diera cuenta—.
-    // Las cargas viejas sin tamaño no entran en esa regla: nacieron cobrando la
-    // suma de sus máquinas y editar su nota no debe volverse imposible.
+    // Precio del servicio Por Encargo, congelado en la carga. Un servicio a la
+    // venta sin precio configurado se rechaza para no crear una nota en $0.
     const tamanoCarga = c.tamano ? String(c.tamano).toLowerCase() : null;
     const tamanoEdredon = prendaCarga === 'EDREDON' && c.tamano_edredon ? String(c.tamano_edredon).trim() : null;
     let precioTope = null;
@@ -1296,21 +1127,20 @@ async function prepararCargas(client, cargas, tipoPrendaNota, sucursal, tipo_ser
       tamano_edredon:  tamanoEdredon,
       tamano:          tamanoCarga,
       ajuste:          ajusteCarga,
-      // Se congela aquí (mig. 096): editar las cargas de una nota las vuelve a
-      // tarifar con los precios de hoy, igual que a sus máquinas.
       precio_tope:     precioTope,
       activar,
       productos,
-      // Medidas de cada tipo de granel que se capturaron al crear la nota; sin
-      // ellas, las de Ajustes (ver granelDeCarga).
+      // Medidas de granel capturadas; sin ellas, las de Ajustes.
       granel:          tipo_servicio === 'POR_ENCARGO' ? leerGranelDeCarga(c.granel, i) : null,
     };
   });
 }
 
-// Medidas de cada tipo de granel que trae una carga desde la pantalla:
-// [{ tipo_granel_id, cantidad }]. Devuelve un Map tipo → medidas (0 = no lleva
-// de ese tipo), o null si no vino nada y mandan las de Ajustes.
+/**
+ * Lee las medidas de granel de una carga: [{ tipo_granel_id, cantidad }].
+ * @returns {Map<number, number>|null} tipo → medidas (0 = no lleva), o null si
+ *   no vino nada y se usan las de Ajustes.
+ */
 function leerGranelDeCarga(v, i) {
   if (v == null) return null;
   if (!Array.isArray(v)) throw new Error(`El granel de la carga ${i + 1} no es válido.`);
@@ -1326,25 +1156,19 @@ function leerGranelDeCarga(v, i) {
   return porTipo;
 }
 
-// Historial de máquinas de una carga (mig. 114): UNA FILA POR PASADA.
-//
-// `nota_cargas` solo guarda la máquina actual de cada hueco y la última usada,
-// así que una carga que repite —relavar, secar de más— perdía la pasada
-// anterior, y dos pasadas en la MISMA máquina eran indistinguibles de una. El
-// nombre y el tipo se copian: la máquina se puede renombrar o borrar, y una
-// nota vieja tiene que seguir diciendo en qué se lavó.
-//
-// Se llama SIEMPRE ANTES del UPDATE que pone la máquina en la carga: así el
-// hueco todavía tiene lo de antes y se puede distinguir una pasada nueva (el
-// hueco estaba libre) de volver a escribir lo mismo.
-//
-//   modo 'pasada'   → una vuelta más de esta carga: fila nueva.
-//   modo 'reemplazo'→ corregir la máquina de la pasada en curso (cambiar
-//                     máquina): se pisa la última fila, no se agrega otra.
-//
-// `cicloUnico` (mig. 115) marca la vuelta que corre UN solo ciclo aunque la
-// marca de la máquina dé para dos: es la que se agrega desde Salidas, va sin
-// cobro y no debe encadenar otra vuelta encima.
+/**
+ * Registra una pasada de la carga por una máquina en `nota_carga_maquinas` (una
+ * fila por vuelta, así un relavado no borra la anterior). Copia nombre y tipo
+ * para que la nota los conserve si la máquina se renombra o se borra.
+ *
+ * Llamar ANTES de poner la máquina en la carga, para distinguir una vuelta
+ * nueva de reescribir la misma.
+ *
+ * @param {'pasada'|'reemplazo'} modo  'pasada' agrega una vuelta; 'reemplazo'
+ *   corrige la máquina de la vuelta en curso (cambiar máquina).
+ * @param {boolean} cicloUnico  la vuelta corre un solo ciclo aunque el modelo dé
+ *   para dos (la que se agrega desde Salidas, sin cobro).
+ */
 async function registrarMaquinaEnCarga(client, cargaId, slot, maquinaId, modo = 'pasada', cicloUnico = false) {
   if (!cargaId || !maquinaId) return;
   const { rows: maq } = await client.query(
@@ -1380,11 +1204,8 @@ async function registrarMaquinaEnCarga(client, cargaId, slot, maquinaId, modo = 
     if (String(enElHueco) === String(m.id)) return;
   }
 
-  // Otra vuelta del mismo hueco (relavado, secado de más): la marca de arranque
-  // de la carga (mig. 097) era de la vuelta anterior y se borra hasta que esta
-  // arranque. Si se quedaba, la máquina nueva contaba como "arrancada por esta
-  // nota" sin que nadie le diera Iniciar: cancelar la nota la soltaba aunque
-  // otra nota la estuviera usando, y Ventas la contaba como ciclo (2026-10-08).
+  // Una vuelta nueva aún no arranca: se borra la marca de la anterior, o la
+  // máquina nueva contaría como arrancada por esta nota.
   if (ultima) {
     const col = slot === 'secadora' ? 'secadora_iniciada_at' : 'lavadora_iniciada_at';
     await client.query(`UPDATE nota_cargas SET ${col} = NULL WHERE id = $1`, [cargaId]);
@@ -1398,15 +1219,12 @@ async function registrarMaquinaEnCarga(client, cargaId, slot, maquinaId, modo = 
   );
 }
 
-// Sella en la pasada en curso cuánto estuvo encendida la máquina (mig. 140):
-// desde que arrancó hasta este Finalizar. Se llama ANTES de soltarla, mientras
-// la carga aún la tiene en su hueco y `en_uso_desde` conserva el arranque. Si
-// la máquina no lo tiene (quedó en uso sin arrancar por aquí), se cae al
-// arranque de la carga. Solo toca la ÚLTIMA pasada de cada carga, y solo si es
-// de esta máquina y no estaba sellada.
-//
-// Con cronómetro el reloj se para en el tope (mig. 141): si ya se cumplió, el
-// corte le quitó la luz ahí, así que el fin es el del tope y no el del clic.
+/**
+ * Guarda inicio y fin de la vuelta en curso de esta máquina (la última de cada
+ * carga, si no estaba sellada). Llamar ANTES de soltarla, mientras
+ * `en_uso_desde` conserva el arranque. Con cronómetro, si ya pasó el tope, el
+ * fin es el tope y no la hora del clic.
+ */
 async function sellarFinDePasada(client, notaId, slot, maquinaId) {
   const col = slot === 'secadora' ? 'secadora' : 'lavadora';
   await client.query(
@@ -1418,7 +1236,6 @@ async function sellarFinDePasada(client, notaId, slot, maquinaId) {
        FROM nota_cargas nc, maquinas m,
             LATERAL (
               SELECT COALESCE(m.en_uso_desde, nc.${col}_iniciada_at) AS inicio,
-                     -- Con "Otro ciclo" (mig. 148) el reloj llega al fin real.
                      CASE WHEN ${esCronometroSql('m')} AND m.ciclo_minutos > 0
                           THEN make_interval(mins => ${TOPE_RELOJ('m')}) END AS tope
             ) t
@@ -1437,16 +1254,18 @@ async function sellarFinDePasada(client, notaId, slot, maquinaId) {
   );
 }
 
-// ── Granel por elegir de un servicio Por Encargo (migs. 132-134) ──────────
-// La clave con que el granel se liga a un servicio ('chico'… 'edredon'). Todos
-// los tamaños de edredón comparten la suya.
+// ── Granel de los servicios Por Encargo ──────────────────────────────────
+
+/** Clave del servicio para el granel ('chico'…'edredon'); todo edredón usa 'edredon'. */
 function claveLigueServicio(prenda, tamano) {
   if (String(prenda ?? '').toUpperCase() === 'EDREDON') return 'edredon';
   return ['chico', 'mediano', 'grande'].includes(tamano) ? tamano : null;
 }
 
-// Cuántas medidas de CADA tipo de granel trae el servicio (Ajustes → Servicios
-// Por Encargo). El edredón lo dice su tamaño; uno viejo sin tamaño, nada.
+/**
+ * Medidas de cada tipo de granel que trae el servicio (Ajustes → Servicios Por
+ * Encargo). El edredón, según su tamaño.
+ */
 async function medidasDeServicio(client, prenda, tamano, tamanoEdredon) {
   if (String(prenda ?? '').toUpperCase() === 'EDREDON') {
     if (!tamanoEdredon) return 0;
@@ -1461,9 +1280,7 @@ async function medidasDeServicio(client, prenda, tamano, tamanoEdredon) {
   return Number(rows[0]?.n) || 0;
 }
 
-// Opciones de granel de un servicio, por tipo: los graneles líquidos de la
-// sucursal con tipo (se elige en el producto, mig. 136). Sirven para cualquier
-// servicio (mig. 135).
+/** Granel líquido de la sucursal agrupado por tipo (Map tipo → productos). */
 async function opcionesGranelDeServicio(client, sucursal) {
   const { rows } = await client.query(
     `SELECT p.id, p.tipo_granel_id AS tipo_id, p.stock_actual - p.stock_reservado AS disponible
@@ -1483,12 +1300,12 @@ async function opcionesGranelDeServicio(client, sucursal) {
   return porTipo;
 }
 
-// Lo que lleva de granel un servicio recién creado: por cada tipo, N medidas.
-// Si el tipo tiene un solo producto y alcanza, entra directo (no hay nada que
-// elegir); si no, queda pendiente y el empleado lo elige en Salidas. Que no
-// alcance no impide crear la nota: el aviso lo da la pantalla.
-// `capturado` son las medidas que se pusieron al crear la nota (Map tipo →
-// medidas); el tipo que no venga ahí lleva las de Ajustes.
+/**
+ * Pone el granel de un servicio nuevo: por cada tipo, las medidas capturadas o
+ * las de Ajustes. Si el tipo tiene un solo producto y alcanza, se aparta
+ * directo; si no, queda pendiente para elegirlo en Salidas. Que no alcance no
+ * impide crear la nota.
+ */
 async function granelDeCarga(client, notaId, carga, sucursal, tipo_servicio, capturado = null) {
   const clave = claveLigueServicio(carga.tipo_prenda, carga.tamano);
   if (!clave) return [];
@@ -1510,13 +1327,13 @@ async function granelDeCarga(client, notaId, carga, sucursal, tipo_servicio, cap
   return productos;
 }
 
-// Ninguna lavadora de la nota arranca mientras algún servicio tenga granel por
-// elegir (decisión del negocio, 2026-10-02): el empleado elige en Salidas qué
-// jabón y qué suavizante usa, y sin eso no se sabe qué descontar. Es la nota
-// entera y no "la lavadora de ese servicio" porque en Por Encargo las máquinas
-// se agregan sueltas en Salidas, sin decir a qué servicio van. Devuelve el
-// mensaje que lo explica, o null si nada lo impide. Las secadoras no cuentan:
-// el granel se sirve al lavar.
+/**
+ * Ninguna lavadora de la nota arranca mientras algún servicio tenga granel por
+ * elegir: sin eso no se sabe qué descontar. Aplica a toda la nota porque las
+ * máquinas de Por Encargo no van ligadas a un servicio. Las secadoras no cuentan.
+ *
+ * @returns {Promise<string|null>} el mensaje que lo explica, o null.
+ */
 async function granelSinElegir(client, notaId, maquinaIds) {
   if (!maquinaIds || maquinaIds.length === 0) return null;
   const { rows: lavadoras } = await client.query(
@@ -1531,7 +1348,7 @@ async function granelSinElegir(client, notaId, maquinaIds) {
        JOIN nota_cargas nc ON nc.id = pe.carga_id
        JOIN tipos_granel t ON t.id = pe.tipo_granel_id
       WHERE pe.nota_id = $1
-        AND NOT pe.del_cliente   -- el cliente trajo el suyo: ya está resuelto (mig. 154)
+        AND NOT pe.del_cliente   -- el cliente trajo el suyo
       GROUP BY nc.id
       ORDER BY nc.orden
       LIMIT 1`,
@@ -1544,9 +1361,10 @@ async function granelSinElegir(client, notaId, maquinaIds) {
     + 'en los productos de la nota.';
 }
 
-// Inserta las filas de nota_cargas ya preparadas (con sus productos, que
-// reservan stock). Devuelve las cargas con sus productos. En Por Encargo, además,
-// el granel que lleva cada servicio (granelDeCarga).
+/**
+ * Inserta las cargas ya preparadas con sus productos (apartados) y, en Por
+ * Encargo, el granel de cada servicio. Devuelve las cargas con sus productos.
+ */
 async function insertarCargas(client, notaId, filas, sucursal, tipo_servicio) {
   const insertadas = [];
   for (const f of filas) {
@@ -1577,26 +1395,22 @@ async function insertarCargas(client, notaId, filas, sucursal, tipo_servicio) {
   return insertadas;
 }
 
-// Cargas de una nota con los datos de sus máquinas y sus productos (detalle).
+/** Cargas de la nota con sus máquinas, vueltas, productos y granel pendiente. */
 async function cargasDeNota(client, notaId) {
   const { rows } = await client.query(
     `SELECT nc.id, nc.orden, nc.lavadora_id, nc.secadora_id,
             nc.precio_lavadora, nc.precio_secadora, nc.es_adicional,
             nc.tipo_prenda, nc.tipo_tela, nc.tamano_edredon, nc.tamano, nc.ajuste,
-            -- Cuándo arrancó cada hueco: una carga que ya pasó por la máquina es
-            -- historial y no se puede quitar, y con esto la pantalla lo sabe sin
-            -- adivinarlo por el estado de la máquina (2026-09-25).
+            -- Una carga que ya arrancó no se puede quitar.
             nc.lavadora_iniciada_at, nc.secadora_iniciada_at,
             nc.lavadora_tipo AS lavadora_tipo_previsto,
             nc.secadora_tipo AS secadora_tipo_previsto,
             ml.nombre AS lavadora_nombre, ml.tipo AS lavadora_tipo, ml.estado AS lavadora_estado,
             ml.en_uso_desde AS lavadora_en_uso_desde,
-            -- Su tope sellado: con él Salidas sabe si la de cronómetro ya
-            -- llegó al tope y se quedó sin luz (2026-10-02).
+            -- Con él Salidas sabe si ya llegó al tope.
             ml.ciclo_minutos AS lavadora_ciclo_minutos,
             ml.ciclo_elegido_minutos AS lavadora_ciclo_elegido_minutos,
-            -- Encendida por ESTA nota y todavía sin arrancar (mig. 110): es lo
-            -- que hace que el botón diga "Iniciar" en vez de "Encender".
+            -- Encendida por esta nota sin arrancar: el botón dice "Iniciar".
             (ml.estado = 'en_uso' AND ml.en_uso_desde IS NULL
              AND ml.encendida_para_nota_id = nc.nota_id) AS lavadora_esperando_arranque,
             ms.nombre AS secadora_nombre, ms.tipo AS secadora_tipo, ms.estado AS secadora_estado,
@@ -1609,22 +1423,15 @@ async function cargasDeNota(client, notaId) {
             mlu.nombre AS lavadora_usada_nombre, mlu.tipo AS lavadora_usada_tipo,
             msu.nombre AS secadora_usada_nombre, msu.tipo AS secadora_usada_tipo,
             msu.tamano AS secadora_usada_tamano,
-            -- Tope CONGELADO de la carga (mig. 096). En Por Encargo el tope ES
-            -- el precio que se cobra por la carga, y es el que ve el ticket;
-            -- NULL = sin tope, la carga se cobra por lo que lleva dentro.
+            -- Precio del servicio congelado (null = se cobra lo que lleva).
             nc.precio_tope AS tope_carga,
-            -- Historial de máquinas de la carga, en orden de uso (mig. 114):
-            -- una entrada por PASADA, así que la misma máquina puede aparecer
-            -- dos veces. La bandera actual marca la que el hueco tiene hoy —la
-            -- que se puede encender o terminar—; las demás ya pasaron.
+            -- Vueltas de la carga en orden; "actual" es la que el hueco tiene hoy.
             (SELECT COALESCE(json_agg(x ORDER BY x.asignada_at, x.id), '[]'::json)
                FROM (
                  SELECT ncm.id, ncm.slot, ncm.maquina_id, ncm.asignada_at,
                         ncm.maquina_nombre AS nombre, ncm.maquina_tipo AS tipo,
                         ncm.maquina_tamano AS tamano,
-                        -- Los tiempos que ofrece su modelo (mig. 120): con
-                        -- ellos la pantalla sabe si al iniciarla hay que
-                        -- preguntar con cuál correr.
+                        -- Programas del modelo: si hay que preguntar al iniciar.
                         (SELECT json_build_object(
                                   'pregunta', mo.pregunta_tiempo,
                                   'minutos', ${PROGRAMAS_DEL_MODELO('mo')})
@@ -1632,8 +1439,7 @@ async function cargasDeNota(client, notaId) {
                            JOIN marcas_maquina mmk ON mmk.nombre = mm2.marca
                            JOIN modelos_maquina mo ON mo.marca_id = mmk.id AND mo.nombre = mm2.modelo
                           WHERE mm2.id = ncm.maquina_id) AS modelo_tiempos,
-                        -- Cómo se comporta: el MODELO dice si la carga corre
-                        -- dos ciclos (mig. 123).
+                        -- Si el modelo corre dos ciclos por carga.
                         (SELECT json_build_object(
                                   'dos_ciclos', COALESCE((
                                     SELECT mo2.dos_ciclos FROM modelos_maquina mo2
@@ -1642,20 +1448,17 @@ async function cargasDeNota(client, notaId) {
                            FROM maquinas mm3
                            JOIN marcas_maquina mmk2 ON mmk2.nombre = mm3.marca
                           WHERE mm3.id = ncm.maquina_id) AS marca_opciones,
-                        -- Cronómetro en vez de temporizador (2026-10-02). Va
-                        -- aparte de la marca: también aplica a la máquina que
-                        -- no tiene marca de catálogo.
+                        -- Aplica también a máquinas sin marca de catálogo.
                         (SELECT ${esCronometroSql('mm4')} FROM maquinas mm4
                           WHERE mm4.id = ncm.maquina_id) AS cronometro,
                         -- Cronómetro que arranca con "Iniciar" y no al encender.
                         (SELECT ${conIniciarSql('mm5')} FROM maquinas mm5
                           WHERE mm5.id = ncm.maquina_id) AS con_iniciar,
-                        -- Solo fichas (mig. 149): su Iniciar no enciende nada.
+                        -- Solo fichas: su Iniciar no enciende nada.
                         (SELECT ${soloFichasSql('mm6')} FROM maquinas mm6
                           WHERE mm6.id = ncm.maquina_id) AS solo_fichas,
-                        -- Actual = la ÚLTIMA pasada del hueco, y solo si esa
-                        -- máquina sigue puesta. Con la comparación a secas, una
-                        -- carga relavada en la misma lavadora marcaba las dos.
+                        -- Actual = la última vuelta del hueco, si esa máquina
+                        -- sigue puesta (un relavado repite máquina).
                         (ncm.maquina_id IS NOT NULL
                          AND ncm.maquina_id = CASE
                            WHEN ncm.slot = 'lavadora' THEN nc.lavadora_id ELSE nc.secadora_id
@@ -1686,8 +1489,7 @@ async function cargasDeNota(client, notaId) {
       ORDER BY np.created_at ASC`,
     [notaId]
   );
-  // Granel por elegir de cada servicio (mig. 134): "1 medida de Jabón". Con
-  // `del_cliente` (mig. 154) no está por elegir: el cliente trajo el suyo.
+  // Granel por elegir de cada servicio; `del_cliente` = lo trajo el cliente.
   const { rows: pendientes } = await client.query(
     `SELECT pe.id, pe.carga_id, pe.tipo_granel_id, t.nombre AS tipo_granel, pe.cantidad, pe.del_cliente
        FROM nota_carga_pendientes pe
@@ -1703,8 +1505,10 @@ async function cargasDeNota(client, notaId) {
   }));
 }
 
-// Verifica que un registro exista y pertenezca a la sucursal indicada.
-// Solo se llama con nombres de tabla constantes (clientes / maquinas).
+/**
+ * ¿El registro existe y es de esta sucursal? `tabla` debe ser una constante
+ * del código (se interpola en el SQL).
+ */
 async function perteneceASucursal(tabla, id, sucursal) {
   const { rows } = await pool.query(
     `SELECT 1 FROM ${tabla} WHERE id = $1 AND sucursal = $2`,
@@ -1713,11 +1517,10 @@ async function perteneceASucursal(tabla, id, sucursal) {
   return rows.length > 0;
 }
 
-// Deja rastro en la campana del Dashboard cuando se revierte un pago
-// (PAGADO → PENDIENTE): es el vector directo para desaparecer una venta,
-// así que siempre queda registrado quién lo hizo y en qué nota.
-// `abonos` son los que la reversión echó atrás: van en el aviso porque es el
-// dinero que sale del corte, que es justo lo que se revisa después.
+/**
+ * Aviso en la campana al revertir un pago, con quién, la nota, el motivo y los
+ * abonos revertidos: es el dinero que sale del corte.
+ */
 async function registrarReversionPago(client, nota, usuarioId, sucursal, motivo = null, abonos = []) {
   const { rows } = await client.query("SELECT TRIM(nombre || ' ' || COALESCE(apellido, '')) AS nombre FROM usuarios WHERE id = $1", [usuarioId]);
   const quien = rows[0]?.nombre ?? 'un administrador';
@@ -1734,9 +1537,7 @@ async function registrarReversionPago(client, nota, usuarioId, sucursal, motivo 
   );
 }
 
-// Deja rastro en la campana del Dashboard cuando se cancela una nota: es una
-// acción fuerte (libera stock y máquinas), así que siempre queda registrado
-// quién la canceló y qué nota fue.
+/** Aviso en la campana al cancelar una nota: quién y cuál. */
 async function registrarCancelacionNota(client, nota, usuarioId, sucursal, motivo = null) {
   const { rows } = await client.query("SELECT TRIM(nombre || ' ' || COALESCE(apellido, '')) AS nombre FROM usuarios WHERE id = $1", [usuarioId]);
   const quien = rows[0]?.nombre ?? 'un empleado';
@@ -1749,9 +1550,7 @@ async function registrarCancelacionNota(client, nota, usuarioId, sucursal, motiv
   );
 }
 
-// Deja rastro en la campana del Dashboard cuando se elimina una nota: borra el
-// registro por completo, así que siempre queda constancia de quién la eliminó y
-// qué nota era.
+/** Aviso en la campana al eliminar una nota: quién y cuál. */
 async function registrarEliminacionNota(client, nota, usuarioId, sucursal) {
   const { rows } = await client.query("SELECT TRIM(nombre || ' ' || COALESCE(apellido, '')) AS nombre FROM usuarios WHERE id = $1", [usuarioId]);
   const quien = rows[0]?.nombre ?? 'un administrador';
@@ -1763,9 +1562,11 @@ async function registrarEliminacionNota(client, nota, usuarioId, sucursal) {
   );
 }
 
-// El siguiente número de folio de una sucursal (mig. 155): cada sucursal lleva
-// su propio contador. Se reserva dentro de la transacción del alta, así que dos
-// altas a la vez no toman el mismo número y un alta que falla no lo gasta.
+/**
+ * Toma el siguiente número de folio de la sucursal (cada una lleva su
+ * contador). Dentro de la transacción del alta: dos altas a la vez no repiten
+ * número y un alta que falla no lo gasta.
+ */
 async function tomarNumeroFolio(client, sucursal) {
   const { rows } = await client.query(
     `INSERT INTO folios_sucursal (sucursal, ultimo) VALUES ($1, 1)
@@ -1802,17 +1603,13 @@ export const getNotas = async (req, res) => {
               TRIM(u.nombre || ' ' || COALESCE(u.apellido, '')) AS usuario_nombre,
               su.nombre  AS sucursal_nombre,
               su.direccion AS sucursal_direccion,
-              -- Horario por día (mig. 160): el comodín *Horario* de WhatsApp.
+              -- Para el comodín *Horario* de WhatsApp.
               su.horario_semana AS sucursal_horario_semana,
               (SELECT COALESCE(json_agg(DISTINCT x.mid), '[]'::json)
                  FROM (${SQL_MAQUINAS_DE_NOTA}) x
                 WHERE x.mid IS NOT NULL) AS maquinas_ids,
-              -- Nombres de todas las máquinas que la nota usa o usó: además de
-              -- las vinculadas, incluye las columnas *_usada_id de las cargas,
-              -- que conservan la máquina aunque ya se haya desvinculado (p. ej.
-              -- tras pasar el lavado a la secadora), y el historial de pasadas
-              -- (nota_carga_maquinas), que guarda también las máquinas por las
-              -- que se cambió. La tarjeta de la lista lo enseña siempre.
+              -- Todas las máquinas que la nota usa o usó: las puestas, las
+              -- últimas usadas y las de su historial de vueltas.
               (SELECT COALESCE(json_agg(mm.nombre ORDER BY mm.nombre), '[]'::json)
                  FROM (
                    SELECT nc.lavadora_id       AS mid FROM nota_cargas nc WHERE nc.nota_id = n.id
@@ -1825,12 +1622,8 @@ export const getNotas = async (req, res) => {
                           WHERE nc.nota_id = n.id
                  ) xm
                  JOIN maquinas mm ON mm.id = xm.mid) AS maquinas_nombres,
-              -- "Doblado" (2026-10-11): Por Encargo que ya LAVÓ Y SECÓ y no le
-              -- queda ninguna carga pendiente (misma regla que
-              -- hayCargasPendientes), esperando a que la marquen como
-              -- Procesado. Se exige la secadora porque el servicio no dice si
-              -- lleva secado: con solo la lavadora saldría antes de secar.
-              -- Sigue EN_ESPERA en la base; solo cambia cómo se enseña.
+              -- "Doblado": Por Encargo que ya lavó y secó, sin cargas pendientes,
+              -- esperando "Procesado". Sigue EN_ESPERA; solo cambia cómo se ve.
               (n.tipo_servicio = 'POR_ENCARGO' AND n.estado = 'EN_ESPERA'
                 AND EXISTS (SELECT 1 FROM nota_cargas nc
                              WHERE nc.nota_id = n.id
@@ -1847,34 +1640,24 @@ export const getNotas = async (req, res) => {
                                      OR (nc.secadora_tipo IS NOT NULL AND nc.secadora_iniciada_at IS NULL
                                          AND nc.secadora_usada_id IS NULL)))
               ) AS doblado,
-              -- Máquinas que la nota tiene CORRIENDO ahora (arrancadas por ella
-              -- y en uso): la tarjeta de la lista lo dice (2026-10-03). Una
-              -- solo asignada no cuenta: otra nota puede arrancarla antes.
+              -- Máquinas que esta nota arrancó y siguen corriendo.
               (SELECT COALESCE(json_agg(DISTINCT mm.nombre), '[]'::json)
                  FROM nota_cargas nc
                  JOIN maquinas mm
                    ON (mm.id = nc.lavadora_id AND nc.lavadora_iniciada_at IS NOT NULL)
                    OR (mm.id = nc.secadora_id AND nc.secadora_iniciada_at IS NOT NULL)
                 WHERE nc.nota_id = n.id AND mm.estado = 'en_uso') AS maquinas_en_uso,
-              -- Fases vivas de la nota: si tiene lavadora(s) y/o secadora(s)
-              -- realmente EN USO ahora mismo (no solo asignadas: una máquina
-              -- asignada pero sin iniciar no cuenta). Con varias cargas puede
-              -- tener ambas a la vez (una lavando, otra secando).
+              -- ¿Corre ahora alguna lavadora / secadora arrancada por la nota?
+              -- Con varias cargas pueden ser las dos.
               EXISTS (SELECT 1 FROM nota_cargas nc JOIN maquinas ml ON ml.id = nc.lavadora_id
                        WHERE nc.nota_id = n.id AND ml.estado = 'en_uso'
                          AND nc.lavadora_iniciada_at IS NOT NULL) AS hay_lavadora_activa,
               EXISTS (SELECT 1 FROM nota_cargas nc JOIN maquinas ms ON ms.id = nc.secadora_id
                        WHERE nc.nota_id = n.id AND ms.estado = 'en_uso'
                          AND nc.secadora_iniciada_at IS NOT NULL) AS hay_secadora_activa,
-              -- Lavadoras que al terminar su lavado encadenan el secado: la
-              -- tarjeta pide elegir secadora ahí mismo ("Iniciar secado") en vez
-              -- de cerrar la carga. Solo pasa en AUTOSERVICIO, donde el cliente
-              -- está esperando su ropa y el encargado la pasa de una máquina a
-              -- la otra en el momento. En Por Encargo la ropa se queda en el
-              -- local: su lavadora termina la carga y la secadora se asigna y se
-              -- arranca aparte, desde Salidas, con su propio botón (2026-09-22).
-              -- Si la carga YA tiene secadora asignada tampoco entra aquí: no
-              -- hay nada que elegir.
+              -- Autoservicio: lavadoras cuya carga pidió secado y aún no tiene
+              -- secadora. Al terminar, la tarjeta pide elegirla ("Iniciar secado").
+              -- En Por Encargo la secadora se asigna aparte en Salidas.
               (SELECT COALESCE(json_agg(nc.lavadora_id), '[]'::json)
                  FROM nota_cargas nc
                 WHERE nc.nota_id = n.id
@@ -1883,17 +1666,9 @@ export const getNotas = async (req, res) => {
                   AND nc.secadora_tipo IS NOT NULL
                   AND nc.secadora_id IS NULL
               ) AS lavadoras_con_secado_ids,
-              -- ¿A la nota le queda trabajo que NO está corriendo ahora mismo?
-              -- Es la parte de hayCargasPendientes que sobrevive a cerrar la
-              -- máquina que está en marcha, y son dos casos:
-              --
-              --   · una máquina que la carga compró y todavía no tiene puesta;
-              --   · una máquina YA PUESTA que nadie ha arrancado — desde que
-              --     la secadora se asigna desde el principio (2026-09-22) este
-              --     es el caso normal, y mirarlo solo por "falta asignar"
-              --     prometía "Por Entregar" en notas que se quedaban En Espera.
-              --
-              -- La máquina que se está cerrando no cuenta: esa ya arrancó.
+              -- ¿Le queda trabajo que no está corriendo? Una máquina pedida y sin
+              -- poner, o una puesta que no corre (sin arrancar, esperando o
+              -- detenida). Dice si al finalizar la máquina en marcha queda trabajo.
               EXISTS (
                 SELECT 1 FROM nota_cargas nc
                  WHERE nc.nota_id = n.id
@@ -1904,11 +1679,8 @@ export const getNotas = async (req, res) => {
                      OR (nc.secadora_tipo IS NOT NULL AND nc.secadora_id IS NULL
                          AND nc.secadora_iniciada_at IS NULL
                          AND nc.secadora_usada_id IS NULL)
-                     -- Máquina PUESTA que no está corriendo: puede no haber
-                     -- arrancado nunca, estar encendida esperando el arranque
-                     -- (mig. 110) o haberse detenido a media vuelta. En los
-                     -- tres casos queda trabajo. Mirar iniciada_at no basta:
-                     -- un ciclo detenido la deja marcada como iniciada.
+                     -- Puesta y sin correr (iniciada_at no basta: un ciclo
+                     -- detenido la deja marcada).
                      OR EXISTS (SELECT 1 FROM maquinas ml2 WHERE ml2.id = nc.lavadora_id
                                  AND NOT (ml2.estado = 'en_uso' AND ml2.en_uso_desde IS NOT NULL))
                      OR EXISTS (SELECT 1 FROM maquinas ms2 WHERE ms2.id = nc.secadora_id
@@ -1942,16 +1714,9 @@ export const getNotaById = async (req, res) => {
               TRIM(u.nombre || ' ' || COALESCE(u.apellido, '')) AS usuario_nombre,
               su.nombre  AS sucursal_nombre,
               su.direccion AS sucursal_direccion,
-              -- Horario por día (mig. 160): el comodín *Horario* de WhatsApp.
+              -- Para el comodín *Horario* de WhatsApp.
               su.horario_semana AS sucursal_horario_semana,
-              -- Las mismas máquinas que la tarjeta de la lista (2026-10-11): el
-              -- detalle las enseña en su propio recuadro.
-              -- Nombres de todas las máquinas que la nota usa o usó: además de
-              -- las vinculadas, incluye las columnas *_usada_id de las cargas,
-              -- que conservan la máquina aunque ya se haya desvinculado (p. ej.
-              -- tras pasar el lavado a la secadora), y el historial de pasadas
-              -- (nota_carga_maquinas), que guarda también las máquinas por las
-              -- que se cambió. La tarjeta de la lista lo enseña siempre.
+              -- Mismas máquinas que en la lista: puestas, usadas y del historial.
               (SELECT COALESCE(json_agg(mm.nombre ORDER BY mm.nombre), '[]'::json)
                  FROM (
                    SELECT nc.lavadora_id       AS mid FROM nota_cargas nc WHERE nc.nota_id = n.id
@@ -1964,38 +1729,26 @@ export const getNotaById = async (req, res) => {
                           WHERE nc.nota_id = n.id
                  ) xm
                  JOIN maquinas mm ON mm.id = xm.mid) AS maquinas_nombres,
-              -- Máquinas que la nota tiene CORRIENDO ahora (arrancadas por ella
-              -- y en uso): la tarjeta de la lista lo dice (2026-10-03). Una
-              -- solo asignada no cuenta: otra nota puede arrancarla antes.
+              -- Máquinas que esta nota arrancó y siguen corriendo.
               (SELECT COALESCE(json_agg(DISTINCT mm.nombre), '[]'::json)
                  FROM nota_cargas nc
                  JOIN maquinas mm
                    ON (mm.id = nc.lavadora_id AND nc.lavadora_iniciada_at IS NOT NULL)
                    OR (mm.id = nc.secadora_id AND nc.secadora_iniciada_at IS NOT NULL)
                 WHERE nc.nota_id = n.id AND mm.estado = 'en_uso') AS maquinas_en_uso,
-              -- ¿Todavía se puede corregir la forma de pago? Solo mientras la
-              -- caja donde se cobró siga ABIERTA: ahí el corte se calcula en
-              -- vivo y se corrige solo. Con la caja cerrada las cifras quedaron
-              -- congeladas (mig. 101) y cambiar la forma dejaría el corte y
-              -- Ventas diciendo cosas distintas, así que no se permite.
+              -- La forma de pago se corrige solo mientras su caja siga abierta;
+              -- un corte cerrado tiene sus cifras congeladas.
               (n.estado_pago = 'PAGADO' AND n.estado <> 'CANCELADA' AND EXISTS (
                  SELECT 1 FROM cajas cj WHERE cj.id = n.caja_id AND cj.estado = 'abierta'
               )) AS forma_pago_editable,
-              -- ¿Se puede revertir el cobro? Mismo razonamiento, con una
-              -- excepción: un cobro hecho SIN caja abierta (caja_id NULL) no
-              -- entró en ningún corte, así que revertirlo no descuadra nada.
-              -- Lo que no se permite es revertir un cobro que ya quedó
-              -- congelado en un corte cerrado: ese corte seguiría contando la
-              -- venta y, al volver a cobrar la nota, el mismo dinero caería
-              -- también en la caja de hoy.
+              -- El cobro se revierte si su caja sigue abierta o si se cobró sin
+              -- caja (no está en ningún corte).
               (n.estado_pago = 'PAGADO' AND n.estado <> 'CANCELADA' AND (
                  n.caja_id IS NULL
                  OR EXISTS (SELECT 1 FROM cajas cj WHERE cj.id = n.caja_id AND cj.estado = 'abierta')
               )) AS pago_reversible,
-              -- ¿El cobro de esta nota quedó congelado en un corte cerrado?
-              -- Entonces NADA que mueva su total se puede hacer (ver
-              -- CorteCerradoError): la pantalla lo usa para no ofrecer acciones
-              -- que van a terminar en 409 al confirmar (2026-09-22).
+              -- Cobro en un corte cerrado: nada que mueva el total se permite
+              -- (CorteCerradoError); la pantalla esconde esas acciones.
               (n.estado_pago = 'PAGADO' AND n.caja_id IS NOT NULL AND NOT EXISTS (
                  SELECT 1 FROM cajas cj WHERE cj.id = n.caja_id AND cj.estado = 'abierta'
               )) AS cobro_congelado
@@ -2038,8 +1791,7 @@ export const getNotaById = async (req, res) => {
       [id]
     );
 
-    // Correcciones de forma de pago (mig. 102): es dinero que se movió entre
-    // columnas del corte, así que el detalle enseña quién y cuándo.
+    // Correcciones de forma de pago, con quién y cuándo.
     const { rows: historialPago } = await pool.query(
       `SELECT h.forma_anterior, h.forma_nueva, h.created_at,
               TRIM(u.nombre || ' ' || COALESCE(u.apellido, '')) AS usuario_nombre
@@ -2052,14 +1804,12 @@ export const getNotaById = async (req, res) => {
 
     const cargas = await cargasDeNota(pool, id);
 
-    // Abonos (mig. 121): pagos parciales de la nota. Los revertidos se enseñan
-    // igual —el rastro importa— pero no suman.
+    // Abonos: los revertidos se muestran pero no suman.
     const { rows: abonos } = await pool.query(
       `SELECT ab.id, ab.monto, ab.forma_pago, ab.created_at, ab.caja_id,
               ab.revertido_at, ab.motivo_reversion,
               TRIM(u.nombre || ' ' || COALESCE(u.apellido, '')) AS usuario_nombre,
-              -- Solo se revierte mientras la caja de ESE abono siga abierta: con
-              -- el corte cerrado sus cifras ya quedaron congeladas (mig. 101).
+              -- Se revierte solo mientras la caja de ese abono siga abierta.
               (ab.revertido_at IS NULL AND (
                  ab.caja_id IS NULL
                  OR EXISTS (SELECT 1 FROM cajas cj WHERE cj.id = ab.caja_id AND cj.estado = 'abierta')
@@ -2080,7 +1830,6 @@ export const getNotaById = async (req, res) => {
       abonos,
       abonado,
       lavadora_terminada: await algunaLavadoraTermino(pool, id),
-      // Lo que falta por cobrar. Una nota ya pagada no debe nada.
       saldo: rows[0].estado_pago === 'PAGADO'
         ? 0
         : Math.max(0, Number(rows[0].precio_total) - abonado),
@@ -2092,11 +1841,10 @@ export const getNotaById = async (req, res) => {
 };
 
 // ── POST /notas ─────────────────────────────────────────────
-// Ninguna nota se crea con la caja cerrada (2026-10-06, a pedido del
-// negocio): antes solo se avisaba, y lo cobrado quedaba fuera de todo corte.
-// Aplica a todos los servicios, también a la venta de productos. Se lee en
-// cada llamada para que las pruebas que no tratan de caja lo puedan apagar
-// (`NOTA_REQUIERE_CAJA=off`, ver vitest.integration.config.js).
+/**
+ * Ninguna nota se crea con la caja cerrada. Se lee en cada llamada para que
+ * las pruebas lo puedan apagar con `NOTA_REQUIERE_CAJA=off`.
+ */
 const notaRequiereCaja = () =>
   String(process.env.NOTA_REQUIERE_CAJA ?? '').toLowerCase() !== 'off';
 
@@ -2111,7 +1859,7 @@ export const createNota = async (req, res) => {
     fecha_entrega,
     tiempo_entrega,
     instrucciones,
-    referencia,     // cliente / referencia libre (Autoservicio, mig. 157)
+    referencia,     // nombre libre del cliente (Autoservicio)
     tamano,
     tipo_tela,
     tamano_edredon,
@@ -2150,10 +1898,8 @@ export const createNota = async (req, res) => {
       message: `Indica si la nota queda ${enPalabras(ESTADOS_PAGO_VALIDOS)}.`,
     });
   }
-  // Pago anticipado que no cubre todo (2026-10-03): la nota nace debiendo y
-  // con su primer abono, en la misma transacción para que no quede una nota
-  // creada sin el dinero que ya se recibió. Si cubre todo, no es abono: la nota
-  // se manda PAGADO como siempre.
+  // Pago anticipado parcial: la nota nace debiendo y con su primer abono, en la
+  // misma transacción. Si cubre todo, la nota llega como PAGADO.
   let abonoInicial = null;
   if (abono_inicial != null) {
     const importe = Number(abono_inicial.monto);
@@ -2169,17 +1915,9 @@ export const createNota = async (req, res) => {
     }
     abonoInicial = { importe, forma };
   }
-  // Por Encargo SÍ puede venir sin cliente: es la nota de mostrador, la del que
-  // deja ropa de paso y no se registra (2026-09-29). Antes esto era un 400
-  // —"las notas Por Encargo llevan cliente"— y la única salida era dar de alta
-  // un cliente que nadie iba a volver a usar. Sin cliente la nota queda a
-  // nombre de Mostrador y el teléfono, si hace falta mandarle el ticket o el
-  // aviso, se captura a nivel nota (PATCH /notas/:id/telefono). El formulario
-  // no manda un null por descuido: obliga a elegir entre un cliente y
-  // Mostrador antes de dejar avanzar.
-  // La venta de mostrador no lava nada: no lleva cargas y lo que la justifica
-  // son sus productos. Es de mostrador como el autoservicio —el que viene a comprar
-  // un jabón no se identifica—, así que tampoco lleva cliente.
+  // El cliente es opcional en todos los servicios: sin él la nota queda a
+  // nombre de Mostrador (el teléfono se guarda en la nota si hace falta).
+  // La venta de productos no lleva cargas.
   if (esVenta(tipo_servicio)) {
     if (Array.isArray(cargas) && cargas.length > 0) {
       return res.status(400).json({ message: 'Una venta de productos no lleva cargas: no hay lavado ni secado que cobrar.' });
@@ -2187,16 +1925,13 @@ export const createNota = async (req, res) => {
     if (!Array.isArray(productos) || productos.length === 0) {
       return res.status(400).json({ message: 'Agrega al menos un producto: una venta sin productos no es nota.' });
     }
-    // Se cobra en el acto, como en el mostrador de cualquier tienda: la nota
-    // nace pagada y finalizada, así que no hay un "después" donde cobrarla.
+    // Se cobra en el acto: nace pagada y finalizada.
     if (estado_pago !== 'PAGADO' || !normalizarFormaPago(forma_pago)) {
       return res.status(400).json({
         message: `La venta de productos se cobra al momento: indica la forma de pago (${enPalabras(FORMAS_PAGO_VALIDAS)}).`,
       });
     }
   } else if (!Array.isArray(cargas) || cargas.length === 0) {
-    // Modelo por cargas: toda nota de lavado trae sus cargas, cada una con sus
-    // máquinas y —en encargo— su prenda, tela/tamaño, ajuste y productos.
     return res.status(400).json({ message: 'La nota necesita al menos una carga.' });
   }
   if (tiempo_entrega && !TIEMPOS_ENTREGA_VALIDOS.includes(String(tiempo_entrega).toUpperCase())) {
@@ -2204,19 +1939,16 @@ export const createNota = async (req, res) => {
       message: `Elige cuándo se entrega: ${enPalabras(TIEMPOS_ENTREGA_VALIDOS)}.`,
     });
   }
-  // El ajuste puede ser negativo (descuento); el total final de la nota no,
-  // lo que se verifica antes del COMMIT ya con los productos sumados.
+  // El ajuste puede ser negativo; el total no (se revisa al recalcularlo).
   if (ajuste != null && ajuste !== '' && !Number.isFinite(Number(ajuste))) {
     return res.status(400).json({ message: 'El ajuste debe ser un número.' });
   }
 
-  // El cliente referenciado debe pertenecer a la sucursal activa (las máquinas
-  // se validan por carga en prepararCargas).
+  // Las máquinas se validan por carga en prepararCargas.
   if (cliente_id && !(await perteneceASucursal('clientes', cliente_id, req.sucursal))) {
     return res.status(400).json({ message: 'El cliente seleccionado no existe en esta sucursal.' });
   }
-  // Un cliente eliminado con historial queda oculto (activo = FALSE,
-  // 2026-10-08): una pantalla abierta desde antes todavía podría mandarlo.
+  // Un cliente eliminado con historial queda oculto (activo = FALSE).
   if (cliente_id) {
     const { rows: act } = await pool.query('SELECT activo FROM clientes WHERE id = $1', [cliente_id]);
     if (act[0] && act[0].activo === false) {
@@ -2230,8 +1962,7 @@ export const createNota = async (req, res) => {
   try {
     await client.query('BEGIN');
 
-    // Se validan y tarifican las cargas primero; de ellas sale el total. La
-    // venta de mostrador no tiene: su total son solo los productos.
+    // La venta de productos no tiene cargas.
     let filasCargas;
     try {
       filasCargas = esVenta(tipo_servicio)
@@ -2241,21 +1972,13 @@ export const createNota = async (req, res) => {
       await client.query('ROLLBACK');
       return res.status(400).json({ message: e.message });
     }
-    // Cada carga (Autoservicio y Por Encargo) exige al menos un tipo de lavado o
-    // secado; eso lo valida prepararCargas. Aquí ya no se exige máquina física.
     const cargasSum = filasCargas.reduce((s, f) => s + f.precio_lavadora + f.precio_secadora, 0);
 
-    // Ninguna máquina de la nota puede estar ya apartada por otra nota abierta
-    // (aunque nazca En Espera). Se bloquean las filas y se valida para que dos
-    // notas no tomen la misma máquina.
     const idsMaquinasNota = [...new Set(filasCargas.flatMap(f => [f.lavadora_id, f.secadora_id]).filter(Boolean))];
 
-    // Máquinas a tomar al crear: solo las de las cargas que se activan. Si
-    // ninguna se activa, la nota nace En Espera (las máquinas quedan asignadas
-    // pero libres, para activarse luego desde Salidas).
+    // Solo las cargas que se activan toman su máquina; si ninguna, la nota
+    // nace En Espera con las máquinas asignadas pero libres.
     const idsActivar = [...new Set(filasCargas.filter(f => f.activar).flatMap(f => [f.lavadora_id, f.secadora_id]).filter(Boolean))];
-    // La venta se entrega en el mostrador en el mismo acto en que se cobra: no
-    // hay nada que esperar ni que entregar después, así que nace FINALIZADA.
     const estadoNota = esVenta(tipo_servicio)
       ? 'FINALIZADA'
       : idsActivar.length > 0
@@ -2286,21 +2009,18 @@ export const createNota = async (req, res) => {
         tipo_tela ? String(tipo_tela).trim() : null,
         tamano_edredon ? String(tamano_edredon).trim() : null,
         ajusteNum,
-        // Forma de pago solo con pago anticipado (PAGADO); si no, null.
+        // Forma de pago solo si nace PAGADO.
         estado_pago === 'PAGADO' ? normalizarFormaPago(forma_pago) : null,
         String(referencia ?? '').trim().slice(0, 80) || null,
       ]
     );
     const nota = notaRows[0];
 
-    // Folio por sucursal (mig. 155), ya no el id de la nota.
     const folio = generarFolio(await tomarNumeroFolio(client, req.sucursal), nota.created_at);
     await client.query('UPDATE notas SET folio = $1 WHERE id = $2', [folio, nota.id]);
     nota.folio = folio;
 
-    // Insertar las cargas y tomar las máquinas de las cargas activadas. Reservar
-    // los productos de una carga puede fallar (p. ej. sin existencia de una bolsa):
-    // se responde con el mensaje claro (400), no un 500.
+    // Apartar productos puede fallar por existencia: se responde 400 con el motivo.
     let cargasInsertadas;
     try {
       cargasInsertadas = await insertarCargas(client, nota.id, filasCargas, req.sucursal, tipo_servicio);
@@ -2355,9 +2075,7 @@ export const createNota = async (req, res) => {
       }
     }
 
-    // ── Insertar productos en nota_productos ────────────────
-    // (nivel nota, carga_id NULL). La unidad/precio/medidas los resuelve
-    // reservarProducto según el servicio (botella en Autoservicio, medida en Por Encargo).
+    // Productos sueltos de la nota (sin carga).
     const productosInsertados = [];
     for (const { producto_id, cantidad } of productos) {
       if (!producto_id || !cantidad || Number(cantidad) <= 0) continue;
@@ -2371,7 +2089,6 @@ export const createNota = async (req, res) => {
       }
     }
 
-    // Recalcular precio_total con la fórmula completa (cargas + productos + ajuste).
     if (productosInsertados.length > 0 || filasCargas) {
       nota.precio_total = await recalcularPrecioTotal(client, nota.id);
     }
@@ -2387,16 +2104,12 @@ export const createNota = async (req, res) => {
       return res.status(400).json({ message: errTope });
     }
 
-    // La venta nace finalizada: el producto se lo lleva el cliente ahora mismo,
-    // así que sale del inventario aquí y no se queda reservado. Es lo mismo que
-    // hace cerrarNotaSinCargasPendientes cuando una nota de autoservicio se
-    // cierra sola, y lo que haría cambiarEstadoNota al cobrar.
+    // La venta nace finalizada: sus productos salen del inventario ya.
     if (esVenta(tipo_servicio)) {
       await consumirProductosDeNota(client, nota.id, req.sucursal, req.user.id);
     }
 
-    // El pago anticipado parcial entra como primer abono, igual que en
-    // abonarNota: a la caja abierta (o fuera de corte si no hay).
+    // El pago anticipado parcial es el primer abono, en la caja abierta.
     if (abonoInicial) {
       const total = Number(nota.precio_total ?? 0);
       if (abonoInicial.importe >= total - 1e-9) {
@@ -2432,14 +2145,11 @@ export const createNota = async (req, res) => {
 };
 
 // ── DELETE /notas/:id/cargas/:cargaId ───────────────────────
-// Quita UNA carga que ya no se va a usar (el cliente trajo menos ropa de la
-// prevista). Solo se puede quitar una carga que nunca arrancó: las que ya
-// lavaron o secaron son historial y se conservan.
-//
-// Es la salida al caso contrario del "no está lista hasta terminarlas todas":
-// sin esto, una carga que nadie va a usar dejaba la nota En Espera para
-// siempre. Al quitarla, la nota deja de cobrarla y, si con eso ya no le queda
-// nada pendiente, pasa sola a Por Entregar.
+/**
+ * Quita una carga que nunca arrancó (las que ya corrieron son historial). Deja
+ * de cobrarse y, si la nota ya no tiene nada pendiente, se cierra. No se puede
+ * quitar la última carga.
+ */
 export const quitarCarga = async (req, res) => {
   const { id, cargaId } = req.params;
   const client = await pool.connect();
@@ -2470,11 +2180,8 @@ export const quitarCarga = async (req, res) => {
     }
     const carga = cargaRows[0];
 
-    // Una carga que ya pasó por una máquina es historial: quitarla borraría el
-    // registro de un lavado que sí ocurrió (y de lo que se cobró por él). La
-    // marca de arranque es de la vuelta EN CURSO (se limpia al pedir otra, ver
-    // registrarMaquinaEnCarga), así que una carga que ya lavó y espera su
-    // relavado se reconoce por sus vueltas ya corridas.
+    // Ya corrió si la vuelta en curso arrancó o si tiene vueltas anteriores
+    // (un relavado pendiente limpia la marca de arranque).
     const { rows: [{ corrio }] } = await client.query(
       `SELECT EXISTS (SELECT 1 FROM nota_carga_maquinas
                        WHERE carga_id = $1
@@ -2498,10 +2205,7 @@ export const quitarCarga = async (req, res) => {
       });
     }
 
-    // Devolver el stock que esta carga tenía reservado (el CASCADE borra las
-    // filas de nota_productos pero no revierte stock_reservado).
-    // Desde la mig. 161 su granel pudo haberse descontado ya (terminó otra
-    // lavadora de la nota): eso vuelve al estante; lo apartado se suelta.
+    // Sus productos vuelven al inventario (el CASCADE los borra sin hacerlo).
     {
       const { rows: deLaCarga } = await client.query(
         'SELECT id FROM nota_productos WHERE carga_id = $1', [cargaId]
@@ -2511,11 +2215,8 @@ export const quitarCarga = async (req, res) => {
       }
     }
 
-    // Sus máquinas nunca arrancaron, así que asignarlas no las apartó: si una
-    // está en uso es porque OTRA nota la arrancó, y no se toca (soltarla le
-    // cortaba el ciclo a esa otra nota, 2026-10-08). La única que es de esta
-    // carga es la que ESTA nota encendió esperando arranque (mig. 110): esa se
-    // apaga y se suelta, igual que al eliminar la nota.
+    // Solo se apaga la máquina que esta nota encendió sin arrancar; si una está
+    // en uso, la arrancó otra nota y no se toca.
     const asignadas = [carga.lavadora_id, carga.secadora_id].filter(Boolean);
     if (asignadas.length > 0) {
       await client.query(
@@ -2578,15 +2279,9 @@ export const eliminarNota = async (req, res) => {
     }
     const { estado: estadoNota } = notaRows[0];
 
-    // El cobro que ya quedó congelado en un corte CERRADO (mig. 101) no se
-    // deshace por ninguna puerta: editar la nota, revertir su pago y cancelarla
-    // ya respondían 409, pero BORRARLA seguía permitido — y es el cambio más
-    // grande de todos. El corte de aquel día conserva la venta (sus cifras están
-    // congeladas) mientras Ventas, que suma las notas vivas, la pierde: dos
-    // reportes del mismo día diciendo cosas distintas, y un dinero en el cajón
-    // sin nota que lo explique (2026-09-23).
-    //
-    // Un cobro SIN caja (caja_id NULL) no entró en ningún corte: ese sí se borra.
+    // No se borra una nota cuyo cobro o algún abono vivo esté en un corte
+    // cerrado: el corte conserva ese dinero y Ventas lo perdería. Sin caja, o
+    // con la caja abierta, sí se borra.
     if (notaRows[0].estado_pago === 'PAGADO' && notaRows[0].caja_id) {
       const { rows: cj } = await client.query(
         'SELECT estado FROM cajas WHERE id = $1 FOR SHARE', [notaRows[0].caja_id]
@@ -2601,10 +2296,6 @@ export const eliminarNota = async (req, res) => {
       }
     }
 
-    // Lo mismo con un ABONO vivo que entró en un corte ya cerrado: borrar la
-    // nota se lleva sus abonos (CASCADE) y Ventas dejaba de contar un dinero
-    // que el corte sí tiene (2026-10-12). Uno sin caja, o en la caja abierta,
-    // se borra como el cobro de arriba.
     const { rows: abonoCerrado } = await client.query(
       `SELECT 1 FROM nota_abonos ab
          JOIN cajas c ON c.id = ab.caja_id
@@ -2621,11 +2312,8 @@ export const eliminarNota = async (req, res) => {
       });
     }
 
-    // Una máquina de esta nota CORRIENDO su ciclo (lavando o secando) no se
-    // interrumpe por un borrado: hay ropa dentro y el ciclo va a medias. Se mide
-    // por `en_uso_desde`, que es lo que separa "lavando" de "encendida
-    // esperando arranque" (mig. 110) — esa última sí se apaga y se suelta más
-    // abajo, porque ahí todavía no empezó nada.
+    // No se borra con una máquina corriendo (hay ropa dentro). La encendida sin
+    // arrancar (`en_uso_desde` NULL) sí: se apaga más abajo.
     const { rows: corriendo } = await client.query(
       `SELECT DISTINCT m.nombre, m.tipo
          FROM maquinas m
@@ -2644,8 +2332,6 @@ export const eliminarNota = async (req, res) => {
       await client.query('ROLLBACK');
       const nombres = listaY(corriendo.map(m => m.nombre));
       const una = corriendo.length === 1;
-      // Con una sola máquina se dice qué está haciendo; con varias, "en uso",
-      // que es lo único cierto de todas a la vez.
       const haciendo = una
         ? (corriendo[0].tipo === 'secadora' ? 'está secando' : 'está lavando')
         : 'siguen en uso';
@@ -2655,23 +2341,10 @@ export const eliminarNota = async (req, res) => {
       });
     }
 
-    // Máquinas ENCENDIDAS por esta nota y todavía sin arrancar (mig. 110):
-    // eliminar la nota las APAGA y las suelta. La nota es lo único que dice por
-    // qué ese relé está cerrado, así que dejarlas encendidas sin ella sería el
-    // agujero de "lavar sin nota" otra vez. Es lo mismo que la eliminación ya
-    // hacía con las máquinas que la nota tenía LAVANDO, que es el caso más
-    // comprometido de los dos.
-    //
-    // Y hay que hacerlo ANTES del DELETE: la referencia es ON DELETE SET NULL y
-    // la 110 obliga a que las dos marcas vayan juntas, así que borrar primero
-    // dejaba media marca y tronaba contra el CHECK con un "Intenta de nuevo"
-    // que nunca iba a funcionar. El guardo de `en_uso_desde IS NULL` es por si
-    // entretanto alguien inició el lavado: esa ya está lavando y la suelta el
-    // camino de siempre, unas líneas más abajo.
+    // ANTES del DELETE: el ON DELETE SET NULL dejaría media marca de encendido y
+    // fallaría el CHECK que exige las dos juntas.
     await apagarEncendidasSinArrancar(client, id);
-    // Se recolectan antes del DELETE: el CASCADE borra nota_cargas.
-    // Solo las que ESTA nota arrancó: las que únicamente tenía asignadas
-    // pueden estar corriendo para otra nota (mig. 097).
+    // Antes del DELETE, que borra las cargas. Solo las que esta nota arrancó.
     const { rows: iniciadasRows } = await client.query(
       `SELECT DISTINCT mid FROM (
          SELECT lavadora_id AS mid FROM nota_cargas
@@ -2684,28 +2357,14 @@ export const eliminarNota = async (req, res) => {
     );
     const maquinasNota = iniciadasRows.map(r => r.mid);
 
-    // El efecto en stock depende del estado de la nota:
-    //   - PAGADA o FINALIZADA: el producto YA salió del estante (lo consumió el
-    //     cobro o el cierre). Eliminar la nota anula esa venta, así que vuelve.
-    //   - CANCELADA: al cancelar ya se devolvió o se soltó la reserva; nada que
-    //     revertir.
-    //   - Estados activos: solo liberar la reserva.
-    //
-    // FINALIZADA se trataba antes como "nada que revertir", y solo la venta de
-    // mostrador era la excepción. Pero el razonamiento de esa excepción vale
-    // para todas: si el borrado no devuelve el producto, un cobro mal capturado
-    // deja el inventario corto sin forma de arreglarlo desde la nota. Y desde
-    // que el Autoservicio se cierra al liquidarlo (2026-09-23), FINALIZADA es
-    // el final normal de casi toda nota, no un caso raro.
-    // Desde la mig. 161 se decide por renglón: lo descontado vuelve al estante
-    // y lo apartado se suelta (una nota activa puede tener ya su granel fuera).
+    // Lo descontado vuelve al inventario y lo apartado se suelta. Una nota
+    // cancelada ya lo hizo al cancelarse.
     if (estadoNota !== 'CANCELADA') {
       await devolverProductosDeNota(client, id, req.sucursal, req.user.id);
     }
 
     await client.query('DELETE FROM notas WHERE id = $1', [id]);
 
-    // Liberar las máquinas que esta nota tenía corriendo
     if (maquinasNota.length > 0) {
       await client.query(
         `UPDATE maquinas
@@ -2716,7 +2375,6 @@ export const eliminarNota = async (req, res) => {
       );
     }
 
-    // Alerta en la campana del Dashboard: la nota se borró por completo.
     await registrarEliminacionNota(client, { id, folio: notaRows[0].folio }, req.user.id, req.sucursal);
 
     await client.query('COMMIT');
@@ -2756,17 +2414,14 @@ export const cambiarEstadoNota = async (req, res) => {
 
     const estadoActual = notaRows[0].estado;
 
-    // Cancelar borra una venta del día: queda en manos del administrador.
+    // Cancelar es de administrador.
     if (estado === 'CANCELADA' && !esAdmin(req.user?.rol)) {
       await client.query('ROLLBACK');
       return res.status(403).json({ message: 'Solo un administrador puede cancelar una nota.' });
     }
 
-    // Una nota ya cobrada NO se cancela. Si se pudiera, el corte del día
-    // quedaría esperando un dinero que se devolvió (y si el cobro fue en otra
-    // sesión de caja, el descuadre caería en el día equivocado). Para deshacer
-    // un cobro está la reversión de pago, que sí deja rastro; una vez revertido,
-    // la nota se puede cancelar.
+    // Una nota cobrada o con abonos vivos no se cancela: el corte esperaría un
+    // dinero que se devolvió. Primero se revierte el pago o los abonos.
     if (estado === 'CANCELADA'
         && (notaRows[0].estado_pago === 'PAGADO' || estadoActual === 'PAGADA')) {
       await client.query('ROLLBACK');
@@ -2775,8 +2430,6 @@ export const cambiarEstadoNota = async (req, res) => {
       });
     }
 
-    // Tampoco la que tiene abonos vivos: ese dinero ya entró a la caja y la
-    // nota cancelada lo dejaría huérfano. Primero se revierten los abonos.
     if (estado === 'CANCELADA') {
       const abonado = await totalAbonado(client, id);
       if (abonado > 0) {
@@ -2802,10 +2455,8 @@ export const cambiarEstadoNota = async (req, res) => {
       });
     }
 
-    // "Procesado" (Por Encargo → Por Entregar) exige que al menos una lavadora
-    // haya terminado (2026-10-02): antes no hay ropa que doblar ni empacar. El
-    // detalle ya esconde el botón; esto cubre una pantalla vieja, otro
-    // dispositivo que cambió la nota mientras tanto o una llamada directa.
+    // "Procesado" (Por Encargo → Por Entregar) exige que haya terminado al
+    // menos una lavadora. La pantalla ya esconde el botón; esto cubre el resto.
     if (estado === 'LISTA' && notaRows[0].tipo_servicio === 'POR_ENCARGO'
         && !(await algunaLavadoraTermino(client, id))) {
       await client.query('ROLLBACK');
@@ -2814,8 +2465,7 @@ export const cambiarEstadoNota = async (req, res) => {
       });
     }
 
-    // No se puede finalizar (entregar) una nota pendiente de pago: primero se
-    // liquida. La UI muestra el botón "Liquidar" en vez de "Finalizar".
+    // No se entrega una nota que debe: primero se liquida.
     if (estado === 'FINALIZADA' && notaRows[0].estado_pago === 'PENDIENTE') {
       await client.query('ROLLBACK');
       return res.status(400).json({
@@ -2824,17 +2474,13 @@ export const cambiarEstadoNota = async (req, res) => {
     }
 
     if (estado === 'CANCELADA') {
-      // Lo que ya salió del estante (cobrado, entregado o el granel de una
-      // lavadora que terminó) vuelve; lo apartado se suelta (mig. 161).
       await devolverProductosDeNota(client, id, req.sucursal, req.user.id);
     } else if (estado === 'PAGADA' || estado === 'FINALIZADA') {
-      // Al cobrar o al entregar, lo que ocurra primero, sale lo que seguía
-      // apartado. Lo ya descontado no se repite (PAGADA → FINALIZADA, o una
-      // nota reabierta y vuelta a entregar).
+      // Al cobrar o entregar sale del inventario lo que seguía apartado.
       await consumirProductosDeNota(client, id, req.sucursal, req.user.id);
     }
 
-    // Al cancelar se guarda el motivo (opcional) capturado por el empleado.
+    // Motivo opcional de la cancelación.
     const motivoCancel = estado === 'CANCELADA'
       ? (typeof req.body?.motivo === 'string' ? req.body.motivo.trim() || null : null)
       : null;
@@ -2843,14 +2489,11 @@ export const cambiarEstadoNota = async (req, res) => {
       estado === 'CANCELADA' ? [estado, id, motivoCancel] : [estado, id]
     );
 
-    // Al terminar el ciclo (Por Entregar) o cancelar, la nota suelta todas
-    // sus máquinas. El backend es el dueño del ciclo de vida: los clientes
-    // ya no necesitan liberar máquina por máquina.
+    // Al pasar a Por Entregar o cancelar, la nota suelta sus máquinas.
     if (estado === 'LISTA' || estado === 'CANCELADA') {
       await liberarMaquinasDeNota(client, id);
     }
 
-    // Alerta en la campana del Dashboard cuando se cancela una nota.
     if (estado === 'CANCELADA') {
       await registrarCancelacionNota(client, rows[0], req.user.id, req.sucursal, motivoCancel);
     }
@@ -2866,21 +2509,16 @@ export const cambiarEstadoNota = async (req, res) => {
   }
 };
 
-// ── PATCH /notas/:id/activar-pendientes ─────────────────────
-// Activa (marca en uso) las máquinas ya asignadas a la nota que sigan
-// disponibles. Sin body activa TODAS; con { maquina_id } activa solo esa (para
-// el botón "Iniciar Lavado" por máquina en Salidas). Sirve para poner en marcha
-// las cargas que quedaron en espera, tanto en una nota En Espera como en una
-// ya En Proceso (caso mixto).
-// ¿La carga que esta nota está corriendo en esta máquina todavía tiene ciclos
-// disponibles (mig. 108)? Es lo que distingue "hay que encenderla para otra
-// vuelta" de "esta carga ya terminó y toca cerrarla".
+/**
+ * ¿A la carga de esta nota en esta máquina le quedan ciclos? Distingue
+ * "encenderla para otra vuelta" de "la carga terminó, hay que cerrarla".
+ */
 async function cargaConCiclosDisponibles(client, notaId, maquinaId) {
   const { rows } = await client.query(
     `SELECT CASE WHEN nc.lavadora_id = $2 THEN nc.lavadora_ciclos
                  ELSE nc.secadora_ciclos END AS ciclos,
             m.tipo,
-            -- La vuelta extra corre un solo ciclo (mig. 115).
+            -- La vuelta extra corre un solo ciclo.
             COALESCE((
               SELECT ncm.ciclo_unico FROM nota_carga_maquinas ncm
                WHERE ncm.carga_id = nc.id
@@ -2888,13 +2526,10 @@ async function cargaConCiclosDisponibles(client, notaId, maquinaId) {
                ORDER BY ncm.asignada_at DESC, ncm.id DESC LIMIT 1
             ), FALSE) AS ciclo_unico,
             ${MINUTOS_CONFIGURADOS} AS minutos_ciclo,
-            -- Y lo que su marca declara (mig. 122): una marca de ciclo único
-            -- tampoco tiene "otra vuelta" que ofrecer.
+            -- Un modelo de ciclo único no ofrece otra vuelta.
             ${OPCIONES_DE_MARCA} AS marca_opciones
        FROM nota_cargas nc
-       -- La máquina entra por el tope de ciclos: una lavadora sin tiempo
-       -- configurado corre uno solo, así que aquí ya no hay "otra vuelta" que
-       -- encender y el botón tiene que llevar a Finalizar.
+       -- Para el tope de ciclos de la máquina (sin tiempo configurado corre uno).
        JOIN maquinas m ON m.id = $2
       WHERE nc.nota_id = $1
         AND ((nc.lavadora_id = $2 AND nc.lavadora_iniciada_at IS NOT NULL)
@@ -2906,22 +2541,14 @@ async function cargaConCiclosDisponibles(client, notaId, maquinaId) {
 }
 
 // ── PATCH /notas/:id/encender-maquina ───────────────────────
-// Paso previo a "Iniciar Lavado" (mig. 110): le da CORRIENTE a la máquina sin
-// arrancar su cronómetro.
-//
-// La lavadora no arranca sola al recibir luz —hay que apretar su botón— y antes
-// de eso todavía hay que meter la ropa. Cuando los dos pasos eran uno, todo ese
-// rato se le descontaba al ciclo, y con el corte por fin de ciclo activo la
-// corriente se iba antes de que el lavado terminara.
-//
-// La máquina queda apartada ('en_uso', no se ofrece a otra nota) pero SIN
-// `en_uso_desde`: eso distingue "encendida esperando" de "lavando" y evita que
-// un `ciclo_minutos` viejo arme un corte que no toca. La espera caduca sola
-// (ESPERA_ARRANQUE_MINUTOS) para que un descuido no deje la máquina prendida.
-//
-// La máquina con cronómetro (2026-10-02) no tiene esos dos pasos: encenderla ES
-// arrancar su carga. El cronómetro empieza con la corriente, el empleado la
-// arranca con su botón cuando quiera y la carga termina al finalizarla.
+/**
+ * Da corriente a la máquina sin arrancar su ciclo, para meter la ropa antes de
+ * "Iniciar". Queda 'en_uso' pero sin `en_uso_desde` (encendida esperando) y la
+ * espera caduca sola (ESPERA_ARRANQUE_MINUTOS).
+ *
+ * Con cronómetro y sin botón Iniciar, encender ya arranca la carga. Las de solo
+ * fichas no se encienden. Si a la carga le queda otro ciclo, vuelve a la espera.
+ */
 export const encenderMaquinaDeNota = async (req, res) => {
   const { id } = req.params;
   const { maquina_id } = req.body ?? {};
@@ -2955,8 +2582,7 @@ export const encenderMaquinaDeNota = async (req, res) => {
       return res.status(409).json({ message: faltaGranel });
     }
 
-    // FOR UPDATE: dos empleados que le den a la vez a la misma máquina se
-    // serializan aquí, igual que al iniciar.
+    // FOR UPDATE: dos clics simultáneos sobre la misma máquina se serializan.
     const { rows: maqRows } = await client.query(
       `SELECT m.id, m.nombre, m.tipo, m.marca, m.estado, m.en_uso_desde, m.encendida_para_nota_id,
               ${esCronometroSql('m')} AS cronometro,
@@ -2971,9 +2597,7 @@ export const encenderMaquinaDeNota = async (req, res) => {
     }
     const maq = maqRows[0];
 
-    // La de fichas (mig. 149) no se enciende: no tiene Sonoff, y su espera de
-    // arranque nunca caducaría (la sincronización no la toca). Su único paso
-    // es "Iniciar", que arranca el cronómetro.
+    // Solo fichas: no tiene Sonoff; su único paso es "Iniciar".
     if (maq.solo_fichas) {
       await client.query('ROLLBACK');
       return res.status(400).json({
@@ -2981,19 +2605,15 @@ export const encenderMaquinaDeNota = async (req, res) => {
       });
     }
 
-    // Ya encendida por esta misma nota: no es un error, es el botón pulsado dos
-    // veces. Se responde ok para que la pantalla quede en el estado correcto.
+    // Ya encendida por esta nota (doble clic): se responde ok.
     if (maq.estado === 'en_uso' && maq.en_uso_desde == null
         && String(maq.encendida_para_nota_id) === String(id)) {
       await client.query('ROLLBACK');
       return res.json({ message: `${maq.nombre} ya está encendida.`, maquina: maq });
     }
 
-    // Segundo ciclo de la misma carga (mig. 108): la máquina sigue 'en_uso' con
-    // la nota abierta, pero su ciclo terminó y el corte ya le quitó la luz. Para
-    // el empleado es el mismo trabajo que la primera vez —encender, cargar,
-    // apretar el botón— así que se le da el mismo camino: vuelve al estado de
-    // espera y "Otro ciclo" hará luego de "Iniciar".
+    // Otro ciclo de la misma carga: la máquina terminó su ciclo y vuelve a
+    // "encendida esperando", igual que la primera vez.
     const listaParaOtroCiclo =
       maq.estado === 'en_uso' && maq.en_uso_desde != null && await cargaConCiclosDisponibles(client, id, maq.id);
 
@@ -3002,8 +2622,7 @@ export const encenderMaquinaDeNota = async (req, res) => {
         `UPDATE maquinas
             SET encendida_sin_iniciar_at = NOW(),
                 encendida_para_nota_id   = $2,
-                -- Se borra el ciclo anterior: hasta que arranque el siguiente no
-                -- hay cronómetro que contar ni corte que programar.
+                -- Sin ciclo hasta que arranque el siguiente.
                 en_uso_desde  = NULL,
                 ciclo_minutos = NULL
           WHERE id = $1 RETURNING *`,
@@ -3017,7 +2636,7 @@ export const encenderMaquinaDeNota = async (req, res) => {
       });
     }
 
-    // Cronómetro ya corriendo para esta misma nota: el botón pulsado dos veces.
+    // Cronómetro ya corriendo para esta nota (doble clic).
     const cronometro = Boolean(maq.cronometro);
     if (cronometro && maq.estado === 'en_uso' && maq.en_uso_desde != null) {
       const { rowCount: yaEsDeEstaNota } = await client.query(
@@ -3045,16 +2664,11 @@ export const encenderMaquinaDeNota = async (req, res) => {
       });
     }
 
-    // La de cronómetro con botón Iniciar (lavadora Speed Queen) sigue el camino
-    // de abajo: espera su "Iniciar Lavado" y ahí arranca el cronómetro.
+    // Cronómetro sin botón Iniciar: encender arranca la carga, como
+    // activar-pendientes. Las que tienen botón Iniciar siguen abajo.
     if (cronometro && !maq.con_iniciar) {
-      // Lo mismo que "Iniciar Lavado" (activar-pendientes) pero en el acto de
-      // encender: el cronómetro cuenta desde aquí, y el ciclo que se sella es
-      // el tope de su modelo o de su tamaño.
-      //
-      // Igual que allá, si es la SECADORA de una carga cuya lavadora seguía
-      // apartada, esa lavadora ya cumplió: se suelta (la carga la conserva en
-      // lavadora_usada_id como historial).
+      // Si es la secadora de una carga cuya lavadora sigue puesta, la lavadora
+      // ya terminó y se suelta (queda en lavadora_usada_id).
       const { rows: lavASoltar } = await client.query(
         `SELECT nc.id AS carga_id, nc.lavadora_id
            FROM nota_cargas nc
@@ -3074,7 +2688,6 @@ export const encenderMaquinaDeNota = async (req, res) => {
       );
       await marcarMaquinasIniciadas(client, id, [Number(maquina_id)]);
       if (lavASoltar.length > 0) {
-        // La lavadora cumplió: su uso se cierra antes de soltarla.
         await sellarPasadasVivas(client, lavASoltar.map(r => r.lavadora_id));
         await client.query(
           `UPDATE maquinas SET estado = 'disponible', en_uso_desde = NULL WHERE id = ANY($1)`,
@@ -3090,7 +2703,6 @@ export const encenderMaquinaDeNota = async (req, res) => {
       await client.query(`UPDATE notas SET estado = $1 WHERE id = $2`, [fase, id]);
       await client.query('COMMIT');
       await sincronizarSonoff(Number(maquina_id));
-      // Las lavadoras soltadas se apagan ya; el trigger también lo haría.
       for (const r of lavASoltar) await sincronizarSonoff(Number(r.lavadora_id));
       return res.json({
         message: `${maq.nombre} encendida. Carga la ropa y arráncala con su botón; finalízala desde su tarjeta cuando termine.`,
@@ -3103,8 +2715,7 @@ export const encenderMaquinaDeNota = async (req, res) => {
           SET estado = 'en_uso',
               encendida_sin_iniciar_at = NOW(),
               encendida_para_nota_id   = $2,
-              -- Sin cronómetro hasta que arranque el lavado. Se limpia el ciclo
-              -- viejo para que nada de la carga anterior arme un corte.
+              -- Sin ciclo hasta que arranque el lavado.
               en_uso_desde  = NULL,
               ciclo_minutos = NULL
         WHERE id = $1 RETURNING *`,
@@ -3113,9 +2724,7 @@ export const encenderMaquinaDeNota = async (req, res) => {
 
     await client.query('COMMIT');
 
-    // El trigger de la mig. 075 ya avisa al cambiar el estado, pero se pide
-    // explícito para no depender de que el listener esté vivo: encender es la
-    // acción que el empleado está mirando.
+    // Directo, sin esperar al trigger (ver el import).
     await sincronizarSonoff(Number(maquina_id));
 
     res.json({
@@ -3131,6 +2740,12 @@ export const encenderMaquinaDeNota = async (req, res) => {
   }
 };
 
+// ── PATCH /notas/:id/activar-pendientes ─────────────────────
+/**
+ * "Iniciar": arranca las máquinas asignadas a la nota que estén libres o
+ * encendidas esperando por ella. Sin body, todas; con `maquina_id`, solo esa
+ * (y `minutos` si el modelo pregunta el programa).
+ */
 export const activarMaquinasPendientes = async (req, res) => {
   const { id } = req.params;
   const { maquina_id, minutos } = req.body ?? {};
@@ -3138,7 +2753,6 @@ export const activarMaquinasPendientes = async (req, res) => {
   try {
     await client.query('BEGIN');
 
-    // Duración elegida en el modal del modelo que pregunta (mig. 120).
     let elegido = null;
     if (maquina_id) {
       const leido = await tiempoElegidoDeMaquina(client, maquina_id, minutos);
@@ -3176,11 +2790,7 @@ export const activarMaquinasPendientes = async (req, res) => {
          FROM maquinas WHERE id = ANY($1) AND sucursal = $2 FOR UPDATE`,
       [ids, req.sucursal]
     );
-    // Arrancable = libre, o ya encendida por ESTA nota esperando su arranque
-    // (mig. 110). Ese segundo caso es el paso previo "Encender máquina": la
-    // máquina está apartada y con corriente, pero sin cronómetro (`en_uso_desde`
-    // en NULL). Sin esto el segundo paso se rechazaba con un "ya está en uso",
-    // porque antes solo contaba 'disponible'.
+    // Arrancable = libre, o encendida por esta nota esperando su arranque.
     const esperandoDeEstaNota = (m) =>
       m.estado === 'en_uso'
       && m.en_uso_desde == null
@@ -3189,10 +2799,8 @@ export const activarMaquinasPendientes = async (req, res) => {
       .filter(m => m.estado === 'disponible' || esperandoDeEstaNota(m))
       .map(m => m.id);
 
-    // Con maquina_id se activa solo esa (botón por máquina); debe estar
-    // asignada a la nota y libre. Aquí es donde se decide quién se queda con
-    // una máquina que varias notas tienen asignada: la primera en iniciar. El
-    // FOR UPDATE de arriba serializa a dos empleados que le den a la vez.
+    // Con maquina_id, solo esa. Aquí se decide quién se queda con una máquina
+    // asignada a varias notas: la primera en iniciar (el FOR UPDATE serializa).
     if (maquina_id != null) {
       if (!libres.some(x => String(x) === String(maquina_id))) {
         const asignada = maqs.some(m => String(m.id) === String(maquina_id));
@@ -3200,7 +2808,6 @@ export const activarMaquinasPendientes = async (req, res) => {
                                        && m.estado === 'en_uso' && !esperandoDeEstaNota(m));
         let mensaje = 'La máquina no está asignada a la nota o no está disponible.';
         if (ocupada) {
-          // La tomó alguien más: hay que cambiarla por otra en esta carga.
           const duena = await notaQueUsaMaquina(client, Number(maquina_id), Number(id));
           const { rows: nomRows } = await client.query('SELECT nombre FROM maquinas WHERE id = $1', [maquina_id]);
           const nombre = nomRows[0]?.nombre ?? 'La máquina';
@@ -3221,10 +2828,8 @@ export const activarMaquinasPendientes = async (req, res) => {
       return res.status(400).json({ message: 'No hay máquinas pendientes por activar.' });
     }
 
-    // Al iniciar el secado de una carga cuya lavadora seguía lavando (en uso),
-    // esa lavadora ya cumplió: se captura antes de tomar la secadora para
-    // soltarla (desvincular + liberar) después. La carga conserva la lavadora
-    // en lavadora_usada_id (historial). Solo aplica a lavadoras realmente en uso.
+    // Al iniciar la secadora de una carga cuya lavadora sigue en uso, esa
+    // lavadora ya terminó: se suelta después (queda en lavadora_usada_id).
     const { rows: lavASoltar } = await client.query(
       `SELECT nc.id AS carga_id, nc.lavadora_id
          FROM nota_cargas nc
@@ -3238,7 +2843,6 @@ export const activarMaquinasPendientes = async (req, res) => {
       `UPDATE maquinas
           SET estado = 'en_uso',
               en_uso_desde = NOW(),
-              -- La espera terminó en el único final bueno: el lavado arrancó.
               encendida_sin_iniciar_at = NULL,
               encendida_para_nota_id   = NULL
         WHERE id = ANY($1)`,
@@ -3249,7 +2853,6 @@ export const activarMaquinasPendientes = async (req, res) => {
     if (lavASoltar.length > 0) {
       const lavIds   = lavASoltar.map(r => r.lavadora_id);
       const cargaIds = lavASoltar.map(r => r.carga_id);
-      // La lavadora cumplió: su uso se cierra antes de soltarla.
       await sellarPasadasVivas(client, lavIds);
       await client.query(
         `UPDATE maquinas SET estado = 'disponible', en_uso_desde = NULL WHERE id = ANY($1)`,
@@ -3262,8 +2865,6 @@ export const activarMaquinasPendientes = async (req, res) => {
     }
 
     await sellarCicloMaquinas(client, id, elegido);
-    // La nota queda en la fase que dicten sus máquinas: si se activó una
-    // lavadora vuelve/queda en LAVANDO; si solo corren secadoras, SECANDO.
     const fase = await faseProcesoDeNota(client, id);
     await client.query(`UPDATE notas SET estado = $1 WHERE id = $2`, [fase, id]);
 
@@ -3284,12 +2885,12 @@ export const activarMaquinasPendientes = async (req, res) => {
 };
 
 // ── PATCH /notas/:id/asignar-carga-maquina ──────────────────
-// Asigna una máquina física a una carga (de Autoservicio o Por Encargo) creada
-// con TIPO pero sin máquina. Valida que sea del slot que toca (una secadora no
-// entra de lavadora), que esté disponible y que no la tenga apartada otra nota
-// abierta. El TAMAÑO ya no se valida salvo en el edredón (2026-09-26). La
-// máquina queda asignada En Espera (se arranca luego con "Iniciar").
-// El precio ya está fijado por el tipo: NO se recalcula.
+/**
+ * Pone una máquina física en el hueco de una carga que solo tenía el tipo. Debe
+ * ser del tipo del hueco y estar libre; el tamaño no importa. Queda asignada
+ * sin arrancar. En Autoservicio aquí se cobra la máquina; en Por Encargo el
+ * precio no cambia.
+ */
 export const asignarCargaMaquina = async (req, res) => {
   const { id } = req.params;
   const { carga_id, slot, maquina_id } = req.body; // slot: 'lavadora' | 'secadora'
@@ -3328,8 +2929,6 @@ export const asignarCargaMaquina = async (req, res) => {
       return res.status(404).json({ message: 'La carga no pertenece a la nota.' });
     }
     const carga = cargaRows[0];
-    // Autoservicio: la máquina se cobra al asignarla (2026-09-25), y el tamaño
-    // de lavadora no se eligió en la nota. Las dos cosas cuelgan de aquí.
     const tarifaAlAsignar = notaRows[0].tipo_servicio === 'AUTOSERVICIO';
     const tipoPrevisto = slot === 'lavadora' ? carga.lavadora_tipo : carga.secadora_tipo;
     const yaAsignada   = slot === 'lavadora' ? carga.lavadora_id   : carga.secadora_id;
@@ -3355,24 +2954,13 @@ export const asignarCargaMaquina = async (req, res) => {
       await client.query('ROLLBACK');
       return res.status(400).json({ message: `La máquina ${maq.nombre} no está disponible.` });
     }
-    // El tipo de la máquina debe coincidir con el previsto de la carga.
+    // Cualquier lavadora o secadora libre sirve: el tamaño no se valida.
     if (slot === 'lavadora') {
       if (maq.tipo === 'secadora') {
         await client.query('ROLLBACK');
         return res.status(400).json({ message: `${maq.nombre} es una secadora, no una lavadora.` });
       }
-      // El tamaño ya NO tiene que coincidir con el que eligió la nota
-      // (2026-09-26). En el mostrador la ropa entra en la lavadora que esté
-      // libre, y el precio no depende de cuál sea: en Por Encargo se cobra el
-      // tope de la carga, congelado al crearla, y en Autoservicio se tarifa
-      // abajo con la máquina que de verdad se asigna. Exigirlo solo dejaba una
-      // carga esperando una mediana con dos jumbos desocupadas al lado.
-      //
-      // Lo que sigue en pie es físico, no de tarifa: un edredón no cabe en una
-      // mediana. Desde el 2026-10-02 tampoco eso: el negocio decidió que el
-      // edredón va en cualquier lavadora, en Autoservicio y en Por Encargo.
     } else {
-      // La secadora es de un solo tamaño: cualquier secadora disponible sirve.
       if (maq.tipo !== 'secadora') {
         await client.query('ROLLBACK');
         return res.status(400).json({ message: `${maq.nombre} no es una secadora.` });
@@ -3382,11 +2970,7 @@ export const asignarCargaMaquina = async (req, res) => {
     const col = slot === 'lavadora' ? 'lavadora_id' : 'secadora_id';
     const colUsada = slot === 'lavadora' ? 'lavadora_usada_id' : 'secadora_usada_id';
     await registrarMaquinaEnCarga(client, carga_id, slot, maquina_id);
-    // AQUÍ se cobra la máquina en Autoservicio (2026-09-25): la nota nace en $0
-    // y es al asignar la física cuando se sabe qué se usó, así que es cuando se
-    // tarifa —con la tarifa de ESA máquina, mediana o jumbo—. En Por Encargo el
-    // precio no depende de esto: la carga se cobra por su tope, congelado al
-    // crear la nota, así que ahí no se toca nada.
+    // Autoservicio: se cobra con la tarifa de esta máquina (mediana o jumbo).
     if (tarifaAlAsignar) {
       const t = await tarifasCarga(client);
       const precio = slot === 'lavadora'
@@ -3397,9 +2981,6 @@ export const asignarCargaMaquina = async (req, res) => {
         `UPDATE nota_cargas SET ${col} = $1, ${colUsada} = $1, ${precioCol} = $2 WHERE id = $3`,
         [maquina_id, precio, carga_id]
       );
-      // Si la nota ya estaba pagada, lo cobrado deja de corresponder: vuelve a
-      // PENDIENTE para cobrarla por el importe nuevo (mismo criterio que
-      // cambiar-maquina).
       await recalcularPrecioTotal(client, id, {
         desmarcarPagoSiCambia: true, usuarioId: req.user?.id, sucursal: req.sucursal,
       });
@@ -3424,21 +3005,17 @@ export const asignarCargaMaquina = async (req, res) => {
 };
 
 // ── PATCH /notas/:id/asignar-maquina ────────────────────────
-// Asigna una máquina extra (lavadora o secadora) a la nota. Sin `carga_id` se
-// crea una CARGA NUEVA; con `carga_id` la máquina se suma a esa carga, llenando
-// su hueco libre (p. ej. la secadora de una carga que solo tiene lavadora).
-// La máquina queda ASIGNADA pero disponible (En Espera): NO arranca aquí,
-// el empleado la inicia manualmente desde Salidas (igual que al crear la nota).
-// `cobrar` decide si la carga suma su tarifa al total (true) o va sin costo
-// (false, precio 0). Disponible mientras la nota no esté finalizada ni cancelada.
-// No toca estado_pago: igual que agregar productos, un cobro posterior a una
-// nota pagada se maneja aparte.
+/**
+ * Agrega una o varias máquinas a la nota. Con `carga_id` la primera pareja
+ * llena los huecos de esa carga (otra vuelta de la misma ropa); lo demás crea
+ * cargas nuevas. Quedan asignadas sin arrancar. `cobrar` decide si suman su
+ * tarifa o van sin costo.
+ */
 export const asignarMaquina = async (req, res) => {
   const { id } = req.params;
   const { maquina_id, maquina_ids, cobrar, carga_id } = req.body;
 
-  // Acepta una máquina (maquina_id, formato viejo) o varias (maquina_ids). Se
-  // normaliza a una lista de ids únicos.
+  // Una máquina (maquina_id) o varias (maquina_ids), sin repetir.
   const idsRaw = Array.isArray(maquina_ids) ? maquina_ids
     : (maquina_id != null ? [maquina_id] : []);
   const ids = [...new Set(idsRaw.map(Number).filter(n => Number.isInteger(n)))];
@@ -3466,12 +3043,6 @@ export const asignarMaquina = async (req, res) => {
       await client.query('ROLLBACK');
       return res.status(400).json({ message: 'No se puede asignar una máquina a una nota finalizada o cancelada.' });
     }
-    // Autoservicio SÍ puede agregar máquinas (2026-09-25). El bloqueo anterior
-    // se apoyaba en que se cobraba por adelantado, y eso ya no es así: la nota
-    // nace pendiente y cada máquina se tarifa al asignarla, así que una máquina
-    // de más es un renglón más de esta nota —no una nota nueva—. La máquina que
-    // la nota ya traía elegida se sigue poniendo con `asignar-carga-maquina`;
-    // esta ruta es para AGREGAR.
 
     const { rows: maqRows } = await client.query(
       'SELECT id, nombre, tipo, tamano, estado FROM maquinas WHERE id = ANY($1) AND sucursal = $2 FOR UPDATE',
@@ -3487,13 +3058,11 @@ export const asignarMaquina = async (req, res) => {
       return res.status(400).json({ message: `La máquina ${noDisp.nombre} no está disponible.` });
     }
 
-    // La(s) carga(s) nueva(s) heredan la prenda de la nota para tarifar con su
-    // categoría.
+    // Las cargas nuevas heredan la prenda de la nota.
     const tipoPrenda = notaRows[0].tipo_prenda ?? null;
     const esEdredon  = String(tipoPrenda).toUpperCase() === 'EDREDON';
     const lavadoras  = maqRows.filter(m => m.tipo !== 'secadora');
     const secadoras  = maqRows.filter(m => m.tipo === 'secadora');
-    // El edredón ya no exige lavadora jumbo (2026-10-02).
 
     const { rows: [{ max_orden }] } = await client.query(
       'SELECT COALESCE(MAX(orden), 0)::int AS max_orden FROM nota_cargas WHERE nota_id = $1',
@@ -3504,14 +3073,9 @@ export const asignarMaquina = async (req, res) => {
     const precioLav = m => cobrar ? tarifaLavadora(m.tipo, tipoPrenda, t) : 0;
     const precioSec = m => cobrar ? tarifaSecadora(m.tamano, tipoPrenda, t) : 0;
 
-    // Si se indica carga_id, la primera pareja se agrega a ESA carga en vez de
-    // crear una carga nueva; las parejas que sobren sí se agregan como cargas
-    // nuevas. La carga puede estar vacía (creada al hacer la nota sin máquina) o
-    // ya traer una máquina: p. ej. sumarle la secadora a una carga que solo
-    // tiene lavadora. El hueco lo ocupa la máquina PUESTA, no la que ya se usó
-    // y se liberó: la misma ropa puede necesitar otro lavado o más secado, y
-    // eso va en su carga (2026-09-22). Lo que no cabe es una segunda máquina
-    // del mismo tipo a la vez: la carga guarda una lavadora y una secadora.
+    // Con carga_id, la primera pareja va a esa carga. Un hueco está ocupado
+    // solo si tiene máquina puesta (no la ya usada y soltada); la carga admite
+    // una lavadora y una secadora a la vez.
     let cargaObjetivo = null;
     if (carga_id != null) {
       const { rows: cRows } = await client.query(
@@ -3536,40 +3100,22 @@ export const asignarMaquina = async (req, res) => {
       cargaObjetivo = c;
     }
 
-    // Empareja lavadora+secadora en una misma carga (un ciclo completo). Las que
-    // sobran de un tipo van cada una en su propia carga.
+    // Empareja lavadora + secadora por carga; las que sobran van solas.
     const nuevas = [];
     const n = Math.max(lavadoras.length, secadoras.length);
     for (let i = 0; i < n; i++) {
       nuevas.push({ lavadora: lavadoras[i] ?? null, secadora: secadoras[i] ?? null });
     }
 
-    // La máquina NO arranca aquí: queda asignada pero disponible (En Espera) y
-    // el empleado la inicia manualmente desde Salidas, igual que al crear la nota.
     let nuevoOrden = max_orden;
     for (let i = 0; i < nuevas.length; i++) {
       const { lavadora, secadora } = nuevas[i];
-      // La primera pareja llena la carga objetivo (si se indicó): conserva su
-      // orden, prenda y es_adicional originales; solo se le ponen las máquinas.
+      // La primera pareja llena los huecos de la carga objetivo.
       if (cargaObjetivo && i === 0) {
         const prendaCarga = cargaObjetivo.tipo_prenda ?? tipoPrenda;
-        // Solo se toca el hueco que se está llenando: si la carga ya traía la
-        // otra máquina (o su precio), se conserva tal cual. Y si ese hueco YA
-        // se había usado (segundo lavado, más secado), su precio tampoco se
-        // reescribe: lo que se cobró al hacer la nota sigue siendo lo cobrado,
-        // y la máquina repetida va sin cobro. Sin esto, repetir con cobrar
-        // false pondría el precio en 0 y bajaría el total de la nota.
-        // Cada hueco que se llena aquí es una pasada más de esa carga. Corre un
-        // solo ciclo (mig. 115) cuando es una REPETICIÓN de ese hueco: relavar
-        // o secar de más sobre ropa que ya dio su vuelta, donde encadenar dos
-        // ciclos es regalar el doble de agua y luz.
-        //
-        // Ya NO se mira si va sin cobro. Ese era un buen atajo cuando la nota
-        // traía sus máquinas elegidas y lo que se agregaba aquí era un extra;
-        // desde que Por Encargo vende servicios y TODAS sus máquinas se ponen
-        // en Salidas —siempre sin cobro, porque lo que se cobra es el
-        // servicio—, capar por ahí dejaba el lavado normal del cliente en un
-        // solo ciclo aunque su modelo pida dos (una LG, sin ir más lejos).
+        // Solo se toca el hueco que se llena. Si ese hueco ya se había usado
+        // (relavado, más secado), es una repetición: corre un solo ciclo y
+        // conserva su precio (la vuelta extra va sin cobro).
         const repiteLav = Boolean(cargaObjetivo.lavadora_usada_id);
         const repiteSec = Boolean(cargaObjetivo.secadora_usada_id);
         await registrarMaquinaEnCarga(client, cargaObjetivo.id, 'lavadora',
@@ -3615,24 +3161,17 @@ export const asignarMaquina = async (req, res) => {
           tipoPrenda,
         ]
       );
-      // Carga nueva: es un lavado de estreno, nunca una repetición, así que
-      // corre lo que diga el modelo de su máquina. Que vaya sin cobro no la
-      // capa: en Por Encargo TODAS las máquinas se ponen aquí y sin cobro
-      // —lo cobrado es el servicio—, así que mirarlo dejaba el lavado del
-      // cliente en un ciclo.
+      // Carga nueva: no es repetición, corre los ciclos que diga su modelo
+      // aunque vaya sin cobro (así llegan todas las de Por Encargo).
       await registrarMaquinaEnCarga(client, nuevaCarga[0].id, 'lavadora',
         lavadora ? lavadora.id : null, 'pasada', false);
       await registrarMaquinaEnCarga(client, nuevaCarga[0].id, 'secadora',
         secadora ? secadora.id : null, 'pasada', false);
     }
 
-    // Estado según las máquinas EN USO: las nuevas no cuentan (no se iniciaron).
-    // Si nada corre, la nota queda En Espera (reabre una nota LISTA para poder
-    // iniciarla).
+    // Las nuevas no arrancan, así que una nota LISTA vuelve a En Espera.
     const nuevoEstado = await faseProcesoDeNota(client, id);
     await client.query('UPDATE notas SET estado = $1 WHERE id = $2', [nuevoEstado, id]);
-    // Si el cambio movió el total y la nota ya estaba pagada, el cobro deja de
-    // corresponder: vuelve a PENDIENTE para cobrarla por el importe nuevo.
     await recalcularPrecioTotal(client, id, {
       desmarcarPagoSiCambia: true, usuarioId: req.user?.id, sucursal: req.sucursal,
     });
@@ -3669,10 +3208,11 @@ export const asignarMaquina = async (req, res) => {
 };
 
 // ── PATCH /notas/:id/cambiar-maquina ────────────────────────
-// Cambia una máquina ASIGNADA PERO SIN INICIAR de una carga por otra disponible
-// del mismo tipo (lavadora↔lavadora, secadora↔secadora). Re-tarifa la carga con
-// la nueva máquina (p. ej. secadora mediana→jumbo cambia el precio) y recalcula
-// el total. No aplica a máquinas ya en uso: primero hay que detenerlas.
+/**
+ * Cambia la máquina de una carga, sin iniciar, por otra libre del mismo tipo.
+ * También sirve cuando otra nota se adelantó y ya la está usando. Si el hueco
+ * se cobraba, se cobra con la tarifa de la nueva.
+ */
 export const cambiarMaquina = async (req, res) => {
   const { id } = req.params;
   const { maquina_actual_id, maquina_nueva_id } = req.body;
@@ -3701,7 +3241,6 @@ export const cambiarMaquina = async (req, res) => {
       return res.status(400).json({ message: 'No se puede cambiar una máquina de una nota finalizada o cancelada.' });
     }
 
-    // La máquina actual debe estar asignada, disponible (sin iniciar) y en la sucursal.
     const { rows: actRows } = await client.query(
       'SELECT id, nombre, tipo, estado FROM maquinas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
       [maquina_actual_id, req.sucursal]
@@ -3710,9 +3249,8 @@ export const cambiarMaquina = async (req, res) => {
       await client.query('ROLLBACK');
       return res.status(400).json({ message: 'La máquina actual no existe.' });
     }
-    // Si la máquina está en uso puede ser por ESTA nota (hay que detenerla
-    // antes) o por OTRA que se le adelantó al iniciar: en ese caso justamente
-    // hay que poder cambiarla, que es lo que pide el aviso de Salidas.
+    // En uso por esta nota: hay que detenerla antes. En uso por otra nota: se
+    // puede cambiar (es lo que pide el aviso de Salidas).
     if (actRows[0].estado !== 'disponible') {
       const otra = await notaQueUsaMaquina(client, Number(maquina_actual_id), Number(id));
       if (!otra) {
@@ -3725,7 +3263,6 @@ export const cambiarMaquina = async (req, res) => {
     const usadaCol   = esSecadora ? 'secadora_usada_id'  : 'lavadora_usada_id';
     const precioCol  = esSecadora ? 'precio_secadora'    : 'precio_lavadora';
 
-    // La carga que usa esa máquina.
     const { rows: cargaRows } = await client.query(
       `SELECT id, tipo_prenda, ${precioCol} AS precio_actual
          FROM nota_cargas WHERE nota_id = $1 AND ${cargaCol} = $2 FOR UPDATE`,
@@ -3737,7 +3274,6 @@ export const cambiarMaquina = async (req, res) => {
     }
     const carga = cargaRows[0];
 
-    // La máquina nueva: disponible, del mismo tipo y en la sucursal.
     const { rows: nueRows } = await client.query(
       'SELECT id, nombre, tipo, tamano, estado FROM maquinas WHERE id = $1 AND sucursal = $2 FOR UPDATE',
       [maquina_nueva_id, req.sucursal]
@@ -3755,12 +3291,8 @@ export const cambiarMaquina = async (req, res) => {
       await client.query('ROLLBACK');
       return res.status(400).json({ message: 'Debes elegir una máquina del mismo tipo.' });
     }
-    // El edredón ya no exige lavadora jumbo (2026-10-02).
 
-    // Se re-tarifa con la máquina nueva SOLO si ese hueco se estaba cobrando
-    // (p. ej. secadora mediana→jumbo en Autoservicio). Una máquina puesta "sin
-    // cobro" —las de Por Encargo, que cobran el servicio, o una extra— sigue
-    // sin cobro: antes cambiarla le ponía precio y subía la nota (2026-10-08).
+    // Solo se re-tarifa si el hueco se cobraba; uno sin cobro sigue sin cobro.
     const t = await tarifasCarga(client);
     const precio = !(Number(carga.precio_actual) > 0) ? carga.precio_actual
       : esSecadora
@@ -3773,8 +3305,6 @@ export const cambiarMaquina = async (req, res) => {
       `UPDATE nota_cargas SET ${cargaCol} = $1, ${usadaCol} = $1, ${precioCol} = $2 WHERE id = $3`,
       [maquina_nueva_id, precio, carga.id]
     );
-    // Si el cambio movió el total y la nota ya estaba pagada, el cobro deja de
-    // corresponder: vuelve a PENDIENTE para cobrarla por el importe nuevo.
     await recalcularPrecioTotal(client, id, {
       desmarcarPagoSiCambia: true, usuarioId: req.user?.id, sucursal: req.sucursal,
     });
@@ -3811,13 +3341,11 @@ export const cambiarMaquina = async (req, res) => {
 };
 
 // ── PATCH /notas/:id/terminar-lavado ────────────────────────
-// Termina el lavado de UNA lavadora de la nota y arranca su secado: libera
-// esa lavadora, marca en uso la secadora elegida (obligatoria) y la asigna a
-// las cargas que lavó esa lavadora. Cada carga es independiente: las demás
-// lavadoras de la nota no se tocan. Cobra la tarifa de secado de esas cargas
-// (el secado es un cargo aparte del lavado), así que el total sube. Si era la
-// última lavadora la nota pasa a SECANDO, y a LISTA cuando termine la última
-// carga que le quede pendiente (ver terminarSecado).
+/**
+ * Termina el lavado de una lavadora y arranca el secado de sus cargas en la
+ * secadora elegida (Autoservicio, "Iniciar secado"). Cobra el secado, así que
+ * el total sube. Las demás lavadoras de la nota no se tocan.
+ */
 export const terminarLavado = async (req, res) => {
   const { id } = req.params;
   const { lavadora_id, secadora_id, minutos } = req.body;
@@ -3862,7 +3390,6 @@ export const terminarLavado = async (req, res) => {
     }
     const secadoraTamano = maqRows[0].tamano;
 
-    // La lavadora debe pertenecer a alguna carga de la nota.
     const { rows: cargasLav } = await client.query(
       'SELECT id FROM nota_cargas WHERE nota_id = $1 AND lavadora_id = $2 FOR UPDATE',
       [id, lavadora_id]
@@ -3872,12 +3399,6 @@ export const terminarLavado = async (req, res) => {
       return res.status(400).json({ message: 'La lavadora no está asignada a esta nota.' });
     }
 
-    // La secadora hereda las cargas de esa lavadora y cobra su tarifa de secado
-    // según el TAMAÑO de la secadora (prenda edredón manda sobre el tamaño). Se
-    // tarifa aquí porque en Autoservicio la carga nace solo con lavadora
-    // (precio_secadora en 0) y el secado se cobra al iniciarlo.
-    // El lavado se da por finalizado aquí: se sella su tiempo encendida antes de
-    // que la lavadora se suelte.
     await sellarFinDePasada(client, id, 'lavadora', lavadora_id);
 
     const t = await tarifasCarga(client);
@@ -3888,6 +3409,8 @@ export const terminarLavado = async (req, res) => {
         FOR UPDATE OF nc`,
       [id, lavadora_id]
     );
+    // La secadora toma las cargas de esa lavadora y cobra el secado según su
+    // tamaño (el edredón tiene tarifa propia).
     for (const c of cargasMover) {
       await registrarMaquinaEnCarga(client, c.id, 'secadora', secadora_id);
       await client.query(
@@ -3895,9 +3418,7 @@ export const terminarLavado = async (req, res) => {
         [secadora_id, tarifaSecadora(secadoraTamano, c.tipo_prenda, t), c.id]
       );
     }
-    // ...y la lavadora se desvincula y libera: queda libre para el siguiente
-    // cliente y no debe re-liberarse (ni frenar el secado) si otra nota la
-    // toma. El cobro del lavado ya quedó guardado en precio_lavadora.
+    // La lavadora se suelta; su cobro queda en precio_lavadora.
     await client.query(
       'UPDATE nota_cargas SET lavadora_id = NULL WHERE nota_id = $1 AND lavadora_id = $2',
       [id, lavadora_id]
@@ -3908,33 +3429,24 @@ export const terminarLavado = async (req, res) => {
       [lavadora_id]
     );
 
-    // La secadora entra en uso y su ciclo arranca ahora, también la que arranca
-    // con "Iniciar" (Speed Queen, Sec49): desde 2026-10-04 no hay paso de
-    // encender, este botón ya es su Iniciar. Se sella su ciclo según la
-    // categoría de la carga (la lavadora que la lavó, ya en lavadora_usada_id,
-    // define mediana/jumbo; la prenda, edredón).
+    // La secadora arranca ya: este botón es su "Iniciar".
     await client.query(
       `UPDATE maquinas SET estado = 'en_uso', en_uso_desde = NOW() WHERE id = $1`,
       [secadora_id]
     );
     await marcarMaquinasIniciadas(client, id, [secadora_id]);
-    // La secadora puede ser de un modelo que pregunta su duración (mig. 120):
-    // este es el otro camino que la arranca, así que también la acepta.
+    // Acepta el programa elegido si el modelo lo pregunta.
     const leido = await tiempoElegidoDeMaquina(client, secadora_id, minutos);
     if (leido?.error) {
       await client.query('ROLLBACK');
       return res.status(400).json({ message: leido.error });
     }
     await sellarCicloMaquinas(client, id, leido ? { maquinaId: secadora_id, minutos: leido.minutos } : null);
-    // Terminó la lavadora: su granel ya se usó y sale del estante (mig. 161).
+    // Terminó una lavadora: el granel de los servicios sale del inventario.
     await consumirProductosDeNota(client, id, req.sucursal, req.user?.id, { soloGranel: true });
-    // Si era la última lavadora, la nota pasa a SECANDO; si otras cargas
-    // siguen en lavadora, continúa LAVANDO.
     const fase = await faseProcesoDeNota(client, id);
     await client.query('UPDATE notas SET estado = $1 WHERE id = $2', [fase, id]);
 
-    // El secado recién cobrado sube el total; se recalcula y se valida que
-    // ninguna carga rebase su tope.
     await recalcularPrecioTotal(client, id);
     const errTope = await validarTopesCargas(client, id);
     if (errTope) {
@@ -3968,10 +3480,10 @@ export const terminarLavado = async (req, res) => {
 };
 
 // ── PATCH /notas/:id/terminar-secado ────────────────────────
-// Termina el secado de UNA secadora de la nota: la libera y la desvincula.
-// Si era la última máquina en uso de la nota, la nota pasa a LISTA
-// ("Por Entregar"); si otras cargas siguen lavando o secando, la nota
-// continúa en proceso.
+/**
+ * "Finalizar" una secadora: la suelta y, si a la nota ya no le queda nada
+ * pendiente, la cierra (ver estadoAlTerminarCargas).
+ */
 export const terminarSecado = async (req, res) => {
   const { id } = req.params;
   const { secadora_id } = req.body;
@@ -4008,8 +3520,6 @@ export const terminarSecado = async (req, res) => {
 
     await sellarFinDePasada(client, id, 'secadora', secadora_id);
 
-    // Desvincular y liberar la secadora: queda libre para el siguiente
-    // cliente y no debe re-liberarse si otra nota la toma.
     await client.query(
       'UPDATE nota_cargas SET secadora_id = NULL WHERE nota_id = $1 AND secadora_id = $2',
       [id, secadora_id]
@@ -4020,7 +3530,6 @@ export const terminarSecado = async (req, res) => {
       [secadora_id]
     );
 
-    // ¿Era la última máquina de la nota? Entonces la nota está lista.
     const restantes = await maquinasDeNota(client, id);
     const { rowCount: enUso } = restantes.length === 0
       ? { rowCount: 0 }
@@ -4029,8 +3538,8 @@ export const terminarSecado = async (req, res) => {
           [restantes]
         );
     if (enUso === 0) {
-      // Sin máquinas corriendo la nota se cierra SOLO si ya no le falta ninguna
-      // carga; si falta alguna, vuelve a su fase real (En Espera).
+      // Sin máquinas corriendo: se cierra si no le falta nada; si no, vuelve a
+      // su fase (En Espera).
       if (await hayCargasPendientes(client, id)) {
         const fase = await faseProcesoDeNota(client, id);
         await client.query(`UPDATE notas SET estado = $1 WHERE id = $2`, [fase, id]);
@@ -4066,11 +3575,11 @@ export const terminarSecado = async (req, res) => {
 };
 
 // ── PATCH /notas/:id/terminar-lavado-final ──────────────────
-// Finaliza una carga de Autoservicio cuya máquina es una LAVADORA, SIN pasar a
-// secado (en Autoservicio cada carga es una sola máquina independiente). Libera
-// la lavadora y, si con eso la nota ya no tiene NINGUNA carga pendiente, la
-// deja LISTA; si queda trabajo (otra máquina corriendo, o una carga que aún no
-// arranca), recalcula la fase. Espejo de terminarSecado para el slot lavadora.
+/**
+ * "Finalizar" una lavadora sin pasar a secado: la suelta, descuenta el granel
+ * de los servicios y, si a la nota ya no le queda nada pendiente, la cierra.
+ * Espejo de terminarSecado.
+ */
 export const terminarLavadoFinal = async (req, res) => {
   const { id } = req.params;
   const { lavadora_id } = req.body;
@@ -4107,7 +3616,6 @@ export const terminarLavadoFinal = async (req, res) => {
 
     await sellarFinDePasada(client, id, 'lavadora', lavadora_id);
 
-    // Desvincular y liberar la lavadora (queda libre para el siguiente cliente).
     await client.query(
       'UPDATE nota_cargas SET lavadora_id = NULL WHERE nota_id = $1 AND lavadora_id = $2',
       [id, lavadora_id]
@@ -4118,11 +3626,9 @@ export const terminarLavadoFinal = async (req, res) => {
       [lavadora_id]
     );
 
-    // Terminó una lavadora: el granel elegido de la nota ya se usó y sale del
-    // estante (mig. 161, 2026-10-11). Solo la primera vez descuenta algo.
+    // El granel de los servicios sale del inventario (lo ya descontado no se repite).
     await consumirProductosDeNota(client, id, req.sucursal, req.user?.id, { soloGranel: true });
 
-    // ¿Quedan máquinas en uso? Si no, la nota está lista; si sí, se recalcula fase.
     const restantes = await maquinasDeNota(client, id);
     const { rowCount: enUso } = restantes.length === 0
       ? { rowCount: 0 }
@@ -4174,9 +3680,7 @@ export const cambiarEstadoPago = async (req, res) => {
     });
   }
 
-  // Cobrar exige saber CÓMO se pagó: sin este dato el corte de caja no puede
-  // distinguir el dinero del cajón de las transferencias y tarjetas, y el
-  // faltante aparente sale a costa del empleado en turno.
+  // Cobrar exige la forma de pago: el corte solo cuenta el efectivo.
   const formaPago = normalizarFormaPago(forma_pago);
   if (estado_pago === 'PAGADO' && !formaPago) {
     return res.status(400).json({
@@ -4204,10 +3708,7 @@ export const cambiarEstadoPago = async (req, res) => {
       return res.status(400).json({ message: 'No se puede cambiar el pago de una nota cancelada.' });
     }
 
-    // Autoservicio sin máquina asignada no se puede cobrar (2026-09-25): su
-    // carga todavía no vale nada (se tarifa al asignar en Salidas), así que el
-    // cobro entraría en $0 y al asignar la máquina el total subiría y la nota
-    // volvería sola a PENDIENTE — con el corte ya cerrado, ni eso se podría.
+    // Autoservicio con cargas sin máquina no se cobra: aún no tienen precio.
     if (estado_pago === 'PAGADO' && actual.tipo_servicio === 'AUTOSERVICIO') {
       const { rows: sinMaquina } = await client.query(
         `SELECT COUNT(*)::int AS faltan
@@ -4226,9 +3727,7 @@ export const cambiarEstadoPago = async (req, res) => {
       }
     }
 
-    // Cobrar lo que falta mete dinero al cajón: sin caja abierta no se recibe
-    // (2026-10-08, mismo candado que /abonos y crear nota). Una nota que ya no
-    // debe nada (saldo $0) se puede marcar pagada sin caja: no entra dinero.
+    // Recibir dinero exige caja abierta; con saldo $0 no entra dinero y se permite.
     if (estado_pago === 'PAGADO' && actual.estado_pago !== 'PAGADO' && notaRequiereCaja()) {
       const { rows: [{ total }] } = await client.query(
         'SELECT precio_total AS total FROM notas WHERE id = $1', [id]
@@ -4254,18 +3753,14 @@ export const cambiarEstadoPago = async (req, res) => {
       await client.query('ROLLBACK');
       return res.status(403).json({ message: 'Solo un administrador puede revertir un pago.' });
     }
-    // Deshacer un cobro es el vector directo para desaparecer una venta: el
-    // motivo es obligatorio y viaja al aviso de la campana, para que se pueda
-    // revisar después sin interrogar a nadie.
+    // Revertir un cobro exige motivo, que va al aviso de la campana.
     const motivoReversion = String(req.body?.motivo ?? '').trim().slice(0, 200);
     if (esReversion && !motivoReversion) {
       await client.query('ROLLBACK');
       return res.status(400).json({ message: 'Escribe por qué se revierte el pago.' });
     }
-    // Solo se revierte mientras el cobro siga en la caja abierta (o si entró
-    // sin caja: entonces no está en ningún corte). Con el corte ya cerrado las
-    // cifras quedaron congeladas (mig. 101): la venta seguiría contada ahí y
-    // volver a cobrar la nota la sumaría otra vez en la caja de hoy.
+    // Solo con su caja abierta (o si se cobró sin caja): un corte cerrado ya
+    // contó esa venta.
     if (esReversion && actual.caja_id) {
       const { rows: cajaRows } = await client.query(
         'SELECT estado FROM cajas WHERE id = $1', [actual.caja_id]
@@ -4279,16 +3774,8 @@ export const cambiarEstadoPago = async (req, res) => {
       }
     }
 
-    // Revertir el pago tiene que devolver también el DINERO, y desde el
-    // 2026-09-26 el dinero entra por los abonos: cobrar una nota de un tirón
-    // registra un abono por el total y la marca pagada sola. Sin esto, la nota
-    // volvía a PENDIENTE con sus abonos vivos y quedaba "Pendiente de cobro
-    // $0.00 · Abonado $140 de $140": marcada como que debe, sin deber nada.
-    //
-    // Se revierten TODOS los abonos vivos: revertir el pago es decir "esta nota
-    // no está cobrada", así que no puede quedar dinero suyo contado en ningún
-    // corte. Para deshacer solo una parte —un adelanto mal capturado— está el
-    // botón de cada abono, que es más fino y pide su propio motivo.
+    // Revertir el pago revierte también TODOS sus abonos vivos: la nota deja de
+    // estar cobrada. Para deshacer solo uno está el botón de cada abono.
     let abonosRevertidos = [];
     if (esReversion) {
       const { rows: vivos } = await client.query(
@@ -4299,10 +3786,8 @@ export const cambiarEstadoPago = async (req, res) => {
           FOR UPDATE OF ab`,
         [id]
       );
-      // Un abono que ya entró en un corte CERRADO no se deshace, igual que un
-      // cobro (mig. 101). Y esta es la única puerta que lo vigilaba: el cobro
-      // por abonos no deja `notas.caja_id`, así que el control de arriba ni se
-      // asomaba a este dinero.
+      // Ni si un abono está en un corte cerrado (no deja `notas.caja_id`, por
+      // eso se revisa aparte).
       const congelado = vivos.find(a => a.caja_id && a.caja_estado !== 'abierta');
       if (congelado) {
         await client.query('ROLLBACK');
@@ -4322,8 +3807,7 @@ export const cambiarEstadoPago = async (req, res) => {
       }
     }
 
-    // Al revertir un pago la forma deja de aplicar y se limpia, para que no
-    // quede una nota PENDIENTE marcada como pagada en efectivo.
+    // Al revertir, la forma de pago se limpia.
     const { rows } = await client.query(
       'UPDATE notas SET estado_pago = $1, forma_pago = $2, caja_id = $4 WHERE id = $3 RETURNING *',
       [estado_pago, estado_pago === 'PAGADO' ? formaPago : null, id,
@@ -4333,16 +3817,8 @@ export const cambiarEstadoPago = async (req, res) => {
       await registrarReversionPago(client, actual, req.user.id, req.sucursal, motivoReversion, abonosRevertidos);
     }
 
-    // Autoservicio que esperaba el cobro en "Por Entregar": al liquidarlo ya no
-    // queda nada que hacer —el cliente se llevó su ropa cuando terminó su
-    // carga—, así que la nota se cierra sola en vez de pedir un "Finalizar" que
-    // solo es un trámite. Es la misma regla de `estadoAlTerminarCargas`, que
-    // hasta ahora solo corría al terminar la última carga; desde que el pago
-    // dejó de ser obligatorio para arrancar (2026-09-23), el cobro puede llegar
-    // después y es aquí donde la nota queda sin pendientes.
-    //
-    // Se exige estado LISTA para no re-consumir el stock de una nota que ya se
-    // cerró (FINALIZADA consume al cerrar), y que no le falte ninguna carga.
+    // Un Autoservicio en Por Entregar sin pendientes se cierra al liquidarlo:
+    // el cliente ya se llevó su ropa.
     let notaFinal = rows[0];
     if (estado_pago === 'PAGADO'
         && actual.tipo_servicio === 'AUTOSERVICIO'
@@ -4366,18 +3842,11 @@ export const cambiarEstadoPago = async (req, res) => {
 };
 
 // ── PATCH /notas/:id/forma-pago ─────────────────────────────
-// Corrige la forma de pago de una nota YA COBRADA, para cuando el empleado se
-// equivocó al registrarla (marcó efectivo y el cliente pagó por transferencia).
-//
-// Solo se permite mientras la caja donde se cobró siga ABIERTA. Con la caja
-// abierta el corte se calcula en vivo desde `notas.caja_id` + `forma_pago`, así
-// que corregir aquí arregla el corte y Ventas sin tocar nada más. Con la caja
-// ya cerrada las cifras quedaron congeladas (mig. 101): cambiar la forma de
-// pago movería Ventas pero no el corte, y ambos dirían cosas distintas.
-//
-// No se usa "revertir el pago y volver a cobrar" para esto: al cobrar de nuevo,
-// el trigger ata la nota a la caja abierta HOY, y la venta se movería del día
-// en que se cobró al día de la corrección.
+/**
+ * Corrige la forma de pago de una nota cobrada, mientras su caja siga abierta
+ * (el corte se calcula en vivo). Revertir y volver a cobrar no sirve: movería
+ * la venta a la caja de hoy.
+ */
 export const corregirFormaPago = async (req, res) => {
   const { id } = req.params;
   const formaPago = normalizarFormaPago(req.body?.forma_pago);
@@ -4418,8 +3887,7 @@ export const corregirFormaPago = async (req, res) => {
       return res.status(400).json({ message: `La nota ya está registrada como ${palabra(formaPago)}.` });
     }
 
-    // El cambio y su rastro van juntos: es dinero moviéndose entre columnas del
-    // corte, no puede quedar uno sin el otro (mig. 102).
+    // El cambio y su historial van en la misma transacción.
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
@@ -4451,8 +3919,7 @@ export const corregirFormaPago = async (req, res) => {
 };
 
 // ── PATCH /notas/:id/telefono ───────────────────────────────
-// Guarda un teléfono de contacto a nivel nota (para el ticket de Autoservicio,
-// que es de mostrador y no lleva cliente). Se normaliza a solo dígitos; vacío = null.
+/** Teléfono de contacto de la nota (sin cliente): solo dígitos; vacío lo borra. */
 export const guardarTelefono = async (req, res) => {
   const { id } = req.params;
   const { telefono } = req.body;
@@ -4474,9 +3941,7 @@ export const guardarTelefono = async (req, res) => {
 };
 
 // ── PATCH /notas/:id/referencia ─────────────────────────────
-// Cambia el cliente / referencia libre de una nota de Autoservicio (mig. 157)
-// desde su detalle, igual que si se hubiera escrito al crearla. Vacío = vuelve
-// a "Mostrador". Solo Autoservicio: Por Encargo lleva cliente del catálogo.
+/** Nombre libre del cliente en una nota de Autoservicio; vacío = "Mostrador". */
 export const guardarReferencia = async (req, res) => {
   const { id } = req.params;
   const valor = String(req.body?.referencia ?? '').trim().slice(0, 80) || null;
@@ -4552,9 +4017,8 @@ export const addProductoToNota = async (req, res) => {
       });
     }
 
-    // Si ya estaba en la nota se le suman las unidades (reservarProducto). En
-    // una nota reabierta ese renglón ya se había entregado: vuelve a apartado
-    // para que lo nuevo salga del estante al volver a entregarla.
+    // Si ya estaba y se había entregado (nota reabierta), vuelve a apartado
+    // antes de sumarle unidades.
     const { rows: yaEsta } = await client.query(
       'SELECT id FROM nota_productos WHERE nota_id = $1 AND producto_id = $2 AND carga_id IS NULL',
       [id, producto_id]
@@ -4563,7 +4027,6 @@ export const addProductoToNota = async (req, res) => {
       await reabrirRenglonProducto(client, id, r.id, req.sucursal, req.user?.id);
     }
 
-    // La unidad/precio/medidas se resuelven según el servicio (botella o medida).
     let fila;
     try {
       fila = await reservarProducto(client, id, null, producto_id, cantidad, req.sucursal, notaRows[0].tipo_servicio);
@@ -4572,16 +4035,11 @@ export const addProductoToNota = async (req, res) => {
       return res.status(400).json({ message: e.message });
     }
 
-    // Si el cambio movió el total y la nota ya estaba pagada, el cobro deja de
-    // corresponder: vuelve a PENDIENTE para cobrarla por el importe nuevo.
     await recalcularPrecioTotal(client, id, {
       desmarcarPagoSiCambia: true, usuarioId: req.user?.id, sucursal: req.sucursal,
     });
 
-    // El tope manda también aquí. En Por Encargo el granel y las bolsas que se
-    // agregan son material del servicio, así que gastan de su precio: sin esta
-    // comprobación, lo que el alta no deja servir se podía servir igual desde
-    // Salidas, que es la otra puerta para agregar productos.
+    // En Por Encargo el granel y las bolsas gastan del precio del servicio.
     const errTope = await validarTopesCargas(client, id);
     if (errTope) {
       await client.query('ROLLBACK');
@@ -4601,13 +4059,12 @@ export const addProductoToNota = async (req, res) => {
 };
 
 // ── PUT /notas/:id/cargas/:cargaId/granel/:tipoId ───────────
-// El granel de un tipo (Jabón, Suavizante…) dentro de un servicio Por Encargo
-// (migs. 133 y 134). El empleado lo elige en Salidas: qué producto y cuántas
-// medidas. Sirve igual para el que está por elegir que para cambiar uno ya
-// elegido: lo que había de ese tipo en el servicio se suelta (devuelve lo
-// apartado) y se pone lo nuevo. Sin producto, el tipo vuelve a quedar por
-// elegir con la cantidad dada. Con `del_cliente: true` (mig. 154) el cliente
-// trajo el suyo: no se usa inventario y ya no bloquea iniciar la lavadora.
+/**
+ * Elige (o cambia) el granel de un tipo —Jabón, Suavizante…— en un servicio Por
+ * Encargo: qué producto y cuántas medidas. Lo que había de ese tipo se suelta y
+ * se pone lo nuevo. Sin producto queda por elegir; con `del_cliente: true` el
+ * cliente trajo el suyo (sin inventario y sin bloquear la lavadora).
+ */
 export const elegirGranelDeCarga = async (req, res) => {
   const { id, cargaId, tipoId } = req.params;
   const { producto_id } = req.body ?? {};
@@ -4660,7 +4117,6 @@ export const elegirGranelDeCarga = async (req, res) => {
       [id, cargaId, tipoId]
     );
     if (previos.length > 0) {
-      // Si ya se había descontado (terminó una lavadora), vuelve al estante.
       await devolverProductosDeNota(client, id, req.sucursal, req.user?.id, { ids: previos.map(np => np.id) });
       await client.query('DELETE FROM nota_productos WHERE id = ANY($1::int[])', [previos.map(np => np.id)]);
     }
@@ -4677,7 +4133,7 @@ export const elegirGranelDeCarga = async (req, res) => {
         [id, cargaId, tipoId, cantidad]
       );
     } else if (producto_id) {
-      // Solo un granel líquido de ESE tipo: es lo que el servicio pide.
+      // Tiene que ser un granel líquido de ese tipo.
       const { rows: ok } = await client.query(
         `SELECT 1 FROM productos p
           WHERE p.id = $1 AND p.sucursal = $2 AND p.archivado = FALSE AND p.tipo_granel_id = $3
@@ -4694,8 +4150,7 @@ export const elegirGranelDeCarga = async (req, res) => {
         await client.query('ROLLBACK');
         return res.status(400).json({ message: e.message });
       }
-      // Elegido cuando ya terminó una lavadora de la nota: ya se usó, así que
-      // sale del estante de una vez, como el resto del granel (mig. 161).
+      // Si ya terminó una lavadora, ya se usó: sale del inventario ahora.
       if (await algunaLavadoraTermino(client, id)) {
         await consumirProductosDeNota(client, id, req.sucursal, req.user?.id, { soloGranel: true });
       }
@@ -4710,7 +4165,6 @@ export const elegirGranelDeCarga = async (req, res) => {
     await recalcularPrecioTotal(client, id, {
       desmarcarPagoSiCambia: true, usuarioId: req.user?.id, sucursal: req.sucursal,
     });
-    // El granel del servicio gasta de su precio, igual que al agregarlo.
     const errTope = await validarTopesCargas(client, id);
     if (errTope) {
       await client.query('ROLLBACK');
@@ -4730,6 +4184,7 @@ export const elegirGranelDeCarga = async (req, res) => {
 };
 
 // ── DELETE /notas/:id/productos/:productoId ─────────────────
+/** Quita un producto suelto de la nota (no el que va dentro de un servicio). */
 export const removeProductoFromNota = async (req, res) => {
   const { id, productoId } = req.params;
 
@@ -4741,9 +4196,6 @@ export const removeProductoFromNota = async (req, res) => {
       `SELECT np.*, n.estado AS nota_estado FROM nota_productos np
        JOIN notas n ON n.id = np.nota_id AND n.sucursal = $3
        WHERE np.nota_id = $1 AND np.producto_id = $2
-         -- Solo el producto SUELTO de la nota, que es el de los botones de
-         -- Salidas. El mismo producto puede ir también dentro de un servicio
-         -- (Por Encargo) y ese no se toca desde aquí (2026-10-08).
          AND np.carga_id IS NULL`,
       [id, productoId, req.sucursal]
     );
@@ -4759,7 +4211,7 @@ export const removeProductoFromNota = async (req, res) => {
       });
     }
 
-    // Nota reabierta: lo que ya se había entregado vuelve al estante.
+    // Nota reabierta: lo ya entregado vuelve al inventario.
     await reabrirRenglonProducto(client, id, np.id, req.sucursal, req.user?.id);
 
     await client.query(
@@ -4772,8 +4224,6 @@ export const removeProductoFromNota = async (req, res) => {
       [np.cantidad_medidas, productoId]
     );
 
-    // Si el cambio movió el total y la nota ya estaba pagada, el cobro deja de
-    // corresponder: vuelve a PENDIENTE para cobrarla por el importe nuevo.
     await recalcularPrecioTotal(client, id, {
       desmarcarPagoSiCambia: true, usuarioId: req.user?.id, sucursal: req.sucursal,
     });
@@ -4791,15 +4241,11 @@ export const removeProductoFromNota = async (req, res) => {
 };
 
 // ── PATCH /notas/:id/productos/:productoId ──────────────────
-// Cambia la CANTIDAD de un producto que la nota ya tiene. Es lo que hacen los
-// botones + y − de Salidas: agregar otra vez sumaba, pero no había forma de
-// servir menos sin borrar el renglón y volver a ponerlo (y eso, además, es de
-// admin). La cantidad viaja completa, no un delta: dos empleados tocando los
-// botones a la vez terminan en el número que se ve, no en la suma de los dos.
-//
-// El precio unitario NO se recalcula: es el que se congeló al ponerlo, igual
-// que hace `reservarProducto` al sumar. Lo que se ajusta es la reserva del
-// inventario, y por eso se valida que alcance.
+/**
+ * Cambia la cantidad de un producto suelto (botones + y − de Salidas). Llega la
+ * cantidad final, no un delta, para que dos clics simultáneos no se sumen. El
+ * precio unitario no cambia; se ajusta lo apartado y se valida que alcance.
+ */
 export const cambiarCantidadProducto = async (req, res) => {
   const { id, productoId } = req.params;
   const cantidad = Number(req.body?.cantidad);
@@ -4816,9 +4262,7 @@ export const cambiarCantidadProducto = async (req, res) => {
       `SELECT np.*, n.estado AS nota_estado FROM nota_productos np
        JOIN notas n ON n.id = np.nota_id AND n.sucursal = $3
        WHERE np.nota_id = $1 AND np.producto_id = $2
-         -- Solo el producto SUELTO de la nota, que es el de los botones de
-         -- Salidas. El mismo producto puede ir también dentro de un servicio
-         -- (Por Encargo) y ese no se toca desde aquí (2026-10-08).
+         -- Solo el suelto, no el de un servicio.
          AND np.carga_id IS NULL`,
       [id, productoId, req.sucursal]
     );
@@ -4834,12 +4278,10 @@ export const cambiarCantidadProducto = async (req, res) => {
       });
     }
 
-    // Nota reabierta: el renglón vuelve a estar apartado, así lo que se cambie
-    // sale del estante al volver a entregarla.
+    // Nota reabierta: el renglón vuelve a apartado antes de cambiarlo.
     await reabrirRenglonProducto(client, id, np.id, req.sucursal, req.user?.id);
 
-    // Las medidas por unidad salen de lo que ya está guardado: así una botella
-    // sigue valiendo las mismas medidas aunque el catálogo haya cambiado después.
+    // Medidas por unidad del renglón guardado, no del catálogo actual.
     const medidasPorPieza = Number(np.cantidad_medidas) / Number(np.cantidad);
     const medidasNuevas = cantidad * medidasPorPieza;
     const delta = medidasNuevas - Number(np.cantidad_medidas);
@@ -4870,14 +4312,10 @@ export const cambiarCantidadProducto = async (req, res) => {
       [delta, productoId]
     );
 
-    // Si el cambio movió el total y la nota ya estaba pagada, el cobro deja de
-    // corresponder: vuelve a PENDIENTE para cobrarla por el importe nuevo.
     await recalcularPrecioTotal(client, id, {
       desmarcarPagoSiCambia: true, usuarioId: req.user?.id, sucursal: req.sucursal,
     });
 
-    // El tope manda igual que al agregar: servir más desde aquí no puede pasarse
-    // de lo que el servicio cobra.
     const errTope = await validarTopesCargas(client, id);
     if (errTope) {
       await client.query('ROLLBACK');
@@ -4902,17 +4340,12 @@ export const cambiarCantidadProducto = async (req, res) => {
   }
 };
 
-// ── Abonos (pagos parciales, mig. 121) ──────────────────────
-//
-// Por Encargo el cliente suele adelantar una parte al dejar la ropa. El abono
-// es dinero que entró HOY: se guarda con la caja abierta de su sucursal, y el
-// corte de ese día lo cuenta. Al liquidar la nota solo entra lo que faltaba, así
-// que cada peso se cuenta una sola vez y en el corte que le toca.
-//
-// Cuando los abonos cubren el total, la nota se marca PAGADA sola: nadie tiene
-// que apretar Liquidar para cerrar algo que ya está cobrado.
+// ── Abonos (pagos parciales) ────────────────────────────────
+// Cada abono entra en la caja abierta del día y su corte lo cuenta; al liquidar
+// solo entra lo que faltaba. Cuando los abonos cubren el total, la nota queda
+// PAGADA sola.
 
-// Suma de lo abonado (sin los revertidos) de una nota.
+/** Suma de lo abonado (sin revertidos). */
 async function totalAbonado(client, notaId) {
   const { rows } = await client.query(
     `SELECT COALESCE(SUM(monto), 0) AS abonado
@@ -4922,6 +4355,8 @@ async function totalAbonado(client, notaId) {
   return Number(rows[0].abonado);
 }
 
+// ── POST /notas/:id/abonos ──────────────────────────────────
+/** Registra un abono: no puede pasar del saldo y exige caja abierta. */
 export const abonarNota = async (req, res) => {
   const { id } = req.params;
   const { monto, forma_pago } = req.body;
@@ -4960,7 +4395,6 @@ export const abonarNota = async (req, res) => {
       return res.status(400).json({ message: 'Esta nota ya está pagada: no hay nada que abonar.' });
     }
 
-    // Nunca se abona de más: lo que sobra sería dinero que la nota no debe.
     const abonado = await totalAbonado(client, id);
     const saldo = Number(nota.precio_total) - abonado;
     if (saldo <= 0) {
@@ -4974,10 +4408,7 @@ export const abonarNota = async (req, res) => {
       });
     }
 
-    // La caja abierta de la sucursal, que es donde entra este dinero. Desde el
-    // 2026-10-08 sin caja abierta no se recibe (mismo candado que crear nota,
-    // `NOTA_REQUIERE_CAJA`): ese dinero no entraba en ningún corte, y revertir
-    // después un abono así podía contar dos veces la liquidación de la nota.
+    // El abono entra en la caja abierta; sin caja no se recibe.
     const { rows: cajaRows } = await client.query(
       `SELECT id FROM cajas WHERE estado = 'abierta' AND sucursal = $1 LIMIT 1`,
       [req.sucursal]
@@ -4997,16 +4428,14 @@ export const abonarNota = async (req, res) => {
       [id, cajaId, req.user?.id ?? null, importe, formaPago]
     );
 
-    // ¿Quedó cubierta? Entonces la nota se cobra sola, con la forma de este
-    // último abono (es el que la terminó de pagar).
+    // Si quedó cubierta, la nota se cobra con la forma de este último abono.
     const cubierta = importe >= saldo - 1e-9;
     if (cubierta) {
       await client.query(
         `UPDATE notas SET estado_pago = 'PAGADO', forma_pago = $2 WHERE id = $1`,
         [id, formaPago]
       );
-      // Mismo cierre que al liquidar: un Autoservicio que ya terminó sus cargas
-      // no tiene nada que entregar, así que queda finalizado.
+      // Igual que al liquidar: un Autoservicio sin pendientes se cierra.
       const { rows: estadoRows } = await client.query(
         'SELECT tipo_servicio, estado FROM notas WHERE id = $1', [id]
       );
@@ -5030,11 +4459,12 @@ export const abonarNota = async (req, res) => {
   }
 };
 
-// Deshace un abono mal capturado. Es de admin y pide motivo, como revertir un
-// pago: el abono no se borra, se marca revertido con quién y por qué. Solo
-// mientras la caja donde entró siga abierta —con el corte cerrado sus cifras ya
-// quedaron congeladas (mig. 101)—, y si el abono había dejado la nota pagada,
-// esta vuelve a deber.
+// ── PATCH /notas/:id/abonos/:abonoId/revertir ───────────────
+/**
+ * Revierte un abono mal capturado (admin, con motivo). No se borra: queda
+ * marcado con quién y por qué. Solo mientras su caja siga abierta y la nota no
+ * se haya liquidado en un corte cerrado. Si la nota estaba pagada, vuelve a deber.
+ */
 export const revertirAbono = async (req, res) => {
   const { id, abonoId } = req.params;
   const motivo = String(req.body?.motivo ?? '').trim().slice(0, 200);
@@ -5077,9 +4507,7 @@ export const revertirAbono = async (req, res) => {
       }
     }
 
-    // Si la nota se LIQUIDÓ en un corte que ya se cerró, revertir este abono la
-    // devolvería a deber y volver a cobrarla contaría otra vez lo que aquel
-    // corte ya contó (2026-10-08). Misma regla que revertir el pago.
+    // Liquidada en un corte cerrado: volver a cobrarla contaría dos veces.
     if (abono.estado_pago === 'PAGADO' && abono.nota_caja_id) {
       const { rows: cjNota } = await client.query(
         'SELECT estado FROM cajas WHERE id = $1', [abono.nota_caja_id]
@@ -5120,16 +4548,11 @@ export const revertirAbono = async (req, res) => {
 };
 
 // ── PATCH /notas/:id/reabrir ────────────────────────────────
-//
-// Deshace la ENTREGA de una nota: la nota finalizada vuelve a "Por Entregar",
-// tal como estaba antes de confirmar que el cliente se la llevó (2026-09-25).
-// Es para el error de mostrador —se marcó entregada la nota equivocada, o el
-// cliente no se llevó todo—, así que es de admin.
-//
-// El producto de la nota NO vuelve al inventario: ya se usó en ella (2026-09-25).
-// Tampoco se vuelve a descontar si la nota se entrega otra vez: el consumo queda
-// marcado en el historial de inventario y solo ocurre una vez. El cobro tampoco
-// se toca: reabrir la entrega no deshace el pago.
+/**
+ * Deshace la entrega (admin): la nota FINALIZADA vuelve a Por Entregar. No toca
+ * el cobro ni el inventario; lo ya descontado no se repite al entregarla de
+ * nuevo, y si se cambia un producto, ver reabrirRenglonProducto.
+ */
 export const reabrirNota = async (req, res) => {
   const { id } = req.params;
   const client = await pool.connect();
@@ -5174,16 +4597,11 @@ export const reabrirNota = async (req, res) => {
 };
 
 // ── PATCH /notas/:id/ajuste ─────────────────────────────────
-//
-// Ajuste de la nota desde Salidas (2026-09-25): un descuento (negativo) o un
-// cargo extra (positivo) sobre el total. Se captura donde se atiende la nota,
-// que es donde aparece el motivo real ("le rebajo $20 porque una prenda se
-// manchó"), y sale impreso en el ticket.
-//
-// Si la nota ya estaba cobrada y el ajuste mueve su total, el cobro deja de
-// corresponder y la nota vuelve a PENDIENTE por el importe nuevo — la misma
-// regla que al cambiar cualquier otra cosa que cuesta dinero. Con el cobro
-// congelado en un corte cerrado no se permite.
+/**
+ * Ajuste de la nota desde Salidas: descuento (negativo) o cargo extra
+ * (positivo); sale en el ticket. Si la nota estaba cobrada vuelve a PENDIENTE
+ * por el importe nuevo; con el cobro en un corte cerrado no se permite.
+ */
 export const ajustarNota = async (req, res) => {
   const { id } = req.params;
   const { ajuste } = req.body;
@@ -5216,7 +4634,6 @@ export const ajustarNota = async (req, res) => {
     const total = await recalcularPrecioTotal(client, id, {
       desmarcarPagoSiCambia: true, usuarioId: req.user?.id, sucursal: req.sucursal,
     });
-    // Un descuento no puede dejar la nota en números rojos.
     if (Number(total) < 0) {
       await client.query('ROLLBACK');
       return res.status(400).json({
