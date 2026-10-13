@@ -1,6 +1,5 @@
-// Una vuelta REPETIDA de una carga (relavado) que se asigna pero no se
-// arranca no es "una máquina que esta nota arrancó": la marca de arranque
-// de la carga (`lavadora_iniciada_at`, mig. 097) es de la vuelta anterior.
+// Un relavado asignado pero sin arrancar no es "una máquina que esta nota
+// arrancó": `lavadora_iniciada_at` es de la vuelta anterior.
 import { describe, it, expect, beforeEach } from 'vitest';
 import request from 'supertest';
 import app from '../../app.js';

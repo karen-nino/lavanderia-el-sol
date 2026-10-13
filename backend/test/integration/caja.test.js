@@ -48,7 +48,7 @@ describe('POST /api/caja/abrir', () => {
     expect(actual.status).toBe(200);
     expect(actual.body.abierta).toBe(true);
     expect(actual.body.caja.monto_inicial).toBe(500);
-    // Desde la mig. 090 el corte separa el efectivo de transferencias y tarjetas.
+    // El corte separa el efectivo de transferencias y tarjetas.
     expect(actual.body.totales).toEqual({
       ventas: 0, entradas: 0, salidas: 0, esperado: 500,
       ventas_desglose: { efectivo: 0, transferencia: 0, tarjeta: 0, total: 0 },
@@ -110,13 +110,11 @@ describe('POST /api/caja/movimientos', () => {
     expect(actual.body.movimientos).toHaveLength(2);
   });
 
-  // Migración 090: al cajón solo entra el efectivo. Contar transferencias y
-  // tarjetas hacía que el corte marcara un faltante inexistente a costa del
-  // empleado en turno. El total del día sí las suma, pero aparte.
+  // Al cajón solo entra el efectivo (si no, el corte marcaría un faltante); el
+  // total del día sí suma lo demás, aparte.
   it('el esperado del cajón solo cuenta el efectivo, no transferencias ni tarjetas', async () => {
     await seedAjustes({ precio_carga_mediana: 70 });
-    // La nota nace en $0 y se tarifa al asignarle la máquina (2026-09-25), así
-    // que el cobro es el último paso.
+    // La nota nace en $0 y se tarifa al asignar la máquina: el cobro va al final.
     const cobrar = async (nombre, forma_pago) => {
       const lavadoraId = await seedMaquina({ nombre, tipo: 'lavadora_mediana' });
       const nota = await request(app).post('/api/notas').set(auth(admin.token)).send({
@@ -192,7 +190,7 @@ describe('POST /api/caja/cerrar', () => {
       diferencia: -10,
     });
 
-    // Tras cerrar, ya no hay caja abierta y aparece en el historial (admin).
+    // Tras cerrar no hay caja abierta y aparece en el historial (admin).
     const actual = await request(app).get('/api/caja/actual').set(auth(admin.token));
     // Sin caja abierta, /actual dice con cuánto se abre la siguiente: lo que
     // quedó contado en este corte (ver aperturaSugerida).
@@ -209,8 +207,7 @@ describe('POST /api/caja/cerrar', () => {
     expect(historial.body[0].movimientos[0]).toMatchObject({ tipo: 'entrada', concepto: 'Extra', monto: 100 });
   });
 
-  // La caja funciona por turnos: el corte lo hace quien abrió el turno o un
-  // administrador (2026-10-03).
+  // El corte lo hace quien abrió el turno o un administrador.
   describe('turnos: quién puede hacer el corte', () => {
     it('otro empleado no puede cerrar el turno ajeno', async () => {
       const ana  = await seedUsuario({ rol: 'operador', sucursal: 'centro', nombre: 'Ana' });
@@ -386,10 +383,8 @@ describe('un corte cerrado no cambia después (mig. 101)', () => {
     return nota.body.id;
   }
 
-  // El corte congelado ya no cambiaba solo, pero revertir un cobro viejo abría
-  // la otra mitad del problema: al volver a cobrar la nota, el mismo dinero
-  // entra también en la caja de hoy y queda contado en dos cortes. Por eso la
-  // reversión solo se permite mientras esa caja siga abierta.
+  // Revertir un cobro de un corte cerrado y volver a cobrarlo contaría el mismo
+  // dinero en dos cortes: solo se permite mientras esa caja siga abierta.
   it('el pago de una nota de un corte ya cerrado no se puede revertir', async () => {
     await request(app).post('/api/caja/abrir').set(auth(admin.token)).send({ monto_inicial: 0 }).expect(201);
     const notaId = await cobrar();
@@ -424,7 +419,7 @@ describe('un corte cerrado no cambia después (mig. 101)', () => {
     expect(rev.body.estado_pago).toBe('PENDIENTE');
     expect(rev.body.forma_pago).toBeNull();
 
-    // La venta sale del corte en vivo: ese dinero ya no se espera en el cajón.
+    // La venta sale del corte en vivo: ese dinero no se espera en el cajón.
     const caja = await request(app).get('/api/caja/actual').set(auth(admin.token));
     expect(caja.body.totales.ventas).toBe(0);
   });
@@ -450,8 +445,7 @@ describe('un corte cerrado no cambia después (mig. 101)', () => {
   });
 });
 
-// Caja final y sobre (mig. 151): lo contado se reparte y el siguiente turno
-// abre con la caja final.
+// Caja final y sobre: lo contado se reparte y el siguiente turno abre con la caja final.
 describe('caja final y sobre', () => {
   const abrir = () => request(app).post('/api/caja/abrir').set(auth(admin.token)).send({ monto_inicial: 500 });
   const cerrar = (body) => request(app).post('/api/caja/cerrar').set(auth(admin.token)).send(body);
@@ -483,8 +477,7 @@ describe('caja final y sobre', () => {
   });
 });
 
-// Cerrar sesión con la caja propia abierta (2026-10-09): la pantalla pregunta
-// por `mi_caja_abierta`, que la busca en cualquier sucursal.
+// `mi_caja_abierta`: la caja propia abierta, en cualquier sucursal (para cerrar sesión).
 describe('mi_caja_abierta', () => {
   it('la encuentra aunque el admin esté viendo otra sucursal', async () => {
     await seedSucursal('norte');

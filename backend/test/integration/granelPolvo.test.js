@@ -1,7 +1,6 @@
-// El granel EN POLVO (mig. 126): mismo catálogo de nombres que el líquido, pero
-// se vende por UNIDAD entera —no se sirve por medidas—, así que se comporta
-// como un producto de marca: sin bidón, contado en unidades y cobrado encima
-// del tope del servicio.
+// Granel en polvo: mismo catálogo de nombres que el líquido, pero se vende por
+// unidad entera, como uno de marca: sin bidón, contado en unidades y cobrado
+// encima del tope del servicio.
 import { describe, it, expect, beforeEach } from 'vitest';
 import request from 'supertest';
 import app from '../../app.js';

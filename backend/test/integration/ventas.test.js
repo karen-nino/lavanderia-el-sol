@@ -4,9 +4,8 @@ import app from '../../app.js';
 import { limpiarBase, seedSucursal, seedUsuario, seedMaquina, seedCliente, seedProducto, auth } from '../helpers.js';
 import pool from '../../db/pool.js';
 
-// Ventas deriva las cargas y el total desde nota_cargas (ya no de las columnas
-// denormalizadas de la nota). Este smoke test ejerce ambas consultas (lista y
-// corte) para atrapar cualquier referencia a columnas eliminadas.
+// Ventas saca cargas y total de nota_cargas. Smoke de la lista y el corte, para
+// atrapar referencias a columnas que no existen.
 let admin;
 
 beforeEach(async () => {
@@ -41,8 +40,7 @@ describe('GET /api/ventas/resumen', () => {
     expect(Array.isArray(res.body.lista_notas)).toBe(true);
     expect(res.body.lista_notas).toHaveLength(1);
     expect(res.body.lista_notas[0].cargas).toBe(1);
-    // Cada máquina trae también cuánto estuvo encendida y si llegó al tope
-    // (migs. 140-141); sin finalizar, sin tiempo.
+    // Cada máquina trae cuánto estuvo encendida y si llegó al tope; sin finalizar, sin tiempo.
     expect(res.body.lista_notas[0].maquinas).toEqual([{ nombre: 'Lavadora 1', cargas: 1, segundos: null, tope: false }]);
   });
 
@@ -78,8 +76,8 @@ describe('GET /api/ventas/resumen', () => {
 // toma su propia máquina disponible).
 async function crearNota(token, { nombreMaquina, estado_pago = 'PENDIENTE', forma_pago = 'EFECTIVO', ajuste = 0, productos, sucursal = 'centro' } = {}) {
   const lavadoraId = await seedMaquina({ nombre: nombreMaquina, tipo: 'lavadora_mediana', sucursal });
-  // Nace PENDIENTE siempre: en Autoservicio la carga se tarifa al asignarle la
-  // máquina (2026-09-25), así que el cobro va al final de la secuencia.
+  // Nace PENDIENTE: en Autoservicio la carga se tarifa al asignar la máquina, así
+  // que el cobro va al final.
   const body = {
     tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE', ajuste,
     cargas: [{ lavadora_tipo: 'mediana' }],
@@ -165,8 +163,8 @@ describe('GET /api/ventas/resumen — tarjetas y período', () => {
 
   it('una nota cancelada no cuenta en los totales, pero sí aparece en la lista', async () => {
     const creada = await crearNota(admin.token, { nombreMaquina: 'L1', estado_pago: 'PAGADO' });
-    // Una nota cobrada ya no se puede cancelar de frente: primero se revierte
-    // el pago (así el dinero devuelto queda registrado) y luego se cancela.
+    // Una nota cobrada no se cancela directo: primero se revierte el pago (queda
+    // registrado el dinero devuelto).
     await request(app).patch(`/api/notas/${creada.body.id}/estado-pago`)
       .set(auth(admin.token)).send({ estado_pago: 'PENDIENTE', motivo: 'se le devolvió el dinero' }).expect(200);
     await request(app).patch(`/api/notas/${creada.body.id}/estado`)

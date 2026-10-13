@@ -1,7 +1,6 @@
-// Venta de mostrador (tipo de servicio PRODUCTOS, mig. 112): productos sueltos,
-// sin lavado ni secado. Es la única nota que nace FINALIZADA, así que lo que se
-// fija aquí es justo lo que la distingue: que no lleva cargas, que se cobra en
-// el acto y que el inventario se mueve en ese mismo momento.
+// Venta de mostrador (PRODUCTOS): productos sueltos, sin lavado. Es la única nota
+// que nace FINALIZADA: sin cargas, cobrada en el acto y con el inventario movido
+// en ese momento.
 import { describe, it, expect, beforeEach } from 'vitest';
 import request from 'supertest';
 import app from '../../app.js';

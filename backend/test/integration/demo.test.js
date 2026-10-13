@@ -1,20 +1,15 @@
-// El backend de la DEMO pública (ENTORNO_DEMO=1) afloja dos barreras: deja
-// entrar sin contraseña y permite al usuario de prueba tocar la configuración
-// global. Estas pruebas fijan la parte que no puede aflojarse: el personal que
-// dé de alta un visitante tiene que nacer DENTRO del entorno de pruebas.
-//
-// Si naciera fuera, ese usuario podría iniciar sesión como uno normal y levantar
-// notas en una sucursal real; entonces la comprobación de arranque vería
-// operación real en la base de la demo y el backend dejaría de levantar
-// (utils/entorno.js), sin que el reset nocturno pudiera deshacerlo.
+// La demo (ENTORNO_DEMO=1) deja entrar sin contraseña y deja al usuario de
+// prueba tocar la configuración global. Lo que no se afloja: el personal que dé
+// de alta un visitante nace dentro del entorno de pruebas. Si no, podría operar
+// en una sucursal real y el chequeo de arranque (utils/entorno.js) tumbaría el
+// backend de la demo.
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import request from 'supertest';
 import fs from 'node:fs';
 import path from 'node:path';
 
-// ENTORNO_DEMO se lee UNA vez, al cargar utils/entorno.js. Hay que ponerla
-// antes de que se importe la app, y de ahí que todo lo demás entre por import
-// dinámico en vez de por el import estático de siempre.
+// ENTORNO_DEMO se lee una vez al cargar utils/entorno.js: va antes de importar
+// la app, y por eso lo demás entra por import dinámico.
 process.env.ENTORNO_DEMO = '1';
 
 const { default: app }  = await import('../../app.js');
@@ -145,9 +140,8 @@ describe('lo que la demo NO deja tocar', () => {
     await seedAjustes();
     const visitante = await seedVisitante();
 
-    // Multer escribe mientras procesa la petición: si el rechazo llegara
-    // después, el archivo ya estaría en disco y la demo —que es pública— se
-    // podría llenar con subidas que no se aplican.
+    // Multer escribe mientras procesa: si el rechazo llegara después, la demo
+    // pública se podría llenar de archivos.
     const dir = path.resolve('uploads/logo');
     const antes = fs.existsSync(dir) ? fs.readdirSync(dir).length : 0;
 

@@ -62,8 +62,7 @@ describe('POST /api/usuarios — crear empleado', () => {
   });
 });
 
-// Dos usuarios activos no pueden llamarse igual: el login elige a la persona
-// por su nombre completo (2026-10-03).
+// Dos usuarios activos no se llaman igual: el login elige por nombre completo.
 describe('nombre repetido', () => {
   it('no se crea otro usuario con el mismo nombre completo, sin importar acentos ni mayúsculas', async () => {
     await request(app).post('/api/usuarios').set(auth(admin.token))
@@ -117,7 +116,7 @@ describe('DELETE /api/usuarios/:id', () => {
     const emp = await seedUsuario({ rol: 'operador', sucursal: 'centro', nombre: 'Empleado' });
     const res = await request(app).delete(`/api/usuarios/${emp.id}`).set(auth(admin.token));
     expect(res.status).toBe(200);
-    // Ya no aparece en el listado de activos.
+    // No aparece en el listado de activos.
     const lista = await request(app).get('/api/usuarios').set(auth(admin.token));
     expect(lista.body.map((u) => u.id)).not.toContain(emp.id);
   });
@@ -143,8 +142,7 @@ describe('GET /api/usuarios/:id/desempeno', () => {
   it('agrega por día las notas que creó el empleado', async () => {
     const emp = await seedUsuario({ rol: 'operador', sucursal: 'centro', nombre: 'Vendedor' });
     for (let i = 0; i < 2; i++) {
-      // El autoservicio se tarifa al asignarle la máquina (2026-09-25): sin ese
-      // paso la nota valdría $0 y no habría nada vendido que agregar.
+      // Autoservicio se tarifa al asignarle la máquina: sin eso valdría $0.
       const lav = await seedMaquina({ nombre: `Lavadora ${i + 1}`, tipo: 'lavadora_mediana' });
       const crea = await request(app).post('/api/notas').set(auth(emp.token)).send({
         tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE',
@@ -154,7 +152,7 @@ describe('GET /api/usuarios/:id/desempeno', () => {
         .send({ carga_id: crea.body.cargas[0].id, slot: 'lavadora', maquina_id: lav }).expect(200);
       await request(app).patch(`/api/notas/${crea.body.id}/estado-pago`).set(auth(emp.token))
         .send({ estado_pago: 'PAGADO', forma_pago: 'EFECTIVO' }).expect(200);
-      // Un ciclo cuenta cuando la máquina arranca (2026-10-06).
+      // Un ciclo cuenta cuando la máquina arranca.
       await request(app).patch(`/api/notas/${crea.body.id}/activar-pendientes`).set(auth(emp.token))
         .send({ maquina_id: lav }).expect(200);
       if (i === 0) {
@@ -252,7 +250,7 @@ describe('GET /api/usuarios/:id/desempeno', () => {
   });
 });
 
-// Columna "Caja" (2026-10-09): los turnos que abrió el empleado, por día.
+// Columna "Caja": los turnos que abrió el empleado, por día.
 describe('desempeño: turnos de caja', () => {
   it('trae el turno cerrado con su reparto y el que sigue abierto', async () => {
     await request(app).post('/api/caja/abrir').set(auth(admin.token)).send({ monto_inicial: 500 }).expect(201);

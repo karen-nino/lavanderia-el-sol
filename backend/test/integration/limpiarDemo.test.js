@@ -1,13 +1,10 @@
-// El reset nocturno de la demo borra la operación que dejaron los visitantes.
-// Su punto frágil es el ORDEN: notas, cajas, movimientos_caja y
-// movimientos_insumos apuntan a usuarios con ON DELETE RESTRICT, así que una
-// sola fila mal ordenada tumba la transacción entera y la demo se queda sin
-// restaurar hasta que alguien entra a la base a mano.
+// El reset nocturno de la demo borra la operación de los visitantes. Lo frágil
+// es el orden: notas, cajas, movimientos_caja y movimientos_insumos apuntan a
+// usuarios con ON DELETE RESTRICT, y una fila mal ordenada tumba la transacción.
 //
-// Estas pruebas ejecutan la secuencia de verdad (scripts/lib/limpiarDemo.js,
-// la misma que importa reset-demo.mjs) contra una base con el escenario que
-// rompía: un usuario dado de alta por un visitante que acabó operando en una
-// sucursal real, con caja, inventario y notas a su nombre.
+// Se corre la secuencia real (scripts/lib/limpiarDemo.js, la de reset-demo.mjs)
+// contra el escenario difícil: un usuario creado por un visitante que operó en
+// una sucursal real, con caja, inventario y notas a su nombre.
 import { describe, it, expect, beforeEach } from 'vitest';
 import { pool, limpiarBase, seedSucursal, seedProducto, seedMaquina, seedCliente } from '../helpers.js';
 import {

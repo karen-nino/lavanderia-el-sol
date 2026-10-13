@@ -5,8 +5,7 @@ const nota = (estado, estado_pago) => ({ estado, estado_pago });
 
 describe('acciones del detalle de una nota', () => {
   it('una Por Encargo recién creada ya ofrece liquidar', () => {
-    // Es el caso que faltaba: el cliente paga al dejar la ropa, mucho antes de
-    // que la nota llegue a LISTA.
+    // El cliente puede pagar al dejar la ropa, antes de que la nota llegue a LISTA.
     expect(puedeLiquidar(nota('EN_ESPERA', 'PENDIENTE'))).toBe(true);
   });
 
@@ -59,9 +58,8 @@ describe('acciones del detalle de una nota', () => {
   });
 
   it('el admin puede eliminar en cualquier estado', () => {
-    // Borrar una nota abierta sigue siendo posible: cancelar una ya cobrada
-    // exige revertir el pago antes, y eso son tres pasos para lo que a veces
-    // es un error de captura.
+    // Borrar una nota abierta es posible: cancelar una cobrada exige revertir el
+    // pago antes, y a veces solo es un error de captura.
     for (const estado of ['EN_ESPERA', 'LAVANDO', 'SECANDO', 'LISTA', 'CANCELADA', 'FINALIZADA']) {
       expect(puedeEliminar(nota(estado, 'PENDIENTE'), true)).toBe(true);
     }

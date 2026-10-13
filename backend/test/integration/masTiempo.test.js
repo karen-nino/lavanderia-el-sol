@@ -1,7 +1,7 @@
-// "Otro ciclo" de la secadora de fichas que pregunta su programa (la Sec49,
-// 2026-10-08): al terminar su programa se le suma otro sin pasarse del tope
-// en minutos METIDOS (mig. 148). Tope 30: con 20 metidos solo cabe 10; con
-// 10, caben 10 y 20. Si el empleado tarda, el fin nuevo cuenta desde ahora.
+// "Otro ciclo" de la secadora de fichas que pregunta su programa (Sec49): al
+// terminar se le suma otro sin pasar el tope en minutos metidos. Tope 30: con 20
+// metidos solo cabe 10; con 10, caben 10 y 20. Si el empleado tarda, el fin
+// nuevo cuenta desde ahora.
 import { describe, it, expect, beforeEach } from 'vitest';
 import request from 'supertest';
 import app from '../../app.js';

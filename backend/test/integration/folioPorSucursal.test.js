@@ -1,6 +1,5 @@
-// Folio por sucursal (mig. 155): cada sucursal lleva su propio consecutivo, así
-// que dos sucursales pueden tener el mismo número y un alta de una no mueve el
-// folio de la otra.
+// Folio por sucursal: cada una lleva su consecutivo, así que dos pueden tener el
+// mismo número y un alta en una no mueve el folio de la otra.
 import { describe, it, expect, beforeEach } from 'vitest';
 import request from 'supertest';
 import app from '../../app.js';

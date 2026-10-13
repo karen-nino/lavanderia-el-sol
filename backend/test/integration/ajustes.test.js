@@ -81,9 +81,7 @@ describe('PATCH /api/ajustes', () => {
     expect(res.body.message).toMatch(/entero de 1 minuto o más/i);
   });
 
-  // Las tres notas al pie del ticket: una para el que lava él mismo (mig. 105),
-  // otra para el que deja su ropa a cargo del negocio y otra para la venta de
-  // productos (mig. 113), que no lava nada.
+  // Tres notas al pie: Autoservicio, Por Encargo (y Edredón) y venta de productos.
   it('guarda cada nota del ticket por separado', async () => {
     const res = await request(app).patch('/api/ajustes').set(auth(admin.token)).send({
       ticket_nota_autoservicio: 'Recoja sus prendas el mismo día.',
@@ -121,8 +119,7 @@ describe('PATCH /api/ajustes', () => {
     expect(res.body.message).toMatch(/obligatorio/i);
   });
 
-  // Jumbo ya no se vende: su columna sigue ahí para las notas viejas y admite
-  // quedarse vacía, como cualquier tope de antes.
+  // Jumbo no se vende: su columna queda para notas viejas y admite quedar vacía.
   it('un tope jumbo vacío ("") lo quita (queda en null)', async () => {
     const res = await request(app).patch('/api/ajustes').set(auth(admin.token))
       .send({ tope_carga_jumbo: '' });
@@ -161,7 +158,7 @@ describe('lo que trae puesto cada servicio (mig. 132)', () => {
   });
 });
 
-// Mig. 156: interruptores de alertas. Nacen encendidos y se guardan.
+// Interruptores de alertas: nacen encendidos y se guardan.
 describe('interruptores de alertas', () => {
   it('nacen encendidos y se pueden apagar', async () => {
     const antes = (await request(app).get('/api/ajustes').set(auth(admin.token))).body;

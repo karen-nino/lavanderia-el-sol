@@ -1,11 +1,7 @@
-// Tiempos de ciclo por marca y tamaño (mig. 107).
-//
-// La duración de un ciclo es de la MÁQUINA y no de la carga: en la lavandería
-// las medianas son LG y tardan 45 min, y las jumbo son Speed Queen y tardan 35
-// — al revés de lo que suponía el eje del tamaño, que daba por hecho que una
-// jumbo tarda más. Estas pruebas fijan que manda la marca, que sin marca se
-// conserva el comportamiento anterior, y que el edredón dejó de tener tiempo
-// propio.
+// Tiempos de ciclo por marca y tamaño. La duración es de la máquina, no de la
+// carga (las LG medianas tardan 45 min y las Speed Queen jumbo 35). Se fija que
+// manda la marca, que sin marca se usa el respaldo por tamaño y que el edredón
+// no tiene tiempo propio.
 import { describe, it, expect, beforeEach } from 'vitest';
 import request from 'supertest';
 import app from '../../app.js';
@@ -104,8 +100,7 @@ describe('sellado del ciclo — manda la marca de la máquina', () => {
     expect(await cicloDe(lavadoraId)).toBe(35);
   });
 
-  // La secadora también se da de alta mediana o jumbo, y su respaldo por
-  // tamaño existe desde la mig. 051 aunque hasta ahora no se usara.
+  // La secadora también es mediana o jumbo, con su propio respaldo por tamaño.
   it('una secadora jumbo sin marca usa su propio respaldo, no el de la mediana', async () => {
     await seedAjustes({ tiempo_carga_secadora: 20, tiempo_secadora_jumbo: 55 });
     const lavadoraId = await seedMaquina({ nombre: 'L1', tipo: 'lavadora_mediana', tamano: 'mediana' });
@@ -166,10 +161,9 @@ describe('sellado del ciclo — manda la marca de la máquina', () => {
 });
 
 describe('GET/PUT /api/etiquetas/tiempos-marca', () => {
-  // La pantalla ya solo configura tiempos por MODELO (mig. 118), así que el
-  // listado no trae marcas sueltas. El tiempo por marca se conserva como
-  // respaldo de las máquinas sin modelo, y se puede seguir escribiendo por su
-  // endpoint para corregir uno heredado.
+  // La pantalla configura tiempos por modelo, así que el listado no trae marcas
+  // sueltas. El tiempo por marca sigue como respaldo de máquinas sin modelo y se
+  // puede escribir por su endpoint.
   it('el listado ya no trae la marca suelta, pero su tiempo se puede escribir', async () => {
     const lg = await seedMarca('Whirlpool');
     const lavadoraId = await seedMaquina({ nombre: 'L1', tipo: 'lavadora_mediana', tamano: 'mediana' });

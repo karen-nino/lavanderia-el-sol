@@ -1,7 +1,6 @@
-// Un cliente con notas YA CERRADAS (finalizadas o canceladas): la base no deja
-// borrarlo (notas.cliente_id es ON DELETE RESTRICT, y las notas son historia de
-// ventas que no se borra). Se OCULTA: sale de la lista y sus notas conservan el
-// nombre. Antes tronaba con 500 (2026-10-08).
+// Un cliente con notas cerradas no se puede borrar (notas.cliente_id es ON
+// DELETE RESTRICT y las ventas no se borran): se oculta. Sale de la lista y sus
+// notas conservan el nombre.
 import { describe, it, expect, beforeEach } from 'vitest';
 import request from 'supertest';
 import app from '../../app.js';
@@ -29,7 +28,7 @@ describe('cliente con historial', () => {
     await notaCerradaPara(id, 'FINALIZADA');
     const res = await request(app).delete(`/api/clientes/${id}`).set(auth(admin.token));
     expect(res.status).toBe(200);
-    // Ya no sale en la lista ni se puede abrir…
+    // No sale en la lista ni se puede abrir…
     const lista = await request(app).get('/api/clientes').set(auth(admin.token)).expect(200);
     expect(lista.body.map((c) => c.id)).not.toContain(id);
     await request(app).get(`/api/clientes/${id}`).set(auth(admin.token)).expect(404);

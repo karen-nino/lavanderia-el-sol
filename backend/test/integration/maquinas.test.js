@@ -215,8 +215,8 @@ describe('GET /api/maquinas/:id/uso — solo cuenta el uso real', () => {
       cargas: [{ lavadora_tipo: 'mediana' }],
     });
     const notas = [(await crear()).body, (await crear()).body, (await crear()).body];
-    // Las tres la tienen asignada —ahí se tarifan (2026-09-25)— y las tres se
-    // cobran; el reporte solo debe contar la que de verdad la usó.
+    // Las tres la tienen asignada (ahí se tarifan) y se cobran; el reporte solo
+    // cuenta la que la usó.
     for (const n of notas) {
       await request(app).patch(`/api/notas/${n.id}/asignar-carga-maquina`).set(auth(admin.token))
         .send({ carga_id: n.cargas[0].id, slot: 'lavadora', maquina_id: lav }).expect(200);
@@ -265,9 +265,8 @@ describe('GET /api/maquinas/:id/uso — solo cuenta el uso real', () => {
   });
 });
 
-// La marca `reservada` del listado avisa que otra nota ya tiene apartada esa
-// máquina. No la bloquea (desde la mig. 097 se la queda quien arranque
-// primero), pero es lo que evita que dos empleados manden ropa a la misma.
+// `reservada` avisa que otra nota ya tiene asignada la máquina. No la bloquea
+// (se la queda quien arranque primero), pero evita mandar ropa a la misma.
 describe('GET /api/maquinas — marca de apartada', () => {
   // Sin pagar: estas notas solo apartan la máquina y una llega a cancelarse
   // (una nota ya cobrada no se cancela sin revertir el pago primero). Ninguna
@@ -315,12 +314,9 @@ describe('GET /api/maquinas — quién tiene la máquina en uso', () => {
   // Usa los dos pasos del temporizador (encender, luego iniciar).
   conTemporizador();
 
-  // Asignar no aparta: varias notas pueden tener la misma lavadora asignada y
-  // se la queda la que le dé a Iniciar primero. "en_uso_folio" es lo único que
-  // dice cuál fue, y resolverlo por la nota más ANTIGUA con la máquina asignada
-  // señalaba a la equivocada en cuanto esa nota vieja tenía OTRA máquina
-  // corriendo: en Salidas veía el ciclo ajeno como suyo, con su botón de
-  // "Detener Lavado" al lado (2026-09-22).
+  // Asignar no aparta: se la queda la nota que inicia primero. "en_uso_folio"
+  // debe ser esa, no la más antigua con la máquina asignada (que podría tener
+  // otra máquina corriendo).
   const crearNotaPagada = (cargas = 1) =>
     request(app).post('/api/notas').set(auth(admin.token)).send({
       tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA',

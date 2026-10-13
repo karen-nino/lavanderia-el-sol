@@ -30,8 +30,8 @@ describe('explicarMotivo', () => {
   });
 
   it('no diagnostica nada cuando eWeLink no mandó código', () => {
-    // El driver arma el motivo como `ewelink_${data?.error}`: sin ese campo
-    // queda 'ewelink_undefined' y antes se reportaba "código undefined".
+    // El driver arma `ewelink_${data?.error}`: sin ese campo queda 'ewelink_undefined',
+    // que no debe reportarse como "código undefined".
     const detalle = explicarMotivo('ewelink_undefined');
     expect(detalle).not.toMatch(/undefined/);
     expect(detalle).toMatch(/no llegó ningún detalle/i);

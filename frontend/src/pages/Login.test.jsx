@@ -83,8 +83,8 @@ describe('Login', () => {
 
   it('si cierras la lista con un clic fuera, no se reabre sola', async () => {
     const user = userEvent.setup();
-    // La respuesta llega DESPUÉS del clic fuera, que es el caso que fallaba:
-    // el debounce y la petición seguían vivos y reabrían la lista encima.
+    // La respuesta llega después del clic fuera: el debounce y la petición no
+    // deben reabrir la lista.
     api.get.mockResolvedValue([{ id: 7, nombre: 'Juan Pérez' }]);
     render(<Login />);
 

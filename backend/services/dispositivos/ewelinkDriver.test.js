@@ -114,8 +114,7 @@ describe('ewelinkDriver — con configuración (fetch mockeado)', () => {
     expect(cmdOpts.method).toBe('POST');
     expect(cmdOpts.headers.Authorization).toBe('Bearer token-abc');
     expect(cmdOpts.headers['X-CK-Appid']).toBe('app123');
-    // eWeLink rechaza con error 400 cualquier Content-Type que no sea uno de
-    // sus dos valores exactos; ya nos costó una prueba en vivo (2026-09-02).
+    // eWeLink responde 400 a cualquier Content-Type que no sea uno de sus dos valores exactos.
     expect(cmdOpts.headers['Content-Type']).toBe('application/json');
     expect(JSON.parse(cmdOpts.body)).toEqual({ type: 1, id: 'd1', params: { switch: 'on' } });
   });

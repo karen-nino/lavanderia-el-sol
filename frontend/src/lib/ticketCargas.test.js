@@ -1,9 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { cargaVisibleEnTicket, maquinasDeCarga } from './ticketCargas';
 
-// El ticket es lo que ve el cliente: solo lista las cargas que existieron y se
-// cobran. Una carga que se quedó sin nada dentro antes salía como
-// "CARGA 2 · $0.00".
+// El ticket solo lista las cargas que existieron y se cobran: una vacía no debe
+// salir como "CARGA 2 · $0.00".
 const carga = (extra = {}) => ({
   id: 1, orden: 1, precio_lavadora: 0, precio_secadora: 0,
   ajuste: 0, productos: [], ...extra,

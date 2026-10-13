@@ -1,6 +1,5 @@
-// Ningún cambio puede dejar el total de una nota por debajo de lo que el
-// cliente ya abonó (2026-10-08): el corte esperaba menos dinero del que entró
-// y nadie sabía que había que devolverle la diferencia.
+// Ningún cambio deja el total de una nota por debajo de lo abonado: el corte
+// esperaría menos dinero del que entró.
 import { describe, it, expect, beforeEach } from 'vitest';
 import request from 'supertest';
 import app from '../../app.js';

@@ -96,9 +96,8 @@ describe('MachineCard', () => {
     expect(screen.queryByRole('button', { name: 'INICIAR SECADO' })).not.toBeInTheDocument();
   });
 
-  // Segundo ciclo de la misma carga (mig. 108): una carga de ropa necesita dos
-  // ciclos de 15 min seguidos, y al terminar el primero la máquina se queda sin
-  // corriente hasta que alguien la re-arma.
+  // Segundo ciclo de la misma carga: la ropa necesita dos ciclos de 15 min y al
+  // terminar el primero la máquina se queda sin corriente hasta re-armarla.
   const nota = { folio: '0123-080726', tipo_servicio: 'AUTOSERVICIO' };
 
   // El siguiente ciclo repite los pasos del primero: la máquina se quedó sin
@@ -182,8 +181,7 @@ describe('MachineCard', () => {
     expect(screen.queryByText(/^Ciclo /)).not.toBeInTheDocument();
   });
 
-  // Una lavadora sin tiempo de marca corre un solo ciclo (2026-09-21): el
-  // backend manda `ciclos_max: 1` y la tarjeta no tiene nada que contar.
+  // Una lavadora sin tiempo de marca corre un ciclo (`ciclos_max: 1`): no hay contador.
   it('con un único ciclo no enseña el contador: "Ciclo 1 de 1" no dice nada', () => {
     render(
       <MachineCard
@@ -219,9 +217,8 @@ describe('MachineCard', () => {
     expect(screen.getByRole('button', { name: 'ENCENDER MÁQUINA' })).toBeInTheDocument();
   });
 
-  // El secado es otro destino del mismo botón: una carga que aún debe secar no
-  // se "finaliza", pasa a la secadora. Eso manda sobre el texto de cierre, pero
-  // NO sobre el de continuar: el segundo ciclo va antes que el secado.
+  // Una carga que aún debe secar pasa a la secadora en lugar de finalizar, pero
+  // el segundo ciclo va antes que el secado.
   it('con secado pendiente y ciclos agotados, el botón lleva al secado', () => {
     render(
       <MachineCard
@@ -283,8 +280,7 @@ describe('MachineCard', () => {
     await userEvent.click(screen.getByRole('button'));
     expect(onClick).toHaveBeenCalledTimes(1);
   });
-  // Lavadora con cronómetro (mig. 137): cuenta hacia arriba y el botón para
-  // finalizarla está siempre a la vista.
+  // Con cronómetro: cuenta hacia arriba y Finalizar siempre está a la vista.
   describe('con cronómetro', () => {
     const lg = { id: 7, nombre: 'L1', estado: 'en_uso', tipo: 'lavadora_mediana', cronometro: true, tiempo_restante: '03:20', progreso: 0.1 };
 

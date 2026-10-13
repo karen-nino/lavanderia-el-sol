@@ -1,8 +1,6 @@
-// Una nota entregada se puede reabrir (vuelve a Por Entregar) y desde ahí los
-// botones de Salidas tocan sus productos sueltos. Esos renglones ya salieron
-// del estante al entregarla (`consumido_at`, mig. 161): quitarlos tiene que
-// devolverlos a la existencia y sumarles unidades tiene que apartar solo las
-// nuevas, sin dejar nada apartado para siempre (2026-10-12).
+// Una nota entregada se puede reabrir y desde Salidas tocar sus productos
+// sueltos, que ya salieron del estante (`consumido_at`): quitarlos los devuelve a
+// la existencia y sumar unidades aparta solo las nuevas.
 import { describe, it, expect, beforeEach } from 'vitest';
 import request from 'supertest';
 import app from '../../app.js';

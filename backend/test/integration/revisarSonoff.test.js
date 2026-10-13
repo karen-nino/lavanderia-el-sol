@@ -1,6 +1,5 @@
-// POST /maquinas/revisar-sonoff (2026-10-11): el botón de refrescar de
-// Máquinas pide leer los Sonoff al momento. En pruebas el driver es el de
-// simulación, así que no hay nada real que leer: responde 0 y no toca nada.
+// POST /maquinas/revisar-sonoff: el refrescar de Máquinas pide leer los Sonoff.
+// En pruebas el driver es simulado: responde 0 y no toca nada.
 import { describe, it, expect, beforeEach } from 'vitest';
 import request from 'supertest';
 import app from '../../app.js';

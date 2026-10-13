@@ -1,9 +1,6 @@
-// El "Edredón" de Autoservicio (2026-10-02).
-//
-// En "Agregar máquina" hay una casilla Edredón, hasta abajo de las lavadoras.
-// Entra a la nota SIN máquina física, cobrando su tarifa de Ajustes
-// (`precio_edredon_jumbo`, "Edredón $80"), y en Salidas se le asigna la
-// lavadora que esté libre —cualquiera, no solo jumbo— sin que el precio cambie. Desde el mismo día el edredón tampoco exige jumbo en Por Encargo.
+// "Edredón" de Autoservicio: entra a la nota sin máquina física, con su tarifa
+// de Ajustes (`precio_edredon_jumbo`), y en Salidas se le asigna la lavadora
+// libre (cualquiera) sin que cambie el precio. En Por Encargo tampoco exige jumbo.
 import { describe, it, expect, beforeEach } from 'vitest';
 import request from 'supertest';
 import app from '../../app.js';

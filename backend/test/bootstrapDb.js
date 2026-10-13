@@ -1,9 +1,7 @@
-// Recrea la base de datos de prueba y le aplica el esquema + todas las
-// migraciones, en el mismo orden que db/migrate.js (schema.sql primero, luego
-// db/migrations/001..NNN). Se conecta al Postgres local con las credenciales
-// DB_* del .env, pero apunta a otra base (TEST_DB_NAME): la de desarrollo no
-// se toca. Correr esto también verifica que la cadena de migraciones aplica
-// limpia de cero.
+// Recrea la base de prueba (TEST_DB_NAME, en el Postgres local con las
+// credenciales DB_*) y le aplica schema.sql y todas las migraciones, en el orden
+// de db/migrate.js. La base de desarrollo no se toca, y de paso se verifica que
+// las migraciones aplican limpias desde cero.
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';

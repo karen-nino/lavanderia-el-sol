@@ -22,8 +22,8 @@ describe('notaAlPieDeTicket', () => {
     expect(notaAlPieDeTicket('EDREDON', NOTAS)).toBe('Aviso de encargo');
   });
 
-  // La venta de mostrador tiene la suya (mig. 113): la de autoservicio habla de
-  // lavadora y secadora, que es justo lo que esa nota no lleva.
+  // La venta de mostrador tiene la suya: la de autoservicio habla de lavadora y
+  // secadora, que esa nota no lleva.
   it('PRODUCTOS lleva la suya, no la de autoservicio', () => {
     expect(notaAlPieDeTicket('PRODUCTOS', NOTAS)).toBe('Aviso de productos');
   });

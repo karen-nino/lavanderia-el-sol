@@ -1,10 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { armarMensajeWhatsapp, cierreDeHoy, hayMensajeWhatsapp, telefonoWhatsapp } from './mensajeWhatsapp';
 
-// La plantilla de WhatsApp de Por Encargo (mig. 124). Lo que importa: que los
-// comodines se sustituyan, que un comodín inventado NO se borre —sería un
-// hueco silencioso en el mensaje que le llega al cliente— y que los asteriscos
-// de negritas de WhatsApp sigan funcionando.
+// Plantilla de WhatsApp de Por Encargo: los comodines se sustituyen, uno
+// inventado no se borra (sería un hueco silencioso) y las negritas de WhatsApp
+// siguen funcionando.
 describe('armarMensajeWhatsapp', () => {
   const nota = {
     cliente_nombre: 'Ana López',
@@ -19,8 +18,7 @@ describe('armarMensajeWhatsapp', () => {
       .toBe('Hola Ana, tu ropa de las 02:30 pm ya está.');
   });
 
-  // En un WhatsApp se saluda por el nombre de pila: "Hola Ana", no "Hola Ana
-  // López" (2026-09-26).
+  // Se saluda por el nombre de pila: "Hola Ana".
   it('*Nombre* es solo el nombre de pila, sin apellidos', () => {
     expect(armarMensajeWhatsapp('*Nombre*', { cliente_nombre: 'María José García López' }))
       .toBe('María');
@@ -92,7 +90,7 @@ describe('telefonoWhatsapp', () => {
   });
 });
 
-// *Horario* (mig. 160): la hora a la que cierra HOY la sucursal de la nota.
+// *Horario*: la hora a la que cierra hoy la sucursal de la nota.
 describe('*Horario*', () => {
   const semana = Array.from({ length: 7 }, (_, dia) => (
     dia === 2 ? { dia, abierto: false, abre: null, cierra: null }

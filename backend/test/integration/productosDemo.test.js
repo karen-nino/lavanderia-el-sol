@@ -1,5 +1,5 @@
-// Productos de marca de la demo pública (2026-10-08). La función es la misma
-// que importa scripts/reset-demo.mjs; aquí corre contra la base de pruebas.
+// Productos de marca de la demo pública. La función es la de
+// scripts/reset-demo.mjs; aquí corre contra la base de pruebas.
 import { describe, it, expect, beforeEach } from 'vitest';
 import request from 'supertest';
 import app from '../../app.js';

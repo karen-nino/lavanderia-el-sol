@@ -1,14 +1,10 @@
-// Encender la máquina ANTES de arrancar su ciclo (mig. 110).
+// Encender la máquina antes de arrancar su ciclo: la lavadora no arranca sola
+// al recibir corriente (hay que meter la ropa y apretar su botón), y ese rato
+// no debe descontarse del ciclo.
 //
-// "Iniciar Lavado" hacía dos cosas a la vez: cerrar el relé y arrancar el
-// cronómetro. Pero la lavadora no arranca sola al recibir corriente —hay que
-// apretar su botón— y antes todavía hay que meter la ropa: todo ese rato se le
-// descontaba al ciclo. Con el corte por fin de ciclo activo, la corriente se
-// iba antes de que el lavado terminara.
-//
-// Lo que se fija aquí: que encender deje la máquina apartada y con corriente
-// pero SIN cronómetro, que el segundo paso sí lo arranque, que la espera
-// caduque sola, y que una máquina ajena a la nota no se pueda encender.
+// Se fija: encender deja la máquina apartada, con corriente y sin cronómetro;
+// el segundo paso lo arranca; la espera caduca sola; y una máquina ajena a la
+// nota no se enciende.
 import { describe, it, expect, beforeEach } from 'vitest';
 import request from 'supertest';
 import app from '../../app.js';
@@ -17,8 +13,7 @@ import {
 } from '../helpers.js';
 import { esperandoArranque, ESPERA_ARRANQUE_MINUTOS } from '../../services/sincronizarSonoff.js';
 
-// Prueba la mecánica del TEMPORIZADOR (dos pasos, otro ciclo): desde el
-// 2026-10-02 vive detrás de MAQUINAS_CRONOMETRO=off.
+// Mecánica del temporizador (dos pasos, otro ciclo), detrás de MAQUINAS_CRONOMETRO=off.
 conTemporizador();
 
 
@@ -180,9 +175,8 @@ describe('el siguiente ciclo repite los mismos dos pasos', () => {
       [maquinaId, segundos]
     );
 
-  // La lavadora va con marca, tiempo configurado y un MODELO marcado como de
-  // dos ciclos (mig. 123): sin cualquiera de las dos cosas la carga corre un
-  // solo ciclo, y este describe es justo el del segundo.
+  // Con marca, tiempo configurado y modelo de dos ciclos: sin eso la carga corre
+  // uno, y este describe prueba el segundo.
   async function arrancada(nombre) {
     await seedMarca({
       nombre: 'Whirlpool', tipo: 'lavadora', tamano: 'mediana', minutos: 15,
@@ -248,9 +242,8 @@ describe('el siguiente ciclo repite los mismos dos pasos', () => {
   });
 });
 
-// La nota es lo único que dice por qué ese relé está cerrado: al borrarla, la
-// máquina tiene que quedarse sin corriente y libre. Antes el borrado ni siquiera
-// llegaba a ocurrir — tronaba contra el CHECK de la 110 al quedar media marca.
+// La nota explica por qué el relé está cerrado: al borrarla, la máquina queda
+// sin corriente y libre.
 describe('eliminar una nota con su máquina encendida', () => {
   it('la apaga, la suelta y borra la nota', async () => {
     const id = await seedMaquina({ nombre: 'L20', tipo: 'lavadora_mediana', tamano: 'mediana' });

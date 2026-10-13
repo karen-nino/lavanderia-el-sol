@@ -1,6 +1,6 @@
-// El mismo producto puede ir DENTRO de un servicio (Por Encargo) y SUELTO en la
-// nota. Los botones de Salidas (+, −, quitar) son del suelto: no pueden tocar
-// el del servicio ni descuadrar lo apartado en inventario (2026-10-08).
+// Un producto puede ir dentro de un servicio (Por Encargo) y suelto en la nota.
+// Los botones de Salidas (+, −, quitar) son del suelto: no tocan el del servicio
+// ni descuadran lo apartado.
 import { describe, it, expect, beforeEach } from 'vitest';
 import request from 'supertest';
 import app from '../../app.js';
@@ -64,8 +64,7 @@ describe('pedir más de un producto que ya está en la nota', () => {
     await pool.query('UPDATE productos SET precio_unitario = precio_unitario + 5, precio_botella = COALESCE(precio_botella, 0) + 5 WHERE id = $1', [marca]);
     await api('post', `/api/notas/${n.body.id}/productos`, { producto_id: marca, cantidad: 1 }).expect(201);
     const despues = Number((await pool.query('SELECT precio_total FROM notas WHERE id = $1', [n.body.id])).rows[0].precio_total);
-    // La segunda unidad se suma al renglón con su precio congelado: no
-    // re-tarifa la primera (antes subía $30: $25 nuevos + $5 de la vieja).
+    // La segunda unidad se suma con su precio congelado: no re-tarifa la primera.
     expect(despues - antes).toBe(antes);
   });
 });

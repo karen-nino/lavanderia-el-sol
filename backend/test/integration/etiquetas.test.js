@@ -42,9 +42,8 @@ describe('POST /api/etiquetas/tipos-tela', () => {
   });
 });
 
-// Los dos catálogos de Inventario que nacieron con la mig. 119. Comparten la
-// misma fábrica que los de arriba, así que basta un smoke de cada uno más lo
-// que sí es propio: el de bolsas es el que valida el alta de un producto.
+// Catálogos de Granel y Bolsas: usan la misma fábrica que los de arriba, así que
+// basta un smoke de cada uno y lo propio (el de bolsas valida el alta de un producto).
 describe('catálogos de Granel y Bolsas (mig. 119)', () => {
   for (const [endpoint, nombre] of [
     ['graneles-producto', 'Cloro'],

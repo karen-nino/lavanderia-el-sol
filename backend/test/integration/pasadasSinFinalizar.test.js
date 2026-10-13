@@ -1,7 +1,6 @@
-// Una máquina en marcha que se suelta SIN el botón de Finalizar también cierra
-// su uso (pasada) con hora de inicio y de fin (2026-10-09). Antes se quedaba
-// en blanco y el ciclo salía sin horario ni tiempo encendida en Desempeño,
-// Ventas e Información de uso.
+// Soltar una máquina en marcha sin Finalizar también cierra su pasada con inicio
+// y fin, para que el ciclo tenga horario y tiempo encendida en Desempeño, Ventas
+// e Información de uso.
 import { describe, it, expect, beforeEach } from 'vitest';
 import request from 'supertest';
 import app from '../../app.js';

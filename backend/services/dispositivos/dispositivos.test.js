@@ -54,8 +54,8 @@ describe('nullDriver (simulación en memoria)', () => {
   });
 });
 
-// DISPOSITIVOS_SUCURSALES (2026-10-09): con el driver real, solo las
-// sucursales de la lista hablan con los Sonoff; las demás siguen simuladas.
+// DISPOSITIVOS_SUCURSALES: con el driver real, solo las sucursales de la lista
+// hablan con los Sonoff; las demás siguen simuladas.
 describe('driver real limitado por sucursal', () => {
   const cargar = async (sucursales) => {
     vi.resetModules();

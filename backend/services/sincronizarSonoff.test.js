@@ -21,7 +21,7 @@ vi.mock('../db/pool.js', () => ({
         return { rows: [] };
       }
 
-      // Reclamo atómico de las fichas del arranque (mig. 147).
+      // Reclamo atómico de las fichas del arranque.
       if (/SET fichas_para_uso = en_uso_desde/.test(s)) {
         const m = filas.maquina;
         if (m.estado !== 'en_uso' || !m.en_uso_desde || m.encendida_manual_at
@@ -130,8 +130,8 @@ describe('el barrido no revive una máquina que alguien apagó', () => {
   });
 });
 
-// El espejo de lo anterior (mig. 104). Antes el barrido apagaba a los 3 minutos
-// cualquier máquina sin nota, incluida la que alguien acababa de prender.
+// El espejo de lo anterior: el barrido no apaga una máquina sin nota que
+// alguien acaba de prender.
 describe('el barrido no apaga una máquina que alguien prendió', () => {
   it('libre, última orden aplicada y ahora encendida → la adopta en vez de apagarla', async () => {
     filas.maquina = { ...maquinaEnUso('enlazada'), estado: 'disponible' };
@@ -263,8 +263,8 @@ describe('corte por fin de ciclo', () => {
     ...extra,
   });
 
-  // Igual, pero contando en segundos: el margen son 10 s, y "justo dentro" y
-  // "justo fuera" ya no se pueden expresar en minutos.
+  // Igual, en segundos: con un margen de 10 s, "justo dentro" y "justo fuera" no
+  // caben en minutos.
   const enUsoDesdeHaceSeg = (seg, ciclo, extra = {}) => ({
     ...maquinaEnUso('enlazada'),
     en_uso_desde: new Date(Date.now() - seg * 1000).toISOString(),
@@ -351,9 +351,7 @@ describe('interruptor del corte', () => {
     // defecto; apagarlo en producción es `fly secrets set SONOFF_CORTE_CICLO=off`.
     const { CORTE_CICLO_ACTIVO, MARGEN_CORTE_SEGUNDOS } = await import('./sincronizarSonoff.js');
     expect(CORTE_CICLO_ACTIVO).toBe(true);
-    // El margen vive en segundos desde la mig. 108. El default eran 20 min y
-    // nadie lo sobreescribía: la máquina se quedaba encendida veinte minutos
-    // después de terminar y el botón del segundo ciclo pedía esperar 1210 s.
+    // El margen va en segundos (5 por defecto): la máquina se apaga casi al terminar.
     expect(MARGEN_CORTE_SEGUNDOS).toBe(5);
   });
 });
@@ -420,8 +418,8 @@ describe('relojes del ciclo (mig. 108)', () => {
 
 describe('tope de ciclos por máquina', () => {
   const cargar = () => import('./sincronizarSonoff.js');
-  // Los dos ciclos son del temporizador: con el cronómetro (2026-10-02) toda
-  // carga corre uno. Aquí se prueba la regla con el interruptor apagado.
+  // Los dos ciclos son del temporizador (con cronómetro la carga corre uno): aquí
+  // se prueba con el interruptor apagado.
   let antes;
   beforeAll(() => { antes = process.env.MAQUINAS_CRONOMETRO; process.env.MAQUINAS_CRONOMETRO = 'off'; });
   afterAll(() => {
@@ -442,8 +440,8 @@ describe('tope de ciclos por máquina', () => {
     expect(maxCiclosDeMaquina({ tipo: 'lavadora_jumbo', minutos_ciclo: null })).toBe(1);
   });
 
-  // Desde la mig. 123 los DOS ciclos son la excepción y los declara el modelo:
-  // una lavadora con tiempo configurado, pero sin esa marca, corre uno solo.
+  // Los dos ciclos los declara el modelo: con tiempo configurado pero sin esa
+  // marca, la lavadora corre uno.
   it('con tiempo de marca, pero sin el modelo marcado, corre un ciclo', async () => {
     const { maxCiclosDeMaquina } = await cargar();
     expect(maxCiclosDeMaquina({ tipo: 'lavadora_mediana', minutos_ciclo: 45 })).toBe(1);
@@ -461,7 +459,7 @@ describe('tope de ciclos por máquina', () => {
 
   it('la vuelta extra corre un solo ciclo aunque el modelo dé para dos', async () => {
     const { maxCiclosDeMaquina } = await cargar();
-    // Misma lavadora, mismo modelo: lo que cambia es la pasada (mig. 115).
+    // Misma lavadora y mismo modelo: lo que cambia es la pasada.
     const dos = { tipo: 'lavadora_mediana', minutos_ciclo: 45, marca_opciones: { dos_ciclos: true } };
     expect(maxCiclosDeMaquina({ ...dos, ciclo_unico: false })).toBe(2);
     expect(maxCiclosDeMaquina({ ...dos, ciclo_unico: true })).toBe(1);
@@ -482,8 +480,8 @@ describe('tope de ciclos por máquina', () => {
   });
 });
 
-// Secadoras de fichas (mig. 147): S4 (Sec49) da 10 min por ficha y pregunta
-// el programa; S2 (Sec50) da 30 y usa su tope.
+// Secadoras de fichas: S4 (Sec49) da 10 min por ficha y pregunta el programa;
+// S2 (Sec50) da 30 y usa su tope.
 describe('secadoras de fichas', () => {
   const desde = '2026-10-06T18:00:00.000Z';
   const secadora = (extra = {}) => ({

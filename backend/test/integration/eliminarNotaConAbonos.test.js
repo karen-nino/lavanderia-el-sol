@@ -1,8 +1,6 @@
-// Borrar una nota se lleva sus abonos (ON DELETE CASCADE). Si alguno entró en
-// un corte ya CERRADO, el corte conserva ese dinero y Ventas lo pierde: dos
-// reportes del mismo día en desacuerdo. Es la misma regla que ya protegía a la
-// nota PAGADA de un corte cerrado (2026-09-23) y la que cancelar aplica a
-// cualquier abono vivo (2026-10-12).
+// Borrar una nota se lleva sus abonos (ON DELETE CASCADE). Si alguno entró en un
+// corte cerrado, el corte y Ventas quedarían en desacuerdo: no se permite (como
+// con una nota pagada en un corte cerrado, y como al cancelar).
 import { describe, it, expect, beforeEach } from 'vitest';
 import request from 'supertest';
 import app from '../../app.js';

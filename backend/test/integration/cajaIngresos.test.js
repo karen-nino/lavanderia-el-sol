@@ -1,7 +1,7 @@
-// Recuadros Ingresos y Egresos del corte (2026-10-10). Ingresos: de dónde salió
-// el efectivo del turno — lavadoras medianas, jumbo, secadoras, productos, Por
-// Encargo y Edredón; solo efectivo, y la suma es la de ventas en efectivo.
-// Egresos: lo que el turno dejó por cobrar en Por Encargo y las salidas.
+// Recuadros del corte. Ingresos: de dónde salió el efectivo del turno
+// (lavadoras medianas, jumbo, secadoras, productos, Por Encargo y Edredón); suma
+// las ventas en efectivo. Egresos: lo que quedó por cobrar en Por Encargo y las
+// salidas.
 import { describe, it, expect, beforeEach } from 'vitest';
 import request from 'supertest';
 import app from '../../app.js';

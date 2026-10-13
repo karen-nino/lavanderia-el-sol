@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { esErrorDeConexion } from './erroresDb.js';
 
-// El caso real que tiró las peticiones el 2026-09-29: el pooler de Supabase
-// soltó las conexiones y el pool repartió sockets muertos.
+// El caso real: el pooler de Supabase soltó las conexiones y el pool repartió
+// sockets muertos.
 const errorPg = (code) => Object.assign(new Error('read ECONNRESET'), { code, errno: -104, syscall: 'read' });
 
 describe('esErrorDeConexion', () => {

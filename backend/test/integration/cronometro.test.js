@@ -1,14 +1,7 @@
-// Máquinas con CRONÓMETRO: todas, lavadoras y secadoras (2026-10-02).
-//
-// Se probó primero con las lavadoras LG y Samsung (mig. 137) y se extendió a
-// todas. Al encenderlas empieza a contar hacia arriba —no hay paso de
-// "Iniciar"—, la carga corre un solo ciclo y termina cuando alguien la
-// finaliza. Los minutos de su modelo, su marca o su tamaño son su TOPE: si
-// nadie la finaliza, el corte le quita la luz y se avisa en la campana.
-//
-// La excepción es el modelo que PREGUNTA su tiempo al iniciar (la Sec49): ese
-// conserva su temporizador. Y `MAQUINAS_CRONOMETRO=off` devuelve todas al
-// temporizador.
+// Máquinas con cronómetro (todas): al arrancar cuenta hacia arriba, la carga
+// corre un ciclo y termina cuando alguien la finaliza. Los minutos de su modelo,
+// marca o tamaño son su tope: si nadie la finaliza, se le corta la luz y se
+// avisa en la campana. `MAQUINAS_CRONOMETRO=off` vuelve al temporizador.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import request from 'supertest';
 import app from '../../app.js';
@@ -178,7 +171,7 @@ describe('encender', () => {
 });
 
 describe('lavadora Speed Queen', () => {
-  // Sin paso de encender (2026-10-04): Iniciar le da corriente y arranca.
+  // Iniciar le da corriente y arranca (sin paso de encender).
   it('Iniciar sin encender antes arranca el cronómetro con su tope', async () => {
     const id = await lavadora('Speed Queen', 'L8', 45);
     const { notaId } = await notaCon(id);

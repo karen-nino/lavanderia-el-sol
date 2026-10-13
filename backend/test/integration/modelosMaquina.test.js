@@ -1,12 +1,7 @@
-// Modelos de máquina (migs. 117 y 118).
-//
-// Los modelos cuelgan de una marca, dicen qué máquina son (tipo y tamaño) y
-// pueden traer su propio tiempo de ciclo, que se escribe desde los bloques de
-// tiempos de Ajustes y no desde el catálogo.
-// Lo que se fija aquí es la cadena de resolución completa —modelo →
-// marca+tamaño (mig. 107) → tamaño (Ajustes)— porque es la que decide cuánto
-// corre el temporizador y, con el corte automático, cuándo se le va la luz a
-// una lavadora a media carga.
+// Modelos de máquina: cuelgan de una marca, dicen qué máquina son (tipo y
+// tamaño) y pueden traer su tiempo de ciclo (se escribe desde los bloques de
+// tiempos de Ajustes). Se fija la cadena de resolución modelo → marca+tamaño →
+// tamaño, que decide cuánto corre la máquina y cuándo se le corta la luz.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import request from 'supertest';
 import app from '../../app.js';
@@ -355,9 +350,7 @@ describe('GET/PUT /api/etiquetas/tiempos-marca — el renglón dice marca y mode
   });
 });
 
-// Tres tiempos por modelo y el interruptor que los pregunta (mig. 120).
-// Desde la mig. 146 el campo grande (`minutos`) del modelo que pregunta es su
-// TOPE y los tres programas a elegir van en minutos_2..4.
+// Modelo que pregunta: `minutos` es su tope y los tres programas van en minutos_2..4.
 describe('modelo con tres tiempos', () => {
   const interruptorAntes = process.env.MAQUINAS_CRONOMETRO;
   afterEach(() => {
@@ -372,8 +365,7 @@ describe('modelo con tres tiempos', () => {
   // de una nota que ya tiene su lavadora corriendo.
   async function conSecadoraDeTresTiempos({ pregunta = true, tope = 75 } = {}) {
     const sq = await seedMarca('Speed Queen');
-    // Que el modelo tenga varios tiempos se declara en su catálogo; los
-    // minutos se escriben desde el bloque de tiempos.
+    // Los varios tiempos se declaran en el catálogo; los minutos, en el bloque de tiempos.
     const modelo = (await crearModelo(admin.token, {
       marca_id: sq, nombre: 'Sec49', tipo: 'secadora', tamano: 'jumbo', minutos: 30,
       pregunta_tiempo: pregunta,
@@ -483,7 +475,7 @@ describe('modelo con tres tiempos', () => {
   });
 });
 
-// Modelo que trabaja SOLO CON FICHAS (mig. 149): sin Sonoff y sin tiempos.
+// Modelo que trabaja solo con fichas: sin Sonoff y sin tiempos.
 describe('modelo de fichas', () => {
   it('no pide tiempos, arranca con Iniciar y no tiene tope', async () => {
     const marca = await seedMarca('Fichera');

@@ -1,6 +1,6 @@
-// El granel de un servicio Por Encargo por TIPO (migs. 132-134): el servicio
-// sabe cuántas medidas lleva de cada tipo (Jabón, Suavizante) y el empleado
-// elige en Salidas cuál producto usa. La lavadora no arranca sin elegir.
+// Granel por tipo en Por Encargo: el servicio sabe cuántas medidas lleva de cada
+// tipo (Jabón, Suavizante) y el empleado elige el producto en Salidas. La
+// lavadora no arranca sin elegir.
 import { describe, it, expect, beforeEach } from 'vitest';
 import request from 'supertest';
 import app from '../../app.js';
@@ -23,7 +23,7 @@ beforeEach(async () => {
   tipo = { jabon: rows[0].id, suavizante: rows[1].id };
 });
 
-// Un granel líquido con su tipo (se elige en el producto, mig. 136).
+// Un granel líquido con su tipo.
 async function granel(nombre, tipoId, stock = 50) {
   const id = await seedProducto({ nombre, precio_unitario: 1, stock_actual: stock });
   await pool.query('UPDATE productos SET tipo_granel_id = $2 WHERE id = $1', [id, tipoId]);
@@ -180,7 +180,7 @@ describe('ninguna lavadora de la nota arranca con granel por elegir', () => {
   });
 });
 
-// Mig. 154: el cliente dejó su propio jabón o suavizante.
+// El cliente dejó su propio jabón o suavizante.
 describe('producto del cliente', () => {
   it('no aparta inventario, devuelve lo que había y deja iniciar la lavadora', async () => {
     const oxxi = await granel('OXXI MEJORADO', tipo.jabon);
@@ -222,8 +222,8 @@ describe('producto del cliente', () => {
   });
 });
 
-// Mig. 161 (2026-10-11): el granel del servicio se DESCUENTA al terminar la
-// primera lavadora de la nota; deja de salir como "apartado" en Inventario.
+// El granel del servicio se descuenta al terminar la primera lavadora de la
+// nota; deja de salir como apartado.
 describe('el granel sale del estante al terminar la lavadora', () => {
   const stock = async (id) => {
     const { rows } = await pool.query('SELECT stock_actual, stock_reservado FROM productos WHERE id = $1', [id]);

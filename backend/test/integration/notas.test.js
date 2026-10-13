@@ -13,8 +13,7 @@ beforeEach(async () => {
   await limpiarBase();
   await seedSucursal('centro');
   admin = await seedUsuario({ rol: 'admin', sucursal: 'centro' });
-  // El catálogo de tamaños de bolsa lo siembra la mig. 119, pero limpiarBase
-  // lo vacía: sin él no se puede dar de alta una bolsa.
+  // limpiarBase vacía el catálogo de tamaños de bolsa: sin él no se da de alta una bolsa.
   await seedEtiquetas('tamanos_bolsa', ['Chica', 'Grande', 'Jumbo']);
   // Los precios de los servicios Por Encargo (Chica 120, Grande 150, Edredón
   // 180) van de entrada, como en la aplicación: sin ellos no se puede crear la
@@ -38,9 +37,7 @@ describe('POST /api/notas — validaciones', () => {
     expect(res.status).toBe(400);
   });
 
-  // Por Encargo SIN cliente ya no es un error: es la nota de mostrador
-  // (2026-09-29). Antes esto devolvía 400 con "las notas Por Encargo llevan
-  // cliente", y la única salida era dar de alta un cliente de una sola nota.
+  // Por Encargo sin cliente es la nota de mostrador.
   it('Por Encargo sin cliente_id se crea a nombre de Mostrador', async () => {
     const res = await request(app).post('/api/notas').set(auth(admin.token)).send({
       tipo_servicio: 'POR_ENCARGO',
@@ -103,8 +100,7 @@ describe('POST /api/notas — Autoservicio (happy path)', () => {
     expect(res.body.cargas).toHaveLength(1);
     expect(res.body.cargas[0].lavadora_id).toBeNull();
     expect(res.body.cargas[0].lavadora_tipo).toBe('mediana');
-    // Autoservicio NO se tarifa al crear (2026-09-25): la máquina se cobra
-    // cuando se asigna la física en Salidas.
+    // Autoservicio no se tarifa al crear: la máquina se cobra al asignarla en Salidas.
     expect(Number(res.body.precio_total)).toBe(0);
 
     const detalle = await request(app).get(`/api/notas/${res.body.id}`).set(auth(admin.token));
@@ -118,10 +114,8 @@ describe('POST /api/notas — Autoservicio (happy path)', () => {
   });
 });
 
-// El alta de Autoservicio elige LA MÁQUINA, no su tipo (2026-09-29): el
-// mostrador la escoge de la lista de libres y la nota nace ya tarifada, que es
-// lo que permite enseñar el total en el formulario y cobrar sin pasar por
-// Salidas. La máquina queda asignada, no arrancada.
+// El alta de Autoservicio elige la máquina (no su tipo): la nota nace tarifada,
+// con la máquina asignada y sin arrancar.
 describe('POST /api/notas — Autoservicio con máquina elegida en el alta', () => {
   const crearCon = (cargas) => request(app).post('/api/notas').set(auth(admin.token)).send({
     tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE', cargas,
@@ -239,7 +233,7 @@ describe('lecturas del modelo por cargas (invariantes que deben sobrevivir el re
     expect(res.body[0].hay_lavadora_activa).toBe(true);
     expect(res.body[0].hay_secadora_activa).toBe(false);
     expect(res.body[0].maquinas_nombres).toContain('Lavadora 1');
-    // La tarjeta de la lista dice qué máquina está usando (2026-10-03).
+    // La lista dice qué máquina está usando la nota.
     expect(res.body[0].maquinas_en_uso).toEqual(['Lavadora 1']);
   });
 
@@ -263,9 +257,8 @@ describe('POST /api/notas — Por Encargo', () => {
     expect(res.body.estado).toBe('EN_ESPERA');
     expect(res.body.estado_pago).toBe('PENDIENTE');
     expect(res.body.cliente_id).toBe(clienteId);
-    // No se reserva máquina: la carga guarda el tipo previsto, sin lavadora_id.
-    // El precio es el del SERVICIO Chica (120), no la tarifa de la máquina: lo
-    // que se cobra en Por Encargo ya no depende de en qué se lave.
+    // No se reserva máquina: la carga guarda el tipo previsto. El precio es el del
+    // servicio Chica (120), no la tarifa de la máquina.
     expect(res.body.cargas).toHaveLength(1);
     expect(res.body.cargas[0].lavadora_id).toBeNull();
     expect(res.body.cargas[0].lavadora_tipo).toBe('mediana');
@@ -305,9 +298,7 @@ describe('POST /api/notas — Por Encargo', () => {
     expect(ok.body.estado).toBe('EN_ESPERA');
   });
 
-  // El tamaño dejó de atar la asignación (2026-09-26): en el mostrador la ropa
-  // entra en la lavadora que esté libre, y el precio de Por Encargo no depende
-  // de cuál sea —se cobra el tope de la carga, congelado al crear la nota—.
+  // El tamaño no ata la asignación: se cobra el tope de la carga, congelado al crearla.
   it('asignar-carga-maquina acepta una jumbo en una carga mediana, sin mover el precio', async () => {
     const clienteId = await seedCliente();
     const lavJum = await seedMaquina({ nombre: 'Lav Jumbo', tipo: 'lavadora_jumbo', tamano: 'jumbo' });
@@ -326,8 +317,7 @@ describe('POST /api/notas — Por Encargo', () => {
     expect(Number(ok.body.precio_total)).toBe(antes);
   });
 
-  // El edredón dejó de exigir jumbo el 2026-10-02 (decisión del negocio): va
-  // en la lavadora que esté libre, también en Por Encargo.
+  // El edredón va en la lavadora que esté libre, también en Por Encargo.
   it('asignar-carga-maquina acepta una mediana para un edredón', async () => {
     const clienteId = await seedCliente();
     const lavMed = await seedMaquina({ nombre: 'Lav Mediana', tipo: 'lavadora_mediana', tamano: 'mediana' });
@@ -369,15 +359,8 @@ describe('POST /api/notas — Por Encargo', () => {
   });
 });
 
-// Asignar una máquina NO la aparta: mientras nadie la arranque, varias notas
-// pueden tenerla asignada. La primera que le da a "Iniciar" se la queda; las
-// demás reciben un aviso para cambiarla por otra.
-// La tarjeta de Máquinas usa este campo para decidir el botón de una lavadora
-// que terminó: con la lavadora marcada ofrece "Iniciar secado" (y pide elegir
-// secadora ahí mismo); sin marcar, "Finalizar carga".
-// Lo cobrado en un corte CERRADO no se deshace por la puerta de atrás: cambiar
-// lo que cuesta la nota la devolvería a pendiente, y ese corte ya cuenta la
-// venta (mig. 101).
+// Lo cobrado en un corte cerrado no se deshace: cambiar lo que cuesta la nota
+// la devolvería a pendiente, y ese corte ya cuenta la venta.
 describe('un cobro congelado en su corte no se deshace por un cambio', () => {
   async function notaPagadaEnCorteCerrado() {
     // Autoservicio cobra la BOTELLA, así que sin `precio_botella` el producto
@@ -730,10 +713,9 @@ async function crearNotaEncargo(estado_pago) {
   return creada;
 }
 
-// Por Encargo vende SERVICIOS: Chica, Grande y Edredón, cada uno a su precio de
-// Ajustes. La nota ya no elige tipo de máquina —eso se decide en Salidas, sin
-// tocar el cobro— y lo que el cliente compra aparte va a nivel nota, encima del
-// precio de los servicios.
+// Por Encargo vende servicios (Chica, Grande, Edredón) a su precio de Ajustes;
+// la máquina se decide en Salidas sin tocar el cobro, y lo que se compra aparte
+// va a nivel nota.
 describe('servicios Por Encargo (sin tipo de máquina)', () => {
   it('cobra el precio de cada servicio y no exige tipo de máquina', async () => {
     const clienteId = await seedCliente();
@@ -874,9 +856,8 @@ describe('servicios Por Encargo (sin tipo de máquina)', () => {
     expect(rows.map(x => x.ciclo_unico)).toEqual([false, true]);
   });
 
-  // Por Encargo pasa a Por Entregar SOLO cuando alguien confirma "Procesado"
-  // (2026-09-28): que las máquinas terminen no quiere decir que la ropa esté
-  // doblada, empacada y revisada.
+  // Por Encargo pasa a Por Entregar solo con "Procesado": que las máquinas
+  // terminen no quiere decir que la ropa esté lista.
   describe('a Por Entregar solo por "Procesado"', () => {
     // Deja la nota con su lavado terminado y devuelve su id y su estado.
     async function trasLavar(nombre) {
@@ -923,8 +904,7 @@ describe('servicios Por Encargo (sin tipo de máquina)', () => {
       expect(res.status).toBe(409);
     });
 
-    // "Doblado" (2026-10-11): en la lista, la Por Encargo que ya lavó Y secó
-    // y espera "Procesado". En la base sigue EN_ESPERA.
+    // "Doblado": Por Encargo que lavó y secó y espera "Procesado" (en la base, EN_ESPERA).
     const dobladoEnLista = async (notaId) => {
       const lista = await request(app).get('/api/notas').set(auth(admin.token));
       return lista.body.find(x => x.id === notaId).doblado;
@@ -1121,10 +1101,8 @@ describe('topes de precio por carga (solo Por Encargo)', () => {
     expect(Number(prod[0].stock_reservado)).toBe(0);
   });
 
-  // Regresión: el tope se congela en la carga (mig. 096). Antes se leía el
-  // vigente en Ajustes en cada recálculo, así que subir los precios re-tarifaba
-  // notas viejas: una nota cobrada en $150 pasaba a $200 y seguía marcada como
-  // PAGADA, descuadrando el corte de caja.
+  // Regresión: el tope se congela en la carga. Si se leyera de Ajustes en cada
+  // recálculo, subir precios re-tarifaría notas ya cobradas y descuadraría el corte.
   it('cambiar el tope en Ajustes NO altera el precio de una nota ya cobrada', async () => {
     await seedAjustes({ precio_carga_mediana: 70, tope_carga_grande: 150 });
     const clienteId = await seedCliente();
@@ -1171,9 +1149,8 @@ describe('handlers de máquina — ciclo de vida', () => {
   async function autoservicioLavando() {
     const lavadoraId = await seedMaquina({ nombre: 'Lavadora 1', tipo: 'lavadora_mediana' });
     const secadoraId = await seedMaquina({ nombre: 'Secadora 1', tipo: 'secadora', tamano: 'mediana' });
-    // Nuevo flujo: crea con TIPO (la nota nace en $0), asigna la lavadora
-    // física —que es cuando se tarifa (2026-09-25)—, la arranca y hasta
-    // entonces se cobra: antes de asignar el servidor no deja cobrarla.
+    // Crea con tipo (nace en $0), asigna la lavadora (ahí se tarifa), la arranca y
+    // la cobra: antes de asignar el servidor no deja cobrarla.
     const crea = await request(app).post('/api/notas').set(auth(admin.token)).send({
       tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE',
       cargas: [{ lavadora_tipo: 'mediana' }],
@@ -1290,10 +1267,8 @@ describe('handlers de máquina — asignar / cambiar / quitar', () => {
     return { notaId: res.body.id, lavadoraId };
   }
 
-  // Autoservicio también agrega máquinas (2026-09-25). Antes se rechazaba
-  // porque se cobraba por adelantado y sumar una máquina a una nota ya pagada
-  // la devolvía a PENDIENTE; hoy la nota nace pendiente y cada máquina se
-  // tarifa al asignarla, así que la de más es un renglón más de la misma nota.
+  // Autoservicio también agrega máquinas: cada una se tarifa al asignarla y es
+  // un renglón más de la nota.
   it('asignar-maquina agrega una máquina más a una nota de Autoservicio', async () => {
     await seedAjustes({ precio_carga_mediana: 70 });
     const lavadoraId = await seedMaquina({ nombre: 'L-auto', tipo: 'lavadora_mediana', tamano: 'mediana' });
@@ -1326,9 +1301,8 @@ describe('handlers de máquina — asignar / cambiar / quitar', () => {
       .set(auth(admin.token)).send({ maquina_id: otra, cobrar: true });
     expect(res.status).toBe(200);
     expect(res.body.cargas).toHaveLength(2);
-    // El servicio Chica de la nota (120) más la tarifa de la máquina agregada
-    // con cobrar:true (70). La carga original ya no cobra su máquina: en Por
-    // Encargo lo que se cobra es el precio del servicio.
+    // El servicio Chica (120) más la máquina agregada con cobrar:true (70). La
+    // carga original no cobra su máquina: en Por Encargo se cobra el servicio.
     expect(Number(res.body.precio_total)).toBe(190);
     // La máquina agregada queda asignada pero sin iniciar (disponible).
     const { rows } = await pool.query('SELECT estado FROM maquinas WHERE id = $1', [otra]);
@@ -1366,9 +1340,8 @@ describe('handlers de máquina — asignar / cambiar / quitar', () => {
     expect(Number(res.body.precio_total)).toBe(totalAntes);
   });
 
-  // El historial de la carga (mig. 114) guarda una fila POR PASADA, así que una
-  // carga que se relava en la misma lavadora la lista dos veces. Los campos
-  // viejos (lavadora_usada_id) solo saben de la última.
+  // El historial guarda una fila por pasada: relavar en la misma lavadora la
+  // lista dos veces (lavadora_usada_id solo sabe de la última).
   it('una carga que repite lavadora la lista dos veces en su historial', async () => {
     const { notaId, lavadoraId } = await porEncargoEnEspera();
     const nota = await request(app).get(`/api/notas/${notaId}`).set(auth(admin.token));
@@ -1391,8 +1364,7 @@ describe('handlers de máquina — asignar / cambiar / quitar', () => {
     expect(usadas.map(u => u.actual)).toEqual([false, true]);
   });
 
-  // La vuelta extra va sin cobro sobre un lavado ya cobrado: darle dos ciclos
-  // sería regalar el doble de agua y luz (mig. 115).
+  // La vuelta extra va sin cobro sobre un lavado ya cobrado: un solo ciclo.
   it('la máquina agregada desde Salidas queda marcada de un solo ciclo', async () => {
     const { notaId, lavadoraId } = await porEncargoEnEspera();
     const nota = await request(app).get(`/api/notas/${notaId}`).set(auth(admin.token));
@@ -1593,9 +1565,8 @@ describe('edredón (lavadora jumbo)', () => {
       estado_pago: 'PENDIENTE', cargas: [{ lavadora_tipo: 'jumbo' }],
     });
     expect(res.status).toBe(201);
-    // El edredón tiene su tarifa propia de lavadora jumbo (precio_edredon_jumbo,
-    // 80 por defecto; se quitó y volvió el 2026-10-02), pero lo que se COBRA es
-    // el precio del servicio Edredón (180): el tope manda sobre las máquinas.
+    // El edredón tiene tarifa de lavadora jumbo (precio_edredon_jumbo, 80), pero se
+    // cobra el precio del servicio Edredón (180): el tope manda.
     expect(Number(res.body.precio_total)).toBe(180);
     expect(Number(res.body.cargas[0].precio_lavadora)).toBe(80);
   });
@@ -1881,8 +1852,7 @@ describe('nota con varias cargas: no está lista hasta terminarlas todas', () =>
   async function notaDeDosCargas() {
     const lav1 = await seedMaquina({ nombre: 'Lavadora 1', tipo: 'lavadora_mediana' });
     const lav2 = await seedMaquina({ nombre: 'Lavadora 2', tipo: 'lavadora_mediana' });
-    // Nace PENDIENTE: el autoservicio se tarifa al asignar la máquina, así que
-    // hasta entonces no hay nada que cobrar (2026-09-25).
+    // Nace PENDIENTE: el autoservicio se tarifa al asignar la máquina.
     const crea = await request(app).post('/api/notas').set(auth(admin.token)).send({
       tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE',
       cargas: [{ lavadora_tipo: 'mediana' }, { lavadora_tipo: 'mediana' }],
@@ -1951,9 +1921,8 @@ describe('cierre automático de la nota al terminar sus cargas', () => {
       .send({ maquina_id: maquinaId }).expect(200);
   };
 
-  // El cobro va SIEMPRE después de asignar la máquina (2026-09-25): antes de eso
-  // el autoservicio vale $0 y el servidor no deja cobrarlo, así que un
-  // `estado_pago: 'PAGADO'` en el body se traduce en cobrar al final.
+  // El cobro va después de asignar la máquina (antes vale $0 y no se deja
+  // cobrar): `estado_pago: 'PAGADO'` se traduce en cobrar al final.
   const terminarUnicaCarga = async ({ estado_pago, forma_pago, ...body } = {}) => {
     const lav = await seedMaquina({ nombre: `Lavadora ${Date.now()}`, tipo: 'lavadora_mediana' });
     const crea = await request(app).post('/api/notas').set(auth(admin.token))
@@ -1997,12 +1966,9 @@ describe('cierre automático de la nota al terminar sus cargas', () => {
     expect(res.body.estado).toBe('LISTA');
   });
 
-  // El autoservicio dejó de cobrarse por adelantado (2026-09-23): se crea
-  // pendiente como Por Encargo, la carga corre igual y el cobro se registra
-  // después desde el detalle. Al liquidarla ya no queda nada por hacer —el
-  // cliente se llevó su ropa—, así que la nota se cierra sola y el producto
-  // que tenía apartado sale del inventario, igual que cuando se cierra al
-  // terminar la carga.
+  // Autoservicio se crea pendiente, la carga corre igual y se cobra después
+  // desde el detalle; al liquidarla se cierra sola y el producto sale del
+  // inventario.
   it('autoservicio sin pagar: arranca igual, espera el cobro y al liquidarlo se cierra solo', async () => {
     const prod = await seedProducto({
       nombre: 'Detergente a deber', precio_botella: 30, stock_actual: 100,
@@ -2016,7 +1982,7 @@ describe('cierre automático de la nota al terminar sus cargas', () => {
     expect(crea.status).toBe(201);
     expect(crea.body.estado_pago).toBe('PENDIENTE');
 
-    // Arranca sin haber cobrado: ya no hay candado.
+    // Arranca sin haber cobrado.
     await arrancar(crea.body.id, crea.body.cargas[0].id, lav);
 
     // Terminada la carga espera el cobro en Por Entregar, con su producto
@@ -2084,10 +2050,7 @@ describe('cierre automático de la nota al terminar sus cargas', () => {
     expect(Number(fin[0].stock_reservado)).toBe(0);
   });
 
-  // Borrar la nota es deshacerla entera: si su producto ya salió del estante al
-  // cerrarse, tiene que volver. Antes solo volvía en la venta de mostrador, y
-  // el autoservicio finalizado dejaba el inventario corto sin manera de
-  // arreglarlo desde la nota.
+  // Borrar la nota es deshacerla entera: el producto que salió al cerrarse vuelve.
   it('borrar una nota ya finalizada devuelve su producto al estante', async () => {
     const prod = await seedProducto({
       nombre: 'Detergente borrado', precio_botella: 30, stock_actual: 100,
@@ -2124,8 +2087,7 @@ describe('cierre automático de la nota al terminar sus cargas', () => {
       cargas: [{ lavadora_tipo: 'mediana' }],
     });
     expect(crea.status).toBe(201);
-    // Se le asigna la máquina (ahí se tarifa) pero nadie la ha iniciado: es lo
-    // mínimo para poder cobrar desde el 2026-09-25.
+    // Con la máquina asignada (ahí se tarifa) ya se puede cobrar, aunque no se haya iniciado.
     await request(app).patch(`/api/notas/${crea.body.id}/asignar-carga-maquina`).set(auth(admin.token))
       .send({ carga_id: crea.body.cargas[0].id, slot: 'lavadora', maquina_id: lav }).expect(200);
     const pago = await request(app).patch(`/api/notas/${crea.body.id}/estado-pago`)
@@ -2171,7 +2133,7 @@ describe('cierre automático de la nota al terminar sus cargas', () => {
     const stockInicial = Number(antes.rows[0].stock_actual);
 
     await arrancar(crea.body.id, crea.body.cargas[0].id, lav);
-    // Con la máquina ya asignada la nota tiene precio y se cobra (2026-09-25).
+    // Con la máquina asignada la nota tiene precio y se cobra.
     await request(app).patch(`/api/notas/${crea.body.id}/estado-pago`).set(auth(admin.token))
       .send({ estado_pago: 'PAGADO', forma_pago: 'EFECTIVO' }).expect(200);
     const res = await request(app).patch(`/api/notas/${crea.body.id}/terminar-lavado-final`)
@@ -2191,9 +2153,8 @@ describe('cierre automático de la nota al terminar sus cargas', () => {
     expect(mov.rows.map(r => r.tipo)).toEqual(['venta']);
   });
 
-  // Terminar dos veces la misma carga antes solo reescribía LISTA (inofensivo);
-  // ahora cierra la nota y descuenta inventario, así que repetirlo descuadraría
-  // el stock. Lo impide la guarda de estado bajo el FOR UPDATE de la nota.
+  // Terminar la carga cierra la nota y descuenta inventario: repetirlo
+  // descuadraría el stock. Lo impide la guarda de estado con FOR UPDATE.
   it('terminar dos veces la misma carga no descuenta el producto dos veces', async () => {
     const prod = await seedProducto({
       nombre: 'Detergente doble', precio_botella: 30, stock_actual: 100,
@@ -2229,9 +2190,8 @@ describe('cierre automático de la nota al terminar sus cargas', () => {
     expect(mov.rows).toHaveLength(1);
   });
 
-  // Por Encargo NO se cierra sola al terminar la máquina (2026-09-28): la ropa
-  // lavada todavía hay que doblarla y empacarla, y quien lo dice es el botón
-  // "Procesado". Se queda En Espera —que es donde está— pagada o no.
+  // Por Encargo no se cierra al terminar la máquina: falta doblar y empacar, y
+  // eso lo dice "Procesado". Se queda En Espera, pagada o no.
   it('por encargo sin pagar: termina su máquina y espera a que la procesen', async () => {
     const clienteId = await seedCliente();
     const res = await terminarUnicaCarga({
@@ -2390,8 +2350,7 @@ describe('una nota no se queda atascada si sobra una carga', () => {
     const { notaId, cargaSinUsar } = await notaConCargaTerminadaYOtraSinUsar();
     const antes = await request(app).get(`/api/notas/${notaId}`).set(auth(admin.token));
     expect(antes.body.estado).not.toBe('LISTA');
-    // Solo cobra la carga que SÍ se usó: a la otra nunca se le asignó máquina,
-    // y en Autoservicio la máquina es lo que pone el precio (2026-09-25).
+    // Solo cobra la carga que tiene máquina: en Autoservicio la máquina pone el precio.
     expect(Number(antes.body.precio_total)).toBe(70);
 
     const res = await request(app).delete(`/api/notas/${notaId}/cargas/${cargaSinUsar}`)
@@ -2402,8 +2361,7 @@ describe('una nota no se queda atascada si sobra una carga', () => {
     expect(res.body.cargas).toHaveLength(1);
   });
 
-  // Quien se equivoca al agregar una máquina de más la quita en el momento: no
-  // hace falta un admin (2026-09-25). El resto de las reglas no se movió.
+  // Una máquina de más se quita en el momento, sin admin.
   it('en Autoservicio cabe cualquier lavadora y se cobra la de esa máquina', async () => {
     // La nota no elige tamaño: guarda 'mediana' y el cliente usa la que esté
     // libre, así que una jumbo también se puede asignar y se cobra como jumbo.
@@ -2467,9 +2425,8 @@ describe('una nota no se queda atascada si sobra una carga', () => {
 });
 
 
-// Deshacer la entrega (2026-09-25): la nota entregada vuelve a Por Entregar,
-// como antes de confirmarla. Es de admin y devuelve al inventario los productos
-// que la entrega había dado por vendidos.
+// Deshacer la entrega (admin): vuelve a Por Entregar y regresan al inventario
+// los productos que la entrega dio por vendidos.
 describe('PATCH /api/notas/:id/reabrir', () => {
   async function encargoEntregado() {
     const prod = await seedProducto({ nombre: 'Jabón entrega', precio_unitario: 10, stock_actual: 100 });
@@ -2559,7 +2516,7 @@ describe('PATCH /api/notas/:id/reabrir', () => {
     const { notaId } = await encargoEntregado();
     await request(app).patch(`/api/notas/${notaId}/reabrir`).set(auth(emp.token)).expect(403);
 
-    // Reabierta una vez, ya no se puede otra: sigue abierta.
+    // Reabierta una vez, no se puede otra: sigue abierta.
     await request(app).patch(`/api/notas/${notaId}/reabrir`).set(auth(admin.token)).expect(200);
     const res = await request(app).patch(`/api/notas/${notaId}/reabrir`).set(auth(admin.token));
     expect(res.status).toBe(400);
@@ -2576,8 +2533,7 @@ describe('PATCH /api/notas/:id/reabrir', () => {
   });
 });
 
-// Ajuste de la nota desde Salidas (2026-09-25): descuento o cargo extra sobre
-// el total, que además sale impreso en el ticket.
+// Ajuste de la nota desde Salidas: descuento o cargo sobre el total, impreso en el ticket.
 describe('PATCH /api/notas/:id/ajuste', () => {
   async function encargoDe150() {
     await seedAjustes({ precio_carga_mediana: 70, tope_carga_grande: 150 });
@@ -2637,7 +2593,7 @@ describe('PATCH /api/notas/:id/ajuste', () => {
   });
 });
 
-// Cliente / referencia del Autoservicio editable desde el detalle (2026-10-11).
+// Cliente / referencia del Autoservicio, editable desde el detalle.
 describe('PATCH /api/notas/:id/referencia', () => {
   it('cambia la referencia del Autoservicio; vacía vuelve a Mostrador', async () => {
     const lav = await seedMaquina({ nombre: 'L-ref', tipo: 'lavadora_mediana', tamano: 'mediana' });

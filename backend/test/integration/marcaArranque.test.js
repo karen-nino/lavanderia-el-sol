@@ -5,14 +5,11 @@ import {
   pool, limpiarBase, seedSucursal, seedUsuario, seedMaquina, seedAjustes, auth, conTemporizador,
 } from '../helpers.js';
 
-// Prueba la mecánica del TEMPORIZADOR (dos pasos, otro ciclo): desde el
-// 2026-10-02 vive detrás de MAQUINAS_CRONOMETRO=off.
+// Mecánica del temporizador (dos pasos, otro ciclo), detrás de MAQUINAS_CRONOMETRO=off.
 conTemporizador();
 
 
-// El MODELO declara si una carga corre dos ciclos (mig. 123); sin eso, una
-// carga corre uno solo. La bandera de la marca "arranca sola" (mig. 122) se
-// borró en la 139.
+// El modelo declara si una carga corre dos ciclos; sin eso, corre uno.
 let admin;
 
 beforeEach(async () => {
@@ -99,8 +96,7 @@ describe('GET /api/maquinas — lo que declaran marca y modelo', () => {
     const res = await request(app).get('/api/maquinas').set(auth(admin.token));
     const m = res.body.find(x => x.id === maquinaId);
     expect(m.marca_opciones).toEqual({ dos_ciclos: false });
-    // Lo decidido el 2026-09-25: los dos ciclos se declaran en el modelo, así
-    // que una máquina sin modelo no los ofrece.
+    // Los dos ciclos se declaran en el modelo: sin modelo no se ofrecen.
     expect(m.ciclos_max).toBe(1);
   });
 });

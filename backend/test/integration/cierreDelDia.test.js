@@ -59,7 +59,7 @@ describe('liberarMaquinasCierreDelDia', () => {
     const r = await liberarMaquinasCierreDelDia();
     expect(r.cargasSueltas).toBe(1);
 
-    // La nota sigue En Espera, pero su carga ya no retiene la lavadora…
+    // La nota sigue En Espera, pero su carga suelta la lavadora…
     const { rows: nota } = await pool.query('SELECT estado FROM notas WHERE id = $1', [creada.body.id]);
     expect(nota[0].estado).toBe('EN_ESPERA');
     const { rows: carga } = await pool.query(
@@ -95,7 +95,7 @@ describe('cerrarSesionesEmpleados', () => {
     const cerradas = await cerrarSesionesEmpleados();
     expect(cerradas).toBe(1); // solo el operador
 
-    // El token del empleado ya no sirve.
+    // El token del empleado deja de servir.
     const empMe = await request(app).get('/api/auth/me').set(auth(empLogin.body.token));
     expect(empMe.status).toBe(401);
     expect(empMe.body.message).toMatch(/otro dispositivo/i);
@@ -160,9 +160,8 @@ describe('cerrarCajasAbiertas', () => {
   });
 
   it('congela las cifras: el corte cerrado no se reescribe pase lo que pase con la nota', async () => {
-    // Es la misma garantía que da el cierre manual (mig. 101). El automático
-    // las dejaba en NULL y el historial las recalculaba en vivo, así que
-    // cualquier movimiento posterior cambiaba un corte de un día ya cerrado.
+    // Como en el cierre manual, las ventas quedan congeladas: un movimiento
+    // posterior no cambia un corte ya cerrado.
     await request(app).post('/api/caja/abrir').set(auth(admin.token)).send({ monto_inicial: 100 });
     const lavadoraId = await seedMaquina({ nombre: 'L9', tipo: 'lavadora_mediana' });
     const nota = await request(app).post('/api/notas').set(auth(admin.token)).send({
@@ -170,8 +169,7 @@ describe('cerrarCajasAbiertas', () => {
       cargas: [{ lavadora_tipo: 'mediana' }],
     });
     expect(nota.status).toBe(201);
-    // La carga se tarifa al asignarle la máquina (2026-09-25); recién entonces
-    // hay algo que cobrar.
+    // La carga se tarifa al asignarle la máquina: entonces hay algo que cobrar.
     const asignada = await request(app).patch(`/api/notas/${nota.body.id}/asignar-carga-maquina`)
       .set(auth(admin.token))
       .send({ carga_id: nota.body.cargas[0].id, slot: 'lavadora', maquina_id: lavadoraId }).expect(200);
@@ -185,9 +183,8 @@ describe('cerrarCajasAbiertas', () => {
     const antes = await request(app).get('/api/caja/historial').set(auth(admin.token));
     expect(antes.body[0].ventas).toBe(cobrado);
 
-    // Al día siguiente el admin intenta deshacer aquella nota. Todas las
-    // puertas están cerradas: revertir el pago, editarla, cancelarla y —desde
-    // el 2026-09-23— también borrarla, que era la que seguía abierta.
+    // Al día siguiente no se puede deshacer aquella nota: ni revertir el pago, ni
+    // editarla, cancelarla o borrarla.
     const del = await request(app).delete(`/api/notas/${nota.body.id}`)
       .set(auth(admin.token));
     expect(del.status).toBe(409);
@@ -209,8 +206,8 @@ describe('cerrarCajasAbiertas', () => {
 
 describe('el cierre del día apaga los encendidos manuales', () => {
   it('borra la marca para que el reconciliador no deje la máquina prendida', async () => {
-    // Si solo se soltara el estado, la marca seguiría viva: la pantalla la
-    // mostraría libre mientras el Sonoff la mantiene andando (mig. 104).
+    // Si solo se soltara el estado, la marca de encendido manual seguiría viva y la
+    // pantalla la mostraría libre con el Sonoff andando.
     const id = await seedMaquina({ nombre: 'L7', tipo: 'lavadora_mediana' });
     await pool.query(
       "UPDATE maquinas SET estado = 'en_uso', en_uso_desde = NOW(), encendida_manual_at = NOW() WHERE id = $1",

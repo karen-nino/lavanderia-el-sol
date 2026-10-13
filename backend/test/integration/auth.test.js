@@ -49,7 +49,7 @@ describe('sesión única por cuenta', () => {
     const segunda = await login(u.id, 'secret123');
     const tokenNuevo = segunda.body.token;
 
-    // El token viejo ya no sirve; el nuevo sí.
+    // El token anterior deja de servir; el nuevo sí.
     const conViejo = await request(app).get('/api/auth/me').set(auth(tokenViejo));
     expect(conViejo.status).toBe(401);
     expect(conViejo.body.message).toMatch(/otro dispositivo/i);

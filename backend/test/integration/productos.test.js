@@ -12,8 +12,7 @@ beforeEach(async () => {
   await limpiarBase();
   await seedSucursal('centro');
   admin = await seedUsuario({ rol: 'admin', sucursal: 'centro' });
-  // El catálogo de tamaños de bolsa lo siembra la mig. 119, pero limpiarBase
-  // lo vacía: sin él no se puede dar de alta una bolsa.
+  // limpiarBase vacía el catálogo de tamaños de bolsa: sin él no se da de alta una bolsa.
   await seedEtiquetas('tamanos_bolsa', ['Chica', 'Grande', 'Jumbo']);
 });
 
@@ -415,9 +414,8 @@ describe('GET /api/productos/reporte-diario', () => {
     expect(d22.fin_botellas_medidas).toBe(68); // sin movimientos posteriores
   });
 
-  // Una venta anulada el mismo día devuelve el producto al estante (movimiento
-  // 'liberacion'). Antes "Salió" seguía contándola y contradecía a "Queda al
-  // final", que sí veía la devolución.
+  // Una venta anulada el mismo día devuelve el producto (movimiento 'liberacion'):
+  // "Salió" no la cuenta, igual que "Queda al final".
   it('resta del día lo que se devolvió al anular una venta', async () => {
     const id = await crearGranel();
     await pool.query('DELETE FROM producto_movimientos WHERE producto_id = $1', [id]);
@@ -527,8 +525,8 @@ describe('tipo de granel en el producto (mig. 136)', () => {
   });
 });
 
-// La existencia vive en MEDIDAS y se lee con los tamaños del producto: con
-// existencia o algo apartado, los tamaños no se cambian (2026-10-08).
+// La existencia va en medidas y se lee con los tamaños del producto: con
+// existencia o algo apartado, los tamaños no se cambian.
 describe('editar los tamaños de un producto con existencia', () => {
   const datos = (extra = {}) => ({
     nombre: 'OXXI', tipo_liquido: 'granel', forma: 'liquido',

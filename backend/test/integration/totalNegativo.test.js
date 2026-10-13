@@ -1,7 +1,5 @@
-// Un descuento no puede dejar la nota en números rojos: `ajustarNota` ya lo
-// revisaba, pero el total también se recalcula al quitar o reducir lo que la
-// nota lleva, y ahí el descuento que ya estaba puesto lo podía dejar negativo
-// (2026-10-12).
+// Un descuento no deja la nota en negativo, tampoco al recalcular el total por
+// quitar o reducir lo que lleva (no solo en `ajustarNota`).
 import { describe, it, expect, beforeEach } from 'vitest';
 import request from 'supertest';
 import app from '../../app.js';

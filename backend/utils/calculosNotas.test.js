@@ -29,14 +29,12 @@ describe('precioProductoEnNota', () => {
     expect(precioProductoEnNota(producto, 'AUTOSERVICIO')).toBe(120);
   });
 
-  // La venta de mostrador (mig. 112) despacha piezas completas, como
-  // Autoservicio: si cayera del lado de la medida se cobraría una fracción.
+  // La venta de mostrador despacha piezas completas, como Autoservicio.
   it('la venta de Productos cobra el precio por botella', () => {
     expect(precioProductoEnNota(producto, 'PRODUCTOS')).toBe(120);
   });
 
-  // Los de marca se venden por unidad (el envase completo) también en Por
-  // Encargo: no se sirven por medidas como el granel (2026-09-25).
+  // Los de marca se venden por unidad (el envase) también en Por Encargo.
   it('un producto de marca cobra su precio por unidad en cualquier servicio', () => {
     const marca = { tipo_liquido: 'marca', precio_unitario: 15, precio_botella: 120 };
     expect(precioProductoEnNota(marca, 'POR_ENCARGO')).toBe(120);

@@ -1,6 +1,6 @@
-// Abonos y caja (2026-10-08):
-//   · sin caja abierta no se recibe un abono (mismo candado que crear nota);
-//   · un abono no se revierte si la nota se liquidó en un corte ya cerrado.
+// Abonos y caja:
+// - sin caja abierta no se recibe un abono (como al crear nota);
+// - un abono no se revierte si la nota se liquidó en un corte ya cerrado.
 import { describe, it, expect, beforeEach, beforeAll, afterAll } from 'vitest';
 import request from 'supertest';
 import app from '../../app.js';
@@ -77,7 +77,7 @@ describe('con el candado de caja encendido', () => {
 describe('revertir un abono', () => {
   it('no se puede si la nota se liquidó en un corte ya cerrado', async () => {
     const id = await notaEncargo();
-    // Abono sin caja (como los de antes del candado).
+    // Abono sin caja (registrado directo en la base).
     await api('post', `/api/notas/${id}/abonos`, { monto: 30, forma_pago: 'EFECTIVO' }).expect(201);
     // Se liquida en una caja que después se cierra.
     await abrirCaja();
@@ -103,9 +103,8 @@ describe('revertir un abono', () => {
   });
 });
 
-// El cierre automático de medianoche congela las ventas con el MISMO cálculo
-// que el corte normal (2026-10-09). Antes sumaba el precio completo de la
-// nota liquidada y volvía a contar lo abonado en un turno anterior.
+// El cierre automático congela las ventas con el mismo cálculo que el corte
+// normal: lo abonado en un turno anterior no se vuelve a contar.
 describe('cierre automático con abonos', () => {
   it('solo cuenta lo que entró en ese turno', async () => {
     const { cerrarCajasAbiertas } = await import('../../jobs/cierreDelDia.js');

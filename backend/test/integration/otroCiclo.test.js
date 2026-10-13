@@ -1,13 +1,9 @@
-// Segundo ciclo de una misma carga (mig. 108).
+// Segundo ciclo de una carga: una LG cicla 15 min y la ropa necesita dos. Al
+// cumplirse el primero se corta la corriente, y este endpoint deja al empleado
+// continuar.
 //
-// El ciclo real de una LG son 15 min y una carga de ropa necesita dos seguidos.
-// Al cumplirse el primero el temporizador llega a cero y el corte por fin de
-// ciclo le quita la corriente, así que sin este endpoint el empleado se queda
-// sin forma de continuar: el encendido manual de Gestión es de admin.
-//
-// Lo que se fija aquí: que re-armar reinicie el reloj sin tocar la nota ni el
-// precio, que respete la pausa sin corriente y el tope de ciclos, y que un
-// empleado pueda hacerlo.
+// Se fija: reinicia el reloj sin tocar la nota ni el precio, respeta la pausa
+// sin corriente y el tope de ciclos, y lo puede hacer un empleado.
 import { describe, it, expect, beforeEach } from 'vitest';
 import request from 'supertest';
 import app from '../../app.js';
@@ -18,22 +14,14 @@ import {
   MAX_CICLOS_POR_CARGA, MARGEN_CORTE_SEGUNDOS, PAUSA_OTRO_CICLO_SEGUNDOS,
 } from '../../services/sincronizarSonoff.js';
 
-// Prueba la mecánica del TEMPORIZADOR (dos pasos, otro ciclo): desde el
-// 2026-10-02 vive detrás de MAQUINAS_CRONOMETRO=off.
+// Mecánica del temporizador (dos pasos, otro ciclo), detrás de MAQUINAS_CRONOMETRO=off.
 conTemporizador();
 
-// Cuánto hay que envejecer el arranque para que el siguiente ciclo esté
-// permitido: el ciclo entero, más el margen de corriente que se le concede,
-// más la pausa sin luz. Se calcula desde las constantes y no con un número
-// fijo porque los dos valores se configuran por entorno.
+// Cuánto envejecer el arranque para permitir el siguiente ciclo: el ciclo, el
+// margen de corriente y la pausa sin luz (configurables por entorno).
 const YA_SE_PUEDE = MARGEN_CORTE_SEGUNDOS + PAUSA_OTRO_CICLO_SEGUNDOS + 5;
-// El ciclo acaba de cumplirse: no ha pasado ni el margen ni la pausa.
-//
-// Antes esto envejecía hasta justo después del margen, para probar que la
-// pausa se exige aparte. Con margen y pausa en 5 s eso dejaba 3 s de holgura
-// para arrancar la app, sembrar y llamar al endpoint, y la prueba se volvía
-// intermitente. El candado que se comprueba es el mismo —`instanteOtroCiclo`
-// suma los dos relojes— y desde aquí quedan los 10 s enteros.
+// El ciclo acaba de cumplirse: no pasó ni el margen ni la pausa. Así quedan los
+// 10 s enteros de holgura y la prueba no es intermitente.
 const RECIEN_TERMINADO = 0;
 
 let admin;
@@ -45,10 +33,8 @@ beforeEach(async () => {
   admin = await seedUsuario({ rol: 'admin', sucursal: 'centro' });
   operador = await seedUsuario({ rol: 'operador', sucursal: 'centro', nombre: 'Operador' });
   await seedAjustes({ tiempo_carga_mediana: 15, tiempo_carga_jumbo: 45, tiempo_carga_secadora: 30 });
-  // Las lavadoras de estas pruebas son LG con su tiempo configurado y con un
-  // MODELO marcado como de dos ciclos (mig. 123): sin eso —o sin tiempo de
-  // marca— la carga corre uno solo y no habría segundo que probar (ver el
-  // describe del final).
+  // LG con tiempo configurado y modelo de dos ciclos: sin eso la carga corre uno
+  // (ver el describe del final).
   await seedMarca({
     nombre: 'Whirlpool', tipo: 'lavadora', tamano: 'mediana', minutos: 15,
     modelo: 'WM-2C', dos_ciclos: true,
@@ -221,10 +207,8 @@ describe('otro ciclo — lo que expone la lista de máquinas', () => {
   });
 });
 
-// Cargas de un solo ciclo (2026-09-21): las secadoras siempre, y las lavadoras
-// sin tiempo de marca (mig. 107), que se cronometran con el respaldo por tamaño
-// de Ajustes —un tiempo supuesto, no medido— y encadenarles otra vuelta las
-// deja corriendo el doble de lo que nadie comprobó.
+// Cargas de un solo ciclo: las secadoras siempre, y las lavadoras sin tiempo de
+// marca (se cronometran con un respaldo supuesto, no medido).
 describe('otro ciclo — cargas de un solo ciclo', () => {
   it('el endpoint lo rechaza y dice dónde se configura', async () => {
     const id = await seedMaquina({ nombre: 'S1', tipo: 'lavadora_mediana', tamano: 'mediana' });
@@ -269,9 +253,8 @@ describe('otro ciclo — cargas de un solo ciclo', () => {
   });
 
   it('"Encender máquina" tampoco la revive para otra vuelta', async () => {
-    // Es el otro camino al segundo ciclo (mig. 110): si este no respetara el
-    // tope, el botón encendería la lavadora igual y el candado del endpoint
-    // llegaría tarde, con la máquina ya con corriente.
+    // El otro camino al segundo ciclo: si no respetara el tope, la lavadora se
+    // encendería antes de que el endpoint lo rechace.
     const id = await seedMaquina({ nombre: 'S4', tipo: 'lavadora_mediana', tamano: 'mediana' });
     const { notaId } = await arrancar(id);
     await envejecer(id, YA_SE_PUEDE);

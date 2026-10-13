@@ -3,9 +3,8 @@ import request from 'supertest';
 import app from '../../app.js';
 import { limpiarBase, seedSucursal, seedUsuario, auth } from '../helpers.js';
 
-// Sin caja abierta no se crea ninguna nota (2026-10-06). El resto de las
-// pruebas corre con el candado apagado (vitest.integration.config.js); aquí se
-// enciende.
+// Sin caja abierta no se crea nota. Las demás pruebas corren con el candado
+// apagado (vitest.integration.config.js); aquí se enciende.
 let antes;
 beforeAll(() => { antes = process.env.NOTA_REQUIERE_CAJA; delete process.env.NOTA_REQUIERE_CAJA; });
 afterAll(() => {

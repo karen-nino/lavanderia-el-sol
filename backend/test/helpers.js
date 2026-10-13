@@ -7,9 +7,10 @@ import app from '../app.js';
 import pool from '../db/pool.js';
 import { beforeAll, afterAll } from 'vitest';
 
-// Corre el bloque (archivo o describe) con las máquinas en TEMPORIZADOR, como
-// eran antes del cronómetro general (2026-10-02). La mecánica sigue viva detrás
-// del interruptor `MAQUINAS_CRONOMETRO=off`, y sus pruebas la cuidan.
+/**
+ * Corre el bloque (archivo o describe) con las máquinas en temporizador
+ * (`MAQUINAS_CRONOMETRO=off`), cuya mecánica sigue viva detrás del interruptor.
+ */
 export function conTemporizador() {
   let antes;
   beforeAll(() => { antes = process.env.MAQUINAS_CRONOMETRO; process.env.MAQUINAS_CRONOMETRO = 'off'; });
@@ -53,12 +54,11 @@ export async function seedUsuario({ rol = 'admin', sucursal = 'centro', nombre =
   return { id, sucursal, token: tokenFor(id) };
 }
 
-// Inserta una marca en el catálogo y, si se le dan minutos, su tiempo de ciclo
-// para ese tipo y tamaño (mig. 107). `limpiarBase` vacía también los catálogos,
-// así que la marca que sembró la migración no sobrevive al beforeEach.
-// `modelo` siembra además un modelo de esa marca (migs. 117/118). Es lo que
-// declara si una carga corre DOS ciclos (mig. 123): sin modelo marcado, una
-// carga corre uno solo por más tiempo que tenga configurado la máquina.
+/**
+ * Inserta una marca y, con `minutos`, su tiempo de ciclo para ese tipo y tamaño
+ * (limpiarBase vacía los catálogos). `modelo` siembra además un modelo, que es lo
+ * que declara si la carga corre dos ciclos: sin él, corre uno.
+ */
 export async function seedMarca({
   nombre = 'LG',
   tipo = 'lavadora',
@@ -91,13 +91,11 @@ export async function seedMarca({
   return nombre;
 }
 
-// Inserta una máquina y devuelve su id. Por defecto una lavadora mediana
-// disponible en la sucursal dada.
-//
-// Sin `marca` la máquina queda como las que nadie ha terminado de configurar:
-// se cronometra con el respaldo por tamaño de Ajustes y su carga corre un solo
-// ciclo. Para probar el flujo de dos ciclos hay que sembrar antes la marca con
-// `seedMarca({ minutos })` y pasarla aquí.
+/**
+ * Inserta una máquina y devuelve su id (por defecto, lavadora mediana
+ * disponible). Sin `marca` se cronometra con el respaldo por tamaño y corre un
+ * ciclo; para dos ciclos, sembrar antes la marca con `seedMarca({ minutos })`.
+ */
 export async function seedMaquina({
   nombre = 'Lavadora 1',
   tipo = 'lavadora_mediana',
@@ -149,7 +147,7 @@ export async function seedProducto({
   stock_granel_medidas = 0,
   es_por_medida = false,
   tipo_liquido = 'granel',
-  forma = 'liquido',            // 'polvo' = se vende por unidad (mig. 126)
+  forma = 'liquido',            // 'polvo' = se vende por unidad
   botella_ml = 800,
   medida_ml = 200,                 // → 4 medidas por botella
   stock_minimo = 0,
@@ -236,15 +234,15 @@ export function tokenFor(id) {
   return jwt.sign({ id }, process.env.JWT_SECRET || 'test-secret');
 }
 
-// Cabeceras de una petición autenticada (token + sucursal activa).
+/** Cabeceras de una petición autenticada (token y sucursal activa). */
 export function auth(token, sucursal = 'centro') {
   return { Authorization: `Bearer ${token}`, 'X-Sucursal': sucursal };
 }
 
-// Flujo nuevo de Autoservicio: crea la nota con TIPO de lavado, le asigna la
-// lavadora física (Salidas) y la arranca → nota LAVANDO. Devuelve
-// { notaId, lavadoraId }. Reutilizable en los tests que necesitan una lavadora
-// de autoservicio en uso.
+/**
+ * Autoservicio lavando: crea la nota con tipo de lavado, asigna la lavadora y
+ * la arranca. Devuelve { notaId, lavadoraId }.
+ */
 export async function autoservicioLavando({ token, sucursal = 'centro', nombre = 'Lav Auto', estado_pago = 'PAGADO' } = {}) {
   const lavadoraId = await seedMaquina({ nombre, tipo: 'lavadora_mediana', tamano: 'mediana', sucursal });
   const crea = await request(app).post('/api/notas').set(auth(token, sucursal)).send({

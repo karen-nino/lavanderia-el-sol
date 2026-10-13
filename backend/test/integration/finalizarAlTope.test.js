@@ -1,5 +1,5 @@
-// Máquina con nota que llega a su TOPE: se finaliza sola, igual que con el
-// botón FINALIZAR (2026-10-11), 1 s después del tope.
+// Una máquina con nota que llega a su tope se finaliza sola (como con el botón
+// Finalizar), 1 s después del tope.
 import { describe, it, expect, beforeEach } from 'vitest';
 import request from 'supertest';
 import app from '../../app.js';
@@ -33,7 +33,7 @@ async function corriendo(slot, { pagada = true, hace }) {
     .send({ carga_id: creada.body.cargas[0].id, slot, maquina_id: maq }).expect(200);
   await request(app).patch(`/api/notas/${notaId}/encender-maquina`).set(auth(admin.token))
     .send({ maquina_id: maq }).expect(200);
-  // El Autoservicio nace pendiente y se cobra en el detalle (2026-09-23).
+  // Autoservicio nace pendiente y se cobra en el detalle.
   if (pagada) {
     await request(app).patch(`/api/notas/${notaId}/estado-pago`).set(auth(admin.token))
       .send({ estado_pago: 'PAGADO', forma_pago: 'EFECTIVO' }).expect(200);
