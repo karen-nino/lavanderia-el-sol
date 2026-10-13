@@ -574,6 +574,13 @@ async function cuadrar(db) {
     await db.query('UPDATE productos SET stock_reservado = stock_reservado + $2 WHERE id = $1',
                    [l.producto_id, Number(l.cantidad_medidas)]);
   }
+  // Y lo vendido queda marcado como ya descontado (mig. 161): sin la marca, la
+  // app lo toma por apartado y al cancelar o borrar la nota no lo devuelve al
+  // estante.
+  if (consumidas.length > 0) {
+    await db.query('UPDATE nota_productos SET consumido_at = $2 WHERE id = ANY($1::int[])',
+                   [consumidas.map(l => l.id), new Date()]);
+  }
 
   // ── Caja: una sesión por día ────────────────────────────────────────────
   const { rows: dias } = await db.query(
