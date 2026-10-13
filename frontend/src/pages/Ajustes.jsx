@@ -1015,6 +1015,8 @@ export default function Ajustes() {
   const soloConsultaPruebas = usuario?.es_prueba === true && !ES_DEMO;
 
   const [tiemposMarca, setTiemposMarca] = useState([]);
+  // Secadoras sin ficha capturada a las que se les abrió el campo "Cada ficha".
+  const [fichaAbierta, setFichaAbierta] = useState(() => new Set());
   const [edredones, setEdredones] = useState([]);
   // Precios de edredón como vinieron, para mandar solo los cambiados.
   const edredonOrigRef = useRef({});
@@ -1187,29 +1189,51 @@ export default function Ajustes() {
     const base = t?.pregunta_tiempo
       ? 'Arriba, el tope: a esos minutos se le corta la luz si nadie la finaliza. Abajo, los programas: al iniciarla se pregunta cuál corre y se avisa cuando lo cumpla. Tope vacío = el programa más largo.'
       : 'Tope de carga de este modelo: a estos minutos se le corta la luz si nadie la finaliza. Vacío = usa el tope de arriba.';
-    if (t?.tipo !== 'secadora') return base;
+    if (!esDeFichas(t)) return base;
     return `${base} Cada ficha: solo si es de fichas con Sonoff; al iniciarla se le mete una ficha por cada tantos minutos ${t?.pregunta_tiempo ? 'del programa elegido' : 'del tope'}. Vacío = no es de fichas.`;
   };
 
   // Los tres programas solo salen en los modelos marcados con varios programas.
   const tieneVariosTiempos = (t) => Boolean(t.pregunta_tiempo);
 
+  /** Secadora con ficha capturada, o a la que se le abrió el campo. */
+  const esDeFichas = (t) => t?.tipo === 'secadora'
+    && (fichaAbierta.has(claveTiempo(t)) || (t.minutos_por_ficha ?? '') !== '');
+
   // Secadoras de fichas: al iniciarla se mete una ficha por cada tantos minutos
-  // del programa (o del tope). Solo secadoras.
-  const campoFicha = (t, inputCls, unidadCls) => (
-    t.tipo === 'secadora' ? (
+  // del programa (o del tope). Las que no son de fichas (Samsung: se encienden y
+  // se aprieta Start, como las lavadoras) solo ven el botón para abrir el campo.
+  const campoFicha = (t, inputCls, unidadCls) => {
+    if (t.tipo !== 'secadora') return null;
+    const clave = claveTiempo(t);
+    if (!esDeFichas(t)) {
+      return (
+        <button
+          type="button"
+          onClick={() => setFichaAbierta(prev => new Set(prev).add(clave))}
+          className={`${unidadCls} mt-2 underline underline-offset-2 hover:text-gray-700`}
+        >
+          Es de fichas con Sonoff
+        </button>
+      );
+    }
+    return (
       <div className="mt-3 flex items-center gap-2">
         <span className={`${unidadCls} flex-shrink-0 w-24`}>Cada ficha</span>
         <input
           type="number" min="1" step="1" placeholder="—"
           value={t.minutos_por_ficha ?? ''}
-          onChange={e => setMinutosMarca(claveTiempo(t), e.target.value, 'minutos_por_ficha')}
+          onChange={e => {
+            // Vaciarlo no esconde el campo mientras se edita.
+            setFichaAbierta(prev => new Set(prev).add(clave));
+            setMinutosMarca(clave, e.target.value, 'minutos_por_ficha');
+          }}
           className={`${inputCls} text-center`}
         />
         <span className={`${unidadCls} flex-shrink-0`}>min</span>
       </div>
-    ) : null
-  );
+    );
+  };
 
   // Un programa más largo que el tope no se cumple: se avisa sin bloquear el
   // guardado (los campos se corrigen uno por uno).
