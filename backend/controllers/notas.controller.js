@@ -1047,6 +1047,26 @@ async function devolverProductosDeNota(client, notaId, sucursal, usuarioId, { id
   }
 }
 
+// Un renglón ya descontado vuelve a quedar APARTADO: regresa al estante (con su
+// 'liberacion') y se aparta otra vez. Lo usan los botones de Salidas antes de
+// tocar un producto de una nota reabierta (Finalizada → Por Entregar): sin
+// esto, quitarlo dejaba lo apartado en negativo y la existencia sin volver, y
+// sumarle unidades las dejaba apartadas para siempre, porque al volver a
+// entregar el renglón ya contaba como vendido (2026-10-12). Si el renglón no
+// estaba descontado, no hace nada.
+async function reabrirRenglonProducto(client, notaId, npId, sucursal, usuarioId) {
+  const { rows } = await client.query(
+    'SELECT producto_id, cantidad_medidas FROM nota_productos WHERE id = $1 AND consumido_at IS NOT NULL',
+    [npId]
+  );
+  if (rows.length === 0) return;
+  await devolverProductosDeNota(client, notaId, sucursal, usuarioId, { ids: [npId] });
+  await client.query(
+    'UPDATE productos SET stock_reservado = stock_reservado + $1 WHERE id = $2',
+    [rows[0].cantidad_medidas, rows[0].producto_id]
+  );
+}
+
 // Valida y tarifica las cargas recibidas en el body. Cada carga puede traer:
 //   { lavadora_id, secadora_id, tipo_prenda, tipo_tela, tamano_edredon,
 //     tamano, ajuste, productos: [{ producto_id, cantidad }] }
@@ -4495,6 +4515,17 @@ export const addProductoToNota = async (req, res) => {
       });
     }
 
+    // Si ya estaba en la nota se le suman las unidades (reservarProducto). En
+    // una nota reabierta ese renglón ya se había entregado: vuelve a apartado
+    // para que lo nuevo salga del estante al volver a entregarla.
+    const { rows: yaEsta } = await client.query(
+      'SELECT id FROM nota_productos WHERE nota_id = $1 AND producto_id = $2 AND carga_id IS NULL',
+      [id, producto_id]
+    );
+    for (const r of yaEsta) {
+      await reabrirRenglonProducto(client, id, r.id, req.sucursal, req.user?.id);
+    }
+
     // La unidad/precio/medidas se resuelven según el servicio (botella o medida).
     let fila;
     try {
@@ -4691,6 +4722,9 @@ export const removeProductoFromNota = async (req, res) => {
       });
     }
 
+    // Nota reabierta: lo que ya se había entregado vuelve al estante.
+    await reabrirRenglonProducto(client, id, np.id, req.sucursal, req.user?.id);
+
     await client.query(
       'DELETE FROM nota_productos WHERE id = $1',
       [np.id]
@@ -4762,6 +4796,10 @@ export const cambiarCantidadProducto = async (req, res) => {
         message: `No se pueden cambiar los productos de una nota ${palabra(np.nota_estado)}.`,
       });
     }
+
+    // Nota reabierta: el renglón vuelve a estar apartado, así lo que se cambie
+    // sale del estante al volver a entregarla.
+    await reabrirRenglonProducto(client, id, np.id, req.sucursal, req.user?.id);
 
     // Las medidas por unidad salen de lo que ya está guardado: así una botella
     // sigue valiendo las mismas medidas aunque el catálogo haya cambiado después.
