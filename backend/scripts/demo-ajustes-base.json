@@ -20,7 +20,10 @@
   "tiempo_secadora_jumbo": 30,
   "tope_carga_edredon": null,
   "rfc": null,
-  "ticket_nota_autoservicio": null,
-  "ticket_nota_encargo": null,
-  "tope_carga_mediano": "135.00"
+  "ticket_nota_autoservicio": "Gracias por su visita. En autoservicio usted opera las máquinas y cuida su ropa: revise las bolsas antes de lavar y no deje sus prendas sin atender. No nos hacemos responsables por objetos olvidados ni por prendas que se queden más de 24 horas.",
+  "ticket_nota_encargo": "Su servicio incluye lavado en máquina de alta eficiencia, detergente adecuado para ropa de color o blanca, secado y doblado de sus prendas. No usamos cloro para cuidar sus prendas y el medio ambiente. Conserve este ticket: lo necesita para recoger su ropa. Después de 30 días no nos hacemos responsables por prendas no recogidas.",
+  "tope_carga_mediano": "135.00",
+  "ticket_nota_productos": "Producto vendido no tiene devolución. Consérvelo bien cerrado y fuera del alcance de los niños.",
+  "whatsapp_mensaje_encargo": "¡Hola *Nombre*! 👋\n\nTu ropa que nos dejaste a las *Tiempo* ya está lavada, seca y doblada ✨\n\nPara recogerla menciona tu clave *Clave*.\n\nHorario: lunes a sábado de 8:00 a 20:00 y domingo de 9:00 a 15:00.\n\n¡Gracias por confiar en Lavandería El Sol! ☀️",
+  "whatsapp_mensaje_reaviso": "Hola *Nombre*, te recordamos que tu ropa (clave *Clave*) sigue esperándote en Lavandería El Sol 🧺\n\nPuedes pasar por ella de lunes a sábado de 8:00 a 20:00 y domingo de 9:00 a 15:00.\n\nSi necesitas que te la guardemos unos días más, responde a este mensaje. ¡Gracias! ☀️"
 }

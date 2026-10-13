@@ -13,6 +13,7 @@ import { leerAvisoCobro, limpiarAvisoCobro } from '../lib/avisoCobro';
 import { esTerminal, puedeLiquidar, puedeFinalizar, puedeEliminar, eliminarSoloEnEscritorio } from '../lib/accionesNota';
 import AbrirCajaModal from '../components/AbrirCajaModal';
 import ModalCobrar from '../components/ModalCobrar';
+import { ES_DEMO } from '../lib/entorno';
 import { armarMensajeWhatsapp, hayMensajeWhatsapp, telefonoWhatsapp } from '../lib/mensajeWhatsapp';
 
 /** Unidad de un producto de la nota en texto ("2 botellas", "3 medidas"). */
@@ -404,6 +405,9 @@ export default function DetalleNota() {
   const [confirmReabrir,    setConfirmReabrir]    = useState(false);
   // Aviso de "ya está procesada" por WhatsApp; la plantilla se escribe en Ajustes.
   const [procesadoOpen,    setProcesadoOpen]    = useState(false);
+  // Demo: a quién se "mandó" el WhatsApp, que no se abre (los teléfonos de los
+  // clientes de la demo podrían ser de alguien).
+  const [waSimulado,       setWaSimulado]       = useState('');
   // Cambiar el nombre (referencia) del Autoservicio.
   const [refOpen,          setRefOpen]          = useState(false);
   const [refValor,         setRefValor]         = useState('');
@@ -493,6 +497,10 @@ export default function DetalleNota() {
   async function enviarProcesado() {
     const avisar = () => {
       if (!mensajeProcesado.trim() || !telefonoAviso) return;
+      if (ES_DEMO) {
+        setWaSimulado(nota.cliente_nombre || nota.telefono || 'el cliente');
+        return;
+      }
       window.open(
         `https://wa.me/${telefonoAviso}?text=${encodeURIComponent(mensajeProcesado)}`,
         '_blank', 'noopener,noreferrer'
@@ -944,6 +952,31 @@ export default function DetalleNota() {
       <div className='space-y-6 mt-12'>
 
             {/* Un cambio en Salidas dejó la nota pendiente: hay que cobrar el importe nuevo. */}
+      {/* Demo: el aviso por WhatsApp se finge, no se abre. */}
+      {waSimulado && (
+        <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 flex items-start gap-3" role="status">
+          <svg className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+          </svg>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold text-green-900">Mensaje enviado por WhatsApp a {waSimulado}</p>
+            <p className="text-sm text-green-800 mt-0.5">
+              En la demostración no se abre WhatsApp: el envío es de mentiras.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setWaSimulado('')}
+            aria-label="Cerrar aviso"
+            className="text-green-600 hover:text-green-800 flex-shrink-0"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      )}
+
       {avisoCobro && nota.estado_pago === 'PENDIENTE' && nota.estado !== 'CANCELADA' && (
         <div className="bg-amber-50 border border-amber-300 rounded-xl p-4 flex items-start gap-3">
           <svg className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
