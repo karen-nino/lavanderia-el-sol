@@ -140,13 +140,14 @@ export default function Login() {
     setError('');
   };
 
-  // Demo pública: todos entran a la misma cuenta. /auth/demo-login solo existe
-  // si el backend corre en modo demo (ENTORNO_DEMO).
-  const entrarDemo = async () => {
+  // Demo pública: todos entran a la misma cuenta de su rol ('admin' u
+  // 'operador'). /auth/demo-login solo existe si el backend corre en modo demo
+  // (ENTORNO_DEMO).
+  const entrarDemo = async (rol) => {
     setError('');
-    setLoading(true);
+    setLoading(rol);
     try {
-      const data = await api.post('/auth/demo-login', {}, { skipAuthRedirect: true });
+      const data = await api.post('/auth/demo-login', { rol }, { skipAuthRedirect: true });
       login(data.token, data.usuario);
       navigate('/');
     } catch (err) {
@@ -206,9 +207,10 @@ export default function Login() {
             <>
               <p className="text-sm text-gray-600 leading-relaxed mb-5">
                 Esto es una copia del sistema con datos inventados, para
-                enseñarlo. Entras como administrador y puedes crear notas,
-                cobrar, mover inventario y cambiar la configuración: no hay
-                ningún negocio detrás.
+                enseñarlo: no hay ningún negocio detrás. Como administrador
+                ves todo, incluida la configuración y los reportes; como
+                empleado, lo del día a día: notas, clientes, máquinas,
+                inventario y caja.
               </p>
 
               {error && (
@@ -217,14 +219,24 @@ export default function Login() {
                 </div>
               )}
 
-              <button
-                type="button"
-                onClick={entrarDemo}
-                disabled={loading}
-                className="w-full bg-blue hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed text-white font-medium py-3.5 rounded-lg text-base transition-colors"
-              >
-                {loading ? 'Entrando...' : 'Entrar'}
-              </button>
+              <div className="space-y-3">
+                <button
+                  type="button"
+                  onClick={() => entrarDemo('admin')}
+                  disabled={Boolean(loading)}
+                  className="w-full bg-blue hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed text-white font-medium py-3.5 rounded-lg text-base transition-colors"
+                >
+                  {loading === 'admin' ? 'Entrando...' : 'Entrar como administrador'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => entrarDemo('operador')}
+                  disabled={Boolean(loading)}
+                  className="w-full border border-blue text-blue hover:bg-blue/5 disabled:opacity-60 disabled:cursor-not-allowed font-medium py-3.5 rounded-lg text-base transition-colors"
+                >
+                  {loading === 'operador' ? 'Entrando...' : 'Entrar como empleado'}
+                </button>
+              </div>
             </>
           )}
 

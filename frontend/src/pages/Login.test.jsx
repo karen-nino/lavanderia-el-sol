@@ -159,19 +159,23 @@ describe('Login', () => {
   });
 });
 
-// La pantalla de la DEMO pública: sin usuario ni contraseña, solo un botón.
+// La pantalla de la DEMO pública: sin usuario ni contraseña, un botón por rol.
 describe('Login en la demo', () => {
   beforeEach(() => { entorno.ES_DEMO = true; });
 
-  it('entra con un solo botón, sin pedir credenciales', async () => {
+  it.each([
+    ['Entrar como administrador', 'admin'],
+    ['Entrar como empleado', 'operador'],
+  ])('"%s" entra sin pedir credenciales con rol %s', async (boton, rol) => {
     const user = userEvent.setup();
     api.post.mockResolvedValue({ token: 'tok', usuario: { id: 1, nombre: 'Prueba' } });
     render(<Login />);
 
     expect(screen.queryByPlaceholderText('Escribe tu nombre...')).not.toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Entrar' }));
+    await user.click(screen.getByRole('button', { name: boton }));
 
     await waitFor(() => expect(login).toHaveBeenCalledWith('tok', { id: 1, nombre: 'Prueba' }));
+    expect(api.post).toHaveBeenCalledWith('/auth/demo-login', { rol }, { skipAuthRedirect: true });
   });
 
   it('explica por qué se cerró la sesión anterior', async () => {

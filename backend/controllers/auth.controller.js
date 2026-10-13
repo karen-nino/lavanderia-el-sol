@@ -126,18 +126,25 @@ export const login = async (req, res) => {
 /**
  * Entrada sin contraseña, solo en la demo pública: la ruta solo se monta con
  * ENTORNO_DEMO, al arrancar se comprueba que la base no tenga operación real y
- * solo entra a usuarios con es_prueba.
+ * solo entra a usuarios con es_prueba. `rol` elige como quién se entra:
+ * 'admin' (por defecto) u 'operador' (empleado).
  */
 export const demoLogin = async (req, res) => {
   if (!ENTORNO_DEMO) return res.status(404).json({ message: 'No encontrado.' });
+
+  const rol = req.body?.rol ?? 'admin';
+  if (rol !== 'admin' && rol !== 'operador') {
+    return res.status(400).json({ message: 'Rol de demostración no válido.' });
+  }
 
   try {
     const { rows } = await pool.query(
       `SELECT id, nombre, apellido, rol, sucursal, es_prueba, session_id
          FROM usuarios
-        WHERE es_prueba = TRUE AND activo = TRUE AND rol = 'admin'
+        WHERE es_prueba = TRUE AND activo = TRUE AND rol = $1
         ORDER BY id
-        LIMIT 1`
+        LIMIT 1`,
+      [rol]
     );
 
     if (rows.length === 0) {
