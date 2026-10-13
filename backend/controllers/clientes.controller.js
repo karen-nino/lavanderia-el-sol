@@ -1,7 +1,6 @@
 import pool from '../db/pool.js';
 
-// Valida un teléfono: debe existir y contener solo dígitos.
-// Devuelve un mensaje de error o null si es válido.
+/** Teléfono obligatorio y solo dígitos. Devuelve el mensaje de error o null. */
 const validarTelefono = (telefono) => {
   const t = String(telefono ?? '').trim();
   if (!t) return 'El teléfono es requerido.';
@@ -46,7 +45,7 @@ export const createCliente = async (req, res) => {
     return res.status(400).json({ message: 'El nombre es requerido.' });
   }
 
-  // El apellido es opcional (2026-10-11): solo nombre y teléfono son forzosos.
+  // Solo nombre y teléfono son obligatorios.
   const apellidoLimpio = String(apellido ?? '').trim() || null;
 
   const errorTelefono = validarTelefono(telefono);
@@ -72,8 +71,7 @@ export const deleteCliente = async (req, res) => {
   const { id } = req.params;
 
   try {
-    // Validar pertenencia antes de revisar notas, para no revelar
-    // la existencia de clientes de otras sucursales.
+    // Primero la sucursal, para no revelar clientes de otras.
     const { rows: cli } = await pool.query(
       'SELECT id FROM clientes WHERE id = $1 AND sucursal = $2',
       [id, req.sucursal]
@@ -82,7 +80,7 @@ export const deleteCliente = async (req, res) => {
       return res.status(404).json({ message: 'Cliente no encontrado.' });
     }
 
-    // Verificar notas activas
+    // Con notas activas no se borra.
     const { rows: activas } = await pool.query(
       `SELECT id FROM notas
        WHERE cliente_id = $1
@@ -93,10 +91,8 @@ export const deleteCliente = async (req, res) => {
       return res.status(400).json({ message: 'No se puede eliminar un cliente con notas activas.' });
     }
 
-    // Con notas ya cerradas el cliente es historia de ventas: la base no deja
-    // borrarlo (notas.cliente_id es ON DELETE RESTRICT) y tronaba con 500
-    // (2026-10-08). Se oculta (activo = FALSE): sale de la lista y sus notas
-    // conservan el nombre. Sin ninguna nota, se borra de verdad.
+    // Con notas cerradas se oculta (activo = FALSE; la FK no deja borrarlo) y
+    // sus notas conservan el nombre. Sin notas, se borra.
     const { rows } = await pool.query(
       `WITH conHistorial AS (SELECT EXISTS (SELECT 1 FROM notas WHERE cliente_id = $1) AS si),
             ocultado AS (
@@ -122,13 +118,11 @@ export const deleteCliente = async (req, res) => {
   }
 };
 
-// Borrado múltiple (solo admin). Trabaja en dos modos según `confirmar`:
-//   • confirmar = false → verificación (dry-run): no borra; devuelve los
-//     clientes con notas activas (bloqueados) y los ids que sí se pueden
-//     borrar (eliminables), para alimentar la advertencia del modal.
-//   • confirmar = true  → borra los eliminables (omite los bloqueados) dentro
-//     de una transacción y devuelve qué se eliminó.
-// Todo acotado a la sucursal del admin, como el borrado individual.
+/**
+ * Borrado múltiple (admin), en la sucursal. `confirmar: false` solo verifica:
+ * devuelve los bloqueados (con notas activas) y los eliminables para el modal.
+ * `confirmar: true` borra (u oculta) los eliminables en una transacción.
+ */
 export const deleteClientesMultiples = async (req, res) => {
   const { ids, confirmar } = req.body;
 
@@ -144,14 +138,14 @@ export const deleteClientesMultiples = async (req, res) => {
   try {
     await client.query('BEGIN');
 
-    // Solo clientes de la sucursal del admin (se ignoran ids ajenos).
+    // Ids de otra sucursal se ignoran.
     const { rows: clientes } = await client.query(
       'SELECT id, nombre, apellido FROM clientes WHERE id = ANY($1) AND sucursal = $2 FOR UPDATE',
       [idsNum, req.sucursal]
     );
     const idsValidos = clientes.map((c) => c.id);
 
-    // Cuáles tienen notas activas: esos no se pueden borrar.
+    // Con notas activas: bloqueados.
     let bloqueadosSet = new Set();
     if (idsValidos.length > 0) {
       const { rows: activas } = await client.query(
@@ -172,8 +166,7 @@ export const deleteClientesMultiples = async (req, res) => {
       return res.json({ bloqueados, eliminables: eliminables.map((c) => c.id) });
     }
 
-    // Los que tienen notas ya cerradas se ocultan en vez de borrarse (ver
-    // deleteCliente); uno solo así tumbaba el borrado de todos.
+    // Con notas cerradas se ocultan (ver deleteCliente).
     let eliminados = [];
     if (eliminables.length > 0) {
       const ids = eliminables.map((c) => c.id);
@@ -208,7 +201,7 @@ export const updateCliente = async (req, res) => {
   const { id } = req.params;
   const { nombre, apellido, telefono, notas, activo } = req.body;
 
-  // Si se envía teléfono, debe ser válido (no vacío y solo dígitos).
+  // Si llega teléfono, debe ser válido.
   if (telefono !== undefined && telefono !== null) {
     const errorTelefono = validarTelefono(telefono);
     if (errorTelefono) {

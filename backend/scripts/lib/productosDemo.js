@@ -1,11 +1,5 @@
-// Productos DE MARCA de la demo pública (2026-10-08, a pedido): para que el
-// inventario de exhibición no tenga un solo producto de marca. Se venden por
-// unidad, como los de verdad (tipo_liquido 'marca': 1 unidad = 1 botella =
-// 1 medida).
-//
-// Lo llama ÚNICAMENTE scripts/reset-demo.mjs, antes de db/seed_pruebas.js (ese
-// seed es compartido con la sucursal oculta de pruebas de producción y no se
-// toca). Producción y la base local no pasan nunca por este archivo.
+// Productos de marca de la demo pública (se venden por unidad). Solo lo usa
+// reset-demo.mjs, antes de seed_pruebas.js.
 
 export const PRODUCTOS_MARCA_DEMO = [
   { nombre: 'Detergente',   marca: 'Ariel',     precio: 32 },
@@ -17,16 +11,13 @@ export const PRODUCTOS_MARCA_DEMO = [
   { nombre: 'Quitamanchas', marca: 'Vanish',    precio: 28 },
 ];
 
-// Las marcas del catálogo de Ajustes → Inventario (de ahí sale el selector al
-// editar un producto). Incluye Ensueño, que siembra db/seed_pruebas.js.
+/** Marcas del catálogo de Ajustes → Inventario (incluye Ensueño, de seed_pruebas.js). */
 export const MARCAS_DEMO = [...new Set([...PRODUCTOS_MARCA_DEMO.map((p) => p.marca), 'Ensueño'])];
 
-// La mig. 071 sembró en el catálogo de marcas unos nombres que no son marcas
-// sino tipos de producto. En la demo se quitan (2026-10-08, a pedido), salvo
-// que algún producto los use.
+/** Nombres del catálogo de marcas que no son marcas; se quitan si nadie los usa. */
 export const NO_MARCAS_DEMO = ['Detergente', 'Suavizante', 'Blanqueador', 'Otro'];
 
-// Idempotente: cada marca y cada producto solo se crean si faltan.
+/** Idempotente: cada marca y producto solo se crean si faltan. */
 export async function sembrarProductosMarcaDemo(db, sucursal) {
   await db.query(
     `DELETE FROM marcas_producto mp

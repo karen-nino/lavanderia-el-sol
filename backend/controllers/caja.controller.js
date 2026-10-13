@@ -1,25 +1,13 @@
 import pool from '../db/pool.js';
 import { esAdmin } from '../middleware/roles.js';
 
-// Ventas cobradas DENTRO de una sesión de caja.
-//
-// Se suman por `notas.caja_id` (mig. 101), que el trigger del pago fija al
-// cobrar. Antes se preguntaba por ventana de tiempo ("¿qué notas pagadas caen
-// entre la apertura y el cierre?"), y eso hacía que un corte ya cerrado
-// cambiara solo cuando alguien revertía un pago viejo.
-//
-// Se devuelven desglosadas por forma de pago porque SOLO el efectivo entra al
-// cajón: sumar transferencias y tarjetas al esperado hacía que el corte
-// marcara un faltante que nadie se robó. Las notas viejas sin forma_pago se
-// cuentan como efectivo (mig. 090 ya las rellenó; el COALESCE cubre cualquier
-// fila que se cuele después). Una nota cancelada no es una venta: su dinero se
-// devolvió.
+/**
+ * Lo cobrado en una caja, por forma de pago (solo el efectivo entra al cajón).
+ * Cada peso cuenta en la caja donde entró: lo que faltaba de las notas
+ * liquidadas aquí (`notas.caja_id`) más los abonos vivos hechos aquí. Sin forma
+ * de pago cuenta como efectivo. Las canceladas no cuentan.
+ */
 export async function ventasDeSesion(client, cajaId) {
-  // Con abonos (mig. 121) el dinero de una nota puede llegar en varios días, así
-  // que cada peso se cuenta en la caja donde entró:
-  //   · de una nota cobrada aquí, lo que faltaba = precio_total − lo ya abonado;
-  //   · más los abonos hechos en ESTA caja (los revertidos no cuentan).
-  // Sin abonos las dos consultas dan exactamente lo de siempre.
   const { rows } = await client.query(
     `WITH cobros AS (
         SELECT n.forma_pago,
@@ -57,20 +45,17 @@ export async function ventasDeSesion(client, cajaId) {
   };
 }
 
-// De dónde salió el EFECTIVO que entró en una caja, para el recuadro Ingresos
-// del corte (2026-10-10). Cada cobro en efectivo (lo que faltaba de una nota
-// cobrada aquí, o un abono hecho aquí; mismas reglas que `ventasDeSesion`) se
-// reparte entre las partes de su nota, en proporción a lo que vale cada una:
-//   · Por Encargo → se cobra por servicio, no por máquina: los servicios de
-//     Edredón (sus tamaños incluyen el Cubre Colchón, mig. 130) van a
-//     `edredon`, los demás a `por_encargo`, y los productos de marca que se
-//     cobran encima del servicio a `productos`;
-//   · lo demás → lavadoras medianas / jumbo (por el tipo de la primera máquina
-//     del hueco; sin ella, por el tamaño pedido; el edredón, siempre jumbo),
-//     secadoras y productos.
-// La proporción absorbe los descuentos de la nota. Se trabaja en centavos y el
-// residuo del redondeo va a la parte más grande, así que la suma de las
-// líneas es exactamente `ventasDeSesion(...).efectivo`.
+/**
+ * De dónde salió el efectivo de una caja (recuadro Ingresos del corte). Cada
+ * cobro (mismas reglas que ventasDeSesion) se reparte entre las partes de su
+ * nota en proporción a lo que vale cada una:
+ * - Por Encargo: `edredon` (servicios de Edredón), `por_encargo` (los demás) y
+ *   `productos` (lo que se cobra encima del servicio).
+ * - Lo demás: lavadoras medianas / jumbo (por la primera máquina del hueco o el
+ *   tamaño pedido; el edredón cuenta como jumbo), secadoras y productos.
+ * Se trabaja en centavos y el residuo va a la parte más grande: la suma es
+ * exactamente el efectivo.
+ */
 export async function ingresosDeSesion(client, cajaId) {
   return repartirCobros(client, `
         SELECT n.id AS nota_id,
@@ -93,10 +78,10 @@ export async function ingresosDeSesion(client, cajaId) {
            AND COALESCE(ab.forma_pago, 'EFECTIVO') = 'EFECTIVO'`, [cajaId]);
 }
 
-// El reparto por concepto de un conjunto de cobros. `cobrosSql` es un SELECT
-// de (nota_id, monto), un renglón por cobro; Caja le pasa el efectivo de un
-// turno y Ventas todos los cobros de su período (2026-10-10). Las reglas del
-// reparto están arriba, en `ingresosDeSesion`.
+/**
+ * Reparte por concepto un conjunto de cobros (reglas en ingresosDeSesion).
+ * @param {string} cobrosSql SELECT de (nota_id, monto), un renglón por cobro.
+ */
 export async function repartirCobros(client, cobrosSql, params) {
   const { rows } = await client.query(
     `WITH cobros AS (${cobrosSql}
@@ -110,8 +95,7 @@ export async function repartirCobros(client, cobrosSql, params) {
             COALESCE(c.lav_mediana, 0) AS lavadoras_medianas,
             COALESCE(c.lav_jumbo, 0)   AS lavadoras_jumbo,
             COALESCE(c.secadoras, 0)   AS secadoras,
-            -- En Por Encargo solo se cobra aparte lo que se vende por unidad
-            -- (marca y polvo); lo demás ya va en el precio del servicio.
+            -- En Por Encargo solo cuenta aparte lo que se vende por unidad.
             CASE WHEN n.tipo_servicio = 'POR_ENCARGO'
                  THEN COALESCE(c.encargo_productos, 0) + COALESCE(sueltos.marca, 0)
                  ELSE COALESCE(c.productos, 0) + COALESCE(sueltos.total, 0)
@@ -123,9 +107,7 @@ export async function repartirCobros(client, cobrosSql, params) {
                 SUM(nc.precio_lavadora) FILTER (WHERE t.jumbo)     AS lav_jumbo,
                 SUM(nc.precio_secadora)                            AS secadoras,
                 SUM(pc.todos)                                      AS productos,
-                -- Lo que vale el servicio en Por Encargo, con la misma regla
-                -- que recalcularPrecioTotal: el tope paga lo servido por
-                -- medidas; lo de marca va encima.
+                -- Lo que vale el servicio Por Encargo (como recalcularPrecioTotal).
                 SUM(v.encargo) FILTER (WHERE UPPER(COALESCE(nc.tipo_prenda, '')) = 'EDREDON')
                                                                    AS encargo_edredon,
                 SUM(v.encargo) FILTER (WHERE UPPER(COALESCE(nc.tipo_prenda, '')) <> 'EDREDON')
@@ -141,8 +123,7 @@ export async function repartirCobros(client, cobrosSql, params) {
               WHERE np.carga_id = nc.id
            ) pc
            CROSS JOIN LATERAL (
-             -- El servicio por un lado y, aparte, los productos que se cobran
-             -- encima de él (van a Productos, 2026-10-10).
+             -- El servicio y, aparte, lo que se cobra encima (va a Productos).
              SELECT GREATEST(0, CASE WHEN nc.precio_tope IS NOT NULL
                                      THEN nc.precio_tope
                                      ELSE nc.precio_lavadora + nc.precio_secadora
@@ -152,8 +133,7 @@ export async function repartirCobros(client, cobrosSql, params) {
            ) v
            LEFT JOIN maquinas ml ON ml.id = nc.lavadora_id
            CROSS JOIN LATERAL (
-             -- El edredón se cobra con la tarifa de edredón jumbo aunque entre
-             -- en una lavadora mediana: cuenta como jumbo siempre.
+             -- El edredón cuenta como jumbo en cualquier lavadora.
              SELECT COALESCE(
                       CASE WHEN UPPER(COALESCE(nc.tipo_prenda, '')) = 'EDREDON'
                              OR nc.lavadora_tipo = 'edredon' THEN TRUE END,
@@ -188,9 +168,8 @@ export async function repartirCobros(client, cobrosSql, params) {
     const LINEAS = r.tipo_servicio === 'POR_ENCARGO' ? ENCARGO : MOSTRADOR;
     const partes = LINEAS.map((k) => Math.max(0, parseFloat(r[k])));
     const valor = partes.reduce((a, b) => a + b, 0);
-    // Sin partes con precio (solo un ajuste): no hay a qué atribuirlo; va a la
-    // primera línea del servicio (Por Encargo, o Productos) para que
-    // la suma siga cuadrando con el efectivo.
+    // Sin partes con precio (solo un ajuste): va a la primera línea del
+    // servicio para que la suma cuadre.
     if (valor <= 0) { cent[LINEAS[0]] += monto; continue; }
     let repartido = 0;
     const asignado = partes.map((p) => {
@@ -204,10 +183,10 @@ export async function repartirCobros(client, cobrosSql, params) {
   return Object.fromEntries(Object.entries(cent).map(([k, v]) => [k, v / 100]));
 }
 
-// Lo que el turno dejó por cobrar en Por Encargo, para el recuadro Egresos del
-// corte (2026-10-10): las notas Por Encargo dadas de alta en la sucursal
-// durante el turno que siguen sin liquidar, por su saldo (total − abonos
-// vivos). Las canceladas no cuentan.
+/**
+ * "SPE Debe" del corte: saldo de las notas Por Encargo creadas en el turno que
+ * siguen sin liquidar (sin canceladas).
+ */
 export async function porEncargoPendienteDeSesion(client, caja) {
   const { rows } = await client.query(
     `SELECT COALESCE(SUM(n.precio_total - COALESCE((
@@ -226,7 +205,7 @@ export async function porEncargoPendienteDeSesion(client, caja) {
   return Math.max(0, parseFloat(rows[0].saldo));
 }
 
-// Totales de movimientos (entradas/salidas) de una caja.
+/** Totales de entradas y gastos de una caja. */
 export async function totalesMovimientos(client, cajaId) {
   const { rows } = await client.query(
     `SELECT
@@ -242,21 +221,16 @@ export async function totalesMovimientos(client, cajaId) {
   };
 }
 
-// Con cuánto dinero debe abrirse la próxima caja de una sucursal: lo que quedó
-// en el cajón al cerrar la anterior. El fondo dejó de ser un número que cada
-// quien teclea — el efectivo no aparece ni desaparece de un día para otro.
-//
-// De un corte normal se arrastra lo CONTADO (el dinero que de verdad está en el
-// cajón, no el teórico). De un cierre automático nadie contó nada, así que se
-// arrastra lo esperado y se avisa en pantalla para que revisen el cajón.
-//
-// Devuelve null cuando la sucursal nunca ha cerrado una caja: ahí no hay nada
-// que arrastrar y el fondo lo captura un administrador.
+/**
+ * Caja inicial de la próxima apertura: lo que quedó en el cajón al cerrar la
+ * anterior (la caja final, o lo contado). Tras un cierre automático, lo
+ * esperado (y la pantalla avisa). null si nunca se ha cerrado una caja: la
+ * captura un admin.
+ */
 async function aperturaSugerida(client, sucursal) {
   const { rows } = await client.query(
     `SELECT c.id, c.monto_inicial, c.monto_contado, c.monto_caja_final, c.cerrada_at, c.cierre_automatico,
-            -- Igual que el historial: las cifras congeladas (mig. 101) y, para
-            -- los cortes anteriores a esa migración, el cálculo en vivo.
+            -- Cifras congeladas o, en cortes muy viejos, calculadas en vivo.
             COALESCE(c.ventas_efectivo, (
               SELECT COALESCE(SUM(precio_total), 0) FROM notas
                WHERE caja_id = c.id AND estado_pago = 'PAGADO' AND estado <> 'CANCELADA'
@@ -285,15 +259,12 @@ async function aperturaSugerida(client, sucursal) {
                  - parseFloat(c.total_salidas);
   const contado = c.monto_contado != null ? parseFloat(c.monto_contado) : null;
   const sinConteo = contado == null;
-  // Lo que se quedó en el cajón (mig. 151): lo contado menos el sobre. Los
-  // cortes de antes no lo tienen y arrastran todo lo contado.
+  // Caja final; los cortes sin reparto arrastran todo lo contado.
   const cajaFinal = c.monto_caja_final != null ? parseFloat(c.monto_caja_final) : contado;
 
   return {
-    // Nunca negativo: un cierre con más salidas que efectivo dejaría el cajón
-    // en rojo, y un fondo negativo no existe.
-    // A centavos: el esperado sale de sumar flotantes (145.30000000000001) y
-    // el campo bloqueado del empleado lo enseña tal cual.
+    // Nunca negativa, y redondeada a centavos (la suma de flotantes deja
+    // decimales sueltos).
     monto:  Math.max(0, Math.round((sinConteo ? esperado : cajaFinal) * 100) / 100),
     origen: sinConteo ? 'cierre_automatico' : 'corte',
     corte: {
@@ -305,10 +276,10 @@ async function aperturaSugerida(client, sucursal) {
   };
 }
 
-// La caja que ESTE usuario abrió y sigue abierta, en cualquier sucursal (o
-// null). Con ella se le impide cerrar sesión sin hacer su corte: un admin
-// puede abrir caja en una sucursal y cambiarse a otra, y mirar solo la
-// sucursal activa lo dejaba salir con el turno abierto (2026-10-09).
+/**
+ * Caja abierta por este usuario en cualquier sucursal, o null. Impide cerrar
+ * sesión sin hacer el corte aunque haya cambiado de sucursal.
+ */
 async function miCajaAbierta(client, usuarioId) {
   const { rows } = await client.query(
     `SELECT c.sucursal, COALESCE(s.nombre, c.sucursal) AS sucursal_nombre
@@ -335,7 +306,7 @@ export async function getCajaActual(req, res) {
     );
 
     if (cajaRes.rowCount === 0) {
-      // Sin caja abierta, lo que importa es con cuánto se abre la siguiente.
+      // Sin caja abierta: con cuánto se abre la siguiente.
       return res.json({
         abierta: false,
         apertura_sugerida: await aperturaSugerida(client, req.sucursal),
@@ -357,8 +328,7 @@ export async function getCajaActual(req, res) {
     const ventas = await ventasDeSesion(client, caja.id);
     const { entradas, salidas } = await totalesMovimientos(client, caja.id);
     const monto_inicial = parseFloat(caja.monto_inicial);
-    // El esperado en el cajón solo cuenta el efectivo; transferencias y
-    // tarjetas se informan aparte para cuadrar el total del día.
+    // El esperado solo cuenta el efectivo.
     const esperado = monto_inicial + ventas.efectivo + entradas - salidas;
 
     res.json({
@@ -397,16 +367,16 @@ export async function getCajaActual(req, res) {
   }
 }
 
-// El fondo de apertura NO es libre: sale del corte anterior (ver
-// `aperturaSugerida`). Un empleado solo confirma ese monto; ajustarlo es cosa
-// de un administrador, que es quien responde por el dinero del cajón.
+/**
+ * Abre la caja. La caja inicial sale del corte anterior (aperturaSugerida): el
+ * empleado solo la confirma; ajustarla, o capturarla la primera vez, es de admin.
+ */
 export async function abrirCaja(req, res) {
   const { monto_inicial, notas } = req.body;
 
   const client = await pool.connect();
   try {
-    // Ya hay una caja abierta: eso se responde antes que cualquier regla de
-    // rol, para que el mensaje diga lo que de verdad pasa.
+    // Primero la caja ya abierta, para que el mensaje diga lo que pasa.
     const abierta = await client.query(
       `SELECT 1 FROM cajas WHERE estado = 'abierta' AND sucursal = $1 LIMIT 1`,
       [req.sucursal]
@@ -420,7 +390,7 @@ export async function abrirCaja(req, res) {
 
     let monto;
     if (admin) {
-      // El admin puede ajustarlo; si no manda nada, va lo del corte anterior.
+      // Admin: si no manda monto, va el del corte anterior.
       monto = monto_inicial === undefined || monto_inicial === null || monto_inicial === ''
         ? sugerida?.monto
         : Number(monto_inicial);
@@ -433,8 +403,7 @@ export async function abrirCaja(req, res) {
           message: 'No hay un corte anterior del cual tomar el fondo. Pide a un administrador que abra la caja.',
         });
       }
-      // Llega un monto distinto al del corte: la pantalla lo tiene bloqueado,
-      // así que esto es alguien llamando a la API por su cuenta.
+      // La pantalla lo bloquea: un monto distinto viene de fuera de la app.
       if (monto_inicial !== undefined && monto_inicial !== null && monto_inicial !== ''
           && Number(monto_inicial) !== sugerida.monto) {
         return res.status(403).json({
@@ -474,8 +443,7 @@ export async function registrarMovimiento(req, res) {
   if (tipo !== 'entrada' && tipo !== 'salida') {
     return res.status(400).json({ message: 'El movimiento debe ser una entrada o una salida.' });
   }
-  // El empleado solo registra gastos; meter dinero al cajón es cosa de un
-  // administrador (2026-10-10).
+  // El empleado solo registra gastos; las entradas son de admin.
   if (tipo === 'entrada' && !esAdmin(req.user.rol)) {
     return res.status(403).json({ message: 'Solo un administrador puede registrar entradas.' });
   }
@@ -517,10 +485,8 @@ export async function cerrarCaja(req, res) {
     return res.status(400).json({ message: 'El monto contado debe ser un número mayor o igual a 0.' });
   }
 
-  // Lo contado se reparte en CAJA FINAL (se queda en el cajón y es el fondo
-  // del siguiente turno) y SOBRE (sale del cajón), mig. 151. Una tablet con la
-  // versión de antes no manda ninguno de los dos: todo se queda en el cajón,
-  // que es lo que pasaba hasta ahora.
+  // Lo contado se reparte en caja final (se queda y abre el siguiente turno) y
+  // sobre (sale del cajón). Sin reparto, todo se queda en el cajón.
   const sinReparto = monto_caja_final == null && monto_sobre == null;
   const cajaFinal = sinReparto ? contado : Number(monto_caja_final);
   const sobre     = sinReparto ? 0 : Number(monto_sobre);
@@ -535,8 +501,7 @@ export async function cerrarCaja(req, res) {
 
   const client = await pool.connect();
   try {
-    // Transacción con bloqueo de fila: dos cierres simultáneos ya no se
-    // pisan — el segundo espera, encuentra la caja cerrada y recibe 409.
+    // Fila bloqueada: un segundo cierre simultáneo espera y recibe 409.
     await client.query('BEGIN');
 
     const cajaRes = await client.query(
@@ -549,10 +514,8 @@ export async function cerrarCaja(req, res) {
     }
     const caja = cajaRes.rows[0];
 
-    // La caja funciona por TURNOS (2026-10-03): cada caja abierta es el turno
-    // de quien la abrió, y el corte lo hace esa misma persona —es la que
-    // responde por el cajón— o un administrador. Así nadie cierra el turno de
-    // otro y le deja la diferencia.
+    // Cada caja es el turno de quien la abrió: el corte lo hace esa persona o
+    // un administrador.
     if (String(caja.usuario_apertura_id) !== String(req.user.id) && !esAdmin(req.user.rol)) {
       await client.query('ROLLBACK');
       const { rows: ab } = await client.query(
@@ -568,18 +531,15 @@ export async function cerrarCaja(req, res) {
     const ventas = await ventasDeSesion(client, caja.id);
     const { entradas, salidas } = await totalesMovimientos(client, caja.id);
     const monto_inicial = parseFloat(caja.monto_inicial);
-    // El esperado en el cajón solo cuenta el efectivo; transferencias y
-    // tarjetas se informan aparte para cuadrar el total del día.
+    // El esperado solo cuenta el efectivo.
     const esperado = monto_inicial + ventas.efectivo + entradas - salidas;
     const diferencia = contado - esperado;
-    // Reparto del efectivo y lo que el turno dejó por cobrar en Por Encargo
-    // (mig. 153): se congelan con lo demás.
+    // Ingresos por concepto y SPE Debe se congelan con lo demás.
     const ingresos = await ingresosDeSesion(client, caja.id);
     const speDebe  = await porEncargoPendienteDeSesion(client, caja);
 
-    // Las cifras se COPIAN al corte (mig. 101). A partir de aquí el historial
-    // las lee tal cual: lo que pase después con esas notas —revertir un pago,
-    // editar un total— ya no puede reescribir un corte cerrado.
+    // Las cifras se copian al corte: lo que pase después con esas notas no
+    // reescribe un corte cerrado.
     const upd = await client.query(
       `UPDATE cajas
           SET estado = 'cerrada',
@@ -633,14 +593,13 @@ export async function cerrarCaja(req, res) {
   }
 }
 
-// Los cortes (turnos de caja) que cumplen `where`, con sus cifras listas para
-// pintar y exportar. Lo usan el historial de Caja y Ventas (2026-10-10).
-//   · Un turno CERRADO lee lo congelado al cerrar (migs. 101 y 153); los de
-//     antes de la 153 recalculan el reparto del efectivo (el dinero de una caja
-//     cerrada ya no se mueve) y se quedan sin SPE Debe.
-//   · Un turno ABIERTO (solo si `where` lo deja pasar) se calcula en vivo, con
-//     las mismas funciones que el corte: `en_curso: true`.
-// `where` es SQL sobre `c` (cajas) con sus `params`.
+/**
+ * Turnos de caja que cumplen `where` (SQL sobre `c`, con `params`), listos para
+ * pintar y exportar (historial de Caja y Ventas).
+ * - Cerrado: sus cifras congeladas. Sin reparto congelado, se recalcula; sin
+ *   SPE Debe congelado, queda null.
+ * - Abierto: en vivo, con `en_curso: true`.
+ */
 export async function leerCortes(client, where, params) {
   const { rows } = await client.query(
     `SELECT
@@ -660,13 +619,8 @@ export async function leerCortes(client, where, params) {
           c.spe_debe,
           TRIM(ua.nombre || ' ' || COALESCE(ua.apellido, '')) AS usuario_apertura,
           TRIM(uc.nombre || ' ' || COALESCE(uc.apellido, '')) AS usuario_cierre,
-          -- Cifras CONGELADAS al cerrar (mig. 101). Un corte cerrado ya no
-          -- se recalcula: revertir un pago o editar un total no puede
-          -- reescribir lo que se contó aquel día.
-          --
-          -- El COALESCE cubre los cortes anteriores a la migración, que no
-          -- tienen copia: esos se siguen sumando desde sus notas, ahora por
-          -- caja_id (el backfill de la 101 lo llenó) en vez de por ventana.
+          -- Cifras congeladas al cerrar; en cortes muy viejos sin copia, se
+          -- suman desde sus notas.
           COALESCE(c.ventas_total, (
             SELECT COALESCE(SUM(precio_total), 0) FROM notas
              WHERE caja_id = c.id AND estado_pago = 'PAGADO' AND estado <> 'CANCELADA'
@@ -694,8 +648,7 @@ export async function leerCortes(client, where, params) {
             SELECT COALESCE(SUM(monto), 0) FROM movimientos_caja
              WHERE caja_id = c.id AND tipo = 'salida'
           )) AS salidas,
-          -- Cada entrada y salida del turno con su concepto (2026-10-04): la
-          -- tarjeta del corte las enseña y van en las exportaciones.
+          -- Entradas y gastos del turno con su concepto.
           (SELECT COALESCE(json_agg(json_build_object(
                     'id', mc.id, 'tipo', mc.tipo, 'concepto', mc.concepto,
                     'monto', mc.monto, 'created_at', mc.created_at,
@@ -748,8 +701,7 @@ export async function leerCortes(client, where, params) {
       usuario_cierre:   r.usuario_cierre,
       abierta_at:        r.abierta_at,
       cerrada_at:        r.cerrada_at,
-      // Cerrada por el barrido de medianoche, sin que nadie contara el
-      // cajón: no es un corte, y la pantalla debe decirlo.
+      // Cerrada a medianoche sin conteo: la pantalla lo dice.
       cierre_automatico: r.cierre_automatico,
       notas_apertura:   r.notas_apertura,
       notas_cierre:     r.notas_cierre,
@@ -761,11 +713,10 @@ export async function leerCortes(client, where, params) {
       esperado,
       contado,
       diferencia: contado != null ? contado - esperado : null,
-      // Reparto de lo contado (mig. 151); null en cortes de antes y en
-      // cierres automáticos.
+      // Reparto de lo contado; null en cierres automáticos.
       caja_final: r.monto_caja_final != null ? parseFloat(r.monto_caja_final) : null,
       sobre:      r.monto_sobre != null ? parseFloat(r.monto_sobre) : null,
-      // Ingresos por concepto y SPE Debe (mig. 153).
+      // Ingresos por concepto y SPE Debe.
       ingresos,
       spe_debe,
       movimientos: (r.movimientos ?? []).map((m) => ({ ...m, monto: parseFloat(m.monto) })),
@@ -784,8 +735,7 @@ export async function getHistorial(req, res) {
 }
 
 // ── DELETE /caja/historial/:id ──────────────────────────────
-// Elimina un corte (sesión de caja ya cerrada) del historial. Solo Admin.
-// Los movimientos de esa sesión se borran en cascada (ON DELETE CASCADE).
+/** Elimina un corte cerrado del historial (admin); sus movimientos van en cascada. */
 export async function eliminarCorte(req, res) {
   const id = Number(req.params.id);
   if (!id) return res.status(400).json({ message: 'No se reconoció el corte.' });

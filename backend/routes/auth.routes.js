@@ -11,14 +11,11 @@ router.post('/login',          loginLimiter, login);
 // Solo en la demo pública: fuera de ella la ruta no existe (404 de Express).
 if (ENTORNO_DEMO) router.post('/demo-login', demoLoginLimiter, demoLogin);
 
-// El de minuto va PRIMERO: los dos cuentan la petición al entrar, así que en el
-// orden contrario una ráfaga ya rechazada por el de minuto seguía gastando el
-// cupo de la hora y acababa cerrando el autocompletado para todos.
+// El de minuto va primero: así una ráfaga rechazada no gasta el cupo de la hora.
 router.get('/buscar-usuarios', busquedaLimiter, busquedaLimiterHora, buscarUsuarios);
 router.post('/logout',         verifyToken, logout);
 router.get('/me',              verifyToken, getMe);
-// Las cuentas de prueba son compartidas: su perfil es solo de consulta para
-// que nadie le cambie el nombre o la contraseña a los demás (2026-10-04).
+// Las cuentas de prueba son compartidas: su perfil es de solo consulta.
 const perfilDePruebaFijo = (req, res, next) => (
   req.user?.es_prueba && !ENTORNO_DEMO
     ? res.status(403).json({ message: 'El perfil de un usuario de prueba no se puede cambiar.' })

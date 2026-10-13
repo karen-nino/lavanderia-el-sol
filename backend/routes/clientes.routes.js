@@ -14,8 +14,7 @@ import {
 
 const router = Router();
 
-// Un id malformado (/notas/undefined y parecidos) se responde aquí: sin esto
-// llega a la consulta y Postgres lo convierte en un 500.
+// Un id malformado responde 404 aquí, no 500 en Postgres.
 router.param('id', validarId('el cliente'));
 
 router.use(verifyToken, sucursalActiva);

@@ -15,13 +15,10 @@ export const verifyToken = async (req, res, next) => {
     return res.status(401).json({ message: 'Tu sesión expiró. Inicia sesión de nuevo.' });
   }
 
-  // La firma del token no basta: el usuario pudo ser desactivado o cambiar
-  // de rol/sucursal después de emitirlo. Se releen de la base en cada
-  // petición para que desactivar a alguien corte su sesión de inmediato.
+  // Rol, sucursal y estado se releen en cada petición: desactivar a alguien
+  // corta su sesión de inmediato.
   try {
-    // Con reintento: esta consulta la atraviesa CADA petición autenticada, así
-    // que una conexión que el pooler soltó no tumba una, tumba todas a la vez
-    // (pasó el 2026-09-29). Es de solo lectura: repetirla no cambia nada.
+    // Con reintento: la cruza cada petición y es de solo lectura.
     const { rows } = await consultarReintentando(
       'SELECT id, rol, sucursal, es_prueba, session_id FROM usuarios WHERE id = $1 AND activo = TRUE',
       [decoded.id]
@@ -30,9 +27,7 @@ export const verifyToken = async (req, res, next) => {
       return res.status(401).json({ message: 'Tu sesión se cerró. Inicia sesión de nuevo.' });
     }
 
-    // Sesión única por cuenta: si el id de sesión del token no coincide con el
-    // vigente, significa que se inició sesión en otro dispositivo después. Se
-    // rechaza para que la sesión anterior quede cerrada.
+    // Sesión única: si el sid no coincide, se entró desde otro dispositivo.
     if (rows[0].session_id && decoded.sid !== rows[0].session_id) {
       return res.status(401).json({ message: 'Se inició sesión en otro dispositivo.' });
     }
@@ -42,10 +37,7 @@ export const verifyToken = async (req, res, next) => {
     next();
   } catch (err) {
     console.error('verifyToken error:', err);
-    // No se pudo llegar a la base: la sesión del empleado está perfectamente
-    // bien, el que no contesta es el servidor. Mandarlo a iniciar sesión otra
-    // vez —lo que decía antes— le hace perder el tiempo en algo que no arregla
-    // nada. 503 y a reintentar.
+    // Sin base de datos: la sesión está bien, se responde 503 para reintentar.
     if (esErrorDeConexion(err)) {
       return res.status(503).json({
         message: 'El servidor no responde en este momento. Espera unos segundos y vuelve a intentar.',

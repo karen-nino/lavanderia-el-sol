@@ -16,14 +16,12 @@ import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-// Relativo al propio archivo: con la ruta clavada, el script solo funcionaba
-// en la máquina donde se escribió (en el runner de CI no existía y abortaba).
+// Ruta relativa al propio archivo, para que funcione también en CI.
 const BACKEND = path.resolve(__dirname, '..');
 dotenv.config({ path: path.join(BACKEND, '.env') });
 
 const MODO_DEMO = process.argv.includes('--demo');
-// Un registro por entorno: si se mezclaran, limpiar en local intentaría borrar
-// ids que solo existen en la base de la demo.
+// Un registro por entorno (local y demo).
 const REGISTRO = path.join(__dirname, MODO_DEMO ? '.demo-ventas-ids.demo.json' : '.demo-ventas-ids.json');
 const SUCURSAL = 'pruebas';
 const DIAS = 90;
@@ -34,16 +32,9 @@ const cfg = {
 };
 
 // ── Candado: la base local, o la de la demo con --demo ────────────────────
-// Esto inventa cientos de notas cobradas. En la base del negocio sería un
-// destrozo, así que por defecto solo acepta la base LOCAL: `DATABASE_URL` es
-// la cadena remota (db/pool.js la prefiere sobre las DB_* en cuanto existe) y
-// el host tiene que ser esta misma máquina.
-//
-// Con --demo apunta al Postgres de la demo pública, que también necesita datos
-// falsos. Esa puerta es estrecha a propósito: la cadena tiene que venir de
-// backend/.env.demo —nunca del .env normal, que es el que apunta a la base de
-// trabajo— y más abajo, ya conectados, se comprueba que la base no tenga
-// operación real antes de escribir nada.
+// Inventa cientos de notas cobradas: por defecto solo acepta la base LOCAL.
+// Con --demo usa la cadena de backend/.env.demo (nunca la del .env normal) y,
+// ya conectado, comprueba que la base no tenga operación real.
 if (MODO_DEMO) {
   const archivo = path.join(BACKEND, '.env.demo');
   if (!fs.existsSync(archivo)) {
@@ -58,8 +49,7 @@ if (MODO_DEMO) {
   }
   cfg.connectionString = process.env.DATABASE_URL;
   cfg.ssl = { rejectUnauthorized: false };
-  // Las DB_* del .env normal apuntan a la base local: si se quedan puestas,
-  // pg las mezcla con la cadena y se conecta a quién sabe dónde.
+  // Se quitan las DB_* locales para que pg no las mezcle con la cadena.
   for (const k of ['host', 'port', 'user', 'password', 'database']) delete cfg[k];
 } else {
   const LOCALES = ['localhost', '127.0.0.1', '::1', ''];
@@ -75,10 +65,7 @@ if (MODO_DEMO) {
   }
 }
 
-// Segunda comprobación, ya conectados: una base con notas fuera de la sucursal
-// de pruebas es una base con operación real. Da igual qué diga la cadena de
-// conexión o el nombre del archivo; si hay trabajo de verdad ahí dentro, este
-// script no escribe.
+// Ya conectado: con notas fuera de la sucursal de pruebas (operación real), no escribe.
 async function verificarBaseSinOperacionReal(db) {
   const { rows } = await db.query(
     'SELECT COUNT(*)::int AS n FROM notas WHERE sucursal <> $1', [SUCURSAL]
@@ -110,9 +97,7 @@ async function limpiar(db) {
   const { notas = [], clientes = [], movimientos = [], cajas = [], stockPrevio = [],
           checkins = [] } = JSON.parse(fs.readFileSync(REGISTRO, 'utf8'));
   await db.query('BEGIN');
-  // Los movimientos de inventario van primero: borrar la nota no los borra
-  // (producto_movimientos.nota_id es ON DELETE SET NULL) y quedarían sueltos
-  // descuadrando el reporte diario.
+  // Primero los movimientos de inventario: borrar la nota no los borra (SET NULL).
   const m = await db.query('DELETE FROM producto_movimientos WHERE id = ANY($1) AND sucursal = $2',
                            [movimientos, SUCURSAL]);
   for (const s of stockPrevio) {
@@ -158,9 +143,7 @@ async function sembrar(db) {
   const lavMedianas = maquinas.filter(m => m.tipo === 'lavadora_mediana').map(m => m.id);
   const lavJumbo    = maquinas.filter(m => m.tipo === 'lavadora_jumbo').map(m => m.id);
   const secadoras   = maquinas.filter(m => m.tipo === 'secadora').map(m => m.id);
-  // La demo pública tiene solo Speed Queen jumbo (scripts/lib/maquinasDemo.js,
-  // 2026-10-08): sin medianas, todas las cargas van en jumbo y se secan con la
-  // tarifa jumbo. Con medianas (la base local) todo sigue como siempre.
+  // Sin lavadoras medianas (la demo: solo Speed Queen jumbo), todo va en jumbo.
   const soloJumbo = lavMedianas.length === 0 && lavJumbo.length > 0;
   const maquinaPorId = new Map(maquinas.map(m => [m.id, m]));
   if ((!lavMedianas.length && !soloJumbo) || !secadoras.length) throw new Error('Faltan máquinas en la sucursal pruebas.');
@@ -172,8 +155,7 @@ async function sembrar(db) {
     secadoraEdredon: Number(t[0].precio_secadora_edredon ?? t[0].precio_carga_secadora),
     secadoraJumbo: Number(t[0].precio_secadora_jumbo ?? t[0].precio_carga_secadora),
   };
-  // Precio de los servicios Por Encargo (mig. 096): lo que se cobra por la
-  // carga. Sin él, la nota se siembra con el modelo viejo (cobrando máquinas).
+  // Precio de los servicios Por Encargo; sin él, se cobran las máquinas.
   const servicios = Object.fromEntries(
     [['chico', t[0].tope_carga_chico], ['mediano', t[0].tope_carga_mediano], ['grande', t[0].tope_carga_grande]]
       .filter(([, v]) => v != null).map(([k, v]) => [k, Number(v)]));
@@ -199,8 +181,7 @@ async function sembrar(db) {
     clientesIds.push(rows[0].id);
   }
 
-  // El folio es correlativo POR SUCURSAL (mig. 155): arranca después del más
-  // alto de esta sucursal, y al final se deja su contador ahí.
+  // El folio es por sucursal: sigue al más alto, y al final se ajusta el contador.
   const { rows: maxFolio } = await db.query(
     `SELECT GREATEST(
               COALESCE(MAX(NULLIF(split_part(folio, '-', 1), '')::int), 0),
@@ -217,9 +198,7 @@ async function sembrar(db) {
   const fechaISO = (f) =>
     `${f.getFullYear()}-${String(f.getMonth() + 1).padStart(2, '0')}-${String(f.getDate()).padStart(2, '0')}`;
 
-  // Check-in del día (mig. 062 + 070): la entrada es el primer login y la
-  // salida, el cierre de sesión. Sin esto, el Desempeño de cada empleado sale
-  // con la columna de horarios vacía los 90 días.
+  // Check-in del día (entrada y salida), para el Desempeño de cada empleado.
   const checarDia = async (usuarioId, dia, { conSalida }) => {
     const fecha = fechaISO(dia);
     const entrada = `${fecha} ${String(entre(7, 8)).padStart(2, '0')}:${String(entre(0, 59)).padStart(2, '0')}:00`;
@@ -258,9 +237,7 @@ async function sembrar(db) {
       const stamp = `${dia.getFullYear()}-${String(dia.getMonth() + 1).padStart(2, '0')}-${String(dia.getDate()).padStart(2, '0')} ${String(hora).padStart(2, '0')}:${String(minuto).padStart(2, '0')}:00`;
       const folio = `${String(consecutivo++).padStart(4, '0')}-${String(dia.getDate()).padStart(2, '0')}${String(dia.getMonth() + 1).padStart(2, '0')}${String(dia.getFullYear()).slice(-2)}`;
 
-      // Por Encargo vende SERVICIOS (Chico, Mediano, Grande, Edredón): es lo
-      // que se cobra, y las máquinas van sin cobro (2026-10-08, como la app).
-      // Sin precios de servicio configurados se cae al modelo viejo.
+      // Por Encargo cobra el servicio; las máquinas van sin cobro.
       const conServicios = tamanosServicio.length > 0;
       const servicio = conServicios
         ? pesado([['AUTOSERVICIO', 60], ['POR_ENCARGO', 40]])
@@ -345,10 +322,7 @@ async function sembrar(db) {
            cancelada ? null : stamp, cancelada || !conSecadora ? null : stamp]);
         cargaIds.push(cRows[0].id);
 
-        // Los CICLOS de la carga (mig. 114, horario y tiempo de las migs. 140-141):
-        // una pasada por máquina, con su encendido y su fin. Sin esto Ventas →
-        // Máquinas, el desempeño y la Información de uso salían vacíos. Una nota
-        // cancelada no llegó a correr ninguna.
+        // Una vuelta por máquina, con inicio y fin (salvo en canceladas).
         if (!cancelada) {
           const pasada = async (slot, mid, minutos) => {
             const m = maquinaPorId.get(mid);
@@ -414,8 +388,7 @@ async function sembrar(db) {
     }
   }
 
-  // El contador de la sucursal sigue después del último folio sembrado, para
-  // que la primera nota que se haga a mano no repita uno (mig. 155).
+  // El contador sigue al último folio sembrado.
   await db.query(
     `INSERT INTO folios_sucursal (sucursal, ultimo) VALUES ($1, $2)
      ON CONFLICT (sucursal) DO UPDATE SET ultimo = GREATEST(folios_sucursal.ultimo, EXCLUDED.ultimo)`,
@@ -434,17 +407,12 @@ async function sembrar(db) {
 }
 
 
-// ── Fase 2: que Inventario y Caja acompañen a Ventas ──────────────────────
-// La siembra deja las notas cobradas pero sin huella en el resto del sistema:
-// ni salidas de inventario ni sesiones de caja. Esto lo rellena imitando lo que
-// habría hecho la app:
-//   · inventario → un movimiento 'venta' por producto de cada nota (como
-//     registrarMovimientosProductosNota) más los reabastos que harían falta
-//     para no quedarse sin stock, y el stock final ajustado al saldo resultante;
-//   · caja → una sesión por día, con sus notas atadas y las cifras congeladas
-//     al cerrar (mig. 101). Todas nacen CERRADAS, la del día en curso incluida:
-//     una abierta se quedaría apartando las notas que se creen después, y el
-//     cierre de medianoche acabaría cerrándola sola.
+// ── Fase 2: inventario y caja para las notas sembradas ────────────────────
+// Imita lo que haría la app:
+// - inventario: un movimiento 'venta' por producto, reabastos para no quedarse
+//   sin existencia y la existencia final ajustada;
+// - caja: una sesión cerrada por día (la de hoy también), con sus notas y las
+//   cifras congeladas.
 async function cuadrar(db) {
   if (!fs.existsSync(REGISTRO)) {
     console.log('No hay siembra registrada. Corre primero el script sin banderas.');
@@ -574,9 +542,7 @@ async function cuadrar(db) {
     await db.query('UPDATE productos SET stock_reservado = stock_reservado + $2 WHERE id = $1',
                    [l.producto_id, Number(l.cantidad_medidas)]);
   }
-  // Y lo vendido queda marcado como ya descontado (mig. 161): sin la marca, la
-  // app lo toma por apartado y al cancelar o borrar la nota no lo devuelve al
-  // estante.
+  // Lo vendido queda marcado como descontado (consumido_at).
   if (consumidas.length > 0) {
     await db.query('UPDATE nota_productos SET consumido_at = $2 WHERE id = ANY($1::int[])',
                    [consumidas.map(l => l.id), new Date()]);

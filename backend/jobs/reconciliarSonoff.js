@@ -1,13 +1,7 @@
-// Reconciliador Sonoff — red de seguridad del control de máquinas.
-//
-// Cada SONOFF_RECONCILE_MINUTOS (por defecto 3) recorre las máquinas con
-// Sonoff enlazado y vuelve a afirmar su estado deseado (sincronizarSonoff es
-// idempotente). Así corrige cualquier desincronización dejada por una orden
-// que falló (internet caído, nube eWeLink sin responder, backend reiniciado a
-// mitad de una operación) y refresca maquinas.sonoff_estado para el indicador.
-//
-// El camino normal es el enganche por evento (trigger + LISTEN/NOTIFY): esto es
-// solo el respaldo periódico.
+// Barrido periódico de respaldo del control Sonoff: cada SONOFF_RECONCILE_MINUTOS
+// (3 por defecto) vuelve a afirmar el estado de las máquinas enlazadas, corrige
+// órdenes que fallaron y refresca sonoff_estado. El camino normal es el evento
+// (trigger + LISTEN/NOTIFY).
 
 import pool from '../db/pool.js';
 import { sincronizarSonoff } from '../services/sincronizarSonoff.js';

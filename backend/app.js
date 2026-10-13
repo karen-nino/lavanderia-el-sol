@@ -12,15 +12,11 @@ if (!fs.existsSync('./uploads/logo')) {
 
 const app = express();
 
-// En Fly la app corre detrás de exactamente un proxy, que agrega la IP
-// real del cliente a X-Forwarded-For; con esto req.ip la refleja y el
-// rate limiting por IP funciona. En local no hay proxy y no afecta.
+// En Fly hay exactamente un proxy: así req.ip es la IP real (para los límites por IP).
 app.set('trust proxy', 1);
 
-// Sin CORS a propósito: todo el tráfico legítimo llega same-origin
-// (Netlify proxyea /api y /uploads; en dev lo hace Vite). Sin el header
-// Access-Control-Allow-Origin, el navegador bloquea llamadas de otros
-// orígenes directas a la API.
+// Sin CORS a propósito: el tráfico legítimo llega same-origin (el hosting del
+// frontend hace proxy de /api y /uploads; en desarrollo, Vite).
 app.use(helmet());
 app.use(express.json());
 app.use('/uploads', express.static('uploads'));

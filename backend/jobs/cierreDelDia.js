@@ -5,9 +5,7 @@ import {
   ventasDeSesion, totalesMovimientos, ingresosDeSesion, porEncargoPendienteDeSesion,
 } from '../controllers/caja.controller.js';
 
-// Hora local del negocio en la que se hace el barrido de "cierre del día".
-// Configurable con CIERRE_HORA (0-23) y TZ_NEGOCIO; por defecto 00:00 en
-// America/Mexico_City (medianoche, con el negocio ya cerrado).
+/** Hora local del cierre del día: CIERRE_HORA (0-23) y TZ_NEGOCIO; por defecto, medianoche en México. */
 const TZ = process.env.TZ_NEGOCIO || 'America/Mexico_City';
 const CIERRE_HORA = (() => {
   const h = Number(process.env.CIERRE_HORA);
@@ -18,28 +16,22 @@ const INTERVALO_MS = 5 * 60 * 1000; // revisar cada 5 minutos
 const fmtHora  = new Intl.DateTimeFormat('en-US', { timeZone: TZ, hour: '2-digit', hourCycle: 'h23' });
 const fmtFecha = new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit' });
 
-// Barrido de fin de día. Hace dos cosas:
-//   1. Libera las máquinas que quedaron EN USO y cierra sus notas (LISTA, o
-//      EN ESPERA en Por Encargo, donde "Por Entregar" lo marca una persona).
-//   2. Suelta las máquinas que se asignaron pero nunca se arrancaron: esas
-//      notas quedaban En Espera reteniendo su lavadora indefinidamente.
-// Idempotente: si no hay nada pendiente no cambia nada. Devuelve los conteos.
+/**
+ * Barrido de fin de día (idempotente; devuelve los conteos):
+ * 1. Libera las máquinas en uso y saca sus notas del proceso (LISTA; Por Encargo
+ *    vuelve a EN ESPERA, porque "Procesado" lo marca una persona).
+ * 2. Suelta las máquinas asignadas que nunca arrancaron (la nota sigue viva).
+ */
 export async function liberarMaquinasCierreDelDia() {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    // Antes de soltar nada, cada máquina en marcha cierra su uso con hora de
-    // fin (o la de su tope): mientras la carga todavía la tiene en su hueco.
+    // Antes de soltarlas, cada máquina en marcha cierra su vuelta.
     const { rows: enMarcha } = await client.query(
       `SELECT id FROM maquinas WHERE estado = 'en_uso' AND en_uso_desde IS NOT NULL`
     );
     await sellarPasadasVivas(client, enMarcha.map(r => r.id));
-    // Se cierran TODAS las notas en proceso (no solo las de la columna legada
-    // maquina_id): con varias cargas la(s) máquina(s) puede(n) vivir solo en
-    // nota_cargas. Se guardan sus IDs para limpiar sus cargas.
-    // Por Encargo vuelve a EN ESPERA, no a LISTA: ahí "Por Entregar" lo marca
-    // una persona con el botón "Procesado" (2026-09-28), y el cierre del día
-    // está para soltar máquinas, no para dar por procesada la ropa de nadie.
+    // Todas las notas en proceso; Por Encargo vuelve a EN ESPERA.
     const notas = await client.query(
       `UPDATE notas
           SET estado = (CASE WHEN tipo_servicio = 'POR_ENCARGO' THEN 'EN_ESPERA' ELSE 'LISTA' END)::estado_orden
@@ -48,9 +40,7 @@ export async function liberarMaquinasCierreDelDia() {
     );
     const notaIds = notas.rows.map(r => r.id);
 
-    // Las cargas conservan su máquina como "usada" (historial), pero sueltan la
-    // referencia viva (lavadora_id / secadora_id). Si no, la nota cerrada se
-    // seguiría viendo "en curso" en Detalle aunque su máquina ya esté libre.
+    // Las cargas sueltan su máquina viva y la conservan como "usada".
     if (notaIds.length > 0) {
       await client.query(
         `UPDATE nota_cargas
@@ -63,31 +53,21 @@ export async function liberarMaquinasCierreDelDia() {
       );
     }
 
-    // También se cancela cualquier encendido manual (mig. 104): el día terminó
-    // y nada debe quedar prendido. Si solo se soltara el estado, la marca
-    // seguiría viva y el reconciliador mantendría la máquina encendida mientras
-    // la pantalla la muestra libre — lista para asignarse a una nota estando
-    // en marcha.
-    // El estado solo se toca si estaba 'en_uso': una máquina en mantenimiento
-    // sigue en mantenimiento aunque alguien la hubiera prendido para revisarla.
+    // Se cancelan también encendidos manuales y esperas de arranque: nada
+    // queda prendido. Solo se libera lo que estaba 'en_uso' (mantenimiento se queda).
     const maquinas = await client.query(
       `UPDATE maquinas
           SET estado       = CASE WHEN estado = 'en_uso' THEN 'disponible'::estado_maquina ELSE estado END,
               en_uso_desde = CASE WHEN estado = 'en_uso' THEN NULL ELSE en_uso_desde END,
               encendida_manual_at = NULL,
-              -- Y la espera de arranque (mig. 110), por lo mismo: el día
-              -- terminó y nada debe quedar prendido ni apartado.
               encendida_sin_iniciar_at = NULL,
               encendida_para_nota_id   = NULL
         WHERE estado = 'en_uso' OR encendida_manual_at IS NOT NULL
            OR encendida_sin_iniciar_at IS NOT NULL`
     );
 
-    // Máquinas que se asignaron a una nota y nunca se arrancaron: la nota se
-    // quedó En Espera y arrastraba su lavadora un día tras otro. Al cerrar el
-    // día se sueltan (la carga vuelve a "sin asignar") y la nota sigue viva:
-    // cuando el cliente vuelva se le asigna la máquina que esté libre. No se
-    // guardan como "usadas" porque nunca lavaron nada.
+    // Máquinas asignadas que nunca arrancaron: se sueltan (no cuentan como
+    // usadas) y la nota sigue viva para asignarle otra después.
     const { rows: [{ sueltas }] } = await client.query(
       `WITH liberadas AS (
          UPDATE nota_cargas nc
@@ -119,13 +99,11 @@ export async function liberarMaquinasCierreDelDia() {
   }
 }
 
-// Cierra (invalida) las sesiones de los empleados al cierre del día. Al asignar
-// un session_id nuevo, los tokens vigentes dejan de coincidir (verifyToken los
-// rechaza) y el empleado tendrá que iniciar sesión de nuevo al día siguiente,
-// registrando así su nueva hora de entrada. NO registra "salida": si el
-// empleado no cerró sesión manualmente, ese día su salida queda en null y se
-// muestra como "—". Solo afecta empleados (operador); los admin conservan su
-// sesión.
+/**
+ * Invalida las sesiones de los empleados (operador) con un session_id nuevo:
+ * mañana inician sesión y registran su entrada. No registra salida (queda "—").
+ * Los admins conservan su sesión.
+ */
 export async function cerrarSesionesEmpleados() {
   const { rowCount } = await pool.query(
     `UPDATE usuarios SET session_id = $1
@@ -135,34 +113,15 @@ export async function cerrarSesionesEmpleados() {
   return rowCount;
 }
 
-// Cierra las cajas que quedaron abiertas al terminar el día.
-//
-// Un cierre automático NO es un corte: nadie contó el cajón, así que
-// `monto_contado` queda NULL (el historial ya lo muestra como "—" y sin
-// diferencia) y `usuario_cierre_id` también, porque ninguna persona lo hizo.
-// La bandera `cierre_automatico` (mig. 099) es lo que permite distinguirlo de
-// un corte real en el historial.
-//
-// Las cifras SÍ se congelan, igual que en el cierre manual (mig. 101). Sin
-// esto quedaban en NULL y el historial las recalculaba en vivo para siempre:
-// revertir un pago o corregir un total reescribía el corte de un día ya
-// cerrado, que es justo lo que la 101 vino a impedir. Y el cierre automático
-// no es un caso raro: es el de cualquier día en que nadie cierre la caja.
-//
-// Sin esto, la sesión seguía viva al día siguiente: nadie podía abrir caja, y
-// las ventas del día nuevo se sumaban a la sesión vieja hasta que alguien la
-// cerraba, momento en el que el esperado de dos días se comparaba contra el
-// efectivo de uno solo y aparecía un faltante inventado.
-//
-// Cierra las de TODAS las sucursales (el barrido es global), todas o ninguna:
-// devuelve las cajas cerradas y, si algo falla, lanza (el scheduler lo atrapa).
+/**
+ * Cierra las cajas abiertas de todas las sucursales (todas o ninguna). No es un
+ * corte: sin conteo (`monto_contado` y `usuario_cierre_id` NULL,
+ * `cierre_automatico`). Las cifras sí se congelan, con el mismo cálculo que el
+ * cierre manual; su esperado es la caja inicial del día siguiente.
+ *
+ * @returns las cajas cerradas. Lanza si algo falla.
+ */
 export async function cerrarCajasAbiertas() {
-  // Las cifras se congelan con el MISMO cálculo que el corte normal
-  // (`ventasDeSesion` / `totalesMovimientos`). Antes este barrido sumaba el
-  // precio completo de las notas pagadas en la caja y no veía los abonos
-  // (mig. 121): contaba otra vez lo abonado en días anteriores y se le
-  // escapaba lo abonado hoy a notas aún no liquidadas. Como nadie contó, ese
-  // esperado es el fondo con el que abre el día siguiente (2026-10-09).
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -206,8 +165,7 @@ export async function cerrarCajasAbiertas() {
   }
 }
 
-// Scheduler ligero (sin dependencias): revisa cada pocos minutos y ejecuta el
-// barrido una sola vez al llegar la hora de cierre, deduplicando por fecha local.
+/** Revisa cada pocos minutos y corre el cierre una vez al día, al llegar la hora. */
 export function iniciarCierreDelDia() {
   let ultimaFecha = null;
 
@@ -225,8 +183,7 @@ export function iniciarCierreDelDia() {
     } catch (err) {
       console.error('[cierre] error al liberar máquinas:', err.message);
     }
-    // Cerrar las cajas que nadie cerró: si siguen abiertas mañana, el corte
-    // del día siguiente sale con las ventas de dos días.
+    // Las cajas que nadie cerró.
     try {
       const cajas = await cerrarCajasAbiertas();
       if (cajas.length > 0) {
@@ -237,7 +194,7 @@ export function iniciarCierreDelDia() {
       console.error('[cierre] error al cerrar cajas abiertas:', err.message);
     }
 
-    // Cerrar las sesiones de los empleados que no cerraron manualmente.
+    // Las sesiones de los empleados.
     try {
       const cerradas = await cerrarSesionesEmpleados();
       if (cerradas > 0) {

@@ -1,16 +1,10 @@
-// Las máquinas de la DEMO PÚBLICA (2026-10-08, a pedido): solo Speed Queen
-// jumbo, que en la demo corren con temporizador (MAQUINAS_CRONOMETRO=off en
-// fly.demo.toml).
-//
-// Lo llama ÚNICAMENTE scripts/reset-demo.mjs, después de vaciar las máquinas y
-// antes de db/seed_pruebas.js. Ese seed es compartido —también arma la sucursal
-// oculta de pruebas de producción— y solo crea las máquinas que falten por
-// nombre, así que al encontrar L1…S2 ya puestas aquí no siembra las suyas.
-// Producción y la base local no pasan nunca por este archivo.
+// Máquinas de la demo pública: solo Speed Queen jumbo, con temporizador
+// (MAQUINAS_CRONOMETRO=off en fly.demo.toml). Solo lo usa reset-demo.mjs, antes
+// de seed_pruebas.js, que al ver L1…S2 ya no siembra las suyas.
 
 export const MARCA_DEMO = 'Speed Queen';
 
-// Un modelo por tipo, con su tiempo de ciclo (con temporizador es lo que dura).
+/** Un modelo por tipo, con su tiempo de ciclo. */
 export const MODELOS_DEMO = [
   { nombre: 'Lavadora Jumbo', tipo: 'lavadora', tamano: 'jumbo', minutos: 45 },
   { nombre: 'Secadora Jumbo', tipo: 'secadora', tamano: 'jumbo', minutos: 40 },
@@ -24,8 +18,7 @@ export const MAQUINAS_DEMO = [
   { nombre: 'S2', tipo: 'secadora',       modelo: 'Secadora Jumbo' },
 ];
 
-// Idempotente: la marca y los modelos se crean si faltan (los catálogos no se
-// vacían en el reset) y cada máquina solo si su nombre no existe en la sucursal.
+/** Idempotente: crea marca, modelos y máquinas que falten. */
 export async function sembrarMaquinasDemo(db, sucursal) {
   let { rows: [marca] } = await db.query('SELECT id FROM marcas_maquina WHERE nombre = $1', [MARCA_DEMO]);
   if (!marca) {
@@ -61,10 +54,7 @@ export async function sembrarMaquinasDemo(db, sucursal) {
   return creadas;
 }
 
-// Precios de los servicios de edredón de la demo (catálogo tamanos_edredon,
-// mig. 130). El reset no restaura ese catálogo y en la demo estaban vacíos, así
-// que una nota Por Encargo de edredón no se podía crear (2026-10-08). Solo se
-// ponen a los tamaños que existen; los demás no se tocan.
+/** Precios de los tamaños de edredón que existan (sin precio no se vende el servicio). */
 export const PRECIOS_EDREDON_DEMO = {
   'cubre colchón': 120, individual: 150, matrimonial: 180, king: 220, queen: 200,
 };

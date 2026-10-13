@@ -7,46 +7,30 @@ import { fechaLocal } from '../utils/tz.js';
 import { ENTORNO_DEMO } from '../utils/entorno.js';
 
 // ── GET /auth/buscar-usuarios?q=... ─────────────────────────
-// Endpoint público usado por la pantalla de login para autocompletar
-// el nombre del empleado. Devuelve solo id + nombre, máximo 5 resultados.
-//
-// Al ser público, cualquiera que llegue a la URL de la app puede consultarlo,
-// así que está acotado para que no sirva de directorio de personal:
-//   · mínimo 3 caracteres (también después del prefijo ***);
-//   · coincide por INICIO de nombre o de apellido, nunca por un trozo suelto
-//     en medio, que es lo que permitiría barrer la plantilla con sílabas
-//     comunes ("an", "ar", "er"...);
-//   · los comodines de ILIKE se escapan, para que un `q` como "%a" no vuelva a
-//     abrir esa puerta;
-//   · dos limitadores por IP en la ruta: uno por minuto y otro por hora, este
-//     último contra el barrido lento y sostenido.
-// Por el momento (2026-10-04, a pedido) los usuarios de prueba salen en la
-// búsqueda normal, sin el prefijo ***, para que cualquiera pueda entrar con
-// ellos escribiendo su nombre. Para volver a ocultarlos, ponerlo en false.
+// Autocompletado público del login: id + nombre, máximo 5. Acotado para que no
+// sirva de directorio de personal: mínimo 3 caracteres, solo coincide por el
+// inicio del nombre o de una palabra, escapa los comodines de ILIKE y la ruta
+// tiene límites por IP (por minuto y por hora).
+
+/** true: los usuarios de prueba salen en la búsqueda normal, sin el prefijo ***. */
 const PRUEBA_VISIBLE_EN_LOGIN = true;
 
 export const buscarUsuarios = async (req, res) => {
   const raw = (req.query.q ?? '').trim();
   if (!raw) return res.json([]);
 
-  // El prefijo *** revela los usuarios ocultos: el admin_main y los usuarios
-  // de prueba. Sin él, esos usuarios no aparecen en la búsqueda normal (los de
-  // prueba sí, mientras PRUEBA_VISIBLE_EN_LOGIN esté encendido).
+  // El prefijo *** muestra los ocultos (admin_main y, si no son visibles, los de prueba).
   const mostrarOcultos = raw.startsWith('***');
   const q = mostrarOcultos ? raw.slice(3).trim() : raw;
 
-  // Mínimo 3 caracteres (también tras el prefijo ***) para dificultar la
-  // enumeración de empleados; con menos, no se listan resultados.
+  // Mínimo 3 caracteres, también después del prefijo.
   if (q.length < 3) return res.json([]);
 
-  // `%`, `_` y `\` son comodines de ILIKE: sin escaparlos, un q = "%a" haría
-  // que el patrón de prefijo casara con cualquier nombre que lleve una "a".
+  // Escapa los comodines de ILIKE (`%`, `_`, `\`).
   const termino = q.replace(/[\\%_]/g, (c) => '\\' + c);
 
-  // Nombre completo (nombre + apellido) para mostrar y para buscar.
   const nombreCompleto = "TRIM(nombre || ' ' || COALESCE(apellido, ''))";
-  // $1 = empieza el nombre; $2 = empieza cualquier palabra posterior (el
-  // apellido, o el segundo nombre), para que buscar por apellido siga sirviendo.
+  // $1: empieza el nombre; $2: empieza otra palabra (apellido, segundo nombre).
   const coincide = `(unaccent(${nombreCompleto}) ILIKE unaccent($1)
                   OR unaccent(${nombreCompleto}) ILIKE unaccent($2))`;
   const sql = mostrarOcultos
@@ -97,17 +81,13 @@ export const login = async (req, res) => {
       return res.status(401).json({ message: 'Contraseña incorrecta.' });
     }
 
-    // Sesión única por cuenta: se genera un id de sesión nuevo en cada login y
-    // se guarda en el usuario. El token lo lleva en "sid"; verifyToken exige que
-    // coincida, así que iniciar sesión aquí invalida cualquier sesión previa en
-    // otro dispositivo.
+    // Sesión única: cada login genera un session_id nuevo (el "sid" del token)
+    // e invalida la sesión en otro dispositivo.
     const sessionId = randomUUID();
     await pool.query('UPDATE usuarios SET session_id = $1 WHERE id = $2', [sessionId, usuario.id]);
 
-    // Check-in del día: el primer login después de la medianoche local cuenta
-    // como la hora de entrada. El ON CONFLICT hace que los logins posteriores
-    // del mismo día no cambien nada. Nunca debe bloquear el inicio de sesión,
-    // por eso va en su propio try/catch.
+    // Check-in: el primer login del día local es la hora de entrada. No debe
+    // bloquear el login, por eso va en su propio try/catch.
     try {
       await pool.query(
         `INSERT INTO checkins (usuario_id, fecha) VALUES ($1, $2)
@@ -118,9 +98,7 @@ export const login = async (req, res) => {
       console.error('checkin error:', err);
     }
 
-    // La sesión dura 30 días (antes 8 h): así se comporta como "stand by" y
-    // normalmente solo se cierra con el botón Cerrar sesión. La sesión única
-    // (sid) sigue cerrándola si se inicia sesión en otro dispositivo.
+    // 30 días: la sesión se cierra con el botón o al entrar en otro dispositivo.
     const token = jwt.sign(
       { id: usuario.id, rol: usuario.rol, sucursal: usuario.sucursal, sid: sessionId },
       process.env.JWT_SECRET,
@@ -145,14 +123,11 @@ export const login = async (req, res) => {
 };
 
 // ── POST /auth/demo-login ────────────────────────────────────
-// Entra sin contraseña. Existe SOLO en la demo pública: la ruta ni siquiera se
-// monta si falta ENTORNO_DEMO (ver auth.routes.js), y al arrancar se comprueba
-// que la base no tenga operación real (utils/entorno.js).
-//
-// Tercera valla, la que de verdad acota el daño si las dos anteriores fallaran:
-// la consulta solo mira usuarios con es_prueba = TRUE. Aunque alguien activara
-// la bandera sobre una base con datos reales, por aquí no se entra a ninguna
-// cuenta del negocio, solo a las del entorno cerrado de pruebas.
+/**
+ * Entrada sin contraseña, solo en la demo pública: la ruta solo se monta con
+ * ENTORNO_DEMO, al arrancar se comprueba que la base no tenga operación real y
+ * solo entra a usuarios con es_prueba.
+ */
 export const demoLogin = async (req, res) => {
   if (!ENTORNO_DEMO) return res.status(404).json({ message: 'No encontrado.' });
 
@@ -171,21 +146,13 @@ export const demoLogin = async (req, res) => {
 
     const usuario = rows[0];
 
-    // Aquí NO se rota la sesión, al revés que en el login normal. Todos los que
-    // abren la demo entran a la misma cuenta, y como verifyToken exige que el
-    // `sid` del token coincida con usuarios.session_id, rotarlo haría que cada
-    // visitante nuevo echara al anterior con "Se inició sesión en otro
-    // dispositivo". Compartiendo el sid conviven sin estorbarse.
+    // No se rota la sesión: todos los visitantes comparten la cuenta y el sid.
     const sessionId = usuario.session_id || randomUUID();
     if (!usuario.session_id) {
       await pool.query('UPDATE usuarios SET session_id = $1 WHERE id = $2', [sessionId, usuario.id]);
     }
 
-    // Una hora, no los 30 días del login normal. La sesión de la demo ya muere
-    // al cerrar la pestaña (el frontend la guarda en sessionStorage), pero eso
-    // solo vale para quien está delante: el token en sí seguiría sirviendo a
-    // quien lo copiara. Al caducar, el visitante vuelve a la pantalla de
-    // entrada y sigue con un clic, que en una demo sin nada que perder basta.
+    // Una hora, para que un token copiado no sirva por mucho tiempo.
     const token = jwt.sign(
       { id: usuario.id, rol: usuario.rol, sucursal: usuario.sucursal, sid: sessionId },
       process.env.JWT_SECRET,
@@ -210,10 +177,10 @@ export const demoLogin = async (req, res) => {
 };
 
 // ── POST /auth/logout ────────────────────────────────────────
-// Registra el cierre de sesión manual como la "salida" del día en el check-in.
-// Actualiza la fila del día local; si cierra sesión varias veces, queda la
-// última. Nunca debe bloquear el cierre de sesión, por eso va en try/catch y
-// siempre responde 200.
+/**
+ * Registra la salida del día en el check-in (queda la última). Nunca bloquea:
+ * siempre responde 200.
+ */
 export const logout = async (req, res) => {
   try {
     await pool.query(

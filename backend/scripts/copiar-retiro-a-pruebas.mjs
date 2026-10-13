@@ -1,5 +1,4 @@
-// Copia a la sucursal oculta `pruebas` el inventario y las máquinas de Retiro
-// (2026-10-04, a pedido), para que el entorno de pruebas sea igual al real.
+// Copia a la sucursal oculta `pruebas` el inventario y las máquinas de Retiro.
 //
 //   node scripts/copiar-retiro-a-pruebas.mjs            → solo dice qué haría
 //   node scripts/copiar-retiro-a-pruebas.mjs --aplicar  → lo hace

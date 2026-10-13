@@ -1,23 +1,17 @@
-// ewelinkOAuth — el trámite de credenciales con eWeLink, aparte del control de
-// dispositivos. Aquí no se enciende nada: solo se consigue y se renueva el
-// token que el driver usará después.
-//
-// Por qué OAuth y no correo/contraseña: la credencial del plan gratuito
-// (Personal Developer) no tiene permiso sobre POST /v2/user/login — responde
-// "407 the path of request is not allowed with appid". Su lista blanca sí
-// incluye /v2/user/oauth/token y /v2/user/refresh, que son estos dos trámites.
-//
-// El flujo completo:
-//   1. urlAutorizacion(state) → la dueña de la cuenta abre esa página y acepta.
-//   2. eWeLink redirige a nuestro callback con ?code=..&region=..&state=..
-//   3. canjearCode(code, region) → accessToken (30 días) + refreshToken.
-//   4. refrescarToken(rt, region) cuando el access token está por vencer.
-//
-// Config por variables de entorno:
-//   EWELINK_APP_ID, EWELINK_APP_SECRET  — credenciales de dev.ewelink.cc
-//   EWELINK_REDIRECT_URL                — debe coincidir EXACTO con la Redirect
-//                                         URL registrada en el panel de eWeLink
-//   EWELINK_REGION                      — región inicial. Default "us".
+/**
+ * Credenciales OAuth de eWeLink: conseguir y renovar el token que usa el driver.
+ * Es OAuth porque el plan gratuito no permite POST /v2/user/login ("407 the path
+ * of request is not allowed with appid").
+ *
+ * Flujo:
+ * 1. urlAutorizacion(state): la dueña de la cuenta abre la página y acepta.
+ * 2. eWeLink redirige al callback con ?code&region&state.
+ * 3. canjearCode(code, region): accessToken (30 días) + refreshToken.
+ * 4. refrescarToken(rt, region) antes de que venza.
+ *
+ * Variables: EWELINK_APP_ID, EWELINK_APP_SECRET, EWELINK_REDIRECT_URL (idéntica a
+ * la registrada en eWeLink) y EWELINK_REGION (por defecto "us").
+ */
 
 import crypto from 'crypto';
 
@@ -44,17 +38,14 @@ export const baseDe = (region) => BASES[(region || cfg.region || 'us').toLowerCa
 export const nonce = () =>
   crypto.randomBytes(6).toString('base64').replace(/[^a-zA-Z0-9]/g, '').slice(0, 8).padEnd(8, '0');
 
-// HMAC-SHA256 con el appSecret, en base64. Sobre el cuerpo JSON exacto que se
-// manda (los trámites de token) o sobre una cadena suelta (la URL de login).
+/** HMAC-SHA256 con el appSecret, en base64, del cuerpo exacto o de la cadena dada. */
 export const firmar = (texto) =>
   crypto.createHmac('sha256', cfg.appSecret).update(texto).digest('base64');
 
-// Petición a la API de eWeLink.
-//
-// OJO con el Content-Type: eWeLink valida la cadena EXACTA y solo acepta
-// "application/json" o "application/json; charset=utf-8". Cualquier otra forma
-// (p. ej. "application/json;charset=UTF-8", sin espacio) se rechaza con un
-// error 400 ANTES de mirar la firma o las credenciales.
+/**
+ * Petición a la API de eWeLink. Ojo: el Content-Type tiene que ser exactamente
+ * "application/json" o "application/json; charset=utf-8"; otra forma da 400.
+ */
 export async function apiFetch(base, path, { method = 'GET', headers = {}, bodyStr, query } = {}) {
   let url = `${base}${path}`;
   if (query) url += `?${new URLSearchParams(query).toString()}`;
@@ -66,19 +57,11 @@ export async function apiFetch(base, path, { method = 'GET', headers = {}, bodyS
   return resp.json();
 }
 
-// Página donde la dueña de la cuenta inicia sesión y autoriza la app.
-//
-// La firma aquí NO es sobre un cuerpo JSON sino sobre la cadena "<appId>_<seq>".
-//
-// Los valores VAN ESCAPADOS, a diferencia de la librería oficial de CoolKit
-// (ewelink-api-next), que los concatena crudos. La firma es base64 y puede
-// contener '+', que sin escapar se lee como un espacio al otro lado: la firma
-// deja de coincidir y eWeLink responde "sign verification failed" —el error que
-// reporta media docena de gente en su foro— pero solo a veces, según si a esa
-// firma le tocó un '+'. Escaparlos lo vuelve determinista.
-//
-// `showQRCode` se omite a propósito: la librería lo manda como "null" literal,
-// que en la página es una cadena no vacía y podría leerse como verdadero.
+/**
+ * URL donde la dueña de la cuenta autoriza la app. Se firma "<appId>_<seq>" y
+ * los valores van escapados: una firma con '+' sin escapar falla a veces
+ * ("sign verification failed"). `showQRCode` se omite a propósito.
+ */
 export function urlAutorizacion(state) {
   const seq = Date.now().toString();
   const params = {
@@ -94,8 +77,7 @@ export function urlAutorizacion(state) {
   return `https://c2ccdn.coolkit.cc/oauth/index.html?${query}`;
 }
 
-// Normaliza lo que devuelven ambos trámites: eWeLink usa nombres distintos para
-// lo mismo (accessToken/at, refreshToken/rt) según el endpoint.
+/** Normaliza la respuesta de ambos trámites (accessToken/at, refreshToken/rt). */
 function leerTokens(data, region) {
   const d = data?.data ?? {};
   const at = d.accessToken ?? d.at;
@@ -106,15 +88,13 @@ function leerTokens(data, region) {
     refreshToken: rt,
     region: (d.region || region || cfg.region).toLowerCase(),
     cuenta: d.user?.email ?? d.user?.phoneNumber ?? null,
-    // Los tiempos vienen en milisegundos desde época. Si faltaran, se asumen
-    // los plazos que documenta eWeLink: 30 días el access, 60 el refresh.
+    // En ms; si faltan, los plazos documentados (30 y 60 días).
     atExpiraAt: d.atExpiredTime ? new Date(d.atExpiredTime) : new Date(Date.now() + 30 * 86400e3),
     rtExpiraAt: d.rtExpiredTime ? new Date(d.rtExpiredTime) : new Date(Date.now() + 60 * 86400e3),
   };
 }
 
-// Cambia el `code` del redirect por el par de tokens.
-// Lanza con mensaje legible: quien llama lo muestra en pantalla.
+/** Canjea el `code` del redirect por los tokens. Lanza con un mensaje para la pantalla. */
 export async function canjearCode(code, region) {
   const cuerpo = { redirectUrl: cfg.redirectUrl, code, grantType: 'authorization_code' };
   const cuerpoStr = JSON.stringify(cuerpo);
@@ -130,7 +110,7 @@ export async function canjearCode(code, region) {
   return tokens;
 }
 
-// Renueva el access token sin volver a molestar al cliente.
+/** Renueva el access token. */
 export async function refrescarToken(refreshToken, region) {
   const cuerpo = { rt: refreshToken };
   const cuerpoStr = JSON.stringify(cuerpo);
@@ -143,6 +123,6 @@ export async function refrescarToken(refreshToken, region) {
   if (data?.error !== 0 || !tokens) {
     throw new Error(`no se pudo renovar el token (error ${data?.error}: ${data?.msg || 'sin detalle'})`);
   }
-  // El refresh no devuelve el usuario; se conserva el que ya estaba guardado.
+  // El refresh no trae la cuenta; se conserva la guardada.
   return { ...tokens, cuenta: null };
 }

@@ -1,21 +1,16 @@
-// Conexión de la cuenta de eWeLink (OAuth 2.0).
-//
-// La credencial del plan gratuito no permite entrar con correo y contraseña
-// (error 407), así que la dueña de la cuenta tiene que autorizar la app una
-// vez desde su navegador. Estos endpoints son ese trámite:
-//
-//   GET  /api/ewelink/estado       → ¿hay cuenta conectada? (admin)
-//   POST /api/ewelink/conectar     → devuelve la URL a la que hay que ir (admin)
-//   GET  /api/ewelink/callback     → a donde vuelve eWeLink (público)
-//   POST /api/ewelink/desconectar  → olvida los tokens (admin)
+// Conexión de la cuenta de eWeLink por OAuth: la dueña autoriza la app una vez
+// desde su navegador.
+//   GET  /api/ewelink/estado       ¿hay cuenta conectada? (admin)
+//   POST /api/ewelink/conectar     URL de autorización (admin)
+//   GET  /api/ewelink/callback     vuelta de eWeLink (público)
+//   POST /api/ewelink/desconectar  olvida los tokens (admin)
 
 import * as oauth from '../services/dispositivos/ewelinkOAuth.js';
 import * as cuentaStore from '../services/dispositivos/ewelinkCuenta.js';
 import { _reset as resetDriver } from '../services/dispositivos/ewelinkDriver.js';
 import * as dispositivos from '../services/dispositivos/index.js';
 
-// El callback lo abre una persona en su navegador, no nuestra app: responde
-// una página, no JSON. Sin estilos ni scripts, que helmet aplica CSP.
+/** Página HTML del callback (sin estilos ni scripts: helmet aplica CSP). */
 const paginaCallback = (titulo, detalle) => `<!doctype html>
 <html lang="es">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -34,8 +29,7 @@ export const getEstado = async (req, res) => {
     res.json({
       // Sin App ID/Secret en el servidor no hay nada que conectar.
       configurado: oauth.configCompleta(),
-      // De la sucursal que se está viendo: con DISPOSITIVOS_SUCURSALES una
-      // puede usar los Sonoff reales y otra seguir simulada.
+      // El driver de la sucursal que se está viendo.
       driver: dispositivos.nombreDriver({ sucursal: req.sucursal }),
       simulado: dispositivos.esSimulacion({ sucursal: req.sucursal }),
       conectada: cuentaStore.estaConectada(cuenta),
@@ -51,8 +45,7 @@ export const getEstado = async (req, res) => {
 };
 
 // ── POST /ewelink/conectar ────────────────────────────────────
-// No redirige: devuelve la URL para que el navegador la abra. La petición lleva
-// nuestro JWT en un header, y una redirección se lo comería.
+/** Devuelve la URL (no redirige: la petición lleva el JWT en un header). */
 export const conectar = async (req, res) => {
   try {
     if (!oauth.configCompleta()) {
@@ -71,8 +64,7 @@ export const conectar = async (req, res) => {
 };
 
 // ── GET /ewelink/callback ─────────────────────────────────────
-// Público a la fuerza: quien llega es eWeLink redirigiendo el navegador, sin
-// nuestro token. Lo que autentica la vuelta es el `state` de un solo uso.
+/** Público: llega sin JWT; lo autentica el `state` de un solo uso. */
 export const callback = async (req, res) => {
   const { code, region, state } = req.query;
   try {
@@ -107,8 +99,7 @@ export const callback = async (req, res) => {
     );
   } catch (err) {
     console.error('ewelink callback error:', err);
-    // err.message trae el código que devolvió eWeLink, que no le dice nada a
-    // quien está en la pantalla: va después de la explicación, no en su lugar.
+    // El código de eWeLink va después de la explicación.
     res.status(502).send(
       paginaCallback(
         'No se pudo conectar',

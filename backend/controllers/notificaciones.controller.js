@@ -1,8 +1,7 @@
 import pool from '../db/pool.js';
 
 // ── GET /notificaciones ─────────────────────────────────────
-// Notificaciones de la sucursal activa de las últimas 24 h (las más
-// viejas se "descartan" solas por antigüedad). Newest first.
+/** Notificaciones de la sucursal de las últimas 24 h, de la más nueva a la más vieja. */
 export const getNotificaciones = async (req, res) => {
   try {
     const { rows } = await pool.query(
@@ -29,8 +28,7 @@ export const getNotificaciones = async (req, res) => {
 };
 
 // ── POST /notificaciones/:id/descartar ──────────────────────
-// Descarta la notificación solo para el usuario actual (los demás la
-// siguen viendo). La notificación no se borra; se registra el descarte.
+/** Descarta la notificación solo para este usuario (no se borra). */
 export const descartarNotificacion = async (req, res) => {
   const id = Number(req.params.id);
   if (!id) return res.status(400).json({ message: 'No se reconoció el aviso.' });
@@ -54,9 +52,7 @@ export const descartarNotificacion = async (req, res) => {
 };
 
 // ── POST /notificaciones/descartar-todas ────────────────────
-// Descarta para el usuario actual todas las notificaciones que hoy ve en la
-// campana (sucursal activa, últimas 24 h). Igual que el descarte individual, no
-// borra nada ni afecta a los demás usuarios.
+/** Descarta, solo para este usuario, todo lo que hoy ve en la campana. */
 export const descartarTodas = async (req, res) => {
   try {
     await pool.query(

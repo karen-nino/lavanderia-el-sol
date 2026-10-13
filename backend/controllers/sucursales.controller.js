@@ -1,8 +1,7 @@
 import pool from '../db/pool.js';
 import { refrescarSlugsSucursales, SUCURSAL_PRUEBAS } from '../middleware/sucursalActiva.js';
 
-// Convierte un nombre en un slug seguro: sin acentos, minúsculas y
-// separando con guión bajo. Ej: "Sucursal Centro Histórico" → "centro_historico".
+/** "Sucursal Centro Histórico" → "centro_historico" (sin acentos, minúsculas, guion bajo). */
 function slugify(str) {
   return String(str)
     .normalize('NFD').replace(/[̀-ͯ]/g, '') // quita acentos
@@ -13,10 +12,7 @@ function slugify(str) {
 }
 
 // ── GET /sucursales ─────────────────────────────────────────
-// Por defecto solo activas (para el selector del header y el form de
-// empleados). Con ?todas=1 incluye las inactivas (gestión en Ajustes).
-// Las sucursales ocultas (la de pruebas) no se listan nunca: un usuario de
-// prueba solo ve la suya y nadie más la ve.
+/** Sucursales activas (con ?todas=1, también las inactivas). Las ocultas nunca se listan. */
 export const getSucursales = async (req, res) => {
   const todas = req.query.todas === '1' || req.query.todas === 'true';
   const esPrueba = req.user?.es_prueba === true;
@@ -40,8 +36,7 @@ export const getSucursales = async (req, res) => {
 };
 
 // ── PATCH /sucursales/reordenar ─────────────────────────────
-// Reordena las sucursales: recibe { slugs: [...] } en el nuevo orden y asigna
-// orden = posición. En una transacción para que quede consistente.
+/** Reordena las sucursales: { slugs } en el nuevo orden, en una transacción. */
 export const reordenarSucursales = async (req, res) => {
   const slugs = Array.isArray(req.body.slugs)
     ? req.body.slugs.map(String).filter(Boolean)
@@ -75,10 +70,8 @@ export const reordenarSucursales = async (req, res) => {
   }
 };
 
-// Horario por día (mig. 160), como en Google Maps: 7 días de lunes (0) a
-// domingo (6), cada uno abierto o cerrado y con su hora de abrir y cerrar
-// ("HH:MM", 24 h). Devuelve { valor } listo para guardar (JSON o null para
-// borrarlo; undefined = no se mandó) o { error }.
+// Horario por día: 7 días, de lunes (0) a domingo (6), abierto o cerrado, con
+// hora de abrir y cerrar ("HH:MM", 24 h).
 const HORA_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 const DIAS = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'];
 function leerHorarioSemana(h) {
@@ -104,8 +97,7 @@ function leerHorarioSemana(h) {
 }
 
 // ── POST /sucursales ────────────────────────────────────────
-// Crea una sucursal (admin). El slug se genera desde el nombre y se
-// hace único agregando un sufijo si ya existe.
+/** Crea una sucursal (admin), con un slug único derivado del nombre. */
 export const createSucursal = async (req, res) => {
   const { nombre, direccion, telefono, horario_semana } = req.body;
 
@@ -117,7 +109,7 @@ export const createSucursal = async (req, res) => {
 
   const base = slugify(nombre) || 'sucursal';
   try {
-    // Buscar un slug libre: base, base_2, base_3, ...
+    // Slug libre: base, base_2, base_3…
     const { rows: existentes } = await pool.query(
       "SELECT slug FROM sucursales WHERE slug = $1 OR slug LIKE $2",
       [base, `${base}_%`]
@@ -143,15 +135,14 @@ export const createSucursal = async (req, res) => {
 };
 
 // ── PATCH /sucursales/:slug ─────────────────────────────────
-// Actualiza el nombre, dirección, teléfono y horario por día de una sucursal (admin).
+/** Edita nombre, dirección, teléfono y horario de una sucursal (admin). */
 export const updateSucursal = async (req, res) => {
   const { slug } = req.params;
   const { nombre, direccion, telefono, horario_semana, orden } = req.body;
   const horario = leerHorarioSemana(horario_semana);
   if (horario.error) return res.status(400).json({ message: horario.error });
 
-  // La sucursal de pruebas no se administra desde la app: no existe para nadie
-  // más que sus usuarios.
+  // La sucursal de pruebas no se administra desde la app.
   if (slug === SUCURSAL_PRUEBAS) {
     return res.status(404).json({ message: 'Sucursal no encontrada.' });
   }
@@ -196,9 +187,10 @@ export const updateSucursal = async (req, res) => {
 };
 
 // ── PATCH /sucursales/:slug/activa ──────────────────────────
-// Activa o desactiva una sucursal (admin). "Eliminar" = desactivar: la
-// sucursal desaparece de la operación pero su historial se conserva.
-// No se permite desactivar la última sucursal activa.
+/**
+ * Activa o desactiva una sucursal (admin); "eliminar" es desactivar y conserva
+ * su historial. No se desactiva la última sucursal real activa.
+ */
 export const setActivaSucursal = async (req, res) => {
   const { slug } = req.params;
   const { activa } = req.body;
@@ -218,8 +210,7 @@ export const setActivaSucursal = async (req, res) => {
     }
 
     if (activa === false) {
-      // La de pruebas no cuenta: desactivar la última sucursal real dejaría al
-      // negocio sin dónde operar aunque el entorno de pruebas siga vivo.
+      // La de pruebas no cuenta como sucursal activa.
       const { rows: act } = await pool.query('SELECT COUNT(*)::int AS n FROM sucursales WHERE activa = TRUE AND oculta = FALSE');
       if (act[0].n <= 1) {
         return res.status(400).json({ message: 'No puedes desactivar la última sucursal activa.' });

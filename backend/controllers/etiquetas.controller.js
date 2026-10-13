@@ -1,23 +1,19 @@
 import pool from '../db/pool.js';
 import { esAdmin } from '../middleware/roles.js';
 
-// Catálogos de etiquetas internas para encargos (tipos de tela, tamaños de
-// edredón). Son listas simples que el admin gestiona en Ajustes. Comparten
-// exactamente la misma forma (nombre + activo), así que se generan con esta
-// fábrica para no duplicar la lógica CRUD.
-//
-// `nombres` son las palabras con las que el usuario conoce el catálogo, para
-// que los mensajes hablen de "el tipo de tela" y no del nombre de la tabla.
-// `banderas` son columnas BOOLEAN propias de ese catálogo que se guardan junto
-// al nombre (hoy ninguno: la `arranca_sola` de la mig. 122 se borró en la 139).
-// Se listan aquí y no se leen del body a lo que venga: los nombres entran en el
-// SQL, así que solo pueden ser los que el catálogo declara.
-// `alRenombrar(client, viejo, nuevo)` es para el catálogo cuyo nombre se copia
-// en otra tabla: corre en la misma transacción que el cambio de nombre.
-// `conPrecio` agrega la columna `precio` (mig. 130: el precio de cada tamaño de
-// edredón). Vacío = sin precio; si viene, es un número mayor o igual a 0.
-// `enteros` son columnas de conteo propias del catálogo (mig. 132: medidas y
-// bolsas que trae puestas cada tamaño de edredón): enteros de 0 o más.
+/**
+ * Fábrica del CRUD de los catálogos simples de Ajustes (nombre + activo + orden):
+ * tipos de tela, tamaños de edredón, marcas, graneles, bolsas…
+ *
+ * @param {string} tabla
+ * @param nombres palabras con que el usuario conoce el catálogo, para los mensajes.
+ * @param {string[]} banderas columnas BOOLEAN propias; se declaran aquí porque
+ *   sus nombres entran al SQL.
+ * @param opciones.alRenombrar (client, viejo, nuevo) para el catálogo cuyo nombre
+ *   se copia en otra tabla; corre en la misma transacción.
+ * @param opciones.conPrecio agrega `precio` (vacío = sin precio; si no, >= 0).
+ * @param opciones.enteros columnas de conteo (enteros >= 0).
+ */
 function crearControladorEtiqueta(tabla, nombres, banderas = [], { alRenombrar, conPrecio = false, enteros = [] } = {}) {
   // undefined = no se manda; { error } si no es un entero de 0 o más.
   const leerEntero = (v) => {
@@ -62,8 +58,7 @@ function crearControladorEtiqueta(tabla, nombres, banderas = [], { alRenombrar, 
       return res.status(400).json({ message: precio.error });
     }
     try {
-      // Se agrega al final del orden actual. Las banderas que declare el
-      // catálogo entran con su valor del body (false si no viene).
+      // Va al final del orden; las banderas toman su valor del body (o false).
       const extras = [...banderas.map(b => [b, Boolean(req.body[b])]),
                       ...(conPrecio ? [['precio', precio ?? null]] : [])];
       const cols = extras.map(([c]) => `, ${c}`).join('');
@@ -89,8 +84,7 @@ function crearControladorEtiqueta(tabla, nombres, banderas = [], { alRenombrar, 
       return res.status(403).json({ message: 'Solo un administrador puede realizar esta acción.' });
     }
     const { id } = req.params;
-    // Un id que no es un número no puede existir: sin este corte entra a la
-    // consulta y Postgres responde con un 500 en vez de un "no se encontró".
+    // Un id no numérico daría 500 en Postgres: se responde 404.
     if (!/^\d+$/.test(String(id))) {
       return res.status(404).json({ message: `No se encontró ${nombres.singular}.` });
     }
@@ -174,8 +168,7 @@ function crearControladorEtiqueta(tabla, nombres, banderas = [], { alRenombrar, 
     }
   };
 
-  // Reordena todo el catálogo: recibe { ids: [...] } en el nuevo orden y asigna
-  // orden = posición. En una transacción para que quede consistente.
+  // Reordena el catálogo: { ids } en el nuevo orden, en una transacción.
   const reorder = async (req, res) => {
     if (!esAdmin(req.user.rol)) {
       return res.status(403).json({ message: 'Solo un administrador puede realizar esta acción.' });
@@ -213,7 +206,7 @@ function crearControladorEtiqueta(tabla, nombres, banderas = [], { alRenombrar, 
 export const tiposTela = crearControladorEtiqueta('tipos_tela', {
   singular: 'el tipo de tela', plural: 'los tipos de tela', uno: 'un tipo de tela',
 });
-// Cada tamaño de edredón es un servicio Por Encargo con su precio (mig. 130).
+/** Cada tamaño de edredón es un servicio Por Encargo, con su precio y precarga. */
 export const tamanosEdredon = crearControladorEtiqueta('tamanos_edredon', {
   singular: 'el tamaño de edredón', plural: 'los tamaños de edredón', uno: 'un tamaño de edredón',
 }, [], { conPrecio: true, enteros: ['precarga_medidas', 'precarga_bolsas'] });
@@ -223,14 +216,14 @@ export const marcasProducto = crearControladorEtiqueta('marcas_producto', {
 export const envasesProducto = crearControladorEtiqueta('envases_producto', {
   singular: 'el envase', plural: 'los envases', uno: 'un envase',
 });
-// Marcas de máquina. Los dos ciclos por carga los declara el MODELO (mig. 123).
+/** Marcas de máquina. */
 export const marcasMaquina = crearControladorEtiqueta('marcas_maquina', {
   singular: 'la marca', plural: 'las marcas', uno: 'una marca',
 });
-// Los líquidos que se venden a granel (mig. 119): es el nombre del producto
-// cuando se rellena desde un bidón ("Jabón", "Suavizante").
-// El producto granel toma su nombre de aquí, así que renombrar el granel
-// renombra también sus productos.
+/**
+ * Nombres de los líquidos a granel ("Persil", "Suavizante"). El producto granel
+ * toma su nombre de aquí: renombrar aquí renombra sus productos.
+ */
 export const granelesProducto = crearControladorEtiqueta('graneles_producto', {
   singular: 'el granel', plural: 'los graneles', uno: 'un granel',
 }, [], {
@@ -240,14 +233,14 @@ export const granelesProducto = crearControladorEtiqueta('graneles_producto', {
     [nuevo, viejo]
   ),
 });
-// Tipos de granel (mig. 133): Jabón, Suavizante… Se elige en cada producto
-// granel (mig. 136). Un servicio Por Encargo lleva medidas de cada tipo y el
-// empleado elige el producto en Salidas.
+/**
+ * Tipos de granel (Jabón, Suavizante…). Cada producto granel tiene uno; un
+ * servicio Por Encargo lleva medidas de cada tipo y en Salidas se elige el producto.
+ */
 export const tiposGranel = crearControladorEtiqueta('tipos_granel', {
   singular: 'el tipo de granel', plural: 'los tipos de granel', uno: 'un tipo de granel',
 });
-// Tamaños de bolsa (mig. 119). La bolsa guarda el nombre tal como está en el
-// catálogo (mig. 128), así que al renombrarlo se renombra también en las bolsas.
+/** Tamaños de bolsa. La bolsa guarda el nombre: renombrar aquí la renombra. */
 export const tamanosBolsa = crearControladorEtiqueta('tamanos_bolsa', {
   singular: 'el tamaño de bolsa', plural: 'los tamaños de bolsa', uno: 'un tamaño de bolsa',
 }, [], {
@@ -258,25 +251,16 @@ export const tamanosBolsa = crearControladorEtiqueta('tamanos_bolsa', {
   ),
 });
 
-// Los dos ejes de una máquina, cerrados: los comparten el catálogo de modelos
-// (mig. 118) y los tiempos por marca (mig. 107).
+/** Tipo y tamaño válidos de un modelo o de un tiempo por marca. */
 const TIPOS_TIEMPO = ['lavadora', 'secadora'];
 const TAMANOS_TIEMPO = ['mediana', 'jumbo'];
 
-// ── Modelos de máquina (migs. 117 y 118) ────────────────────────────────────
-//
-// Los modelos cuelgan de una marca, así que no encajan en la fábrica de
-// arriba: toda consulta se filtra por `marca_id`. El resto se comporta igual
-// que cualquier catálogo (crear, renombrar, activar/desactivar, reordenar;
-// solo admin).
-//
-// Un modelo dice qué máquina es —tipo y tamaño (mig. 118)—, que es lo que lo
-// coloca en su bloque de Ajustes. Su tiempo de ciclo (`minutos`) NO se captura
-// aquí: se escribe desde ese bloque, junto a los demás tiempos.
+// ── Modelos de máquina ──────────────────────────────────────────────────────
+// Cuelgan de una marca (todo se filtra por `marca_id`); por lo demás son un
+// catálogo más (solo admin). Tipo y tamaño lo ubican en su bloque de Ajustes;
+// sus tiempos se guardan desde ese bloque (guardarTiempoMarca).
 
-// Normaliza los minutos que llegan del formulario: vacío es un modelo sin
-// tiempo propio —cae al respaldo por marca—, y cualquier otra cosa tiene que
-// ser un entero positivo. Devuelve { valor } o { error }.
+/** Minutos del formulario: vacío = sin tiempo propio; si no, entero positivo. { valor } | { error }. */
 function leerMinutos(minutos) {
   if (minutos === null || minutos === undefined || minutos === '') return { valor: null };
   const n = Number(minutos);
@@ -286,9 +270,10 @@ function leerMinutos(minutos) {
   return { valor: n };
 }
 
-// Todos los modelos, o los de una marca si viene `?marca_id=`. Vienen con el
-// nombre de su marca porque la máquina guarda el NOMBRE y no el id (mig. 106):
-// quien arma el desplegable compara por nombre.
+/**
+ * Modelos (o los de `?marca_id=`), con el nombre de su marca: la máquina guarda
+ * nombres, no ids.
+ */
 export const getModelosMaquina = async (req, res) => {
   const { marca_id: marcaId } = req.query;
   if (marcaId !== undefined && !/^\d+$/.test(String(marcaId))) {
@@ -334,13 +319,13 @@ export const crearModeloMaquina = async (req, res) => {
   if (minutos.error) return res.status(400).json({ message: minutos.error });
 
   try {
-    // El orden se cuenta dentro de la marca: cada marca tiene su propia lista.
+    // El orden es dentro de la marca.
     const { rows } = await pool.query(
       `INSERT INTO modelos_maquina (marca_id, nombre, tipo, tamano, minutos, pregunta_tiempo, dos_ciclos, solo_fichas, orden)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8,
                (SELECT COALESCE(MAX(orden), 0) + 1 FROM modelos_maquina WHERE marca_id = $1))
        RETURNING *`,
-      // El de fichas no tiene programas que elegir (mig. 149).
+      // El de fichas no tiene programas que elegir.
       [marcaId, nombre, tipo, tamano, minutos.valor,
        Boolean(pregunta_tiempo) && !solo_fichas, Boolean(dos_ciclos), Boolean(solo_fichas)]
     );
@@ -397,11 +382,7 @@ export const actualizarModeloMaquina = async (req, res) => {
     updates.push(`tamano = $${i++}`);
     values.push(tamano);
   }
-  // Que el modelo tenga varios tiempos y pregunte cuál usar es parte de lo que
-  // ES el modelo (mig. 120), igual que su tipo: se declara aquí, y el bloque de
-  // tiempos enseña los campos extra solo a los modelos que lo tienen.
-  // El de fichas (mig. 149) no tiene programas que elegir: marcarlo apaga
-  // "Varios programas".
+  // "Varios programas" es parte del modelo. Marcarlo de fichas lo apaga.
   if (pregunta_tiempo !== undefined || solo_fichas) {
     updates.push(`pregunta_tiempo = $${i++}`);
     values.push(Boolean(pregunta_tiempo) && !solo_fichas);
@@ -410,13 +391,12 @@ export const actualizarModeloMaquina = async (req, res) => {
     updates.push(`solo_fichas = $${i++}`);
     values.push(Boolean(solo_fichas));
   }
-  // Mig. 123: la segunda vuelta de la carga se declara en el modelo.
+  // Si el modelo corre dos ciclos por carga.
   if (dos_ciclos !== undefined) {
     updates.push(`dos_ciclos = $${i++}`);
     values.push(Boolean(dos_ciclos));
   }
-  // `minutos: null` es un cambio de verdad —quitarle el tiempo propio al
-  // modelo—, así que se distingue de no mandar el campo.
+  // `minutos: null` quita el tiempo propio; distinto de no mandarlo.
   if (minutos !== undefined) {
     const leido = leerMinutos(minutos);
     if (leido.error) return res.status(400).json({ message: leido.error });
@@ -447,9 +427,7 @@ export const actualizarModeloMaquina = async (req, res) => {
   }
 };
 
-// Reordena los modelos de UNA marca: llegan sus ids en el nuevo orden. El
-// filtro por `marca_id` evita que una lista mal armada renumere los modelos de
-// otra marca.
+/** Reordena los modelos de una marca (solo los de esa marca). */
 export const reordenarModelosMaquina = async (req, res) => {
   if (!esAdmin(req.user.rol)) {
     return res.status(403).json({ message: 'Solo un administrador puede realizar esta acción.' });
@@ -490,21 +468,12 @@ export const reordenarModelosMaquina = async (req, res) => {
   }
 };
 
-// ── Tiempos de ciclo por modelo (migs. 107 y 118) ───────────────────────────
-//
-// La duración de un ciclo es de la MÁQUINA y no de la carga: una LG mediana
-// tarda 45 min y una Speed Queen jumbo 35, al revés de lo que suponía el eje
-// del tamaño. Quien lo sabe de verdad es el MODELO, así que es lo único que
-// se configura: "LG · WM22WV26SR".
-//
-// El escalón por MARCA de la mig. 107 sigue existiendo en la base y en el
-// cálculo (ver MINUTOS_CONFIGURADOS), pero ya no se lista: es el respaldo de
-// las máquinas que todavía no tienen modelo capturado, no algo que se
-// configure. Cuando todas lo tengan, deja de usarse solo.
+// ── Tiempos de ciclo ────────────────────────────────────────────────────────
+// El tiempo es de la máquina y lo sabe su MODELO ("LG · WM22WV26SR"): es lo que
+// se configura. El tiempo por marca sigue en el cálculo como respaldo (ver
+// MINUTOS_CONFIGURADOS), pero no se lista.
 
-// Un renglón por modelo activo. El modelo dice su tipo y su tamaño (mig. 118),
-// así que aparece en su bloque aunque todavía no haya ninguna máquina con ese
-// modelo: primero se configura el tiempo, luego se le asigna a las máquinas.
+/** Un renglón por modelo activo (sin los de fichas), aunque ninguna máquina lo use aún. */
 export const getTiemposMarca = async (req, res) => {
   try {
     const { rows } = await pool.query(
@@ -515,7 +484,7 @@ export const getTiemposMarca = async (req, res) => {
               mo.minutos_por_ficha
          FROM modelos_maquina mo
          JOIN marcas_maquina mm ON mm.id = mo.marca_id
-        -- El de fichas no pide tiempos (mig. 149): no tiene renglón aquí.
+        -- El de fichas no pide tiempos.
         WHERE mo.activo AND mm.activo AND NOT mo.solo_fichas
         ORDER BY mo.tipo, CASE mo.tamano WHEN 'mediana' THEN 0 ELSE 1 END,
                  mm.orden NULLS LAST, mm.id, mo.orden NULLS LAST, mo.id`
@@ -527,18 +496,11 @@ export const getTiemposMarca = async (req, res) => {
   }
 };
 
-// Guarda (o borra) el tiempo de UN renglón. `minutos` vacío o nulo lo borra:
-// ese renglón vuelve a usar el escalón de abajo —la marca, o el tamaño de
-// Ajustes—, que es la forma de deshacer sin dejar un cero que pararía el
-// temporizador.
-//
-// Con `modelo_id` el tiempo es del modelo y vive en su fila del catálogo
-// (mig. 118): es el único que se configura desde la pantalla.
-//
-// Sin él escribe el tiempo por marca (mig. 107), que ya no se lista pero
-// sigue aplicándose a las máquinas sin modelo. Se conserva porque es la única
-// forma de corregir uno de esos tiempos heredados mientras queden máquinas
-// así; el día que todas tengan modelo, sobra.
+/**
+ * Guarda (o borra, con vacío) el tiempo de un renglón; borrarlo cae al
+ * respaldo en vez de dejar un cero. Con `modelo_id`, en el modelo (lo que usa
+ * la pantalla); sin él, el tiempo por marca (respaldo).
+ */
 export const guardarTiempoMarca = async (req, res) => {
   if (!esAdmin(req.user.rol)) {
     return res.status(403).json({ message: 'Solo un administrador puede realizar esta acción.' });
@@ -549,16 +511,14 @@ export const guardarTiempoMarca = async (req, res) => {
     if (!/^\d+$/.test(String(modelo_id))) {
       return res.status(400).json({ message: 'Elige un modelo válido.' });
     }
-    // Un modelo lleva su tiempo (el tope, en el que pregunta), hasta tres
-    // programas a elegir (migs. 120 y 146) y, si es secadora de fichas, los
-    // minutos que da cada ficha (mig. 147).
-    // Se manda solo lo que cambió, así que cada campo se mira por separado.
+    // Tiempo (tope), hasta tres programas y, en la secadora de fichas, minutos
+    // por ficha. Solo llega lo que cambió.
     const updates = [];
     const values  = [];
     let i = 1;
     for (const [campo, valor] of [
       ['minutos', minutos], ['minutos_2', req.body.minutos_2], ['minutos_3', req.body.minutos_3],
-      ['minutos_4', req.body.minutos_4], // `minutos_por_moneda`: nombre de antes de la mig. 152 (tablets sin actualizar).
+      ['minutos_4', req.body.minutos_4], // `minutos_por_moneda`: alias para tablets con una versión anterior.
       ['minutos_por_ficha', req.body.minutos_por_ficha ?? req.body.minutos_por_moneda],
     ]) {
       if (valor === undefined) continue;

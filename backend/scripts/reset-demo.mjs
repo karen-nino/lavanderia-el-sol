@@ -29,12 +29,9 @@ const SUCURSAL = 'pruebas';
 // esté aquí lo creó un visitante y se va.
 const SUCURSALES_BASE = ['zapopan', 'retiro', 'pruebas'];
 
-// --forzar: limpiar aunque la base tenga notas FUERA de la sucursal de pruebas.
-// Sin la bandera eso aborta, porque es la señal de "esta base tiene operación
-// real". En la base de la demo no puede haberla de forma legítima, así que si
-// aparece es contaminación —un usuario dado de alta por un visitante que acabó
-// operando en una sucursal real— y hay que poder barrerla sin entrar a la base
-// a mano. El workflow nocturno NO pasa la bandera: se queda en el camino seguro.
+// --forzar: limpiar aunque haya notas fuera de la sucursal de pruebas (en la
+// demo eso es contaminación de un visitante). Sin ella se aborta; el workflow
+// nocturno no la pasa.
 const FORZAR = process.argv.includes('--forzar');
 
 const archivoEnv = path.join(BACKEND, '.env.demo');
@@ -48,9 +45,7 @@ if (!process.env.DATABASE_URL) {
   process.exit(1);
 }
 
-// Red de seguridad que no depende de lo que haya dentro de la base: producción
-// vive en Supabase, y este script borra la operación entera. Ninguna bandera
-// levanta este candado.
+// Producción vive en Supabase: contra esa base nunca corre, con ninguna bandera.
 if (/supabase/i.test(process.env.DATABASE_URL)) {
   console.error('ABORTADO: la DATABASE_URL de .env.demo apunta a Supabase, que es producción.');
   process.exit(1);
@@ -66,12 +61,9 @@ const seed = (script, args = []) =>
 
 await db.connect();
 try {
-  // La base tiene que estar al día con las migraciones de ESTE código antes de
-  // tocar nada: el seeder escribe las columnas que traen. Las migraciones de la
-  // demo solo corren al desplegar su backend (release_command de
-  // fly.demo.toml), y si nadie lo despliega la base se queda atrás. Pasó el
-  // 2026-10-07: la base seguía en la 107, la limpieza borró todo y la siembra
-  // falló, así que la demo quedó vacía. Ahora se aborta antes de borrar.
+  // La base debe tener todas las migraciones de este código antes de borrar
+  // nada (solo corren al desplegar el backend de la demo); si no, la siembra
+  // fallaría con la demo ya vacía.
   const enCodigo = fs.readdirSync(path.join(BACKEND, 'db', 'migrations'))
     .filter((f) => f.endsWith('.sql'));
   const { rows: aplicadas } = await db.query('SELECT name FROM schema_migrations');
@@ -88,8 +80,7 @@ try {
     process.exit(1);
   }
 
-  // Mismo criterio que el resto: notas fuera de la sucursal de pruebas = base
-  // con operación real. Aquí importa el doble, porque esto borra a conciencia.
+  // Notas fuera de la sucursal de pruebas = operación real.
   const { rows: reales } = await db.query(
     'SELECT COUNT(*)::int AS n FROM notas WHERE sucursal <> $1', [SUCURSAL]
   );
@@ -107,17 +98,15 @@ try {
 
   await db.query('BEGIN');
 
-  // La secuencia vive en scripts/lib/limpiarDemo.js: es lo único de aquí que
-  // las pruebas de integración pueden ejecutar tal cual contra una base real.
+  // La secuencia vive en scripts/lib/limpiarDemo.js para poder probarla.
   await limpiarOperacion(db);
   const usuariosBorrados = await borrarUsuariosDeVisitantes(db);
   await borrarCatalogos(db);
-  // Las máquinas de la demo son solo Speed Queen jumbo (2026-10-08). Van antes
-  // que db/seed_pruebas.js, que al ver L1…S2 ya puestas no siembra las suyas.
+  // Máquinas de la demo (Speed Queen jumbo), antes que seed_pruebas.js.
   await sembrarMaquinasDemo(db, SUCURSAL);
   // Y los servicios de edredón con precio: sin él no se puede vender ninguno.
   await preciosEdredonDemo(db);
-  // Más productos de marca en el inventario de exhibición (2026-10-08).
+  // Productos de marca de exhibición.
   await sembrarProductosMarcaDemo(db, SUCURSAL);
   // Al final: las sucursales que un visitante creara solo se sueltan cuando ya
   // no les cuelga nada (usuarios, productos, máquinas e insumos).
@@ -125,13 +114,11 @@ try {
     'DELETE FROM sucursales WHERE slug <> ALL($1)', [SUCURSALES_BASE]
   );
 
-  // Ajustes: son globales y en la demo cualquiera puede escribirlos, así que se
-  // reponen desde la copia versionada del estado de exhibición.
+  // Ajustes: se reponen desde la copia versionada (demo-ajustes-base.json).
   const base = JSON.parse(fs.readFileSync(path.join(__dirname, 'demo-ajustes-base.json'), 'utf8'));
   const columnas = Object.keys(base);
 
-  // El JSON lista las columnas a mano: cuando una migración añada una nueva,
-  // esto avisa en vez de dejar de restaurarla en silencio.
+  // Avisa si una migración agregó columnas que el JSON no lista.
   const { rows: cols } = await db.query(
     `SELECT column_name FROM information_schema.columns
       WHERE table_name = 'ajustes' AND column_name <> 'id'`
@@ -163,14 +150,11 @@ try {
   await db.end();
 }
 
-// El registro de lo sembrado sobra: acaba de borrarse la operación entera, no
-// unos ids sueltos. Si se quedara, el seeder creería que ya hay una siembra viva.
+// Sin registro de siembra: se borró la operación entera.
 const registro = path.join(__dirname, '.demo-ventas-ids.demo.json');
 if (fs.existsSync(registro)) fs.unlinkSync(registro);
 
-// La limpieza ya está confirmada en la base, así que a partir de aquí un fallo
-// deja la demo a medio montar. Conviene que se lea como lo que es —y no como un
-// error suelto de un script— para que quien lo vea sepa que hay que relanzar.
+// Desde aquí un fallo deja la demo a medias: el mensaje pide relanzar.
 try {
   // Repone usuarios, máquinas, productos y el stock de granel; es idempotente.
   seed('db/seed_pruebas.js', [process.env.DEMO_PASSWORD || 'Demo1234']);

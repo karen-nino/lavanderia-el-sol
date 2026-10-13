@@ -1,14 +1,6 @@
-// Fallos de CONEXIÓN con la base, que no son fallos de la consulta.
-//
-// El pooler de Supabase suelta las conexiones de vez en cuando (un reinicio de
-// su lado, o la limpieza de las que llevan rato ociosas). Cuando pasa, el pool
-// de node-postgres todavía cree que sus sockets sirven y se los entrega a la
-// siguiente petición, que muere con ECONNRESET sin haber llegado a la base.
-//
-// Son fallos de ida: la consulta nunca se ejecutó, así que repetirla no duplica
-// nada. Eso es lo que hace seguro el reintento, y lo que separa estos errores
-// de los de la consulta misma (una restricción violada, un dato inválido), que
-// hay que dejar subir tal cual.
+// Fallos de CONEXIÓN (el pooler soltó el socket y la consulta nunca llegó a la
+// base): repetirla no duplica nada. Los errores de la consulta misma
+// (restricción, dato inválido) no entran aquí.
 const CODIGOS = new Set([
   'ECONNRESET',    // el otro extremo cortó la conexión
   'ECONNREFUSED',  // la base no acepta conexiones (reiniciando)
@@ -23,8 +15,7 @@ const CODIGOS = new Set([
   '08003',         // Postgres: connection does not exist
 ]);
 
-// node-postgres no siempre trae `code`: cuando el socket muere entre consultas,
-// el error llega como un Error pelón con este mensaje.
+/** Mensajes sin `code` de node-postgres cuando el socket muere entre consultas. */
 const MENSAJES = [
   'Connection terminated unexpectedly',
   'Client has encountered a connection error',

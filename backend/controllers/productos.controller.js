@@ -2,9 +2,7 @@ import pool from '../db/pool.js';
 import { esAdmin } from '../middleware/roles.js';
 import { esFechaISO } from '../utils/tz.js';
 
-// El mínimo es de cada producto (en medidas; en piezas para las bolsas). El
-// mínimo global de Ajustes se quitó (2026-10-03): todo producto que se puede
-// dar de alta es por medida o bolsa, así que ya no entraba en el cálculo.
+/** Semáforo de existencia contra el mínimo de cada producto (lo disponible). */
 const ESTADO_STOCK_SQL = `
   CASE
     WHEN (stock_actual - stock_reservado) = 0
@@ -15,9 +13,11 @@ const ESTADO_STOCK_SQL = `
   END AS estado_stock
 `.trim();
 
-// Campos derivados que necesita el frontend para mostrar botellas/bidones:
-//   medidas_por_botella  = floor(botella_ml / medida_ml)
-//   botellas_por_bidon = floor(volumen_envase_ml / botella_ml)   (volumen_envase_ml = mL del bidón)
+/**
+ * Campos derivados para mostrar botellas y bidones:
+ * - medidas_por_botella = floor(botella_ml / medida_ml)
+ * - botellas_por_bidon = floor(volumen_envase_ml / botella_ml)
+ */
 const DERIVADOS_SQL = `
   CASE WHEN botella_ml > 0 AND medida_ml > 0
        THEN floor(botella_ml::numeric / medida_ml) END AS medidas_por_botella,
@@ -25,8 +25,7 @@ const DERIVADOS_SQL = `
        THEN floor(volumen_envase_ml::numeric / botella_ml) END AS botellas_por_bidon
 `.trim();
 
-// Estado del líquido a granel (bidón): agotado cuando no queda nada, por
-// agotarse cuando queda menos de un bidón lleno. Solo aplica a productos granel.
+/** Semáforo del bidón (solo granel): agotado sin nada, por agotarse con menos de un bidón. */
 const ESTADO_GRANEL_SQL = `
   CASE WHEN tipo_liquido = 'granel' THEN
     CASE
@@ -37,15 +36,17 @@ const ESTADO_GRANEL_SQL = `
   END AS estado_granel
 `.trim();
 
-// SELECT estándar de un producto con sus campos calculados.
+/** SELECT de un producto con sus campos calculados. */
 const SELECT_PRODUCTO = `*,
               (stock_actual - stock_reservado) AS stock_disponible,
               ${DERIVADOS_SQL},
               ${ESTADO_STOCK_SQL},
               ${ESTADO_GRANEL_SQL}`;
 
-// Resuelve el tamaño de la medida (mL). Si no se dio explícito, se deriva de
-// "cuántas medidas salen de una botella" (aprox): medida_ml = floor(botella_ml / N).
+/**
+ * Tamaño de la medida en mL: el dado, o derivado de cuántas medidas rinde una
+ * botella (floor(botella_ml / N)).
+ */
 function resolverMedidaMl(medidaMl, medidasPorBotella, botellaMl) {
   const explicito = Number(medidaMl) || 0;
   if (explicito > 0) return explicito;
@@ -54,9 +55,11 @@ function resolverMedidaMl(medidaMl, medidasPorBotella, botellaMl) {
   return 0;
 }
 
-// Cuántas unidades de stock representa una "unidad" dada.
-//   Líquidos (stock en medidas): medida → 1 · botella → medidas/botella · bidon → medidas/bidón.
-//   Bolsas (stock en piezas):  pieza → 1 · rollo → bolsas por rollo.
+/**
+ * Unidades de existencia que vale una unidad dada:
+ * - Líquidos (en medidas): medida 1, botella = medidas por botella, bidón = medidas por bidón.
+ * - Bolsas (en piezas): pieza 1, rollo = bolsas por rollo.
+ */
 function medidasDeUnidad(unidad, p) {
   if (unidad === 'pieza') return 1;
   if (unidad === 'rollo') return Number(p.bolsas_por_rollo) || 0;
@@ -69,7 +72,7 @@ function medidasDeUnidad(unidad, p) {
   return 0;
 }
 
-// Inserta una fila en el historial de movimientos de stock.
+/** Inserta un movimiento en el historial de inventario. */
 async function registrarMovimiento(client, {
   productoId, sucursal, usuarioId, tipo, destino, cantidadMedidas,
   descripcion = null, notaId = null, nota = null,
@@ -83,8 +86,7 @@ async function registrarMovimiento(client, {
 }
 
 export const getProductos = async (req, res) => {
-  // Por defecto solo productos activos; con ?archivados=1 devuelve los archivados
-  // (para la vista de "ver archivados / restaurar").
+  // Solo activos; con ?archivados=1, los archivados.
   const soloArchivados = req.query.archivados === '1';
   try {
     const { rows } = await pool.query(
@@ -104,8 +106,7 @@ export const getProductos = async (req, res) => {
   }
 };
 
-// Archivar (ocultar) o restaurar un producto. Solo admin. No borra nada: el
-// producto sigue existiendo para el historial de las notas viejas.
+/** Archiva o restaura un producto (admin). No borra: lo conservan sus notas. */
 export const archivarProducto = async (req, res) => {
   const { id } = req.params;
   const archivado = req.body?.archivado !== false; // por defecto archiva
@@ -127,12 +128,11 @@ export const archivarProducto = async (req, res) => {
   }
 };
 
-// Los tamaños de bolsa dejaron de estar en el código: los dice el catálogo de
-// Ajustes → Inventario (mig. 119). El producto guarda el nombre tal como está
-// escrito en el catálogo ('SPE', no 'spe'), así que se busca sin distinguir
-// mayúsculas y se devuelve el del catálogo; null si no existe. No se filtra por
-// `activo`: desactivar un tamaño lo quita de la lista, pero no tiene por qué
-// impedir editar el producto que ya lo usa.
+/**
+ * Tamaño de bolsa tal como está en el catálogo (Ajustes → Inventario), buscado
+ * sin distinguir mayúsculas; null si no existe. Incluye los inactivos para poder
+ * editar el producto que ya lo usa.
+ */
 async function tamanoBolsaDelCatalogo(tamano) {
   const limpio = String(tamano ?? '').trim();
   if (!limpio) return null;
@@ -146,9 +146,10 @@ async function tamanoBolsaDelCatalogo(tamano) {
 const MSG_TAMANO_BOLSA =
   'Elige un tamaño de bolsa de la lista. Se administran en Ajustes → Inventario.';
 
-// Servicios a los que va ligada la bolsa para precargarse sola en Por Encargo
-// (mig. 125). Lista vacía = no se precarga en ninguna carga. Una bolsa puede
-// cubrir varios servicios; lo que no se permite es al revés (ver abajo).
+/**
+ * Servicios Por Encargo en los que la bolsa se precarga sola (vacío = ninguno).
+ * Una bolsa puede cubrir varios servicios.
+ */
 const SERVICIOS_BOLSA = ['chico', 'mediano', 'grande', 'edredon'];
 function normalizarServiciosBolsa(v) {
   if (v === undefined || v === null || v === '') return { valor: [] };
@@ -162,9 +163,10 @@ function normalizarServiciosBolsa(v) {
 
 const NOMBRE_SERVICIO = { chico: 'Chico', mediano: 'Mediano', grande: 'Grande', edredon: 'Edredón' };
 
-// Un servicio no puede tener dos bolsas activas: al precargar la carga habría
-// que adivinar cuál toca. Como la lista vive en un arreglo, esto no se puede
-// dejar en un índice único; se revisa aquí antes de guardar.
+/**
+ * Un servicio no puede tener dos bolsas activas (no se sabría cuál precargar).
+ * Va aquí porque un arreglo no admite índice único.
+ */
 async function servicioBolsaOcupado(servicios, sucursal, excluirId) {
   if (servicios.length === 0) return null;
   const { rows } = await pool.query(
@@ -180,8 +182,7 @@ async function servicioBolsaOcupado(servicios, sucursal, excluirId) {
   return `Ya hay otra bolsa ligada a ${txt}. Quítasela a esa primero.`;
 }
 
-// Cómo se surte la bolsa: en rollo (con cuántas bolsas trae) o suelta por
-// pieza. Vacío = por pieza; con valor, tiene que ser un número mayor que cero.
+/** Bolsas por rollo; vacío = se surte por pieza. */
 function normalizarBolsasPorRollo(v) {
   if (v === undefined || v === null || v === '') return { valor: null };
   const n = Number(v);
@@ -189,8 +190,7 @@ function normalizarBolsasPorRollo(v) {
   return { valor: Math.round(n) };
 }
 
-// Crea una bolsa: producto (clase='bolsa') contado en piezas. Nace en 0; la
-// existencia se carga con una entrada (por rollo o por pieza).
+/** Crea una bolsa contada en piezas. Nace en 0; la existencia entra con una Entrada. */
 async function crearBolsa(req, res, { nombre, descripcion, marca, tamano_bolsa, bolsas_por_rollo, servicios_bolsa, precio_unitario, stock_minimo }) {
   const tamano = await tamanoBolsaDelCatalogo(tamano_bolsa);
   if (!tamano) {
@@ -231,7 +231,7 @@ export const createProducto = async (req, res) => {
     clase = 'liquido', tipo_liquido = 'granel', forma = 'liquido', envase,
     stock_minimo = 0, stock_minimo_granel = 0,
     volumen_envase_ml, botella_ml, medida_ml, medidas_por_botella, precio_botella,
-    // Granel líquido: su tipo (Jabón, Suavizante…), mig. 136.
+    // Granel líquido: su tipo (Jabón, Suavizante…).
     tipo_granel_id,
     // Bolsas:
     tamano_bolsa, bolsas_por_rollo, servicios_bolsa,
@@ -257,15 +257,13 @@ export const createProducto = async (req, res) => {
   if (!['liquido', 'polvo'].includes(forma)) {
     return res.status(400).json({ message: 'Indica si el producto es líquido o en polvo.' });
   }
-  // El POLVO no se sirve por medidas: se cuenta por unidades enteras, igual que
-  // un producto de marca. No hay bidón ni medida que capturar, así que
-  // 1 unidad = 1 botella = 1 medida (mig. 126) y el stock queda en unidades.
+  // El polvo se cuenta por unidades enteras, como la marca (1 unidad = 1 medida).
   const esPolvo = forma === 'polvo';
   const botellaMl = esPolvo ? 1 : Number(botella_ml);
   if (!(botellaMl > 0)) {
     return res.status(400).json({ message: 'Indica el tamaño de la botella (mL).' });
   }
-  // La medida se puede dar por tamaño (mL) o por cuántas medidas rinde una botella.
+  // La medida llega en mL o como medidas por botella.
   const medidaMl = esPolvo ? 1 : resolverMedidaMl(medida_ml, medidas_por_botella, botellaMl);
   if (!(medidaMl > 0)) {
     return res.status(400).json({ message: 'Indica el tamaño de la medida (mL) o cuántas medidas salen de una botella.' });
@@ -286,7 +284,7 @@ export const createProducto = async (req, res) => {
   const medidasPorBidon   = bidonMl ? Math.floor(bidonMl / medidaMl) : 0;
   const medidasPorEnvase  = conBidon ? medidasPorBidon : medidasPorBotella;
 
-  // El stock se guarda en MEDIDAS: rellenadas (stock_actual) y a granel (bidón).
+  // Existencia en medidas: rellenadas (stock_actual) y a granel (bidón).
   const stockActual = Math.round((Number(stock_botellas) || 0) * medidasPorBotella);
   const stockGranel = Math.round((Number(stock_bidones)  || 0) * medidasPorBidon);
 
@@ -308,7 +306,7 @@ export const createProducto = async (req, res) => {
        bidonMl, botellaMl, medidaMl, tipoGranel]
     );
     const prod = rows[0];
-    // Semilla del historial: registra las existencias iniciales como entradas.
+    // Las existencias iniciales quedan como entradas en el historial.
     if (stockGranel > 0) {
       await registrarMovimiento(client, {
         productoId: prod.id, sucursal: req.sucursal, usuarioId: req.user?.id,
@@ -337,9 +335,10 @@ export const createProducto = async (req, res) => {
   }
 };
 
-// Edita los ATRIBUTOS del producto (nombre, precios, volúmenes, etc.). Solo
-// admin. El stock ya NO se cambia aquí: se mueve con las acciones de
-// entrada / salida / rellenar (que quedan en el historial).
+/**
+ * Edita los atributos del producto (admin). La existencia no se toca aquí: se
+ * mueve con Entrada, Salida y Rellenar, que quedan en el historial.
+ */
 export const updateProducto = async (req, res) => {
   const { id } = req.params;
   if (!esAdmin(req.user.rol)) {
@@ -401,9 +400,7 @@ export const updateProducto = async (req, res) => {
   if (!['liquido', 'polvo'].includes(forma)) {
     return res.status(400).json({ message: 'Indica si el producto es líquido o en polvo.' });
   }
-  // El POLVO no se sirve por medidas: se cuenta por unidades enteras, igual que
-  // un producto de marca. No hay bidón ni medida que capturar, así que
-  // 1 unidad = 1 botella = 1 medida (mig. 126) y el stock queda en unidades.
+  // El polvo se cuenta por unidades enteras, como la marca (1 unidad = 1 medida).
   const esPolvo = forma === 'polvo';
   const botellaMl = esPolvo ? 1 : Number(botella_ml);
   if (!(botellaMl > 0)) {
@@ -430,11 +427,8 @@ export const updateProducto = async (req, res) => {
     ? Math.floor(bidonMl / medidaMl)
     : Math.floor(botellaMl / medidaMl);
 
-  // La existencia se guarda en MEDIDAS y la pantalla la convierte con estos
-  // tamaños: cambiarlos con existencia le cambiaba el significado (medida de
-  // 200 a 100 mL y 10 botellas pasaban a verse como 5) y descuadraba lo
-  // apartado en notas. Decisión de la usuaria (2026-10-08): con existencia o
-  // con algo apartado, los tamaños no se tocan.
+  // Con existencia o algo apartado, los tamaños no se tocan: la existencia está
+  // en medidas y cambiaría de significado.
   const { rows: actualRows } = await pool.query(
     `SELECT tipo_liquido, COALESCE(forma, 'liquido') AS forma, botella_ml, medida_ml,
             volumen_envase_ml, stock_actual, stock_granel_medidas, stock_reservado
@@ -493,8 +487,10 @@ export const updateProducto = async (req, res) => {
 };
 
 // ── POST /productos/:id/rellenar ────────────────────────────────
-// Rellena N botellas desde el bidón (solo granel). Mueve N×medidas_por_botella
-// de "a granel" a "rellenadas". Topa N a lo que alcance el líquido a granel.
+/**
+ * Rellena N botellas desde el bidón (solo granel): pasa N × medidas por botella
+ * de "a granel" a "rellenadas", hasta lo que alcance.
+ */
 export const rellenarBotellas = async (req, res) => {
   const { id } = req.params;
   const botellas = Number(req.body?.botellas);
@@ -556,8 +552,10 @@ export const rellenarBotellas = async (req, res) => {
 };
 
 // ── POST /productos/:id/movimiento ──────────────────────────────
-// Entrada o salida manual de stock. destino: 'granel' (bidón) o 'botellas'.
-// unidad: 'bidon' | 'botella' | 'medida' (se convierte a medidas).
+/**
+ * Entrada o salida manual. destino: 'granel' | 'botellas'; unidad: 'bidon' |
+ * 'botella' | 'medida' | 'pieza' | 'rollo' (se convierte a medidas o piezas).
+ */
 export const crearMovimiento = async (req, res) => {
   const { id } = req.params;
   const { tipo, destino, cantidad, unidad } = req.body;
@@ -565,8 +563,7 @@ export const crearMovimiento = async (req, res) => {
   if (!['entrada', 'salida'].includes(tipo)) {
     return res.status(400).json({ message: 'El movimiento debe ser una entrada o una salida.' });
   }
-  // Nota libre de una salida manual (migs. 142-143): lo que haga falta decir
-  // de por qué salió. Opcional; la entrada no lleva.
+  // Motivo libre de una salida manual (opcional).
   const nota = tipo === 'salida' ? (String(req.body.nota ?? '').trim().slice(0, 1000) || null) : null;
   if (!['granel', 'botellas', 'piezas'].includes(destino)) {
     return res.status(400).json({ message: 'Indica a dónde va el movimiento: granel, botellas o piezas.' });
@@ -608,15 +605,14 @@ export const crearMovimiento = async (req, res) => {
     const columna = destino === 'granel' ? 'stock_granel_medidas' : 'stock_actual';
     const delta = tipo === 'entrada' ? medidas : -medidas;
 
-    // En salidas, valida que haya existencia suficiente (no negativa; en botellas
-    // respeta lo reservado por notas).
+    // Una salida no deja existencia negativa ni toca lo apartado por notas.
     if (tipo === 'salida') {
       const disponible = destino === 'granel'
         ? Number(p.stock_granel_medidas)
         : Number(p.stock_actual) - Number(p.stock_reservado);
       if (medidas > disponible) {
         await client.query('ROLLBACK');
-        // Muestra lo disponible en la unidad que el empleado eligió.
+        // Lo disponible en la unidad elegida.
         const dispUnidad = Math.floor(disponible / medidasPorUnidad);
         const uni = unidad === 'bidon' ? 'bidón(es)' : unidad === 'rollo' ? 'rollo(s)'
           : unidad === 'pieza' ? 'bolsa(s)' : unidad === 'botella' ? 'botella(s)' : 'medida(s)';
@@ -657,11 +653,10 @@ export const crearMovimiento = async (req, res) => {
 };
 
 // ── GET /productos/:id/movimientos ──────────────────────────────
-// Historial de movimientos de un producto (más reciente primero).
-// ¿Esta venta (alias `m`) se devolvió después? Se empata con su devolución por
-// la nota —viva (nota_id) o borrada (folio copiado, migs. 144-145)— y el
-// producto. Una venta devuelta no cuenta en Salidas: solo aparece en Devuelto
-// (2026-10-03).
+/**
+ * ¿Esta venta (alias `m`) se devolvió después? Se empata por nota (viva o
+ * borrada, por su folio) y producto. Una venta devuelta solo cuenta en Devuelto.
+ */
 const VENTA_DEVUELTA_SQL = `EXISTS (
   SELECT 1 FROM producto_movimientos l
    WHERE l.tipo = 'liberacion'
@@ -671,17 +666,20 @@ const VENTA_DEVUELTA_SQL = `EXISTS (
      AND ((m.nota_id    IS NOT NULL AND l.nota_id    = m.nota_id)
        OR (m.nota_folio IS NOT NULL AND l.nota_folio = m.nota_folio)))`;
 
-// Filtros opcionales (Reporte diario, 2026-10-03): `fecha` acota a ese día
-// local y `tipo` a las entradas, a las salidas (por notas y manuales) o a lo
-// devuelto (ventas anuladas). Rellenar va en las dos: pasa producto del bidón a
-// las botellas, así que no entra ni sale, pero explica por qué cambió cada
-// existencia. Sin filtros, el historial de siempre.
+/**
+ * Tipos de movimiento por filtro del Reporte diario. Rellenar va en entradas y
+ * salidas: no entra ni sale, pero explica el cambio de cada existencia.
+ */
 const TIPOS_MOVIMIENTO = {
   entradas: ['entrada', 'rellenar'],
   salidas:  ['venta', 'salida', 'rellenar'],
   devueltos: ['liberacion'],
 };
 
+/**
+ * Historial de un producto, del más reciente al más viejo. Filtros opcionales:
+ * `fecha` (día local) y `tipo` (entradas | salidas | devueltos).
+ */
 export const getMovimientos = async (req, res) => {
   const { id } = req.params;
   const fecha = esFechaISO(req.query.fecha) ? req.query.fecha : null;
@@ -691,7 +689,7 @@ export const getMovimientos = async (req, res) => {
       `SELECT m.id, m.producto_id, m.sucursal, m.usuario_id, m.tipo, m.destino,
               m.cantidad_medidas, m.descripcion, m.nota_id, m.nota, m.created_at,
               TRIM(u.nombre || ' ' || COALESCE(u.apellido, '')) AS usuario_nombre,
-              -- El folio vivo o, si la nota se borró, el copiado (mig. 144).
+              -- El folio vivo o, si la nota se borró, el copiado.
               COALESCE(n.folio, m.nota_folio) AS nota_folio
          FROM producto_movimientos m
          LEFT JOIN usuarios u ON u.id = m.usuario_id
@@ -701,7 +699,7 @@ export const getMovimientos = async (req, res) => {
                 m.created_at >= ($3::date)::timestamp     AT TIME ZONE 'America/Mexico_City'
             AND m.created_at <  ($3::date + 1)::timestamp AT TIME ZONE 'America/Mexico_City'))
           AND ($4::text[] IS NULL OR m.tipo = ANY($4))
-          -- En Salidas, la venta que se devolvió ya no aparece (va en Devuelto).
+          -- En Salidas no aparece la venta devuelta (va en Devuelto).
           AND NOT ($5 AND m.tipo = 'venta' AND ${VENTA_DEVUELTA_SQL})
         ORDER BY m.created_at DESC, m.id DESC
         LIMIT 200`,
@@ -715,21 +713,18 @@ export const getMovimientos = async (req, res) => {
 };
 
 // ── GET /productos/reporte-diario?fecha=YYYY-MM-DD ──────────────
-// Reporte para el admin: por producto líquido (granel/marca), cuánto SALIÓ ese
-// día (ventas/consumo en notas) y cuánto QUEDA al cierre del día.
-//
-// El stock se lleva en MEDIDAS. La existencia al cierre de un día se reconstruye
-// desde la existencia actual (exacta) restando los movimientos posteriores al
-// cierre — no se necesita una "foto" diaria. Efecto de cada movimiento sobre
-// cada existencia (botellas rellenadas = stock_actual, bidón = stock_granel):
-//   entrada  → + en su destino;   salida → − en su destino;
-//   rellenar → + botellas y − granel (transferencia bidón→botellas);
-//   venta    → − botellas;        liberacion → + botellas (devolución al anular).
-// El día se acota en hora local (America/Mexico_City), no en UTC del servidor.
+/**
+ * Reporte del día por producto (admin): qué había al inicio, qué entró, salió,
+ * se devolvió y qué quedó al cierre. La existencia de un día se reconstruye
+ * desde la actual deshaciendo los movimientos posteriores:
+ * - entrada / salida: + / − en su destino (botellas o bidón);
+ * - rellenar: + botellas y − bidón;
+ * - venta: − botellas; liberacion (venta anulada): + botellas.
+ * El día es el local (America/Mexico_City).
+ */
 export const getReporteDiario = async (req, res) => {
   const hoyMx = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Mexico_City' });
-  // esFechaISO además de la forma comprueba que el día exista: '2026-99-99'
-  // pasaba el filtro anterior y reventaba al convertirlo a ::date.
+  // esFechaISO valida también que el día exista.
   const fecha = esFechaISO(req.query.fecha) ? req.query.fecha : hoyMx;
 
   try {
@@ -746,15 +741,8 @@ export const getReporteDiario = async (req, res) => {
               THEN floor(p.volumen_envase_ml::numeric / p.medida_ml) END AS medidas_por_bidon,
          p.stock_actual,
          p.stock_granel_medidas,
-         -- Lo que SALIÓ de verdad ese día por notas (siempre sale de las
-         -- botellas): lo vendido MENOS lo devuelto. Anular una venta —cancelar
-         -- la nota o borrarla— regresa el producto al estante y deja un
-         -- movimiento 'liberacion'; sin restarlo, la columna "Salidas" seguía
-         -- contando una venta que se deshizo y contradecía a "Queda al final",
-         -- que sí veía la devolución.
-         --
-         -- Puede dar negativo cuando lo que se devuelve hoy se vendió ayer: ese
-         -- día entró producto, no salió, y la pantalla lo dice con "Devuelto".
+         -- Salió por notas: vendido menos devuelto. Puede ser negativo si hoy se
+         -- devolvió algo vendido otro día.
          COALESCE((
            SELECT SUM(CASE WHEN m.tipo = 'venta' THEN m.cantidad_medidas
                            ELSE -m.cantidad_medidas END)
@@ -762,9 +750,7 @@ export const getReporteDiario = async (req, res) => {
             WHERE m.producto_id = p.id AND m.tipo IN ('venta', 'liberacion')
               AND m.created_at >= bounds.inicio AND m.created_at < bounds.cierre
          ), 0) AS vendido_medidas,
-         -- Lo que ENTRÓ ese día (Inventario → Entradas, y la existencia
-         -- inicial al dar de alta), separado por dónde quedó: botellas o
-         -- bidón (2026-10-03).
+         -- Entradas del día (incluida la existencia inicial), por destino.
          COALESCE((
            SELECT SUM(m.cantidad_medidas) FROM producto_movimientos m, bounds
             WHERE m.producto_id = p.id AND m.tipo = 'entrada' AND m.destino = 'botellas'
@@ -775,9 +761,7 @@ export const getReporteDiario = async (req, res) => {
             WHERE m.producto_id = p.id AND m.tipo = 'entrada' AND m.destino = 'granel'
               AND m.created_at >= bounds.inicio AND m.created_at < bounds.cierre
          ), 0) AS entrada_granel_medidas,
-         -- Salidas manuales del día (Inventario → Salidas: merma, dañado…),
-         -- que la columna Salidas suma a lo que salió por notas (2026-10-03).
-         -- Van separadas por dónde salieron, como las entradas.
+         -- Salidas manuales del día (merma, dañado…), por destino.
          COALESCE((
            SELECT SUM(m.cantidad_medidas) FROM producto_movimientos m, bounds
             WHERE m.producto_id = p.id AND m.tipo = 'salida' AND m.destino = 'botellas'
@@ -788,29 +772,26 @@ export const getReporteDiario = async (req, res) => {
             WHERE m.producto_id = p.id AND m.tipo = 'salida' AND m.destino = 'granel'
               AND m.created_at >= bounds.inicio AND m.created_at < bounds.cierre
          ), 0) AS salida_granel_medidas,
-         -- Rellenado ese día (del bidón a botellas). No entra ni sale, pero
-         -- deja ver el detalle aunque no haya otro movimiento.
+         -- Rellenado del día (bidón → botellas).
          COALESCE((
            SELECT SUM(m.cantidad_medidas) FROM producto_movimientos m, bounds
             WHERE m.producto_id = p.id AND m.tipo = 'rellenar'
               AND m.created_at >= bounds.inicio AND m.created_at < bounds.cierre
          ), 0) AS rellenado_medidas,
-         -- Lo vendido ese día que NO se devolvió después: es lo que cuenta en
-         -- Salidas. Lo devuelto se borra de ahí y queda solo en Devuelto.
+         -- Vendido ese día y no devuelto después (lo que cuenta en Salidas).
          COALESCE((
            SELECT SUM(m.cantidad_medidas) FROM producto_movimientos m, bounds
             WHERE m.producto_id = p.id AND m.tipo = 'venta'
               AND m.created_at >= bounds.inicio AND m.created_at < bounds.cierre
               AND NOT ${VENTA_DEVUELTA_SQL}
          ), 0) AS vendido_vigente_medidas,
-         -- Devuelto ese día (ventas anuladas), para poder explicarlo aparte.
+         -- Devuelto ese día (ventas anuladas).
          COALESCE((
            SELECT SUM(m.cantidad_medidas) FROM producto_movimientos m, bounds
             WHERE m.producto_id = p.id AND m.tipo = 'liberacion'
               AND m.created_at >= bounds.inicio AND m.created_at < bounds.cierre
          ), 0) AS devuelto_medidas,
-         -- Lo mismo desde el INICIO del día: con eso se sabe cuánto había al
-         -- abrir (columna "Había al inicio", 2026-10-03).
+         -- Lo mismo desde el inicio del día ("Había al inicio").
          COALESCE((
            SELECT SUM(CASE
              WHEN m.tipo = 'entrada'    AND m.destino = 'botellas' THEN  m.cantidad_medidas
@@ -879,7 +860,7 @@ export const getReporteDiario = async (req, res) => {
         salida_botellas_medidas:  int(r.salida_botellas_medidas),
         salida_granel_medidas:    int(r.salida_granel_medidas),
         rellenado_medidas:        int(r.rellenado_medidas),
-        // La existencia no puede ser negativa; se acota a 0 por si hay datos raros.
+        // Nunca negativa.
         inicio_botellas_medidas: Math.max(0, int(r.stock_actual) - int(r.efecto_botellas_desde_inicio)),
         inicio_granel_medidas:   Math.max(0, int(r.stock_granel_medidas) - int(r.efecto_granel_desde_inicio)),
         fin_botellas_medidas: Math.max(0, int(r.stock_actual) - int(r.efecto_botellas_post)),
@@ -892,21 +873,17 @@ export const getReporteDiario = async (req, res) => {
   }
 };
 
-// Borrado múltiple (solo admin). Igual que en clientes, con dos modos según
-// `confirmar`:
-//   • confirmar = false → verificación (dry-run): no borra; devuelve los
-//     productos con ventas registradas (bloqueados) y los ids eliminables.
-//   • confirmar = true  → borra los eliminables (omite los bloqueados) en una
-//     transacción.
-// Un producto referenciado en nota_productos (con ventas) no se puede borrar
-// por la restricción de llave foránea. Todo acotado a la sucursal.
-// ¿El producto (alias que se pase) tiene historia? Usado en alguna nota o con
-// algún movimiento de inventario (entrada, salida, rellenado, venta).
+/** ¿El producto (alias `p`) tiene historia? Usado en notas o con movimientos. */
 const CON_HISTORIA = (p) => `(
   EXISTS (SELECT 1 FROM nota_productos np WHERE np.producto_id = ${p}.id)
   OR EXISTS (SELECT 1 FROM producto_movimientos pm WHERE pm.producto_id = ${p}.id)
 )`;
 
+/**
+ * Borrado múltiple (admin), en la sucursal. `confirmar: false` solo verifica y
+ * devuelve los bloqueados (con historia) y los eliminables; `confirmar: true`
+ * borra los eliminables en una transacción.
+ */
 export const deleteProductosMultiples = async (req, res) => {
   const { ids, confirmar } = req.body;
 
@@ -928,8 +905,7 @@ export const deleteProductosMultiples = async (req, res) => {
     );
     const idsValidos = productos.map((p) => p.id);
 
-    // Productos con historia (notas o movimientos): no se borran, igual que
-    // el borrado individual.
+    // Los que tienen historia no se borran.
     let bloqueadosSet = new Set();
     if (idsValidos.length > 0) {
       const { rows } = await client.query(
@@ -969,11 +945,8 @@ export const deleteProductosMultiples = async (req, res) => {
 export const deleteProducto = async (req, res) => {
   const { id } = req.params;
   try {
-    // Uno con HISTORIA no se borra: si se usó en notas, la llave foránea no
-    // deja (tronaba con un 500 de "intenta de nuevo"); si tiene entradas o
-    // salidas, el CASCADE se llevaba su historial y el Reporte diario de días
-    // pasados perdía esas filas (2026-10-08). Se desactiva en su lugar. Solo se
-    // borra de verdad uno recién creado por error.
+    // Con historia (notas o movimientos) no se borra: se archiva. Solo se borra
+    // uno recién creado por error.
     const { rows: [h] } = await pool.query(
       `SELECT ${CON_HISTORIA('p')} AS con_historia
          FROM productos p WHERE p.id = $1 AND p.sucursal = $2`,

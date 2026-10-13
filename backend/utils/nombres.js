@@ -1,6 +1,4 @@
-// Normaliza un nombre propio: cada palabra con la primera letra en mayúscula
-// y el resto en minúsculas. Ej.: "juan humberto" → "Juan Humberto",
-// "MONRRAZ espinosa" → "Monrraz Espinosa". Respeta acentos (locale es).
+/** "MONRRAZ espinosa" → "Monrraz Espinosa" (respeta acentos). */
 export const capitalizarNombre = (texto) =>
   (texto ?? '')
     .trim()

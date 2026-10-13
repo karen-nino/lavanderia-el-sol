@@ -1,5 +1,4 @@
-// Prepara el ENTORNO DE PRUEBAS: los usuarios con los que se revisa la app y
-// la sucursal oculta donde operan (migración 095).
+// Prepara el ENTORNO DE PRUEBAS: sus usuarios y la sucursal oculta donde operan.
 //
 // Los usuarios de prueba viven en la sucursal 'pruebas': sus notas, caja,
 // clientes e inventario son solo suyos y no tocan los datos reales del
@@ -38,15 +37,13 @@ const MAQUINAS_PRUEBA = [
   { nombre: 'S2', tipo: 'secadora',         tamano: 'jumbo',   capacidad: '35kg' },
 ];
 
-// El granel se lleva en MEDIDAS: un bidón de 20 L con medida de 200 mL da 100
-// medidas. El entorno de pruebas siempre arranca con 4 bidones de cada líquido.
+// Granel en medidas: un bidón de 20 L con medida de 200 mL da 100. Arranca con
+// 4 bidones de cada líquido.
 const MEDIDAS_POR_BIDON = 100;
 const BIDONES_PRUEBA = 4;
 
-// Productos de arranque: una copia de lo que hay en la Sucursal Retiro
-// (tomada el 2026-09-03), para que el entorno controlado tenga el mismo
-// catálogo con el que se trabaja de verdad: jabón y suavizante a granel,
-// un suavizante de marca y las bolsas de los tres tamaños.
+// Productos de arranque, como el catálogo real: jabón y suavizante a granel, un
+// suavizante de marca y bolsas de tres tamaños.
 const PRODUCTOS_PRUEBA = [
   {
     nombre: 'Jabón', clase: 'liquido', unidad: 'Medidas',
@@ -104,8 +101,7 @@ async function main() {
   const client = await pool.connect();
   try {
     // ── Sucursal oculta ───────────────────────────────────────
-    // La crea la migración 095; aquí solo se asegura por si el seed corre
-    // contra una base donde alguien la borró o la desactivó.
+    // La crea una migración; aquí se asegura por si la borraron o desactivaron.
     await client.query(
       `INSERT INTO sucursales (slug, nombre, activa, oculta, orden)
        VALUES ($1, 'Sucursal Pruebas', TRUE, TRUE, 999)
@@ -203,9 +199,8 @@ async function main() {
       console.log(`Producto:    ${etiquetaProducto(p)}`);
     }
 
-    // Los seeds viejos creaban un jabón y un suavizante de marca inventada
-    // ('Prueba') que ya no forman parte del catálogo. Se archivan (no se
-    // borran, por si alguna nota los usó) para dejar solo la copia de Retiro.
+    // Se archivan (no se borran) los productos de marca 'Prueba', que ya no
+    // forman parte del catálogo.
     const { rowCount: archivados } = await client.query(
       `UPDATE productos SET archivado = TRUE
         WHERE sucursal = $1 AND marca = 'Prueba' AND archivado = FALSE`,

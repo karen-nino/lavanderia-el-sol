@@ -1,40 +1,25 @@
-// Fragmentos de SQL sobre `maquinas` que usan varios controladores.
-//
-// Viven aquí y no copiados en cada consulta porque son reglas, no detalles de
-// una pantalla: si cambian, tienen que cambiar en todas a la vez.
+// Fragmentos de SQL sobre `maquinas` compartidos por varios controladores: son
+// reglas y tienen que cambiar en todas las consultas a la vez. Marca y modelo
+// se alcanzan por NOMBRE (es lo que guarda la máquina). Los que no reciben alias
+// esperan la máquina como `m`.
 
-// Los minutos de ciclo CONFIGURADOS para ESTA máquina, o NULL si nadie los ha
-// medido. Se resuelven en cadena, del dato más específico al más general:
-//
-//   1. su MODELO, si tiene uno con minutos propios (mig. 117). Es su campo
-//      grande, `minutos`; en el modelo que pregunta su programa ese campo es
-//      el TOPE y los programas van aparte (mig. 146, ver MINUTOS_DEL_MODELO);
-//   2. su MARCA para su tipo y tamaño (mig. 107);
-//   3. NULL → la máquina se cronometra con el respaldo por tamaño de Ajustes,
-//      que es un tiempo supuesto y no medido.
-//
-// El escalón del modelo va primero porque es el que sabe de verdad cuánto
-// tarda el aparato; el de la marca no se puede quitar, porque hoy ninguna
-// máquina tiene modelo capturado y sin él las LG se cronometrarían cortas
-// (que es justo el bug que arregló la mig. 107).
-//
-// Tanto la marca como el modelo se alcanzan por NOMBRE y no por id (migs. 106
-// y 117): es lo que guarda la máquina.
-//
-// Se interpola en consultas donde la tabla `maquinas` va con el alias `m`, y
-// no lleva parámetros: es una subconsulta correlacionada, no una plantilla con
-// valores del usuario.
-// Los minutos que manda un modelo (alias de `modelos_maquina` que se pase): su
-// campo grande y, si no lo capturaron, el más largo de sus programas —quedarse
-// corto le cortaría la corriente a media carga—. GREATEST ignora los NULL.
+/**
+ * Minutos de un modelo (alias de `modelos_maquina`): su campo grande o, si no
+ * lo capturaron, el más largo de sus programas (quedarse corto cortaría la luz
+ * a media carga).
+ */
 export const MINUTOS_DEL_MODELO = (mo) =>
   `COALESCE(${mo}.minutos, GREATEST(${mo}.minutos_2, ${mo}.minutos_3, ${mo}.minutos_4))`;
 
-// Los programas que ofrece el modelo que pregunta (mig. 146): los tres campos
-// chicos de "Otros tiempos".
+/** Programas del modelo que pregunta: los campos de "Otros tiempos". */
 export const PROGRAMAS_DEL_MODELO = (mo) =>
   `ARRAY_REMOVE(ARRAY[${mo}.minutos_2, ${mo}.minutos_3, ${mo}.minutos_4], NULL)`;
 
+/**
+ * Minutos de ciclo configurados para la máquina `m`, o NULL: los de su modelo
+ * (en el que pregunta, es su tope) o, si no, los de su marca para su tipo y
+ * tamaño. Con NULL se usa el respaldo por tamaño de Ajustes.
+ */
 export const MINUTOS_CONFIGURADOS = `COALESCE(
   (
     SELECT ${MINUTOS_DEL_MODELO('mo')}
@@ -54,46 +39,33 @@ export const MINUTOS_CONFIGURADOS = `COALESCE(
   )
 )`;
 
-// Máquinas que corren con CRONÓMETRO en vez de temporizador.
-//
-// Al encenderlas empieza a contar hacia ARRIBA, el empleado las arranca con su
-// botón y la carga termina cuando alguien la finaliza; un solo ciclo. Los
-// minutos de su modelo o de su tamaño dejan de ser "lo que dura" y pasan a ser
-// su TOPE: si nadie la finaliza, al cumplirse se le corta la luz y se avisa.
-//
-// Se probó primero con las lavadoras LG y Samsung (mig. 137) y el 2026-10-02 el
-// negocio lo extendió a TODAS, lavadoras y secadoras. Hasta el 2026-10-04 el
-// modelo que PREGUNTA su tiempo (la secadora Speed Queen Sec49, mig. 120) se
-// quedaba con temporizador; desde la mig. 146 también va con cronómetro: su
-// programa elegido avisa cuándo terminó y su campo grande es el tope.
-//
-// Interruptor general: `MAQUINAS_CRONOMETRO=off` en el servidor devuelve TODAS
-// las máquinas al temporizador sin tocar código (ver
-// info/Temporizador/Máquinas - flujo con temporizador.md). Se lee en cada
-// llamada para que las pruebas del temporizador lo puedan apagar.
+/**
+ * Todas las máquinas usan CRONÓMETRO: cuenta hacia arriba y la carga termina al
+ * finalizarla (un solo ciclo). Sus minutos son el TOPE: al cumplirse sin que
+ * nadie la finalice se corta la luz y se avisa.
+ *
+ * `MAQUINAS_CRONOMETRO=off` las regresa todas al temporizador sin tocar código
+ * (ver info/Temporizador/). Se lee en cada llamada para que las pruebas lo apaguen.
+ */
 export const cronometroActivo = () =>
   String(process.env.MAQUINAS_CRONOMETRO ?? '').toLowerCase() !== 'off';
 
-// La regla en SQL, para la fila de `maquinas` con el alias que se pase. Hoy
-// son todas o ninguna; se deja como función para no tocar sus usos si vuelve a
-// haber excepciones.
+/** La regla en SQL. Hoy son todas o ninguna; es función por si vuelve a haber excepciones. */
 export const esCronometroSql = () => (cronometroActivo() ? 'TRUE' : 'FALSE');
 
-// Cronómetro CON botón Iniciar (a pedido del negocio). Son de
-// cronómetro —cuenta hacia arriba, los minutos de su modelo son su TOPE y la
-// carga termina cuando alguien la finaliza— pero no llevan "Encender máquina":
-// su único botón es "Iniciar", que les da corriente y arranca el cronómetro en
-// el mismo paso (2026-10-04; antes iban en dos pasos, como la espera de la mig. 110):
-//   · todas las Speed Queen, lavadoras y secadoras;
-//   · el modelo que pregunta su programa (mig. 146), sea de la marca que sea:
-//     la pregunta sale al iniciar, cuando ya la están programando;
-//   · el modelo de FICHAS (mig. 149): no tiene Sonoff, así que su "Iniciar"
-//     solo arranca el cronómetro.
+/**
+ * Máquinas con cronómetro y un solo botón, "Iniciar", que da corriente y
+ * arranca el cronómetro en el mismo paso (sin "Encender"):
+ * - todas las Speed Queen;
+ * - el modelo que pregunta su programa (se pregunta al iniciar);
+ * - el modelo de solo fichas (sin Sonoff: solo arranca el cronómetro).
+ */
 export const MARCA_CON_INICIAR = 'speed queen';
 
-// ¿El modelo de esta máquina trabaja solo con fichas? (mig. 149). Sin Sonoff
-// y sin tiempos: no se enciende, no tiene tope y su cronómetro corre hasta que
-// la finalizan. Alias de `maquinas` que se pase.
+/**
+ * ¿El modelo trabaja solo con fichas? Sin Sonoff ni tiempos: no se enciende, no
+ * tiene tope y su cronómetro corre hasta finalizarla.
+ */
 export const soloFichasSql = (alias) => `COALESCE((
   SELECT mof.solo_fichas
     FROM marcas_maquina mmf
@@ -102,6 +74,7 @@ export const soloFichasSql = (alias) => `COALESCE((
      AND mof.nombre = ${alias}.modelo
 ), FALSE)`;
 
+/** SQL: ¿la máquina usa el botón "Iniciar"? (ver MARCA_CON_INICIAR). */
 export const conIniciarSql = (alias) => (cronometroActivo() ? `(
   COALESCE(LOWER(TRIM(${alias}.marca)), '') = '${MARCA_CON_INICIAR}'
   OR EXISTS (
@@ -115,19 +88,19 @@ export const conIniciarSql = (alias) => (cronometroActivo() ? `(
   )
 )` : 'FALSE');
 
-// Dónde se para el reloj de una máquina con cronómetro (alias que se pase): su
-// tope, `ciclo_minutos`. Excepción: a la secadora de fichas que recibió
-// "Otro ciclo" (mig. 148, `minutos_pagados` con valor) nunca se le corta la
-// luz, y si el empleado tardó en sumarle puede secar más allá del tope; ahí el
-// reloj llega hasta que se le acaba el tiempo (`ciclo_elegido_minutos`).
+/**
+ * Minuto en que se para el reloj de una máquina con cronómetro: su tope. En la
+ * secadora de fichas con "Otro ciclo" (`minutos_pagados`), el fin real, que
+ * puede pasar del tope.
+ */
 export const TOPE_RELOJ = (a) => `(CASE WHEN ${a}.minutos_pagados IS NOT NULL
   THEN GREATEST(${a}.ciclo_minutos, COALESCE(${a}.ciclo_elegido_minutos, 0))
   ELSE ${a}.ciclo_minutos END)`;
 
-// Minutos que da cada ficha en las secadoras de fichas (mig. 147), o NULL
-// si la máquina es normal. Con valor, su Sonoff no da corriente: cada pulso es
-// una ficha (ver `sincronizarSonoff`). Mismo alias `m` que
-// MINUTOS_CONFIGURADOS.
+/**
+ * Minutos por ficha de la secadora de fichas, o NULL. Con valor, cada pulso del
+ * Sonoff es una ficha (ver sincronizarSonoff).
+ */
 export const MINUTOS_POR_FICHA = `(
   SELECT mo.minutos_por_ficha
     FROM marcas_maquina mm
@@ -136,11 +109,7 @@ export const MINUTOS_POR_FICHA = `(
      AND mo.nombre = m.modelo
 )`;
 
-// Cómo se comporta esta máquina, según su catálogo:
-//   · `dos_ciclos` lo declara el MODELO (mig. 123): una carga corre DOS vueltas
-//     en ese aparato. Sin modelo capturado va en FALSE y la carga corre una
-//     sola, que es lo normal.
-// Mismo alias `m` que MINUTOS_CONFIGURADOS.
+/** Opciones del modelo de la máquina: `dos_ciclos` (sin modelo, FALSE). */
 export const OPCIONES_DE_MARCA = `(
   SELECT json_build_object(
            'dos_ciclos', COALESCE((
@@ -153,11 +122,10 @@ export const OPCIONES_DE_MARCA = `(
    WHERE mm.nombre = m.marca
 )`;
 
-// Los programas que ofrece el modelo de ESTA máquina y si hay que preguntar
-// cuál usar (migs. 120 y 146). Va como objeto porque las dos cosas se leen
-// juntas: la pantalla pregunta solo si el interruptor está encendido y hay más
-// de uno.
-// Mismo alias `m` y mismas reglas que MINUTOS_CONFIGURADOS.
+/**
+ * { pregunta, minutos }: los programas del modelo y si se pregunta cuál usar
+ * (la pantalla pregunta si está activo y hay más de uno).
+ */
 export const TIEMPOS_DEL_MODELO = `(
   SELECT json_build_object(
            'pregunta', mo.pregunta_tiempo,
@@ -169,25 +137,20 @@ export const TIEMPOS_DEL_MODELO = `(
      AND mo.nombre = m.modelo
 )`;
 
-// Los CICLOS de una o varias notas: una fila por PASADA de una máquina
-// (mig. 114) que de verdad arrancó, con lo que vale, a qué hora arrancó y
-// terminó y cuánto estuvo encendida (migs. 140-141). Lo usan el desempeño del
-// empleado y Ventas, y sigue las mismas reglas que Información de uso:
-//   · precio: lo cobrado a ese hueco en su primera pasada; si no se cobró
-//     aparte (Por Encargo, con precio de servicio) o es una vuelta más, la
-//     tarifa de la máquina en Ajustes;
-//   · la pasada que sigue corriendo toma el arranque de la máquina y, si ya
-//     pasó su tope, el reloj se paró ahí.
-// `filtro` es una condición SQL sobre `n` (la nota), p. ej. 'n.id = o.id' o
-// 'n.usuario_id = $1'. Sin ORDER BY: lo pone quien la usa (carga_orden,
-// asignada_at, pasada_id).
+/**
+ * Ciclos de una o varias notas: una fila por vuelta que de verdad arrancó, con
+ * precio, inicio, fin y segundos (desempeño de empleados y Ventas; mismas reglas
+ * que Información de uso):
+ * - precio: lo cobrado a ese hueco en su primera vuelta; si no se cobró aparte
+ *   o es una vuelta más, la tarifa de la máquina en Ajustes;
+ * - la vuelta que sigue corriendo usa el arranque de la máquina y, si ya pasó
+ *   su tope, se para ahí.
+ *
+ * @param {string} filtro condición SQL sobre `n` (la nota). Sin ORDER BY.
+ */
 export const CICLOS_DE_PASADAS = (filtro) => `SELECT nc.nota_id, nc.orden AS carga_orden, p.id AS pasada_id, p.asignada_at,
               p.maquina_nombre,
-              -- Lo que vale el ciclo en ESA máquina, con la misma regla que
-              -- Información de uso: lo cobrado a ese hueco en su primera
-              -- pasada; si no se cobró aparte (Por Encargo, con precio de
-              -- servicio) o es una vuelta más, la tarifa de la máquina en
-              -- Ajustes. Manda el tipo congelado en la pasada; sin él, el de la máquina.
+              -- Precio de la vuelta (tipo congelado en ella o, si no, el de la máquina).
               CASE WHEN ROW_NUMBER() OVER (PARTITION BY p.carga_id, p.slot
                                            ORDER BY p.asignada_at, p.id) = 1
                         AND (CASE WHEN p.slot = 'lavadora' THEN nc.precio_lavadora
@@ -220,7 +183,7 @@ export const CICLOS_DE_PASADAS = (filtro) => `SELECT nc.nota_id, nc.orden AS car
            SELECT (CASE WHEN p.slot = 'lavadora' THEN nc.lavadora_id
                         ELSE nc.secadora_id END) IS NOT DISTINCT FROM p.maquina_id
                   AND p.finalizada_at IS NULL
-                  -- Solo la última pasada de su hueco puede estar corriendo.
+                  -- Solo la última vuelta de su hueco puede estar corriendo.
                   AND p.id = (SELECT x.id FROM nota_carga_maquinas x
                                WHERE x.carga_id = p.carga_id AND x.slot = p.slot
                                ORDER BY x.asignada_at DESC, x.id DESC LIMIT 1) AS corriendo

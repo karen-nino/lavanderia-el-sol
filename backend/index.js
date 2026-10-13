@@ -17,12 +17,10 @@ app.listen(PORT, () => {
   // Barrido de cierre del día: libera máquinas que quedaron en uso.
   iniciarCierreDelDia();
   iniciarLimpiezaNotificaciones();
-  // Máquina con nota que llega a su tope: se finaliza sola (2026-10-11).
+  // Máquina con nota que llega a su tope: se finaliza sola.
   iniciarFinalizarAlTope();
-  // Control Sonoff: listener por evento (enganche central) + reconciliador
-  // periódico de respaldo. En la demo no se arrancan: no hay interruptores que
-  // controlar, y el listener mantiene abierta una conexión permanente contra la
-  // base, lo que impediría que Neon se duerma y gastaría horas de cómputo.
+  // Control Sonoff: listener por evento + barrido de respaldo. No en la demo:
+  // no hay interruptores y la conexión permanente no dejaría dormir a Neon.
   if (!ENTORNO_DEMO) {
     iniciarListenerSonoff();
     iniciarReconciliadorSonoff();

@@ -11,10 +11,7 @@ router.get('/',    getAjustes);
 // Los ajustes son del negocio entero (tarifas, tiempos, ticket): los usuarios
 // de prueba los leen, pero no los cambian.
 router.patch('/',  bloquearPruebaGlobal, updateAjustes);
-// bloquearLogoEnDemo va ANTES de multer a propósito: multer escribe el archivo
-// en disco mientras procesa la petición, así que rechazar dentro del controlador
-// llegaba tarde —el archivo ya estaba guardado— y en la demo, que es pública,
-// cualquiera podía seguir llenando el disco con subidas que no se aplicaban.
+// bloquearLogoEnDemo va ANTES de multer, que escribe el archivo al procesar.
 router.post('/logo', bloquearPruebaGlobal, bloquearLogoEnDemo, upload.single('logo'), uploadLogo);
 
 export default router;

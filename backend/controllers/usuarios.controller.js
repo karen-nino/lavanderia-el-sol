@@ -12,9 +12,7 @@ const ROL_VALIDOS = ['admin_main', 'admin', 'operador'];
 
 export const getEmpleados = async (req, res) => {
   try {
-    // Un admin ve los empleados de TODAS las sucursales (Empleados es
-    // admin-only). Si no es admin, se limita a la sucursal activa. Los usuarios
-    // de prueba nunca salen de la suya: no ven al personal real.
+    // Un admin ve todas las sucursales; los demás y los de prueba, solo la suya.
     const sucursalFiltro = esAdmin(req.user?.rol) && !req.user?.es_prueba ? null : req.sucursal;
     const { rows } = await pool.query(
       `SELECT id, nombre, apellido, rol, sucursal, activo, es_prueba, created_at
@@ -32,11 +30,11 @@ export const getEmpleados = async (req, res) => {
 };
 
 // ── GET /usuarios/:id/desempeno ─────────────────────────────
-// Desempeño diario del empleado, derivado de las notas que creó.
-// "Vendido" = valor (precio_total) de todas sus notas no canceladas,
-// atribuido al día en que se crearon. Métricas por día: notas, vendido,
-// máquinas distintas, cargas, productos despachados y clientes (cada
-// autoservicio cuenta como 1 cliente; el resto, sus clientes distintos).
+/**
+ * Desempeño diario del empleado según las notas que creó (sin canceladas):
+ * notas, vendido, máquinas, ciclos, productos, clientes, horario y turnos de
+ * caja que abrió.
+ */
 export const getDesempeno = async (req, res) => {
   const id = Number(req.params.id);
   if (!id) return res.status(400).json({ message: 'No se reconoció al empleado.' });
@@ -47,14 +45,12 @@ export const getDesempeno = async (req, res) => {
       [id]
     );
     if (emp.length === 0) return res.status(404).json({ message: 'Empleado no encontrado.' });
-    // Un usuario de prueba solo consulta el desempeño de su propio entorno.
+    // Un usuario de prueba solo ve su propio entorno.
     if (req.user?.es_prueba && emp[0].sucursal !== req.sucursal) {
       return res.status(404).json({ message: 'Empleado no encontrado.' });
     }
 
-    // Se traen las notas del empleado y, por separado, sus cargas y productos.
-    // El desglose por día (con el detalle de cada métrica) se arma en JS para
-    // que cada número y el contenido de su modal siempre coincidan.
+    // El desglose por día se arma en JS para que cada número cuadre con su modal.
     const { rows: notas } = await pool.query(
       `SELECT n.id, to_char(n.created_at AT TIME ZONE $2, 'YYYY-MM-DD') AS fecha, n.folio, n.tipo_servicio, n.estado,
               n.precio_total, n.cliente_id,
@@ -66,8 +62,7 @@ export const getDesempeno = async (req, res) => {
       [id, TZ_NEGOCIO]
     );
 
-    // Check-ins del empleado, por día local del negocio: entrada (primer login,
-    // created_at) y salida (cierre de sesión manual).
+    // Check-ins por día local: entrada (primer login) y salida (cerrar sesión).
     const { rows: checkins } = await pool.query(
       `SELECT to_char(created_at AT TIME ZONE $2, 'YYYY-MM-DD')  AS fecha,
               to_char(created_at AT TIME ZONE $2, 'HH12:MI am') AS hora,
@@ -77,8 +72,7 @@ export const getDesempeno = async (req, res) => {
       [id, TZ_NEGOCIO]
     );
 
-    // Cargas con la máquina que se usó (para contar máquinas): la activa (lavadora_id/secadora_id) o,
-    // si ya terminó y se desvinculó, la registrada (lavadora_usada_id/…).
+    // Máquinas de cada carga: la puesta o, si ya se soltó, la usada.
     const { rows: cargas } = await pool.query(
       `SELECT nc.nota_id, nc.precio_lavadora, nc.precio_secadora,
               COALESCE(nc.lavadora_id, nc.lavadora_usada_id) AS lav_id,
@@ -94,9 +88,7 @@ export const getDesempeno = async (req, res) => {
       [id]
     );
 
-    // Ciclos (2026-10-06; antes "Cargas", una por carga juntando lavadora y
-    // secadora): una fila por pasada que arrancó, con su precio, horario y
-    // tiempo encendida. Las reglas viven en CICLOS_DE_PASADAS.
+    // Ciclos: una fila por vuelta que arrancó (ver CICLOS_DE_PASADAS).
     const { rows: ciclos } = await pool.query(
       `SELECT * FROM (${CICLOS_DE_PASADAS("n.usuario_id = $1 AND n.estado <> 'CANCELADA'")}) c
         ORDER BY c.nota_id, c.carga_orden, c.asignada_at, c.pasada_id`,
@@ -105,7 +97,7 @@ export const getDesempeno = async (req, res) => {
 
     const { rows: productos } = await pool.query(
       `SELECT np.nota_id, np.cantidad, np.precio_unitario, p.nombre,
-              -- El granel no tiene marca: se dice "Granel" (2026-10-06).
+              -- El granel no tiene marca: se dice "Granel".
               CASE WHEN p.tipo_liquido = 'granel' THEN 'Granel' ELSE p.marca END AS marca
          FROM nota_productos np
          JOIN notas n ON n.id = np.nota_id
@@ -153,7 +145,7 @@ export const getDesempeno = async (req, res) => {
         cliente:   clienteNombre || null,
         precio:    Number(n.precio_total) || 0,
       });
-      // Clientes: autoservicio = 1 cliente cada uno; el resto, por cliente.
+      // Clientes: cada Autoservicio cuenta como uno; el resto, por cliente.
       if (n.tipo_servicio === 'AUTOSERVICIO') {
         b._autoservicios.push({ folio: n.folio });
       } else if (n.cliente_id) {
@@ -169,8 +161,7 @@ export const getDesempeno = async (req, res) => {
       sumarMaquina(b, c.sec_id, c.sec_nombre, c.sec_tipo);
     }
 
-    // La clave sigue llamándose `cargas` para no mover la pantalla ni la
-    // tabla por día; lo que cuenta ahora son ciclos.
+    // La clave se llama `cargas` pero cuenta ciclos.
     for (const c of ciclos) {
       const n = notaPorId.get(c.nota_id);
       if (!n) continue;
@@ -199,10 +190,8 @@ export const getDesempeno = async (req, res) => {
       b._productos.set(p.nombre, acc);
     }
 
-    // Turnos de caja que ABRIÓ el empleado (2026-10-09), en el día en que los
-    // abrió. Un corte cerrado usa sus cifras congeladas (mig. 101); el turno
-    // en curso, o un corte de antes de esa migración, se calcula en vivo con
-    // las mismas funciones que la pantalla de Caja.
+    // Turnos de caja que abrió, en su día: cifras congeladas o, en curso, en
+    // vivo (mismas funciones que Caja).
     const { rows: cajas } = await pool.query(
       `SELECT c.*, s.nombre AS sucursal_nombre,
               to_char(c.abierta_at AT TIME ZONE $2, 'YYYY-MM-DD') AS fecha,
@@ -253,8 +242,7 @@ export const getDesempeno = async (req, res) => {
       });
     }
 
-    // Hora de entrada por día. Un check-in sin notas crea su propio bucket con
-    // métricas en 0, para que el día de asistencia aparezca igual en la tabla.
+    // Un día con check-in y sin notas aparece igual, con métricas en 0.
     for (const ci of checkins) {
       const b = getBucket(ci.fecha);
       b.checkin = ci.hora;
@@ -302,12 +290,12 @@ export const getDesempeno = async (req, res) => {
   }
 };
 
-// Dos usuarios activos no pueden llamarse igual (2026-10-03): en el login se
-// elige a la persona por su nombre, y con el nombre completo escrito se
-// selecciona sola. Se compara el nombre COMPLETO (nombre + apellido) sin
-// importar mayúsculas, acentos ni espacios de más, y contra todos los activos
-// —de cualquier sucursal y rol—, porque el login los busca a todos juntos.
-// Devuelve el nombre del que ya lo usa, o null.
+/**
+ * Dos usuarios activos no pueden llamarse igual: el login elige a la persona
+ * por nombre. Compara el nombre completo sin mayúsculas, acentos ni espacios de
+ * más, contra todos los activos.
+ * @returns {Promise<string|null>} el nombre de quien ya lo usa, o null.
+ */
 async function nombreEnUso(nombre, apellido, excluirId = null) {
   const completo = `${nombre ?? ''} ${apellido ?? ''}`;
   const clave = (expr) => `lower(unaccent(TRIM(regexp_replace(${expr}, '\\s+', ' ', 'g'))))`;
@@ -339,25 +327,16 @@ export const createEmpleado = async (req, res) => {
     return res.status(403).json({ message: 'Solo el Admin Main puede asignar este rol.' });
   }
 
-  // En la DEMO pública quien da de alta personal es el usuario de prueba, y ese
-  // personal tiene que nacer DENTRO de su entorno cerrado. Si naciera fuera
-  // (es_prueba = FALSE y una sucursal real), podría iniciar sesión como un
-  // usuario normal y levantar notas en esa sucursal; entonces la comprobación
-  // de arranque vería operación real en la base de la demo y el backend se
-  // negaría a levantar (utils/entorno.js), sin que el reset nocturno pudiera
-  // deshacerlo. Mismo criterio que updateEmpleado, que ya fuerza la sucursal de
-  // pruebas a todo usuario con es_prueba.
+  // En la demo, el personal que da de alta el usuario de prueba nace en el
+  // entorno de pruebas; fuera, la demo vería "operación real" y no arrancaría.
   const naceEnPruebas = ENTORNO_DEMO && req.user?.es_prueba === true;
 
-  // La sucursal de pruebas es un entorno cerrado: fuera de la demo sus únicos
-  // usuarios son los que crea seed_pruebas.js, no se da de alta personal ahí.
+  // Fuera de la demo, en pruebas solo existen los usuarios de seed_pruebas.js.
   if (!naceEnPruebas && sucursal?.trim() === SUCURSAL_PRUEBAS) {
     return res.status(400).json({ message: 'La sucursal seleccionada no existe.' });
   }
 
-  // Un administrador es global: no se liga a ninguna sucursal (NULL). Para un
-  // empleado (operador) se usa la sucursal del formulario o, si no llega, la
-  // sucursal activa de quien lo crea.
+  // Admin: global (sin sucursal). Empleado: la del formulario o la activa.
   const sucursalFinal = naceEnPruebas
     ? SUCURSAL_PRUEBAS
     : (esAdmin(rolFinal) ? null : (sucursal?.trim() || req.sucursal));
@@ -396,8 +375,7 @@ export const updateEmpleado = async (req, res) => {
     }
     const target = targetRows[0];
 
-    // Solo el Admin Main puede modificar a un administrador (admin o admin_main);
-    // cualquiera puede editar su propio usuario.
+    // A un administrador solo lo modifica el Admin Main (o él mismo).
     if (esAdmin(target.rol) && !callerEsMain && targetId !== req.user.id) {
       return res.status(403).json({ message: 'Solo el Admin Main puede modificar a un administrador.' });
     }
@@ -425,10 +403,7 @@ export const updateEmpleado = async (req, res) => {
       }
       updates.push(`rol = $${i++}`); values.push(rol);
     }
-    // Un administrador es global (sucursal NULL); un usuario de prueba vive
-    // siempre en la sucursal oculta de pruebas, aunque su rol sea admin; un
-    // empleado normal requiere una. El rol resultante es el que venga en la
-    // petición o, si no cambia, el actual.
+    // Admin: sin sucursal. Usuario de prueba: siempre en pruebas. Empleado: requiere una.
     const rolResultante = rol !== undefined ? rol : target.rol;
     if (target.es_prueba) {
       updates.push(`sucursal = $${i++}`); values.push(SUCURSAL_PRUEBAS);
@@ -453,7 +428,7 @@ export const updateEmpleado = async (req, res) => {
       return res.status(400).json({ message: 'No hay cambios que guardar.' });
     }
 
-    // Cambiar el nombre tampoco puede dejarlo igual al de otro usuario.
+    // El nombre nuevo no puede repetir el de otro usuario.
     if (nombre !== undefined || apellido !== undefined) {
       const nuevoNombre   = nombre   !== undefined ? capitalizarNombre(nombre)   : target.nombre;
       const nuevoApellido = apellido !== undefined ? capitalizarNombre(apellido) : target.apellido;
@@ -491,7 +466,7 @@ export const deleteEmpleado = async (req, res) => {
     if (targetRows.length === 0) {
       return res.status(404).json({ message: 'Empleado no encontrado.' });
     }
-    // Solo el Admin Main puede eliminar a un administrador (admin o admin_main).
+    // A un administrador solo lo elimina el Admin Main.
     if (esAdmin(targetRows[0].rol) && req.user.rol !== 'admin_main') {
       return res.status(403).json({ message: 'Solo el Admin Main puede eliminar a un administrador.' });
     }

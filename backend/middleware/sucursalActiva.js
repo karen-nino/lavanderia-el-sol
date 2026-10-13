@@ -2,12 +2,10 @@ import pool from '../db/pool.js';
 import { esAdmin } from './roles.js';
 import { ENTORNO_DEMO } from '../utils/entorno.js';
 
-// Sucursal oculta donde operan los usuarios de prueba (migración 095). Sus
-// notas, caja e inventario viven aquí y no se mezclan con los datos reales.
+/** Sucursal oculta de los usuarios de prueba: sus datos no se mezclan con los reales. */
 export const SUCURSAL_PRUEBAS = 'pruebas';
 
-// Catálogo de slugs elegibles (sucursales activas y NO ocultas), cacheado.
-// Se invalida con refrescarSlugsSucursales() al crear/activar/desactivar.
+/** Caché de slugs elegibles (activas y no ocultas); se invalida con refrescarSlugsSucursales. */
 let slugsCache = null;
 async function slugsValidos({ recargar = false } = {}) {
   if (!slugsCache || recargar) {
@@ -17,35 +15,27 @@ async function slugsValidos({ recargar = false } = {}) {
   return slugsCache;
 }
 
-// ¿Es un slug elegible? Si el cache no lo conoce se recarga una vez antes de
-// decir que no: una sucursal recién creada (o creada por otra instancia) no
-// debe hacer que el admin caiga en silencio a otra sucursal.
+/** ¿Slug elegible? Si el caché no lo conoce, se recarga una vez (sucursal recién creada). */
 async function esSlugElegible(slug) {
   if ((await slugsValidos()).has(slug)) return true;
   return (await slugsValidos({ recargar: true })).has(slug);
 }
 
-// Fuerza recargar el cache en la próxima petición. Llamar tras mutar el
-// catálogo de sucursales (crear/activar/desactivar).
+/** Recarga el caché en la próxima petición; llamar tras cambiar el catálogo de sucursales. */
 export function refrescarSlugsSucursales() {
   slugsCache = null;
 }
 
-// Slugs renombrados (mig. 150): una tablet con la sesión o el bundle de antes
-// sigue mandando el viejo en X-Sucursal, y sin esto se le ignoraría en
-// silencio y caería a la sucursal propia del admin.
+/** Slugs renombrados: una tablet con versión vieja puede seguir mandando el anterior. */
 const SLUGS_RENOMBRADOS = { lopez_cotilla: 'zapopan' };
 export const slugVigente = (slug) => SLUGS_RENOMBRADOS[slug] ?? slug;
 
-// Resuelve la sucursal activa de la petición en req.sucursal.
-//   - Usuario de prueba: SIEMPRE la sucursal de pruebas, sin importar su rol
-//     ni lo que mande el cliente. Es un entorno cerrado: no puede salir a una
-//     sucursal real, igual que nadie más puede entrar a la suya.
-//   - Admin: puede operar cualquier sucursal elegible enviándola en el header
-//     'X-Sucursal' (o ?sucursal=); si no manda una válida, usa la suya. Las
-//     ocultas no son elegibles, así que la de pruebas nunca le toca.
-//   - Empleado: siempre su sucursal asignada, ignora lo que mande el cliente.
-// Debe montarse después de verifyToken (necesita req.user).
+/**
+ * Pone en `req.sucursal` la sucursal activa (montar después de verifyToken):
+ * - usuario de prueba: siempre la de pruebas;
+ * - admin: la elegible que mande en 'X-Sucursal' (o ?sucursal=), o la suya;
+ * - empleado: siempre la suya.
+ */
 export const sucursalActiva = async (req, res, next) => {
   try {
     if (req.user?.es_prueba) {
@@ -71,14 +61,10 @@ export const sucursalActiva = async (req, res, next) => {
   }
 };
 
-// Bloquea a los usuarios de prueba en las acciones GLOBALES, las que no
-// pertenecen a una sucursal y afectarían al negocio real: ajustes (tarifas,
-// tiempos, datos del ticket), catálogo de sucursales y alta/edición de
-// usuarios. Su entorno es de solo lectura hacia afuera: pueden operar todo lo
-// suyo, pero no cambiar lo que comparten todas las sucursales.
-// En la demo pública no hay negocio detrás: la configuración "global" es la de
-// una base de juguete, y dejarla bloqueada solo esconde dos módulos que quien
-// mira la demo querría ver. La bandera se valida al arrancar (utils/entorno.js).
+/**
+ * Bloquea a los usuarios de prueba en lo global (Ajustes, sucursales, usuarios):
+ * operan lo suyo pero no cambian lo compartido. En la demo no aplica.
+ */
 export const bloquearPruebaGlobal = (req, res, next) => {
   if (req.user?.es_prueba && !ENTORNO_DEMO) {
     return res.status(403).json({

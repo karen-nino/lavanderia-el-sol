@@ -8,9 +8,8 @@ const router = Router();
 
 router.use(verifyToken, sucursalActiva);
 
-// El Dashboard de TODOS enseña "Ingresado hoy" (2026-10-11): un empleado
-// puede pedir el resumen de hoy, pero solo recibe el total (`soloTotal`).
-// Otros periodos y el detalle (notas, gráfica) siguen siendo solo de admin.
+// El Dashboard enseña "Ingresado hoy" a todos: un empleado puede pedir el
+// resumen de hoy y solo recibe el total (`soloTotal`). Lo demás es de admin.
 const adminOTotalDeHoy = (req, res, next) => {
   if (esAdmin(req.user?.rol)) return next();
   const { periodo = 'hoy', desde, hasta, year, month } = req.query;

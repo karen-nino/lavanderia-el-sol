@@ -1,32 +1,23 @@
-// ewelinkDriver — control real de los Sonoff a través de la nube eWeLink (API v2).
-//
-// Autenticación: el token sale de la sesión OAuth que guardó `ewelinkCuenta`
-// (ver `ewelinkOAuth.js` para el porqué de OAuth y no correo/contraseña). El
-// driver solo lo usa y lo renueva cuando está por vencer; conectar la cuenta la
-// primera vez es cosa del endpoint /api/ewelink/conectar.
-//
-// Control: POST /v2/device/thing/status con { type:1, id, params:{switch} }.
-// Lectura: GET /v2/device/thing/status?type=1&id=..&params=switch.
-// Sonoff multi-relé: se usa params.switches[{switch, outlet}] según device_canal.
-//
-// Todas las funciones devuelven { ok, estado, motivo } y NUNCA lanzan: un fallo
-// de red/nube se refleja como ok:false para que sonoff_estado quede en 'error'.
-// El motivo viaja hasta la pantalla, así que distingue los casos que se arreglan
-// distinto: 'sin_cuenta_conectada' (falta autorizar) no es lo mismo que
-// 'ewelink_<código>' (la nube rechazó la operación).
+/**
+ * Control real de los Sonoff por la nube eWeLink (API v2). Usa y renueva el
+ * token OAuth guardado; conectar la cuenta es de /api/ewelink/conectar.
+ * - Control: POST /v2/device/thing/status { type: 1, id, params: { switch } }.
+ * - Lectura: GET /v2/device/thing/status?type=1&id=..&params=switch.
+ * - Multi-relé: params.switches [{ switch, outlet }] según device_canal.
+ *
+ * Nunca lanza: devuelve { ok, estado, motivo }. El motivo llega a la pantalla y
+ * distingue, p. ej., 'sin_cuenta_conectada' de 'ewelink_<código>'.
+ */
 
 import { apiFetch, baseDe, nonce, configCompleta, refrescarToken } from './ewelinkOAuth.js';
 
 const NO_CONFIGURADO = { ok: false, estado: null, motivo: 'ewelink_no_configurado' };
 const ERROR_RED = (motivo = 'error_red') => ({ ok: false, estado: null, motivo });
 
-// Margen para renovar el access token antes de que caduque de verdad. Con 30
-// días de vida, renovar un día antes evita la carrera de que expire entre que
-// se lee y se usa.
+/** Se renueva un día antes de que caduque. */
 const MARGEN_RENOVACION_MS = 24 * 60 * 60 * 1000;
 
-// De dónde se leen y guardan los tokens. Se carga tarde (y se puede sustituir)
-// para que las pruebas del driver no arrastren la conexión a la base.
+/** Almacén de tokens; se carga tarde y es sustituible en pruebas. */
 let store = null;
 export function _setStore(nuevo) {
   store = nuevo;
@@ -37,7 +28,7 @@ async function getStore() {
   return store;
 }
 
-// Token en memoria para no ir a la base en cada encendido: { at, base }.
+/** Token en memoria ({ at, base }) para no leer la base en cada encendido. */
 let sesion = null;
 
 class SinCuenta extends Error {
@@ -47,15 +38,14 @@ class SinCuenta extends Error {
   }
 }
 
-// Devuelve un token utilizable, renovándolo si hace falta.
+/** Token utilizable, renovándolo si hace falta. */
 async function asegurarSesion() {
   if (sesion?.at) return sesion;
 
   const s = await getStore();
   const cuenta = await s.leerCuenta();
   if (!s.estaConectada(cuenta)) {
-    // Sin cuenta autorizada (o con el refresh token ya vencido) no hay nada que
-    // renovar: alguien tiene que volver a conectar la cuenta a mano.
+    // Sin cuenta o con el refresh vencido: hay que reconectar a mano.
     throw new SinCuenta(cuenta?.access_token ? 'sesion_expirada' : 'sin_cuenta_conectada');
   }
 
@@ -73,9 +63,7 @@ async function asegurarSesion() {
   return sesion;
 }
 
-// Fuerza una renovación cuando la nube dice que el token no sirve, aunque
-// nuestras fechas digan que todavía estaba vigente (pasa si el cliente revoca
-// el permiso y lo vuelve a dar, o si eWeLink lo invalida antes de tiempo).
+/** Renueva cuando la nube rechaza un token que según nuestras fechas seguía vigente. */
 async function renovarPorRechazo() {
   const s = await getStore();
   const cuenta = await s.leerCuenta();
@@ -86,12 +74,11 @@ async function renovarPorRechazo() {
   return sesion;
 }
 
-// 401xx/402 = token inválido o expirado del lado de eWeLink.
+/** 401xx/402: token inválido o expirado según eWeLink. */
 const esErrorDeAuth = (error) =>
   error === 402 || error === 401 || String(error).startsWith('401');
 
-// Llama a un endpoint autenticado; si el token es rechazado, lo renueva y
-// reintenta una vez.
+/** Llama a un endpoint autenticado; si rechaza el token, lo renueva y reintenta una vez. */
 async function llamarAuth(path, opts, reintento = true) {
   const s = await asegurarSesion();
   const data = await apiFetch(s.base, path, {
@@ -106,7 +93,7 @@ async function llamarAuth(path, opts, reintento = true) {
   return data;
 }
 
-// Construye los params de switch respetando el canal (multi-relé).
+/** Params de switch según el canal (multi-relé). */
 function paramsSwitch(maquina, on) {
   const valor = on ? 'on' : 'off';
   if (maquina.device_canal != null) {
@@ -171,7 +158,7 @@ export async function estado(maquina) {
   }
 }
 
-// Solo para pruebas: limpia la sesión cacheada.
+/** Solo para pruebas: limpia la sesión en memoria. */
 export function _reset() {
   sesion = null;
 }

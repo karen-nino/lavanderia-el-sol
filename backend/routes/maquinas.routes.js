@@ -21,8 +21,7 @@ import {
 
 const router = Router();
 
-// Un id malformado (/notas/undefined y parecidos) se responde aquí: sin esto
-// llega a la consulta y Postgres lo convierte en un 500.
+// Un id malformado responde 404 aquí, no 500 en Postgres.
 router.param('id', validarId('la máquina'));
 
 router.use(verifyToken, sucursalActiva);
@@ -36,10 +35,9 @@ router.put('/:id', updateMaquina);
 router.delete('/:id', requireAdmin, deleteMaquina);
 router.patch('/:id/estado', cambiarEstadoMaquina);
 router.patch('/:id/detener-ciclo', detenerCiclo);
-// Sin requireAdmin a propósito: el segundo ciclo lo da quien está en el
-// mostrador cuando termina el primero, y ese es el empleado (mig. 108).
+// Sin requireAdmin: el segundo ciclo lo da el empleado del mostrador.
 router.patch('/:id/otro-ciclo', otroCiclo);
-// "Otro ciclo" de la secadora de fichas que pregunta (Sec49): suma minutos.
+// "Otro ciclo" de la secadora de fichas que pregunta su programa.
 router.patch('/:id/mas-tiempo', masTiempo);
 router.post('/:id/probar-sonoff', requireAdmin, probarSonoff);
 router.post('/:id/apagar-sonoff', requireAdmin, apagarSonoff);

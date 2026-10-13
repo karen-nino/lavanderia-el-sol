@@ -1,8 +1,7 @@
 import pool from '../db/pool.js';
 
-// La campana solo muestra notificaciones de las últimas 24 h; se purgan las
-// de más de 48 h (margen de seguridad). Los descartes asociados se eliminan
-// en cascada (FK ON DELETE CASCADE), así que la tabla no crece sin control.
+// La campana muestra las últimas 24 h; se borran las de más de 48 h (y sus
+// descartes, en cascada).
 const RETENCION_HORAS = 48;
 const INTERVALO_MS = 6 * 60 * 60 * 1000; // cada 6 horas
 
@@ -14,7 +13,7 @@ export async function purgarNotificaciones() {
   return rowCount;
 }
 
-// Scheduler ligero (sin dependencias): una pasada al arrancar y luego cada 6 h.
+/** Una pasada al arrancar y luego cada 6 h. */
 export function iniciarLimpiezaNotificaciones() {
   const tick = async () => {
     try {

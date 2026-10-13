@@ -1,18 +1,9 @@
-// Cierre de la PASADA en curso de una máquina (migs. 114, 140 y 141).
-//
-// Cada uso de una máquina en una carga es una fila de `nota_carga_maquinas`
-// con su arranque (`encendida_at`) y su fin (`finalizada_at`). Los botones de
-// Finalizar la cierran con `sellarFinDePasada` (notas.controller.js), pero
-// hay otros caminos que sueltan una máquina en marcha: el barrido de
-// medianoche, pasar la nota a Por Entregar o cancelarla, Detener ciclo, y
-// arrancar la secadora de una carga cuya lavadora seguía en uso. Sin esto esa
-// pasada se quedaba sin hora de inicio ni de fin, y el ciclo salía sin horario
-// ni tiempo encendida en Desempeño, Ventas e Información de uso (2026-10-09).
-//
-// Se llama ANTES de soltar la máquina, mientras la carga todavía la tiene en
-// su hueco y `en_uso_desde` conserva el arranque. Solo toca la última pasada
-// del hueco, sin cerrar, de una carga que de verdad arrancó esa máquina. Misma
-// regla de fin que Finalizar: con cronómetro el reloj se para en el tope.
+/**
+ * Cierra la vuelta en curso (`nota_carga_maquinas`: inicio y fin) de máquinas
+ * que se sueltan sin Finalizar: medianoche, Por Entregar, cancelar, Detener
+ * ciclo o arrancar la secadora. Llamar ANTES de soltarlas, mientras
+ * `en_uso_desde` conserva el arranque. Con cronómetro, el fin se para en el tope.
+ */
 
 import { esCronometroSql, TOPE_RELOJ } from './sqlMaquina.js';
 
@@ -38,12 +29,11 @@ export async function sellarPasadasVivas(client, maquinaIds) {
           WHERE m.id = ANY($1)
             AND m.estado = 'en_uso'
             AND x.finalizada_at IS NULL
-            -- La carga sigue teniendo esta máquina en el hueco y la arrancó
-            -- ella (asignar no aparta: otra nota puede tenerla sin usarla).
+            -- La carga la sigue teniendo y la arrancó ella.
             AND (CASE WHEN x.slot = 'lavadora' THEN nc.lavadora_id ELSE nc.secadora_id END) = m.id
             AND (CASE WHEN x.slot = 'lavadora' THEN nc.lavadora_iniciada_at
                       ELSE nc.secadora_iniciada_at END) IS NOT NULL
-            -- Solo la última pasada de su hueco.
+            -- Solo la última vuelta de su hueco.
             AND x.id = (
               SELECT y.id FROM nota_carga_maquinas y
                WHERE y.carga_id = x.carga_id AND y.slot = x.slot

@@ -2,23 +2,10 @@ import pool from '../db/pool.js';
 import { esCronometroSql, TOPE_RELOJ } from '../db/sqlMaquina.js';
 import { terminarLavadoFinal, terminarSecado } from '../controllers/notas.controller.js';
 
-// Una máquina con nota que llega a su TOPE se finaliza sola (2026-10-11, a
-// pedido): antes se quedaba con "Llegó al tope y se le cortó la luz" esperando
-// a que alguien le diera FINALIZAR, y mientras tanto no se podía ocupar.
-//
-// Se finaliza con la MISMA función que el botón (terminarLavadoFinal /
-// terminarSecado), así que pasa exactamente lo mismo: se libera la máquina, se
-// cierra la carga, la nota avanza (o se cierra) y el granel se descuenta.
-//
-// GRACIA: 1 s después del tope (a pedido, 2026-10-11; primero eran 30 s). El
-// aviso sonoro de la app (lib/avisoTope.js) suena con el reloj del equipo,
-// revisándolo cada segundo con la última lista que pidió: suena en el tope y
-// la tarjeta desaparece en el siguiente refresco. El sonido queda como "esta
-// se finalizó por tope".
-//
-// Solo con cronómetro (con temporizador la tarjeta de ciclo terminado espera
-// a la persona, como siempre). Las de solo fichas no tienen tope (mig. 149) y
-// la encendida a mano sin nota no tiene carga que cerrar.
+// Una máquina con nota que llega a su tope se finaliza sola, 1 s después, con la
+// misma función que el botón Finalizar (terminarLavadoFinal / terminarSecado).
+// El aviso sonoro de la app suena en el tope. Solo con cronómetro; no aplica a
+// las de solo fichas (sin tope) ni a las encendidas a mano sin nota.
 const INTERVALO_MS = 2 * 1000; // una consulta chica: cabe correrla seguido
 const GRACIA_SEGUNDOS = 1;
 
@@ -45,8 +32,7 @@ export async function finalizarMaquinasAlTope() {
 
   const finalizadas = [];
   for (const r of rows) {
-    // Se llama al controlador con un request armado aquí: sin usuario (lo
-    // hizo el sistema) y en la sucursal de la nota.
+    // Request armado: sin usuario (lo hizo el sistema), en la sucursal de la nota.
     let estado = 200;
     let cuerpo = null;
     const req = {

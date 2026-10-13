@@ -1,12 +1,6 @@
-// Listener LISTEN/NOTIFY — enganche central del control de máquinas.
-//
-// Mantiene una conexión dedicada a Postgres escuchando el canal 'maquina_sync'.
-// El trigger trg_notificar_sync_maquina (migración 075) emite un aviso con el
-// id de la máquina cada vez que cambia su estado o su enlace Sonoff, sin
-// importar desde qué flujo. Al recibirlo, se dispara sincronizarSonoff(id).
-//
-// Es una conexión persistente (no del pool), con reconexión automática: si se
-// cae, el reconciliador periódico cubre el hueco hasta que vuelva.
+// Escucha el canal 'maquina_sync' en una conexión propia (con reconexión): el
+// trigger trg_notificar_sync_maquina avisa cuando cambia el estado o el enlace
+// de una máquina, y se llama a sincronizarSonoff(id). Si se cae, cubre el barrido.
 
 import pg from 'pg';
 import { dbConfig } from '../db/pool.js';
@@ -58,7 +52,7 @@ export function iniciarListenerSonoff() {
   conectar();
 }
 
-// Para pruebas / apagado limpio.
+/** Para pruebas y apagado limpio. */
 export async function detenerListenerSonoff() {
   detenido = true;
   try { await cliente?.end(); } catch { /* noop */ }

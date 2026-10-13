@@ -3,29 +3,28 @@ import { TZ_NEGOCIO, fechaLocal, esFechaISO } from '../utils/tz.js';
 import { esCronometroSql, CICLOS_DE_PASADAS, TOPE_RELOJ } from '../db/sqlMaquina.js';
 import { leerCortes, repartirCobros } from './caja.controller.js';
 
-// El "día" de un reporte es el día del NEGOCIO (America/Mexico_City), no el del
-// servidor: en producción Postgres corre en UTC, así que `DATE(pagado_en)` metía
-// todo lo cobrado después de las 18:00 locales en el día siguiente. Se
-// interpola como literal (no como parámetro) para no correr la numeración de
-// $1/$2 que ya usan los períodos; por eso se valida el formato del nombre.
+/**
+ * Zona del negocio como literal SQL: los días de los reportes son locales, no
+ * UTC. Va interpolada (no como parámetro) para no mover la numeración $1/$2 de
+ * los períodos; por eso se valida el nombre.
+ */
 const TZ = /^[A-Za-z0-9/_+-]+$/.test(TZ_NEGOCIO) ? `'${TZ_NEGOCIO}'` : `'America/Mexico_City'`;
-// Fecha local del negocio de una columna timestamptz, como texto 'YYYY-MM-DD'.
-// Va como texto (y no como date) para que el JSON no la convierta en un
-// instante UTC que el navegador vuelva a correr un día.
+/**
+ * Fecha local de una columna timestamptz como 'YYYY-MM-DD'. Texto y no date,
+ * para que el JSON no la convierta en un instante UTC.
+ */
 const fechaNegocio = (col) => `to_char(${col} AT TIME ZONE ${TZ}, 'YYYY-MM-DD')`;
 
-// El período se mide por pagado_en (día real del cobro), no por la fecha de
-// creación de la nota. whereBase filtra estado_pago = 'PAGADO', así que
-// pagado_en nunca es NULL en las filas que llegan a estas consultas.
-// La lista de notas (todas, no solo las pagadas) usa created_at, porque una
-// nota pendiente aún no tiene pagado_en.
-// anioParam indica que se eligió un año específico (llega en $1); sin él,
-// "anio" significa el año en curso.
+/**
+ * Condición SQL del período sobre la columna `col` (por defecto el día del
+ * cobro). Con `anioParam` el año llega en $1 (y con `mesParam`, el mes en $2);
+ * sin ellos, el año o mes en curso. 'custom' usa $1 y $2 como fechas.
+ */
 function buildPeriodSQL(periodo, col = 'o.pagado_en', anioParam = false, mesParam = false) {
   switch (periodo) {
     case 'semana': return `${col} >= NOW() - INTERVAL '7 days'`;
     case 'mes':    return mesParam
-      // Mes específico de un año dado (año en $1, mes 1-12 en $2).
+      // Año en $1, mes 1-12 en $2.
       ? `DATE_PART('year', ${col} AT TIME ZONE ${TZ}) = $1 AND DATE_PART('month', ${col} AT TIME ZONE ${TZ}) = $2`
       : `${col} >= DATE_TRUNC('month', NOW() AT TIME ZONE ${TZ}) AT TIME ZONE ${TZ}`;
     case 'anio':   return anioParam
@@ -36,6 +35,11 @@ function buildPeriodSQL(periodo, col = 'o.pagado_en', anioParam = false, mesPara
   }
 }
 
+/**
+ * Resumen de Ventas del período: tarjetas, gráfica, lista de notas, corte por
+ * concepto, abonos, correcciones y turnos de caja. Un empleado solo recibe el
+ * total de hoy (`req.soloTotal`).
+ */
 export async function getResumen(req, res) {
   const { periodo = 'hoy', desde, hasta, year, month } = req.query;
 
@@ -43,10 +47,8 @@ export async function getResumen(req, res) {
   const yearNum = /^\d{4}$/.test(String(year ?? '')) ? Number(year) : null;
   // Año específico: solo aplica al período 'anio'.
   const anioSel = periodo === 'anio' && yearNum != null ? yearNum : null;
-  // Mes específico (0-11, como JS): solo aplica al período 'mes'. Usa el año
-  // elegido o, si no llega uno válido, el año en curso DEL NEGOCIO: el proceso
-  // corre en UTC, donde las últimas horas del 31 de diciembre ya son del año
-  // siguiente y el reporte saldría vacío.
+  // Mes específico (0-11) del año elegido o, si no llega, del año en curso del
+  // negocio (no del servidor en UTC).
   const mesRaw = Number(month);
   const mesSel = periodo === 'mes' && Number.isInteger(mesRaw) && mesRaw >= 0 && mesRaw <= 11 ? mesRaw : null;
   const anioNegocio = () => Number(fechaLocal().slice(0, 4));
@@ -54,25 +56,18 @@ export async function getResumen(req, res) {
 
   const periodSQL = buildPeriodSQL(periodo, 'o.pagado_en', anioSel != null, mesSel != null);
   const periodListSQL = buildPeriodSQL(periodo, 'o.created_at', anioSel != null, mesSel != null);
-  // Correcciones de forma de pago (mig. 102): se ubican por CUÁNDO se
-  // corrigieron, no por cuándo se cobró la nota, porque lo que se está
-  // reportando es la corrección en sí.
+  // Correcciones de forma de pago: por cuándo se corrigieron.
   const periodCorrSQL = buildPeriodSQL(periodo, 'h.created_at', anioSel != null, mesSel != null);
-  // El dinero se mide por CUÁNDO entró (mig. 121): una nota puede cobrarse en
-  // varios pagos —abonos— y cada uno cuenta el día que se hizo. Al liquidarla
-  // entra solo lo que faltaba, así que ningún peso se cuenta dos veces y estos
-  // totales cuadran con el corte de caja de esos días.
+  // El dinero cuenta el día que entró: cada abono su día y, al liquidar, lo que
+  // faltaba. Así cuadra con los cortes de caja.
   const periodCobroSQL = buildPeriodSQL(periodo, 'c.momento', anioSel != null, mesSel != null);
-  // Turnos de caja del período (2026-10-10): por CUÁNDO se abrieron, con sus
-  // Ingresos, Egresos y Desglose, uno por tarjeta.
+  // Turnos de caja del período, por cuándo se abrieron.
   const periodTurnoSQL = buildPeriodSQL(periodo, 'c.abierta_at', anioSel != null, mesSel != null);
 
   if (isCustom && (!desde || !hasta)) {
     return res.status(400).json({ message: 'Elige la fecha de inicio y la de fin del período.' });
   }
-  // Las fechas entran a la consulta como ::date: una que no existe (o texto
-  // suelto) la hace fallar y el usuario recibe un 500 en lugar de saber que
-  // el rango está mal.
+  // Se validan antes: una fecha inválida haría fallar el ::date con un 500.
   if (isCustom && (!esFechaISO(desde) || !esFechaISO(hasta))) {
     return res.status(400).json({ message: 'Las fechas del período no son válidas.' });
   }
@@ -84,15 +79,12 @@ export async function getResumen(req, res) {
     ? [desde, hasta]
     : anioSel != null ? [anioSel] : (mesSel != null ? [anioMes, mesSel + 1] : []);
 
-  // "Ingresado" = dinero efectivamente cobrado: notas con pago registrado
-  // (estado_pago = 'PAGADO') y no canceladas, de la sucursal activa. El
-  // período se mide por pagado_en (día real del cobro). La sucursal va como
-  // último parámetro, después de los del período (custom usa $1 y $2).
+  // Notas pagadas y no canceladas de la sucursal, por día de cobro. La sucursal
+  // va después de los parámetros del período.
   const sucIdx = periodParams.length + 1;
   const params = [...periodParams, req.sucursal];
   const whereBase = `o.estado_pago = 'PAGADO' AND o.estado != 'CANCELADA' AND o.sucursal = $${sucIdx} AND ${periodSQL}`;
-  // Lista: TODAS las notas del período (pagadas, pendientes y canceladas). Las
-  // canceladas se muestran con su estado, pero no cuentan en los totales.
+  // Lista: todas las notas del período; las canceladas no cuentan en totales.
   const whereLista = `o.sucursal = $${sucIdx} AND ${periodListSQL}`;
 
   // Cada peso cobrado, con el momento en que entró y su forma de pago.
@@ -162,22 +154,13 @@ export async function getResumen(req, res) {
           o.estado,
           o.estado_pago,
           o.forma_pago,
-          -- El servicio decide cómo se lee el estado LISTA: "Por Cobrar" en
-          -- Autoservicio (el cliente ya se llevó su ropa) y "Por Entregar" en
-          -- los demás (2026-09-25).
+          -- LISTA se lee "Por Cobrar" en Autoservicio y "Por Entregar" en los demás.
           o.tipo_servicio,
           o.motivo_cancelacion,
-          -- Máquina(s) de la nota con su número de cargas y cuánto estuvieron
-          -- encendidas: [{ nombre, cargas, segundos }]. Cuenta las cargas
-          -- (nota_cargas) donde aparece cada máquina, incluidas las ya
-          -- desvinculadas (*_usada_id). "segundos" suma las pasadas que se
-          -- finalizaron (mig. 140); NULL si ninguna lo tiene sellado. "tope"
-          -- dice si alguna llegó al tope del cronómetro (mig. 141).
-          --
-          -- Una máquina que llegó al tope y aún no se finaliza no tiene nada
-          -- sellado, pero su reloj ya se paró: se cuenta en vivo ("tope_vivo")
-          -- para que Ventas lo diga en cuanto pasa, sin esperar al Finalizar.
-          -- Solo si ESTA nota la arrancó (iniciada_at) y la sigue ocupando.
+          -- Máquinas de la nota: [{ nombre, cargas, segundos, tope, tope_vivo }].
+          -- "segundos" suma las vueltas finalizadas (null si ninguna); "tope",
+          -- si alguna llegó al tope; "tope_vivo", la que ya llegó y sigue sin
+          -- finalizar (se cuenta en vivo, si esta nota la arrancó).
           COALESCE((
             SELECT json_agg(json_build_object(
                      'nombre', t.nombre, 'cargas', t.cargas,
@@ -187,7 +170,7 @@ export async function getResumen(req, res) {
                      'tope', t.tope OR t.tope_vivo) ORDER BY t.nombre)
               FROM (
                 SELECT mm.nombre, COUNT(*)::int AS cargas,
-                       -- Dónde se para su reloj (con "Otro ciclo", mig. 148, el fin real).
+                       -- Dónde se para su reloj (con "Otro ciclo", el fin real).
                        ${TOPE_RELOJ('mm')} AS ciclo_minutos,
                        (mm.en_uso_desde IS NOT NULL
                         AND mm.ciclo_minutos > 0
@@ -218,9 +201,7 @@ export async function getResumen(req, res) {
                  GROUP BY mm.id, mm.nombre
               ) t
           ), '[]'::json)                               AS maquinas,
-          -- Un renglón por ciclo (2026-10-06), como en Información de uso:
-          -- máquina, lo que vale, a qué hora arrancó y terminó y cuánto estuvo
-          -- encendida. El modal de Máquinas de Ventas lo enseña.
+          -- Un renglón por ciclo: máquina, lo que vale, inicio, fin y minutos.
           COALESCE((
             SELECT json_agg(json_build_object(
                      'nombre', c.maquina_nombre, 'precio', c.precio,
@@ -230,9 +211,7 @@ export async function getResumen(req, res) {
               FROM (${CICLOS_DE_PASADAS('n.id = o.id')}) c
           ), '[]'::json)                               AS ciclos,
           NULLIF(TRIM(u.nombre || ' ' || COALESCE(u.apellido, '')), '') AS atendio,
-          -- Abonos de la nota (mig. 121), del más viejo al más nuevo: Ventas
-          -- los enseña al tocar su forma de pago. Los revertidos no: ese dinero
-          -- volvió.
+          -- Abonos vivos de la nota, del más viejo al más nuevo.
           COALESCE((
             SELECT json_agg(json_build_object(
                      'id', ab.id, 'monto', ab.monto, 'forma_pago', ab.forma_pago,
@@ -245,9 +224,7 @@ export async function getResumen(req, res) {
           ), '[]'::json)                               AS abonos,
           (SELECT COUNT(*) FROM nota_cargas nc WHERE nc.nota_id = o.id)::int AS cargas,
           COALESCE(np_t.total_productos, 0)            AS total_productos,
-          -- Detalle de los productos de la nota (2026-10-06): Ventas los enseña
-          -- al tocar la columna Productos. "incluido" marca el material que ya
-          -- va en el precio del servicio (misma regla que total_productos).
+          -- Productos de la nota; "incluido" = va en el precio del servicio.
           COALESCE((
             SELECT json_agg(json_build_object(
                      'nombre', a.nombre, 'marca', a.marca, 'clase', a.clase,
@@ -267,8 +244,7 @@ export async function getResumen(req, res) {
           o.precio_total                               AS total
         FROM notas o
         LEFT JOIN usuarios u ON u.id = o.usuario_id
-        -- Productos cobrados APARTE, con la regla del corte: en Por Encargo el
-        -- material del servicio (granel, bolsa) ya va en su precio.
+        -- Productos cobrados aparte (en Por Encargo, el material va en el servicio).
         LEFT JOIN (
           SELECT np.nota_id, SUM(np.cantidad * np.precio_unitario) AS total_productos
           FROM nota_productos np
@@ -285,13 +261,8 @@ export async function getResumen(req, res) {
         params
       ),
 
-      // Corte de caja: por concepto, con la MISMA regla con que se cobra la
-      // nota (recalcularPrecioTotal), para que la suma cuadre con lo cobrado.
-      //   · Por Encargo con precio de servicio (tope): se cobra ese precio, que
-      //     ya incluye el material —granel y bolsa—; encima solo lo que se
-      //     vende por unidad (marca, polvo).
-      //   · Los demás (y Por Encargo viejo sin tope): máquinas + productos.
-      // El ajuste de cada carga va con el de la nota.
+      // Corte por concepto con la misma regla que recalcularPrecioTotal, para
+      // que cuadre con lo cobrado. El ajuste de cada carga va con el de la nota.
       pool.query(
         `WITH conceptos AS (
            SELECT o.id,
@@ -307,9 +278,8 @@ export async function getResumen(req, res) {
             GROUP BY o.id
          ),
          productos_aparte AS (
-           -- Solo lo que se cobró ENCIMA: en Por Encargo, lo que se vende por
-           -- unidad (o todo, si su carga no tiene precio de servicio); en los
-           -- demás servicios, todo producto es venta.
+           -- Solo lo cobrado encima: en Por Encargo lo que se vende por unidad
+           -- (o todo, sin precio de servicio); en los demás, todo.
            SELECT np.nota_id, SUM(np.cantidad * np.precio_unitario) AS total
              FROM nota_productos np
              JOIN notas o     ON o.id = np.nota_id
@@ -330,8 +300,7 @@ export async function getResumen(req, res) {
         LEFT JOIN productos_aparte pa ON pa.nota_id = c.id`,
         params
       ),
-      // Correcciones de forma de pago hechas en el período. Explican por qué el
-      // desglose por forma de cobro puede no cuadrar con lo que se recordaba.
+      // Correcciones de forma de pago del período.
       pool.query(
         `SELECT o.id AS nota_id, o.folio, o.precio_total,
                 h.forma_anterior, h.forma_nueva, h.created_at,
@@ -344,8 +313,7 @@ export async function getResumen(req, res) {
         params
       ),
 
-      // Abonos del período (mig. 121): quién recibió cada pago parcial y de qué
-      // nota. Los revertidos no se listan: ese dinero volvió.
+      // Abonos vivos del período: quién lo recibió y de qué nota.
       pool.query(
         `SELECT ab.id, ab.monto, ab.forma_pago, ab.created_at,
                 ${fechaNegocio('ab.created_at')} AS fecha,
@@ -361,8 +329,7 @@ export async function getResumen(req, res) {
         params
       ),
 
-      // Dinero que entró en el período, con su forma de pago. Es lo que cuadra
-      // con el corte de caja de esos días.
+      // Dinero que entró en el período, por forma de pago.
       pool.query(
         `${COBROS_CTE}
          SELECT
@@ -385,9 +352,7 @@ export async function getResumen(req, res) {
     const total_cargas    = parseFloat(corte.total_cargas);
     const total_productos = parseFloat(corte.total_productos);
     const total_ajustes   = parseFloat(corte.total_ajustes);
-    // El dinero (y su desglose) sale de los COBROS, no de los totales de las
-    // notas: con abonos, una nota se paga en varios días y cada parte cuenta el
-    // suyo (mig. 121).
+    // El dinero sale de los cobros (cada abono en su día), no de las notas.
     const cobrado = cobradoRes.rows[0];
     const total_efectivo      = parseFloat(cobrado.total_efectivo);
     const total_transferencia = parseFloat(cobrado.total_transferencia);
@@ -396,9 +361,8 @@ export async function getResumen(req, res) {
 
     const turnos = await leerCortes(pool, `c.sucursal = $${sucIdx} AND ${periodTurnoSQL}`, params);
 
-    // Por concepto (2026-10-10): cada cobro del período —efectivo y
-    // transferencia, liquidaciones y abonos, el día que entró— repartido con
-    // las mismas líneas que el corte de Caja. Suman el total cobrado.
+    // Cada cobro del período repartido por concepto, como el corte de Caja.
+    // Suman el total cobrado.
     const conceptos = await repartirCobros(pool, `
         SELECT o.id AS nota_id,
                o.precio_total - COALESCE((
@@ -458,16 +422,15 @@ export async function getResumen(req, res) {
         total_cargas,
         total_productos,
         total_ajustes,
-        // Suma de los conceptos facturados; se conserva el nombre histórico.
+        // Suma de los conceptos facturados.
         total_general: total_servicios + total_cargas + total_productos + total_ajustes,
         total_efectivo,
         total_transferencia,
         total_tarjeta,
-        // Dinero que realmente entró en el período: lo que se liquidó más lo
-        // que se abonó. Es el número que cuadra con el corte de caja.
+        // Lo liquidado más lo abonado: cuadra con los cortes de caja.
         total_cobrado,
       },
-      // Quién recibió cada abono y de qué nota (mig. 121).
+      // Quién recibió cada abono y de qué nota.
       abonos: abonosRes.rows.map((r) => ({
         id:         r.id,
         nota_id:    r.nota_id,
@@ -496,8 +459,7 @@ export async function getResumen(req, res) {
   }
 }
 
-// Años con notas (no canceladas) de la sucursal activa, para el selector de
-// año del filtro de período. Se mide por created_at (toda nota lo tiene).
+/** Años con notas no canceladas de la sucursal, para el filtro de período. */
 export async function getAnios(req, res) {
   try {
     const { rows } = await pool.query(

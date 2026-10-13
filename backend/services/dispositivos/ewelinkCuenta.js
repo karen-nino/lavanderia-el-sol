@@ -1,15 +1,10 @@
-// ewelinkCuenta — dónde vive la sesión de eWeLink (tabla `ewelink_cuenta`,
-// migración 098, una sola fila).
-//
-// Está separado del driver a propósito: el driver solo pide "dame un token
-// válido" y no sabe si sale de la base, de un archivo o de una prueba.
+// Sesión de eWeLink guardada en `ewelink_cuenta` (una fila). Separada del driver,
+// que solo pide un token válido.
 
 import crypto from 'crypto';
 import pool from '../../db/pool.js';
 
-// Cuánto vale el `state` del flujo de autorización. Es el tiempo que tiene la
-// persona para iniciar sesión en eWeLink y aceptar; pasado eso hay que volver a
-// darle al botón. Corto a propósito: es una credencial de un solo uso.
+/** Minutos para autorizar en eWeLink antes de que el `state` caduque. */
 const STATE_VIGENCIA_MIN = 15;
 
 export async function leerCuenta() {
@@ -17,8 +12,7 @@ export async function leerCuenta() {
   return rows[0] ?? null;
 }
 
-// ¿Hay una cuenta utilizable? Con el refresh token vencido no se puede renovar
-// nada y toca volver a autorizar a mano, así que cuenta como desconectada.
+/** ¿Cuenta utilizable? Con el refresh token vencido cuenta como desconectada. */
 export function estaConectada(cuenta) {
   if (!cuenta?.access_token || !cuenta?.refresh_token) return false;
   if (cuenta.rt_expira_at && new Date(cuenta.rt_expira_at) <= new Date()) return false;
@@ -61,7 +55,7 @@ export async function borrarCuenta() {
   );
 }
 
-// Genera el `state` del flujo y lo deja guardado para verificarlo a la vuelta.
+/** Genera y guarda el `state` del flujo. */
 export async function crearState() {
   const state = crypto.randomBytes(16).toString('hex');
   await pool.query(
@@ -71,12 +65,10 @@ export async function crearState() {
   return state;
 }
 
-// Verifica el `state` que vuelve en el redirect y lo quema. El callback es
-// público (quien llega es eWeLink, sin nuestro JWT), así que esto es lo único
-// que impide que un tercero nos haga canjear un code que no pedimos.
-//
-// La comparación es en tiempo constante por costumbre, no porque el riesgo sea
-// grande: el valor es de un solo uso y dura minutos.
+/**
+ * Verifica y quema el `state` del redirect: es lo que impide canjear un code que
+ * no pedimos (el callback es público). Compara en tiempo constante.
+ */
 export async function consumirState(state) {
   const cuenta = await leerCuenta();
   const esperado = cuenta?.state;

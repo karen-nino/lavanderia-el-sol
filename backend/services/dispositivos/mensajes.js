@@ -1,14 +1,6 @@
-// Traducción de los motivos técnicos del driver de dispositivos a algo que
-// entienda quien está parado frente a la máquina.
-//
-// Los drivers devuelven { ok, estado, motivo } y el motivo es un código
-// ('sin_cuenta_conectada', 'error_red', 'ewelink_40001'...). Ese código no le
-// dice nada a nadie: lo que hace falta es saber QUÉ pasó y QUÉ hacer, y sobre
-// todo si es algo que se arregla en la app (conectar la cuenta), en la
-// lavandería (el Sonoff desconectado) o en el servidor (las credenciales).
-//
-// Cada detalle empieza en minúscula porque se pega después de un encabezado:
-//   "No se pudo encender la máquina: la cuenta de eWeLink no está conectada..."
+// Traduce los motivos del driver ('sin_cuenta_conectada', 'error_red',
+// 'ewelink_40001'…) a qué pasó y qué hacer: en la app, en la lavandería o en el
+// servidor. Cada detalle va en minúscula: se pega después de un encabezado.
 
 const DETALLE_MOTIVO = {
   sin_enlazar:
@@ -37,10 +29,7 @@ const DETALLE_MOTIVO = {
 const SIN_DETALLE =
   'no se pudo hablar con el Sonoff y no llegó ningún detalle. Vuelve a intentar en un momento.';
 
-// Los códigos de la nube de eWeLink llegan como 'ewelink_<código>'. Los de
-// autenticación (402 y la familia 401xx, ver ewelinkDriver) son los únicos que
-// sabemos leer con certeza; el resto se reporta con el código a la vista, sin
-// inventarle un significado.
+/** 402 y 401xx son de autenticación; los demás códigos se reportan tal cual. */
 const esCodigoDeAuth = (codigo) => codigo === '402' || codigo.startsWith('401');
 
 export function explicarMotivo(motivo) {
@@ -49,9 +38,7 @@ export function explicarMotivo(motivo) {
 
   if (motivo.startsWith('ewelink_')) {
     const codigo = motivo.slice('ewelink_'.length);
-    // El driver arma el motivo como `ewelink_${data?.error}`: si la nube
-    // responde sin ese campo queda 'ewelink_undefined'. Diagnosticar un Sonoff
-    // desenchufado a partir de eso sería inventar; mejor decir que no se sabe.
+    // Sin código numérico ('ewelink_undefined') no se inventa un diagnóstico.
     if (!/^\d+$/.test(codigo)) return SIN_DETALLE;
     if (esCodigoDeAuth(codigo)) {
       return 'eWeLink no aceptó el permiso de la app. Conecta la cuenta otra vez desde el aviso ' +
@@ -64,22 +51,17 @@ export function explicarMotivo(motivo) {
   return `no se pudo hablar con el Sonoff (${motivo}). Vuelve a intentar en un momento.`;
 }
 
-// Mensaje completo para la pantalla: qué se intentaba hacer + por qué falló.
+/** "<qué se intentaba>: <por qué falló>". */
 export const explicarFalla = (motivo, encabezado) => `${encabezado}: ${explicarMotivo(motivo)}`;
 
-// Pone mayúscula inicial, salvo que la primera palabra ya venga con mayúsculas
-// propias: "eWeLink" no puede volverse "EWeLink" en la tarjeta.
+/** Mayúscula inicial, salvo que la palabra ya traiga las suyas ("eWeLink"). */
 const capitalizar = (texto) => {
   const primeraPalabra = texto.split(' ')[0];
   if (/[A-ZÁÉÍÓÚÜÑ]/.test(primeraPalabra)) return texto;
   return texto.charAt(0).toUpperCase() + texto.slice(1);
 };
 
-// Texto para guardar en maquinas.sonoff_detalle y pintarlo en la tarjeta.
-//
-// Va completo a propósito: la frase que dice QUÉ hacer casi siempre es la
-// segunda ("Conecta la cuenta otra vez..."), y recortarla dejaba la tarjeta
-// enunciando el problema sin la salida, que es justo para lo que existe.
+/** Texto completo para `sonoff_detalle` (sin recortar: la segunda frase dice qué hacer). */
 export function resumirMotivo(motivo) {
   return capitalizar(explicarMotivo(motivo));
 }

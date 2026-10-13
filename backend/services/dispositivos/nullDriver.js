@@ -1,15 +1,6 @@
-// nullDriver — driver por defecto cuando NO hay integración real configurada.
-//
-// No habla con ningún hardware: simula los Sonoff en memoria. Sirve para
-// desarrollar y probar todo el flujo (sincronización, reconciliador, indicador
-// de la tarjeta) sin credenciales de eWeLink ni dispositivos físicos.
-//
-// Guarda el último estado por device_id, así que encender→estado devuelve 'on'
-// de forma coherente. Al reiniciar el proceso se pierde (arranca en 'off').
-//
-// IMPORTANTE: en producción hay que usar DISPOSITIVOS_DRIVER=ewelink. Con este
-// driver el sistema "cree" que controla las máquinas pero no prende nada real;
-// por eso registra en consola cada operación para que sea evidente.
+// Driver de simulación (por defecto): los Sonoff viven en memoria, por
+// device_id, para desarrollar y probar sin hardware. Registra cada operación en
+// consola: no prende nada real. En producción se usa DISPOSITIVOS_DRIVER=ewelink.
 
 const estados = new Map(); // device_id -> 'on' | 'off'
 
@@ -34,7 +25,7 @@ export async function estado(maquina) {
   return { ok: true, estado: e };
 }
 
-// Solo para pruebas: reinicia el estado simulado.
+/** Solo para pruebas: reinicia el estado simulado. */
 export function _reset() {
   estados.clear();
 }

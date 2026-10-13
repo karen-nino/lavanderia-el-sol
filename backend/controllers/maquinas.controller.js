@@ -23,34 +23,32 @@ const TIPOS_VALIDOS   = ['lavadora_mediana', 'lavadora_jumbo', 'secadora'];
 const CAPACIDADES_VALIDAS = ['20kg', '35kg'];
 const TAMANOS_VALIDOS = ['mediana', 'jumbo'];
 
-// Los valores válidos se enlistan como se leen, no como se guardan:
-// ['lavadora_mediana', 'secadora'] → "lavadora mediana o secadora".
+/** ['lavadora_mediana', 'secadora'] → "lavadora mediana o secadora" */
 const enPalabras = (valores) => {
   const legibles = valores.map((v) => v.replace(/_/g, ' '));
   if (legibles.length <= 1) return legibles.join('');
   return `${legibles.slice(0, -1).join(', ')} o ${legibles.at(-1)}`;
 };
 
-// device_id del Sonoff en eWeLink: cadena recortada, o null si viene vacío.
+/** device_id del Sonoff en eWeLink: recortado, o null si viene vacío. */
 const normalizarDeviceId = (v) => {
   if (v == null) return null;
   const s = String(v).trim();
   return s === '' ? null : s;
 };
 
-// Canal/relé del dispositivo (Sonoff multi-relé): entero >= 0, o null.
+/** Canal del Sonoff multi-relé: entero >= 0, o null. */
 const normalizarDeviceCanal = (v) => {
   if (v == null || v === '') return null;
   const n = Number(v);
   return Number.isInteger(n) && n >= 0 ? n : null;
 };
 
-// Un mismo relé físico no puede estar enlazado a dos máquinas: un device_id
-// copiado por error haría que la app apague la máquina equivocada (con ropa
-// dentro). Se busca en TODAS las sucursales porque el Sonoff es un aparato
-// físico único, no un dato por sucursal. Un mismo device_id con canales
-// distintos sí es válido (Sonoff multi-relé).
-// Devuelve el nombre de la máquina que ya lo usa, o null si está libre.
+/**
+ * Un relé no puede estar enlazado a dos máquinas (apagaría la equivocada). Se
+ * busca en todas las sucursales; el mismo device_id con otro canal sí vale.
+ * @returns {Promise<string|null>} nombre de la máquina que ya lo usa, o null.
+ */
 const buscarMaquinaConMismoDevice = async (deviceId, deviceCanal, excluirId = null) => {
   if (!deviceId) return null;
   const { rows } = await pool.query(
@@ -64,9 +62,7 @@ const buscarMaquinaConMismoDevice = async (deviceId, deviceCanal, excluirId = nu
   return rows[0]?.nombre ?? null;
 };
 
-// El driver 'null' simula todo en memoria: responde ok a cualquier device_id,
-// sin tocar hardware. Mientras esté activo, las pruebas de enlace no prueban
-// nada y hay que decirlo en pantalla en vez de pintar una palomita verde.
+/** Con el driver de simulación las pruebas de enlace no prueban nada. */
 const simulacionActiva = (maq) => dispositivos.esSimulacion(maq);
 
 const MSG_SIMULACION =
@@ -75,8 +71,7 @@ const MSG_SIMULACION =
   'Para activarlo hay que configurar eWeLink en el servidor (DISPOSITIVOS_DRIVER=ewelink) ' +
   'y, si se limita por sucursal, incluir esta en DISPOSITIVOS_SUCURSALES.';
 
-// Guarda cómo quedó el enlace y, si falló, POR QUÉ: así la tarjeta explica el
-// problema sin que nadie tenga que apretar "Probar" para enterarse.
+/** Guarda el estado del enlace y, si falló, el motivo para la tarjeta. */
 const guardarEnlace = async (id, ok, motivo) => {
   const { rows } = await pool.query(
     `UPDATE maquinas SET sonoff_estado = $1, sonoff_detalle = $2, sonoff_sync_at = NOW()
@@ -86,13 +81,11 @@ const guardarEnlace = async (id, ok, motivo) => {
   return rows[0];
 };
 
-// Duración del pulso de la prueba física: suficiente para ver/oír arrancar la
-// máquina, corto para no iniciar un ciclo de verdad.
+/** Pulso de la prueba física: se ve arrancar, sin iniciar un ciclo. */
 
 const esperar = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-// Apagar es la operación que NO puede quedarse a medias: si falla, una máquina
-// se queda andando sola. Se reintenta con una pausa corta antes de rendirse.
+/** Apaga con reintentos: un apagado fallido deja una máquina andando sola. */
 const INTENTOS_APAGADO = 3;
 async function apagarConReintentos(maq) {
   let ultimo;
@@ -113,30 +106,19 @@ const mensajeDeviceDuplicado = (nombre, deviceCanal) =>
   (deviceCanal != null ? ` (canal ${deviceCanal})` : '') +
   '. Usa un ID distinto o, si es un dispositivo multi-relé, indica otro canal.';
 
-// Agrega a la fila de la máquina lo que la tarjeta necesita para ofrecer otro
-// ciclo (mig. 108). Se calcula aquí y no en el frontend porque depende del
-// margen y de la pausa, que son configuración del servidor: mandarlos al
-// navegador para que allá se haga la resta sería duplicar la regla en dos
-// lugares que pueden desincronizarse.
-//
-//   ciclos_carga        → cuántos ciclos lleva (1 = va en el primero)
-//   ciclos_max          → el tope, para poder decir "ciclo 1 de 2"
-//   otro_ciclo_desde    → cuándo se le puede devolver la corriente (ISO)
-//   esperando_arranque  → ya tiene corriente y falta que la arranquen (mig. 110)
-//   opciones_mas_tiempo → programas que aún se le pueden sumar a la secadora
-//                         de fichas que pregunta (Sec49, 2026-10-08)
-//
-// Los dos últimos son los que parten el botón en dos pasos: primero "Encender
-// máquina" —que no se habilita hasta pasada la pausa sin corriente— y después
-// "Otro ciclo", que arranca el cronómetro cuando el lavado ya empezó.
+/**
+ * Agrega lo que la tarjeta necesita para "otro ciclo" (se calcula aquí porque
+ * depende de configuración del servidor):
+ * - ciclos_carga: ciclos que lleva la carga.
+ * - ciclos_max: tope de ciclos ("ciclo 1 de 2").
+ * - otro_ciclo_desde: cuándo se le puede volver a dar corriente (ISO).
+ * - esperando_arranque: tiene corriente y falta "Iniciar".
+ * - opciones_mas_tiempo: programas que caben en la secadora de fichas.
+ */
 const conDatosDeOtroCiclo = (m) => {
   const ciclos = m.ciclos_carga ?? null;
   const desde = instanteOtroCiclo(m);
-  // El tope no es el mismo para todas: una lavadora sin tiempo configurado
-  // corre un solo ciclo. Sale de la fila, así que la consulta tiene que traer
-  // `minutos_ciclo`.
-  // `ciclo_unico` viene de la carga que corre ahora (lateral de getMaquinas),
-  // así que el tope se calcula con la fila completa.
+  // Necesita `minutos_ciclo` y `ciclo_unico` en la fila (ver getMaquinas).
   const maxCiclos = maxCiclosDeMaquina(m);
   return {
     ...m,
@@ -153,37 +135,26 @@ const conDatosDeOtroCiclo = (m) => {
 
 export const getMaquinas = async (req, res) => {
   try {
-    // Dos datos que las pantallas de asignación necesitan, además del estado:
-    //
-    // · "reservada": la máquina está libre pero ya la tiene asignada otra nota
-    //   abierta que aún no la arranca. NO bloquea —asignar no aparta— pero se
-    //   muestra para avisar que alguien más va por ella.
-    // · "en_uso_folio": la nota que la está usando ahora mismo. Es la que se
-    //   la quedó al darle a Iniciar —por eso se busca por `iniciada_at`, la
-    //   marca de haberla arrancado—; las demás tienen que cambiar de máquina.
-    //   Resolverlo por la nota más antigua con la máquina ASIGNADA era mirar el
-    //   dato equivocado: asignar no aparta, así que la nota vieja que nunca le
-    //   dio a Iniciar salía como dueña del ciclo de otra, con su botón de
-    //   "Detener Lavado" al lado (2026-09-22).
+    // Además del estado:
+    // - reservada: libre pero asignada a otra nota abierta que aún no la arranca.
+    // - en_uso_folio: la nota que la está usando, la que le dio a Iniciar
+    //   (asignar no aparta).
     const { rows } = await pool.query(
       `SELECT m.*,
               ${MINUTOS_CONFIGURADOS} AS minutos_ciclo,
-              -- Los tiempos que ofrece su modelo y si hay que preguntar cuál
-              -- usar al iniciarla (mig. 120).
+              -- Programas del modelo y si se pregunta cuál al iniciar.
               ${TIEMPOS_DEL_MODELO} AS modelo_tiempos,
-              -- Lo que su marca dice del arranque y de los ciclos (mig. 122).
+              -- Opciones del modelo (dos ciclos).
               ${OPCIONES_DE_MARCA} AS marca_opciones,
-              -- Cronómetro en vez de temporizador (2026-10-02): la tarjeta
-              -- cuenta hacia arriba y ofrece Finalizar siempre.
+              -- Cronómetro: la tarjeta cuenta hacia arriba y ofrece Finalizar.
               ${esCronometroSql('m')} AS cronometro,
               -- Cronómetro que arranca con "Iniciar" y no al encender.
               ${conIniciarSql('m')} AS con_iniciar,
-              -- Secadora de fichas (mig. 147): su "Otro ciclo" suma programas.
+              -- Secadora de fichas: su "Otro ciclo" suma programas.
               ${MINUTOS_POR_FICHA} AS minutos_por_ficha,
-              -- Nombre de antes de la mig. 152, para las tablets con la versión
-              -- anterior de la app. Se puede quitar cuando todas se actualicen.
+              -- Alias para tablets con una versión anterior de la app.
               ${MINUTOS_POR_FICHA} AS minutos_por_moneda,
-              -- Solo fichas (mig. 149): sin Sonoff ni tope.
+              -- Solo fichas: sin Sonoff ni tope.
               ${soloFichasSql('m')} AS solo_fichas,
               (r.folio IS NOT NULL) AS reservada,
               r.folio               AS reservada_folio,
@@ -213,30 +184,22 @@ export const getMaquinas = async (req, res) => {
             WHERE m.estado = 'en_uso'
               AND n.estado IN ('EN_ESPERA', 'LAVANDO', 'SECANDO')
               AND (
-                -- La arrancó esta nota, o está encendida esperando su arranque
-                -- (mig. 110): en esa ventana la máquina ya es suya aunque el
-                -- cronómetro no haya empezado.
+                -- La arrancó esta nota, o la encendió y espera su arranque.
                 (nc.lavadora_id = m.id
                  AND (nc.lavadora_iniciada_at IS NOT NULL OR m.encendida_para_nota_id = n.id))
                 OR (nc.secadora_id = m.id
                     AND (nc.secadora_iniciada_at IS NOT NULL OR m.encendida_para_nota_id = n.id))
               )
-            -- La última en arrancarla es la que la tiene: una carga puede
-            -- repetir máquina, y la encendida sin arrancar va al final.
+            -- La última en arrancarla; la encendida sin arrancar va al final.
             ORDER BY (CASE WHEN nc.lavadora_id = m.id THEN nc.lavadora_iniciada_at
                            ELSE nc.secadora_iniciada_at END) DESC NULLS LAST
             LIMIT 1
          ) u ON TRUE
-         -- Ciclos que lleva la carga que está corriendo en esta máquina
-         -- (mig. 108). Va aparte del lateral de arriba a propósito: aquel
-         -- responde "qué nota la tiene" y aquí hace falta la CARGA concreta,
-         -- que además tiene que haber arrancado de verdad (mig. 097).
+         -- Ciclos de la carga que corre en esta máquina (arrancada por su nota).
          LEFT JOIN LATERAL (
            SELECT CASE WHEN nc.lavadora_id = m.id THEN nc.lavadora_ciclos
                        ELSE nc.secadora_ciclos END AS ciclos,
-                  -- ¿Esta vuelta es de un solo ciclo? (mig. 115) Es de la
-                  -- PASADA: la misma lavadora puede dar dos ciclos en el
-                  -- lavado de la nota y uno en el relavado de después.
+                  -- ¿Esta vuelta es de un solo ciclo? (lo marca cada vuelta).
                   COALESCE((
                     SELECT ncm.ciclo_unico FROM nota_carga_maquinas ncm
                      WHERE ncm.carga_id = nc.id
@@ -264,15 +227,12 @@ export const getMaquinas = async (req, res) => {
 };
 
 // ── GET /maquinas/:id/uso ───────────────────────────────────
-// Uso diario de la máquina, derivado de las notas que la usaron DE VERDAD:
-// tenerla asignada no cuenta (varias notas pueden tenerla; la usa la que le da
-// a Iniciar, y eso es lo que marca nota_cargas.*_iniciada_at, mig. 097).
-// "Generado" = dinero cobrado (notas PAGADAS), atribuido al día en que se
-// usó la máquina. Métricas por día: usos, cargas, generado, empleados que
-// la operaron y clientes atendidos (cada autoservicio cuenta como 1 cliente;
-// el resto, sus clientes distintos). Excluye notas canceladas.
-// El desglose por día se arma en JS (igual que el desempeño de empleados)
-// para que cada número y el contenido de su modal siempre coincidan.
+/**
+ * Uso diario de la máquina según las notas que de verdad la arrancaron (sin
+ * canceladas): usos, cargas, generado (cobrado), empleados y clientes. Un
+ * Autoservicio o un Por Encargo sin cliente cuenta como un cliente. El desglose
+ * se arma en JS para que cada número cuadre con su modal.
+ */
 export const getUsoMaquina = async (req, res) => {
   const id = Number(req.params.id);
   if (!id) return res.status(400).json({ message: 'No se reconoció la máquina.' });
@@ -284,12 +244,8 @@ export const getUsoMaquina = async (req, res) => {
     );
     if (maq.length === 0) return res.status(404).json({ message: 'Máquina no encontrada.' });
 
-    // Una nota "usó" la máquina si alguna de sus cargas corrió en ella. Se lee
-    // del historial de pasadas (mig. 114) y no de lavadora_id / secadora_id:
-    // esos se vacían al finalizar, así que solo veían la máquina mientras
-    // seguía corriendo y el historial de uso quedaba vacío (2026-10-03).
-    // Una pasada cuenta si la máquina arrancó: tiene su encendido sellado
-    // (mig. 140) o la carga arrancó ese hueco (mig. 097).
+    // Una nota la usó si alguna vuelta de sus cargas corrió en ella (el
+    // historial de vueltas, porque lavadora_id se vacía al finalizar).
     const PASADAS_DE_LA_MAQUINA = `
       SELECT ncm.id, ncm.carga_id, ncm.slot, ncm.asignada_at, nc.nota_id,
              ncm.encendida_at, ncm.finalizada_at, ncm.llego_tope
@@ -314,15 +270,9 @@ export const getUsoMaquina = async (req, res) => {
       [id, TZ_NEGOCIO]
     );
 
-    // Ciclos de esta máquina: una fila por PASADA, así que una carga que se
-    // relavó o se secó de más en ella cuenta cada vuelta (2026-10-03).
-    //
-    // Lo generado es lo que vale CADA vez que se usó la máquina, no el total
-    // de la nota (que en Por Encargo paga el servicio entero, con todas sus
-    // máquinas). El primer ciclo de la carga vale lo que se le cobró a ese
-    // hueco; si no se le cobró aparte (Por Encargo, que va con precio de
-    // servicio) o es una vuelta más, vale la tarifa de la máquina en Ajustes.
-    // La descripción son las máquinas que usó la carga (*_usada_id).
+    // Una fila por vuelta. Lo generado es lo que vale cada vuelta: la primera,
+    // lo cobrado a ese hueco; si no se cobró aparte (Por Encargo) o es una
+    // vuelta más, la tarifa de la máquina en Ajustes.
     const { rows: cargas } = await pool.query(
       `SELECT nc.nota_id, p.slot,
               CASE WHEN ROW_NUMBER() OVER (PARTITION BY p.carga_id, p.slot
@@ -338,18 +288,15 @@ export const getUsoMaquina = async (req, res) => {
                           ELSE aj.precio_carga_mediana
                         END
               END AS precio,
-              -- Cuánto estuvo encendida en este ciclo (migs. 140-141). Si aún
-              -- no se finaliza pero ya pasó su tope, el reloj se paró ahí y se
-              -- cuenta en vivo, como en Ventas.
+              -- Minutos encendida; si sigue y ya pasó su tope, hasta el tope.
               p.finalizada_at IS NULL AND vivo.al_tope AS tope_vivo,
               CASE WHEN p.finalizada_at IS NOT NULL
                    THEN ROUND(EXTRACT(EPOCH FROM p.finalizada_at - p.encendida_at))::int
                    WHEN vivo.al_tope THEN ${TOPE_RELOJ('mx')} * 60
               END AS segundos,
               p.llego_tope OR (p.finalizada_at IS NULL AND vivo.al_tope) AS tope,
-              -- A qué hora arrancó y terminó ese ciclo (2026-10-06). La pasada
-              -- los sella al finalizar; la que sigue corriendo toma el arranque
-              -- de la máquina, y si ya pasó su tope, el fin es el tope.
+              -- Inicio y fin; la que sigue corriendo usa el arranque de la
+              -- máquina y, si ya pasó su tope, el tope como fin.
               COALESCE(p.encendida_at,
                        CASE WHEN (CASE WHEN p.slot = 'lavadora' THEN nc.lavadora_id
                                        ELSE nc.secadora_id END) = $1
@@ -402,7 +349,7 @@ export const getUsoMaquina = async (req, res) => {
     for (const n of notas) {
       const b = getBucket(n.fecha);
       const clienteNombre = `${n.cliente_nombre ?? ''}${n.cliente_apellido ? ' ' + n.cliente_apellido : ''}`.trim();
-      // Cada nota que usó la máquina cuenta como un uso.
+      // Cada nota cuenta como un uso.
       b._usos.push({
         id:        n.id,
         folio:     n.folio,
@@ -417,10 +364,7 @@ export const getUsoMaquina = async (req, res) => {
         e.usos += 1;
         b._empleados.set(n.usuario_id, e);
       }
-      // Clientes: autoservicio = 1 cliente cada uno; el resto, por cliente,
-      // con las notas que trajo (2026-10-03: antes el registrado iba sin nota).
-      // Por Encargo de mostrador no tiene cliente: cuenta como uno, igual que
-      // el autoservicio.
+      // Clientes: cada nota sin cliente cuenta como uno; las demás, por cliente.
       if (n.tipo_servicio === 'AUTOSERVICIO') {
         b._autoservicios.push({ folio: n.folio });
       } else if (n.cliente_id) {
@@ -450,8 +394,7 @@ export const getUsoMaquina = async (req, res) => {
       });
     }
 
-    // En el detalle de notas, cada nota vale lo que generó EN ESTA MÁQUINA (sus
-    // ciclos), no su total: así cuadra con la columna Generado.
+    // Cada nota vale lo que generó en esta máquina, no su total.
     const generadoPorNota = new Map();
     for (const c of cargas) {
       generadoPorNota.set(c.nota_id, (generadoPorNota.get(c.nota_id) ?? 0) + (Number(c.precio) || 0));
@@ -515,10 +458,8 @@ export const createMaquina = async (req, res) => {
 
   const deviceId = normalizarDeviceId(device_id);
   const deviceCanal = normalizarDeviceCanal(device_canal);
-  // Sin dispositivo enlazado la máquina queda 'sin_enlazar'; con dispositivo
-  // arranca en 'sin_probar' hasta que el reconciliador o el botón "Probar"
-  // verifiquen que responde y lo marquen 'enlazada'. No es 'error': todavía no
-  // ha fallado nada, solo falta comprobarlo (mig. 103).
+  // Sin dispositivo: 'sin_enlazar'. Con dispositivo: 'sin_probar' hasta que el
+  // barrido o "Probar" confirmen que responde.
   const sonoffEstado = deviceId ? 'sin_probar' : 'sin_enlazar';
 
   try {
@@ -572,15 +513,10 @@ export const updateMaquina = async (req, res) => {
       return res.status(409).json({ message: mensajeDeviceDuplicado(yaUsado, deviceCanal) });
     }
 
-    // estado es opcional: si llega null se conserva el actual. Al cambiarlo se
-    // mantiene en_uso_desde coherente, igual que en cambiarEstadoMaquina.
-    //
-    // sonoff_estado/sonoff_sync_at se recalculan según el enlace: sin
-    // dispositivo → 'sin_enlazar'; si el device_id cambia → 'sin_probar' (aún
-    // sin confirmar, pero sin fallas que reportar) y se limpia sync_at para que
-    // el reconciliador/probar lo reverifiquen; si no cambia, se conserva el
-    // estado actual. El detalle del último fallo se borra en ambos casos:
-    // hablaba del Sonoff anterior.
+    // `estado` null conserva el actual. El estado del Sonoff según el enlace:
+    // sin dispositivo → 'sin_enlazar'; si cambia el device_id o el canal →
+    // 'sin_probar' (a reverificar); si no, se conserva. El detalle de la falla
+    // anterior se borra.
     const { rows } = await pool.query(
       `UPDATE maquinas
          SET nombre = $1, tipo = $2, tamano = $3, modelo = $4, capacidad = $5, numero_serie = $6, fecha_adquisicion = $7, notas = $8,
@@ -593,12 +529,7 @@ export const updateMaquina = async (req, res) => {
              END,
              device_id = $12::varchar,
              device_canal = $13,
-             -- $12 va casteado en TODOS sus usos: sin el cast, Postgres lo
-             -- deduce como varchar en la asignación y como text dentro del
-             -- CASE, y rechaza la consulta ("inconsistent types deduced").
-             -- El canal cuenta igual que el device_id: en un Sonoff multi-relé
-             -- corregir el canal apunta a OTRO relé, y el enlace que se había
-             -- confirmado ya no dice nada del nuevo.
+             -- $12 casteado en todos sus usos ("inconsistent types deduced").
              sonoff_estado = CASE
                WHEN $12::varchar IS NULL THEN 'sin_enlazar'
                WHEN device_id IS DISTINCT FROM $12::varchar
@@ -633,9 +564,8 @@ export const updateMaquina = async (req, res) => {
 export const deleteMaquina = async (req, res) => {
   const { id } = req.params;
   try {
-    // Una máquina EN USO no se borra (2026-10-08): la carga que la corre se
-    // quedaba sin máquina —la nota podía darse por terminada a media lavada— y,
-    // si tiene Sonoff, ya nadie le mandaba apagar: el relé se quedaba cerrado.
+    // Una máquina en uso no se borra: su carga se quedaría sin máquina y nadie
+    // apagaría su relé.
     const { rowCount } = await pool.query(
       `DELETE FROM maquinas WHERE id = $1 AND sucursal = $2 AND estado <> 'en_uso'`,
       [id, req.sucursal]
@@ -662,10 +592,11 @@ export const deleteMaquina = async (req, res) => {
 };
 
 // ── PATCH /maquinas/:id/detener-ciclo ───────────────────────
-// Detiene manualmente el ciclo: la máquina pasa a 'disponible' y se
-// reinicia su temporizador. Si el ajuste alerta_ciclo_detenido está
-// activo y la máquina estaba en uso, registra una notificación que
-// aparecerá en la campana del Dashboard.
+/**
+ * Detiene el ciclo: la máquina pasa a disponible y la nota recalcula su fase.
+ * Con `alerta_ciclo_detenido` activo deja aviso en la campana. Detener una
+ * lavadora es de admin.
+ */
 export const detenerCiclo = async (req, res) => {
   const { id } = req.params;
   const client = await pool.connect();
@@ -681,24 +612,21 @@ export const detenerCiclo = async (req, res) => {
       return res.status(404).json({ message: 'Máquina no encontrada.' });
     }
     const maq = maqRows[0];
-    // Solo un admin puede detener una LAVADORA; la secadora la puede detener
-    // cualquier usuario.
+    // Lavadora: solo admin. Secadora: cualquiera.
     if (maq.tipo !== 'secadora' && !esAdmin(req.user?.rol)) {
       await client.query('ROLLBACK');
       return res.status(403).json({ message: 'Solo un administrador puede detener una lavadora.' });
     }
     const estabaEnUso = maq.estado === 'en_uso';
 
-    // Su uso queda con hora de fin antes de soltarla.
+    // Cierra su vuelta antes de soltarla.
     await sellarPasadasVivas(client, [maq.id]);
     const { rows: upd } = await client.query(
       `UPDATE maquinas SET estado = 'disponible', en_uso_desde = NULL WHERE id = $1 RETURNING *`,
       [id]
     );
 
-    // Si la máquina pertenece a una nota en proceso, recalcular su fase: al
-    // soltarla la nota puede quedar sin ninguna máquina en uso y volver a
-    // "En Espera" (o seguir Lavando/Secando si otras cargas siguen corriendo).
+    // La nota en proceso recalcula su fase (puede volver a En Espera).
     await client.query(
       `UPDATE notas n SET estado = (CASE
            WHEN EXISTS (SELECT 1 FROM nota_cargas nc JOIN maquinas m ON m.id = nc.lavadora_id
@@ -749,9 +677,7 @@ export const cambiarEstadoMaquina = async (req, res) => {
   }
 
   try {
-    // en_uso_desde se setea al activar y se limpia al salir de en_uso.
-    // Se castea $1 al enum estado_maquina porque al usarlo en la rama CASE
-    // Postgres ya no puede inferir el tipo desde la asignación a la columna.
+    // $1 casteado al enum: dentro del CASE Postgres no infiere el tipo.
     const { rows } = await pool.query(
       `UPDATE maquinas
          SET estado       = $1::estado_maquina,
@@ -774,10 +700,10 @@ export const cambiarEstadoMaquina = async (req, res) => {
 };
 
 // ── POST /maquinas/:id/probar-sonoff ────────────────────────
-// Verifica el enlace con el Sonoff SIN cambiar el estado operativo de la
-// máquina: solo lee el estado del dispositivo. Actualiza sonoff_estado
-// ('enlazada' si respondió, 'error' si no, 'sin_enlazar' si no tiene device_id)
-// y devuelve la máquina actualizada. Útil al asignar el device_id en Gestión.
+/**
+ * Prueba el enlace leyendo el estado del Sonoff, sin tocar la máquina. Guarda
+ * 'enlazada', 'error' o 'sin_enlazar' y devuelve la máquina.
+ */
 export const probarSonoff = async (req, res) => {
   const { id } = req.params;
   try {
@@ -802,9 +728,7 @@ export const probarSonoff = async (req, res) => {
       });
     }
 
-    // Con el driver de simulación CUALQUIER device_id responde ok, así que una
-    // prueba "exitosa" no significa nada: no se guarda el resultado (marcar
-    // 'enlazada' sería mentir en la tarjeta) y se avisa a quien la ejecutó.
+    // En simulación todo responde ok: no se guarda y se avisa.
     if (simulacionActiva(maq)) {
       return res.json({
         simulado: true,
@@ -823,8 +747,7 @@ export const probarSonoff = async (req, res) => {
         maquina: actualizada,
       });
     }
-    // Decir en qué estado se encontró el relé ahorra el viaje a la máquina: si
-    // aparece encendida y nadie la está usando, ahí mismo se ve el problema.
+    // Se dice en qué estado estaba el relé.
     res.json({
       message: `Sonoff enlazado correctamente. Ahora mismo está ${resultado.estado === 'on' ? 'encendido' : 'apagado'}.`,
       estado: resultado.estado,
@@ -836,15 +759,10 @@ export const probarSonoff = async (req, res) => {
   }
 };
 
-// Apagado de emergencia: corta el Sonoff ya, sin esperas ni condiciones.
-//
-// Existe porque una máquina puede quedar andando cuando no debería (un
-// encendido manual que nadie apagó, un ciclo que no cortó) y en ese momento lo
-// último que sirve es ir a buscar el teléfono y abrir eWeLink.
-//
-// Se permite incluso con la máquina en uso: justamente el caso urgente es
-// "está encendida y no debería estarlo". No toca el estado operativo en la BD;
-// solo manda apagar el dispositivo.
+/**
+ * Apagado de emergencia: corta el Sonoff ya, aunque la máquina esté en uso.
+ * Cancela un encendido manual; no toca el estado de una nota.
+ */
 export const apagarSonoff = async (req, res) => {
   const { id } = req.params;
   try {
@@ -869,10 +787,8 @@ export const apagarSonoff = async (req, res) => {
     const apagado = await apagarConReintentos(maq);
     console.log(`[maquinas] apagado de emergencia ${maq.nombre}: ${apagado.ok ? 'ok' : `falló (${apagado.motivo})`}`);
 
-    // Apagar cancela el encendido manual: si no se borrara la marca, el
-    // reconciliador volvería a prender la máquina que se acaba de cortar.
-    // La máquina se libera solo si estaba ocupada por ese encendido, no por una
-    // nota: ahí el estado lo maneja el flujo de la nota.
+    // Se borra el encendido manual (si no, el barrido la volvería a prender) y
+    // se libera si solo la ocupaba eso.
     if (apagado.ok && maq.encendida_manual_at) {
       await pool.query(
         `UPDATE maquinas
@@ -896,9 +812,7 @@ export const apagarSonoff = async (req, res) => {
     const actualizada = await guardarEnlace(id, apagado.ok, apagado.motivo);
 
     if (!apagado.ok) {
-      // Aquí la máquina puede estar andando con ropa dentro, así que el mensaje
-      // termina siempre con la salida manual: no se queda esperando a que la
-      // app se recupere.
+      // Puede estar andando con ropa dentro: el mensaje da la salida manual.
       return res.status(502).json({
         message: explicarFalla(apagado.motivo, `No se pudo apagar ${maq.nombre} después de ${INTENTOS_APAGADO} intentos`) +
                  ' Apágala desde la app de eWeLink o con el interruptor de la máquina.',
@@ -912,17 +826,11 @@ export const apagarSonoff = async (req, res) => {
   }
 };
 
-// Encendido manual desde Gestión de Máquinas: cierra el relé y lo deja
-// cerrado, hasta que alguien lo apague.
-//
-// Sirve para arrancar una máquina sin pasar por una nota: reanudar un ciclo
-// que se cortó por un apagón, o dejarla andando mientras se revisa. Como el
-// equipo arranca de verdad, la UI pide confirmación antes de llamar aquí.
-//
-// La máquina queda marcada como encendida a mano (mig. 104) y pasa a 'en_uso':
-// el reconciliador la respeta y deja de ofrecerse al crear notas y en Salidas,
-// porque está ocupada de verdad. Antes de la 104 este botón prendía la máquina
-// y el barrido la apagaba a los tres minutos.
+/**
+ * Encendido manual desde Gestión de Máquinas, sin nota (reanudar tras un
+ * apagón, revisarla). Queda 'en_uso' con encendido manual: el barrido la
+ * respeta y no se ofrece a notas hasta que se apague o caduque.
+ */
 export const encenderSonoff = async (req, res) => {
   const { id } = req.params;
   try {
@@ -936,9 +844,7 @@ export const encenderSonoff = async (req, res) => {
     }
     const maq = rows[0];
 
-    // La de fichas (mig. 149) no tiene Sonoff. Aunque le hayan dejado uno
-    // enlazado, encenderla la dejaría 'en_uso' para siempre: la sincronización
-    // no la toca, así que su encendido manual nunca caducaría.
+    // Solo fichas: no se enciende (su encendido manual nunca caducaría).
     if (maq.solo_fichas) {
       return res.status(400).json({
         message: `${maq.nombre} trabaja con fichas: no tiene Sonoff que encender.`,
@@ -964,10 +870,7 @@ export const encenderSonoff = async (req, res) => {
       });
     }
 
-    // Queda marcada como encendida a mano (mig. 104). Sin esto el reconciliador
-    // la apagaba en su siguiente pasada, o sea que el botón prendía la máquina
-    // por tres minutos. La marca además la pone 'en_uso': está ocupada de
-    // verdad, y así no se ofrece al crear notas ni en Salidas.
+    // Encendido manual: el barrido la respeta y queda 'en_uso'.
     const { rows: upd } = await pool.query(
       `UPDATE maquinas
           SET encendida_manual_at = NOW(),
@@ -993,21 +896,11 @@ export const encenderSonoff = async (req, res) => {
 };
 
 // ── PATCH /maquinas/:id/otro-ciclo ──────────────────────────
-// Re-arma una máquina para el siguiente ciclo de la MISMA carga (mig. 108).
-//
-// El ciclo real de una LG son 15 min y una carga necesita dos seguidos. Al
-// cumplirse el primero la máquina se queda sin corriente (corte por fin de
-// ciclo) y su temporizador llega a cero: sin esto, el único modo de seguir era
-// el encendido manual de Gestión, que es de admin. Aquí lo puede hacer quien
-// esté en el mostrador.
-//
-// Lo que cambia es el reloj, no la nota: `en_uso_desde` vuelve a NOW() y el
-// contador de la carga sube. `ciclo_minutos` no se recalcula —es la misma
-// máquina y la misma marca, así que el ciclo dura lo mismo— y el precio
-// tampoco: los dos ciclos son una sola carga cobrada una vez.
-//
-// Tres candados, en este orden: que el ciclo anterior haya TERMINADO, que la
-// pausa sin corriente se haya cumplido, y que la carga no haya agotado su tope.
+/**
+ * Arranca el siguiente ciclo de la misma carga (modelos de dos ciclos): reinicia
+ * el reloj y sube el contador; el precio no cambia. Exige que el ciclo anterior
+ * haya terminado, que pasara la pausa sin corriente y que no se agote el tope.
+ */
 export const otroCiclo = async (req, res) => {
   const { id } = req.params;
   const client = await pool.connect();
@@ -1031,8 +924,7 @@ export const otroCiclo = async (req, res) => {
       return res.status(400).json({ message: `${maq.nombre} no está corriendo ninguna carga.` });
     }
 
-    // La carga que de verdad la arrancó (mig. 097). Se bloquea para que dos
-    // empleados no puedan re-armar el mismo ciclo a la vez y saltarse el tope.
+    // La carga que la arrancó, bloqueada: dos clics no se saltan el tope.
     const { rows: cargas } = await client.query(
       `SELECT nc.id,
               nc.nota_id,
@@ -1063,10 +955,7 @@ export const otroCiclo = async (req, res) => {
       });
     }
 
-    // Una lavadora sin tiempo de marca corre un solo ciclo, y la vuelta
-    // REPETIDA sobre la misma carga también (mig. 115). Se revalida aquí y no
-    // solo en la tarjeta porque este endpoint es lo que de verdad alarga el
-    // lavado: el botón es únicamente quien lo pide.
+    // El tope de ciclos se revalida aquí, no solo en la tarjeta.
     const maxCiclos = maxCiclosDeMaquina({ ...maq, ciclo_unico: carga.ciclo_unico });
     if (carga.ciclos >= maxCiclos) {
       await client.query('ROLLBACK');
@@ -1075,8 +964,7 @@ export const otroCiclo = async (req, res) => {
           ? `Esta carga ya corrió sus ${maxCiclos} ciclos. Termínala para liberar ${maq.nombre}.`
           : carga.ciclo_unico
           ? `Esta vuelta es una repetición (relavado o secado de más), así que corre un solo ciclo. Termínala para liberar ${maq.nombre}.`
-          // Una secadora corre un ciclo por regla del negocio, tenga o no
-          // tiempo de marca: mandarla a configurarlo no arregla nada.
+          // La secadora siempre corre un ciclo.
           : maq.tipo === 'secadora'
           ? `Un secado es un solo ciclo. Termínalo para liberar ${maq.nombre}.`
           : `${maq.nombre} no tiene configurado el tiempo de su marca, así que su carga corre un solo ciclo. `
@@ -1084,11 +972,8 @@ export const otroCiclo = async (req, res) => {
       });
     }
 
-    // Si ya se le dio a "Encender máquina" para esta vuelta (mig. 110), la
-    // máquina está esperando arranque: sin cronómetro y con corriente. Los
-    // relojes de abajo ya se cumplieron ANTES de encenderla —es lo que dejó que
-    // el botón apareciera— y volver a exigirlos aquí bloquearía el segundo ciclo
-    // para siempre, porque al encender se borró el `en_uso_desde` que miden.
+    // Ya encendida para esta vuelta: los relojes se cumplieron antes de
+    // encenderla (y al encender se borró el `en_uso_desde` que miden).
     const esperandoArranqueDeEstaCarga =
       maq.en_uso_desde == null && String(maq.encendida_para_nota_id) === String(carga.nota_id);
 
@@ -1105,9 +990,7 @@ export const otroCiclo = async (req, res) => {
         });
       }
 
-      // La pausa sin corriente es parte del flujo pedido por el negocio, no un
-      // detalle de la UI: si se pudiera saltar desde la API, el botón de la
-      // tarjeta sería el único que la respeta.
+      // La pausa sin corriente se exige también desde la API.
       const desde = instanteOtroCiclo(maq);
       if (desde != null && Date.now() < desde) {
         const faltan = Math.ceil((desde - Date.now()) / 1000);
@@ -1124,14 +1007,8 @@ export const otroCiclo = async (req, res) => {
       [carga.id]
     );
 
-    // Reiniciar en_uso_desde es lo que vuelve a arrancar el temporizador y, de
-    // paso, lo que hace que la máquina deje de estar vencida: la sincronización
-    // de abajo la vuelve a encender.
-    //
-    // El ciclo se vuelve a sellar porque "Encender máquina" lo dejó en NULL: una
-    // máquina esperando arranque no tiene cronómetro. Sale de su modelo o su
-    // marca (migs. 117 y 107) con el mismo respaldo por tamaño de siempre, para
-    // que el segundo ciclo dure exactamente lo que duró el primero.
+    // Reiniciar en_uso_desde arranca el reloj. El ciclo se vuelve a sellar
+    // (encender lo dejó en NULL) con la misma cadena que el primero.
     const { rows: upd } = await client.query(
       `UPDATE maquinas m
           SET en_uso_desde = NOW(),
@@ -1141,8 +1018,7 @@ export const otroCiclo = async (req, res) => {
                 m.ciclo_minutos,
                 ${MINUTOS_CONFIGURADOS},
                 (SELECT CASE
-                          -- La secadora también tiene respaldo por tamaño
-                          -- (mig. 051): la columna plana es la mediana.
+                          -- Respaldo por tamaño; la columna plana es la mediana.
                           WHEN m.tipo = 'secadora' AND m.tamano = 'jumbo'
                             THEN COALESCE(a.tiempo_secadora_jumbo, a.tiempo_carga_secadora)
                           WHEN m.tipo = 'secadora'       THEN a.tiempo_carga_secadora
@@ -1156,9 +1032,8 @@ export const otroCiclo = async (req, res) => {
 
     await client.query('COMMIT');
 
-    // Fuera de la transacción: el trigger de LISTEN/NOTIFY solo mira el estado
-    // y el enlace (mig. 075), y aquí ninguno cambió, así que el encendido hay
-    // que pedirlo a mano. Esto además reprograma el corte del nuevo ciclo.
+    // Fuera de la transacción: el trigger no ve este cambio, así que se pide el
+    // encendido (y reprograma el corte).
     await sincronizarSonoff(maq.id);
 
     const { rows: fresca } = await pool.query(
@@ -1175,8 +1050,7 @@ export const otroCiclo = async (req, res) => {
       maquina: conDatosDeOtroCiclo({
         ...(fresca[0] ?? upd[0]),
         ciclos_carga: ciclo,
-        // La consulta de arriba trae la máquina sola; el tope de ESTA vuelta
-        // lo decide la pasada, que ya se leyó con la carga.
+        // El tope de esta vuelta lo decide la pasada leída con la carga.
         ciclo_unico: carga.ciclo_unico,
       }),
     });
@@ -1190,14 +1064,11 @@ export const otroCiclo = async (req, res) => {
 };
 
 // ── PATCH /maquinas/:id/mas-tiempo ──────────────────────────
-// "Otro ciclo" de la secadora de fichas que pregunta su programa (la Sec49,
-// 2026-10-08). Cuando se le acaba el programa elegido, el empleado le puede
-// sumar otro: se le meten las fichas de esos minutos y la carga sigue
-// abierta. Nunca se pasa del tope en minutos metidos (mig. 148): con tope 30
-// y 20 metidos solo cabe 10. El precio no cambia (se cobra por tamaño).
-//
-// El nuevo fin cuenta desde AHORA si el empleado tardó en decidirse: eligió
-// 10, se acabaron al minuto 10 y le suma 20 al minuto 15 → seca hasta el 35.
+/**
+ * "Otro ciclo" de la secadora de fichas que pregunta su programa: al acabar el
+ * programa, suma otro y mete sus fichas, sin pasar del tope en minutos metidos.
+ * El precio no cambia. El nuevo fin cuenta desde ahora si ya había terminado.
+ */
 export const masTiempo = async (req, res) => {
   const { id } = req.params;
   const minutos = Number(req.body?.minutos);
@@ -1207,8 +1078,7 @@ export const masTiempo = async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    // Se bloquea la fila: dos clics seguidos no pueden sumar dos veces el
-    // mismo cupo y pasarse del tope.
+    // Fila bloqueada: dos clics no suman dos veces el mismo cupo.
     const { rows } = await client.query(
       `SELECT m.*, ${TIEMPOS_DEL_MODELO} AS modelo_tiempos,
               ${MINUTOS_POR_FICHA} AS minutos_por_ficha,
@@ -1222,8 +1092,7 @@ export const masTiempo = async (req, res) => {
     }
     const maq = rows[0];
     const opciones = opcionesMasTiempo(maq);
-    // Un minuto de gracia: el botón lo muestra la tablet con SU reloj, que
-    // puede ir unos segundos adelantado al del servidor.
+    // Un minuto de gracia por la diferencia de reloj con la tablet.
     if (opciones.length > 0 && !programaTerminado(maq, Date.now() + 60_000)) {
       await client.query('ROLLBACK');
       return res.status(400).json({
@@ -1241,8 +1110,7 @@ export const masTiempo = async (req, res) => {
     const { rows: upd } = await client.query(
       `UPDATE maquinas
           SET minutos_pagados = COALESCE(minutos_pagados, ciclo_elegido_minutos) + $2,
-              -- El fin nuevo: desde ahora (al minuto más cercano) o desde el
-              -- fin anterior si todavía no llegaba.
+              -- Nuevo fin: desde ahora o desde el fin anterior si no ha llegado.
               ciclo_elegido_minutos = GREATEST(
                 ciclo_elegido_minutos,
                 ROUND(EXTRACT(EPOCH FROM (NOW() - en_uso_desde)) / 60)::int
@@ -1252,7 +1120,7 @@ export const masTiempo = async (req, res) => {
     );
     await client.query('COMMIT');
 
-    // Fuera de la transacción: los pulsos tardan (2 s entre ficha y ficha).
+    // Fuera de la transacción: los pulsos tardan.
     await meterFichasExtra(maq.id, minutos);
 
     res.json({
@@ -1270,13 +1138,11 @@ export const masTiempo = async (req, res) => {
 };
 
 // ── POST /maquinas/revisar-sonoff ───────────────────────────
-// Lo pide el botón de refrescar de Máquinas (2026-10-11): lee AHORA el estado
-// real de los Sonoff de las máquinas ocupadas de la sucursal, en vez de esperar
-// al revisor automático (cada SONOFF_RECONCILE_MINUTOS, 3 por defecto). Así una
-// máquina encendida a mano que alguien ya apagó se suelta en el acto y su
-// tarjeta desaparece al refrescar. Es el mismo paso del revisor
-// (`reconciliando`: no reenciende lo apagado a mano). Nunca falla: si un Sonoff
-// no responde, se sigue con los demás. En simulación no hay nada que leer.
+/**
+ * Botón de refrescar de Máquinas: hace ya el paso del barrido sobre las
+ * máquinas ocupadas de la sucursal (así una encendida a mano que ya apagaron se
+ * suelta en el acto). Si un Sonoff no responde, sigue con los demás.
+ */
 export const revisarSonoff = async (req, res) => {
   try {
     const { rows } = await pool.query(
