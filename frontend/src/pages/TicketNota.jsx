@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { toBlob } from 'html-to-image';
 import { etiquetaProducto, ordenProducto, seVendePorUnidad, esPolvo } from '../lib/formatoInventario';
 import { api } from '../lib/api';
+import { ES_DEMO } from '../lib/entorno';
 import { maquinasDeCarga, cargaVisibleEnTicket } from '../lib/ticketCargas';
 import { notaAlPieDeTicket } from '../lib/ticketNotaPie';
 import { formaPagoLabel } from '../lib/formasPago';
@@ -258,6 +259,9 @@ export default function TicketNota() {
   const reciboRef = useRef(null);
   const [enviando, setEnviando] = useState(false);
   const [avisoEnvio, setAvisoEnvio] = useState('');
+  // Demo: a quién se "mandó" el ticket, que no sale (los teléfonos de la demo
+  // podrían ser de alguien).
+  const [envioSimulado, setEnvioSimulado] = useState('');
   // Sin cliente, el teléfono se pide en un modal al tocar WhatsApp.
   const [pidiendoTelefono, setPidiendoTelefono] = useState(false);
 
@@ -334,6 +338,11 @@ export default function TicketNota() {
     setEnviando(true);
     setAvisoEnvio('');
     guardarTelefonoEnNota(); // best-effort, no bloquea el envío
+    if (ES_DEMO) {
+      setEnvioSimulado(nota.cliente_nombre || telefonoDestino);
+      setEnviando(false);
+      return;
+    }
     try {
       const archivo = await ticketComoPng();
       if (archivo && navigator.canShare?.({ files: [archivo] })) {
@@ -663,6 +672,12 @@ export default function TicketNota() {
 
         {avisoEnvio && (
           <p className="text-xs text-gray-500 text-center">{avisoEnvio}</p>
+        )}
+        {envioSimulado && (
+        <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3" role="status">
+          <p className="text-sm font-semibold text-green-900">Ticket enviado por WhatsApp a {envioSimulado}</p>
+          <p className="text-sm text-green-800 mt-0.5">En la demostración no se abre WhatsApp: el envío es de mentiras.</p>
+        </div>
         )}
       </div>
 

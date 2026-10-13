@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../lib/api';
+import { ES_DEMO } from '../lib/entorno';
 import { useAuth } from '../context/AuthContext';
 import { esAdmin as esAdminFn } from '../lib/roles';
 import { capitalizarNombre } from '../lib/texto';
@@ -48,6 +49,9 @@ export default function Clientes() {
 
   // Modal info (mobile)
   const [infoCliente, setInfoCliente]     = useState(null);
+  // Demo: con quién se "abrió" el chat, que no se abre (los teléfonos de la
+  // demo podrían ser de alguien).
+  const [chatSimulado, setChatSimulado]   = useState('');
 
   // Altura de la cabecera sticky, para compensarla al saltar a una letra.
   const stickyRef = useRef(null);
@@ -195,6 +199,7 @@ export default function Clientes() {
   const abrirWhatsapp = (c) => {
     const digits = String(c.telefono ?? '').replace(/\D/g, '');
     if (digits.length === 0) return;
+    if (ES_DEMO) { setChatSimulado([c.nombre, c.apellido].filter(Boolean).join(' ')); return; }
     const phone = digits.startsWith('52') ? digits : `52${digits}`;
     window.open(`https://wa.me/${phone}`, '_blank', 'noopener,noreferrer');
   };
@@ -331,6 +336,26 @@ export default function Clientes() {
 
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">{error}</div>
+      )}
+
+      {/* Demo: el chat de WhatsApp se finge, no se abre. */}
+      {chatSimulado && (
+        <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 flex items-start gap-3" role="status">
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold text-green-900">Chat de WhatsApp abierto con {chatSimulado}</p>
+            <p className="text-sm text-green-800 mt-0.5">En la demostración no se abre WhatsApp: es de mentiras.</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setChatSimulado('')}
+            aria-label="Cerrar aviso"
+            className="text-green-600 hover:text-green-800 flex-shrink-0"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
       )}
 
       {!loading && !error && filtrados.length === 0 && (
