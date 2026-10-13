@@ -1,17 +1,18 @@
-// Formateo de existencias de productos líquidos (opción B: unidades reales, sin
-// decimales). El stock se lleva en MEDIDAS; aquí se reparte en botellas y bidones.
-// Lo usan la pestaña "Reporte diario" de Inventario y su exportación a PDF/CSV.
+/**
+ * Existencias en unidades reales, sin decimales: el stock va en medidas y aquí
+ * se reparte en botellas y bidones (Reporte diario y su exportación).
+ */
 
-// Lo que se cuenta y se vende por UNIDAD entera: los productos de marca y el
-// jabón EN POLVO (mig. 126), que no se sirve por medidas. La columna la calcula
-// la BD; lo demás es respaldo por si el producto llega sin ella.
+/**
+ * Lo que se vende por unidad entera: marca y granel en polvo. La columna la
+ * calcula la BD; lo demás es respaldo.
+ */
 export function seVendePorUnidad(p) {
   if (p?.se_vende_por_unidad != null) return Boolean(p.se_vende_por_unidad);
   return p?.tipo_liquido === 'marca' || p?.forma === 'polvo';
 }
 
-// El granel en polvo: mismo catálogo de nombres que el líquido, pero contado en
-// unidades. Se nombra aparte para no confundir dos "Jabón" en la misma lista.
+/** Granel en polvo: se nombra aparte para no confundir dos "Jabón". */
 export function esPolvo(p) {
   return p?.clase !== 'bolsa' && p?.forma === 'polvo';
 }
@@ -53,10 +54,9 @@ export function textoGranel(medidasGranel, medidasPorBidon, medidasPorBotella) {
   return partes.join(' y ');
 }
 
-// Un movimiento del día en el Reporte diario (2026-10-03), en líneas: lo que
-// se cuenta por unidad, una sola; el granel, lo de botellas y lo del bidón,
-// solo las que tuvieron algo. Sin movimiento, un guion. `textoBot` escribe lo
-// de botellas (por omisión, en botellas y medidas).
+// Un movimiento del día en líneas: por unidad, una; el granel, botellas y
+// bidón (solo las que tuvieron algo). Sin movimiento, un guion. `textoBot`
+// escribe lo de botellas.
 function lineasMovimiento(p, porUnidad, bot, gra, textoBot = (n) => textoBotellas(n, p?.medidas_por_botella)) {
   if (bot <= 0 && gra <= 0) return ['—'];
   if (porUnidad) return [textoBotellas(bot + gra, p?.medidas_por_botella, { marca: true })];
@@ -70,10 +70,10 @@ function lineasMovimiento(p, porUnidad, bot, gra, textoBot = (n) => textoBotella
   return [textoBot(bot)];
 }
 
-// Medidas sueltas dichas como medidas, y su equivalencia en botellas cuando
-// llegan a una: "1 medida", "2 medidas = 1 botella", "3 medidas = 1 botella y
-// 1 medida". Para Salidas (2026-10-03): lo que sale en las notas son medidas,
-// no botellas, y escribirlo solo en botellas parecía que salió una entera.
+/**
+ * Medidas con su equivalencia en botellas cuando llegan a una: "1 medida",
+ * "2 medidas = 1 botella", "3 medidas = 1 botella y 1 medida".
+ */
 export function textoMedidasEquivalencia(medidas, medidasPorBotella) {
   const n = Math.max(0, Math.round(Number(medidas) || 0));
   const mpb = Number(medidasPorBotella) || 0;
@@ -82,30 +82,28 @@ export function textoMedidasEquivalencia(medidas, medidasPorBotella) {
   return `${enMedidas} = ${textoBotellas(n, mpb)}`;
 }
 
-// Lo que entró ese día (Inventario → Entradas y la existencia del alta).
+/** Lo que entró ese día (Entradas y existencia del alta). */
 export function lineasEntradas(p, porUnidad) {
   return lineasMovimiento(p, porUnidad,
     Number(p?.entrada_botellas_medidas) || 0, Number(p?.entrada_granel_medidas) || 0);
 }
 
-// Lo que salió ese día: lo usado o vendido en notas que NO se devolvió
-// después (siempre de botellas) más las salidas manuales de Inventario. Lo
-// que se devolvió se borra de aquí y solo lo dice Devuelto (2026-10-03).
+/**
+ * Lo que salió ese día: lo usado en notas que no se devolvió (en botellas) más
+ * las salidas manuales. Lo devuelto va en Devuelto.
+ */
 export function lineasSalidas(p, porUnidad) {
   const bot = (Number(p?.vendido_vigente_medidas) || 0) + (Number(p?.salida_botellas_medidas) || 0);
   return lineasMovimiento(p, porUnidad, Math.max(0, bot), Number(p?.salida_granel_medidas) || 0,
     (n) => textoMedidasEquivalencia(n, p?.medidas_por_botella));
 }
 
-// Lo que regresó ese día al estante porque se anuló la venta (nota cancelada
-// o borrada). Siempre vuelve a botellas.
+/** Lo que regresó ese día por una venta anulada (nota cancelada o borrada), en botellas. */
 export function lineasDevuelto(p, porUnidad) {
   return lineasMovimiento(p, porUnidad, Number(p?.devuelto_medidas) || 0, 0);
 }
 
-// Nombre del producto con lo que lo distingue de otro que se llame igual: el
-// tamaño en las bolsas y la marca en los productos de marca. Sin esto, tres
-// bolsas o dos suavizantes de distinta marca se ven idénticos en las listas.
+/** Nombre con lo que lo distingue: tamaño en bolsas, marca en productos de marca. */
 export function etiquetaProducto(p) {
   if (!p) return '';
   if (p.clase === 'bolsa') {
@@ -116,8 +114,7 @@ export function etiquetaProducto(p) {
   return p.nombre ?? '';
 }
 
-// Para listas de dos líneas: la marca manda como título y el nombre baja al
-// subtítulo (Ensueño / Suavizante), que es donde también se marca el granel.
+/** Para listas de dos líneas: la marca de título y el nombre abajo (Ensueño / Suavizante). */
 export function tituloProducto(p) {
   if (!p) return '';
   if (p.clase === 'bolsa') {
@@ -127,8 +124,7 @@ export function tituloProducto(p) {
   return p.nombre ?? '';
 }
 
-// Lo que acompaña al título: el nombre en los de marca, "Granel" en el bidón.
-// Las bolsas no llevan (su tamaño ya va en el título).
+/** Subtítulo: el nombre en los de marca, "Granel" en el bidón; nada en bolsas. */
 export function subtituloProducto(p) {
   if (!p || p.clase === 'bolsa') return '';
   if (p.tipo_liquido === 'marca' && p.marca) return p.nombre ?? '';
@@ -137,8 +133,7 @@ export function subtituloProducto(p) {
   return '';
 }
 
-// Orden de presentación: primero el granel, luego los de marca y al final las
-// bolsas — el mismo criterio con el que el backend ordena el catálogo.
+/** Orden: granel, marca y bolsas (como ordena el backend). */
 export function ordenProducto(p) {
   if (p?.tipo_liquido === 'granel') return 0;
   if (p?.tipo_liquido === 'marca')  return 1;

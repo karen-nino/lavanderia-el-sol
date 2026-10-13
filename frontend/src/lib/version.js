@@ -1,10 +1,8 @@
-// Versión de la app, tomada de package.json en tiempo de build (ver el `define`
-// de vite.config.js). El fallback cubre entornos donde no se inyecta.
+/** Versión de package.json, inyectada en el build (`define` de vite.config.js). */
 export const APP_VERSION =
   typeof __APP_VERSION__ === 'string' ? __APP_VERSION__ : 'dev';
 
-// Zona horaria del negocio: el "día" se corta a medianoche local, igual que el
-// cierre del día del backend (jobs/cierreDelDia.js, CIERRE_HORA por defecto 0).
+/** Zona del negocio: el día se corta a medianoche local, como el cierre del día del backend. */
 const TZ = 'America/Mexico_City';
 const CLAVE = 'appVersionVista';
 
@@ -15,10 +13,11 @@ const fmtDia = new Intl.DateTimeFormat('en-CA', {
 // Día del negocio ('YYYY-MM-DD') para la fecha dada.
 const diaNegocio = (fecha = new Date()) => fmtDia.format(fecha);
 
-// ¿Se estrena esta versión? Sirve para marcarla como nueva en el login. La
-// marca se enciende la primera vez que este dispositivo ve la versión y se
-// apaga en el siguiente cierre del día, no al recargar: si desapareciera al
-// primer vistazo, el segundo turno del día nunca se enteraría.
+/**
+ * ¿Se estrena esta versión? (para marcarla en el login). Se enciende la primera
+ * vez que el equipo la ve y se apaga en el siguiente cierre del día, no al
+ * recargar.
+ */
 export function versionEsNueva() {
   const hoy = diaNegocio();
   let visto = null;

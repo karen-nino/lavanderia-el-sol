@@ -20,9 +20,8 @@ export default function Login() {
   const [password, setPassword]         = useState('');
   const [verPassword, setVerPassword]   = useState(false);
   const [error, setError]               = useState('');
-  // Motivo por el que se cerró la sesión anterior (lo deja api.js al recibir un
-  // 401, p. ej. tras iniciar sesión en otro dispositivo). Se lee una sola vez al
-  // montar; el efecto solo lo borra de sessionStorage para que no reaparezca.
+  // Por qué se cerró la sesión anterior (lo deja api.js con un 401, p. ej. al
+  // entrar en otro dispositivo). Se lee al montar y luego se borra.
   const [aviso, setAviso]               = useState(() => sessionStorage.getItem('authAviso') || '');
   const [loading, setLoading]           = useState(false);
 
@@ -31,13 +30,11 @@ export default function Login() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Se resuelve una sola vez al montar: la marca no debe apagarse por recargar.
+  // Se resuelve al montar: la marca no se apaga por recargar.
   const [versionNueva] = useState(versionEsNueva);
 
-  // ¿El servidor ya tiene otra versión? Es el caso de la app instalada en el
-  // teléfono, que puede llevar semanas sin recargarse (ver lib/actualizacion).
-  // Se pregunta al montar y cada vez que la app vuelve al frente, que es cuando
-  // el empleado la retoma y el momento bueno para ofrecerle la nueva.
+  // ¿El servidor tiene otra versión? (la app instalada puede llevar semanas sin
+  // recargarse). Se pregunta al montar y al volver la app al frente.
   const [versionServidor, setVersionServidor] = useState(null);
   const [actualizando, setActualizando]       = useState(false);
 
@@ -62,12 +59,8 @@ export default function Login() {
   const navigate = useNavigate();
   const containerRef = useRef(null);
   const passwordRef  = useRef(null);
-  // La lista la cerró el usuario a propósito (clic fuera), así que no debe
-  // reabrirse sola. Sin esto, cerrarla mientras había una búsqueda en marcha no
-  // servía de nada: 200 ms después saltaba el debounce —o llegaba la respuesta—
-  // y la volvía a abrir encima de lo que el usuario estuviera mirando. Es un
-  // ref y no un estado porque solo lo consulta el efecto; no hay que repintar
-  // cuando cambia.
+  // El usuario cerró la lista: no se reabre sola cuando llega el debounce o la
+  // respuesta. Ref, porque solo lo lee el efecto.
   const cerradaPorElUsuario = useRef(false);
 
   // Lo que se busca de verdad: sin el prefijo *** de los usuarios ocultos.
@@ -83,17 +76,15 @@ export default function Login() {
     setTimeout(() => passwordRef.current?.focus(), 0);
   };
 
-  // Debounce de la búsqueda de sugerencias
+  // Debounce de la búsqueda de sugerencias.
   useEffect(() => {
     if (seleccionado) return;
 
     const t = setTimeout(async () => {
-      // El backend no responde con menos de 3 caracteres: esas peticiones solo
-      // gastarían el límite por IP, así que ni se mandan.
+      // El backend no responde con menos de 3 caracteres: no se gasta el límite por IP.
       if (termino.length < 3) {
         setSugerencias([]);
-        // Para que se vea la pista de las 3 letras, salvo que la lista esté
-        // cerrada porque el usuario la cerró.
+        // Muestra la pista de las 3 letras, salvo que el usuario cerró la lista.
         setMostrarLista(!cerradaPorElUsuario.current && consulta.length > 0);
         return;
       }
@@ -101,18 +92,15 @@ export default function Login() {
       try {
         const data = await api.get(`/auth/buscar-usuarios?q=${encodeURIComponent(consulta)}`);
         const lista = data ?? [];
-        // Si se escribió el nombre COMPLETO de alguien y es la única opción,
-        // se elige solo y se pasa a la contraseña (2026-10-03). Solo con el
-        // nombre completo: con uno a medias la persona podría seguir
-        // escribiendo y las letras caerían en la contraseña.
+        // Si se escribió el nombre completo y es la única opción, se elige y se pasa a
+        // la contraseña (con uno a medias, las letras caerían en la contraseña).
         if (lista.length === 1 && mismoNombre(termino, lista[0].nombre)) {
           setSugerencias(lista);
           elegirUsuario(lista[0]);
           return;
         }
         setSugerencias(lista);
-        // Se vuelve a mirar aquí, no solo arriba: la respuesta tarda más que el
-        // debounce y el usuario puede haber cerrado la lista mientras llegaba.
+        // Se revisa otra vez: la lista pudo cerrarse mientras llegaba la respuesta.
         if (!cerradaPorElUsuario.current) setMostrarLista(true);
       } catch {
         setSugerencias([]);
@@ -123,7 +111,7 @@ export default function Login() {
     return () => clearTimeout(t);
   }, [consulta, termino, seleccionado]);
 
-  // Cerrar dropdown al click fuera
+  // Cerrar la lista al clicar fuera.
   useEffect(() => {
     const onClick = (e) => {
       if (containerRef.current && !containerRef.current.contains(e.target)) {
@@ -152,10 +140,8 @@ export default function Login() {
     setError('');
   };
 
-  // En la demo pública no hay a quién identificar: todo el mundo entra a la
-  // misma cuenta de juguete. El backend solo expone /auth/demo-login si él
-  // también está en modo demo (ENTORNO_DEMO), así que aquí no hay credenciales
-  // que esconder ni una puerta que pueda quedarse abierta en producción.
+  // Demo pública: todos entran a la misma cuenta. /auth/demo-login solo existe
+  // si el backend corre en modo demo (ENTORNO_DEMO).
   const entrarDemo = async () => {
     setError('');
     setLoading(true);
@@ -209,8 +195,7 @@ export default function Login() {
             {ES_DEMO ? 'Demostración' : 'Iniciar sesión'}
           </h2>
 
-          {/* Por qué se cerró la sesión anterior. En la demo también: su token
-              caduca en una hora, y volver aquí sin explicación desconcierta. */}
+          {/* Por qué se cerró la sesión (en la demo el token caduca en una hora). */}
           {aviso && (
             <div className="bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-lg px-3 py-2.5 mb-4">
               {aviso}
@@ -352,17 +337,9 @@ export default function Login() {
           )}
         </div>
 
-        {/* Versión de la app, y SIEMPRE el botón para traerla de nuevo.
-
-            Que solo apareciera al detectar una versión nueva no alcanzaba: la
-            app instalada que todavía corre una versión vieja no trae este
-            código, así que no tiene botón que apretar y se queda anclada. Con
-            el botón fijo, cualquier versión que llegue a esta pantalla puede
-            forzar la actualización a mano — y de paso sirve cuando la
-            comprobación no pudo hacerse (sin red, o el servidor no contestó).
-
-            El punto azul marca que se estrena versión y se apaga en el
-            siguiente cierre del día. */}
+        {/* Versión de la app y siempre el botón para actualizarla a mano (sirve
+            aunque no se pudo comprobar). El punto azul marca una versión recién
+            estrenada y se apaga en el siguiente cierre del día. */}
         <button
           type="button"
           onClick={async () => { setActualizando(true); await aplicarActualizacion(); }}

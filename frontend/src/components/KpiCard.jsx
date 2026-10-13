@@ -29,8 +29,7 @@ export default function KpiCard({ label, sublabel, value, color = 'blue', icon, 
     </>
   );
 
-  // Con `to`, la tarjeta se comporta como un botón que navega, con feedback al
-  // pasar el cursor. Sin `to`, se mantiene como una tarjeta estática.
+  // Con `to`, navega como botón; sin él, tarjeta estática.
   if (to) {
     return (
       <Link

@@ -1,9 +1,7 @@
-// Aviso sonoro de "máquina lista": suena cuando una tarjeta pasa a verde y
-// ofrece Iniciar Secado o Finalizar Carga. En la lavandería nadie está viendo
-// la pantalla todo el tiempo, así que el ciclo terminado tiene que oírse.
-//
-// El tono se sintetiza con Web Audio (no hay archivo que cargar ni que se
-// quede a medias con mala señal).
+/**
+ * Aviso sonoro de máquina lista, sintetizado con Web Audio (sin archivo que
+ * cargar).
+ */
 
 let ctx = null;
 let preparado = false;
@@ -17,9 +15,7 @@ function contexto() {
   return ctx;
 }
 
-// Deja el audio listo aprovechando el primer toque del usuario: los navegadores
-// no dejan sonar nada antes de eso, y el aviso llega cuando el empleado ya no
-// está tocando la pantalla.
+/** Prepara el audio con el primer toque (antes, el navegador no deja sonar). */
 export function prepararAviso() {
   if (preparado) return;
   preparado = true;
@@ -28,7 +24,7 @@ export function prepararAviso() {
   window.addEventListener('keydown', despertar, { once: true });
 }
 
-// Un pitido corto con entrada y salida suaves (sin rampa se oye un "clic").
+/** Pitido corto con entrada y salida suaves (sin rampa se oye un clic). */
 function pitido(ac, frecuencia, inicio, duracion, volumen = 0.22) {
   const osc  = ac.createOscillator();
   const gain = ac.createGain();
@@ -42,8 +38,7 @@ function pitido(ac, frecuencia, inicio, duracion, volumen = 0.22) {
   osc.stop(inicio + duracion + 0.05);
 }
 
-// Tres notas que suben, dos veces: se distingue del ruido de las máquinas y no
-// se confunde con una notificación del celular.
+/** Tres notas que suben, dos veces: se distingue del ruido de las máquinas. */
 export function reproducirAvisoCiclo() {
   const ac = contexto();
   if (!ac) return;

@@ -3,9 +3,7 @@ import { AuthContext } from './AuthContext';
 import { api } from '../lib/api';
 import { almacenSesion } from '../lib/sesion';
 
-// Slugs renombrados (mig. 150): la sesión guardada en la tablet puede traer el
-// de antes. El backend también lo traduce; esto es para que la pantalla
-// (selector, barra de sucursal) reconozca la sucursal sin volver a entrar.
+/** Slugs renombrados: una sesión guardada puede traer el viejo (el backend también lo traduce). */
 const SLUGS_RENOMBRADOS = { lopez_cotilla: 'zapopan' };
 const slugVigente = (slug) => SLUGS_RENOMBRADOS[slug] ?? slug;
 
@@ -21,9 +19,8 @@ export function AuthProvider({ children }) {
       return null;
     }
   });
-  // Sucursal que se está administrando. Para un empleado siempre es la suya;
-  // un admin puede cambiarla con el selector. Se persiste para que api.js la
-  // envíe en el header X-Sucursal en cada petición.
+  // Sucursal que se administra: la propia para un empleado; un admin la cambia
+  // con el selector. Se guarda para que api.js la mande en X-Sucursal.
   const [sucursalActiva, setSucursalActivaState] = useState(
     () => slugVigente(almacenSesion.getItem('sucursalActiva')) || null
   );
@@ -44,15 +41,12 @@ export function AuthProvider({ children }) {
   };
 
   const logout = () => {
-    // Registrar la salida (cierre de sesión manual) antes de borrar el token.
-    // Es "fire-and-forget": la petición ya lleva el token y no debe frenar el
-    // cierre de sesión aunque falle.
+    // Registra la salida sin esperar respuesta (no frena el cierre de sesión).
     api.post('/auth/logout').catch(() => {});
     almacenSesion.removeItem('token');
     almacenSesion.removeItem('usuario');
-    // Rastros de navegación del turno que termina (hoy, el filtro con el que se
-    // dejó la lista de notas). Al entrar otro empleado en el mismo teléfono no
-    // debe encontrarse la pantalla como la dejó el anterior.
+    // Rastros de navegación del turno (p. ej. el filtro de notas): el siguiente
+    // empleado no debe encontrarlos.
     try { sessionStorage.clear(); } catch { /* ignore */ }
     persistSucursal(null);
     setToken(null);
@@ -67,10 +61,8 @@ export function AuthProvider({ children }) {
     });
   };
 
-  // Cambia la sucursal activa (admin). Por defecto recarga para que todas las
-  // vistas y sus refrescos periódicos vuelvan a pedir datos de la nueva
-  // sucursal. En la selección inicial tras el login (cuando aún no hay panel
-  // montado) se pasa { reload: false } para entrar sin recargar.
+  // Cambia la sucursal activa y recarga para que todo pida datos de la nueva.
+  // Tras el login se pasa { reload: false } (aún no hay panel montado).
   const setSucursalActiva = (slug, { reload = true } = {}) => {
     if (!slug || slug === sucursalActiva) return;
     persistSucursal(slug);

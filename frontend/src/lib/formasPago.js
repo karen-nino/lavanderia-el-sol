@@ -1,8 +1,7 @@
-// Formas de pago de una nota (espeja el CHECK de notas.forma_pago, mig. 078/090).
-//
-// `enCajon` marca si ese dinero entra físicamente al cajón: solo el efectivo.
-// El corte de caja usa esa distinción — contar transferencias y tarjetas como
-// efectivo hacía que el corte marcara un faltante inexistente.
+/**
+ * Formas de pago (espeja el CHECK de notas.forma_pago). `enCajon`: solo el
+ * efectivo entra al cajón, y así lo cuenta el corte.
+ */
 
 export const FORMAS_PAGO = [
   { v: 'EFECTIVO',      label: 'Efectivo',      enCajon: true  },
@@ -10,9 +9,7 @@ export const FORMAS_PAGO = [
   { v: 'TARJETA',       label: 'Tarjeta',       enCajon: false },
 ];
 
-// Las que se ofrecen al COBRAR (pago anticipado, cobrar y el cobro de Nueva
-// nota). Tarjeta se ocultó el 2026-10-06 a pedido del negocio: sigue en
-// FORMAS_PAGO para que las notas viejas cobradas con tarjeta se lean bien.
+/** Las que se ofrecen al cobrar. Tarjeta no, pero sigue en FORMAS_PAGO para leer cobros viejos. */
 export const FORMAS_PAGO_COBRO = FORMAS_PAGO.filter((f) => f.v !== 'TARJETA');
 
 // Etiqueta legible; cadena vacía si no hay forma de pago (nota sin cobrar).

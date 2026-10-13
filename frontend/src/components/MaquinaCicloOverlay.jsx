@@ -1,18 +1,14 @@
-// Overlay con una lavadora/secadora animada, para dar feedback al arrancar o
-// detener una máquina. Hay tres variantes visuales:
-//   - 'lavar'   (iniciar + lavadora): tonos azules, el tambor se LLENA de agua.
-//   - 'secar'   (iniciar + secadora): tonos cálidos, el tambor GIRA con ondas
-//                de calor subiendo.
-//   - 'detener' (cualquier tipo):     tonos rojos, el tambor DESACELERA hasta
-//                frenar y un anillo de alerta pulsa.
-//
-//   - 'encender' (paso previo, mig. 110): verdes, el tambor quieto y un anillo
-//                de energía saliendo de la puerta. Es la máquina recibiendo
-//                corriente, todavía sin lavar: por eso no hay agua ni giro.
-//
-//   modo:   'iniciar' | 'detener' | 'encender'
-//   tipo:   'secadora' → "Secadora"; cualquier otro → "Lavadora".
-//   nombre: nombre de la máquina (L1, S1, …).
+/**
+ * Lavadora o secadora animada al arrancar, detener o encender una máquina:
+ * - 'lavar' (iniciar lavadora): azul, el tambor se llena de agua.
+ * - 'secar' (iniciar secadora): cálido, el tambor gira con ondas de calor.
+ * - 'detener': rojo, el tambor frena y pulsa un anillo de alerta.
+ * - 'encender': verde, tambor quieto y anillo de energía (recibe corriente).
+ *
+ * @param modo 'iniciar' | 'detener' | 'encender'
+ * @param tipo 'secadora' → "Secadora"; cualquier otro → "Lavadora".
+ * @param nombre nombre de la máquina (L1, S1…).
+ */
 export default function MaquinaCicloOverlay({ modo = 'iniciar', tipo, nombre }) {
   const esDetener  = modo === 'detener';
   const esEncender = modo === 'encender';
@@ -72,8 +68,7 @@ export default function MaquinaCicloOverlay({ modo = 'iniciar', tipo, nombre }) 
             <animate attributeName="opacity" values="1;.35;1" dur={c.lightDur} repeatCount="indefinite" />
           </circle>
 
-          {/* Anillo pulsante: alerta al detener, energía al encender. Misma
-              animación, distinto color y ritmo — lo que cambia es qué significa. */}
+          {/* Anillo pulsante: alerta al detener, energía al encender. */}
           {(esDetener || esEncender) && (
             <circle
               cx="60" cy="90" r="34" fill="none" stroke={c.anillo ?? '#ef4444'} strokeWidth="2.5"
@@ -98,8 +93,7 @@ export default function MaquinaCicloOverlay({ modo = 'iniciar', tipo, nombre }) 
           <g clipPath="url(#sol-glass)">
             <rect x="34" y="64" width="52" height="52" fill={c.glass} />
 
-            {/* Interior (agujeros + ropa). Gira al secar y al detener (frena);
-                queda quieto al lavar mientras el agua sube. */}
+            {/* Interior (agujeros y ropa): gira al secar y al detener; quieto al lavar. */}
             <g style={c.drum}>
               {[0, 45, 90, 135, 180, 225, 270, 315].map((a) => {
                 const r = 21;

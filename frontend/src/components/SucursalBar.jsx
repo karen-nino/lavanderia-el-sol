@@ -3,12 +3,10 @@ import { useAuth } from '../context/AuthContext';
 import { esAdmin } from '../lib/roles';
 import { api } from '../lib/api';
 
-// Barra de ancho completo con el nombre de la sucursal activa. Se coloca justo
-// debajo de la cabecera de cada página (excepto el Dashboard). El slug viene
-// del contexto de sesión; el nombre legible se resuelve contra /sucursales.
-// La ven los administradores (admin y admin_main) y los usuarios de prueba
-// (para tener siempre a la vista que están en el entorno de pruebas); los
-// empleados reales no la ven.
+/**
+ * Barra con el nombre de la sucursal activa, bajo la cabecera de cada página
+ * (salvo el Dashboard). La ven los admins y los usuarios de prueba.
+ */
 export default function SucursalBar() {
   const { usuario, sucursalActiva } = useAuth();
   const [nombre, setNombre] = useState('');

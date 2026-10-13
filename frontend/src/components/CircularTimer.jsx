@@ -9,8 +9,7 @@ export default function CircularTimer({
 }) {
   const filledColor = color === 'green' ? '#2F9F58' : color === 'red' ? '#E65001' : '#0272C0';
   const trackColor  = color === 'green' ? '#C9EAD3' : color === 'red' ? '#FBD9CF' : '#C7E1F0';
-  // El número de la secadora (color rojo) conserva el mismo tono que la
-  // lavadora (dark-blue); solo el aro cambia a rojo.
+  // El número va en azul también en la secadora; solo el aro cambia a rojo.
   const textCls     = color === 'green' ? 'text-green' : 'text-dark-blue';
 
   const c = size / 2;
@@ -22,8 +21,7 @@ export default function CircularTimer({
 
   const tickEls = [];
   for (let i = 0; i < ticks; i++) {
-    // Desde las 12 y en el sentido del reloj (en SVG la y crece hacia abajo,
-    // así que un ángulo que crece gira a la derecha).
+    // Desde las 12 en el sentido del reloj (en SVG la y crece hacia abajo).
     const angle = (i / ticks) * 2 * Math.PI - Math.PI / 2;
     const x1 = c + innerR * Math.cos(angle);
     const y1 = c + innerR * Math.sin(angle);

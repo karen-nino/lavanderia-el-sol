@@ -1,14 +1,8 @@
-// Instalación de la app desde el navegador (PWA).
-//
-// Android/Chrome avisa que la app se puede instalar con el evento
-// `beforeinstallprompt`, y lo dispara UNA vez, muy temprano — normalmente antes
-// de que React termine de montar. Por eso el evento se captura aquí, en un
-// módulo que se importa desde main.jsx antes de renderizar: si se esperara al
-// componente, el aviso ya habría pasado y el botón nunca aparecería.
-//
-// iPhone/iPad no tienen ese evento: Safari no deja instalar por código. Ahí lo
-// único posible es explicar la ruta manual (Compartir → Agregar a inicio), que
-// es lo que hace la pantalla de ayuda.
+/**
+ * Instalación como PWA. Chrome dispara `beforeinstallprompt` una vez y muy
+ * temprano, así que se captura aquí (se importa desde main.jsx antes de
+ * renderizar). iPhone/iPad no lo tienen: ahí se explica la ruta manual.
+ */
 
 let promptDiferido = null;
 const suscriptores = new Set();
@@ -16,8 +10,7 @@ const avisar = () => suscriptores.forEach((fn) => fn());
 
 if (typeof window !== 'undefined') {
   window.addEventListener('beforeinstallprompt', (e) => {
-    // Sin preventDefault, Chrome muestra su propia barra de instalación además
-    // del botón del menú.
+    // Sin preventDefault, Chrome muestra además su barra de instalación.
     e.preventDefault();
     promptDiferido = e;
     avisar();
@@ -29,8 +22,7 @@ if (typeof window !== 'undefined') {
   });
 }
 
-// ¿La app ya corre instalada? (standalone en Android/escritorio, la propiedad
-// de Safari en iOS). Si es así no hay nada que ofrecer.
+/** ¿Ya corre instalada? (standalone, o la propiedad de Safari en iOS). */
 export function estaInstalada() {
   if (typeof window === 'undefined') return false;
   return (
@@ -48,10 +40,10 @@ export function esIOS() {
   );
 }
 
-// Estado de instalación para la interfaz.
-//   comoInstalar: 'prompt' → hay diálogo nativo; 'ios' → hay que explicarlo;
-//                 null     → no se puede ofrecer (ya instalada, o el navegador
-//                            no la admite).
+/**
+ * Estado para la interfaz. `comoInstalar`: 'prompt' (diálogo nativo), 'ios'
+ * (explicarlo) o null (ya instalada o no se admite).
+ */
 export function leerEstadoInstalacion() {
   if (estaInstalada()) return { disponible: false, comoInstalar: null };
   if (promptDiferido)  return { disponible: true,  comoInstalar: 'prompt' };
@@ -68,8 +60,7 @@ export function suscribirse(fn) {
 export async function lanzarInstalacion() {
   if (!promptDiferido) return 'no-hay';
   const evento = promptDiferido;
-  // El evento es de un solo uso: se suelta antes de esperar la respuesta para
-  // que un segundo clic no intente reutilizarlo.
+  // El evento es de un solo uso: se suelta antes de esperar la respuesta.
   promptDiferido = null;
   avisar();
   try {

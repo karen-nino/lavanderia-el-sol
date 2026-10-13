@@ -7,18 +7,18 @@ import ElegirTiempoModal from './ElegirTiempoModal';
 import { preguntaTiempo, tiemposDeMaquina } from '../lib/tiemposModelo';
 import { marcaYTamano } from '../lib/estadoMaquina';
 
-// Cada cuánto se re-consultan notas y máquinas en segundo plano.
+/** Cada cuánto se vuelven a consultar notas y máquinas. */
 const REFRESCO_MS = 15000;
 
-// Duración mínima del giro en la recarga manual. Sin esto, con red rápida el
-// icono gira ~100 ms y el clic parece no haber hecho nada.
+/** Giro mínimo del botón de recargar, para que se note el clic. */
 const GIRO_MIN_MS = 400;
 
 const esperar = ms => new Promise(r => setTimeout(r, ms));
 
-// Acción que el operador intentó pero no se completó porque la sesión expiró
-// (la app redirige a /login). Se persiste para reabrir la confirmación al
-// volver a entrar. Ver confirmarTerminarCiclo y la reanudación en la carga inicial.
+/**
+ * Acción que no se completó porque expiró la sesión: se guarda para reabrir la
+ * confirmación al volver a entrar.
+ */
 const ACCION_PENDIENTE_KEY = 'accionPendiente';
 
 function guardarAccionPendiente(accion) {
@@ -41,18 +41,15 @@ function formatMMSS(totalSegundos) {
   return `${mm}:${ss}`;
 }
 
-// Monitor de máquinas en uso: tarjetas con temporizador y la confirmación
-// "Terminar ciclo". Es autónomo (consulta sus propios datos y se auto-refresca)
-// para poder usarse tanto en la página Máquinas como en el Dashboard.
-//
-// `showHeader`: muestra el encabezado propio ("Máquinas en uso (n)" + botón de
-// recargar). La página Máquinas lo oculta y lleva el título/conteo al nav (vía
-// `onCountChange`), el aviso de recarga fallida (vía `onErrorRefresco`) y el
-// refresco a su botón (vía el método `refrescar` expuesto por ref).
-//
-// `layout`: 'grid' (por defecto, página Máquinas) muestra todas las máquinas en
-// uso en una sola rejilla. 'carousel' (Dashboard) las agrupa en dos carruseles
-// horizontales — Lavadoras y Secadoras — cada uno con su conteo "en uso/total".
+/**
+ * Máquinas en uso: tarjetas con su reloj y la confirmación de Finalizar. Consulta
+ * y refresca sus propios datos (página Máquinas y Dashboard).
+ *
+ * @param showHeader encabezado propio ("Máquinas en uso (n)" y recargar). La
+ *   página Máquinas lo oculta y usa `onCountChange`, `onErrorRefresco` y el
+ *   método `refrescar` (por ref).
+ * @param layout 'grid' (Máquinas) o 'carousel' (Dashboard: Lavadoras y Secadoras).
+ */
 const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onCountChange, onErrorRefresco, layout = 'grid' }, ref) {
   const navigate = useNavigate();
   const [notas, setNotas]       = useState([]);
@@ -61,60 +58,51 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
   const [loading, setLoading]   = useState(true);
   const [now, setNow]           = useState(() => Date.now());
   const [confirmTerminar, setConfirmTerminar] = useState(null);
-  // Secadora esperando que se elija su tiempo antes de arrancar (mig. 120).
+  // Secadora esperando que se elija su programa antes de arrancar.
   const [eligiendoTiempo, setEligiendoTiempo] = useState(null);
-  // Máquina con cronómetro que arranca con Iniciar y pregunta su programa
-  // (mig. 146): espera a que se elija antes de arrancarla desde su tarjeta.
+  // Máquina de botón Iniciar que pregunta su programa: espera la elección.
   const [eligiendoArranque, setEligiendoArranque] = useState(null);
-  // Secadora que arranca al terminar el lavado (para la animación de ciclo).
+  // Secadora que arranca al terminar el lavado (para la animación).
   const [iniciandoSecadora, setIniciandoSecadora] = useState(null);
   const [secadoraSel, setSecadoraSel] = useState('');
   const [terminando, setTerminando] = useState(false);
   const [errorTerminar, setErrorTerminar] = useState('');
   const [refrescando, setRefrescando] = useState(false);
-  // Aviso de la recarga manual que falló (el refresco automático nunca
-  // escribe este error: se reintenta solo).
+  // Error de la recarga manual (el refresco automático no avisa).
   const [errorRefresco, setErrorRefresco] = useState('');
-  // Máquina a la que se le está pidiendo otro ciclo, y el error si falló. El
-  // error se guarda por máquina para que el de una tarjeta no salga en otra.
+  // Otro ciclo en curso y su error, por máquina.
   const [otroCicloEnCurso, setOtroCicloEnCurso] = useState(null);
   const [errorOtroCiclo, setErrorOtroCiclo] = useState(null);
-  // Máquina recibiendo corriente para el siguiente ciclo: pinta la animación.
+  // Máquina recibiendo corriente para el siguiente ciclo (animación).
   const [encendiendoMaquina, setEncendiendoMaquina] = useState(null);
 
-  // Refresco silencioso de los datos que cambian en tiempo real. No toca
-  // `loading` ni muestra errores: los fallos transitorios se ignoran y se
-  // reintenta en el siguiente ciclo. Devuelve si la consulta trajo datos, para
-  // que la recarga manual (la única que avisa) sepa si falló; un éxito borra
-  // un error anterior.
+  // Refresco silencioso: ignora los fallos y reintenta en el siguiente ciclo.
+  // Devuelve si trajo datos (la recarga manual avisa si no); un éxito borra el error.
   const refrescarDatos = useCallback(async () => {
     try {
       const [n, m] = await Promise.all([
         api.get('/notas'),
         api.get('/maquinas'),
       ]);
-      // Si la sesión expiró, api redirige y devuelve undefined: no es una
-      // actualización válida aunque la promesa se haya resuelto.
+      // Sesión expirada: api redirige y devuelve undefined.
       if (!Array.isArray(n) || !Array.isArray(m)) return false;
       setNotas(n);
       setMaquinas(m);
       setErrorRefresco('');
       return true;
     } catch {
-      // ignorar: se reintenta en el siguiente ciclo de refresco
+      // Se reintenta en el siguiente ciclo.
       return false;
     }
   }, []);
 
-  // Recarga manual (botón): gira al menos GIRO_MIN_MS y avisa si falló.
+  // Recarga manual: gira al menos GIRO_MIN_MS y avisa si falla.
   const refrescarManual = useCallback(async () => {
     setRefrescando(true);
     setErrorRefresco('');
     try {
-      // Primero se le pide al servidor que lea los Sonoff AHORA (2026-10-11):
-      // si no, una máquina encendida a mano que ya apagaron seguía saliendo
-      // hasta que pasara el revisor automático (cada 3 min). Si falla, se
-      // refresca igual con lo que haya.
+      // Primero se pide al servidor que lea los Sonoff ya (una encendida a mano que
+      // apagaron se suelta al momento); si falla, se refresca igual.
       const leer = api.post('/maquinas/revisar-sonoff').catch(() => null);
       const [ok] = await Promise.all([leer.then(() => refrescarDatos()), esperar(GIRO_MIN_MS)]);
       if (!ok) setErrorRefresco('No se pudo actualizar');
@@ -124,12 +112,10 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
     }
   }, [refrescarDatos]);
 
-  // Permite que un contenedor (p. ej. el nav de la página Máquinas) dispare el
-  // refresco. Devuelve la promesa para que pueda manejar su propio spinner.
+  // Permite al contenedor disparar el refresco (devuelve la promesa).
   useImperativeHandle(ref, () => ({ refrescar: refrescarManual }), [refrescarManual]);
 
-  // Carga inicial. Los ajustes (tiempos de carga) solo se piden aquí: no
-  // cambian en tiempo real, así que el refresco periódico no los reconsulta.
+  // Carga inicial. Los ajustes (tiempos) solo aquí: no cambian en tiempo real.
   useEffect(() => {
     let cancelado = false;
     Promise.all([
@@ -149,10 +135,8 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
           });
         }
 
-        // Reanudar una acción pendiente (p. ej. "Terminar ciclo" que quedó a
-        // medias porque expiró la sesión): reabrimos la confirmación sobre esa
-        // máquina, solo si sigue existiendo y en uso. El operador la confirma
-        // de nuevo.
+        // Reanuda una acción que quedó pendiente por sesión expirada: reabre la
+        // confirmación si la máquina sigue en uso.
         const accion = leerAccionPendiente();
         if (accion?.tipo === 'terminar_ciclo' && Array.isArray(m)) {
           limpiarAccionPendiente();
@@ -189,20 +173,17 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
     return () => clearInterval(tick);
   }, []);
 
-  // Reporta el número de máquinas en uso al contenedor (p. ej. el nav de la
-  // página Máquinas lo muestra como subtítulo).
+  // Número de máquinas en uso para el contenedor.
   useEffect(() => {
     onCountChange?.(maquinas.filter(m => m.estado === 'en_uso').length);
   }, [maquinas, onCountChange]);
 
-  // Reporta al contenedor si la recarga manual falló, para que pinte el aviso
-  // donde tenga su propio botón.
+  // Avisa al contenedor si la recarga manual falló.
   useEffect(() => {
     onErrorRefresco?.(errorRefresco);
   }, [errorRefresco, onErrorRefresco]);
 
-  // Una nota está vinculada a la máquina si esta aparece en cualquiera de sus
-  // cargas (maquinas_ids, calculado por el servidor).
+  // La nota usa la máquina si aparece en sus cargas (maquinas_ids).
   const notaUsaMaquina = (n, maquinaId) =>
     Array.isArray(n.maquinas_ids) &&
     n.maquinas_ids.some(mid => String(mid) === String(maquinaId));
@@ -214,14 +195,9 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
         .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0]
     : null;
 
-  // ¿La máquina por terminar es una lavadora con nota? Entonces el ciclo que
-  // termina es el lavado: se exige elegir una secadora disponible para pasar
-  // esa carga a secado. Si es una secadora, termina su secado; la nota pasa a
-  // "Por Entregar" solo si era su última máquina en uso.
-  // Encadena el secado la lavadora que el servidor marca en
-  // `lavadoras_con_secado_ids`: hoy solo las de Autoservicio, donde el cliente
-  // espera su ropa. La que no está marcada —toda Por Encargo— finaliza su carga
-  // directo, y su secadora se asigna y arranca aparte desde Salidas.
+  // Si es una lavadora que encadena secado (`lavadoras_con_secado_ids`: hoy solo
+  // Autoservicio), terminar es pasar la carga a una secadora y hay que elegirla.
+  // Por Encargo finaliza directo; su secadora va aparte en Salidas.
   const terminaLavado = Boolean(
     confirmTerminar && confirmTerminar.tipo !== 'secadora' && notaParaTerminar
     && Array.isArray(notaParaTerminar.lavadoras_con_secado_ids)
@@ -229,25 +205,19 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
          mid => String(mid) === String(confirmTerminar.id))
   );
   const secadorasDisponibles = maquinas.filter(m => m.tipo === 'secadora' && m.estado === 'disponible');
-  // ¿La nota tiene otras máquinas en uso además de esta? (otras cargas
-  // lavando o secando: al terminar esta, la nota sigue en proceso)
+  // ¿La nota tiene otras máquinas en uso?
   const otrasEnUso = Boolean(confirmTerminar && notaParaTerminar &&
     maquinas.some(m => String(m.id) !== String(confirmTerminar.id)
       && m.estado === 'en_uso' && notaUsaMaquina(notaParaTerminar, m.id)));
-  // A la nota le puede quedar trabajo que no está corriendo: una máquina que
-  // todavía no se asigna, o una ya asignada que nadie ha arrancado —que desde
-  // que la secadora se pone desde el principio es lo habitual—. En cualquiera
-  // de los dos casos la nota NO pasa a "Por Entregar" al cerrar esta máquina, y
-  // prometerlo confunde. Lo calcula el servidor con el mismo criterio con el
-  // que cierra la nota.
+  // Trabajo pendiente que no corre (máquina sin asignar o sin arrancar): la nota
+  // no pasa a "Por Entregar" al cerrar esta. Lo calcula el servidor.
   const sigueEnProceso = otrasEnUso || Boolean(notaParaTerminar?.trabajo_pendiente);
-  // Qué le pasa a la nota cuando esta máquina era lo último (la regla de
-  // `estadoAlTerminarCargas` en el servidor, igual que en Salidas):
-  //   · Autoservicio cobrado → se finaliza sola: el cliente se lleva su ropa.
-  //   · Autoservicio que debe → "Por Cobrar", donde se liquida.
-  //   · Por Encargo → NO avanza sola: espera a que la marquen como Procesado
-  //     (2026-09-28). Antes este aviso prometía "Por Entregar" en todos.
-  //   · Cualquier otro (Edredón) → "Por Entregar".
+  // Qué le pasa a la nota si esta era su última máquina (como
+  // estadoAlTerminarCargas del servidor):
+  // - Autoservicio cobrado → se finaliza (el cliente se lleva su ropa).
+  // - Autoservicio que debe → "Por Cobrar".
+  // - Por Encargo → no avanza: espera "Procesado".
+  // - Edredón → "Por Entregar".
   const tipoTerminar = notaParaTerminar?.tipo_servicio;
   const esAutoservicioTerminar = tipoTerminar === 'AUTOSERVICIO';
   const estadoAlCerrar = tipoTerminar === 'POR_ENCARGO' ? null
@@ -257,9 +227,7 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
   const confirmarTerminarCiclo = async (minutosElegidos = null) => {
     if (!confirmTerminar) return;
     if (terminaLavado && !secadoraSel) return;
-    // La secadora que va a arrancar puede ser de un modelo con varios
-    // programas: se pregunta antes de tocar nada (mig. 120). Desde 2026-10-04
-    // la Sec49 tampoco tiene paso de encender: aquí mismo elige y arranca.
+    // Si la secadora pregunta su programa, se pregunta antes de nada.
     const secElegida = terminaLavado
       ? secadorasDisponibles.find(m => String(m.id) === String(secadoraSel)) : null;
     if (terminaLavado && minutosElegidos == null) {
@@ -267,17 +235,13 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
     }
     setTerminando(true);
     setErrorTerminar('');
-    // Si la sesión expira a mitad de esto, la app redirige a /login y se pierde
-    // el contexto; guardamos la intención para reabrir esta confirmación al
-    // volver a entrar (api.patch devuelve undefined en ese caso 401).
+    // Si la sesión expira a medias, se guarda la intención para reabrir esta
+    // confirmación (api.patch devuelve undefined con 401).
     guardarAccionPendiente({ tipo: 'terminar_ciclo', maquinaId: confirmTerminar.id });
     try {
       if (terminaLavado) {
-        // Termina el lavado de ESTA lavadora: el servidor la libera, arranca
-        // la secadora elegida y la nota pasa a Secando (o sigue Lavando si
-        // otras cargas siguen en lavadora). Las demás cargas no se tocan.
-        // Se muestra la animación de arranque de la secadora (como en Salidas),
-        // con una duración mínima para que alcance a verse.
+        // Termina el lavado de esta lavadora y arranca la secadora elegida; la nota
+        // pasa a Secando (o sigue Lavando). Con animación de duración mínima.
         setIniciandoSecadora(secElegida || null);
         const [notaActualizada] = await Promise.all([
           api.patch(`/notas/${notaParaTerminar.id}/terminar-lavado`, {
@@ -290,9 +254,8 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
         if (notaActualizada === undefined) return; // sesión expiró: se conserva la acción pendiente
         setNotas(prev => prev.map(n => n.id === notaActualizada.id ? { ...n, ...notaActualizada } : n));
       } else if (notaParaTerminar) {
-        // Finaliza la carga de ESTA máquina: la libera y, si era la última de la
-        // nota, la pasa a "Por Entregar". Secadora → terminar-secado; lavadora de
-        // Autoservicio → terminar-lavado-final (no pasa a secado).
+        // Finaliza la carga de esta máquina: secadora → terminar-secado; lavadora →
+        // terminar-lavado-final.
         const esSecadora = confirmTerminar.tipo === 'secadora';
         const notaActualizada = esSecadora
           ? await api.patch(`/notas/${notaParaTerminar.id}/terminar-secado`, { secadora_id: Number(confirmTerminar.id) })
@@ -300,7 +263,7 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
         if (notaActualizada === undefined) return; // sesión expiró: se conserva la acción pendiente
         setNotas(prev => prev.map(n => n.id === notaActualizada.id ? { ...n, ...notaActualizada } : n));
       } else {
-        // Máquina en uso sin nota vinculada: solo se libera.
+        // En uso sin nota: solo se libera.
         const actualizada = await api.patch(`/maquinas/${confirmTerminar.id}/estado`, { estado: 'disponible' });
         if (actualizada === undefined) return; // sesión expiró: se conserva la acción pendiente
         setMaquinas(prev => prev.map(m => m.id === actualizada.id ? actualizada : m));
@@ -309,8 +272,7 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
       setConfirmTerminar(null);
       setSecadoraSel('');
       setEligiendoTiempo(null);
-      // La nota pudo liberar o tomar más máquinas (todas las de sus cargas):
-      // se refresca para reflejar el estado real.
+      // La nota pudo soltar o tomar máquinas: se refresca.
       refrescarDatos();
     } catch (err) {
       limpiarAccionPendiente();
@@ -329,15 +291,11 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
   const totalLavadoras = maquinas.filter(esLavadora).length;
   const totalSecadoras = maquinas.length - totalLavadoras;
 
-  // Construye la tarjeta de una máquina en uso: calcula el tiempo restante del
-  // ciclo y resuelve su nota relacionada. El botón de terminar es por máquina:
-  // aparece cuando ESTA máquina cumple su tiempo, aunque otras cargas de la
-  // nota sigan corriendo (cada carga es independiente).
+  // Datos de la tarjeta: reloj del ciclo y su nota. Finalizar es por máquina y
+  // sale cuando esta cumple su tiempo, aunque otras sigan corriendo.
   const datosDeCiclo = (m) => {
-    // El ciclo se sella al arrancar (ciclo_minutos): imprescindible para el
-    // secado, cuya duración depende del tipo de carga, no del tipo de máquina.
-    // Fallback por tipo para máquinas puestas en uso antes de la migración.
-    // La de fichas (mig. 149) no tiene tope: su reloj solo cuenta hacia arriba.
+    // Ciclo sellado al arrancar (ciclo_minutos) o, si no hay, el de su tipo. La de
+    // fichas no tiene tope: su reloj solo sube.
     const minutos = m.solo_fichas ? 0
                   : m.ciclo_minutos != null ? m.ciclo_minutos
                   : m.tipo === 'secadora'       ? tiempos.secadora
@@ -352,32 +310,24 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
       .filter(n => notaUsaMaquina(n, m.id)
                 && ['LAVANDO', 'SECANDO'].includes(n.estado))
       .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
-    // Encendida esperando su Iniciar: su nota puede seguir "En espera" (la
-    // secadora encendida desde la tarjeta de la lavadora, 2026-10-04) y no
-    // entra en el filtro de arriba. La toma de lo que dice la máquina.
+    // Encendida esperando Iniciar: su nota puede seguir En espera; se toma la de la máquina.
     const notaRel = notaEnProceso ?? (m.esperando_arranque && m.en_uso_nota_id
       ? (notas.find(n => String(n.id) === String(m.en_uso_nota_id))
          ?? { id: m.en_uso_nota_id, folio: m.en_uso_folio })
       : undefined);
-    // Encendida a mano y sin nota (mig. 104): no hay ciclo que contar, así que
-    // el contador mentiría con el tiempo de una carga que nadie pidió.
+    // Encendida a mano y sin nota: no hay ciclo que contar.
     const soloManual = Boolean(m.encendida_manual_at) && !notaRel;
-    // Segundo ciclo de la misma carga (mig. 108). `otro_ciclo_desde` lo calcula
-    // el backend —depende del margen de corte y de la pausa, que son
-    // configuración del servidor— y aquí solo se cuenta hacia atrás.
+    // Otro ciclo de la misma carga: `otro_ciclo_desde` lo calcula el backend; aquí
+    // solo se cuenta hacia atrás.
     const habilitaEn = m.otro_ciclo_desde ? new Date(m.otro_ciclo_desde).getTime() : null;
     const esperaSeg = habilitaEn ? Math.max(0, Math.ceil((habilitaEn - now) / 1000)) : 0;
-    // Máquina con cronómetro (todas desde la mig. 146, 2026-10-04): cuenta
-    // hacia ARRIBA desde que arrancó y termina cuando alguien la finaliza, así
-    // que nunca se pone verde sola. Su `ciclo_minutos` es su tope: al llegar
-    // ahí el corte le quita la luz y el reloj se queda parado en el tope. Si se
-    // eligió un programa al iniciarla, al cumplirlo se avisa que ya terminó.
+    // Con cronómetro cuenta hacia arriba y termina al finalizarla. `ciclo_minutos`
+    // es su tope: ahí se corta la luz y el reloj se para. Con programa elegido, al
+    // cumplirlo se avisa.
     if (m.cronometro && !soloManual) {
       const programaSeg = Math.max(0, Number(m.ciclo_elegido_minutos) || 0) * 60;
-      // Secadora de fichas (mig. 147): nunca se le corta la luz; su tope solo
-      // limita las fichas. Con "Otro ciclo" puede secar más allá del tope en
-      // el reloj (el empleado tardó en sumarle), así que el reloj llega hasta
-      // donde se le acaba el tiempo.
+      // Secadora de fichas: nunca se le corta la luz; con "Otro ciclo" el reloj
+      // llega hasta donde se le acaba el tiempo.
       const deFichas = Number(m.minutos_por_ficha) > 0;
       const limiteSeg = deFichas ? Math.max(duracionSeg, programaSeg) : duracionSeg;
       const contadoSeg = limiteSeg > 0 ? Math.min(transcurridoSeg, limiteSeg) : transcurridoSeg;
@@ -410,14 +360,10 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
     };
   };
 
-  // Pide el siguiente ciclo de la carga. El backend revalida el tope y la
-  // pausa, así que aquí no hay confirmación: es una acción reversible (termina
-  // en el mismo botón de Finalizar que ya estaba) y el empleado la da con la
-  // máquina enfrente.
+  // Pide el siguiente ciclo, sin confirmación (el backend revalida tope y pausa).
   const pedirOtroCiclo = async (maquina, minutos = null) => {
-    // Cronómetro con botón Iniciar (Speed Queen, Sec49) recién encendida: no
-    // es otro ciclo sino el primero, y ese lo arranca la nota. El modelo que
-    // pregunta su programa lo elige antes (mig. 146).
+    // Botón Iniciar recién encendida: es el primer arranque, no otro ciclo (si
+    // pregunta su programa, se elige antes).
     const primerArranque = maquina.con_iniciar && maquina.esperando_arranque
       && maquina.en_uso_nota_id && maquina.ciclos_carga == null;
     if (primerArranque && minutos == null && preguntaTiempo(maquina)) {
@@ -445,9 +391,8 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
     }
   };
 
-  // Paso previo del siguiente ciclo: le devuelve la corriente sin arrancar el
-  // cronómetro. Va contra el endpoint de la nota, igual que "Encender máquina"
-  // en Salidas, porque es exactamente el mismo estado de la mig. 110.
+  // Le devuelve la corriente para el siguiente ciclo sin arrancar el cronómetro
+  // (como "Encender máquina" de Salidas).
   const encenderParaOtroCiclo = async (maquina, notaRel) => {
     if (!notaRel) return;
     setErrorOtroCiclo(null);
@@ -471,8 +416,7 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
     }
   };
 
-  // Elegir con cuál de sus tiempos corre la secadora (mig. 120). Se pinta
-  // aparte del modal de confirmación: aquel ya hizo su pregunta.
+  // Elegir el programa de la secadora; aparte del modal de confirmación.
   const modalElegirTiempo = eligiendoTiempo && (
     <ElegirTiempoModal
       maquina={eligiendoTiempo}
@@ -510,11 +454,9 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
     );
   };
 
-  // El aviso sonoro de "ciclo terminado" ya no vive aquí: suena en cualquier
-  // pantalla desde el Layout (lib/avisoTope.js), para el temporizador y para
-  // el tope del cronómetro (2026-10-03).
+  // El aviso sonoro de fin de ciclo vive en el Layout (lib/avisoTope.js).
 
-  // Un carrusel horizontal por tipo, con conteo "en uso/total" en el título.
+  // Un carrusel por tipo, con "en uso/total" en el título.
   const renderCarrusel = (titulo, enUso, total) => (
     <div className="space-y-4">
       <p className="text-section text-grey">
@@ -574,8 +516,7 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
                   fill="none" stroke="currentColor" strokeWidth={2}
                   strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"
                 >
-                  {/* En espejo horizontal (2026-10-11): se voltea el dibujo y no el
-                      <svg>, para que el giro de animate-spin no lo deshaga. */}
+                  {/* En espejo: se voltea el dibujo y no el <svg>, para que el giro no lo deshaga. */}
                   <g transform="matrix(-1 0 0 1 24 0)">
                     <path d="M20 11A8.1 8.1 0 004.5 9M4 5v4h4" />
                     <path d="M4 13a8.1 8.1 0 0015.5 2M20 19v-4h-4" />
@@ -590,8 +531,7 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
               <div className="animate-spin rounded-pill h-8 w-8 border-b-2 border-blue" />
             </div>
           ) : (
-            // Separadas en Lavadoras y Secadoras (como Gestión de Máquinas),
-            // cada sección con su conteo "en uso/total".
+            // Lavadoras y Secadoras por separado, cada una con "en uso/total".
             <div className="space-y-16">
               {[
                 { titulo: 'Lavadoras', items: lavadorasEnUso, total: totalLavadoras },
@@ -620,8 +560,7 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
       {modalElegirTiempo}
       {modalElegirArranque}
 
-      {/* Corriente de vuelta para el siguiente ciclo: misma animación que el
-          "Encender máquina" de Salidas, porque es exactamente el mismo paso. */}
+      {/* Corriente para el siguiente ciclo: la animación de "Encender máquina". */}
       {encendiendoMaquina && (
         <MaquinaCicloOverlay modo="encender" tipo={encendiendoMaquina.tipo} nombre={encendiendoMaquina.nombre} />
       )}
@@ -658,8 +597,7 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
                           }`}
                         >
                           <span className="font-medium text-gray-800">{m.nombre}</span>
-                          {/* "Marca · Tamaño", como en todas las listas para
-                              elegir máquina; sin datos, al menos qué es. */}
+                          {/* "Marca · Tamaño"; sin datos, al menos qué es. */}
                           <span className="text-xs text-gray-500">{marcaYTamano(m) ?? 'Secadora'}</span>
                         </button>
                       );

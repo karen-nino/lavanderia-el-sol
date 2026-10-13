@@ -1,17 +1,15 @@
-// Exportación del reporte de Ventas a CSV (Excel) y a PDF. Ver exportUtils.js
-// para las piezas compartidas.
-//
-// Recibe el objeto que devuelve GET /ventas/resumen:
-//   { tarjetas: { total_cobrado, notas_pagadas, productos_consumidos, notas_pendientes },
-//     corte:    { total_servicios, total_cargas, total_productos, total_ajustes,
-//                 total_efectivo, total_transferencia, total_tarjeta,
-//                 total_general (suma de conceptos), total_cobrado },
-//     lista_notas: [{ folio, fecha, creado_en, estado, maquinas:[{nombre,cargas}],
-//                     atendio, forma_pago, total_productos, total }],
-//     turnos: [cortes de caja del período, con la forma de /caja/historial] }
-//
-// Los turnos de caja (2026-10-10) salen con sus Ingresos, Egresos y Desglose,
-// con las mismas piezas que la exportación de Caja (exportCorte.js).
+/**
+ * Reporte de Ventas a CSV y PDF (ver exportUtils.js). Recibe GET /ventas/resumen:
+ *   { tarjetas: { total_cobrado, notas_pagadas, productos_consumidos, notas_pendientes },
+ *     corte:    { total_servicios, total_cargas, total_productos, total_ajustes,
+ *                 total_efectivo, total_transferencia, total_tarjeta,
+ *                 total_general (suma de conceptos), total_cobrado },
+ *     lista_notas: [{ folio, fecha, creado_en, estado, maquinas:[{nombre,cargas}],
+ *                     atendio, forma_pago, total_productos, total }],
+ *     turnos: [turnos de caja del período, con la forma de /caja/historial] }
+ *
+ * Los turnos salen con Ingresos, Egresos y Desglose (piezas de exportCorte.js).
+ */
 
 import { formatHora12 } from './fecha';
 import { formaPagoLabel } from './formasPago';
@@ -33,8 +31,7 @@ const ESTADO_LABEL = {
   FINALIZADA: 'Finalizada',
   CANCELADA:  'Cancelada',
 };
-// El estado LISTA se lee según el servicio: en Autoservicio no hay nada que
-// entregar, la nota espera su cobro (2026-09-25).
+// LISTA según el servicio (en Autoservicio espera su cobro).
 const estadoLabel = (e, tipoServicio) =>
   etiquetaEstadoNota(e, tipoServicio, ESTADO_LABEL[e] ?? (e ?? ''));
 
@@ -77,8 +74,7 @@ const filaCSV = (n) => [
 export function descargarVentasCSV(data, sufijo) {
   const notas = data?.lista_notas ?? [];
   descargarCSV(`ventas-${slug(sufijo)}`, ENCABEZADOS_CSV, notas.map(filaCSV));
-  // Los abonos van en su propio archivo: son otro tipo de renglón (un pago, no
-  // una nota) y mezclarlos dejaría media tabla vacía (2026-09-25).
+  // Los abonos en su propio archivo: son pagos, no notas.
   const abonos = data?.abonos ?? [];
   if (abonos.length > 0) {
     descargarCSV(
@@ -121,8 +117,7 @@ const filaCorte = (etiqueta, valor, total = false) => `
     <td>${esc(etiqueta)}</td><td class="r">${fmtMoneda(valor)}</td>
   </tr>`;
 
-// Por concepto (2026-10-10): lo cobrado en el período repartido con las mismas
-// líneas que el corte de Caja; suma el total cobrado.
+// Por concepto: lo cobrado repartido como el corte de Caja; suma el total cobrado.
 const bloqueCorte = (c) => {
   const conceptos = lineasConcepto(c?.conceptos);
   const suma = conceptos.reduce((a, l) => a + l.value, 0);
@@ -181,8 +176,7 @@ const bloqueNotas = (notas) => {
     </table>`;
 };
 
-// Abonos del período (mig. 121): quién recibió cada pago parcial. Solo sale si
-// hay abonos; una exportación sin ellos se ve como siempre.
+// Abonos del período y quién recibió cada uno; solo si hay.
 const bloqueAbonos = (abonos) => {
   if (abonos.length === 0) return '';
   const total = abonos.reduce((t, a) => t + Number(a.monto || 0), 0);

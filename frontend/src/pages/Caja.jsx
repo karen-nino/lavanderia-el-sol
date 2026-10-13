@@ -59,8 +59,7 @@ const fmtFechaCorta = (fecha) => {
   return `${diaSem}, ${dd} ${mes} ${yy}`;
 };
 
-// Lunes (inicio) de la semana a la que pertenece una fecha. Sirve de clave para
-// agrupar el historial por semana.
+/** Lunes de la semana de una fecha (clave para agrupar por semana). */
 const inicioSemana = (fecha) => {
   const d = new Date(fecha);
   d.setHours(0, 0, 0, 0);
@@ -82,10 +81,10 @@ const nombreDia = (d) => {
   return s.charAt(0).toUpperCase() + s.slice(1);
 };
 
-// Encabezado de la sección de semana (Mes/Año/Personalizado): rango lunes–domingo
-// con día a dos dígitos y el año. Ej.: Semana del 05 - 11 de Enero 2026. Si cruza
-// de mes: Semana del 28 de Julio - 03 de Agosto 2026. Si cruza de año, muestra
-// ambos años: Semana del 29 de Diciembre 2025 - 04 de Enero 2026.
+/**
+ * Encabezado de semana, lunes a domingo: "Semana del 05 - 11 de Enero 2026";
+ * con el mes o el año que cruza cuando cambia.
+ */
 const fmtSemanaHeader = (fecha) => {
   const lunes = inicioSemana(fecha);
   const domingo = new Date(lunes);
@@ -104,10 +103,7 @@ const fmtSemanaHeader = (fecha) => {
     : `Semana del ${dd(lunes)} de ${mes(lunes)} - ${dd(domingo)} de ${mes(domingo)} ${anio}`;
 };
 
-// Filtro de fecha del historial, con las mismas opciones que Ventas. El "mes"
-// se elige de un dropdown (como el año), por eso no lleva etiqueta fija.
-// "Hoy" volvió como filtro propio el 2026-10-04 (a pedido) y es el que se ve
-// al abrir; "Esta semana" sigue resaltando el día de hoy.
+/** Filtros del historial (como en Ventas). Abre en "Hoy"; el mes se elige de un desplegable. */
 const PERIODOS = [
   { id: 'hoy',    label: 'Hoy' },
   { id: 'semana', label: 'Esta semana' },
@@ -122,8 +118,7 @@ const MESES = Array.from({ length: 12 }, (_, i) => {
   return m.charAt(0).toUpperCase() + m.slice(1);
 });
 
-// Rango [desde, hasta) según el periodo elegido. null = sin filtro (p. ej.
-// Personalizado sin fechas todavía). El mes se toma del año seleccionado.
+/** Rango [desde, hasta) del periodo; null = sin filtro (personalizado sin fechas). */
 const rangoDePeriodo = (periodo, anio, mes, desde, hasta) => {
   const ahora = new Date();
   const hoy0 = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
@@ -150,9 +145,7 @@ const rangoDePeriodo = (periodo, anio, mes, desde, hasta) => {
   }
 };
 
-// Apertura y Corte son una sola pestaña desde el 2026-10-06: "Corte" enseña el
-// formulario para abrir la caja cuando está cerrada y el corte cuando está
-// abierta.
+/** Pestañas. "Corte" abre la caja si está cerrada y hace el corte si está abierta. */
 const TABS = [
   { id: 'movimientos', label: 'Movimientos' },
   { id: 'corte',       label: 'Corte' },
@@ -190,15 +183,9 @@ function Apertura({ data, onAbrir }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
-  // El fondo lo trae el corte anterior: el campo arranca con ese monto y se
-  // vuelve a poner si el corte cambia (p. ej. después de recargar).
-  //
-  // Se ajusta DURANTE el render, no en un efecto. Es el patrón que React
-  // recomienda para un campo que sigue a una prop: el efecto obligaba a pintar
-  // una vez con el valor viejo y a repintar enseguida con el bueno, que es lo
-  // que marcaba react-hooks/set-state-in-effect. La clave junta corte y monto
-  // para no repetir el ajuste mientras el corte sea el mismo, y así lo que
-  // escriba el usuario encima se respeta.
+  // La caja inicial viene del corte anterior. Se ajusta durante el render (no en
+  // un efecto) cuando cambia ese corte; la clave evita repetirlo y respeta lo que
+  // se escriba.
   const claveSugerida = sugerida ? `${sugerida.corte?.id ?? ''}:${sugerida.monto}` : null;
   const [claveAplicada, setClaveAplicada] = useState(null);
   if (claveSugerida && claveSugerida !== claveAplicada) {
@@ -246,8 +233,8 @@ function Apertura({ data, onAbrir }) {
 // ── Movimientos ─────────────────────────────────────────────
 function Movimientos({ data, onChange }) {
   const { usuario } = useAuth();
-  // El empleado solo registra gastos; la entrada es del administrador
-  // (2026-10-10, el servidor también lo exige).
+  // El empleado solo registra gastos; las entradas son de admin (el servidor
+  // también lo exige).
   const puedeEntrada = esAdminFn(usuario?.rol);
   const [tipo, setTipo] = useState('salida');
   const [concepto, setConcepto] = useState('');
@@ -352,8 +339,7 @@ function Movimientos({ data, onChange }) {
 function Corte({ data, onCerrar, onAbrir }) {
   const { usuario } = useAuth();
   const [contado, setContado] = useState('');
-  // Reparto de lo contado (mig. 151): lo que se queda en el cajón —el fondo
-  // del siguiente turno— y lo que se aparta en el sobre.
+  // Reparto de lo contado: caja final (se queda y abre el siguiente turno) y sobre.
   const [cajaFinal, setCajaFinal] = useState('');
   const [sobre, setSobre] = useState('');
   const [notas, setNotas] = useState('');
@@ -370,9 +356,8 @@ function Corte({ data, onCerrar, onAbrir }) {
   const contadoNum = Number(contado);
   const diferencia = contado === '' ? null : contadoNum - totales.esperado;
 
-  // Caja final y sobre suman lo contado: al escribir uno, el otro se calcula
-  // con lo que falta. Si cambia lo contado, se respeta la caja final (es el
-  // fondo que se quiere dejar) y se ajusta el sobre.
+  // Caja final y sobre suman lo contado: al escribir uno se calcula el otro. Si
+  // cambia lo contado, se respeta la caja final y se ajusta el sobre.
   const centavos = (n) => Math.round(n * 100) / 100;
   const resto = (total, parte) => (
     total === '' || parte === '' ? '' : String(centavos(Number(total) - Number(parte)))
@@ -402,7 +387,7 @@ function Corte({ data, onCerrar, onAbrir }) {
       setCajaFinal('');
       setSobre('');
       setNotas('');
-      // Se muestra la animación de éxito un momento antes de salir del corte.
+      // La animación de éxito, un momento antes de salir.
       setExito(true);
       setTimeout(() => onCerrar(), 1800);
     } catch (err) {
@@ -411,15 +396,13 @@ function Corte({ data, onCerrar, onAbrir }) {
     }
   };
 
-  // Solo el efectivo entra al cajón. Transferencias y tarjetas se cobran de
-  // verdad, pero contarlas aquí haría que el conteo físico saliera con un
-  // faltante que nadie se llevó: se informan en "Cómo se cobró" de Ingresos
-  // (el recuadro aparte "Cobrado fuera del cajón" se quitó el 2026-10-10).
+  // Solo el efectivo entra al cajón; transferencia y tarjeta se informan en
+  // "Cómo se cobró".
   const desglose = totales.ventas_desglose ?? {
     total: totales.ventas, efectivo: totales.ventas, transferencia: 0, tarjeta: 0,
   };
 
-  // Ingresos, Egresos y Desglose (2026-10-10): mismas líneas que Ventas y las
+  // Ingresos, Egresos y Desglose: las mismas líneas que Ventas y las
   // exportaciones (lib/desgloseCaja.js).
   const turno = {
     monto_inicial:   caja.monto_inicial,
@@ -429,8 +412,7 @@ function Corte({ data, onCerrar, onAbrir }) {
     ingresos:        totales.ingresos ?? null,
     spe_debe:        totales.egresos?.por_encargo_pendiente ?? null,
   };
-  // El turno abierto con la forma del historial, para exportarlo desde aquí
-  // (admin y empleados, 2026-10-10): sin conteo todavía, como "en curso".
+  // El turno abierto con la forma del historial, para exportarlo (sin conteo).
   const turnoExportable = {
     ...turno,
     id:               caja.id,
@@ -447,13 +429,11 @@ function Corte({ data, onCerrar, onAbrir }) {
   };
   const sufijoExport = `turno-${fmtFechaCorta(caja.abierta_at)}`;
 
-  // La caja funciona por turnos (2026-10-03): el corte lo hace quien abrió el
-  // turno o un administrador. El servidor también lo exige; aquí se dice antes
-  // de que alguien cuente el cajón para nada.
+  // El corte lo hace quien abrió el turno o un admin (también lo exige el servidor).
   const esMiTurno = String(caja.usuario_apertura_id) === String(usuario?.id);
   const puedeCerrar = esMiTurno || esAdminFn(usuario?.rol);
-  // El empleado escribe lo contado y la caja final; el sobre se calcula solo
-  // (lo que sobra) y solo un administrador lo escribe a mano.
+  // El empleado escribe lo contado y la caja final; el sobre se calcula (solo un
+  // admin lo escribe).
   const sobreEditable = esAdminFn(usuario?.rol);
 
   return (
@@ -470,7 +450,7 @@ function Corte({ data, onCerrar, onAbrir }) {
           {esMiTurno ? 'Tu turno' : `Turno de ${caja.usuario_apertura || '—'}`}
         </p>
         <p className="text-xs text-gray-500 mt-0.5">Abierto desde las {fmtHora(caja.abierta_at)}</p>
-        {/* La nota que se dejó al abrir (antes vivía en la pestaña Apertura). */}
+        {/* La nota que se dejó al abrir. */}
         {caja.notas_apertura && (
           <p className="text-xs text-gray-600 mt-1.5">Nota de apertura: {caja.notas_apertura}</p>
         )}
@@ -512,7 +492,7 @@ function Corte({ data, onCerrar, onAbrir }) {
             {Math.abs(diferencia) < 0.005 ? ' (cuadra)' : (diferencia > 0 ? ' (sobrante)' : ' (faltante)')}
           </div>
         )}
-        {/* Reparto de lo contado (mig. 151). */}
+        {/* Reparto de lo contado. */}
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label htmlFor="caja-final" className="block text-sm font-medium text-gray-700 mb-1">Caja final</label>
@@ -586,9 +566,8 @@ function Historial({ onFiltroLabel }) {
   const esAdminMain = esAdminMainFn(usuario?.rol);
 
   const [cortes, setCortes] = useState([]);
-  // El turno que sigue abierto (2026-10-03): se ve en su día, marcado "En
-  // curso", con lo que lleva hasta ahora. No es un corte: no tiene conteo, ni
-  // menú, ni entra en las exportaciones.
+  // El turno abierto: se ve en su día, "En curso", con lo que lleva. No es un
+  // corte: sin conteo ni menú.
   const [enCurso, setEnCurso] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -656,7 +635,7 @@ function Historial({ onFiltroLabel }) {
           esperado: totales.esperado,
           contado: null,
           diferencia: null,
-          // Ingresos por concepto y SPE Debe, para las exportaciones (2026-10-10).
+          // Ingresos por concepto y SPE Debe, para exportar.
           ingresos: totales.ingresos ?? null,
           spe_debe: totales.egresos?.por_encargo_pendiente ?? null,
         });
@@ -721,9 +700,7 @@ function Historial({ onFiltroLabel }) {
     }
   };
 
-  // Etiqueta del filtro activo, para mostrarla como subtítulo del encabezado.
-  // Misma idea que los títulos de Ventas: Hoy con su fecha, la semana con su
-  // rango, y el personalizado con día, mes y año (con ambos años si cruza).
+  // Etiqueta del filtro activo para el subtítulo (como en Ventas).
   const filtroLabel = (() => {
     const hoyD = new Date();
     switch (periodo) {
@@ -764,23 +741,20 @@ function Historial({ onFiltroLabel }) {
 
   const rango = rangoDePeriodo(periodo, anioSel, mesSel, desde, hasta);
   const visibles = rango
-    // Cada turno es del día en que se ABRIÓ: el que se cierra solo a
-    // medianoche (o pasada) sigue siendo del día en que empezó.
+    // Cada turno es del día en que se abrió.
     ? cortes.filter((c) => {
         const f = new Date(c.abierta_at);
         return f >= rango.desde && f < rango.hasta;
       })
     : cortes;
 
-  // Lo que se exporta: los cortes del período y, si cae dentro, el turno que
-  // sigue abierto (2026-10-04). Sin él, "Hoy" casi nunca tenía qué exportar.
+  // Se exportan los cortes del período y, si cae dentro, el turno abierto.
   const enCursoVisible = enCurso && (!rango || (
     new Date(enCurso.abierta_at) >= rango.desde && new Date(enCurso.abierta_at) < rango.hasta));
   // Va primero: la lista viene de la más nueva a la más vieja.
   const exportables = enCursoVisible ? [enCurso, ...visibles] : visibles;
 
-  // Vista "Esta semana": los 7 días en curso (Lunes → Domingo) como contenedores,
-  // para ver de un vistazo en qué días hubo o falta corte.
+  // "Esta semana": los 7 días (lunes → domingo), para ver qué días faltan.
   const lunesSemana = inicioSemana(new Date());
   const diasSemana = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(lunesSemana);
@@ -789,9 +763,8 @@ function Historial({ onFiltroLabel }) {
   });
   const hoy0 = new Date(); hoy0.setHours(0, 0, 0, 0);
 
-  // Tarjeta de un corte (se reutiliza para los cortes de hoy y los del resto).
-  // Menú de opciones (badge de diferencia + ⋮ para eliminar). Solo Admin Main
-  // ve el menú de opciones.
+  // Menú de opciones de un corte (badge de diferencia y ⋮ para eliminar; el ⋮
+  // solo lo ve el Admin Main).
   const menuOpciones = (c) => {
     if (c.en_curso) {
       return (
@@ -877,9 +850,7 @@ function Historial({ onFiltroLabel }) {
     );
   };
 
-  // Cuerpo del corte (montos + quién abrió/cerró). Sin contenedor propio: se
-  // inserta dentro de la tarjeta del día o de la tarjeta de corte.
-  // Renglones { label, value, sign, nota } en la rejilla de la tarjeta.
+  // Renglones { label, value, sign, nota } de la rejilla.
   const filasRejilla = (filas) => filas.map((r) => (
     <div key={r.label} className="contents">
       <span className="text-gray-500">
@@ -893,9 +864,8 @@ function Historial({ onFiltroLabel }) {
     <p className="col-span-2 pt-2 text-xs font-semibold uppercase tracking-wide text-gray-400">{texto}</p>
   );
 
-  // Cuerpo del corte: lo mismo que la tarjeta de turno de Ventas (Ingresos,
-  // Egresos, Esperado y su detalle desplegable, 2026-10-10) con el diseño de
-  // siempre, más lo que solo tiene el corte: conteo, caja final y sobre.
+  // Cuerpo del corte: Ingresos, Egresos y Esperado con su detalle desplegable
+  // (como el turno de Ventas), más conteo, caja final y sobre.
   const cuerpoCorte = (c) => {
     const d = desgloseCaja(c);
     return (
@@ -905,9 +875,8 @@ function Historial({ onFiltroLabel }) {
         <span className="text-gray-500">Egresos</span><span className="text-right text-gray-700">−{fmt(d.totalEgresos)}</span>
         <span className="text-gray-500">{c.en_curso ? 'Esperado hasta ahora' : 'Esperado'}</span><span className="text-right text-gray-700">{fmt(c.esperado)}</span>
         <span className="text-gray-500">Contado</span><span className="text-right text-gray-700">{c.contado != null ? fmt(c.contado) : '—'}</span>
-        {/* Reparto de lo contado (mig. 151). Los cortes de antes no lo tienen.
-            Lo que se resalta es la caja final (azul) y el sobre (negritas),
-            2026-10-10; si cuadró o no ya lo dice la etiqueta de arriba. */}
+        {/* Reparto de lo contado (en cortes que lo tienen): caja final en azul y
+            sobre en negritas. */}
         {c.caja_final != null && (
           <>
             <span className="text-gray-500 font-medium">Caja final</span><span className="text-right font-medium text-blue-600">{fmt(c.caja_final)}</span>
@@ -915,7 +884,7 @@ function Historial({ onFiltroLabel }) {
           </>
         )}
       </div>
-      {/* El detalle, plegado como en Ventas: las mismas líneas del corte. */}
+      {/* El detalle, plegado como en Ventas. */}
       <div className="mt-4">
         <button
           type="button"
@@ -934,8 +903,7 @@ function Historial({ onFiltroLabel }) {
             {filasRejilla(d.ingresos)}
             <span className="font-medium text-gray-700">Total ingresos</span>
             <span className="text-right font-medium text-gray-800">{fmt(d.totalIngresos)}</span>
-            {/* Después del total (2026-10-11): debajo de Efectivo/Transferencia
-                se leía como su suma. Informativo, no se suma. */}
+            {/* Después del total, para que no se lea como su suma; es informativo. */}
             {subtituloRejilla('Cómo se cobró')}
             {filasRejilla(d.comoSeCobro)}
             {subtituloRejilla('Egresos')}
@@ -949,8 +917,7 @@ function Historial({ onFiltroLabel }) {
           </div>
         )}
       </div>
-      {/* Entradas y salidas del turno con su concepto (2026-10-04). Plegadas
-          para que la tarjeta no crezca; se abren con un toque. */}
+      {/* Entradas y gastos del turno con su concepto, plegados. */}
       {c.movimientos?.length > 0 && (
         <div className="mt-4">
           <button
@@ -1013,12 +980,10 @@ function Historial({ onFiltroLabel }) {
     );
   };
 
-  // Tarjeta de un día (2026-10-03: la caja funciona por TURNOS). Un turno es
-  // una caja abierta, y un día puede tener varios. Antes se suponía uno por día
-  // y el segundo turno no se veía en ninguna parte.
-  //   · Un turno: la tarjeta del día ES ese turno, con su horario.
-  //   · Varios: el resumen del día arriba y cada turno en su propia tarjeta.
-  //   · Ninguno: la tarjeta vacía ("Sin corte" / "Pendiente").
+  // Tarjeta de un día (un día puede tener varios turnos):
+  // - un turno: la tarjeta es ese turno, con su horario;
+  // - varios: el resumen del día y cada turno en su tarjeta;
+  // - ninguno: vacía ("Sin corte" / "Pendiente").
   const renderDia = (dia) => {
     const turnos = [...visibles, ...(enCurso ? [enCurso] : [])]
       .filter((x) => mismoDia(x.abierta_at, dia))
@@ -1074,13 +1039,9 @@ function Historial({ onFiltroLabel }) {
     );
   };
 
-  // Resumen de un día con varios turnos: lo que entró entre todos y cómo
-  // quedó el día. La diferencia suma solo los turnos que se contaron; uno que
-  // cerró el sistema a medianoche no tiene conteo y se avisa aparte.
-  //
-  // Ingresos y Egresos (2026-10-10) con las reglas del corte. La caja inicial
-  // cuenta UNA vez, la del primer turno: cada turno siguiente abre con la caja
-  // final del anterior, que es dinero ya contado, y sumarlas lo repetiría.
+  // Resumen de un día con varios turnos. La diferencia suma solo los contados
+  // (un cierre automático no tiene conteo). La caja inicial cuenta una vez, la
+  // del primer turno: las siguientes son caja final ya contada.
   const resumenDia = (turnos) => {
     const suma = (f) => turnos.reduce((t, c) => t + (Number(f(c)) || 0), 0);
     const efectivo = suma((c) => c.ventas_desglose?.efectivo ?? c.ventas);
@@ -1114,8 +1075,7 @@ function Historial({ onFiltroLabel }) {
     );
   };
 
-  // Agrupa una lista de días (en orden) por semana, cada una con su encabezado y
-  // sus tarjetas de día (vacías si no hubo corte). Se usa en "Mes" y "Año".
+  // Agrupa días por semana, con su encabezado (vistas Mes y Año).
   const agruparEnSemanas = (dias) => {
     const semanas = [];
     for (const dia of dias) {
@@ -1146,8 +1106,7 @@ function Historial({ onFiltroLabel }) {
 
   return (
     <div className="space-y-10">
-      {/* Filtro de período: Hoy, Esta semana, Mes, Este año (con selector) y
-          Personalizado. */}
+      {/* Filtro: Hoy, Esta semana, Mes, Este año y Personalizado. */}
       <div className="space-y-3">
         <div className="flex flex-wrap gap-2">
           {PERIODOS.map((p) => {
@@ -1293,17 +1252,15 @@ function Historial({ onFiltroLabel }) {
           {renderDia(hoy0)}
         </div>
       ) : periodo === 'semana' ? (
-        // Un contenedor por día de la semana (Lunes → Domingo). Los días sin
-        // corte se ven como un espacio vacío; hoy va resaltado y los días que
-        // aún no llegan quedan como "Pendiente".
+        // Un contenedor por día (lunes → domingo): vacíos sin corte, hoy resaltado y
+        // los que no llegan, "Pendiente".
         <div className="space-y-4">
           {diasSemana.map(renderDia)}
         </div>
       ) : periodo === 'custom' && (!desde || !hasta) ? (
         <EmptyState>Elige las fechas del rango.</EmptyState>
       ) : (
-        // Mes, Año y Personalizado: cada semana con su encabezado y las tarjetas
-        // de sus días (vacías si no hubo corte), igual que en "Esta semana".
+        // Mes, Año y Personalizado: cada semana con sus días.
         <div className="space-y-24">
           {agruparEnSemanas(
             periodo === 'mes' ? diasDeMes(anioSel, mesSel)
@@ -1364,22 +1321,16 @@ function Historial({ onFiltroLabel }) {
 export default function Caja() {
   const { usuario } = useAuth();
   const esAdmin = esAdminFn(usuario?.rol);
-  // El historial de cortes (con diferencias de caja) es solo para admins;
-  // el endpoint también lo exige.
-  // Para admins el Historial es lo más importante: va primero en las pestañas.
-  // Los no-admins no ven Historial.
+  // El Historial (con diferencias de caja) es solo de admins y va primero.
   const tabs = esAdmin
     ? [TABS.find((t) => t.id === 'historial'), ...TABS.filter((t) => t.id !== 'historial')]
     : TABS.filter((t) => t.id !== 'historial');
 
-  // Se puede entrar directo a una pestaña con ?tab=... (ej. desde la tarjeta
-  // de Corte del Dashboard, que enlaza a /caja?tab=corte). Sin ?tab, los admins
-  // abren en Historial y los demás según la caja. Un enlace viejo a ?tab=apertura
-  // cae en Corte, que es donde vive ahora la apertura.
+  // Se entra a una pestaña con ?tab=... (p. ej. desde el Dashboard). Sin él, los
+  // admins abren en Historial. ?tab=apertura cae en Corte.
   const [searchParams] = useSearchParams();
-  // Para los demás, sin ?tab la pestaña queda "por defecto" (null) y se decide
-  // con el estado de la caja: abierta → Movimientos, cerrada → Corte
-  // (2026-10-06). Ver `tabActiva`.
+  // Sin ?tab, la pestaña la decide la caja: abierta → Movimientos, cerrada →
+  // Corte (ver `tabActiva`).
   const [tab, setTab] = useState(() => {
     const req = searchParams.get('tab') === 'apertura' ? 'corte' : searchParams.get('tab');
     return tabs.some((t) => t.id === req) ? req : (esAdmin ? 'historial' : null);
@@ -1388,13 +1339,11 @@ export default function Caja() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Menú de acciones (⋮) para admins: Movimientos y Corte pasan aquí
-  // como secundarias; el Historial es la página principal.
+  // Menú ⋮ de admins: Movimientos y Corte como secundarias.
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
 
-  // Etiqueta del filtro activo del Historial, reportada por ese componente,
-  // para mostrarla como subtítulo del encabezado en esa pestaña.
+  // Filtro activo del Historial, para el subtítulo.
   const [historialFiltro, setHistorialFiltro] = useState('');
 
   const fetchActual = useCallback(async () => {
@@ -1433,9 +1382,7 @@ export default function Caja() {
     return () => document.removeEventListener('mousedown', onDown);
   }, [menuOpen]);
 
-  // Con la caja cerrada no hay movimientos que registrar (2026-10-06): la
-  // pestaña se esconde y, si alguien estaba en ella cuando se cerró la caja,
-  // se ve Corte (que ahí sirve para abrirla).
+  // Con la caja cerrada no hay Movimientos; se ve Corte (que sirve para abrirla).
   const tabVisible = (t) => t.id !== 'movimientos' || Boolean(data?.abierta);
   const tabActiva = tab == null
     ? (data?.abierta ? 'movimientos' : 'corte')

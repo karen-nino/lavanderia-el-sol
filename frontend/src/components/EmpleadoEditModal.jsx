@@ -7,12 +7,14 @@ import Selector from './Selector';
 const INPUT_CLS =
   'w-full px-4 py-3.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent transition';
 
-// Modal para editar un empleado. Reutilizable desde la lista de Empleados y
-// desde la página de detalles del empleado.
-//   empleado:  usuario a editar (con id, nombre, apellido, rol, sucursal, es_prueba)
-//   sucursales: catálogo para el selector
-//   onClose():  cerrar sin guardar
-//   onSaved(actualizado): tras guardar con éxito, con el usuario actualizado
+/**
+ * Modal para editar un empleado (desde la lista y desde su página).
+ *
+ * @param empleado usuario a editar (id, nombre, apellido, rol, sucursal, es_prueba).
+ * @param sucursales catálogo para el selector.
+ * @param onClose cerrar sin guardar.
+ * @param onSaved(actualizado) tras guardar.
+ */
 export default function EmpleadoEditModal({ empleado, sucursales = [], onClose, onSaved }) {
   const { usuario } = useAuth();
   const [form, setForm] = useState({
@@ -44,9 +46,7 @@ export default function EmpleadoEditModal({ empleado, sucursales = [], onClose, 
         // Un admin es global: no lleva sucursal.
         sucursal: esAdminFn(form.rol) ? '' : form.sucursal,
       };
-      // Solo se manda el rol cuando de verdad cambió. Si no, editar la propia
-      // cuenta (con el rol bloqueado) dispararía "No puedes cambiar tu propio
-      // rol" en el backend y no dejaría guardar ni el nombre ni el apellido.
+      // El rol solo si cambió: en la propia cuenta (rol bloqueado) el backend lo rechazaría.
       if (form.rol !== empleado.rol) payload.rol = form.rol;
       if (form.password) payload.password = form.password;
       const actualizado = await api.patch(`/usuarios/${empleado.id}`, payload);

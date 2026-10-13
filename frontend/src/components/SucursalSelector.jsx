@@ -17,10 +17,12 @@ const ChevronIcon = (
   </svg>
 );
 
-// Selector de la sucursal que administra un admin. Solo se muestra a los
-// administradores; a los empleados el backend los fuerza a su sucursal.
-// variant "header": chip compacto (encabezado de escritorio).
-// variant "menu":  fila de ancho completo (modal de menú / móvil).
+/**
+ * Selector de sucursal, solo para admins (a los empleados el backend los fija a
+ * la suya).
+ *
+ * @param variant "header": chip compacto (escritorio); "menu": fila completa (menú y móvil).
+ */
 export default function SucursalSelector({ variant = 'header' }) {
   const { usuario, sucursalActiva, setSucursalActiva } = useAuth();
   const [sucursales, setSucursales] = useState([]);
@@ -45,8 +47,7 @@ export default function SucursalSelector({ variant = 'header' }) {
     return () => document.removeEventListener('mousedown', onClick);
   }, [open]);
 
-  // El usuario de prueba tiene una sola sucursal (la oculta) y no puede salir
-  // de ella: no se le muestra el selector.
+  // El usuario de prueba no sale de su sucursal oculta.
   if (!esAdmin(usuario?.rol) || usuario?.es_prueba) return null;
 
   const activa = sucursalActiva || usuario?.sucursal;

@@ -4,17 +4,14 @@ import { useAuth } from '../context/AuthContext';
 import { esAdmin as esAdminFn } from '../lib/roles';
 import FondoApertura from './FondoApertura';
 
-// Modal para abrir la caja del día (fondo inicial + nota). Es el mismo que se
-// usa desde el Dashboard y desde el aviso de Nueva Nota, para que abrir caja se
-// vea y funcione igual en toda la app.
-//   • open      → si se muestra
-//   • onClose   → cerrar sin abrir
-//   • onAbierta → se llama cuando la caja ya quedó abierta (también si el
-//                 servidor responde que ya lo estaba)
-// Solo decide si hay modal. El contenido va aparte para que se MONTE al abrir y
-// se DESMONTE al cerrar: así empieza en limpio por nacer de cero, en vez de que
-// un efecto vaya reseteando los campos cada vez que cambia `open` (eso obligaba
-// a un render extra en cascada, y es lo que marcaba react-hooks/set-state-in-effect).
+/**
+ * Modal para abrir la caja (fondo y nota), el mismo en Dashboard y Nueva Nota.
+ * El contenido se monta al abrir para empezar en limpio.
+ *
+ * @param open si se muestra.
+ * @param onClose cerrar sin abrir.
+ * @param onAbierta la caja quedó abierta (también si ya lo estaba).
+ */
 export default function AbrirCajaModal({ open, onClose, onAbierta }) {
   if (!open) return null;
   return <ContenidoAbrirCaja onClose={onClose} onAbierta={onAbierta} />;
@@ -57,7 +54,7 @@ function ContenidoAbrirCaja({ onClose, onAbierta }) {
       await api.post('/caja/abrir', { monto_inicial: Number(monto), notas });
       onAbierta();
     } catch (err) {
-      // Si ya había una caja abierta (409), igual reflejamos ese estado.
+      // Si ya había una caja abierta (409), se refleja igual.
       if (/abierta/i.test(err.message)) onAbierta();
       else setError(err.message);
     } finally {

@@ -1,7 +1,7 @@
-// Sol de la marca — el mismo dibujo que el icono de la app (public/icon.svg).
-// Va en SVG y no como emoji (antes era 🫧) porque el emoji lo dibuja cada
-// sistema a su manera: en la tablet salía como un glifo plano, no como el
-// icono. El color se pone desde afuera con una clase de Tailwind.
+/**
+ * Sol de la marca, el mismo dibujo que el icono de la app (public/icon.svg). En
+ * SVG para que se vea igual en todos los equipos; el color va por clase.
+ */
 export default function LogoSol({ className = 'w-16 h-16' }) {
   return (
     <svg

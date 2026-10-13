@@ -1,27 +1,16 @@
-// Advertencia antes de una acción que no se deshace o que mueve hardware.
-//
-// Nace de Gestión de Máquinas, donde "Encender" y "Eliminar" se confirmaban con
-// el `confirm()` del navegador: en la PWA sale como un diálogo del sistema, sin
-// nada del lenguaje de la app, y en el teléfono es fácil despacharlo sin leerlo.
-// Este modal usa el mismo patrón que EmpleadoDeleteModal —círculo con ícono,
-// título, texto y dos botones— para que una advertencia se vea como una
-// advertencia en toda la app.
-//
-//   tono:           'peligro' (rojo, algo se pierde) | 'aviso' (ámbar, algo se mueve)
-//   titulo:         qué se va a hacer, con el nombre de la cosa
-//   mensaje:        la consecuencia principal, en una frase
-//   puntos:         consecuencias sueltas; las vacías se ignoran, así que se
-//                   pueden armar con condicionales sin filtrarlas antes
-//   detalle:        filas [{ etiqueta, valor }] para lo que hay que ver en
-//                   números —cuánto deja de cobrarse, cómo queda el total—
-//                   cuando decirlo en prosa no basta para decidir
-//   textoConfirmar: el verbo del botón, el mismo que se pulsó para llegar aquí
-//   procesando:     deshabilita los botones mientras la acción corre
-//   error:          lo que respondió el servidor si la acción falló. Va DENTRO
-//                   del modal porque el aviso de la página queda debajo de su
-//                   fondo y, en una pantalla larga, fuera de vista: cerrar el
-//                   modal para enseñarlo hacía que el rechazo pareciera que no
-//                   pasó nada (2026-09-22)
+/**
+ * Advertencia antes de una acción que no se deshace o que mueve hardware, con
+ * el aspecto de la app (en lugar del `confirm()` del navegador).
+ *
+ * @param tono 'peligro' (rojo, algo se pierde) | 'aviso' (ámbar, algo se mueve).
+ * @param titulo qué se va a hacer, con el nombre de la cosa.
+ * @param mensaje la consecuencia principal, en una frase.
+ * @param puntos consecuencias sueltas; las vacías se ignoran.
+ * @param detalle filas [{ etiqueta, valor }] para lo que hay que ver en números.
+ * @param textoConfirmar el verbo del botón.
+ * @param procesando deshabilita los botones mientras corre.
+ * @param error respuesta del servidor si falló; va dentro del modal para que se vea.
+ */
 const TONOS = {
   peligro: {
     circulo: 'bg-red-100',

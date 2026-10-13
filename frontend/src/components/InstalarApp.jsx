@@ -3,17 +3,13 @@ import { lanzarInstalacion } from '../lib/pwa';
 import { useInstalacion } from '../lib/useInstalacion';
 import { APP_VERSION } from '../lib/version';
 
-// Botón para instalar la app en el teléfono o la tablet, desde Ajustes.
-//
-// Se comporta distinto según el equipo, porque los navegadores no ofrecen lo
-// mismo:
-//   · Android/Chrome y escritorio → hay un diálogo nativo que se lanza al
-//     tocar el botón.
-//   · iPhone/iPad → Safari NO deja instalar por código. Lo único posible es
-//     explicar la ruta manual, así que el botón abre esa ayuda.
-//   · Cualquier otro caso (el aviso ya se descartó, o el navegador no lo da)
-//     → el botón explica cómo hacerlo desde el menú del navegador.
-// Se muestra siempre; si la app ya está instalada solo lo dice, sin botón.
+/**
+ * Botón para instalar la app, en Ajustes. Según el equipo:
+ * - Android/Chrome y escritorio: el diálogo nativo.
+ * - iPhone/iPad: Safari no instala por código; el botón abre la ayuda manual.
+ * - Otro caso: explica cómo hacerlo desde el menú del navegador.
+ * Si ya está instalada, solo lo dice.
+ */
 
 const IconoInstalar = (
   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -153,7 +149,7 @@ export default function InstalarApp({ variant = 'desktop' }) {
     </button>
   );
 
-  // La versión que corre en este equipo, la misma del login (2026-10-11).
+  // La versión que corre en este equipo (la del login).
   const version = (
     <p className="text-sm text-gray-500">Versión {APP_VERSION}</p>
   );
@@ -165,8 +161,7 @@ export default function InstalarApp({ variant = 'desktop' }) {
     </>
   );
 
-  // Móvil: el contenido de su propia sección de Ajustes, que ya pone el título
-  // arriba. Escritorio: dentro del marco de sección que usan las demás.
+  // Móvil: el contenido de su sección de Ajustes. Escritorio: dentro del marco de sección.
   if (variant === 'mobile') {
     return (
       <>

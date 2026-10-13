@@ -1,35 +1,26 @@
-// Buscador del manual. Vive aparte de la página para poder probarlo: es la
-// única pieza del manual con reglas propias, y la que se rompe en silencio (un
-// artículo que existe pero no aparece al buscarlo no da ningún error).
+// Buscador del manual (aparte para poder probarlo).
 
-// Sin acentos y en minúsculas: en el mostrador nadie escribe "jabón" con tilde.
-// (La lista de Notas hace lo mismo para buscar folios y clientes.)
+/** Sin acentos y en minúsculas (como la búsqueda de Notas). */
 export function normalizar(s) {
   return (s ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 }
 
-// Texto sobre el que se busca un artículo: su título, su cuerpo y las palabras
-// con las que la gente lo buscaría aunque no aparezcan escritas. Las claves
-// importan más de lo que parece: se busca "cobrar", y el artículo dice
-// "liquidar".
+// Texto de búsqueda: título, cuerpo y claves (palabras con que se buscaría,
+// como "cobrar" para "liquidar").
 const indice = (art) =>
   normalizar([art.titulo, art.cuerpo, (art.claves ?? []).join(' ')].join(' '));
 
-// Coincide el artículo que contiene TODAS las palabras de la consulta (no
-// cualquiera de ellas): "cobrar tarjeta" debe traer el artículo del cobro, no
-// todo lo que hable de tarjetas.
+/** Coincide si contiene todas las palabras de la consulta. */
 function coincide(art, palabras) {
   const texto = indice(art);
   return palabras.every((p) => texto.includes(p));
 }
 
-// Devuelve las secciones con solo los artículos que coinciden; las que se
-// quedan sin ninguno no se devuelven, para no dejar encabezados huérfanos.
-// Consulta vacía = el manual entero, sin filtrar.
-//
-// Orden: primero los artículos cuyo TÍTULO coincide, que casi siempre son los
-// que se buscaban; el resto conserva el orden del manual, que va de lo más
-// común a lo más raro.
+/**
+ * Secciones con solo los artículos que coinciden (sin secciones vacías);
+ * consulta vacía = todo. Primero los que coinciden por título; el resto, en el
+ * orden del manual.
+ */
 export function buscarEnManual(secciones, consulta) {
   const palabras = normalizar(consulta).split(/\s+/).filter(Boolean);
   if (palabras.length === 0) return secciones;
@@ -49,8 +40,7 @@ export function buscarEnManual(secciones, consulta) {
     .filter((sec) => sec.articulos.length > 0);
 }
 
-// Cuántos artículos quedaron, para poder decir "3 resultados" sin recorrer de
-// nuevo la lista en la pantalla.
+/** Cuántos artículos quedaron ("3 resultados"). */
 export function contarArticulos(secciones) {
   return secciones.reduce((n, sec) => n + sec.articulos.length, 0);
 }

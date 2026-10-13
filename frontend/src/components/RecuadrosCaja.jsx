@@ -1,9 +1,10 @@
 import { desgloseCaja } from '../lib/desgloseCaja';
 import { fmtMoneda as fmt } from '../lib/exportUtils';
 
-// Los tres recuadros de un turno de caja: Ingresos, Egresos y Desglose
-// esperado (2026-10-10). Los usan el corte (Caja) y las tarjetas de turno de
-// Ventas; las líneas salen de `desgloseCaja`, igual que en las exportaciones.
+/**
+ * Recuadros de un turno de caja: Ingresos, Egresos y Desglose esperado (corte
+ * de Caja y turnos de Ventas). Las líneas salen de `desgloseCaja`.
+ */
 
 const Fila = ({ r }) => (
   <div className="flex justify-between px-4 py-3 text-sm text-gray-600">
@@ -15,10 +16,8 @@ const Fila = ({ r }) => (
   </div>
 );
 
-// `aparte`: { titulo, filas } informativas que no se suman al total (como
-// "Cómo se cobró" en Ventas); van con su encabezado DESPUÉS del total
-// (2026-10-11): debajo de Efectivo/Transferencia, el total se leía como su
-// suma y parecía contar la transferencia.
+// `aparte`: { titulo, filas } informativas que no suman; van después del total
+// para que no se lea como su suma.
 function Recuadro({ titulo, filas, totalLabel, total, aparte }) {
   return (
     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
@@ -44,8 +43,10 @@ function Recuadro({ titulo, filas, totalLabel, total, aparte }) {
   );
 }
 
-// `turno`: con la forma del historial (ver lib/desgloseCaja.js).
-// `esperadoLabel`: "ESPERADO EN CAJA" o, en un turno abierto, "hasta ahora".
+/**
+ * @param turno con la forma del historial (lib/desgloseCaja.js).
+ * @param esperadoLabel "ESPERADO EN CAJA" o, en un turno abierto, "hasta ahora".
+ */
 export default function RecuadrosCaja({ turno, esperadoLabel = 'ESPERADO EN CAJA' }) {
   const d = desgloseCaja(turno);
   return (

@@ -7,28 +7,26 @@ import { useAuth } from '../context/AuthContext';
 import { esAdminMain as esAdminMainFn } from '../lib/roles';
 import SucursalBar from '../components/SucursalBar';
 
-// Orden del filtro: el ciclo de la nota tal como pasa en el mostrador y, justo
-// después de Por Entregar, las que están Por Cobrar — es el par que más se
-// consulta junto. Lavando y Secando salieron de aquí (2026-09-25): lo que está
-// corriendo se ve en Máquinas y en el Inicio, y la nota lo dice en su badge.
+/**
+ * Orden del filtro: el ciclo de la nota en el mostrador, con Por Cobrar junto a
+ * Por Entregar. Lavando y Secando no van: se ven en Máquinas y en la nota.
+ */
 const ESTADOS = ['TODOS', 'EN_ESPERA', 'POR_ENTREGAR', 'PENDIENTE', 'FINALIZADA', 'CANCELADA',
   'AUTOSERVICIO', 'POR_ENCARGO'];
 
-// Opciones del filtro que no son un estado sino el tipo de servicio de la nota.
+/** Opciones del filtro por tipo de servicio (no son un estado). */
 const FILTROS_SERVICIO = ['AUTOSERVICIO', 'POR_ENCARGO'];
-// Su franja de color a la izquierda, con los colores de cada servicio; el
-// texto en el gris de las demás opciones (2026-10-11).
+/** Franja con el color de cada servicio; el texto, gris como las demás opciones. */
 const FILTRO_SERVICIO_CLS = {
   AUTOSERVICIO: 'border-l-4 border-blue-500 rounded-l-sm font-semibold text-gray-700',
-  // mt-2: más aire entre los dos servicios (2026-10-11).
+  // mt-2: aire entre los dos servicios.
   POR_ENCARGO:  'mt-2 border-l-4 border-amber-500 rounded-l-sm font-semibold text-gray-700',
 };
 
 // Renglones por página en la tabla de escritorio.
 const POR_PAGINA = 15;
 
-// Páginas a mostrar en los botones: primera, última, y una ventana alrededor de
-// la actual; el resto se colapsa en "…".
+/** Páginas de los botones: primera, última y una ventana alrededor de la actual ("…"). */
 function rangoPaginas(actual, total) {
   const delta = 2;
   const out = [];
@@ -42,8 +40,7 @@ function rangoPaginas(actual, total) {
   return out;
 }
 
-// Estados que se consideran "Por Entregar": listas sin entregar y pagadas sin
-// entregar. Coincide con el conteo del KPI del Dashboard.
+/** "Por Entregar": listas y pagadas sin entregar (como el KPI del Dashboard). */
 const ESTADOS_POR_ENTREGAR = ['LISTA', 'PAGADA'];
 
 const FILTRO_LABEL = {
@@ -56,8 +53,7 @@ const FILTRO_LABEL = {
   POR_ENCARGO:  'Por Encargo',
 };
 
-// Mensaje del estado vacío según el filtro activo, para que el texto se
-// relacione con el filtro (p. ej. "No hay notas por cobrar").
+/** Mensaje del estado vacío según el filtro ("No hay notas por cobrar"). */
 const FILTRO_VACIO = {
   TODOS:        'No hay notas',
   EN_ESPERA:    'No hay notas en espera',
@@ -76,8 +72,7 @@ const RANGOS_FECHA = [
   { value: 'ESTE_MES',  label: 'Este mes' },
 ];
 
-// Valores que puede tomar el filtro de fecha: los fijos del desplegable, TODAS
-// y los dinámicos que arma el modal (un mes o un año concretos).
+/** Valores válidos del filtro de fecha: los fijos, TODAS, 'MES:YYYY-MM' y 'ANIO:YYYY'. */
 function rangoFechaValido(v) {
   return v === 'TODAS'
     || RANGOS_FECHA.some(r => r.value === v)
@@ -121,10 +116,7 @@ function calcularRangoFecha(rango) {
   }
 }
 
-// Sufijo del rango de fecha para el mensaje del estado vacío (p. ej. "de hoy"),
-// para que "No hay notas" también se relacione con el filtro de fecha. Con
-// 'TODAS' no agrega nada.
-// Nombre corto del filtro de fecha para su chip ("Hoy", "Marzo 2026", "2025").
+/** Nombre corto del filtro de fecha para su chip ("Hoy", "Marzo 2026", "2025"). */
 function etiquetaRangoFecha(rango) {
   if (!rango || rango === 'TODAS') return null;
   if (rango.startsWith('MES:')) {
@@ -161,8 +153,7 @@ const BADGE_ESTADO = {
   CANCELADA:  { label: 'Cancelada',  cls: 'bg-red-100 text-red-700'         },
 };
 
-// Por Encargo ya lavada y secada, esperando "Procesado" (2026-10-11). En la
-// base sigue EN_ESPERA; el backend la marca con `doblado`.
+/** Por Encargo lavada y secada, esperando "Procesado" (sigue EN_ESPERA; lo marca el backend). */
 const BADGE_DOBLADO = { label: 'Doblado', cls: 'bg-purple-100 text-purple-700' };
 
 const BADGE_TIPO_SERVICIO = {
@@ -186,8 +177,7 @@ const DIAS_SEMANA = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Vier
 
 const TIEMPO_ENTREGA_LABEL = { MANANA: 'Mañana', DOS_DIAS: 'En 2 días', OTRA: 'Otra fecha' };
 
-// Fecha de entrega (solo la parte de fecha, sin corrimiento por zona horaria).
-// Ej.: "14 Ago" (sin año).
+/** Fecha de entrega sin corrimiento por zona: "14 Ago". */
 function fmtFechaEntrega(fecha) {
   if (!fecha) return null;
   const s = typeof fecha === 'string' ? fecha.slice(0, 10) : new Date(fecha).toISOString().slice(0, 10);
@@ -195,8 +185,7 @@ function fmtFechaEntrega(fecha) {
   return `${d} ${MESES_ABR[m - 1]}`;
 }
 
-// Etiqueta de la fecha de entrega: "Hoy" si es hoy, "Mañana" si es el día
-// siguiente; en otro caso la fecha completa (15 Ago 2026).
+/** "Hoy", "Mañana" o la fecha completa (15 Ago 2026). */
 function etiquetaFechaEntrega(fecha) {
   if (!fecha) return null;
   const s = typeof fecha === 'string' ? fecha.slice(0, 10) : new Date(fecha).toISOString().slice(0, 10);
@@ -208,8 +197,7 @@ function etiquetaFechaEntrega(fecha) {
   return fmtFechaEntrega(fecha);
 }
 
-// Fecha con día de la semana: "Sábado, 03/10/26" (2026-10-03; antes
-// "Sábado, 03 Oct 2026").
+/** "Sábado, 03/10/26". */
 function fmtFechaDia(iso) {
   const d = new Date(iso);
   const diaSem = DIAS_SEMANA[d.getDay()];
@@ -223,8 +211,7 @@ function fmtMonto(n) {
   return n != null ? `$${Number(n).toFixed(2)}` : '—';
 }
 
-// Sin cliente del catálogo cae a la referencia libre del Autoservicio
-// (mig. 157); sin ninguna de las dos, quien llama pone "Mostrador".
+/** Cliente del catálogo o, si no, la referencia del Autoservicio; sin ninguno, null. */
 function fmtClienteCatalogo(n) {
   if (!n.cliente_nombre) return null;
   const ap = (n.cliente_apellido ?? '').trim();
@@ -261,19 +248,15 @@ export default function Notas() {
   const { usuario }                           = useAuth();
   const esAdminMain                           = esAdminMainFn(usuario?.rol);
 
-  // Filtro inicial desde la URL (?estado=EN_ESPERA), p. ej. al entrar desde un
-  // KPI del Dashboard. Solo se acepta si es un estado válido.
+  // Filtro inicial desde la URL (?estado=EN_ESPERA), si es válido (p. ej. desde
+  // un KPI del Dashboard).
   const estadoParam = (searchParams.get('estado') || '').toUpperCase();
   const estadoInicial = ESTADOS.includes(estadoParam) ? estadoParam : 'TODOS';
 
   const [notas,             setNotas]             = useState([]);
   const [filtro,            setFiltro]            = useState(estadoInicial);
-  // Con un estado preseleccionado (desde un KPI del Dashboard) se arranca en
-  // TODAS las fechas, igual que al elegir un estado en el desplegable; así no
-  // se esconden notas de días anteriores. Sin estado, la vista default es HOY.
-  // Rango de fecha desde la URL (?fecha=TODAS, MES:2026-09, ANIO:2026…). Si no
-  // viene uno válido: con estado preseleccionado se arranca en TODAS y sin él,
-  // en HOY.
+  // Rango de fecha desde la URL (?fecha=TODAS, MES:2026-09, ANIO:2026…). Sin uno
+  // válido: TODAS si viene con estado (para no esconder días anteriores), HOY si no.
   const fechaParam = searchParams.get('fecha') || '';
   const rangoInicial = rangoFechaValido(fechaParam)
     ? fechaParam
@@ -289,7 +272,7 @@ export default function Notas() {
   const estadoRef = useRef(null);
   const fechaRef  = useRef(null);
 
-  // Selección múltiple para borrado en lote (solo admin_main, desktop).
+  // Selección múltiple para borrado en lote (admin_main, escritorio).
   const [seleccion,         setSeleccion]         = useState(() => new Set());
   const [confirmarBorrado,  setConfirmarBorrado]  = useState(false);
   const [borrando,          setBorrando]          = useState(false);
@@ -302,14 +285,9 @@ export default function Notas() {
       .finally(() => setLoading(false));
   }, []);
 
-  // Tocar "Notas" en el menú lleva a /notas a secas. Si ya se estaba en Notas
-  // la página no se vuelve a montar, así que conservaba los filtros y los
-  // reescribía en la URL (2026-10-03). La URL de la lista SIEMPRE trae `fecha`
-  // (la escribe el efecto de abajo); si llega sin ella es que se pidió la
-  // lista desde cero: vuelve a Hoy, sin estado, sin búsqueda y a la página 1.
-  // Si trae un estado (un KPI del Dashboard), se respeta como al entrar.
-  // Se ajusta durante el render, al cambiar la URL (patrón de React para
-  // reiniciar estado según una prop), no en un efecto.
+  // "Notas" del menú lleva a /notas sin `fecha` (la lista siempre la escribe):
+  // eso reinicia a Hoy, sin estado, búsqueda ni página (respeta un estado que
+  // venga en la URL). Se ajusta durante el render, no en un efecto.
   const sinFecha = !searchParams.has('fecha');
   const [sinFechaPrevio, setSinFechaPrevio] = useState(sinFecha);
   if (sinFecha !== sinFechaPrevio) {
@@ -322,16 +300,14 @@ export default function Notas() {
     }
   }
 
-  // Los filtros elegidos viven en la URL (sustituyendo la entrada actual, sin
-  // llenar el historial). Así, al abrir una nota y volver con "atrás", la lista
-  // reaparece con el mismo filtro en vez de reiniciarse en "Hoy".
+  // Los filtros viven en la URL (sin llenar el historial): al volver con "atrás"
+  // la lista conserva su filtro.
   useEffect(() => {
     const params = new URLSearchParams();
     if (filtro !== 'TODOS') params.set('estado', filtro);
     params.set('fecha', rangoFecha);
     setSearchParams(params, { replace: true });
-    // Y se apunta aparte, para que el botón "Volver" del detalle de una nota
-    // devuelva a la lista con estos mismos filtros.
+    // También se guarda para el botón "Volver" del detalle.
     recordarListaNotas(`/notas?${params}`);
   }, [filtro, rangoFecha, setSearchParams]);
 
@@ -355,8 +331,7 @@ export default function Notas() {
   const q = normalizar(busqueda.trim());
   const rango = useMemo(() => calcularRangoFecha(rangoFecha), [rangoFecha]);
 
-  // Años con notas (desc) y meses del año en curso que tienen notas, para los
-  // selectores "Por año" / "Por mes" del filtro de fecha.
+  // Años con notas y meses del año en curso con notas, para "Por año" / "Por mes".
   const anioActual = new Date().getFullYear();
   const { aniosConNotas, mesesAnioActual } = useMemo(() => {
     const anios = new Set();
@@ -374,8 +349,7 @@ export default function Notas() {
   }, [notas, anioActual]);
 
   const filtradas = notas.filter(n => {
-    // Las canceladas solo salen en su propio filtro: en Todos, Por Cobrar o
-    // por servicio no hay nada que hacer con ellas.
+    // Las canceladas solo salen en su propio filtro.
     if (n.estado === 'CANCELADA' && filtro !== 'CANCELADA') return false;
     if (filtro === 'PENDIENTE') {
       if (n.estado_pago !== 'PENDIENTE') return false;
@@ -400,9 +374,8 @@ export default function Notas() {
       || referencia.includes(q);
   });
 
-  // Filtros activos (2026-10-11): dicen qué se está viendo y se quitan de un
-  // toque con su ✕, sin abrir el menú. Sin filtros, no se pintan. `display`
-  // decide dónde se ven (escritorio / móvil).
+  // Chips de los filtros activos, que se quitan con su ✕. `display` decide en
+  // qué tamaño se ven.
   const chipsFiltros = (display) => (filtro !== 'TODOS' || rangoFecha !== 'TODAS') && (
     <div className={`${display} flex-wrap justify-end gap-2`}>
       {filtro !== 'TODOS' && (
@@ -420,16 +393,12 @@ export default function Notas() {
     </div>
   );
 
-  // Paginación (solo escritorio): 15 renglones por página. `paginaActual` va
-  // acotada por si `pagina` quedó fuera de rango (al filtrar o borrar); los
-  // botones operan sobre este valor ya acotado.
+  // Paginación (escritorio). `paginaActual` se acota por si quedó fuera de rango.
   const totalPaginas = Math.max(1, Math.ceil(filtradas.length / POR_PAGINA));
   const paginaActual = Math.min(Math.max(1, pagina), totalPaginas);
   const paginadas = filtradas.slice((paginaActual - 1) * POR_PAGINA, paginaActual * POR_PAGINA);
 
-  // Para las tarjetas de móvil, las notas se agrupan por día: un encabezado de
-  // fecha arriba de cada grupo, así la fecha ya no se repite en cada tarjeta.
-  // Se respeta el orden en que vienen filtradas.
+  // En móvil, agrupadas por día con un encabezado de fecha, en el orden filtrado.
   const gruposMobile = [];
   for (const n of filtradas) {
     const clave = new Date(n.created_at).toDateString();
@@ -457,17 +426,14 @@ export default function Notas() {
   };
   const limpiarSeleccion = () => setSeleccion(new Set());
 
-  // Borra las notas seleccionadas una por una reusando DELETE /notas/:id (que
-  // libera stock y máquinas y deja rastro). Continúa aunque alguna falle.
+  // Borra las seleccionadas una por una (DELETE /notas/:id), aunque alguna falle.
   const borrarSeleccionadas = async () => {
     setErrBorrado('');
     setBorrando(true);
     const ids = [...seleccion];
     const borradas = [];
     const fallidas = [];
-    // El porqué del primer fallo: el servidor solo borra notas cerradas, y
-    // "no se pudieron eliminar 3" sin más deja al admin sin saber qué hacer
-    // (cancelarlas). Basta con uno: cuando falla, casi siempre es lo mismo.
+    // El motivo del primer fallo (casi siempre es el mismo).
     let motivo = '';
     for (const id of ids) {
       try {
@@ -500,13 +466,9 @@ export default function Notas() {
           <h1 className="text-xl font-bold text-gray-900">Notas</h1>
           <p className="text-sm text-gray-500">{filtradas.length} resultado(s)</p>
         </div>
-        {/* `relative` en la FILA, no en cada botón: los paneles miden 224px
-            (w-56) y se abren hacia la izquierda desde su ancla. Colgados del
-            botón de Estado —el más a la izquierda de los tres— se salían de la
-            pantalla en celulares angostos (se cortaban "ESTADO", "Todos", "En
-            Espera"…). Anclados aquí, el borde derecho es el de la fila y el
-            panel siempre cae dentro. Los paneles siguen DENTRO del div con
-            ref, que es lo que distingue un clic fuera para cerrarlos. */}
+        {/* `relative` en la fila: los paneles (224 px) se abren a la izquierda y así
+            no se salen de la pantalla en celulares angostos. Siguen dentro del div
+            con ref, para detectar el clic fuera. */}
         <div className="flex items-center gap-3 relative">
           <div ref={estadoRef}>
             <button
@@ -535,13 +497,11 @@ export default function Notas() {
                       <p className="text-xs font-semibold text-gray-500 uppercase mt-2 mb-1 px-1 pt-2 border-t border-gray-100">Servicio</p>
                     )}
                     <button
-                      // Al elegir un estado se busca en TODAS las fechas, para no
-                      // esconder notas de días anteriores (p. ej. las que están
-                      // por cobrar de hace días). El filtro de fecha acota.
+                      // Al elegir un estado se busca en todas las fechas (para no esconder las de
+                      // días anteriores); el filtro de fecha acota.
                       onClick={() => { setFiltro(e); setRangoFecha('TODAS'); setPagina(1); setMostrarEstado(false); }}
                       className={`text-left text-sm px-3 py-2 rounded-lg transition-colors ${
-                        // Los de servicio resaltan con una franja de su color
-                        // y negritas (2026-10-11): no son un estado más.
+                        // Los de servicio llevan franja de color y negritas.
                         FILTRO_SERVICIO_CLS[e] ?? ''
                       } ${
                         FILTROS_SERVICIO.includes(e)
@@ -615,8 +575,7 @@ export default function Notas() {
                   >
                     {rangoFecha.startsWith('ANIO:') ? rangoFecha.slice(5) : 'Por año'}
                   </button>
-                  {/* "Todas las fechas" cierra la lista, después de los rangos
-                      concretos: es la que quita el filtro, no una opción más. */}
+                  {/* "Todas las fechas" al final: es la que quita el filtro. */}
                   <button
                     onClick={() => { setRangoFecha('TODAS'); setPagina(1); setMostrarFecha(false); }}
                     className={`text-left text-sm px-3 py-2 rounded-lg transition-colors ${
@@ -669,9 +628,8 @@ export default function Notas() {
         />
       </div>
 
-      {/* Aquí solo en escritorio, o en móvil cuando no hay tarjetas (para
-          poder quitar el filtro que dejó la lista vacía). Con tarjetas, en
-          móvil van dentro de su contenedor, arriba del primer día. */}
+      {/* En escritorio, o en móvil sin tarjetas (para quitar el filtro que dejó la
+          lista vacía); con tarjetas, en móvil van arriba del primer día. */}
       {chipsFiltros(filtradas.length > 0 ? 'hidden md:flex' : 'flex')}
 
       {loading && (
@@ -788,10 +746,7 @@ export default function Notas() {
                             {badgeTipoServicio.label}
                           </td>
                           <td className="px-4 py-3">
-                            {/* En la tabla el cliente es solo el del catálogo: la
-                                referencia del Autoservicio va en su columna
-                                (2026-10-11), así que una nota sin cliente sigue
-                                diciendo Mostrador. */}
+                            {/* Aquí solo el cliente del catálogo; la referencia va en su columna. */}
                             <p className="font-medium text-gray-800">
                               {fmtClienteCatalogo(n) ?? <span className="text-gray-400 italic">Mostrador</span>}
                             </p>
@@ -799,7 +754,7 @@ export default function Notas() {
                               <p className="text-xs text-gray-400">{n.cliente_telefono}</p>
                             )}
                           </td>
-                          {/* Cliente / referencia libre del Autoservicio (mig. 157). */}
+                          {/* Cliente / referencia libre del Autoservicio. */}
                           <td className="px-4 py-3 text-gray-700">
                             {n.referencia || <span className="text-gray-300">—</span>}
                           </td>
@@ -899,8 +854,7 @@ export default function Notas() {
             </div>
           </div>
 
-          {/* Cards — mobile, agrupadas por día. El encabezado de fecha va
-              arriba de cada grupo, así la tarjeta ya no repite la fecha. */}
+          {/* Tarjetas de móvil, agrupadas por día con encabezado de fecha. */}
           <div className="md:hidden pt-8 space-y-16">
             {gruposMobile.map((grupo, iGrupo) => (
               <div key={grupo.clave} className="space-y-4">
@@ -911,17 +865,12 @@ export default function Notas() {
               const badgeEstado    = n.doblado ? BADGE_DOBLADO : (BADGE_ESTADO[n.estado] ?? BADGE_ESTADO.LAVANDO);
               // Cancelada no tiene estado de pago: no se va a cobrar.
               const badgePago      = n.estado === 'CANCELADA' ? null : BADGE_PAGO[n.estado_pago];
-              // Sin cliente la tarjeta dice Mostrador, igual que la tabla y que
-              // el detalle. Antes caía al tipo de servicio ("Por Encargo"), que
-              // en el renglón del cliente se leía como si ese fuera su nombre.
+              // Sin cliente, "Mostrador" (como la tabla y el detalle).
               const cliente        = fmtCliente(n) ?? 'Mostrador';
-              // Con varias cargas la nota puede estar lavando y secando a la vez
-              // (una carga en lavadora, otra en secadora): se muestran ambos
-              // estados apilados en lugar del único estado de la nota.
+              // Con varias cargas puede lavar y secar a la vez: se apilan los dos estados.
               const lavandoYSecando = ['LAVANDO', 'SECANDO'].includes(n.estado)
                 && n.hay_lavadora_activa && n.hay_secadora_activa;
-              // Máquinas asignadas o usadas por la nota (siempre visibles); las
-              // que la nota tiene corriendo ahora van resaltadas en azul.
+              // Máquinas asignadas o usadas; las que corren ahora, en azul.
               const enUso    = new Set(n.maquinas_en_uso ?? []);
               const maquinas = [...new Set([...(n.maquinas_nombres ?? []), ...enUso])]
                 .sort((a, b) => a.localeCompare(b, 'es', { numeric: true }));
@@ -950,10 +899,7 @@ export default function Notas() {
                     )}
                   </div>
 
-                  {/* Cliente + total. Sin rótulo encima: "Información:" no
-                      decía nada que el renglón no dijera ya solo. El mt-2 que
-                      llevaba el rótulo pasa aquí, para no perder el aire que
-                      lo separa del folio. */}
+                  {/* Cliente y total. */}
                   <div className="flex items-center justify-between gap-2 mt-2">
                     <p className="text-xl font-semibold">{cliente}</p>
                     <p className="text-xl font-bold">{fmtMonto(n.precio_total)}</p>
@@ -981,8 +927,7 @@ export default function Notas() {
                     </>
                   )}
 
-                  {/* Estado de pago (la fecha/hora viven en el Detalle de nota,
-                      a un toque). */}
+                  {/* Estado de pago (fecha y hora en el detalle). */}
                   {badgePago && (
                     <>
                       <div className={`border-t border-dashed border-gray-300 ${maquinas.length > 0 ? 'my-3' : 'my-4'}`} />
@@ -1045,8 +990,7 @@ export default function Notas() {
         </div>
       )}
 
-      {/* Selector "Por mes": los 12 meses del año en curso; se deshabilitan los
-          que no tienen notas. */}
+      {/* "Por mes": los 12 meses del año en curso; sin notas, deshabilitados. */}
       {modalFecha === 'MES' && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={() => setModalFecha(null)}>
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-xs p-5" onClick={e => e.stopPropagation()}>

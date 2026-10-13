@@ -49,12 +49,10 @@ export default function Clientes() {
   // Modal info (mobile)
   const [infoCliente, setInfoCliente]     = useState(null);
 
-  // Cabecera sticky: su altura medida el destino del índice alfabético,
-  // así que se mide para compensarla al hacer scroll.
+  // Altura de la cabecera sticky, para compensarla al saltar a una letra.
   const stickyRef = useRef(null);
 
-  // Letra bajo el dedo al deslizar sobre el índice (estilo WhatsApp).
-  // El ref evita saltos repetidos entre renders durante el arrastre.
+  // Letra bajo el dedo al deslizar sobre el índice; el ref evita saltos repetidos.
   const [letraActiva, setLetraActiva] = useState(null);
   const letraActivaRef = useRef(null);
 
@@ -103,8 +101,7 @@ export default function Clientes() {
     if (!el) return;
     const offset = (stickyRef.current?.offsetHeight ?? 0) + 8;
     el.style.scrollMarginTop = `${offset}px`;
-    // Durante el arrastre el salto es instantáneo; con smooth los saltos
-    // encadenados se encolan y la lista se queda atrás del dedo.
+    // Instantáneo durante el arrastre: con smooth los saltos se encolan.
     el.scrollIntoView({ behavior: suave ? 'smooth' : 'auto', block: 'start' });
   };
 
@@ -241,8 +238,7 @@ export default function Clientes() {
   };
   const limpiarSeleccion = () => setSeleccionados(new Set());
 
-  // Abre el modal de borrado múltiple: primero verifica (dry-run) cuáles tienen
-  // notas activas para mostrar la advertencia antes de borrar.
+  // Antes de borrar, revisa (dry-run) cuáles tienen notas activas para advertirlo.
   const abrirBulk = async () => {
     setBulkError('');
     setBulkInfo(null);

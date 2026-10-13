@@ -2,24 +2,22 @@ import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import Selector from './Selector';
 
-// Granel de cada servicio Por Encargo, en Salidas (migs. 132-134).
-//
-// Al crear la nota cada servicio sabe CUÁNTO lleva de cada tipo de granel
-// (Ajustes → Servicios Por Encargo) pero no CUÁL producto: eso lo elige aquí el
-// empleado, servicio por servicio. Elegir aparta la existencia; también puede
-// cambiar el producto o las medidas. Mientras algún servicio tenga algo por
-// elegir, el servidor no deja iniciar las lavadoras de la nota.
-//
-// "Producto del cliente" (mig. 154): el cliente dejó su propio jabón o
-// suavizante. Cuenta como elegido, pero no usa inventario.
+/**
+ * Granel de cada servicio Por Encargo, en Salidas. El servicio sabe cuánto
+ * lleva de cada tipo (Ajustes → Servicios Por Encargo); aquí el empleado elige
+ * cuál producto, que aparta existencia, y puede cambiarlo. Mientras falte
+ * elegir, el servidor no deja iniciar las lavadoras.
+ *
+ * "Producto del cliente": cuenta como elegido, sin usar inventario.
+ */
 
-// Valor de la opción "Producto del cliente" en el selector.
+/** Valor de la opción "Producto del cliente". */
 const DEL_CLIENTE = 'cliente';
 
 const NOMBRE_TAMANO = { chico: 'Chico', mediano: 'Mediano', grande: 'Grande', jumbo: 'Jumbo' };
 
 const esEdredon = (c) => String(c?.tipo_prenda ?? '').toUpperCase() === 'EDREDON';
-// Los servicios que llevan granel (los de ropa y el edredón).
+/** Servicios que llevan granel (ropa y edredón). */
 const claveLigue = (c) => (esEdredon(c) ? 'edredon' : (['chico', 'mediano', 'grande'].includes(c?.tamano) ? c.tamano : null));
 const nombreServicio = (c) => (esEdredon(c)
   ? (c.tamano_edredon ? `Edredón ${c.tamano_edredon}` : 'Edredón')
@@ -32,8 +30,7 @@ export default function GranelPorServicio({ nota, puedeEditar, onCambio }) {
   const [ocupado, setOcupado]   = useState(null); // `${cargaId}-${tipoId}` en proceso
   const [error, setError]       = useState('');
 
-  // El catálogo se vuelve a pedir cuando cambia la nota: lo que queda de cada
-  // producto cambia al elegir.
+  // El catálogo se vuelve a pedir al cambiar la nota (elegir cambia lo que queda).
   useEffect(() => {
     if (nota?.tipo_servicio !== 'POR_ENCARGO') return undefined;
     let vivo = true;
@@ -47,8 +44,7 @@ export default function GranelPorServicio({ nota, puedeEditar, onCambio }) {
   const nombreTipo = (id) => tipos.find(t => t.id === id)?.nombre ?? 'Granel';
   const ordenTipo  = (id) => { const i = tipos.findIndex(t => t.id === id); return i < 0 ? 999 : i; };
 
-  // Un renglón por tipo de granel que el servicio lleva: los que están por
-  // elegir y los que ya tienen producto.
+  // Un renglón por tipo de granel del servicio, elegido o no.
   const renglonesDe = (c) => {
     const renglones = new Map();
     for (const pe of (c.pendientes ?? [])) {
@@ -64,7 +60,7 @@ export default function GranelPorServicio({ nota, puedeEditar, onCambio }) {
     return [...renglones.values()].sort((a, b) => ordenTipo(a.tipoId) - ordenTipo(b.tipoId));
   };
 
-  // Los servicios de la nota que llevan granel, numerados cuando se repiten.
+  // Servicios con granel, numerados si se repiten.
   const servicios = (nota?.cargas ?? []).filter(c => claveLigue(c));
   const conGranel = servicios
     .map(c => {
@@ -78,8 +74,7 @@ export default function GranelPorServicio({ nota, puedeEditar, onCambio }) {
 
   const porElegir = conGranel.some(s => s.renglones.some(r => !r.producto && !r.delCliente));
 
-  // Opciones de un tipo: los graneles de ese tipo (sirven para cualquier
-  // servicio, mig. 135), más el que ya tenga puesto aunque ya no sea de ese tipo.
+  // Graneles de ese tipo, más el ya puesto aunque haya cambiado de tipo.
   const opcionesDe = (tipoId, actual) => {
     const lista = catalogo.filter(p => p.tipo_granel_id === tipoId);
     if (actual && !lista.some(p => p.id === actual.producto_id)) {
@@ -89,8 +84,7 @@ export default function GranelPorServicio({ nota, puedeEditar, onCambio }) {
     return lista;
   };
 
-  // La ventana con tarjetas para elegir el producto de un renglón. Se abre
-  // desde "Elegir" o desde "Cambiar": cambia solo el botón que la dispara.
+  // Ventana para elegir el producto; la abre "Elegir" o "Cambiar".
   const selectorDe = (r, opciones, elegido, quedanDe, bloqueado, c, etiqueta, disparador) => (
     <Selector
       valor={elegido ?? ''}
@@ -103,7 +97,7 @@ export default function GranelPorServicio({ nota, puedeEditar, onCambio }) {
         ...opciones.map(p => ({
           valor: p.id,
           etiqueta: p.nombre,
-          // Lo que queda, en medidas; el que no alcanza no se elige.
+          // Lo que queda, en medidas; si no alcanza, no se elige.
           detalle: quedanDe(p) > 0 ? `quedan ${quedanDe(p)}` : 'agotado',
           deshabilitado: elegido !== p.id && quedanDe(p) < r.cantidad,
         })),
@@ -146,21 +140,19 @@ export default function GranelPorServicio({ nota, puedeEditar, onCambio }) {
         {conGranel.map(({ carga: c, etiqueta, renglones }) => (
           <div key={c.id} className="px-4 py-3 space-y-3">
             <p className="text-sm font-semibold text-gray-900">{etiqueta}</p>
-            {/* Más aire entre un tipo y otro (Jabón / Suavizante), 2026-10-11. */}
+            {/* Aire entre Jabón y Suavizante. */}
             <div className="space-y-6">
             {renglones.map(r => {
               const opciones = opcionesDe(r.tipoId, r.producto);
               const bloqueado = !puedeEditar || ocupado != null;
               const elegido = r.delCliente ? DEL_CLIENTE : (r.producto?.producto_id ?? null);
               const resuelto = r.producto || r.delCliente;
-              // Lo que queda de un producto no cuenta lo que este mismo
-              // servicio ya tiene apartado de él.
+              // Sin contar lo que este servicio ya tiene apartado.
               const quedanDe = (p) => disponible(p) + (elegido === p.id ? r.cantidad : 0);
               return (
                 <div key={r.tipoId} className="flex items-center justify-between gap-3">
-                  {/* Sin producto, a la derecha va solo "Elegir", en el lugar de
-                      las medidas; elegido, abajo del nombre sale cuál es (con
-                      "Cambiar") y a la derecha las medidas (2026-10-02). */}
+                  {/* Sin producto: "Elegir" a la derecha. Elegido: el nombre y "Cambiar"
+                      abajo, y las medidas a la derecha. */}
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-gray-800">{nombreTipo(r.tipoId)}</p>
                     {opciones.length === 0 && !resuelto && (
@@ -170,8 +162,7 @@ export default function GranelPorServicio({ nota, puedeEditar, onCambio }) {
                     )}
                     {resuelto && selectorDe(r, opciones, elegido, quedanDe, bloqueado, c, etiqueta,
                       ({ abrir, elegida, deshabilitado }) => (
-                        // Solo el nombre se recorta con "…": "Cambiar" no se
-                        // encoge, para que en móvil no se esconda (2026-10-10).
+                        // Solo el nombre se recorta: "Cambiar" no se encoge.
                         <p className="flex items-baseline gap-1 text-xs text-gray-500 mt-0.5 min-w-0">
                           <span className="truncate">{elegida?.etiqueta ?? r.producto?.nombre}</span>
                           <span className="flex-shrink-0">·</span>

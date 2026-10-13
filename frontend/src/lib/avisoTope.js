@@ -1,31 +1,24 @@
-// Aviso sonoro de máquina en TODA la app (2026-10-03): suena en cualquier
-// pantalla, no solo en Máquinas, porque el empleado puede estar haciendo una
-// nota. Cubre los dos modos:
-//
-//   · Cronómetro: cuenta hacia arriba hasta que alguien la finaliza; si nadie
-//     lo hace, al llegar a su tope el corte le quita la luz. Suena ahí.
-//   · Temporizador (MAQUINAS_CRONOMETRO=off): suena cuando el ciclo de una
-//     máquina con nota termina —la tarjeta pasa a verde—. Antes este aviso
-//     vivía solo en la pantalla de Máquinas (MaquinasEnUso).
-//
-// En los dos casos el momento es el mismo: se cumplieron los minutos sellados
-// al arrancar (`ciclo_minutos`). Además, con cronómetro, la máquina a la que se
-// le eligió un programa al iniciarla (mig. 146) suena también al cumplirlo:
-// ahí terminó su lavado y falta finalizarla. Lo que suena es avisoSonoro.js.
+/**
+ * Aviso sonoro de fin de ciclo en cualquier pantalla (lo monta el Layout):
+ * - Cronómetro: al llegar al tope (y al cumplir el programa elegido al iniciar).
+ * - Temporizador (MAQUINAS_CRONOMETRO=off): al terminar el ciclo de una máquina
+ *   con nota.
+ * El momento es cuando se cumplen los minutos sellados (`ciclo_minutos`).
+ */
 import { useEffect, useRef, useState } from 'react';
 import { api } from './api';
 import { prepararAviso, reproducirAvisoCiclo } from './avisoSonoro';
 
 const REFRESCO_MS = 30_000; // cada cuánto se vuelve a pedir la lista de máquinas
-// Cada segundo (2026-10-11): la máquina se finaliza sola 1 s después de su
-// tope, y el sonido tiene que ganarle al refresco que la quita de la lista.
+// Cada segundo: la máquina se finaliza sola poco después de su tope, y el
+// sonido tiene que ganarle al refresco que la quita de la lista.
 const REVISION_MS = 1_000;  // cada cuánto se compara con el reloj
 
-// Máquinas que ya cumplieron su tiempo, como claves "id:en_uso_desde": la
-// misma máquina en otro encendido es otra clave, así que vuelve a sonar.
-// En uso y con minutos sellados. Una encendida a mano sin nota no tiene carga
-// que cuidar; el temporizador, además, solo avisa si una nota la usa (es la
-// tarjeta verde de "terminar ciclo").
+/**
+ * Claves "id:en_uso_desde" de las máquinas que cumplieron su tiempo (otro
+ * encendido es otra clave y vuelve a sonar). No cuentan las encendidas a mano
+ * sin nota; con temporizador, solo las que usa una nota.
+ */
 export function clavesEnTope(maquinas, ahora = Date.now()) {
   const vivas = (maquinas ?? [])
     .filter(m => m.estado === 'en_uso' && m.en_uso_desde)
@@ -37,9 +30,8 @@ export function clavesEnTope(maquinas, ahora = Date.now()) {
   const tope = (m) => (m.minutos_pagados
     ? Math.max(Number(m.ciclo_minutos), Number(m.ciclo_elegido_minutos) || 0)
     : Number(m.ciclo_minutos));
-  // Desde el 2026-10-11 la máquina con nota se FINALIZA SOLA medio minuto
-  // después de su tope (backend, jobs/finalizarAlTope.js): este sonido es el
-  // aviso de que esa tarjeta se va. Por eso también suenan las de fichas.
+  // La máquina con nota se finaliza sola tras su tope (jobs/finalizarAlTope.js):
+  // el sonido avisa que la tarjeta se va. Por eso también suenan las de fichas.
   const topes = vivas
     .filter(m => Number(m.ciclo_minutos) > 0)
     .filter(m => m.cronometro || m.en_uso_nota_id)
@@ -55,17 +47,19 @@ export function clavesEnTope(maquinas, ahora = Date.now()) {
   return [...topes, ...programas];
 }
 
-// ¿Llegó alguna máquina NUEVA al tope desde la revisión anterior? Sin revisión
-// anterior (`previas` null) nunca: al abrir la app no suena por lo que ya
-// estaba en tope, solo por lo que llega con la app abierta.
+/**
+ * ¿Llegó alguna máquina nueva al tope? Sin revisión anterior (`previas` null)
+ * no: al abrir la app no suena lo que ya estaba en tope.
+ */
 export function hayTopeNuevo(previas, actuales) {
   if (!previas) return false;
   return actuales.some(c => !previas.has(c));
 }
 
-// `sonar`: el interruptor "Sonido de fin de ciclo" de Ajustes (mig. 156). Apagado,
-// se siguen llevando las cuentas (para no sonar de golpe al volver a encenderlo
-// por algo que ya había pasado), pero no suena.
+/**
+ * @param sonar el interruptor "Sonido de fin de ciclo" de Ajustes. Apagado se
+ *   siguen llevando las cuentas, para no sonar de golpe al encenderlo.
+ */
 export function useAvisoTopeMaquinas(sonar = true) {
   const [maquinas, setMaquinas] = useState(null); // null = aún no cargan
   const previasRef = useRef(null);

@@ -1,13 +1,12 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 
-// Muestra "nombre apellido" completo. Solo en MÓVIL, si no cabe en el ancho
-// disponible, corta el apellido a cinco letras (en vez de bajar de renglón o
-// salir con "..."). Ej.: "Sofía Monrraz" → "Sofía Monrr.". En escritorio nunca
-// se acorta: se muestra el nombre completo. Se mide con un nodo oculto que
-// siempre lleva el nombre completo.
-//   nombre / apellido: partes del nombre del empleado (apellido opcional)
-//   className: clases de tipografía (tamaño, peso, color); se aplican tanto al
-//              texto visible como al medidor para que la medición coincida.
+/**
+ * "Nombre Apellido"; solo en móvil, si no cabe, el apellido se corta a cinco
+ * letras ("Sofía Monrr."). Se mide con un nodo oculto con el nombre completo.
+ *
+ * @param nombre, apellido partes del nombre (apellido opcional).
+ * @param className tipografía, aplicada al texto y al medidor.
+ */
 export default function NombreEmpleado({ nombre, apellido, className = '' }) {
   const visibleRef = useRef(null);
   const medidorRef = useRef(null);

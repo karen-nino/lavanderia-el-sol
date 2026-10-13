@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 
-// Botón "Exportar" con su menú (PDF / CSV), con el mismo aspecto que el de
-// Ventas. Lo usa el corte de Caja (2026-10-10).
+/** Botón "Exportar" con su menú (PDF / CSV), como el de Ventas. */
 export default function MenuExportar({ onPdf, onCsv, deshabilitado = false }) {
   const [abierto, setAbierto] = useState(false);
   const ref = useRef(null);

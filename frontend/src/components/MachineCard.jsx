@@ -15,8 +15,7 @@ function formatearCliente(nombre, apellido) {
   return `${n} ${a[0].toUpperCase()}.`;
 }
 
-// Solo el nombre de la máquina en la cabecera (2026-10-11, a pedido; desde el
-// 2026-10-03 llevaba debajo su marca y tamaño, "LG · Mediana").
+/** Nombre de la máquina en la cabecera de la tarjeta. */
 function NombreMaquina({ maquina, className }) {
   return <span className={className}>{maquina.nombre}</span>;
 }
@@ -34,19 +33,15 @@ export default function MachineCard({
   const folioTxt    = nota?.folio
     ? `#${String(nota.folio).split('-')[0]}`
     : (nota?.id != null ? `#${nota.id}` : null);
-  // Autoservicio: su Cliente / referencia (mig. 157) o, sin ella, Mostrador,
-  // como en la lista de Notas (2026-10-11; antes decía "Autoservicio").
+  // Autoservicio: su referencia o "Mostrador", como en la lista de Notas.
   const clienteTxt  = nota?.tipo_servicio === 'AUTOSERVICIO'
     ? (String(nota?.referencia ?? '').trim() || 'Mostrador')
     : formatearCliente(nota?.cliente_nombre, nota?.cliente_apellido);
-  // Una máquina puede estar en uso sin nota: alguien la prendió a mano, con el
-  // botón de Gestión o desde eWeLink (mig. 104). Sin decirlo, la tarjeta sale
-  // en blanco y parece un error.
+  // En uso sin nota: alguien la prendió a mano (botón de Gestión o eWeLink).
   const encendidaAMano = Boolean(maquina.encendida_manual_at) && !nota;
   const infoNota = (folioTxt || clienteTxt) ? (
     <div className="w-full text-center">
-      {/* El cliente en grande y el folio debajo, chico (2026-10-11, a pedido;
-          antes era al revés). */}
+      {/* El cliente en grande y el folio debajo. */}
       {clienteTxt && (
         <p className="text-card-title text-dark-grey text-xl font-bold truncate">{clienteTxt}</p>
       )}
@@ -61,13 +56,8 @@ export default function MachineCard({
     </div>
   ) : null;
 
-  // En qué ciclo va la carga. Va en las tres caras de la tarjeta —lavando,
-  // encendida esperando y terminada— porque la pregunta es la misma en todas:
-  // si a esta máquina le queda otra vuelta o ya va de salida. Antes solo
-  // aparecía al terminar, que es cuando ya no sirve para planear nada.
-  //
-  // "Ciclo 1 de 1" no dice nada: una secadora, o una lavadora sin tiempo de
-  // marca, corren una sola vuelta y el contador sobra.
+  // En qué ciclo va la carga, en todas las caras de la tarjeta. "Ciclo 1 de 1"
+  // no se muestra.
   const contadorCiclos = maquina.ciclos_carga != null && maquina.ciclos_max > 1 ? (
     <p className="text-kpi-label text-grey text-sm">
       Ciclo {maquina.ciclos_carga} de {maquina.ciclos_max}
@@ -124,41 +114,26 @@ export default function MachineCard({
   }
 
   if (maquina.necesita_terminar_ciclo) {
-    // Máquina que cumplió su ciclo: SIEMPRE en verde, sea Autoservicio o Por
-    // Encargo. El verde comunica "esta máquina ya terminó", que es lo mismo en
-    // los dos casos; lo único que cambia es el siguiente paso, y eso lo dice el
-    // botón. Antes la lavadora que pasaba a secado se pintaba de rojo, y dos
-    // tarjetas en el mismo estado se veían como si una tuviera un problema.
-    //
-    // El siguiente paso lo manda el servidor en `lavadoras_con_secado_ids`:
-    // son las lavadoras que encadenan el secado al terminar. Hoy solo las de
-    // Autoservicio, donde el cliente espera su ropa y se pasa de una máquina a
-    // la otra en el momento; en Por Encargo la lavadora finaliza su carga y la
-    // secadora se asigna y arranca aparte, desde Salidas (2026-09-22).
+    // Máquina que cumplió su ciclo: siempre en verde; el siguiente paso lo dice el
+    // botón. Las lavadoras de `lavadoras_con_secado_ids` (hoy solo Autoservicio)
+    // pasan a secado; las demás finalizan su carga y la secadora va en Salidas.
     const esSecadora = maquina.tipo === 'secadora';
     const debeSecar = Array.isArray(nota?.lavadoras_con_secado_ids)
       && nota.lavadoras_con_secado_ids.some(mid => String(mid) === String(maquina.id));
     const finalizaCarga = esSecadora || !debeSecar;
 
-    // Un solo botón para los dos momentos en que la tarjeta se pone verde
-    // (mig. 108). La primera vez ofrece el siguiente ciclo —una carga de ropa
-    // son dos ciclos seguidos—; la segunda ya lleva al paso de siempre. Tener
-    // dos botones a la vez hacía elegir entre continuar y cerrar cada vez que
-    // terminaba un ciclo, y el 99% de las veces la respuesta es la misma.
+    // Un solo botón para los dos momentos en verde: primero ofrece el siguiente
+    // ciclo (una carga son dos) y luego el paso de siempre.
     const ofreceOtroCiclo = Boolean(maquina.puede_otro_ciclo);
     const enPausa = ofreceOtroCiclo && maquina.espera_otro_ciclo > 0;
-    // El siguiente ciclo empieza igual que el primero: la máquina se quedó sin
-    // corriente al terminar, así que primero hay que encenderla. "Iniciar
-    // ciclo" llega después, cuando ya está arrancada.
+    // El siguiente ciclo empieza encendiendo la máquina; "Iniciar ciclo" viene después.
     const etiquetaBoton = otroCicloEnCurso ? 'ENCENDIENDO…'
       : enPausa            ? `ENCENDER EN ${maquina.espera_otro_ciclo}s`
       : ofreceOtroCiclo    ? 'ENCENDER MÁQUINA'
       : finalizaCarga      ? 'FINALIZAR CARGA'
       : 'INICIAR SECADO';
-    // El color va con lo que pide el botón, no con el estado de la tarjeta:
-    // **ámbar mientras falte algo por hacer** —darle corriente— y **verde
-    // cuando lo que toca es arrancar o cerrar la carga**. Por eso esta misma
-    // tarjeta es ámbar si ofrece encender y verde si ya solo queda finalizar.
+    // El color va con lo que pide el botón: ámbar si falta darle corriente, verde
+    // si toca arrancar o cerrar la carga.
     const c = ofreceOtroCiclo
       ? { fondo: 'bg-amber-50', aro: 'ring-amber-400', cabecera: 'bg-amber-500',
           titulo: 'text-amber-700', boton: 'bg-amber-500 ring-amber-600' }
@@ -177,9 +152,7 @@ export default function MachineCard({
             {esSecadora ? <>Finalizó<br />secadora</> : <>Finalizó<br />lavadora</>}
           </p>
           {infoNota}
-          {/* Mientras corre la pausa sin corriente el botón no desaparece: se
-              queda con la cuenta atrás, para que no parezca que no hay nada que
-              hacer. */}
+          {/* Durante la pausa sin corriente el botón muestra la cuenta atrás. */}
           <button
             onClick={(e) => {
               e.stopPropagation();
@@ -200,10 +173,7 @@ export default function MachineCard({
     );
   }
 
-  // Encendida y esperando a que la arranquen (mig. 110). Es el paso intermedio
-  // del siguiente ciclo: ya tiene corriente pero nadie ha apretado su botón, así
-  // que no hay cronómetro que mostrar. Va en verde: la corriente ya está dada y
-  // lo único que queda es arrancar el ciclo.
+  // Encendida y esperando que la arranquen: sin cronómetro todavía, en verde.
   if (maquina.esperando_arranque && nota) {
     return (
       <div
@@ -237,13 +207,11 @@ export default function MachineCard({
     );
   }
 
-  // Máquina con cronómetro (2026-10-02): el reloj cuenta hacia arriba desde que
-  // se encendió y el botón para finalizarla está siempre a la vista, porque
-  // aquí nadie avisa que el lavado terminó: lo decide quien tiene la ropa
-  // enfrente. Finalizar le corta la luz. Si llegó al tope sin que nadie la
-  // finalizara, el corte ya se la quitó y se dice en rojo.
+  // Con cronómetro: el reloj sube desde que se encendió y Finalizar siempre está
+  // a la vista (lo decide quien tiene la ropa enfrente). Si llegó al tope, el
+  // corte ya le quitó la luz y se dice en rojo.
   if (maquina.cronometro && nota) {
-    // La secadora conserva su rojo, igual que con temporizador.
+    // La secadora va en rojo, como con temporizador.
     const esSecadoraCrono = maquina.tipo === 'secadora';
     const debeSecar = !esSecadoraCrono && Array.isArray(nota?.lavadoras_con_secado_ids)
       && nota.lavadoras_con_secado_ids.some(mid => String(mid) === String(maquina.id));
@@ -263,11 +231,9 @@ export default function MachineCard({
               Llegó al tope: se finaliza sola en unos segundos.
             </p>
           ) : maquina.programa_cumplido ? (
-            /* Programa elegido al iniciarla (mig. 146): ya cumplió, falta
-               finalizarla; la luz se le corta hasta el tope. */
+            /* Ya cumplió el programa elegido: falta finalizarla (la luz se corta en el tope). */
             <p className="text-kpi-label text-amber-600 text-sm text-center">
-              {/* La de fichas (Sec49) puede llevar tiempo sumado en Salidas
-                  (mig. 148): ahí el fin ya no es "un programa". */}
+              {/* La de fichas puede llevar tiempo sumado en Salidas: su fin no es "un programa". */}
               {maquina.de_fichas
                 ? 'Se le acabó el tiempo. Finalízala.'
                 : `Terminó su programa de ${maquina.ciclo_elegido_minutos} min. Finalízala.`}
@@ -291,8 +257,7 @@ export default function MachineCard({
     );
   }
 
-  // Temporizador en marcha. La secadora en uso va en tonos rojos (encabezado
-  // y aro del contador); las lavadoras conservan el azul.
+  // Temporizador en marcha: secadora en rojo, lavadora en azul.
   const esSecadora = maquina.tipo === 'secadora';
   return (
     <div {...containerProps} className={`rounded-card bg-white shadow-card overflow-hidden ${interactivoCls}`}>
@@ -305,8 +270,7 @@ export default function MachineCard({
           label={maquina.tiempo_restante ?? '—:—'}
           color={esSecadora ? 'red' : 'blue'}
         />
-        {/* Juntos y con poco aire: el ciclo se lee como parte del bloque de la
-            nota, no como un dato suelto al final de la tarjeta. */}
+        {/* El ciclo, pegado al bloque de la nota. */}
         <div className="w-full flex flex-col items-center gap-1">
           {infoNota}
           {contadorCiclos}

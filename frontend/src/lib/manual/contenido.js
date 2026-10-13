@@ -1,13 +1,11 @@
-// Manual de uso de la app, en el código y no en la base de datos: así se
-// actualiza en el mismo commit que el cambio que describe y no queda desfasado
-// sin que nadie lo note. Para agregar un artículo basta sumarlo a su sección.
-//
-// Cada artículo lleva:
-//   id      → ancla de la URL (/manual#cobrar-una-nota), para mandarlo por chat
-//   titulo  → lo que se ve y por donde se busca primero
-//   cuerpo  → texto plano; los saltos de línea se respetan al pintarlo
-//   claves  → palabras con que la gente lo buscaría aunque no estén escritas
-//             ("cobrar" para el artículo que habla de "liquidar")
+/**
+ * Manual de uso, en el código para que cambie en el mismo commit que la app.
+ * Cada artículo lleva:
+ * - id: ancla de la URL (/manual#cobrar-una-nota).
+ * - titulo: lo que se ve y por donde se busca primero.
+ * - cuerpo: texto plano; se respetan los saltos de línea.
+ * - claves: palabras con que se buscaría aunque no estén escritas.
+ */
 
 export const SECCIONES_MANUAL = [
   {

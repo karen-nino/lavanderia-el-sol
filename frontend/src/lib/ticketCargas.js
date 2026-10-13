@@ -1,6 +1,4 @@
-// Cómo se listan las cargas de una nota en el ticket del cliente. Vive fuera de
-// TicketNota para poder probarlo y para que Fast Refresh siga funcionando en la
-// página (que solo debe exportar el componente).
+// Cómo se listan las cargas en el ticket (aparte para probarlo y para Fast Refresh).
 
 const MAQUINA_TIPO_LABEL = {
   lavadora_mediana: 'Mediana',
@@ -8,17 +6,11 @@ const MAQUINA_TIPO_LABEL = {
   secadora:         'Secadora',
 };
 
-// Lo que la carga cobra por máquina. Al cliente se le nombra siempre el tipo
-// de máquina ("Lavadora · Mediana"), no la máquina física que le tocó ("L1"):
-// el identificador es de uso interno y en el ticket no le dice nada. El tamaño
-// sale de la máquina asignada, o del tipo elegido al crear la nota mientras no
-// haya una.
-//
-// En AUTOSERVICIO el tipo elegido no basta (2026-09-25): ahí la máquina se
-// cobra al asignarla en Salidas, así que mientras no haya máquina física no hay
-// nada que enseñar — el ticket mostraría una máquina y un precio que todavía no
-// existen. En Por Encargo sí se anuncia el tipo elegido, porque la carga se
-// cobra por su tope desde que se hace la nota.
+/**
+ * Máquinas que cobra la carga, por tipo ("Lavadora · Mediana"), no por máquina
+ * física. El tamaño, de la máquina asignada o del tipo elegido. En Autoservicio
+ * solo con máquina asignada: antes no tiene precio.
+ */
 export function maquinasDeCarga(cg, tipoServicio) {
   const capitalizar = (t) => (t ? t.charAt(0).toUpperCase() + t.slice(1) : '');
   const soloAsignadas = tipoServicio === 'AUTOSERVICIO';
@@ -41,22 +33,14 @@ export function maquinasDeCarga(cg, tipoServicio) {
   return [lavadora, secadora].filter(Boolean);
 }
 
-// ¿Esta carga tiene algo que enseñarle al cliente? Una carga sin máquina, sin
-// productos y sin precio no debe aparecer en el ticket: el cliente vería una
-// "Carga 2 · $0.00" que no existió. Se conserva si tiene máquina (puesta o solo
-// elegida), productos o un precio que cobrar.
-//
-// POR ENCARGO es la excepción: ahí el ticket lista SERVICIOS, no máquinas, y el
-// cliente paga por el servicio venga en una máquina o en tres. Una máquina que
-// el mostrador agregó en Salidas —una secadora que abre su propio renglón— no
-// cobra nada, y listarla imprimiría un "SERVICIO POR ENCARGO · $0.00" que el
-// cliente no compró. Por eso ahí solo se enseña lo que cuesta algo.
+/**
+ * ¿La carga tiene algo que mostrar? Sí si tiene máquina (puesta o elegida),
+ * productos o precio. En Por Encargo solo lo que cobra algo: el ticket lista
+ * servicios, y una secadora agregada en Salidas no cobra.
+ */
 export function cargaVisibleEnTicket(cg, tipoServicio) {
   const tieneProductos = (cg.productos ?? []).some(p => p.unidad !== 'medida');
-  // El precio del servicio Por Encargo llega de la API como `tope_carga`
-  // (`nota_cargas.precio_tope` renombrado en el SELECT). Mirar solo
-  // `precio_tope` dejaba fuera del ticket al servicio Chico o Grande, que no
-  // cobra máquinas ni lleva productos: su única línea es su precio.
+  // El precio del servicio llega como `tope_carga` (precio_tope renombrado).
   const cobraAlgo      = Number(cg.tope_carga ?? cg.precio_tope ?? 0) > 0
     || Number(cg.precio_lavadora ?? 0) > 0
     || Number(cg.precio_secadora ?? 0) > 0

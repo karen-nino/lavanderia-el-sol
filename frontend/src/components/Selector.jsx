@@ -1,30 +1,21 @@
 import { useEffect, useState } from 'react';
 
 /**
- * Campo para elegir UNA opción, con el mismo estilo que "Agregar máquina"
- * (2026-10-02): el campo se ve como los demás del formulario y, al tocarlo,
- * abre una ventana con las opciones en tarjetas. Sustituye a los `<select>`
- * nativos de la app, cuya lista la dibuja el sistema operativo y no se parece
- * a nada de lo demás.
+ * Campo para elegir una opción: se ve como los demás campos y abre una ventana
+ * con las opciones en tarjetas (como "Agregar máquina"). Tocar una opción la
+ * elige y cierra. Sustituye a los `<select>` nativos.
  *
- * A diferencia de Agregar máquina se elige una sola cosa, así que tocar una
- * opción la elige y cierra la ventana: no hace falta un botón de confirmar.
- *
- * Props:
- *   valor       — el valor elegido ('' si ninguno).
- *   onChange    — recibe el VALOR, no un evento.
- *   opciones    — [{ valor, etiqueta, detalle?, deshabilitado? }]. `detalle`
- *                 va a la derecha en gris (lo que queda, la marca…). Solo lo
- *                 elegible: el texto de "Seleccionar…" es `marcador`.
- *   marcador    — texto gris del campo mientras no hay nada elegido.
- *   titulo      — título de la ventana (por defecto, la etiqueta aria).
- *   requerido   — como `required`: el formulario no se envía sin valor.
- *   deshabilitado, etiquetaAria, id,
- *   claseCampo  — clases del campo para igualar a sus vecinos (INPUT_CLS,
- *                 MOBILE_INPUT_CLS…); sin ella, el tamaño estándar.
- *   alerta      — borde ámbar: falta elegir algo que hace falta.
- *   disparador  — ({ abrir, elegida, deshabilitado }) => nodo: un botón propio
- *                 en vez del campo (p. ej. "Elegir" en el granel de Salidas).
+ * @param valor el valor elegido ('' si ninguno).
+ * @param onChange recibe el valor, no un evento.
+ * @param opciones [{ valor, etiqueta, detalle?, deshabilitado? }]; `detalle` va
+ *   a la derecha en gris. Solo lo elegible.
+ * @param marcador texto gris mientras no hay nada elegido.
+ * @param titulo título de la ventana (por defecto, la etiqueta aria).
+ * @param requerido como `required`: el formulario no se envía sin valor.
+ * @param claseCampo clases para igualar a sus vecinos; sin ella, tamaño estándar.
+ * @param alerta borde ámbar: falta elegir.
+ * @param disparador ({ abrir, elegida, deshabilitado }) => nodo propio en vez del campo.
+ * @param deshabilitado, etiquetaAria, id
  */
 const CAMPO_BASE = 'w-full px-4 py-3.5 border border-gray-300 rounded-lg text-base';
 
@@ -47,7 +38,7 @@ export default function Selector({
   const actual = String(valor ?? '');
   const elegida = opciones.find(o => String(o.valor) === actual) ?? null;
 
-  // Esc cierra la ventana, como cualquier otro modal de la app.
+  // Esc cierra la ventana.
   useEffect(() => {
     if (!abierto) return undefined;
     const tecla = (e) => { if (e.key === 'Escape') setAbierto(false); };
@@ -70,7 +61,7 @@ export default function Selector({
         disabled={deshabilitado}
         onClick={() => setAbierto(true)}
         aria-haspopup="dialog"
-        // El nombre del campo y lo elegido: "Rol: Empleado".
+        // Nombre del campo y lo elegido: "Rol: Empleado".
         aria-label={etiquetaAria ? `${etiquetaAria}: ${elegida?.etiqueta ?? marcador}` : undefined}
         className={`${claseCampo} text-left flex items-center justify-between gap-2 transition-colors
           ${deshabilitado
@@ -86,8 +77,8 @@ export default function Selector({
       </button>
       )}
 
-      {/* `required` sin <select>: un campo invisible encima del botón lleva la
-          validación del navegador, que así sigue avisando en su sitio. */}
+      {/* `required` sin <select>: un campo invisible sobre el botón lleva la
+          validación del navegador. */}
       {requerido && (
         <input
           tabIndex={-1} aria-hidden="true" required
@@ -99,8 +90,7 @@ export default function Selector({
       {abierto && (
         <div
           className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
-          // Muchos selectores viven dentro de otra ventana (alta de empleado,
-          // de máquina…): el clic en el fondo cierra solo ESTA, no la de atrás.
+          // Si vive dentro de otra ventana, el clic en el fondo cierra solo esta.
           onClick={(e) => { e.stopPropagation(); setAbierto(false); }}
         >
           <div

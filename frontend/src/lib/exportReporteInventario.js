@@ -1,7 +1,8 @@
-// Exportación del "Reporte diario" de Inventario a CSV (Excel) y a PDF.
-// Ver exportUtils.js (piezas compartidas) y formatoInventario.js (opción B).
-//
-// Recibe { fecha: 'YYYY-MM-DD', productos: [...] } de GET /productos/reporte-diario.
+/**
+ * "Reporte diario" de Inventario a CSV y PDF (ver exportUtils.js y
+ * formatoInventario.js). Recibe { fecha: 'YYYY-MM-DD', productos } de GET
+ * /productos/reporte-diario.
+ */
 
 import { slug, esc, descargarCSV, imprimirDocumento, fechaLarga } from './exportUtils';
 import { textoBotellas, textoGranel, seVendePorUnidad, esPolvo, lineasEntradas, lineasSalidas, lineasDevuelto } from './formatoInventario';
@@ -12,24 +13,21 @@ const fechaLocal = (iso) => {
   return new Date(y, (m || 1) - 1, d || 1);
 };
 
-// Para el reporte, lo que se cuenta por unidades (marca y polvo) se lee igual:
-// sin botellas ni bidón detrás.
+// Lo que se cuenta por unidad (marca y polvo): sin botellas ni bidón.
 const esMarca  = (p) => seVendePorUnidad(p);
 const nombreProd = (p) => (esMarca(p) && p.marca ? `${p.marca} · ${p.nombre}` : p.nombre);
 
 const entradasLineas = (p) => lineasEntradas(p, esMarca(p));
 // Salidas: por notas más las manuales (merma, dañado…).
 const salidasLineas = (p) => lineasSalidas(p, esMarca(p));
-// Ventas anuladas ese día: van en su propia columna (Salidas ya no las resta)
-// para que el total no parezca un error de captura.
+// Ventas anuladas ese día, en su propia columna.
 const devueltoTexto = (p) => lineasDevuelto(p, esMarca(p)).join(' · ');
 const inicioRellenadas = (p) => textoBotellas(p.inicio_botellas_medidas, p.medidas_por_botella, { marca: esMarca(p) });
 const inicioGranel = (p) => (esMarca(p) ? '' : textoGranel(p.inicio_granel_medidas, p.medidas_por_bidon, p.medidas_por_botella));
 const rellenadasTexto = (p) => textoBotellas(p.fin_botellas_medidas, p.medidas_por_botella, { marca: esMarca(p) });
 const granelTexto = (p) => (esMarca(p) ? '' : textoGranel(p.fin_granel_medidas, p.medidas_por_bidon, p.medidas_por_botella));
 
-// Devuelto solo va el día que algún producto tuvo algo devuelto, igual que en
-// la pantalla.
+// La columna Devuelto solo si algo se devolvió ese día (como en la pantalla).
 const hayDevuelto = (productos) => productos.some((p) => Number(p.devuelto_medidas) > 0);
 
 // ── CSV ─────────────────────────────────────────────────────

@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { api } from '../lib/api';
 
-// Modal de confirmación para eliminar un empleado. Reutilizable desde la lista
-// de Empleados y desde la página de detalles del empleado.
-//   empleado:   usuario a eliminar (con id, nombre)
-//   onClose():  cerrar sin eliminar
-//   onDeleted(id): tras eliminar con éxito, con el id eliminado
+/**
+ * Confirmación para eliminar un empleado (desde la lista y desde su página).
+ *
+ * @param empleado usuario a eliminar (id, nombre).
+ * @param onClose cerrar sin eliminar.
+ * @param onDeleted(id) tras eliminar.
+ */
 export default function EmpleadoDeleteModal({ empleado, onClose, onDeleted }) {
   const [eliminando, setEliminando] = useState(false);
   const [error, setError] = useState('');

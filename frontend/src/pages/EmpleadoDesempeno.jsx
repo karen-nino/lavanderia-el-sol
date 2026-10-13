@@ -13,8 +13,7 @@ import { fmtEncendidaConTope, horarioCiclo } from '../lib/tiempoEncendida';
 const fmtMoneda = (n) =>
   '$' + Number(n ?? 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-// `fecha` llega como 'YYYY-MM-DD' (día local del negocio). Se le agrega la hora
-// para que se interprete en la zona local del navegador y no se corra un día.
+// `fecha` llega como 'YYYY-MM-DD' (día del negocio): con hora, no se corre un día.
 const fmtFecha = (iso) =>
   new Date(iso + 'T00:00:00').toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
 
@@ -97,8 +96,7 @@ function CeldaNumero({ value, onClick }) {
   );
 }
 
-// Celda "Caja" (2026-10-09): cómo quedaron los turnos de caja que el empleado
-// abrió ese día. Sin turnos, un guion; con alguno, un botón que abre el detalle.
+/** Celda "Caja": un guion sin turnos; con alguno, un botón al detalle. */
 function resumenCaja(cajas) {
   if (cajas.some((c) => c.en_curso)) return { texto: 'En curso', cls: 'text-blue' };
   if (cajas.some((c) => c.contado == null)) return { texto: 'Sin conteo', cls: 'text-amber-600' };
@@ -122,7 +120,7 @@ function CeldaCaja({ cajas, onClick }) {
   );
 }
 
-// Detalle de los turnos de caja de un día: el mismo desglose que el corte.
+/** Turnos de caja de un día, con el desglose del corte. */
 function CajaModal({ fecha, cajas, onClose }) {
   const fila = (label, valor, cls = 'text-gray-700') => (
     <div className="flex justify-between gap-3 py-1 text-sm">
@@ -196,7 +194,7 @@ function CajaModal({ fecha, cajas, onClose }) {
   );
 }
 
-// `sub2` es una segunda línea gris debajo de `sub` (el horario de un ciclo).
+/** Renglón de un modal; `sub2` es una segunda línea gris (horario de un ciclo). */
 function FilaModal({ left, sub, sub2, right, rightSub, onClick }) {
   const contenido = (
     <>
@@ -266,7 +264,7 @@ function EstadoBadge({ estado, tipoServicio }) {
   );
 }
 
-// Modal con el detalle de una métrica de un día.
+/** Detalle de una métrica de un día. */
 function MetricaModal({ metrica, fecha, count, items, onClose }) {
   const navigate = useNavigate();
   const noun = { notas: 'nota', maquinas: 'máquina', cargas: 'ciclo', productos: 'producto', clientes: 'cliente' }[metrica];
@@ -305,8 +303,7 @@ function MetricaModal({ metrica, fecha, count, items, onClose }) {
             ))
           ) : metrica === 'cargas' ? (
             items.map((c, i) => (
-              // Un ciclo por máquina (2026-10-06): la nota y, abajo, a qué
-              // hora arrancó y terminó y cuánto estuvo encendida.
+              // Un ciclo por renglón: la nota, inicio, fin y minutos encendida.
               <FilaModal key={i} left={c.descripcion} sub={c.folio ? `Nota ${c.folio}` : null}
                 sub2={[horarioCiclo(c), fmtEncendidaConTope(c.segundos, c.tope)]
                   .filter(Boolean).join(' · ') || null}
@@ -380,8 +377,8 @@ export default function EmpleadoDesempeno() {
 
   const empleado      = data?.empleado;
   const esMismoUsuario = usuario?.id === empleado?.id;
-  // Solo el Admin Main puede modificar/eliminar a un administrador; cada quien
-  // puede editarse a sí mismo. No se puede eliminar la propia cuenta.
+  // Solo el Admin Main modifica o elimina a un admin; cada quien se edita a sí
+  // mismo. Nadie elimina su propia cuenta.
   const puedeModificar = !!empleado && esAdminFn(usuario?.rol)
     && (esMismoUsuario || !esAdminFn(empleado.rol) || esAdminMainFn(usuario?.rol));
   const puedeEliminar  = puedeModificar && !esMismoUsuario;
@@ -476,8 +473,7 @@ export default function EmpleadoDesempeno() {
             </div>
           </div>
 
-          {/* En la propia cuenta se oculta el menú de acciones (como al ver a
-              otro admin); el perfil propio se edita desde Ajustes → Mi Perfil. */}
+          {/* En la propia cuenta no hay menú (el perfil se edita en Ajustes → Mi Perfil). */}
           {!esMismoUsuario && (puedeModificar || puedeEliminar) && (
             <div ref={menuRef} className="relative flex-shrink-0">
               <button
@@ -694,8 +690,7 @@ export default function EmpleadoDesempeno() {
             </div>
           </div>
         ) : null}
-        {/* Espacio extra abajo para poder desplazarse y ver el dropdown de
-            fecha completo sin que lo tape la barra inferior. */}
+        {/* Espacio para ver el desplegable de fecha completo sobre la barra inferior. */}
         {mostrarFecha && <div className="h-80" aria-hidden />}
       </div>
 
@@ -717,8 +712,7 @@ export default function EmpleadoDesempeno() {
         />
       )}
 
-      {/* Selector "Por mes": los 12 meses del año en curso; se deshabilitan los
-          que no tienen actividad. */}
+      {/* "Por mes": los 12 meses del año en curso; sin actividad, deshabilitados. */}
       {modalFecha === 'MES' && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={() => setModalFecha(null)}>
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-xs p-5" onClick={e => e.stopPropagation()}>

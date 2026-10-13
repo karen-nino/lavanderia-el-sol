@@ -117,9 +117,10 @@ const navItems = [
   { to: '/inventario', label: 'Inventario', icon: Icon.inventario },
 ];
 
-// Navegación de escritorio: una sola lista ordenada por prioridad. El sidebar
-// muestra los que quepan verticalmente y el resto pasa al menú de overflow, sin
-// duplicar botones entre el sidebar y el modal.
+/**
+ * Navegación de escritorio por prioridad: el sidebar muestra los que caben y
+ * el resto va al Menú, sin repetir botones.
+ */
 const buildDesktopNav = (isAdmin) => [
   { to: '/',                 label: 'Inicio',              icon: Icon.dashboard, end: true },
   { to: '/maquinas',         label: 'Máquinas',            icon: Icon.maquinas },
@@ -170,15 +171,14 @@ function SidebarItem({ to, label, short, icon, end }) {
   );
 }
 
-// Botón del pie del sidebar (Menú, Ajustes, Cerrar sesión).
+/** Botón del pie del sidebar (Menú, Ajustes, Cerrar sesión). */
 function SidebarPieBoton({ icon, label, onClick, peligro = false, activo = false }) {
   return (
     <button
       onClick={onClick}
       className="group flex flex-col items-center gap-1.5 py-1 w-full"
     >
-      {/* Activo: igual que un ítem de navegación. En rojo (peligro): igual que
-          Cerrar sesión dentro del menú. */}
+      {/* Activo: como un ítem de navegación; en rojo: como Cerrar sesión. */}
       <span
         className={`w-12 h-12 rounded-card-sm flex items-center justify-center transition-colors ${
           activo
@@ -201,20 +201,18 @@ function SidebarPieBoton({ icon, label, onClick, peligro = false, activo = false
   );
 }
 
-// Hueco del alto de un botón del pie: reserva el espacio sin mostrar nada.
+/** Hueco del alto de un botón del pie. */
 const RanuraVacia = () => (
   <div className="invisible" aria-hidden="true">
     <SidebarPieBoton icon={Icon.menu} label="—" />
   </div>
 );
 
-// Sidebar de escritorio: muestra los ítems de navegación que quepan; los que no,
-// pasan al botón Menú, que abre el modal con esos accesos. Reporta al padre los
-// ítems que no caben.
-//
-// El pie tiene SIEMPRE dos ranuras: si cambiara de alto según lo que muestre,
-// cambiaría el espacio medido para los íconos y la capacidad oscilaría (con dos
-// botones cabe menos → aparece overflow → vuelve un botón → cabe más…).
+/**
+ * Sidebar de escritorio: los ítems que caben; los demás van al Menú y se
+ * reportan al padre. El pie tiene siempre dos ranuras: si cambiara de alto, la
+ * capacidad medida oscilaría.
+ */
 function DesktopSidebar({ items, onMenu, onOverflowChange, onSettings, onLogout }) {
   const { pathname } = useLocation();
   const slotRef = useRef(null);
@@ -259,9 +257,8 @@ function DesktopSidebar({ items, onMenu, onOverflowChange, onSettings, onLogout 
         ))}
       </div>
 
-      {/* Ranura de arriba: Ajustes solo cuando cabe todo y el usuario es admin.
-          Ranura de abajo (la de siempre): Menú si algo no cupo, Salir si no.
-          Las ranuras sin botón se dejan invisibles pero ocupando su lugar. */}
+      {/* Ranura de arriba: Ajustes, si cabe todo y es admin. Ranura de abajo: Menú
+          si algo no cupo, Salir si no. Las vacías ocupan su lugar invisibles. */}
       <div className="flex-shrink-0 mt-3 flex flex-col gap-2">
         {overflow.length === 0 && onSettings ? (
           <SidebarPieBoton
@@ -376,8 +373,7 @@ function AlertsModal({ open, onClose, alertas, onSelect, onDismiss, onDismissAll
   if (!open) return null;
 
   const cerrar = () => { setDetalle(null); setConfirmAll(false); onClose(); };
-  // El botón "Descartar todas" solo tiene sentido con más de una descartable;
-  // con una sola basta su propia X.
+  // "Descartar todas" solo con más de una descartable.
   const hayDescartables = alertas.filter(a => a.dismissable).length > 1;
 
   return (
@@ -526,7 +522,7 @@ function AlertsModal({ open, onClose, alertas, onSelect, onDismiss, onDismissAll
       </div>
     </div>
 
-    {/* Confirmación antes de descartar todas las notificaciones */}
+    {/* Confirmación antes de descartar todas */}
     {confirmAll && (
       <div
         className="fixed inset-0 z-[60] flex items-center justify-center bg-dark-blue/40 p-4"
@@ -579,9 +575,10 @@ function MenuItemButton({ label, icon, onClick }) {
   );
 }
 
-// Modal Menú. En móvil muestra el menú completo (sucursal, accesos, ajustes,
-// cerrar sesión). En desktop solo los accesos de navegación que no cupieron en
-// el sidebar; el resto (ajustes/cerrar sesión) vive en el menú de cuenta.
+/**
+ * Modal Menú. En móvil, el menú completo (sucursal, accesos, ajustes y cerrar
+ * sesión); en escritorio, los accesos que no cupieron más Ajustes y Cerrar sesión.
+ */
 function MenuModal({ open, onClose, mobileItems = [], desktopItems = [], onSettings, onLogout }) {
   if (!open) return null;
   return (
@@ -624,8 +621,7 @@ function MenuModal({ open, onClose, mobileItems = [], desktopItems = [], onSetti
           </button>
         </div>
 
-        {/* Desktop: los accesos de navegación que no cupieron en el sidebar,
-            más Ajustes y Cerrar sesión. */}
+        {/* Escritorio: los accesos que no cupieron, más Ajustes y Cerrar sesión. */}
         <div className="hidden md:flex flex-col gap-2">
           {desktopItems.map((item) => (
             <MenuItemButton key={item.label} {...item} />
@@ -682,9 +678,8 @@ export default function Layout() {
   const navigate = useNavigate();
   const location = useLocation();
   const now = useClock();
-  // Suena en cualquier pantalla cuando una máquina llega a su tope.
-  // Interruptores de Ajustes → Alertas (mig. 156). Sin dato (aún no carga o
-  // falla), todo encendido, como antes.
+  // Interruptores de Ajustes → Alertas; sin dato (cargando o con error), todo
+  // encendido. El aviso sonoro de tope suena en cualquier pantalla.
   const [ajustesAlertas, setAjustesAlertas] = useState(null);
   useAvisoTopeMaquinas(ajustesAlertas?.aviso_sonoro_ciclo !== false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -695,8 +690,8 @@ export default function Layout() {
   const [productos, setProductos] = useState([]);
   const [notificaciones, setNotificaciones] = useState([]);
   const [sucursales, setSucursales] = useState([]);
-  // Alertas de stock ocultadas manualmente (por firma id+stock). Es solo de
-  // sesión: reaparecen si cambia el stock o al recargar.
+  // Alertas de stock ocultadas (firma id+stock), solo en esta sesión: vuelven si
+  // cambia el stock o al recargar.
   const [stockOcultas, setStockOcultas] = useState(() => new Set());
   const isDashboard = location.pathname === '/';
 
@@ -714,13 +709,12 @@ export default function Layout() {
         .catch(() => {});
     };
     cargar();
-    // Refresco periódico para que las notificaciones aparezcan sin navegar.
+    // Refresco periódico de las notificaciones.
     const id = setInterval(cargar, 60_000);
     return () => { activo = false; clearInterval(id); };
   }, [location.pathname]);
 
-  // Lista de sucursales para mostrar el nombre de la sucursal actual en el
-  // encabezado (el usuario guarda solo el slug).
+  // Sucursales, para mostrar el nombre de la actual (el usuario guarda el slug).
   useEffect(() => {
     let activo = true;
     api.get('/sucursales')
@@ -729,21 +723,18 @@ export default function Layout() {
     return () => { activo = false; };
   }, []);
 
-  // Sucursal actual: la activa (admin) o la propia del usuario. Se muestra su
-  // nombre; si aún no cargó la lista, se cae al slug como respaldo.
+  // La sucursal activa (admin) o la del usuario; sin la lista, el slug.
   const sucursalSlug = sucursalActiva || usuario?.sucursal || null;
   const sucursalNombre =
     sucursales.find(s => s.slug === sucursalSlug)?.nombre ?? sucursalSlug ?? '—';
 
-  // Con "Alertas de stock" apagado en Ajustes no se arman las de existencia
-  // ni las de granel; las demás de la campana siguen igual.
+  // Con "Alertas de stock" apagado no se arman las de existencia ni de granel.
   const conAlertaStock = ajustesAlertas?.alerta_stock !== false;
   const alertas = useMemo(() => {
     const orden = { agotado: 0, por_agotarse: 1 };
     const stock = (conAlertaStock ? productos : [])
       .filter(p => p.estado_stock && p.estado_stock !== 'ok')
-      // Firma con el stock actual: si el stock cambia, la firma cambia y la
-      // alerta vuelve a mostrarse aunque se hubiera ocultado.
+      // La firma lleva el stock: si cambia, la alerta vuelve.
       .filter(p => !stockOcultas.has(`producto-${p.id}:${p.stock_actual}`))
       .sort((a, b) => (orden[a.estado_stock] ?? 99) - (orden[b.estado_stock] ?? 99))
       .map(p => {
@@ -766,10 +757,9 @@ export default function Layout() {
           ],
         };
       });
-    // Alertas del líquido a granel (bidón) por acabarse o agotado.
+    // Granel (bidón) por acabarse o agotado.
     const granel = (conAlertaStock ? productos : [])
-      // Solo el granel líquido tiene bidón que avisar: el polvo se cuenta en
-      // unidades y ya sale en el aviso de existencia.
+      // Solo el granel líquido: el polvo va en el aviso de existencia.
       .filter(p => p.tipo_liquido === 'granel' && p.forma !== 'polvo' && p.estado_granel && p.estado_granel !== 'ok')
       .filter(p => !stockOcultas.has(`granel-${p.id}:${p.stock_granel_medidas}`))
       .sort((a, b) => (orden[a.estado_granel] ?? 99) - (orden[b.estado_granel] ?? 99))
@@ -790,7 +780,7 @@ export default function Layout() {
 
     const notifs = notificaciones.map(n => {
       const fechaHora = formatFechaHora12(n.created_at);
-      // Cada tipo de notificación tiene su título, color, destino y detalles.
+      // Título, color, destino y detalles de cada tipo de notificación.
       const cfg =
           n.tipo === 'nota_cancelada'
             ? { title: 'Nota cancelada', severity: 'cancelada', to: '/notas', accionLabel: 'Ver notas',
@@ -830,7 +820,7 @@ export default function Layout() {
   }, [productos, notificaciones, stockOcultas, conAlertaStock]);
 
   const handleDismissAlerta = async (a) => {
-    // Alerta de stock (sin id): se oculta solo en esta sesión.
+    // Alerta de stock (sin id): se oculta en esta sesión.
     if (!a.id) {
       setStockOcultas(prev => new Set(prev).add(a.dismissKey));
       return;
@@ -839,8 +829,7 @@ export default function Layout() {
     try { await api.post(`/notificaciones/${a.id}/descartar`); } catch { /* la lista ya se actualizó localmente */ }
   };
 
-  // Descarta todo lo visible: las notificaciones en la base y las alertas de
-  // stock se ocultan en esta sesión (reaparecen si cambia el stock o al recargar).
+  // Descarta lo visible: las notificaciones en la base y las de stock en esta sesión.
   const handleDismissTodas = async () => {
     setStockOcultas(prev => {
       const next = new Set(prev);
@@ -859,17 +848,16 @@ export default function Layout() {
   const handleLogout = async () => {
     setMenuOpen(false);
     setCajaSinCerrar(null);
-    // Si el propio usuario abrió una caja y sigue abierta, no puede cerrar
-    // sesión sin hacer su corte —empleado o admin (2026-10-09)—. El servidor
-    // la busca en CUALQUIER sucursal (`mi_caja_abierta`): un admin puede
-    // abrirla en una y cambiarse a otra. Si la consulta falla, no se bloquea.
+    // Quien abrió una caja que sigue abierta no cierra sesión sin su corte. El
+    // servidor la busca en cualquier sucursal (`mi_caja_abierta`); si falla la
+    // consulta, no se bloquea.
     try {
       const data = await api.get('/caja/actual');
       if (data?.mi_caja_abierta) {
         setCajaSinCerrar(data.mi_caja_abierta);
       } else if (data?.mi_caja_abierta === undefined && data?.abierta
                  && String(data.caja?.usuario_apertura_id) === String(usuario?.id)) {
-        // Servidor de antes, sin `mi_caja_abierta`: solo la sucursal activa.
+        // Sin `mi_caja_abierta` en la respuesta: solo la sucursal activa.
         setCajaSinCerrar({ sucursal: sucursalSlug });
       }
     } catch { /* ignorar */ }
@@ -882,9 +870,8 @@ export default function Layout() {
     navigate('/login');
   };
 
-  // Si su caja está en otra sucursal, se cambia a esa antes de ir al corte.
-  // Con carga completa, como cualquier cambio de sucursal: las pantallas ya
-  // montadas (la propia Caja incluida) no vuelven a pedir sus datos solas.
+  // Si la caja está en otra sucursal, primero se cambia a esa, con carga
+  // completa como cualquier cambio de sucursal.
   const irACaja = () => {
     setConfirmLogout(false);
     if (cajaSinCerrar?.sucursal && cajaSinCerrar.sucursal !== sucursalSlug) {
@@ -910,7 +897,7 @@ export default function Layout() {
 
   const mobileBottomItems = navItems.filter((item) => item.to !== '/inventario');
 
-  // Menú móvil: accesos que no están en la barra inferior (igual que antes).
+  // Menú móvil: los accesos que no están en la barra inferior.
   const menuExtraItems = [
     { label: 'Caja',                icon: Icon.caja,       onClick: () => goTo('/caja') },
     { label: 'Inventario',          icon: Icon.inventario, onClick: () => goTo('/inventario') },
@@ -923,7 +910,7 @@ export default function Layout() {
       : []),
   ];
 
-  // Accesos de navegación que no cupieron en el sidebar (desktop) → modal Menú.
+  // Accesos que no cupieron en el sidebar → modal Menú.
   const [desktopOverflow, setDesktopOverflow] = useState([]);
   const desktopMenuItems = desktopOverflow.map((item) => ({
     label: item.label,
@@ -1007,9 +994,7 @@ export default function Layout() {
               </div>
             )}
             {cajaSinCerrar ? (
-              // Con caja abierta: ir a Caja o cancelar. Nadie sale sin hacer
-              // su corte: el empleado desde el 2026-10-06 y el admin desde el
-              // 2026-10-09 (antes tenía "Cerrar sesión de todos modos").
+              // Con caja abierta: ir a Caja o cancelar (nadie sale sin su corte).
               <div className="space-y-2.5">
                 <button
                   onClick={irACaja}

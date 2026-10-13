@@ -8,7 +8,7 @@ import SalesCard from '../components/SalesCard';
 import CashCutCard from '../components/CashCutCard';
 import MaquinasEnUso from '../components/MaquinasEnUso';
 
-// Icono de notas (info/notes.svg). Hereda el color con currentColor.
+/** Icono de notas; hereda el color con currentColor. */
 const notesIcon = (
   <svg className="w-full h-full scale-90" viewBox="0 0 59 59" fill="none" xmlns="http://www.w3.org/2000/svg">
     <path d="M14.75 14.75C14.75 14.098 15.009 13.4727 15.47 13.0117C15.9311 12.5507 16.5563 12.2917 17.2083 12.2917H41.7917C42.4437 12.2917 43.0689 12.5507 43.53 13.0117C43.991 13.4727 44.25 14.098 44.25 14.75C44.25 15.402 43.991 16.0273 43.53 16.4883C43.0689 16.9493 42.4437 17.2083 41.7917 17.2083H17.2083C16.5563 17.2083 15.9311 16.9493 15.47 16.4883C15.009 16.0273 14.75 15.402 14.75 14.75ZM14.75 24.5833C14.75 23.9313 15.009 23.306 15.47 22.845C15.9311 22.384 16.5563 22.125 17.2083 22.125H41.7917C42.4437 22.125 43.0689 22.384 43.53 22.845C43.991 23.306 44.25 23.9313 44.25 24.5833C44.25 25.2353 43.991 25.8606 43.53 26.3216C43.0689 26.7827 42.4437 27.0417 41.7917 27.0417H17.2083C16.5563 27.0417 15.9311 26.7827 15.47 26.3216C15.009 25.8606 14.75 25.2353 14.75 24.5833ZM17.2083 31.9583C16.5563 31.9583 15.9311 32.2173 15.47 32.6784C15.009 33.1394 14.75 33.7647 14.75 34.4167C14.75 35.0686 15.009 35.6939 15.47 36.155C15.9311 36.616 16.5563 36.875 17.2083 36.875H41.7917C42.4437 36.875 43.0689 36.616 43.53 36.155C43.991 35.6939 44.25 35.0686 44.25 34.4167C44.25 33.7647 43.991 33.1394 43.53 32.6784C43.0689 32.2173 42.4437 31.9583 41.7917 31.9583H17.2083ZM14.75 44.25C14.75 43.598 15.009 42.9727 15.47 42.5117C15.9311 42.0507 16.5563 41.7917 17.2083 41.7917H27.0417C27.6937 41.7917 28.3189 42.0507 28.78 42.5117C29.241 42.9727 29.5 43.598 29.5 44.25C29.5 44.902 29.241 45.5273 28.78 45.9883C28.3189 46.4493 27.6937 46.7083 27.0417 46.7083H17.2083C16.5563 46.7083 15.9311 46.4493 15.47 45.9883C15.009 45.5273 14.75 44.902 14.75 44.25Z" fill="currentColor"/>
@@ -31,12 +31,10 @@ const KpiIcon = {
   deliver: notesIcon,
 };
 
-// Cada cuánto se re-consultan notas, máquinas y ventas en segundo plano.
+/** Cada cuánto se vuelven a consultar notas, máquinas y ventas. */
 const REFRESCO_MS = 15000;
 
-// ¿La fecha cae en el mismo día calendario (hora local) que la referencia?
-// Se usa para que los KPIs de la sección "Hoy" cuenten solo notas del día y se
-// reinicien al cambiar la fecha, igual que "Ingresado hoy" (filtrado en backend).
+/** ¿La fecha cae en el mismo día local que la referencia? (KPIs de "Hoy"). */
 function esDeHoy(fecha, refMs) {
   if (!fecha) return false;
   const d = new Date(fecha);
@@ -48,8 +46,7 @@ function esDeHoy(fecha, refMs) {
 
 export default function Dashboard() {
   const { usuario } = useAuth();
-  // La página Ventas es solo para admins; para empleados la tarjeta "Ingresado
-  // hoy" se muestra sin enlace.
+  // Ventas es solo de admins: para empleados la tarjeta va sin enlace.
   const ventasLink = esAdmin(usuario?.rol) ? '/ventas' : undefined;
   const [notas, setNotas]       = useState([]);
   const [maquinas, setMaquinas] = useState([]);
@@ -57,10 +54,8 @@ export default function Dashboard() {
   const [loading, setLoading]   = useState(true);
   const [now, setNow]           = useState(() => Date.now());
 
-  // Refresco silencioso de los datos que cambian en tiempo real.
-  // No toca `loading` ni muestra errores: los fallos transitorios se ignoran
-  // y se reintenta en el siguiente ciclo. Solo escribe si llegó un arreglo,
-  // para no romper render si la sesión expiró (api redirige y devuelve undefined).
+  // Refresco silencioso: ignora los fallos y reintenta. Solo escribe arreglos
+  // (con sesión expirada api devuelve undefined).
   const refrescarDatos = useCallback(async () => {
     try {
       const [n, m, v] = await Promise.all([
@@ -72,7 +67,7 @@ export default function Dashboard() {
       if (Array.isArray(m)) setMaquinas(m);
       if (v !== undefined)  setVentas(v);
     } catch {
-      // ignorar: se reintenta en el siguiente ciclo de refresco
+      // Se reintenta en el siguiente ciclo.
     }
   }, []);
 
@@ -121,21 +116,14 @@ export default function Dashboard() {
   const notasDeHoy       = notas.filter(n => esDeHoy(n.created_at, now));
   const enUso            = maquinas.filter(m => m.estado === 'en_uso').length;
   const notasPagadas     = notasDeHoy.filter(n => n.estado_pago === 'PAGADO').length;
-  // "Por Cobrar" es la cuenta del AUTOSERVICIO: es ahí donde el cliente se lleva
-  // la máquina antes de pagar y la nota espera su cobro en el mostrador. Las
-  // notas Por Encargo, de Edredón y las ventas de productos no entran aunque
-  // queden pendientes: esas se cobran al entregar, no son dinero esperando caja.
-  // Una nota CANCELADA no se va a cobrar nunca, así que no entra: cancelar no
-  // toca el estado de pago —y una nota ya cobrada ni siquiera se puede cancelar
-  // sin revertir antes el pago—, así que toda cancelada se queda en PENDIENTE y
-  // engordaba el número.
+  // "Por Cobrar": notas de Autoservicio de hoy pendientes de pago (Por Encargo,
+  // Edredón y productos se cobran al entregar). Sin canceladas.
   const notasPorCobrar   = notasDeHoy.filter(
     n => n.tipo_servicio === 'AUTOSERVICIO'
       && n.estado_pago   === 'PENDIENTE'
       && n.estado        !== 'CANCELADA'
   ).length;
-  // "Para Entregar" no se reinicia al día: cuenta todas las notas listas para
-  // entregar (LISTA/PAGADA) sin importar cuándo se crearon, hasta que finalicen.
+  // "Para Entregar" cuenta todas las listas para entregar (LISTA/PAGADA), de cualquier día.
   const paraEntregar     = notas.filter(n => ['LISTA', 'PAGADA'].includes(n.estado)).length;
   const ventasHoy        = ventas?.tarjetas?.total_cobrado ?? 0;
 
@@ -155,8 +143,7 @@ export default function Dashboard() {
       <div className="space-y-4">
         <p className="text-section text-grey">Hoy</p>
 
-        {/* En móvil "Ingresado hoy" va aquí arriba; en desktop vive en la
-            columna izquierda bajo el título "Ventas" (ver más abajo). */}
+        {/* En móvil "Ingresado hoy" va arriba; en escritorio, bajo "Ventas". */}
         <div className="md:hidden">
           <SalesCard total={ventasHoy} label="Ingresado hoy" to={ventasLink} />
         </div>
@@ -198,23 +185,18 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Cuerpo: en desktop, dos columnas (izquierda Ventas + Caja,
-          derecha el monitor de máquinas). En móvil se apila en una sola. */}
+      {/* Escritorio: Ventas y Caja a la izquierda, máquinas a la derecha. Móvil: apilado. */}
       <div className="space-y-16 md:space-y-0 md:grid md:grid-cols-[minmax(0,22rem)_1fr] md:gap-8 md:items-start">
 
-        {/* Columna izquierda. El hueco entre Ventas y Caja usa space-y-10 para
-            igualar el de la columna derecha (Lavadoras a Secadoras) y que la
-            etiqueta Caja quede a la misma altura que Secadoras. */}
+        {/* space-y-10, como la columna derecha: "Caja" queda a la altura de "Secadoras". */}
         <div className="space-y-10">
-          {/* Ventas — solo desktop; en móvil ya se muestra arriba en "Hoy" */}
+          {/* Ventas, solo escritorio (en móvil va arriba). */}
           <div className="hidden md:block space-y-4">
             <p className="text-section text-grey">Ventas</p>
             <SalesCard total={ventasHoy} label="Ingresado hoy" to={ventasLink} />
           </div>
 
-          {/* Caja. La etiqueta y la tarjeta usan space-y-4 (igual que los
-              carruseles de la derecha) para que la tarjeta quede a la misma
-              altura que la de Secadoras. */}
+          {/* space-y-4, como los carruseles, para alinear con Secadoras. */}
           <div className="space-y-4">
             <p className="text-section text-grey">Caja</p>
             <div className="space-y-4">
@@ -223,8 +205,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Columna derecha: carruseles de máquinas por tipo — solo desktop; en
-            móvil el monitor vive en la página Máquinas */}
+        {/* Máquinas por tipo, solo escritorio (en móvil, en la página Máquinas). */}
         <div className="hidden md:block">
           <MaquinasEnUso layout="carousel" />
         </div>

@@ -42,8 +42,7 @@ export default function Maquinas() {
               fill="none" stroke="currentColor" strokeWidth={2}
               strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"
             >
-              {/* En espejo horizontal (2026-10-11): se voltea el dibujo y no el
-                  <svg>, para que el giro de animate-spin no lo deshaga. */}
+              {/* En espejo: se voltea el dibujo y no el <svg>, para que el giro no lo deshaga. */}
               <g transform="matrix(-1 0 0 1 24 0)">
                 <path d="M20 11A8.1 8.1 0 004.5 9M4 5v4h4" />
                 <path d="M4 13a8.1 8.1 0 0015.5 2M20 19v-4h-4" />
@@ -55,8 +54,7 @@ export default function Maquinas() {
 
       <SucursalBar />
 
-      {/* Contenido. El espacio de abajo es para que el botón flotante de
-          nueva nota no tape el Finalizar de la última tarjeta. */}
+      {/* Espacio abajo para que el botón flotante no tape el Finalizar de la última tarjeta. */}
       <div className="max-w-7xl mx-auto px-6 md:px-8 pt-6 pb-28">
         <MaquinasEnUso
           ref={monitorRef}
@@ -66,8 +64,7 @@ export default function Maquinas() {
         />
       </div>
 
-      {/* Crear nota desde aquí, el mismo botón flotante del Dashboard: en el
-          mostrador se pasa de ver las máquinas a hacer la nota del cliente. */}
+      {/* Crear nota, el mismo botón flotante del Dashboard. */}
       <Link
         to="/notas/nueva"
         aria-label="Nueva nota"

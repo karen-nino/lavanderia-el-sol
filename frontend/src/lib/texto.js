@@ -7,9 +7,10 @@ export function capitalizarNombre(s) {
     .join(' ');
 }
 
-// ¿Dos nombres son el mismo, sin importar mayúsculas, acentos ni espacios de
-// más? "  rebeca " y "Rebeca" sí; "Ana" y "Ana López" no. Lo usa el login para
-// elegir solo al usuario cuando se escribe su nombre completo (2026-10-03).
+/**
+ * ¿Son el mismo nombre, sin importar mayúsculas, acentos ni espacios? ("  rebeca "
+ * y "Rebeca" sí; "Ana" y "Ana López" no).
+ */
 export function mismoNombre(a, b) {
   const norm = (s) => String(s ?? '')
     .normalize('NFD').replace(/[̀-ͯ]/g, '')

@@ -1,9 +1,7 @@
-// Los tiempos que ofrece el modelo de una máquina y si hay que preguntar cuál
-// usar al arrancarla (mig. 120). El backend manda `modelo_tiempos` con la
-// máquina; esto es el único lugar donde se decide si el modal sale.
-//
-// Con un solo tiempo no se pregunta aunque el interruptor esté encendido: no
-// hay nada que elegir.
+/**
+ * Tiempos del modelo de una máquina (`modelo_tiempos`) y si hay que preguntar
+ * cuál al arrancar: solo con más de uno.
+ */
 export function tiemposDeMaquina(maquina) {
   const lista = maquina?.modelo_tiempos?.minutos ?? [];
   return lista.filter(n => Number.isInteger(n) && n > 0);

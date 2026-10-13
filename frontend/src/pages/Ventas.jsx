@@ -37,8 +37,7 @@ const fmtFecha = (fecha) => {
   return fechaLocal(fecha).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
 };
 
-// Hora local en formato de 12 horas con am/pm (p. ej. 2:30 p.m.), a partir del
-// timestamp de creación de la nota (created_at).
+/** Hora de 12 h (2:30 p.m.) de la creación de la nota. */
 const fmtHora = (fecha) => {
   if (!fecha) return '—';
   return formatHora12(fecha);
@@ -50,7 +49,7 @@ const fmtDiaSemana = (fecha) => {
   const s = fechaLocal(fecha).toLocaleDateString('es-MX', { weekday: 'long' });
   return s.charAt(0).toUpperCase() + s.slice(1);
 };
-// Versión abreviada (Lun, Mar, Mié, …) para cuando hay poco espacio (mobile).
+/** Día abreviado (Lun, Mar…) para móvil. */
 const fmtDiaSemanaCorto = (fecha) => {
   if (!fecha) return '—';
   return fmtDiaSemana(fecha).slice(0, 3);
@@ -58,11 +57,11 @@ const fmtDiaSemanaCorto = (fecha) => {
 
 const NOTAS_POR_PAGINA = 20;
 
-// Cuántas máquinas se muestran en la celda antes de resumir con "+N" (que abre
-// el modal con la lista completa).
-// Nombre y unidad de un producto en el modal de Productos (mismas reglas que
-// el ticket): el granel líquido lleva "· Granel"; marca y polvo se cuentan
-// por unidad entera, el granel por botella o por medida, la bolsa por pieza.
+/**
+ * Nombre y unidad de un producto en el modal de Productos (como el ticket): el
+ * granel lleva "· Granel"; marca y polvo por unidad, granel por botella o medida,
+ * bolsa por pieza.
+ */
 function nombreProductoVenta(p) {
   return etiquetaProducto(p) + (p.tipo_liquido === 'granel' && !esPolvo(p) ? ' · Granel' : '');
 }
@@ -78,9 +77,10 @@ function unidadProductoVenta(p) {
 
 const MAQUINAS_VISIBLES = 2;
 
-// Forma de pago de una nota con abonos. Si se pagó con más de una forma
-// (efectivo y luego transferencia) dice "Varios" y el detalle está al tocarla;
-// si no, la suya o, si aún debe, la de sus abonos, para que haya qué tocar.
+/**
+ * Forma de pago de una nota: "Varios" si se pagó con más de una (el detalle al
+ * tocarla); si no, la suya o la de sus abonos.
+ */
 const formaPagoDeNota = (nota) => {
   const formas = new Set((nota.abonos ?? []).map(a => a.forma_pago).filter(Boolean));
   if (nota.forma_pago) formas.add(nota.forma_pago);
@@ -153,8 +153,7 @@ function Tarjeta({ titulo, valor, sub, color }) {
 
 function CustomTooltip({ active, payload, label, periodo }) {
   if (!active || !payload?.length) return null;
-  // En la vista anual cada barra es un mes: se muestra "Mes Año" en vez de una
-  // fecha con día (que sería engañosa, siempre el día 1).
+  // En la vista anual cada barra es un mes: "Mes Año".
   const titulo = periodo === 'anio'
     ? `${MESES[fechaLocal(label).getMonth()]} ${fechaLocal(label).getFullYear()}`
     : fmtFecha(label);
@@ -180,8 +179,7 @@ export default function Ventas() {
   const [motivoModal,   setMotivoModal]   = useState(null); // { folio, motivo }
   const [abonosModal,   setAbonosModal]   = useState(null); // { folio, total, abonos }
   const [productosModal, setProductosModal] = useState(null); // { folio, total, productos }
-  // En pantallas angostas (mobile) los nombres de los días se abrevian para que
-  // los 7 quepan sin encimarse en el eje X de la gráfica semanal.
+  // En pantallas angostas los días se abrevian para que quepan los 7.
   const [esAngosto, setEsAngosto] = useState(
     () => typeof window !== 'undefined' && window.matchMedia('(max-width: 640px)').matches
   );
@@ -229,21 +227,19 @@ export default function Ventas() {
     [aniosDisponibles, anioActual]
   );
 
-  // Datos de la gráfica, rellenando con 0 los días sin ventas:
-  //  - "semana": los 7 días de la semana en curso (Lunes a Domingo).
-  //  - "mes": todos los días del mes seleccionado (1 … último).
-  //  - otros períodos: la gráfica tal cual la manda el backend.
-  // Corte de caja → Por concepto (2026-10-10): mismas líneas que el corte de Caja.
+  // Corte de caja → Por concepto: las mismas líneas que el corte de Caja.
   const conceptos = lineasConcepto(data?.corte?.conceptos);
   const sumaConceptos = conceptos.reduce((a, l) => a + l.value, 0);
 
+  // Datos de la gráfica, con 0 los días sin ventas: "semana", los 7 días;
+  // "mes", todos los días del mes; los demás, como los manda el backend.
   const graficaData = useMemo(() => {
     const g = data?.grafica ?? [];
     if (periodo === 'semana') {
       const porFecha = new Map(g.map(d => [ymd(d.fecha), Number(d.total) || 0]));
       const hoy = new Date();
       hoy.setHours(0, 0, 0, 0);
-      // Lunes de esta semana: getDay() da 0=Domingo … 6=Sábado; se retrocede al lunes.
+      // Lunes de esta semana (getDay: 0 = domingo).
       const lunes = new Date(hoy);
       lunes.setDate(hoy.getDate() - ((hoy.getDay() + 6) % 7));
       const dias = [];
@@ -276,7 +272,7 @@ export default function Ventas() {
     }
     if (periodo === 'custom') {
       if (!desde || !hasta) return g;
-      // Todos los días del rango elegido, rellenando con 0 los que no tuvieron ventas.
+      // Todos los días del rango, con 0 los que no tuvieron ventas.
       const porFecha = new Map(g.map(d => [ymd(d.fecha), Number(d.total) || 0]));
       const fin = fechaLocal(hasta);
       const dias = [];
@@ -289,8 +285,7 @@ export default function Ventas() {
     return g;
   }, [data, periodo, anioSel, mesSel, desde, hasta]);
 
-  // Título de la vista semanal con el rango de la semana en curso, p. ej.
-  // "Ingresos del 10 al 16 de Agosto" (si cruza de mes, muestra ambos meses).
+  // "Ingresos del 10 al 16 de Agosto" (con los dos meses si cruza).
   const tituloSemana = useMemo(() => {
     const hoy = new Date();
     hoy.setHours(0, 0, 0, 0);
@@ -305,9 +300,7 @@ export default function Ventas() {
       : `Ingresos del ${lunes.getDate()} de ${mesL} - ${domingo.getDate()} de ${mesD}`;
   }, []);
 
-  // Título del período personalizado con el rango elegido, p. ej.
-  // "Ingresos del 10 de Agosto al 13 de Agosto 2026". Si el rango cruza de año,
-  // muestra el año en ambas fechas.
+  // "Ingresos del 10 de Agosto al 13 de Agosto 2026" (con los dos años si cruza).
   const tituloPersonalizado = useMemo(() => {
     if (!desde || !hasta) return 'Ingresos';
     const d1 = fechaLocal(desde);
@@ -353,7 +346,7 @@ export default function Ventas() {
   const paginaSegura = Math.min(paginaNotas, totalPaginas);
   const notasPagina  = listaNotas.slice((paginaSegura - 1) * NOTAS_POR_PAGINA, paginaSegura * NOTAS_POR_PAGINA);
 
-  // Etiqueta del filtro activo, para mostrarla como subtítulo del encabezado.
+  // Etiqueta del filtro activo para el subtítulo.
   const fmtDiaMes = (s) => {
     if (!s) return '';
     return new Date(`${s}T00:00:00`).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -607,9 +600,8 @@ export default function Ventas() {
                   <XAxis
                     dataKey="fecha"
                     tick={{ fontSize: 11, fill: '#6b7280' }}
-                    // Semana: los 7 días (interval 0). Mes: en pantallas angostas
-                    // se muestra 1 de cada 4 días para que no se encimen; en anchas,
-                    // 1 de cada 2. Otros períodos: densidad automática de Recharts.
+                    // Semana: los 7 días. Mes: uno de cada 4 (angosto) o de cada 2. Otros:
+                    // automático.
                     interval={periodo === 'semana' || periodo === 'anio' ? 0 : periodo === 'mes' ? (esAngosto ? 3 : 1) : undefined}
                     tickFormatter={(v) =>
                       periodo === 'semana'
@@ -627,10 +619,8 @@ export default function Ventas() {
                     tick={{ fontSize: 11, fill: '#6b7280' }}
                     tickFormatter={(v) => `$${v}`}
                     width={60}
-                    // Aire arriba: al menos $1,000 de tope y ~15% de margen sobre
-                    // la barra más alta, redondeado hacia arriba a un paso acorde a
-                    // la magnitud (para dejar aire parejo y números limpios en el
-                    // eje en cualquier escala: día, semana, mes o año).
+                    // Aire arriba: tope mínimo de $1,000 y ~15% sobre la barra más alta,
+                    // redondeado a un paso según la magnitud.
                     domain={[0, (dataMax) => {
                       const conAire = Math.max(1000, dataMax * 1.15);
                       const paso = Math.pow(10, Math.floor(Math.log10(conAire))) / 2;
@@ -638,8 +628,7 @@ export default function Ventas() {
                     }]}
                   />
                   <Tooltip content={<CustomTooltip periodo={periodo} />} />
-                  {/* En "hoy" hay una sola barra: se le da un ancho fijo cómodo
-                      para que no salga tan angosta. Los demás períodos, automático. */}
+                  {/* En "hoy" hay una barra: ancho fijo. */}
                   <Bar dataKey="total" fill="#16a34a" radius={[4, 4, 0, 0]} barSize={periodo === 'hoy' ? 106 : undefined}>
                     {graficaData.map((_, i) => (
                       <Cell key={i} fill={VERDES_BARRA[i % VERDES_BARRA.length]} />
@@ -660,9 +649,8 @@ export default function Ventas() {
               <div className="px-4 pt-3 pb-1">
                 <p className="text-xs font-medium uppercase tracking-wide text-gray-400">Por concepto</p>
               </div>
-              {/* Lo cobrado en el período repartido con las mismas líneas que el
-                  corte de Caja (2026-10-10): efectivo y transferencia, cada pago
-                  el día que entró, así que la suma es el total cobrado. */}
+              {/* Lo cobrado en el período (cada pago el día que entró), repartido como el
+                  corte de Caja: suma el total cobrado. */}
               {conceptos.map((l) => (
                 <div key={l.label} className="flex justify-between px-4 py-3 text-sm text-gray-600">
                   <span>{l.label}</span>
@@ -686,8 +674,7 @@ export default function Ventas() {
                 <span>Transferencia</span>
                 <span>{fmt(data.corte.total_transferencia)}</span>
               </div>
-              {/* Tarjeta ya no se ofrece al cobrar (2026-10-06): el renglón
-                  solo sale si en el período hubo cobros viejos con tarjeta. */}
+              {/* Tarjeta solo si hubo cobros viejos con tarjeta en el período. */}
               {(data.corte.total_tarjeta ?? 0) > 0 && (
                 <div className="flex justify-between px-4 py-3 text-sm text-gray-600">
                   <span>Tarjeta</span>
@@ -698,9 +685,8 @@ export default function Ventas() {
                 <span>TOTAL COBRADO</span>
                 <span className="text-lg">{fmt(data.corte.total_cobrado)}</span>
               </div>
-              {/* Correcciones de forma de pago del período (mig. 102). Van aquí
-                  porque explican por qué el desglose de arriba puede no cuadrar
-                  con lo que se recordaba: el dinero cambió de columna. */}
+              {/* Correcciones de forma de pago del período: explican si el desglose no
+                  cuadra con lo que se recordaba. */}
               {(data.correcciones_pago ?? []).length > 0 && (
                 <div className="px-4 py-3 bg-amber-50 border-t border-amber-100">
                   <p className="text-xs font-semibold text-amber-800 uppercase tracking-wide mb-2">
@@ -722,7 +708,7 @@ export default function Ventas() {
             </div>
           </div>
 
-          {/* Turnos de caja del período, con sus Ingresos y Egresos (2026-10-10). */}
+          {/* Turnos de caja del período, con Ingresos y Egresos. */}
           <TurnosCaja turnos={data.turnos ?? []} />
 
           {/* Lista de notas */}
@@ -880,9 +866,7 @@ export default function Ventas() {
               </button>
             </div>
             {maquinasModal.ciclos.length > 0 ? (
-              // Un renglón por ciclo (2026-10-06), como en Información de uso:
-              // la máquina y lo que vale; abajo, a qué hora arrancó y terminó
-              // y cuánto estuvo encendida.
+              // Un renglón por ciclo: máquina, lo que vale, inicio, fin y minutos.
               <ul className="p-4 space-y-1.5 overflow-y-auto">
                 {maquinasModal.ciclos.map((c, i) => {
                   const detalle = [horarioCiclo(c), fmtEncendidaConTope(c.segundos, c.tope)]
@@ -902,7 +886,7 @@ export default function Ventas() {
                 })}
               </ul>
             ) : (
-              // Notas sin historial de pasadas: el resumen por máquina de antes.
+              // Notas sin historial de vueltas: resumen por máquina.
               <ul className="p-4 space-y-1.5 overflow-y-auto">
                 {maquinasModal.maquinas.map((m, i) => (
                   <li key={i} className="flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-gray-50 text-sm">
@@ -921,9 +905,8 @@ export default function Ventas() {
         </div>
       )}
 
-      {/* Modal: productos de una nota (2026-10-06). Lo que ya va en el precio
-          del servicio (granel y bolsa de Por Encargo) dice "Incluido" y no
-          suma al total de la columna. */}
+      {/* Modal: productos de una nota. Lo que va en el precio del servicio dice
+          "Incluido" y no suma. */}
       {productosModal && (
         <div
           className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
@@ -967,7 +950,7 @@ export default function Ventas() {
         </div>
       )}
 
-      {/* Modal: abonos recibidos de una nota (mig. 121) */}
+      {/* Modal: abonos de una nota */}
       {abonosModal && (
         <div
           className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"

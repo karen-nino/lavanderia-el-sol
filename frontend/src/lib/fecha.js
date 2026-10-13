@@ -1,7 +1,7 @@
-// Formato de hora unificado en toda la app: 12 horas con cero inicial y
-// meridiano en minúsculas sin puntos → "09:05 am", "02:30 pm", "12:00 am".
-// Se usa en-US (que da "09:05 AM") + toLowerCase para lograr ese estilo exacto,
-// que es el elegido por el negocio.
+/**
+ * Hora de 12 h con cero inicial y meridiano en minúsculas: "09:05 am". Se usa
+ * en-US ("09:05 AM") y se pasa a minúsculas.
+ */
 
 export function formatHora12(fecha) {
   if (fecha == null || fecha === '') return '';

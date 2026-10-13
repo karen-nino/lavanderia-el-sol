@@ -10,9 +10,7 @@ const IconoBuscar = (
   </svg>
 );
 
-// Resalta en amarillo lo que se buscó, para que el ojo caiga en el renglón sin
-// releer el artículo entero. Trabaja sobre el texto ya partido para no tener
-// que meter HTML en el contenido del manual.
+/** Resalta en amarillo lo buscado, sobre el texto ya partido (sin HTML en el contenido). */
 function Resaltado({ texto, palabras }) {
   if (palabras.length === 0) return texto;
   const partes = texto.split(
@@ -57,8 +55,7 @@ function Articulo({ art, abierto, onToggle, palabras }) {
 export default function Manual() {
   const navigate = useNavigate();
   const [consulta, setConsulta] = useState('');
-  // Artículos desplegados a mano. Con una búsqueda en curso se ignoran: ahí se
-  // abren todos los resultados, que es lo que se venía a leer.
+  // Artículos abiertos a mano; con búsqueda se abren todos los resultados.
   const [abiertos, setAbiertos] = useState(() => new Set());
   const buscadorRef = useRef(null);
 
@@ -71,11 +68,7 @@ export default function Manual() {
   const total     = contarArticulos(secciones);
 
   // Enlace directo a un artículo (/manual#cobrar-una-nota): se abre y se sube a
-  // él. Sirve para mandarle a alguien la instrucción exacta por chat.
-  //
-  // Se escucha también `hashchange` porque cambiar solo el hash NO recarga la
-  // página: sin esto, a quien ya tuviera el manual abierto el enlace no le
-  // hacía nada.
+  // él. También con `hashchange`, que no recarga la página.
   useEffect(() => {
     let t;
     const abrirDelHash = () => {
@@ -102,8 +95,7 @@ export default function Manual() {
     document.getElementById(`sec-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
-  // En papel el manual sirve más que en el teléfono cuando hay cola, así que
-  // antes de imprimir se abren todos los artículos: uno plegado no se imprime.
+  // Se abren todos los artículos antes de imprimir (plegados no salen).
   const imprimir = () => {
     setAbiertos(new Set(SECCIONES_MANUAL.flatMap(s => s.articulos.map(a => a.id))));
     setTimeout(() => window.print(), 80);
@@ -143,7 +135,7 @@ export default function Manual() {
           </button>
         </div>
 
-        {/* Buscador: pegado bajo la cabecera, siempre a mano al ir bajando. */}
+        {/* Buscador, pegado bajo la cabecera. */}
         <div className="max-w-5xl mx-auto px-6 pb-4 print:hidden">
           <div className="relative">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">{IconoBuscar}</span>

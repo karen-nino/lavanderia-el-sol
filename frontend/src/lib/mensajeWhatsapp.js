@@ -1,20 +1,13 @@
-// El mensaje de WhatsApp que el mostrador le manda al cliente de Por Encargo
-// cuando su ropa ya se procesó (mig. 124).
-//
-// La plantilla se escribe una vez en Ajustes → WhatsApp y lleva COMODINES
-// entre asteriscos que se sustituyen al enviar. Los asteriscos se eligieron
-// porque es lo que ya se teclea sin pensar; que en WhatsApp signifiquen
-// negritas no estorba, porque el comodín se sustituye CON sus asteriscos y
-// desaparecen con él. Una palabra entre asteriscos que no sea un comodín se
-// queda tal cual y WhatsApp la pinta en negritas, que es lo esperable.
-//
-// El nombre del comodín no distingue mayúsculas ni acentos (*Nombre*, *nombre*
-// y *NOMBRE* son el mismo): lo escribe una persona a mano.
+/**
+ * Mensaje de WhatsApp al cliente de Por Encargo cuando su ropa está lista. La
+ * plantilla (Ajustes → WhatsApp) lleva comodines entre asteriscos que se
+ * sustituyen al enviar; otra palabra entre asteriscos queda tal cual (en
+ * negritas). El comodín no distingue mayúsculas ni acentos.
+ */
 
 import { formatHora12 } from './fecha';
 
-// Qué se puede meter en el mensaje. La descripción es la que se enseña en
-// Ajustes, así que vive junto al comodín y no suelta en la pantalla.
+/** Comodines disponibles, con la descripción que se muestra en Ajustes. */
 export const COMODINES_WHATSAPP = [
   { clave: 'Nombre', descripcion: 'El nombre de pila del cliente, sin apellidos' },
   { clave: 'Tiempo', descripcion: 'La hora a la que se levantó la nota' },
@@ -23,10 +16,8 @@ export const COMODINES_WHATSAPP = [
   { clave: 'Horario', descripcion: 'La hora a la que cierra HOY la sucursal, según su horario (7:00 pm)' },
 ];
 
-// Hora de cierre de HOY en la sucursal de la nota (mig. 160), "7:00 pm". El
-// día es el del negocio (America/Mexico_City), no el del equipo. Si ese día no
-// abre o no hay horario capturado, se va en blanco como cualquier dato que
-// falta.
+// Hora de cierre de hoy de la sucursal ("7:00 pm"), con el día del negocio. Si
+// ese día no abre o no hay horario, en blanco.
 const TZ_NEGOCIO = 'America/Mexico_City';
 const DIA_SEMANA = { Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4, Sat: 5, Sun: 6 };
 const diaDeHoy = (ahora) => DIA_SEMANA[
@@ -43,34 +34,25 @@ export function cierreDeHoy(horarioSemana, ahora = new Date()) {
   return hoy?.abierto && hoy.cierra ? hora12(hoy.cierra) : '';
 }
 
-// Solo el nombre de pila: en un WhatsApp se saluda "Hola Ana", no "Hola Ana
-// López" (2026-09-26). Se toma la primera palabra, que es lo único que se
-// puede distinguir con certeza — en "María José García" no hay forma de saber
-// que el nombre son dos palabras, así que sale "María", que sigue saludando
-// bien.
+// Solo la primera palabra del nombre ("Hola Ana").
 const primerNombre = (nombre) => String(nombre ?? '').trim().split(/\s+/)[0] ?? '';
 
-// La clave con la que el cliente recoge su ropa: el número de la nota sin la
-// fecha. El folio es `<id>-<ddmmaa>` ("1796-260926"), y al cliente solo le
-// sirve la primera mitad para decir cuál es su bolsa. Sin folio se cae al id,
-// que es de donde sale ese número.
+// Clave para recoger la ropa: el número del folio sin la fecha ("1796-260926"
+// → "1796"); sin folio, el id.
 const claveDeNota = (nota) => {
   const folio = String(nota?.folio ?? '').trim();
   if (folio) return folio.split('-')[0];
   return nota?.id != null ? String(nota.id) : '';
 };
 
-// Cómo se resuelve cada comodín contra una nota. Añadir uno nuevo es añadirlo
-// aquí y en COMODINES_WHATSAPP; el resto de la pantalla se entera sola.
-// Números de ancho completo (１５４５) para la clave (2026-10-11, a pedido):
-// resaltan en el chat sin depender del formato de WhatsApp. Son caracteres
-// Unicode (U+FF10–FF19), así que se ven igual en cualquier teléfono.
+// Dígitos de ancho completo (U+FF10–FF19) para la clave: resaltan sin depender
+// del formato de WhatsApp.
 const anchos = (texto) => String(texto).replace(/[0-9]/g, (d) => String.fromCharCode(0xFF10 + Number(d)));
 
-// Emoji de tecla (2026-10-11): el dígito + selector de emoji (U+FE0F) + tecla
-// (U+20E3). Lo dibuja como 1️⃣ cualquier teléfono con emojis.
+// Emoji de tecla: dígito + U+FE0F + U+20E3 (1️⃣).
 const emojis = (texto) => String(texto).replace(/[0-9]/g, (d) => `${d}\uFE0F\u20E3`);
 
+// Cómo se resuelve cada comodín. Uno nuevo va aquí y en COMODINES_WHATSAPP.
 const VALORES = {
   nombre:  (nota) => primerNombre(nota?.cliente_nombre),
   tiempo:  (nota) => formatHora12(nota?.created_at),
@@ -83,18 +65,16 @@ const VALORES = {
 const normalizar = (s) =>
   s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
 
-// Sustituye los comodines de la plantilla con los datos de la nota. Un comodín
-// que no existe se deja intacto —con sus asteriscos— en vez de borrarse: si
-// alguien escribió *Direccion* es un error de captura que tiene que verse, no
-// un hueco silencioso en el mensaje que le llega al cliente.
-//
-// Un comodín conocido pero sin dato (una nota sin cliente) se va en blanco: el
-// mensaje no puede decir "*Nombre*" a un cliente de verdad.
-// Comodines que salen SIEMPRE en negritas de WhatsApp (2026-10-11): la clave,
-// para que llame la atención sin tener que acordarse de los asteriscos.
+// Comodines que siempre van en negritas.
 const EN_NEGRITAS = new Set(['clave']);
 
-// `ahora` decide el día de *Horario*; solo las pruebas lo pasan.
+/**
+ * Sustituye los comodines con los datos de la nota. Uno que no existe se deja
+ * con sus asteriscos (un error de captura tiene que verse); uno sin dato va en
+ * blanco.
+ *
+ * @param ahora decide el día de *Horario* (lo pasan las pruebas).
+ */
 export function armarMensajeWhatsapp(plantilla, nota, ahora = new Date()) {
   if (!plantilla) return '';
   const texto = String(plantilla);
@@ -103,19 +83,16 @@ export function armarMensajeWhatsapp(plantilla, nota, ahora = new Date()) {
     const valor = VALORES[clave];
     if (!valor) return completo;
     const v = valor(nota, ahora);
-    // Si la plantilla ya lo rodea con otro par (**Clave**), esos asteriscos
-    // ya ponen las negritas: duplicarlos los dejaría visibles en el chat.
+    // Si ya lo rodea otro par (**Clave**), no se duplican los asteriscos.
     const yaRodeado = texto[pos - 1] === '*' && texto[pos + completo.length] === '*';
     return EN_NEGRITAS.has(clave) && v && !yaRodeado ? `*${v}*` : v;
   });
 }
 
-// ¿La plantilla tiene algo que mandar? Un mensaje en blanco abriría WhatsApp
-// con el chat vacío, que es peor que decir que falta configurarlo.
+/** ¿La plantilla tiene algo? En blanco, WhatsApp abriría el chat vacío. */
 export const hayMensajeWhatsapp = (plantilla) => Boolean(String(plantilla ?? '').trim());
 
-// El número tal como lo quiere wa.me: solo dígitos y con la lada de México si
-// viene un celular de 10 dígitos. Mismo criterio que el envío del ticket.
+/** Número para wa.me: solo dígitos y con lada de México si son 10 (como el ticket). */
 export function telefonoWhatsapp(telefono) {
   const digits = String(telefono ?? '').replace(/\D/g, '');
   if (!digits) return '';

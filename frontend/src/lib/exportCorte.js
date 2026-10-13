@@ -1,20 +1,14 @@
-// Exportación de cortes de caja a CSV (Excel) y a PDF. Ver exportUtils.js para
-// las piezas compartidas (descarga de CSV, ventana de impresión, formatos).
-//
-// La forma de cada `corte` es la que devuelve GET /caja/historial:
-//   { usuario_apertura, usuario_cierre, abierta_at, cerrada_at,
-//     notas_apertura, notas_cierre, monto_inicial, ventas, entradas,
-//     salidas, esperado, contado, diferencia,
-//     movimientos: [{ tipo, concepto, monto, usuario, created_at }] }
-//
-// Las entradas y salidas van con su concepto en todas las exportaciones
-// (2026-10-04): en el CSV como una segunda tabla debajo de los cortes, una fila
-// por movimiento, y en el PDF como tabla.
-//
-// Desde el 2026-10-10 cada turno lleva también sus Ingresos (por máquina,
-// productos, SPE y edredón), Egresos (SPE Debe y gastos) y el Desglose, con las
-// mismas líneas que la pantalla (lib/desgloseCaja.js). Ventas reutiliza estas
-// piezas para sus propias exportaciones.
+/**
+ * Cortes de caja a CSV y PDF (piezas compartidas en exportUtils.js). Cada
+ * `corte` tiene la forma de GET /caja/historial:
+ *   { usuario_apertura, usuario_cierre, abierta_at, cerrada_at,
+ *     notas_apertura, notas_cierre, monto_inicial, ventas, entradas,
+ *     salidas, esperado, contado, diferencia,
+ *     movimientos: [{ tipo, concepto, monto, usuario, created_at }] }
+ *
+ * Cada turno lleva Ingresos, Egresos y Desglose (lib/desgloseCaja.js) y sus
+ * entradas y salidas. Ventas reusa estas piezas.
+ */
 
 import { formatHora12 } from './fecha';
 import { desgloseCaja } from './desgloseCaja';
@@ -23,9 +17,8 @@ import {
   descargarCSV, imprimirDocumento,
 } from './exportUtils';
 
-// El turno que sigue abierto también se exporta (2026-10-04, para el filtro
-// Hoy): no tiene cierre, así que su fecha es la de apertura y donde iría la
-// hora de cierre dice "en curso".
+// El turno abierto también se exporta: su fecha es la de apertura y el cierre
+// dice "en curso".
 const fechaCorte = (c) => c.cerrada_at ?? c.abierta_at;
 const horaCierre = (c) => (c.en_curso ? 'en curso' : formatHora12(c.cerrada_at));
 const quienCerro = (c) => (c.en_curso ? 'En curso' : (c.usuario_cierre || '—'));
@@ -47,8 +40,8 @@ const ENCABEZADOS_CSV = [
   'Estado', 'Nota apertura', 'Nota cierre',
 ];
 
-// Segunda tabla del CSV: una fila por entrada o salida, con el corte al que
-// pertenece. La salida va en negativo para que en Excel se pueda sumar.
+// Segunda tabla del CSV: una fila por movimiento con su corte; la salida en
+// negativo para sumar en Excel.
 const ENCABEZADOS_MOVS = ['Corte', 'Fecha', 'Hora', 'Tipo', 'Concepto', 'Registró', 'Monto'];
 
 const filasMovimientos = (c) => (c.movimientos ?? []).map((m) => [
@@ -83,13 +76,13 @@ const filaCSV = (c) => [
   num(c.entradas),
   num(c.salidas),
   num(desgloseCaja(c).totalIngresos),
-  // Sin dato en los cortes anteriores a la mig. 153.
+  // Sin dato en cortes viejos.
   c.spe_debe != null ? num(c.spe_debe) : '',
   num(desgloseCaja(c).totalEgresos),
   num(c.esperado),
   c.contado != null ? num(c.contado) : '',
   c.diferencia != null ? num(c.diferencia) : '',
-  // Reparto de lo contado (mig. 151); vacío en cortes de antes.
+  // Reparto de lo contado; vacío en cortes que no lo tienen.
   c.caja_final != null ? num(c.caja_final) : '',
   c.sobre != null ? num(c.sobre) : '',
   estadoCorte(c),
@@ -97,13 +90,11 @@ const filaCSV = (c) => [
   c.notas_cierre ?? '',
 ];
 
-// La tabla de cortes del CSV: encabezados y una fila por corte, más la tabla
-// de entradas y salidas debajo. Ventas la reutiliza para sus turnos.
+/** Tabla de cortes del CSV (una fila por corte) y debajo la de movimientos. Ventas la reusa. */
 export function tablaCortesCSV(cortes) {
   const lista = Array.isArray(cortes) ? cortes : [cortes];
   const movs = lista.flatMap(filasMovimientos);
-  // Tarjeta ya no se ofrece al cobrar (2026-10-06): su columna solo sale si
-  // algún corte exportado trae cobros viejos con tarjeta.
+  // La columna de tarjeta solo si algún corte trae cobros con tarjeta.
   const conTarjeta = lista.some((c) => (c.ventas_desglose?.tarjeta ?? 0) > 0);
   const iTarjeta = ENCABEZADOS_CSV.indexOf('Tarjeta');
   const sinTarjeta = (fila) => fila.filter((_, i) => i !== iTarjeta);
@@ -157,9 +148,8 @@ const tablaMovimientos = (c) => {
     </table>`;
 };
 
-// Una tabla de Ingresos, Egresos o Desglose con su renglón de total. `aparte`
-// ({ titulo, lineas }) son renglones informativos que no se suman (Cómo se
-// cobró), con su subtítulo; el total va hasta abajo.
+// Tabla de Ingresos, Egresos o Desglose con su total. `aparte` ({ titulo,
+// lineas }): renglones informativos que no suman (Cómo se cobró).
 const filaLinea = (l) => `
         <tr><td>${esc(l.label)}${l.nota ? ` <span class="nota">(${esc(l.nota)})</span>` : ''}</td>
           <td class="r">${l.sign}${fmtMoneda(l.value)}</td></tr>`;
@@ -173,8 +163,7 @@ const tablaLineas = (titulo, lineas, totalLabel, total, aparte = null) => `
       </tbody>
     </table>`;
 
-// Bloque detallado de un corte (encabezado + Ingresos, Egresos y Desglose +
-// conteo + firmas + entradas y salidas). Ventas lo reutiliza por turno.
+/** Detalle de un corte: encabezado, recuadros, conteo, firmas y movimientos. Ventas lo reusa. */
 export const bloqueDetalle = (c) => {
   const d = desgloseCaja(c);
   return `
@@ -206,9 +195,7 @@ export const bloqueDetalle = (c) => {
   </section>`;
 };
 
-// Con varios cortes, después de la tabla resumen: el detalle completo de cada
-// uno (Ingresos, Egresos, Desglose, notas, entradas y salidas), para que
-// ninguno quede fuera.
+// Con varios cortes, después del resumen, el detalle de cada uno.
 const detallePorCorte = (cortes) => `
     <p class="seccion">Detalle por turno</p>
     ${cortes.map(bloqueDetalle).join('')}`;
@@ -257,7 +244,7 @@ const tablaResumen = (cortes) => {
     </table>`;
 };
 
-// Abre una ventana con el/los corte(s) y lanza la impresión (Guardar como PDF).
+/** Abre una ventana con los cortes y lanza la impresión (Guardar como PDF). */
 export function imprimirCortes(cortes, { titulo, subtitulo } = {}) {
   const lista = Array.isArray(cortes) ? cortes : [cortes];
   if (lista.length === 0) return;

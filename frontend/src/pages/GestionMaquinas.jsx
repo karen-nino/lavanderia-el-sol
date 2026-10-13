@@ -9,26 +9,22 @@ import ConfirmacionModal from '../components/ConfirmacionModal';
 import Selector from '../components/Selector';
 import { ES_DEMO } from '../lib/entorno';
 
-// En la demo pública no hay Sonoff (2026-10-08, a pedido): todo es simulado,
-// así que se esconden la pastilla, el ID del dispositivo y el Encender a mano.
+/** En la demo no hay Sonoff: se esconden la pastilla, el ID y el Encender. */
 const CON_SONOFF = !ES_DEMO;
 
 const ESTADO_CFG = {
   disponible:    { label: 'Disponible',    cls: 'bg-green-100 text-green-700', clsActive: 'bg-green-600 text-white', dot: 'bg-green-500' },
-  // "Reservada": libre pero apartada por otra nota abierta (no es un estado real
-  // de la máquina, se deriva de `reservada` que devuelve el backend).
+  // "Reservada": libre pero asignada a otra nota abierta (lo deriva el backend).
   reservada:     { label: 'Reservada',     cls: 'bg-amber-100 text-amber-700', clsActive: 'bg-amber-500 text-white', dot: 'bg-amber-500' },
   en_uso:        { label: 'En uso',        cls: 'bg-blue-100 text-blue-700',   clsActive: 'bg-blue-600 text-white',  dot: 'bg-blue-500'  },
   mantenimiento: { label: 'Mantenimiento', cls: 'bg-red-100 text-red-700',     clsActive: 'bg-red-600 text-white',   dot: 'bg-red-500'   },
 };
 
-// Enlace con el Sonoff, para la pastilla de la tarjeta. Se muestra en Gestión
-// (y no solo en Máquinas en uso) porque es aquí donde se asignan los Device ID:
-// sin esto habría que abrir el modal de cada máquina para saber cuáles faltan.
-//
-// 'sin_probar' (mig. 103) es el enlace recién capturado que todavía nadie ha
-// verificado: antes se pintaba igual que un fallo, y eso mandaba a revisar el
-// cableado de una máquina a la que solo le faltaba apretar "Probar".
+/**
+ * Pastilla del enlace Sonoff en la tarjeta: aquí se asignan los Device ID, así
+ * que se ve de un vistazo cuáles faltan. 'sin_probar' = capturado pero sin
+ * verificar.
+ */
 const SONOFF_CFG = {
   enlazada:    { label: 'Sonoff OK',    cls: 'bg-green-50 text-green-700 border-green-200', dot: 'bg-green-500' },
   error:       { label: 'Sin conexión', cls: 'bg-red-50 text-red-700 border-red-200',       dot: 'bg-red-500'   },
@@ -36,13 +32,9 @@ const SONOFF_CFG = {
   sin_enlazar: { label: 'Sin Sonoff',   cls: 'bg-gray-50 text-gray-500 border-gray-200',    dot: 'bg-gray-400'  },
 };
 
-// Qué decir bajo la pastilla. El backend guarda el motivo del último fallo en
-// sonoff_detalle (mig. 103); cuando no hay fallo, el texto explica igual qué
-// significa el estado, para que nadie tenga que adivinar ni apretar "Probar"
-// solo para enterarse.
+/** Texto bajo la pastilla: el motivo del último fallo o qué significa el estado. */
 const sonoffExplicacion = (m) => {
-  // Ocupada sin nota: alguien la prendió a mano, con el botón o desde eWeLink
-  // (mig. 104). Sin decirlo, la tarjeta muestra "En uso" y nadie sabe de quién.
+  // Ocupada sin nota: alguien la prendió a mano (botón o eWeLink).
   if (m.encendida_manual_at && !m.en_uso_folio) {
     return 'Encendida a mano, sin nota. Queda ocupada hasta que la apagues.';
   }
@@ -88,7 +80,7 @@ const descomponerTipo = (tipoDb) => {
   return { tipo: 'secadora', tamano: 'mediana' };
 };
 
-// Ícono de lavadora (info/washing-machine.svg). El color se hereda con currentColor.
+/** Ícono de lavadora; el color se hereda con currentColor. */
 function WashingMachineIcon({ className = '' }) {
   return (
     <svg className={className} viewBox="0 0 66 64" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -126,8 +118,7 @@ export default function GestionMaquinas() {
   const [conectando, setConectando] = useState(false);
   const [accionesMenuId, setAccionesMenuId] = useState(null);
   const accionesMenuRef = useRef(null);
-  // Catálogos de marcas (mig. 106) y modelos (mig. 117). Se administran en
-  // Ajustes → Máquinas; aquí solo se eligen.
+  // Catálogos de marcas y modelos (se administran en Ajustes → Máquinas).
   const [marcas, setMarcas] = useState([]);
   const [modelos, setModelos] = useState([]);
 
@@ -138,24 +129,15 @@ export default function GestionMaquinas() {
       .finally(() => setLoading(false));
   }, []);
 
-  // Los catálogos son del negocio entero, no de la sucursal. Si fallan no se
-  // rompe nada: los selects se quedan sin opciones y la máquina se guarda sin
-  // marca ni modelo, que son datos opcionales.
-  //
-  // Los modelos se traen todos de una vez y se filtran por la marca elegida:
-  // son pocos y así cambiar de marca no pide otra vuelta al servidor.
+  // Catálogos del negocio. Los modelos se traen todos y se filtran por marca.
+  // Si fallan, los selectores quedan vacíos.
   useEffect(() => {
     api.get('/etiquetas/marcas-maquina').then(setMarcas).catch(() => setMarcas([]));
     api.get('/etiquetas/modelos-maquina').then(setModelos).catch(() => setModelos([]));
   }, []);
 
-  // La cuenta de eWeLink es lo que hace que los Sonoff obedezcan: sin ella el
-  // enlace de cada máquina falla y desde la tarjeta no se ve por qué. Solo le
-  // sirve al admin, que es quien puede conectarla.
-  // useCallback para poder declararla como dependencia de los efectos que la
-  // usan: sin él se recreaba en cada render y había que omitirla de las listas,
-  // que es lo que avisaba react-hooks/exhaustive-deps. Solo cambia con esAdmin,
-  // así que los efectos se vuelven a ejecutar en los mismos casos que antes.
+  // Estado de la cuenta de eWeLink (sin ella ningún Sonoff obedece). Solo para
+  // admin; useCallback para poder ponerla en las dependencias de los efectos.
   const cargarCuentaSonoff = useCallback(() => {
     if (!esAdmin) return;
     api.get('/ewelink/estado').then(setCuentaSonoff).catch(() => setCuentaSonoff(null));
@@ -163,16 +145,11 @@ export default function GestionMaquinas() {
 
   useEffect(() => { cargarCuentaSonoff(); }, [cargarCuentaSonoff]);
 
-  // El apagado de emergencia solo se ofrece cuando el backend manda órdenes de
-  // verdad: en simulación respondería "modo simulación" y quien lo aprieta
-  // creería que cortó una máquina que sigue girando. Lo decide el servidor
-  // (`/ewelink/estado`) y no una bandera escrita a mano, para que el botón
-  // aparezca solo con reactivar el driver, sin depender de acordarse de venir
-  // a editar este archivo.
+  // El apagado de emergencia solo con el driver real (lo dice /ewelink/estado):
+  // en simulación se creería que se cortó una máquina que sigue girando.
   const mostrarApagadoEmergencia = Boolean(cuentaSonoff) && !cuentaSonoff.simulado;
 
-  // Autorizar ocurre en otra pestaña (la de eWeLink), así que al regresar a
-  // esta se vuelve a preguntar en vez de obligar a recargar la página.
+  // Autorizar ocurre en la pestaña de eWeLink: al volver se pregunta de nuevo.
   useEffect(() => {
     if (!esAdmin) return;
     const onFocus = () => cargarCuentaSonoff();
@@ -219,18 +196,14 @@ export default function GestionMaquinas() {
 
   const cerrarModal = () => setModalOpen(false);
 
-  // Cuando una acción de Sonoff falla, el backend responde con la máquina ya
-  // actualizada (sonoff_estado='error' y el motivo en sonoff_detalle). Si no se
-  // recoge aquí, la tarjeta se queda mostrando el estado viejo hasta recargar
-  // la página, que es justo lo que el detalle guardado venía a evitar.
+  // Si falla una acción de Sonoff, el backend manda la máquina con su error:
+  // se recoge para que la tarjeta lo muestre sin recargar.
   const refrescarDesdeError = (err, id) => {
     if (err?.data?.maquina) setMaquinas(prev => prev.map(m => m.id === id ? err.data.maquina : m));
   };
 
-  // Prueba el enlace con el Sonoff guardado (no cambia el estado operativo).
-  // Requiere que la máquina ya exista con su device_id guardado. `id` explícito
-  // para poder probar justo después de guardar, cuando el estado aún no se
-  // refrescó.
+  // Prueba el enlace guardado (no cambia la máquina). `id` explícito para probar
+  // justo después de guardar.
   const handleProbar = async (id = editandoId) => {
     if (id == null) return;
     setProbando(true);
@@ -238,7 +211,7 @@ export default function GestionMaquinas() {
     try {
       const r = await api.post(`/maquinas/${id}/probar-sonoff`, {});
       if (r?.maquina) setMaquinas(prev => prev.map(m => m.id === id ? r.maquina : m));
-      // El servidor avisa cuando corre en simulación: ahí un "ok" no prueba nada.
+      // En simulación un "ok" no prueba nada.
       setProbarMsg(r?.simulado
         ? { tipo: 'sim', texto: r.message }
         : { tipo: 'ok', texto: r?.message ?? 'Sonoff enlazado correctamente.' });
@@ -250,9 +223,8 @@ export default function GestionMaquinas() {
     }
   };
 
-  // Conectar la cuenta: el servidor arma la URL firmada y se abre en otra
-  // pestaña. No se puede redirigir desde aquí porque la petición lleva nuestro
-  // token en un header y una navegación lo perdería.
+  // Conectar la cuenta: se abre en otra pestaña la URL firmada del servidor (una
+  // redirección perdería el token del header).
   const handleConectarSonoff = async () => {
     setConectando(true);
     try {
@@ -265,7 +237,7 @@ export default function GestionMaquinas() {
     }
   };
 
-  // La advertencia la pone el modal, igual que en encender y eliminar.
+  // La advertencia la pone el modal.
   const handleDesconectarSonoff = async () => {
     setDesconectando(true);
     try {
@@ -278,9 +250,7 @@ export default function GestionMaquinas() {
     }
   };
 
-  // Apagado de emergencia. Sin confirmación a propósito: se usa cuando la
-  // máquina está andando y no debería, y ahí un diálogo de más es tiempo
-  // perdido. Apagar de sobra no rompe nada; dejarla andando sí.
+  // Apagado de emergencia, sin confirmación: apagar de más no rompe nada.
   const handleApagarYa = async () => {
     if (editandoId == null) return;
     setApagando(true);
@@ -299,16 +269,12 @@ export default function GestionMaquinas() {
     }
   };
 
-  // Las marcas desactivadas no se ofrecen, pero la de la máquina que se edita
-  // se conserva aunque ya no esté en el catálogo (ver el select).
+  // Marcas activas, más la de la máquina que se edita aunque ya no esté.
   const marcasVisibles = marcas.filter(m => m.activo);
   const marcaFueraDeLista = Boolean(form.marca) && !marcasVisibles.some(m => m.nombre === form.marca);
 
-  // Los modelos que le quedan a esta máquina: los de su marca, y solo los de
-  // su mismo tipo y tamaño (mig. 118) — una secadora no se ofrece los modelos
-  // de lavadora. Mismo criterio que la marca: desactivado no se ofrece, pero el
-  // de esta máquina se conserva. La máquina guarda el NOMBRE del modelo, así
-  // que la lista se cruza por nombre.
+  // Modelos de la marca, del mismo tipo y tamaño; desactivados no, salvo el de
+  // esta máquina. Se cruzan por nombre.
   const modelosVisibles = form.marca
     ? modelos.filter(mo => (
         mo.marca === form.marca && mo.activo
@@ -316,20 +282,16 @@ export default function GestionMaquinas() {
       ))
     : [];
   const modeloFueraDeLista = Boolean(form.modelo) && !modelosVisibles.some(mo => mo.nombre === form.modelo);
-  // Sin nada que elegir el desplegable va apagado: o no hay marca, o la marca
-  // no tiene modelos. Se deja abierto si la máquina ya trae modelo, para que
-  // editar cualquier otra cosa no se lo borre en silencio.
+  // Apagado si no hay nada que elegir, salvo que la máquina ya traiga modelo.
   const modeloBloqueado = modelosVisibles.length === 0 && !form.modelo;
-  // El modelo elegido trabaja con fichas (mig. 149): no lleva Sonoff.
+  // Modelo de fichas: no lleva Sonoff.
   const modeloDeFichas = Boolean(form.modelo) && modelos.some(mo => (
     mo.marca === form.marca && mo.nombre === form.modelo && mo.solo_fichas
   ));
 
   const handleChange = e => setForm(f => ({ ...f, [e.target.name]: e.target.value }));
 
-  // Cambiar de marca, de tipo o de tamaño limpia el modelo: un modelo es de
-  // una marca y de una máquina concreta, así que el que estaba elegido puede
-  // dejar de corresponder.
+  // Cambiar marca, tipo o tamaño limpia el modelo.
   const handleCambioConModelo = e =>
     setForm(f => ({ ...f, [e.target.name]: e.target.value, modelo: '' }));
 
@@ -343,8 +305,7 @@ export default function GestionMaquinas() {
         ...rest,
         nombre: capitalizar(rest.nombre),
         tipo: tipoCompuesto(tipo, tamano),
-        // Tamaño también como columna propia: en lavadoras espeja el tipo; en
-        // secadoras es la única forma de guardarlo.
+        // Tamaño como columna: en lavadoras espeja el tipo; en secadoras es su único lugar.
         tamano,
       };
       const deviceIdNuevo = (rest.device_id ?? '').trim();
@@ -352,8 +313,7 @@ export default function GestionMaquinas() {
       let hayDeviceIdNuevo = false;
 
       if (editandoId != null) {
-        // Solo tocamos el estado cuando el toggle de mantenimiento implica un
-        // cambio; así no interrumpimos una máquina que esté en uso.
+        // El estado solo se toca si cambia el mantenimiento (no se interrumpe una en uso).
         const original = maquinas.find(m => m.id === editandoId);
         if (mantenimiento) {
           payload.estado = 'mantenimiento';
@@ -370,9 +330,7 @@ export default function GestionMaquinas() {
         hayDeviceIdNuevo = deviceIdNuevo !== '';
       }
 
-      // Si se acaba de asignar (o cambiar) el Sonoff, se prueba solo y el modal
-      // sigue abierto con el resultado: antes había que guardar, cerrar y volver
-      // a entrar para poder probar.
+      // Con un Sonoff recién asignado se prueba solo y el modal muestra el resultado.
       if (hayDeviceIdNuevo) {
         setEditandoId(idResultante);
         await handleProbar(idResultante);
@@ -386,9 +344,7 @@ export default function GestionMaquinas() {
     }
   };
 
-  // Encendido manual desde el menú de la tarjeta. La advertencia la pone el
-  // modal: el equipo arranca de verdad y se queda andando, que no es lo que
-  // hace la prueba física (esa apaga sola a los segundos).
+  // Encendido manual (el modal advierte que se queda andando).
   const encenderMaquina = async (m) => {
     setEncendiendo(m.id);
     try {
@@ -415,9 +371,7 @@ export default function GestionMaquinas() {
     }
   };
 
-  // Qué dice la advertencia de cada acción. Vive aquí y no dentro del modal
-  // porque es de estas dos acciones, no del componente, y porque el texto
-  // depende de cómo esté la máquina ahora mismo.
+  // Advertencia de cada acción, según cómo esté la máquina ahora.
   const avisoDe = ({ tipo, maquina }) => tipo === 'desconectar' ? {
     tono: 'peligro',
     titulo: 'Olvidar la cuenta de eWeLink',
@@ -444,8 +398,7 @@ export default function GestionMaquinas() {
     titulo: `Eliminar ${maquina.nombre}`,
     mensaje: 'La máquina desaparece del sistema y esto no se puede deshacer.',
     puntos: [
-      // No es una suposición: `nota_cargas` apunta a la máquina con ON DELETE
-      // SET NULL, así que al borrarla las cargas se quedan sin ella.
+      // nota_cargas apunta a la máquina con ON DELETE SET NULL.
       'Las notas que la usaron, incluso las ya cerradas, dejan de decir en qué máquina se lavó.',
       maquina.estado === 'en_uso'
         && 'Ahora mismo está en uso: la nota que la tiene se queda sin máquina asignada.',
@@ -461,14 +414,11 @@ export default function GestionMaquinas() {
 
   const filtradas = filtrarPorEstado(maquinas, filtro);
 
-  // Avance del enlace con los Sonoff: al configurarlos por primera vez es fácil
-  // saltarse una máquina, y sin este conteo no hay forma de notarlo.
-  // Las de fichas (mig. 149) no llevan Sonoff: no son una máquina por enlazar.
+  // Avance del enlace con los Sonoff (las de fichas no cuentan).
   const conControl   = maquinas.filter(m => !m.solo_fichas);
   const conDeviceId  = conControl.filter(m => m.device_id).length;
   const confirmadas  = conControl.filter(m => m.sonoff_estado === 'enlazada').length;
-  // Las que están fallando se cuentan aparte: es lo que hay que atender hoy,
-  // y en una lista larga se pierden entre las que sí responden.
+  // Las que fallan, aparte: es lo que hay que atender.
   const conFalla     = conControl.filter(m => m.device_id && m.sonoff_estado === 'error').length;
 
   if (loading) {
@@ -517,10 +467,7 @@ export default function GestionMaquinas() {
       {/* Contenido */}
       <div className="max-w-7xl mx-auto px-6 md:px-8 py-4 space-y-4">
 
-      {/* Cuenta de eWeLink. Sin ella ningún Sonoff responde, y el error que se
-          ve al probar una máquina ("no respondió") no deja adivinar que lo que
-          falta es autorizar la cuenta. Se oculta en simulación, donde no hay
-          cuenta que conectar. */}
+      {/* Cuenta de eWeLink: sin ella ningún Sonoff responde. Oculta en simulación. */}
       {esAdmin && CON_SONOFF && cuentaSonoff && !cuentaSonoff.simulado && (
         cuentaSonoff.conectada ? (
           <div className="flex items-center justify-between gap-3 bg-white border border-gray-200 rounded-lg px-4 py-2.5">
@@ -624,29 +571,18 @@ export default function GestionMaquinas() {
             const cfg = ESTADO_CFG[estadoVisual(m)] ?? ESTADO_CFG.disponible;
             const { tipo, tamano } = descomponerTipo(m.tipo);
             const tipoLabel = tipo === 'lavadora' ? 'Lavadora' : 'Secadora';
-            // El tamaño se enseña también en las secadoras: desde que se
-            // separaron en Mediana y Jumbo tienen precio y tiempo propios, y
-            // es lo que decide qué modelos puede elegir la máquina. Ocultarlo
-            // dejaba invisible una secadora con el tamaño equivocado.
+            // El tamaño también en secadoras: decide su precio, su tiempo y sus modelos.
             const tamanoVal = m.tamano ?? tamano;
             const tamanoLabel = tamanoVal
               ? (tamanoVal === 'jumbo' ? 'Jumbo' : 'Mediana')
               : null;
             const borrando = eliminando === m.id;
             const prendiendo = encendiendo === m.id;
-            // La pastilla de Sonoff se muestra SIEMPRE: esta es la pantalla
-            // donde se enlazan, así que ver cuáles siguen sin Sonoff es la
-            // información útil, no ruido. (Antes se ocultaba mientras ninguna
-            // máquina tuviera ID; eso dejaba el dato invisible justo cuando
-            // faltaban todas, y ahora este es su único sitio en la app.)
-            // Salvo la de un modelo de fichas (mig. 149): no lleva Sonoff, así
-            // que "Sin Sonoff" no es algo que falte, y ni pastilla ni texto.
+            // La pastilla siempre (aquí se enlazan), salvo en modelos de fichas.
             const sonoffCfg = m.solo_fichas ? null
               : SONOFF_CFG[m.device_id ? (m.sonoff_estado ?? 'sin_probar') : 'sin_enlazar'];
 
-            // Toda la tarjeta abre la información de uso de la máquina (igual que
-            // la tarjeta de empleados abre su desempeño). Solo Admin, y con
-            // soporte de teclado (Enter/Espacio).
+            // La tarjeta abre la información de uso (solo admin, también con teclado).
             const verUso = () => navigate(`/gestion-maquinas/${m.id}/uso`);
             return (
               <div
@@ -695,7 +631,7 @@ export default function GestionMaquinas() {
                         </svg>
                         Editar
                       </button>
-                      {/* La de fichas no tiene Sonoff que encender (mig. 149). */}
+                      {/* La de fichas no tiene Sonoff que encender. */}
                       {CON_SONOFF && !m.solo_fichas && (
                       <button
                         type="button"
@@ -770,8 +706,7 @@ export default function GestionMaquinas() {
                         <span className={`w-1.5 h-1.5 rounded-full ${sonoffCfg.dot}`} />
                         {sonoffCfg.label}
                       </span>
-                      {/* El porqué, en texto: la pastilla sola no distingue una
-                          cuenta de eWeLink desconectada de un Sonoff sin luz. */}
+                      {/* El porqué, en texto: la pastilla sola no distingue la causa. */}
                       {sonoffExplicacion(m) && (
                         <p className="mt-1 text-[11px] leading-snug text-gray-500">{sonoffExplicacion(m)}</p>
                       )}
@@ -844,9 +779,7 @@ export default function GestionMaquinas() {
                 />
               </div>
 
-              {/* La secadora también se da de alta con tamaño: su precio de
-                  secado y su tiempo de ciclo van separados en Mediana y Jumbo,
-                  igual que los de la lavadora. */}
+              {/* La secadora también lleva tamaño (precio y tiempo propios). */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
                   Tamaño <span className="text-red-500">*</span>
@@ -873,22 +806,13 @@ export default function GestionMaquinas() {
                 />
               </div>
 
-              {/* Marca y modelo: los dos son catálogos elegibles (migs. 106 y
-                  117) y se administran en Ajustes → Máquinas. Son el dato que
-                  se repite entre máquinas y sobre el que se puede razonar —
-                  entre otras cosas, cuánto dura de verdad un ciclo.
-
-                  La marca es obligatoria: sin ella no hay modelo que elegir, y
-                  sin modelo no hay dónde configurarle el tiempo de ciclo. El
-                  renglón vacío es un "elige", no una opción que se pueda
-                  guardar: `required` no deja pasar el formulario con él. */}
+              {/* Marca y modelo, de los catálogos de Ajustes → Máquinas. La marca es
+                  obligatoria: sin ella no hay modelo ni tiempo de ciclo. */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
                   Marca <span className="text-red-500">*</span>
                 </label>
-                {/* Una marca desactivada o escrita antes del catálogo sigue
-                    apareciendo mientras sea la de esta máquina: si no,
-                    editarla por cualquier otra cosa se la borraría sin aviso. */}
+                {/* La marca de esta máquina se ofrece aunque ya no esté en el catálogo. */}
                 <Selector
                   claseCampo={INPUT_CLS}
                   requerido
@@ -904,14 +828,8 @@ export default function GestionMaquinas() {
               </div>
 
               <div>
-                {/* Obligatorio, porque el tiempo del ciclo se configura por
-                    modelo: una máquina sin él se cronometra a ciegas.
-
-                    `required` sobre un select apagado no se valida, y eso es
-                    justo lo que hace falta: cuando la marca todavía no tiene
-                    modelos de este tipo no hay nada que elegir y la máquina se
-                    puede guardar igual (si no, no se le podría ni corregir el
-                    Sonoff). En cuanto hay de dónde elegir, hay que elegir. */}
+                {/* Obligatorio (el tiempo se configura por modelo), salvo si la marca aún
+                    no tiene modelos de este tipo: un select apagado no se valida. */}
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
                   Modelo <span className="text-red-500">*</span>
                 </label>
@@ -937,10 +855,8 @@ export default function GestionMaquinas() {
                 </p>
               </div>
 
-              {/* Enlace con el Sonoff (eWeLink). Vacío = máquina sin control
-                  remoto; el sistema la sigue manejando de forma manual. */}
-              {/* El modelo de fichas no lleva Sonoff: el campo solo sigue a
-                  la vista si quedó uno enlazado, para poder quitarlo. */}
+              {/* Sonoff (eWeLink). Vacío = sin control remoto. */}
+              {/* En un modelo de fichas solo se muestra si quedó uno enlazado, para quitarlo. */}
               {CON_SONOFF && (!modeloDeFichas || form.device_id.trim() !== '') && (<>
               <div>
                 {modeloDeFichas && (
@@ -971,9 +887,7 @@ export default function GestionMaquinas() {
                       >
                         {probando ? 'Probando…' : 'Probar enlace'}
                       </button>
-                      {/* Apagar SIEMPRE está disponible, incluso con la máquina
-                          en uso: es el botón al que se corre cuando algo quedó
-                          andando y no debería. */}
+                      {/* Apagar siempre está disponible, también en uso. */}
                       {mostrarApagadoEmergencia && (
                         <button
                           type="button" onClick={handleApagarYa} disabled={apagando}

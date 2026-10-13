@@ -4,22 +4,16 @@ function fmtMonto(n) {
   return n != null ? `$${Number(n).toFixed(2)}` : '—';
 }
 
-// Modal ÚNICO de cobro (2026-09-26). Antes eran dos —"Abonar" y "Liquidar"—,
-// y en el mostrador son el mismo gesto: recibir dinero. La única diferencia es
-// si lo que trae el cliente alcanza para todo, y eso lo dice el importe, no un
-// botón distinto. Aquí viene puesto el saldo completo, que es el caso normal
-// (liquidar de un toque); bajarlo deja la nota abonada y debiendo el resto.
-//
-// Con saldo 0 no hay importe que teclear —no se puede abonar $0— y el modal se
-// queda en confirmar el cobro y su forma, como hacía Liquidar.
-//
-// `cajaAbierta === false`: desde el 2026-10-08 sin caja abierta no se recibe
-// dinero (el backend responde 409 CAJA_CERRADA), así que el aviso ofrece
-// abrirla y el botón espera. Liquidar con saldo $0 no mueve dinero y sigue
-// permitido.
-//
-// También lo abre Nueva Nota al elegir "Sí" en Pago anticipado de Por Encargo
-// (2026-10-03): la nota aún no existe, así que va sin folio y con su título.
+/**
+ * Modal de cobro. Trae el saldo completo (liquidar de un toque); con menos, la
+ * nota queda abonada. Con saldo 0 solo confirma la forma de pago.
+ *
+ * Con `cajaAbierta === false` no se recibe dinero (el backend responde 409
+ * CAJA_CERRADA): el aviso ofrece abrirla. Liquidar en $0 sí se permite.
+ *
+ * Nueva Nota también lo usa para el pago anticipado de Por Encargo (sin folio,
+ * con su título).
+ */
 export default function ModalCobrar({ saldo, folio, titulo = 'Cobrar nota', monto, onMonto, formaPago, onFormaPago,
                        onCancelar, onConfirmar, loading, error, cajaAbierta, onAbrirCaja,
                        abonado = 0, total }) {
@@ -28,8 +22,7 @@ export default function ModalCobrar({ saldo, folio, titulo = 'Cobrar nota', mont
   const montoOk = Number.isFinite(importe) && importe > 0 && importe <= saldo + 1e-9;
   const sinCaja = cajaAbierta === false && !sinSaldo;
   const valido = (sinSaldo || montoOk) && !sinCaja;
-  // Lo que pasa al confirmar, dicho antes de confirmar: es lo que antes
-  // elegías al escoger entre los dos botones.
+  // Qué pasará al confirmar, dicho antes.
   const liquida = sinSaldo || (montoOk && importe >= saldo - 1e-9);
   const restante = montoOk ? saldo - importe : 0;
   return (
@@ -40,10 +33,7 @@ export default function ModalCobrar({ saldo, folio, titulo = 'Cobrar nota', mont
           {folio && <p className="text-sm text-gray-500">Nota {folio}</p>}
         </div>
 
-        {/* El monto es lo que el empleado tiene que cobrar: va en grande y
-            aparte, no escondido dentro del texto. Con abonos no es el total de
-            la nota sino lo que falta; el total se dice debajo para que se
-            entienda el número grande (mig. 121). */}
+        {/* El monto a cobrar en grande; con abonos es lo que falta, con el total debajo. */}
         <div className="rounded-2xl bg-light-blue border-2 border-blue/30 px-5 py-4 text-center">
           <p className="text-xs font-semibold text-blue-700 uppercase tracking-wide">
             {abonado > 0 ? 'Falta por cobrar' : 'Total'}
@@ -104,8 +94,7 @@ export default function ModalCobrar({ saldo, folio, titulo = 'Cobrar nota', mont
           </div>
         )}
 
-        {/* Mismos botones que el cobro de Nueva Nota: el empleado elige la
-            forma de pago en el mismo gesto en las dos pantallas. */}
+        {/* Los mismos botones de forma de pago que Nueva Nota. */}
         <div className="space-y-2">
           <p className="text-sm font-semibold text-gray-900">Método de pago:</p>
           <div className="grid grid-cols-2 gap-3">

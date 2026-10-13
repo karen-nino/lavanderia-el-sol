@@ -1,7 +1,7 @@
-// Utilidades compartidas para exportar a CSV (Excel) y a PDF (vía la impresión
-// del navegador). Sin dependencias: el CSV se descarga como Blob y el PDF se
-// arma en una ventana nueva con HTML propio y se manda a imprimir.
-// Lo usan exportCorte.js (cortes de caja) y exportVentas.js (reporte de ventas).
+/**
+ * Piezas compartidas para exportar a CSV (Blob descargado) y PDF (ventana con
+ * HTML propio que se manda a imprimir). Sin dependencias.
+ */
 
 import { formatHora12 } from './fecha';
 

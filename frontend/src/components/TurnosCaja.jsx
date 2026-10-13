@@ -4,10 +4,11 @@ import { desgloseCaja } from '../lib/desgloseCaja';
 import { formatHora12 } from '../lib/fecha';
 import { fmtMoneda as fmt, fechaLarga } from '../lib/exportUtils';
 
-// Turnos de caja del período en Ventas (2026-10-10): una tarjeta por turno con
-// su Ingresos, Egresos y Esperado, y el detalle completo (los mismos recuadros
-// del corte) al desplegarla. `turnos` viene de /ventas/resumen, con la forma
-// de /caja/historial.
+/**
+ * Turnos de caja del período en Ventas: una tarjeta por turno con Ingresos,
+ * Egresos y Esperado, y al desplegarla los recuadros del corte. `turnos` viene
+ * de /ventas/resumen con la forma de /caja/historial.
+ */
 
 function TarjetaTurno({ t }) {
   const [abierto, setAbierto] = useState(false);
@@ -25,8 +26,7 @@ function TarjetaTurno({ t }) {
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="text-sm font-semibold text-gray-800 truncate">{fechaLarga(t.abierta_at)}</p>
-            {/* Quién trabajó el turno: quien lo abrió, que es quien responde por
-                el cajón (la caja va por turnos). */}
+            {/* Quien abrió el turno, que responde por el cajón. */}
             <p className="text-sm font-semibold text-gray-800 mt-0.5 truncate">{t.usuario_apertura || '—'}</p>
             <p className="text-xs text-gray-500 mt-0.5">
               {horario}{t.cierre_automatico ? ' · cerrado por el sistema' : ''}
@@ -48,9 +48,7 @@ function TarjetaTurno({ t }) {
           <span className="text-right text-gray-700">−{fmt(d.totalEgresos)}</span>
           <span className="text-gray-500">{t.en_curso ? 'Esperado hasta ahora' : 'Esperado en caja'}</span>
           <span className="text-right text-gray-700">{fmt(d.esperado)}</span>
-          {/* Lo que quedó en el cajón y lo que se apartó al cerrar (mig. 151).
-              Sin dato en el turno abierto, en el cierre automático y en los
-              cortes de antes: "—". */}
+          {/* Caja final y sobre; "—" si el turno no los tiene (abierto o cierre automático). */}
           <span className="font-semibold text-gray-800">Caja final</span>
           <span className="text-right font-semibold text-gray-900">{t.caja_final != null ? fmt(t.caja_final) : '—'}</span>
           <span className="font-semibold text-gray-800">Sobre</span>

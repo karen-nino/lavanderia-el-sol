@@ -17,10 +17,10 @@ const ChevronIcon = (
   </svg>
 );
 
-// Pantalla completa que un admin ve al iniciar sesión para elegir a qué
-// sucursal quiere entrar. La monta SucursalGate cuando el usuario es admin
-// (incluido el admin_main) y todavía no tiene una sucursal activa. Al elegir,
-// fija la sucursal sin recargar y el gate deja pasar al panel.
+/**
+ * Pantalla para que un admin elija sucursal al iniciar sesión (la monta
+ * SucursalGate). Al elegir, se fija sin recargar y se pasa al panel.
+ */
 export default function SeleccionarSucursal() {
   const { setSucursalActiva, logout } = useAuth();
   const [sucursales, setSucursales] = useState([]);

@@ -22,8 +22,7 @@ function fmtMonto(n) {
   return n != null ? `$${Number(n).toFixed(2)}` : '—';
 }
 
-// Lo único que el cliente ve de una carga Por Encargo: su tamaño ("Chico").
-// En edredones no hay tamaño de carga, se usa el del edredón.
+/** Lo que el cliente ve de una carga Por Encargo: su tamaño (o el del edredón). */
 function tamanoCargaTxt(cg) {
   if (String(cg.tipo_prenda ?? '').toUpperCase() === 'EDREDON') {
     return cg.tamano_edredon ? `Edredón · ${cg.tamano_edredon}` : 'Edredón';
@@ -31,26 +30,21 @@ function tamanoCargaTxt(cg) {
   return TAMANO_CARGA_LABEL[cg.tamano] ?? null;
 }
 
-// Cómo se nombra el renglón del ticket. En Autoservicio cada carga ES una
-// máquina —así se captura y así lo llama el mostrador (2026-09-25)—; en los
-// demás servicios sigue siendo una carga.
+/** Nombre del renglón: en Autoservicio "Máquina", en los demás "Carga". */
 const etiquetaCarga = (cg, tipoServicio) =>
   `${tipoServicio === 'AUTOSERVICIO' ? 'Máquina' : 'Carga'} ${cg.orden}`;
 
-// Costo real de la carga: máquinas + productos + ajuste.
+/** Costo real de la carga: máquinas + productos + ajuste. */
 function costoDeCarga(cg) {
   const prods = (cg.productos ?? []).reduce((s, p) => s + Number(p.subtotal ?? 0), 0);
   return Number(cg.precio_lavadora) + Number(cg.precio_secadora)
     + Number(cg.ajuste ?? 0) + prods;
 }
 
-// Abonos vivos de la nota (mig. 121). Los revertidos no cuentan: ese dinero
-// volvió. Solo se imprimen si hay alguno — una nota sin abonos se ve como
-// siempre (2026-09-25).
-//
-// Y en una nota YA LIQUIDADA tampoco: ahí no queda saldo que explicar —da igual
-// si se pagó de una o abonando— y el ticket ya dice que está cobrada. Los
-// abonos son para el ticket de la nota que todavía debe.
+/**
+ * Abonos vivos de la nota, solo si todavía debe (una nota liquidada no tiene
+ * saldo que explicar).
+ */
 function abonosDeNota(nota) {
   if (nota.estado_pago === 'PAGADO') return [];
   return (nota.abonos ?? []).filter(a => a.revertido_at == null);
@@ -59,19 +53,21 @@ function totalAbonado(nota) {
   return abonosDeNota(nota).reduce((s, a) => s + Number(a.monto), 0);
 }
 
-// Productos de MARCA de la carga. Se venden por UNIDAD —el cliente se lleva el
-// envase—, así que se cobran encima del precio del servicio y se listan aparte.
-// El granel (por medida) y la bolsa sí van servidos dentro del servicio.
+/**
+ * Productos que se venden por unidad (marca y polvo): se cobran encima del
+ * servicio y se listan aparte; el granel y la bolsa van dentro.
+ */
 function marcaDeCarga(cg) {
   return (cg.productos ?? [])
     .filter(seVendePorUnidad)
     .reduce((s, p) => s + Number(p.subtotal ?? 0), 0);
 }
 
-// Lo que el cliente paga por la carga. En Por Encargo con tope el precio ES el
-// precio del servicio (el granel y la bolsa van dentro), más los productos de
-// marca; el ajuste manual va aparte. Sin tope, y en los demás tipos de
-// servicio, se cobra el costo real.
+/**
+ * Lo que el cliente paga por la carga: en Por Encargo con precio de servicio,
+ * ese precio más lo que se vende por unidad (el ajuste va aparte); si no, el
+ * costo real.
+ */
 function precioDeCarga(cg, esEncargo) {
   if (esEncargo && cg.tope_carga != null) {
     return Number(cg.tope_carga) + Number(cg.ajuste ?? 0) + marcaDeCarga(cg);
@@ -79,12 +75,12 @@ function precioDeCarga(cg, esEncargo) {
   return costoDeCarga(cg);
 }
 
-// Unidad de venta de un producto en texto ("2 botellas" / "3 medidas").
+/** Unidad de un producto en texto ("2 botellas", "3 medidas"). */
 function unidadProdTxt(p) {
   const n = Number(p.cantidad);
   if (p.unidad === 'pieza') return n === 1 ? 'pieza' : 'piezas';
   if (p.unidad === 'botella') {
-    // Marca y polvo se cuentan por unidad entera; el granel líquido, por botella.
+    // Marca y polvo, por unidad; el granel líquido, por botella.
     if (seVendePorUnidad(p)) return n === 1 ? 'unidad' : 'unidades';
     return n === 1 ? 'botella' : 'botellas';
   }
@@ -94,9 +90,7 @@ function nombreProd(p) {
   return etiquetaProducto(p) + (p.tipo_liquido === 'granel' && !esPolvo(p) ? ' · Granel' : '');
 }
 
-// En el ticket las fechas van como en un recibo impreso: 04/09/2026, y la hora
-// de 24 h (14:08). En el resto de la app se siguen viendo como siempre
-// ("04 sep 2026, 02:08 pm"); aquí manda el formato del papel.
+/** Fecha como en un recibo impreso: 04/09/2026 14:08 (24 h). */
 function fmtFecha(iso) {
   if (!iso) return '—';
   return new Date(iso).toLocaleDateString('es-MX', {
@@ -106,21 +100,18 @@ function fmtFecha(iso) {
 
 function fmtFechaHora(iso) {
   if (!iso) return '—';
-  // hourCycle 'h23' y no `hour12: false`: este último puede imprimir la
-  // medianoche como 24:00 en vez de 00:00.
+  // hourCycle 'h23' y no hour12: false, que puede imprimir 24:00.
   const hora = new Date(iso).toLocaleTimeString('es-MX', {
     hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
   });
   return `${fmtFecha(iso)} ${hora}`;
 }
 
-// Fila del ticket: etiqueta a la izquierda, valor a la derecha. Estilo recibo.
-// El recibo imita un ticket de caja impreso: monoespaciada, mayúsculas,
-// separadores de guiones y columnas alineadas. La fuente es la del sistema
-// (`font-mono`) a propósito: el PNG que se manda por WhatsApp se rasteriza con
-// `skipFonts: true`, así que una fuente web saldría cambiada en la imagen.
+// El recibo imita un ticket de caja: monoespaciado, mayúsculas, guiones y
+// columnas alineadas. La fuente es la del sistema (`font-mono`): el PNG se
+// rasteriza con skipFonts y una fuente web saldría cambiada.
 
-// Renglón de dos columnas: rótulo a la izquierda, dato pegado a la derecha.
+/** Renglón de dos columnas: rótulo a la izquierda, dato a la derecha. */
 function Linea({ label, value, fuerte }) {
   return (
     <div className="flex items-baseline justify-between gap-3">
@@ -130,13 +121,12 @@ function Linea({ label, value, fuerte }) {
   );
 }
 
-// Corte de guiones entre bloques, como el del papel.
+/** Línea de guiones entre bloques. */
 function Corte() {
   return <div className="my-2 border-t border-dashed border-black/70" />;
 }
 
-// La hilera de asteriscos que cierra el total en los tickets de tienda. Se
-// recorta al ancho del papel en vez de saltar de renglón.
+/** Hilera de asteriscos que cierra el total, recortada al ancho del papel. */
 function Asteriscos() {
   return (
     <p className="my-2 overflow-hidden whitespace-nowrap text-center leading-none" aria-hidden="true">
@@ -145,12 +135,10 @@ function Asteriscos() {
   );
 }
 
-// Construye el texto plano del ticket que se envía por WhatsApp. Refleja el
-// mismo desglose que se ve en pantalla (cargas, máquinas, productos).
+/** Texto plano del ticket para WhatsApp, con el mismo desglose que el recibo. */
 function armarTextoTicket(nota, rfc, notaPie) {
   const L = ['*Lavandería El Sol*'];
-  // Misma cabecera que el recibo impreso: dirección de la sucursal y luego el
-  // R.F.C. (que sale tal cual se capturó en Ajustes, es texto libre).
+  // Misma cabecera que el recibo: dirección de la sucursal y R.F.C. (texto libre).
   if (nota.sucursal_direccion) L.push(nota.sucursal_direccion);
   if (rfc) L.push(rfc);
   L.push(`Nota: ${nota.folio ?? `#${nota.id}`}`);
@@ -159,17 +147,15 @@ function armarTextoTicket(nota, rfc, notaPie) {
     const apellido = nota.cliente_apellido ? ` ${nota.cliente_apellido}` : '';
     L.push(`Cliente: ${nota.cliente_nombre}${apellido}`);
   }
-  // Por Encargo se cobra la carga completa: el cliente solo ve tamaño y costo.
-  // El tipo no se repite arriba: cada línea del desglose ya lo nombra.
+  // En Por Encargo el tipo no se repite: cada línea del desglose lo nombra.
   const esEncargo = nota.tipo_servicio === 'POR_ENCARGO';
   if (!esEncargo) {
     L.push(`Tipo: ${BADGE_TIPO_SERVICIO[nota.tipo_servicio] ?? nota.tipo_servicio}`);
   }
   L.push(`Método de pago: ${formaPagoLabel(nota.forma_pago) || 'Pendiente'}`);
 
-  // Vuelca las líneas de una carga (máquinas, productos, ajuste) al arreglo L.
-  // En Autoservicio no lleva encabezado (2026-09-25): cada máquina es una línea
-  // suelta con su precio, que es justo lo que el cliente pagó.
+  // Líneas de una carga (máquinas, productos y ajuste). En Autoservicio sin
+  // encabezado: cada máquina es una línea con su precio.
   const volcarCarga = cg => {
     const conEncabezado = nota.tipo_servicio !== 'AUTOSERVICIO';
     if (conEncabezado) L.push(`${etiquetaCarga(cg, nota.tipo_servicio)}:`);
@@ -177,7 +163,7 @@ function armarTextoTicket(nota, rfc, notaPie) {
     maquinasDeCarga(cg, nota.tipo_servicio).forEach(m => {
       L.push(`${vineta}1 x ${m.nombre}${m.tipo ? ` (${m.tipo})` : ''} — ${fmtMonto(m.precio)}`);
     });
-    // Las medidas son información interna: no se listan en el ticket.
+    // Las medidas son internas: no salen en el ticket.
     (cg.productos ?? []).filter(p => p.unidad !== 'medida')
       .sort((a, b) => ordenProducto(a) - ordenProducto(b)).forEach(p => {
       const monto = p.es_por_medida && Number(p.subtotal) === 0 ? 'Incluido' : fmtMonto(p.subtotal);
@@ -188,25 +174,20 @@ function armarTextoTicket(nota, rfc, notaPie) {
     }
   };
 
-  // Mismo criterio que la vista: las cargas que se quedaron sin nada que cobrar
-  // no se listan.
+  // Las cargas sin nada que cobrar no se listan (como en el recibo).
   const cargas      = (nota.cargas ?? []).filter(cg => cargaVisibleEnTicket(cg, nota.tipo_servicio));
-  // En Autoservicio todas las máquinas van en una sola lista (2026-09-25): que
-  // una se agregara después es cosa del mostrador, no algo que el cliente
-  // tenga que leer. En los demás servicios el bloque aparte sí dice algo: la
-  // nota creció después de que se llevara su primer ticket.
+  // En Autoservicio todas las máquinas van en una lista; en los demás, lo
+  // agregado después va en un bloque aparte.
   const unaSolaLista = nota.tipo_servicio === 'AUTOSERVICIO';
   const originales  = unaSolaLista ? cargas : cargas.filter(cg => !cg.es_adicional);
   const adicionales = unaSolaLista ? []     : cargas.filter(cg => cg.es_adicional);
 
-  // En Por Encargo el bloque es la lista de servicios cobrados (una línea por
-  // carga); en los demás tipos, el desglose carga por carga.
+  // Por Encargo: una línea por servicio cobrado; los demás, carga por carga.
   const volcarBloque = lista => {
     if (esEncargo) {
       lista.forEach(cg => {
         const tam = tamanoCargaTxt(cg);
-        // El servicio va sin los productos de marca: esos se venden por unidad
-        // y llevan su propia línea, para que el total se explique solo.
+        // Sin los productos de marca: llevan su propia línea.
         L.push(`1 x Servicio por encargo${tam ? ` · ${tam}` : ''}`
              + ` — ${fmtMonto(precioDeCarga(cg, true) - marcaDeCarga(cg))}`);
         (cg.productos ?? []).filter(seVendePorUnidad).forEach(p => {
@@ -227,9 +208,8 @@ function armarTextoTicket(nota, rfc, notaPie) {
     volcarBloque(adicionales);
   }
 
-  // Mismo criterio que el recibo (prodsNota): en Por Encargo el granel y las
-  // bolsas sueltos los paga el servicio y el total no los cobra; listarlos con
-  // su importe hacía que el desglose sumara más que el total.
+  // Como el recibo (prodsNota): en Por Encargo el granel y las bolsas sueltos
+  // los paga el servicio y no se listan.
   const productos = (nota.productos ?? []).filter(p => p.unidad !== 'medida'
       && (!esEncargo || seVendePorUnidad(p)))
     .sort((a, b) => ordenProducto(a) - ordenProducto(b));
@@ -246,7 +226,7 @@ function armarTextoTicket(nota, rfc, notaPie) {
   }
 
   L.push('', `*Total: ${fmtMonto(nota.precio_total)}*`);
-  // Lo abonado y lo que resta: el cliente se lleva la cuenta de lo que ya pagó.
+  // Lo abonado y lo que resta.
   const abonos = abonosDeNota(nota);
   if (abonos.length > 0) {
     abonos.forEach(ab => {
@@ -266,23 +246,19 @@ export default function TicketNota() {
   const navigate = useNavigate();
 
   const [nota, setNota]       = useState(null);
-  // Datos del negocio que se imprimen en el ticket (Ajustes): el R.F.C. en el
-  // encabezado y la nota en letra chica al pie. Vacíos, no se muestran.
+  // R.F.C. (encabezado) y notas al pie (Ajustes); vacíos no se muestran.
   const [rfcNegocio, setRfcNegocio] = useState('');
-  // Hay una nota por tipo de servicio: lo que le sirve al cliente que lava él
-  // mismo no es lo que le sirve al que deja su ropa a cargo del negocio.
+  // Una nota al pie por tipo de servicio.
   const [notasPie, setNotasPie] = useState({ autoservicio: '', encargo: '', productos: '' });
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState('');
-  // Autoservicio es de mostrador (sin cliente): el empleado captura aquí el
-  // teléfono para enviar el ticket por WhatsApp.
+  // Teléfono capturado a mano para mandar el ticket (sin cliente).
   const [telefonoManual, setTelefonoManual] = useState('');
   // El recibo que se convierte en imagen para mandar por WhatsApp.
   const reciboRef = useRef(null);
   const [enviando, setEnviando] = useState(false);
   const [avisoEnvio, setAvisoEnvio] = useState('');
-  // Autoservicio: el teléfono se pide en un modal al apretar WhatsApp, no en
-  // un campo suelto de la pantalla.
+  // Sin cliente, el teléfono se pide en un modal al tocar WhatsApp.
   const [pidiendoTelefono, setPidiendoTelefono] = useState(false);
 
   const notaPie = notaAlPieDeTicket(nota?.tipo_servicio, notasPie);
@@ -305,7 +281,7 @@ export default function TicketNota() {
       .then(data => {
         if (!activo) return;
         setNota(data);
-        // Precargar el teléfono ya guardado en la nota (si lo hay).
+        // El teléfono ya guardado en la nota, si lo hay.
         if (data?.telefono) setTelefonoManual(String(data.telefono));
       })
       .catch(err => { if (activo) setError(err.message); })
@@ -313,7 +289,7 @@ export default function TicketNota() {
     return () => { activo = false; };
   }, [id]);
 
-  // Guarda el teléfono capturado en la nota (best-effort; no bloquea el envío).
+  // Guarda el teléfono en la nota (sin bloquear el envío).
   async function guardarTelefonoEnNota() {
     const digits = String(telefonoManual || '').replace(/\D/g, '');
     if (nota?.cliente_telefono || digits === String(nota?.telefono ?? '')) return;
@@ -323,30 +299,25 @@ export default function TicketNota() {
     } catch { /* no bloquear por esto */ }
   }
 
-  // Teléfono a usar: el del cliente (Por Encargo) o el capturado a mano
-  // (Autoservicio, que es de mostrador).
+  // El del cliente o el capturado a mano.
   const telefonoDestino = nota?.cliente_telefono || telefonoManual;
   const telefonoDigits  = String(telefonoDestino || '').replace(/\D/g, '');
   const puedeEnviar     = telefonoDigits.length >= 10;
-  // Sin cliente (Autoservicio, de mostrador) no hay a quién mandarle: primero
-  // se pregunta el número.
+  // Sin cliente, primero se pide el número.
   const pideTelefono    = !nota?.cliente_telefono;
 
-  // Lo que hacen los dos botones de WhatsApp (el de la cabecera y el del
-  // final): en Por Encargo manda directo; en Autoservicio abre el modal.
+  // Los dos botones de WhatsApp: con cliente manda directo; sin él, abre el modal.
   function pedirEnvio() {
     if (enviando) return;
     if (pideTelefono) { setAvisoEnvio(''); setPidiendoTelefono(true); return; }
     enviarPorWhatsapp();
   }
 
-  // Convierte el recibo de la pantalla en un PNG (x2 para que se lea bien al
-  // ampliarlo en el celular).
+  // El recibo como PNG, a escala 2 para que se lea al ampliarlo.
   async function ticketComoPng() {
     const nodo = reciboRef.current;
     if (!nodo) return null;
-    // skipFonts: la hoja de Google Fonts es de otro origen y no se puede leer
-    // para embeberla (SecurityError). El texto sale con la fuente ya cargada.
+    // skipFonts: la hoja de Google Fonts es de otro origen (SecurityError).
     const blob = await toBlob(nodo, {
       pixelRatio: 2, backgroundColor: '#ffffff', cacheBust: true, skipFonts: true,
     });
@@ -354,11 +325,9 @@ export default function TicketNota() {
     return new File([blob], `ticket-${nota.folio ?? nota.id}.png`, { type: 'image/png' });
   }
 
-  // Manda el ticket como imagen. En celular se abre la hoja de compartir con el
-  // PNG ya adjunto y el empleado elige el chat del cliente en WhatsApp (mandar
-  // una imagen a un número por wa.me no es posible: ese enlace solo lleva
-  // texto). En escritorio, donde no hay hoja de compartir, se descarga el PNG
-  // para adjuntarlo a mano y se abre el chat del cliente con el ticket en texto.
+  // Manda el ticket como imagen. En el celular abre la hoja de compartir con el
+  // PNG (wa.me no lleva imágenes). En escritorio descarga el PNG y abre el chat
+  // con el ticket en texto.
   async function enviarPorWhatsapp() {
     if (!puedeEnviar || enviando) return;
     setPidiendoTelefono(false);
@@ -411,35 +380,25 @@ export default function TicketNota() {
 
   const cargas      = nota.cargas ?? [];
   const productos   = [...(nota.productos ?? [])].sort((a, b) => ordenProducto(a) - ordenProducto(b));
-  // Los productos de la nota que sí se imprimen: las medidas son información
-  // interna y no salen en el ticket.
-  //
-  // Y en POR ENCARGO tampoco sale lo que se SIRVE dentro del servicio —el granel
-  // y las bolsas—: eso ya lo paga su precio, así que imprimirlo con su importe
-  // sumaría al ojo del cliente algo que el total no cobra. Los de MARCA, que se
-  // venden por unidad, sí se imprimen.
+  // Productos que se imprimen: sin medidas, y en Por Encargo solo lo que se vende
+  // por unidad (el granel y las bolsas los paga el servicio).
   const prodsNota   = productos.filter(p =>
     p.unidad !== 'medida'
     && (nota.tipo_servicio !== 'POR_ENCARGO' || seVendePorUnidad(p)));
-  // Cargas creadas al dar de alta la nota (originales) vs. las agregadas
-  // después (adicionales), para mostrarlas en bloques separados.
+  // Cargas del alta (originales) y las agregadas después (adicionales).
   const visibles    = cargas.filter(cg => cargaVisibleEnTicket(cg, nota.tipo_servicio));
-  // Autoservicio lista todas sus máquinas juntas, sin el bloque "ADICIONAL":
-  // ahí agregar una máquina es parte del servicio, no un añadido posterior.
+  // Autoservicio no usa el bloque "ADICIONAL".
   const unaSolaLista = nota.tipo_servicio === 'AUTOSERVICIO';
   const originales  = unaSolaLista ? visibles : visibles.filter(cg => !cg.es_adicional);
   const adicionales = unaSolaLista ? []       : visibles.filter(cg => cg.es_adicional);
   const esEncargo   = nota.tipo_servicio === 'POR_ENCARGO';
 
-  // Bloque de cargas. Por Encargo se cobra la carga completa (máquinas y
-  // productos van dentro del precio): al cliente solo se le
-  // muestra el servicio con su tamaño y su costo, una línea por carga.
+  // Por Encargo: una línea por servicio con su tamaño y su precio.
   const renderBloqueCargas = lista => (
     esEncargo
       ? lista.map(cg => {
           const tam = tamanoCargaTxt(cg);
-          // El jabón de granel, el suavizante y la bolsa van dentro del precio
-          // del servicio. Los de MARCA se venden por unidad: su propio renglón.
+          // Los de marca, en su propio renglón.
           const marca = (cg.productos ?? []).filter(seVendePorUnidad);
           return (
             <div key={cg.id} className="space-y-1">
@@ -467,8 +426,7 @@ export default function TicketNota() {
       : lista.map(renderCarga)
   );
 
-  // Render de una carga del recibo: encabezado con su total y el detalle de
-  // máquinas, productos y ajuste. Se reusa para el bloque original y el adicional.
+  // Una carga: encabezado con su total y detalle de máquinas, productos y ajuste.
   const renderCarga = cg => {
     const maquinas   = maquinasDeCarga(cg, nota.tipo_servicio);
     const prods      = [...(cg.productos ?? [])].sort((a, b) => ordenProducto(a) - ordenProducto(b));
@@ -476,8 +434,7 @@ export default function TicketNota() {
 
     return (
       <div key={cg.id} className="space-y-1">
-        {/* En Autoservicio la máquina ES el renglón (2026-09-25): no lleva
-            encabezado propio, se lista como una línea más con su importe. */}
+        {/* En Autoservicio la máquina es el renglón: sin encabezado. */}
         {nota.tipo_servicio !== 'AUTOSERVICIO' && (
           <div className="flex items-baseline justify-between gap-2 font-bold">
             <span className="uppercase whitespace-nowrap">{etiquetaCarga(cg, nota.tipo_servicio)}</span>
@@ -494,7 +451,7 @@ export default function TicketNota() {
             <span className="whitespace-nowrap">{fmtMonto(m.precio)}</span>
           </div>
         ))}
-        {/* Las medidas son información interna: no se muestran en el ticket. */}
+        {/* Las medidas son internas. */}
         {prods.filter(p => p.unidad !== 'medida').map(p => (
           <div key={p.id} className="flex items-baseline justify-between gap-2">
             <span className="flex-1">
@@ -534,8 +491,7 @@ export default function TicketNota() {
             </button>
             <h1 className="text-xl font-bold text-gray-900 leading-tight">Ticket</h1>
           </div>
-          {/* Atajo arriba para mandar el ticket: hace lo mismo que el botón
-              grande del final de la pantalla, sin tener que bajar. */}
+          {/* Atajo para mandar el ticket, igual que el botón del final. */}
           <div className="flex items-center gap-1 flex-shrink-0">
             <button
               onClick={pedirEnvio}
@@ -556,12 +512,9 @@ export default function TicketNota() {
       <div className="max-w-2xl mx-auto px-6 py-6 space-y-6">
 
         {/* Recibo (es lo que se manda por WhatsApp como imagen) */}
-        {/* El recibo: imita un ticket de caja impreso (ver los auxiliares de
-            arriba). Angosto como el papel térmico, y es este mismo nodo el que
-            se rasteriza para mandarlo por WhatsApp. */}
-        {/* El centrado va FUERA del nodo que se rasteriza: un `mx-auto` en el
-            propio recibo desplaza el contenido dentro del lienzo del PNG y el
-            ticket sale cortado por la derecha (sin los importes). */}
+        {/* Angosto como el papel térmico; este nodo es el que se rasteriza. */}
+        {/* El centrado va fuera del nodo que se rasteriza: dentro, el PNG sale
+            cortado por la derecha. */}
         <div className="mx-auto w-full max-w-[20rem]">
         <div
           ref={reciboRef}
@@ -570,23 +523,19 @@ export default function TicketNota() {
           {/* Encabezado del negocio */}
           <div className="text-center mb-5">
             <p className="text-sm font-bold tracking-[0.15em]">LAVANDERÍA EL SOL</p>
-            {/* Dirección de la sucursal DONDE SE HIZO la nota (no la del
-                negocio): con varias sucursales, el ticket tiene que decir a
-                cuál volver. Se omite si esa sucursal no la tiene capturada. */}
+            {/* Dirección de la sucursal donde se hizo la nota (si la tiene). */}
             {nota.sucursal_direccion && (
               <p className="mt-1">{nota.sucursal_direccion.toUpperCase()}</p>
             )}
-            {/* El R.F.C. sale tal cual se capturó en Ajustes (es texto libre). */}
+            {/* El R.F.C. tal cual se capturó. */}
             {rfcNegocio && <p className="mt-1">R.F.C. {rfcNegocio}</p>}
             <p className="mt-1">{fmtFechaHora(nota.created_at).toUpperCase()}</p>
           </div>
 
           <Corte />
 
-          {/* Datos generales. El número de nota encabeza el bloque: es el dato
-              con el que el cliente reclama su ropa. Sin cliente no se imprime
-              la línea: al que viene de paso no le aporta nada leer "Mostrador".
-              La fecha de entrega no va en ningún servicio (2026-10-06). */}
+          {/* Datos generales: primero el número de nota (con él se reclama la ropa).
+              Sin cliente no se imprime esa línea. */}
           <div className="space-y-1 py-1">
             <Linea label="Nota" value={nota.folio ?? `#${nota.id}`} fuerte />
             {nota.cliente_nombre && (
@@ -602,9 +551,7 @@ export default function TicketNota() {
                 value={(BADGE_TIPO_SERVICIO[nota.tipo_servicio] ?? nota.tipo_servicio).toUpperCase()}
               />
             )}
-            {/* Cierra el bloque: en Autoservicio va debajo de TIPO y en Por
-                Encargo debajo de TELÉFONO. La nota que todavía no se cobra
-                (pasa en Por Encargo) sale como PENDIENTE. */}
+            {/* Forma de pago (o PENDIENTE), al cierre del bloque. */}
             <Linea
               label="Método de pago"
               value={(formaPagoLabel(nota.forma_pago) || 'Pendiente').toUpperCase()}
@@ -620,8 +567,7 @@ export default function TicketNota() {
               <span>IMPORTE</span>
             </div>
 
-            {/* Desglose por cargas (originales). En Autoservicio cada máquina
-                es una sola línea, así que van juntas y no separadas por bloque. */}
+            {/* Desglose de las cargas del alta. */}
             {originales.length > 0 && (
               <div className={`mt-2 pb-4 ${unaSolaLista ? 'space-y-1' : 'space-y-3'}`}>
                 {renderBloqueCargas(originales)}
@@ -637,8 +583,7 @@ export default function TicketNota() {
               </>
             )}
 
-            {/* Productos de la nota (nivel nota, sin carga), con su propio título
-                y su subtotal, igual que los bloques de carga. */}
+            {/* Productos sueltos de la nota, con su subtotal. */}
             {prodsNota.length > 0 && (
               <div className="space-y-1">
                 <div className="flex items-baseline justify-between gap-2 font-bold">
@@ -674,10 +619,7 @@ export default function TicketNota() {
               <span className="whitespace-nowrap">{fmtMonto(nota.precio_total)}</span>
             </div>
 
-            {/* Abonos (mig. 121): solo si la nota tiene alguno. Cada uno con su
-                fecha y su forma de pago, y al final lo que resta. Quién lo
-                recibió NO va en el ticket (2026-09-25): es dato interno, se ve
-                en el detalle de la nota y en Ventas. */}
+            {/* Abonos, si los hay: fecha, forma y lo que resta (quién lo recibió es interno). */}
             {abonosDeNota(nota).length > 0 && (() => {
               const abonos = abonosDeNota(nota);
               const abonado = totalAbonado(nota);
@@ -710,7 +652,7 @@ export default function TicketNota() {
           {/* Pie */}
           <p className="text-center">¡GRACIAS POR SU PREFERENCIA!</p>
 
-          {/* Nota del negocio (Ajustes → Ticket): la letra chica del recibo */}
+          {/* Nota al pie (Ajustes → Ticket) */}
           {notaPie && (
             <p className="mt-3 whitespace-pre-line text-center text-[10px] leading-relaxed">
               {notaPie}
@@ -724,7 +666,7 @@ export default function TicketNota() {
         )}
       </div>
 
-      {/* Modal del teléfono (solo Autoservicio, que no trae cliente). */}
+      {/* Modal del teléfono (cuando la nota no tiene cliente). */}
       {pidiendoTelefono && (
         <div
           className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"

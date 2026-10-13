@@ -1,30 +1,18 @@
 import { useEffect, useId, useRef, useState } from 'react';
 
 /**
- * Desplegable con la lista de opciones pintada por la app.
+ * Desplegable con la lista pintada por la app (la de un `<select>` nativo la
+ * dibuja el sistema y no se parece al campo). Mide lo mismo que los campos de
+ * formulario (`px-4 py-3.5`).
  *
- * Existe porque la lista de un `<select>` nativo la dibuja el sistema
- * operativo: no hereda el tipo de letra, ni el alto de renglón, ni las
- * esquinas del campo, y en macOS sale gris y apretada al lado de un campo que
- * es blanco y espacioso. Con este componente la lista se ve como el campo del
- * que sale (2026-09-26, referencias en `info/`).
+ * Maneja a mano lo que el nativo da: teclado (flechas, Enter, Esc, Inicio/Fin),
+ * cerrar al clicar fuera y roles ARIA.
  *
- * Es del mismo tamaño que los campos de formulario (`px-4 py-3.5`), así que se
- * puede alternar con ellos sin que la fila se desalinee.
- *
- * Props:
- *   valor        — el valor elegido ('' si ninguno).
- *   onChange     — recibe el VALOR, no un evento: no hay `<select>` detrás.
- *   opciones     — [{ valor, etiqueta }]: SOLO lo elegible. El marcador de
- *                  posición no va aquí (2026-09-26) — en el nativo ocupaba un
- *                  renglón de la lista y se leía como una tercera opción.
- *   marcador     — el texto gris del campo mientras no hay nada elegido.
- *   deshabilitado, etiquetaAria, id, className.
- *
- * Lo que el nativo daba gratis y aquí hay que sostener a mano: teclado
- * (flechas, Enter, Esc, Inicio/Fin), cerrar al clicar fuera, y los roles ARIA
- * para que un lector de pantalla siga entendiendo que esto es una lista de
- * opciones.
+ * @param valor el valor elegido ('' si ninguno).
+ * @param onChange recibe el valor, no un evento.
+ * @param opciones [{ valor, etiqueta }], solo lo elegible.
+ * @param marcador texto gris mientras no hay nada elegido.
+ * @param deshabilitado, etiquetaAria, id, className
  */
 export default function Desplegable({
   valor,
@@ -39,8 +27,7 @@ export default function Desplegable({
   const [abierto, setAbierto] = useState(false);
   // Opción "marcada" con el teclado, que no es la elegida hasta dar Enter.
   const [activo, setActivo] = useState(0);
-  // Hacia arriba cuando abajo no cabe: en el teléfono la tarjeta de la última
-  // máquina queda pegada al borde y la lista se saldría de la pantalla.
+  // Hacia arriba cuando abajo no cabe (p. ej. la última tarjeta en el teléfono).
   const [haciaArriba, setHaciaArriba] = useState(false);
   const caja = useRef(null);
   const disparador = useRef(null);
@@ -51,8 +38,8 @@ export default function Desplegable({
   const indiceElegido = Math.max(0, opciones.findIndex(o => o.valor === valor));
   const elegida = opciones.find(o => o.valor === valor) ?? null;
 
-  // Cerrar al clicar fuera. `mousedown` y no `click`: si se espera al click, un
-  // arrastre que empieza dentro y termina fuera deja la lista abierta.
+  // Cerrar al clicar fuera. `mousedown`: con `click`, un arrastre que termina
+  // fuera dejaría la lista abierta.
   useEffect(() => {
     if (!abierto) return;
     const fuera = (e) => {
@@ -65,14 +52,13 @@ export default function Desplegable({
   // La opción marcada tiene que verse aunque la lista tenga scroll.
   useEffect(() => {
     if (!abierto || !lista.current) return;
-    // `scrollIntoView?.` porque jsdom no lo implementa y las pruebas montan
-    // el componente de verdad.
+    // `scrollIntoView?.`: jsdom no lo implementa.
     lista.current.querySelector(`[data-i="${activo}"]`)?.scrollIntoView?.({ block: 'nearest' });
   }, [abierto, activo]);
 
   const abrir = () => {
     if (deshabilitado) return;
-    // Decidir el lado ANTES de pintar: medir después haría saltar la lista.
+    // Se decide el lado antes de pintar, para que la lista no salte.
     const r = disparador.current?.getBoundingClientRect();
     const alto = Math.min(opciones.length * 56 + 16, 320);
     setHaciaArriba(Boolean(r) && r.bottom + alto > window.innerHeight && r.top > alto);
@@ -154,8 +140,7 @@ export default function Desplegable({
                 data-i={i}
                 role="option"
                 aria-selected={puesta}
-                // `mousedown` corre antes de que el botón pierda el foco, así
-                // que la lista no se cierra por el "clic fuera" antes de elegir.
+                // `mousedown` corre antes de perder el foco: la lista no se cierra antes de elegir.
                 onMouseDown={(e) => { e.preventDefault(); elegir(i); }}
                 onMouseEnter={() => setActivo(i)}
                 className={`px-4 py-3.5 text-base cursor-pointer flex items-center justify-between gap-2

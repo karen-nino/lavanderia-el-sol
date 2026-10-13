@@ -17,7 +17,7 @@ const NUM_CLS =
 
 const UNIDADES_VOLUMEN = ['Litros', 'Mililitros'];
 
-// Convierte un valor a mililitros según su unidad.
+/** Convierte un valor a mililitros según su unidad. */
 function aMl(valor, unidad) {
   const v = Number(valor) || 0;
   return unidad === 'Litros' ? v * 1000 : v;
@@ -37,14 +37,14 @@ function botellasPorBidon(p) {
 function medidasPorBidon(p) {
   return medidasPorBotella(p) * botellasPorBidon(p);
 }
-// Descompone unas medidas en "X botellas y Y medidas".
+/** Medidas → "X botellas y Y medidas". */
 function desglosarBotellas(medidas, p) {
   const tpb = medidasPorBotella(p);
   const t = Math.round(Number(medidas) || 0);
   if (tpb <= 0) return { botellas: 0, medidas: t };
   return { botellas: Math.floor(t / tpb), medidas: t % tpb };
 }
-// Descompone el líquido a granel en "N bidones y M botellas".
+/** Granel → "N bidones y M botellas". */
 function desglosarBidones(medidasGranel, p) {
   const tpb = medidasPorBotella(p);
   const medidasPorBidon = tpb * botellasPorBidon(p);
@@ -55,8 +55,7 @@ function desglosarBidones(medidasGranel, p) {
 function plural(n, sing, plur) {
   return `${n} ${n === 1 ? sing : plur}`;
 }
-// El granel EN POLVO (mig. 126) se cuenta por unidades, no por medidas de un
-// bidón: para todo lo que sigue se comporta como un producto de marca.
+/** El granel en polvo se cuenta por unidades: se comporta como un producto de marca. */
 function esPolvo(p) {
   return p?.clase !== 'bolsa' && p?.forma === 'polvo';
 }
@@ -64,20 +63,17 @@ function porUnidad(p) {
   if (p?.se_vende_por_unidad != null) return Boolean(p.se_vende_por_unidad);
   return p?.tipo_liquido === 'marca' || esPolvo(p);
 }
-// El granel LÍQUIDO es el único con bidón detrás: es el que se rellena y el que
-// lleva dos existencias (a granel y rellenadas).
+/** El granel líquido es el único con bidón: se rellena y lleva dos existencias. */
 function esGranelLiquido(p) {
   return p?.clase !== 'bolsa' && p?.tipo_liquido === 'granel' && !esPolvo(p);
 }
-// Palabra para la existencia según el tipo: el granel líquido se cuenta en
-// botellas; la marca y el polvo, en unidades.
+/** Unidad de la existencia: botellas (granel líquido) o unidades (marca y polvo). */
 function unidadVenta(p, n = 2) {
   if (p.clase === 'bolsa') return n === 1 ? 'bolsa' : 'bolsas';
   if (porUnidad(p)) return n === 1 ? 'unidad' : 'unidades';
   return n === 1 ? 'botella' : 'botellas';
 }
-// Unas medidas contadas en la unidad del producto. Las bolsas se cuentan en
-// piezas (no hay medidas).
+/** Medidas contadas en la unidad del producto (las bolsas, en piezas). */
 function textoExistencia(p, medidas) {
   if (p.clase === 'bolsa') {
     const n = Math.max(0, Math.round(Number(medidas) || 0));
@@ -85,32 +81,30 @@ function textoExistencia(p, medidas) {
   }
   const { botellas, medidas: sueltas } = desglosarBotellas(Math.max(0, Number(medidas) || 0), p);
   const partes = [];
-  // El "0 botellas" solo se dice cuando no hay nada más que decir: con medidas
-  // sueltas estorba ("0 botellas y 1 medida"). Misma regla que el reporte diario.
+  // "0 botellas" solo si no hay nada más que decir (como el reporte diario).
   if (botellas > 0 || sueltas === 0) partes.push(`${botellas} ${unidadVenta(p, botellas)}`);
   if (sueltas > 0) partes.push(plural(sueltas, 'medida', 'medidas'));
   return partes.join(' y ');
 }
-// Lo que está en el estante.
+/** Lo que está en el estante. */
 function textoRellenadas(p) {
   return textoExistencia(p, p.stock_actual);
 }
-// Medidas comprometidas con notas abiertas: siguen en el estante, pero ya tienen
-// dueño. El semáforo (estado_stock) se calcula con lo DISPONIBLE, así que sin
-// decir esto la tarjeta mostraba "9 botellas" junto a un "Por agotarse" que
-// parecía un error.
+/**
+ * Medidas apartadas en notas abiertas: siguen en el estante pero ya tienen
+ * dueño. El semáforo se calcula con lo disponible, por eso se muestra.
+ */
 function medidasApartadas(p) {
   return Math.max(0, Math.round(Number(p.stock_reservado) || 0));
 }
 function textoApartadas(p) {
   return textoExistencia(p, medidasApartadas(p));
 }
-// Lo que de verdad se puede vender hoy: existencia menos lo apartado.
+/** Lo que se puede vender hoy: existencia menos lo apartado. */
 function textoDisponible(p) {
   return textoExistencia(p, (Number(p.stock_actual) || 0) - medidasApartadas(p));
 }
-// Texto del líquido a granel: se expresa en bidones (con las botellas sueltas
-// como remanente si las hay).
+/** El granel en bidones (con las botellas sueltas de remanente). */
 function textoGranel(p) {
   if (!esGranelLiquido(p)) return '';
   const { bidones, botellas } = desglosarBidones(p.stock_granel_medidas, p);
@@ -118,8 +112,7 @@ function textoGranel(p) {
   if (botellas > 0) partes.push(plural(botellas, 'botella', 'botellas'));
   return partes.join(' y ');
 }
-// Línea bajo la existencia: qué parte ya está apartada en notas y qué queda
-// libre. Solo sale cuando hay algo apartado, para no ensuciar el caso normal.
+/** Línea de lo apartado y lo disponible; solo si hay algo apartado. */
 function LineaApartadas({ p, className = 'text-xs text-gray-500 mt-0.5' }) {
   if (medidasApartadas(p) <= 0) return null;
   return (
@@ -131,16 +124,14 @@ function LineaApartadas({ p, className = 'text-xs text-gray-500 mt-0.5' }) {
 function precioTxt(v) {
   return v != null && v !== '' ? `$${Number(v).toFixed(2)}` : '—';
 }
-// Nombre con el que se conoce la bolsa (el catálogo de tamaños: "NEGRA",
-// "SPE", "Edredón"), tal como se escribió en Ajustes. El campo `nombre` de todas
-// las bolsas es "Bolsa", así que es esto lo que distingue una de otra.
+/** Nombre de la bolsa según su tamaño de catálogo (todas se llaman "Bolsa"). */
 function nombreBolsa(p) {
   return p.tamano_bolsa || null;
 }
-// En los productos de marca el título es la MARCA y el subtítulo el nombre;
-// en los de granel (sin marca) el título es el nombre. En las bolsas manda el
-// nombre de la bolsa y "Bolsa" baja al subtítulo: tres renglones "Bolsa" no se
-// distinguían entre sí de un vistazo.
+/**
+ * Título del producto: la marca en los de marca, el nombre en el granel y el
+ * tamaño en las bolsas ("Bolsa" baja al subtítulo).
+ */
 function tituloProd(p) {
   if (p.clase === 'bolsa') return nombreBolsa(p) ?? p.nombre;
   return p.tipo_liquido === 'marca' && p.marca ? p.marca : p.nombre;
@@ -150,15 +141,13 @@ function subtituloProd(p) {
   if (esPolvo(p)) return 'Polvo';
   return p.tipo_liquido === 'marca' && p.marca ? p.nombre : null;
 }
-// Orden de la lista: primero granel, luego marca, al final bolsas; dentro de
-// cada grupo, por nombre.
+/** Orden: granel, marca y bolsas; dentro de cada grupo, por nombre. */
 function ordenProd(a, b) {
   const rank = (p) => (p.clase === 'bolsa' ? 2 : p.tipo_liquido === 'granel' ? 0 : 1);
   const r = rank(a) - rank(b);
   return r !== 0 ? r : a.nombre.localeCompare(b.nombre);
 }
-// Palabra de la existencia para los avisos. Las bolsas incluyen su tamaño
-// ("bolsas chicas"); los líquidos usan botellas/unidades.
+/** Unidad para los avisos: las bolsas con su tamaño ("bolsas chicas"). */
 function unidadAviso(p) {
   if (p.clase === 'bolsa') {
     const t = { chica: 'chicas', grande: 'grandes', jumbo: 'jumbo' }[p.tamano_bolsa?.toLowerCase()] ?? '';
@@ -166,9 +155,7 @@ function unidadAviso(p) {
   }
   return unidadVenta(p);
 }
-// Mensajes de aviso ("Se acabaron …", "Están por acabarse … — disponibles: …").
-// Cuentan lo DISPONIBLE, que es lo que decide el semáforo: decir "hay 9" cuando
-// las 9 están apartadas en notas no mandaba a nadie a rellenar.
+/** Mensajes de aviso de existencia, contando lo disponible (lo que decide el semáforo). */
 function mensajeAvisoBotellas(p) {
   if (p.estado_stock === 'agotado') {
     return medidasApartadas(p) > 0
@@ -211,25 +198,19 @@ const FORM_VACIO = {
   precio_botella:       '',
   stock_minimo_botellas: '0',   // el aviso se captura en botellas; se guarda en medidas
   stock_minimo_bidones:  '0',   // aviso del granel, en bidones; se guarda en medidas
-  // Bolsas: el tamaño sale del catálogo (mig. 119), así que arranca vacío y
-  // `required` obliga a elegirlo en vez de dar por buena una "chica" que nadie
-  // escogió.
+  // Tamaño del catálogo: arranca vacío para obligar a elegirlo.
   tamano_bolsa:      '',
-  // Cómo se surte la bolsa: 'rollo' (y cuántas trae) o 'pieza' (sueltas).
-  // Arranca vacío a propósito: no todas las bolsas vienen en rollo.
+  // Cómo se surte: 'rollo' (y cuántas trae) o 'pieza'. Arranca vacío.
   compra_bolsa:      '',
   bolsas_por_rollo:  '',
-  // Servicios de Por Encargo a los que va ligada la bolsa: es lo que hace que
-  // se agregue sola a la carga. Vacío = se vende a mano, no se precarga.
+  // Servicios Por Encargo donde la bolsa se agrega sola; vacío = se vende a mano.
   servicios_bolsa:   [],
   stock_minimo_bolsas: '0',
-  // Granel líquido: Jabón, Suavizante… (mig. 136). Vacío = sin tipo.
+  // Tipo de granel líquido (Jabón, Suavizante…); vacío = sin tipo.
   tipo_granel_id:    '',
 };
 
-// Servicios de Por Encargo a los que se puede ligar una bolsa (mig. 125). El
-// valor es el que guarda el producto; la etiqueta, como se llama el servicio.
-// Una bolsa puede cubrir varios, así que se marcan uno por uno.
+/** Servicios Por Encargo a los que se puede ligar una bolsa: [valor, etiqueta]. */
 const SERVICIOS_BOLSA = [['chico', 'Chico'], ['mediano', 'Mediano'], ['grande', 'Grande'], ['edredon', 'Edredón']];
 
 // ── Modal crear / editar ────────────────────────────────────────
@@ -277,8 +258,7 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = 
   const esGranel = form.tipo_liquido === 'granel';
   const esBolsa  = form.tipo_liquido === 'bolsa';
 
-  // Un botón por servicio Por Encargo; `campo` es la lista del form que marcan
-  // (los de la bolsa o los de la precarga del granel).
+  // Un botón por servicio Por Encargo; `campo` es la lista del form que marcan.
   const botonesServicios = (campo) => (
     <div className="flex gap-2">
       {SERVICIOS_BOLSA.map(([val, label]) => {
@@ -301,9 +281,7 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = 
     </div>
   );
   const esMarca  = form.tipo_liquido === 'marca';
-  // El polvo es granel de nombre y de catálogo, pero se cuenta por unidades:
-  // no tiene bidón, ni botella, ni medida que capturar (mig. 126). Todo lo que
-  // pregunta por medidas es cosa del granel LÍQUIDO.
+  // El polvo se cuenta por unidades: sin bidón, botella ni medida que capturar.
   const esPolvoForm  = esGranel && form.forma === 'polvo';
   const esGranelLiq  = esGranel && !esPolvoForm;
 
@@ -319,13 +297,11 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = 
   const medidasBidon = botellasBidon * medidasBotella;
 
   const marcaOptions = form.marca && !marcas.includes(form.marca) ? [form.marca, ...marcas] : marcas;
-  // Mismo criterio para los dos catálogos nuevos (mig. 119): un nombre o un
-  // tamaño que ya no esté en la lista sigue apareciendo si es el del producto
-  // que se está editando, para no borrárselo sin avisar al guardar.
+  // Si el nombre o el tamaño ya no está en el catálogo pero es del producto que
+  // se edita, se sigue ofreciendo para no borrárselo.
   const granelOptions = form.nombre && !graneles.includes(form.nombre)
     ? [form.nombre, ...graneles] : graneles;
-  // El producto guarda el tamaño tal como está en el catálogo (mig. 128). Se
-  // empata sin distinguir mayúsculas por si el catálogo cambió de forma.
+  // Se empata con el catálogo sin distinguir mayúsculas.
   const bolsaOptions = tamanosBolsa.map(n => ({ v: n, label: n }));
   const bolsaElegida = bolsaOptions.find(
     o => o.v.toLowerCase() === form.tamano_bolsa.toLowerCase()
@@ -339,8 +315,7 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = 
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    // Los botones no entran en la validación del navegador, así que el "¿cómo
-    // se compra?" se revisa aquí antes de pedir la confirmación.
+    // Los botones no pasan por la validación del navegador: se revisa aquí.
     if (esBolsa && !form.compra_bolsa) {
       setError('Indica si la bolsa se compra por rollo o por pieza.');
       return;
@@ -360,8 +335,7 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = 
         clase:            'bolsa',
         nombre:           'Bolsa',
         tamano_bolsa:     form.tamano_bolsa,
-        // Por pieza no hay rollo que guardar: null es lo que distingue a una
-        // bolsa suelta de una que viene en rollo.
+        // Por pieza, null (es lo que distingue a una bolsa suelta).
         bolsas_por_rollo: form.compra_bolsa === 'rollo' ? (Number(form.bolsas_por_rollo) || null) : null,
         servicios_bolsa:  form.servicios_bolsa,
         precio_unitario:  form.precio_botella !== '' ? Number(form.precio_botella) : null,
@@ -393,15 +367,13 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = 
       precio_unitario:   esGranelLiq && form.precio_medida !== '' ? Number(form.precio_medida) : null,
       precio_botella:    form.precio_botella !== '' ? Number(form.precio_botella) : null,
       volumen_envase_ml: esGranelLiq && bidonMl > 0 ? bidonMl : null,
-      // Marca y polvo: se venden por unidad entera (sin mL). Internamente
-      // 1 unidad = 1 botella = 1 medida, así que botella_ml = medida_ml = 1 y el
-      // stock queda contado en unidades.
+      // Marca y polvo: por unidad entera (1 unidad = 1 botella = 1 medida).
       botella_ml:        esGranelLiq ? (botellaMl > 0 ? botellaMl : null) : 1,
       medida_ml:           esGranelLiq
         ? (form.metodo_medida === 'ml' && medidaMl > 0 ? medidaMl : null)
         : 1,
       medidas_por_botella: esGranelLiq && form.metodo_medida === 'medidas' ? (Number(form.medidas_por_botella) || null) : null,
-      // Su tipo: con él el servicio Por Encargo lo ofrece en Salidas (mig. 136).
+      // Con su tipo, los servicios Por Encargo lo ofrecen en Salidas.
       tipo_granel_id:    esGranelLiq && form.tipo_granel_id !== '' ? Number(form.tipo_granel_id) : null,
       // El aviso se captura en botellas y se guarda en medidas.
       stock_minimo:      medidasBotella > 0
@@ -465,11 +437,8 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = 
             </div>
           </div>
 
-          {/* Nombre (las bolsas siempre se llaman "Bolsa"; se distinguen por
-              tamaño). En el granel sale de su catálogo (Ajustes → Inventario):
-              son pocos y siempre los mismos, y escritos a mano acababan
-              contando por separado ("jabon" y "Jabón"). El de marca lo sigue
-              escribiendo. */}
+          {/* Nombre (las bolsas se llaman "Bolsa"). El granel lo elige de su catálogo,
+              para no tener nombres distintos para lo mismo; el de marca lo escribe. */}
           {!esBolsa && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">
@@ -501,8 +470,7 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = 
             </div>
           )}
 
-          {/* Granel: líquido o en polvo. El polvo no se sirve por medidas, se
-              vende por unidades enteras como los de marca. */}
+          {/* Granel: líquido o en polvo (por unidades enteras). */}
           {esGranel && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">
@@ -525,10 +493,8 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = 
             </div>
           )}
 
-          {/* Tipo de granel (mig. 136): Jabón, Suavizante… Es lo que hace que un
-              servicio Por Encargo lo ofrezca en Salidas. Solo el líquido: el
-              polvo se vende por unidad. Un tipo desactivado se sigue mostrando
-              si el producto ya lo tiene, para no quitárselo al editar. */}
+          {/* Tipo de granel (solo líquido): con él los servicios lo ofrecen en Salidas.
+              Uno desactivado se sigue mostrando si el producto ya lo tiene. */}
           {esGranelLiq && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">
@@ -664,9 +630,8 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = 
                 </div>
               </div>
             )}
-            {/* La existencia se guarda en medidas y se lee con estos tamaños: con
-                existencia o algo apartado no se dejan cambiar (2026-10-08). Se
-                avisa antes de guardar para no llenar todo y chocar al final. */}
+            {/* Con existencia o algo apartado, los tamaños no se pueden cambiar: se
+                avisa antes de guardar. */}
             {esEdicion && (Number(producto?.stock_actual) > 0 || Number(producto?.stock_granel_medidas) > 0
               || Number(producto?.stock_reservado) > 0) && (
               <p className="text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
@@ -686,8 +651,7 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = 
                 />
               </div>
             )}
-            {/* El rendimiento por medida solo aplica al granel líquido; la marca
-                y el polvo se venden por unidad entera. */}
+            {/* El rendimiento por medida solo aplica al granel líquido. */}
             {esGranelLiq && (
               <>
                 <div>
@@ -780,8 +744,7 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = 
             </div>
           </div>
 
-          {/* Las existencias (botellas rellenadas / bidones) se cargan con una
-              Entrada, no al dar de alta el producto. */}
+          {/* La existencia se carga con una Entrada, no al dar de alta. */}
 
           {/* Alerta de stock bajo */}
           {esBolsa ? (
@@ -887,12 +850,11 @@ function ModalMovimiento({ producto, tipo, onClose, onDone }) {
   const esGranel = esGranelLiquido(producto);
   const esBolsa  = producto.clase === 'bolsa';
   const [destino, setDestino] = useState(esGranel ? 'granel' : esBolsa ? 'piezas' : 'botellas');
-  // Bolsas: rollo | pieza. Las que se compran sueltas no tienen rollo que
-  // ofrecer, así que entran y salen por pieza.
+  // Bolsas: por rollo o por pieza (las que se compran sueltas, solo pieza).
   const porRollo = Number(producto.bolsas_por_rollo) > 0;
   const [unidadBolsa, setUnidadBolsa] = useState(porRollo ? 'rollo' : 'pieza');
   const [cantidad, setCantidad] = useState('');
-  // Nota libre de la salida (migs. 142-143), opcional.
+  // Motivo libre de la salida (opcional).
   const [nota, setNota] = useState('');
   const [error, setError]     = useState('');
   const [loading, setLoading] = useState(false);
@@ -1015,8 +977,7 @@ function ModalMovimiento({ producto, tipo, onClose, onDone }) {
 function ModalRellenar({ producto, onClose, onDone }) {
   const tpb = medidasPorBotella(producto);
   const maxBotellas = tpb > 0 ? Math.floor(Number(producto.stock_granel_medidas) / tpb) : 0;
-  // Nace vacío (2026-10-06): con un número sugerido se rellenaba lo que
-  // decía la app y no lo que de verdad se rellenó.
+  // Vacío: se rellena lo que de verdad se rellenó.
   const [botellas, setBotellas] = useState('');
   const [error, setError]   = useState('');
   const [loading, setLoading] = useState(false);
@@ -1143,7 +1104,7 @@ function ModalHistorial({ producto, onClose }) {
                       {m.destino === 'granel' ? 'A granel' : 'Botellas'}
                       {m.usuario_nombre ? ` · ${m.usuario_nombre}` : ''}
                     </p>
-                    {/* Nota de la salida manual (migs. 142-143). */}
+                    {/* Motivo de la salida manual. */}
                     {m.nota && <p className="text-xs text-gray-500 mt-0.5 whitespace-pre-line">Nota: {m.nota}</p>}
                   </div>
                   <span className="text-xs text-gray-400 flex-shrink-0 whitespace-nowrap">{fechaHoraCorta(m.created_at)}</span>
@@ -1344,11 +1305,11 @@ function BadgeGranel({ estado }) {
 }
 
 // ── Página principal ────────────────────────────────────────────
-// Día de hoy en formato YYYY-MM-DD (zona local del navegador).
+/** Hoy en YYYY-MM-DD (zona local del navegador). */
 function hoyISO() {
   return new Date().toLocaleDateString('en-CA');
 }
-// "Lunes, 03 de Agosto de 2026" a partir de 'YYYY-MM-DD' (sin corrimiento).
+/** "Lunes, 03 de Agosto de 2026" a partir de 'YYYY-MM-DD'. */
 function fechaLegible(iso) {
   const [y, m, d] = String(iso).split('-').map(Number);
   const dt = new Date(y, (m || 1) - 1, d || 1);
@@ -1357,17 +1318,17 @@ function fechaLegible(iso) {
 }
 
 // ── Pestaña "Reporte diario" (solo admin) ───────────────────────
-// Por producto líquido (granel/marca): cuánto SALIÓ ese día (ventas/consumo en
-// notas) y cuánto QUEDA al cierre del día. Se puede elegir cualquier día pasado.
-// 'YYYY-MM-DD' → Date local, sin el corrimiento de un día que da new Date(iso).
+
+/** 'YYYY-MM-DD' → Date local (new Date(iso) correría un día). */
 function fechaLocalISO(iso) {
   const [y, m, d] = String(iso).split('-').map(Number);
   return new Date(y, (m || 1) - 1, d || 1);
 }
 
-// Celda de Entradas o Salidas del Reporte diario: con movimiento es un botón
-// que abre quién lo hizo, a qué hora y cuánto; sin movimiento, el guion.
-// `hayAlgo` la vuelve botón aunque el neto sea guion (una devolución).
+/**
+ * Celda de Entradas o Salidas: con movimiento es un botón que abre el detalle.
+ * `hayAlgo` la vuelve botón aunque el neto sea guion (una devolución).
+ */
 function CeldaMovimiento({ lineas, hayAlgo = false, onClick }) {
   const vacia = lineas.length === 1 && lineas[0] === '—';
   if (vacia && !hayAlgo) return <span className="block text-gray-400">—</span>;
@@ -1381,8 +1342,7 @@ function CeldaMovimiento({ lineas, hayAlgo = false, onClick }) {
   );
 }
 
-// Rellenar se cuenta del lado que se está viendo: en Entradas, las botellas
-// que se llenaron; en Salidas, lo que bajó el bidón.
+/** Rellenar: en Entradas, las botellas llenadas; en Salidas, lo que bajó el bidón. */
 function enBidon(m, tipo) {
   return m.tipo === 'rellenar' ? tipo === 'salidas' : m.destino === 'granel';
 }
@@ -1396,9 +1356,7 @@ function cantidadMovimiento(m, p, esMarca, tipo) {
 
 const TITULO_MOVIMIENTOS = { entradas: 'Entradas', salidas: 'Salidas', devueltos: 'Devuelto' };
 
-// Detalle de las entradas o salidas de un producto en un día (2026-10-03):
-// quién hizo cada movimiento, a qué hora y cuánto. Lo que vino de una nota
-// lleva a esa nota.
+/** Entradas o salidas de un producto en un día: quién, a qué hora y cuánto (con enlace a su nota). */
 function MovimientosDiaModal({ producto, tipo, fecha, onClose }) {
   const navigate = useNavigate();
   const [movs, setMovs] = useState(null);
@@ -1438,16 +1396,14 @@ function MovimientosDiaModal({ producto, tipo, fecha, onClose }) {
           ) : movs.length === 0 ? (
             <p className="text-center text-gray-400 text-sm py-10">Sin movimientos</p>
           ) : movs.map(m => {
-            // Título: quién y a qué hora (2026-10-03). Si vino de una nota de
-            // venta, el título es esa nota (lleva a ella) y quién y la hora
-            // bajan a subtítulo. Si la salida manual trae nota (migs. 142-143),
-            // un botón "Nota" la despliega.
+            // Título: quién y a qué hora; si vino de una nota, la nota (y lo otro baja a
+            // subtítulo). Una salida manual con motivo tiene su botón "Nota".
             const abierta = notaAbierta === m.id;
             const deNota = m.tipo === 'venta' || m.tipo === 'liberacion';
             const irANota = m.nota_id && m.nota_folio ? () => { onClose(); navigate(`/notas/${m.nota_id}`); } : null;
             const quienHora = `${m.usuario_nombre || 'Usuario eliminado'} · ${formatHora12(m.created_at)}`;
-            // Lo devuelto dice qué nota se anuló: si se canceló, lleva a ella;
-            // si se borró, queda su folio (mig. 144) pero ya no hay a dónde ir.
+            // Lo devuelto dice qué nota se anuló: si se canceló, lleva a ella; si se borró,
+            // queda su folio.
             const tituloNota = m.tipo === 'liberacion'
               ? (m.nota_folio
                   ? `Nota ${m.nota_folio} anulada${irANota ? '' : ' (se eliminó)'}`
@@ -1536,17 +1492,15 @@ function ReporteDiario() {
   }, [exportOpen]);
 
   const productos = data?.productos ?? [];
-  // El polvo se cuenta por unidades como la marca, pero es granel: va en su
-  // propio grupo para no mezclarlo con productos que sí tienen marca.
+  // El polvo va en su propio grupo: es granel aunque se cuente por unidades.
   const granel = productos.filter(p => p.tipo_liquido === 'granel' && !esPolvo(p));
   const polvo  = productos.filter(esPolvo);
   const marca  = productos.filter(p => p.tipo_liquido === 'marca');
-  // La columna Devuelto solo aparece el día que algún producto tuvo algo
-  // devuelto; si no, sería una columna entera de guiones.
+  // La columna Devuelto solo aparece si hubo algo devuelto ese día.
   const hayDevuelto = productos.some(p => Number(p.devuelto_medidas) > 0);
 
-  // Celdas "Había al inicio" y "Queda al final": por unidad = una línea;
-  // granel = rellenadas + a granel.
+  // "Había al inicio" y "Queda al final": por unidad, una línea; granel,
+  // rellenadas + a granel.
   const existenciaCelda = (p, botellas, granel) => {
     if (porUnidad(p)) return <span>{textoBotellas(botellas, p.medidas_por_botella, { marca: true })}</span>;
     return (
@@ -1715,8 +1669,7 @@ export default function Inventario() {
   const [modalHistorial,  setModalHistorial]  = useState(null);  // producto
   const [stockOcultoSig,  setStockOcultoSig]  = useState(null);  // firma del aviso de stock bajo descartado
   const [granelOcultoSig, setGranelOcultoSig] = useState(null);  // firma del aviso de granel descartado
-  // Productos recién creados en esta sesión: no disparan advertencias (nacen en
-  // cero) hasta que se les cargue existencia con una entrada.
+  // Recién creados en esta sesión: nacen en cero y no avisan hasta su primera entrada.
   const [recienCreados,   setRecienCreados]   = useState(() => new Set());
 
   // Archivados: se cargan bajo demanda al abrir el panel "Ver archivados".
@@ -1735,13 +1688,12 @@ export default function Inventario() {
   const [searchParams, setSearchParams] = useSearchParams();
   const highlightAplicadoRef = useRef(null);
 
-  // Catálogos editables de Ajustes → Inventario. Solo los activos: lo que se
-  // desactiva se deja de ofrecer, pero no se le quita a los productos que ya
-  // lo usan (eso lo resuelve el modal).
+  // Catálogos de Ajustes → Inventario, solo los activos (el modal conserva el del
+  // producto que ya lo usa).
   const [marcas, setMarcas] = useState([]);
   const [graneles, setGraneles] = useState([]);
   const [tamanosBolsa, setTamanosBolsa] = useState([]);
-  // Tipos de granel (mig. 133): todos, con su id; el modal decide cuáles ofrece.
+  // Tipos de granel, todos; el modal decide cuáles ofrece.
   const [tiposGranel, setTiposGranel] = useState([]);
 
   useEffect(() => {
@@ -1771,7 +1723,7 @@ export default function Inventario() {
     return () => { activo = false; };
   }, []);
 
-  // Highlight desde ?highlight=<id> (alerta del nav)
+  // Resaltado desde ?highlight=<id> (alerta del menú).
   useEffect(() => {
     const id = searchParams.get('highlight');
     if (!id || loading || productos.length === 0) return;
@@ -1790,19 +1742,17 @@ export default function Inventario() {
   }, [searchParams, productos, loading, setSearchParams]);
 
   const stockBajo = productos.filter(p => p.estado_stock !== 'ok' && !recienCreados.has(p.id));
-  // El aviso de stock bajo también se puede ocultar en la sesión (firma con el
-  // stock, así reaparece si cambia).
+  // El aviso se oculta en la sesión; su firma incluye la existencia, así reaparece
+  // si cambia.
   const stockSig = stockBajo.map(p => `${p.id}:${p.stock_actual}`).join(',');
   const mostrarStockBajo = stockBajo.length > 0 && stockSig !== stockOcultoSig;
   // Granel por acabarse o agotado (solo productos granel).
   const granelBajo = productos.filter(p => esGranelLiquido(p) && p.estado_granel && p.estado_granel !== 'ok' && !recienCreados.has(p.id));
-  // El aviso de granel se puede ocultar en la sesión; su firma incluye el stock,
-  // así que reaparece si el granel cambia o entra otro producto a la lista.
+  // Igual que el aviso de existencia.
   const granelSig = granelBajo.map(p => `${p.id}:${p.stock_granel_medidas}`).join(',');
   const mostrarGranel = granelBajo.length > 0 && granelSig !== granelOcultoSig;
 
-  // Reemplaza un producto en la lista (tras editar / movimiento / rellenar). Si
-  // ya tiene existencia, deja de considerarse "recién creado" (vuelve a avisar).
+  // Reemplaza un producto en la lista; con existencia deja de ser "recién creado".
   const reemplazarProducto = (prod) => {
     setProductos(prev => prev.map(p => (p.id === prod.id ? prod : p)));
     setInfoProducto(prev => (prev && prev.id === prod.id ? prod : prev));
@@ -1819,7 +1769,7 @@ export default function Inventario() {
       reemplazarProducto(resultado);
     } else {
       setProductos(prev => [...prev, resultado].sort(ordenProd));
-      // Nace en cero: no dispares advertencias hasta que se le cargue existencia.
+      // Nace en cero: no avisa hasta su primera entrada.
       setRecienCreados(prev => new Set(prev).add(resultado.id));
     }
     setModalProducto(null);
@@ -1914,7 +1864,7 @@ export default function Inventario() {
     }
   };
 
-  // Acciones de stock disponibles para todos (operativas).
+  // Acciones de existencia (para todos).
   const accionesStock = (p, { compact = false } = {}) => (
     <>
       <button

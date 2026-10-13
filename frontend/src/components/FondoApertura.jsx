@@ -1,12 +1,13 @@
-// Fondo con el que se abre la caja. No es un número libre: es el dinero que
-// quedó en el cajón en el corte anterior (lo calcula el backend, ver
-// `aperturaSugerida`). El empleado solo lo confirma; el admin puede ajustarlo,
-// pero viendo siempre con cuánto se cerró el día anterior.
-//
-//   • sugerida → { monto, origen: 'corte' | 'cierre_automatico', corte: {...} }
-//                 o null si la sucursal nunca ha cerrado una caja
-//   • admin    → si el usuario puede ajustar el monto
-//   • monto / onMonto → el valor del campo (string, como todo <input>)
+/**
+ * Fondo con el que se abre la caja: lo que quedó en el cajón en el corte
+ * anterior (`aperturaSugerida` en el backend). El empleado lo confirma; el admin
+ * puede ajustarlo, viendo con cuánto se cerró.
+ *
+ * @param sugerida { monto, origen: 'corte' | 'cierre_automatico', corte } o
+ *   null si la sucursal nunca ha cerrado una caja.
+ * @param admin si puede ajustar el monto.
+ * @param monto, onMonto el valor del campo (string).
+ */
 
 const fmt = (n) =>
   new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(n ?? 0);
@@ -87,8 +88,7 @@ export default function FondoApertura({ sugerida, admin, monto, onMonto }) {
           type="number" min="0" step="0.01" required
           value={monto} onChange={(e) => onMonto(e.target.value)}
           readOnly={!admin}
-          // Bloqueado para el empleado: el dinero del cajón no cambia porque
-          // alguien teclee otro número.
+          // Bloqueado para el empleado.
           className={`w-full border rounded-lg px-3 py-2.5 text-base ${
             admin ? 'border-gray-300' : 'border-gray-200 bg-gray-100 text-gray-500 cursor-not-allowed'
           }`}

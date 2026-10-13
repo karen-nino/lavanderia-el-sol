@@ -1,31 +1,17 @@
 /**
- * Elegir las máquinas de una nota de Autoservicio, al darla de alta.
+ * Elegir las máquinas de una nota de Autoservicio al darla de alta: las libres
+ * de la sucursal, en Lavadoras y Secadoras, con su tamaño (como "Asignar
+ * máquina" de Salidas). Lo elegido viaja con la nota y permite cobrarla desde
+ * el alta. Sin precios: el dinero se lee en el renglón y el resumen.
  *
- * Es el mismo gesto que "Asignar máquina" de Salidas: las máquinas libres de la
- * sucursal, partidas en Lavadoras y Secadoras, con su tamaño. La diferencia es
- * que aquí no se asigna nada todavía: lo elegido se queda en el formulario y
- * viaja con la nota al crearla, que es lo que permite cobrarla desde el alta
- * —ya se sabe qué máquina usó el cliente, y con ella su tarifa—.
- *
- * Aquí no van los PRECIOS: lo que se elige es qué máquina, y el dinero se lee
- * de un tirón donde se cobra —el renglón de cada máquina y el resumen de la
- * nota—, no repetido en cada opción de una lista de la que solo se marca una.
- *
- * Se pueden marcar VARIAS de una vez: cada una entra como una máquina más de la
- * nota (su propio renglón, con su precio), así que el mostrador elige de un
- * tirón todo lo que va a usar el cliente.
- *
- * Aquí solo se ofrece lo que está libre de verdad: ni en uso, ni apuntado ya en
- * otra nota abierta. En Salidas esas últimas sí se ofrecen —asignar no aparta,
- * y ahí el empleado tiene la ropa delante y decide si se arriesga a que el otro
- * inicie primero—, pero al dar de alta la nota se estaría vendiendo una máquina
- * que otro cliente puede arrancar antes, y aquí ya se cobra por ella. El
- * servidor lo vuelve a comprobar al guardar.
+ * Se pueden marcar varias; cada una es un renglón de la nota. Solo se ofrece lo
+ * libre de verdad (ni en uso ni en otra nota abierta), porque aquí ya se cobra;
+ * el servidor lo vuelve a comprobar.
  */
 
 import { marcaYTamano } from '../lib/estadoMaquina';
 
-// Casilla de selección, igual que la del modal de Salidas.
+/** Casilla de selección (como la de Salidas). */
 function SelCheck({ on }) {
   return (
     <span className={`flex-shrink-0 w-5 h-5 rounded-md border-2 flex items-center justify-center transition-colors ${
@@ -40,13 +26,11 @@ function SelCheck({ on }) {
   );
 }
 
-// Valor con que el renglón "Edredón" entra a la selección (2026-10-02). No es
-// una máquina: es una carga de edredón que se cobra con su tarifa y cuya
-// lavadora —la que esté libre— se asigna después, en Salidas.
+/** Valor del renglón "Edredón": una carga con su tarifa; la lavadora se asigna en Salidas. */
 export const SELECCION_EDREDON = 'edredon';
 
 function FilaMaquina({ maquina, seleccionada, onToggle }) {
-  // "LG · Mediana": con la marca se distingue qué máquina es de un vistazo.
+  // "LG · Mediana".
   const tamano = marcaYTamano(maquina);
   return (
     <button
@@ -87,8 +71,7 @@ export default function ElegirMaquinasModal({
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      {/* Título y botones fijos; solo la lista se desplaza (2026-10-11): con
-          muchas máquinas, Agregar se iba fuera de la pantalla. */}
+      {/* Título y botones fijos; solo la lista se desplaza. */}
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm max-h-[90vh] flex flex-col">
         <div className="px-6 pt-6 pb-3 flex-shrink-0">
           <h3 className="text-base font-bold text-gray-900">Agregar máquina</h3>
@@ -125,8 +108,7 @@ export default function ElegirMaquinasModal({
                   />
                 ))
               )}
-              {/* Hasta abajo de las lavadoras: el Edredón se vende con su
-                  tarifa y su lavadora se asigna en Salidas (2026-10-02). */}
+              {/* Al final de las lavadoras: el Edredón (su lavadora se asigna en Salidas). */}
               {ofrecerEdredon && (
                 <FilaMaquina
                   maquina={{ id: SELECCION_EDREDON, nombre: 'Edredón', tipo: 'edredon' }}

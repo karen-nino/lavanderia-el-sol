@@ -1,26 +1,26 @@
-// Ingresos, Egresos y Desglose de un turno de caja (2026-10-10).
-//
-// Lo comparten la pantalla del corte, las tarjetas de turno de Ventas y las
-// exportaciones (PDF/CSV de Caja y de Ventas), para que todos digan lo mismo.
-//
-// Recibe un turno con la forma del historial (`leerCortes` en el backend):
-//   { monto_inicial, entradas, salidas, ventas_desglose: { efectivo,
-//     transferencia }, ingresos: { lavadoras_medianas, ... } | null,
-//     spe_debe: number | null }
-//
-// Reglas (decisiones de la usuaria):
-//   · las líneas de máquina, SPE, edredón y productos son las ventas en
-//     efectivo por concepto: ESAS se suman en Ingresos;
-//   · "Cómo se cobró" (efectivo y transferencia, como en Ventas) se informa
-//     aparte y no se suma; la transferencia y el SPE Debe no entran ni salen
-//     del cajón, así que no cuentan en los totales;
-//   · TOTAL INGRESOS − TOTAL EGRESOS = ESPERADO EN CAJA.
+/**
+ * Ingresos, Egresos y Desglose de un turno de caja. Lo comparten el corte, los
+ * turnos de Ventas y las exportaciones, para que digan lo mismo.
+ *
+ * Recibe un turno con la forma del historial (`leerCortes` en el backend):
+ *   { monto_inicial, entradas, salidas, ventas_desglose: { efectivo,
+ *     transferencia }, ingresos: { lavadoras_medianas, ... } | null,
+ *     spe_debe: number | null }
+ *
+ * Reglas:
+ * - Ingresos suma las ventas en efectivo por concepto (máquinas, SPE, edredón,
+ *   productos).
+ * - "Cómo se cobró" (efectivo y transferencia) es informativo; la transferencia
+ *   y el SPE Debe no pasan por el cajón.
+ * - TOTAL INGRESOS − TOTAL EGRESOS = ESPERADO EN CAJA.
+ */
 
 const num = (v) => Number(v ?? 0) || 0;
 
-// Los conceptos en que se reparte lo cobrado, en el orden en que se leen. Los
-// usan Ingresos (efectivo de un turno) y Ventas → Corte de caja → Por concepto
-// (todos los cobros del período).
+/**
+ * Conceptos en que se reparte lo cobrado, en orden de lectura (Ingresos de un
+ * turno y Ventas → Por concepto).
+ */
 export const CONCEPTOS = [
   { key: 'lavadoras_medianas', label: 'Lavadoras Medianas' },
   { key: 'lavadoras_jumbo',    label: 'Lavadoras Jumbo' },
@@ -42,8 +42,7 @@ export function desgloseCaja(t) {
   const ingresos = [
     { label: 'Caja inicial', value: num(t.monto_inicial), sign: '' },
     { label: 'Entradas',     value: num(t.entradas),      sign: '+' },
-    // Sin reparto (respaldo por si faltara el dato) se suma el efectivo en un
-    // solo renglón, para que el total se siga viendo completo.
+    // Sin reparto, el efectivo en un solo renglón para que el total cuadre.
     ...(ing
       ? lineasConcepto(ing).map((l) => ({ ...l, sign: '' }))
       : [{ label: 'Ventas en efectivo', value: efectivo, sign: '+' }]),
@@ -52,7 +51,7 @@ export function desgloseCaja(t) {
   const comoSeCobro = [
     { label: 'Efectivo',      value: efectivo, sign: '' },
     { label: 'Transferencia', value: num(t.ventas_desglose?.transferencia), sign: '' },
-    // Tarjeta ya no se ofrece al cobrar (2026-10-06): solo si hubo cobros viejos.
+    // Tarjeta solo si hubo cobros viejos con tarjeta.
     ...(num(t.ventas_desglose?.tarjeta) > 0
       ? [{ label: 'Tarjeta', value: num(t.ventas_desglose.tarjeta), sign: '' }]
       : []),
@@ -60,7 +59,7 @@ export function desgloseCaja(t) {
   const totalIngresos = num(t.monto_inicial) + efectivo + num(t.entradas);
 
   const egresos = [
-    // Sin dato en los cortes anteriores a la mig. 153: no se inventa.
+    // Sin dato en cortes viejos: no se inventa.
     ...(t.spe_debe != null
       ? [{ label: 'SPE Debe', value: num(t.spe_debe), sign: '', nota: 'No sale del cajón' }]
       : []),

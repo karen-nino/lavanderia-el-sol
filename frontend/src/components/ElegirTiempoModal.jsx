@@ -1,17 +1,9 @@
 /**
- * Elegir con cuánto tiempo corre un ciclo (mig. 120).
- *
- * Hay modelos que no tienen "un" ciclo sino varios programas de distinta
- * duración —la Speed Queen Sec49 tiene tres— y quién decide cuál corre es el
- * empleado con la ropa delante, no la configuración. Este modal sale justo
- * después de confirmar el arranque, y lo que se elija es lo que cronometra la
- * app y lo que decide cuándo se le corta la corriente.
- *
- * Sale solo cuando el modelo lo pide y tiene más de un tiempo configurado; con
- * uno solo no hay nada que preguntar.
+ * Elegir el programa de un ciclo, en modelos con varios (la Sec49 tiene tres):
+ * lo decide el empleado con la ropa delante. Sale tras confirmar el arranque si
+ * el modelo tiene más de un tiempo. `titulo`, `descripcion` y `etiqueta` lo
+ * reusan para sumar tiempo con "Otro ciclo".
  */
-// `titulo`, `descripcion` y `etiqueta` dejan reusarlo para sumar tiempo con
-// "Otro ciclo" (Sec49, 2026-10-08).
 export default function ElegirTiempoModal({
   maquina, tiempos, guardando = false, error = '', onElegir, onCancelar,
   titulo = '¿Con cuánto tiempo?', descripcion = null, etiqueta = (min) => `${min} min`,
@@ -39,7 +31,7 @@ export default function ElegirTiempoModal({
 
         <p className="text-sm text-gray-500">
           {descripcion ?? (maquina.cronometro
-            /* Con cronómetro (mig. 146) el programa solo avisa; el corte es el tope. */
+            /* Con cronómetro el programa solo avisa; el corte es el tope. */
             ? 'Elige el programa con el que la arrancaste. La app te avisa cuando lo cumpla; la corriente se le corta hasta su tope si nadie la finaliza.'
             : 'Elige el programa con el que la arrancaste. La app cronometra ese tiempo y le corta la corriente al terminar.')}
         </p>
@@ -48,8 +40,7 @@ export default function ElegirTiempoModal({
           <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">{error}</div>
         )}
 
-        {/* Un botón por tiempo. En columna y no en fila: en el teléfono tres
-            botones lado a lado quedan estrechos y aquí se aprieta con prisa. */}
+        {/* En columna: tres botones en fila quedan estrechos en el teléfono. */}
         <div className="space-y-2">
           {tiempos.map(min => (
             <button

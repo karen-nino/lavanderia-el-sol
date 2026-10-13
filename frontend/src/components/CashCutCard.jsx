@@ -3,10 +3,10 @@ import { Link } from 'react-router-dom';
 import { api } from '../lib/api';
 import AbrirCajaModal from './AbrirCajaModal';
 
-// Tarjeta de Corte del Dashboard. El botón depende del estado de la caja:
-//   • Sin caja abierta → Abrir caja: abre un modal (fondo inicial + nota)
-//     que la abre; al confirmar, el botón pasa a Realizar corte.
-//   • Con caja abierta → Realizar corte: lleva a Caja → Corte.
+/**
+ * Tarjeta de Caja del Dashboard: sin caja abierta, "Abrir caja" (modal de
+ * fondo y nota); abierta, "Realizar corte" (lleva a Caja → Corte).
+ */
 export default function CashCutCard() {
   const [abierta, setAbierta] = useState(null); // null = cargando
   const [modalOpen, setModalOpen] = useState(false);
@@ -19,9 +19,7 @@ export default function CashCutCard() {
     return () => { activo = false; };
   }, []);
 
-  // Acento de color e ícono según el estado (verde = abrir, rojo = corte), en
-  // línea con el resto de la app (verde = caja abierta, rojo = cerrar). Durante
-  // la carga (abierta === null) se muestra el estado de abrir.
+  // Verde para abrir, rojo para el corte; mientras carga, como abrir.
   const abrir = !abierta;
   const accent = abrir
     ? { circle: 'bg-green-50', icon: 'text-green-600', btn: 'bg-green-600 hover:bg-green-700' }
@@ -45,7 +43,6 @@ export default function CashCutCard() {
       <div className="text-center">
         <p className="text-card-title text-dark-blue">{abierta ? 'Corte de Caja' : 'Abrir Caja'}</p>
         <p className="text-kpi-label text-grey mt-1">
-          {/* La caja funciona por turnos (2026-10-03). */}
           {abierta
             ? 'Cerrar el turno y revisar ventas'
             : 'Registra la caja inicial para empezar tu turno'}

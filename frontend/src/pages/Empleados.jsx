@@ -21,9 +21,8 @@ const ROL_LABEL = { admin_main: 'Admin Main', admin: 'Admin', operador: 'Emplead
 export default function Empleados() {
   const navigate = useNavigate();
   const { usuario, sucursalActiva } = useAuth();
-  // Un usuario de prueba no administra al personal real: ve su entorno, pero no
-  // da de alta ni edita empleados (el backend también se lo bloquea).
-  // En la demo no hay personal real que administrar: se deja entrar al módulo.
+  // Un usuario de prueba no administra al personal real (el backend también lo
+  // bloquea), salvo en la demo.
   const esAdmin     = esAdminFn(usuario?.rol) && (usuario?.es_prueba !== true || ES_DEMO);
   const esAdminMain = esAdminMainFn(usuario?.rol);
 
@@ -75,8 +74,7 @@ export default function Empleados() {
       .catch(() => {});
   }, []);
 
-  // Sucursal que se está viendo. Los operadores se limitan a ella; los admins
-  // son globales y se muestran siempre.
+  // Sucursal que se ve: los empleados de ella y todos los admins (son globales).
   const sucursalVista = sucursalActiva || usuario?.sucursal || null;
 
   const filtrados = empleados
@@ -86,10 +84,8 @@ export default function Empleados() {
       const nombreCompleto = `${e.nombre} ${e.apellido ?? ''}`.toLowerCase();
       return nombreCompleto.includes(busqueda.toLowerCase());
     })
-    // Orden: el usuario actual hasta arriba (para que siempre encuentre su
-    // tarjeta), después TODOS los usuarios de prueba, luego los admin y al
-    // final los empleados. Dentro de cada grupo, admin antes que empleado y
-    // en alfabético.
+    // Orden: el usuario actual, los de prueba, los admins y los empleados; en
+    // alfabético dentro de cada grupo.
     .sort((a, b) => {
       if (a.id === usuario?.id) return -1;
       if (b.id === usuario?.id) return 1;

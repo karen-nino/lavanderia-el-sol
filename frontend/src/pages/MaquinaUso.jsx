@@ -8,8 +8,7 @@ import { fmtEncendidaConTope, horarioCiclo } from '../lib/tiempoEncendida';
 const fmtMoneda = (n) =>
   '$' + Number(n ?? 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-// `fecha` llega como 'YYYY-MM-DD' (día local del negocio). Se le agrega la hora
-// para que se interprete en la zona local del navegador y no se corra un día.
+// `fecha` llega como 'YYYY-MM-DD' (día del negocio): con hora, no se corre un día.
 const fmtFecha = (iso) =>
   new Date(iso + 'T00:00:00').toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
 
@@ -71,7 +70,7 @@ function CeldaNumero({ value, onClick }) {
   );
 }
 
-// `sub2` es una segunda línea gris debajo de `sub` (el horario de un ciclo).
+/** Renglón de un modal; `sub2` es una segunda línea gris (horario de un ciclo). */
 function FilaModal({ left, sub, sub2, right, rightSub, onClick }) {
   const contenido = (
     <>
@@ -127,15 +126,15 @@ function EstadoBadge({ estado, tipoServicio }) {
 }
 
 const METRICA_TITULO = {
-  // Cada nota que corrió en la máquina (antes se decía "usos", 2026-10-03).
+  // Cada nota que corrió en la máquina.
   usos:      'Notas',
-  // Cada vez que la máquina corrió (antes "cargas", 2026-10-03).
+  // Cada vez que la máquina corrió.
   cargas:    'Ciclos',
   empleados: 'Empleados',
   clientes:  'Clientes',
 };
 
-// Modal con el detalle de una métrica de un día.
+/** Detalle de una métrica de un día. */
 function MetricaModal({ metrica, fecha, count, items, onClose }) {
   const navigate = useNavigate();
   const noun = { usos: 'nota', cargas: 'ciclo', empleados: 'empleado', clientes: 'cliente' }[metrica];
@@ -170,8 +169,7 @@ function MetricaModal({ metrica, fecha, count, items, onClose }) {
           ) : metrica === 'cargas' ? (
             items.map((c, i) => (
               <FilaModal key={i} left={c.descripcion}
-                // La nota arriba; abajo, a qué hora arrancó y terminó y cuánto
-                // estuvo encendida en ese ciclo (si se finalizó).
+                // La nota; abajo, inicio, fin y minutos encendida (si se finalizó).
                 sub={c.folio ? `Nota ${c.folio}` : null}
                 sub2={[horarioCiclo(c), fmtEncendidaConTope(c.segundos, c.tope)]
                   .filter(Boolean).join(' · ') || null}
@@ -396,8 +394,7 @@ export default function MaquinaUso() {
             </div>
           </div>
         ) : null}
-        {/* Espacio extra abajo para poder desplazarse y ver el dropdown de
-            fecha completo sin que lo tape la barra inferior. */}
+        {/* Espacio para ver el desplegable de fecha completo sobre la barra inferior. */}
         {mostrarFecha && <div className="h-80" aria-hidden />}
       </div>
 
