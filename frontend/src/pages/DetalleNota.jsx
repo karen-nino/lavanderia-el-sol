@@ -961,7 +961,7 @@ export default function DetalleNota() {
           <div className="min-w-0 flex-1">
             <p className="text-sm font-semibold text-green-900">Mensaje enviado por WhatsApp a {waSimulado}</p>
             <p className="text-sm text-green-800 mt-0.5">
-              En la demostración no se abre WhatsApp: el envío es de mentiras.
+              En la demostración no se abre WhatsApp.
             </p>
           </div>
           <button

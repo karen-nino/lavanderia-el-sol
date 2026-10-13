@@ -676,7 +676,7 @@ export default function TicketNota() {
         {envioSimulado && (
         <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3" role="status">
           <p className="text-sm font-semibold text-green-900">Ticket enviado por WhatsApp a {envioSimulado}</p>
-          <p className="text-sm text-green-800 mt-0.5">En la demostración no se abre WhatsApp: el envío es de mentiras.</p>
+          <p className="text-sm text-green-800 mt-0.5">En la demostración no se abre WhatsApp.</p>
         </div>
         )}
       </div>

@@ -343,7 +343,7 @@ export default function Clientes() {
         <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 flex items-start gap-3" role="status">
           <div className="min-w-0 flex-1">
             <p className="text-sm font-semibold text-green-900">Chat de WhatsApp abierto con {chatSimulado}</p>
-            <p className="text-sm text-green-800 mt-0.5">En la demostración no se abre WhatsApp: es de mentiras.</p>
+            <p className="text-sm text-green-800 mt-0.5">En la demostración no se abre WhatsApp.</p>
           </div>
           <button
             type="button"
