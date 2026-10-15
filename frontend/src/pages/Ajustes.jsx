@@ -1180,7 +1180,7 @@ export default function Ajustes() {
   };
 
   // ── Tiempos de ciclo por modelo ──
-  // Con temporizador (la demo) los minutos son lo que dura la carga, no un tope.
+  /* Con temporizador (demo), los minutos son la duración, no un tope. */
   const conTemporizador = config?.cronometro === false;
   const etiquetaTiempoGeneral = conTemporizador ? 'Tiempo de carga' : 'Tope de carga';
   /** Ayuda del tiempo de respaldo por tamaño ("lavadoras medianas"). */
@@ -1190,8 +1190,7 @@ export default function Ajustes() {
   // Un renglón por modelo ("LG · WM22WV26SR"); vacío cae al tiempo general.
   const claveTiempo = (t) => `modelo|${t.modelo_id}`;
   const etiquetaTiempo = (t) => `${t.marca} · ${t.modelo}`;
-  // Con cronómetro estos minutos son el TOPE; con temporizador, lo que dura la
-  // carga. En el modelo que pregunta, los tres chicos son sus programas.
+  /* Cronómetro: los minutos son el tope. Temporizador: la duración. */
   const ayudaTiempo = (t) => {
     let base;
     if (conTemporizador) {
@@ -1254,7 +1253,7 @@ export default function Ajustes() {
   // guardado (los campos se corrigen uno por uno).
   const programasSobreTope = (t) => {
     const tope = Number(t.minutos);
-    // Con temporizador el programa elegido reemplaza al tiempo: no hay tope.
+    /* Con temporizador no hay tope: manda el programa elegido. */
     if (conTemporizador || !tieneVariosTiempos(t) || !(tope > 0)) return [];
     return ['minutos_2', 'minutos_3', 'minutos_4']
       .map(c => Number(t[c]))

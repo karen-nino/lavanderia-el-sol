@@ -148,8 +148,8 @@ export default function Dashboard() {
           <SalesCard total={ventasHoy} label="Ingresado hoy" to={ventasLink} />
         </div>
 
-        {/* KPIs: 2x2 en mobile, 4 columnas en tablet */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {/* KPIs: 2x2 hasta tableta, 4 en fila desde lg. */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <KpiCard
             label="Máquinas"
             sublabel="en Servicio"
@@ -185,8 +185,8 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Escritorio: Ventas y Caja a la izquierda, máquinas a la derecha. Móvil: apilado.
-          Máquinas con mínimo 0: si no, el carrusel lleno estira su columna y aplasta a Caja. */}
+      {/* Ventas y Caja a la izquierda, máquinas a la derecha; en móvil, apilado. */}
+      {/* minmax(0,1fr): el carrusel lleno no aplasta a Caja. */}
       <div className="space-y-16 md:space-y-0 md:grid md:grid-cols-[minmax(0,22rem)_minmax(0,1fr)] md:gap-8 md:items-start">
 
         {/* space-y-10, como la columna derecha: "Caja" queda a la altura de "Secadoras". */}

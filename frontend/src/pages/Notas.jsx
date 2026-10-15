@@ -682,7 +682,7 @@ export default function Notas() {
             <div className="hidden lg:block bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3 mb-3">{errBorrado}</div>
           )}
 
-          {/* Tabla — desde lg (tableta horizontal y escritorio) */}
+          {/* Tabla desde lg */}
           <div className="hidden lg:block bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -854,7 +854,7 @@ export default function Notas() {
             </div>
           </div>
 
-          {/* Tarjetas (móvil y tableta vertical, abajo de lg), agrupadas por día con encabezado de fecha. */}
+          {/* Tarjetas abajo de lg, agrupadas por día. */}
           <div className="lg:hidden pt-8 space-y-16">
             {gruposMobile.map((grupo, iGrupo) => (
               <div key={grupo.clave} className="space-y-4">
