@@ -829,7 +829,7 @@ function MarcasYModelos({ movil = false, onMensaje, soloConsulta = false }) {
       <div className={divisorCls}>
         <Campo
           label="Modelos"
-          hint="Los modelos de la marca elegida. Su tope de carga se configura arriba, en el bloque de Lavadora o Secadora que les toque."
+          hint="Los modelos de la marca elegida. Su tiempo se configura arriba, en el bloque de Lavadora o Secadora que les toque."
         >
           {marcas.length === 0 ? (
             <p className="text-sm text-gray-400">Primero agrega una marca.</p>
@@ -1180,17 +1180,32 @@ export default function Ajustes() {
   };
 
   // ── Tiempos de ciclo por modelo ──
+  // Con temporizador (la demo) los minutos son lo que dura la carga, no un tope.
+  const conTemporizador = config?.cronometro === false;
+  const etiquetaTiempoGeneral = conTemporizador ? 'Tiempo de carga' : 'Tope de carga';
+  /** Ayuda del tiempo de respaldo por tamaño ("lavadoras medianas"). */
+  const ayudaTiempoGeneral = (maquinas) => (conTemporizador
+    ? `Lo que dura la carga: la cuenta regresiva y, al cumplirse, se apaga sola. Para las ${maquinas} cuyo modelo no tenga tiempo propio.`
+    : `Si nadie finaliza la máquina, a estos minutos se le corta la luz. Para las ${maquinas} cuyo modelo no tenga tope propio.`);
   // Un renglón por modelo ("LG · WM22WV26SR"); vacío cae al tiempo general.
   const claveTiempo = (t) => `modelo|${t.modelo_id}`;
   const etiquetaTiempo = (t) => `${t.marca} · ${t.modelo}`;
-  // Con cronómetro estos minutos son el TOPE; en el modelo que pregunta, el campo
-  // grande es el tope y los tres chicos, sus programas.
+  // Con cronómetro estos minutos son el TOPE; con temporizador, lo que dura la
+  // carga. En el modelo que pregunta, los tres chicos son sus programas.
   const ayudaTiempo = (t) => {
-    const base = t?.pregunta_tiempo
-      ? 'Arriba, el tope: a esos minutos se le corta la luz si nadie la finaliza. Abajo, los programas: al iniciarla se pregunta cuál corre y se avisa cuando lo cumpla. Tope vacío = el programa más largo.'
-      : 'Tope de carga de este modelo: a estos minutos se le corta la luz si nadie la finaliza. Vacío = usa el tope de arriba.';
+    let base;
+    if (conTemporizador) {
+      base = t?.pregunta_tiempo
+        ? 'Arriba, el tiempo de carga. Abajo, los programas: al iniciarla se pregunta cuál corre y la cuenta regresiva usa ese.'
+        : 'Tiempo de carga de este modelo: la cuenta regresiva y, al cumplirse, se apaga sola. Vacío = usa el tiempo de arriba.';
+    } else {
+      base = t?.pregunta_tiempo
+        ? 'Arriba, el tope: a esos minutos se le corta la luz si nadie la finaliza. Abajo, los programas: al iniciarla se pregunta cuál corre y se avisa cuando lo cumpla. Tope vacío = el programa más largo.'
+        : 'Tope de carga de este modelo: a estos minutos se le corta la luz si nadie la finaliza. Vacío = usa el tope de arriba.';
+    }
     if (!esDeFichas(t)) return base;
-    return `${base} Cada ficha: solo si es de fichas con Sonoff; al iniciarla se le mete una ficha por cada tantos minutos ${t?.pregunta_tiempo ? 'del programa elegido' : 'del tope'}. Vacío = no es de fichas.`;
+    const deQue = t?.pregunta_tiempo ? 'del programa elegido' : (conTemporizador ? 'del tiempo de carga' : 'del tope');
+    return `${base} Cada ficha: solo si es de fichas con Sonoff; al iniciarla se le mete una ficha por cada tantos minutos ${deQue}. Vacío = no es de fichas.`;
   };
 
   // Los tres programas solo salen en los modelos marcados con varios programas.
@@ -1239,7 +1254,8 @@ export default function Ajustes() {
   // guardado (los campos se corrigen uno por uno).
   const programasSobreTope = (t) => {
     const tope = Number(t.minutos);
-    if (!tieneVariosTiempos(t) || !(tope > 0)) return [];
+    // Con temporizador el programa elegido reemplaza al tiempo: no hay tope.
+    if (conTemporizador || !tieneVariosTiempos(t) || !(tope > 0)) return [];
     return ['minutos_2', 'minutos_3', 'minutos_4']
       .map(c => Number(t[c]))
       .filter(n => Number.isFinite(n) && n > tope);
@@ -1672,7 +1688,7 @@ export default function Ajustes() {
       </div>
     </Field>
   );
-  const campoTiempo = (name, hint, label = 'Tope de carga') => (
+  const campoTiempo = (name, hint, label = etiquetaTiempoGeneral) => (
     <Field label={label} hint={hint}>
       <div className="flex items-center gap-2">
         <input
@@ -1715,14 +1731,14 @@ export default function Ajustes() {
     <Section titulo="Lavadora">
       {subTitulo('Mediana')}
       {campoPrecio('precio_carga_mediana', 'Aplica a lavadoras medianas en autoservicio y por encargo.')}
-      {campoTiempo('tiempo_carga_mediana', 'Si nadie finaliza la máquina, a estos minutos se le corta la luz. Para las lavadoras medianas cuyo modelo no tenga tope propio.')}
+      {campoTiempo('tiempo_carga_mediana', ayudaTiempoGeneral('lavadoras medianas'))}
       {camposTiempoMarca('lavadora', 'mediana')}
 
       <div className="border-t border-gray-100" />
 
       {subTitulo('Jumbo')}
       {campoPrecio('precio_carga_jumbo', 'Aplica a lavadoras jumbo en autoservicio y por encargo.')}
-      {campoTiempo('tiempo_carga_jumbo', 'Si nadie finaliza la máquina, a estos minutos se le corta la luz. Para las lavadoras jumbo cuyo modelo no tenga tope propio.')}
+      {campoTiempo('tiempo_carga_jumbo', ayudaTiempoGeneral('lavadoras jumbo'))}
       {camposTiempoMarca('lavadora', 'jumbo')}
 
       <div className="border-t border-gray-100" />
@@ -1736,14 +1752,14 @@ export default function Ajustes() {
     <Section titulo="Secadora">
       {subTitulo('Mediana')}
       {campoPrecio('precio_carga_secadora', 'Precio del secado de una carga mediana.')}
-      {campoTiempo('tiempo_carga_secadora', 'Si nadie finaliza la máquina, a estos minutos se le corta la luz. Para las secadoras medianas cuyo modelo no tenga tope propio.')}
+      {campoTiempo('tiempo_carga_secadora', ayudaTiempoGeneral('secadoras medianas'))}
       {camposTiempoMarca('secadora', 'mediana')}
 
       <div className="border-t border-gray-100" />
 
       {subTitulo('Jumbo')}
       {campoPrecio('precio_secadora_jumbo', 'Precio del secado de una carga jumbo.')}
-      {campoTiempo('tiempo_secadora_jumbo', 'Si nadie finaliza la máquina, a estos minutos se le corta la luz. Para las secadoras jumbo cuyo modelo no tenga tope propio.')}
+      {campoTiempo('tiempo_secadora_jumbo', ayudaTiempoGeneral('secadoras jumbo'))}
       {camposTiempoMarca('secadora', 'jumbo')}
     </Section>
 
@@ -2452,7 +2468,7 @@ export default function Ajustes() {
       </div>
     </MobileField>
   );
-  const campoTiempoM = (name, hint, label = 'Tope de carga') => (
+  const campoTiempoM = (name, hint, label = etiquetaTiempoGeneral) => (
     <MobileField label={label} hint={hint}>
       <div className="flex items-center gap-2">
         <input
@@ -2494,12 +2510,12 @@ export default function Ajustes() {
         <div className="space-y-4">
         <TarjetaMobile titulo="Mediana">
           {campoPrecioM('precio_carga_mediana', 'Aplica a lavadoras medianas (autoservicio y por encargo).')}
-          {campoTiempoM('tiempo_carga_mediana', 'Si nadie finaliza la máquina, a estos minutos se le corta la luz. Para las lavadoras medianas cuyo modelo no tenga tope propio.')}
+          {campoTiempoM('tiempo_carga_mediana', ayudaTiempoGeneral('lavadoras medianas'))}
           {camposTiempoMarcaM('lavadora', 'mediana')}
         </TarjetaMobile>
         <TarjetaMobile titulo="Jumbo">
           {campoPrecioM('precio_carga_jumbo', 'Aplica a lavadoras jumbo (autoservicio y por encargo).')}
-          {campoTiempoM('tiempo_carga_jumbo', 'Si nadie finaliza la máquina, a estos minutos se le corta la luz. Para las lavadoras jumbo cuyo modelo no tenga tope propio.')}
+          {campoTiempoM('tiempo_carga_jumbo', ayudaTiempoGeneral('lavadoras jumbo'))}
           {camposTiempoMarcaM('lavadora', 'jumbo')}
         </TarjetaMobile>
         {/* Tarifa propia del edredón en lavadora. */}
@@ -2514,12 +2530,12 @@ export default function Ajustes() {
         <div className="space-y-4">
         <TarjetaMobile titulo="Mediana">
           {campoPrecioM('precio_carga_secadora', 'Precio del secado de una carga mediana.')}
-          {campoTiempoM('tiempo_carga_secadora', 'Si nadie finaliza la máquina, a estos minutos se le corta la luz. Para las secadoras medianas cuyo modelo no tenga tope propio.')}
+          {campoTiempoM('tiempo_carga_secadora', ayudaTiempoGeneral('secadoras medianas'))}
           {camposTiempoMarcaM('secadora', 'mediana')}
         </TarjetaMobile>
         <TarjetaMobile titulo="Jumbo">
           {campoPrecioM('precio_secadora_jumbo', 'Precio del secado de una carga jumbo.')}
-          {campoTiempoM('tiempo_secadora_jumbo', 'Si nadie finaliza la máquina, a estos minutos se le corta la luz. Para las secadoras jumbo cuyo modelo no tenga tope propio.')}
+          {campoTiempoM('tiempo_secadora_jumbo', ayudaTiempoGeneral('secadoras jumbo'))}
           {camposTiempoMarcaM('secadora', 'jumbo')}
         </TarjetaMobile>
         </div>
