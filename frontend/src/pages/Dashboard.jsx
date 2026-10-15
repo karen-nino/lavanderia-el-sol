@@ -185,8 +185,9 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Escritorio: Ventas y Caja a la izquierda, máquinas a la derecha. Móvil: apilado. */}
-      <div className="space-y-16 md:space-y-0 md:grid md:grid-cols-[minmax(0,22rem)_1fr] md:gap-8 md:items-start">
+      {/* Escritorio: Ventas y Caja a la izquierda, máquinas a la derecha. Móvil: apilado.
+          Máquinas con mínimo 0: si no, el carrusel lleno estira su columna y aplasta a Caja. */}
+      <div className="space-y-16 md:space-y-0 md:grid md:grid-cols-[minmax(0,22rem)_minmax(0,1fr)] md:gap-8 md:items-start">
 
         {/* space-y-10, como la columna derecha: "Caja" queda a la altura de "Secadoras". */}
         <div className="space-y-10">

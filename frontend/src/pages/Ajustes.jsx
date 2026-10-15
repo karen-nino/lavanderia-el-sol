@@ -2987,13 +2987,13 @@ export default function Ajustes() {
       <div className="hidden md:block min-h-full bg-gray-50">
         {/* Cabecera (barra superior) */}
         <div className="bg-white border-b-2 border-gray-200">
-          <div className="max-w-2xl mx-auto px-6 pt-14 pb-4">
+          <div className="max-w-2xl mx-auto px-8 pt-14 pb-4">
             <h1 className="text-xl font-bold text-gray-900">Ajustes</h1>
           </div>
         </div>
 
         {/* Contenido */}
-        <div className="max-w-2xl mx-auto p-6 space-y-6">
+        <div className="max-w-2xl mx-auto px-8 py-6 space-y-6">
 
         <div className="space-y-6">
           {avisoPruebas}

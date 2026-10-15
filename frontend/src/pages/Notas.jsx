@@ -461,7 +461,7 @@ export default function Notas() {
     <div className="min-h-full bg-slate-100">
       {/* Cabecera (barra superior) */}
       <div className="bg-white border-b-2 border-gray-200">
-        <div className="max-w-2xl min-[990px]:max-w-none min-[1441px]:max-w-7xl mx-auto px-6 md:px-8 pt-10 md:pt-14 pb-4 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-6 md:px-8 pt-10 md:pt-14 pb-4 flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Notas</h1>
           <p className="text-sm text-gray-500">{filtradas.length} resultado(s)</p>
@@ -608,7 +608,7 @@ export default function Notas() {
       <SucursalBar />
 
       {/* Contenido */}
-      <div className="max-w-2xl min-[990px]:max-w-none min-[1441px]:max-w-7xl mx-auto px-6 md:px-8 py-4 space-y-4">
+      <div className="max-w-7xl mx-auto px-6 md:px-8 py-4 space-y-4">
 
       {/* Búsqueda */}
       <div className="relative">
@@ -630,7 +630,7 @@ export default function Notas() {
 
       {/* En escritorio, o en móvil sin tarjetas (para quitar el filtro que dejó la
           lista vacía); con tarjetas, en móvil van arriba del primer día. */}
-      {chipsFiltros(filtradas.length > 0 ? 'hidden md:flex' : 'flex')}
+      {chipsFiltros(filtradas.length > 0 ? 'hidden lg:flex' : 'flex')}
 
       {loading && (
         <div className="flex justify-center py-12">
@@ -658,7 +658,7 @@ export default function Notas() {
         <>
           {/* Barra de selección múltiple (admin_main, desktop) */}
           {esAdminMain && seleccion.size > 0 && (
-            <div className="hidden md:flex items-center justify-between gap-3 bg-white rounded-xl shadow-sm border border-gray-100 px-4 py-3 mb-3">
+            <div className="hidden lg:flex items-center justify-between gap-3 bg-white rounded-xl shadow-sm border border-gray-100 px-4 py-3 mb-3">
               <span className="text-sm text-gray-700">
                 {seleccion.size} nota(s) seleccionada(s)
               </span>
@@ -679,11 +679,11 @@ export default function Notas() {
             </div>
           )}
           {esAdminMain && errBorrado && (
-            <div className="hidden md:block bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3 mb-3">{errBorrado}</div>
+            <div className="hidden lg:block bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3 mb-3">{errBorrado}</div>
           )}
 
-          {/* Tabla — desktop */}
-          <div className="hidden md:block bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+          {/* Tabla — desde lg (tableta horizontal y escritorio) */}
+          <div className="hidden lg:block bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                   <thead>
@@ -810,7 +810,7 @@ export default function Notas() {
           </div>
 
           {/* Paginación (escritorio) — siempre visible */}
-          <div className="hidden md:flex items-center justify-between gap-3 mt-3">
+          <div className="hidden lg:flex items-center justify-between gap-3 mt-3">
             <span className="text-xs text-gray-500">
               {filtradas.length === 0
                 ? 'Sin notas'
@@ -854,8 +854,8 @@ export default function Notas() {
             </div>
           </div>
 
-          {/* Tarjetas de móvil, agrupadas por día con encabezado de fecha. */}
-          <div className="md:hidden pt-8 space-y-16">
+          {/* Tarjetas (móvil y tableta vertical, abajo de lg), agrupadas por día con encabezado de fecha. */}
+          <div className="lg:hidden pt-8 space-y-16">
             {gruposMobile.map((grupo, iGrupo) => (
               <div key={grupo.clave} className="space-y-4">
                 {iGrupo === 0 && chipsFiltros('flex')}

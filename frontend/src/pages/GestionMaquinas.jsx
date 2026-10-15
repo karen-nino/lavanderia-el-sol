@@ -431,9 +431,9 @@ export default function GestionMaquinas() {
 
   return (
     <div className="min-h-full bg-slate-100">
-      {/* Cabecera (barra superior): mismo ancho que el contenido. */}
+      {/* Cabecera (barra superior) */}
       <div className="bg-white border-b-2 border-gray-200">
-        <div className="max-w-2xl min-[1000px]:max-w-none min-[1441px]:max-w-7xl mx-auto px-6 md:px-8 pt-10 md:pt-14 pb-4 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-6 md:px-8 pt-10 md:pt-14 pb-4 flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Gestión de máquinas</h1>
           <p className="text-sm text-gray-500">{maquinas.length} equipo(s) registrado(s)</p>
@@ -464,8 +464,8 @@ export default function GestionMaquinas() {
 
       <SucursalBar />
 
-      {/* Contenido: columna angosta abajo de 1000 px, todo el ancho hasta 1440 px y tope de 7xl arriba. */}
-      <div className="max-w-2xl min-[1000px]:max-w-none min-[1441px]:max-w-7xl mx-auto px-6 md:px-8 py-4 space-y-4">
+      {/* Contenido */}
+      <div className="max-w-7xl mx-auto px-6 md:px-8 py-4 space-y-4">
 
       {/* Cuenta de eWeLink: sin ella ningún Sonoff responde. Oculta en simulación. */}
       {esAdmin && CON_SONOFF && cuentaSonoff && !cuentaSonoff.simulado && (
@@ -566,7 +566,7 @@ export default function GestionMaquinas() {
               <h2 className="text-base font-bold text-gray-900">
                 {grupo.titulo} <span className="text-gray-400 font-medium">({grupo.items.length})</span>
               </h2>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
                 {grupo.items.map(m => {
             const cfg = ESTADO_CFG[estadoVisual(m)] ?? ESTADO_CFG.disponible;
             const { tipo, tamano } = descomponerTipo(m.tipo);
