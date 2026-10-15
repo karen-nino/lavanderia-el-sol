@@ -546,7 +546,8 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
                       <p className="text-md text-grey">Sin {grupo.titulo.toLowerCase()} en uso</p>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-2 lg:grid-cols-3 gap-6">
+                    // Tres por fila solo arriba de 1440 px: abajo, la página va en columna angosta.
+                    <div className="grid grid-cols-2 min-[1441px]:grid-cols-3 gap-6">
                       {grupo.items.map(renderCard)}
                     </div>
                   )}
