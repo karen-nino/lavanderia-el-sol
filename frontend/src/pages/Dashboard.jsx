@@ -148,8 +148,8 @@ export default function Dashboard() {
           <SalesCard total={ventasHoy} label="Ingresado hoy" to={ventasLink} />
         </div>
 
-        {/* KPIs: 2x2 hasta tableta, 4 en fila desde lg. */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* KPIs: 2x2 en móvil, 4 en fila desde tableta. */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <KpiCard
             label="Máquinas"
             sublabel="en Servicio"

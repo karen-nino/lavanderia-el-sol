@@ -11,12 +11,12 @@ export default function KpiCard({ label, sublabel, value, color = 'blue', icon, 
   const v = VARIANT[color] ?? VARIANT.blue;
   /* Móvil cuadrada, tableta alto fijo y desde lg 16/9 con alto mínimo. */
   /* w-full: sin él, el alto mínimo ensancha la tarjeta y se enciman. */
-  const baseCls = `relative w-full aspect-square md:aspect-auto md:min-h-[7.5rem] lg:aspect-[16/9] lg:min-h-[9rem] rounded-xl p-4 md:p-5 pb-5 md:pb-5 shadow-card overflow-hidden flex flex-col justify-end ${v.container}`;
+  const baseCls = `relative w-full aspect-square md:aspect-auto md:min-h-[9rem] lg:aspect-[16/9] rounded-xl p-4 lg:p-5 pb-5 shadow-card overflow-hidden flex flex-col justify-end ${v.container}`;
 
   const contenido = (
     <>
       {icon && (
-        <span className={`absolute top-3.5 right-3.5 md:top-4 md:right-4 w-16 h-16 md:w-12 md:h-12 opacity-50 ${v.value}`}>
+        <span className={`absolute top-3.5 right-3.5 lg:top-4 lg:right-4 w-16 h-16 md:w-10 md:h-10 lg:w-12 lg:h-12 opacity-50 ${v.value}`}>
           {icon}
         </span>
       )}
@@ -26,7 +26,7 @@ export default function KpiCard({ label, sublabel, value, color = 'blue', icon, 
           {value}
         </p>
         <p className="text-sm leading-tight text-dark-grey">{label}</p>
-        <p className="text-lg font-bold leading-tight text-dark-blue">{sublabel}</p>
+        <p className="text-lg md:text-base lg:text-lg font-bold leading-tight text-dark-blue">{sublabel}</p>
       </div>
     </>
   );
