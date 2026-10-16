@@ -860,8 +860,8 @@ export default function Notas() {
               <div key={grupo.clave} className="space-y-4">
                 {iGrupo === 0 && chipsFiltros('flex')}
                 <h3 className="text-sm font-bold text-dark-blue px-1">{grupo.fecha}</h3>
-                {/* Una por fila en celular angosto; dos desde 580 px. */}
-                <div className="grid grid-cols-1 min-[580px]:grid-cols-2 gap-4">
+                {/* Una por fila en celular, dos en tableta. */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {grupo.notas.map(n => {
               const badgeEstado    = n.doblado ? BADGE_DOBLADO : (BADGE_ESTADO[n.estado] ?? BADGE_ESTADO.LAVANDO);
               // Cancelada no tiene estado de pago: no se va a cobrar.
