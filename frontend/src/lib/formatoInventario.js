@@ -30,10 +30,10 @@ export function partesBotellas(medidas, medidasPorBotella) {
 }
 
 // Unas medidas contadas en botellas y medidas sueltas. En productos de marca
-// la botella se nombra "unidad".
+// la botella se nombra "pieza".
 export function textoBotellas(medidas, medidasPorBotella, { marca = false } = {}) {
   const { botellas, medidas: sueltas } = partesBotellas(medidas, medidasPorBotella);
-  const unidad = marca ? plural(botellas, 'unidad', 'unidades') : plural(botellas, 'botella', 'botellas');
+  const unidad = marca ? plural(botellas, 'pieza', 'piezas') : plural(botellas, 'botella', 'botellas');
   const partes = [];
   if (botellas > 0 || sueltas === 0) partes.push(unidad);
   if (sueltas > 0) partes.push(plural(sueltas, 'medida', 'medidas'));

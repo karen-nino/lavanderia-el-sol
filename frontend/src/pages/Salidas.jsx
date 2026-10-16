@@ -18,13 +18,13 @@ function fmtMonto(n) {
 }
 
 /**
- * Unidad de un producto de la nota para el "$28.00/unidad": medida (Por
- * Encargo), bolsa, unidad (marca y polvo) o botella (granel). Como en Nueva Nota.
+ * Unidad de un producto de la nota para el "$28.00/pieza": medida (Por
+ * Encargo), bolsa, pieza (marca y polvo) o botella (granel). Como en Nueva Nota.
  */
 function unidadDeRenglon(p) {
   if (p.unidad === 'medida') return 'medida';
   if (p.clase === 'bolsa') return 'bolsa';
-  if (seVendePorUnidad(p)) return 'unidad';
+  if (seVendePorUnidad(p)) return 'pieza';
   return 'botella';
 }
 
@@ -888,7 +888,7 @@ export default function Salidas() {
     const disp = existenciaProducto(p);
     const [uno, varios] = p.clase === 'bolsa' ? ['bolsa', 'bolsas']
       : porMedida(p) ? ['medida', 'medidas']
-      : seVendePorUnidad(p) ? ['unidad', 'unidades']
+      : seVendePorUnidad(p) ? ['pieza', 'piezas']
       : ['botella', 'botellas'];
     const precio = porMedida(p) || p.clase === 'bolsa'
       ? Number(p.precio_unitario) || 0

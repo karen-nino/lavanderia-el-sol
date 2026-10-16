@@ -21,8 +21,8 @@ function unidadProdTxt(p) {
   const n = Number(p.cantidad);
   if (p.unidad === 'pieza') return n === 1 ? 'pieza' : 'piezas';
   if (p.unidad === 'botella') {
-    // Marca y polvo, por unidad; el granel líquido, por botella.
-    if (seVendePorUnidad(p)) return n === 1 ? 'unidad' : 'unidades';
+    // Marca y polvo, por pieza; el granel líquido, por botella.
+    if (seVendePorUnidad(p)) return n === 1 ? 'pieza' : 'piezas';
     return n === 1 ? 'botella' : 'botellas';
   }
   return n === 1 ? 'medida' : 'medidas';

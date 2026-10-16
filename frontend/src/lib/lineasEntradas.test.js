@@ -8,8 +8,8 @@ describe('lineasEntradas (Reporte diario)', () => {
     expect(lineasEntradas({ ...granel }, false)).toEqual(['—']);
     expect(lineasEntradas({ medidas_por_botella: 1 }, true)).toEqual(['—']);
   });
-  it('lo que se cuenta por unidad va en una línea', () => {
-    expect(lineasEntradas({ medidas_por_botella: 1, entrada_botellas_medidas: 3 }, true)).toEqual(['3 unidades']);
+  it('lo que se cuenta por pieza va en una línea', () => {
+    expect(lineasEntradas({ medidas_por_botella: 1, entrada_botellas_medidas: 3 }, true)).toEqual(['3 piezas']);
   });
   it('granel separa botellas y bidón', () => {
     expect(lineasEntradas({ ...granel, entrada_granel_medidas: 50 }, false)).toEqual(['A granel: 1 bidón']);

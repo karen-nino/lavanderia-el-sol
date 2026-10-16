@@ -2444,7 +2444,7 @@ export default function Inventario() {
                     return sub && <p className="text-sm text-gray-500 mt-0.5">{sub}</p>;
                   })()}
                 </div>
-                {/* Precio: bolsa = por pieza; granel = medida + botella; marca = unidad. */}
+                {/* Precio: bolsa = por pieza; granel = medida + botella; marca y polvo = pieza. */}
                 {p.clase === 'bolsa' ? (
                   <div>
                     <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Precio por pieza</p>

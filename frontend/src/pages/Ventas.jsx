@@ -59,7 +59,7 @@ const NOTAS_POR_PAGINA = 20;
 
 /**
  * Nombre y unidad de un producto en el modal de Productos (como el ticket): el
- * granel lleva "· Granel"; marca y polvo por unidad, granel por botella o medida,
+ * granel lleva "· Granel"; marca y polvo por pieza, granel por botella o medida,
  * bolsa por pieza.
  */
 function nombreProductoVenta(p) {
@@ -69,7 +69,7 @@ function unidadProductoVenta(p) {
   const uno = Number(p.cantidad) === 1;
   if (p.unidad === 'pieza') return uno ? 'pieza' : 'piezas';
   if (p.unidad === 'botella') {
-    if (seVendePorUnidad(p)) return uno ? 'unidad' : 'unidades';
+    if (seVendePorUnidad(p)) return uno ? 'pieza' : 'piezas';
     return uno ? 'botella' : 'botellas';
   }
   return uno ? 'medida' : 'medidas';

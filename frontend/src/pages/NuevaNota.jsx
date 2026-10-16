@@ -327,10 +327,10 @@ export default function NuevaNota() {
     const disp = Number(prod.stock_disponible ?? prod.stock_actual) || 0;
     return tpb > 0 ? Math.floor(disp / tpb) : disp;
   };
-  // Unidad vendida en Autoservicio: botella (granel), unidad (marca y polvo) o bolsa.
+  // Unidad vendida en Autoservicio: botella (granel), pieza (marca y polvo) o bolsa.
   const unidadVentaNota = (prod, n = 2) => {
     if (prod?.clase === 'bolsa') return n === 1 ? 'bolsa' : 'bolsas';
-    if (seVendePorUnidad(prod)) return n === 1 ? 'unidad' : 'unidades';
+    if (seVendePorUnidad(prod)) return n === 1 ? 'pieza' : 'piezas';
     return n === 1 ? 'botella' : 'botellas';
   };
   // Granel de los servicios Por Encargo: N medidas de cada tipo; el producto se
