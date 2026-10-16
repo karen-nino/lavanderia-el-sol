@@ -182,15 +182,15 @@ function PreviaWhatsapp({ plantilla }) {
 }
 
 const MOBILE_SECTIONS = [
-  { id: 'perfil',  label: 'Mi Perfil',                 subtitle: 'Información de perfil',    icon: SectionIcon.perfil  },
-  { id: 'negocio', label: 'Negocio y Sucursales',      subtitle: 'Información de sucursales', icon: SectionIcon.negocio },
-  { id: 'maquinas', label: 'Máquinas',                  subtitle: 'Detalles de máquinas',      icon: SectionIcon.maquinas },
-  { id: 'cargas',   label: 'Servicios Por Encargo',      subtitle: 'Precio de cada servicio',   icon: SectionIcon.cargas },
-  { id: 'alertas', label: 'Alertas y Notificaciones',  subtitle: 'Ajustes de alertas', icon: SectionIcon.alertas },
-  { id: 'etiquetas', label: 'Etiquetas de encargo',    subtitle: 'Tipos de tela y tamaños de edredón', icon: SectionIcon.etiquetas },
-  { id: 'inventario', label: 'Inventario',              subtitle: 'Marcas y envases de productos', icon: SectionIcon.inventario },
-  { id: 'whatsapp', label: 'WhatsApp',                 subtitle: 'Mensaje para Por Encargo', icon: SectionIcon.whatsapp },
-  { id: 'ticket',   label: 'Ticket',                   subtitle: 'Notas al pie del ticket', icon: SectionIcon.ticket },
+  { id: 'perfil',  label: 'Mi Perfil',                 subtitle: 'Información de perfil',    icon: SectionIcon.perfil, detalle: 'Tu nombre y tu contraseña' },
+  { id: 'negocio', label: 'Negocio y Sucursales',      subtitle: 'Información de sucursales', icon: SectionIcon.negocio, detalle: 'Nombre, logo, R.F.C. y datos de cada sucursal' },
+  { id: 'maquinas', label: 'Máquinas',                  subtitle: 'Detalles de máquinas',      icon: SectionIcon.maquinas, detalle: 'Precio y tiempo de lavadoras y secadoras, marcas y modelos' },
+  { id: 'cargas',   label: 'Servicios Por Encargo',      subtitle: 'Precio de cada servicio',   icon: SectionIcon.cargas, detalle: 'Precio y lo que incluye cada servicio' },
+  { id: 'alertas', label: 'Alertas y Notificaciones',  subtitle: 'Ajustes de alertas', icon: SectionIcon.alertas, detalle: 'Qué avisos y sonidos salen' },
+  { id: 'etiquetas', label: 'Etiquetas de encargo',    subtitle: 'Tipos de tela y tamaños de edredón', icon: SectionIcon.etiquetas, detalle: 'Tipos de tela y tamaños de edredón' },
+  { id: 'inventario', label: 'Inventario',              subtitle: 'Marcas y envases de productos', icon: SectionIcon.inventario, detalle: 'Marcas, envases, granel y bolsas' },
+  { id: 'whatsapp', label: 'WhatsApp',                 subtitle: 'Mensaje para Por Encargo', icon: SectionIcon.whatsapp, detalle: 'Mensajes que se mandan a los clientes' },
+  { id: 'ticket',   label: 'Ticket',                   subtitle: 'Notas al pie del ticket', icon: SectionIcon.ticket, detalle: 'Notas al pie del ticket' },
 ];
 
 /** Claves con que los datos de un tamaño de edredón entran a `config`. */
@@ -220,7 +220,7 @@ const CAMPOS_PRECARGA = PRECIOS_SERVICIO.flatMap(([, , , m, b]) => [m, b]);
 /** El manual abre su propia página (/manual); en escritorio es un botón aparte. */
 const SECCION_MANUAL = {
   id: 'manual', label: 'Manual de uso', subtitle: 'Cómo funciona la aplicación',
-  icon: SectionIcon.manual,
+  detalle: 'Cómo funciona la aplicación, paso a paso', icon: SectionIcon.manual,
 };
 
 /**
@@ -229,7 +229,7 @@ const SECCION_MANUAL = {
  */
 const SECCION_INSTALAR = {
   id: 'instalar', label: 'Instalar la app', subtitle: 'Tenerla en la pantalla de inicio',
-  icon: SectionIcon.instalar,
+  detalle: 'Tenerla en la pantalla de inicio', icon: SectionIcon.instalar,
 };
 
 const aNumero = (v) => (v === '' || v == null ? null : Number(v));
@@ -465,7 +465,77 @@ function TarjetaManual({ onAbrir }) {
   );
 }
 
-/** Renglón del menú lateral de Ajustes: solo ícono en tableta, con nombre desde lg. */
+/** Tarjeta del inicio de Ajustes (tableta y laptop): nombre, qué tiene y si hay cambios. */
+function TarjetaSeccion({ seccion, conCambios }) {
+  const destino = seccion.id === 'manual' ? '/manual' : `/ajustes/${seccion.id}`;
+  return (
+    <Link
+      to={destino}
+      className="relative flex items-start gap-3 bg-white rounded-xl border border-gray-200 p-4 hover:border-blue/40 hover:shadow-card-hover transition"
+    >
+      <span className="flex-shrink-0 text-blue [&>svg]:w-6 [&>svg]:h-6">{seccion.icon}</span>
+      <span className="min-w-0">
+        <span className="block text-sm font-semibold text-dark-blue">{seccion.label}</span>
+        <span className="block text-xs text-gray-500 mt-0.5">{seccion.detalle}</span>
+      </span>
+      {conCambios && (
+        <span className="absolute top-3 right-3 w-2 h-2 rounded-full bg-amber-500" aria-label="Con cambios sin guardar" />
+      )}
+    </Link>
+  );
+}
+
+/** Lista desplegable para saltar de sección sin volver al inicio (768–1319 px). */
+function CambiarSeccion({ actual, conCambios }) {
+  const [abierto, setAbierto] = useState(false);
+  return (
+    <div className="relative flex-shrink-0">
+      <button
+        type="button"
+        onClick={() => setAbierto(v => !v)}
+        aria-expanded={abierto}
+        className="flex items-center gap-2 px-4 py-2.5 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors"
+      >
+        Cambiar sección
+        <svg className={`w-4 h-4 transition-transform ${abierto ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+      {abierto && (
+        <>
+          {/* Un toque fuera la cierra. */}
+          <button type="button" aria-label="Cerrar" className="fixed inset-0 z-30 cursor-default" onClick={() => setAbierto(false)} />
+          <div className="absolute right-0 top-full mt-2 z-40 w-80 max-h-[70vh] overflow-y-auto bg-white border border-gray-200 rounded-xl shadow-lg py-2">
+            {GRUPOS_AJUSTES.map((g) => (
+              <div key={g.titulo} className="py-1">
+                <p className="px-4 py-1 text-xs font-semibold uppercase tracking-wide text-gray-400">{g.titulo}</p>
+                {g.ids.map(seccionPorId).map((sec) => (
+                  <Link
+                    key={sec.id}
+                    to={sec.id === 'manual' ? '/manual' : `/ajustes/${sec.id}`}
+                    onClick={() => setAbierto(false)}
+                    className={`flex items-start gap-3 px-4 py-2.5 ${sec.id === actual ? 'bg-light-blue/60' : 'hover:bg-gray-50'}`}
+                  >
+                    <span className="flex-shrink-0 text-blue [&>svg]:w-5 [&>svg]:h-5">{sec.icon}</span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-medium text-dark-blue">{sec.label}</span>
+                      <span className="block text-xs text-gray-500">{sec.detalle}</span>
+                    </span>
+                    {conCambios.has(sec.id) && (
+                      <span className="mt-1.5 w-2 h-2 rounded-full bg-amber-500 flex-shrink-0" aria-label="Con cambios sin guardar" />
+                    )}
+                  </Link>
+                ))}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/** Renglón del menú lateral de Ajustes (desde 1320 px). */
 function ItemMenuAjustes({ seccion, activa, conCambios }) {
   const destino = seccion.id === 'manual' ? '/manual' : `/ajustes/${seccion.id}`;
   return (
@@ -473,15 +543,15 @@ function ItemMenuAjustes({ seccion, activa, conCambios }) {
       to={destino}
       title={seccion.label}
       aria-current={activa ? 'page' : undefined}
-      className={`relative flex items-center justify-center lg:justify-start gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+      className={`relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
         activa ? 'bg-light-blue text-blue' : 'text-gray-600 hover:bg-gray-100 hover:text-dark-blue'
       }`}
     >
       <span className="flex-shrink-0 [&>svg]:w-5 [&>svg]:h-5">{seccion.icon}</span>
-      <span className="hidden lg:block truncate">{seccion.label}</span>
+      <span className="truncate">{seccion.label}</span>
       {conCambios && (
         <span
-          className="absolute top-1.5 right-1.5 lg:static lg:ml-auto w-2 h-2 rounded-full bg-amber-500 flex-shrink-0"
+          className="ml-auto w-2 h-2 rounded-full bg-amber-500 flex-shrink-0"
           aria-label="Con cambios sin guardar"
         />
       )}
@@ -3136,20 +3206,43 @@ export default function Ajustes() {
         className="hidden"
       />
 
-      {/* ── Vista escritorio: menú lateral y una sección a la vez ── */}
+      {/* ── Vista escritorio ──
+          Desde 1320 px: menú lateral y una sección a la vez.
+          De 768 a 1319: tarjetas al entrar y la sección a todo lo ancho. */}
       <div className="hidden md:block min-h-full bg-gray-50">
         <div className="bg-white border-b-2 border-gray-200">
-          <div className="max-w-5xl mx-auto px-8 pt-14 pb-4">
-            <h1 className="text-xl font-bold text-gray-900">Ajustes</h1>
-            <p className="text-sm text-gray-500">Configuración del negocio y de tu cuenta</p>
+          <div className="max-w-3xl min-[1320px]:max-w-5xl mx-auto px-8 pt-14 pb-4">
+            <div className={seccionUrl ? 'hidden min-[1320px]:block' : ''}>
+              <h1 className="text-xl font-bold text-gray-900">Ajustes</h1>
+              <p className="text-sm text-gray-500">Configuración del negocio y de tu cuenta</p>
+            </div>
+            {seccionUrl && (
+              <div className="min-[1320px]:hidden flex items-center gap-3">
+                <Link
+                  to="/ajustes"
+                  aria-label="Volver a Ajustes"
+                  className="w-11 h-11 rounded-full border border-gray-300 text-dark-blue flex items-center justify-center flex-shrink-0 hover:bg-gray-50 transition-colors"
+                >
+                  {SectionIcon.back}
+                </Link>
+                <div className="min-w-0 mr-auto">
+                  <p className="text-xs text-gray-400">
+                    <Link to="/ajustes" className="hover:text-blue">Ajustes</Link>
+                    {' / '}{GRUPOS_AJUSTES.find(g => g.ids.includes(seccionVista))?.titulo}
+                  </p>
+                  <h1 className="text-xl font-bold text-gray-900 truncate">{seccionPorId(seccionVista).label}</h1>
+                </div>
+                <CambiarSeccion actual={seccionVista} conCambios={seccionesConCambios} />
+              </div>
+            )}
           </div>
         </div>
 
-        <div className="max-w-5xl mx-auto px-8 py-6 flex items-start gap-6 lg:gap-8">
-          <nav aria-label="Secciones de Ajustes" className="sticky top-6 w-14 lg:w-60 flex-shrink-0 space-y-5">
+        <div className="max-w-3xl min-[1320px]:max-w-5xl mx-auto px-8 py-6 flex items-start gap-8">
+          <nav aria-label="Secciones de Ajustes" className="hidden min-[1320px]:block sticky top-6 w-60 flex-shrink-0 space-y-5">
             {GRUPOS_AJUSTES.map((g) => (
               <div key={g.titulo} className="space-y-1">
-                <p className="hidden lg:block px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-gray-400">{g.titulo}</p>
+                <p className="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-gray-400">{g.titulo}</p>
                 {g.ids.map(seccionPorId).map((sec) => (
                   <ItemMenuAjustes
                     key={sec.id}
@@ -3163,14 +3256,32 @@ export default function Ajustes() {
           </nav>
 
           <div className="flex-1 min-w-0 space-y-6">
-            <div>
+            {avisoPruebas}
+
+            {/* Inicio de Ajustes en tableta y laptop: una tarjeta por sección. */}
+            {!seccionUrl && (
+              <div className="min-[1320px]:hidden space-y-6">
+                {GRUPOS_AJUSTES.map((g) => (
+                  <div key={g.titulo} className="space-y-3">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">{g.titulo}</p>
+                    <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+                      {g.ids.map(seccionPorId).map((sec) => (
+                        <TarjetaSeccion key={sec.id} seccion={sec} conCambios={seccionesConCambios.has(sec.id)} />
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className={`space-y-6 ${seccionUrl ? '' : 'hidden min-[1320px]:block'}`}>
+            <div className={seccionUrl ? 'hidden min-[1320px]:block' : ''}>
               <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">
                 {GRUPOS_AJUSTES.find(g => g.ids.includes(seccionVista))?.titulo}
               </p>
               <h2 className="text-lg font-bold text-dark-blue">{seccionPorId(seccionVista).label}</h2>
               <p className="text-sm text-gray-500">{seccionPorId(seccionVista).subtitle}</p>
             </div>
-            {avisoPruebas}
             {mensajeBanner}
             {{
               perfil:     seccionPerfilDesktop,
@@ -3185,6 +3296,7 @@ export default function Ajustes() {
               manual:     <TarjetaManual onAbrir={() => navigate('/manual')} />,
               instalar:   <InstalarApp />,
             }[seccionVista]}
+            </div>
 
             {/* Solo aparece con cambios: dice dónde y deja guardar o descartar. */}
             {(hayCambios || guardadoOk === 'todo') && (
