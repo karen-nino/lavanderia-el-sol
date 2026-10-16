@@ -2461,12 +2461,12 @@ export default function Inventario() {
                   </div>
                 )}
 
-                <div className="space-y-2 pt-1">
-                  <div className="flex gap-2">
+                <div className="space-y-3.5 pt-1">
+                  <div className="flex gap-3">
                     <button
                       type="button"
                       onClick={() => { setModalMovimiento({ producto: p, tipo: 'entrada' }); }}
-                      className="flex-1 flex items-center justify-center gap-2 py-3 border border-green-300 text-green-700 hover:bg-green-50 font-medium rounded-lg text-sm transition-colors"
+                      className="flex-1 flex items-center justify-center gap-2 py-3.5 border border-green-300 text-green-700 hover:bg-green-50 font-medium rounded-lg text-sm transition-colors"
                     >
                       + Entrada
                     </button>
@@ -2482,7 +2482,7 @@ export default function Inventario() {
                     <button
                       type="button"
                       onClick={() => { setModalRellenar(p); }}
-                      className="w-full flex items-center justify-center gap-2 py-3 bg-blue hover:opacity-90 text-white font-medium rounded-lg text-sm transition-colors"
+                      className="w-full flex items-center justify-center gap-2 py-3.5 bg-blue hover:opacity-90 text-white font-medium rounded-lg text-sm transition-colors"
                     >
                       Rellenar botellas
                     </button>
@@ -2490,7 +2490,7 @@ export default function Inventario() {
                   <button
                     type="button"
                     onClick={() => { setModalHistorial(p); }}
-                    className="w-full flex items-center justify-center gap-2 py-3 border border-gray-300 text-gray-700 hover:bg-gray-50 font-medium rounded-lg text-sm transition-colors"
+                    className="w-full flex items-center justify-center gap-2 py-3.5 border border-gray-300 text-gray-700 hover:bg-gray-50 font-medium rounded-lg text-sm transition-colors"
                   >
                     <IconoHistorial />
                     Ver historial
