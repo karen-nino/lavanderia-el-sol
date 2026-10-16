@@ -2249,8 +2249,10 @@ export default function Inventario() {
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2 flex-wrap">
+                            {/* Con suficiente, el punto verde va a la izquierda; los avisos, a la derecha. */}
+                            {es === 'ok' && <BadgeEstado estado={es} />}
                             <span className="font-medium text-gray-800">{textoRellenadas(p)}</span>
-                            <BadgeEstado estado={es} />
+                            {es !== 'ok' && <BadgeEstado estado={es} />}
                           </div>
                           <LineaApartadas p={p} />
                         </td>
@@ -2334,8 +2336,10 @@ export default function Inventario() {
                     return sub && <p className="text-xs text-gray-400 mt-0.5">{sub}</p>;
                   })()}
                   <div className="flex items-center gap-2 mt-1 flex-wrap">
+                    {/* Con suficiente, el punto verde va a la izquierda; los avisos, a la derecha. */}
+                    {es === 'ok' && <BadgeEstado estado={es} />}
                     <span className="text-md font-semibold text-gray-700">{textoRellenadas(p)}</span>
-                    <BadgeEstado estado={es} />
+                    {es !== 'ok' && <BadgeEstado estado={es} />}
                   </div>
                   <LineaApartadas p={p} />
                   {/* Los bidones se ven al abrir la tarjeta. */}
@@ -2438,8 +2442,10 @@ export default function Inventario() {
                 <div>
                   <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">{p.clase === 'bolsa' ? 'Bolsas' : p.tipo_liquido === 'marca' ? 'Unidades' : 'Botellas'}</p>
                   <div className="flex items-center gap-2 flex-wrap">
+                    {/* Con suficiente, el punto verde va a la izquierda; los avisos, a la derecha. */}
+                    {es === 'ok' && <BadgeEstado estado={es} />}
                     <span className="text-base font-medium text-gray-800">{textoRellenadas(p)}</span>
-                    <BadgeEstado estado={es} />
+                    {es !== 'ok' && <BadgeEstado estado={es} />}
                   </div>
                   <LineaApartadas p={p} className="text-xs text-gray-500 mt-1" />
                 </div>
