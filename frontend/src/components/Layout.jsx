@@ -280,7 +280,7 @@ function DesktopSidebar({ items, onMenu, onOverflowChange, onSettings, onLogout 
   );
 }
 
-function DesktopHeader({ usuario, sucursalNombre, now }) {
+function DesktopHeader({ usuario, sucursalNombre, now, alertas, onAlerts }) {
   const fecha = now.toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' });
   const hora  = formatHora12(now);
   return (
@@ -296,7 +296,10 @@ function DesktopHeader({ usuario, sucursalNombre, now }) {
       </div>
 
       <div className="flex flex-col items-end gap-1">
-        <SucursalSelector />
+        <div className="flex items-center gap-3">
+          <BotonAlertas alertas={alertas} onAlerts={onAlerts} />
+          <SucursalSelector />
+        </div>
         <div className="flex items-center gap-1 mt-2">
           <span className="w-2 h-2 rounded-pill bg-green" />
           <span className="text-kpi-label font-bold text-green uppercase tracking-wide">{sucursalNombre}</span>
@@ -308,13 +311,33 @@ function DesktopHeader({ usuario, sucursalNombre, now }) {
   );
 }
 
-function MobileTopbar({ usuario, sucursalNombre, alertas, onAlerts }) {
+/** Campana de alertas con contador; roja si alguna es crítica. */
+function BotonAlertas({ alertas, onAlerts, className = '' }) {
   const count = alertas.length;
   const tieneAlertas = count > 0;
   const hayCritica = alertas.some(a => a.severity === 'agotado');
   const colorCls = tieneAlertas
     ? (hayCritica ? 'bg-light-red text-red' : 'bg-light-bronce text-bronce')
     : 'text-dark-blue';
+  return (
+    <button
+      onClick={onAlerts}
+      aria-label={tieneAlertas ? `Ver ${count} alerta(s)` : 'Ver alertas'}
+      className={`relative flex items-center justify-center ${className}`}
+    >
+      <span className={`w-11 h-11 flex items-center justify-center rounded-pill transition-colors ${colorCls}`}>
+        {Icon.bell}
+      </span>
+      {count > 0 && (
+        <span className="absolute top-0.5 right-0.5 min-w-[20px] h-5 px-1 bg-red text-white text-[11px] font-bold rounded-pill flex items-center justify-center ring-2 ring-white">
+          {count > 9 ? '9+' : count}
+        </span>
+      )}
+    </button>
+  );
+}
+
+function MobileTopbar({ usuario, sucursalNombre, alertas, onAlerts }) {
   return (
     <header className="md:hidden flex items-start justify-between px-6 pt-10 pb-4 flex-shrink-0">
       <div className="flex items-center gap-3">
@@ -327,20 +350,7 @@ function MobileTopbar({ usuario, sucursalNombre, alertas, onAlerts }) {
           </div>
         </div>
       </div>
-      <button
-        onClick={onAlerts}
-        aria-label={tieneAlertas ? `Ver ${count} alerta(s)` : 'Ver alertas'}
-        className="relative pt-1 flex items-center justify-center"
-      >
-        <span className={`w-11 h-11 flex items-center justify-center rounded-pill transition-colors ${colorCls}`}>
-          {Icon.bell}
-        </span>
-        {count > 0 && (
-          <span className="absolute top-0.5 right-0.5 min-w-[20px] h-5 px-1 bg-red text-white text-[11px] font-bold rounded-pill flex items-center justify-center ring-2 ring-white">
-            {count > 9 ? '9+' : count}
-          </span>
-        )}
-      </button>
+      <BotonAlertas alertas={alertas} onAlerts={onAlerts} className="pt-1" />
     </header>
   );
 }
@@ -933,7 +943,7 @@ export default function Layout() {
           {isDashboard && (
             <>
               <MobileTopbar usuario={usuario} sucursalNombre={sucursalNombre} alertas={alertas} onAlerts={() => setAlertsOpen(true)} />
-              <DesktopHeader usuario={usuario} sucursalNombre={sucursalNombre} now={now} />
+              <DesktopHeader usuario={usuario} sucursalNombre={sucursalNombre} now={now} alertas={alertas} onAlerts={() => setAlertsOpen(true)} />
             </>
           )}
           <Outlet />
