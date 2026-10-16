@@ -261,22 +261,22 @@ const GRUPOS_AJUSTES = [
 const ALERTAS_APAGABLES = [
   {
     campo: 'alerta_stock',
-    label: 'Avisar de stock bajo',
+    label: 'Stock bajo',
     hint: 'Avisa en la campana cuando un producto (botellas, unidades o bolsas) se está acabando o se agotó.',
   },
   {
     campo: 'alerta_granel',
-    label: 'Avisar de bidones bajos',
+    label: 'Bidones bajos',
     hint: 'Avisa en la campana cuando el granel de los bidones está por terminarse o se acabó.',
   },
   {
     campo: 'alerta_encendido_manual',
-    label: 'Avisar de máquinas encendidas a mano',
+    label: 'Máquinas encendidas a mano',
     hint: 'Avisa en la campana cuando el Sonoff encuentra una máquina prendida sin nota. La máquina se marca ocupada igual.',
   },
   {
     campo: 'alerta_tope_maquina',
-    label: 'Avisar cuando una máquina llega a su tope',
+    label: 'Máquina en su tope',
     hint: 'Avisa en la campana cuando a una máquina se le corta la luz por llegar a su tiempo máximo sin que nadie la finalizara. El corte ocurre igual.',
   },
   {
@@ -2241,7 +2241,7 @@ export default function Ajustes() {
       {/* "Detener ciclo" solo existe con temporizador. */}
       {config.cronometro === false && (
         <ToggleRow
-          label="Avisar cuando se detenga un ciclo"
+          label="Ciclo detenido"
           hint="Cuando alguien detenga una máquina con 'Detener ciclo', aparecerá una alerta en el Dashboard."
           checked={!!config.alerta_ciclo_detenido}
           onChange={(v) => setConfig(prev => ({ ...prev, alerta_ciclo_detenido: v }))}
@@ -2770,7 +2770,7 @@ export default function Ajustes() {
       {/* "Detener ciclo" solo existe con temporizador. */}
       {config.cronometro === false && (
         <ToggleRow
-          label="Avisar cuando se detenga un ciclo"
+          label="Ciclo detenido"
           hint="Cuando alguien detenga una máquina con 'Detener ciclo', aparecerá una alerta en el Dashboard."
           checked={!!config.alerta_ciclo_detenido}
           onChange={(v) => setConfig(prev => ({ ...prev, alerta_ciclo_detenido: v }))}
