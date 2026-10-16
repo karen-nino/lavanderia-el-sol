@@ -1996,7 +1996,9 @@ export default function Inventario() {
         <div>
           <h1 className="text-xl font-bold text-gray-900">Inventario</h1>
           <p className="text-sm text-gray-500">
-            {esAdmin && vista === 'reporte' ? 'Reporte diario' : `${productos.length} producto(s)`}
+            {/* Como en Ventas: dice qué se está viendo, sin la cantidad. */}
+            {esAdmin && vista === 'reporte' ? 'Reporte diario'
+              : filtro === 'todos' ? 'Todos los productos' : FILTRO_CFG[filtro].label}
           </p>
         </div>
         {esAdmin && (

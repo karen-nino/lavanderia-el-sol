@@ -1594,6 +1594,11 @@ export const getNextFolio = async (req, res) => {
 
 // ── GET /notas ──────────────────────────────────────────────
 export const getNotas = async (req, res) => {
+  // ?cliente_id=N: solo las notas de ese cliente (historial en Clientes).
+  const clienteId = req.query.cliente_id != null ? Number(req.query.cliente_id) : null;
+  if (clienteId !== null && !Number.isInteger(clienteId)) {
+    return res.status(400).json({ message: 'Cliente inválido.' });
+  }
   try {
     const { rows } = await pool.query(
       `SELECT n.*,
@@ -1692,8 +1697,9 @@ export const getNotas = async (req, res) => {
        JOIN      usuarios   u  ON u.id = n.usuario_id
        LEFT JOIN sucursales su ON su.slug = n.sucursal
        WHERE n.sucursal = $1
+         AND ($2::int IS NULL OR n.cliente_id = $2)
        ORDER BY n.created_at DESC`,
-      [req.sucursal]
+      [req.sucursal, clienteId]
     );
     res.json(rows);
   } catch (err) {

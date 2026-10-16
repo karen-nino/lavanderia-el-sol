@@ -400,12 +400,18 @@ export default function Notas() {
   // En móvil, agrupadas por día con un encabezado de fecha, en el orden filtrado.
   const gruposMobile = [];
   const claveHoy = new Date().toDateString();
+  const ayer = new Date();
+  ayer.setDate(ayer.getDate() - 1);
+  const claveAyer = ayer.toDateString();
   for (const n of filtradas) {
     const clave = new Date(n.created_at).toDateString();
     const ultimo = gruposMobile[gruposMobile.length - 1];
     if (ultimo && ultimo.clave === clave) ultimo.notas.push(n);
-    // El día de hoy se titula "Hoy" en lugar de su fecha.
-    else gruposMobile.push({ clave, fecha: clave === claveHoy ? 'Hoy' : fmtFechaDia(n.created_at), notas: [n] });
+    // Hoy y ayer se titulan "Hoy" y "Ayer" en lugar de su fecha.
+    else {
+      const fecha = clave === claveHoy ? 'Hoy' : clave === claveAyer ? 'Ayer' : fmtFechaDia(n.created_at);
+      gruposMobile.push({ clave, fecha, notas: [n] });
+    }
   }
 
   // ── Selección múltiple (admin_main) ─────────────────────

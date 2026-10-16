@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
+import { etiquetaEstadoNota } from '../lib/estadoNota';
 import { ES_DEMO } from '../lib/entorno';
 import { useAuth } from '../context/AuthContext';
 import { esAdmin as esAdminFn } from '../lib/roles';
@@ -13,7 +15,91 @@ const FORM_INIT = { nombre: '', apellido: '', telefono: '' };
 
 const ALFABETO = [...'ABCDEFGHIJKLMNÑOPQRSTUVWXYZ', '#'];
 
+/** Estado de la nota en el historial del cliente (como el badge de Notas). */
+const ESTADO_NOTA = {
+  EN_ESPERA:  { label: 'En Espera',    cls: 'bg-gray-100 text-gray-600' },
+  LAVANDO:    { label: 'Lavando',      cls: 'bg-light-blue text-blue-700' },
+  SECANDO:    { label: 'Secando',      cls: 'bg-red-100 text-red-700' },
+  LISTA:      { label: 'Por Entregar', cls: 'bg-yellow-100 text-yellow-800' },
+  PAGADA:     { label: 'Pagada',       cls: 'bg-light-green text-green-700' },
+  FINALIZADA: { label: 'Finalizada',   cls: 'bg-light-green text-green-700' },
+  CANCELADA:  { label: 'Cancelada',    cls: 'bg-red-100 text-red-700' },
+};
+
+/** "15/10/26 · 3:40 pm" */
+function fmtFechaNota(iso) {
+  const d = new Date(iso);
+  const fecha = d.toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit', year: '2-digit' });
+  const hora = d.toLocaleTimeString('es-MX', { hour: 'numeric', minute: '2-digit', hour12: true });
+  return `${fecha} · ${hora}`;
+}
+
+/**
+ * Botón ⋮ del modal de cliente: WhatsApp, Editar y Eliminar, fuera de la vista
+ * para no tocarlos sin querer (como el de los productos en Inventario).
+ */
+function MenuOpcionesCliente({ onWhatsapp, onEditar, onEliminar }) {
+  const [abierto, setAbierto] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (!abierto) return undefined;
+    const fuera = (e) => { if (ref.current && !ref.current.contains(e.target)) setAbierto(false); };
+    document.addEventListener('mousedown', fuera);
+    document.addEventListener('touchstart', fuera);
+    return () => {
+      document.removeEventListener('mousedown', fuera);
+      document.removeEventListener('touchstart', fuera);
+    };
+  }, [abierto]);
+
+  const OPCION_CLS = 'w-full flex items-center gap-3 px-4 py-3 text-left text-sm font-medium';
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setAbierto((v) => !v)}
+        aria-haspopup="menu"
+        aria-expanded={abierto}
+        aria-label="Más opciones"
+        className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+      >
+        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+          <circle cx="12" cy="5" r="1.8" />
+          <circle cx="12" cy="12" r="1.8" />
+          <circle cx="12" cy="19" r="1.8" />
+        </svg>
+      </button>
+      {abierto && (
+        <div role="menu" className="absolute right-0 mt-1 z-10 w-52 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
+          {onWhatsapp && (
+            <button type="button" role="menuitem" onClick={() => { setAbierto(false); onWhatsapp(); }}
+              className={`${OPCION_CLS} text-green-700 hover:bg-green-50`}>
+              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"> <path d="M.057 24l1.687-6.163a11.867 11.867 0 01-1.587-5.945C.16 5.335 5.495 0 12.05 0a11.817 11.817 0 018.413 3.488 11.824 11.824 0 013.48 8.413c-.003 6.557-5.338 11.892-11.893 11.892a11.9 11.9 0 01-5.688-1.448L.057 24zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413z" /> </svg>
+              Enviar WhatsApp
+            </button>
+          )}
+          <button type="button" role="menuitem" onClick={() => { setAbierto(false); onEditar(); }}
+            className={`${OPCION_CLS} text-gray-700 hover:bg-gray-50`}>
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"> <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /> </svg>
+            Editar
+          </button>
+          {/* Separado del resto: es lo único que no se puede deshacer. */}
+          {onEliminar && (
+            <button type="button" role="menuitem" onClick={() => { setAbierto(false); onEliminar(); }}
+              className={`${OPCION_CLS} text-red-600 hover:bg-red-50 border-t border-gray-100`}>
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"> <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /> </svg>
+              Eliminar
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Clientes() {
+  const navigate = useNavigate();
   const { usuario } = useAuth();
   const esAdmin = esAdminFn(usuario?.rol);
 
@@ -49,6 +135,9 @@ export default function Clientes() {
 
   // Modal info (mobile)
   const [infoCliente, setInfoCliente]     = useState(null);
+  // Notas del cliente del modal: { id, notas } y si está abierto el modal con la lista.
+  const [notasCargadas, setNotasCargadas] = useState(null);
+  const [verNotas, setVerNotas]           = useState(false);
   // Demo: con quién se "abrió" el chat, que no se abre (los teléfonos de la
   // demo podrían ser de alguien).
   const [chatSimulado, setChatSimulado]   = useState('');
@@ -131,6 +220,19 @@ export default function Clientes() {
     letraActivaRef.current = null;
     setLetraActiva(null);
   };
+
+  // Notas del cliente al abrir su modal.
+  const idInfo = infoCliente?.id;
+  useEffect(() => {
+    if (idInfo == null) return undefined;
+    let activo = true;
+    api.get(`/notas?cliente_id=${idInfo}`)
+      .then(data => { if (activo) setNotasCargadas({ id: idInfo, notas: data ?? [] }); })
+      .catch(() => { if (activo) setNotasCargadas({ id: idInfo, notas: null }); });
+    return () => { activo = false; };
+  }, [idInfo]);
+  const notasCliente = notasCargadas && notasCargadas.id === idInfo ? notasCargadas.notas : undefined;
+  const cerrarInfo = () => { setInfoCliente(null); setVerNotas(false); };
 
   // ── Crear ──────────────────────────────────────────────
   const abrirModal = () => { setForm(FORM_INIT); setFormError(''); setModalOpen(true); };
@@ -545,11 +647,18 @@ export default function Clientes() {
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] flex flex-col">
             <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-gray-100 flex-shrink-0">
               <h2 className="text-base font-semibold text-gray-900">Cliente</h2>
-              <button onClick={() => setInfoCliente(null)} className="text-gray-400 hover:text-gray-600">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
+              <div className="flex items-center gap-2">
+                <MenuOpcionesCliente
+                  onWhatsapp={infoCliente.telefono ? () => { const c = infoCliente; cerrarInfo(); abrirWhatsapp(c); } : null}
+                  onEditar={() => { const c = infoCliente; cerrarInfo(); abrirEditar(c); }}
+                  onEliminar={esAdmin ? () => { const c = infoCliente; cerrarInfo(); abrirEliminar(c); } : null}
+                />
+                <button onClick={cerrarInfo} aria-label="Cerrar" className="p-1.5 text-gray-400 hover:text-gray-600">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
             </div>
             <div className="p-5 space-y-5 overflow-y-auto">
               <div>
@@ -565,44 +674,75 @@ export default function Clientes() {
                 </p>
               </div>
 
-              <div className="space-y-2 pt-1">
-                {infoCliente.telefono && (
+              {/* Notas del cliente: el texto abre su modal; cada nota lleva a su detalle. */}
+              <div>
+                <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Notas</p>
+                {notasCliente === undefined ? (
+                  <p className="text-base text-gray-400">Cargando…</p>
+                ) : notasCliente === null ? (
+                  <p className="text-sm text-red-600">No se pudieron cargar las notas.</p>
+                ) : notasCliente.length === 0 ? (
+                  <p className="text-base text-gray-400 italic">Sin notas todavía</p>
+                ) : (
                   <button
                     type="button"
-                    onClick={() => { const c = infoCliente; setInfoCliente(null); abrirWhatsapp(c); }}
-                    className="w-full flex items-center justify-center gap-2 py-3 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg text-sm transition-colors"
+                    onClick={() => setVerNotas(true)}
+                    className="inline-flex items-center gap-1 text-base font-medium text-blue hover:underline"
                   >
-                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M.057 24l1.687-6.163a11.867 11.867 0 01-1.587-5.945C.16 5.335 5.495 0 12.05 0a11.817 11.817 0 018.413 3.488 11.824 11.824 0 013.48 8.413c-.003 6.557-5.338 11.892-11.893 11.892a11.9 11.9 0 01-5.688-1.448L.057 24zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413z" />
-                    </svg>
-                    Enviar WhatsApp
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => { const c = infoCliente; setInfoCliente(null); abrirEditar(c); }}
-                  className="w-full flex items-center justify-center gap-2 py-3 bg-blue hover:opacity-90 text-white font-medium rounded-lg text-sm transition-colors"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                      d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                  </svg>
-                  Editar
-                </button>
-                {esAdmin && (
-                  <button
-                    type="button"
-                    onClick={() => { const c = infoCliente; setInfoCliente(null); abrirEliminar(c); }}
-                    className="w-full flex items-center justify-center gap-2 py-3 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg text-sm transition-colors"
-                  >
+                    {notasCliente.length} {notasCliente.length === 1 ? 'nota realizada' : 'notas realizadas'}
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                     </svg>
-                    Eliminar
                   </button>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal: Notas del cliente (sobre el de info) ───── */}
+      {infoCliente && verNotas && Array.isArray(notasCliente) && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[60] p-4 md:hidden">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between gap-3 px-5 pt-5 pb-4 border-b border-gray-100 flex-shrink-0">
+              <div className="min-w-0">
+                <h2 className="text-base font-semibold text-gray-900">Notas</h2>
+                <p className="text-sm text-gray-500 truncate">
+                  {`${infoCliente.nombre}${infoCliente.apellido ? ' ' + infoCliente.apellido : ''}`}
+                </p>
+              </div>
+              <button onClick={() => setVerNotas(false)} aria-label="Cerrar" className="text-gray-400 hover:text-gray-600">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="p-5 space-y-2 overflow-y-auto">
+              {notasCliente.map(n => {
+                const est = ESTADO_NOTA[n.estado] ?? ESTADO_NOTA.EN_ESPERA;
+                return (
+                  <button
+                    key={n.id}
+                    type="button"
+                    onClick={() => navigate(`/notas/${n.id}`)}
+                    className="w-full text-left px-4 py-3 rounded-lg border border-gray-100 bg-gray-50 hover:bg-light-blue/40 transition-colors"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm font-bold text-dark-blue/70">#{n.folio?.split('-')[0] ?? n.id}</span>
+                      <span className={`text-xs font-bold px-2.5 py-0.5 rounded-pill ${est.cls}`}>
+                        {etiquetaEstadoNota(n.estado, n.tipo_servicio, est.label)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 mt-1">
+                      <span className="text-sm text-gray-600">{fmtFechaNota(n.created_at)}</span>
+                      <span className="text-sm font-semibold text-gray-900">
+                        ${Number(n.precio_total ?? 0).toFixed(2)}
+                      </span>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>
