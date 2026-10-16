@@ -82,8 +82,9 @@ export default function App() {
                 </AdminRoute>
               }
             />
+            {/* Cada sección de Ajustes con su dirección (/ajustes/maquinas…). */}
             <Route
-              path="ajustes"
+              path="ajustes/:seccion?"
               element={
                 <AdminRoute>
                   <Ajustes />

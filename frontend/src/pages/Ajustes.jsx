@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api, mensajeDeError } from '../lib/api';
 import InstalarApp from '../components/InstalarApp';
 import { formatTelefono } from '../lib/telefono';
@@ -232,6 +232,64 @@ const SECCION_INSTALAR = {
   icon: SectionIcon.instalar,
 };
 
+const aNumero = (v) => (v === '' || v == null ? null : Number(v));
+/** Tope, programas y ficha de un modelo, para compararlo con lo guardado. */
+const fotoTiempo = (t) => [
+  aNumero(t.minutos), aNumero(t.minutos_2), aNumero(t.minutos_3), aNumero(t.minutos_4),
+  aNumero(t.minutos_por_ficha),
+].join('|');
+/** Lo editable de una sucursal, para compararla con lo guardado. */
+const huellaSucursal = (s) => JSON.stringify([s.nombre ?? '', s.direccion ?? '', s.telefono ?? '', s.horario_semana ?? null]);
+
+/** Todas las secciones de Ajustes, en el orden del menú del celular. */
+const SECCIONES_AJUSTES = [...MOBILE_SECTIONS, SECCION_MANUAL, SECCION_INSTALAR];
+const seccionPorId = (id) => SECCIONES_AJUSTES.find(s => s.id === id);
+
+/** Menú de Ajustes agrupado por intención; el mismo en celular y escritorio. */
+const GRUPOS_AJUSTES = [
+  { titulo: 'Cuenta',    ids: ['perfil'] },
+  { titulo: 'Negocio',   ids: ['negocio', 'ticket', 'whatsapp'] },
+  { titulo: 'Operación', ids: ['maquinas', 'cargas', 'etiquetas', 'inventario'] },
+  { titulo: 'Sistema',   ids: ['alertas', 'manual', 'instalar'] },
+];
+
+/** Lo que el buscador encuentra en cada sección: textos tal como salen en pantalla. */
+const TERMINOS_AJUSTES = {
+  perfil:     ['Nombre', 'Apellido', 'Contraseña', 'Tipo de Cuenta'],
+  negocio:    ['Nombre del negocio', 'Logo', 'R.F.C.', 'Sucursal a editar', 'Nombre de la sucursal',
+               'Dirección', 'Teléfono', 'Horario', 'Orden de las sucursales'],
+  maquinas:   ['Lavadora', 'Secadora', 'Mediana', 'Jumbo', 'Edredón', 'Precio por carga',
+               'Tope de carga', 'Tiempo de carga', 'Marcas y modelos', 'Cada ficha', 'Otros tiempos'],
+  cargas:     ['Servicio Chico', 'Servicio Mediano', 'Servicio Grande', 'Servicio Edredón',
+               'Medidas de granel', 'Bolsas'],
+  alertas:    ['Avisar de stock bajo', 'Avisar de máquinas encendidas a mano',
+               'Avisar cuando una máquina llega a su tope', 'Sonido de fin de ciclo',
+               'Avisar cuando se detenga un ciclo'],
+  etiquetas:  ['Tipos de tela', 'Tamaños de edredón'],
+  inventario: ['Marcas', 'Envases', 'Tipos de granel', 'Granel', 'Bolsas'],
+  ticket:     ['Nota para Autoservicio', 'Nota para Por Encargo y Edredón', 'Nota para Productos'],
+  whatsapp:   ['Mensaje para Por Encargo', 'Mensaje para volver a avisar'],
+  manual:     ['Manual de uso'],
+  instalar:   ['Instalar la app', 'Pantalla de inicio'],
+};
+
+/** Minúsculas y sin acentos: "edredon" encuentra "Edredón". */
+const normalizar = (t) => String(t ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+
+/** Hasta 8 resultados `{ seccion, termino }` para lo escrito en el buscador. */
+function buscarAjustes(texto) {
+  const q = normalizar(texto);
+  if (q.length < 2) return [];
+  const res = [];
+  for (const s of SECCIONES_AJUSTES) {
+    if (normalizar(s.label).includes(q)) res.push({ seccion: s, termino: null });
+    for (const t of TERMINOS_AJUSTES[s.id] ?? []) {
+      if (normalizar(t).includes(q)) res.push({ seccion: s, termino: t });
+    }
+  }
+  return res.slice(0, 8);
+}
+
 /**
  * Alertas que se pueden apagar en Ajustes → Alertas (además de "ciclo
  * detenido"); nacen encendidas. Las de dinero y borrados no se apagan: son el
@@ -261,7 +319,7 @@ const ALERTAS_APAGABLES = [
 ];
 
 /** Secciones sin nada que guardar con el botón general. */
-const SECCIONES_SIN_GUARDAR = ['etiquetas', 'inventario', 'instalar'];
+const SECCIONES_SIN_GUARDAR = ['etiquetas', 'inventario', 'manual', 'instalar'];
 
 /** Encabezado de un grupo de campos (por encima de las etiquetas, que son bold). */
 function TituloGrupo({ children }) {
@@ -417,6 +475,133 @@ function MobileSectionButton({ label, icon, onClick }) {
       <span className="text-blue flex items-center justify-center flex-shrink-0">{icon}</span>
       <span className="text-base font-medium text-dark-blue">{label}</span>
     </button>
+  );
+}
+
+/** El manual se abre en su propia página; esta tarjeta lleva a ella. */
+function TarjetaManual({ onAbrir }) {
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 px-5 py-5 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+      <p className="text-sm text-gray-600 max-w-md">
+        Cómo funciona la aplicación, paso a paso, con buscador. Se abre en su propia página.
+      </p>
+      <button
+        type="button"
+        onClick={onAbrir}
+        className="flex items-center justify-center gap-2 w-full lg:w-auto px-6 py-3.5 bg-blue hover:opacity-90 text-white text-base font-medium rounded-lg transition-colors whitespace-nowrap"
+      >
+        {/* Ícono de 20 px para que el texto no se parta. */}
+        <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+            d="M12 6.5C10.5 5.2 8.6 4.7 6 4.8A1 1 0 005 5.8v11.4a1 1 0 001.06 1c2.5-.1 4.4.4 5.94 1.7 1.54-1.3 3.44-1.8 5.94-1.7a1 1 0 001.06-1V5.8a1 1 0 00-1-1c-2.6-.1-4.5.4-6 1.7z" />
+          <path strokeLinecap="round" strokeWidth={2} d="M12 6.5V19" />
+        </svg>
+        Abrir el manual
+      </button>
+    </div>
+  );
+}
+
+/** Renglón del menú lateral de Ajustes: solo ícono en tableta, con nombre desde lg. */
+function ItemMenuAjustes({ seccion, activa, conCambios }) {
+  const destino = seccion.id === 'manual' ? '/manual' : `/ajustes/${seccion.id}`;
+  return (
+    <Link
+      to={destino}
+      title={seccion.label}
+      aria-current={activa ? 'page' : undefined}
+      className={`relative flex items-center justify-center lg:justify-start gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+        activa ? 'bg-light-blue text-blue' : 'text-gray-600 hover:bg-gray-100 hover:text-dark-blue'
+      }`}
+    >
+      <span className="flex-shrink-0 [&>svg]:w-5 [&>svg]:h-5">{seccion.icon}</span>
+      <span className="hidden lg:block truncate">{seccion.label}</span>
+      {conCambios && (
+        <span
+          className="absolute top-1.5 right-1.5 lg:static lg:ml-auto w-2 h-2 rounded-full bg-amber-500 flex-shrink-0"
+          aria-label="Con cambios sin guardar"
+        />
+      )}
+    </Link>
+  );
+}
+
+/** Pista del atajo del buscador, con la tecla de cada sistema. */
+const ATAJO_BUSCAR = /Mac|iPhone|iPad/.test(globalThis.navigator?.platform ?? '') ? '⌘K' : 'Ctrl K';
+
+/** Buscador de Ajustes: lleva a la sección y al campo. Ctrl/⌘ + K lo enfoca. */
+function BuscadorAjustes({ onElegir }) {
+  const [texto, setTexto] = useState('');
+  const [abierto, setAbierto] = useState(false);
+  const [marcado, setMarcado] = useState(0);
+  const inputRef = useRef(null);
+  const resultados = buscarAjustes(texto);
+
+  useEffect(() => {
+    const atajo = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        inputRef.current?.focus();
+      }
+    };
+    window.addEventListener('keydown', atajo);
+    return () => window.removeEventListener('keydown', atajo);
+  }, []);
+
+  const elegir = (r) => {
+    onElegir(r);
+    setTexto('');
+    setAbierto(false);
+    inputRef.current?.blur();
+  };
+
+  const alTeclear = (e) => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); setMarcado(m => Math.min(m + 1, resultados.length - 1)); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setMarcado(m => Math.max(m - 1, 0)); }
+    else if (e.key === 'Enter' && resultados[marcado]) { e.preventDefault(); elegir(resultados[marcado]); }
+    else if (e.key === 'Escape') { setTexto(''); inputRef.current?.blur(); }
+  };
+
+  return (
+    <div className="relative w-56 lg:w-72">
+      <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z" />
+      </svg>
+      <input
+        ref={inputRef}
+        type="search"
+        value={texto}
+        onChange={(e) => { setTexto(e.target.value); setMarcado(0); setAbierto(true); }}
+        onFocus={() => setAbierto(true)}
+        onBlur={() => setTimeout(() => setAbierto(false), 150)}
+        onKeyDown={alTeclear}
+        placeholder="Buscar un ajuste…"
+        aria-label="Buscar un ajuste"
+        className="w-full pl-9 pr-12 py-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent transition"
+      />
+      <kbd className="hidden lg:block absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-gray-400 border border-gray-200 rounded px-1.5 py-0.5 pointer-events-none">{ATAJO_BUSCAR}</kbd>
+      {abierto && texto.trim().length >= 2 && (
+        <div className="absolute right-0 mt-2 w-full lg:w-80 bg-white border border-gray-200 rounded-xl shadow-lg z-30 py-1 max-h-80 overflow-y-auto">
+          {resultados.length === 0 ? (
+            <p className="px-4 py-3 text-sm text-gray-400">Sin resultados para "{texto.trim()}".</p>
+          ) : resultados.map((r, i) => (
+            <button
+              key={`${r.seccion.id}-${r.termino ?? ''}`}
+              type="button"
+              onMouseDown={(e) => { e.preventDefault(); elegir(r); }}
+              onMouseEnter={() => setMarcado(i)}
+              className={`w-full flex items-center gap-3 px-4 py-2.5 text-left ${i === marcado ? 'bg-light-blue/60' : ''}`}
+            >
+              <span className="flex-shrink-0 text-blue [&>svg]:w-4 [&>svg]:h-4">{r.seccion.icon}</span>
+              <span className="min-w-0">
+                <span className="block text-sm font-medium text-dark-blue truncate">{r.termino ?? r.seccion.label}</span>
+                {r.termino && <span className="block text-xs text-gray-400 truncate">{r.seccion.label}</span>}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -982,8 +1167,11 @@ export default function Ajustes() {
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [logoPreview,   setLogoPreview]   = useState(null);
   const [mensaje,       setMensaje]       = useState(null);
-  const [mobileSection, setMobileSection] = useState(null);
   const navigate = useNavigate();
+  /* La sección vive en la dirección: atrás y recargar la respetan. */
+  const { seccion: seccionUrl } = useParams();
+  const mobileSection = seccionPorId(seccionUrl) ? seccionUrl : null;
+  const setMobileSection = (id) => navigate(id ? `/ajustes/${id}` : '/ajustes');
   const [perfilForm,    setPerfilForm]    = useState(() => ({
     nombre: usuario?.nombre ?? '',
     apellido: usuario?.apellido ?? '',
@@ -994,6 +1182,8 @@ export default function Ajustes() {
   const [guardadoOk, setGuardadoOk] = useState(null);
   const marcarGuardado = (clave) => {
     setGuardadoOk(clave);
+    /* Lo recién guardado es la nueva foto de partida. */
+    setBase(null);
     setTimeout(() => setGuardadoOk((actual) => (actual === clave ? null : actual)), 2200);
   };
   const logoInputRef = useRef(null);
@@ -1018,6 +1208,10 @@ export default function Ajustes() {
   // Secadoras sin ficha capturada a las que se les abrió el campo "Cada ficha".
   const [fichaAbierta, setFichaAbierta] = useState(() => new Set());
   const [edredones, setEdredones] = useState([]);
+  /* Edredones y tiempos ya cargados (2): desde ahí se toma la foto de partida. */
+  const [catalogosListos, setCatalogosListos] = useState(0);
+  /* Cómo venía cada sucursal del servidor, para saber cuáles cambiaron. */
+  const [baseSucursales, setBaseSucursales] = useState({});
   // Precios de edredón como vinieron, para mandar solo los cambiados.
   const edredonOrigRef = useRef({});
   // Lo que vino del servidor, para mandar solo lo cambiado.
@@ -1044,13 +1238,15 @@ export default function Ajustes() {
         setEdredones(lista);
         setConfig(prev => ({ ...prev, ...valores }));
       })
-      .catch(() => { /* sin catálogo no hay precios de edredón que mostrar */ });
+      .catch(() => { /* sin catálogo no hay precios de edredón que mostrar */ })
+      .finally(() => setCatalogosListos(n => n + 1));
   }, []);
 
   useEffect(() => {
     api.get('/etiquetas/tiempos-marca')
       .then(d => { setTiemposMarca(d ?? []); tiemposOrigRef.current = d ?? []; })
-      .catch(() => { /* sin esto la pantalla sigue sirviendo: manda el respaldo */ });
+      .catch(() => { /* sin esto la pantalla sigue sirviendo: manda el respaldo */ })
+      .finally(() => setCatalogosListos(n => n + 1));
   }, []);
 
   useEffect(() => {
@@ -1072,23 +1268,24 @@ export default function Ajustes() {
 
   // Valida y guarda la sucursal seleccionada (la llama "Guardar cambios").
   // Devuelve la fila o null; lanza si el nombre está vacío o falla la API.
-  const patchSucursalActual = async () => {
-    const s = sucursales.find(x => x.slug === sucursalSel);
-    if (!s) return null;
-    if (!String(s.nombre ?? '').trim()) {
+  /** Guarda cada sucursal con cambios, no solo la que se ve en pantalla. */
+  const patchSucursalesCambiadas = async () => {
+    const cambiadas = sucursales.filter(s =>
+      baseSucursales[s.slug] && huellaSucursal(baseSucursales[s.slug]) !== huellaSucursal(s));
+    if (cambiadas.some(s => !String(s.nombre ?? '').trim())) {
       throw new Error('El nombre de la sucursal no puede estar vacío.');
     }
-    const updated = await api.patch(`/sucursales/${s.slug}`, {
+    const actualizadas = (await Promise.all(cambiadas.map(s => api.patch(`/sucursales/${s.slug}`, {
       nombre:    s.nombre,
       direccion: s.direccion ?? '',
       telefono:  s.telefono  ?? '',
-      // Solo si se capturó.
+      /* Solo si se capturó. */
       ...(s.horario_semana ? { horario_semana: s.horario_semana } : {}),
-    });
-    setSucursales(prev => prev.map(x =>
-      x.slug === updated.slug ? { ...updated, telefono: formatTelefono(updated.telefono ?? '') } : x
-    ));
-    return updated;
+    })))).map(u => ({ ...u, telefono: formatTelefono(u.telefono ?? '') }));
+    const porSlug = new Map(actualizadas.map(u => [u.slug, u]));
+    setSucursales(prev => prev.map(x => (porSlug.has(x.slug) ? { ...x, ...porSlug.get(x.slug) } : x)));
+    setBaseSucursales(prev => ({ ...prev, ...Object.fromEntries(actualizadas.map(u => [u.slug, u])) }));
+    return actualizadas;
   };
 
   const handleNuevaChange = (field, value) => {
@@ -1333,14 +1530,8 @@ export default function Ajustes() {
   // Solo los tiempos cambiados, cada uno a su endpoint. Vaciar uno lo borra: cae
   // al respaldo en vez de dejar un cero.
   const guardarTiemposMarca = async () => {
-    const aNumero = (v) => (v === '' || v == null ? null : Number(v));
-    // Se compara campo por campo (tope y programas).
-    const foto = (t) => [
-      aNumero(t.minutos), aNumero(t.minutos_2), aNumero(t.minutos_3), aNumero(t.minutos_4),
-      aNumero(t.minutos_por_ficha),
-    ].join('|');
-    const antes = new Map(tiemposOrigRef.current.map(t => [claveTiempo(t), foto(t)]));
-    const cambiados = tiemposMarca.filter(t => antes.get(claveTiempo(t)) !== foto(t));
+    const antes = new Map(tiemposOrigRef.current.map(t => [claveTiempo(t), fotoTiempo(t)]));
+    const cambiados = tiemposMarca.filter(t => antes.get(claveTiempo(t)) !== fotoTiempo(t));
     if (cambiados.length === 0) return;
 
     await Promise.all(cambiados.map(t => api.put('/etiquetas/tiempos-marca', {
@@ -1418,7 +1609,7 @@ export default function Ajustes() {
     try {
       const [updatedConfig] = await Promise.all([
         api.patch('/ajustes', buildConfigPayload()),
-        patchSucursalActual(),
+        patchSucursalesCambiadas(),
         guardarTiemposMarca(),
         guardarPreciosEdredon(),
       ]);
@@ -1528,15 +1719,17 @@ export default function Ajustes() {
         guardarTiemposMarca(),
         guardarPreciosEdredon(),
         // La sucursal seleccionada se guarda junto con lo demás.
-        patchSucursalActual(),
+        patchSucursalesCambiadas(),
       ]);
 
       updateUsuario({ nombre: updatedPerfil.nombre, apellido: updatedPerfil.apellido, rol: updatedPerfil.rol });
       setPerfilForm(f => ({ ...f, password: '' }));
       setConfig(prev => ({ ...prev, ...updatedConfig }));
       marcarGuardado('todo');
+      return true;
     } catch (err) {
       setMensaje({ tipo: 'error', texto: err.message });
+      return false;
     } finally {
       setSaving(false);
     }
@@ -1599,6 +1792,99 @@ export default function Ajustes() {
       if (logoInputRef.current) logoInputRef.current.value = '';
     }
   };
+
+  /* ── Cambios sin guardar (escritorio) ── */
+  const seccionVista = seccionPorId(seccionUrl)?.id ?? 'perfil';
+  const huella = config && catalogosListos >= 2 ? JSON.stringify([
+    buildConfigPayload(),
+    edredones.map(e => camposEdredon(e).map(([k]) => String(config[k] ?? ''))),
+    [perfilForm.nombre, perfilForm.apellido, perfilForm.password],
+    tiemposMarca.map(fotoTiempo),
+  ]) : null;
+  const [base, setBase] = useState(null);
+  if (huella && base === null) setBase({ huella, config, perfilForm, tiemposMarca });
+
+  /* Las sucursales que llegan (o se crean) entran tal cual a la foto. */
+  const sinFoto = sucursales.filter(x => !baseSucursales[x.slug]);
+  if (sinFoto.length > 0) {
+    setBaseSucursales(prev => ({ ...prev, ...Object.fromEntries(sinFoto.map(x => [x.slug, x])) }));
+  }
+  const sucursalesCambiadas = sucursales.some(x =>
+    baseSucursales[x.slug] && huellaSucursal(baseSucursales[x.slug]) !== huellaSucursal(x));
+  const hayCambios = !soloConsultaPruebas
+    && ((base !== null && huella !== base.huella) || sucursalesCambiadas);
+
+  /* Se marca la sección donde se hizo cada cambio (solo hay una a la vista). */
+  const huellaTotal = `${huella}|${sucursales.map(huellaSucursal).join()}`;
+  const [huellaPrevia, setHuellaPrevia] = useState(huellaTotal);
+  const [seccionesConCambios, setSeccionesConCambios] = useState(() => new Set());
+  if (huellaTotal !== huellaPrevia) {
+    setHuellaPrevia(huellaTotal);
+    if (hayCambios && !seccionesConCambios.has(seccionVista)) {
+      setSeccionesConCambios(new Set(seccionesConCambios).add(seccionVista));
+    }
+  }
+  if (!hayCambios && seccionesConCambios.size > 0) setSeccionesConCambios(new Set());
+
+  const nombresConCambios = [...seccionesConCambios].map(id => seccionPorId(id)?.label).join(', ');
+
+  /** Regresa todo a como estaba al abrir (o al último guardado). */
+  const descartarCambios = () => {
+    if (!base) return;
+    setConfig(prev => ({ ...base.config, logo_url: prev.logo_url }));
+    setPerfilForm(base.perfilForm);
+    setTiemposMarca(base.tiemposMarca);
+    setSucursales(prev => prev.map(x => (baseSucursales[x.slug] ? { ...x, ...baseSucursales[x.slug] } : x)));
+  };
+
+  /* Cerrar o recargar la pestaña con cambios: el navegador pregunta. */
+  useEffect(() => {
+    if (!hayCambios) return undefined;
+    const avisar = (e) => { e.preventDefault(); e.returnValue = ''; };
+    window.addEventListener('beforeunload', avisar);
+    return () => window.removeEventListener('beforeunload', avisar);
+  }, [hayCambios]);
+
+  /* Un enlace fuera de Ajustes con cambios: se pregunta antes de irse. */
+  const [salidaPendiente, setSalidaPendiente] = useState(null);
+  useEffect(() => {
+    if (!hayCambios) return undefined;
+    const interceptar = (e) => {
+      const a = e.target.closest?.('a[href]');
+      if (!a || a.target === '_blank' || e.metaKey || e.ctrlKey) return;
+      const destino = a.getAttribute('href');
+      if (!destino?.startsWith('/') || destino.startsWith('/ajustes')) return;
+      e.preventDefault();
+      e.stopPropagation();
+      setSalidaPendiente(destino);
+    };
+    document.addEventListener('click', interceptar, true);
+    return () => document.removeEventListener('click', interceptar, true);
+  }, [hayCambios]);
+
+  /* Resultado del buscador: abre la sección y resalta el campo. */
+  const contenidoRef = useRef(null);
+  const [resaltar, setResaltar] = useState(null);
+  const elegirBusqueda = ({ seccion, termino }) => {
+    if (seccion.id === 'manual') return navigate('/manual');
+    navigate(`/ajustes/${seccion.id}`);
+    setResaltar(termino);
+  };
+  useEffect(() => {
+    if (!resaltar || !contenidoRef.current) return undefined;
+    const q = normalizar(resaltar);
+    const candidatos = [...contenidoRef.current.querySelectorAll('label, h2, h3, p, span')]
+      .filter(el => el.offsetParent !== null);
+    const el = candidatos.find(c => normalizar(c.textContent) === q)
+      ?? candidatos.find(c => normalizar(c.textContent).startsWith(q));
+    const bloque = el?.parentElement;
+    if (bloque) {
+      bloque.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      bloque.classList.add('resaltado-busqueda');
+    }
+    const t = setTimeout(() => { bloque?.classList.remove('resaltado-busqueda'); setResaltar(null); }, 1800);
+    return () => clearTimeout(t);
+  }, [resaltar, seccionVista]);
 
   if (loading) {
     return (
@@ -2708,30 +2994,37 @@ export default function Ajustes() {
   const seccionWhatsappDesktop = (
     <Section titulo="WhatsApp">
       {ES_DEMO && <p className="text-xs text-gray-400 -mt-2">{NOTA_DEMO}</p>}
-      <Field label="Mensaje para Por Encargo" hint={ayudaComodines}>
-        <textarea
-          name="whatsapp_mensaje_encargo"
-          rows={6}
-          value={config.whatsapp_mensaje_encargo ?? ''}
-          onChange={handleChange}
-          placeholder="Hola *Nombre*, tu ropa de las *Tiempo* ya está lista."
-          disabled={ES_DEMO}
-          className={`${INPUT_CLS} resize-y leading-relaxed disabled:bg-gray-50 disabled:text-gray-500 disabled:cursor-not-allowed`}
-        />
-      </Field>
-      <PreviaWhatsapp plantilla={config.whatsapp_mensaje_encargo} />
-      <Field label="Mensaje para volver a avisar" hint={ayudaReaviso}>
-        <textarea
-          name="whatsapp_mensaje_reaviso"
-          rows={6}
-          value={config.whatsapp_mensaje_reaviso ?? ''}
-          onChange={handleChange}
-          placeholder="Hola *Nombre*, te recordamos que tu ropa (nota *Clave*) ya está lista."
-          disabled={ES_DEMO}
-          className={`${INPUT_CLS} resize-y leading-relaxed disabled:bg-gray-50 disabled:text-gray-500 disabled:cursor-not-allowed`}
-        />
-      </Field>
-      {config.whatsapp_mensaje_reaviso?.trim() && <PreviaWhatsapp plantilla={config.whatsapp_mensaje_reaviso} />}
+      {/* En pantallas anchas, cada mensaje con su vista previa al lado. */}
+      <div className="grid xl:grid-cols-2 gap-4 xl:items-start">
+        <Field label="Mensaje para Por Encargo" hint={ayudaComodines}>
+          <textarea
+            name="whatsapp_mensaje_encargo"
+            rows={6}
+            value={config.whatsapp_mensaje_encargo ?? ''}
+            onChange={handleChange}
+            placeholder="Hola *Nombre*, tu ropa de las *Tiempo* ya está lista."
+            disabled={ES_DEMO}
+            className={`${INPUT_CLS} resize-y leading-relaxed disabled:bg-gray-50 disabled:text-gray-500 disabled:cursor-not-allowed`}
+          />
+        </Field>
+        <div className="xl:mt-7"><PreviaWhatsapp plantilla={config.whatsapp_mensaje_encargo} /></div>
+      </div>
+      <div className="grid xl:grid-cols-2 gap-4 xl:items-start">
+        <Field label="Mensaje para volver a avisar" hint={ayudaReaviso}>
+          <textarea
+            name="whatsapp_mensaje_reaviso"
+            rows={6}
+            value={config.whatsapp_mensaje_reaviso ?? ''}
+            onChange={handleChange}
+            placeholder="Hola *Nombre*, te recordamos que tu ropa (nota *Clave*) ya está lista."
+            disabled={ES_DEMO}
+            className={`${INPUT_CLS} resize-y leading-relaxed disabled:bg-gray-50 disabled:text-gray-500 disabled:cursor-not-allowed`}
+          />
+        </Field>
+        {config.whatsapp_mensaje_reaviso?.trim() && (
+          <div className="xl:mt-7"><PreviaWhatsapp plantilla={config.whatsapp_mensaje_reaviso} /></div>
+        )}
+      </div>
     </Section>
   );
 
@@ -2825,6 +3118,7 @@ export default function Ajustes() {
     inventario: seccionInventarioMobile,
     ticket: seccionTicketMobile,
     whatsapp: seccionWhatsappMobile,
+    manual: <TarjetaManual onAbrir={() => navigate('/manual')} />,
     instalar: <InstalarApp variant="mobile" />,
   };
 
@@ -2865,12 +3159,7 @@ export default function Ajustes() {
     </div>
   );
 
-  const seccionesMobile = [
-    ...MOBILE_SECTIONS,
-    SECCION_MANUAL,
-    SECCION_INSTALAR,
-  ];
-  const activeSection = seccionesMobile.find((s) => s.id === mobileSection);
+  const activeSection = seccionPorId(mobileSection);
 
   // En pruebas, toda sección salvo Mi Perfil es de consulta: sin Cancelar/Guardar.
   const seccionDeConsulta = soloConsultaPruebas
@@ -2906,13 +3195,18 @@ export default function Ajustes() {
             </div>
             <div className="max-w-movil mx-auto px-6 py-6 space-y-3">
               {avisoPruebas}
-              {seccionesMobile.map((s) => (
-                <MobileSectionButton
-                  key={s.id}
-                  label={s.label}
-                  icon={s.icon}
-                  onClick={() => (s.id === 'manual' ? navigate('/manual') : setMobileSection(s.id))}
-                />
+              {GRUPOS_AJUSTES.map((g) => (
+                <div key={g.titulo} className="space-y-3">
+                  <p className="px-1 pt-3 text-xs font-semibold uppercase tracking-wide text-grey">{g.titulo}</p>
+                  {g.ids.map(seccionPorId).map((s) => (
+                    <MobileSectionButton
+                      key={s.id}
+                      label={s.label}
+                      icon={s.icon}
+                      onClick={() => (s.id === 'manual' ? navigate('/manual') : setMobileSection(s.id))}
+                    />
+                  ))}
+                </div>
               ))}
             </div>
           </>
@@ -2954,7 +3248,7 @@ export default function Ajustes() {
             <div className="grid grid-cols-2 gap-3 pt-8">
               <button
                 type="button"
-                onClick={() => setMobileSection(null)}
+                onClick={() => { descartarCambios(); setMobileSection(null); }}
                 className="border border-gray-300 text-gray-700 font-medium py-3.5 rounded-lg text-base hover:bg-gray-50 transition-colors"
               >
                 Cancelar
@@ -2982,79 +3276,138 @@ export default function Ajustes() {
         className="hidden"
       />
 
-      {/* ── Vista desktop ── */}
+      {/* ── Vista escritorio: menú lateral y una sección a la vez ── */}
       <div className="hidden md:block min-h-full bg-gray-50">
-        {/* Cabecera (barra superior) */}
         <div className="bg-white border-b-2 border-gray-200">
-          <div className="max-w-2xl mx-auto px-8 pt-14 pb-4">
-            <h1 className="text-xl font-bold text-gray-900">Ajustes</h1>
+          <div className="max-w-5xl mx-auto px-8 pt-14 pb-4 flex items-end justify-between gap-4">
+            <div>
+              <h1 className="text-xl font-bold text-gray-900">Ajustes</h1>
+              <p className="text-sm text-gray-500">Configuración del negocio y de tu cuenta</p>
+            </div>
+            <BuscadorAjustes onElegir={elegirBusqueda} />
           </div>
         </div>
 
-        {/* Contenido */}
-        <div className="max-w-2xl mx-auto px-8 py-6 space-y-6">
+        <div className="max-w-5xl mx-auto px-8 py-6 flex items-start gap-6 lg:gap-8">
+          <nav aria-label="Secciones de Ajustes" className="sticky top-6 w-14 lg:w-60 flex-shrink-0 space-y-5">
+            {GRUPOS_AJUSTES.map((g) => (
+              <div key={g.titulo} className="space-y-1">
+                <p className="hidden lg:block px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-gray-400">{g.titulo}</p>
+                {g.ids.map(seccionPorId).map((sec) => (
+                  <ItemMenuAjustes
+                    key={sec.id}
+                    seccion={sec}
+                    activa={sec.id === seccionVista}
+                    conCambios={seccionesConCambios.has(sec.id)}
+                  />
+                ))}
+              </div>
+            ))}
+          </nav>
 
-        <div className="space-y-6">
-          {avisoPruebas}
-          {seccionPerfilDesktop}
-        </div>
+          <div ref={contenidoRef} className="flex-1 min-w-0 space-y-6">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+                {GRUPOS_AJUSTES.find(g => g.ids.includes(seccionVista))?.titulo}
+              </p>
+              <h2 className="text-lg font-bold text-dark-blue">{seccionPorId(seccionVista).label}</h2>
+              <p className="text-sm text-gray-500">{seccionPorId(seccionVista).subtitle}</p>
+            </div>
+            {avisoPruebas}
+            {mensajeBanner}
+            {{
+              perfil:     seccionPerfilDesktop,
+              negocio:    seccionSucursalesDesktop,
+              maquinas:   seccionPreciosDesktop,
+              cargas:     seccionCargasPreciosDesktop,
+              alertas:    seccionAlertasDesktop,
+              etiquetas:  seccionEtiquetasDesktop,
+              inventario: seccionInventarioDesktop,
+              whatsapp:   seccionWhatsappDesktop,
+              ticket:     seccionTicketDesktop,
+              manual:     <TarjetaManual onAbrir={() => navigate('/manual')} />,
+              instalar:   <InstalarApp />,
+            }[seccionVista]}
 
-        <div className="space-y-6">
-          {seccionPreciosDesktop}
-          {seccionCargasPreciosDesktop}
-          {seccionSucursalesDesktop}
-          {seccionAlertasDesktop}
-          {seccionEtiquetasDesktop}
-          {seccionInventarioDesktop}
-          {seccionWhatsappDesktop}
-          {seccionTicketDesktop}
-        </div>
-
-        {/* El manual y la instalación al final: son acciones, y también se ofrecen en pruebas. */}
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div className="px-5 py-4 border-b border-gray-100">
-            <h2 className="text-base font-bold text-dark-blue">Manual de uso</h2>
+            {/* Solo aparece con cambios: dice dónde y deja guardar o descartar. */}
+            {(hayCambios || guardadoOk === 'todo') && (
+              <div className="sticky bottom-6 z-20">
+                <div className="flex items-center justify-between gap-4 bg-dark-blue text-white rounded-xl shadow-xl pl-5 pr-3 py-3">
+                  <p className="text-sm min-w-0">
+                    {guardadoOk === 'todo' ? 'Cambios guardados.' : (
+                      <>
+                        <span className="font-semibold">Cambios sin guardar</span>
+                        {nombresConCambios && <span className="text-white/70"> en {nombresConCambios}</span>}
+                      </>
+                    )}
+                  </p>
+                  <div className="flex gap-2 flex-shrink-0">
+                    {guardadoOk !== 'todo' && (
+                      <button
+                        type="button"
+                        onClick={descartarCambios}
+                        disabled={saving}
+                        className="px-4 py-3.5 rounded-lg text-base font-medium text-white/80 hover:bg-white/10 disabled:opacity-50 transition-colors"
+                      >
+                        Descartar
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={handleGuardarTodo}
+                      disabled={saving || guardadoOk === 'todo'}
+                      className={`flex items-center gap-2 px-6 py-3.5 ${guardadoOk === 'todo' ? 'bg-green-600' : 'bg-blue hover:opacity-90'} disabled:opacity-100 disabled:cursor-not-allowed text-white text-base font-medium rounded-lg transition-colors`}
+                    >
+                      <ContenidoGuardar saving={saving} ok={guardadoOk === 'todo'} okLabel="¡Guardado!">Guardar</ContenidoGuardar>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
-          <div className="px-5 py-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <p className="text-sm text-gray-600 max-w-md">
-              Cómo funciona la aplicación, paso a paso, con buscador. Se abre en su
-              propia página.
-            </p>
-            <button
-              type="button"
-              onClick={() => navigate('/manual')}
-              className="flex items-center justify-center gap-2 w-full md:w-auto px-6 py-3.5 bg-blue hover:opacity-90 text-white text-base font-medium rounded-lg transition-colors whitespace-nowrap"
-            >
-              {/* Ícono de 20 px para que el texto no se parta. */}
-              <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                  d="M12 6.5C10.5 5.2 8.6 4.7 6 4.8A1 1 0 005 5.8v11.4a1 1 0 001.06 1c2.5-.1 4.4.4 5.94 1.7 1.54-1.3 3.44-1.8 5.94-1.7a1 1 0 001.06-1V5.8a1 1 0 00-1-1c-2.6-.1-4.5.4-6 1.7z" />
-                <path strokeLinecap="round" strokeWidth={2} d="M12 6.5V19" />
-              </svg>
-              Abrir el manual
-            </button>
-          </div>
-        </div>
-
-        <InstalarApp />
-
-        {!soloConsultaPruebas && (
-        <div className="space-y-3">
-          {mensajeBanner}
-          <div className="flex justify-end">
-            <button
-              type="button"
-              onClick={handleGuardarTodo}
-              disabled={saving || guardadoOk === 'todo'}
-              className={`flex items-center gap-2 px-6 py-3.5 ${guardadoOk === 'todo' ? 'bg-green-600' : 'bg-blue hover:opacity-90'} disabled:opacity-100 disabled:cursor-not-allowed text-white text-base font-medium rounded-lg transition-colors`}
-            >
-              <ContenidoGuardar saving={saving} ok={guardadoOk === 'todo'} okLabel="¡Guardado!">Guardar cambios</ContenidoGuardar>
-            </button>
-          </div>
-        </div>
-        )}
         </div>
       </div>
+
+      {/* Salir de Ajustes con cambios sin guardar. */}
+      {salidaPendiente && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm max-h-modal overflow-y-auto p-6 space-y-4">
+            <div className="space-y-1">
+              <h3 className="text-base font-bold text-gray-900">Tienes cambios sin guardar</h3>
+              <p className="text-sm text-gray-500">
+                Si sales ahora se pierden{nombresConCambios ? ` los cambios en ${nombresConCambios}` : ''}.
+              </p>
+            </div>
+            <div className="space-y-2">
+              <button
+                type="button"
+                disabled={saving}
+                onClick={async () => {
+                  const destino = salidaPendiente;
+                  if (await handleGuardarTodo()) { setSalidaPendiente(null); navigate(destino); }
+                }}
+                className="w-full bg-blue hover:opacity-90 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
+              >
+                {saving ? 'Guardando...' : 'Guardar y salir'}
+              </button>
+              <button
+                type="button"
+                onClick={() => { const destino = salidaPendiente; descartarCambios(); setSalidaPendiente(null); navigate(destino); }}
+                className="w-full border border-red-200 text-red-600 hover:bg-red-50 font-medium py-3.5 rounded-lg text-base transition-colors"
+              >
+                Salir sin guardar
+              </button>
+              <button
+                type="button"
+                onClick={() => setSalidaPendiente(null)}
+                className="w-full text-gray-600 hover:bg-gray-50 font-medium py-3.5 rounded-lg text-base transition-colors"
+              >
+                Seguir editando
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Confirmación para desactivar una sucursal (solo Admin Main) */}
       {confirmarDesactivar && (
