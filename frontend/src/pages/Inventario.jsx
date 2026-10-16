@@ -1743,6 +1743,21 @@ export default function Inventario() {
   const [granelOcultoSig, setGranelOcultoSig] = useState(null);  // firma del aviso de granel descartado
   // Recién creados en esta sesión: nacen en cero y no avisan hasta su primera entrada.
   const [recienCreados,   setRecienCreados]   = useState(() => new Set());
+  // Interruptores de Ajustes → Alertas; sin dato (cargando o con error), todo encendido.
+  const [ajustesAlertas,  setAjustesAlertas]  = useState(null);
+  useEffect(() => {
+    let activo = true;
+    api.get('/ajustes')
+      .then(data => { if (activo && data) setAjustesAlertas(data); })
+      .catch(() => {});
+    return () => { activo = false; };
+  }, []);
+  const conAlertaStock  = ajustesAlertas?.alerta_stock !== false;
+  const conAlertaGranel = ajustesAlertas?.alerta_granel !== false;
+  /** Semáforo de existencia; con su alerta apagada, o recién creado, no avisa. */
+  const estadoStock = (p) => (!conAlertaStock || recienCreados.has(p.id) ? 'ok' : (p.estado_stock ?? 'ok'));
+  /** Semáforo de los bidones; igual, con su propio interruptor. */
+  const estadoGranel = (p) => (!conAlertaGranel || recienCreados.has(p.id) ? 'ok' : p.estado_granel);
 
   // Filtro de la lista: 'todos', una categoría o 'desactivados' (solo admin).
   const [filtro, setFiltro] = useState('todos');
@@ -1816,13 +1831,13 @@ export default function Inventario() {
     setSearchParams(next, { replace: true });
   }, [searchParams, productos, loading, setSearchParams]);
 
-  const stockBajo = productos.filter(p => p.estado_stock !== 'ok' && !recienCreados.has(p.id));
+  const stockBajo = productos.filter(p => estadoStock(p) !== 'ok');
   // El aviso se oculta en la sesión; su firma incluye la existencia, así reaparece
   // si cambia.
   const stockSig = stockBajo.map(p => `${p.id}:${p.stock_actual}`).join(',');
   const mostrarStockBajo = stockBajo.length > 0 && stockSig !== stockOcultoSig;
   // Granel por acabarse o agotado (solo productos granel).
-  const granelBajo = productos.filter(p => esGranelLiquido(p) && p.estado_granel && p.estado_granel !== 'ok' && !recienCreados.has(p.id));
+  const granelBajo = productos.filter(p => esGranelLiquido(p) && estadoGranel(p) && estadoGranel(p) !== 'ok');
   // Igual que el aviso de existencia.
   const granelSig = granelBajo.map(p => `${p.id}:${p.stock_granel_medidas}`).join(',');
   const mostrarGranel = granelBajo.length > 0 && granelSig !== granelOcultoSig;
@@ -2209,7 +2224,7 @@ export default function Inventario() {
                 </thead>
                 <tbody className="divide-y divide-gray-50">
                   {visibles.map(p => {
-                    const es = recienCreados.has(p.id) ? 'ok' : (p.estado_stock ?? 'ok');
+                    const es = estadoStock(p);
                     const rowCls = es === 'agotado' ? 'bg-red-50/40' : es === 'por_agotarse' ? 'bg-amber-50/40' : '';
                     return (
                       <tr key={p.id} data-producto-id={p.id} className={`transition-colors ${seleccionados.has(p.id) ? 'bg-light-blue/40' : `hover:bg-gray-50 ${rowCls}`}`}>
@@ -2254,7 +2269,7 @@ export default function Inventario() {
                             ? (
                               <div className="flex items-center gap-2 flex-wrap">
                                 <span>{textoGranel(p)}</span>
-                                <BadgeGranel estado={recienCreados.has(p.id) ? 'ok' : p.estado_granel} />
+                                <BadgeGranel estado={estadoGranel(p)} />
                               </div>
                             )
                             : <span className="text-gray-300">—</span>}
@@ -2302,7 +2317,7 @@ export default function Inventario() {
           {/* Cards — mobile */}
           <div className="md:hidden space-y-3">
             {visibles.map(p => {
-              const es = recienCreados.has(p.id) ? 'ok' : (p.estado_stock ?? 'ok');
+              const es = estadoStock(p);
               const rowCls = es === 'agotado' ? 'bg-red-50/40' : es === 'por_agotarse' ? 'bg-amber-50/40' : 'bg-white';
               return (
                 <button
@@ -2381,7 +2396,7 @@ export default function Inventario() {
       {/* Modal info producto (mobile) */}
       {infoProducto && (() => {
         const p = infoProducto;
-        const es = recienCreados.has(p.id) ? 'ok' : (p.estado_stock ?? 'ok');
+        const es = estadoStock(p);
         return (
           <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4 md:hidden">
             <div className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] flex flex-col">
@@ -2436,7 +2451,7 @@ export default function Inventario() {
                     <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Bidones</p>
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-base font-medium text-gray-700">{textoGranel(p)}</span>
-                      <BadgeGranel estado={recienCreados.has(p.id) ? 'ok' : p.estado_granel} />
+                      <BadgeGranel estado={estadoGranel(p)} />
                     </div>
                   </div>
                 )}
