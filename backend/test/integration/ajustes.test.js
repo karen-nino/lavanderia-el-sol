@@ -163,13 +163,13 @@ describe('interruptores de alertas', () => {
   it('nacen encendidos y se pueden apagar', async () => {
     const antes = (await request(app).get('/api/ajustes').set(auth(admin.token))).body;
     expect(antes).toMatchObject({
-      alerta_stock: true, alerta_encendido_manual: true, alerta_tope_maquina: true, aviso_sonoro_ciclo: true,
+      alerta_stock: true, alerta_granel: true, alerta_encendido_manual: true, alerta_tope_maquina: true, aviso_sonoro_ciclo: true,
     });
     await request(app).patch('/api/ajustes').set(auth(admin.token))
       .send({ alerta_stock: false, aviso_sonoro_ciclo: false }).expect(200);
     const despues = (await request(app).get('/api/ajustes').set(auth(admin.token))).body;
     expect(despues).toMatchObject({
-      alerta_stock: false, alerta_encendido_manual: true, alerta_tope_maquina: true, aviso_sonoro_ciclo: false,
+      alerta_stock: false, alerta_granel: true, alerta_encendido_manual: true, alerta_tope_maquina: true, aviso_sonoro_ciclo: false,
     });
   });
 });

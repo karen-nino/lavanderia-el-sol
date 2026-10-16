@@ -89,6 +89,7 @@ export const updateAjustes = async (req, res) => {
     alerta_ciclo_detenido,
     // Interruptores de alertas.
     alerta_stock,
+    alerta_granel,
     alerta_encendido_manual,
     alerta_tope_maquina,
     aviso_sonoro_ciclo,
@@ -224,6 +225,7 @@ export const updateAjustes = async (req, res) => {
   // Interruptores de alertas.
   for (const [col, v] of [
     ['alerta_stock', alerta_stock],
+    ['alerta_granel', alerta_granel],
     ['alerta_encendido_manual', alerta_encendido_manual],
     ['alerta_tope_maquina', alerta_tope_maquina],
     ['aviso_sonoro_ciclo', aviso_sonoro_ciclo],

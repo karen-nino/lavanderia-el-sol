@@ -262,7 +262,12 @@ const ALERTAS_APAGABLES = [
   {
     campo: 'alerta_stock',
     label: 'Avisar de stock bajo',
-    hint: 'Avisa en la campana cuando un producto se está acabando o se agotó, y cuando el granel del bidón está por terminarse.',
+    hint: 'Avisa en la campana cuando un producto (botellas, unidades o bolsas) se está acabando o se agotó.',
+  },
+  {
+    campo: 'alerta_granel',
+    label: 'Avisar de bidones bajos',
+    hint: 'Avisa en la campana cuando el granel de los bidones está por terminarse o se acabó.',
   },
   {
     campo: 'alerta_encendido_manual',

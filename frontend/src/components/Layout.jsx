@@ -741,8 +741,9 @@ export default function Layout() {
   const sucursalNombre =
     sucursales.find(s => s.slug === sucursalSlug)?.nombre ?? sucursalSlug ?? '—';
 
-  // Con "Alertas de stock" apagado no se arman las de existencia ni de granel.
+  // Cada interruptor de Ajustes apaga lo suyo: existencia o granel (bidones).
   const conAlertaStock = ajustesAlertas?.alerta_stock !== false;
+  const conAlertaGranel = ajustesAlertas?.alerta_granel !== false;
   const alertas = useMemo(() => {
     const orden = { agotado: 0, por_agotarse: 1 };
     const stock = (conAlertaStock ? productos : [])
@@ -771,7 +772,7 @@ export default function Layout() {
         };
       });
     // Granel (bidón) por acabarse o agotado.
-    const granel = (conAlertaStock ? productos : [])
+    const granel = (conAlertaGranel ? productos : [])
       // Solo el granel líquido: el polvo va en el aviso de existencia.
       .filter(p => p.tipo_liquido === 'granel' && p.forma !== 'polvo' && p.estado_granel && p.estado_granel !== 'ok')
       .filter(p => !stockOcultas.has(`granel-${p.id}:${p.stock_granel_medidas}`))
@@ -830,7 +831,7 @@ export default function Layout() {
       };
     });
     return [...stock, ...granel, ...notifs];
-  }, [productos, notificaciones, stockOcultas, conAlertaStock]);
+  }, [productos, notificaciones, stockOcultas, conAlertaStock, conAlertaGranel]);
 
   const handleDismissAlerta = async (a) => {
     // Alerta de stock (sin id): se oculta en esta sesión.
