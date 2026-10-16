@@ -1364,6 +1364,11 @@ function BadgeEstado({ estado }) {
   return <span className="w-2 h-2 rounded-full bg-green-500 inline-block" />;
 }
 
+/** Punto naranja de las listas: el producto tiene algo apartado en notas. */
+function PuntoApartado() {
+  return <span className="w-2 h-2 rounded-full bg-orange-500 inline-block" />;
+}
+
 // Badge del granel (bidón). Solo se dibuja algo cuando está por acabarse o agotado.
 function BadgeGranel({ estado }) {
   if (estado === 'agotado') return <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700">Sin bidones</span>;
@@ -2238,9 +2243,9 @@ export default function Inventario() {
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2 flex-wrap">
-                            {/* El punto verde marca que hay algo apartado en notas; los avisos, a la derecha. */}
-                            {es === 'ok' && medidasApartadas(p) > 0 && <BadgeEstado estado={es} />}
+                            {/* El punto naranja (algo apartado en notas) y los avisos van a la derecha. */}
                             <span className="font-medium text-gray-800">{textoDisponible(p)}</span>
+                            {es === 'ok' && medidasApartadas(p) > 0 && <PuntoApartado />}
                             {es !== 'ok' && <BadgeEstado estado={es} />}
                           </div>
                         </td>
@@ -2324,9 +2329,9 @@ export default function Inventario() {
                     return sub && <p className="text-xs text-gray-400 mt-0.5">{sub}</p>;
                   })()}
                   <div className="flex items-center gap-2 mt-1 flex-wrap">
-                    {/* El punto verde marca que hay algo apartado en notas; los avisos, a la derecha. */}
-                    {es === 'ok' && medidasApartadas(p) > 0 && <BadgeEstado estado={es} />}
+                    {/* El punto naranja (algo apartado en notas) y los avisos van a la derecha. */}
                     <span className="text-md font-semibold text-gray-700">{textoDisponible(p)}</span>
+                    {es === 'ok' && medidasApartadas(p) > 0 && <PuntoApartado />}
                     {es !== 'ok' && <BadgeEstado estado={es} />}
                   </div>
                   {/* Los bidones se ven al abrir la tarjeta. */}
