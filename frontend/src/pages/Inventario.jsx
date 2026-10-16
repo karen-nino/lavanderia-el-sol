@@ -86,10 +86,6 @@ function textoExistencia(p, medidas) {
   if (sueltas > 0) partes.push(plural(sueltas, 'medida', 'medidas'));
   return partes.join(' y ');
 }
-/** Lo que está en el estante. */
-function textoRellenadas(p) {
-  return textoExistencia(p, p.stock_actual);
-}
 /**
  * Medidas apartadas en notas abiertas: siguen en el estante pero ya tienen
  * dueño. El semáforo se calcula con lo disponible, por eso se muestra.
@@ -112,12 +108,12 @@ function textoGranel(p) {
   if (botellas > 0) partes.push(plural(botellas, 'botella', 'botellas'));
   return partes.join(' y ');
 }
-/** Línea de lo apartado y lo disponible; solo si hay algo apartado. */
+/** Línea de lo apartado en notas; solo si hay algo apartado. */
 function LineaApartadas({ p, className = 'text-xs text-gray-500 mt-0.5' }) {
   if (medidasApartadas(p) <= 0) return null;
   return (
     <p className={className}>
-      Disponibles: {textoDisponible(p)} · apartadas en notas: {textoApartadas(p)}
+      Apartadas en notas: {textoApartadas(p)}
     </p>
   );
 }
@@ -2253,7 +2249,7 @@ export default function Inventario() {
                           <div className="flex items-center gap-2 flex-wrap">
                             {/* Con suficiente, el punto verde va a la izquierda; los avisos, a la derecha. */}
                             {es === 'ok' && <BadgeEstado estado={es} />}
-                            <span className="font-medium text-gray-800">{textoRellenadas(p)}</span>
+                            <span className="font-medium text-gray-800">{textoDisponible(p)}</span>
                             {es !== 'ok' && <BadgeEstado estado={es} />}
                           </div>
                           <LineaApartadas p={p} />
@@ -2340,7 +2336,7 @@ export default function Inventario() {
                   <div className="flex items-center gap-2 mt-1 flex-wrap">
                     {/* Con suficiente, el punto verde va a la izquierda; los avisos, a la derecha. */}
                     {es === 'ok' && <BadgeEstado estado={es} />}
-                    <span className="text-md font-semibold text-gray-700">{textoRellenadas(p)}</span>
+                    <span className="text-md font-semibold text-gray-700">{textoDisponible(p)}</span>
                     {es !== 'ok' && <BadgeEstado estado={es} />}
                   </div>
                   <LineaApartadas p={p} />
@@ -2446,7 +2442,7 @@ export default function Inventario() {
                   <div className="flex items-center gap-2 flex-wrap">
                     {/* Con suficiente, el punto verde va a la izquierda; los avisos, a la derecha. */}
                     {es === 'ok' && <BadgeEstado estado={es} />}
-                    <span className="text-base font-medium text-gray-800">{textoRellenadas(p)}</span>
+                    <span className="text-base font-medium text-gray-800">{textoDisponible(p)}</span>
                     {es !== 'ok' && <BadgeEstado estado={es} />}
                   </div>
                   <LineaApartadas p={p} className="text-xs text-gray-500 mt-1" />
