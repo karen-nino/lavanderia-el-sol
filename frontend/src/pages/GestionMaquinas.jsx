@@ -414,13 +414,6 @@ export default function GestionMaquinas() {
 
   const filtradas = filtrarPorEstado(maquinas, filtro);
 
-  // Avance del enlace con los Sonoff (las de fichas no cuentan).
-  const conControl   = maquinas.filter(m => !m.solo_fichas);
-  const conDeviceId  = conControl.filter(m => m.device_id).length;
-  const confirmadas  = conControl.filter(m => m.sonoff_estado === 'enlazada').length;
-  // Las que fallan, aparte: es lo que hay que atender.
-  const conFalla     = conControl.filter(m => m.device_id && m.sonoff_estado === 'error').length;
-
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -437,15 +430,6 @@ export default function GestionMaquinas() {
         <div>
           <h1 className="text-xl font-bold text-gray-900">Gestión de máquinas</h1>
           <p className="text-sm text-gray-500">{maquinas.length} equipo(s) registrado(s)</p>
-          {esAdmin && CON_SONOFF && conControl.length > 0 && (
-            <p className="text-xs text-gray-400 mt-0.5">
-              Sonoff: {conDeviceId} de {conControl.length} con ID asignado
-              {conDeviceId > 0 && ` · ${confirmadas} con enlace confirmado`}
-              {conFalla > 0 && (
-                <span className="text-red-600 font-medium"> · {conFalla} sin conexión</span>
-              )}
-            </p>
-          )}
         </div>
         {esAdmin && (
           <button
