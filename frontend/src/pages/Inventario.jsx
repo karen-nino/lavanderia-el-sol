@@ -1340,6 +1340,13 @@ function ChipNuevo() {
   return <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-700">Nuevo</span>;
 }
 
+/** Color del texto del chip de tipo, para pintar el nombre igual. */
+function colorTextoTipo(p) {
+  if (p.clase === 'bolsa') return 'text-amber-700';
+  if (p.tipo_liquido === 'granel') return 'text-blue';
+  if (p.tipo_liquido === 'marca') return 'text-purple-700';
+  return 'text-gray-800';
+}
 // Chip de tipo de producto (granel / marca / bolsa).
 function ChipTipo({ p }) {
   const cfg = p.clase === 'bolsa'
@@ -1755,6 +1762,7 @@ export default function Inventario() {
   const [tamanosBolsa, setTamanosBolsa] = useState([]);
   // Tipos de granel, todos; el modal decide cuáles ofrece.
   const [tiposGranel, setTiposGranel] = useState([]);
+  const nombreTipoGranel = new Map(tiposGranel.map(t => [t.id, t.nombre]));
 
   useEffect(() => {
     let activo = true;
@@ -1970,7 +1978,7 @@ export default function Inventario() {
         <div className="max-w-movil md:max-w-7xl mx-auto px-6 md:px-8 pt-10 md:pt-14 pb-4 flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Inventario</h1>
-          <p className="text-sm text-gray-500">{productos.length} producto(s) en inventario</p>
+          <p className="text-sm text-gray-500">{productos.length} producto(s)</p>
         </div>
         {esAdmin && (
           <button
@@ -2245,26 +2253,30 @@ export default function Inventario() {
                   data-producto-id={p.id}
                   type="button"
                   onClick={() => setInfoProducto(p)}
-                  className={`w-full text-left rounded-xl shadow-sm border border-gray-100 px-4 py-3 hover:shadow-md active:opacity-80 transition ${rowCls}`}
+                  className={`w-full text-left rounded-xl shadow-sm border border-gray-100 px-4 py-5 hover:shadow-md active:opacity-80 transition ${rowCls}`}
                 >
-                  <div className="flex items-center gap-2">
-                    {es !== 'ok' && <IconoAdvertencia severity={es} />}
-                    <p className="font-medium text-gray-800 text-sm">{tituloProd(p)}</p>
-                    <ChipTipo p={p} />
-                            {recienCreados.has(p.id) && <ChipNuevo />}
+                  {/* Nombre a la izquierda; chips de tipo y "Nuevo" arriba a la derecha. */}
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      {es !== 'ok' && <IconoAdvertencia severity={es} />}
+                      <p className={`font-medium text-sm ${colorTextoTipo(p)}`}>{tituloProd(p)}</p>
+                    </div>
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      <ChipTipo p={p} />
+                      {recienCreados.has(p.id) && <ChipNuevo />}
+                    </div>
                   </div>
-                  {subtituloProd(p) && <p className="text-xs text-gray-400 mt-0.5">{subtituloProd(p)}</p>}
+                  {/* En el granel líquido el subtítulo es su tipo (Jabón, Suavizante…). */}
+                  {(() => {
+                    const sub = (esGranelLiquido(p) && nombreTipoGranel.get(p.tipo_granel_id)) || subtituloProd(p);
+                    return sub && <p className="text-xs text-gray-400 mt-0.5">{sub}</p>;
+                  })()}
                   <div className="flex items-center gap-2 mt-1 flex-wrap">
-                    <span className="text-sm font-medium text-gray-700">{textoRellenadas(p)}</span>
+                    <span className="text-md font-semibold text-gray-700">{textoRellenadas(p)}</span>
                     <BadgeEstado estado={es} />
                   </div>
                   <LineaApartadas p={p} />
-                  {esGranelLiquido(p) && (
-                    <p className="text-xs text-gray-500 mt-0.5 inline-flex items-center gap-1.5">
-                      <span>A granel: {textoGranel(p)}</span>
-                      <BadgeGranel estado={recienCreados.has(p.id) ? 'ok' : p.estado_granel} />
-                    </p>
-                  )}
+                  {/* Los bidones se ven al abrir la tarjeta. */}
                 </button>
               );
             })}
