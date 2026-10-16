@@ -1253,7 +1253,7 @@ function MenuOpcionesProducto({ onEditar, onDesactivar, onEliminar }) {
     };
   }, [abierto]);
 
-  const OPCION_CLS = 'w-full flex items-center gap-3 px-4 py-3 text-left text-sm font-medium';
+  const OPCION_CLS = 'w-full flex items-center gap-3 px-4 py-3.5 text-left text-sm font-medium';
   return (
     <div ref={ref} className="relative">
       <button
