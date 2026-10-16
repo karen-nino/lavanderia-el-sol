@@ -245,7 +245,7 @@ const huellaSucursal = (s) => JSON.stringify([s.nombre ?? '', s.direccion ?? '',
 const SECCIONES_AJUSTES = [...MOBILE_SECTIONS, SECCION_MANUAL, SECCION_INSTALAR];
 const seccionPorId = (id) => SECCIONES_AJUSTES.find(s => s.id === id);
 
-/** Menú de Ajustes agrupado por intención; el mismo en celular y escritorio. */
+/** Secciones de Ajustes agrupadas por intención; igual en celular y escritorio. */
 const GRUPOS_AJUSTES = [
   { titulo: 'Cuenta',    ids: ['perfil'] },
   { titulo: 'Negocio',   ids: ['negocio', 'ticket', 'whatsapp'] },
@@ -465,7 +465,7 @@ function TarjetaManual({ onAbrir }) {
   );
 }
 
-/** Tarjeta del inicio de Ajustes (tableta y laptop): nombre, qué tiene y si hay cambios. */
+/** Tarjeta del inicio de Ajustes: nombre, qué tiene y si hay cambios. */
 function TarjetaSeccion({ seccion, conCambios }) {
   const destino = seccion.id === 'manual' ? '/manual' : `/ajustes/${seccion.id}`;
   return (
@@ -485,7 +485,7 @@ function TarjetaSeccion({ seccion, conCambios }) {
   );
 }
 
-/** Lista desplegable para saltar de sección sin volver al inicio (768–1319 px). */
+/** Lista desplegable para saltar de sección sin volver al inicio. */
 function CambiarSeccion({ actual, conCambios }) {
   const [abierto, setAbierto] = useState(false);
   return (
@@ -532,30 +532,6 @@ function CambiarSeccion({ actual, conCambios }) {
         </>
       )}
     </div>
-  );
-}
-
-/** Renglón del menú lateral de Ajustes (desde 1320 px). */
-function ItemMenuAjustes({ seccion, activa, conCambios }) {
-  const destino = seccion.id === 'manual' ? '/manual' : `/ajustes/${seccion.id}`;
-  return (
-    <Link
-      to={destino}
-      title={seccion.label}
-      aria-current={activa ? 'page' : undefined}
-      className={`relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-        activa ? 'bg-light-blue text-blue' : 'text-gray-600 hover:bg-gray-100 hover:text-dark-blue'
-      }`}
-    >
-      <span className="flex-shrink-0 [&>svg]:w-5 [&>svg]:h-5">{seccion.icon}</span>
-      <span className="truncate">{seccion.label}</span>
-      {conCambios && (
-        <span
-          className="ml-auto w-2 h-2 rounded-full bg-amber-500 flex-shrink-0"
-          aria-label="Con cambios sin guardar"
-        />
-      )}
-    </Link>
   );
 }
 
@@ -3206,18 +3182,12 @@ export default function Ajustes() {
         className="hidden"
       />
 
-      {/* ── Vista escritorio ──
-          Desde 1320 px: menú lateral y una sección a la vez.
-          De 768 a 1319: tarjetas al entrar y la sección a todo lo ancho. */}
+      {/* ── Vista escritorio: tarjetas al entrar y la sección a todo lo ancho ── */}
       <div className="hidden md:block min-h-full bg-gray-50">
         <div className="bg-white border-b-2 border-gray-200">
-          <div className="max-w-3xl min-[1320px]:max-w-5xl mx-auto px-8 pt-14 pb-4">
-            <div className={seccionUrl ? 'hidden min-[1320px]:block' : ''}>
-              <h1 className="text-xl font-bold text-gray-900">Ajustes</h1>
-              <p className="text-sm text-gray-500">Configuración del negocio y de tu cuenta</p>
-            </div>
-            {seccionUrl && (
-              <div className="min-[1320px]:hidden flex items-center gap-3">
+          <div className="max-w-3xl mx-auto px-8 pt-14 pb-4">
+            {seccionUrl ? (
+              <div className="flex items-center gap-3">
                 <Link
                   to="/ajustes"
                   aria-label="Volver a Ajustes"
@@ -3234,33 +3204,22 @@ export default function Ajustes() {
                 </div>
                 <CambiarSeccion actual={seccionVista} conCambios={seccionesConCambios} />
               </div>
+            ) : (
+              <>
+                <h1 className="text-xl font-bold text-gray-900">Ajustes</h1>
+                <p className="text-sm text-gray-500">Configuración del negocio y de tu cuenta</p>
+              </>
             )}
           </div>
         </div>
 
-        <div className="max-w-3xl min-[1320px]:max-w-5xl mx-auto px-8 py-6 flex items-start gap-8">
-          <nav aria-label="Secciones de Ajustes" className="hidden min-[1320px]:block sticky top-6 w-60 flex-shrink-0 space-y-5">
-            {GRUPOS_AJUSTES.map((g) => (
-              <div key={g.titulo} className="space-y-1">
-                <p className="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-gray-400">{g.titulo}</p>
-                {g.ids.map(seccionPorId).map((sec) => (
-                  <ItemMenuAjustes
-                    key={sec.id}
-                    seccion={sec}
-                    activa={sec.id === seccionVista}
-                    conCambios={seccionesConCambios.has(sec.id)}
-                  />
-                ))}
-              </div>
-            ))}
-          </nav>
-
+        <div className="max-w-3xl mx-auto px-8 py-6">
           <div className="flex-1 min-w-0 space-y-6">
             {avisoPruebas}
 
-            {/* Inicio de Ajustes en tableta y laptop: una tarjeta por sección. */}
+            {/* Inicio de Ajustes: una tarjeta por sección. */}
             {!seccionUrl && (
-              <div className="min-[1320px]:hidden space-y-6">
+              <div className="space-y-6">
                 {GRUPOS_AJUSTES.map((g) => (
                   <div key={g.titulo} className="space-y-3">
                     <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">{g.titulo}</p>
@@ -3274,14 +3233,8 @@ export default function Ajustes() {
               </div>
             )}
 
-            <div className={`space-y-6 ${seccionUrl ? '' : 'hidden min-[1320px]:block'}`}>
-            <div className={seccionUrl ? 'hidden min-[1320px]:block' : ''}>
-              <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">
-                {GRUPOS_AJUSTES.find(g => g.ids.includes(seccionVista))?.titulo}
-              </p>
-              <h2 className="text-lg font-bold text-dark-blue">{seccionPorId(seccionVista).label}</h2>
-              <p className="text-sm text-gray-500">{seccionPorId(seccionVista).subtitle}</p>
-            </div>
+            {seccionUrl && (
+            <div className="space-y-6">
             {mensajeBanner}
             {{
               perfil:     seccionPerfilDesktop,
@@ -3297,6 +3250,7 @@ export default function Ajustes() {
               instalar:   <InstalarApp />,
             }[seccionVista]}
             </div>
+            )}
 
             {/* Solo aparece con cambios: dice dónde y deja guardar o descartar. */}
             {(hayCambios || guardadoOk === 'todo') && (
