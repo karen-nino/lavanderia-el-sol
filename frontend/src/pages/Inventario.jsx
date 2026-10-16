@@ -55,7 +55,7 @@ function desglosarBidones(medidasGranel, p) {
 function plural(n, sing, plur) {
   return `${n} ${n === 1 ? sing : plur}`;
 }
-/** El granel en polvo se cuenta por unidades: se comporta como un producto de marca. */
+/** El granel en polvo se cuenta por piezas: se comporta como un producto de marca. */
 function esPolvo(p) {
   return p?.clase !== 'bolsa' && p?.forma === 'polvo';
 }
@@ -67,13 +67,13 @@ function porUnidad(p) {
 function esGranelLiquido(p) {
   return p?.clase !== 'bolsa' && p?.tipo_liquido === 'granel' && !esPolvo(p);
 }
-/** Unidad de la existencia: botellas (granel líquido) o unidades (marca y polvo). */
+/** Unidad de la existencia: botellas (granel líquido) o piezas (marca y polvo). */
 function unidadVenta(p, n = 2) {
   if (p.clase === 'bolsa') return n === 1 ? 'bolsa' : 'bolsas';
-  if (porUnidad(p)) return n === 1 ? 'unidad' : 'unidades';
+  if (porUnidad(p)) return n === 1 ? 'pieza' : 'piezas';
   return n === 1 ? 'botella' : 'botellas';
 }
-/** Título de la existencia: Botellas, Unidades o Bolsas. */
+/** Título de la existencia: Botellas, Piezas o Bolsas. */
 function tituloExistencia(p) {
   const u = unidadVenta(p);
   return u.charAt(0).toUpperCase() + u.slice(1);
@@ -462,14 +462,14 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = 
             </div>
           )}
 
-          {/* Granel: líquido o en polvo (por unidades enteras). */}
+          {/* Granel: líquido o en polvo (por piezas enteras). */}
           {esGranel && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">
                 ¿Qué tipo es? <span className="text-red-500">*</span>
               </label>
               <div className="flex gap-2">
-                {[['liquido', 'Líquido', 'Se sirve por medidas'], ['polvo', 'Polvo', 'Se vende por unidades']].map(([val, label, hint]) => (
+                {[['liquido', 'Líquido', 'Se sirve por medidas'], ['polvo', 'Polvo', 'Se vende por piezas']].map(([val, label, hint]) => (
                   <button
                     key={val} type="button"
                     onClick={() => setForm(f => ({ ...f, forma: val }))}
@@ -722,7 +722,7 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = 
             )}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                {esGranelLiq ? 'Precio por botella ($)' : esBolsa ? 'Precio por pieza ($)' : 'Precio por unidad ($)'}
+                {esGranelLiq ? 'Precio por botella ($)' : 'Precio por pieza ($)'}
               </label>
               <div className="relative">
                 <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-base">$</span>
@@ -753,7 +753,7 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = 
           ) : (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                Avisar cuando queden ({esGranelLiq ? 'botellas' : 'unidades'})
+                Avisar cuando queden ({esGranelLiq ? 'botellas' : 'piezas'})
               </label>
               <input
                 type="number" name="stock_minimo_botellas" min="0" step="1"
@@ -2257,7 +2257,7 @@ export default function Inventario() {
                               {esGranelLiquido(p) && (
                                 <div>Medida: <span className="font-medium text-gray-700">{precioTxt(p.precio_unitario)}</span></div>
                               )}
-                              <div>{p.tipo_liquido === 'marca' ? 'Unidad' : 'Botella'}: <span className="font-medium text-gray-700">{precioTxt(p.precio_botella)}</span></div>
+                              <div>{porUnidad(p) ? 'Pieza' : 'Botella'}: <span className="font-medium text-gray-700">{precioTxt(p.precio_botella)}</span></div>
                             </>
                           )}
                         </td>
@@ -2459,7 +2459,7 @@ export default function Inventario() {
                       </div>
                     )}
                     <div>
-                      <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">{p.tipo_liquido === 'marca' ? 'Precio por unidad' : 'Precio por botella'}</p>
+                      <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">{porUnidad(p) ? 'Precio por pieza' : 'Precio por botella'}</p>
                       <p className="text-base font-medium text-gray-700">{precioTxt(p.precio_botella)}</p>
                     </div>
                   </div>
