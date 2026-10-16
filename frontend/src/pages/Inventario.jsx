@@ -2172,7 +2172,8 @@ export default function Inventario() {
       )}
 
       {!loading && !error && !verArchivados && visibles.length > 0 && (
-        <>
+        /* Separado de los filtros, como en Gestión de máquinas. */
+        <div className="pt-2">
           {/* Barra de acciones de selección múltiple (admin, desktop) */}
           {esAdmin && seleccionados.size > 0 && (
             <div className="hidden md:flex items-center justify-between gap-3 bg-white rounded-xl shadow-sm border border-gray-100 px-4 py-3 mb-4">
@@ -2342,7 +2343,7 @@ export default function Inventario() {
               );
             })}
           </div>
-        </>
+        </div>
       )}
 
       {/* Desactivados (filtro, solo admin) */}
