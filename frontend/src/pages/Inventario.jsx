@@ -1340,6 +1340,19 @@ function ChipNuevo() {
   return <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-700">Nuevo</span>;
 }
 
+/** Categoría del producto para los filtros. */
+function categoriaProd(p) {
+  if (p.clase === 'bolsa') return 'bolsa';
+  return p.tipo_liquido === 'marca' ? 'marca' : 'granel';
+}
+/** Filtros de la lista, con el estilo de los de Gestión de máquinas. */
+const FILTRO_CFG = {
+  granel:       { label: 'Granel',       cls: 'bg-light-blue text-blue',      clsActive: 'bg-blue text-white',       dot: 'bg-blue' },
+  marca:        { label: 'Marca',        cls: 'bg-purple-100 text-purple-700', clsActive: 'bg-purple-600 text-white', dot: 'bg-purple-500' },
+  bolsa:        { label: 'Bolsa',        cls: 'bg-amber-100 text-amber-700',  clsActive: 'bg-amber-500 text-white',  dot: 'bg-amber-500' },
+  desactivados: { label: 'Desactivados', cls: 'bg-gray-100 text-gray-600',    clsActive: 'bg-gray-600 text-white',   dot: 'bg-gray-400' },
+};
+
 /** Color del texto del chip de tipo, para pintar el nombre igual. */
 function colorTextoTipo(p) {
   if (p.clase === 'bolsa') return 'text-amber-700';
@@ -1721,7 +1734,7 @@ function ReporteDiario() {
 export default function Inventario() {
   const { usuario } = useAuth();
   const esAdmin = esAdminFn(usuario?.rol);
-  // Pestañas (solo admin): lista de Inventario y Reporte diario.
+  // Vista (solo admin): lista de Inventario o Reporte diario; se cambia con el botón de la cabecera.
   const [vista, setVista] = useState('inventario');
 
   const [productos,       setProductos]       = useState([]);
@@ -1739,10 +1752,12 @@ export default function Inventario() {
   // Recién creados en esta sesión: nacen en cero y no avisan hasta su primera entrada.
   const [recienCreados,   setRecienCreados]   = useState(() => new Set());
 
-  // Archivados: se cargan bajo demanda al abrir el panel "Ver archivados".
-  const [verArchivados,   setVerArchivados]   = useState(false);
+  // Filtro de la lista: 'todos', una categoría o 'desactivados' (solo admin).
+  const [filtro, setFiltro] = useState('todos');
+  const verArchivados = filtro === 'desactivados';
+  // Desactivados: se cargan al entrar (admin) para el número del filtro.
   const [archivados,      setArchivados]      = useState([]);
-  const [archLoading,     setArchLoading]     = useState(false);
+  const [archLoading,     setArchLoading]     = useState(true);
   const [archError,       setArchError]       = useState('');
 
   // Selección múltiple (admin, desktop) para borrado en lote.
@@ -1850,29 +1865,31 @@ export default function Inventario() {
   };
 
   // ── Archivar / restaurar ───────────────────────────────
-  const cargarArchivados = async () => {
-    setArchError('');
-    setArchLoading(true);
-    try {
-      const data = await api.get('/productos?archivados=1');
-      setArchivados(data);
-    } catch (err) {
-      setArchError(err.message);
-    } finally {
-      setArchLoading(false);
-    }
-  };
-  const toggleVerArchivados = () => {
-    const abrir = !verArchivados;
-    setVerArchivados(abrir);
-    if (abrir) cargarArchivados();
+  useEffect(() => {
+    if (!esAdmin) return undefined;
+    let activo = true;
+    api.get('/productos?archivados=1')
+      .then(data => { if (activo) setArchivados(data); })
+      .catch(e => { if (activo) setArchError(e.message); })
+      .finally(() => { if (activo) setArchLoading(false); });
+    return () => { activo = false; };
+  }, [esAdmin]);
+  const visibles = filtro === 'todos' || verArchivados
+    ? productos
+    : productos.filter(p => categoriaProd(p) === filtro);
+  const conteos = {
+    todos: productos.length,
+    granel: productos.filter(p => categoriaProd(p) === 'granel').length,
+    marca: productos.filter(p => categoriaProd(p) === 'marca').length,
+    bolsa: productos.filter(p => categoriaProd(p) === 'bolsa').length,
+    desactivados: archivados.length,
   };
   const handleArchivar = async () => {
     const p = prodAArchivar;
     await api.patch(`/productos/${p.id}/archivar`, { archivado: true });
     setProductos(prev => prev.filter(x => x.id !== p.id));
     setSeleccionados(prev => { const n = new Set(prev); n.delete(p.id); return n; });
-    if (verArchivados) setArchivados(prev => [...prev, p].sort(ordenProd));
+    setArchivados(prev => [...prev, p].sort(ordenProd));
     setProdAArchivar(null);
   };
   const restaurarProducto = async (p) => {
@@ -1890,12 +1907,12 @@ export default function Inventario() {
     });
   };
   const todosSeleccionados =
-    productos.length > 0 && productos.every(p => seleccionados.has(p.id));
+    visibles.length > 0 && visibles.every(p => seleccionados.has(p.id));
   const toggleTodos = () => {
     setSeleccionados(prev => {
       const next = new Set(prev);
-      const yaTodos = productos.every(p => next.has(p.id));
-      productos.forEach(p => { if (yaTodos) next.delete(p.id); else next.add(p.id); });
+      const yaTodos = visibles.every(p => next.has(p.id));
+      visibles.forEach(p => { if (yaTodos) next.delete(p.id); else next.add(p.id); });
       return next;
     });
   };
@@ -1978,18 +1995,45 @@ export default function Inventario() {
         <div className="max-w-movil md:max-w-7xl mx-auto px-6 md:px-8 pt-10 md:pt-14 pb-4 flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Inventario</h1>
-          <p className="text-sm text-gray-500">{productos.length} producto(s)</p>
+          <p className="text-sm text-gray-500">
+            {esAdmin && vista === 'reporte' ? 'Reporte diario' : `${productos.length} producto(s)`}
+          </p>
         </div>
         {esAdmin && (
-          <button
-            onClick={() => setModalProducto('nuevo')}
-            aria-label="Agregar producto"
-            className="w-11 h-11 rounded-full bg-blue hover:opacity-90 text-white flex items-center justify-center transition-colors flex-shrink-0"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
-            </svg>
-          </button>
+          <div className="flex items-center gap-3">
+            {/* Cambia entre la lista y el Reporte diario (antes eran pestañas). */}
+            <button
+              onClick={() => setVista(v => (v === 'reporte' ? 'inventario' : 'reporte'))}
+              aria-label={vista === 'reporte' ? 'Ver inventario' : 'Ver reporte diario'}
+              title={vista === 'reporte' ? 'Ver inventario' : 'Ver reporte diario'}
+              className={`w-11 h-11 rounded-full border flex items-center justify-center transition-colors flex-shrink-0 ${
+                vista === 'reporte'
+                  ? 'border-blue bg-light-blue text-blue-700'
+                  : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              {vista === 'reporte' ? (
+                /* Lista */
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+              ) : (
+                /* Reporte */
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              )}
+            </button>
+            <button
+              onClick={() => setModalProducto('nuevo')}
+              aria-label="Agregar producto"
+              className="w-11 h-11 rounded-full bg-blue hover:opacity-90 text-white flex items-center justify-center transition-colors flex-shrink-0"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+              </svg>
+            </button>
+          </div>
         )}
         </div>
       </div>
@@ -1999,28 +2043,41 @@ export default function Inventario() {
       {/* Contenido */}
       <div className="max-w-movil md:max-w-7xl mx-auto px-6 md:px-8 py-4 space-y-4">
 
-      {/* Pestañas (solo admin): Inventario / Reporte diario */}
-      {esAdmin && (
-        <div className="flex flex-wrap gap-2">
-          {[
-            { id: 'inventario', label: 'Inventario' },
-            { id: 'reporte',    label: 'Reporte diario' },
-          ].map(t => (
-            <button
-              key={t.id}
-              onClick={() => setVista(t.id)}
-              className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                vista === t.id ? 'bg-blue text-white' : 'bg-white text-gray-600 border border-gray-300 hover:bg-gray-50'
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-      )}
-
       {esAdmin && vista === 'reporte' ? <ReporteDiario /> : (
       <>
+
+      {/* Filtros por categoría (y Desactivados, solo admin) */}
+      {!loading && !error && (productos.length > 0 || conteos.desactivados > 0) && (
+        <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-none">
+          <button
+            onClick={() => setFiltro('todos')}
+            className={`flex-shrink-0 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+              filtro === 'todos'
+                ? 'bg-blue text-white'
+                : 'bg-white text-gray-600 border border-gray-200 hover:border-blue-300'
+            }`}
+          >
+            Todos: {conteos.todos}
+          </button>
+          {Object.entries(FILTRO_CFG)
+            .filter(([id]) => id !== 'desactivados' || esAdmin)
+            .map(([id, cfg]) => {
+              const activo = filtro === id;
+              return (
+                <button
+                  key={id}
+                  onClick={() => setFiltro(id)}
+                  className={`flex-shrink-0 flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                    activo ? cfg.clsActive : cfg.cls
+                  }`}
+                >
+                  <span className={`w-2 h-2 rounded-full ${activo ? 'bg-white' : cfg.dot}`} />
+                  {cfg.label}: {conteos[id]}
+                </button>
+              );
+            })}
+        </div>
+      )}
 
       {/* Alerta stock bajo */}
       {mostrarStockBajo && (
@@ -2096,7 +2153,7 @@ export default function Inventario() {
         <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">{error}</div>
       )}
 
-      {!loading && !error && productos.length === 0 && (
+      {!loading && !error && !verArchivados && productos.length === 0 && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 text-center py-12">
           <p className="text-gray-400 text-sm mb-3">Sin productos en inventario</p>
           {esAdmin && (
@@ -2110,7 +2167,11 @@ export default function Inventario() {
         </div>
       )}
 
-      {!loading && !error && productos.length > 0 && (
+      {!loading && !error && !verArchivados && productos.length > 0 && visibles.length === 0 && (
+        <p className="text-sm text-gray-400 italic py-2">No hay productos de esta categoría.</p>
+      )}
+
+      {!loading && !error && !verArchivados && visibles.length > 0 && (
         <>
           {/* Barra de acciones de selección múltiple (admin, desktop) */}
           {esAdmin && seleccionados.size > 0 && (
@@ -2152,7 +2213,7 @@ export default function Inventario() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
-                  {productos.map(p => {
+                  {visibles.map(p => {
                     const es = recienCreados.has(p.id) ? 'ok' : (p.estado_stock ?? 'ok');
                     const rowCls = es === 'agotado' ? 'bg-red-50/40' : es === 'por_agotarse' ? 'bg-amber-50/40' : '';
                     return (
@@ -2244,7 +2305,7 @@ export default function Inventario() {
 
           {/* Cards — mobile */}
           <div className="md:hidden space-y-3">
-            {productos.map(p => {
+            {visibles.map(p => {
               const es = recienCreados.has(p.id) ? 'ok' : (p.estado_stock ?? 'ok');
               const rowCls = es === 'agotado' ? 'bg-red-50/40' : es === 'por_agotarse' ? 'bg-amber-50/40' : 'bg-white';
               return (
@@ -2284,47 +2345,32 @@ export default function Inventario() {
         </>
       )}
 
-      {/* Archivados */}
-      {esAdmin && !loading && !error && (
-        <div className="pt-2">
-          <button
-            type="button"
-            onClick={toggleVerArchivados}
-            className="text-sm text-gray-500 hover:text-gray-700 font-medium inline-flex items-center gap-1.5 transition-colors"
-          >
-            <svg className={`w-4 h-4 transition-transform ${verArchivados ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-            {verArchivados ? 'Ocultar desactivados' : 'Ver productos desactivados'}
-          </button>
-
-          {verArchivados && (
-            <div className="mt-3">
-              {archLoading ? (
-                <p className="text-sm text-gray-400 py-4">Cargando…</p>
-              ) : archError ? (
-                <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">{archError}</div>
-              ) : archivados.length === 0 ? (
-                <p className="text-sm text-gray-400 italic py-2">No hay productos desactivados.</p>
-              ) : (
-                <div className="bg-white rounded-xl shadow-sm border border-gray-100 divide-y divide-gray-50">
-                  {archivados.map(p => (
-                    <div key={p.id} className="px-4 py-3 flex items-center justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-gray-700 truncate">{tituloProd(p)}</p>
-                        {subtituloProd(p) && <p className="text-xs text-gray-400">{subtituloProd(p)}</p>}
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => restaurarProducto(p)}
-                        className="flex-shrink-0 text-sm font-medium text-blue hover:text-blue-800 border border-blue/30 hover:bg-light-blue rounded-lg px-3 py-1.5 transition-colors"
-                      >
-                        Reactivar
-                      </button>
-                    </div>
-                  ))}
+      {/* Desactivados (filtro, solo admin) */}
+      {esAdmin && !loading && !error && verArchivados && (
+        <div>
+          {archLoading ? (
+            <p className="text-sm text-gray-400 py-4">Cargando…</p>
+          ) : archError ? (
+            <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">{archError}</div>
+          ) : archivados.length === 0 ? (
+            <p className="text-sm text-gray-400 italic py-2">No hay productos desactivados.</p>
+          ) : (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 divide-y divide-gray-50">
+              {archivados.map(p => (
+                <div key={p.id} className="px-4 py-3 flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-gray-700 truncate">{tituloProd(p)}</p>
+                    {subtituloProd(p) && <p className="text-xs text-gray-400">{subtituloProd(p)}</p>}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => restaurarProducto(p)}
+                    className="flex-shrink-0 text-sm font-medium text-blue hover:text-blue-800 border border-blue/30 hover:bg-light-blue rounded-lg px-3 py-1.5 transition-colors"
+                  >
+                    Reactivar
+                  </button>
                 </div>
-              )}
+              ))}
             </div>
           )}
         </div>
