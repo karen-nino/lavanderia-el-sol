@@ -6,6 +6,10 @@ export default {
   content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
   theme: {
     extend: {
+      /* Columna centrada en celular ancho: ~500 px de contenido. */
+      maxWidth: {
+        movil: '34.25rem',
+      },
       colors: {
         blue:           { ...colors.blue,   DEFAULT: '#0272C0' },
         green:          { ...colors.green,  DEFAULT: '#2F9F58' },

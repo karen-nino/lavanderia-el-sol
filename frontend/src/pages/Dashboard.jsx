@@ -136,7 +136,7 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto pt-4 pb-16 px-6 md:py-10 md:px-8 space-y-16">
+    <div className="max-w-movil md:max-w-7xl mx-auto pt-4 pb-16 px-6 md:py-10 md:px-8 space-y-16">
 
       {/* Sección resumen: KPIs de "Hoy" */}
 
@@ -148,7 +148,7 @@ export default function Dashboard() {
           <SalesCard total={ventasHoy} label="Ingresado hoy" to={ventasLink} />
         </div>
 
-        {/* KPIs: 2x2 en móvil, 4 en fila desde tableta. */}
+        {/* KPIs: 2x2 en celular, 4 en fila desde tableta. */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <KpiCard
             label="Máquinas"

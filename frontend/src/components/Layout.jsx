@@ -339,7 +339,7 @@ function BotonAlertas({ alertas, onAlerts, className = '' }) {
 
 function MobileTopbar({ usuario, sucursalNombre, alertas, onAlerts }) {
   return (
-    <header className="md:hidden flex items-start justify-between px-6 pt-10 pb-4 flex-shrink-0">
+    <header className="md:hidden flex items-start justify-between w-full max-w-movil mx-auto px-6 pt-10 pb-4 flex-shrink-0">
       <div className="flex items-center gap-3">
         <div>
           <p className="text-kpi-label text-grey">{ROL_LABEL[usuario?.rol] ?? 'Usuario'}</p>

@@ -9,10 +9,10 @@ const VARIANT = {
 
 export default function KpiCard({ label, sublabel, sublabelCorto, value, color = 'blue', icon, to }) {
   const v = VARIANT[color] ?? VARIANT.blue;
-  /* Móvil cuadrada, tableta alto fijo y desde lg 16/9 con alto mínimo. */
+  /* Cuadrada en celular angosto, alto fijo desde 500 px y 16/9 desde lg. */
   /* w-full: sin él, el alto mínimo ensancha la tarjeta y se enciman. */
-  /* Sin overflow-hidden: si el texto no cabe, crece y la fila se empareja (self-stretch). */
-  const baseCls = `relative w-full self-stretch aspect-square md:aspect-auto md:min-h-[9rem] lg:aspect-[16/9] rounded-xl p-4 lg:p-5 pb-5 shadow-card flex flex-col justify-end ${v.container}`;
+  /* Sin overflow-hidden: si el texto no cabe, crece y la fila se empareja. */
+  const baseCls = `relative w-full self-stretch aspect-square min-[500px]:aspect-auto min-[500px]:min-h-[9rem] lg:aspect-[16/9] rounded-xl p-4 lg:p-5 pb-5 shadow-card flex flex-col justify-end ${v.container}`;
 
   const contenido = (
     <>
