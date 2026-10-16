@@ -193,12 +193,12 @@ export default function Ventas() {
   const anioActual = new Date().getFullYear();
   const [anioSel, setAnioSel] = useState(anioActual);
   const [aniosDisponibles, setAniosDisponibles] = useState([]);
-  const [mostrarAnios, setMostrarAnios] = useState(false);
-  const anioRef = useRef(null);
-
   const [mesSel, setMesSel] = useState(() => new Date().getMonth());
-  const [mostrarMeses, setMostrarMeses] = useState(false);
-  const mesRef = useRef(null);
+
+  // Botón de filtro de la cabecera; Mes y Año despliegan su lista dentro del panel.
+  const [mostrarFiltro, setMostrarFiltro] = useState(false);
+  const [subFiltro, setSubFiltro] = useState(null); // 'mes' | 'anio' | null
+  const filtroRef = useRef(null);
 
   // Menú de exportación (PDF/CSV) del período visible.
   const [exportOpen, setExportOpen] = useState(false);
@@ -311,25 +311,26 @@ export default function Ventas() {
     return `Ingresos del ${p1} al ${p2}`;
   }, [desde, hasta]);
 
-  // Cierra el selector de año al hacer clic fuera.
+  // Cierra el panel de filtro al hacer clic fuera.
   useEffect(() => {
-    if (!mostrarAnios) return;
+    if (!mostrarFiltro) return;
     const onDown = (e) => {
-      if (anioRef.current && !anioRef.current.contains(e.target)) setMostrarAnios(false);
+      if (filtroRef.current && !filtroRef.current.contains(e.target)) {
+        setMostrarFiltro(false);
+        setSubFiltro(null);
+      }
     };
     document.addEventListener('mousedown', onDown);
     return () => document.removeEventListener('mousedown', onDown);
-  }, [mostrarAnios]);
+  }, [mostrarFiltro]);
 
-  // Cierra el selector de mes al hacer clic fuera.
-  useEffect(() => {
-    if (!mostrarMeses) return;
-    const onDown = (e) => {
-      if (mesRef.current && !mesRef.current.contains(e.target)) setMostrarMeses(false);
-    };
-    document.addEventListener('mousedown', onDown);
-    return () => document.removeEventListener('mousedown', onDown);
-  }, [mostrarMeses]);
+  /** Elige el período y cierra el panel. */
+  const elegirPeriodo = (id) => {
+    setPeriodo(id);
+    setPaginaNotas(1);
+    setMostrarFiltro(false);
+    setSubFiltro(null);
+  };
 
   // Cierra el menú de exportación al hacer clic fuera.
   useEffect(() => {
@@ -366,9 +367,105 @@ export default function Ventas() {
     <div className="min-h-full bg-slate-100">
       {/* Cabecera (barra superior) */}
       <div className="bg-white border-b-2 border-gray-200">
-        <div className="max-w-movil md:max-w-7xl mx-auto px-6 md:px-8 pt-10 md:pt-14 pb-4">
-          <h1 className="text-xl font-bold text-gray-800">Ventas</h1>
-          <p className="text-sm text-gray-500 mt-0.5">{filtroLabel}</p>
+        <div className="max-w-movil md:max-w-7xl mx-auto px-6 md:px-8 pt-10 md:pt-14 pb-4 flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="text-xl font-bold text-gray-800">Ventas</h1>
+            <p className="text-sm text-gray-500 mt-0.5">{filtroLabel}</p>
+          </div>
+          <div className="flex items-center gap-3 relative">
+            {/* Filtro de período, como los de Notas. */}
+            <div ref={filtroRef}>
+              <button
+                onClick={() => { setMostrarFiltro(v => !v); setSubFiltro(null); }}
+                aria-label="Filtrar por período"
+                aria-expanded={mostrarFiltro}
+                className={`w-11 h-11 rounded-full border flex items-center justify-center transition-colors ${
+                  periodo !== 'hoy'
+                    ? 'border-blue bg-light-blue text-blue-700'
+                    : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5}
+                    d="M4 6h16M7 12h10M10 18h4" />
+                </svg>
+              </button>
+
+              {mostrarFiltro && (
+                <div className="absolute right-0 top-12 z-20 bg-white border border-gray-200 rounded-xl shadow-lg p-3 w-60 max-w-[calc(100vw-2rem)] max-h-[70vh] overflow-y-auto">
+                  <p className="text-xs font-semibold text-gray-500 uppercase mb-2 px-1">Período</p>
+                  <div className="flex flex-col gap-1">
+                    {PERIODOS.map((op) => {
+                      const activo = periodo === op.id;
+                      const opCls = `flex items-center justify-between text-left text-sm px-3 py-2 rounded-lg transition-colors ${
+                        activo ? 'bg-light-blue text-blue-700 font-medium' : 'text-gray-700 hover:bg-gray-50'
+                      }`;
+                      // Mes y Año despliegan su lista aquí mismo.
+                      if (op.id === 'mes' || op.id === 'anio') {
+                        const abierto = subFiltro === op.id;
+                        return (
+                          <div key={op.id}>
+                            <button
+                              onClick={() => setSubFiltro(abierto ? null : op.id)}
+                              aria-expanded={abierto}
+                              className={`w-full ${opCls}`}
+                            >
+                              <span>
+                                {op.id === 'mes' ? 'Mes' : 'Año'}
+                                {activo && `: ${op.id === 'mes' ? MESES[mesSel] : anioSel}`}
+                              </span>
+                              <svg className={`w-3.5 h-3.5 transition-transform ${abierto ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                              </svg>
+                            </button>
+                            {abierto && op.id === 'mes' && (
+                              <div className="grid grid-cols-3 gap-1 mt-1 mb-1">
+                                {MESES.map((nombre, i) => (
+                                  <button
+                                    key={i}
+                                    onClick={() => { setMesSel(i); elegirPeriodo('mes'); }}
+                                    className={`text-sm px-2 py-2 rounded-lg transition-colors ${
+                                      activo && mesSel === i
+                                        ? 'bg-blue text-white font-medium'
+                                        : 'text-gray-700 hover:bg-gray-50'
+                                    }`}
+                                  >
+                                    {nombre.slice(0, 3)}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                            {abierto && op.id === 'anio' && (
+                              <div className="grid grid-cols-3 gap-1 mt-1 mb-1">
+                                {anios.map((y) => (
+                                  <button
+                                    key={y}
+                                    onClick={() => { setAnioSel(y); elegirPeriodo('anio'); }}
+                                    className={`text-sm px-2 py-2 rounded-lg transition-colors ${
+                                      activo && anioSel === y
+                                        ? 'bg-blue text-white font-medium'
+                                        : 'text-gray-700 hover:bg-gray-50'
+                                    }`}
+                                  >
+                                    {y}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      }
+                      return (
+                        <button key={op.id} onClick={() => elegirPeriodo(op.id)} className={opCls}>
+                          {op.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -377,167 +474,73 @@ export default function Ventas() {
       {/* Contenido */}
       <div className="max-w-movil md:max-w-7xl mx-auto px-6 md:px-8 py-6 space-y-6">
 
-      {/* Filtro de período */}
-      <div className="space-y-3">
-        <div className="flex flex-wrap gap-2">
-          {PERIODOS.map((p) => {
-            // El período "mes" es un selector: muestra el mes elegido y
-            // despliega la lista de meses (del año en curso).
-            if (p.id === 'mes') {
-              const activoMes = periodo === 'mes';
-              return (
-                <div key={p.id} ref={mesRef} className="relative">
-                  <button
-                    onClick={() => { setPeriodo('mes'); setPaginaNotas(1); setMostrarAnios(false); setMostrarMeses(v => !v); }}
-                    className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                      activoMes
-                        ? 'bg-blue text-white'
-                        : 'bg-white text-gray-600 border border-gray-300 hover:bg-gray-50'
-                    }`}
-                  >
-                    {MESES[mesSel]}
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </button>
-                  {mostrarMeses && (
-                    <div className="absolute left-0 top-10 z-10 bg-white border border-gray-200 rounded-xl shadow-lg p-2 w-40 max-h-64 overflow-y-auto">
-                      {MESES.map((nombre, i) => (
-                        <button
-                          key={i}
-                          onClick={() => { setMesSel(i); setPeriodo('mes'); setMostrarMeses(false); setPaginaNotas(1); }}
-                          className={`block w-full text-left text-sm px-3 py-2 rounded-lg transition-colors ${
-                            mesSel === i
-                              ? 'bg-light-blue text-blue-700 font-medium'
-                              : 'text-gray-700 hover:bg-gray-50'
-                          }`}
-                        >
-                          {nombre}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            }
-            // El período "año" es un selector: muestra el año elegido y
-            // despliega la lista de años disponibles.
-            if (p.id === 'anio') {
-              const activo = periodo === 'anio';
-              return (
-                <div key={p.id} ref={anioRef} className="relative">
-                  <button
-                    onClick={() => { setPeriodo('anio'); setPaginaNotas(1); setMostrarMeses(false); setMostrarAnios(v => !v); }}
-                    className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                      activo
-                        ? 'bg-blue text-white'
-                        : 'bg-white text-gray-600 border border-gray-300 hover:bg-gray-50'
-                    }`}
-                  >
-                    {anioSel}
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </button>
-                  {mostrarAnios && (
-                    <div className="absolute left-0 top-10 z-10 bg-white border border-gray-200 rounded-xl shadow-lg p-2 w-32 max-h-64 overflow-y-auto">
-                      {anios.map((y) => (
-                        <button
-                          key={y}
-                          onClick={() => { setAnioSel(y); setPeriodo('anio'); setMostrarAnios(false); setPaginaNotas(1); }}
-                          className={`block w-full text-left text-sm px-3 py-2 rounded-lg transition-colors ${
-                            anioSel === y
-                              ? 'bg-light-blue text-blue-700 font-medium'
-                              : 'text-gray-700 hover:bg-gray-50'
-                          }`}
-                        >
-                          {y}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            }
-            return (
+      {/* Exportar, a la derecha (donde estaba la fila de períodos). */}
+      <div className="flex justify-end">
+        {/* Exportar el reporte del período visible a PDF o CSV. */}
+        <div ref={exportRef} className="relative">
+          <button
+            type="button"
+            onClick={() => setExportOpen((v) => !v)}
+            disabled={!data || listaNotas.length === 0}
+            aria-haspopup="menu"
+            aria-expanded={exportOpen}
+            className="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-medium border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
+            </svg>
+            Exportar
+          </button>
+          {exportOpen && (
+            <div role="menu" className="absolute right-0 mt-1 z-20 w-48 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
               <button
-                key={p.id}
-                onClick={() => { setPeriodo(p.id); setPaginaNotas(1); setMostrarAnios(false); setMostrarMeses(false); }}
-                className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                  periodo === p.id
-                    ? 'bg-blue text-white'
-                    : 'bg-white text-gray-600 border border-gray-300 hover:bg-gray-50'
-                }`}
+                type="button"
+                onClick={() => { setExportOpen(false); imprimirVentas(data, { titulo: 'Ventas', subtitulo: filtroLabel }); }}
+                className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm font-medium text-gray-700 hover:bg-gray-50"
               >
-                {p.label}
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.415 42.415 0 0 1 10.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0 .229 2.523a1.125 1.125 0 0 1-1.12 1.227H7.231c-.662 0-1.18-.568-1.12-1.227L6.34 18m11.318 0h1.091A2.25 2.25 0 0 0 21 15.75V9.456c0-1.081-.768-2.015-1.837-2.175a48.055 48.055 0 0 0-1.913-.247M6.34 18H5.25A2.25 2.25 0 0 1 3 15.75V9.456c0-1.081.768-2.015 1.837-2.175a48.041 48.041 0 0 1 1.913-.247m10.5 0a48.536 48.536 0 0 0-10.5 0m10.5 0V3.375c0-.621-.504-1.125-1.125-1.125h-8.25c-.621 0-1.125.504-1.125 1.125v3.659" />
+                </svg>
+                Exportar PDF
               </button>
-            );
-          })}
+              <button
+                type="button"
+                onClick={() => { setExportOpen(false); descargarVentasCSV(data, filtroLabel); }}
+                className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3.375 19.5h17.25m-17.25 0a1.125 1.125 0 0 1-1.125-1.125M3.375 19.5h7.5c.621 0 1.125-.504 1.125-1.125m-9.75 0V5.625m0 12.75v-1.5c0-.621.504-1.125 1.125-1.125m-1.125 1.125v-1.5m0-9.75a1.125 1.125 0 0 1 1.125-1.125h7.5c.621 0 1.125.504 1.125 1.125m0 0v1.5c0 .621-.504 1.125-1.125 1.125M21 12l-3-3m0 0-3 3m3-3v9" />
+                </svg>
+                Descargar CSV
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
 
-          {/* Exportar el reporte del período visible a PDF o CSV. */}
-          <div ref={exportRef} className="relative ml-auto">
-            <button
-              type="button"
-              onClick={() => setExportOpen((v) => !v)}
-              disabled={!data || listaNotas.length === 0}
-              aria-haspopup="menu"
-              aria-expanded={exportOpen}
-              className="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-medium border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
-              </svg>
-              Exportar
-            </button>
-            {exportOpen && (
-              <div role="menu" className="absolute right-0 mt-1 z-20 w-48 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
-                <button
-                  type="button"
-                  onClick={() => { setExportOpen(false); imprimirVentas(data, { titulo: 'Ventas', subtitulo: filtroLabel }); }}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm font-medium text-gray-700 hover:bg-gray-50"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.415 42.415 0 0 1 10.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0 .229 2.523a1.125 1.125 0 0 1-1.12 1.227H7.231c-.662 0-1.18-.568-1.12-1.227L6.34 18m11.318 0h1.091A2.25 2.25 0 0 0 21 15.75V9.456c0-1.081-.768-2.015-1.837-2.175a48.055 48.055 0 0 0-1.913-.247M6.34 18H5.25A2.25 2.25 0 0 1 3 15.75V9.456c0-1.081.768-2.015 1.837-2.175a48.041 48.041 0 0 1 1.913-.247m10.5 0a48.536 48.536 0 0 0-10.5 0m10.5 0V3.375c0-.621-.504-1.125-1.125-1.125h-8.25c-.621 0-1.125.504-1.125 1.125v3.659" />
-                  </svg>
-                  Exportar PDF
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { setExportOpen(false); descargarVentasCSV(data, filtroLabel); }}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm font-medium text-gray-700 hover:bg-gray-50"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M3.375 19.5h17.25m-17.25 0a1.125 1.125 0 0 1-1.125-1.125M3.375 19.5h7.5c.621 0 1.125-.504 1.125-1.125m-9.75 0V5.625m0 12.75v-1.5c0-.621.504-1.125 1.125-1.125m-1.125 1.125v-1.5m0-9.75a1.125 1.125 0 0 1 1.125-1.125h7.5c.621 0 1.125.504 1.125 1.125m0 0v1.5c0 .621-.504 1.125-1.125 1.125M21 12l-3-3m0 0-3 3m3-3v9" />
-                  </svg>
-                  Descargar CSV
-                </button>
-              </div>
-            )}
+      {/* Fechas del período personalizado (se elige en el botón de filtro). */}
+      {periodo === 'custom' && (
+        <div className="flex flex-wrap gap-3 items-center">
+          <div className="flex items-center gap-2">
+            <label className="text-sm text-gray-600">Desde</label>
+            <input
+              type="date"
+              value={desde}
+              onChange={(e) => { setDesde(e.target.value); setPaginaNotas(1); }}
+              className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="text-sm text-gray-600">Hasta</label>
+            <input
+              type="date"
+              value={hasta}
+              onChange={(e) => { setHasta(e.target.value); setPaginaNotas(1); }}
+              className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm"
+            />
           </div>
         </div>
-        {periodo === 'custom' && (
-          <div className="flex flex-wrap gap-3 items-center">
-            <div className="flex items-center gap-2">
-              <label className="text-sm text-gray-600">Desde</label>
-              <input
-                type="date"
-                value={desde}
-                onChange={(e) => { setDesde(e.target.value); setPaginaNotas(1); }}
-                className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm"
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <label className="text-sm text-gray-600">Hasta</label>
-              <input
-                type="date"
-                value={hasta}
-                onChange={(e) => { setHasta(e.target.value); setPaginaNotas(1); }}
-                className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm"
-              />
-            </div>
-          </div>
-        )}
-      </div>
+      )}
 
       {/* Loading */}
       {loading && (
