@@ -10,6 +10,10 @@ export default {
       maxWidth: {
         movil: '34.25rem',
       },
+      /* Modales: nunca más altos que la pantalla (celular acostado, tableta chica). */
+      maxHeight: {
+        modal: 'calc(100dvh - 2rem)',
+      },
       colors: {
         blue:           { ...colors.blue,   DEFAULT: '#0272C0' },
         green:          { ...colors.green,  DEFAULT: '#2F9F58' },

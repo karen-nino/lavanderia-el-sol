@@ -1508,7 +1508,7 @@ export default function Salidas() {
         const minElegidos = minutosDeMaquina(maqModal);
         return (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-7 space-y-6">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm max-h-modal overflow-y-auto p-7 space-y-6">
             <div className="flex items-center gap-3">
               <span className="flex-shrink-0 w-9 h-9 rounded-full bg-green-100 text-green-600 flex items-center justify-center">
                 {esIniciar ? (
@@ -1745,7 +1745,7 @@ export default function Salidas() {
       {/* Modal confirmar detener ciclo */}
       {confirmDetener && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm max-h-modal overflow-y-auto p-6 space-y-4">
             <div className="flex items-center gap-3">
               <span className="flex-shrink-0 w-9 h-9 rounded-full bg-red-100 text-red-600 flex items-center justify-center">
                 {/* Ícono de advertencia */}
@@ -1784,7 +1784,7 @@ export default function Salidas() {
       {/* Modal confirmar terminar ciclo de una secadora */}
       {confirmTerminarMaq && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm max-h-modal overflow-y-auto p-6 space-y-4">
             <h3 className="text-base font-bold text-gray-900">Terminar ciclo</h3>
             <p className="text-sm text-gray-500">
               ¿Confirmar que la carga de <span className="font-semibold text-gray-800">{confirmTerminarMaq.nombre}</span> ya terminó?{' '}

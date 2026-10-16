@@ -40,10 +40,11 @@ export default function CircularTimer({
   }
 
   return (
-    <div className="relative" style={{ width: size, height: size }}>
-      <svg width={size} height={size}>{tickEls}</svg>
+    /* Hasta `size`; en tarjetas angostas se encoge con todo y número. */
+    <div className="relative w-full aspect-square" style={{ maxWidth: size, containerType: 'inline-size' }}>
+      <svg viewBox={`0 0 ${size} ${size}`} className="w-full h-full">{tickEls}</svg>
       <div className="absolute inset-0 flex items-center justify-center">
-        <span className={`text-timer ${textCls}`}>{label}</span>
+        <span className={`text-timer ${textCls}`} style={{ fontSize: 'min(1.5rem, 20cqi)' }}>{label}</span>
       </div>
     </div>
   );

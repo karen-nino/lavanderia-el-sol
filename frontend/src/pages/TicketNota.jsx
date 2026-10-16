@@ -688,7 +688,7 @@ export default function TicketNota() {
           onClick={() => setPidiendoTelefono(false)}
         >
           <div
-            className="bg-white rounded-2xl shadow-xl w-full max-w-sm"
+            className="bg-white rounded-2xl shadow-xl w-full max-w-sm max-h-modal overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-gray-100">

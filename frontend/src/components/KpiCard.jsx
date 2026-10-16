@@ -27,7 +27,7 @@ export default function KpiCard({ label, sublabel, sublabelCorto, value, color =
           {value}
         </p>
         <p className="text-sm leading-tight text-dark-grey">{label}</p>
-        <p className="text-lg md:text-base lg:text-lg font-bold leading-tight text-dark-blue">
+        <p className="text-base min-[360px]:text-lg md:text-base lg:text-lg font-bold leading-tight text-dark-blue">
           {/* Abajo de 368 px el texto largo se parte en dos líneas: va el corto. */}
           {sublabelCorto ? (
             <>

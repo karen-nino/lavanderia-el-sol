@@ -715,7 +715,7 @@ export default function EmpleadoDesempeno() {
       {/* "Por mes": los 12 meses del año en curso; sin actividad, deshabilitados. */}
       {modalFecha === 'MES' && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={() => setModalFecha(null)}>
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-xs p-5" onClick={e => e.stopPropagation()}>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-xs max-h-modal overflow-y-auto p-5" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-base font-semibold text-gray-900">Selecciona un mes</h3>
               <span className="text-sm font-medium text-gray-500">{anioActual}</span>
@@ -752,7 +752,7 @@ export default function EmpleadoDesempeno() {
       {/* Selector "Por año": años con actividad. */}
       {modalFecha === 'ANIO' && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={() => setModalFecha(null)}>
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-xs p-5" onClick={e => e.stopPropagation()}>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-xs max-h-modal overflow-y-auto p-5" onClick={e => e.stopPropagation()}>
             <h3 className="text-base font-semibold text-gray-900 mb-4">Selecciona un año</h3>
             {aniosConDatos.length === 0 ? (
               <p className="text-sm text-gray-500">No hay actividad registrada.</p>

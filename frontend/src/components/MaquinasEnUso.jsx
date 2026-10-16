@@ -573,7 +573,7 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
 
       {confirmTerminar && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm max-h-modal overflow-y-auto p-6 space-y-4">
             <h3 className="text-base font-bold text-gray-900">{terminaLavado ? 'Iniciar secado' : confirmTerminar.cronometro && !confirmTerminar.solo_fichas ? 'Finalizar y apagar' : confirmTerminar.cronometro ? 'Finalizar' : 'Terminar ciclo'}</h3>
             {terminaLavado ? (
               <>

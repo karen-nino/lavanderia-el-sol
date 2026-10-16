@@ -1573,7 +1573,7 @@ export default function DetalleNota() {
       {refOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
           <form
-            className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-4"
+            className="bg-white rounded-2xl shadow-xl w-full max-w-sm max-h-modal overflow-y-auto p-6 space-y-4"
             onSubmit={e => { e.preventDefault(); guardarReferencia(); }}
           >
             <div>
@@ -1616,7 +1616,7 @@ export default function DetalleNota() {
       {/* Modal del motivo de cancelación */}
       {motivoCancelarOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm max-h-modal overflow-y-auto p-6 space-y-4">
             <div>
               <h3 className="text-base font-semibold text-gray-900">Motivo de cancelación</h3>
               <p className="text-sm text-gray-500 mt-0.5">Anota por qué se cancela la nota (opcional).</p>
@@ -1768,7 +1768,7 @@ export default function DetalleNota() {
 
       {confirmRevertirAbono && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm max-h-modal overflow-y-auto p-6 space-y-4">
             <div>
               <h3 className="text-base font-semibold text-gray-900">Revertir abono</h3>
               <p className="text-sm text-gray-500 mt-0.5">
@@ -1825,7 +1825,7 @@ export default function DetalleNota() {
       {/* Modal revertir pago (admin, caja abierta); el motivo es obligatorio. */}
       {revirtiendoPago && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm max-h-modal overflow-y-auto p-6 space-y-4">
             <div>
               <h3 className="text-base font-semibold text-gray-900">Revertir pago</h3>
               <p className="text-sm text-gray-500 mt-0.5">
@@ -1875,7 +1875,7 @@ export default function DetalleNota() {
       {/* Modal corregir forma de pago (admin, caja abierta) */}
       {corrigiendoPago && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm max-h-modal overflow-y-auto p-6 space-y-4">
             <div className="flex items-center gap-3">
               <span className="flex-shrink-0 w-9 h-9 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

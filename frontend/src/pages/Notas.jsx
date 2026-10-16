@@ -956,7 +956,7 @@ export default function Notas() {
       {/* Modal confirmar borrado múltiple (admin_main) */}
       {confirmarBorrado && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm max-h-modal overflow-y-auto p-6 space-y-4">
             <div className="flex items-center gap-3">
               <div className="flex-shrink-0 w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
                 <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -994,7 +994,7 @@ export default function Notas() {
       {/* "Por mes": los 12 meses del año en curso; sin notas, deshabilitados. */}
       {modalFecha === 'MES' && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={() => setModalFecha(null)}>
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-xs p-5" onClick={e => e.stopPropagation()}>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-xs max-h-modal overflow-y-auto p-5" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-base font-semibold text-gray-900">Selecciona un mes</h3>
               <span className="text-sm font-medium text-gray-500">{anioActual}</span>
@@ -1030,7 +1030,7 @@ export default function Notas() {
       {/* Selector "Por año": años que tienen notas. */}
       {modalFecha === 'ANIO' && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={() => setModalFecha(null)}>
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-xs p-5" onClick={e => e.stopPropagation()}>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-xs max-h-modal overflow-y-auto p-5" onClick={e => e.stopPropagation()}>
             <h3 className="text-base font-semibold text-gray-900 mb-4">Selecciona un año</h3>
             {aniosConNotas.length === 0 ? (
               <p className="text-sm text-gray-500">No hay notas registradas.</p>

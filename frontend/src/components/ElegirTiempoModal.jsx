@@ -11,7 +11,7 @@ export default function ElegirTiempoModal({
   if (!maquina) return null;
   return (
     <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-7 space-y-6">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm max-h-modal overflow-y-auto p-7 space-y-6">
         <div className="flex items-center gap-3">
           <span className="flex-shrink-0 w-9 h-9 rounded-full bg-light-blue text-blue flex items-center justify-center">
             {/* Reloj */}

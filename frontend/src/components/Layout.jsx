@@ -539,7 +539,7 @@ function AlertsModal({ open, onClose, alertas, onSelect, onDismiss, onDismissAll
         onClick={() => setConfirmAll(false)}
       >
         <div
-          className="w-full max-w-xs bg-white rounded-card shadow-xl p-5 space-y-4"
+          className="w-full max-w-xs max-h-modal overflow-y-auto bg-white rounded-card shadow-xl p-5 space-y-4"
           onClick={(e) => e.stopPropagation()}
         >
           <div>
@@ -975,7 +975,7 @@ export default function Layout() {
 
       {confirmLogout && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm max-h-modal overflow-y-auto p-6 space-y-4">
             <h3 className="text-base font-bold text-gray-900">Cerrar sesión</h3>
             {cajaSinCerrar ? (
               <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-lg p-3">

@@ -729,7 +729,7 @@ function CatalogoEtiquetas({
     {/* Confirmación antes de agregar */}
     {confirmar && (
       <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40">
-        <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-4">
+        <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm max-h-modal overflow-y-auto p-6 space-y-4">
           <div className="flex items-center gap-3">
             <div className="flex-shrink-0 w-10 h-10 bg-light-blue rounded-full flex items-center justify-center">
               <svg className="w-5 h-5 text-blue" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2837,7 +2837,7 @@ export default function Ajustes() {
 
   const errorModal = mensaje?.tipo === 'error' && (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-8 text-center space-y-5 animate-shake">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm max-h-modal overflow-y-auto p-8 text-center space-y-5 animate-shake">
         <div className="w-20 h-20 mx-auto rounded-full bg-red-100 flex items-center justify-center animate-pop-in">
           <svg className="w-12 h-12 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path
@@ -3059,7 +3059,7 @@ export default function Ajustes() {
       {/* Confirmación para desactivar una sucursal (solo Admin Main) */}
       {confirmarDesactivar && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm max-h-modal overflow-y-auto">
             <div className="p-6">
               <div className="flex items-center justify-center w-12 h-12 rounded-full bg-red-100 mx-auto mb-4">
                 <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
