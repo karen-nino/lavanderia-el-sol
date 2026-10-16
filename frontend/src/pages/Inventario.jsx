@@ -1234,6 +1234,66 @@ function ModalArchivar({ producto, onClose, onConfirmar }) {
 }
 
 // ── Íconos ─────────────────────────────────────────────────────
+/**
+ * Botón ⋮ con Editar, Desactivar y Eliminar: fuera de la vista principal para
+ * que no se toquen sin querer. Desactivar y Eliminar piden confirmación.
+ */
+function MenuOpcionesProducto({ onEditar, onDesactivar, onEliminar }) {
+  const [abierto, setAbierto] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (!abierto) return undefined;
+    const fuera = (e) => { if (ref.current && !ref.current.contains(e.target)) setAbierto(false); };
+    document.addEventListener('mousedown', fuera);
+    document.addEventListener('touchstart', fuera);
+    return () => {
+      document.removeEventListener('mousedown', fuera);
+      document.removeEventListener('touchstart', fuera);
+    };
+  }, [abierto]);
+
+  const OPCION_CLS = 'w-full flex items-center gap-3 px-4 py-3 text-left text-sm font-medium';
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setAbierto((v) => !v)}
+        aria-haspopup="menu"
+        aria-expanded={abierto}
+        aria-label="Más opciones"
+        className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+      >
+        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+          <circle cx="12" cy="5" r="1.8" />
+          <circle cx="12" cy="12" r="1.8" />
+          <circle cx="12" cy="19" r="1.8" />
+        </svg>
+      </button>
+      {abierto && (
+        <div role="menu" className="absolute right-0 mt-1 z-10 w-52 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
+          <button type="button" role="menuitem" onClick={() => { setAbierto(false); onEditar(); }}
+            className={`${OPCION_CLS} text-gray-700 hover:bg-gray-50`}>
+            <IconoLapiz />
+            Editar
+          </button>
+          <button type="button" role="menuitem" onClick={() => { setAbierto(false); onDesactivar(); }}
+            className={`${OPCION_CLS} text-amber-700 hover:bg-amber-50`}>
+            <IconoArchivar />
+            Desactivar
+          </button>
+          {/* Separado del resto: es lo único que no se puede deshacer. */}
+          <button type="button" role="menuitem" onClick={() => { setAbierto(false); onEliminar(); }}
+            className={`${OPCION_CLS} text-red-600 hover:bg-red-50 border-t border-gray-100`}>
+            <IconoBasura />
+            Eliminar
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function IconoLapiz() {
   return (
     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2272,11 +2332,20 @@ export default function Inventario() {
             <div className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] flex flex-col">
               <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-gray-100 flex-shrink-0">
                 <h2 className="text-base font-semibold text-gray-900">Producto</h2>
-                <button onClick={() => setInfoProducto(null)} className="text-gray-400 hover:text-gray-600">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
+                <div className="flex items-center gap-2">
+                  {esAdmin && (
+                    <MenuOpcionesProducto
+                      onEditar={() => { setInfoProducto(null); setModalProducto(p); }}
+                      onDesactivar={() => { setInfoProducto(null); setProdAArchivar(p); }}
+                      onEliminar={() => { setInfoProducto(null); setProdAEliminar(p); }}
+                    />
+                  )}
+                  <button onClick={() => setInfoProducto(null)} aria-label="Cerrar" className="p-1.5 text-gray-400 hover:text-gray-600">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
               </div>
               <div className="p-5 space-y-5 overflow-y-auto">
                 <div>
@@ -2359,36 +2428,6 @@ export default function Inventario() {
                     <IconoHistorial />
                     Ver historial
                   </button>
-                  {esAdmin && (
-                    <button
-                      type="button"
-                      onClick={() => { setInfoProducto(null); setModalProducto(p); }}
-                      className="w-full flex items-center justify-center gap-2 py-3 border border-gray-300 text-gray-700 hover:bg-gray-50 font-medium rounded-lg text-sm transition-colors"
-                    >
-                      <IconoLapiz />
-                      Editar
-                    </button>
-                  )}
-                  {esAdmin && (
-                    <button
-                      type="button"
-                      onClick={() => { setInfoProducto(null); setProdAArchivar(p); }}
-                      className="w-full flex items-center justify-center gap-2 py-3 border border-amber-300 text-amber-700 hover:bg-amber-50 font-medium rounded-lg text-sm transition-colors"
-                    >
-                      <IconoArchivar />
-                      Desactivar
-                    </button>
-                  )}
-                  {esAdmin && (
-                    <button
-                      type="button"
-                      onClick={() => { setInfoProducto(null); setProdAEliminar(p); }}
-                      className="w-full flex items-center justify-center gap-2 py-3 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg text-sm transition-colors"
-                    >
-                      <IconoBasura />
-                      Eliminar
-                    </button>
-                  )}
                 </div>
               </div>
             </div>
