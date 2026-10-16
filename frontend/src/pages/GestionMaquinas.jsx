@@ -429,7 +429,7 @@ export default function GestionMaquinas() {
         <div className="max-w-movil md:max-w-7xl mx-auto px-6 md:px-8 pt-10 md:pt-14 pb-4 flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Gestión de máquinas</h1>
-          <p className="text-sm text-gray-500">{maquinas.length} equipo(s) registrado(s)</p>
+          <p className="text-sm text-gray-500">{maquinas.length} {maquinas.length === 1 ? 'equipo' : 'equipos'}</p>
         </div>
         {esAdmin && (
           <button
