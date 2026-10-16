@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
@@ -78,18 +78,18 @@ function tituloExistencia(p) {
   const u = unidadVenta(p);
   return u.charAt(0).toUpperCase() + u.slice(1);
 }
-/** Medidas contadas en la unidad del producto (las bolsas, en piezas). */
-function textoExistencia(p, medidas) {
+/** Medidas contadas en la unidad del producto, por partes ("9 botellas", "1 medida"; las bolsas, en piezas). */
+function partesExistencia(p, medidas) {
   if (p.clase === 'bolsa') {
     const n = Math.max(0, Math.round(Number(medidas) || 0));
-    return `${n} ${unidadVenta(p, n)}`;
+    return [`${n} ${unidadVenta(p, n)}`];
   }
   const { botellas, medidas: sueltas } = desglosarBotellas(Math.max(0, Number(medidas) || 0), p);
   const partes = [];
   // "0 botellas" solo si no hay nada más que decir (como el reporte diario).
   if (botellas > 0 || sueltas === 0) partes.push(`${botellas} ${unidadVenta(p, botellas)}`);
   if (sueltas > 0) partes.push(plural(sueltas, 'medida', 'medidas'));
-  return partes.join(' y ');
+  return partes;
 }
 /**
  * Medidas apartadas en notas abiertas: siguen en el estante pero ya tienen
@@ -98,20 +98,36 @@ function textoExistencia(p, medidas) {
 function medidasApartadas(p) {
   return Math.max(0, Math.round(Number(p.stock_reservado) || 0));
 }
+function partesApartadas(p) {
+  return partesExistencia(p, medidasApartadas(p));
+}
 function textoApartadas(p) {
-  return textoExistencia(p, medidasApartadas(p));
+  return partesApartadas(p).join(' y ');
 }
 /** Lo que se puede vender hoy: existencia menos lo apartado. */
-function textoDisponible(p) {
-  return textoExistencia(p, (Number(p.stock_actual) || 0) - medidasApartadas(p));
+function partesDisponible(p) {
+  return partesExistencia(p, (Number(p.stock_actual) || 0) - medidasApartadas(p));
 }
-/** El granel en bidones (con las botellas sueltas de remanente). */
-function textoGranel(p) {
-  if (!esGranelLiquido(p)) return '';
+function textoDisponible(p) {
+  return partesDisponible(p).join(' y ');
+}
+/** El granel en bidones (con las botellas sueltas de remanente), por partes. */
+function partesGranel(p) {
+  if (!esGranelLiquido(p)) return [];
   const { bidones, botellas } = desglosarBidones(p.stock_granel_medidas, p);
   const partes = [plural(bidones, 'bidón', 'bidones')];
   if (botellas > 0) partes.push(plural(botellas, 'botella', 'botellas'));
-  return partes.join(' y ');
+  return partes;
+}
+/** Partes unidas con "y"; si no caben, se parten entre una y otra, nunca a media parte. */
+function Partes({ partes }) {
+  /* El espacio va fuera del nowrap: ahí es donde se puede partir el renglón. */
+  return partes.map((t, i) => (
+    <Fragment key={i}>
+      {i > 0 && ' '}
+      <span className="whitespace-nowrap">{t}{i < partes.length - 1 && ' y'}</span>
+    </Fragment>
+  ));
 }
 function precioTxt(v) {
   return v != null && v !== '' ? `$${Number(v).toFixed(2)}` : '—';
@@ -998,7 +1014,7 @@ function ModalRellenar({ producto, onClose, onDone }) {
         </div>
 
         <div className="bg-gray-50 rounded-lg px-4 py-3 text-sm text-gray-600">
-          A granel disponible: <span className="font-semibold text-gray-800">{textoGranel(producto)}</span>
+          A granel disponible: <span className="font-semibold text-gray-800"><Partes partes={partesGranel(producto)} /></span>
           <br />Alcanza para <span className="font-semibold text-gray-800">{maxBotellas} botella(s)</span>.
         </div>
 
@@ -1371,7 +1387,12 @@ function BadgeEstado({ estado }) {
 
 /** Punto naranja de las listas: el producto tiene algo apartado en notas. */
 function PuntoApartado() {
-  return <span className="w-2 h-2 rounded-full bg-orange-500 inline-block" />;
+  /* Centrado en la primera línea: si el texto baja de renglón, el punto no se va solo. */
+  return (
+    <span className="h-[1lh] flex items-center flex-shrink-0">
+      <span className="w-2 h-2 rounded-full bg-orange-500" />
+    </span>
+  );
 }
 
 // Badge del granel (bidón). Solo se dibuja algo cuando está por acabarse o agotado.
@@ -2262,10 +2283,10 @@ export default function Inventario() {
                           )}
                         </td>
                         <td className="px-4 py-3">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            {/* El punto naranja (algo apartado en notas) y los avisos van a la derecha. */}
-                            <span className="font-medium text-gray-800">{textoDisponible(p)}</span>
+                          <div className={`flex items-start gap-2 ${es !== 'ok' ? 'flex-wrap' : ''}`}>
+                            {/* El punto naranja (algo apartado en notas) va a la izquierda; los avisos, a la derecha y, si no caben, abajo. */}
                             {es === 'ok' && medidasApartadas(p) > 0 && <PuntoApartado />}
+                            <span className="min-w-0 font-medium text-gray-800"><Partes partes={partesDisponible(p)} /></span>
                             {es !== 'ok' && <BadgeEstado estado={es} />}
                           </div>
                         </td>
@@ -2273,7 +2294,7 @@ export default function Inventario() {
                           {esGranelLiquido(p)
                             ? (
                               <div className="flex items-center gap-2 flex-wrap">
-                                <span>{textoGranel(p)}</span>
+                                <span><Partes partes={partesGranel(p)} /></span>
                                 <BadgeGranel estado={estadoGranel(p)} />
                               </div>
                             )
@@ -2349,17 +2370,17 @@ export default function Inventario() {
                       <div className="min-w-0">
                         <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-0.5">Bidones</p>
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-md font-semibold text-gray-700">{textoGranel(p)}</span>
+                          <span className="text-md font-semibold text-gray-700"><Partes partes={partesGranel(p)} /></span>
                           <BadgeGranel estado={estadoGranel(p)} />
                         </div>
                       </div>
                     )}
                     <div className="min-w-0">
                       <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-0.5">{tituloExistencia(p)}</p>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        {/* El punto naranja (algo apartado en notas) y los avisos van a la derecha. */}
-                        <span className="text-md font-semibold text-gray-700">{textoDisponible(p)}</span>
+                      <div className={`flex items-start gap-2 ${es !== 'ok' ? 'flex-wrap' : ''}`}>
+                        {/* El punto naranja (algo apartado en notas) va a la izquierda; los avisos, a la derecha y, si no caben, abajo. */}
                         {es === 'ok' && medidasApartadas(p) > 0 && <PuntoApartado />}
+                        <span className="min-w-0 text-md font-semibold text-gray-700"><Partes partes={partesDisponible(p)} /></span>
                         {es !== 'ok' && <BadgeEstado estado={es} />}
                       </div>
                     </div>
@@ -2468,7 +2489,7 @@ export default function Inventario() {
                   <div>
                     <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Bidones</p>
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-base font-medium text-gray-700">{textoGranel(p)}</span>
+                      <span className="text-base font-medium text-gray-700"><Partes partes={partesGranel(p)} /></span>
                       <BadgeGranel estado={estadoGranel(p)} />
                     </div>
                   </div>
@@ -2476,16 +2497,16 @@ export default function Inventario() {
                 <div>
                   <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">{tituloExistencia(p)}</p>
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-base font-medium text-gray-800">{textoDisponible(p)}</span>
+                    <span className="text-base font-medium text-gray-800"><Partes partes={partesDisponible(p)} /></span>
                     {es !== 'ok' && <BadgeEstado estado={es} />}
                   </div>
                 </div>
                 {medidasApartadas(p) > 0 && (
                   <div>
                     <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Apartadas en notas</p>
-                    <div className="flex items-center gap-2">
-                      <span className="text-base font-medium text-gray-700">{textoApartadas(p)}</span>
+                    <div className="flex items-start gap-2">
                       <PuntoApartado />
+                      <span className="min-w-0 text-base font-medium text-gray-700"><Partes partes={partesApartadas(p)} /></span>
                     </div>
                   </div>
                 )}

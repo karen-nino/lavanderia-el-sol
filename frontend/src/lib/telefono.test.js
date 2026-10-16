@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatTelefono } from './telefono.js';
+import { formatTelefono, telefonoLegible } from './telefono.js';
 
 describe('formatTelefono', () => {
   it('formatea 10 dígitos como XX-XXXX-XXXX', () => {
@@ -26,5 +26,15 @@ describe('formatTelefono', () => {
     expect(formatTelefono(null)).toBe('');
     expect(formatTelefono(undefined)).toBe('');
     expect(formatTelefono('')).toBe('');
+  });
+});
+
+describe('telefonoLegible', () => {
+  it('separa los 10 dígitos con espacios', () => {
+    expect(telefonoLegible('3312345678')).toBe('33 1234 5678');
+    expect(telefonoLegible('33-1234-5678')).toBe('33 1234 5678');
+  });
+  it('deja tal cual lo que no son 10 dígitos', () => {
+    expect(telefonoLegible('+1 555 123')).toBe('+1 555 123');
   });
 });

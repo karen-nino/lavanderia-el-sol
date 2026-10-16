@@ -7,6 +7,7 @@ import { useAuth } from '../context/AuthContext';
 import { esAdmin as esAdminFn } from '../lib/roles';
 import { capitalizarNombre } from '../lib/texto';
 import SucursalBar from '../components/SucursalBar';
+import { telefonoLegible } from '../lib/telefono';
 
 const INPUT_CLS =
   'w-full px-4 py-3.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent transition';
@@ -34,11 +35,20 @@ function fmtFechaNota(iso) {
   return `${fecha} · ${hora}`;
 }
 
+/** Logo de WhatsApp. */
+function IconoWhatsapp({ className }) {
+  return (
+    <svg className={className} fill="currentColor" viewBox="0 0 24 24">
+      <path d="M.057 24l1.687-6.163a11.867 11.867 0 01-1.587-5.945C.16 5.335 5.495 0 12.05 0a11.817 11.817 0 018.413 3.488 11.824 11.824 0 013.48 8.413c-.003 6.557-5.338 11.892-11.893 11.892a11.9 11.9 0 01-5.688-1.448L.057 24zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413z" />
+    </svg>
+  );
+}
+
 /**
- * Botón ⋮ del modal de cliente: WhatsApp, Editar y Eliminar, fuera de la vista
- * para no tocarlos sin querer (como el de los productos en Inventario).
+ * Botón ⋮ del modal de cliente: Editar y Eliminar, fuera de la vista para no
+ * tocarlos sin querer (como el de los productos en Inventario).
  */
-function MenuOpcionesCliente({ onWhatsapp, onEditar, onEliminar }) {
+function MenuOpcionesCliente({ onEditar, onEliminar }) {
   const [abierto, setAbierto] = useState(false);
   const ref = useRef(null);
 
@@ -53,7 +63,7 @@ function MenuOpcionesCliente({ onWhatsapp, onEditar, onEliminar }) {
     };
   }, [abierto]);
 
-  const OPCION_CLS = 'w-full flex items-center gap-3 px-4 py-3 text-left text-sm font-medium';
+  const OPCION_CLS = 'w-full flex items-center gap-3 px-4 py-3.5 text-left text-sm font-medium';
   return (
     <div ref={ref} className="relative">
       <button
@@ -72,13 +82,6 @@ function MenuOpcionesCliente({ onWhatsapp, onEditar, onEliminar }) {
       </button>
       {abierto && (
         <div role="menu" className="absolute right-0 mt-1 z-10 w-52 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
-          {onWhatsapp && (
-            <button type="button" role="menuitem" onClick={() => { setAbierto(false); onWhatsapp(); }}
-              className={`${OPCION_CLS} text-green-700 hover:bg-green-50`}>
-              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"> <path d="M.057 24l1.687-6.163a11.867 11.867 0 01-1.587-5.945C.16 5.335 5.495 0 12.05 0a11.817 11.817 0 018.413 3.488 11.824 11.824 0 013.48 8.413c-.003 6.557-5.338 11.892-11.893 11.892a11.9 11.9 0 01-5.688-1.448L.057 24zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413z" /> </svg>
-              Enviar WhatsApp
-            </button>
-          )}
           <button type="button" role="menuitem" onClick={() => { setAbierto(false); onEditar(); }}
             className={`${OPCION_CLS} text-gray-700 hover:bg-gray-50`}>
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"> <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /> </svg>
@@ -532,9 +535,7 @@ export default function Clientes() {
                               className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
                               title="Enviar WhatsApp"
                             >
-                              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                                <path d="M.057 24l1.687-6.163a11.867 11.867 0 01-1.587-5.945C.16 5.335 5.495 0 12.05 0a11.817 11.817 0 018.413 3.488 11.824 11.824 0 013.48 8.413c-.003 6.557-5.338 11.892-11.893 11.892a11.9 11.9 0 01-5.688-1.448L.057 24zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413z" />
-                              </svg>
+                              <IconoWhatsapp className="w-4 h-4" />
                             </button>
                           )}
                           <button
@@ -649,7 +650,6 @@ export default function Clientes() {
               <h2 className="text-base font-semibold text-gray-900">Cliente</h2>
               <div className="flex items-center gap-2">
                 <MenuOpcionesCliente
-                  onWhatsapp={infoCliente.telefono ? () => { const c = infoCliente; cerrarInfo(); abrirWhatsapp(c); } : null}
                   onEditar={() => { const c = infoCliente; cerrarInfo(); abrirEditar(c); }}
                   onEliminar={esAdmin ? () => { const c = infoCliente; cerrarInfo(); abrirEliminar(c); } : null}
                 />
@@ -663,15 +663,24 @@ export default function Clientes() {
             <div className="p-5 space-y-5 overflow-y-auto">
               <div>
                 <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Nombre</p>
-                <p className="text-base font-medium text-gray-900">
+                <p className="text-lg font-medium text-gray-900">
                   {`${infoCliente.nombre}${infoCliente.apellido ? ' ' + infoCliente.apellido : ''}`}
                 </p>
               </div>
               <div>
-                <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Teléfono</p>
-                <p className="text-base text-gray-700">
-                  {infoCliente.telefono ?? <span className="text-gray-400 italic">Sin teléfono</span>}
-                </p>
+                <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Teléfono (WhatsApp)</p>
+                {/* El teléfono abre el chat de WhatsApp con el cliente. */}
+                {infoCliente.telefono ? (
+                  <button
+                    type="button"
+                    onClick={() => { const c = infoCliente; cerrarInfo(); abrirWhatsapp(c); }}
+                    className="inline-flex items-center gap-2 text-lg font-medium tracking-wide hover:underline"
+                  >
+                    {telefonoLegible(infoCliente.telefono)}
+                  </button>
+                ) : (
+                  <p className="text-base text-gray-400 italic">Sin teléfono</p>
+                )}
               </div>
 
               {/* Notas del cliente: el texto abre su modal; cada nota lleva a su detalle. */}
@@ -687,7 +696,7 @@ export default function Clientes() {
                   <button
                     type="button"
                     onClick={() => setVerNotas(true)}
-                    className="inline-flex items-center gap-1 text-base font-medium text-blue hover:underline"
+                    className="inline-flex items-center gap-1 text-lg font-medium text-blue hover:underline"
                   >
                     {notasCliente.length} {notasCliente.length === 1 ? 'nota realizada' : 'notas realizadas'}
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -708,8 +717,10 @@ export default function Clientes() {
             <div className="flex items-center justify-between gap-3 px-5 pt-5 pb-4 border-b border-gray-100 flex-shrink-0">
               <div className="min-w-0">
                 <h2 className="text-base font-semibold text-gray-900">Notas</h2>
-                <p className="text-sm text-gray-500 truncate">
-                  {`${infoCliente.nombre}${infoCliente.apellido ? ' ' + infoCliente.apellido : ''}`}
+                {/* Si el nombre es largo se recorta; el número de notas siempre se ve. */}
+                <p className="flex gap-1 text-sm text-gray-500">
+                  <span className="truncate">{`${infoCliente.nombre}${infoCliente.apellido ? ' ' + infoCliente.apellido : ''}`}</span>
+                  <span className="flex-shrink-0">({notasCliente.length} {notasCliente.length === 1 ? 'Nota' : 'Notas'})</span>
                 </p>
               </div>
               <button onClick={() => setVerNotas(false)} aria-label="Cerrar" className="text-gray-400 hover:text-gray-600">
