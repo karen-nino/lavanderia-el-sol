@@ -29,6 +29,13 @@ const SUCURSAL = 'pruebas';
 // esté aquí lo creó un visitante y se va.
 const SUCURSALES_BASE = ['zapopan', 'retiro', 'pruebas'];
 
+/** Horario de una lavandería de verdad: lunes a sábado 8:00–20:00, domingo 9:00–15:00. */
+const HORARIO_DEMO = Array.from({ length: 7 }, (_, dia) => (
+  dia === 6
+    ? { dia, abierto: true, abre: '09:00', cierra: '15:00' }
+    : { dia, abierto: true, abre: '08:00', cierra: '20:00' }
+));
+
 // --forzar: limpiar aunque haya notas fuera de la sucursal de pruebas (en la
 // demo eso es contaminación de un visitante). Sin ella se aborta; el workflow
 // nocturno no la pasa.
@@ -134,9 +141,11 @@ try {
     columnas.map((c) => base[c])
   );
 
-  // El nombre visible de la sucursal vive aparte de los ajustes.
+  // El nombre y el horario de la sucursal viven aparte de los ajustes.
   await db.query(
-    `UPDATE sucursales SET nombre = 'Sucursal Centro', activa = TRUE WHERE slug = $1`, [SUCURSAL]
+    `UPDATE sucursales SET nombre = 'Sucursal Centro', activa = TRUE, horario_semana = $2
+      WHERE slug = $1`,
+    [SUCURSAL, JSON.stringify(HORARIO_DEMO)]
   );
 
   await db.query('COMMIT');
