@@ -177,6 +177,7 @@ export default function Dashboard() {
           <KpiCard
             label="Notas"
             sublabel="Para Entregar"
+            sublabelCorto="Para Entr."
             value={paraEntregar}
             color="bronce"
             icon={KpiIcon.deliver}

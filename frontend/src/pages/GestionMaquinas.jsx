@@ -566,7 +566,8 @@ export default function GestionMaquinas() {
               <h2 className="text-base font-bold text-gray-900">
                 {grupo.titulo} <span className="text-gray-400 font-medium">({grupo.items.length})</span>
               </h2>
-              <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+              {/* Las que quepan; abajo de 384 px, fijo 2 (si no, saldría 1). */}
+              <div className="grid grid-cols-2 min-[384px]:grid-cols-[repeat(auto-fill,minmax(10rem,1fr))] gap-4">
                 {grupo.items.map(m => {
             const cfg = ESTADO_CFG[estadoVisual(m)] ?? ESTADO_CFG.disponible;
             const { tipo, tamano } = descomponerTipo(m.tipo);
