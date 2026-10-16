@@ -108,15 +108,6 @@ function textoGranel(p) {
   if (botellas > 0) partes.push(plural(botellas, 'botella', 'botellas'));
   return partes.join(' y ');
 }
-/** Línea de lo apartado en notas; solo si hay algo apartado. */
-function LineaApartadas({ p, className = 'text-xs text-gray-500 mt-0.5' }) {
-  if (medidasApartadas(p) <= 0) return null;
-  return (
-    <p className={className}>
-      Apartadas en notas: {textoApartadas(p)}
-    </p>
-  );
-}
 function precioTxt(v) {
   return v != null && v !== '' ? `$${Number(v).toFixed(2)}` : '—';
 }
@@ -2247,12 +2238,11 @@ export default function Inventario() {
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2 flex-wrap">
-                            {/* Con suficiente, el punto verde va a la izquierda; los avisos, a la derecha. */}
-                            {es === 'ok' && <BadgeEstado estado={es} />}
+                            {/* El punto verde marca que hay algo apartado en notas; los avisos, a la derecha. */}
+                            {es === 'ok' && medidasApartadas(p) > 0 && <BadgeEstado estado={es} />}
                             <span className="font-medium text-gray-800">{textoDisponible(p)}</span>
                             {es !== 'ok' && <BadgeEstado estado={es} />}
                           </div>
-                          <LineaApartadas p={p} />
                         </td>
                         <td className="px-4 py-3 text-gray-600">
                           {esGranelLiquido(p)
@@ -2334,12 +2324,11 @@ export default function Inventario() {
                     return sub && <p className="text-xs text-gray-400 mt-0.5">{sub}</p>;
                   })()}
                   <div className="flex items-center gap-2 mt-1 flex-wrap">
-                    {/* Con suficiente, el punto verde va a la izquierda; los avisos, a la derecha. */}
-                    {es === 'ok' && <BadgeEstado estado={es} />}
+                    {/* El punto verde marca que hay algo apartado en notas; los avisos, a la derecha. */}
+                    {es === 'ok' && medidasApartadas(p) > 0 && <BadgeEstado estado={es} />}
                     <span className="text-md font-semibold text-gray-700">{textoDisponible(p)}</span>
                     {es !== 'ok' && <BadgeEstado estado={es} />}
                   </div>
-                  <LineaApartadas p={p} />
                   {/* Los bidones se ven al abrir la tarjeta. */}
                 </button>
               );
