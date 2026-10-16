@@ -543,7 +543,7 @@ export default function EmpleadoDesempeno() {
         ) : data ? (
           <div className="space-y-6">
             {/* Resumen */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <ResumenCard label="Días activos" value={data.resumen.dias_activos} />
               <ResumenCard label="Notas" value={data.resumen.notas} />
               <ResumenCard label="Vendido" value={fmtMoneda(data.resumen.vendido)} />

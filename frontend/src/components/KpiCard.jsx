@@ -45,7 +45,7 @@ export default function KpiCard({ label, sublabel, sublabelCorto, value, color =
     return (
       <Link
         to={to}
-        className={`${baseCls} block text-left transition-transform hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-blue/40`}
+        className={`${baseCls} text-left transition-transform hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-blue/40`}
       >
         {contenido}
       </Link>

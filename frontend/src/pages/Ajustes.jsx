@@ -1785,7 +1785,7 @@ export default function Ajustes() {
       </Campo>
     );
     return (
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {uno(medidas, 'Medidas de granel', 'De cada granel ligado a este servicio.')}
         {uno(bolsas, 'Bolsas', 'De la bolsa ligada a este servicio.')}
       </div>

@@ -280,7 +280,7 @@ export default function MaquinaUso() {
         ) : data ? (
           <div className="space-y-6">
             {/* Resumen */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <ResumenCard label="Días usada" value={data.resumen.dias_usada} />
               <ResumenCard label="Notas" value={data.resumen.usos} />
               <ResumenCard label="Generado" value={fmtMoneda(data.resumen.generado)} />
