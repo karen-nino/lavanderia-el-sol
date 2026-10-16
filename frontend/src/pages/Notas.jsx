@@ -374,10 +374,9 @@ export default function Notas() {
       || referencia.includes(q);
   });
 
-  // Chips de los filtros activos, que se quitan con su ✕. `display` decide en
-  // qué tamaño se ven.
-  const chipsFiltros = (display) => (filtro !== 'TODOS' || rangoFecha !== 'TODAS') && (
-    <div className={`${display} flex-wrap justify-end gap-2`}>
+  // Chips de los filtros activos, en el subtítulo; se quitan con su ✕.
+  const chipsFiltros = (filtro !== 'TODOS' || rangoFecha !== 'TODAS') && (
+    <div className="flex flex-wrap gap-2 mt-1">
       {filtro !== 'TODOS' && (
         <ChipFiltro
           label={FILTRO_LABEL[filtro] ?? BADGE_ESTADO[filtro]?.label}
@@ -400,11 +399,13 @@ export default function Notas() {
 
   // En móvil, agrupadas por día con un encabezado de fecha, en el orden filtrado.
   const gruposMobile = [];
+  const claveHoy = new Date().toDateString();
   for (const n of filtradas) {
     const clave = new Date(n.created_at).toDateString();
     const ultimo = gruposMobile[gruposMobile.length - 1];
     if (ultimo && ultimo.clave === clave) ultimo.notas.push(n);
-    else gruposMobile.push({ clave, fecha: fmtFechaDia(n.created_at), notas: [n] });
+    // El día de hoy se titula "Hoy" en lugar de su fecha.
+    else gruposMobile.push({ clave, fecha: clave === claveHoy ? 'Hoy' : fmtFechaDia(n.created_at), notas: [n] });
   }
 
   // ── Selección múltiple (admin_main) ─────────────────────
@@ -457,13 +458,6 @@ export default function Notas() {
     }
   };
 
-  // Subtítulo con los filtros puestos: "Por Cobrar · Este mes", "Octubre 2026"…
-  const etiquetaFecha = rangoFecha === 'TODAS' ? null
-    : rangoFecha.startsWith('MES:') ? `${MESES[Number(rangoFecha.slice(9, 11)) - 1]} ${rangoFecha.slice(4, 8)}`
-    : rangoFecha.startsWith('ANIO:') ? rangoFecha.slice(5)
-    : RANGOS_FECHA.find(r => r.value === rangoFecha)?.label;
-  const etiquetaEstado = filtro === 'TODOS' ? null : (FILTRO_LABEL[filtro] ?? BADGE_ESTADO[filtro]?.label);
-  const subtituloFiltros = [etiquetaEstado, etiquetaFecha].filter(Boolean).join(' · ') || 'Todas las notas';
 
   return (
     <div className="min-h-full bg-slate-100">
@@ -472,7 +466,7 @@ export default function Notas() {
         <div className="max-w-movil md:max-w-7xl mx-auto px-6 md:px-8 pt-10 md:pt-14 pb-4 flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Notas</h1>
-          <p className="text-sm text-gray-500">{subtituloFiltros}</p>
+          {chipsFiltros || <p className="text-sm text-gray-500">Todas las notas</p>}
         </div>
         {/* `relative` en la fila: los paneles (224 px) se abren a la izquierda y así
             no se salen de la pantalla en celulares angostos. Siguen dentro del div
@@ -636,9 +630,6 @@ export default function Notas() {
         />
       </div>
 
-      {/* En escritorio, o en móvil sin tarjetas (para quitar el filtro que dejó la
-          lista vacía); con tarjetas, en móvil van arriba del primer día. */}
-      {chipsFiltros(filtradas.length > 0 ? 'hidden lg:flex' : 'flex')}
 
       {loading && (
         <div className="flex justify-center py-12">
@@ -864,9 +855,8 @@ export default function Notas() {
 
           {/* Tarjetas abajo de lg, agrupadas por día. */}
           <div className="lg:hidden pt-8 space-y-16">
-            {gruposMobile.map((grupo, iGrupo) => (
+            {gruposMobile.map((grupo) => (
               <div key={grupo.clave} className="space-y-4">
-                {iGrupo === 0 && chipsFiltros('flex')}
                 <h3 className="text-sm font-bold text-dark-blue px-1">{grupo.fecha}</h3>
                 {/* Una por fila en celular, dos en tableta. */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
