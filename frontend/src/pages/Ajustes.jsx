@@ -373,10 +373,6 @@ function HorarioSemana({ value, onChange }) {
   const dias = horarioCompleto(value);
   const cambiar = (dia, cambios) =>
     onChange(dias.map(d => (d.dia === dia ? { ...d, ...cambios } : d)));
-  // Lo del lunes a todos los días.
-  const lunes = dias[0];
-  const copiarLunes = () =>
-    onChange(dias.map(d => ({ ...d, abierto: lunes.abierto, abre: lunes.abre, cierra: lunes.cierra })));
   const HORA_CLS = 'w-full min-w-0 px-3 py-2.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent transition bg-white';
   return (
     <div className="space-y-1">
@@ -408,9 +404,6 @@ function HorarioSemana({ value, onChange }) {
           </div>
         ))}
       </div>
-      <button type="button" onClick={copiarLunes} className="text-sm font-medium text-blue hover:underline">
-        Copiar el horario del lunes a todos los días
-      </button>
     </div>
   );
 }
@@ -1121,11 +1114,10 @@ export default function Ajustes() {
   // Sucursales editables; sucursalSel = slug de la que se edita.
   const [sucursales,     setSucursales]     = useState([]);
   const [sucursalSel,    setSucursalSel]    = useState('');
-  const [cambiandoActiva, setCambiandoActiva] = useState(null); // slug activándose/desactivándose
+  const [cambiandoActiva, setCambiandoActiva] = useState(null); // slug reactivándose
   const [agregando,      setAgregando]      = useState(false);
   const [creando,        setCreando]        = useState(false);
   const [nuevaSucursal,  setNuevaSucursal]  = useState({ nombre: '', direccion: '', telefono: '', horario_semana: null });
-  const [confirmarDesactivar, setConfirmarDesactivar] = useState(null); // sucursal a desactivar
 
   // Solo el Admin Main activa o desactiva sucursales.
   const esMain = esAdminMainFn(usuario?.rol);
@@ -1266,12 +1258,6 @@ export default function Ajustes() {
     } finally {
       setCambiandoActiva(null);
     }
-  };
-
-  const confirmarDesactivarSucursal = async () => {
-    if (!confirmarDesactivar) return;
-    await toggleActivaSucursal(confirmarDesactivar.slug, false);
-    setConfirmarDesactivar(null);
   };
 
   const handleChange = (e) => {
@@ -2222,22 +2208,16 @@ export default function Ajustes() {
                 onChange={(v) => handleSucursalChange(sucursalActual.slug, 'horario_semana', v)}
               />
             </Field>
-            {/* Los datos se guardan con "Guardar cambios"; aquí solo activar/desactivar (Admin Main). */}
-            {esMain && (
+            {/* Los datos se guardan con "Guardar cambios"; aquí solo reactivar (Admin Main). */}
+            {esMain && !sucursalActual.activa && (
               <div className="pt-1">
                 <button
                   type="button"
-                  onClick={() => sucursalActual.activa
-                    ? setConfirmarDesactivar(sucursalActual)
-                    : toggleActivaSucursal(sucursalActual.slug, true)}
+                  onClick={() => toggleActivaSucursal(sucursalActual.slug, true)}
                   disabled={cambiandoActiva === sucursalActual.slug}
-                  className={`text-sm font-medium disabled:opacity-60 ${
-                    sucursalActual.activa ? 'text-red hover:opacity-80' : 'text-green hover:opacity-80'
-                  }`}
+                  className="text-sm font-medium text-green hover:opacity-80 disabled:opacity-60"
                 >
-                  {cambiandoActiva === sucursalActual.slug
-                    ? 'Aplicando...'
-                    : sucursalActual.activa ? 'Desactivar sucursal' : 'Reactivar sucursal'}
+                  {cambiandoActiva === sucursalActual.slug ? 'Aplicando...' : 'Reactivar sucursal'}
                 </button>
               </div>
             )}
@@ -2617,22 +2597,14 @@ export default function Ajustes() {
               />
             </MobileField>
             {/* Los datos se guardan con "Guardar" del pie. */}
-            {esMain && (
+            {esMain && !sucursalActual.activa && (
               <button
                 type="button"
-                onClick={() => sucursalActual.activa
-                  ? setConfirmarDesactivar(sucursalActual)
-                  : toggleActivaSucursal(sucursalActual.slug, true)}
+                onClick={() => toggleActivaSucursal(sucursalActual.slug, true)}
                 disabled={cambiandoActiva === sucursalActual.slug}
-                className={`w-full py-3.5 rounded-lg text-base font-medium border disabled:opacity-60 ${
-                  sucursalActual.activa
-                    ? 'border-red/40 text-red'
-                    : 'border-green/40 text-green'
-                }`}
+                className="w-full py-3.5 rounded-lg text-base font-medium border border-green/40 text-green disabled:opacity-60"
               >
-                {cambiandoActiva === sucursalActual.slug
-                  ? 'Aplicando...'
-                  : sucursalActual.activa ? 'Desactivar sucursal' : 'Reactivar sucursal'}
+                {cambiandoActiva === sucursalActual.slug ? 'Aplicando...' : 'Reactivar sucursal'}
               </button>
             )}
           </>
@@ -3101,19 +3073,21 @@ export default function Ajustes() {
             </div>
             <div className="max-w-movil mx-auto px-6 py-6 space-y-3">
               {avisoPruebas}
-              {GRUPOS_AJUSTES.map((g) => (
-                <div key={g.titulo} className="space-y-3">
-                  <p className="px-1 pt-3 text-xs font-semibold uppercase tracking-wide text-grey">{g.titulo}</p>
-                  {g.ids.map(seccionPorId).map((s) => (
-                    <MobileSectionButton
-                      key={s.id}
-                      label={s.label}
-                      icon={s.icon}
-                      onClick={() => (s.id === 'manual' ? navigate('/manual') : setMobileSection(s.id))}
-                    />
-                  ))}
-                </div>
-              ))}
+              <div className="pt-3 space-y-8">
+                {GRUPOS_AJUSTES.map((g) => (
+                  <div key={g.titulo} className="space-y-3">
+                    <p className="px-1 text-xs font-semibold uppercase tracking-wide text-grey">{g.titulo}</p>
+                    {g.ids.map(seccionPorId).map((s) => (
+                      <MobileSectionButton
+                        key={s.id}
+                        label={s.label}
+                        icon={s.icon}
+                        onClick={() => (s.id === 'manual' ? navigate('/manual') : setMobileSection(s.id))}
+                      />
+                    ))}
+                  </div>
+                ))}
+              </div>
             </div>
           </>
         ) : (
@@ -3219,7 +3193,7 @@ export default function Ajustes() {
 
             {/* Inicio de Ajustes: una tarjeta por sección. */}
             {!seccionUrl && (
-              <div className="space-y-6">
+              <div className="space-y-10">
                 {GRUPOS_AJUSTES.map((g) => (
                   <div key={g.titulo} className="space-y-3">
                     <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">{g.titulo}</p>
@@ -3332,45 +3306,6 @@ export default function Ajustes() {
         </div>
       )}
 
-      {/* Confirmación para desactivar una sucursal (solo Admin Main) */}
-      {confirmarDesactivar && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm max-h-modal overflow-y-auto">
-            <div className="p-6">
-              <div className="flex items-center justify-center w-12 h-12 rounded-full bg-red-100 mx-auto mb-4">
-                <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
-              </div>
-              <h3 className="text-base font-semibold text-gray-900 text-center mb-1">Desactivar sucursal</h3>
-              <p className="text-sm text-gray-500 text-center mb-4">
-                ¿Seguro que quieres desactivar{' '}
-                <span className="font-medium text-gray-700">{confirmarDesactivar.nombre}</span>?
-                Dejará de aparecer en la operación, pero su historial (notas, caja y ventas) se conserva
-                y podrás reactivarla después.
-              </p>
-              <div className="flex gap-3">
-                <button
-                  type="button"
-                  onClick={() => setConfirmarDesactivar(null)}
-                  className="flex-1 border border-gray-300 text-gray-700 font-medium py-3.5 rounded-lg text-base hover:bg-gray-50 transition-colors"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="button"
-                  onClick={confirmarDesactivarSucursal}
-                  disabled={cambiandoActiva === confirmarDesactivar.slug}
-                  className="flex-1 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white font-medium py-3.5 rounded-lg text-base transition-colors"
-                >
-                  {cambiandoActiva === confirmarDesactivar.slug ? 'Desactivando...' : 'Desactivar'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </>
   );
 }

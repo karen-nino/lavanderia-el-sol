@@ -23,7 +23,7 @@ export default function KpiCard({ label, sublabel, sublabelCorto, value, color =
       )}
 
       <div className="flex flex-col">
-        <p className={`font-extrabold leading-none text-4xl min-[400px]:text-5xl md:text-4xl mb-2 md:mb-1 ${v.value}`}>
+        <p className={`font-extrabold leading-none text-[2.75rem] min-[400px]:text-5xl md:text-4xl mb-2 md:mb-1 ${v.value}`}>
           {value}
         </p>
         <p className="text-sm leading-tight text-dark-grey">{label}</p>
