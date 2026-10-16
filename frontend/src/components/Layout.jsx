@@ -201,39 +201,41 @@ function SidebarPieBoton({ icon, label, onClick, peligro = false, activo = false
   );
 }
 
-/** Hueco del alto de un botón del pie. */
-const RanuraVacia = () => (
-  <div className="invisible" aria-hidden="true">
-    <SidebarPieBoton icon={Icon.menu} label="—" />
-  </div>
-);
-
 /**
  * Sidebar de escritorio: los ítems que caben; los demás van al Menú y se
- * reportan al padre. El pie tiene siempre dos ranuras: si cambiara de alto, la
- * capacidad medida oscilaría.
+ * reportan al padre. Se mide la zona de ítems + pie, que no cambia de alto
+ * aunque el pie tenga uno o dos botones; así la capacidad no oscila.
  */
 function DesktopSidebar({ items, onMenu, onOverflowChange, onSettings, onLogout }) {
   const { pathname } = useLocation();
+  const zonaRef = useRef(null);
   const slotRef = useRef(null);
+  const pieRef = useRef(null);
   const [capacity, setCapacity] = useState(items.length);
+  const conAjustes = Boolean(onSettings);
 
   useLayoutEffect(() => {
-    const slot = slotRef.current;
-    if (!slot) return undefined;
-    const GAP = 12; // gap-3 entre ítems
+    const zona = zonaRef.current;
+    if (!zona) return undefined;
+    const GAP = 12;     // gap-3 entre ítems
+    const PIE_MT = 12;  // mt-3 del pie
+    const PIE_GAP = 8;  // gap-2 entre botones del pie
     const medir = () => {
-      const primerItem = slot.firstElementChild;
-      const itemH = primerItem?.offsetHeight ?? 64;
-      const slotH = slot.clientHeight;
-      const cap = Math.max(1, Math.floor((slotH + GAP) / (itemH + GAP)));
-      setCapacity(cap);
+      const itemH = slotRef.current?.firstElementChild?.offsetHeight ?? 64;
+      const pieH = pieRef.current?.firstElementChild?.offsetHeight ?? 64;
+      const zonaH = zona.clientHeight;
+      /* Alto que queda para los ítems con el pie de 1 o 2 botones. */
+      const libre = (botones) => zonaH - PIE_MT - botones * pieH - (botones - 1) * PIE_GAP;
+      const caben = (alto) => Math.max(1, Math.floor((alto + GAP) / (itemH + GAP)));
+      /* Sin desborde el pie lleva Ajustes + Salir (admin); con desborde, solo Menú. */
+      const todos = caben(libre(conAjustes ? 2 : 1));
+      setCapacity(todos >= items.length ? items.length : caben(libre(1)));
     };
     medir();
     const ro = new ResizeObserver(medir);
-    ro.observe(slot);
+    ro.observe(zona);
     return () => ro.disconnect();
-  }, [items.length]);
+  }, [items.length, conAjustes]);
 
   const visibles = items.slice(0, capacity);
   const overflow = items.slice(capacity);
@@ -251,30 +253,31 @@ function DesktopSidebar({ items, onMenu, onOverflowChange, onSettings, onLogout 
         </div>
       </div>
 
-      <div ref={slotRef} className="flex-1 min-h-0 flex flex-col gap-3 overflow-hidden">
-        {visibles.map((item) => (
-          <SidebarItem key={item.to} {...item} />
-        ))}
-      </div>
+      <div ref={zonaRef} className="flex-1 min-h-0 flex flex-col">
+        <div ref={slotRef} className="flex-1 min-h-0 flex flex-col gap-3 overflow-hidden">
+          {visibles.map((item) => (
+            <SidebarItem key={item.to} {...item} />
+          ))}
+        </div>
 
-      {/* Ranura de arriba: Ajustes, si cabe todo y es admin. Ranura de abajo: Menú
-          si algo no cupo, Salir si no. Las vacías ocupan su lugar invisibles. */}
-      <div className="flex-shrink-0 mt-3 flex flex-col gap-2">
-        {overflow.length === 0 && onSettings ? (
-          <SidebarPieBoton
-            icon={Icon.ajustes}
-            label="Ajustes"
-            onClick={onSettings}
-            activo={pathname.startsWith('/ajustes')}
-          />
-        ) : (
-          <RanuraVacia />
-        )}
-        {overflow.length > 0 ? (
-          <SidebarPieBoton icon={Icon.menu} label="Menú" onClick={onMenu} />
-        ) : (
-          <SidebarPieBoton icon={Icon.logout} label="Salir" onClick={onLogout} peligro />
-        )}
+        {/* Pie: Menú si algo no cupo; si no, Ajustes (admin) y Salir. */}
+        <div ref={pieRef} className="flex-shrink-0 mt-3 flex flex-col gap-2">
+          {overflow.length > 0 ? (
+            <SidebarPieBoton icon={Icon.menu} label="Menú" onClick={onMenu} />
+          ) : (
+            <>
+              {onSettings && (
+                <SidebarPieBoton
+                  icon={Icon.ajustes}
+                  label="Ajustes"
+                  onClick={onSettings}
+                  activo={pathname.startsWith('/ajustes')}
+                />
+              )}
+              <SidebarPieBoton icon={Icon.logout} label="Salir" onClick={onLogout} peligro />
+            </>
+          )}
+        </div>
       </div>
     </aside>
   );
