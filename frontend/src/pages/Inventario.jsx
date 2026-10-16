@@ -73,6 +73,11 @@ function unidadVenta(p, n = 2) {
   if (porUnidad(p)) return n === 1 ? 'unidad' : 'unidades';
   return n === 1 ? 'botella' : 'botellas';
 }
+/** Título de la existencia: Botellas, Unidades o Bolsas. */
+function tituloExistencia(p) {
+  const u = unidadVenta(p);
+  return u.charAt(0).toUpperCase() + u.slice(1);
+}
 /** Medidas contadas en la unidad del producto (las bolsas, en piezas). */
 function textoExistencia(p, medidas) {
   if (p.clase === 'bolsa') {
@@ -2343,13 +2348,27 @@ export default function Inventario() {
                     const sub = (esGranelLiquido(p) && nombreTipoGranel.get(p.tipo_granel_id)) || subtituloProd(p);
                     return sub && <p className="text-xs text-gray-400 mt-0.5">{sub}</p>;
                   })()}
-                  <div className="flex items-center gap-2 mt-1 flex-wrap">
-                    {/* El punto naranja (algo apartado en notas) y los avisos van a la derecha. */}
-                    <span className="text-md font-semibold text-gray-700">{textoDisponible(p)}</span>
-                    {es === 'ok' && medidasApartadas(p) > 0 && <PuntoApartado />}
-                    {es !== 'ok' && <BadgeEstado estado={es} />}
+                  {/* Como en el detalle: cada existencia con su título; el granel líquido, bidones y botellas lado a lado. */}
+                  <div className={`mt-3 ${esGranelLiquido(p) ? 'grid grid-cols-2 gap-3' : ''}`}>
+                    {esGranelLiquido(p) && (
+                      <div className="min-w-0">
+                        <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-0.5">Bidones</p>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-md font-semibold text-gray-700">{textoGranel(p)}</span>
+                          <BadgeGranel estado={estadoGranel(p)} />
+                        </div>
+                      </div>
+                    )}
+                    <div className="min-w-0">
+                      <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-0.5">{tituloExistencia(p)}</p>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {/* El punto naranja (algo apartado en notas) y los avisos van a la derecha. */}
+                        <span className="text-md font-semibold text-gray-700">{textoDisponible(p)}</span>
+                        {es === 'ok' && medidasApartadas(p) > 0 && <PuntoApartado />}
+                        {es !== 'ok' && <BadgeEstado estado={es} />}
+                      </div>
+                    </div>
                   </div>
-                  {/* Los bidones se ven al abrir la tarjeta. */}
                 </button>
               );
             })}
@@ -2456,7 +2475,7 @@ export default function Inventario() {
                   </div>
                 )}
                 <div>
-                  <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">{p.clase === 'bolsa' ? 'Bolsas' : p.tipo_liquido === 'marca' ? 'Unidades' : 'Botellas'}</p>
+                  <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">{tituloExistencia(p)}</p>
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-base font-medium text-gray-800">{textoDisponible(p)}</span>
                     {es !== 'ok' && <BadgeEstado estado={es} />}
