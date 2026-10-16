@@ -457,6 +457,14 @@ export default function Notas() {
     }
   };
 
+  // Subtítulo con los filtros puestos: "Por Cobrar · Este mes", "Octubre 2026"…
+  const etiquetaFecha = rangoFecha === 'TODAS' ? null
+    : rangoFecha.startsWith('MES:') ? `${MESES[Number(rangoFecha.slice(9, 11)) - 1]} ${rangoFecha.slice(4, 8)}`
+    : rangoFecha.startsWith('ANIO:') ? rangoFecha.slice(5)
+    : RANGOS_FECHA.find(r => r.value === rangoFecha)?.label;
+  const etiquetaEstado = filtro === 'TODOS' ? null : (FILTRO_LABEL[filtro] ?? BADGE_ESTADO[filtro]?.label);
+  const subtituloFiltros = [etiquetaEstado, etiquetaFecha].filter(Boolean).join(' · ') || 'Todas las notas';
+
   return (
     <div className="min-h-full bg-slate-100">
       {/* Cabecera (barra superior) */}
@@ -464,7 +472,7 @@ export default function Notas() {
         <div className="max-w-movil md:max-w-7xl mx-auto px-6 md:px-8 pt-10 md:pt-14 pb-4 flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Notas</h1>
-          <p className="text-sm text-gray-500">{filtradas.length} resultado(s)</p>
+          <p className="text-sm text-gray-500">{subtituloFiltros}</p>
         </div>
         {/* `relative` en la fila: los paneles (224 px) se abren a la izquierda y así
             no se salen de la pantalla en celulares angostos. Siguen dentro del div
