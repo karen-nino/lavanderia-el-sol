@@ -940,7 +940,7 @@ function ModalMovimiento({ producto, tipo, onClose, onDone }) {
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1.5">Cantidad ({unidadTxt})</label>
           <input
-            type="number" min="0" step="any" value={cantidad}
+            type="number" min="0" step="any" value={cantidad} placeholder="0"
             onChange={(e) => setCantidad(e.target.value)} className={NUM_CLS}
           />
         </div>
@@ -1023,7 +1023,7 @@ function ModalRellenar({ producto, onClose, onDone }) {
             ¿Cuántas botellas rellenaste?
           </label>
           <input
-            type="number" min="1" max={maxBotellas} step="1" value={botellas}
+            type="number" min="1" max={maxBotellas} step="1" value={botellas} placeholder="0"
             onChange={(e) => setBotellas(e.target.value)} className={NUM_CLS}
           />
           {n > 0 && !invalido && (

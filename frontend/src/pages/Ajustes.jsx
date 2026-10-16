@@ -1862,7 +1862,7 @@ export default function Ajustes() {
       <div className="flex items-center gap-2">
         <span className="text-sm text-gray-500 flex-shrink-0">$</span>
         <input
-          type="number" name={name} min="0" step="0.01" required={required}
+          type="number" name={name} min="0" step="0.01" required={required} placeholder="0.00"
           value={config[name] ?? ''} onChange={handleChange} className={INPUT_CLS}
         />
         <span className="text-sm text-gray-500 flex-shrink-0">MXN</span>
@@ -1874,7 +1874,7 @@ export default function Ajustes() {
     <Field label={label} hint={hint}>
       <div className="flex items-center gap-2">
         <input
-          type="number" name={name} min="1" step="1" required
+          type="number" name={name} min="1" step="1" required placeholder="0"
           value={config[name] ?? ''} onChange={handleChange} className={INPUT_CLS}
         />
         <span className="text-sm text-gray-500 flex-shrink-0">min</span>
@@ -1894,7 +1894,7 @@ export default function Ajustes() {
       >
         <div className="flex items-center gap-2">
           <input
-            type="number" min="1" step="1" value={t.minutos ?? ''}
+            type="number" min="1" step="1" value={t.minutos ?? ''} placeholder="0"
             onChange={e => setMinutosMarca(claveTiempo(t), e.target.value)}
             className={INPUT_CLS}
           />
@@ -1960,7 +1960,7 @@ export default function Ajustes() {
     const uno = (name, label, hint) => (
       <Campo label={label} hint={hint}>
         <div className="flex items-center gap-2">
-          <input type="number" name={name} min="0" step="1"
+          <input type="number" name={name} min="0" step="1" placeholder="0"
             value={config[name] ?? ''} onChange={handleChange}
             className={`${cls} ${precargaInvalida(name) ? 'border-red-300' : ''}`} />
           {stepBtns(name, 1, 0, mobile)}
@@ -1983,7 +1983,7 @@ export default function Ajustes() {
     >
       <div className="flex items-center gap-2">
         <span className="text-sm text-gray-500 flex-shrink-0">$</span>
-        <input type="number" name={name} min="0" step="0.01"
+        <input type="number" name={name} min="0" step="0.01" placeholder="0.00"
           value={config[name] ?? ''} onChange={handleChange}
           className={`${INPUT_CLS} ${sinPrecioServicio(name) ? 'border-red-300' : ''}`} />
         <span className="text-sm text-gray-500 flex-shrink-0">MXN</span>
@@ -2628,7 +2628,7 @@ export default function Ajustes() {
       <div className="flex items-center gap-2">
         <span className="text-base text-grey flex-shrink-0">$</span>
         <input
-          type="number" name={name} min="0" step="0.01" required={required}
+          type="number" name={name} min="0" step="0.01" required={required} placeholder="0.00"
           value={config[name] ?? ''} onChange={handleChange} className={MOBILE_INPUT_CLS}
         />
         <span className="text-base text-grey flex-shrink-0">MXN</span>
@@ -2640,7 +2640,7 @@ export default function Ajustes() {
     <MobileField label={label} hint={hint}>
       <div className="flex items-center gap-2">
         <input
-          type="number" name={name} min="1" step="1" required
+          type="number" name={name} min="1" step="1" required placeholder="0"
           value={config[name] ?? ''} onChange={handleChange} className={MOBILE_INPUT_CLS}
         />
         <span className="text-base text-grey flex-shrink-0">min</span>
@@ -2659,7 +2659,7 @@ export default function Ajustes() {
       >
         <div className="flex items-center gap-2">
           <input
-            type="number" min="1" step="1" value={t.minutos ?? ''}
+            type="number" min="1" step="1" value={t.minutos ?? ''} placeholder="0"
             onChange={e => setMinutosMarca(claveTiempo(t), e.target.value)}
             className={MOBILE_INPUT_CLS}
           />
@@ -2726,7 +2726,7 @@ export default function Ajustes() {
     >
       <div className="flex items-center gap-2">
         <span className="text-base text-grey flex-shrink-0">$</span>
-        <input type="number" name={name} min="0" step="0.01"
+        <input type="number" name={name} min="0" step="0.01" placeholder="0.00"
           value={config[name] ?? ''} onChange={handleChange}
           className={`${MOBILE_INPUT_CLS} ${sinPrecioServicio(name) ? 'border-red-300' : ''}`} />
         <span className="text-base text-grey flex-shrink-0">MXN</span>
