@@ -2343,11 +2343,6 @@ export default function Inventario() {
                       {recienCreados.has(p.id) && <ChipNuevo />}
                     </div>
                   </div>
-                  {/* En el granel líquido el subtítulo es su tipo (Jabón, Suavizante…). */}
-                  {(() => {
-                    const sub = (esGranelLiquido(p) && nombreTipoGranel.get(p.tipo_granel_id)) || subtituloProd(p);
-                    return sub && <p className="text-xs text-gray-400 mt-0.5">{sub}</p>;
-                  })()}
                   {/* Como en el detalle: cada existencia con su título; el granel líquido, bidones y botellas lado a lado. */}
                   <div className={`mt-3 ${esGranelLiquido(p) ? 'grid grid-cols-2 gap-3' : ''}`}>
                     {esGranelLiquido(p) && (
@@ -2443,7 +2438,11 @@ export default function Inventario() {
                     <ChipTipo p={p} />
                             {recienCreados.has(p.id) && <ChipNuevo />}
                   </div>
-                  {subtituloProd(p) && <p className="text-sm text-gray-500 mt-0.5">{subtituloProd(p)}</p>}
+                  {/* En el granel líquido el subtítulo es su tipo (Jabón, Suavizante…). */}
+                  {(() => {
+                    const sub = (esGranelLiquido(p) && nombreTipoGranel.get(p.tipo_granel_id)) || subtituloProd(p);
+                    return sub && <p className="text-sm text-gray-500 mt-0.5">{sub}</p>;
+                  })()}
                 </div>
                 {/* Precio: bolsa = por pieza; granel = medida + botella; marca = unidad. */}
                 {p.clase === 'bolsa' ? (
