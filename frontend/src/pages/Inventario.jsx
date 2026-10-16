@@ -1361,7 +1361,7 @@ function ChipTipo({ p }) {
 function BadgeEstado({ estado }) {
   if (estado === 'agotado') return <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700">Agotado</span>;
   if (estado === 'por_agotarse') return <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Por agotarse</span>;
-  return <span className="w-2 h-2 rounded-full bg-green-500 inline-block" />;
+  return null;
 }
 
 /** Punto naranja de las listas: el producto tiene algo apartado en notas. */
@@ -2415,19 +2415,19 @@ export default function Inventario() {
                 {p.clase === 'bolsa' ? (
                   <div>
                     <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Precio por pieza</p>
-                    <p className="text-base text-gray-700">{precioTxt(p.precio_unitario)}</p>
+                    <p className="text-base font-medium text-gray-700">{precioTxt(p.precio_unitario)}</p>
                   </div>
                 ) : (
                   <div className={esGranelLiquido(p) ? 'grid grid-cols-2 gap-4' : ''}>
                     {esGranelLiquido(p) && (
                       <div>
                         <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Precio por medida</p>
-                        <p className="text-base text-gray-700">{precioTxt(p.precio_unitario)}</p>
+                        <p className="text-base font-medium text-gray-700">{precioTxt(p.precio_unitario)}</p>
                       </div>
                     )}
                     <div>
                       <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">{p.tipo_liquido === 'marca' ? 'Precio por unidad' : 'Precio por botella'}</p>
-                      <p className="text-base text-gray-700">{precioTxt(p.precio_botella)}</p>
+                      <p className="text-base font-medium text-gray-700">{precioTxt(p.precio_botella)}</p>
                     </div>
                   </div>
                 )}
@@ -2435,7 +2435,7 @@ export default function Inventario() {
                   <div>
                     <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Bidones</p>
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-base text-gray-700">{textoGranel(p)}</span>
+                      <span className="text-base font-medium text-gray-700">{textoGranel(p)}</span>
                       <BadgeGranel estado={recienCreados.has(p.id) ? 'ok' : p.estado_granel} />
                     </div>
                   </div>
@@ -2443,8 +2443,6 @@ export default function Inventario() {
                 <div>
                   <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">{p.clase === 'bolsa' ? 'Bolsas' : p.tipo_liquido === 'marca' ? 'Unidades' : 'Botellas'}</p>
                   <div className="flex items-center gap-2 flex-wrap">
-                    {/* Con suficiente, el punto verde va a la izquierda; los avisos, a la derecha. */}
-                    {es === 'ok' && <BadgeEstado estado={es} />}
                     <span className="text-base font-medium text-gray-800">{textoDisponible(p)}</span>
                     {es !== 'ok' && <BadgeEstado estado={es} />}
                   </div>
@@ -2452,7 +2450,10 @@ export default function Inventario() {
                 {medidasApartadas(p) > 0 && (
                   <div>
                     <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Apartadas en notas</p>
-                    <p className="text-base text-gray-700">{textoApartadas(p)}</p>
+                    <div className="flex items-center gap-2">
+                      <span className="text-base font-medium text-gray-700">{textoApartadas(p)}</span>
+                      <PuntoApartado />
+                    </div>
                   </div>
                 )}
 
