@@ -487,7 +487,7 @@ export default function TicketNota() {
 
       {/* Cabecera */}
       <div className="bg-white border-b-2 border-gray-200">
-        <div className="max-w-2xl mx-auto px-6 pt-10 md:pt-6 pb-4 flex items-center justify-between gap-4">
+        <div className="max-w-movil md:max-w-2xl mx-auto px-6 pt-10 md:pt-6 pb-4 flex items-center justify-between gap-4">
           <div className="flex items-center gap-2 min-w-0">
             <button
               onClick={() => navigate(`/notas/${id}`)}
@@ -518,7 +518,7 @@ export default function TicketNota() {
       </div>
 
       {/* Contenido */}
-      <div className="max-w-2xl mx-auto px-6 py-6 space-y-6">
+      <div className="max-w-movil md:max-w-2xl mx-auto px-6 py-6 space-y-6">
 
         {/* Recibo (es lo que se manda por WhatsApp como imagen) */}
         {/* Angosto como el papel térmico; este nodo es el que se rasteriza. */}

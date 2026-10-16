@@ -897,7 +897,7 @@ export default function Salidas() {
   };
 
   return (
-    <div className="pt-10 pb-16 px-6 md:p-6 max-w-2xl mx-auto space-y-6">
+    <div className="pt-10 pb-16 px-6 md:p-6 max-w-movil md:max-w-2xl mx-auto space-y-6">
 
       {/* Cabecera */}
       <div className="flex items-center gap-2">

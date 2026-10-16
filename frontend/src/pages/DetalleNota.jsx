@@ -824,7 +824,7 @@ export default function DetalleNota() {
 
       {/* Cabecera (barra superior) */}
       <div className="bg-white border-b-2 border-gray-200">
-        <div className="max-w-2xl mx-auto px-6 md:px-6 pt-10 md:pt-6 pb-4 flex items-center justify-between gap-4">
+        <div className="max-w-movil md:max-w-2xl mx-auto px-6 md:px-6 pt-10 md:pt-6 pb-4 flex items-center justify-between gap-4">
         <div className="flex items-center gap-2 min-w-0">
           <button
             onClick={() => navigate(urlListaNotas())}
@@ -866,7 +866,7 @@ export default function DetalleNota() {
       </div>
 
       {/* Contenido */}
-      <div className="max-w-2xl mx-auto px-6 md:p-6 py-6">
+      <div className="max-w-movil md:max-w-2xl mx-auto px-6 md:p-6 py-6">
 
       {/* Error de acción */}
       {errorAccion && (

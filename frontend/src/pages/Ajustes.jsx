@@ -2896,7 +2896,7 @@ export default function Ajustes() {
         {!activeSection ? (
           <>
             <div className="bg-white border-b-2 border-gray-200">
-              <div className="px-6 pt-10 pb-4 flex flex-col items-start">
+              <div className="max-w-movil mx-auto px-6 pt-10 pb-4 flex flex-col items-start">
                 <div className='flex flex-row items-center gap-1'>
                   {SectionIcon.gear}
                   <h1 className="text-xl font-bold text-dark-blue leading-tight">Ajustes</h1>
@@ -2904,7 +2904,7 @@ export default function Ajustes() {
                 <p className="text-sm text-grey">Pantalla de ajustes</p>
               </div>
             </div>
-            <div className="px-6 py-6 space-y-3">
+            <div className="max-w-movil mx-auto px-6 py-6 space-y-3">
               {avisoPruebas}
               {seccionesMobile.map((s) => (
                 <MobileSectionButton
@@ -2919,7 +2919,7 @@ export default function Ajustes() {
         ) : (
           <form onSubmit={handleSubmitMobile}>
             <div className="bg-white border-b-2 border-gray-200">
-              <div className="px-6 pt-10 pb-4 flex items-center gap-2">
+              <div className="max-w-movil mx-auto px-6 pt-10 pb-4 flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => setMobileSection(null)}
@@ -2935,7 +2935,7 @@ export default function Ajustes() {
               </div>
             </div>
 
-            <div className="px-6 py-6 space-y-6">
+            <div className="max-w-movil mx-auto px-6 py-6 space-y-6">
             {/* Arriba, con el estilo del aviso de pruebas. */}
             {seccionDeConsulta && (
               <div className="bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-xl p-4">

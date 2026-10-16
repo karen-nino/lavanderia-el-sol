@@ -1353,7 +1353,7 @@ export default function NuevaNota() {
   }
 
   return (
-    <div className="pt-10 pb-16 px-6 md:p-6 max-w-2xl mx-auto">
+    <div className="pt-10 pb-16 px-6 md:p-6 max-w-movil md:max-w-2xl mx-auto">
       <div className="flex items-center gap-2 mb-6">
         <button
           onClick={() => navigate(-1)}

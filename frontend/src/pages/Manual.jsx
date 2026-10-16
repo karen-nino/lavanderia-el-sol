@@ -105,7 +105,7 @@ export default function Manual() {
     <div className="min-h-full bg-slate-100">
       {/* Cabecera */}
       <div className="bg-white border-b-2 border-gray-200 print:border-b-0">
-        <div className="max-w-5xl mx-auto px-6 pt-10 md:pt-6 pb-4 flex items-center justify-between gap-4">
+        <div className="max-w-movil md:max-w-5xl mx-auto px-6 pt-10 md:pt-6 pb-4 flex items-center justify-between gap-4">
           <div className="flex items-center gap-2 min-w-0">
             <button
               type="button"
@@ -136,7 +136,7 @@ export default function Manual() {
         </div>
 
         {/* Buscador, pegado bajo la cabecera. */}
-        <div className="max-w-5xl mx-auto px-6 pb-4 print:hidden">
+        <div className="max-w-movil md:max-w-5xl mx-auto px-6 pb-4 print:hidden">
           <div className="relative">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">{IconoBuscar}</span>
             <input
@@ -159,7 +159,7 @@ export default function Manual() {
         </div>
       </div>
 
-      <div className="max-w-5xl mx-auto p-6 flex gap-6">
+      <div className="max-w-movil md:max-w-5xl mx-auto p-6 flex gap-6">
         {/* Índice: solo en escritorio, donde sobra el ancho. */}
         {!buscando && (
           <nav className="hidden lg:block w-48 flex-shrink-0 print:hidden">

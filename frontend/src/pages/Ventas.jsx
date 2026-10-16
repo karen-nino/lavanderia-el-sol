@@ -366,7 +366,7 @@ export default function Ventas() {
     <div className="min-h-full bg-slate-100">
       {/* Cabecera (barra superior) */}
       <div className="bg-white border-b-2 border-gray-200">
-        <div className="max-w-7xl mx-auto px-6 md:px-8 pt-10 md:pt-14 pb-4">
+        <div className="max-w-movil md:max-w-7xl mx-auto px-6 md:px-8 pt-10 md:pt-14 pb-4">
           <h1 className="text-xl font-bold text-gray-800">Ventas</h1>
           <p className="text-sm text-gray-500 mt-0.5">{filtroLabel}</p>
         </div>
@@ -375,7 +375,7 @@ export default function Ventas() {
       <SucursalBar />
 
       {/* Contenido */}
-      <div className="max-w-7xl mx-auto px-6 md:px-8 py-6 space-y-6">
+      <div className="max-w-movil md:max-w-7xl mx-auto px-6 md:px-8 py-6 space-y-6">
 
       {/* Filtro de período */}
       <div className="space-y-3">
