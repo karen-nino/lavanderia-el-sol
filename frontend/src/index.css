@@ -57,9 +57,3 @@ select,
   -ms-user-select: text;
   user-select: text;
 }
-/* Campo al que llevó el buscador de Ajustes: se marca un momento. */
-.resaltado-busqueda {
-  border-radius: 0.5rem;
-  box-shadow: 0 0 0 3px #fff, 0 0 0 5px #0272C0;
-  transition: box-shadow 0.3s ease-out;
-}

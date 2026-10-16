@@ -253,43 +253,6 @@ const GRUPOS_AJUSTES = [
   { titulo: 'Sistema',   ids: ['alertas', 'manual', 'instalar'] },
 ];
 
-/** Lo que el buscador encuentra en cada sección: textos tal como salen en pantalla. */
-const TERMINOS_AJUSTES = {
-  perfil:     ['Nombre', 'Apellido', 'Contraseña', 'Tipo de Cuenta'],
-  negocio:    ['Nombre del negocio', 'Logo', 'R.F.C.', 'Sucursal a editar', 'Nombre de la sucursal',
-               'Dirección', 'Teléfono', 'Horario', 'Orden de las sucursales'],
-  maquinas:   ['Lavadora', 'Secadora', 'Mediana', 'Jumbo', 'Edredón', 'Precio por carga',
-               'Tope de carga', 'Tiempo de carga', 'Marcas y modelos', 'Cada ficha', 'Otros tiempos'],
-  cargas:     ['Servicio Chico', 'Servicio Mediano', 'Servicio Grande', 'Servicio Edredón',
-               'Medidas de granel', 'Bolsas'],
-  alertas:    ['Avisar de stock bajo', 'Avisar de máquinas encendidas a mano',
-               'Avisar cuando una máquina llega a su tope', 'Sonido de fin de ciclo',
-               'Avisar cuando se detenga un ciclo'],
-  etiquetas:  ['Tipos de tela', 'Tamaños de edredón'],
-  inventario: ['Marcas', 'Envases', 'Tipos de granel', 'Granel', 'Bolsas'],
-  ticket:     ['Nota para Autoservicio', 'Nota para Por Encargo y Edredón', 'Nota para Productos'],
-  whatsapp:   ['Mensaje para Por Encargo', 'Mensaje para volver a avisar'],
-  manual:     ['Manual de uso'],
-  instalar:   ['Instalar la app', 'Pantalla de inicio'],
-};
-
-/** Minúsculas y sin acentos: "edredon" encuentra "Edredón". */
-const normalizar = (t) => String(t ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
-
-/** Hasta 8 resultados `{ seccion, termino }` para lo escrito en el buscador. */
-function buscarAjustes(texto) {
-  const q = normalizar(texto);
-  if (q.length < 2) return [];
-  const res = [];
-  for (const s of SECCIONES_AJUSTES) {
-    if (normalizar(s.label).includes(q)) res.push({ seccion: s, termino: null });
-    for (const t of TERMINOS_AJUSTES[s.id] ?? []) {
-      if (normalizar(t).includes(q)) res.push({ seccion: s, termino: t });
-    }
-  }
-  return res.slice(0, 8);
-}
-
 /**
  * Alertas que se pueden apagar en Ajustes → Alertas (además de "ciclo
  * detenido"); nacen encendidas. Las de dinero y borrados no se apagan: son el
@@ -523,85 +486,6 @@ function ItemMenuAjustes({ seccion, activa, conCambios }) {
         />
       )}
     </Link>
-  );
-}
-
-/** Pista del atajo del buscador, con la tecla de cada sistema. */
-const ATAJO_BUSCAR = /Mac|iPhone|iPad/.test(globalThis.navigator?.platform ?? '') ? '⌘K' : 'Ctrl K';
-
-/** Buscador de Ajustes: lleva a la sección y al campo. Ctrl/⌘ + K lo enfoca. */
-function BuscadorAjustes({ onElegir }) {
-  const [texto, setTexto] = useState('');
-  const [abierto, setAbierto] = useState(false);
-  const [marcado, setMarcado] = useState(0);
-  const inputRef = useRef(null);
-  const resultados = buscarAjustes(texto);
-
-  useEffect(() => {
-    const atajo = (e) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
-        e.preventDefault();
-        inputRef.current?.focus();
-      }
-    };
-    window.addEventListener('keydown', atajo);
-    return () => window.removeEventListener('keydown', atajo);
-  }, []);
-
-  const elegir = (r) => {
-    onElegir(r);
-    setTexto('');
-    setAbierto(false);
-    inputRef.current?.blur();
-  };
-
-  const alTeclear = (e) => {
-    if (e.key === 'ArrowDown') { e.preventDefault(); setMarcado(m => Math.min(m + 1, resultados.length - 1)); }
-    else if (e.key === 'ArrowUp') { e.preventDefault(); setMarcado(m => Math.max(m - 1, 0)); }
-    else if (e.key === 'Enter' && resultados[marcado]) { e.preventDefault(); elegir(resultados[marcado]); }
-    else if (e.key === 'Escape') { setTexto(''); inputRef.current?.blur(); }
-  };
-
-  return (
-    <div className="relative w-56 lg:w-72">
-      <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z" />
-      </svg>
-      <input
-        ref={inputRef}
-        type="search"
-        value={texto}
-        onChange={(e) => { setTexto(e.target.value); setMarcado(0); setAbierto(true); }}
-        onFocus={() => setAbierto(true)}
-        onBlur={() => setTimeout(() => setAbierto(false), 150)}
-        onKeyDown={alTeclear}
-        placeholder="Buscar un ajuste…"
-        aria-label="Buscar un ajuste"
-        className="w-full pl-9 pr-12 py-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent transition"
-      />
-      <kbd className="hidden lg:block absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-gray-400 border border-gray-200 rounded px-1.5 py-0.5 pointer-events-none">{ATAJO_BUSCAR}</kbd>
-      {abierto && texto.trim().length >= 2 && (
-        <div className="absolute right-0 mt-2 w-full lg:w-80 bg-white border border-gray-200 rounded-xl shadow-lg z-30 py-1 max-h-80 overflow-y-auto">
-          {resultados.length === 0 ? (
-            <p className="px-4 py-3 text-sm text-gray-400">Sin resultados para "{texto.trim()}".</p>
-          ) : resultados.map((r, i) => (
-            <button
-              key={`${r.seccion.id}-${r.termino ?? ''}`}
-              type="button"
-              onMouseDown={(e) => { e.preventDefault(); elegir(r); }}
-              onMouseEnter={() => setMarcado(i)}
-              className={`w-full flex items-center gap-3 px-4 py-2.5 text-left ${i === marcado ? 'bg-light-blue/60' : ''}`}
-            >
-              <span className="flex-shrink-0 text-blue [&>svg]:w-4 [&>svg]:h-4">{r.seccion.icon}</span>
-              <span className="min-w-0">
-                <span className="block text-sm font-medium text-dark-blue truncate">{r.termino ?? r.seccion.label}</span>
-                {r.termino && <span className="block text-xs text-gray-400 truncate">{r.seccion.label}</span>}
-              </span>
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
   );
 }
 
@@ -1861,30 +1745,6 @@ export default function Ajustes() {
     document.addEventListener('click', interceptar, true);
     return () => document.removeEventListener('click', interceptar, true);
   }, [hayCambios]);
-
-  /* Resultado del buscador: abre la sección y resalta el campo. */
-  const contenidoRef = useRef(null);
-  const [resaltar, setResaltar] = useState(null);
-  const elegirBusqueda = ({ seccion, termino }) => {
-    if (seccion.id === 'manual') return navigate('/manual');
-    navigate(`/ajustes/${seccion.id}`);
-    setResaltar(termino);
-  };
-  useEffect(() => {
-    if (!resaltar || !contenidoRef.current) return undefined;
-    const q = normalizar(resaltar);
-    const candidatos = [...contenidoRef.current.querySelectorAll('label, h2, h3, p, span')]
-      .filter(el => el.offsetParent !== null);
-    const el = candidatos.find(c => normalizar(c.textContent) === q)
-      ?? candidatos.find(c => normalizar(c.textContent).startsWith(q));
-    const bloque = el?.parentElement;
-    if (bloque) {
-      bloque.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      bloque.classList.add('resaltado-busqueda');
-    }
-    const t = setTimeout(() => { bloque?.classList.remove('resaltado-busqueda'); setResaltar(null); }, 1800);
-    return () => clearTimeout(t);
-  }, [resaltar, seccionVista]);
 
   if (loading) {
     return (
@@ -3279,12 +3139,9 @@ export default function Ajustes() {
       {/* ── Vista escritorio: menú lateral y una sección a la vez ── */}
       <div className="hidden md:block min-h-full bg-gray-50">
         <div className="bg-white border-b-2 border-gray-200">
-          <div className="max-w-5xl mx-auto px-8 pt-14 pb-4 flex items-end justify-between gap-4">
-            <div>
-              <h1 className="text-xl font-bold text-gray-900">Ajustes</h1>
-              <p className="text-sm text-gray-500">Configuración del negocio y de tu cuenta</p>
-            </div>
-            <BuscadorAjustes onElegir={elegirBusqueda} />
+          <div className="max-w-5xl mx-auto px-8 pt-14 pb-4">
+            <h1 className="text-xl font-bold text-gray-900">Ajustes</h1>
+            <p className="text-sm text-gray-500">Configuración del negocio y de tu cuenta</p>
           </div>
         </div>
 
@@ -3305,7 +3162,7 @@ export default function Ajustes() {
             ))}
           </nav>
 
-          <div ref={contenidoRef} className="flex-1 min-w-0 space-y-6">
+          <div className="flex-1 min-w-0 space-y-6">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">
                 {GRUPOS_AJUSTES.find(g => g.ids.includes(seccionVista))?.titulo}
