@@ -2437,6 +2437,15 @@ export default function Inventario() {
                     </div>
                   </div>
                 )}
+                {esGranelLiquido(p) && (
+                  <div>
+                    <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Bidones</p>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-base text-gray-700">{textoGranel(p)}</span>
+                      <BadgeGranel estado={recienCreados.has(p.id) ? 'ok' : p.estado_granel} />
+                    </div>
+                  </div>
+                )}
                 <div>
                   <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">{p.clase === 'bolsa' ? 'Bolsas' : p.tipo_liquido === 'marca' ? 'Unidades' : 'Botellas'}</p>
                   <div className="flex items-center gap-2 flex-wrap">
@@ -2445,17 +2454,14 @@ export default function Inventario() {
                     <span className="text-base font-medium text-gray-800">{textoDisponible(p)}</span>
                     {es !== 'ok' && <BadgeEstado estado={es} />}
                   </div>
-                  <LineaApartadas p={p} className="text-xs text-gray-500 mt-1" />
                 </div>
-                {esGranelLiquido(p) && (
+                {medidasApartadas(p) > 0 && (
                   <div>
-                    <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Bidones (a granel)</p>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-base text-gray-700">{textoGranel(p)}</span>
-                      <BadgeGranel estado={recienCreados.has(p.id) ? 'ok' : p.estado_granel} />
-                    </div>
+                    <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Apartadas en notas</p>
+                    <p className="text-base text-gray-700">{textoApartadas(p)}</p>
                   </div>
                 )}
+
 
                 <div className="space-y-3.5 pt-1">
                   <div className="flex gap-3">
