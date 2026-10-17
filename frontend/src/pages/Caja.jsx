@@ -14,24 +14,6 @@ import SucursalBar from '../components/SucursalBar';
 const fmt = (n) =>
   new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(n ?? 0);
 
-// Íconos de entrada/salida para las filas de apertura y cierre del corte.
-function IconEntrada({ className }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
-      <path strokeLinecap="round" strokeLinejoin="round"
-        d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15M12 9l3 3m0 0-3 3m3-3H2.25" />
-    </svg>
-  );
-}
-function IconSalida({ className }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
-      <path strokeLinecap="round" strokeLinejoin="round"
-        d="M8.25 9V5.25A2.25 2.25 0 0 1 10.5 3h6a2.25 2.25 0 0 1 2.25 2.25v13.5A2.25 2.25 0 0 1 16.5 21h-6a2.25 2.25 0 0 1-2.25-2.25V15m-3 0-3-3m0 0 3-3m-3 3h12.75" />
-    </svg>
-  );
-}
-
 // Ej.: 12 de Agosto, 6:57 p.m.
 const fmtHora = (fecha) => {
   if (!fecha) return '—';
@@ -602,14 +584,7 @@ function Historial({ onFiltroLabel }) {
   const anioRef = useRef(null);
   const mesRef = useRef(null);
 
-  // Cortes con su lista de entradas y salidas desplegada (por id).
-  const [movsAbiertos, setMovsAbiertos] = useState(() => new Set());
-  const alternarMovs = (id) => setMovsAbiertos((prev) => {
-    const next = new Set(prev);
-    if (next.has(id)) next.delete(id); else next.add(id);
-    return next;
-  });
-  // Cortes con su detalle de Ingresos, Egresos y Desglose desplegado (por id).
+  // Cortes con su detalle (ingresos, egresos y movimientos) desplegado (por id).
   const [detAbiertos, setDetAbiertos] = useState(() => new Set());
   const alternarDet = (id) => setDetAbiertos((prev) => {
     const next = new Set(prev);
@@ -874,129 +849,103 @@ function Historial({ onFiltroLabel }) {
   // Renglones { label, value, sign, nota } de la rejilla.
   const filasRejilla = (filas) => filas.map((r) => (
     <div key={r.label} className="contents">
-      <span className="text-gray-500">
+      <span className="text-gray-600">
         {r.label}
-        {r.nota && <span className="block text-sm text-gray-400">{r.nota}</span>}
+        {r.nota && <span className="block text-sm text-gray-500">{r.nota}</span>}
       </span>
-      <span className="text-right text-gray-700">{r.sign}{fmt(r.value)}</span>
+      <span className="text-right text-gray-800">{r.sign}{fmt(r.value)}</span>
     </div>
   ));
-  const subtituloRejilla = (texto) => (
-    <p className="col-span-2 pt-2 text-sm font-semibold uppercase tracking-wide text-gray-400">{texto}</p>
+  const totalRejilla = (label, valor) => (
+    <>
+      <span className="font-semibold text-gray-800">{label}</span>
+      <span className="text-right font-semibold text-gray-900">{valor}</span>
+    </>
+  );
+  const tituloRejilla = (texto) => (
+    <p className="col-span-2 pt-3 font-semibold text-gray-800">{texto}</p>
   );
 
-  // Cuerpo del corte: Ingresos, Egresos y Esperado con su detalle desplegable
-  // (como el turno de Ventas), más conteo, caja final y sobre.
+  /** Quién cerró, solo si no es quien abrió (o lo cerró el sistema), y las notas. */
+  const pieCorte = (c) => {
+    const cerroOtro = !c.en_curso && !c.cierre_automatico && c.usuario_cierre && c.usuario_cierre !== c.usuario_apertura;
+    const lineas = [
+      c.cierre_automatico && <p key="auto" className="text-amber-700">Lo cerró el sistema al terminar el día.</p>,
+      cerroOtro && <p key="cerro">Cerró: <span className="font-medium text-gray-800">{c.usuario_cierre}</span></p>,
+      c.notas_apertura && <p key="na">Nota de apertura: {c.notas_apertura}</p>,
+      c.notas_cierre && <p key="nc">Nota de cierre: {c.notas_cierre}</p>,
+    ].filter(Boolean);
+    if (lineas.length === 0) return null;
+    return <div className="mt-4 space-y-1.5 text-sm text-gray-600">{lineas}</div>;
+  };
+
+  // Cuerpo del corte: lo del cierre (esperado, contado, caja final y sobre) y,
+  // plegado, de dónde salió (ingresos, egresos y movimientos).
   const cuerpoCorte = (c) => {
     const d = desgloseCaja(c);
+    const cobrado = d.comoSeCobro.map((r) => `${r.label.toLowerCase()} ${fmt(r.value)}`).join(' · ');
     return (
     <>
       <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-base">
-        <span className="text-gray-500">Ingresos</span><span className="text-right text-gray-700">{fmt(d.totalIngresos)}</span>
-        <span className="text-gray-500">Egresos</span><span className="text-right text-gray-700">−{fmt(d.totalEgresos)}</span>
-        <span className="text-gray-500">{c.en_curso ? 'Esperado hasta ahora' : 'Esperado'}</span><span className="text-right text-gray-700">{fmt(c.esperado)}</span>
-        <span className="text-gray-500">Contado</span><span className="text-right text-gray-700">{c.contado != null ? fmt(c.contado) : '—'}</span>
-        {/* Reparto de lo contado (en cortes que lo tienen): caja final en azul y
-            sobre en negritas. */}
+        <span className="text-gray-600">{c.en_curso ? 'Esperado hasta ahora' : 'Esperado'}</span><span className="text-right text-gray-800">{fmt(c.esperado)}</span>
+        <span className="text-gray-600">Contado</span><span className="text-right text-gray-800">{c.contado != null ? fmt(c.contado) : '—'}</span>
+        {/* Reparto de lo contado (en cortes que lo tienen). */}
         {c.caja_final != null && (
           <>
-            <span className="text-gray-500 font-medium">Caja final</span><span className="text-right font-medium text-blue-600">{fmt(c.caja_final)}</span>
-            <span className="text-gray-500 font-medium">Sobre</span><span className="text-right font-medium text-gray-800">{fmt(c.sobre)}</span>
+            <span className="text-gray-600 font-medium">Caja final</span><span className="text-right font-medium text-blue-600">{fmt(c.caja_final)}</span>
+            <span className="text-gray-600 font-medium">Sobre</span><span className="text-right font-medium text-gray-800">{fmt(c.sobre)}</span>
           </>
         )}
       </div>
-      {/* El detalle, plegado como en Ventas. */}
+      {/* El detalle, plegado: mismo tamaño y aire que el resumen. */}
       <div className="mt-4">
         <button
           type="button"
           onClick={() => alternarDet(c.id)}
-          className="flex items-center gap-1 text-sm font-medium text-blue hover:underline"
+          aria-expanded={detAbiertos.has(c.id)}
+          className="flex items-center gap-1 py-1 text-sm font-medium text-blue hover:underline"
         >
-          {detAbiertos.has(c.id) ? 'Ocultar' : 'Ver'} ingresos y egresos
+          {detAbiertos.has(c.id) ? 'Ocultar detalle' : 'Ver detalle'}
           <svg className={`w-4 h-4 transition-transform ${detAbiertos.has(c.id) ? 'rotate-180' : ''}`}
             fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
           </svg>
         </button>
         {detAbiertos.has(c.id) && (
-          <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-            {subtituloRejilla('Ingresos')}
+          <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-3 text-base">
+            {tituloRejilla('Ingresos')}
             {filasRejilla(d.ingresos)}
-            <span className="font-medium text-gray-700">Total ingresos</span>
-            <span className="text-right font-medium text-gray-800">{fmt(d.totalIngresos)}</span>
-            {/* Después del total, para que no se lea como su suma; es informativo. */}
-            {subtituloRejilla('Cómo se cobró')}
-            {filasRejilla(d.comoSeCobro)}
-            {subtituloRejilla('Egresos')}
+            {totalRejilla('Total', fmt(d.totalIngresos))}
+            {/* Informativo: no se suma. */}
+            <p className="col-span-2 -mt-1 text-sm text-gray-500">Cobrado: {cobrado}</p>
+            {tituloRejilla('Egresos')}
             {filasRejilla(d.egresos)}
-            <span className="font-medium text-gray-700">Total egresos</span>
-            <span className="text-right font-medium text-gray-800">{fmt(d.totalEgresos)}</span>
-            {subtituloRejilla('Desglose esperado')}
-            {filasRejilla(d.desglose)}
-            <span className="font-medium text-gray-700">{c.en_curso ? 'Esperado hasta ahora' : 'Esperado en caja'}</span>
-            <span className="text-right font-medium text-gray-800">{fmt(c.esperado)}</span>
+            {totalRejilla('Total', fmt(d.totalEgresos))}
+            {/* Entradas y gastos con su concepto. */}
+            {c.movimientos?.length > 0 && (
+              <>
+                {tituloRejilla(`Entradas y gastos (${c.movimientos.length})`)}
+                <div className="col-span-2 divide-y divide-gray-100">
+                  {c.movimientos.map((m) => (
+                    <div key={m.id} className="flex items-center justify-between gap-3 py-2.5">
+                      <div className="min-w-0">
+                        <p className="text-base text-gray-800 break-words">{m.concepto}</p>
+                        <p className="text-sm text-gray-500">
+                          {m.tipo === 'salida' ? 'Gasto' : 'Entrada'} · {m.usuario} · {fmtHora(m.created_at)}
+                        </p>
+                      </div>
+                      <span className={`flex-shrink-0 whitespace-nowrap text-base font-semibold ${m.tipo === 'salida' ? 'text-red-600' : 'text-green-600'}`}>
+                        {m.tipo === 'salida' ? '−' : '+'}{fmt(m.monto)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         )}
       </div>
-      {/* Entradas y gastos del turno con su concepto, plegados. */}
-      {c.movimientos?.length > 0 && (
-        <div className="mt-4">
-          <button
-            type="button"
-            onClick={() => alternarMovs(c.id)}
-            className="flex items-center gap-1 text-sm font-medium text-blue hover:underline"
-          >
-            {movsAbiertos.has(c.id) ? 'Ocultar' : 'Ver'} entradas y gastos ({c.movimientos.length})
-            <svg className={`w-4 h-4 transition-transform ${movsAbiertos.has(c.id) ? 'rotate-180' : ''}`}
-              fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-          </button>
-          {movsAbiertos.has(c.id) && (
-            <div className="mt-2 rounded-lg border border-gray-200 divide-y divide-gray-100">
-              {c.movimientos.map((m) => (
-                <div key={m.id} className="flex items-center justify-between gap-3 px-3 py-2.5">
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-gray-800 break-words">{m.concepto}</p>
-                    <p className="text-sm text-gray-400">
-                      {m.tipo === 'salida' ? 'Gasto' : 'Entrada'} · {m.usuario} · {fmtHora(m.created_at)}
-                    </p>
-                  </div>
-                  <span className={`flex-shrink-0 text-sm font-semibold ${m.tipo === 'salida' ? 'text-red-600' : 'text-green-600'}`}>
-                    {m.tipo === 'salida' ? '−' : '+'}{fmt(m.monto)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-      <div className="mt-5 pt-5 border-t border-gray-100 divide-y divide-gray-100">
-        <div className="py-6 first:pt-0 last:pb-0">
-          <div className="flex items-center gap-2 text-sm">
-            <IconEntrada className="w-5 h-5 text-green-500 flex-shrink-0" />
-            <span className="font-medium text-green-600 w-12">Abrió</span>
-            <span className="font-medium text-gray-700">{c.usuario_apertura}</span>
-          </div>
-          {c.notas_apertura && (
-            <p className="mt-2 ml-7 pl-3 border-l-2 border-gray-100 text-sm text-gray-500">{c.notas_apertura}</p>
-          )}
-        </div>
-        <div className="py-6 first:pt-0 last:pb-0">
-          <div className="flex items-center gap-2 text-sm">
-            <IconSalida className="w-5 h-5 text-orange-500 flex-shrink-0" />
-            <span className="font-medium text-orange-600 w-12">Cerró</span>
-            <span className={`font-medium ${
-              c.en_curso ? 'text-green-700' : c.cierre_automatico ? 'text-amber-700' : 'text-gray-700'
-            }`}>
-              {c.en_curso ? 'Sigue abierto' : c.cierre_automatico ? 'El sistema, al cerrar el día' : (c.usuario_cierre ?? '—')}
-            </span>
-          </div>
-          {c.notas_cierre && (
-            <p className="mt-2 ml-7 pl-3 border-l-2 border-gray-100 text-sm text-gray-500">{c.notas_cierre}</p>
-          )}
-        </div>
-      </div>
+      {pieCorte(c)}
     </>
     );
   };
@@ -1022,77 +971,84 @@ function Historial({ onFiltroLabel }) {
             : 'border-dashed border-gray-300 bg-gray-50'
         }`}
       >
-        <div className="flex items-start justify-between mb-3">
-          <div>
-            <h4 className="text-sm font-semibold text-gray-700">
-              {nombreDia(dia)} - {dia.getDate()} {MESES[dia.getMonth()]}
+        <div className="flex items-start justify-between gap-3 mb-4">
+          <div className="min-w-0">
+            <h4 className="text-base font-semibold text-gray-800">
+              {nombreDia(dia)} {dia.getDate()} de {MESES[dia.getMonth()]}
               {hoy && (
                 <span className="ml-2 text-[10px] font-bold uppercase tracking-wide text-blue">Hoy</span>
               )}
             </h4>
-            {uno && <p className="text-sm text-gray-500 mt-0.5">{horario(uno)}</p>}
-            {turnos.length > 1 && <p className="text-sm text-gray-500 mt-0.5">{turnos.length} turnos</p>}
+            {uno && <p className="text-sm text-gray-600 mt-0.5">{uno.usuario_apertura || '—'} · {horario(uno)}</p>}
+            {turnos.length > 1 && <p className="text-sm text-gray-600 mt-0.5">{turnos.length} turnos</p>}
           </div>
           {uno && menuOpciones(uno)}
+          {turnos.length > 1 && chipDia(turnos)}
         </div>
         {turnos.length === 0 ? (
-          <p className="text-sm text-gray-400 italic">{futuro ? 'Pendiente' : 'Sin corte'}</p>
+          <p className="text-sm text-gray-500 italic">{futuro ? 'Pendiente' : 'Sin corte'}</p>
         ) : uno ? cuerpoCorte(uno) : (
           <>
             {resumenDia(turnos)}
-            <div className="mt-5 space-y-4">
-              {turnos.map((c, i) => (
-                <div key={c.id} className={`rounded-lg border p-4 ${c.en_curso ? 'border-green-200 bg-green-50/40' : 'border-gray-200 bg-white'}`}>
-                  <div className="flex items-start justify-between mb-3">
-                    <div>
-                      <p className="text-sm font-semibold text-gray-700">Turno {i + 1}</p>
-                      <p className="text-sm text-gray-500 mt-0.5">{horario(c)}</p>
-                    </div>
-                    {menuOpciones(c)}
+            {/* Cada turno separado por una línea, sin tarjeta propia. */}
+            {turnos.map((c, i) => (
+              <div key={c.id} className="mt-5 pt-5 border-t border-gray-200">
+                <div className="flex items-start justify-between gap-3 mb-3">
+                  <div className="min-w-0">
+                    <p className="text-base font-semibold text-gray-800 truncate">Turno {i + 1} · {c.usuario_apertura || '—'}</p>
+                    <p className="text-sm text-gray-600 mt-0.5">{horario(c)}</p>
                   </div>
-                  {cuerpoCorte(c)}
+                  {menuOpciones(c)}
                 </div>
-              ))}
-            </div>
+                {cuerpoCorte(c)}
+              </div>
+            ))}
           </>
         )}
       </div>
     );
   };
 
-  // Resumen de un día con varios turnos. La diferencia suma solo los contados
-  // (un cierre automático no tiene conteo). La caja inicial cuenta una vez, la
-  // del primer turno: las siguientes son caja final ya contada.
+  // Diferencia de un día con varios turnos: suma solo los contados (un cierre
+  // automático no tiene conteo).
+  const diferenciaDia = (turnos) => {
+    const contados = turnos.filter((c) => c.diferencia != null);
+    return contados.length ? contados.reduce((t, c) => t + c.diferencia, 0) : null;
+  };
+  /** El resultado del día, en el encabezado (como el de cada turno). */
+  const chipDia = (turnos) => {
+    const dif = diferenciaDia(turnos);
+    if (dif == null) return null;
+    const cuadra = Math.abs(dif) < 0.005;
+    return (
+      <span className={`flex-shrink-0 text-sm font-semibold px-2.5 py-1 rounded-full ${
+        cuadra ? 'bg-blue-50 text-blue-700' : dif < 0 ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'
+      }`}>
+        {cuadra ? 'Cuadra' : `${dif > 0 ? '+' : ''}${fmt(dif)}`}
+      </span>
+    );
+  };
+
+  // Resumen de un día con varios turnos. La caja inicial cuenta una vez, la del
+  // primer turno: las siguientes son caja final ya contada.
   const resumenDia = (turnos) => {
     const suma = (f) => turnos.reduce((t, c) => t + (Number(f(c)) || 0), 0);
     const efectivo = suma((c) => c.ventas_desglose?.efectivo ?? c.ventas);
     const transferencia = suma((c) => c.ventas_desglose?.transferencia);
     const ingresos = (Number(turnos[0]?.monto_inicial) || 0) + suma((c) => c.entradas) + efectivo;
     const egresos = suma((c) => desgloseCaja(c).totalEgresos);
-    const contados = turnos.filter((c) => c.diferencia != null);
-    const diferencia = contados.reduce((t, c) => t + c.diferencia, 0);
     const sinConteo = turnos.some((c) => c.cierre_automatico);
-    const cuadra = Math.abs(diferencia) < 0.005;
     return (
-      <div className="rounded-lg bg-gray-50 px-4 py-3">
-        <p className="text-sm font-semibold uppercase tracking-wide text-gray-400 mb-2">Resumen del día</p>
-        <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-          <span className="text-gray-500">Ingresos</span><span className="text-right text-gray-700">{fmt(ingresos)}</span>
-          <span className="text-gray-500">Egresos</span><span className="text-right text-gray-700">−{fmt(egresos)}</span>
-          <span className="text-gray-500">Ventas en efectivo</span><span className="text-right text-gray-700">{fmt(efectivo)}</span>
-          <span className="text-gray-500">Ventas por transferencia</span><span className="text-right text-gray-700">{fmt(transferencia)}</span>
-          <span className="text-gray-500 font-medium">Diferencia del día</span>
-          <span className={`text-right font-medium ${
-            contados.length === 0 ? 'text-gray-500'
-              : cuadra ? 'text-blue-600' : diferencia < 0 ? 'text-red-600' : 'text-green-600'
-          }`}>
-            {contados.length === 0 ? '—' : cuadra ? 'Cuadra' : `${diferencia > 0 ? '+' : ''}${fmt(diferencia)}`}
-          </span>
+      <>
+        <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-base">
+          <span className="text-gray-600">Ingresos</span><span className="text-right text-gray-800">{fmt(ingresos)}</span>
+          <span className="text-gray-600">Egresos</span><span className="text-right text-gray-800">−{fmt(egresos)}</span>
+          <span className="text-gray-600">Ventas por transferencia</span><span className="text-right text-gray-800">{fmt(transferencia)}</span>
         </div>
         {sinConteo && (
-          <p className="mt-2 text-sm text-amber-700">Un turno lo cerró el sistema sin conteo: no entra en la diferencia.</p>
+          <p className="mt-3 text-sm text-amber-700">Un turno lo cerró el sistema sin conteo: no entra en la diferencia.</p>
         )}
-      </div>
+      </>
     );
   };
 
