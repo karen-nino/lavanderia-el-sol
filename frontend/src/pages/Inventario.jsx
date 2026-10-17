@@ -1670,12 +1670,21 @@ function ReporteDiario() {
     <div className="space-y-4">
       {/* Día y Exportar, en un mismo renglón y del mismo alto (como en Ventas). */}
       <div className="flex items-center gap-3">
-        <label className="flex-1 min-w-0 h-11 flex items-center gap-2 px-4 rounded-lg border border-gray-300 bg-white text-base text-gray-800 hover:bg-gray-50 transition-colors cursor-pointer">
-          <span className="text-gray-500 flex-shrink-0">Día:</span>
+        {/* El calendario va invisible encima para que la caja pueda decir "Hoy". */}
+        <label className="relative flex-1 min-w-0 h-11 flex items-center justify-between gap-2 px-4 rounded-lg border border-gray-300 bg-white text-base text-gray-800 hover:bg-gray-50 transition-colors cursor-pointer">
+          <span className="truncate">
+            <span className="text-gray-500">Día: </span>
+            <span className="font-medium">{fecha === hoyISO() ? 'Hoy' : fecha.split('-').reverse().join('/')}</span>
+          </span>
+          <svg className="w-5 h-5 flex-shrink-0 text-gray-500" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />
+          </svg>
           <input
             type="date" value={fecha} max={hoyISO()}
             onChange={(e) => setFecha(e.target.value || hoyISO())}
-            className="flex-1 min-w-0 bg-transparent font-medium text-base outline-none cursor-pointer"
+            onClick={(e) => { try { e.currentTarget.showPicker?.(); } catch { /* sin showPicker */ } }}
+            aria-label="Día del reporte"
+            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
           />
         </label>
 
