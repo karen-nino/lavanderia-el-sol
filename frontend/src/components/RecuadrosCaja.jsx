@@ -8,7 +8,7 @@ import { fmtMoneda as fmt } from '../lib/exportUtils';
 
 const Fila = ({ r }) => (
   <div className="flex justify-between px-4 py-3.5 text-base font-semibold text-gray-700">
-    <span>
+    <span className="text-gray-600">
       {r.label}
       {r.nota && <span className="block text-sm font-normal text-gray-400">{r.nota}</span>}
     </span>
@@ -22,11 +22,11 @@ function Recuadro({ titulo, filas, totalLabel, total, aparte }) {
   return (
     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
       <div className="px-4 py-3 border-b border-gray-200">
-        <h2 className="text-lg font-semibold text-gray-800">{titulo}</h2>
+        <h2 className="text-lg font-semibold text-blue">{titulo}</h2>
       </div>
       <div className="divide-y divide-gray-100">
         {filas.map((r) => <Fila key={r.label} r={r} />)}
-        <div className="flex items-center justify-between px-4 py-4 text-lg font-bold text-gray-900 bg-gray-50">
+        <div className="flex items-center justify-between px-4 py-4 text-lg font-bold text-blue bg-gray-50">
           <span>{totalLabel}</span>
           <span className="text-xl">{fmt(total)}</span>
         </div>
