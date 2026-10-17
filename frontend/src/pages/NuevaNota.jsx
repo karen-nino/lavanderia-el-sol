@@ -1680,7 +1680,7 @@ export default function NuevaNota() {
                     <div className="relative flex-1">
                       <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 text-base">$</span>
                       <input
-                        type="number" name="ajuste" step="any"
+                        type="number" inputMode="decimal" name="ajuste" step="any"
                         value={encargoForm.ajuste} onChange={handleEncargoChange}
                         placeholder="Ej. -10 para descuento, 20 para cargo extra"
                         className={`${INPUT_CLS} pl-8 text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`}

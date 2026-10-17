@@ -906,7 +906,7 @@ export default function GestionMaquinas() {
                     <span className="ml-1 font-normal text-gray-400">(solo multi-relé)</span>
                   </label>
                   <input
-                    name="device_canal" type="number" min="0" value={form.device_canal} onChange={handleChange}
+                    name="device_canal" type="number" inputMode="decimal" min="0" value={form.device_canal} onChange={handleChange}
                     placeholder="0"
                     className={INPUT_CLS}
                   />

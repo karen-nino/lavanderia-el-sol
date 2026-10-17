@@ -74,7 +74,7 @@ export default function ModalCobrar({ saldo, folio, titulo = 'Cobrar nota', mont
             <div className="relative">
               <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 text-base">$</span>
               <input
-                type="number" min="0" step="any" max={saldo}
+                type="number" inputMode="decimal" min="0" step="any" max={saldo}
                 value={monto}
                 onChange={e => onMonto(e.target.value)}
                 placeholder="0"

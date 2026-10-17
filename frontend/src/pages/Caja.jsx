@@ -152,6 +152,25 @@ const TABS = [
   { id: 'historial',   label: 'Historial' },
 ];
 
+/** Íconos de los botones de la cabecera de empleados (como los de Notas). */
+const ICONO_TAB = {
+  movimientos: 'M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4',
+  corte:       'M9 6a3 3 0 11-6 0 3 3 0 016 0zm0 12a3 3 0 11-6 0 3 3 0 016 0zM20 4L8.12 15.88M14.47 14.48L20 20M8.12 8.12L12 12',
+};
+
+/** Campo de dinero: en cuanto tiene un número, lleva el $ a la izquierda. */
+function ConPesos({ valor, children }) {
+  const conValor = valor !== '' && valor != null;
+  return (
+    <div className={`relative ${conValor ? '[&>input]:pl-7' : ''}`}>
+      {conValor && (
+        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-base font-medium text-gray-500">$</span>
+      )}
+      {children}
+    </div>
+  );
+}
+
 function Spinner() {
   return (
     <div className="flex justify-center py-12">
@@ -295,11 +314,13 @@ function Movimientos({ data, onChange }) {
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Monto</label>
-          <input
-            type="number" min="0.01" step="0.01" required value={monto} onChange={(e) => setMonto(e.target.value)}
-            placeholder="$0.00"
-            className="w-full border border-gray-300 rounded-lg px-3 py-3.5 text-base"
-          />
+          <ConPesos valor={monto}>
+            <input
+              type="number" inputMode="decimal" min="0.01" step="0.01" required value={monto} onChange={(e) => setMonto(e.target.value)}
+              placeholder="$ 0.00"
+              className="w-full border border-gray-300 rounded-lg px-3 py-3.5 text-base"
+            />
+          </ConPesos>
         </div>
         <button
           type="submit" disabled={saving}
@@ -470,15 +491,17 @@ function Corte({ data, onCerrar, onAbrir }) {
         <ErrorBox message={error} />
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Efectivo contado</label>
-          <input
-            type="number" min="0" step="0.01" required value={contado} onChange={(e) => cambiarContado(e.target.value)}
-            placeholder="$0.00"
-            className={`w-full border border-gray-300 rounded-lg px-3 py-3.5 text-base font-medium ${
-              diferencia === null ? 'text-gray-900'
-                : Math.abs(diferencia) < 0.005 ? 'text-blue-600'
-                : diferencia < 0 ? 'text-red-600' : 'text-green-600'
-            }`}
-          />
+          <ConPesos valor={contado}>
+            <input
+              type="number" inputMode="decimal" min="0" step="0.01" required value={contado} onChange={(e) => cambiarContado(e.target.value)}
+              placeholder="$ 0.00"
+              className={`w-full border border-gray-300 rounded-lg px-3 py-3.5 text-base font-medium ${
+                diferencia === null ? 'text-gray-900'
+                  : Math.abs(diferencia) < 0.005 ? 'text-blue-600'
+                  : diferencia < 0 ? 'text-red-600' : 'text-green-600'
+              }`}
+            />
+          </ConPesos>
         </div>
         {diferencia !== null && (
           <div className={`rounded-lg px-4 py-3 text-sm font-medium ${
@@ -496,24 +519,28 @@ function Corte({ data, onCerrar, onAbrir }) {
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label htmlFor="caja-final" className="block text-sm font-medium text-gray-700 mb-1">Caja final</label>
-            <input
-              id="caja-final"
-              type="number" min="0" step="0.01" required value={cajaFinal}
-              onChange={(e) => cambiarCajaFinal(e.target.value)}
-              placeholder="$0.00"
-              className="w-full border border-gray-300 rounded-lg px-3 py-3.5 text-base font-medium"
-            />
+            <ConPesos valor={cajaFinal}>
+              <input
+                id="caja-final"
+                type="number" inputMode="decimal" min="0" step="0.01" required value={cajaFinal}
+                onChange={(e) => cambiarCajaFinal(e.target.value)}
+                placeholder="$ 0.00"
+                className="w-full border border-gray-300 rounded-lg px-3 py-3.5 text-base font-medium"
+              />
+            </ConPesos>
           </div>
           <div>
             <label htmlFor="sobre" className="block text-sm font-medium text-gray-700 mb-1">Sobre</label>
-            <input
-              id="sobre"
-              type="number" min="0" step="0.01" required value={sobre}
-              onChange={(e) => cambiarSobre(e.target.value)}
-              disabled={!sobreEditable}
-              placeholder="$0.00"
-              className="w-full border border-gray-300 rounded-lg px-3 py-3.5 text-base font-medium disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed"
-            />
+            <ConPesos valor={sobre}>
+              <input
+                id="sobre"
+                type="number" inputMode="decimal" min="0" step="0.01" required value={sobre}
+                onChange={(e) => cambiarSobre(e.target.value)}
+                disabled={!sobreEditable}
+                placeholder="$ 0.00"
+                className="w-full border border-gray-300 rounded-lg px-3 py-3.5 text-base font-medium disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed"
+              />
+            </ConPesos>
           </div>
           <p className={`col-span-2 -mt-1 text-sm ${repartoMal ? 'text-red-600 font-medium' : 'text-gray-500'}`}>
             {repartoMal
@@ -1398,12 +1425,34 @@ export default function Caja() {
             <h1 className="text-xl font-bold text-gray-800">Caja</h1>
             {/* Para admins la página es el Historial; el subtítulo refleja el
                 filtro activo en esa pestaña y la sección actual en las demás. */}
-            {esAdmin && (
-              <p className="text-sm text-gray-500 mt-0.5">
-                {tab === 'historial' ? historialFiltro : seccionLabel}
-              </p>
-            )}
+            <p className="text-sm text-gray-500 mt-0.5">
+              {esAdmin && tab === 'historial' ? historialFiltro : seccionLabel}
+            </p>
           </div>
+
+          {/* Empleados: Movimientos y Corte como botones redondos (como los de Notas). */}
+          {!esAdmin && (
+            <div className="flex items-center gap-3 flex-shrink-0">
+              {tabs.filter(tabVisible).map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => setTab(t.id)}
+                  aria-label={t.label}
+                  title={t.label}
+                  aria-pressed={tabActiva === t.id}
+                  className={`w-11 h-11 rounded-full border flex items-center justify-center transition-colors ${
+                    tabActiva === t.id
+                      ? 'border-blue bg-light-blue text-blue-700'
+                      : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={ICONO_TAB[t.id]} />
+                  </svg>
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* Menú de acciones (⋮): Movimientos / Corte como secundarias. */}
           {esAdmin && (
@@ -1446,25 +1495,6 @@ export default function Caja() {
 
       {/* Contenido */}
       <div className="max-w-movil md:max-w-2xl mx-auto px-6 md:px-8 py-6 space-y-6">
-
-      {/* No-admins conservan las pestañas (no tienen Historial). */}
-      {!esAdmin && (
-        <div className="flex flex-wrap gap-2">
-          {tabs.filter(tabVisible).map((t) => (
-            <button
-              key={t.id}
-              onClick={() => setTab(t.id)}
-              className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                tabActiva === t.id
-                  ? 'bg-blue text-white'
-                  : 'bg-white text-gray-600 border border-gray-300 hover:bg-gray-50'
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-      )}
 
       {/* Admins: al entrar a una sección secundaria, un enlace para volver. */}
       {esAdmin && tab !== 'historial' && (

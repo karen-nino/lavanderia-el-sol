@@ -348,7 +348,7 @@ function ModalAjuste({ folio, guardado, valor, onValor, onCancelar, onGuardar, l
           <div className="relative flex-1">
             <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 text-base">$</span>
             <input
-              type="number" step="any"
+              type="number" inputMode="decimal" step="any"
               value={valor}
               onChange={e => onValor(e.target.value)}
               placeholder="0"

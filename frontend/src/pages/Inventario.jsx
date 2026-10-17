@@ -604,7 +604,7 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = 
                     ¿Cuántas bolsas trae un rollo? <span className="text-red-500">*</span>
                   </label>
                   <input
-                    type="number" name="bolsas_por_rollo" min="1" step="1" required
+                    type="number" inputMode="numeric" name="bolsas_por_rollo" min="1" step="1" required
                     value={form.bolsas_por_rollo} onChange={handleChange} placeholder="Ej. 100"
                     className={NUM_CLS}
                   />
@@ -622,7 +622,7 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = 
                 </p>
                 <div className="flex gap-2">
                   <input
-                    type="number" name="bidon_valor" min="0" step="any" required
+                    type="number" inputMode="decimal" name="bidon_valor" min="0" step="any" required
                     value={form.bidon_valor} onChange={handleChange} placeholder="Ej. 20"
                     className={`${NUM_CLS} flex-1 min-w-0`}
                   />
@@ -652,7 +652,7 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = 
                   ¿De qué tamaño es la botella? (mL) <span className="text-red-500">*</span>
                 </p>
                 <input
-                  type="number" name="botella_ml" min="1" step="any" required
+                  type="number" inputMode="decimal" name="botella_ml" min="1" step="any" required
                   value={form.botella_ml} onChange={handleChange} placeholder="Ej. 800"
                   className={NUM_CLS}
                 />
@@ -687,14 +687,14 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = 
                   </div>
                   {form.metodo_medida === 'ml' ? (
                     <input
-                      type="number" name="medida_ml" min="1" step="any" required
+                      type="number" inputMode="decimal" name="medida_ml" min="1" step="any" required
                       value={form.medida_ml} onChange={handleChange} placeholder="Ej. 200 mL"
                       className={NUM_CLS}
                     />
                   ) : (
                     <>
                       <input
-                        type="number" name="medidas_por_botella" min="1" step="1" required
+                        type="number" inputMode="numeric" name="medidas_por_botella" min="1" step="1" required
                         value={form.medidas_por_botella} onChange={handleChange} placeholder="Ej. 2 medidas por botella"
                         className={NUM_CLS}
                       />
@@ -727,7 +727,7 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = 
                 <div className="relative">
                   <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-base">$</span>
                   <input
-                    type="number" name="precio_medida" min="0" step="any"
+                    type="number" inputMode="decimal" name="precio_medida" min="0" step="any"
                     value={form.precio_medida} onChange={handleChange} placeholder="0.00"
                     className={`${NUM_CLS} pl-7`}
                   />
@@ -742,7 +742,7 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = 
               <div className="relative">
                 <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-base">$</span>
                 <input
-                  type="number" name="precio_botella" min="0" step="any"
+                  type="number" inputMode="decimal" name="precio_botella" min="0" step="any"
                   value={form.precio_botella} onChange={handleChange} placeholder="0.00"
                   className={`${NUM_CLS} pl-7`}
                 />
@@ -760,7 +760,7 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = 
                 Avisar cuando queden (bolsas)
               </label>
               <input
-                type="number" name="stock_minimo_bolsas" min="0" step="1"
+                type="number" inputMode="numeric" name="stock_minimo_bolsas" min="0" step="1"
                 value={form.stock_minimo_bolsas} onChange={handleChange} placeholder="Ej. 20"
                 className={NUM_CLS}
               />
@@ -771,7 +771,7 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = 
                 Avisar cuando queden ({esGranelLiq ? 'botellas' : 'piezas'})
               </label>
               <input
-                type="number" name="stock_minimo_botellas" min="0" step="1"
+                type="number" inputMode="numeric" name="stock_minimo_botellas" min="0" step="1"
                 value={form.stock_minimo_botellas} onChange={handleChange} placeholder="Ej. 5"
                 className={NUM_CLS}
               />
@@ -785,7 +785,7 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = 
                 Avisar cuando queden (bidones)
               </label>
               <input
-                type="number" name="stock_minimo_bidones" min="0" step="1"
+                type="number" inputMode="numeric" name="stock_minimo_bidones" min="0" step="1"
                 value={form.stock_minimo_bidones} onChange={handleChange} placeholder="Ej. 1"
                 className={NUM_CLS}
               />
@@ -939,7 +939,7 @@ function ModalMovimiento({ producto, tipo, onClose, onDone }) {
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1.5">Cantidad ({unidadTxt})</label>
           <input
-            type="number" min="0" step="any" value={cantidad} placeholder="0"
+            type="number" inputMode="decimal" min="0" step="any" value={cantidad} placeholder="0"
             onChange={(e) => setCantidad(e.target.value)} className={NUM_CLS}
           />
         </div>
@@ -1022,7 +1022,7 @@ function ModalRellenar({ producto, onClose, onDone }) {
             ¿Cuántas botellas rellenaste?
           </label>
           <input
-            type="number" min="1" max={maxBotellas} step="1" value={botellas} placeholder="0"
+            type="number" inputMode="numeric" min="1" max={maxBotellas} step="1" value={botellas} placeholder="0"
             onChange={(e) => setBotellas(e.target.value)} className={NUM_CLS}
           />
           {n > 0 && !invalido && (

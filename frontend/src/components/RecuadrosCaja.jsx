@@ -26,9 +26,9 @@ function Recuadro({ titulo, filas, totalLabel, total, aparte }) {
       </div>
       <div className="divide-y divide-gray-100">
         {filas.map((r) => <Fila key={r.label} r={r} />)}
-        <div className="flex items-center justify-between px-4 py-4 text-lg font-bold text-blue bg-gray-50">
+        <div className="flex items-center justify-between px-4 py-4 text-lg font-bold text-gray-900 bg-gray-50">
           <span>{totalLabel}</span>
-          <span className="text-xl">{fmt(total)}</span>
+          <span className="text-xl text-blue">{fmt(total)}</span>
         </div>
         {aparte && (
           <>

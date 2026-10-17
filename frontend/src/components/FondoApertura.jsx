@@ -41,7 +41,7 @@ export default function FondoApertura({ sugerida, admin, monto, onMonto }) {
         </label>
         <input
           id="fondo-apertura"
-          type="number" min="0" step="0.01" required autoFocus
+          type="number" inputMode="decimal" min="0" step="0.01" required autoFocus
           value={monto} onChange={(e) => onMonto(e.target.value)}
           placeholder="0.00"
           className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-base"
@@ -85,7 +85,7 @@ export default function FondoApertura({ sugerida, admin, monto, onMonto }) {
         </label>
         <input
           id="fondo-apertura"
-          type="number" min="0" step="0.01" required placeholder="0.00"
+          type="number" inputMode="decimal" min="0" step="0.01" required placeholder="0.00"
           value={monto} onChange={(e) => onMonto(e.target.value)}
           readOnly={!admin}
           // Bloqueado para el empleado.
