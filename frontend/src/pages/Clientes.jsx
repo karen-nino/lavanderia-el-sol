@@ -141,6 +141,8 @@ export default function Clientes() {
   // Notas del cliente del modal: { id, notas } y si está abierto el modal con la lista.
   const [notasCargadas, setNotasCargadas] = useState(null);
   const [verNotas, setVerNotas]           = useState(false);
+  // En escritorio las notas se abren desde la tabla, sin el modal del cliente.
+  const [notasDesdeTabla, setNotasDesdeTabla] = useState(false);
   // Demo: con quién se "abrió" el chat, que no se abre (los teléfonos de la
   // demo podrían ser de alguien).
   const [chatSimulado, setChatSimulado]   = useState('');
@@ -235,7 +237,8 @@ export default function Clientes() {
     return () => { activo = false; };
   }, [idInfo]);
   const notasCliente = notasCargadas && notasCargadas.id === idInfo ? notasCargadas.notas : undefined;
-  const cerrarInfo = () => { setInfoCliente(null); setVerNotas(false); };
+  const cerrarInfo = () => { setInfoCliente(null); setVerNotas(false); setNotasDesdeTabla(false); };
+  const abrirNotasDesdeTabla = (c) => { setInfoCliente(c); setVerNotas(true); setNotasDesdeTabla(true); };
 
   // ── Crear ──────────────────────────────────────────────
   const abrirModal = () => { setForm(FORM_INIT); setFormError(''); setModalOpen(true); };
@@ -510,6 +513,7 @@ export default function Clientes() {
                     )}
                     <th className="text-left px-4 py-3 text-sm font-medium text-gray-500 uppercase tracking-wide">Nombre</th>
                     <th className="text-left px-4 py-3 text-sm font-medium text-gray-500 uppercase tracking-wide">Teléfono</th>
+                    <th className="text-left px-4 py-3 text-sm font-medium text-gray-500 uppercase tracking-wide">Notas</th>
                     <th className="px-4 py-3" />
                   </tr>
                 </thead>
@@ -527,6 +531,23 @@ export default function Clientes() {
                         {`${c.nombre}${c.apellido ? ' ' + c.apellido : ''}`}
                       </td>
                       <td className="px-4 py-3 text-gray-600">{c.telefono ?? '—'}</td>
+                      {/* Abre el historial de notas del cliente. */}
+                      <td className="px-4 py-3">
+                        {c.notas_count > 0 ? (
+                          <button
+                            type="button"
+                            onClick={() => abrirNotasDesdeTabla(c)}
+                            className="inline-flex items-center gap-1 font-medium text-blue hover:underline"
+                          >
+                            {c.notas_count} {c.notas_count === 1 ? 'nota' : 'notas'}
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                            </svg>
+                          </button>
+                        ) : (
+                          <span className="text-gray-400">—</span>
+                        )}
+                      </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-1 justify-end">
                           {c.telefono && (
@@ -715,7 +736,7 @@ export default function Clientes() {
 
       {/* ── Modal: Notas del cliente (sobre el de info) ───── */}
       {infoCliente && verNotas && Array.isArray(notasCliente) && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[60] p-4 md:hidden">
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[60] p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] flex flex-col">
             <div className="flex items-center justify-between gap-3 px-5 pt-5 pb-4 border-b border-gray-100 flex-shrink-0">
               <div className="min-w-0">
@@ -726,7 +747,7 @@ export default function Clientes() {
                   <span className="flex-shrink-0">({notasCliente.length} {notasCliente.length === 1 ? 'Nota' : 'Notas'})</span>
                 </p>
               </div>
-              <button onClick={() => setVerNotas(false)} aria-label="Cerrar" className="text-gray-400 hover:text-gray-600">
+              <button onClick={() => (notasDesdeTabla ? cerrarInfo() : setVerNotas(false))} aria-label="Cerrar" className="text-gray-400 hover:text-gray-600">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>

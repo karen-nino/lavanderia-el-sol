@@ -69,6 +69,18 @@ describe('GET /api/clientes — aislamiento por sucursal', () => {
     expect(res.body[0].nombre).toBe('DelCentro');
   });
 
+  it('trae cuántas notas tiene cada cliente (notas_count)', async () => {
+    const conNotas = await seedCliente({ nombre: 'ConNotas' });
+    await seedCliente({ nombre: 'SinNotas' });
+    await notaActivaPara(conNotas);
+    await notaActivaPara(conNotas);
+
+    const res = await request(app).get('/api/clientes').set(auth(admin.token, 'centro'));
+    expect(res.status).toBe(200);
+    const porNombre = Object.fromEntries(res.body.map((c) => [c.nombre, c.notas_count]));
+    expect(porNombre).toEqual({ ConNotas: 2, SinNotas: 0 });
+  });
+
   it('getById de un cliente de otra sucursal → 404', async () => {
     await seedSucursal('norte', 'Norte');
     const ajeno = await seedCliente({ sucursal: 'norte' });

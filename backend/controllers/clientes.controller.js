@@ -11,7 +11,12 @@ const validarTelefono = (telefono) => {
 export const getClientes = async (req, res) => {
   try {
     const { rows } = await pool.query(
-      'SELECT * FROM clientes WHERE activo = TRUE AND sucursal = $1 ORDER BY nombre ASC',
+      // notas_count: cuántas notas tiene en la sucursal (columna Notas de escritorio).
+      `SELECT c.*,
+              (SELECT COUNT(*)::int FROM notas n WHERE n.cliente_id = c.id AND n.sucursal = $1) AS notas_count
+         FROM clientes c
+        WHERE c.activo = TRUE AND c.sucursal = $1
+        ORDER BY c.nombre ASC`,
       [req.sucursal]
     );
     res.json(rows);
