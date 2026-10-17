@@ -73,8 +73,9 @@ function unidadVenta(p, n = 2) {
   if (porUnidad(p)) return n === 1 ? 'pieza' : 'piezas';
   return n === 1 ? 'botella' : 'botellas';
 }
-/** Título de la existencia: Botellas, Piezas o Bolsas. */
+/** Título de la existencia: Botellas, Bolsas o Cant. (lo que va en piezas, que ya lo dice la cantidad). */
 function tituloExistencia(p) {
+  if (p.clase !== 'bolsa' && porUnidad(p)) return 'Cant.';
   const u = unidadVenta(p);
   return u.charAt(0).toUpperCase() + u.slice(1);
 }
@@ -2357,7 +2358,7 @@ export default function Inventario() {
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-center gap-2 min-w-0">
                       {es !== 'ok' && <IconoAdvertencia severity={es} />}
-                      <p className={`font-medium text-sm ${colorTextoTipo(p)}`}>{tituloProd(p)}</p>
+                      <p className={`font-semibold text-sm ${colorTextoTipo(p)}`}>{tituloProd(p)}</p>
                     </div>
                     <div className="flex items-center gap-1.5 flex-shrink-0">
                       <ChipTipo p={p} />
@@ -2368,7 +2369,7 @@ export default function Inventario() {
                   <div className={`mt-3 ${esGranelLiquido(p) ? 'grid grid-cols-2 gap-3' : ''}`}>
                     {esGranelLiquido(p) && (
                       <div className="min-w-0">
-                        <p className="text-sm font-medium text-gray-400 uppercase tracking-wide mb-0.5">Bidones</p>
+                        <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-0.5">Bidones</p>
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-md font-semibold text-gray-700"><Partes partes={partesGranel(p)} /></span>
                           <BadgeGranel estado={estadoGranel(p)} />
@@ -2376,7 +2377,7 @@ export default function Inventario() {
                       </div>
                     )}
                     <div className="min-w-0">
-                      <p className="text-sm font-medium text-gray-400 uppercase tracking-wide mb-0.5">{tituloExistencia(p)}</p>
+                      <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-0.5">{tituloExistencia(p)}</p>
                       <div className={`flex items-start gap-2 ${es !== 'ok' ? 'flex-wrap' : ''}`}>
                         {/* El punto naranja (algo apartado en notas) va a la izquierda; los avisos, a la derecha y, si no caben, abajo. */}
                         {es === 'ok' && medidasApartadas(p) > 0 && <PuntoApartado />}
