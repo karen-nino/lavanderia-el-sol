@@ -33,15 +33,6 @@ function IconSalida({ className }) {
 }
 
 // Ej.: 12 de Agosto, 6:57 p.m.
-const fmtFechaHora = (fecha) => {
-  if (!fecha) return '—';
-  const d = new Date(fecha);
-  const mes = d.toLocaleDateString('es-MX', { month: 'long' });
-  const mesCap = mes.charAt(0).toUpperCase() + mes.slice(1);
-  const hora = formatHora12(d);
-  return `${d.getDate()} de ${mesCap}, ${hora}`;
-};
-
 const fmtHora = (fecha) => {
   if (!fecha) return '—';
   return formatHora12(fecha);
@@ -152,8 +143,9 @@ const TABS = [
   { id: 'historial',   label: 'Historial' },
 ];
 
-/** Íconos de los botones de la cabecera de empleados (como los de Notas). */
+/** Íconos de los botones de la cabecera (como los de Notas). */
 const ICONO_TAB = {
+  historial:   'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z',
   movimientos: 'M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4',
   corte:       'M9 6a3 3 0 11-6 0 3 3 0 016 0zm0 12a3 3 0 11-6 0 3 3 0 016 0zM20 4L8.12 15.88M14.47 14.48L20 20M8.12 8.12L12 12',
 };
@@ -339,12 +331,12 @@ function Movimientos({ data, onChange }) {
         ) : (
           <div className="divide-y divide-gray-100">
             {movimientos.map((m) => (
-              <div key={m.id} className="flex items-center justify-between px-4 py-3">
+              <div key={m.id} className="flex items-center justify-between gap-3 px-4 py-3">
                 <div className="min-w-0">
-                  <p className="text-sm font-medium text-gray-800 truncate">{m.concepto}</p>
-                  <p className="text-sm text-gray-400">{m.usuario} · {fmtFechaHora(m.created_at)}</p>
+                  <p className="text-base font-medium text-gray-800 truncate">{m.concepto}</p>
+                  <p className="text-sm text-gray-400">{m.usuario} · {fmtHora(m.created_at)}</p>
                 </div>
-                <span className={`text-sm font-semibold ${m.tipo === 'salida' ? 'text-red-600' : 'text-green-600'}`}>
+                <span className={`flex-shrink-0 whitespace-nowrap text-sm font-semibold ${m.tipo === 'salida' ? 'text-red-600' : 'text-green-600'}`}>
                   {m.tipo === 'salida' ? '−' : '+'}{fmt(m.monto)}
                 </span>
               </div>
@@ -756,7 +748,9 @@ function Historial({ onFiltroLabel }) {
       default:       return '';
     }
   })();
-  useEffect(() => { onFiltroLabel?.(filtroLabel); }, [filtroLabel, onFiltroLabel]);
+  // En la cabecera, Hoy va solo; el PDF y el CSV conservan la fecha.
+  const subtituloLabel = periodo === 'hoy' ? 'Hoy' : filtroLabel;
+  useEffect(() => { onFiltroLabel?.(subtituloLabel); }, [subtituloLabel, onFiltroLabel]);
 
   if (loading) return <Spinner />;
   if (error) return <ErrorBox message={error} />;
@@ -1366,10 +1360,6 @@ export default function Caja() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Menú ⋮ de admins: Movimientos y Corte como secundarias.
-  const [menuOpen, setMenuOpen] = useState(false);
-  const menuRef = useRef(null);
-
   // Filtro activo del Historial, para el subtítulo.
   const [historialFiltro, setHistorialFiltro] = useState('');
 
@@ -1399,16 +1389,6 @@ export default function Caja() {
   const handleAbrir = () => { fetchActual(); setTab('movimientos'); };
   const handleCerrar = () => { fetchActual(); setTab(esAdmin ? 'historial' : 'corte'); };
 
-  // Cierra el menú de acciones (⋮) al hacer clic fuera.
-  useEffect(() => {
-    if (!menuOpen) return;
-    const onDown = (e) => {
-      if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false);
-    };
-    document.addEventListener('mousedown', onDown);
-    return () => document.removeEventListener('mousedown', onDown);
-  }, [menuOpen]);
-
   // Con la caja cerrada no hay Movimientos; se ve Corte (que sirve para abrirla).
   const tabVisible = (t) => t.id !== 'movimientos' || Boolean(data?.abierta);
   const tabActiva = tab == null
@@ -1430,64 +1410,27 @@ export default function Caja() {
             </p>
           </div>
 
-          {/* Empleados: Movimientos y Corte como botones redondos (como los de Notas). */}
-          {!esAdmin && (
-            <div className="flex items-center gap-3 flex-shrink-0">
-              {tabs.filter(tabVisible).map((t) => (
-                <button
-                  key={t.id}
-                  onClick={() => setTab(t.id)}
-                  aria-label={t.label}
-                  title={t.label}
-                  aria-pressed={tabActiva === t.id}
-                  className={`w-11 h-11 rounded-full border flex items-center justify-center transition-colors ${
-                    tabActiva === t.id
-                      ? 'border-blue bg-light-blue text-blue-700'
-                      : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
-                  }`}
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={ICONO_TAB[t.id]} />
-                  </svg>
-                </button>
-              ))}
-            </div>
-          )}
-
-          {/* Menú de acciones (⋮): Movimientos / Corte como secundarias. */}
-          {esAdmin && (
-            <div ref={menuRef} className="relative flex-shrink-0">
+          {/* Secciones como botones redondos (como los de Notas); los admins también tienen Historial. */}
+          <div className="flex items-center gap-3 flex-shrink-0">
+            {tabs.filter(tabVisible).map((t) => (
               <button
-                onClick={() => setMenuOpen((v) => !v)}
-                aria-label="Acciones de caja"
-                aria-haspopup="menu"
-                aria-expanded={menuOpen}
-                className="w-10 h-10 rounded-full border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 flex items-center justify-center transition-colors"
+                key={t.id}
+                onClick={() => setTab(t.id)}
+                aria-label={t.label}
+                title={t.label}
+                aria-pressed={tabActiva === t.id}
+                className={`w-11 h-11 rounded-full border flex items-center justify-center transition-colors ${
+                  tabActiva === t.id
+                    ? 'border-blue bg-light-blue text-blue-700'
+                    : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+                }`}
               >
-                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                  <circle cx="12" cy="5" r="2" />
-                  <circle cx="12" cy="12" r="2" />
-                  <circle cx="12" cy="19" r="2" />
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={ICONO_TAB[t.id]} />
                 </svg>
               </button>
-              {menuOpen && (
-                <div role="menu" className="absolute right-0 top-12 z-20 bg-white border border-gray-200 rounded-xl shadow-lg p-1 w-44">
-                  {TABS.filter((t) => t.id !== 'historial' && tabVisible(t)).map((t) => (
-                    <button
-                      key={t.id}
-                      role="menuitem"
-                      onClick={() => { setTab(t.id); setMenuOpen(false); }}
-                      className={`w-full text-left text-sm px-3 py-3.5 rounded-lg transition-colors ${
-                        tabActiva === t.id ? 'bg-light-blue text-blue-700 font-medium' : 'text-gray-700 hover:bg-gray-50'
-                      }`}
-                    >
-                      {t.label}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
+            ))}
+          </div>
         </div>
       </div>
 
@@ -1495,19 +1438,6 @@ export default function Caja() {
 
       {/* Contenido */}
       <div className="max-w-movil md:max-w-2xl mx-auto px-6 md:px-8 py-6 space-y-6">
-
-      {/* Admins: al entrar a una sección secundaria, un enlace para volver. */}
-      {esAdmin && tab !== 'historial' && (
-        <button
-          onClick={() => setTab('historial')}
-          className="flex items-center gap-1.5 text-sm font-medium text-blue hover:opacity-80"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
-          Volver al historial
-        </button>
-      )}
 
       {loading && tab !== 'historial' && <Spinner />}
       {error && tab !== 'historial' && <ErrorBox message={error} />}
