@@ -1668,25 +1668,24 @@ function ReporteDiario() {
 
   return (
     <div className="space-y-4">
-      {/* Selector de día + exportar */}
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-2">
-          <label className="text-sm text-gray-600">Día</label>
+      {/* Día y Exportar, en un mismo renglón y del mismo alto (como en Ventas). */}
+      <div className="flex items-center gap-3">
+        <label className="flex-1 min-w-0 h-11 flex items-center gap-2 px-4 rounded-lg border border-gray-300 bg-white text-base text-gray-800 hover:bg-gray-50 transition-colors cursor-pointer">
+          <span className="text-gray-500 flex-shrink-0">Día:</span>
           <input
             type="date" value={fecha} max={hoyISO()}
             onChange={(e) => setFecha(e.target.value || hoyISO())}
-            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm"
+            className="flex-1 min-w-0 bg-transparent font-medium text-base outline-none cursor-pointer"
           />
-        </div>
-        <span className="text-sm text-gray-500">{fechaLegible(fecha)}</span>
+        </label>
 
-        <div ref={exportRef} className="relative ml-auto">
+        <div ref={exportRef} className="relative flex-shrink-0">
           <button
             type="button"
             onClick={() => setExportOpen(v => !v)}
             disabled={productos.length === 0}
             aria-haspopup="menu" aria-expanded={exportOpen}
-            className="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-medium border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="h-11 flex items-center gap-1.5 px-4 rounded-lg text-base font-medium border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
@@ -1719,6 +1718,7 @@ function ReporteDiario() {
           )}
         </div>
       </div>
+      <p className="text-sm text-gray-500 -mt-1">{fechaLegible(fecha)}</p>
 
       {loading ? (
         <div className="flex justify-center py-12">
