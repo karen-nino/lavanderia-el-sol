@@ -73,11 +73,9 @@ function unidadVenta(p, n = 2) {
   if (porUnidad(p)) return n === 1 ? 'pieza' : 'piezas';
   return n === 1 ? 'botella' : 'botellas';
 }
-/** Título de la existencia: Botellas, Bolsas o Cant. (lo que va en piezas, que ya lo dice la cantidad). */
+/** Título de la existencia: Botellas en el granel líquido; lo demás, Cant. (la unidad ya la dice la cantidad). */
 function tituloExistencia(p) {
-  if (p.clase !== 'bolsa' && porUnidad(p)) return 'Cant.';
-  const u = unidadVenta(p);
-  return u.charAt(0).toUpperCase() + u.slice(1);
+  return esGranelLiquido(p) ? 'Botellas' : 'Cant.';
 }
 /** Medidas contadas en la unidad del producto, por partes ("9 botellas", "1 medida"; las bolsas, en piezas). */
 function partesExistencia(p, medidas) {

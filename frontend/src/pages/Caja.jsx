@@ -1428,7 +1428,7 @@ export default function Caja() {
                       key={t.id}
                       role="menuitem"
                       onClick={() => { setTab(t.id); setMenuOpen(false); }}
-                      className={`w-full text-left text-sm px-3 py-2.5 rounded-lg transition-colors ${
+                      className={`w-full text-left text-sm px-3 py-3.5 rounded-lg transition-colors ${
                         tabActiva === t.id ? 'bg-light-blue text-blue-700 font-medium' : 'text-gray-700 hover:bg-gray-50'
                       }`}
                     >

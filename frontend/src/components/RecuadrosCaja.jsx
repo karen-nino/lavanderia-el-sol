@@ -7,10 +7,10 @@ import { fmtMoneda as fmt } from '../lib/exportUtils';
  */
 
 const Fila = ({ r }) => (
-  <div className="flex justify-between px-4 py-3.5 text-sm text-gray-600">
+  <div className="flex justify-between px-4 py-3.5 text-sm font-semibold text-gray-700">
     <span>
       {r.label}
-      {r.nota && <span className="block text-sm text-gray-400">{r.nota}</span>}
+      {r.nota && <span className="block text-sm font-normal text-gray-400">{r.nota}</span>}
     </span>
     <span>{r.sign}{fmt(r.value)}</span>
   </div>
