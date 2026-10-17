@@ -321,7 +321,7 @@ function Movimientos({ data, onChange }) {
               <div key={m.id} className="flex items-center justify-between px-4 py-3">
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-gray-800 truncate">{m.concepto}</p>
-                  <p className="text-xs text-gray-400">{m.usuario} · {fmtFechaHora(m.created_at)}</p>
+                  <p className="text-sm text-gray-400">{m.usuario} · {fmtFechaHora(m.created_at)}</p>
                 </div>
                 <span className={`text-sm font-semibold ${m.tipo === 'salida' ? 'text-red-600' : 'text-green-600'}`}>
                   {m.tipo === 'salida' ? '−' : '+'}{fmt(m.monto)}
@@ -452,7 +452,7 @@ function Corte({ data, onCerrar, onAbrir }) {
         <p className="text-sm text-gray-500 mt-0.5">Abierto desde las {fmtHora(caja.abierta_at)}</p>
         {/* La nota que se dejó al abrir. */}
         {caja.notas_apertura && (
-          <p className="text-xs text-gray-600 mt-1.5">Nota de apertura: {caja.notas_apertura}</p>
+          <p className="text-sm text-gray-600 mt-1.5">Nota de apertura: {caja.notas_apertura}</p>
         )}
       </div>
 
@@ -855,13 +855,13 @@ function Historial({ onFiltroLabel }) {
     <div key={r.label} className="contents">
       <span className="text-gray-500">
         {r.label}
-        {r.nota && <span className="block text-xs text-gray-400">{r.nota}</span>}
+        {r.nota && <span className="block text-sm text-gray-400">{r.nota}</span>}
       </span>
       <span className="text-right text-gray-700">{r.sign}{fmt(r.value)}</span>
     </div>
   ));
   const subtituloRejilla = (texto) => (
-    <p className="col-span-2 pt-2 text-xs font-semibold uppercase tracking-wide text-gray-400">{texto}</p>
+    <p className="col-span-2 pt-2 text-sm font-semibold uppercase tracking-wide text-gray-400">{texto}</p>
   );
 
   // Cuerpo del corte: Ingresos, Egresos y Esperado con su detalle desplegable
@@ -937,7 +937,7 @@ function Historial({ onFiltroLabel }) {
                 <div key={m.id} className="flex items-center justify-between gap-3 px-3 py-2.5">
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-gray-800 break-words">{m.concepto}</p>
-                    <p className="text-xs text-gray-400">
+                    <p className="text-sm text-gray-400">
                       {m.tipo === 'salida' ? 'Gasto' : 'Entrada'} · {m.usuario} · {fmtHora(m.created_at)}
                     </p>
                   </div>
@@ -1054,7 +1054,7 @@ function Historial({ onFiltroLabel }) {
     const cuadra = Math.abs(diferencia) < 0.005;
     return (
       <div className="rounded-lg bg-gray-50 px-4 py-3">
-        <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-2">Resumen del día</p>
+        <p className="text-sm font-semibold uppercase tracking-wide text-gray-400 mb-2">Resumen del día</p>
         <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
           <span className="text-gray-500">Ingresos</span><span className="text-right text-gray-700">{fmt(ingresos)}</span>
           <span className="text-gray-500">Egresos</span><span className="text-right text-gray-700">−{fmt(egresos)}</span>
@@ -1069,7 +1069,7 @@ function Historial({ onFiltroLabel }) {
           </span>
         </div>
         {sinConteo && (
-          <p className="mt-2 text-xs text-amber-700">Un turno lo cerró el sistema sin conteo: no entra en la diferencia.</p>
+          <p className="mt-2 text-sm text-amber-700">Un turno lo cerró el sistema sin conteo: no entra en la diferencia.</p>
         )}
       </div>
     );

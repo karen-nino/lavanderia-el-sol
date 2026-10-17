@@ -164,7 +164,7 @@ export default function Manual() {
         {!buscando && (
           <nav className="hidden lg:block w-48 flex-shrink-0 print:hidden">
             <div className="sticky top-6 space-y-1">
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide px-3 pb-1">
+              <p className="text-sm font-semibold text-gray-400 uppercase tracking-wide px-3 pb-1">
                 Contenido
               </p>
               {SECCIONES_MANUAL.map((sec) => (

@@ -52,7 +52,7 @@ function ResumenCard({ label, value }) {
   return (
     <div className="bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-3 text-center">
       <p className="text-2xl font-bold text-dark-blue leading-tight">{value}</p>
-      <p className="text-xs text-gray-500 mt-1">{label}</p>
+      <p className="text-sm text-gray-500 mt-1">{label}</p>
     </div>
   );
 }
@@ -76,8 +76,8 @@ function FilaModal({ left, sub, sub2, right, rightSub, onClick }) {
     <>
       <div className="min-w-0">
         <p className={`text-sm truncate ${onClick ? 'text-blue font-medium' : 'text-gray-800'}`}>{left}</p>
-        {sub && <p className="text-xs text-gray-400 truncate">{sub}</p>}
-        {sub2 && <p className="text-xs text-gray-400 truncate">{sub2}</p>}
+        {sub && <p className="text-sm text-gray-400 truncate">{sub}</p>}
+        {sub2 && <p className="text-sm text-gray-400 truncate">{sub2}</p>}
       </div>
       {(right != null || rightSub) && (
         <div className="flex flex-col items-end gap-1 flex-shrink-0">
@@ -147,7 +147,7 @@ function MetricaModal({ metrica, fecha, count, items, onClose }) {
         <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-gray-100 flex-shrink-0">
           <div>
             <h2 className="text-base font-semibold text-gray-900">{METRICA_TITULO[metrica]}</h2>
-            <p className="text-xs text-gray-500">{fecha} · {count} {count === 1 ? noun : `${noun}s`}</p>
+            <p className="text-sm text-gray-500">{fecha} · {count} {count === 1 ? noun : `${noun}s`}</p>
           </div>
           <button onClick={onClose} aria-label="Cerrar" className="text-gray-400 hover:text-gray-600">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -309,7 +309,7 @@ export default function MaquinaUso() {
                   </button>
                   {mostrarFecha && (
                     <div className="absolute right-0 top-12 z-10 bg-white border border-gray-200 rounded-xl shadow-lg p-3 w-56">
-                      <p className="text-xs font-semibold text-gray-500 uppercase mb-2 px-1">Fecha</p>
+                      <p className="text-sm font-semibold text-gray-500 uppercase mb-2 px-1">Fecha</p>
                       <div className="flex flex-col gap-1">
                         {RANGOS_FECHA.map(r => (
                           <button
@@ -332,7 +332,7 @@ export default function MaquinaUso() {
               </div>
               <div className="overflow-x-auto">
                 <table className="min-w-full text-sm">
-                  <thead className="bg-gray-50 text-gray-500 text-xs uppercase">
+                  <thead className="bg-gray-50 text-gray-500 text-sm uppercase">
                     <tr>
                       <th className="text-left px-4 py-2.5 font-medium">Fecha</th>
                       <th className="text-right px-4 py-2.5 font-medium">Generado</th>

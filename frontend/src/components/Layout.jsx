@@ -436,7 +436,7 @@ function AlertsModal({ open, onClose, alertas, onSelect, onDismiss, onDismissAll
               <div className="divide-y divide-gray-100 border border-gray-100 rounded-card-sm">
                 {(detalle.detalles ?? []).map((d) => (
                   <div key={d.label} className="flex items-start justify-between gap-3 px-3 py-2.5">
-                    <span className="text-xs text-grey flex-shrink-0">{d.label}</span>
+                    <span className="text-sm text-grey flex-shrink-0">{d.label}</span>
                     <span className="text-sm font-medium text-dark-blue text-right">{d.value}</span>
                   </div>
                 ))}
@@ -482,7 +482,7 @@ function AlertsModal({ open, onClose, alertas, onSelect, onDismiss, onDismissAll
                 <button
                   type="button"
                   onClick={() => setConfirmAll(true)}
-                  className="text-xs font-semibold text-blue hover:opacity-80 transition-opacity"
+                  className="text-sm font-semibold text-blue hover:opacity-80 transition-opacity"
                 >
                   Descartar todas
                 </button>
@@ -508,7 +508,7 @@ function AlertsModal({ open, onClose, alertas, onSelect, onDismiss, onDismissAll
                       </span>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-dark-blue truncate">{a.title}</p>
-                        <p className="text-xs text-grey truncate">{a.description}</p>
+                        <p className="text-sm text-grey truncate">{a.description}</p>
                       </div>
                     </button>
                     <span className={`flex-shrink-0 text-[11px] font-semibold px-2 py-0.5 rounded-pill ${sevCls(a.severity)}`}>
@@ -1002,7 +1002,7 @@ export default function Layout() {
                   <circle cx="12" cy="12" r="9" strokeWidth={2} />
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 7v5l3 2" />
                 </svg>
-                <p className="text-xs text-gray-600">
+                <p className="text-sm text-gray-600">
                   Se registrará esta hora como tu <span className="font-medium text-gray-800">hora de salida</span> del día.
                 </p>
               </div>

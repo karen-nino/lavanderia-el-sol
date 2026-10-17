@@ -45,7 +45,7 @@ function FilaMaquina({ maquina, seleccionada, onToggle }) {
         <span className="font-medium text-gray-800 truncate">{maquina.nombre}</span>
       </span>
       <span className="flex items-center gap-2 flex-shrink-0">
-        {tamano && <span className="text-xs text-gray-500">{tamano}</span>}
+        {tamano && <span className="text-sm text-gray-500">{tamano}</span>}
       </span>
     </button>
   );
@@ -98,7 +98,7 @@ export default function ElegirMaquinasModal({
         ) : (
           <div className="space-y-4">
             <div className="space-y-2">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Lavadoras</p>
+              <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Lavadoras</p>
               {lavadoras.length === 0 ? (
                 <p className="text-sm text-gray-400">No hay lavadoras disponibles.</p>
               ) : (
@@ -119,7 +119,7 @@ export default function ElegirMaquinasModal({
             </div>
 
             <div className="space-y-2">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Secadoras</p>
+              <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Secadoras</p>
               {secadoras.length === 0 ? (
                 <p className="text-sm text-gray-400">No hay secadoras disponibles.</p>
               ) : (

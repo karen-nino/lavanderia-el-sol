@@ -135,7 +135,7 @@ export default function Selector({
                         <span className="font-medium text-gray-800 truncate">{o.etiqueta}</span>
                       </span>
                       {o.detalle && (
-                        <span className="text-xs text-gray-500 flex-shrink-0">{o.detalle}</span>
+                        <span className="text-sm text-gray-500 flex-shrink-0">{o.detalle}</span>
                       )}
                     </button>
                   );

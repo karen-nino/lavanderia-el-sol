@@ -508,8 +508,8 @@ export default function Clientes() {
                           className="w-4 h-4 rounded border-gray-300 text-blue focus:ring-blue cursor-pointer" />
                       </th>
                     )}
-                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Nombre</th>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Teléfono</th>
+                    <th className="text-left px-4 py-3 text-sm font-medium text-gray-500 uppercase tracking-wide">Nombre</th>
+                    <th className="text-left px-4 py-3 text-sm font-medium text-gray-500 uppercase tracking-wide">Teléfono</th>
                     <th className="px-4 py-3" />
                   </tr>
                 </thead>
@@ -662,13 +662,13 @@ export default function Clientes() {
             </div>
             <div className="p-5 space-y-5 overflow-y-auto">
               <div>
-                <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Nombre</p>
+                <p className="text-sm font-medium text-gray-400 uppercase tracking-wide mb-1">Nombre</p>
                 <p className="text-lg font-medium text-gray-900">
                   {`${infoCliente.nombre}${infoCliente.apellido ? ' ' + infoCliente.apellido : ''}`}
                 </p>
               </div>
               <div>
-                <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Teléfono (WhatsApp)</p>
+                <p className="text-sm font-medium text-gray-400 uppercase tracking-wide mb-1">Teléfono (WhatsApp)</p>
                 {/* El teléfono abre el chat de WhatsApp con el cliente. */}
                 {infoCliente.telefono ? (
                   <button
@@ -688,7 +688,7 @@ export default function Clientes() {
 
               {/* Notas del cliente: el texto abre su modal; cada nota lleva a su detalle. */}
               <div>
-                <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Notas</p>
+                <p className="text-sm font-medium text-gray-400 uppercase tracking-wide mb-1">Notas</p>
                 {notasCliente === undefined ? (
                   <p className="text-base text-gray-400">Cargando…</p>
                 ) : notasCliente === null ? (

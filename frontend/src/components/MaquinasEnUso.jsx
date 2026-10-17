@@ -599,7 +599,7 @@ const MaquinasEnUso = forwardRef(function MaquinasEnUso({ showHeader = true, onC
                         >
                           <span className="font-medium text-gray-800">{m.nombre}</span>
                           {/* "Marca · Tamaño"; sin datos, al menos qué es. */}
-                          <span className="text-xs text-gray-500">{marcaYTamano(m) ?? 'Secadora'}</span>
+                          <span className="text-sm text-gray-500">{marcaYTamano(m) ?? 'Secadora'}</span>
                         </button>
                       );
                     })}

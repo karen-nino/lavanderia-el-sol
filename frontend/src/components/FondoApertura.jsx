@@ -46,7 +46,7 @@ export default function FondoApertura({ sugerida, admin, monto, onMonto }) {
           placeholder="0.00"
           className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-base"
         />
-        <p className="mt-1.5 text-xs text-gray-500">
+        <p className="mt-1.5 text-sm text-gray-500">
           Es la primera caja de esta sucursal: cuenta el efectivo y captúralo. De aquí en
           adelante el fondo lo trae solo del corte anterior.
         </p>
@@ -62,13 +62,13 @@ export default function FondoApertura({ sugerida, admin, monto, onMonto }) {
     <div className="space-y-3">
       {/* De dónde sale el dinero: el corte anterior, siempre a la vista. */}
       <div className={`rounded-xl border p-4 ${sinConteo ? 'bg-amber-50 border-amber-200' : 'bg-gray-50 border-gray-200'}`}>
-        <p className={`text-xs font-medium uppercase tracking-wide ${sinConteo ? 'text-amber-700' : 'text-gray-500'}`}>
+        <p className={`text-sm font-medium uppercase tracking-wide ${sinConteo ? 'text-amber-700' : 'text-gray-500'}`}>
           {sinConteo ? 'Cierre anterior · sin conteo' : 'Quedó del corte anterior'}
         </p>
         <p className={`mt-1 text-2xl font-bold ${sinConteo ? 'text-amber-800' : 'text-gray-900'}`}>
           {fmt(sugerida.monto)}
         </p>
-        <p className={`mt-0.5 text-xs ${sinConteo ? 'text-amber-700' : 'text-gray-500'}`}>
+        <p className={`mt-0.5 text-sm ${sinConteo ? 'text-amber-700' : 'text-gray-500'}`}>
           {fmtFechaHora(sugerida.corte?.cerrada_at)}
         </p>
         {sinConteo && (
@@ -95,17 +95,17 @@ export default function FondoApertura({ sugerida, admin, monto, onMonto }) {
         />
         {admin ? (
           ajustado ? (
-            <p className="mt-1.5 text-xs text-amber-700">
+            <p className="mt-1.5 text-sm text-amber-700">
               Estás ajustando el fondo en {diferencia > 0 ? '+' : '−'}{fmt(Math.abs(diferencia))}
               {' '}sobre lo que quedó del corte anterior.
             </p>
           ) : (
-            <p className="mt-1.5 text-xs text-gray-500">
+            <p className="mt-1.5 text-sm text-gray-500">
               Viene del corte anterior. Puedes ajustarlo si el efectivo del cajón no coincide.
             </p>
           )
         ) : (
-          <p className="mt-1.5 text-xs text-gray-500">
+          <p className="mt-1.5 text-sm text-gray-500">
             Lo fija el corte anterior. Si el efectivo no coincide, un administrador puede ajustarlo.
           </p>
         )}

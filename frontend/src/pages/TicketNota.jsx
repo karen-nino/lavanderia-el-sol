@@ -671,7 +671,7 @@ export default function TicketNota() {
         </div>
 
         {avisoEnvio && (
-          <p className="text-xs text-gray-500 text-center">{avisoEnvio}</p>
+          <p className="text-sm text-gray-500 text-center">{avisoEnvio}</p>
         )}
         {envioSimulado && (
         <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3" role="status">
@@ -723,7 +723,7 @@ export default function TicketNota() {
                   maxLength={12}
                   className="w-full px-4 py-3.5 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue focus:border-transparent transition"
                 />
-                <p className="mt-1.5 text-xs text-gray-500">10 dígitos, sin lada internacional.</p>
+                <p className="mt-1.5 text-sm text-gray-500">10 dígitos, sin lada internacional.</p>
               </div>
               <div className="flex gap-3 pt-1">
                 <button

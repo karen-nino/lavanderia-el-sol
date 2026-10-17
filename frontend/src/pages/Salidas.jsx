@@ -944,7 +944,7 @@ export default function Salidas() {
             <button
               onClick={() => iniciarAsignar()}
               disabled={loadingMaquina}
-              className="flex items-center gap-1 text-xs font-medium text-blue hover:underline disabled:opacity-60"
+              className="flex items-center gap-1 text-sm font-medium text-blue hover:underline disabled:opacity-60"
             >
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
@@ -963,7 +963,7 @@ export default function Salidas() {
             <div key={carga.id} className="space-y-2 [&:not(:first-child)]:border-t [&:not(:first-child)]:border-gray-100 [&:not(:first-child)]:pt-4">
               {carga.orden != null && (
                 <div className="flex items-center justify-between gap-2">
-                  <p className="text-xs font-semibold text-gray-500">
+                  <p className="text-sm font-semibold text-gray-500">
                     {/* Cada renglón es una máquina, como en la captura y el ticket. */}
                     {/* Sin el tamaño de la carga: aquí se administran máquinas y cualquiera sirve. */}
                     {Renglon} {numeroDeCarga(carga)}
@@ -1009,37 +1009,37 @@ export default function Salidas() {
                       )}
                       <span className="text-sm font-medium text-gray-800">{m.nombre}</span>
                       {tipoLabel && (
-                        <span className="text-xs text-gray-500">— {tipoLabel}</span>
+                        <span className="text-sm text-gray-500">— {tipoLabel}</span>
                       )}
                       {m.tomadaPor && (
-                        <span className="text-xs font-medium text-amber-700 basis-full">
+                        <span className="text-sm font-medium text-amber-700 basis-full">
                           La está usando la nota {m.tomadaPor}. Cámbiala por otra para poder iniciar.
                         </span>
                       )}
                       {m.esperandoArranque && (
-                        <span className="text-xs font-medium text-green-700 basis-full">
+                        <span className="text-sm font-medium text-green-700 basis-full">
                           Encendida. Carga la ropa, arráncala y dale a Iniciar.
                         </span>
                       )}
                       {m.cronometro && m.estado === 'en_uso' && !m.esperandoArranque && !m.tomadaPor && (
                         // Pasó su tope: falta finalizarla (como en la tarjeta de Máquinas).
                         topeAlcanzado(m) && !deFichas(m) ? (
-                          <span className="text-xs font-medium text-red-600 basis-full">
+                          <span className="text-sm font-medium text-red-600 basis-full">
                             Llegó al tope: se finaliza sola en unos segundos.
                           </span>
                         ) : programaCumplido(m) && deFichas(m) ? (
                           // Secadora de fichas: se acabó su tiempo; si le cabe, Otro ciclo.
-                          <span className="text-xs font-medium text-amber-600 basis-full">
+                          <span className="text-sm font-medium text-amber-600 basis-full">
                             {opcionesMasTiempo(m).length > 0
                               ? 'Se le acabó el tiempo. Dale otro ciclo o finalízala.'
                               : 'Se le acabó el tiempo. Finalízala.'}
                           </span>
                         ) : programaCumplido(m) ? (
-                          <span className="text-xs font-medium text-amber-600 basis-full">
+                          <span className="text-sm font-medium text-amber-600 basis-full">
                             Terminó su programa de {m.ciclo_elegido_minutos} min. Finalízala.
                           </span>
                         ) : (
-                          <span className="text-xs font-medium text-green-700 basis-full">
+                          <span className="text-sm font-medium text-green-700 basis-full">
                             {/* Botón Iniciar (Speed Queen, Sec49): mensaje corto. */}
                             {m.solo_fichas
                               ? 'Corriendo. Finalízala cuando termine.'
@@ -1221,7 +1221,7 @@ export default function Salidas() {
             <button
               onClick={iniciarAgregarProducto}
               disabled={loadingProducto != null}
-              className="flex items-center gap-1 text-xs font-medium text-blue hover:underline disabled:opacity-60"
+              className="flex items-center gap-1 text-sm font-medium text-blue hover:underline disabled:opacity-60"
             >
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
@@ -1240,7 +1240,7 @@ export default function Salidas() {
               <div key={p.producto_id} className="flex flex-wrap items-center gap-x-2 gap-y-4 px-3 py-4">
                 <div className="flex-1 min-w-[10rem]">
                   <p className="text-sm font-semibold text-gray-900">{etiquetaProducto(p)}</p>
-                  <p className="text-xs text-gray-500 tabular-nums">
+                  <p className="text-sm text-gray-500 tabular-nums">
                     {fmtMonto(p.precio_unitario)}/{unidadDeRenglon(p)}
                   </p>
                 </div>
@@ -1314,7 +1314,7 @@ export default function Salidas() {
             <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-gray-100 flex-shrink-0">
               <div>
                 <h2 className="text-base font-semibold text-gray-900">Agregar producto</h2>
-                <p className="text-xs text-gray-500 mt-0.5">
+                <p className="text-sm text-gray-500 mt-0.5">
                   {esEncargo ? 'El granel se sirve por medida' : 'Se cobra por pieza completa'}
                 </p>
               </div>
@@ -1378,7 +1378,7 @@ export default function Salidas() {
                             <p className={`text-base font-semibold ${bloqueado ? 'text-gray-400' : 'text-gray-900'}`}>
                               {etiquetaProducto(p)}
                             </p>
-                            <p className="text-xs text-gray-500 tabular-nums">{detalleProducto(p)}</p>
+                            <p className="text-sm text-gray-500 tabular-nums">{detalleProducto(p)}</p>
                           </div>
                           {yaEsta ? (
                             <span className="flex-shrink-0 text-xs font-semibold text-gray-500 bg-gray-200 rounded-pill px-2.5 py-1">
@@ -1706,12 +1706,12 @@ export default function Salidas() {
                       <span className="font-medium text-gray-800">{m.nombre}</span>
                       <span className="flex items-center gap-2">
                         {reservada && (
-                          <span className="text-xs font-medium text-amber-600">
+                          <span className="text-sm font-medium text-amber-600">
                             Reservada{m.reservada_folio ? ` (${m.reservada_folio})` : ''}
                           </span>
                         )}
                         {tamanoLabel && (
-                          <span className="text-xs text-gray-500">{tamanoLabel}</span>
+                          <span className="text-sm text-gray-500">{tamanoLabel}</span>
                         )}
                       </span>
                     </button>
@@ -1864,7 +1864,7 @@ export default function Salidas() {
             {/* A qué carga se suma, si el modal viene de "+ Agregar" y hay varias. */}
             {!asignarCargaFija && !porMaquinas && cargasDestino.length > 0 && (
               <div className="space-y-2">
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Dónde va</p>
+                <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Dónde va</p>
                 <div className="flex flex-wrap gap-2">
                   {cargasDestino.map(c => {
                     const h = huecosDeCarga(c);
@@ -1882,7 +1882,7 @@ export default function Salidas() {
                         }`}
                       >
                         <span className="text-sm font-medium text-gray-800">{Renglon} {numeroDeCarga(c)}</span>
-                        <span className="text-xs text-gray-500">{admite}</span>
+                        <span className="text-sm text-gray-500">{admite}</span>
                       </button>
                     );
                   })}
@@ -1902,7 +1902,7 @@ export default function Salidas() {
                 {/* Lavadoras, si el destino tiene hueco de lavadora */}
                 {huecosAsignar.lavadora && (
                 <div className="space-y-2">
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Lavadoras</p>
+                  <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Lavadoras</p>
                   {lavadorasDisp.length === 0 ? (
                     <p className="text-sm text-gray-400">No hay lavadoras disponibles.</p>
                   ) : (
@@ -1934,12 +1934,12 @@ export default function Salidas() {
                           </span>
                           <span className="flex items-center gap-2 flex-shrink-0">
                             {reservada && (
-                              <span className="text-xs font-medium text-amber-600">
+                              <span className="text-sm font-medium text-amber-600">
                                 También en {m.reservada_folio ?? 'otra nota'}
                               </span>
                             )}
                             {marcaYTamano(m) && (
-                              <span className="text-xs text-gray-500">{marcaYTamano(m)}</span>
+                              <span className="text-sm text-gray-500">{marcaYTamano(m)}</span>
                             )}
                           </span>
                         </button>
@@ -1952,7 +1952,7 @@ export default function Salidas() {
                 {/* Secadoras, si el destino tiene hueco de secadora */}
                 {huecosAsignar.secadora && (
                 <div className="space-y-2">
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Secadoras</p>
+                  <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Secadoras</p>
                   {secadorasDisp.length === 0 ? (
                     <p className="text-sm text-gray-400">No hay secadoras disponibles.</p>
                   ) : (
@@ -1984,12 +1984,12 @@ export default function Salidas() {
                           </span>
                           <span className="flex items-center gap-2 flex-shrink-0">
                             {reservada && (
-                              <span className="text-xs font-medium text-amber-600">
+                              <span className="text-sm font-medium text-amber-600">
                                 También en {m.reservada_folio ?? 'otra nota'}
                               </span>
                             )}
                             {marcaYTamano(m) && (
-                              <span className="text-xs text-gray-500">{marcaYTamano(m)}</span>
+                              <span className="text-sm text-gray-500">{marcaYTamano(m)}</span>
                             )}
                           </span>
                         </button>

@@ -166,7 +166,7 @@ function PreviaWhatsapp({ plantilla }) {
   if (!texto.trim()) return null;
   return (
     <div className="rounded-xl bg-green-50 border border-green-200 px-4 py-3">
-      <p className="text-xs font-semibold text-green-800 uppercase tracking-wide">
+      <p className="text-sm font-semibold text-green-800 uppercase tracking-wide">
         Así le llegaría a Ana López
       </p>
       {/* Las negritas de WhatsApp (*texto*) se ven como negritas. */}
@@ -329,7 +329,7 @@ function Field({ label, hint, children }) {
     <div>
       <label className="block text-sm font-medium text-gray-700 mb-1.5">{label}</label>
       {children}
-      {hint && <p className="text-xs text-gray-400 mt-1">{hint}</p>}
+      {hint && <p className="text-sm text-gray-400 mt-1">{hint}</p>}
     </div>
   );
 }
@@ -339,7 +339,7 @@ function MobileField({ label, children, hint }) {
     <div className="space-y-2">
       <label className="block text-base font-bold text-dark-blue">{label}</label>
       {children}
-      {hint && <p className="text-xs text-grey">{hint}</p>}
+      {hint && <p className="text-sm text-grey">{hint}</p>}
     </div>
   );
 }
@@ -419,7 +419,7 @@ function ToggleRow({ label, hint, checked, onChange }) {
     <div className="flex items-start justify-between gap-4">
       <div>
         <p className="text-sm font-medium text-gray-700">{label}</p>
-        {hint && <p className="text-xs text-gray-400 mt-0.5">{hint}</p>}
+        {hint && <p className="text-sm text-gray-400 mt-0.5">{hint}</p>}
       </div>
       <Toggle checked={checked} onChange={onChange} />
     </div>
@@ -474,7 +474,7 @@ function TarjetaSeccion({ seccion, conCambios }) {
       <span className="flex-shrink-0 text-blue [&>svg]:w-6 [&>svg]:h-6">{seccion.icon}</span>
       <span className="min-w-0">
         <span className="block text-sm font-semibold text-dark-blue">{seccion.label}</span>
-        <span className="block text-xs text-gray-500 mt-0.5">{seccion.detalle}</span>
+        <span className="block text-sm text-gray-500 mt-0.5">{seccion.detalle}</span>
       </span>
       {conCambios && (
         <span className="absolute top-3 right-3 w-2 h-2 rounded-full bg-amber-500" aria-label="Con cambios sin guardar" />
@@ -506,7 +506,7 @@ function CambiarSeccion({ actual, conCambios }) {
           <div className="absolute right-0 top-full mt-2 z-40 w-80 max-h-[70vh] overflow-y-auto bg-white border border-gray-200 rounded-xl shadow-lg py-2">
             {GRUPOS_AJUSTES.map((g) => (
               <div key={g.titulo} className="py-1">
-                <p className="px-4 py-1 text-xs font-semibold uppercase tracking-wide text-gray-400">{g.titulo}</p>
+                <p className="px-4 py-1 text-sm font-semibold uppercase tracking-wide text-gray-400">{g.titulo}</p>
                 {g.ids.map(seccionPorId).map((sec) => (
                   <Link
                     key={sec.id}
@@ -517,7 +517,7 @@ function CambiarSeccion({ actual, conCambios }) {
                     <span className="flex-shrink-0 text-blue [&>svg]:w-5 [&>svg]:h-5">{sec.icon}</span>
                     <span className="min-w-0 flex-1">
                       <span className="block text-sm font-medium text-dark-blue">{sec.label}</span>
-                      <span className="block text-xs text-gray-500">{sec.detalle}</span>
+                      <span className="block text-sm text-gray-500">{sec.detalle}</span>
                     </span>
                     {conCambios.has(sec.id) && (
                       <span className="mt-1.5 w-2 h-2 rounded-full bg-amber-500 flex-shrink-0" aria-label="Con cambios sin guardar" />
@@ -798,13 +798,13 @@ function CatalogoEtiquetas({
                       {item.nombre}
                     </p>
                     {extraCampos.length > 0 && (
-                      <p className="text-xs text-gray-400 truncate">
+                      <p className="text-sm text-gray-400 truncate">
                         {extraCampos.map(c => etiquetaDe(c, item[c.name])).filter(Boolean).join(' · ')}
                       </p>
                     )}
                   </div>
                   {savedId === item.id && (
-                    <span className="flex items-center gap-1 text-green-600 text-xs font-medium animate-fade-in">
+                    <span className="flex items-center gap-1 text-green-600 text-sm font-medium animate-fade-in">
                       <IconoGuardado />
                       Guardado
                     </span>
@@ -1382,7 +1382,7 @@ export default function Ajustes() {
     if (largos.length === 0) return null;
     const lista = largos.map(n => `${n} min`).join(' y ');
     return (
-      <p className="mt-2 text-xs font-medium text-amber-700" role="alert">
+      <p className="mt-2 text-sm font-medium text-amber-700" role="alert">
         {largos.length === 1 ? `El programa de ${lista} es más largo` : `Los programas de ${lista} son más largos`}
         {` que el tope (${Number(t.minutos)} min): el tope llega antes de que termine. Sube el tope o acorta el programa.`}
       </p>
@@ -1990,7 +1990,7 @@ export default function Ajustes() {
         {stepBtns(name, 5, 0)}
       </div>
       {sinPrecioServicio(name) && (
-        <p className="mt-1.5 text-xs text-red-600">
+        <p className="mt-1.5 text-sm text-red-600">
           Sin precio no se puede vender este servicio.
         </p>
       )}
@@ -2032,7 +2032,7 @@ export default function Ajustes() {
           disabled={ES_DEMO}
           className={`${INPUT_CLS} disabled:bg-gray-50 disabled:text-gray-500 disabled:cursor-not-allowed`}
         />
-        {ES_DEMO && <p className="text-xs text-gray-400 mt-1">{NOTA_DEMO}</p>}
+        {ES_DEMO && <p className="text-sm text-gray-400 mt-1">{NOTA_DEMO}</p>}
       </Field>
 
       {/* R.F.C. del negocio: opcional */}
@@ -2082,7 +2082,7 @@ export default function Ajustes() {
                 'Cambiar logo'
               )}
             </button>
-            <p className="text-xs text-gray-400">JPG, PNG o WebP · Máx. 2 MB</p>
+            <p className="text-sm text-gray-400">JPG, PNG o WebP · Máx. 2 MB</p>
           </div>
         </div>
       </div>
@@ -2305,7 +2305,7 @@ export default function Ajustes() {
 
   const seccionTicketDesktop = (
     <Section titulo="Ticket">
-      {ES_DEMO && <p className="text-xs text-gray-400 -mt-2">{NOTA_DEMO}</p>}
+      {ES_DEMO && <p className="text-sm text-gray-400 -mt-2">{NOTA_DEMO}</p>}
       <Field
         label="Nota para Autoservicio"
         hint="Se imprime en letra chica al final del ticket que se manda al cliente."
@@ -2429,7 +2429,7 @@ export default function Ajustes() {
             disabled={ES_DEMO}
             className={`${MOBILE_INPUT_CLS} disabled:bg-gray-50 disabled:text-gray-500 disabled:cursor-not-allowed`}
           />
-          {ES_DEMO && <p className="text-xs text-grey mt-1">{NOTA_DEMO}</p>}
+          {ES_DEMO && <p className="text-sm text-grey mt-1">{NOTA_DEMO}</p>}
         </MobileField>
 
         {/* R.F.C. del negocio: opcional */}
@@ -2471,7 +2471,7 @@ export default function Ajustes() {
                   </>
                 ) : 'Cambiar logo'}
               </button>
-              <p className="text-xs text-grey">JPG, PNG o WebP Max. 2 MB</p>
+              <p className="text-sm text-grey">JPG, PNG o WebP Max. 2 MB</p>
             </div>
           </div>
         </MobileField>
@@ -2733,7 +2733,7 @@ export default function Ajustes() {
         {stepBtns(name, 5, 0, true)}
       </div>
       {sinPrecioServicio(name) && (
-        <p className="mt-1.5 text-xs text-red-600">
+        <p className="mt-1.5 text-sm text-red-600">
           Sin precio no se puede vender este servicio.
         </p>
       )}
@@ -2876,7 +2876,7 @@ export default function Ajustes() {
 
   const seccionWhatsappDesktop = (
     <Section titulo="WhatsApp">
-      {ES_DEMO && <p className="text-xs text-gray-400 -mt-2">{NOTA_DEMO}</p>}
+      {ES_DEMO && <p className="text-sm text-gray-400 -mt-2">{NOTA_DEMO}</p>}
       {/* En pantallas anchas, cada mensaje con su vista previa al lado. */}
       <div className="grid xl:grid-cols-2 gap-4 xl:items-start">
         <Field label="Mensaje para Por Encargo" hint={ayudaComodines}>
@@ -2913,7 +2913,7 @@ export default function Ajustes() {
 
   const seccionTicketMobile = (
     <div className="space-y-6">
-      {ES_DEMO && <p className="text-xs text-grey">{NOTA_DEMO}</p>}
+      {ES_DEMO && <p className="text-sm text-grey">{NOTA_DEMO}</p>}
       <MobileField
         label="Nota para Autoservicio"
         hint="Se imprime en letra chica al final del ticket que se manda al cliente."
@@ -2963,7 +2963,7 @@ export default function Ajustes() {
 
   const seccionWhatsappMobile = (
     <div className="space-y-6">
-      {ES_DEMO && <p className="text-xs text-grey">{NOTA_DEMO}</p>}
+      {ES_DEMO && <p className="text-sm text-grey">{NOTA_DEMO}</p>}
       <MobileField label="Mensaje para Por Encargo" hint={ayudaComodines}>
         <textarea
           name="whatsapp_mensaje_encargo"
@@ -3081,7 +3081,7 @@ export default function Ajustes() {
               <div className="pt-3 space-y-8">
                 {GRUPOS_AJUSTES.map((g) => (
                   <div key={g.titulo} className="space-y-3">
-                    <p className="px-1 text-xs font-semibold uppercase tracking-wide text-grey">{g.titulo}</p>
+                    <p className="px-1 text-sm font-semibold uppercase tracking-wide text-grey">{g.titulo}</p>
                     {g.ids.map(seccionPorId).map((s) => (
                       <MobileSectionButton
                         key={s.id}
@@ -3175,7 +3175,7 @@ export default function Ajustes() {
                   {SectionIcon.back}
                 </Link>
                 <div className="min-w-0 mr-auto">
-                  <p className="text-xs text-gray-400">
+                  <p className="text-sm text-gray-400">
                     <Link to="/ajustes" className="hover:text-blue">Ajustes</Link>
                     {' / '}{GRUPOS_AJUSTES.find(g => g.ids.includes(seccionVista))?.titulo}
                   </p>
@@ -3201,7 +3201,7 @@ export default function Ajustes() {
               <div className="space-y-10">
                 {GRUPOS_AJUSTES.map((g) => (
                   <div key={g.titulo} className="space-y-3">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">{g.titulo}</p>
+                    <p className="text-sm font-semibold uppercase tracking-wide text-gray-400">{g.titulo}</p>
                     <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
                       {g.ids.map(seccionPorId).map((sec) => (
                         <TarjetaSeccion key={sec.id} seccion={sec} conCambios={seccionesConCambios.has(sec.id)} />

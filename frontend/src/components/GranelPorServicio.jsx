@@ -128,7 +128,7 @@ export default function GranelPorServicio({ nota, puedeEditar, onCambio }) {
       <div className="px-4 py-3 border-b border-gray-50">
         <h2 className="text-sm font-semibold text-gray-700">Granel de cada servicio</h2>
         {porElegir && (
-          <p className="text-xs text-amber-700 mt-0.5">
+          <p className="text-sm text-amber-700 mt-0.5">
             Elige qué usa cada servicio. Mientras falte alguno no se puede iniciar la lavadora.
           </p>
         )}
@@ -156,14 +156,14 @@ export default function GranelPorServicio({ nota, puedeEditar, onCambio }) {
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-gray-800">{nombreTipo(r.tipoId)}</p>
                     {opciones.length === 0 && !resuelto && (
-                      <p className="text-xs text-gray-400 mt-0.5">
+                      <p className="text-sm text-gray-400 mt-0.5">
                         No hay {nombreTipo(r.tipoId).toLowerCase()} en Inventario: dalo de alta o asígnale su tipo al producto.
                       </p>
                     )}
                     {resuelto && selectorDe(r, opciones, elegido, quedanDe, bloqueado, c, etiqueta,
                       ({ abrir, elegida, deshabilitado }) => (
                         // Solo el nombre se recorta: "Cambiar" no se encoge.
-                        <p className="flex items-baseline gap-1 text-xs text-gray-500 mt-0.5 min-w-0">
+                        <p className="flex items-baseline gap-1 text-sm text-gray-500 mt-0.5 min-w-0">
                           <span className="truncate">{elegida?.etiqueta ?? r.producto?.nombre}</span>
                           <span className="flex-shrink-0">·</span>
                           <button

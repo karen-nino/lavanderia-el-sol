@@ -186,7 +186,7 @@ function fmtHora(iso) {
 function FilaDetalle({ label, children }) {
   return (
     <div className="flex gap-3 py-2.5 border-b border-gray-50 last:border-0">
-      <span className="text-xs text-gray-400 w-28 flex-shrink-0 pt-0.5">{label}</span>
+      <span className="text-sm text-gray-400 w-32 flex-shrink-0 pt-0.5">{label}</span>
       <span className="text-sm text-gray-800 flex-1">{children}</span>
     </div>
   );
@@ -359,7 +359,7 @@ function ModalAjuste({ folio, guardado, valor, onValor, onCancelar, onGuardar, l
           <button type="button" onClick={() => onValor(String(n - 10))} aria-label="Disminuir ajuste" className={btn}>−</button>
           <button type="button" onClick={() => onValor(String(n + 10))} aria-label="Aumentar ajuste" className={btn}>+</button>
         </div>
-        <p className="text-xs text-gray-500">
+        <p className="text-sm text-gray-500">
           {Number(guardado) !== 0
             ? `Guardado: ${Number(guardado) > 0 ? '+' : ''}${fmtMonto(guardado)}`
             : 'Sin ajuste'}
@@ -1013,11 +1013,11 @@ export default function DetalleNota() {
         nota.estado_pago === 'PENDIENTE' ? (
           <div className="rounded-xl border-2 border-amber-300 bg-amber-50 px-5 py-4 flex items-center justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide">Pendiente de cobro</p>
+              <p className="text-sm font-semibold text-amber-700 uppercase tracking-wide">Pendiente de cobro</p>
               {/* Con abonos, el monto grande es el saldo y debajo de cuánto viene. */}
               <p className="text-3xl font-bold text-amber-900 leading-tight mt-0.5">{fmtMonto(saldoNota)}</p>
               {abonadoNota > 0 && (
-                <p className="text-xs text-amber-800 mt-1">
+                <p className="text-sm text-amber-800 mt-1">
                   Abonado {fmtMonto(abonadoNota)} de {fmtMonto(nota.precio_total)}
                 </p>
               )}
@@ -1031,7 +1031,7 @@ export default function DetalleNota() {
           <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-5 py-3 mt-12">
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wide">
+                <p className="text-sm font-semibold text-emerald-700 uppercase tracking-wide">
                   Cobrada{nota.forma_pago ? ` · ${formaPagoLabel(nota.forma_pago)}` : ''}
                 </p>
                 <p className="text-xl font-bold text-emerald-900 leading-tight mt-0.5">{fmtMonto(nota.precio_total)}</p>
@@ -1046,7 +1046,7 @@ export default function DetalleNota() {
                 <button
                   type="button"
                   onClick={() => { setFormaPagoNueva(''); setCorrigiendoPago(true); }}
-                  className="text-xs font-semibold text-emerald-800 underline underline-offset-2 hover:text-emerald-900"
+                  className="text-sm font-semibold text-emerald-800 underline underline-offset-2 hover:text-emerald-900"
                 >
                   Corregir forma de pago
                 </button>
@@ -1056,7 +1056,7 @@ export default function DetalleNota() {
                 <button
                   type="button"
                   onClick={() => { setMotivoReversion(''); setErrorAccion(''); setRevirtiendoPago(true); }}
-                  className="text-xs font-semibold text-emerald-800 underline underline-offset-2 hover:text-emerald-900"
+                  className="text-sm font-semibold text-emerald-800 underline underline-offset-2 hover:text-emerald-900"
                 >
                   Revertir pago
                 </button>
@@ -1074,7 +1074,7 @@ export default function DetalleNota() {
       {/* De quién es y cuál es, en grande: lo que se busca desde el mostrador. */}
       <div className="bg-white border border-gray-100 rounded-xl shadow-sm px-5 py-4 flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide"># Nota</p>
+          <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide"># Nota</p>
           {/* Solo el consecutivo (1806): con él se pide la nota en el mostrador. */}
           <p className="text-2xl font-bold text-gray-900 leading-tight mt-0.5 truncate">
             {nota.folio?.split('-')[0] ?? nota.id}
@@ -1091,7 +1091,7 @@ export default function DetalleNota() {
               <button
                 type="button"
                 onClick={() => { setErrorAccion(''); setRefValor(nota.referencia ?? ''); setRefOpen(true); }}
-                className="flex-shrink-0 text-xs text-blue underline underline-offset-2"
+                className="flex-shrink-0 text-sm text-blue underline underline-offset-2"
               >
                 Cambiar
               </button>
@@ -1108,7 +1108,7 @@ export default function DetalleNota() {
           ya usadas. */}
       {maquinasNota.length > 0 && (
         <div className="bg-white border border-gray-100 rounded-xl shadow-sm px-4 py-4">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+          <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide">
             {maquinasNota.length === 1 ? 'Máquina' : 'Máquinas'}
           </p>
           <p className="text-lg font-bold mt-0.5">
@@ -1157,7 +1157,7 @@ export default function DetalleNota() {
             <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${badgeTipoServicio.cls}`}>
               {badgeTipoServicio.label}
             </span>
-            {nota.tamano && <span className="ml-2 text-xs text-gray-500 capitalize">{nota.tamano}</span>}
+            {nota.tamano && <span className="ml-2 text-sm text-gray-500 capitalize">{nota.tamano}</span>}
           </FilaDetalle>
           <FilaDetalle label="ID">
             <span className="text-sm font-medium text-gray-800">{nota.id}</span>
@@ -1216,7 +1216,7 @@ export default function DetalleNota() {
             <FilaDetalle label="Correcciones de pago">
               <div className="space-y-1.5">
                 {nota.historial_forma_pago.map((h, i) => (
-                  <div key={i} className="text-xs text-gray-500">
+                  <div key={i} className="text-sm text-gray-500">
                     <span className="font-medium text-gray-700">
                       {formaPagoLabel(h.forma_anterior)} → {formaPagoLabel(h.forma_nueva)}
                     </span>
@@ -1235,7 +1235,7 @@ export default function DetalleNota() {
                 {abonosNota.map(ab => {
                   const revertido = ab.revertido_at != null;
                   return (
-                    <div key={ab.id} className="text-xs text-gray-500">
+                    <div key={ab.id} className="text-sm text-gray-500">
                       <span className={`font-medium ${revertido ? 'text-gray-400 line-through' : 'text-gray-700'}`}>
                         {fmtMonto(ab.monto)} · {formaPagoLabel(ab.forma_pago)}
                       </span>
@@ -1251,7 +1251,7 @@ export default function DetalleNota() {
                         <button
                           type="button"
                           onClick={() => { setMotivoAbono(''); setErrorAccion(''); setConfirmRevertirAbono(ab); }}
-                          className="mt-0.5 text-xs font-semibold text-amber-800 underline underline-offset-2 hover:text-amber-900"
+                          className="mt-0.5 text-sm font-semibold text-amber-800 underline underline-offset-2 hover:text-amber-900"
                         >
                           Revertir abono
                         </button>
@@ -1259,7 +1259,7 @@ export default function DetalleNota() {
                     </div>
                   );
                 })}
-                <div className="text-xs font-semibold text-gray-700 pt-1 border-t border-gray-100">
+                <div className="text-sm font-semibold text-gray-700 pt-1 border-t border-gray-100">
                   Abonado {fmtMonto(abonadoNota)} · Falta {fmtMonto(saldoNota)}
                 </div>
               </div>
@@ -1329,7 +1329,7 @@ export default function DetalleNota() {
                     <div key={cg.id} className="border border-gray-100 rounded-lg p-3 space-y-1.5">
                       {/* Carga N y, debajo, una línea por máquina con su costo. */}
                       <div className="flex items-center justify-between">
-                        <span className="text-xs font-semibold text-gray-500">
+                        <span className="text-sm font-semibold text-gray-500">
                           {nombreDeCarga(cg)}
                         </span>
                         {!maquinaSinPrecio && (
@@ -1359,7 +1359,7 @@ export default function DetalleNota() {
                                 )}
                                 <span className="text-sm font-medium text-gray-800">{m.nombre}</span>
                                 {tipoLabel && (
-                                  <span className="text-xs text-gray-500">— {tipoLabel}</span>
+                                  <span className="text-sm text-gray-500">— {tipoLabel}</span>
                                 )}
                               </div>
                               {/* Sin importe: vuelta repetida o máquina de Por Encargo. */}
@@ -1379,17 +1379,17 @@ export default function DetalleNota() {
                         </div>
                       ))}
                       {atributos.length > 0 && (
-                        <p className="text-xs text-gray-500">{atributos.join(' · ')}</p>
+                        <p className="text-sm text-gray-500">{atributos.join(' · ')}</p>
                       )}
                       {prods.map(p => (
-                        <p key={p.id} className="text-xs text-gray-500">
+                        <p key={p.id} className="text-sm text-gray-500">
                           {p.es_por_medida && Number(p.subtotal) === 0
                             ? <>{etiquetaProducto(p)} · {p.cantidad} {unidadProdTxt(p)} · <span className="text-green-700 font-medium">Incluido</span></>
                             : <>{etiquetaProducto(p)} · {p.cantidad} {unidadProdTxt(p)} × {fmtMonto(p.precio_unitario)} = {fmtMonto(p.subtotal)}</>}
                         </p>
                       ))}
                       {Number(cg.ajuste) !== 0 && (
-                        <p className="text-xs text-gray-500">
+                        <p className="text-sm text-gray-500">
                           Ajuste: {Number(cg.ajuste) > 0 ? '+' : ''}{fmtMonto(cg.ajuste)}
                         </p>
                       )}
@@ -1428,7 +1428,7 @@ export default function DetalleNota() {
         <div className="px-4 py-3 border-b border-gray-50 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-gray-700">Productos</h2>
           {(nota.productos || []).length > 0 && (
-            <span className="text-xs text-gray-400">{(nota.productos || []).length} ítem(s)</span>
+            <span className="text-sm text-gray-400">{(nota.productos || []).length} ítem(s)</span>
           )}
         </div>
         {(nota.productos || []).length === 0 ? (
@@ -1441,7 +1441,7 @@ export default function DetalleNota() {
               <div key={p.id} className="px-4 py-3 flex items-center justify-between gap-3">
                 <div>
                   <p className="text-sm font-medium text-gray-800">{tituloProducto(p)}</p>
-                  <p className="text-xs text-gray-400">
+                  <p className="text-sm text-gray-400">
                     {subtituloProducto(p) && `${subtituloProducto(p)} · `}
                     {incluido
                       ? `${p.cantidad} ${unidadProdTxt(p)}`
@@ -1485,7 +1485,7 @@ export default function DetalleNota() {
               </span>
               <div>
                 <p className="text-sm font-semibold text-gray-900">Cancelada</p>
-                <p className="text-xs text-gray-400">
+                <p className="text-sm text-gray-400">
                   {nota.motivo_cancelacion ? `Motivo: ${nota.motivo_cancelacion}` : 'Esta nota fue cancelada'}
                 </p>
               </div>
@@ -1528,13 +1528,13 @@ export default function DetalleNota() {
                       <p className={`text-sm font-semibold ${activo ? 'text-gray-900' : 'text-gray-400'}`}>
                         {etiquetaEstadoNota(paso.key, nota.tipo_servicio, paso.label)}
                       </p>
-                      <p className="text-xs text-gray-400">{subtituloEstado(paso.key, { done, current }, fechaDePaso(paso, fechaPorEstado))}</p>
+                      <p className="text-sm text-gray-400">{subtituloEstado(paso.key, { done, current }, fechaDePaso(paso, fechaPorEstado))}</p>
 
                       {/* En qué fase va cada carga que está en máquina. */}
                       {cargasAqui.length > 0 && (
                         <div className="mt-2 space-y-1.5">
                           {cargasAqui.map(cg => (
-                            <div key={cg.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                            <div key={cg.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
                               <span className="font-semibold text-gray-500">{nombreDeCarga(cg)}</span>
                               {cg.lavadora_id && cg.lavadora_estado === 'en_uso' && (
                                 <FaseChip label="Lavado" fase={faseMaquina(cg.lavadora_id, cg.lavadora_usada_id, cg.lavadora_estado)} />
@@ -1690,7 +1690,7 @@ export default function DetalleNota() {
               </div>
             ) : (
               <div className="rounded-xl bg-green-50 border border-green-200 px-4 py-3">
-                <p className="text-xs font-semibold text-green-800 uppercase tracking-wide">Mensaje</p>
+                <p className="text-sm font-semibold text-green-800 uppercase tracking-wide">Mensaje</p>
                 <p className="mt-1.5 text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">
                   {mensajeProcesado}
                 </p>

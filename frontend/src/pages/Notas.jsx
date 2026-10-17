@@ -496,13 +496,13 @@ export default function Notas() {
 
             {mostrarEstado && (
               <div className="absolute right-0 top-12 z-10 bg-white border border-gray-200 rounded-xl shadow-lg p-3 w-56 max-w-[calc(100vw-2rem)]">
-                <p className="text-xs font-semibold text-gray-500 uppercase mb-2 px-1">Estado</p>
+                <p className="text-sm font-semibold text-gray-500 uppercase mb-2 px-1">Estado</p>
                 <div className="flex flex-col gap-1">
                   {ESTADOS.map(e => (
                     <Fragment key={e}>
                     {/* Las de tipo de servicio van aparte, con su título. */}
                     {e === FILTROS_SERVICIO[0] && (
-                      <p className="text-xs font-semibold text-gray-500 uppercase mt-2 mb-1 px-1 pt-2 border-t border-gray-100">Servicio</p>
+                      <p className="text-sm font-semibold text-gray-500 uppercase mt-2 mb-1 px-1 pt-2 border-t border-gray-100">Servicio</p>
                     )}
                     <button
                       // Al elegir un estado se busca en todas las fechas (para no esconder las de
@@ -547,7 +547,7 @@ export default function Notas() {
 
             {mostrarFecha && (
               <div className="absolute right-0 top-12 z-10 bg-white border border-gray-200 rounded-xl shadow-lg p-3 w-56 max-w-[calc(100vw-2rem)]">
-                <p className="text-xs font-semibold text-gray-500 uppercase mb-2 px-1">Fecha</p>
+                <p className="text-sm font-semibold text-gray-500 uppercase mb-2 px-1">Fecha</p>
                 <div className="flex flex-col gap-1">
                   {RANGOS_FECHA.map(r => (
                     <button
@@ -704,15 +704,15 @@ export default function Notas() {
                           />
                         </th>
                       )}
-                      <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Folio</th>
-                      <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Fecha</th>
-                      <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Tipo</th>
-                      <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Cliente</th>
-                      <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Referencia</th>
-                      <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Estado</th>
-                      <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Pago</th>
-                      <th className="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Total</th>
-                      <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Entrega</th>
+                      <th className="text-left px-4 py-3 text-sm font-medium text-gray-500 uppercase tracking-wide">Folio</th>
+                      <th className="text-left px-4 py-3 text-sm font-medium text-gray-500 uppercase tracking-wide">Fecha</th>
+                      <th className="text-left px-4 py-3 text-sm font-medium text-gray-500 uppercase tracking-wide">Tipo</th>
+                      <th className="text-left px-4 py-3 text-sm font-medium text-gray-500 uppercase tracking-wide">Cliente</th>
+                      <th className="text-left px-4 py-3 text-sm font-medium text-gray-500 uppercase tracking-wide">Referencia</th>
+                      <th className="text-left px-4 py-3 text-sm font-medium text-gray-500 uppercase tracking-wide">Estado</th>
+                      <th className="text-left px-4 py-3 text-sm font-medium text-gray-500 uppercase tracking-wide">Pago</th>
+                      <th className="text-right px-4 py-3 text-sm font-medium text-gray-500 uppercase tracking-wide">Total</th>
+                      <th className="text-left px-4 py-3 text-sm font-medium text-gray-500 uppercase tracking-wide">Entrega</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
@@ -741,10 +741,10 @@ export default function Notas() {
                               />
                             </td>
                           )}
-                          <td className="px-4 py-3 font-mono text-xs text-gray-600">
+                          <td className="px-4 py-3 font-mono text-sm text-gray-600">
                             #{n.folio?.split('-')[0] ?? n.id}
                           </td>
-                          <td className="px-4 py-3 text-gray-400 text-xs">
+                          <td className="px-4 py-3 text-gray-400 text-sm">
                             {fmtFecha(n.created_at)}
                           </td>
                           <td className="px-4 py-3 text-sm text-gray-600">
@@ -756,7 +756,7 @@ export default function Notas() {
                               {fmtClienteCatalogo(n) ?? <span className="text-gray-400 italic">Mostrador</span>}
                             </p>
                             {n.cliente_telefono && (
-                              <p className="text-xs text-gray-400">{n.cliente_telefono}</p>
+                              <p className="text-sm text-gray-400">{n.cliente_telefono}</p>
                             )}
                           </td>
                           {/* Cliente / referencia libre del Autoservicio. */}
@@ -794,7 +794,7 @@ export default function Notas() {
                           <td className="px-4 py-3 text-right text-gray-600">
                             {fmtMonto(n.precio_total)}
                           </td>
-                          <td className="px-4 py-3 text-xs">
+                          <td className="px-4 py-3 text-sm">
                             {n.fecha_entrega ? (
                               <span className="text-gray-600">
                                 {etiquetaFechaEntrega(n.fecha_entrega)}
@@ -816,7 +816,7 @@ export default function Notas() {
 
           {/* Paginación (escritorio) — siempre visible */}
           <div className="hidden lg:flex items-center justify-between gap-3 mt-3">
-            <span className="text-xs text-gray-500">
+            <span className="text-sm text-gray-500">
               {filtradas.length === 0
                 ? 'Sin notas'
                 : `${(paginaActual - 1) * POR_PAGINA + 1}–${Math.min(paginaActual * POR_PAGINA, filtradas.length)} de ${filtradas.length}`}

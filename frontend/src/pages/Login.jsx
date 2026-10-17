@@ -261,7 +261,7 @@ export default function Login() {
                 <button
                   type="button"
                   onClick={cambiarUsuario}
-                  className="absolute right-2 top-11 text-xs text-blue hover:text-blue-700 font-medium px-2 py-1"
+                  className="absolute right-2 top-11 text-sm text-blue hover:text-blue-700 font-medium px-2 py-1"
                 >
                   Cambiar
                 </button>
@@ -357,7 +357,7 @@ export default function Login() {
           onClick={async () => { setActualizando(true); await aplicarActualizacion(); }}
           disabled={actualizando}
           title="Volver a cargar la app para traer la versión más reciente"
-          className={`mx-auto mt-6 flex items-center justify-center gap-1.5 px-3 py-2 text-xs underline underline-offset-4 disabled:opacity-60 ${
+          className={`mx-auto mt-6 flex items-center justify-center gap-1.5 px-3 py-2 text-sm underline underline-offset-4 disabled:opacity-60 ${
             hayActualizacion
               ? 'font-semibold text-blue-300 hover:text-blue-200'
               : 'text-slate-400 hover:text-slate-300'

@@ -35,12 +35,12 @@ export default function ModalCobrar({ saldo, folio, titulo = 'Cobrar nota', mont
 
         {/* El monto a cobrar en grande; con abonos es lo que falta, con el total debajo. */}
         <div className="rounded-2xl bg-light-blue border-2 border-blue/30 px-5 py-4 text-center">
-          <p className="text-xs font-semibold text-blue-700 uppercase tracking-wide">
+          <p className="text-sm font-semibold text-blue-700 uppercase tracking-wide">
             {abonado > 0 ? 'Falta por cobrar' : 'Total'}
           </p>
           <p className="text-4xl font-bold text-dark-blue leading-tight mt-1">{fmtMonto(saldo)}</p>
           {abonado > 0 && (
-            <p className="text-xs text-blue-700 mt-1">
+            <p className="text-sm text-blue-700 mt-1">
               Ya abonó {fmtMonto(abonado)} de {fmtMonto(total)}
             </p>
           )}
@@ -83,13 +83,13 @@ export default function ModalCobrar({ saldo, folio, titulo = 'Cobrar nota', mont
               />
             </div>
             {Number.isFinite(importe) && importe > saldo + 1e-9 ? (
-              <p className="text-xs text-red-600">La nota solo debe {fmtMonto(saldo)}.</p>
+              <p className="text-sm text-red-600">La nota solo debe {fmtMonto(saldo)}.</p>
             ) : montoOk && !liquida ? (
-              <p className="text-xs text-gray-500">
+              <p className="text-sm text-gray-500">
                 Queda abonada: le faltarían {fmtMonto(restante)} por pagar.
               </p>
             ) : montoOk ? (
-              <p className="text-xs text-gray-500">Con esto la nota queda liquidada.</p>
+              <p className="text-sm text-gray-500">Con esto la nota queda liquidada.</p>
             ) : null}
           </div>
         )}

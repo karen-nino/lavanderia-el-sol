@@ -186,7 +186,7 @@ export default function Empleados() {
 
           {mostrarFiltros && (
             <div className="absolute right-0 top-12 z-10 bg-white border border-gray-200 rounded-xl shadow-lg p-3 w-56">
-              <p className="text-xs font-semibold text-gray-500 uppercase mb-2 px-1">Filtrar por rol</p>
+              <p className="text-sm font-semibold text-gray-500 uppercase mb-2 px-1">Filtrar por rol</p>
               <div className="flex flex-col gap-1">
                 {[
                   { v: 'todos',    label: 'Todos' },
@@ -403,7 +403,7 @@ export default function Empleados() {
                     )}
                   </button>
                 </div>
-                <p className="text-xs text-gray-500 mt-1">Mínimo 6 caracteres.</p>
+                <p className="text-sm text-gray-500 mt-1">Mínimo 6 caracteres.</p>
               </div>
               {formError && (
                 <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">{formError}</div>

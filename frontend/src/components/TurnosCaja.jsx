@@ -28,7 +28,7 @@ function TarjetaTurno({ t }) {
             <p className="text-sm font-semibold text-gray-800 truncate">{fechaLarga(t.abierta_at)}</p>
             {/* Quien abrió el turno, que responde por el cajón. */}
             <p className="text-sm font-semibold text-gray-800 mt-0.5 truncate">{t.usuario_apertura || '—'}</p>
-            <p className="text-xs text-gray-500 mt-0.5">
+            <p className="text-sm text-gray-500 mt-0.5">
               {horario}{t.cierre_automatico ? ' · cerrado por el sistema' : ''}
             </p>
           </div>

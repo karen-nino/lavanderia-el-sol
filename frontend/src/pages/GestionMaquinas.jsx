@@ -483,7 +483,7 @@ export default function GestionMaquinas() {
                 >
                   {conectando ? 'Abriendo…' : 'Conectar cuenta de eWeLink'}
                 </button>
-                <p className="mt-1.5 text-xs text-amber-700">
+                <p className="mt-1.5 text-sm text-amber-700">
                   Se abre la página de eWeLink en otra pestaña. Inicia sesión con la cuenta
                   donde están dados de alta los Sonoff y acepta el permiso.
                 </p>
@@ -669,7 +669,7 @@ export default function GestionMaquinas() {
                     {cfg.label}
                   </span>
                   {m.reservada && m.reservada_folio && (
-                    <p className="text-xs text-amber-600 mt-1">
+                    <p className="text-sm text-amber-600 mt-1">
                       Apartada por{' '}
                       {m.reservada_nota_id ? (
                         <button
@@ -831,7 +831,7 @@ export default function GestionMaquinas() {
                     ...modelosVisibles.map(mo => ({ valor: mo.nombre, etiqueta: mo.nombre })),
                   ]}
                 />
-                <p className="text-xs text-gray-400 mt-1">
+                <p className="text-sm text-gray-400 mt-1">
                   {!form.marca
                     ? 'Elige primero la marca.'
                     : modelosVisibles.length === 0
@@ -845,7 +845,7 @@ export default function GestionMaquinas() {
               {CON_SONOFF && (!modeloDeFichas || form.device_id.trim() !== '') && (<>
               <div>
                 {modeloDeFichas && (
-                  <p className="mb-1.5 text-xs font-medium text-amber-700">
+                  <p className="mb-1.5 text-sm font-medium text-amber-700">
                     Este modelo trabaja con fichas: la app no usará este Sonoff. Borra el ID para desenlazarlo.
                   </p>
                 )}
@@ -859,7 +859,7 @@ export default function GestionMaquinas() {
                   placeholder="Device ID de eWeLink (ej. 10001abcd2)"
                   className={INPUT_CLS}
                 />
-                <p className="mt-1 text-xs text-gray-400">
+                <p className="mt-1 text-sm text-gray-400">
                   Se ve en la app eWeLink, en la información del dispositivo.
                 </p>
 
@@ -882,7 +882,7 @@ export default function GestionMaquinas() {
                         </button>
                       )}
                     </div>
-                    <p className="mt-1.5 text-xs text-gray-400">
+                    <p className="mt-1.5 text-sm text-gray-400">
                       "Probar enlace" solo consulta el dispositivo; no mueve la máquina.
                       {mostrarApagadoEmergencia && ' "Apagar ahora" corta el Sonoff de inmediato.'}
                     </p>

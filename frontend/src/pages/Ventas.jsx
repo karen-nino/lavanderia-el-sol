@@ -144,9 +144,9 @@ function Tarjeta({ titulo, valor, sub, color }) {
   };
   return (
     <div className={`rounded-xl border p-4 ${colores[color]}`}>
-      <p className="text-xs font-medium uppercase tracking-wide opacity-70">{titulo}</p>
+      <p className="text-sm font-medium uppercase tracking-wide opacity-70">{titulo}</p>
       <p className="mt-1 text-2xl font-bold">{valor}</p>
-      {sub && <p className="mt-0.5 text-xs opacity-60">{sub}</p>}
+      {sub && <p className="mt-0.5 text-sm opacity-60">{sub}</p>}
     </div>
   );
 }
@@ -393,7 +393,7 @@ export default function Ventas() {
 
               {mostrarFiltro && (
                 <div className="absolute right-0 top-12 z-20 bg-white border border-gray-200 rounded-xl shadow-lg p-3 w-60 max-w-[calc(100vw-2rem)] max-h-[70vh] overflow-y-auto">
-                  <p className="text-xs font-semibold text-gray-500 uppercase mb-2 px-1">Período</p>
+                  <p className="text-sm font-semibold text-gray-500 uppercase mb-2 px-1">Período</p>
                   <div className="flex flex-col gap-1">
                     {PERIODOS.map((op) => {
                       const activo = periodo === op.id;
@@ -650,7 +650,7 @@ export default function Ventas() {
             <div className="divide-y divide-gray-100">
               {/* Qué se cobró, por concepto. */}
               <div className="px-4 pt-3 pb-1">
-                <p className="text-xs font-medium uppercase tracking-wide text-gray-400">Por concepto</p>
+                <p className="text-sm font-medium uppercase tracking-wide text-gray-400">Por concepto</p>
               </div>
               {/* Lo cobrado en el período (cada pago el día que entró), repartido como el
                   corte de Caja: suma el total cobrado. */}
@@ -667,7 +667,7 @@ export default function Ventas() {
 
               {/* Cómo entró el dinero. Suma lo mismo que los conceptos. */}
               <div className="px-4 pt-3 pb-1 bg-gray-50/60">
-                <p className="text-xs font-medium uppercase tracking-wide text-gray-400">Cómo se cobró</p>
+                <p className="text-sm font-medium uppercase tracking-wide text-gray-400">Cómo se cobró</p>
               </div>
               <div className="flex justify-between px-4 py-3 text-sm text-gray-600">
                 <span>Efectivo</span>
@@ -692,12 +692,12 @@ export default function Ventas() {
                   cuadra con lo que se recordaba. */}
               {(data.correcciones_pago ?? []).length > 0 && (
                 <div className="px-4 py-3 bg-amber-50 border-t border-amber-100">
-                  <p className="text-xs font-semibold text-amber-800 uppercase tracking-wide mb-2">
+                  <p className="text-sm font-semibold text-amber-800 uppercase tracking-wide mb-2">
                     Formas de pago corregidas ({data.correcciones_pago.length})
                   </p>
                   <ul className="space-y-1.5">
                     {data.correcciones_pago.map((c, i) => (
-                      <li key={i} className="text-xs text-amber-800">
+                      <li key={i} className="text-sm text-amber-800">
                         <span className="font-semibold">{c.folio}</span> · {fmt(c.total)} ·{' '}
                         {formaPagoLabel(c.forma_anterior)} → {formaPagoLabel(c.forma_nueva)}
                         <span className="block text-amber-700">
@@ -727,7 +727,7 @@ export default function Ventas() {
               <>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
-                    <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wide">
+                    <thead className="bg-gray-50 text-sm text-gray-500 uppercase tracking-wide">
                       <tr>
                         <th className="px-4 py-3 text-left">Folio</th>
                         <th className="px-4 py-3 text-left">Servicio</th>
@@ -749,7 +749,7 @@ export default function Ventas() {
                             <button
                               type="button"
                               onClick={() => navigate(`/notas/${nota.id}`)}
-                              className="font-mono text-xs text-blue hover:text-blue-700 hover:underline underline-offset-2 transition-colors"
+                              className="font-mono text-sm text-blue hover:text-blue-700 hover:underline underline-offset-2 transition-colors"
                             >
                               {nota.folio}
                             </button>
@@ -881,7 +881,7 @@ export default function Ventas() {
                           <span className="w-1.5 h-1.5 rounded-full bg-blue flex-shrink-0" />
                           {c.nombre}
                         </span>
-                        {detalle && <span className="block text-xs text-gray-400 mt-0.5 pl-3.5">{detalle}</span>}
+                        {detalle && <span className="block text-sm text-gray-400 mt-0.5 pl-3.5">{detalle}</span>}
                       </span>
                       <span className="text-right text-gray-700 whitespace-nowrap">{fmt(c.precio)}</span>
                     </li>
@@ -938,7 +938,7 @@ export default function Ventas() {
                 <li key={i} className="flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-gray-50 text-sm">
                   <span className="min-w-0">
                     <span className="block text-gray-700 truncate">{nombreProductoVenta(p)}</span>
-                    <span className="block text-xs text-gray-400">{p.cantidad} {unidadProductoVenta(p)}</span>
+                    <span className="block text-sm text-gray-400">{p.cantidad} {unidadProductoVenta(p)}</span>
                   </span>
                   <span className="text-right text-gray-600 whitespace-nowrap">
                     {p.incluido ? <span className="text-gray-400">Incluido</span> : fmt(p.subtotal)}
@@ -984,7 +984,7 @@ export default function Ventas() {
                     <span className="text-gray-700">{formaPagoLabel(a.forma_pago) || '—'}</span>
                     <span className="font-semibold text-gray-800">{fmt(a.monto)}</span>
                   </div>
-                  <p className="text-xs text-gray-400 mt-0.5">
+                  <p className="text-sm text-gray-400 mt-0.5">
                     Recibió {a.recibio ?? 'Usuario eliminado'} · {formatFechaHora12(a.creado_en)}
                   </p>
                 </li>
@@ -1025,7 +1025,7 @@ export default function Ventas() {
               </button>
             </div>
             <div className="p-5">
-              <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Motivo de cancelación</p>
+              <p className="text-sm font-medium text-gray-400 uppercase tracking-wide mb-1">Motivo de cancelación</p>
               <p className="text-sm text-gray-700">
                 {motivoModal.motivo?.trim()
                   ? motivoModal.motivo

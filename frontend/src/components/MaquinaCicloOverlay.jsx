@@ -150,7 +150,7 @@ export default function MaquinaCicloOverlay({ modo = 'iniciar', tipo, nombre }) 
         </svg>
 
         <div className="text-center">
-          <p className={`text-xs font-semibold uppercase tracking-wide ${c.tituloCls}`}>{titulo}</p>
+          <p className={`text-sm font-semibold uppercase tracking-wide ${c.tituloCls}`}>{titulo}</p>
           <p className={`text-xl font-bold mt-1.5 ${c.tipoCls}`}>{tipoLabel}</p>
           {nombre && <p className={`text-3xl font-extrabold leading-tight ${c.nombreCls}`}>{nombre}</p>}
         </div>

@@ -463,7 +463,7 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = 
                     opciones={granelOptions.map(g => ({ valor: g, etiqueta: g }))}
                   />
                   {granelOptions.length === 0 && (
-                    <p className="text-xs text-gray-400 mt-1">
+                    <p className="text-sm text-gray-400 mt-1">
                       Todavía no hay graneles. Se agregan en Ajustes → Inventario.
                     </p>
                   )}
@@ -520,7 +520,7 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = 
                     .map(t => ({ valor: String(t.id), etiqueta: t.nombre })),
                 ]}
               />
-              <p className="text-xs text-gray-400 mt-1">
+              <p className="text-sm text-gray-400 mt-1">
                 {form.tipo_granel_id === ''
                   ? 'Sin tipo no se ofrece en los servicios Por Encargo. Los tipos se administran en Ajustes → Inventario.'
                   : 'Los servicios Por Encargo lo ofrecen en Salidas junto con los demás de este tipo.'}
@@ -564,7 +564,7 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = 
                   ]}
                 />
                 {bolsaOptions.length === 0 && (
-                  <p className="text-xs text-gray-400 mt-1">
+                  <p className="text-sm text-gray-400 mt-1">
                     Todavía no hay tamaños de bolsa. Se agregan en Ajustes → Inventario.
                   </p>
                 )}
@@ -593,7 +593,7 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = 
                   ¿A qué servicios va ligada?
                 </label>
                 {botonesServicios('servicios_bolsa')}
-                <p className="text-xs text-gray-400 mt-1">
+                <p className="text-sm text-gray-400 mt-1">
                   {form.servicios_bolsa.length === 0
                     ? 'Sin servicio no se agrega sola: se vende a mano.'
                     : 'En Por Encargo, la nota la agrega sola a cada carga de esos servicios, tantas como diga el servicio en Ajustes.'}
@@ -642,7 +642,7 @@ function ModalProducto({ producto, onClose, onGuardado, marcas = [], graneles = 
                 avisa antes de guardar. */}
             {esEdicion && (Number(producto?.stock_actual) > 0 || Number(producto?.stock_granel_medidas) > 0
               || Number(producto?.stock_reservado) > 0) && (
-              <p className="text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+              <p className="text-sm font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
                 Este producto tiene existencia: sus tamaños y su tipo no se pueden cambiar. Para corregirlos,
                 registra una salida de todo, edítalo y vuelve a dar entrada.
               </p>
@@ -1027,7 +1027,7 @@ function ModalRellenar({ producto, onClose, onDone }) {
             onChange={(e) => setBotellas(e.target.value)} className={NUM_CLS}
           />
           {n > 0 && !invalido && (
-            <p className="text-xs text-gray-500 mt-1">
+            <p className="text-sm text-gray-500 mt-1">
               Quedarán {maxBotellas - n} botella(s) de líquido en el bidón.
             </p>
           )}
@@ -1108,14 +1108,14 @@ function ModalHistorial({ producto, onClose }) {
                       </span>
                       <span className="text-sm font-medium text-gray-800">{m.descripcion ?? `${m.cantidad_medidas} medidas`}</span>
                     </div>
-                    <p className="text-xs text-gray-400 mt-0.5">
+                    <p className="text-sm text-gray-400 mt-0.5">
                       {m.destino === 'granel' ? 'A granel' : 'Botellas'}
                       {m.usuario_nombre ? ` · ${m.usuario_nombre}` : ''}
                     </p>
                     {/* Motivo de la salida manual. */}
-                    {m.nota && <p className="text-xs text-gray-500 mt-0.5 whitespace-pre-line">Nota: {m.nota}</p>}
+                    {m.nota && <p className="text-sm text-gray-500 mt-0.5 whitespace-pre-line">Nota: {m.nota}</p>}
                   </div>
-                  <span className="text-xs text-gray-400 flex-shrink-0 whitespace-nowrap">{fechaHoraCorta(m.created_at)}</span>
+                  <span className="text-sm text-gray-400 flex-shrink-0 whitespace-nowrap">{fechaHoraCorta(m.created_at)}</span>
                 </li>
               ))}
             </ul>
@@ -1478,7 +1478,7 @@ function MovimientosDiaModal({ producto, tipo, fecha, onClose }) {
         <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-3 border-b border-gray-100">
           <div className="min-w-0">
             <h3 className="text-base font-semibold text-gray-900">{TITULO_MOVIMIENTOS[tipo] ?? 'Movimientos'}</h3>
-            <p className="text-xs text-gray-500 truncate">{nombre} · {fechaLarga(fechaLocalISO(fecha))}</p>
+            <p className="text-sm text-gray-500 truncate">{nombre} · {fechaLarga(fechaLocalISO(fecha))}</p>
           </div>
           <button onClick={onClose} aria-label="Cerrar" className="text-gray-400 hover:text-gray-600 flex-shrink-0">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1522,7 +1522,7 @@ function MovimientosDiaModal({ producto, tipo, fecha, onClose }) {
                       ) : (
                         <p className="text-sm text-gray-800 truncate">{tituloNota}</p>
                       )}
-                      <p className="text-xs text-gray-400 truncate">{quienHora}</p>
+                      <p className="text-sm text-gray-400 truncate">{quienHora}</p>
                     </div>
                   ) : (
                     <div className="min-w-0 flex items-center gap-2">
@@ -1620,7 +1620,7 @@ function ReporteDiario() {
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wide">
+            <thead className="bg-gray-50 text-sm text-gray-500 uppercase tracking-wide">
               <tr>
                 <th className="px-4 py-3 text-left">Producto</th>
                 <th className="px-4 py-3 text-left">Entradas</th>
@@ -1637,7 +1637,7 @@ function ReporteDiario() {
                   <tr key={p.id} className="hover:bg-gray-50 align-top">
                     <td className="px-4 py-3">
                       <p className="font-medium text-gray-800">{esMarca && p.marca ? p.marca : p.nombre}</p>
-                      {esMarca && p.marca && <p className="text-xs text-gray-400">{p.nombre}</p>}
+                      {esMarca && p.marca && <p className="text-sm text-gray-400">{p.nombre}</p>}
                     </td>
                     <td className="px-4 py-3 text-gray-700">
                       <CeldaMovimiento lineas={lineasEntradas(p, esMarca)} hayAlgo={p.rellenado_medidas > 0}
@@ -2241,10 +2241,10 @@ export default function Inventario() {
                           className="w-4 h-4 rounded border-gray-300 text-blue focus:ring-blue cursor-pointer" />
                       </th>
                     )}
-                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Producto</th>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Precios</th>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Existencia</th>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">A granel</th>
+                    <th className="text-left px-4 py-3 text-sm font-medium text-gray-500 uppercase tracking-wide">Producto</th>
+                    <th className="text-left px-4 py-3 text-sm font-medium text-gray-500 uppercase tracking-wide">Precios</th>
+                    <th className="text-left px-4 py-3 text-sm font-medium text-gray-500 uppercase tracking-wide">Existencia</th>
+                    <th className="text-left px-4 py-3 text-sm font-medium text-gray-500 uppercase tracking-wide">A granel</th>
                     <th className="px-4 py-3" />
                   </tr>
                 </thead>
@@ -2268,9 +2268,9 @@ export default function Inventario() {
                             <ChipTipo p={p} />
                             {recienCreados.has(p.id) && <ChipNuevo />}
                           </div>
-                          {subtituloProd(p) && <p className="text-xs text-gray-400 mt-0.5">{subtituloProd(p)}</p>}
+                          {subtituloProd(p) && <p className="text-sm text-gray-400 mt-0.5">{subtituloProd(p)}</p>}
                         </td>
-                        <td className="px-4 py-3 text-gray-600 text-xs">
+                        <td className="px-4 py-3 text-gray-600 text-sm">
                           {p.clase === 'bolsa' ? (
                             <div>Pieza: <span className="font-medium text-gray-700">{precioTxt(p.precio_unitario)}</span></div>
                           ) : (
@@ -2368,7 +2368,7 @@ export default function Inventario() {
                   <div className={`mt-3 ${esGranelLiquido(p) ? 'grid grid-cols-2 gap-3' : ''}`}>
                     {esGranelLiquido(p) && (
                       <div className="min-w-0">
-                        <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-0.5">Bidones</p>
+                        <p className="text-sm font-medium text-gray-400 uppercase tracking-wide mb-0.5">Bidones</p>
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-md font-semibold text-gray-700"><Partes partes={partesGranel(p)} /></span>
                           <BadgeGranel estado={estadoGranel(p)} />
@@ -2376,7 +2376,7 @@ export default function Inventario() {
                       </div>
                     )}
                     <div className="min-w-0">
-                      <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-0.5">{tituloExistencia(p)}</p>
+                      <p className="text-sm font-medium text-gray-400 uppercase tracking-wide mb-0.5">{tituloExistencia(p)}</p>
                       <div className={`flex items-start gap-2 ${es !== 'ok' ? 'flex-wrap' : ''}`}>
                         {/* El punto naranja (algo apartado en notas) va a la izquierda; los avisos, a la derecha y, si no caben, abajo. */}
                         {es === 'ok' && medidasApartadas(p) > 0 && <PuntoApartado />}
@@ -2407,7 +2407,7 @@ export default function Inventario() {
                 <div key={p.id} className="px-4 py-3 flex items-center justify-between gap-3">
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-gray-700 truncate">{tituloProd(p)}</p>
-                    {subtituloProd(p) && <p className="text-xs text-gray-400">{subtituloProd(p)}</p>}
+                    {subtituloProd(p) && <p className="text-sm text-gray-400">{subtituloProd(p)}</p>}
                   </div>
                   <button
                     type="button"
@@ -2468,26 +2468,26 @@ export default function Inventario() {
                 {/* Precio: bolsa = por pieza; granel = medida + botella; marca y polvo = pieza. */}
                 {p.clase === 'bolsa' ? (
                   <div>
-                    <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Precio por pieza</p>
+                    <p className="text-sm font-medium text-gray-400 uppercase tracking-wide mb-1">Precio por pieza</p>
                     <p className="text-base font-medium text-gray-700">{precioTxt(p.precio_unitario)}</p>
                   </div>
                 ) : (
                   <div className={esGranelLiquido(p) ? 'grid grid-cols-2 gap-4' : ''}>
                     {esGranelLiquido(p) && (
                       <div>
-                        <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Precio por medida</p>
+                        <p className="text-sm font-medium text-gray-400 uppercase tracking-wide mb-1">Precio por medida</p>
                         <p className="text-base font-medium text-gray-700">{precioTxt(p.precio_unitario)}</p>
                       </div>
                     )}
                     <div>
-                      <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">{porUnidad(p) ? 'Precio por pieza' : 'Precio por botella'}</p>
+                      <p className="text-sm font-medium text-gray-400 uppercase tracking-wide mb-1">{porUnidad(p) ? 'Precio por pieza' : 'Precio por botella'}</p>
                       <p className="text-base font-medium text-gray-700">{precioTxt(p.precio_botella)}</p>
                     </div>
                   </div>
                 )}
                 {esGranelLiquido(p) && (
                   <div>
-                    <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Bidones</p>
+                    <p className="text-sm font-medium text-gray-400 uppercase tracking-wide mb-1">Bidones</p>
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-base font-medium text-gray-700"><Partes partes={partesGranel(p)} /></span>
                       <BadgeGranel estado={estadoGranel(p)} />
@@ -2495,7 +2495,7 @@ export default function Inventario() {
                   </div>
                 )}
                 <div>
-                  <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">{tituloExistencia(p)}</p>
+                  <p className="text-sm font-medium text-gray-400 uppercase tracking-wide mb-1">{tituloExistencia(p)}</p>
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-base font-medium text-gray-800"><Partes partes={partesDisponible(p)} /></span>
                     {es !== 'ok' && <BadgeEstado estado={es} />}
@@ -2503,7 +2503,7 @@ export default function Inventario() {
                 </div>
                 {medidasApartadas(p) > 0 && (
                   <div>
-                    <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Apartadas en notas</p>
+                    <p className="text-sm font-medium text-gray-400 uppercase tracking-wide mb-1">Apartadas en notas</p>
                     <div className="flex items-start gap-2">
                       <PuntoApartado />
                       <span className="min-w-0 text-base font-medium text-gray-700"><Partes partes={partesApartadas(p)} /></span>

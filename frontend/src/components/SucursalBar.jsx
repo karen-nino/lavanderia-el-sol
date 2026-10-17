@@ -28,7 +28,7 @@ export default function SucursalBar() {
   if (!puedeVer || !nombre) return null;
   return (
     <div className="bg-blue text-white text-center py-1 px-4">
-      <span className="text-xs font-semibold tracking-wider">{nombre}</span>
+      <span className="text-sm font-semibold tracking-wider">{nombre}</span>
     </div>
   );
 }

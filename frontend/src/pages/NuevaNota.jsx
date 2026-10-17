@@ -1055,7 +1055,7 @@ export default function NuevaNota() {
       {esClienteMostrador && !clienteSearchQ && (
         <div className="flex items-center justify-between gap-3 bg-light-blue border border-blue-200 rounded-lg px-4 py-3">
           <div>
-            <p className="text-xs font-medium text-blue uppercase tracking-wide">Cliente seleccionado</p>
+            <p className="text-sm font-medium text-blue uppercase tracking-wide">Cliente seleccionado</p>
             <p className="font-medium text-gray-900">Mostrador</p>
             <p className="text-sm text-gray-500">Sin cliente registrado</p>
           </div>
@@ -1073,7 +1073,7 @@ export default function NuevaNota() {
       {clienteSeleccionado && !clienteSearchQ && (
         <div className="flex items-center justify-between gap-3 bg-light-blue border border-blue-200 rounded-lg px-4 py-3">
           <div>
-            <p className="text-xs font-medium text-blue uppercase tracking-wide">Cliente seleccionado</p>
+            <p className="text-sm font-medium text-blue uppercase tracking-wide">Cliente seleccionado</p>
             <p className="font-medium text-gray-900">
               {`${clienteSeleccionado.nombre}${clienteSeleccionado.apellido ? ' ' + clienteSeleccionado.apellido : ''}`}
             </p>
@@ -1190,7 +1190,7 @@ export default function NuevaNota() {
             {/* "Medidas": cuántas medidas de cada granel lleva el servicio. */}
             <div className="flex items-center justify-between gap-2">
               <p className="text-sm font-semibold text-gray-900">{sv.etiqueta}</p>
-              <span className="w-[7rem] text-center text-xs font-medium text-gray-500 uppercase tracking-wide">
+              <span className="w-[7rem] text-center text-sm font-medium text-gray-500 uppercase tracking-wide">
                 Medidas
               </span>
             </div>
@@ -1214,11 +1214,11 @@ export default function NuevaNota() {
         {noAlcanza.length > 0 && (
           <div className="px-3 py-3 border-t border-gray-100 bg-amber-50 space-y-0.5">
             {noAlcanza.map(t => (
-              <p key={t.tipoId} className="text-xs font-semibold text-amber-700">
+              <p key={t.tipoId} className="text-sm font-semibold text-amber-700">
                 No alcanza el {t.nombre.toLowerCase()}: se necesitan {t.total} {t.total === 1 ? 'medida' : 'medidas'} y quedan {t.quedan}.
               </p>
             ))}
-            <p className="text-xs text-amber-700">La nota se crea igual.</p>
+            <p className="text-sm text-amber-700">La nota se crea igual.</p>
           </div>
         )}
       </div>
@@ -1230,7 +1230,7 @@ export default function NuevaNota() {
       <div className="flex items-baseline gap-2 min-w-0 mb-2">
         <h2 className={LABEL_CLS + ' mb-0'}>Productos</h2>
         {productosLista.length > 0 && (
-          <span className="text-xs text-gray-500 truncate">
+          <span className="text-sm text-gray-500 truncate">
             {productosLista.length} {productosLista.length === 1 ? 'producto' : 'productos'}
           </span>
         )}
@@ -1273,7 +1273,7 @@ export default function NuevaNota() {
                   <p className={`text-sm font-semibold ${prod ? 'text-gray-900' : 'text-gray-400'}`}>
                     {prod ? etiquetaProducto(prod) : 'Producto no disponible'}
                   </p>
-                  <p className="text-xs text-gray-500 tabular-nums">
+                  <p className="text-sm text-gray-500 tabular-nums">
                     {prod ? precioProductoTexto(prod, ambitoProductosNota) : '—'}
                     {prod && esMaterial && (
                       <span className="ml-1.5 not-italic text-gray-400">· va dentro del servicio</span>
@@ -1330,7 +1330,7 @@ export default function NuevaNota() {
           {/* En Por Encargo, sin nada que cobrar aparte no se muestra "$0.00". */}
           {(tipoServicio !== 'POR_ENCARGO' || subtotalProductos > 0) && (
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+              <span className="text-sm font-semibold text-gray-500 uppercase tracking-wide">
                 {tipoServicio === 'POR_ENCARGO' ? 'Se cobra aparte' : 'Total productos'}
               </span>
               <span className="text-base font-bold text-dark-blue tabular-nums">
@@ -1520,7 +1520,7 @@ export default function NuevaNota() {
                     <h2 className="text-base font-semibold text-gray-900">
                       Cantidad de servicios <span className="text-red-500">*</span>
                     </h2>
-                    <p className="text-xs text-gray-400 mt-1">
+                    <p className="text-sm text-gray-400 mt-1">
                       Cada servicio ya incluye lavado, secado, jabón y bolsa. Qué jabón y qué
                       suavizante se usan se elige en Salidas.
                     </p>
@@ -1541,10 +1541,10 @@ export default function NuevaNota() {
                             <p className="text-base font-semibold text-gray-900 truncate">
                               {s.titulo ?? s.label}
                               {s.legado && (
-                                <span className="ml-2 text-xs font-normal text-gray-400">ya no se vende</span>
+                                <span className="ml-2 text-sm font-normal text-gray-400">ya no se vende</span>
                               )}
                             </p>
-                            <p className={`text-xs tabular-nums ${precio == null ? 'text-red-600' : 'text-gray-500'}`}>
+                            <p className={`text-sm tabular-nums ${precio == null ? 'text-red-600' : 'text-gray-500'}`}>
                               {precio == null ? 'Sin precio configurado' : `$${precio.toFixed(2)} c/u`}
                               {precio != null && cant > 0 && (
                                 <span className="ml-1.5 font-bold text-blue-700">· ${(precio * cant).toFixed(2)}</span>
@@ -1579,7 +1579,7 @@ export default function NuevaNota() {
 
                     {nCargas > 0 && (
                       <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 bg-gray-50">
-                        <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                        <span className="text-sm font-semibold text-gray-500 uppercase tracking-wide">
                           {nCargas} {nCargas === 1 ? 'servicio' : 'servicios'}
                         </span>
                         <span className="text-base font-bold text-dark-blue tabular-nums">
@@ -1599,7 +1599,7 @@ export default function NuevaNota() {
                       <p className="text-sm font-semibold text-red-700">
                         Falta el precio de: {serviciosSinPrecio.map(s => s.label).join(', ')}
                       </p>
-                      <p className="text-xs text-red-600 mt-0.5">
+                      <p className="text-sm text-red-600 mt-0.5">
                         Se configura en Ajustes → Servicios Por Encargo.
                       </p>
                     </div>
@@ -1665,7 +1665,7 @@ export default function NuevaNota() {
                       <p className="text-sm font-semibold text-red-700">
                         El servicio {nombre} se cobra en ${Number(topeDeCarga(c)).toFixed(2)} y su material suma ${usadoContraTope(c).toFixed(2)}
                       </p>
-                      <p className="text-xs text-red-600 mt-0.5">
+                      <p className="text-sm text-red-600 mt-0.5">
                         Baja ${exceso.toFixed(2)}: sirve menos, quita la bolsa o sube el precio del servicio en Ajustes.
                       </p>
                     </div>
@@ -1703,7 +1703,7 @@ export default function NuevaNota() {
                       +
                     </button>
                   </div>
-                  <p className="text-xs text-gray-400 mt-1.5">Descuento (negativo) o cargo extra (positivo)</p>
+                  <p className="text-sm text-gray-400 mt-1.5">Descuento (negativo) o cargo extra (positivo)</p>
                 </div>
 
                 {/* El tope a la vista: cuánto se cobra, cuánto lleva el material y cuánto queda. */}
@@ -1714,13 +1714,13 @@ export default function NuevaNota() {
                         El material suma ${materialUsado.toFixed(2)} y el tope
                         {ajusteEncargo !== 0 ? ', ya con el ajuste,' : ''} es ${presupuestoConAjuste.toFixed(2)}
                       </p>
-                      <p className="text-xs text-red-600 mt-0.5">
+                      <p className="text-sm text-red-600 mt-0.5">
                         Baja ${excesoDeLaNota.toFixed(2)}: quita productos, sirve menos
                         {ajusteEncargo < 0 ? ', baja el descuento' : ''} o sube el precio de los servicios en Ajustes.
                       </p>
                     </div>
                   ) : (
-                    <p className="text-xs text-gray-500 text-right tabular-nums">
+                    <p className="text-sm text-gray-500 text-right tabular-nums">
                       {nCargas === 1 ? 'Tope del servicio' : 'Tope de los servicios'}: ${presupuestoServicios.toFixed(2)}
                       {' · '}usado ${materialUsado.toFixed(2)}
                       {/* El ajuste se nombra aparte cuando lo hay. */}
@@ -1812,7 +1812,7 @@ export default function NuevaNota() {
             {/* Resumen */}
             {encargoStep === pasoResumen && (
               <div className="bg-light-blue border border-blue-200 rounded-xl p-4">
-                <p className="text-xs font-medium text-blue uppercase tracking-wide mb-2">Resumen</p>
+                <p className="text-sm font-medium text-blue uppercase tracking-wide mb-2">Resumen</p>
                 <div className="space-y-1 mb-3 text-sm text-blue-700">
                   <div className="flex justify-between">
                     <span>Cliente</span>
@@ -1959,11 +1959,11 @@ export default function NuevaNota() {
                       </span>
                     </span>
                     {anticipoParcial && (
-                      <span className="block text-xs text-blue-700 mt-0.5">
+                      <span className="block text-sm text-blue-700 mt-0.5">
                         Queda debiendo ${(encargoPrecioTotal - anticipoNum).toFixed(2)}
                       </span>
                     )}
-                    <span className="block text-xs text-blue underline underline-offset-2 mt-1">Cambiar</span>
+                    <span className="block text-sm text-blue underline underline-offset-2 mt-1">Cambiar</span>
                   </button>
                 )}
               </div>
@@ -2040,7 +2040,7 @@ export default function NuevaNota() {
             <div className="flex items-baseline gap-2 min-w-0 mb-2">
               <h2 className={LABEL_CLS + ' mb-0'}>Máquinas <span className="text-red-500">*</span></h2>
               {cargasAuto.length > 0 && (
-                <span className="text-xs text-gray-500 truncate">
+                <span className="text-sm text-gray-500 truncate">
                   {cargasAuto.length} {cargasAuto.length === 1 ? 'máquina' : 'máquinas'}
                 </span>
               )}
@@ -2092,7 +2092,7 @@ export default function NuevaNota() {
               ))}
 
               <div className="px-4 py-3 border-t border-gray-200 bg-gray-50 flex items-center justify-between">
-                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                <span className="text-sm font-semibold text-gray-500 uppercase tracking-wide">
                   Total máquinas
                 </span>
                 <span className="text-base font-bold text-dark-blue tabular-nums">
@@ -2150,7 +2150,7 @@ export default function NuevaNota() {
                     <span>Productos</span>
                     <span>${subtotalProductos.toFixed(2)}</span>
                   </div>
-                  <div className="pl-3 mt-1.5 space-y-1.5 text-xs text-blue-700/80">
+                  <div className="pl-3 mt-1.5 space-y-1.5 text-sm text-blue-700/80">
                     {productosLista
                       .map(item => ({
                         item,
@@ -2236,7 +2236,7 @@ export default function NuevaNota() {
                     <span>Productos</span>
                     <span>${subtotalProductos.toFixed(2)}</span>
                   </div>
-                  <div className="pl-3 mt-1.5 space-y-1.5 text-xs text-blue-700/80">
+                  <div className="pl-3 mt-1.5 space-y-1.5 text-sm text-blue-700/80">
                     {productosLista
                       .map(item => ({
                         item,
@@ -2337,7 +2337,7 @@ export default function NuevaNota() {
             <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-gray-100 flex-shrink-0">
               <div>
                 <h2 className="text-base font-semibold text-gray-900">Forma de pago</h2>
-                <p className="text-xs text-gray-500 mt-0.5">Se cobra al momento</p>
+                <p className="text-sm text-gray-500 mt-0.5">Se cobra al momento</p>
               </div>
               <button
                 type="button"
@@ -2422,7 +2422,7 @@ export default function NuevaNota() {
                 <h2 className="text-base font-semibold text-gray-900">
                   Agregar producto
                 </h2>
-                <p className="text-xs text-gray-500 mt-0.5">
+                <p className="text-sm text-gray-500 mt-0.5">
                   {esCarga(selectorProducto.ambito)
                     ? `Carga ${selectorProducto.carga + 1} · se cobra por medida`
                     : 'Se cobra por pieza completa'}
@@ -2488,7 +2488,7 @@ export default function NuevaNota() {
                             <p className={`text-base font-semibold ${bloqueado ? 'text-gray-400' : 'text-gray-900'}`}>
                               {etiquetaProducto(p)}
                             </p>
-                            <p className="text-xs text-gray-500 tabular-nums">{detalleProducto(p, ambito)}</p>
+                            <p className="text-sm text-gray-500 tabular-nums">{detalleProducto(p, ambito)}</p>
                           </div>
                           {yaEsta ? (
                             <span className="flex-shrink-0 text-xs font-semibold text-gray-500 bg-gray-200 rounded-pill px-2.5 py-1">

@@ -10,7 +10,7 @@ const Fila = ({ r }) => (
   <div className="flex justify-between px-4 py-3.5 text-sm text-gray-600">
     <span>
       {r.label}
-      {r.nota && <span className="block text-xs text-gray-400">{r.nota}</span>}
+      {r.nota && <span className="block text-sm text-gray-400">{r.nota}</span>}
     </span>
     <span>{r.sign}{fmt(r.value)}</span>
   </div>
@@ -33,7 +33,7 @@ function Recuadro({ titulo, filas, totalLabel, total, aparte }) {
         {aparte && (
           <>
             <div className="px-4 pt-3 pb-1 bg-gray-50/60">
-              <p className="text-xs font-medium uppercase tracking-wide text-gray-400">{aparte.titulo}</p>
+              <p className="text-sm font-medium uppercase tracking-wide text-gray-400">{aparte.titulo}</p>
             </div>
             {aparte.filas.map((r) => <Fila key={r.label} r={r} />)}
           </>
