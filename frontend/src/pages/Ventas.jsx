@@ -391,7 +391,7 @@ export default function Ventas() {
             className="w-full h-11 flex items-center justify-between gap-2 px-4 rounded-lg border border-gray-300 bg-white text-base text-gray-800 hover:bg-gray-50 transition-colors"
           >
             <span className="truncate">
-              <span className="text-gray-500">Período: </span>
+              <span className="hidden sm:inline text-gray-500">Período: </span>
               <span className="font-medium">{filtroLabel}</span>
             </span>
             <svg className={`w-4 h-4 flex-shrink-0 text-gray-500 transition-transform ${mostrarFiltro ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
