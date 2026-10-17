@@ -265,8 +265,8 @@ function Movimientos({ data, onChange }) {
   const movimientos = data.movimientos ?? [];
 
   return (
-    <div className="space-y-6">
-      <form onSubmit={submit} className="space-y-4">
+    <div className="space-y-12">
+      <form onSubmit={submit} className="space-y-8">
         <ErrorBox message={error} />
         <div className="flex gap-2">
           {[
@@ -275,7 +275,7 @@ function Movimientos({ data, onChange }) {
           ].map((t) => (
             <button
               key={t.id} type="button" onClick={() => setTipo(t.id)}
-              className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              className={`flex-1 px-4 py-3.5 rounded-lg text-sm font-medium transition-colors ${
                 tipo === t.id
                   ? (t.id === 'salida' ? 'bg-red-600 text-white' : 'bg-green-600 text-white')
                   : 'bg-white text-gray-600 border border-gray-300 hover:bg-gray-50'
@@ -290,15 +290,15 @@ function Movimientos({ data, onChange }) {
           <input
             type="text" required value={concepto} onChange={(e) => setConcepto(e.target.value)}
             placeholder="Ej. Compra de detergente"
-            className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-base"
+            className="w-full border border-gray-300 rounded-lg px-3 py-3.5 text-base"
           />
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Monto</label>
           <input
             type="number" min="0.01" step="0.01" required value={monto} onChange={(e) => setMonto(e.target.value)}
-            placeholder="0.00"
-            className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-base"
+            placeholder="$0.00"
+            className="w-full border border-gray-300 rounded-lg px-3 py-3.5 text-base"
           />
         </div>
         <button
@@ -311,7 +311,7 @@ function Movimientos({ data, onChange }) {
 
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <div className="px-4 py-3 border-b border-gray-200">
-          <h2 className="text-sm font-semibold text-gray-700">Movimientos de la sesión</h2>
+          <h2 className="text-sm font-semibold text-gray-700">Movimientos</h2>
         </div>
         {movimientos.length === 0 ? (
           <EmptyState>Sin movimientos registrados.</EmptyState>
@@ -472,7 +472,7 @@ function Corte({ data, onCerrar, onAbrir }) {
           <label className="block text-sm font-medium text-gray-700 mb-1">Efectivo contado</label>
           <input
             type="number" min="0" step="0.01" required value={contado} onChange={(e) => cambiarContado(e.target.value)}
-            placeholder="0.00"
+            placeholder="$0.00"
             className={`w-full border border-gray-300 rounded-lg px-3 py-2.5 text-base font-medium ${
               diferencia === null ? 'text-gray-900'
                 : Math.abs(diferencia) < 0.005 ? 'text-blue-600'
@@ -500,7 +500,7 @@ function Corte({ data, onCerrar, onAbrir }) {
               id="caja-final"
               type="number" min="0" step="0.01" required value={cajaFinal}
               onChange={(e) => cambiarCajaFinal(e.target.value)}
-              placeholder="0.00"
+              placeholder="$0.00"
               className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-base font-medium"
             />
           </div>
@@ -511,7 +511,7 @@ function Corte({ data, onCerrar, onAbrir }) {
               type="number" min="0" step="0.01" required value={sobre}
               onChange={(e) => cambiarSobre(e.target.value)}
               disabled={!sobreEditable}
-              placeholder="0.00"
+              placeholder="$0.00"
               className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-base font-medium disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed"
             />
           </div>
