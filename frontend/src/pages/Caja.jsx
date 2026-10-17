@@ -449,7 +449,7 @@ function Corte({ data, onCerrar, onAbrir }) {
         <p className="text-sm font-semibold text-dark-blue">
           {esMiTurno ? 'Tu turno' : `Turno de ${caja.usuario_apertura || '—'}`}
         </p>
-        <p className="text-xs text-gray-500 mt-0.5">Abierto desde las {fmtHora(caja.abierta_at)}</p>
+        <p className="text-sm text-gray-500 mt-0.5">Abierto desde las {fmtHora(caja.abierta_at)}</p>
         {/* La nota que se dejó al abrir. */}
         {caja.notas_apertura && (
           <p className="text-xs text-gray-600 mt-1.5">Nota de apertura: {caja.notas_apertura}</p>
@@ -473,7 +473,7 @@ function Corte({ data, onCerrar, onAbrir }) {
           <input
             type="number" min="0" step="0.01" required value={contado} onChange={(e) => cambiarContado(e.target.value)}
             placeholder="$0.00"
-            className={`w-full border border-gray-300 rounded-lg px-3 py-2.5 text-base font-medium ${
+            className={`w-full border border-gray-300 rounded-lg px-3 py-3.5 text-base font-medium ${
               diferencia === null ? 'text-gray-900'
                 : Math.abs(diferencia) < 0.005 ? 'text-blue-600'
                 : diferencia < 0 ? 'text-red-600' : 'text-green-600'
@@ -501,7 +501,7 @@ function Corte({ data, onCerrar, onAbrir }) {
               type="number" min="0" step="0.01" required value={cajaFinal}
               onChange={(e) => cambiarCajaFinal(e.target.value)}
               placeholder="$0.00"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-base font-medium"
+              className="w-full border border-gray-300 rounded-lg px-3 py-3.5 text-base font-medium"
             />
           </div>
           <div>
@@ -512,22 +512,22 @@ function Corte({ data, onCerrar, onAbrir }) {
               onChange={(e) => cambiarSobre(e.target.value)}
               disabled={!sobreEditable}
               placeholder="$0.00"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-base font-medium disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed"
+              className="w-full border border-gray-300 rounded-lg px-3 py-3.5 text-base font-medium disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed"
             />
           </div>
-          <p className={`col-span-2 -mt-1 text-xs ${repartoMal ? 'text-red-600 font-medium' : 'text-gray-500'}`}>
+          <p className={`col-span-2 -mt-1 text-sm ${repartoMal ? 'text-red-600 font-medium' : 'text-gray-500'}`}>
             {repartoMal
               ? `La caja final y el sobre tienen que sumar lo contado (${fmt(contadoNum)}), sin números negativos.`
               : sobreEditable
                 ? 'Reparte lo contado: la caja final se queda en el cajón y con ella abre el siguiente turno; el sobre se aparta.'
-                : 'Escribe la caja final: se queda en el cajón y con ella abre el siguiente turno. El sobre es lo que sobra y se calcula solo.'}
+                : 'Con la caja final se abre el siguiente turno.'}
           </p>
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Nota de cierre (opcional)</label>
           <textarea
             rows={4} value={notas} onChange={(e) => setNotas(e.target.value)}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-base resize-y min-h-[6rem]"
+            className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-base resize-y min-h-[8rem]"
           />
         </div>
         <button
