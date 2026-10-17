@@ -674,9 +674,12 @@ export default function Clientes() {
                   <button
                     type="button"
                     onClick={() => { const c = infoCliente; cerrarInfo(); abrirWhatsapp(c); }}
-                    className="inline-flex items-center gap-2 text-lg font-medium tracking-wide hover:underline"
+                    className="inline-flex items-center gap-2 text-lg font-medium tracking-wide text-blue hover:underline"
                   >
                     {telefonoLegible(infoCliente.telefono)}
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
                   </button>
                 ) : (
                   <p className="text-base text-gray-400 italic">Sin teléfono</p>
@@ -698,7 +701,7 @@ export default function Clientes() {
                     onClick={() => setVerNotas(true)}
                     className="inline-flex items-center gap-1 text-lg font-medium text-blue hover:underline"
                   >
-                    {notasCliente.length} {notasCliente.length === 1 ? 'nota realizada' : 'notas realizadas'}
+                    {notasCliente.length} {notasCliente.length === 1 ? 'nota' : 'notas'}
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                     </svg>
