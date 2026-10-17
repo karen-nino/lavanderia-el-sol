@@ -195,7 +195,7 @@ export default function Ventas() {
   const [aniosDisponibles, setAniosDisponibles] = useState([]);
   const [mesSel, setMesSel] = useState(() => new Date().getMonth());
 
-  // Botón de filtro de la cabecera; Mes y Año despliegan su lista dentro del panel.
+  // Selector de período; Mes y Año despliegan su lista dentro del panel.
   const [mostrarFiltro, setMostrarFiltro] = useState(false);
   const [subFiltro, setSubFiltro] = useState(null); // 'mes' | 'anio' | null
   const filtroRef = useRef(null);
@@ -372,100 +372,6 @@ export default function Ventas() {
             <h1 className="text-xl font-bold text-gray-800">Ventas</h1>
             <p className="text-sm text-gray-500 mt-0.5">{filtroLabel}</p>
           </div>
-          <div className="flex items-center gap-3 relative">
-            {/* Filtro de período, como los de Notas. */}
-            <div ref={filtroRef}>
-              <button
-                onClick={() => { setMostrarFiltro(v => !v); setSubFiltro(null); }}
-                aria-label="Filtrar por período"
-                aria-expanded={mostrarFiltro}
-                className={`w-11 h-11 rounded-full border flex items-center justify-center transition-colors ${
-                  periodo !== 'hoy'
-                    ? 'border-blue bg-light-blue text-blue-700'
-                    : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
-                }`}
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5}
-                    d="M4 6h16M7 12h10M10 18h4" />
-                </svg>
-              </button>
-
-              {mostrarFiltro && (
-                <div className="absolute right-0 top-12 z-20 bg-white border border-gray-200 rounded-xl shadow-lg p-3 w-60 max-w-[calc(100vw-2rem)] max-h-[70vh] overflow-y-auto">
-                  <p className="text-sm font-semibold text-gray-500 uppercase mb-2 px-1">Período</p>
-                  <div className="flex flex-col gap-1">
-                    {PERIODOS.map((op) => {
-                      const activo = periodo === op.id;
-                      const opCls = `flex items-center justify-between text-left text-sm px-3 py-2 rounded-lg transition-colors ${
-                        activo ? 'bg-light-blue text-blue-700 font-medium' : 'text-gray-700 hover:bg-gray-50'
-                      }`;
-                      // Mes y Año despliegan su lista aquí mismo.
-                      if (op.id === 'mes' || op.id === 'anio') {
-                        const abierto = subFiltro === op.id;
-                        return (
-                          <div key={op.id}>
-                            <button
-                              onClick={() => setSubFiltro(abierto ? null : op.id)}
-                              aria-expanded={abierto}
-                              className={`w-full ${opCls}`}
-                            >
-                              <span>
-                                {op.id === 'mes' ? 'Mes' : 'Año'}
-                                {activo && `: ${op.id === 'mes' ? MESES[mesSel] : anioSel}`}
-                              </span>
-                              <svg className={`w-3.5 h-3.5 transition-transform ${abierto ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                              </svg>
-                            </button>
-                            {abierto && op.id === 'mes' && (
-                              <div className="grid grid-cols-3 gap-1 mt-1 mb-1">
-                                {MESES.map((nombre, i) => (
-                                  <button
-                                    key={i}
-                                    onClick={() => { setMesSel(i); elegirPeriodo('mes'); }}
-                                    className={`text-sm px-2 py-2 rounded-lg transition-colors ${
-                                      activo && mesSel === i
-                                        ? 'bg-blue text-white font-medium'
-                                        : 'text-gray-700 hover:bg-gray-50'
-                                    }`}
-                                  >
-                                    {nombre.slice(0, 3)}
-                                  </button>
-                                ))}
-                              </div>
-                            )}
-                            {abierto && op.id === 'anio' && (
-                              <div className="grid grid-cols-3 gap-1 mt-1 mb-1">
-                                {anios.map((y) => (
-                                  <button
-                                    key={y}
-                                    onClick={() => { setAnioSel(y); elegirPeriodo('anio'); }}
-                                    className={`text-sm px-2 py-2 rounded-lg transition-colors ${
-                                      activo && anioSel === y
-                                        ? 'bg-blue text-white font-medium'
-                                        : 'text-gray-700 hover:bg-gray-50'
-                                    }`}
-                                  >
-                                    {y}
-                                  </button>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      }
-                      return (
-                        <button key={op.id} onClick={() => elegirPeriodo(op.id)} className={opCls}>
-                          {op.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
         </div>
       </div>
 
@@ -474,17 +380,107 @@ export default function Ventas() {
       {/* Contenido */}
       <div className="max-w-movil md:max-w-7xl mx-auto px-6 md:px-8 py-6 space-y-6">
 
-      {/* Exportar, a la derecha (donde estaba la fila de períodos). */}
-      <div className="flex justify-end">
+      {/* Período (selector que abre su panel) y Exportar, en un mismo renglón y del mismo alto (como en Caja). */}
+      <div className="flex items-center gap-3">
+        <div ref={filtroRef} className="relative flex-1 min-w-0">
+          <button
+            type="button"
+            onClick={() => { setMostrarFiltro((v) => !v); setSubFiltro(null); }}
+            aria-haspopup="menu"
+            aria-expanded={mostrarFiltro}
+            className="w-full h-11 flex items-center justify-between gap-2 px-4 rounded-lg border border-gray-300 bg-white text-base text-gray-800 hover:bg-gray-50 transition-colors"
+          >
+            <span className="truncate">
+              <span className="text-gray-500">Período: </span>
+              <span className="font-medium">{filtroLabel}</span>
+            </span>
+            <svg className={`w-4 h-4 flex-shrink-0 text-gray-500 transition-transform ${mostrarFiltro ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          {mostrarFiltro && (
+            <div role="menu" className="absolute left-0 top-full mt-2 z-20 w-full min-w-[15rem] bg-white border border-gray-200 rounded-xl shadow-lg p-2 max-h-[70vh] overflow-y-auto">
+              <div className="flex flex-col gap-1">
+                {PERIODOS.map((op) => {
+                  const activo = periodo === op.id;
+                  const opCls = `flex items-center justify-between text-left text-base px-3 py-3 rounded-lg transition-colors ${
+                    activo ? 'bg-light-blue text-blue-700 font-medium' : 'text-gray-700 hover:bg-gray-50'
+                  }`;
+                  // Mes y Año despliegan su lista aquí mismo.
+                  if (op.id === 'mes' || op.id === 'anio') {
+                    const abierto = subFiltro === op.id;
+                    return (
+                      <div key={op.id}>
+                        <button
+                          onClick={() => setSubFiltro(abierto ? null : op.id)}
+                          aria-expanded={abierto}
+                          className={`w-full ${opCls}`}
+                        >
+                          <span>
+                            {op.id === 'mes' ? 'Mes' : 'Año'}
+                            {activo && `: ${op.id === 'mes' ? MESES[mesSel] : anioSel}`}
+                          </span>
+                          <svg className={`w-4 h-4 transition-transform ${abierto ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </button>
+                        {abierto && op.id === 'mes' && (
+                          <div className="grid grid-cols-3 gap-1 mt-1 mb-1">
+                            {MESES.map((nombre, i) => (
+                              <button
+                                key={i}
+                                onClick={() => { setMesSel(i); elegirPeriodo('mes'); }}
+                                className={`text-sm px-2 py-2.5 rounded-lg transition-colors ${
+                                  activo && mesSel === i
+                                    ? 'bg-blue text-white font-medium'
+                                    : 'text-gray-700 hover:bg-gray-50'
+                                }`}
+                              >
+                                {nombre.slice(0, 3)}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        {abierto && op.id === 'anio' && (
+                          <div className="grid grid-cols-3 gap-1 mt-1 mb-1">
+                            {anios.map((y) => (
+                              <button
+                                key={y}
+                                onClick={() => { setAnioSel(y); elegirPeriodo('anio'); }}
+                                className={`text-sm px-2 py-2.5 rounded-lg transition-colors ${
+                                  activo && anioSel === y
+                                    ? 'bg-blue text-white font-medium'
+                                    : 'text-gray-700 hover:bg-gray-50'
+                                }`}
+                              >
+                                {y}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  }
+                  return (
+                    <button key={op.id} onClick={() => elegirPeriodo(op.id)} className={opCls}>
+                      {op.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* Exportar el reporte del período visible a PDF o CSV. */}
-        <div ref={exportRef} className="relative">
+        <div ref={exportRef} className="relative flex-shrink-0">
           <button
             type="button"
             onClick={() => setExportOpen((v) => !v)}
             disabled={!data || listaNotas.length === 0}
             aria-haspopup="menu"
             aria-expanded={exportOpen}
-            className="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-medium border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="h-11 flex items-center gap-1.5 px-4 rounded-lg text-base font-medium border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
@@ -518,7 +514,7 @@ export default function Ventas() {
         </div>
       </div>
 
-      {/* Fechas del período personalizado (se elige en el botón de filtro). */}
+      {/* Fechas del período personalizado (se elige en el selector de período). */}
       {periodo === 'custom' && (
         <div className="flex flex-wrap gap-3 items-center">
           <div className="flex items-center gap-2">
@@ -527,7 +523,7 @@ export default function Ventas() {
               type="date"
               value={desde}
               onChange={(e) => { setDesde(e.target.value); setPaginaNotas(1); }}
-              className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm"
+              className="h-11 border border-gray-300 rounded-lg px-3 text-base"
             />
           </div>
           <div className="flex items-center gap-2">
@@ -536,7 +532,7 @@ export default function Ventas() {
               type="date"
               value={hasta}
               onChange={(e) => { setHasta(e.target.value); setPaginaNotas(1); }}
-              className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm"
+              className="h-11 border border-gray-300 rounded-lg px-3 text-base"
             />
           </div>
         </div>
