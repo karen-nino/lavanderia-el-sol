@@ -374,9 +374,9 @@ export default function Notas() {
       || referencia.includes(q);
   });
 
-  // Chips de los filtros activos, en el subtítulo; se quitan con su ✕.
+  // Chips de los filtros activos, bajo la búsqueda y a la derecha; se quitan con su ✕.
   const chipsFiltros = (filtro !== 'TODOS' || rangoFecha !== 'TODAS') && (
-    <div className="flex flex-wrap gap-2 mt-1">
+    <div className="flex flex-wrap justify-end gap-2">
       {filtro !== 'TODOS' && (
         <ChipFiltro
           label={FILTRO_LABEL[filtro] ?? BADGE_ESTADO[filtro]?.label}
@@ -472,7 +472,9 @@ export default function Notas() {
         <div className="max-w-movil md:max-w-7xl mx-auto px-6 md:px-8 pt-10 md:pt-14 pb-4 flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Notas</h1>
-          {chipsFiltros || <p className="text-sm text-gray-500">Todas las notas</p>}
+          <p className="text-sm text-gray-500 mt-0.5">
+            {loading ? '\u00a0' : `${filtradas.length} ${filtradas.length === 1 ? 'nota' : 'notas'}`}
+          </p>
         </div>
         {/* `relative` en la fila: los paneles (224 px) se abren a la izquierda y así
             no se salen de la pantalla en celulares angostos. Siguen dentro del div
@@ -636,6 +638,7 @@ export default function Notas() {
         />
       </div>
 
+      {chipsFiltros}
 
       {loading && (
         <div className="flex justify-center py-12">
