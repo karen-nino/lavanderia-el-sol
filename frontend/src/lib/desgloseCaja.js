@@ -3,16 +3,21 @@
  * turnos de Ventas y las exportaciones, para que digan lo mismo.
  *
  * Recibe un turno con la forma del historial (`leerCortes` en el backend):
- *   { monto_inicial, entradas, salidas, ventas_desglose: { efectivo,
- *     transferencia }, ingresos: { lavadoras_medianas, ... } | null,
- *     spe_debe: number | null }
+ *   { monto_inicial, entradas, salidas, ventas_desglose: { total, efectivo,
+ *     transferencia, tarjeta }, ingresos: { lavadoras_medianas, ... } | null,
+ *     ingresos_solo_efectivo?, spe_debe: number | null }
  *
  * Reglas:
- * - Ingresos suma las ventas en efectivo por concepto (máquinas, SPE, edredón,
- *   productos).
- * - "Cómo se cobró" (efectivo y transferencia) es informativo; la transferencia
- *   y el SPE Debe no pasan por el cajón.
- * - TOTAL INGRESOS − TOTAL EGRESOS = ESPERADO EN CAJA.
+ * - Ingresos reparte por concepto todo lo vendido (máquinas, SPE, edredón,
+ *   productos), con cualquier forma de pago.
+ * - Si hubo cobros que no son en efectivo: TOTAL VENDIDO, menos la
+ *   transferencia (y la tarjeta), da el TOTAL EN EFECTIVO. Si todo fue en
+ *   efectivo, un solo TOTAL INGRESOS como antes.
+ * - Cortes congelados con el reparto solo del efectivo
+ *   (`ingresos_solo_efectivo`) se leen como entonces: un solo total.
+ * - "Cómo se cobró" es informativo; la transferencia y el SPE Debe no pasan
+ *   por el cajón.
+ * - TOTAL INGRESOS (el de efectivo) − TOTAL EGRESOS = ESPERADO EN CAJA.
  */
 
 const num = (v) => Number(v ?? 0) || 0;
@@ -37,7 +42,11 @@ export const lineasConcepto = (reparto) =>
 
 export function desgloseCaja(t) {
   const efectivo = num(t.ventas_desglose?.efectivo);
+  const transferencia = num(t.ventas_desglose?.transferencia);
+  const tarjeta = num(t.ventas_desglose?.tarjeta);
   const ing = t.ingresos;
+  // El reparto trae lo no cobrado en efectivo: hay que restarlo.
+  const hayNoEfectivo = Boolean(ing) && !t.ingresos_solo_efectivo && transferencia + tarjeta > 0;
 
   const ingresos = [
     { label: 'Caja inicial', value: num(t.monto_inicial), sign: '' },
@@ -47,6 +56,19 @@ export function desgloseCaja(t) {
       ? lineasConcepto(ing).map((l) => ({ ...l, sign: '' }))
       : [{ label: 'Ventas en efectivo', value: efectivo, sign: '+' }]),
   ];
+  if (hayNoEfectivo) {
+    const vendido = ingresos.reduce((a, l) => a + l.value, 0);
+    ingresos.push(
+      // Subtotal: no se suma con los demás renglones.
+      { label: 'Total vendido', value: vendido, sign: '', subtotal: true },
+      ...(transferencia > 0
+        ? [{ label: 'Transferencia', value: transferencia, sign: '−', nota: 'No entra al cajón' }]
+        : []),
+      ...(tarjeta > 0
+        ? [{ label: 'Tarjeta', value: tarjeta, sign: '−', nota: 'No entra al cajón' }]
+        : []),
+    );
+  }
   // Informativo, como "Cómo se cobró" de Ventas: no se suma.
   const comoSeCobro = [
     { label: 'Efectivo',      value: efectivo, sign: '' },
@@ -71,6 +93,8 @@ export function desgloseCaja(t) {
     ingresos,
     comoSeCobro,
     totalIngresos,
+    // Con cobros que no son en efectivo, el total de ingresos es el del efectivo.
+    totalIngresosLabel: hayNoEfectivo ? 'Total en efectivo' : 'Total ingresos',
     egresos,
     totalEgresos,
     desglose: [

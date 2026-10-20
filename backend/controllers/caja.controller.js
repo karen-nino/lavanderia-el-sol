@@ -46,15 +46,16 @@ export async function ventasDeSesion(client, cajaId) {
 }
 
 /**
- * De dónde salió el efectivo de una caja (recuadro Ingresos del corte). Cada
- * cobro (mismas reglas que ventasDeSesion) se reparte entre las partes de su
- * nota en proporción a lo que vale cada una:
+ * Qué se vendió en una caja, por concepto (recuadro Ingresos del corte). Cada
+ * cobro, con cualquier forma de pago (mismas reglas que ventasDeSesion), se
+ * reparte entre las partes de su nota en proporción a lo que vale cada una:
  * - Por Encargo: `edredon` (servicios de Edredón), `por_encargo` (los demás) y
  *   `productos` (lo que se cobra encima del servicio).
  * - Lo demás: lavadoras medianas / jumbo (por la primera máquina del hueco o el
  *   tamaño pedido; el edredón cuenta como jumbo), secadoras y productos.
  * Se trabaja en centavos y el residuo va a la parte más grande: la suma es
- * exactamente el efectivo.
+ * exactamente el total cobrado. Los cortes congelados antes del 2026-10-19
+ * repartían solo el efectivo (ver `ingresos_solo_efectivo` en leerCortes).
  */
 export async function ingresosDeSesion(client, cajaId) {
   return repartirCobros(client, `
@@ -67,15 +68,13 @@ export async function ingresosDeSesion(client, cajaId) {
          WHERE n.caja_id = $1
            AND n.estado_pago = 'PAGADO'
            AND n.estado <> 'CANCELADA'
-           AND COALESCE(n.forma_pago, 'EFECTIVO') = 'EFECTIVO'
         UNION ALL
         SELECT ab.nota_id, ab.monto
           FROM nota_abonos ab
           JOIN notas n ON n.id = ab.nota_id
          WHERE ab.caja_id = $1
            AND ab.revertido_at IS NULL
-           AND n.estado <> 'CANCELADA'
-           AND COALESCE(ab.forma_pago, 'EFECTIVO') = 'EFECTIVO'`, [cajaId]);
+           AND n.estado <> 'CANCELADA'`, [cajaId]);
 }
 
 /**
@@ -691,6 +690,11 @@ export async function leerCortes(client, where, params) {
     const ingresos = !en_curso && r.ingresos_detalle
       ? r.ingresos_detalle
       : await ingresosDeSesion(client, r.id);
+    // Congelado cuando el reparto era solo del efectivo: suma el efectivo y no
+    // el total (el reparto cuadra al centavo).
+    const sumaIngresos = Object.values(ingresos).reduce((a, v) => a + Number(v || 0), 0);
+    const ingresos_solo_efectivo = Math.abs(ventas - ventas_desglose.efectivo) >= 0.005
+      && Math.abs(sumaIngresos - ventas_desglose.efectivo) < 0.005;
     const spe_debe = en_curso
       ? await porEncargoPendienteDeSesion(client, r)
       : (r.spe_debe != null ? parseFloat(r.spe_debe) : null);
@@ -718,6 +722,7 @@ export async function leerCortes(client, where, params) {
       sobre:      r.monto_sobre != null ? parseFloat(r.monto_sobre) : null,
       // Ingresos por concepto y SPE Debe.
       ingresos,
+      ingresos_solo_efectivo,
       spe_debe,
       movimientos: (r.movimientos ?? []).map((m) => ({ ...m, monto: parseFloat(m.monto) })),
     });

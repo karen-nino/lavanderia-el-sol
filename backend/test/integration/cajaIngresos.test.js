@@ -41,10 +41,10 @@ async function autoservicio({ tipo, secadora = false, forma_pago = 'EFECTIVO' })
 }
 
 describe('GET /api/caja/actual — ingresos', () => {
-  it('reparte el efectivo por tipo de máquina, productos y Por Encargo', async () => {
+  it('reparte lo cobrado (también transferencia) por tipo de máquina, productos y Por Encargo', async () => {
     await autoservicio({ tipo: 'lavadora_mediana', secadora: true });      // 70 + 50
     await autoservicio({ tipo: 'lavadora_jumbo' });                         // 90
-    await autoservicio({ tipo: 'lavadora_mediana', forma_pago: 'TRANSFERENCIA' }); // no es efectivo
+    await autoservicio({ tipo: 'lavadora_mediana', forma_pago: 'TRANSFERENCIA' }); // 70 también
 
     const jabon = await seedProducto({ nombre: 'Jabón', precio_unitario: 5, precio_botella: 27, stock_actual: 40 });
     await api('post', '/api/notas', {
@@ -61,10 +61,28 @@ describe('GET /api/caja/actual — ingresos', () => {
 
     const { totales } = (await api('get', '/api/caja/actual')).body;
     expect(totales.ingresos).toEqual({
-      lavadoras_medianas: 70, lavadoras_jumbo: 90, secadoras: 50, productos: 27, edredon: 0, por_encargo: 30,
+      lavadoras_medianas: 140, lavadoras_jumbo: 90, secadoras: 50, productos: 27, edredon: 0, por_encargo: 30,
     });
     const suma = Object.values(totales.ingresos).reduce((a, b) => a + b, 0);
-    expect(suma).toBeCloseTo(totales.ventas_desglose.efectivo, 2);
+    expect(suma).toBeCloseTo(totales.ventas_desglose.total, 2);
+  });
+
+  it('un corte congelado con el reparto solo del efectivo se marca ingresos_solo_efectivo', async () => {
+    await autoservicio({ tipo: 'lavadora_mediana' });                               // 70 efectivo
+    await autoservicio({ tipo: 'lavadora_mediana', forma_pago: 'TRANSFERENCIA' });  // 70
+    await api('post', '/api/caja/cerrar', { monto_contado: 270, monto_caja_final: 270, monto_sobre: 0 }).expect(200);
+
+    let [corte] = (await api('get', '/api/caja/historial')).body;
+    expect(corte.ingresos.lavadoras_medianas).toBe(140);
+    expect(corte.ingresos_solo_efectivo).toBe(false);
+
+    // Como los cortes congelados antes del cambio: solo el efectivo.
+    await pool.query(
+      `UPDATE cajas SET ingresos_detalle = jsonb_set(ingresos_detalle, '{lavadoras_medianas}', '70')
+        WHERE id = $1`, [corte.id]);
+    [corte] = (await api('get', '/api/caja/historial')).body;
+    expect(corte.ingresos.lavadoras_medianas).toBe(70);
+    expect(corte.ingresos_solo_efectivo).toBe(true);
   });
 
   it('en Por Encargo, el edredón y el cubre colchón van a Edredón y lo demás a Por Encargo', async () => {

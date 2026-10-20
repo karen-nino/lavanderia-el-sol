@@ -6,7 +6,13 @@ import { fmtMoneda as fmt } from '../lib/exportUtils';
  * de Caja y turnos de Ventas). Las líneas salen de `desgloseCaja`.
  */
 
-const Fila = ({ r }) => (
+// Un subtotal (Total vendido) va como el total del recuadro, más chico.
+const Fila = ({ r }) => r.subtotal ? (
+  <div className="flex items-center justify-between px-4 py-3.5 text-base font-bold uppercase text-gray-900 bg-gray-50">
+    <span>{r.label}</span>
+    <span className="text-lg text-blue">{fmt(r.value)}</span>
+  </div>
+) : (
   <div className="flex justify-between px-4 py-3.5 text-base font-semibold text-gray-700">
     <span className="text-gray-600">
       {r.label}
@@ -52,7 +58,7 @@ export default function RecuadrosCaja({ turno, esperadoLabel = 'ESPERADO EN CAJA
   return (
     <>
       <Recuadro
-        titulo="Ingresos" filas={d.ingresos} totalLabel="TOTAL INGRESOS" total={d.totalIngresos}
+        titulo="Ingresos" filas={d.ingresos} totalLabel={d.totalIngresosLabel.toUpperCase()} total={d.totalIngresos}
         aparte={{ titulo: 'Cómo se cobró', filas: d.comoSeCobro }}
       />
       <Recuadro titulo="Egresos" filas={d.egresos} totalLabel="TOTAL EGRESOS" total={d.totalEgresos} />

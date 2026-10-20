@@ -835,7 +835,9 @@ function Historial() {
   };
 
   // Renglones { label, value, sign, nota } de la rejilla.
-  const filasRejilla = (filas) => filas.map((r) => (
+  const filasRejilla = (filas) => filas.map((r) => r.subtotal ? (
+    <div key={r.label} className="contents">{totalRejilla(r.label, fmt(r.value))}</div>
+  ) : (
     <div key={r.label} className="contents">
       <span className="text-gray-600">
         {r.label}
@@ -903,7 +905,7 @@ function Historial() {
           <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-3 text-base">
             {tituloRejilla('Ingresos')}
             {filasRejilla(d.ingresos)}
-            {totalRejilla('Total', fmt(d.totalIngresos))}
+            {totalRejilla(d.ingresos.some((r) => r.subtotal) ? d.totalIngresosLabel : 'Total', fmt(d.totalIngresos))}
             {/* Informativo: no se suma. */}
             <p className="col-span-2 -mt-1 text-sm text-gray-500">Cobrado: {cobrado}</p>
             {tituloRejilla('Egresos')}
