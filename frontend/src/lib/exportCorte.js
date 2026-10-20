@@ -33,9 +33,9 @@ const estadoCorte = (c) => {
 
 // ── CSV ─────────────────────────────────────────────────────
 const ENCABEZADOS_CSV = [
-  'Fecha', 'Hora', 'Abrió', 'Cerró', 'Caja inicial', 'Ventas', 'Ventas efectivo', 'Transferencia', 'Tarjeta',
+  'Fecha', 'Apertura', 'Cierre', 'Abrió', 'Cerró', 'Caja inicial', 'Ventas', 'Ventas efectivo', 'Transferencia', 'Tarjeta',
   'Lavadoras Medianas', 'Lavadoras Jumbo', 'Secadoras', 'SPE', 'Edredón', 'Productos',
-  'Entradas', 'Gastos', 'Total ingresos', 'SPE Debe', 'Total egresos',
+  'Entradas', 'Gastos', 'Total en efectivo', 'SPE Debe', 'Total egresos',
   'Esperado', 'Contado', 'Diferencia', 'Caja final', 'Sobre',
   'Estado', 'Nota apertura', 'Nota cierre',
 ];
@@ -54,11 +54,13 @@ const filasMovimientos = (c) => (c.movimientos ?? []).map((m) => [
   num(m.tipo === 'salida' ? -m.monto : m.monto),
 ]);
 
-// Un importe del reparto por concepto, vacío si el corte no lo trae.
+// Un importe del reparto por concepto (lo vendido con cualquier forma de pago;
+// en cortes congelados antes del 2026-10-19, solo el efectivo), vacío si no lo trae.
 const ing = (c, k) => (c.ingresos ? num(c.ingresos[k] ?? 0) : '');
 
 const filaCSV = (c) => [
   fechaISO(fechaCorte(c)),
+  formatHora12(c.abierta_at),
   horaCierre(c),
   c.usuario_apertura ?? '',
   c.en_curso ? 'En curso' : (c.usuario_cierre ?? ''),

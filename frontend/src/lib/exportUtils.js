@@ -74,18 +74,20 @@ export const esc = (s) =>
 
 const formatFechaImpresion = () => `${fechaLarga(new Date())} a las ${formatHora12(new Date())}`;
 
-// Hoja de estilos común para los documentos imprimibles (cortes y ventas).
+// Hoja de estilos común para los documentos imprimibles (cortes, ventas e inventario).
 const ESTILOS = `
   * { box-sizing: border-box; }
   body { font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-         color: #1f2937; margin: 0; padding: 32px; }
-  header { border-bottom: 2px solid #e5e7eb; padding-bottom: 16px; margin-bottom: 24px; }
-  header .marca { font-size: 13px; letter-spacing: .04em; text-transform: uppercase; color: #2563eb; font-weight: 700; }
-  header h1 { font-size: 22px; margin: 4px 0 2px; }
-  header .sub { color: #6b7280; font-size: 13px; }
+         color: #1a2230; margin: 0; padding: 32px; font-size: 14px; line-height: 1.45;
+         font-variant-numeric: tabular-nums; }
+  header { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px;
+           border-bottom: 2px solid #1a2230; padding-bottom: 14px; margin-bottom: 24px; }
+  header .marca { font-size: 14px; color: #1b3a5c; font-weight: 700; }
+  header h1 { font-size: 24px; margin: 2px 0 0; letter-spacing: -0.01em; }
+  header .sub { color: #4a5565; font-size: 13.5px; text-align: right; }
   h2 { font-size: 16px; margin: 0; }
-  .seccion { font-size: 14px; font-weight: 700; margin: 24px 0 10px; }
-  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .seccion { font-size: 15px; font-weight: 700; margin: 28px 0 8px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
   .r { text-align: right; }
   .ok { color: #2563eb; } .neg { color: #b42318; } .pos { color: #1f7a41; }
   /* Corte: cifras del cierre arriba, Ingresos | Egresos y movimientos, firmas */
@@ -127,24 +129,21 @@ const ESTILOS = `
   .firma p { margin: 6px 0 0; }
   .firma .rol { color: #4a5565; }
   .firma .obs { color: #4a5565; }
-  .resumen th, .resumen td { padding: 8px 6px; border-bottom: 1px solid #f3f4f6; }
-  .resumen thead th { text-align: left; border-bottom: 2px solid #e5e7eb; color: #6b7280;
-                      font-size: 11px; text-transform: uppercase; letter-spacing: .03em; }
-  .resumen tfoot td { font-weight: 700; border-top: 2px solid #d1d5db; }
-  .resumen tr.cancelada td { color: #9ca3af; }
+  .resumen th, .resumen td { padding: 7px 6px; border-bottom: 1px solid #eceff3; vertical-align: baseline; }
+  .resumen th:first-child, .resumen td:first-child { padding-left: 0; }
+  .resumen th:last-child, .resumen td:last-child { padding-right: 0; }
+  .resumen thead th { text-align: left; border-bottom: 1px solid #1a2230; color: #4a5565;
+                      font-size: 12.5px; font-weight: 600; }
+  .resumen thead th.r { text-align: right; }
+  .resumen tfoot td { font-weight: 700; border-top: 2px solid #1a2230; border-bottom: none; }
+  .resumen tr.cancelada td { color: #6b7280; }
   .resumen tr.pendiente td { background: #fffbeb; }
   .resumen .tachado { text-decoration: line-through; }
   .resumen .chip { display: inline-block; margin-left: 6px; font-size: 10px; font-weight: 700;
                    color: #b45309; background: #fef3c7; border-radius: 9999px; padding: 1px 6px; }
-  .aviso { font-size: 11px; color: #9ca3af; margin: 0 0 10px; }
-  /* Ventas */
-  .tarjetas { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 8px; }
-  .tarjeta { flex: 1; min-width: 150px; border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px 14px; }
-  .tarjeta .t { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: #6b7280; }
-  .tarjeta .v { font-size: 20px; font-weight: 700; margin-top: 4px; }
-  .tarjeta .s { font-size: 11px; color: #9ca3af; margin-top: 2px; }
-  footer { margin-top: 32px; padding-top: 12px; border-top: 1px solid #f3f4f6;
-           color: #9ca3af; font-size: 11px; }
+  .aviso { font-size: 12.5px; color: #4a5565; margin: 0 0 10px; }
+  footer { display: flex; justify-content: space-between; gap: 12px; margin-top: 32px; padding-top: 10px;
+           border-top: 1px solid #d9dee5; color: #4a5565; font-size: 12px; }
   @media print { body { padding: 0; } @page { margin: 16mm; } }
 `;
 
@@ -161,12 +160,14 @@ export function imprimirDocumento({ titulo, subtitulo, cuerpo }) {
 <style>${ESTILOS}</style></head>
 <body>
   <header>
-    <div class="marca">Lavandería El Sol</div>
-    <h1>${esc(titulo)}</h1>
+    <div>
+      <div class="marca">Lavandería El Sol</div>
+      <h1>${esc(titulo)}</h1>
+    </div>
     ${subtitulo ? `<div class="sub">${esc(subtitulo)}</div>` : ''}
   </header>
   ${cuerpo}
-  <footer>Generado el ${esc(formatFechaImpresion())}</footer>
+  <footer><span>Lavandería El Sol</span><span>Generado el ${esc(formatFechaImpresion())}</span></footer>
 </body></html>`);
   win.document.close();
   win.focus();

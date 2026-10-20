@@ -8,7 +8,7 @@
  *                     atendio, forma_pago, total_productos, total }],
  *     turnos: [turnos de caja del período, con la forma de /caja/historial] }
  *
- * Los turnos salen con Ingresos, Egresos y Desglose (piezas de exportCorte.js).
+ * Los turnos salen como en el PDF del corte (bloqueDetalle de exportCorte.js).
  */
 
 import { formatHora12 } from './fecha';
@@ -36,6 +36,15 @@ const estadoLabel = (e, tipoServicio) =>
   etiquetaEstadoNota(e, tipoServicio, ESTADO_LABEL[e] ?? (e ?? ''));
 
 
+// El servicio de la nota, con las mismas palabras que la tabla de Ventas.
+const SERVICIO_LABEL = {
+  AUTOSERVICIO: 'Autoservicio',
+  POR_ENCARGO:  'Por Encargo',
+  EDREDON:      'Edredón',
+  PRODUCTOS:    'Productos',
+};
+const servicioLabel = (t) => SERVICIO_LABEL[t] ?? (t ?? '');
+
 // Máquinas de una nota como texto: "Lavadora 1 (2 cargas), Secadora 3 (1 carga)".
 const maquinasTexto = (maquinas) =>
   (maquinas ?? [])
@@ -53,16 +62,24 @@ const fechaNotaLocal = (fecha) => {
 };
 
 // ── CSV ─────────────────────────────────────────────────────
+// "Pago" separa las pendientes (no cuentan en lo cobrado) para filtrar en Excel.
 const ENCABEZADOS_CSV = [
-  'Folio', 'Fecha', 'Hora', 'Estado', 'Máquinas', 'Atendió',
+  'Folio', 'Fecha', 'Hora', 'Servicio', 'Estado', 'Pago', 'Máquinas', 'Atendió',
   'Forma de pago', 'Productos', 'Total',
 ];
+
+const pagoLabel = (n) => {
+  if (n.estado === 'CANCELADA') return 'Cancelada';
+  return n.estado_pago === 'PENDIENTE' ? 'Pendiente' : 'Pagada';
+};
 
 const filaCSV = (n) => [
   n.folio ?? '',
   typeof n.fecha === 'string' ? n.fecha.slice(0, 10) : '',
   formatHora12(n.creado_en),
+  servicioLabel(n.tipo_servicio),
   estadoLabel(n.estado, n.tipo_servicio),
+  pagoLabel(n),
   maquinasTexto(n.maquinas),
   n.atendio ?? '',
   formaPagoLabel(n.forma_pago),
@@ -100,16 +117,16 @@ export function descargarVentasCSV(data, sufijo) {
 }
 
 // ── PDF (impresión del navegador) ───────────────────────────
-const tarjeta = (t, v, sub) =>
-  `<div class="tarjeta"><div class="t">${esc(t)}</div><div class="v">${esc(v)}</div>` +
-  `${sub ? `<div class="s">${esc(sub)}</div>` : ''}</div>`;
+// Franja de arriba con las cifras del período (como la del corte).
+const casilla = (k, v, s) =>
+  `<div><p class="k">${esc(k)}</p><p class="v">${esc(v)}</p>${s ? `<p class="s">${esc(s)}</p>` : ''}</div>`;
 
-const bloqueTarjetas = (tj) => `
-  <div class="tarjetas">
-    ${tarjeta('Total cobrado', fmtMoneda(tj?.total_cobrado))}
-    ${tarjeta('Notas pagadas', tj?.notas_pagadas ?? 0)}
-    ${tarjeta('Productos consumidos', tj?.productos_consumidos ?? 0, 'unidades')}
-    ${tarjeta('Saldo pendiente', tj?.notas_pendientes ?? 0, 'notas con saldo')}
+const bloqueCifras = (tj) => `
+  <div class="cifras">
+    ${casilla('Total cobrado', fmtMoneda(tj?.total_cobrado))}
+    ${casilla('Notas pagadas', tj?.notas_pagadas ?? 0)}
+    ${casilla('Productos consumidos', tj?.productos_consumidos ?? 0, 'unidades')}
+    ${casilla('Notas con saldo', tj?.notas_pendientes ?? 0, 'por cobrar')}
   </div>`;
 
 const filaCorte = (etiqueta, valor, total = false) => `
@@ -117,25 +134,30 @@ const filaCorte = (etiqueta, valor, total = false) => `
     <td>${esc(etiqueta)}</td><td class="r">${fmtMoneda(valor)}</td>
   </tr>`;
 
-// Por concepto: lo cobrado repartido como el corte de Caja; suma el total cobrado.
-const bloqueCorte = (c) => {
-  const conceptos = lineasConcepto(c?.conceptos);
-  const suma = conceptos.reduce((a, l) => a + l.value, 0);
-  return `
-  <div class="seccion">Corte de caja</div>
-  <table class="desglose">
-    <tbody>
-      <tr class="sub"><td colspan="2">Por concepto</td></tr>
-      ${conceptos.map((l) => filaCorte(l.label, l.value)).join('')}
-      ${filaCorte('Suma de conceptos', suma)}
-      <tr class="sub"><td colspan="2">Cómo se cobró</td></tr>
-      ${filaCorte('Efectivo', c?.total_efectivo)}
-      ${filaCorte('Transferencia', c?.total_transferencia)}
-      ${(c?.total_tarjeta ?? 0) > 0 ? filaCorte('Tarjeta', c.total_tarjeta) : ''}
-      ${filaCorte('Total cobrado', c?.total_cobrado, true)}
-    </tbody>
-  </table>`;
-};
+// Lo cobrado repartido por concepto (como el corte de Caja) y, al lado, cómo
+// se cobró. Los conceptos suman el total cobrado.
+const bloqueCorte = (c) => `
+  <div class="dos">
+    <div>
+      <p class="seccion">Por concepto</p>
+      <table class="desglose">
+        <tbody>
+          ${lineasConcepto(c?.conceptos).map((l) => filaCorte(l.label, l.value)).join('')}
+          ${filaCorte('Total cobrado', c?.total_cobrado, true)}
+        </tbody>
+      </table>
+    </div>
+    <div>
+      <p class="seccion">Cómo se cobró</p>
+      <table class="desglose">
+        <tbody>
+          ${filaCorte('Efectivo', c?.total_efectivo)}
+          ${filaCorte('Transferencia', c?.total_transferencia)}
+          ${(c?.total_tarjeta ?? 0) > 0 ? filaCorte('Tarjeta', c.total_tarjeta) : ''}
+        </tbody>
+      </table>
+    </div>
+  </div>`;
 
 const bloqueNotas = (notas) => {
   if (notas.length === 0) return '<div class="seccion">Notas</div><p>Sin notas en este período.</p>';
@@ -154,6 +176,7 @@ const bloqueNotas = (notas) => {
     <tr class="${cls}">
       <td>${esc(n.folio)}</td>
       <td>${esc(fechaLarga(fechaNotaLocal(n.fecha)))}</td>
+      <td>${esc(servicioLabel(n.tipo_servicio) || '—')}</td>
       <td>${estadoCell}</td>
       <td>${esc(maquinasTexto(n.maquinas) || '—')}</td>
       <td>${esc(n.atendio || '—')}</td>
@@ -168,7 +191,7 @@ const bloqueNotas = (notas) => {
     <table class="resumen">
       <thead>
         <tr>
-          <th>Folio</th><th>Fecha</th><th>Estado</th><th>Máquinas</th>
+          <th>Folio</th><th>Fecha</th><th>Servicio</th><th>Estado</th><th>Máquinas</th>
           <th>Atendió</th><th>Pago</th><th class="r">Productos</th><th class="r">Total</th>
         </tr>
       </thead>
@@ -205,7 +228,7 @@ const bloqueAbonos = (abonos) => {
     </table>`;
 };
 
-// Un bloque por turno de caja del período, con Ingresos, Egresos y Desglose.
+// Un bloque por turno de caja del período, con sus cifras, Ingresos y Egresos.
 const bloqueTurnos = (turnos) => (turnos.length === 0 ? '' : `
   <p class="seccion">Turnos de caja (${turnos.length})</p>
   ${turnos.map(bloqueDetalle).join('')}`);
@@ -214,7 +237,7 @@ const bloqueTurnos = (turnos) => (turnos.length === 0 ? '' : `
 export function imprimirVentas(data, { titulo, subtitulo } = {}) {
   if (!data) return;
   const cuerpo =
-    bloqueTarjetas(data.tarjetas) +
+    bloqueCifras(data.tarjetas) +
     bloqueCorte(data.corte) +
     bloqueTurnos(data.turnos ?? []) +
     bloqueAbonos(data.abonos ?? []) +

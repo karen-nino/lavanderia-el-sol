@@ -36,9 +36,10 @@ describe('descargarCortesCSV', () => {
   it('el turno en curso se exporta con su fecha de apertura y sin cierre', () => {
     descargarCortesCSV([{ ...corte([]), en_curso: true, cerrada_at: null, contado: null, diferencia: null }], 'hoy');
     const [fila] = capturado.filas;
-    expect(fila[0]).toBe('2026-10-04');
-    expect(fila[1]).toBe('en curso');
-    expect(fila[3]).toBe('En curso');
+    const col = (k) => fila[capturado.encabezados.indexOf(k)];
+    expect(col('Fecha')).toBe('2026-10-04');
+    expect(col('Cierre')).toBe('en curso');
+    expect(col('Cerró')).toBe('En curso');
     expect(fila[capturado.encabezados.indexOf('Estado')]).toBe('En curso');
   });
 
@@ -55,7 +56,7 @@ describe('descargarCortesCSV', () => {
     expect(col('Lavadoras Jumbo')).toBe('90.00');
     expect(col('Secadoras')).toBe('50.00');
     expect(col('SPE Debe')).toBe('40.00');
-    expect(col('Total ingresos')).toBe('810.00'); // 500 inicial + 210 efectivo + 100 entradas
+    expect(col('Total en efectivo')).toBe('810.00'); // 500 inicial + 210 efectivo + 100 entradas
     expect(col('Total egresos')).toBe('300.00');  // solo los gastos
   });
 

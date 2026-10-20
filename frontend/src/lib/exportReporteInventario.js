@@ -95,7 +95,7 @@ export function imprimirReporte(data) {
   const polvo  = productos.filter(esPolvo);
   const marca  = productos.filter((p) => esMarca(p) && !esPolvo(p));
   const cuerpo = productos.length === 0
-    ? '<p>Sin productos líquidos en este período.</p>'
+    ? '<p>Sin productos en el inventario ese día.</p>'
     : (() => {
         const conDevuelto = hayDevuelto(productos);
         return seccion('Granel', granel, conDevuelto) + seccion('Polvo', polvo, conDevuelto)
