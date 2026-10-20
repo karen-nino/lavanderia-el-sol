@@ -898,10 +898,10 @@ export default function DetalleNota() {
               disabled={loadingAccion}
             />
           )}
-          {/* Admin en Por Encargo: Procesado, Salidas, Ajuste y Cobrar; lo demás: Cobrar, Ajuste, Salidas y Procesado. */}
+          {/* Admin en Por Encargo: Procesado, Salidas, Ajuste y Cobrar; lo demás: Ajuste, Cobrar, Salidas y Procesado. */}
           {esAdmin && esEncargoNota
             ? <>{botonProcesado}{botonSalidas}{botonAjuste}{botonCobrar}</>
-            : <>{botonCobrar}{botonAjuste}{botonSalidas}{botonProcesado}</>}
+            : <>{botonAjuste}{botonCobrar}{botonSalidas}{botonProcesado}</>}
           {/* Último paso; exige el cobro. En Por Encargo dice ENTREGAR. */}
           {puedeFinalizar(nota) && (
             <AccionCircular
