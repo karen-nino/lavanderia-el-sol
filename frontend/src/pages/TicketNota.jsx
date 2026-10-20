@@ -122,6 +122,22 @@ function Linea({ label, value, fuerte }) {
   );
 }
 
+/** Sello del pago bajo el total: PAGADA en verde, PENDIENTE en ámbar, CANCELADA en gris. */
+function SelloPago({ nota }) {
+  const [texto, color] = nota.estado === 'CANCELADA'
+    ? ['CANCELADA', 'text-gray-500']
+    : nota.estado_pago === 'PAGADO'
+      ? ['PAGADA', 'text-green-600']
+      : ['PENDIENTE', 'text-amber-600'];
+  return (
+    <div className="flex justify-end px-1.5 pt-3">
+      <span className={`-rotate-6 rounded border-2 border-current px-2.5 py-1.5 text-[14px] font-bold leading-none tracking-[0.14em] outline outline-1 outline-current outline-offset-2 opacity-[.85] ${color}`}>
+        {texto}
+      </span>
+    </div>
+  );
+}
+
 /** Línea de guiones entre bloques. */
 function Corte() {
   return <div className="my-2 border-t border-dashed border-black/70" />;
@@ -410,7 +426,7 @@ export default function TicketNota() {
           // Los de marca, en su propio renglón.
           const marca = (cg.productos ?? []).filter(seVendePorUnidad);
           return (
-            <div key={cg.id} className="space-y-1">
+            <div key={cg.id} className="space-y-2">
               <div className="flex items-baseline justify-between gap-2">
                 <span className="flex-1">
                   <span className="inline-block w-9">1</span>
@@ -426,7 +442,7 @@ export default function TicketNota() {
                     <span className="inline-block w-9">{p.cantidad}</span>
                     {nombreProd(p).toUpperCase()}
                   </span>
-                  <span className="whitespace-nowrap">{fmtMonto(p.subtotal)}</span>
+                  <span className="whitespace-nowrap font-bold">{fmtMonto(p.subtotal)}</span>
                 </div>
               ))}
             </div>
@@ -442,12 +458,12 @@ export default function TicketNota() {
     const totalCarga = costoDeCarga(cg);
 
     return (
-      <div key={cg.id} className="space-y-1">
+      <div key={cg.id} className="space-y-2">
         {/* En Autoservicio la máquina es el renglón: sin encabezado. */}
         {nota.tipo_servicio !== 'AUTOSERVICIO' && (
-          <div className="flex items-baseline justify-between gap-2 font-bold">
+          <div className="flex items-baseline justify-between gap-2 font-bold text-blue">
             <span className="uppercase whitespace-nowrap">{etiquetaCarga(cg, nota.tipo_servicio)}</span>
-            <span className="whitespace-nowrap">{fmtMonto(totalCarga)}</span>
+            <span className="whitespace-nowrap font-bold">{fmtMonto(totalCarga)}</span>
           </div>
         )}
         {maquinas.map((m, i) => (
@@ -457,7 +473,7 @@ export default function TicketNota() {
               <span className="inline-block w-9">1</span>
               {m.nombre.toUpperCase()}{m.tipo && ` ${m.tipo.toUpperCase()}`}
             </span>
-            <span className="whitespace-nowrap">{fmtMonto(m.precio)}</span>
+            <span className="whitespace-nowrap font-bold">{fmtMonto(m.precio)}</span>
           </div>
         ))}
         {/* Las medidas son internas. */}
@@ -468,14 +484,14 @@ export default function TicketNota() {
               {nombreProd(p).toUpperCase()}
             </span>
             {p.es_por_medida && Number(p.subtotal) === 0
-              ? <span className="whitespace-nowrap">INCLUIDO</span>
-              : <span className="whitespace-nowrap">{fmtMonto(p.subtotal)}</span>}
+              ? <span className="whitespace-nowrap font-bold">INCLUIDO</span>
+              : <span className="whitespace-nowrap font-bold">{fmtMonto(p.subtotal)}</span>}
           </div>
         ))}
         {Number(cg.ajuste) !== 0 && (
           <div className="flex items-baseline justify-between gap-2">
             <span className="flex-1"><span className="inline-block w-9" />AJUSTE</span>
-            <span className="whitespace-nowrap">{Number(cg.ajuste) > 0 ? '+' : ''}{fmtMonto(cg.ajuste)}</span>
+            <span className="whitespace-nowrap font-bold">{Number(cg.ajuste) > 0 ? '+' : ''}{fmtMonto(cg.ajuste)}</span>
           </div>
         )}
       </div>
@@ -527,11 +543,11 @@ export default function TicketNota() {
         <div className="mx-auto w-full max-w-[20rem]">
         <div
           ref={reciboRef}
-          className="w-full bg-white px-4 py-6 font-mono text-[12px] leading-relaxed text-black shadow-sm"
+          className="w-full bg-white border-l-[6px] border-blue px-4 py-6 font-mono text-[12px] leading-relaxed text-black shadow-sm"
         >
           {/* Encabezado del negocio */}
-          <div className="text-center mb-5">
-            <p className="text-[15px] font-bold tracking-[0.15em]">LAVANDERÍA EL SOL</p>
+          <div className="text-center pt-3.5 pb-2.5 mb-5">
+            <p className="mb-1 text-[15px] font-bold tracking-[0.15em] text-dark-blue">LAVANDERÍA EL SOL</p>
             {/* Dirección de la sucursal donde se hizo la nota (si la tiene). */}
             {nota.sucursal_direccion && (
               <p className="mt-1">{nota.sucursal_direccion.toUpperCase()}</p>
@@ -569,34 +585,32 @@ export default function TicketNota() {
 
           <Corte />
 
-          <div className="my-5 space-y-2">
-            {/* Encabezado de columnas, como en el papel */}
-            <div className="my-1 flex items-baseline justify-between gap-2 font-bold">
-              <span className="flex-1"><span className="inline-block w-9">CANT</span>DESCRIPCIÓN</span>
-              <span>IMPORTE</span>
-            </div>
-
+          <div className="my-5 space-y-4">
             {/* Desglose de las cargas del alta. */}
             {originales.length > 0 && (
-              <div className={`mt-2 pb-4 ${unaSolaLista ? 'space-y-1' : 'space-y-3'}`}>
-                {renderBloqueCargas(originales)}
+              <div>
+                <p className="mb-2 font-bold tracking-wider text-blue">SERVICIOS</p>
+                <div className={unaSolaLista ? 'space-y-2' : 'space-y-4'}>
+                  {renderBloqueCargas(originales)}
+                </div>
               </div>
             )}
 
             {/* Cargas adicionales (agregadas después de crear la nota) */}
             {adicionales.length > 0 && (
               <>
-                <Corte />
-                <p className="font-bold">ADICIONAL</p>
-                <div className=" space-y-3">{renderBloqueCargas(adicionales)}</div>
+              <div>
+                <p className="mb-2 font-bold tracking-wider text-blue">ADICIONAL</p>
+                <div className="space-y-4">{renderBloqueCargas(adicionales)}</div>
+              </div>
               </>
             )}
 
             {/* Productos sueltos de la nota, con su subtotal. */}
             {prodsNota.length > 0 && (
-              <div className="space-y-1">
+              <div className="space-y-2">
                 <div className="flex items-baseline justify-between gap-2 font-bold">
-                  <span className="uppercase whitespace-nowrap">Productos</span>
+                  <span className="uppercase whitespace-nowrap tracking-wider text-blue">Productos</span>
                   <span className="whitespace-nowrap">
                     {fmtMonto(prodsNota.reduce((s, p) => s + Number(p.subtotal ?? 0), 0))}
                   </span>
@@ -608,25 +622,24 @@ export default function TicketNota() {
                       {nombreProd(p).toUpperCase()}
                     </span>
                     {p.es_por_medida && Number(p.subtotal) === 0
-                      ? <span className="whitespace-nowrap">INCLUIDO</span>
-                      : <span className="whitespace-nowrap">{fmtMonto(p.subtotal)}</span>}
+                      ? <span className="whitespace-nowrap font-bold">INCLUIDO</span>
+                      : <span className="whitespace-nowrap font-bold">{fmtMonto(p.subtotal)}</span>}
                   </div>
                 ))}
               </div>
             )}
           </div>
 
-          <Corte />
-
           {/* Totales */}
           <div className="mb-5">
             {Number(nota.ajuste) !== 0 && nota.ajuste != null && (
               <Linea label="Ajuste" value={`${Number(nota.ajuste) > 0 ? '+' : ''}${fmtMonto(nota.ajuste)}`} />
             )}
-            <div className="flex items-baseline justify-between gap-2 text-[15px] font-bold">
+            <div className="-mx-4 px-4 py-2 bg-light-blue flex items-baseline justify-between gap-2 text-[15px] font-bold">
               <span>TOTAL M.N.</span>
-              <span className="whitespace-nowrap">{fmtMonto(nota.precio_total)}</span>
+              <span className="whitespace-nowrap text-blue">{fmtMonto(nota.precio_total)}</span>
             </div>
+            <SelloPago nota={nota} />
 
             {/* Abonos, si los hay: fecha, forma y lo que resta (quién lo recibió es interno). */}
             {abonosDeNota(nota).length > 0 && (() => {
@@ -659,14 +672,16 @@ export default function TicketNota() {
           <Asteriscos />
 
           {/* Pie */}
-          <p className="text-center">¡GRACIAS POR SU PREFERENCIA!</p>
+          <div className="pt-2.5 pb-1.5 space-y-3">
+            <p className="text-center">¡GRACIAS POR SU PREFERENCIA!</p>
 
-          {/* Nota al pie (Ajustes → Ticket) */}
-          {notaPie && (
-            <p className="mt-3 whitespace-pre-line text-center text-[11px] leading-relaxed">
-              {notaPie}
-            </p>
-          )}
+            {/* Nota al pie (Ajustes → Ticket) */}
+            {notaPie && (
+              <p className="whitespace-pre-line text-center text-[11px] leading-relaxed">
+                {notaPie}
+              </p>
+            )}
+          </div>
         </div>
         </div>
 
