@@ -1,13 +1,5 @@
-import { describe, it, expect, vi } from 'vitest';
-
-// Se captura lo que se mandaría a descargar en vez de bajar un archivo.
-const capturados = vi.hoisted(() => []);
-vi.mock('./exportUtils', async (original) => ({
-  ...(await original()),
-  descargarCSV: (nombre, encabezados, filas) => capturados.push({ nombre, encabezados, filas }),
-}));
-
-import { descargarVentasCSV } from './exportVentas';
+import { describe, it, expect } from 'vitest';
+import { hojasVentas } from './exportVentas';
 
 const nota = (extra) => ({
   folio: '0066', fecha: '2026-10-19', creado_en: '2026-10-19T18:30:00Z',
@@ -16,27 +8,33 @@ const nota = (extra) => ({
   total_productos: 10, total: 60, ...extra,
 });
 
-describe('descargarVentasCSV', () => {
-  it('cada nota lleva su servicio y si está pagada, pendiente o cancelada', () => {
-    capturados.length = 0;
-    descargarVentasCSV({ lista_notas: [
+const columna = (hoja, k) => hoja.grupos.flatMap((g) => g.columnas.map((c) => c.titulo)).indexOf(k);
+
+describe('hojasVentas', () => {
+  it('cada nota lleva su servicio y si está pagada, pendiente o cancelada; solo las pagadas suman', () => {
+    const [hoja] = hojasVentas({ lista_notas: [
       nota(),
       nota({ folio: '0067', tipo_servicio: 'POR_ENCARGO', estado: 'LISTA', estado_pago: 'PENDIENTE', forma_pago: null }),
       nota({ folio: '0068', estado: 'CANCELADA', estado_pago: 'PENDIENTE' }),
-    ] }, 'hoy');
-
-    const [{ nombre, encabezados, filas }] = capturados;
-    expect(nombre).toBe('ventas-hoy');
-    const col = (fila, k) => fila[encabezados.indexOf(k)];
-    expect(filas.map((f) => col(f, 'Servicio'))).toEqual(['Autoservicio', 'Por Encargo', 'Autoservicio']);
-    expect(filas.map((f) => col(f, 'Pago'))).toEqual(['Pagada', 'Pendiente', 'Cancelada']);
-    expect(col(filas[0], 'Total')).toBe('60.00');
-    expect(filas.every((f) => f.length === encabezados.length)).toBe(true);
+    ] });
+    expect(hoja.nombre).toBe('Notas');
+    expect(hoja.filas.map((f) => f[columna(hoja, 'Servicio')])).toEqual(['Autoservicio', 'Por Encargo', 'Autoservicio']);
+    expect(hoja.filas.map((f) => f[columna(hoja, 'Pago')])).toEqual(['Pagada', 'Pendiente', 'Cancelada']);
+    expect([...hoja.atenuadas]).toEqual([1, 2]);
+    const [tot] = hoja.pie;
+    expect(tot[columna(hoja, 'Total')]).toBe(60);
+    expect(tot[0]).toBe('Totales (1 pagadas)');
   });
 
-  it('los abonos y los turnos salen en sus propios archivos solo si hay', () => {
-    capturados.length = 0;
-    descargarVentasCSV({ lista_notas: [nota()], abonos: [], turnos: [] }, 'hoy');
-    expect(capturados.map((c) => c.nombre)).toEqual(['ventas-hoy']);
+  it('los abonos y los turnos van en sus propias hojas, solo si hay', () => {
+    expect(hojasVentas({ lista_notas: [nota()], abonos: [], turnos: [] }).map((h) => h.nombre)).toEqual(['Notas']);
+    const hojas = hojasVentas({
+      lista_notas: [nota()],
+      abonos: [{ folio: '0067', fecha: '2026-10-19', creado_en: '2026-10-19T19:00:00Z', monto: 30, forma_pago: 'EFECTIVO', recibio: 'Ana' }],
+      turnos: [{ abierta_at: '2026-10-19T14:00:00Z', cerrada_at: '2026-10-20T03:00:00Z', monto_inicial: 500, ventas: 0,
+        ventas_desglose: {}, entradas: 0, salidas: 0, esperado: 500, movimientos: [] }],
+    });
+    expect(hojas.map((h) => h.nombre)).toEqual(['Notas', 'Abonos', 'Turnos de caja']);
+    expect(hojas[1].pie[0].at(-1)).toBe(30);
   });
 });

@@ -1,5 +1,5 @@
 /**
- * Reporte de Ventas a CSV y PDF (ver exportUtils.js). Recibe GET /ventas/resumen:
+ * Reporte de Ventas a Excel y PDF (exportExcel.js y exportUtils.js). Recibe GET /ventas/resumen:
  *   { tarjetas: { total_cobrado, notas_pagadas, productos_consumidos, notas_pendientes },
  *     corte:    { total_servicios, total_cargas, total_productos, total_ajustes,
  *                 total_efectivo, total_transferencia, total_tarjeta,
@@ -13,12 +13,10 @@
 
 import { formatHora12 } from './fecha';
 import { formaPagoLabel } from './formasPago';
-import {
-  fmtMoneda, num, fechaLarga, slug, esc,
-  descargarCSV, imprimirDocumento,
-} from './exportUtils';
+import { fmtMoneda, fechaLarga, slug, esc, imprimirDocumento } from './exportUtils';
+import { descargarExcel } from './exportExcel';
 import { etiquetaEstadoNota } from './estadoNota';
-import { tablaCortesCSV, bloqueDetalle } from './exportCorte';
+import { hojasCortes, bloqueDetalle } from './exportCorte';
 import { lineasConcepto } from './desgloseCaja';
 
 // Etiquetas de estado (iguales a las de la tabla de Ventas).
@@ -61,59 +59,105 @@ const fechaNotaLocal = (fecha) => {
   return new Date(fecha);
 };
 
-// ── CSV ─────────────────────────────────────────────────────
-// "Pago" separa las pendientes (no cuentan en lo cobrado) para filtrar en Excel.
-const ENCABEZADOS_CSV = [
-  'Folio', 'Fecha', 'Hora', 'Servicio', 'Estado', 'Pago', 'Máquinas', 'Atendió',
-  'Forma de pago', 'Productos', 'Total',
-];
-
+// ── Excel ───────────────────────────────────────────────────
+// "Pago" separa las pendientes y canceladas, que no cuentan en lo cobrado.
 const pagoLabel = (n) => {
   if (n.estado === 'CANCELADA') return 'Cancelada';
   return n.estado_pago === 'PENDIENTE' ? 'Pendiente' : 'Pagada';
 };
+const cuenta = (n) => pagoLabel(n) === 'Pagada';
 
-const filaCSV = (n) => [
-  n.folio ?? '',
-  typeof n.fecha === 'string' ? n.fecha.slice(0, 10) : '',
-  formatHora12(n.creado_en),
-  servicioLabel(n.tipo_servicio),
-  estadoLabel(n.estado, n.tipo_servicio),
-  pagoLabel(n),
-  maquinasTexto(n.maquinas),
-  n.atendio ?? '',
-  formaPagoLabel(n.forma_pago),
-  num(n.total_productos),
-  num(n.total),
-];
+const hojaNotas = (notas) => {
+  const filas = notas.map((n) => [
+    n.folio ?? '',
+    typeof n.fecha === 'string' ? n.fecha.slice(0, 10) : '',
+    formatHora12(n.creado_en),
+    servicioLabel(n.tipo_servicio),
+    estadoLabel(n.estado, n.tipo_servicio),
+    pagoLabel(n),
+    maquinasTexto(n.maquinas),
+    n.atendio ?? '',
+    formaPagoLabel(n.forma_pago),
+    n.total_productos,
+    n.total,
+  ]);
+  const pagadas = notas.filter(cuenta);
+  const suma = (k) => pagadas.reduce((a, n) => a + Number(n[k] ?? 0), 0);
+  return {
+    nombre: 'Notas',
+    grupos: [
+      { titulo: 'Nota', color: 'gris', columnas: [
+        { titulo: 'Folio', ancho: 14 },
+        { titulo: 'Fecha', tipo: 'fecha', ancho: 24 },
+        { titulo: 'Hora', ancho: 15 },
+        { titulo: 'Servicio', ancho: 19 },
+      ] },
+      { titulo: 'Estado', color: 'azul', columnas: [
+        { titulo: 'Estado', ancho: 19 },
+        { titulo: 'Pago', ancho: 15 },
+      ] },
+      { titulo: 'Quién y con qué', color: 'verde', columnas: [
+        { titulo: 'Máquinas', tipo: 'notas', ancho: 36 },
+        { titulo: 'Atendió', ancho: 25 },
+      ] },
+      { titulo: 'Cobro', color: 'ambar', columnas: [
+        { titulo: 'Forma de pago', ancho: 20 },
+        { titulo: 'Productos', tipo: 'moneda', ancho: 17 },
+        { titulo: 'Total', tipo: 'moneda', ancho: 17, negritas: true },
+      ] },
+    ],
+    filas,
+    // Las pendientes y canceladas, en gris (no cuentan en los totales).
+    atenuadas: new Set(notas.map((n, i) => (cuenta(n) ? -1 : i)).filter((i) => i >= 0)),
+    pie: notas.length > 0
+      ? [[`Totales (${pagadas.length} pagadas)`, null, null, null, null, null, null, null, null,
+          suma('total_productos'), suma('total')]]
+      : [],
+    nota: notas.some((n) => !cuenta(n))
+      ? 'Las notas pendientes y canceladas van en gris y no cuentan en los totales.'
+      : undefined,
+  };
+};
 
-// Descarga la lista de notas del período como CSV. `sufijo` va en el nombre.
-export function descargarVentasCSV(data, sufijo) {
-  const notas = data?.lista_notas ?? [];
-  descargarCSV(`ventas-${slug(sufijo)}`, ENCABEZADOS_CSV, notas.map(filaCSV));
-  // Los abonos en su propio archivo: son pagos, no notas.
-  const abonos = data?.abonos ?? [];
-  if (abonos.length > 0) {
-    descargarCSV(
-      `abonos-${slug(sufijo)}`,
-      ['Folio', 'Fecha', 'Hora', 'Forma de pago', 'Recibió', 'Monto'],
-      abonos.map((a) => [
-        a.folio ?? '',
-        typeof a.fecha === 'string' ? a.fecha.slice(0, 10) : '',
-        formatHora12(a.creado_en),
-        formaPagoLabel(a.forma_pago),
-        a.recibio ?? '',
-        num(a.monto),
-      ]),
-    );
-  }
-  // Los turnos de caja, también en su propio archivo: una fila por turno con
-  // sus Ingresos y Egresos, y debajo sus entradas y salidas.
+const hojaAbonos = (abonos) => abonos.length > 0 && {
+  nombre: 'Abonos',
+  grupos: [
+    { titulo: 'Nota', color: 'gris', columnas: [
+      { titulo: 'Folio', ancho: 14 },
+      { titulo: 'Fecha', tipo: 'fecha', ancho: 24 },
+      { titulo: 'Hora', ancho: 15 },
+    ] },
+    { titulo: 'Pago', color: 'ambar', columnas: [
+      { titulo: 'Forma de pago', ancho: 20 },
+      { titulo: 'Recibió', ancho: 25 },
+      { titulo: 'Monto', tipo: 'moneda', ancho: 17, negritas: true },
+    ] },
+  ],
+  filas: abonos.map((a) => [
+    a.folio ?? '',
+    typeof a.fecha === 'string' ? a.fecha.slice(0, 10) : '',
+    formatHora12(a.creado_en),
+    formaPagoLabel(a.forma_pago),
+    a.recibio ?? '',
+    a.monto,
+  ]),
+  pie: [[`Total abonado (${abonos.length})`, null, null, null, null,
+    abonos.reduce((t, a) => t + Number(a.monto || 0), 0)]],
+};
+
+/** Hojas del Excel de ventas: Notas, Abonos y los turnos de caja del período. */
+export function hojasVentas(data) {
   const turnos = data?.turnos ?? [];
-  if (turnos.length > 0) {
-    const { encabezados, filas } = tablaCortesCSV(turnos);
-    descargarCSV(`turnos-caja-${slug(sufijo)}`, encabezados, filas);
-  }
+  return [
+    hojaNotas(data?.lista_notas ?? []),
+    hojaAbonos(data?.abonos ?? []),
+    ...(turnos.length > 0 ? hojasCortes(turnos, { nombre: 'Turnos de caja' }) : []),
+  ].filter(Boolean);
+}
+
+// Descarga el reporte del período como Excel. `sufijo` va en el nombre.
+export async function descargarVentasExcel(data, sufijo) {
+  await descargarExcel(`ventas-${slug(sufijo)}`, hojasVentas(data));
 }
 
 // ── PDF (impresión del navegador) ───────────────────────────

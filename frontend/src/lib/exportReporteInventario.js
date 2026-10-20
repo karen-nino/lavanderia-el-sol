@@ -1,10 +1,11 @@
 /**
- * "Reporte diario" de Inventario a CSV y PDF (ver exportUtils.js y
+ * "Reporte diario" de Inventario a Excel y PDF (ver exportExcel.js, exportUtils.js y
  * formatoInventario.js). Recibe { fecha: 'YYYY-MM-DD', productos } de GET
  * /productos/reporte-diario.
  */
 
-import { slug, esc, descargarCSV, imprimirDocumento, fechaLarga } from './exportUtils';
+import { slug, esc, imprimirDocumento, fechaLarga } from './exportUtils';
+import { descargarExcel } from './exportExcel';
 import { textoBotellas, textoGranel, seVendePorUnidad, esPolvo, lineasEntradas, lineasSalidas, lineasDevuelto } from './formatoInventario';
 
 // 'YYYY-MM-DD' → Date local (sin corrimiento por zona horaria).
@@ -30,31 +31,53 @@ const granelTexto = (p) => (esMarca(p) ? '' : textoGranel(p.fin_granel_medidas, 
 // La columna Devuelto solo si algo se devolvió ese día (como en la pantalla).
 const hayDevuelto = (productos) => productos.some((p) => Number(p.devuelto_medidas) > 0);
 
-// ── CSV ─────────────────────────────────────────────────────
-const encabezadosCSV = (conDevuelto) => [
-  'Tipo', 'Marca', 'Producto', 'Entradas', 'Salidas',
-  ...(conDevuelto ? ['Devuelto'] : []),
-  'Había (rellenadas)', 'Había (a granel)', 'Queda (rellenadas)', 'Queda (a granel)',
-];
+// ── Excel ───────────────────────────────────────────────────
+// Varias líneas de movimientos van una debajo de otra en la misma celda.
+const enRenglones = (lineas) => lineas.join('\n');
 
-const filaCSV = (p, conDevuelto) => [
-  esPolvo(p) ? 'Polvo' : esMarca(p) ? 'Marca' : 'Granel',
-  p.marca ?? '',
-  p.nombre ?? '',
-  entradasLineas(p).join(' · '),
-  salidasLineas(p).join(' · '),
-  ...(conDevuelto ? [devueltoTexto(p)] : []),
-  inicioRellenadas(p),
-  inicioGranel(p),
-  rellenadasTexto(p),
-  granelTexto(p),
-];
-
-export function descargarReporteCSV(data) {
+/** Hoja del Excel del reporte diario: una fila por producto. */
+export function hojasReporte(data) {
   const productos = data?.productos ?? [];
   const conDevuelto = hayDevuelto(productos);
-  descargarCSV(`inventario-${slug(data?.fecha)}`, encabezadosCSV(conDevuelto),
-    productos.map((p) => filaCSV(p, conDevuelto)));
+  return [{
+    nombre: 'Inventario',
+    grupos: [
+      { titulo: 'Producto', color: 'gris', columnas: [
+        { titulo: 'Tipo', ancho: 13 },
+        { titulo: 'Marca', ancho: 20 },
+        { titulo: 'Producto', ancho: 30 },
+      ] },
+      { titulo: 'Movimientos del día', color: 'verde', columnas: [
+        { titulo: 'Entradas', tipo: 'notas', ancho: 30 },
+        { titulo: 'Salidas', tipo: 'notas', ancho: 30 },
+        ...(conDevuelto ? [{ titulo: 'Devuelto', tipo: 'notas', ancho: 26 }] : []),
+      ] },
+      { titulo: 'Había al inicio', color: 'azul', columnas: [
+        { titulo: 'Rellenadas', tipo: 'notas', ancho: 24 },
+        { titulo: 'A granel', tipo: 'notas', ancho: 24 },
+      ] },
+      { titulo: 'Queda al final', color: 'morado', columnas: [
+        { titulo: 'Rellenadas', tipo: 'notas', ancho: 24 },
+        { titulo: 'A granel', tipo: 'notas', ancho: 24 },
+      ] },
+    ],
+    filas: productos.map((p) => [
+      esPolvo(p) ? 'Polvo' : esMarca(p) ? 'Marca' : 'Granel',
+      p.marca ?? '',
+      p.nombre ?? '',
+      enRenglones(entradasLineas(p)),
+      enRenglones(salidasLineas(p)),
+      ...(conDevuelto ? [enRenglones(lineasDevuelto(p, esMarca(p)))] : []),
+      inicioRellenadas(p),
+      inicioGranel(p),
+      rellenadasTexto(p),
+      granelTexto(p),
+    ]),
+  }];
+}
+
+export async function descargarReporteExcel(data) {
+  await descargarExcel(`inventario-${slug(data?.fecha)}`, hojasReporte(data));
 }
 
 // ── PDF (impresión del navegador) ───────────────────────────

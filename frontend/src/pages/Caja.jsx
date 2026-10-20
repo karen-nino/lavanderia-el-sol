@@ -8,7 +8,7 @@ import RecuadrosCaja from '../components/RecuadrosCaja';
 import { desgloseCaja } from '../lib/desgloseCaja';
 import MenuExportar from '../components/MenuExportar';
 import { formatHora12 } from '../lib/fecha';
-import { imprimirCortes, descargarCortesCSV } from '../lib/exportCorte';
+import { imprimirCortes, descargarCortesExcel } from '../lib/exportCorte';
 import SucursalBar from '../components/SucursalBar';
 
 const fmt = (n) =>
@@ -436,7 +436,7 @@ function Corte({ data, onCerrar, onAbrir }) {
       <div className="flex justify-end">
         <MenuExportar
           onPdf={() => imprimirCortes(turnoExportable, { titulo: 'Corte de caja', subtitulo: `Turno en curso · ${caja.usuario_apertura || ''}` })}
-          onCsv={() => descargarCortesCSV(turnoExportable, sufijoExport)}
+          onExcel={() => descargarCortesExcel(turnoExportable, sufijoExport)}
         />
       </div>
       {/* De quién es el turno que se está cortando. */}
@@ -599,7 +599,7 @@ function Historial() {
   const [eliminando, setEliminando] = useState(false);
   const menuRef = useRef(null);
 
-  // Menú de exportación (PDF/CSV) del período visible.
+  // Menú de exportación (PDF/Excel) del período visible.
   const [exportOpen, setExportOpen] = useState(false);
   const exportRef = useRef(null);
 
@@ -806,14 +806,14 @@ function Historial() {
                 type="button"
                 onClick={() => {
                   setMenuCorte(null);
-                  descargarCortesCSV([c], fmtFechaCorta(c.cerrada_at));
+                  descargarCortesExcel([c], fmtFechaCorta(c.cerrada_at));
                 }}
                 className="w-full flex items-center gap-2 px-3 py-3.5 text-left text-sm font-medium text-gray-700 hover:bg-gray-50"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
                 </svg>
-                Descargar CSV
+                Descargar Excel
               </button>
               {esAdminMain && (
                 <button
@@ -1147,7 +1147,7 @@ function Historial() {
             )}
           </div>
 
-          {/* Exportar todos los cortes del período visible a PDF o CSV. */}
+          {/* Exportar todos los cortes del período visible a PDF o Excel. */}
           <div ref={exportRef} className="relative flex-shrink-0">
             <button
               type="button"
@@ -1176,13 +1176,13 @@ function Historial() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => { setExportOpen(false); descargarCortesCSV(exportables, filtroLabel); }}
+                  onClick={() => { setExportOpen(false); descargarCortesExcel(exportables, filtroLabel); }}
                   className="w-full flex items-center gap-2 px-3 py-3.5 text-left text-sm font-medium text-gray-700 hover:bg-gray-50"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M3.375 19.5h17.25m-17.25 0a1.125 1.125 0 0 1-1.125-1.125M3.375 19.5h7.5c.621 0 1.125-.504 1.125-1.125m-9.75 0V5.625m0 12.75v-1.5c0-.621.504-1.125 1.125-1.125m-1.125 1.125v-1.5m0-9.75a1.125 1.125 0 0 1 1.125-1.125h7.5c.621 0 1.125.504 1.125 1.125m0 0v1.5c0 .621-.504 1.125-1.125 1.125M21 12l-3-3m0 0-3 3m3-3v9" />
                   </svg>
-                  Descargar CSV
+                  Descargar Excel
                 </button>
               </div>
             )}

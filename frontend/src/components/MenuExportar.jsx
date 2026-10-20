@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 
-/** Botón "Exportar" con su menú (PDF / CSV), como el de Ventas. */
-export default function MenuExportar({ onPdf, onCsv, deshabilitado = false }) {
+/** Botón "Exportar" con su menú (PDF / Excel), como el de Ventas. */
+export default function MenuExportar({ onPdf, onExcel, deshabilitado = false }) {
   const [abierto, setAbierto] = useState(false);
   const ref = useRef(null);
 
@@ -46,13 +46,13 @@ export default function MenuExportar({ onPdf, onCsv, deshabilitado = false }) {
           </button>
           <button
             type="button"
-            onClick={() => { setAbierto(false); onCsv(); }}
+            onClick={() => { setAbierto(false); onExcel(); }}
             className="w-full flex items-center gap-2 px-3 py-3.5 text-left text-sm font-medium text-gray-700 hover:bg-gray-50"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M3.375 19.5h17.25m-17.25 0a1.125 1.125 0 0 1-1.125-1.125M3.375 19.5h7.5c.621 0 1.125-.504 1.125-1.125m-9.75 0V5.625m0 12.75v-1.5c0-.621.504-1.125 1.125-1.125m-1.125 1.125v-1.5m0-9.75a1.125 1.125 0 0 1 1.125-1.125h7.5c.621 0 1.125.504 1.125 1.125m0 0v1.5c0 .621-.504 1.125-1.125 1.125M21 12l-3-3m0 0-3 3m3-3v9" />
             </svg>
-            Descargar CSV
+            Descargar Excel
           </button>
         </div>
       )}

@@ -1,5 +1,5 @@
 /**
- * Piezas compartidas para exportar a CSV (Blob descargado) y PDF (ventana con
+ * Piezas compartidas para exportar a Excel (archivo descargado) y PDF (ventana con
  * HTML propio que se manda a imprimir). Sin dependencias.
  */
 
@@ -11,8 +11,6 @@ const DIAS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', '
 export const fmtMoneda = (n) =>
   new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(n ?? 0);
 
-// Número plano con dos decimales y punto (Excel es-MX lo lee como número).
-export const num = (n) => Number(n ?? 0).toFixed(2);
 
 // "Lunes, 03 Ago 2026"
 export const fechaLarga = (fecha) => {
@@ -22,7 +20,7 @@ export const fechaLarga = (fecha) => {
   return `${DIAS[d.getDay()]}, ${dd} ${MESES_CORTOS[d.getMonth()]} ${d.getFullYear()}`;
 };
 
-// "2026-08-27" (para nombres de archivo y columnas de CSV).
+// "2026-08-27" (para nombres de archivo y fechas del Excel).
 export const fechaISO = (fecha) => {
   if (!fecha) return '';
   const d = new Date(fecha);
@@ -40,13 +38,8 @@ export const slug = (s) =>
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/(^-|-$)/g, '') || 'export';
 
-// ── CSV ─────────────────────────────────────────────────────
-const csvCell = (v) => {
-  const s = v == null ? '' : String(v);
-  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-};
-
-const descargarArchivo = (nombre, contenido, mime) => {
+// Descarga un archivo hecho en el navegador (Excel de los reportes).
+export const descargarArchivo = (nombre, contenido, mime) => {
   const blob = new Blob([contenido], { type: mime });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -57,15 +50,6 @@ const descargarArchivo = (nombre, contenido, mime) => {
   a.remove();
   URL.revokeObjectURL(url);
 };
-
-// Descarga un CSV a partir de encabezados (array) y filas (array de arrays).
-// `nombreBase` no lleva extensión ni sufijo de archivo.
-export function descargarCSV(nombreBase, encabezados, filas) {
-  const lineas = [encabezados, ...filas].map((f) => f.map(csvCell).join(','));
-  // BOM para que Excel respete los acentos (UTF-8).
-  const csv = '﻿' + lineas.join('\r\n');
-  descargarArchivo(`${nombreBase}.csv`, csv, 'text/csv;charset=utf-8;');
-}
 
 // ── PDF (impresión del navegador) ───────────────────────────
 export const esc = (s) =>

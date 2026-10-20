@@ -6,7 +6,7 @@ import { formaPagoLabel } from '../lib/formasPago';
 import { fmtEncendidaConTope, horarioCiclo } from '../lib/tiempoEncendida';
 import { etiquetaProducto, seVendePorUnidad, esPolvo } from '../lib/formatoInventario';
 import { formatHora12, formatFechaHora12 } from '../lib/fecha';
-import { imprimirVentas, descargarVentasCSV } from '../lib/exportVentas';
+import { imprimirVentas, descargarVentasExcel } from '../lib/exportVentas';
 import TurnosCaja from '../components/TurnosCaja';
 import { lineasConcepto } from '../lib/desgloseCaja';
 import SucursalBar from '../components/SucursalBar';
@@ -200,7 +200,7 @@ export default function Ventas() {
   const [subFiltro, setSubFiltro] = useState(null); // 'mes' | 'anio' | null
   const filtroRef = useRef(null);
 
-  // Menú de exportación (PDF/CSV) del período visible.
+  // Menú de exportación (PDF/Excel) del período visible.
   const [exportOpen, setExportOpen] = useState(false);
   const exportRef = useRef(null);
 
@@ -472,7 +472,7 @@ export default function Ventas() {
           )}
         </div>
 
-        {/* Exportar el reporte del período visible a PDF o CSV. */}
+        {/* Exportar el reporte del período visible a PDF o Excel. */}
         <div ref={exportRef} className="relative flex-shrink-0">
           <button
             type="button"
@@ -501,13 +501,13 @@ export default function Ventas() {
               </button>
               <button
                 type="button"
-                onClick={() => { setExportOpen(false); descargarVentasCSV(data, filtroLabel); }}
+                onClick={() => { setExportOpen(false); descargarVentasExcel(data, filtroLabel); }}
                 className="w-full flex items-center gap-2 px-3 py-3.5 text-left text-sm font-medium text-gray-700 hover:bg-gray-50"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M3.375 19.5h17.25m-17.25 0a1.125 1.125 0 0 1-1.125-1.125M3.375 19.5h7.5c.621 0 1.125-.504 1.125-1.125m-9.75 0V5.625m0 12.75v-1.5c0-.621.504-1.125 1.125-1.125m-1.125 1.125v-1.5m0-9.75a1.125 1.125 0 0 1 1.125-1.125h7.5c.621 0 1.125.504 1.125 1.125m0 0v1.5c0 .621-.504 1.125-1.125 1.125M21 12l-3-3m0 0-3 3m3-3v9" />
                 </svg>
-                Descargar CSV
+                Descargar Excel
               </button>
             </div>
           )}

@@ -4,7 +4,7 @@ import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { esAdmin as esAdminFn } from '../lib/roles';
 import { textoBotellas, textoGranel as textoGranelFmt, lineasEntradas, lineasSalidas, lineasDevuelto } from '../lib/formatoInventario';
-import { imprimirReporte, descargarReporteCSV } from '../lib/exportReporteInventario';
+import { imprimirReporte, descargarReporteExcel } from '../lib/exportReporteInventario';
 import { fechaLarga } from '../lib/exportUtils';
 import { formatHora12 } from '../lib/fecha';
 import SucursalBar from '../components/SucursalBar';
@@ -1708,13 +1708,13 @@ function ReporteDiario() {
               </button>
               <button
                 type="button"
-                onClick={() => { setExportOpen(false); descargarReporteCSV(data); }}
+                onClick={() => { setExportOpen(false); descargarReporteExcel(data); }}
                 className="w-full flex items-center gap-2 px-3 py-3.5 text-left text-sm font-medium text-gray-700 hover:bg-gray-50"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
                 </svg>
-                Descargar CSV
+                Descargar Excel
               </button>
             </div>
           )}

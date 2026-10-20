@@ -1,5 +1,5 @@
 /**
- * Cortes de caja a CSV y PDF (piezas compartidas en exportUtils.js). Cada
+ * Cortes de caja a Excel y PDF (exportExcel.js y exportUtils.js). Cada
  * `corte` tiene la forma de GET /caja/historial:
  *   { usuario_apertura, usuario_cierre, abierta_at, cerrada_at,
  *     notas_apertura, notas_cierre, monto_inicial, ventas, entradas,
@@ -11,11 +11,11 @@
  */
 
 import { formatHora12 } from './fecha';
-import { desgloseCaja } from './desgloseCaja';
+import { desgloseCaja, CONCEPTOS } from './desgloseCaja';
 import {
-  fmtMoneda, num, fechaLarga, fechaISO, slug, esc,
-  descargarCSV, imprimirDocumento,
+  fmtMoneda, fechaLarga, fechaISO, slug, esc, imprimirDocumento,
 } from './exportUtils';
+import { descargarExcel } from './exportExcel';
 
 // El turno abierto también se exporta: su fecha es la de apertura y el cierre
 // dice "en curso".
@@ -31,86 +31,129 @@ const estadoCorte = (c) => {
   return c.diferencia < 0 ? 'Faltante' : 'Sobrante';
 };
 
-// ── CSV ─────────────────────────────────────────────────────
-const ENCABEZADOS_CSV = [
-  'Fecha', 'Apertura', 'Cierre', 'Abrió', 'Cerró', 'Caja inicial', 'Ventas', 'Ventas efectivo', 'Transferencia', 'Tarjeta',
-  'Lavadoras Medianas', 'Lavadoras Jumbo', 'Secadoras', 'SPE', 'Edredón', 'Productos',
-  'Entradas', 'Gastos', 'Total en efectivo', 'SPE Debe', 'Total egresos',
-  'Esperado', 'Contado', 'Diferencia', 'Caja final', 'Sobre',
-  'Estado', 'Nota apertura', 'Nota cierre',
+// ── Excel ───────────────────────────────────────────────────
+// Columnas en el orden en que se lee un corte (como el PDF), por grupos de color.
+const gruposCortes = (conTarjeta) => [
+  { titulo: 'Quién y cuándo', color: 'gris', columnas: [
+    { titulo: 'Fecha', tipo: 'fecha', ancho: 24 },
+    { titulo: 'Apertura', ancho: 15 },
+    { titulo: 'Cierre', ancho: 15 },
+    { titulo: 'Abrió', ancho: 25 },
+    { titulo: 'Cerró', ancho: 25 },
+  ] },
+  { titulo: 'Resultado', color: 'azul', columnas: [
+    { titulo: 'Esperado', tipo: 'moneda', ancho: 17, negritas: true },
+    { titulo: 'Contado', tipo: 'moneda', ancho: 17 },
+    { titulo: 'Diferencia', tipo: 'dif', ancho: 17, negritas: true },
+    { titulo: 'Estado', ancho: 14, alinear: 'right' },
+    { titulo: 'Caja final', tipo: 'moneda', ancho: 17 },
+    { titulo: 'Sobre', tipo: 'moneda', ancho: 17, negritas: true },
+  ] },
+  { titulo: 'Lo vendido', color: 'verde', columnas: [
+    ...CONCEPTOS.map(({ label }) => ({ titulo: label, tipo: 'moneda', ancho: 17 })),
+    { titulo: 'Total vendido', tipo: 'moneda', ancho: 18, negritas: true },
+  ] },
+  { titulo: 'Cómo se cobró', color: 'ambar', columnas: [
+    { titulo: 'Efectivo', tipo: 'moneda', ancho: 17 },
+    { titulo: 'Transferencia', tipo: 'moneda', ancho: 18 },
+    ...(conTarjeta ? [{ titulo: 'Tarjeta', tipo: 'moneda', ancho: 17 }] : []),
+  ] },
+  { titulo: 'El cajón', color: 'morado', columnas: [
+    { titulo: 'Caja inicial', tipo: 'moneda', ancho: 17 },
+    { titulo: 'Entradas', tipo: 'moneda', ancho: 16 },
+    { titulo: 'Gastos', tipo: 'moneda', ancho: 16 },
+    { titulo: 'Total en efectivo', tipo: 'moneda', ancho: 20, negritas: true },
+    { titulo: 'SPE Debe', tipo: 'moneda', ancho: 16 },
+  ] },
+  { titulo: 'Notas', color: 'calido', columnas: [
+    { titulo: 'Nota de apertura', tipo: 'notas', ancho: 36 },
+    { titulo: 'Nota de cierre', tipo: 'notas', ancho: 45 },
+  ] },
 ];
-
-// Segunda tabla del CSV: una fila por movimiento con su corte; la salida en
-// negativo para sumar en Excel.
-const ENCABEZADOS_MOVS = ['Corte', 'Fecha', 'Hora', 'Tipo', 'Concepto', 'Registró', 'Monto'];
-
-const filasMovimientos = (c) => (c.movimientos ?? []).map((m) => [
-  `${fechaISO(fechaCorte(c))} ${horaCierre(c)}`,
-  fechaISO(m.created_at),
-  formatHora12(m.created_at),
-  m.tipo === 'salida' ? 'Gasto' : 'Entrada',
-  m.concepto ?? '',
-  m.usuario ?? '',
-  num(m.tipo === 'salida' ? -m.monto : m.monto),
-]);
 
 // Un importe del reparto por concepto (lo vendido con cualquier forma de pago;
 // en cortes congelados antes del 2026-10-19, solo el efectivo), vacío si no lo trae.
-const ing = (c, k) => (c.ingresos ? num(c.ingresos[k] ?? 0) : '');
+const ing = (c, k) => (c.ingresos ? Number(c.ingresos[k] ?? 0) : null);
 
-const filaCSV = (c) => [
+const filaCorte = (c, conTarjeta) => [
   fechaISO(fechaCorte(c)),
   formatHora12(c.abierta_at),
   horaCierre(c),
   c.usuario_apertura ?? '',
-  c.en_curso ? 'En curso' : (c.usuario_cierre ?? ''),
-  num(c.monto_inicial),
-  num(c.ventas),
-  num(c.ventas_desglose?.efectivo ?? c.ventas),
-  num(c.ventas_desglose?.transferencia ?? 0),
-  num(c.ventas_desglose?.tarjeta ?? 0),
-  ing(c, 'lavadoras_medianas'),
-  ing(c, 'lavadoras_jumbo'),
-  ing(c, 'secadoras'),
-  ing(c, 'por_encargo'),
-  ing(c, 'edredon'),
-  ing(c, 'productos'),
-  num(c.entradas),
-  num(c.salidas),
-  num(desgloseCaja(c).totalIngresos),
-  // Sin dato en cortes viejos.
-  c.spe_debe != null ? num(c.spe_debe) : '',
-  num(desgloseCaja(c).totalEgresos),
-  num(c.esperado),
-  c.contado != null ? num(c.contado) : '',
-  c.diferencia != null ? num(c.diferencia) : '',
-  // Reparto de lo contado; vacío en cortes que no lo tienen.
-  c.caja_final != null ? num(c.caja_final) : '',
-  c.sobre != null ? num(c.sobre) : '',
+  quienCerro(c),
+  c.esperado,
+  c.contado,
+  c.diferencia,
   estadoCorte(c),
+  c.caja_final,
+  c.sobre,
+  ...CONCEPTOS.map(({ key }) => ing(c, key)),
+  c.ventas,
+  c.ventas_desglose?.efectivo ?? c.ventas,
+  c.ventas_desglose?.transferencia ?? 0,
+  ...(conTarjeta ? [c.ventas_desglose?.tarjeta ?? 0] : []),
+  c.monto_inicial,
+  c.entradas,
+  c.salidas,
+  desgloseCaja(c).totalIngresos,
+  c.spe_debe,
   c.notas_apertura ?? '',
   c.notas_cierre ?? '',
 ];
 
-/** Tabla de cortes del CSV (una fila por corte) y debajo la de movimientos. Ventas la reusa. */
-export function tablaCortesCSV(cortes) {
+// Fila de totales: suma de cada importe; vacía donde no tiene sentido sumar.
+const sumaColumnas = (grupos, filas) => grupos.flatMap((g) => g.columnas).map((col, i) => {
+  if (!['moneda', 'dif'].includes(col.tipo)) return null;
+  const vals = filas.map((f) => f[i]).filter((v) => v != null && v !== '');
+  return vals.length ? vals.reduce((a, v) => a + Number(v), 0) : null;
+});
+
+/**
+ * Hojas del Excel de cortes: "Cortes" (una fila por turno y sus totales) y,
+ * si hubo, "Entradas y gastos" (una fila por movimiento). Ventas las reusa.
+ */
+export function hojasCortes(cortes, { nombre = 'Cortes' } = {}) {
   const lista = Array.isArray(cortes) ? cortes : [cortes];
-  const movs = lista.flatMap(filasMovimientos);
   // La columna de tarjeta solo si algún corte trae cobros con tarjeta.
   const conTarjeta = lista.some((c) => (c.ventas_desglose?.tarjeta ?? 0) > 0);
-  const iTarjeta = ENCABEZADOS_CSV.indexOf('Tarjeta');
-  const sinTarjeta = (fila) => fila.filter((_, i) => i !== iTarjeta);
-  const encabezados = conTarjeta ? ENCABEZADOS_CSV : sinTarjeta(ENCABEZADOS_CSV);
-  const filas = lista.map((c) => (conTarjeta ? filaCSV(c) : sinTarjeta(filaCSV(c))));
-  // Debajo de los cortes, separada por una fila vacía, la tabla de movimientos.
-  if (movs.length > 0) filas.push([], ['Entradas y gastos'], ENCABEZADOS_MOVS, ...movs);
-  return { encabezados, filas };
+  const grupos = gruposCortes(conTarjeta);
+  const filas = lista.map((c) => filaCorte(c, conTarjeta));
+  const totales = lista.length > 1 ? sumaColumnas(grupos, filas) : null;
+  if (totales) totales[0] = `Totales (${lista.length} cortes)`;
+
+  const movs = lista.flatMap((c) => (c.movimientos ?? []).map((m) => [
+    fechaISO(fechaCorte(c)),
+    formatHora12(m.created_at),
+    m.tipo === 'salida' ? 'Gasto' : 'Entrada',
+    m.concepto ?? '',
+    m.usuario ?? '',
+    m.tipo === 'salida' ? -Number(m.monto) : Number(m.monto),
+  ]));
+  const suma = (tipo) => movs.filter((m) => m[2] === tipo).reduce((a, m) => a + m[5], 0);
+
+  return [
+    { nombre, grupos, filas, pie: totales ? [totales] : [] },
+    movs.length > 0 && {
+      nombre: 'Entradas y gastos',
+      grupos: [{ color: 'gris', columnas: [
+        { titulo: 'Fecha del corte', tipo: 'fecha', ancho: 25 },
+        { titulo: 'Hora', ancho: 15 },
+        { titulo: 'Tipo', ancho: 14 },
+        { titulo: 'Concepto', ancho: 36 },
+        { titulo: 'Registró', ancho: 28 },
+        { titulo: 'Monto', tipo: 'signo', ancho: 18 },
+      ] }],
+      filas: movs,
+      // Entradas y gastos por separado: sumados no dicen nada.
+      pie: [['Entradas', null, null, null, null, suma('Entrada')],
+            ['Gastos', null, null, null, null, suma('Gasto')]],
+    },
+  ].filter(Boolean);
 }
 
-// Descarga uno o varios cortes como CSV. `sufijo` va en el nombre del archivo.
-export function descargarCortesCSV(cortes, sufijo) {
-  const { encabezados, filas } = tablaCortesCSV(cortes);
-  descargarCSV(`cortes-${slug(sufijo)}`, encabezados, filas);
+// Descarga uno o varios cortes como Excel. `sufijo` va en el nombre del archivo.
+export async function descargarCortesExcel(cortes, sufijo) {
+  await descargarExcel(`cortes-${slug(sufijo)}`, hojasCortes(cortes));
 }
 
 // ── PDF (impresión del navegador) ───────────────────────────
