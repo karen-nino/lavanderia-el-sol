@@ -2280,7 +2280,9 @@ describe('cambiar la cantidad de un producto de la nota', () => {
 });
 
 describe('cancelar una nota es cosa de administradores', () => {
-  it('un empleado no puede cancelar', async () => {
+  // TEMPORAL: mientras EMPLEADOS_CANCELAN (notas.controller.js) esté en true, el
+  // empleado sí cancela. Volver a .it cuando se apague.
+  it.skip('un empleado no puede cancelar', async () => {
     const empleado = await seedUsuario({ rol: 'operador', sucursal: 'centro', nombre: 'Empleado' });
     const nota = await request(app).post('/api/notas').set(auth(admin.token)).send({
       tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PAGADO', forma_pago: 'EFECTIVO',
@@ -2294,6 +2296,18 @@ describe('cancelar una nota es cosa de administradores', () => {
 
     const { rows } = await pool.query('SELECT estado FROM notas WHERE id = $1', [nota.body.id]);
     expect(rows[0].estado).not.toBe('CANCELADA');
+  });
+
+  it('por ahora (capacitaciones) un empleado sí cancela una nota sin cobrar', async () => {
+    const empleado = await seedUsuario({ rol: 'operador', sucursal: 'centro', nombre: 'Empleado' });
+    const nota = await request(app).post('/api/notas').set(auth(admin.token)).send({
+      tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PENDIENTE',
+      cargas: [{ lavadora_tipo: 'mediana' }],
+    });
+    await request(app).patch(`/api/notas/${nota.body.id}/estado`)
+      .set(auth(empleado.token)).send({ estado: 'CANCELADA', motivo: 'me equivoqué' }).expect(200);
+    const { rows } = await pool.query('SELECT estado FROM notas WHERE id = $1', [nota.body.id]);
+    expect(rows[0].estado).toBe('CANCELADA');
   });
 
   it('ni el admin puede cancelar una nota ya cobrada: primero se revierte el pago', async () => {

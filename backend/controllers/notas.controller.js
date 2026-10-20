@@ -2264,6 +2264,10 @@ export const quitarCarga = async (req, res) => {
   }
 };
 
+// TEMPORAL (2026-10-20): los empleados también cancelan mientras terminan las
+// capacitaciones. Volver a false cuando la dueña lo pida (y en DetalleNota.jsx).
+const EMPLEADOS_CANCELAN = true;
+
 // ── DELETE /notas/:id ───────────────────────────────────────
 export const eliminarNota = async (req, res) => {
   if (!esAdminMain(req.user.rol)) {
@@ -2420,8 +2424,8 @@ export const cambiarEstadoNota = async (req, res) => {
 
     const estadoActual = notaRows[0].estado;
 
-    // Cancelar es de administrador.
-    if (estado === 'CANCELADA' && !esAdmin(req.user?.rol)) {
+    // Cancelar es de administrador (por ahora también de empleados).
+    if (estado === 'CANCELADA' && !esAdmin(req.user?.rol) && !EMPLEADOS_CANCELAN) {
       await client.query('ROLLBACK');
       return res.status(403).json({ message: 'Solo un administrador puede cancelar una nota.' });
     }

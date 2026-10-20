@@ -245,6 +245,10 @@ function AccionCircular({ icono, label, onClick, color, disabled = false, title,
   );
 }
 
+// TEMPORAL (2026-10-20): los empleados también ven Cancelar mientras terminan
+// las capacitaciones. Volver a false cuando la dueña lo pida (y en notas.controller.js).
+const EMPLEADOS_CANCELAN = true;
+
 // Íconos de las acciones, en trazo blanco sobre el círculo.
 const IconoSalidas = (
   <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -742,8 +746,9 @@ export default function DetalleNota() {
   const maquinasEnUso = new Set(nota.maquinas_en_uso ?? []);
   const maquinasNota = [...new Set([...(nota.maquinas_nombres ?? []), ...maquinasEnUso])]
     .sort((a, b) => a.localeCompare(b, 'es', { numeric: true }));
-  // Cancelar: solo admin, sin cobro ni abonos (para eso está revertir).
-  const puedeCancelar = esAdmin
+  // Cancelar: de admin (por ahora también de empleados), sin cobro ni abonos
+  // (para eso está revertir).
+  const puedeCancelar = (esAdmin || EMPLEADOS_CANCELAN)
     && !['CANCELADA', 'PAGADA'].includes(nota.estado)
     && nota.estado_pago !== 'PAGADO'
     && Number(nota.abonado ?? 0) === 0;
