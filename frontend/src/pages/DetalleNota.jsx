@@ -816,6 +816,9 @@ export default function DetalleNota() {
       disabled={loadingAccion}
     />
   );
+  // Nota cerrada: Abrir (deshacer la entrega) y si queda algún botón.
+  const puedeReabrir = esAdmin && esEncargoNota && nota.estado === 'FINALIZADA';
+  const hayAccionesCerrada = Boolean(botonCobrar) || puedeReabrir || puedeEliminar(nota, esAdminMain);
   const badgeTipoServicio    = BADGE_TIPO_SERVICIO[nota.tipo_servicio] ?? BADGE_TIPO_SERVICIO.AUTOSERVICIO;
   const badgePago     = BADGE_PAGO[nota.estado_pago];
   const barcodeValue  = nota.folio ?? String(nota.id);
@@ -925,11 +928,11 @@ export default function DetalleNota() {
         </div>
       )}
       {/* Ya cerrada se ve en todos los tamaños; si quedó debiendo, se puede cobrar. */}
-      {terminal && (
+      {terminal && hayAccionesCerrada && (
         <div className="flex flex-wrap items-start gap-2">
           {botonCobrar}
           {/* Deshacer la entrega (admin): vuelve a Por Entregar. */}
-          {esAdmin && esEncargoNota && nota.estado === 'FINALIZADA' && (
+          {puedeReabrir && (
             <AccionCircular
               label="Abrir"
               title="Deshacer la entrega"
@@ -951,7 +954,8 @@ export default function DetalleNota() {
         </div>
       )}
 
-      <div className='space-y-6 mt-12'>
+      {/* Sin botones (nota cerrada sin acciones), sin el espacio de arriba. */}
+      <div className={`space-y-6 ${!terminal || hayAccionesCerrada ? 'mt-12' : ''}`}>
 
             {/* Un cambio en Salidas dejó la nota pendiente: hay que cobrar el importe nuevo. */}
       {/* Demo: el aviso por WhatsApp se finge, no se abre. */}
