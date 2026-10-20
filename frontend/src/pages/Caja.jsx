@@ -835,7 +835,9 @@ function Historial() {
   };
 
   // Renglones { label, value, sign, nota } de la rejilla.
-  const filasRejilla = (filas) => filas.map((r) => r.subtotal ? (
+  const filasRejilla = (filas) => filas.map((r) => r.titulo ? (
+    <p key={r.label} className="col-span-2 pt-1 text-sm font-medium uppercase tracking-wide text-gray-400">{r.label}</p>
+  ) : r.subtotal ? (
     <div key={r.label} className="contents">{totalRejilla(r.label, fmt(r.value))}</div>
   ) : (
     <div key={r.label} className="contents">
@@ -907,7 +909,7 @@ function Historial() {
             {filasRejilla(d.ingresos)}
             {totalRejilla(d.ingresos.some((r) => r.subtotal) ? d.totalIngresosLabel : 'Total', fmt(d.totalIngresos))}
             {/* Informativo: no se suma. */}
-            <p className="col-span-2 -mt-1 text-sm text-gray-500">Cobrado: {cobrado}</p>
+            {!d.comoSeCobroDentro && <p className="col-span-2 -mt-1 text-sm text-gray-500">Cobrado: {cobrado}</p>}
             {tituloRejilla('Egresos')}
             {filasRejilla(d.egresos)}
             {totalRejilla('Total', fmt(d.totalEgresos))}

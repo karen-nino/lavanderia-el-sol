@@ -780,10 +780,18 @@ export default function DetalleNota() {
       label={yaProcesada ? 'Avisar' : 'Procesado'}
       title={yaProcesada ? 'Volver a avisarle al cliente' : 'Marcar la nota como procesada'}
       icono={yaProcesada ? IconoAvisar : IconoProcesado}
-      // Azul (el verde es de Entregar).
-      color="bg-blue group-hover:bg-blue-700"
+      // Procesado en verde, como Entregar; Avisar en azul.
+      color={yaProcesada ? 'bg-blue group-hover:bg-blue-700' : 'bg-green-500 group-hover:bg-green-600'}
       onClick={() => { setErrorAccion(''); setProcesadoOpen(true); }}
       disabled={loadingAccion}
+    />
+  );
+  const botonSalidas = (
+    <AccionCircular
+      label="Salidas"
+      icono={IconoSalidas}
+      color="bg-blue group-hover:bg-blue-700"
+      onClick={() => navigate(`/notas/${id}/salidas`)}
     />
   );
   const botonCobrar = puedeLiquidar(nota) && (
@@ -888,15 +896,10 @@ export default function DetalleNota() {
               disabled={loadingAccion}
             />
           )}
-          {botonCobrar}
-          {botonAjuste}
-          <AccionCircular
-            label="Salidas"
-            icono={IconoSalidas}
-            color="bg-blue group-hover:bg-blue-700"
-            onClick={() => navigate(`/notas/${id}/salidas`)}
-          />
-          {botonProcesado}
+          {/* Admin: Procesado, Salidas, Ajuste y Cobrar; empleado: Cobrar, Ajuste, Salidas y Procesado. */}
+          {esAdmin
+            ? <>{botonProcesado}{botonSalidas}{botonAjuste}{botonCobrar}</>
+            : <>{botonCobrar}{botonAjuste}{botonSalidas}{botonProcesado}</>}
           {/* Último paso; exige el cobro. En Por Encargo dice ENTREGAR. */}
           {puedeFinalizar(nota) && (
             <AccionCircular

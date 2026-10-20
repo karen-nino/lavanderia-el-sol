@@ -6,8 +6,15 @@ import { fmtMoneda as fmt } from '../lib/exportUtils';
  * de Caja y turnos de Ventas). Las líneas salen de `desgloseCaja`.
  */
 
+// Título de bloque, como el de "Cómo se cobró".
+const Titulo = ({ texto }) => (
+  <div className="px-4 pt-3 pb-1 bg-gray-50/60">
+    <p className="text-sm font-medium uppercase tracking-wide text-gray-400">{texto}</p>
+  </div>
+);
+
 // Un subtotal (Total vendido) va como el total del recuadro, más chico.
-const Fila = ({ r }) => r.subtotal ? (
+const Fila = ({ r }) => r.titulo ? <Titulo texto={r.label} /> : r.subtotal ? (
   <div className="flex items-center justify-between px-4 py-3.5 text-base font-bold uppercase text-gray-900 bg-gray-50">
     <span>{r.label}</span>
     <span className="text-lg text-blue">{fmt(r.value)}</span>
@@ -38,9 +45,7 @@ function Recuadro({ titulo, filas, totalLabel, total, aparte }) {
         </div>
         {aparte && (
           <>
-            <div className="px-4 pt-3 pb-1 bg-gray-50/60">
-              <p className="text-sm font-medium uppercase tracking-wide text-gray-400">{aparte.titulo}</p>
-            </div>
+            <Titulo texto={aparte.titulo} />
             {aparte.filas.map((r) => <Fila key={r.label} r={r} />)}
           </>
         )}
@@ -59,7 +64,7 @@ export default function RecuadrosCaja({ turno, esperadoLabel = 'ESPERADO EN CAJA
     <>
       <Recuadro
         titulo="Ingresos" filas={d.ingresos} totalLabel={d.totalIngresosLabel.toUpperCase()} total={d.totalIngresos}
-        aparte={{ titulo: 'Cómo se cobró', filas: d.comoSeCobro }}
+        aparte={d.comoSeCobroDentro ? null : { titulo: 'Cómo se cobró', filas: d.comoSeCobro }}
       />
       <Recuadro titulo="Egresos" filas={d.egresos} totalLabel="TOTAL EGRESOS" total={d.totalEgresos} />
       <Recuadro titulo="Desglose esperado" filas={d.desglose} totalLabel={esperadoLabel} total={d.esperado} />

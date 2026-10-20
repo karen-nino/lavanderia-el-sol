@@ -150,7 +150,8 @@ const tablaMovimientos = (c) => {
 
 // Tabla de Ingresos, Egresos o Desglose con su total. `aparte` ({ titulo,
 // lineas }): renglones informativos que no suman (Cómo se cobró).
-const filaLinea = (l) => l.subtotal ? `
+const filaLinea = (l) => l.titulo ? `
+        <tr class="sub"><td colspan="2">${esc(l.label)}</td></tr>` : l.subtotal ? `
         <tr class="tot"><td>${esc(l.label)}</td><td class="r">${fmtMoneda(l.value)}</td></tr>` : `
         <tr><td>${esc(l.label)}${l.nota ? ` <span class="nota">(${esc(l.nota)})</span>` : ''}</td>
           <td class="r">${l.sign}${fmtMoneda(l.value)}</td></tr>`;
@@ -174,7 +175,7 @@ export const bloqueDetalle = (c) => {
       <span class="hora">${esc(formatHora12(c.abierta_at))} – ${esc(horaCierre(c))}</span>
     </div>
     ${tablaLineas('Ingresos', d.ingresos, d.totalIngresosLabel, d.totalIngresos,
-    { titulo: 'Cómo se cobró', lineas: d.comoSeCobro })}
+    d.comoSeCobroDentro ? null : { titulo: 'Cómo se cobró', lineas: d.comoSeCobro })}
     ${tablaLineas('Egresos', d.egresos, 'Total egresos', d.totalEgresos)}
     ${tablaLineas('Desglose esperado', d.desglose, c.en_curso ? 'Esperado hasta ahora' : 'Esperado en caja', c.esperado)}
     <table class="desglose">
