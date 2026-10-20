@@ -87,23 +87,46 @@ const ESTILOS = `
   .seccion { font-size: 14px; font-weight: 700; margin: 24px 0 10px; }
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
   .r { text-align: right; }
-  .ok { color: #2563eb; } .neg { color: #dc2626; } .pos { color: #16a34a; }
-  /* Corte */
-  .corte { margin-bottom: 28px; page-break-inside: avoid; }
-  .corte-head { display: flex; justify-content: space-between; align-items: baseline;
-                border-bottom: 1px solid #e5e7eb; padding-bottom: 8px; margin-bottom: 12px; }
-  .corte-head .hora { color: #6b7280; font-size: 13px; }
-  .desglose td { padding: 8px 4px; border-bottom: 1px solid #f3f4f6; }
-  .desglose .tot td { font-weight: 700; border-top: 1px solid #d1d5db; }
+  .ok { color: #2563eb; } .neg { color: #b42318; } .pos { color: #1f7a41; }
+  /* Corte: cifras del cierre arriba, Ingresos | Egresos y movimientos, firmas */
+  .corte { margin-bottom: 36px; font-variant-numeric: tabular-nums; }
+  .corte-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px;
+                border-bottom: 1px solid #d9dee5; padding-bottom: 8px; margin-bottom: 16px; }
+  .corte-head .hora { color: #4a5565; font-size: 13px; }
+  .corte .seccion { font-size: 15px; margin: 0 0 6px; }
+  .cifras { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border: 1px solid #d9dee5;
+            border-radius: 8px; margin-bottom: 24px; page-break-inside: avoid; }
+  .cifras > div { padding: 11px 14px; border-left: 1px solid #d9dee5; }
+  .cifras > div:first-child { border-left: 0; }
+  .cifras p { margin: 0; }
+  .cifras .k { font-size: 13px; color: #4a5565; }
+  .cifras .v { font-size: 20px; font-weight: 700; margin-top: 2px; white-space: nowrap; }
+  .cifras .s { font-size: 12.5px; color: #4a5565; margin-top: 1px; }
+  .cifras .falta { background: #fdecea; } .cifras .falta .k, .cifras .falta .v, .cifras .falta .s { color: #b42318; }
+  .cifras .sobra { background: #e6f4ec; } .cifras .sobra .k, .cifras .sobra .v, .cifras .sobra .s { color: #1f7a41; }
+  .cifras .cuadra .v { color: #1f7a41; }
+  .dos { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; align-items: start; }
+  .dos table + .seccion { margin-top: 24px; }
+  .desglose td { padding: 7px 0; border-bottom: 1px solid #eceff3; vertical-align: baseline; }
+  .desglose .tot td { font-weight: 700; font-size: 14px; border-top: 2px solid #1f2937; border-bottom: none; padding-top: 9px; }
+  .desglose .subtot td { font-weight: 700; border-bottom: 1px solid #d9dee5; }
   .desglose .dif td { font-weight: 700; }
   /* Encabezado de subgrupo dentro de un desglose (p. ej. "Por concepto"). */
-  .desglose .sub td { padding-top: 14px; font-size: 11px; text-transform: uppercase;
-                      letter-spacing: .04em; color: #9ca3af; border-bottom: none; }
-  .desglose .nota td { padding-top: 6px; font-size: 11px; color: #6b7280;
-                       border-bottom: none; }
-  .firmas { display: flex; gap: 32px; margin-top: 16px; font-size: 13px; }
-  .firmas .lbl { display: block; text-transform: uppercase; font-size: 11px; letter-spacing: .04em; color: #9ca3af; }
-  .firmas .nota { margin: 6px 0 0; color: #6b7280; border-left: 2px solid #e5e7eb; padding-left: 8px; }
+  .desglose .sub td { padding-top: 14px; font-weight: 600; color: #1b3a5c; border-bottom: 1px solid #d9dee5; }
+  .desglose .nota { display: block; font-size: 12px; color: #4a5565; }
+  .desglose .nota td { padding-top: 6px; font-size: 12px; color: #4a5565; border-bottom: none; }
+  .movs th { text-align: left; font-size: 12.5px; font-weight: 600; color: #4a5565;
+             border-bottom: 1px solid #1f2937; padding: 6px 0; }
+  .movs th.r { text-align: right; }
+  .movs td { padding: 7px 0; border-bottom: 1px solid #eceff3; vertical-align: baseline; }
+  .movs td.hora { width: 76px; white-space: nowrap; padding-right: 8px; }
+  .movs .quien { display: block; font-size: 12px; color: #4a5565; }
+  .firmas { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-top: 32px; font-size: 13px;
+            page-break-inside: avoid; }
+  .firma .rayita { border-bottom: 1px solid #1f2937; height: 34px; }
+  .firma p { margin: 6px 0 0; }
+  .firma .rol { color: #4a5565; }
+  .firma .obs { color: #4a5565; }
   .resumen th, .resumen td { padding: 8px 6px; border-bottom: 1px solid #f3f4f6; }
   .resumen thead th { text-align: left; border-bottom: 2px solid #e5e7eb; color: #6b7280;
                       font-size: 11px; text-transform: uppercase; letter-spacing: .03em; }

@@ -118,42 +118,59 @@ const claseDif = (c) => {
   return c.diferencia < 0 ? 'neg' : 'pos';
 };
 
-const textoDif = (c) => {
-  if (c.contado == null || c.diferencia == null) return '—';
-  if (Math.abs(c.diferencia) < 0.005) return 'Cuadra';
-  const signo = c.diferencia > 0 ? '+' : '';
-  const etiqueta = c.diferencia < 0 ? 'faltante' : 'sobrante';
-  return `${signo}${fmtMoneda(c.diferencia)} (${etiqueta})`;
+// Casilla de la diferencia en el resumen: { valor, nota, clase }.
+const casillaDif = (c) => {
+  if (c.contado == null || c.diferencia == null) return { valor: '—', nota: '', clase: '' };
+  if (Math.abs(c.diferencia) < 0.005) return { valor: 'Cuadra', nota: '', clase: 'cuadra' };
+  return c.diferencia < 0
+    ? { valor: `−${fmtMoneda(-c.diferencia)}`, nota: 'Faltante', clase: 'falta' }
+    : { valor: `+${fmtMoneda(c.diferencia)}`, nota: 'Sobrante', clase: 'sobra' };
 };
 
-// Tabla de entradas y salidas de un corte, o '' si no hubo ninguna.
+// Franja de arriba: esperado, contado, diferencia y el sobre con la caja final.
+const resumenCorte = (c) => {
+  const dif = casillaDif(c);
+  return `
+    <div class="cifras">
+      <div><p class="k">${c.en_curso ? 'Esperado hasta ahora' : 'Esperado en caja'}</p>
+        <p class="v">${fmtMoneda(c.esperado)}</p></div>
+      <div><p class="k">Efectivo contado</p>
+        <p class="v">${c.contado != null ? fmtMoneda(c.contado) : '—'}</p></div>
+      <div class="${dif.clase}"><p class="k">Diferencia</p>
+        <p class="v">${dif.valor}</p>${dif.nota ? `<p class="s">${dif.nota}</p>` : ''}</div>
+      <div><p class="k">Sobre</p>
+        <p class="v">${c.sobre != null ? fmtMoneda(c.sobre) : '—'}</p>
+        ${c.caja_final != null ? `<p class="s">Caja final ${fmtMoneda(c.caja_final)}</p>` : ''}</div>
+    </div>`;
+};
+
+// Tabla de entradas y gastos de un corte, o '' si no hubo ninguno. Quién lo
+// registró va bajo el concepto; el signo y el color dicen si entró o salió.
 const tablaMovimientos = (c) => {
   const movs = c.movimientos ?? [];
   if (movs.length === 0) return '';
   return `
     <p class="seccion">Entradas y gastos</p>
-    <table class="resumen">
+    <table class="movs">
       <thead>
-        <tr><th>Hora</th><th>Tipo</th><th>Concepto</th><th>Registró</th><th class="r">Monto</th></tr>
+        <tr><th>Hora</th><th>Concepto</th><th class="r">Monto</th></tr>
       </thead>
       <tbody>${movs.map((m) => `
         <tr>
-          <td>${esc(formatHora12(m.created_at))}</td>
-          <td>${m.tipo === 'salida' ? 'Gasto' : 'Entrada'}</td>
-          <td>${esc(m.concepto)}</td>
-          <td>${esc(m.usuario || '—')}</td>
+          <td class="hora">${esc(formatHora12(m.created_at))}</td>
+          <td>${esc(m.concepto)}<span class="quien">${m.tipo === 'salida' ? 'Gasto' : 'Entrada'} · ${esc(m.usuario || '—')}</span></td>
           <td class="r ${m.tipo === 'salida' ? 'neg' : 'pos'}">${m.tipo === 'salida' ? '−' : '+'}${fmtMoneda(m.monto)}</td>
         </tr>`).join('')}
       </tbody>
     </table>`;
 };
 
-// Tabla de Ingresos, Egresos o Desglose con su total. `aparte` ({ titulo,
-// lineas }): renglones informativos que no suman (Cómo se cobró).
+// Tabla de Ingresos o Egresos con su total. `aparte` ({ titulo, lineas }):
+// renglones informativos que no suman (Cómo se cobró).
 const filaLinea = (l) => l.titulo ? `
         <tr class="sub"><td colspan="2">${esc(l.label)}</td></tr>` : l.subtotal ? `
-        <tr class="tot"><td>${esc(l.label)}</td><td class="r">${fmtMoneda(l.value)}</td></tr>` : `
-        <tr><td>${esc(l.label)}${l.nota ? ` <span class="nota">(${esc(l.nota)})</span>` : ''}</td>
+        <tr class="subtot"><td>${esc(l.label)}</td><td class="r">${fmtMoneda(l.value)}</td></tr>` : `
+        <tr><td>${esc(l.label)}${l.nota ? `<span class="nota">${esc(l.nota)}</span>` : ''}</td>
           <td class="r">${l.sign}${fmtMoneda(l.value)}</td></tr>`;
 const tablaLineas = (titulo, lineas, totalLabel, total, aparte = null) => `
     <p class="seccion">${esc(titulo)}</p>
@@ -165,7 +182,18 @@ const tablaLineas = (titulo, lineas, totalLabel, total, aparte = null) => `
       </tbody>
     </table>`;
 
-/** Detalle de un corte: encabezado, recuadros, conteo, firmas y movimientos. Ventas lo reusa. */
+// Firma con su línea; la nota del turno, debajo.
+const firma = (nombre, rol, nota) => `
+      <div class="firma">
+        <div class="rayita"></div>
+        <p><b>${esc(nombre)}</b> <span class="rol">· ${rol}</span></p>
+        ${nota ? `<p class="obs">“${esc(nota)}”</p>` : ''}
+      </div>`;
+
+/**
+ * Detalle de un corte: primero las cifras del cierre; luego Ingresos y, al
+ * lado, Egresos con las entradas y gastos; al final las firmas. Ventas lo reusa.
+ */
 export const bloqueDetalle = (c) => {
   const d = desgloseCaja(c);
   return `
@@ -174,26 +202,21 @@ export const bloqueDetalle = (c) => {
       <h2>${esc(fechaLarga(fechaCorte(c)))}${c.en_curso ? ' · turno en curso' : ''}</h2>
       <span class="hora">${esc(formatHora12(c.abierta_at))} – ${esc(horaCierre(c))}</span>
     </div>
-    ${tablaLineas('Ingresos', d.ingresos, d.totalIngresosLabel, d.totalIngresos,
+    ${resumenCorte(c)}
+    <div class="dos">
+      <div>
+        ${tablaLineas('Ingresos', d.ingresos, d.totalIngresosLabel, d.totalIngresos,
     d.comoSeCobroDentro ? null : { titulo: 'Cómo se cobró', lineas: d.comoSeCobro })}
-    ${tablaLineas('Egresos', d.egresos, 'Total egresos', d.totalEgresos)}
-    ${tablaLineas('Desglose esperado', d.desglose, c.en_curso ? 'Esperado hasta ahora' : 'Esperado en caja', c.esperado)}
-    <table class="desglose">
-      <tbody>
-        <tr><td>Efectivo contado</td><td class="r">${c.contado != null ? fmtMoneda(c.contado) : '—'}</td></tr>
-        <tr class="dif ${claseDif(c)}"><td>Diferencia</td><td class="r">${textoDif(c)}</td></tr>
-        ${c.caja_final != null ? `
-        <tr><td>Caja final (queda en el cajón)</td><td class="r">${fmtMoneda(c.caja_final)}</td></tr>
-        <tr><td>Sobre</td><td class="r">${fmtMoneda(c.sobre)}</td></tr>` : ''}
-      </tbody>
-    </table>
-    <div class="firmas">
-      <div><span class="lbl">Abrió</span> ${esc(c.usuario_apertura || '—')}
-        ${c.notas_apertura ? `<p class="nota">${esc(c.notas_apertura)}</p>` : ''}</div>
-      <div><span class="lbl">Cerró</span> ${esc(quienCerro(c))}
-        ${c.notas_cierre ? `<p class="nota">${esc(c.notas_cierre)}</p>` : ''}</div>
+      </div>
+      <div>
+        ${tablaLineas('Egresos', d.egresos, 'Total egresos', d.totalEgresos)}
+        ${tablaMovimientos(c)}
+      </div>
     </div>
-    ${tablaMovimientos(c)}
+    <div class="firmas">
+      ${firma(c.usuario_apertura || '—', 'abrió', c.notas_apertura)}
+      ${c.en_curso ? '' : firma(c.cierre_automatico ? 'El sistema' : quienCerro(c), 'cerró', c.notas_cierre)}
+    </div>
   </section>`;
 };
 
