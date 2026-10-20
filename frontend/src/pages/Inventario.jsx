@@ -1360,13 +1360,6 @@ const FILTRO_CFG = {
   desactivados: { label: 'Desactivados', cls: 'bg-gray-100 text-gray-600',    clsActive: 'bg-gray-600 text-white',   dot: 'bg-gray-400' },
 };
 
-/** Color del texto del chip de tipo, para pintar el nombre igual. */
-function colorTextoTipo(p) {
-  if (p.clase === 'bolsa') return 'text-amber-700';
-  if (p.tipo_liquido === 'granel') return 'text-blue';
-  if (p.tipo_liquido === 'marca') return 'text-purple-700';
-  return 'text-gray-800';
-}
 // Chip de tipo de producto (granel / marca / bolsa).
 function ChipTipo({ p }) {
   const cfg = p.clase === 'bolsa'
@@ -2365,7 +2358,7 @@ export default function Inventario() {
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-center gap-2 min-w-0">
                       {es !== 'ok' && <IconoAdvertencia severity={es} />}
-                      <p className={`font-semibold text-sm ${colorTextoTipo(p)}`}>{tituloProd(p)}</p>
+                      <p className="font-semibold text-sm text-blue">{tituloProd(p)}</p>
                     </div>
                     <div className="flex items-center gap-1.5 flex-shrink-0">
                       <ChipTipo p={p} />
