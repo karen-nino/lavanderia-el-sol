@@ -527,11 +527,11 @@ export default function TicketNota() {
         <div className="mx-auto w-full max-w-[20rem]">
         <div
           ref={reciboRef}
-          className="w-full bg-white px-4 py-6 font-mono text-[11px] leading-relaxed text-black shadow-sm"
+          className="w-full bg-white px-4 py-6 font-mono text-[12px] leading-relaxed text-black shadow-sm"
         >
           {/* Encabezado del negocio */}
           <div className="text-center mb-5">
-            <p className="text-sm font-bold tracking-[0.15em]">LAVANDERÍA EL SOL</p>
+            <p className="text-[15px] font-bold tracking-[0.15em]">LAVANDERÍA EL SOL</p>
             {/* Dirección de la sucursal donde se hizo la nota (si la tiene). */}
             {nota.sucursal_direccion && (
               <p className="mt-1">{nota.sucursal_direccion.toUpperCase()}</p>
@@ -623,7 +623,7 @@ export default function TicketNota() {
             {Number(nota.ajuste) !== 0 && nota.ajuste != null && (
               <Linea label="Ajuste" value={`${Number(nota.ajuste) > 0 ? '+' : ''}${fmtMonto(nota.ajuste)}`} />
             )}
-            <div className="flex items-baseline justify-between gap-2 text-sm font-bold">
+            <div className="flex items-baseline justify-between gap-2 text-[15px] font-bold">
               <span>TOTAL M.N.</span>
               <span className="whitespace-nowrap">{fmtMonto(nota.precio_total)}</span>
             </div>
@@ -663,7 +663,7 @@ export default function TicketNota() {
 
           {/* Nota al pie (Ajustes → Ticket) */}
           {notaPie && (
-            <p className="mt-3 whitespace-pre-line text-center text-[10px] leading-relaxed">
+            <p className="mt-3 whitespace-pre-line text-center text-[11px] leading-relaxed">
               {notaPie}
             </p>
           )}
