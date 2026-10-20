@@ -8,6 +8,7 @@ import { useAuth } from '../context/AuthContext';
 import { esAdmin as esAdminFn } from '../lib/roles';
 import MaquinaCicloOverlay from '../components/MaquinaCicloOverlay';
 import ConfirmacionModal from '../components/ConfirmacionModal';
+import AbrirCajaModal from '../components/AbrirCajaModal';
 import ElegirTiempoModal from '../components/ElegirTiempoModal';
 import GranelPorServicio from '../components/GranelPorServicio';
 import { preguntaTiempo, tiemposDeMaquina } from '../lib/tiemposModelo';
@@ -82,6 +83,20 @@ export default function Salidas() {
 
   const [confirmQuitarCarga, setConfirmQuitarCarga] = useState(null);
   const [errorAccion,      setErrorAccion]      = useState('');
+  // Con la caja cerrada no se agregan ni encienden máquinas ni se cambian
+  // productos (el servidor responde 409); Finalizar y Detener sí se pueden.
+  const [cajaAbierta,      setCajaAbierta]      = useState(null);
+  const [modalCajaOpen,    setModalCajaOpen]    = useState(false);
+  useEffect(() => {
+    api.get('/caja/actual')
+      .then(r => setCajaAbierta(Boolean(r?.abierta)))
+      .catch(() => setCajaAbierta(null)); // si falla la consulta, no se avisa nada
+  }, []);
+  /** Error de una acción; si fue por la caja cerrada, además sale el aviso de arriba. */
+  const fallaAccion = (err, texto = err.message) => {
+    if (err?.data?.code === 'CAJA_CERRADA') setCajaAbierta(false);
+    setErrorAccion(texto);
+  };
   const [confirmDetener,   setConfirmDetener]   = useState(null); // máquina a detener
   // Máquina del modal de arranque. Se guarda el id: el paso (encender o iniciar)
   // sale del estado vivo de la máquina, que cambia sin cerrar el modal.
@@ -208,7 +223,7 @@ export default function Salidas() {
       if (maq.cronometro) setMaquinaModalId(null);
       await cargarDatos();
     } catch (err) {
-      setErrorAccion(err.message);
+      fallaAccion(err);
     } finally {
       setEncendiendo(null);
     }
@@ -274,7 +289,7 @@ export default function Salidas() {
       await cargarDatos();
     } catch (err) {
       // El modal sigue abierto detrás y ahí se ve el error.
-      setErrorAccion(err.message);
+      fallaAccion(err);
     } finally {
       setIniciando(null);
       setLoadingMaquina(false);
@@ -302,7 +317,7 @@ export default function Salidas() {
       cerrarAsignar();
       await cargarDatos();
     } catch (err) {
-      setErrorAccion(err.message);
+      fallaAccion(err);
     } finally {
       setLoadingMaquina(false);
     }
@@ -343,7 +358,7 @@ export default function Salidas() {
       await cargarDatos();
     } catch (err) {
       // El modal sigue abierto detrás y ahí se ve el error.
-      setErrorAccion(err.message);
+      fallaAccion(err);
     } finally {
       setDeteniendo(null);
       setLoadingMaquina(false);
@@ -369,7 +384,7 @@ export default function Salidas() {
         && !m.reservada
         && !maquinasNota.some(mid => String(mid) === String(m.id))));
     } catch (err) {
-      setErrorAccion(err.message);
+      fallaAccion(err);
     } finally {
       setLoadingMaquinas(false);
     }
@@ -420,7 +435,7 @@ export default function Salidas() {
       cerrarAsignar();
       await cargarDatos();
     } catch (err) {
-      setErrorAccion(err.message);
+      fallaAccion(err);
     } finally {
       setLoadingMaquina(false);
     }
@@ -442,7 +457,7 @@ export default function Salidas() {
         && (esSecadora ? x.tipo === 'secadora' : x.tipo !== 'secadora')
         && !maquinasNota.some(mid => String(mid) === String(x.id))));
     } catch (err) {
-      setErrorAccion(err.message);
+      fallaAccion(err);
     } finally {
       setLoadingMaquinas(false);
     }
@@ -461,7 +476,7 @@ export default function Salidas() {
       setCambiarMaq(null);
       await cargarDatos();
     } catch (err) {
-      setErrorAccion(err.message);
+      fallaAccion(err);
     } finally {
       setLoadingMaquina(false);
     }
@@ -481,7 +496,7 @@ export default function Salidas() {
       setConfirmTerminarMaq(null);
       await cargarDatos();
     } catch (err) {
-      setErrorAccion(err.message);
+      fallaAccion(err);
       setConfirmTerminarMaq(null);
     } finally {
       setLoadingMaquina(false);
@@ -497,7 +512,7 @@ export default function Salidas() {
       const data = await api.get('/productos');
       setCatalogoProd(data ?? []);
     } catch (err) {
-      setErrorAccion(err.message);
+      fallaAccion(err);
     } finally {
       setLoadingCatalogo(false);
     }
@@ -515,7 +530,7 @@ export default function Salidas() {
       setAgregarProdOpen(false);
       await cargarDatos();
     } catch (err) {
-      setErrorAccion(err.message);
+      fallaAccion(err);
     } finally {
       setLoadingProducto(null);
     }
@@ -531,7 +546,7 @@ export default function Salidas() {
       await api.patch(`/notas/${id}/productos/${productoId}`, { cantidad });
       await cargarDatos();
     } catch (err) {
-      setErrorAccion(err.message);
+      fallaAccion(err);
     } finally {
       setLoadingProducto(null);
     }
@@ -547,7 +562,7 @@ export default function Salidas() {
       await cargarDatos();
     } catch (err) {
       // El error se ve dentro del modal: el aviso de la página queda fuera de vista.
-      setErrorAccion(err.message);
+      fallaAccion(err);
     } finally {
       setLoadingProducto(null);
     }
@@ -563,7 +578,7 @@ export default function Salidas() {
       await cargarDatos();
       return true;
     } catch (err) {
-      setErrorAccion(err.message);
+      fallaAccion(err);
       return false;
     } finally {
       setLoadingMaquina(false);
@@ -763,7 +778,7 @@ export default function Salidas() {
         await cargarDatos();
       }
     } catch (err) {
-      setErrorAccion(err.message || 'No se pudo sumar el tiempo.');
+      fallaAccion(err, err.message || 'No se pudo sumar el tiempo.');
     } finally {
       setLoadingMaquina(false);
     }
@@ -916,6 +931,28 @@ export default function Salidas() {
           <p className="text-sm text-gray-500 leading-tight truncate">{nota?.folio ?? `Nota #${id}`}</p>
         </div>
       </div>
+
+      {/* Caja cerrada: solo se puede terminar lo que quedó corriendo. */}
+      {cajaAbierta === false && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
+          <p className="text-sm font-semibold text-amber-900">La caja está cerrada</p>
+          <p className="mt-0.5 text-sm text-amber-800">
+            Ábrela para agregar o encender máquinas y cambiar productos. Finalizar y detener sí se pueden.
+          </p>
+          <button
+            type="button"
+            onClick={() => setModalCajaOpen(true)}
+            className="mt-2.5 text-sm font-medium text-amber-800 border border-amber-300 bg-white rounded-lg px-4 py-2 hover:bg-amber-100 transition-colors"
+          >
+            Abrir caja
+          </button>
+        </div>
+      )}
+      <AbrirCajaModal
+        open={modalCajaOpen}
+        onClose={() => setModalCajaOpen(false)}
+        onAbierta={() => { setModalCajaOpen(false); setCajaAbierta(true); }}
+      />
 
       {errorAccion && (
         <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">

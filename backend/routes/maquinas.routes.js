@@ -3,6 +3,7 @@ import { verifyToken } from '../middleware/auth.js';
 import { sucursalActiva } from '../middleware/sucursalActiva.js';
 import { requireAdmin } from '../middleware/roles.js';
 import { validarId } from '../middleware/validarId.js';
+import { requiereCajaAbierta as conCaja } from '../middleware/cajaAbierta.js';
 import {
   getMaquinas,
   getUsoMaquina,
@@ -36,9 +37,9 @@ router.delete('/:id', requireAdmin, deleteMaquina);
 router.patch('/:id/estado', cambiarEstadoMaquina);
 router.patch('/:id/detener-ciclo', detenerCiclo);
 // Sin requireAdmin: el segundo ciclo lo da el empleado del mostrador.
-router.patch('/:id/otro-ciclo', otroCiclo);
+router.patch('/:id/otro-ciclo', conCaja, otroCiclo);
 // "Otro ciclo" de la secadora de fichas que pregunta su programa.
-router.patch('/:id/mas-tiempo', masTiempo);
+router.patch('/:id/mas-tiempo', conCaja, masTiempo);
 router.post('/:id/probar-sonoff', requireAdmin, probarSonoff);
 router.post('/:id/apagar-sonoff', requireAdmin, apagarSonoff);
 router.post('/:id/encender-sonoff', requireAdmin, encenderSonoff);

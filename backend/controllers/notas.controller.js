@@ -1,5 +1,6 @@
 import pool from '../db/pool.js';
 import { esAdmin, esAdminMain } from '../middleware/roles.js';
+import { notaRequiereCaja } from '../middleware/cajaAbierta.js';
 import { tarifaSecadora, precioProductoEnNota, unidadDeVenta, medidasPorUnidad, generarFolio } from '../utils/calculosNotas.js';
 // Encender y apagar normalmente lo dispara el trigger LISTEN/NOTIFY. "Encender
 // máquina" llama directo para no depender del listener; es idempotente.
@@ -1847,13 +1848,7 @@ export const getNotaById = async (req, res) => {
 };
 
 // ── POST /notas ─────────────────────────────────────────────
-/**
- * Ninguna nota se crea con la caja cerrada. Se lee en cada llamada para que
- * las pruebas lo puedan apagar con `NOTA_REQUIERE_CAJA=off`.
- */
-const notaRequiereCaja = () =>
-  String(process.env.NOTA_REQUIERE_CAJA ?? '').toLowerCase() !== 'off';
-
+// Ninguna nota se crea con la caja cerrada (notaRequiereCaja en middleware/cajaAbierta.js).
 export const createNota = async (req, res) => {
   const {
     cliente_id,
