@@ -7,10 +7,12 @@ import app from '../../app.js';
 import { pool, limpiarBase, seedSucursal, seedUsuario, seedCliente, seedAjustes, auth } from '../helpers.js';
 
 let admin;
+let adminMain; // borrar notas es solo del Admin Main
 beforeEach(async () => {
   await limpiarBase();
   await seedSucursal('centro');
   admin = await seedUsuario({ rol: 'admin', sucursal: 'centro' });
+  adminMain = await seedUsuario({ rol: 'admin_main', sucursal: 'centro', nombre: 'Main' });
   await seedAjustes({});
 });
 const api = (m, url, body) => request(app)[m](url).set(auth(admin.token)).send(body);
@@ -32,7 +34,7 @@ describe('eliminar una nota con abonos', () => {
     const id = await notaConAbono();
     await api('post', '/api/caja/cerrar', { monto_contado: 30 }).expect(200);
 
-    const res = await api('delete', `/api/notas/${id}`);
+    const res = await request(app).delete(`/api/notas/${id}`).set(auth(adminMain.token));
     expect(res.status).toBe(409);
     const { rows } = await pool.query('SELECT 1 FROM nota_abonos WHERE nota_id = $1', [id]);
     expect(rows).toHaveLength(1);
@@ -40,7 +42,7 @@ describe('eliminar una nota con abonos', () => {
 
   it('con la caja todavía abierta sí se borra, como una nota cobrada ahí', async () => {
     const id = await notaConAbono();
-    await api('delete', `/api/notas/${id}`).expect(204);
+    await request(app).delete(`/api/notas/${id}`).set(auth(adminMain.token)).expect(204);
   });
 
   it('un abono revertido no la bloquea', async () => {
@@ -48,6 +50,6 @@ describe('eliminar una nota con abonos', () => {
     const { rows: [ab] } = await pool.query('SELECT id FROM nota_abonos WHERE nota_id = $1', [id]);
     await api('patch', `/api/notas/${id}/abonos/${ab.id}/revertir`, { motivo: 'error' }).expect(200);
     await api('post', '/api/caja/cerrar', { monto_contado: 0 }).expect(200);
-    await api('delete', `/api/notas/${id}`).expect(204);
+    await request(app).delete(`/api/notas/${id}`).set(auth(adminMain.token)).expect(204);
   });
 });

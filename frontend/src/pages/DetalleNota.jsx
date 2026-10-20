@@ -5,12 +5,12 @@ import Barcode from 'react-barcode';
 import { api } from '../lib/api';
 import { urlListaNotas } from '../lib/filtrosNotas';
 import { useAuth } from '../context/AuthContext';
-import { esAdmin as esAdminFn } from '../lib/roles';
+import { esAdmin as esAdminFn, esAdminMain as esAdminMainFn } from '../lib/roles';
 import { etiquetaProducto, tituloProducto, subtituloProducto, ordenProducto, seVendePorUnidad } from '../lib/formatoInventario';
 import { FORMAS_PAGO, formaPagoLabel } from '../lib/formasPago';
 import { formatHora12, formatFechaHora12 } from '../lib/fecha';
 import { leerAvisoCobro, limpiarAvisoCobro } from '../lib/avisoCobro';
-import { esTerminal, puedeLiquidar, puedeFinalizar, puedeEliminar, eliminarSoloEnEscritorio } from '../lib/accionesNota';
+import { esTerminal, puedeLiquidar, puedeFinalizar, puedeEliminar } from '../lib/accionesNota';
 import AbrirCajaModal from '../components/AbrirCajaModal';
 import ModalCobrar from '../components/ModalCobrar';
 import { ES_DEMO } from '../lib/entorno';
@@ -391,6 +391,8 @@ export default function DetalleNota() {
   const navigate = useNavigate();
   const { usuario } = useAuth();
   const esAdmin = esAdminFn(usuario?.rol);
+  // Borrar una nota es solo del Admin Main.
+  const esAdminMain = esAdminMainFn(usuario?.rol);
 
   const [nota,             setNota]             = useState(null);
   const [loading,          setLoading]          = useState(true);
@@ -911,14 +913,11 @@ export default function DetalleNota() {
               disabled={loadingAccion}
             />
           )}
-          {/* Con la nota viva, Eliminar solo se ve con mouse (`pointer: fine`): en
-              táctil queda pegado a Cancelar y borrar no se deshace. */}
-          {puedeEliminar(nota, esAdmin) && (
+          {puedeEliminar(nota, esAdminMain) && (
             <AccionCircular
               label="Eliminar"
               icono={IconoEliminar}
               color="bg-blue group-hover:bg-red-700"
-              className={eliminarSoloEnEscritorio(nota) ? 'hidden pointer-fine:flex' : 'flex'}
               onClick={() => setConfirmEliminar(true)}
               disabled={loadingAccion}
             />
@@ -940,7 +939,7 @@ export default function DetalleNota() {
               disabled={loadingAccion}
             />
           )}
-          {puedeEliminar(nota, esAdmin) && (
+          {puedeEliminar(nota, esAdminMain) && (
             <AccionCircular
               label="Eliminar"
               icono={IconoEliminar}

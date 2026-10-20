@@ -1,5 +1,5 @@
 import pool from '../db/pool.js';
-import { esAdmin } from '../middleware/roles.js';
+import { esAdmin, esAdminMain } from '../middleware/roles.js';
 import { tarifaSecadora, precioProductoEnNota, unidadDeVenta, medidasPorUnidad, generarFolio } from '../utils/calculosNotas.js';
 // Encender y apagar normalmente lo dispara el trigger LISTEN/NOTIFY. "Encender
 // máquina" llama directo para no depender del listener; es idempotente.
@@ -2266,8 +2266,8 @@ export const quitarCarga = async (req, res) => {
 
 // ── DELETE /notas/:id ───────────────────────────────────────
 export const eliminarNota = async (req, res) => {
-  if (!esAdmin(req.user.rol)) {
-    return res.status(403).json({ message: 'Solo los administradores pueden eliminar notas.' });
+  if (!esAdminMain(req.user.rol)) {
+    return res.status(403).json({ message: 'Solo el Admin Main puede eliminar notas.' });
   }
   const { id } = req.params;
   const client = await pool.connect();

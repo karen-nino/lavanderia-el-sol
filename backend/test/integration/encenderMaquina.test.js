@@ -18,11 +18,13 @@ conTemporizador();
 
 
 let admin;
+let adminMain; // borrar notas es solo del Admin Main
 
 beforeEach(async () => {
   await limpiarBase();
   await seedSucursal('centro');
   admin = await seedUsuario({ rol: 'admin', sucursal: 'centro' });
+  adminMain = await seedUsuario({ rol: 'admin_main', sucursal: 'centro', nombre: 'Main' });
   await seedAjustes({ tiempo_carga_mediana: 15, tiempo_carga_jumbo: 45, tiempo_carga_secadora: 30 });
 });
 
@@ -251,7 +253,7 @@ describe('eliminar una nota con su máquina encendida', () => {
     await encender(notaId, id).expect(200);
     expect(esperandoArranque(await maquina(id))).toBe(true);
 
-    await request(app).delete(`/api/notas/${notaId}`).set(auth(admin.token)).expect(204);
+    await request(app).delete(`/api/notas/${notaId}`).set(auth(adminMain.token)).expect(204);
 
     const m = await maquina(id);
     expect(m.estado).toBe('disponible');           // vuelve a ofrecerse
@@ -269,7 +271,7 @@ describe('eliminar una nota con su máquina encendida', () => {
     await iniciar(notaId, id).expect(200);
     expect((await maquina(id)).en_uso_desde).not.toBeNull();   // ya tiene cronómetro
 
-    const res = await request(app).delete(`/api/notas/${notaId}`).set(auth(admin.token));
+    const res = await request(app).delete(`/api/notas/${notaId}`).set(auth(adminMain.token));
 
     expect(res.status).toBe(409);
     expect(res.body.message).toMatch(/L21/);
@@ -291,7 +293,7 @@ describe('eliminar una nota con su máquina encendida', () => {
     await request(app).patch(`/api/notas/${notaId}/terminar-lavado`).set(auth(admin.token))
       .send({ lavadora_id: lav, secadora_id: sec }).expect(200);
 
-    const res = await request(app).delete(`/api/notas/${notaId}`).set(auth(admin.token));
+    const res = await request(app).delete(`/api/notas/${notaId}`).set(auth(adminMain.token));
     expect(res.status).toBe(409);
     expect(res.body.message).toMatch(/S22/);
     expect(res.body.message).toMatch(/secando/i);

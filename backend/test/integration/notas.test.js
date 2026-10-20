@@ -8,11 +8,13 @@ import {
 } from '../helpers.js';
 
 let admin;
+let adminMain; // borrar notas es solo del Admin Main
 
 beforeEach(async () => {
   await limpiarBase();
   await seedSucursal('centro');
   admin = await seedUsuario({ rol: 'admin', sucursal: 'centro' });
+  adminMain = await seedUsuario({ rol: 'admin_main', sucursal: 'centro', nombre: 'Main' });
   // limpiarBase vacía el catálogo de tamaños de bolsa: sin él no se da de alta una bolsa.
   await seedEtiquetas('tamanos_bolsa', ['Chica', 'Grande', 'Jumbo']);
   // Los precios de los servicios Por Encargo (Chica 120, Grande 150, Edredón
@@ -399,7 +401,7 @@ describe('un cobro congelado en su corte no se deshace por un cambio', () => {
   // aquel día conserva la venta y Ventas, que suma notas vivas, la perdía.
   it('borrar la nota entera también se rechaza con 409', async () => {
     const { notaId } = await notaPagadaEnCorteCerrado();
-    const res = await request(app).delete(`/api/notas/${notaId}`).set(auth(admin.token));
+    const res = await request(app).delete(`/api/notas/${notaId}`).set(auth(adminMain.token));
     expect(res.status).toBe(409);
     expect(res.body.message).toMatch(/corte cerrado/i);
 
@@ -411,7 +413,7 @@ describe('un cobro congelado en su corte no se deshace por un cambio', () => {
   it('con la caja de ese cobro abierta, la nota sí se borra', async () => {
     const { notaId } = await notaPagadaEnCorteCerrado();
     await pool.query("UPDATE cajas SET estado = 'abierta', cerrada_at = NULL WHERE id = (SELECT caja_id FROM notas WHERE id = $1)", [notaId]);
-    await request(app).delete(`/api/notas/${notaId}`).set(auth(admin.token)).expect(204);
+    await request(app).delete(`/api/notas/${notaId}`).set(auth(adminMain.token)).expect(204);
     const { rows } = await pool.query('SELECT id FROM notas WHERE id = $1', [notaId]);
     expect(rows).toHaveLength(0);
   });
@@ -587,7 +589,7 @@ describe('quién se queda con la máquina: la primera que inicia', () => {
     await asignarACarga(b.id, b.cargas[0].id, lav).expect(200);
     await iniciar(a.id, lav).expect(200);
 
-    await request(app).delete(`/api/notas/${b.id}`).set(auth(admin.token)).expect(204);
+    await request(app).delete(`/api/notas/${b.id}`).set(auth(adminMain.token)).expect(204);
 
     const { rows } = await pool.query('SELECT estado FROM maquinas WHERE id = $1', [lav]);
     expect(rows[0].estado).toBe('en_uso');
@@ -1485,7 +1487,7 @@ describe('handlers de máquina — asignar / cambiar / quitar', () => {
 });
 
 describe('permisos por rol', () => {
-  it('un empleado no puede eliminar una nota (403); un admin sí (204)', async () => {
+  it('un empleado ni un admin pueden eliminar una nota (403); el Admin Main sí (204)', async () => {
     const empleado = await seedUsuario({ rol: 'operador', sucursal: 'centro', nombre: 'Empleado' });
     const creada = await request(app).post('/api/notas').set(auth(admin.token)).send({
       tipo_servicio: 'AUTOSERVICIO', tipo_prenda: 'ROPA', estado_pago: 'PAGADO', forma_pago: 'EFECTIVO',
@@ -1494,7 +1496,8 @@ describe('permisos por rol', () => {
     const notaId = creada.body.id;
 
     await request(app).delete(`/api/notas/${notaId}`).set(auth(empleado.token)).expect(403);
-    await request(app).delete(`/api/notas/${notaId}`).set(auth(admin.token)).expect(204);
+    await request(app).delete(`/api/notas/${notaId}`).set(auth(admin.token)).expect(403);
+    await request(app).delete(`/api/notas/${notaId}`).set(auth(adminMain.token)).expect(204);
   });
 });
 
@@ -2071,7 +2074,7 @@ describe('cierre automático de la nota al terminar sus cargas', () => {
       'SELECT stock_actual FROM productos WHERE id = $1', [prod]);
     expect(Number(vendido[0].stock_actual)).toBeLessThan(100);
 
-    await request(app).delete(`/api/notas/${crea.body.id}`).set(auth(admin.token)).expect(204);
+    await request(app).delete(`/api/notas/${crea.body.id}`).set(auth(adminMain.token)).expect(204);
 
     const { rows: fin } = await pool.query(
       'SELECT stock_actual, stock_reservado FROM productos WHERE id = $1', [prod]);

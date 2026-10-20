@@ -5,11 +5,13 @@ import { pool, limpiarBase, seedSucursal, seedUsuario, seedLogin, seedMaquina, a
 import { liberarMaquinasCierreDelDia, cerrarSesionesEmpleados, cerrarCajasAbiertas } from '../../jobs/cierreDelDia.js';
 
 let admin;
+let adminMain; // borrar notas es solo del Admin Main
 
 beforeEach(async () => {
   await limpiarBase();
   await seedSucursal('centro');
   admin = await seedUsuario({ rol: 'admin', sucursal: 'centro' });
+  adminMain = await seedUsuario({ rol: 'admin_main', sucursal: 'centro', nombre: 'Main' });
 });
 
 describe('liberarMaquinasCierreDelDia', () => {
@@ -186,7 +188,7 @@ describe('cerrarCajasAbiertas', () => {
     // Al día siguiente no se puede deshacer aquella nota: ni revertir el pago, ni
     // editarla, cancelarla o borrarla.
     const del = await request(app).delete(`/api/notas/${nota.body.id}`)
-      .set(auth(admin.token));
+      .set(auth(adminMain.token));
     expect(del.status).toBe(409);
     expect(del.body.message).toMatch(/corte cerrado/i);
 

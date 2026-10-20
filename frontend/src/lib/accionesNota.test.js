@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { esTerminal, puedeLiquidar, puedeFinalizar, puedeEliminar, eliminarSoloEnEscritorio } from './accionesNota';
+import { esTerminal, puedeLiquidar, puedeFinalizar, puedeEliminar } from './accionesNota';
 
 const nota = (estado, estado_pago) => ({ estado, estado_pago });
 
@@ -57,7 +57,7 @@ describe('acciones del detalle de una nota', () => {
     }
   });
 
-  it('el admin puede eliminar en cualquier estado', () => {
+  it('el Admin Main puede eliminar en cualquier estado', () => {
     // Borrar una nota abierta es posible: cancelar una cobrada exige revertir el
     // pago antes, y a veces solo es un error de captura.
     for (const estado of ['EN_ESPERA', 'LAVANDO', 'SECANDO', 'LISTA', 'CANCELADA', 'FINALIZADA']) {
@@ -73,20 +73,9 @@ describe('acciones del detalle de una nota', () => {
     expect(puedeEliminar({ ...nota('FINALIZADA', 'PAGADO'), cobro_congelado: false }, true)).toBe(true);
   });
 
-  it('un empleado no elimina nunca', () => {
+  it('un empleado o un admin no eliminan nunca', () => {
     expect(puedeEliminar(nota('CANCELADA', 'PENDIENTE'), false)).toBe(false);
     expect(puedeEliminar(nota('EN_ESPERA', 'PENDIENTE'), false)).toBe(false);
-  });
-
-  it('en el teléfono el botón se esconde mientras la nota siga viva', () => {
-    for (const estado of ['EN_ESPERA', 'LAVANDO', 'SECANDO', 'LISTA']) {
-      expect(eliminarSoloEnEscritorio(nota(estado, 'PENDIENTE'))).toBe(true);
-    }
-  });
-
-  it('ya cerrada, el botón se ve también en el teléfono', () => {
-    expect(eliminarSoloEnEscritorio(nota('CANCELADA', 'PENDIENTE'))).toBe(false);
-    expect(eliminarSoloEnEscritorio(nota('FINALIZADA', 'PAGADO'))).toBe(false);
   });
 
   it('esTerminal reconoce las notas cerradas', () => {

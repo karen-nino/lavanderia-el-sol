@@ -7,11 +7,13 @@ import {
 } from '../helpers.js';
 
 let admin;
+let adminMain; // borrar notas es solo del Admin Main
 
 beforeEach(async () => {
   await limpiarBase();
   await seedSucursal('centro');
   admin = await seedUsuario({ rol: 'admin', sucursal: 'centro' });
+  adminMain = await seedUsuario({ rol: 'admin_main', sucursal: 'centro', nombre: 'Main' });
   // limpiarBase vacía el catálogo de tamaños de bolsa: sin él no se da de alta una bolsa.
   await seedEtiquetas('tamanos_bolsa', ['Chica', 'Grande', 'Jumbo']);
 });
@@ -456,7 +458,7 @@ describe('GET /api/productos/reporte-diario', () => {
     const conVenta = await request(app).get('/api/productos/reporte-diario').set(auth(admin.token));
     expect(conVenta.body.productos.find((x) => x.id === id).vendido_medidas).toBe(4);
 
-    await request(app).delete(`/api/notas/${venta.body.id}`).set(auth(admin.token)).expect(204);
+    await request(app).delete(`/api/notas/${venta.body.id}`).set(auth(adminMain.token)).expect(204);
 
     const despues = await request(app).get('/api/productos/reporte-diario').set(auth(admin.token));
     const p = despues.body.productos.find((x) => x.id === id);

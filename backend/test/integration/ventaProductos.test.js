@@ -9,12 +9,14 @@ import {
 } from '../helpers.js';
 
 let admin;
+let adminMain; // borrar notas es solo del Admin Main
 
 beforeEach(async () => {
   await limpiarBase();
   await seedSucursal('centro');
   await seedAjustes();
   admin = await seedUsuario({ rol: 'admin', sucursal: 'centro' });
+  adminMain = await seedUsuario({ rol: 'admin_main', sucursal: 'centro', nombre: 'Main' });
 });
 
 // Producto de marca que se vende por botella: 800/200 = 4 medidas por botella.
@@ -127,7 +129,7 @@ describe('POST /api/notas — venta de Productos', () => {
     const res = await venta({ productos: [{ producto_id: jabon, cantidad: 2 }] });
     expect(res.status).toBe(201);
 
-    const del = await request(app).delete(`/api/notas/${res.body.id}`).set(auth(admin.token));
+    const del = await request(app).delete(`/api/notas/${res.body.id}`).set(auth(adminMain.token));
     expect(del.status).toBe(204);
 
     const { rows } = await pool.query(

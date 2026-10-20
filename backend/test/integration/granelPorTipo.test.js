@@ -10,6 +10,7 @@ import {
 } from '../helpers.js';
 
 let admin;
+let adminMain; // borrar notas es solo del Admin Main
 let tipo; // { jabon, suavizante } → ids de tipos_granel
 
 beforeEach(async () => {
@@ -17,6 +18,7 @@ beforeEach(async () => {
   await seedSucursal('centro');
   await seedAjustes({ precarga_medidas_chico: 1, precio_carga_mediana: 0, precio_carga_secadora: 0 });
   admin = await seedUsuario({ rol: 'admin', sucursal: 'centro' });
+  adminMain = await seedUsuario({ rol: 'admin_main', sucursal: 'centro', nombre: 'Main' });
   const { rows } = await pool.query(
     `INSERT INTO tipos_granel (nombre, orden) VALUES ('Jabón', 1), ('Suavizante', 2) RETURNING id, nombre`
   );
@@ -288,7 +290,7 @@ describe('el granel sale del estante al terminar la lavadora', () => {
 
   it('eliminar la nota lo regresa al estante', async () => {
     const { notaId, oxxi } = await lavadaConOxxi();
-    await request(app).delete(`/api/notas/${notaId}`).set(auth(admin.token)).expect(204);
+    await request(app).delete(`/api/notas/${notaId}`).set(auth(adminMain.token)).expect(204);
     expect(await stock(oxxi)).toEqual({ actual: 50, reservado: 0 });
   });
 });

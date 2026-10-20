@@ -1,6 +1,6 @@
 /** Qué botones ofrece el detalle de una nota (estado de la nota × estado del pago). */
 
-/** Una nota terminada solo se mira (borrar va aparte, es de admin). */
+/** Una nota terminada solo se mira (borrar va aparte, es del Admin Main). */
 export const esTerminal = (nota) => ['FINALIZADA', 'CANCELADA'].includes(nota?.estado);
 
 /**
@@ -27,15 +27,9 @@ export const puedeFinalizar = (nota) =>
   !esTerminal(nota) && nota?.estado === 'LISTA' && nota?.estado_pago !== 'PENDIENTE';
 
 /**
- * Borrar es de admin, en cualquier estado, salvo con el cobro congelado en un
- * corte cerrado (`cobro_congelado`: el servidor responde 409).
+ * Borrar es del Admin Main, en cualquier estado y en cualquier pantalla, salvo
+ * con el cobro congelado en un corte cerrado (`cobro_congelado`: el servidor
+ * responde 409).
  */
-export const puedeEliminar = (nota, esAdmin) =>
-  Boolean(esAdmin) && !nota?.cobro_congelado;
-
-/**
- * En pantallas táctiles el botón de borrar solo se muestra en notas cerradas:
- * con la nota viva el camino es cancelar. La página lo aplica con
- * `pointer-fine` (mouse o trackpad), no por ancho.
- */
-export const eliminarSoloEnEscritorio = (nota) => !esTerminal(nota);
+export const puedeEliminar = (nota, esAdminMain) =>
+  Boolean(esAdminMain) && !nota?.cobro_congelado;
