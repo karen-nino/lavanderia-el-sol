@@ -240,6 +240,12 @@ const SECCION_INSTALAR = {
   detalle: 'Tenerla en la pantalla de inicio', icon: SectionIcon.instalar,
 };
 
+/** Traer la versión nueva de la app; también la tienen los empleados. */
+const SECCION_ACTUALIZAR = {
+  id: 'actualizar', label: 'Actualizar la app', subtitle: 'Versión de la app',
+  detalle: 'Tu versión y traer la más nueva', icon: SectionIcon.actualizar,
+};
+
 const aNumero = (v) => (v === '' || v == null ? null : Number(v));
 /** Tope, programas y ficha de un modelo, para compararlo con lo guardado. */
 const fotoTiempo = (t) => [
@@ -250,7 +256,7 @@ const fotoTiempo = (t) => [
 const huellaSucursal = (s) => JSON.stringify([s.nombre ?? '', s.direccion ?? '', s.telefono ?? '', s.horario_semana ?? null]);
 
 /** Todas las secciones de Ajustes, en el orden del menú del celular. */
-const SECCIONES_AJUSTES = [...MOBILE_SECTIONS, SECCION_MANUAL, SECCION_INSTALAR];
+const SECCIONES_AJUSTES = [...MOBILE_SECTIONS, SECCION_MANUAL, SECCION_INSTALAR, SECCION_ACTUALIZAR];
 const seccionPorId = (id) => SECCIONES_AJUSTES.find(s => s.id === id);
 
 /** Secciones de Ajustes agrupadas por intención; igual en celular y escritorio. */
@@ -258,7 +264,7 @@ const GRUPOS_AJUSTES = [
   { titulo: 'Cuenta',    ids: ['perfil'] },
   { titulo: 'Negocio',   ids: ['negocio', 'ticket', 'whatsapp'] },
   { titulo: 'Operación', ids: ['maquinas', 'cargas', 'etiquetas', 'inventario'] },
-  { titulo: 'Sistema',   ids: ['alertas', 'manual', 'instalar'] },
+  { titulo: 'Sistema',   ids: ['alertas', 'manual', 'instalar', 'actualizar'] },
 ];
 
 /**
@@ -295,7 +301,7 @@ const ALERTAS_APAGABLES = [
 ];
 
 /** Secciones sin nada que guardar con el botón general. */
-const SECCIONES_SIN_GUARDAR = ['etiquetas', 'inventario', 'manual', 'instalar'];
+const SECCIONES_SIN_GUARDAR = ['etiquetas', 'inventario', 'manual', 'instalar', 'actualizar'];
 
 /** Encabezado de un grupo de campos (por encima de las etiquetas, que son bold). */
 function TituloGrupo({ children }) {
@@ -1101,19 +1107,11 @@ export default function Ajustes() {
   return esAdmin(usuario?.rol) ? <AjustesAdmin /> : <AjustesEmpleado />;
 }
 
-/** Traer la versión nueva de la app (Ajustes del empleado). */
-const SECCION_ACTUALIZAR = {
-  id: 'actualizar', label: 'Actualizar la app', subtitle: 'Versión de la app',
-  detalle: 'Tu versión y traer la más nueva', icon: SectionIcon.actualizar,
-};
-
 /** Secciones del empleado: su cuenta y actualizar la app. */
 const GRUPOS_EMPLEADO = [
   { titulo: 'Cuenta',  ids: ['perfil'] },
   { titulo: 'Sistema', ids: ['actualizar'] },
 ];
-/** Sección del empleado por id (las suyas no son todas de Ajustes del admin). */
-const seccionEmpleado = (id) => (id === 'actualizar' ? SECCION_ACTUALIZAR : seccionPorId(id));
 
 /** Una sección del Ajustes del empleado con su encabezado y el botón de volver. */
 function SeccionEmpleado({ seccion, grupo, mobile, desktop }) {
@@ -1199,7 +1197,7 @@ function AjustesEmpleado() {
             {GRUPOS_EMPLEADO.map((g) => (
               <div key={g.titulo} className="space-y-3">
                 <p className="px-1 text-sm font-semibold uppercase tracking-wide text-grey">{g.titulo}</p>
-                {g.ids.map(seccionEmpleado).map((s) => (
+                {g.ids.map(seccionPorId).map((s) => (
                   <MobileSectionButton key={s.id} label={s.label} icon={s.icon} onClick={() => navigate(`/ajustes/${s.id}`)} />
                 ))}
               </div>
@@ -1221,7 +1219,7 @@ function AjustesEmpleado() {
             <div key={g.titulo} className="space-y-3">
               <p className="text-sm font-semibold uppercase tracking-wide text-gray-400">{g.titulo}</p>
               <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-                {g.ids.map(seccionEmpleado).map((sec) => (
+                {g.ids.map(seccionPorId).map((sec) => (
                   <TarjetaSeccion key={sec.id} seccion={sec} />
                 ))}
               </div>
@@ -3150,6 +3148,7 @@ function AjustesAdmin() {
     whatsapp: seccionWhatsappMobile,
     manual: <TarjetaManual onAbrir={() => navigate('/manual')} />,
     instalar: <InstalarApp variant="mobile" />,
+    actualizar: <ActualizarApp variant="mobile" />,
   };
 
   // Éxitos: banner verde. Errores: modal.
@@ -3193,7 +3192,7 @@ function AjustesAdmin() {
 
   // En pruebas, toda sección salvo Mi Perfil es de consulta: sin Cancelar/Guardar.
   const seccionDeConsulta = soloConsultaPruebas
-    && activeSection && activeSection.id !== 'instalar';
+    && activeSection && !['instalar', 'actualizar'].includes(activeSection.id);
 
   // Aviso fijo del entorno de pruebas, arriba de la lista de ajustes.
   const avisoPruebas = soloConsultaPruebas && (
@@ -3374,6 +3373,7 @@ function AjustesAdmin() {
               ticket:     seccionTicketDesktop,
               manual:     <TarjetaManual onAbrir={() => navigate('/manual')} />,
               instalar:   <InstalarApp />,
+              actualizar: <ActualizarApp />,
             }[seccionVista]}
             </div>
             )}
