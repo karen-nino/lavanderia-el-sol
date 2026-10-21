@@ -1227,11 +1227,24 @@ export default function DetalleNota() {
             </span>
             {nota.tamano && <span className="ml-2 text-sm text-gray-500 capitalize">{nota.tamano}</span>}
           </FilaDetalle>
-          <FilaDetalle label="ID">
-            <span className="text-sm font-medium text-gray-800">{nota.id}</span>
-          </FilaDetalle>
           <FilaDetalle label="# Nota">
             <span className="text-sm font-medium text-gray-800">{nota.folio ?? `#${nota.id}`}</span>
+          </FilaDetalle>
+          <FilaDetalle label="Cliente">
+            {nota.cliente_nombre
+              ? (
+                  <div>
+                    <p>{`${nota.cliente_nombre}${nota.cliente_apellido ? ' ' + nota.cliente_apellido : ''}`}</p>
+                    {nota.cliente_telefono && (
+                      <p className="text-gray-400 text-sm">{nota.cliente_telefono}</p>
+                    )}
+                  </div>
+                )
+              // Mostrador se lee como un cliente más; antes va la referencia del Autoservicio.
+              : (nota.referencia || 'Mostrador')}
+          </FilaDetalle>
+          <FilaDetalle label="ID">
+            <span className="text-sm font-medium text-gray-800">{nota.id}</span>
           </FilaDetalle>
           <FilaDetalle label="Fecha">
             {fmtFecha(nota.created_at)}
@@ -1494,19 +1507,6 @@ export default function DetalleNota() {
               </div>
             </FilaDetalle>
           )}
-          <FilaDetalle label="Cliente">
-            {nota.cliente_nombre
-              ? (
-                  <div>
-                    <p>{`${nota.cliente_nombre}${nota.cliente_apellido ? ' ' + nota.cliente_apellido : ''}`}</p>
-                    {nota.cliente_telefono && (
-                      <p className="text-gray-400 text-sm">{nota.cliente_telefono}</p>
-                    )}
-                  </div>
-                )
-              // Mostrador se lee como un cliente más; antes va la referencia del Autoservicio.
-              : (nota.referencia || 'Mostrador')}
-          </FilaDetalle>
           <FilaDetalle label="Ajuste">
             {nota.ajuste != null ? fmtMonto(nota.ajuste) : '—'}
           </FilaDetalle>
