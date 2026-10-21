@@ -6,7 +6,7 @@
 
 import { slug, esc, imprimirDocumento, fechaLarga } from './exportUtils';
 import { descargarExcel } from './exportExcel';
-import { textoBotellas, textoGranel, seVendePorUnidad, esPolvo, lineasEntradas, lineasSalidas, lineasDevuelto } from './formatoInventario';
+import { textoBotellas, textoGranel, seVendePorUnidad, esPolvo, lineasEntradas, lineasSalidas, lineasDevuelto, tituloProducto } from './formatoInventario';
 
 // 'YYYY-MM-DD' → Date local (sin corrimiento por zona horaria).
 const fechaLocal = (iso) => {
@@ -14,9 +14,11 @@ const fechaLocal = (iso) => {
   return new Date(y, (m || 1) - 1, d || 1);
 };
 
-// Lo que se cuenta por unidad (marca y polvo): sin botellas ni bidón.
+// Lo que se cuenta por unidad (marca, polvo y bolsas): sin botellas ni bidón.
 const esMarca  = (p) => seVendePorUnidad(p);
-const nombreProd = (p) => (esMarca(p) && p.marca ? `${p.marca} · ${p.nombre}` : p.nombre);
+const esBolsa  = (p) => p?.clase === 'bolsa';
+const nombreProd = (p) => (esBolsa(p) ? tituloProducto(p)
+  : esMarca(p) && p.marca ? `${p.marca} · ${p.nombre}` : p.nombre);
 
 const entradasLineas = (p) => lineasEntradas(p, esMarca(p));
 // Salidas: por notas más las manuales (merma, dañado…).
@@ -62,9 +64,9 @@ export function hojasReporte(data) {
       ] },
     ],
     filas: productos.map((p) => [
-      esPolvo(p) ? 'Polvo' : esMarca(p) ? 'Marca' : 'Granel',
+      esBolsa(p) ? 'Bolsa' : esPolvo(p) ? 'Polvo' : esMarca(p) ? 'Marca' : 'Granel',
       p.marca ?? '',
-      p.nombre ?? '',
+      esBolsa(p) ? tituloProducto(p) : (p.nombre ?? ''),
       enRenglones(entradasLineas(p)),
       enRenglones(salidasLineas(p)),
       ...(conDevuelto ? [enRenglones(lineasDevuelto(p, esMarca(p)))] : []),
@@ -116,13 +118,14 @@ export function imprimirReporte(data) {
   const productos = data.productos ?? [];
   const granel = productos.filter((p) => !esMarca(p));
   const polvo  = productos.filter(esPolvo);
-  const marca  = productos.filter((p) => esMarca(p) && !esPolvo(p));
+  const marca  = productos.filter((p) => esMarca(p) && !esPolvo(p) && !esBolsa(p));
+  const bolsas = productos.filter(esBolsa);
   const cuerpo = productos.length === 0
     ? '<p>Sin productos en el inventario ese día.</p>'
     : (() => {
         const conDevuelto = hayDevuelto(productos);
         return seccion('Granel', granel, conDevuelto) + seccion('Polvo', polvo, conDevuelto)
-          + seccion('Marca', marca, conDevuelto);
+          + seccion('Marca', marca, conDevuelto) + seccion('Bolsas', bolsas, conDevuelto);
       })();
   imprimirDocumento({
     titulo: 'Reporte diario de inventario',

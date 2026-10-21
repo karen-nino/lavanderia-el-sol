@@ -1,9 +1,9 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { esAdmin as esAdminFn } from '../lib/roles';
-import { textoBotellas, textoGranel as textoGranelFmt, lineasEntradas, lineasSalidas, lineasDevuelto, tituloProducto, subtituloProducto, unidadProdTxt } from '../lib/formatoInventario';
+import { textoBotellas, textoGranel as textoGranelFmt, lineasEntradas, lineasSalidas, lineasDevuelto, tituloProducto } from '../lib/formatoInventario';
 import { imprimirReporte, descargarReporteExcel } from '../lib/exportReporteInventario';
 import { fechaLarga } from '../lib/exportUtils';
 import { formatHora12 } from '../lib/fecha';
@@ -1407,7 +1407,7 @@ function fechaLegible(iso) {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-// ── Pestaña "Reporte diario" (solo admin) ───────────────────────
+// ── "Reporte diario" (admin y empleados) ────────────────────────
 
 /** 'YYYY-MM-DD' → Date local (new Date(iso) correría un día). */
 function fechaLocalISO(iso) {
@@ -1463,7 +1463,8 @@ function MovimientosDiaModal({ producto, tipo, fecha, onClose }) {
     return () => { activo = false; };
   }, [producto.id, tipo, fecha]);
 
-  const nombre = esMarca && producto.marca ? `${producto.marca} · ${producto.nombre}` : producto.nombre;
+  const nombre = producto.clase === 'bolsa' ? tituloProducto(producto)
+    : esMarca && producto.marca ? `${producto.marca} · ${producto.nombre}` : producto.nombre;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={onClose}>
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
@@ -1586,6 +1587,7 @@ function ReporteDiario() {
   const granel = productos.filter(p => p.tipo_liquido === 'granel' && !esPolvo(p));
   const polvo  = productos.filter(esPolvo);
   const marca  = productos.filter(p => p.tipo_liquido === 'marca');
+  const bolsas = productos.filter(p => p.clase === 'bolsa');
   // La columna Devuelto solo aparece si hubo algo devuelto ese día.
   const hayDevuelto = productos.some(p => Number(p.devuelto_medidas) > 0);
 
@@ -1628,8 +1630,13 @@ function ReporteDiario() {
                 return (
                   <tr key={p.id} className="hover:bg-gray-50 align-top">
                     <td className="px-4 py-3">
-                      <p className="font-medium text-gray-800">{esMarca && p.marca ? p.marca : p.nombre}</p>
-                      {esMarca && p.marca && <p className="text-sm text-gray-400">{p.nombre}</p>}
+                      {/* Bolsa: su tamaño de título y "Bolsa" abajo; marca: la marca y el nombre. */}
+                      <p className="font-medium text-gray-800">
+                        {p.clase === 'bolsa' ? (p.tamano_bolsa || 'Bolsa') : esMarca && p.marca ? p.marca : p.nombre}
+                      </p>
+                      {p.clase === 'bolsa'
+                        ? <p className="text-sm text-gray-400">Bolsa</p>
+                        : esMarca && p.marca && <p className="text-sm text-gray-400">{p.nombre}</p>}
                     </td>
                     <td className="px-4 py-3 text-gray-700">
                       <CeldaMovimiento lineas={lineasEntradas(p, esMarca)} hayAlgo={p.rellenado_medidas > 0}
@@ -1729,12 +1736,13 @@ function ReporteDiario() {
       ) : error ? (
         <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 text-sm">{error}</div>
       ) : productos.length === 0 ? (
-        <p className="text-sm text-gray-400 text-center py-10">No hay productos de marca o granel para mostrar.</p>
+        <p className="text-sm text-gray-400 text-center py-10">No hay productos para mostrar.</p>
       ) : (
         <>
           {grupo('Granel', granel)}
           {grupo('Polvo', polvo)}
           {grupo('Marca', marca)}
+          {grupo('Bolsas', bolsas)}
         </>
       )}
 
@@ -1750,73 +1758,10 @@ function ReporteDiario() {
   );
 }
 
-/**
- * Lo vendido hoy en las notas de la sucursal (vista del empleado): por
- * producto, cuánto salió y en qué notas.
- */
-function VendidoHoy() {
-  const [productos, setProductos] = useState(null);
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    let activo = true;
-    api.get('/productos/vendidos-hoy')
-      .then(d => { if (activo) { setProductos(d); setError(''); } })
-      .catch(e => { if (activo) setError(e.message); });
-    return () => { activo = false; };
-  }, []);
-
-  if (error) return <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl p-4">{error}</p>;
-  if (!productos) {
-    return (
-      <div className="flex justify-center py-16">
-        <div className="w-8 h-8 border-4 border-blue border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
-  if (productos.length === 0) {
-    return <p className="text-sm text-gray-400 italic text-center py-16">Hoy todavía no se vende ningún producto.</p>;
-  }
-
-  return (
-    <div className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
-      <div className="px-4 py-3 border-b border-gray-50 flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-gray-700">Vendido hoy</h2>
-        <span className="text-sm text-gray-400">{productos.length} producto(s)</span>
-      </div>
-      <div className="divide-y divide-gray-50">
-        {productos.map(p => (
-          <div key={`${p.id}-${p.unidad}`} className="px-4 py-3 space-y-1">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-gray-800">{tituloProducto(p)}</p>
-                {subtituloProducto(p) && <p className="text-sm text-gray-400">{subtituloProducto(p)}</p>}
-              </div>
-              <span className="flex-shrink-0 text-sm font-semibold text-gray-700">
-                {p.cantidad} {unidadProdTxt(p)}
-              </span>
-            </div>
-            {/* Las notas donde salió, para ir a verlas. */}
-            <p className="text-sm text-gray-500">
-              {p.notas.length === 1 ? 'Nota ' : 'Notas '}
-              {[...p.notas].sort((a, b) => a.id - b.id).map((n, i) => (
-                <Fragment key={n.id}>
-                  {i > 0 && ', '}
-                  <Link to={`/notas/${n.id}`} className="text-blue hover:underline">{n.folio ?? `#${n.id}`}</Link>
-                </Fragment>
-              ))}
-            </p>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 export default function Inventario() {
   const { usuario } = useAuth();
   const esAdmin = esAdminFn(usuario?.rol);
-  // Vista: lista de Inventario o, con el botón de la cabecera, Reporte diario (admin) o Vendido hoy (empleado).
+  // Vista: lista de Inventario o Reporte diario (admin y empleados); se cambia con el botón de la cabecera.
   const [vista, setVista] = useState('inventario');
 
   const [productos,       setProductos]       = useState([]);
@@ -2094,13 +2039,11 @@ export default function Inventario() {
           <h1 className="text-xl font-bold text-gray-900">Inventario</h1>
           <p className="text-sm text-gray-500">
             {/* Como en Ventas: dice qué se está viendo, sin la cantidad. */}
-            {esAdmin && vista === 'reporte' ? 'Reporte diario'
-              : !esAdmin && vista === 'vendidos' ? 'Vendido hoy'
+            {vista === 'reporte' ? 'Reporte diario'
               : filtro === 'todos' ? 'Todos los productos' : FILTRO_CFG[filtro].label}
           </p>
         </div>
-        {esAdmin && (
-          <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3">
             {/* Cambia entre la lista y el Reporte diario (antes eran pestañas). */}
             <button
               onClick={() => setVista(v => (v === 'reporte' ? 'inventario' : 'reporte'))}
@@ -2124,6 +2067,7 @@ export default function Inventario() {
                 </svg>
               )}
             </button>
+            {esAdmin && (
             <button
               onClick={() => setModalProducto('nuevo')}
               aria-label="Agregar producto"
@@ -2133,32 +2077,8 @@ export default function Inventario() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
               </svg>
             </button>
-          </div>
-        )}
-        {!esAdmin && (
-          /* Cambia entre la lista y lo vendido hoy. */
-          <button
-            onClick={() => setVista(v => (v === 'vendidos' ? 'inventario' : 'vendidos'))}
-            aria-label={vista === 'vendidos' ? 'Ver inventario' : 'Ver lo vendido hoy'}
-            title={vista === 'vendidos' ? 'Ver inventario' : 'Ver lo vendido hoy'}
-            className={`flex items-center gap-2 h-11 px-4 rounded-full border text-sm font-medium transition-colors flex-shrink-0 ${
-              vista === 'vendidos'
-                ? 'border-blue bg-light-blue text-blue-700'
-                : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
-            }`}
-          >
-            {vista === 'vendidos' ? (
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-              </svg>
-            ) : (
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
             )}
-            {vista === 'vendidos' ? 'Inventario' : 'Vendido hoy'}
-          </button>
-        )}
+          </div>
         </div>
       </div>
 
@@ -2167,8 +2087,7 @@ export default function Inventario() {
       {/* Contenido */}
       <div className="max-w-movil md:max-w-7xl mx-auto px-6 md:px-8 py-4 space-y-4">
 
-      {esAdmin && vista === 'reporte' ? <ReporteDiario />
-        : !esAdmin && vista === 'vendidos' ? <VendidoHoy /> : (
+      {vista === 'reporte' ? <ReporteDiario /> : (
       <>
 
       {/* Filtros por categoría (y Desactivados, solo admin) */}

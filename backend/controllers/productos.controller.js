@@ -712,49 +712,14 @@ export const getMovimientos = async (req, res) => {
   }
 };
 
-// ── GET /productos/vendidos-hoy ─────────────────────────────────
-/**
- * Lo que se vendió hoy en las notas de la sucursal (cualquier rol): por
- * producto y unidad, cuánto y en qué notas. Sin las canceladas; el día es el
- * local (America/Mexico_City).
- */
-export const getVendidosHoy = async (req, res) => {
-  try {
-    const { rows } = await pool.query(
-      `WITH bounds AS (
-         SELECT (now() AT TIME ZONE 'America/Mexico_City')::date::timestamp
-                  AT TIME ZONE 'America/Mexico_City' AS inicio
-       )
-       SELECT p.id, p.nombre, p.marca, p.tipo_liquido, p.forma, p.se_vende_por_unidad,
-              p.es_por_medida, p.clase, p.tamano_bolsa, np.unidad,
-              SUM(np.cantidad) AS cantidad,
-              json_agg(DISTINCT jsonb_build_object('id', n.id, 'folio', n.folio)) AS notas
-         FROM nota_productos np
-         JOIN notas n     ON n.id = np.nota_id
-         JOIN productos p ON p.id = np.producto_id
-         , bounds
-        WHERE n.sucursal = $1 AND n.estado != 'CANCELADA'
-          AND np.created_at >= bounds.inicio
-        GROUP BY p.id, np.unidad
-        ORDER BY CASE p.tipo_liquido WHEN 'granel' THEN 0 WHEN 'marca' THEN 1 ELSE 2 END,
-                 p.marca NULLS LAST, p.nombre`,
-      [req.sucursal]
-    );
-    res.json(rows.map(r => ({ ...r, cantidad: Number(r.cantidad) })));
-  } catch (err) {
-    console.error('getVendidosHoy error:', err);
-    res.status(500).json({ message: 'No se pudo cargar lo vendido hoy. Intenta de nuevo.' });
-  }
-};
-
 // ── GET /productos/reporte-diario?fecha=YYYY-MM-DD ──────────────
 /**
- * Reporte del día por producto (admin): qué había al inicio, qué entró, salió,
- * se devolvió y qué quedó al cierre. La existencia de un día se reconstruye
- * desde la actual deshaciendo los movimientos posteriores:
- * - entrada / salida: + / − en su destino (botellas o bidón);
+ * Reporte del día por producto, bolsas incluidas (cualquier rol): qué había al
+ * inicio, qué entró, salió, se devolvió y qué quedó al cierre. La existencia de
+ * un día se reconstruye desde la actual deshaciendo los movimientos posteriores:
+ * - entrada / salida: + / − en su destino (botellas o piezas, o bidón);
  * - rellenar: + botellas y − bidón;
- * - venta: − botellas; liberacion (venta anulada): + botellas.
+ * - venta: − botellas (o piezas); liberacion (venta anulada): + botellas.
  * El día es el local (America/Mexico_City).
  */
 export const getReporteDiario = async (req, res) => {
@@ -770,6 +735,7 @@ export const getReporteDiario = async (req, res) => {
        )
        SELECT
          p.id, p.nombre, p.marca, p.tipo_liquido, p.forma, p.se_vende_por_unidad,
+         p.clase, p.tamano_bolsa,
          CASE WHEN p.botella_ml > 0 AND p.medida_ml > 0
               THEN floor(p.botella_ml::numeric / p.medida_ml) END        AS medidas_por_botella,
          CASE WHEN p.volumen_envase_ml > 0 AND p.medida_ml > 0
@@ -788,7 +754,7 @@ export const getReporteDiario = async (req, res) => {
          -- Entradas del día (incluida la existencia inicial), por destino.
          COALESCE((
            SELECT SUM(m.cantidad_medidas) FROM producto_movimientos m, bounds
-            WHERE m.producto_id = p.id AND m.tipo = 'entrada' AND m.destino = 'botellas'
+            WHERE m.producto_id = p.id AND m.tipo = 'entrada' AND m.destino IN ('botellas', 'piezas')
               AND m.created_at >= bounds.inicio AND m.created_at < bounds.cierre
          ), 0) AS entrada_botellas_medidas,
          COALESCE((
@@ -799,7 +765,7 @@ export const getReporteDiario = async (req, res) => {
          -- Salidas manuales del día (merma, dañado…), por destino.
          COALESCE((
            SELECT SUM(m.cantidad_medidas) FROM producto_movimientos m, bounds
-            WHERE m.producto_id = p.id AND m.tipo = 'salida' AND m.destino = 'botellas'
+            WHERE m.producto_id = p.id AND m.tipo = 'salida' AND m.destino IN ('botellas', 'piezas')
               AND m.created_at >= bounds.inicio AND m.created_at < bounds.cierre
          ), 0) AS salida_botellas_medidas,
          COALESCE((
@@ -829,11 +795,11 @@ export const getReporteDiario = async (req, res) => {
          -- Lo mismo desde el inicio del día ("Había al inicio").
          COALESCE((
            SELECT SUM(CASE
-             WHEN m.tipo = 'entrada'    AND m.destino = 'botellas' THEN  m.cantidad_medidas
-             WHEN m.tipo = 'salida'     AND m.destino = 'botellas' THEN -m.cantidad_medidas
+             WHEN m.tipo = 'entrada'    AND m.destino IN ('botellas', 'piezas') THEN  m.cantidad_medidas
+             WHEN m.tipo = 'salida'     AND m.destino IN ('botellas', 'piezas') THEN -m.cantidad_medidas
              WHEN m.tipo = 'rellenar'                              THEN  m.cantidad_medidas
-             WHEN m.tipo = 'venta'      AND m.destino = 'botellas' THEN -m.cantidad_medidas
-             WHEN m.tipo = 'liberacion' AND m.destino = 'botellas' THEN  m.cantidad_medidas
+             WHEN m.tipo = 'venta'      AND m.destino IN ('botellas', 'piezas') THEN -m.cantidad_medidas
+             WHEN m.tipo = 'liberacion' AND m.destino IN ('botellas', 'piezas') THEN  m.cantidad_medidas
              ELSE 0 END)
             FROM producto_movimientos m, bounds
             WHERE m.producto_id = p.id AND m.created_at >= bounds.inicio
@@ -850,11 +816,11 @@ export const getReporteDiario = async (req, res) => {
          -- Efecto sobre botellas de lo ocurrido DESPUÉS del cierre (para revertir).
          COALESCE((
            SELECT SUM(CASE
-             WHEN m.tipo = 'entrada'    AND m.destino = 'botellas' THEN  m.cantidad_medidas
-             WHEN m.tipo = 'salida'     AND m.destino = 'botellas' THEN -m.cantidad_medidas
+             WHEN m.tipo = 'entrada'    AND m.destino IN ('botellas', 'piezas') THEN  m.cantidad_medidas
+             WHEN m.tipo = 'salida'     AND m.destino IN ('botellas', 'piezas') THEN -m.cantidad_medidas
              WHEN m.tipo = 'rellenar'                              THEN  m.cantidad_medidas
-             WHEN m.tipo = 'venta'      AND m.destino = 'botellas' THEN -m.cantidad_medidas
-             WHEN m.tipo = 'liberacion' AND m.destino = 'botellas' THEN  m.cantidad_medidas
+             WHEN m.tipo = 'venta'      AND m.destino IN ('botellas', 'piezas') THEN -m.cantidad_medidas
+             WHEN m.tipo = 'liberacion' AND m.destino IN ('botellas', 'piezas') THEN  m.cantidad_medidas
              ELSE 0 END)
             FROM producto_movimientos m, bounds
             WHERE m.producto_id = p.id AND m.created_at >= bounds.cierre
@@ -871,9 +837,9 @@ export const getReporteDiario = async (req, res) => {
          ), 0) AS efecto_granel_post
        FROM productos p
        WHERE p.sucursal = $1 AND p.archivado = false
-         AND p.tipo_liquido IN ('granel', 'marca')
-       ORDER BY (CASE WHEN p.tipo_liquido = 'granel' THEN 0 ELSE 1 END),
-                p.marca NULLS LAST, p.nombre ASC`,
+         AND (p.tipo_liquido IN ('granel', 'marca') OR p.clase = 'bolsa')
+       ORDER BY (CASE WHEN p.clase = 'bolsa' THEN 2 WHEN p.tipo_liquido = 'granel' THEN 0 ELSE 1 END),
+                p.marca NULLS LAST, p.tamano_bolsa NULLS LAST, p.nombre ASC`,
       [req.sucursal, fecha]
     );
 
@@ -885,7 +851,13 @@ export const getReporteDiario = async (req, res) => {
         nombre:            r.nombre,
         marca:             r.marca,
         tipo_liquido:      r.tipo_liquido,
-        medidas_por_botella: r.medidas_por_botella != null ? int(r.medidas_por_botella) : null,
+        forma:             r.forma,
+        clase:             r.clase,
+        tamano_bolsa:      r.tamano_bolsa,
+        // La bolsa se cuenta en piezas: una "botella" por pieza.
+        se_vende_por_unidad: r.clase === 'bolsa' ? true : r.se_vende_por_unidad,
+        medidas_por_botella: r.clase === 'bolsa' ? 1
+          : r.medidas_por_botella != null ? int(r.medidas_por_botella) : null,
         medidas_por_bidon:   r.medidas_por_bidon != null ? int(r.medidas_por_bidon) : null,
         vendido_medidas:     int(r.vendido_medidas),
         devuelto_medidas:    int(r.devuelto_medidas),

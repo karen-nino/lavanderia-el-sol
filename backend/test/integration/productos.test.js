@@ -477,19 +477,33 @@ describe('GET /api/productos/reporte-diario', () => {
     expect(Array.isArray(res.body.productos)).toBe(true);
   });
 
-  it('excluye bolsas y archivados; solo líquidos marca/granel', async () => {
+  it('incluye las bolsas, contadas en piezas', async () => {
     await crearGranel();
-    await request(app).post('/api/productos').set(auth(admin.token))
+    const bolsa = await request(app).post('/api/productos').set(auth(admin.token))
       .send({ nombre: 'Bolsa', clase: 'bolsa', tamano_bolsa: 'chica', bolsas_por_rollo: 100, precio_unitario: 2 });
+    await request(app).post(`/api/productos/${bolsa.body.id}/movimiento`).set(auth(admin.token))
+      .send({ tipo: 'entrada', destino: 'piezas', unidad: 'rollo', cantidad: 1 });
+    await request(app).post(`/api/productos/${bolsa.body.id}/movimiento`).set(auth(admin.token))
+      .send({ tipo: 'salida', destino: 'piezas', unidad: 'pieza', cantidad: 3 });
+
     const res = await request(app).get('/api/productos/reporte-diario').set(auth(admin.token));
     expect(res.status).toBe(200);
-    expect(res.body.productos.every((p) => ['granel', 'marca'].includes(p.tipo_liquido))).toBe(true);
+    const p = res.body.productos.find((x) => x.id === bolsa.body.id);
+    expect(p.clase).toBe('bolsa');
+    expect(p.se_vende_por_unidad).toBe(true);
+    expect(p.medidas_por_botella).toBe(1);
+    expect(p.entrada_botellas_medidas).toBe(100);
+    expect(p.salida_botellas_medidas).toBe(3);
+    expect(p.inicio_botellas_medidas).toBe(0);
+    expect(p.fin_botellas_medidas).toBe(97);
+    // Las bolsas van al final, después de los líquidos.
+    expect(res.body.productos.at(-1).id).toBe(bolsa.body.id);
   });
 
-  it('solo admin (un empleado recibe 403)', async () => {
+  it('también lo ve un empleado (200)', async () => {
     const empleado = await seedUsuario({ rol: 'operador', sucursal: 'centro', nombre: 'Empleado' });
     const res = await request(app).get('/api/productos/reporte-diario').set(auth(empleado.token));
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(200);
   });
 });
 
