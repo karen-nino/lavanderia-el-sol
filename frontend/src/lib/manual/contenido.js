@@ -143,7 +143,7 @@ POR ENTREGAR — la ropa está lista y espera al cliente. En POR ENCARGO la nota
 
 FINALIZADA — se acabó. En AUTOSERVICIO la nota llega aquí SOLA en cuanto termina su última carga, si ya está pagada: el cliente está en el local y se lleva su ropa él mismo. Si todavía debe, se queda en Por Entregar hasta que la cobras, y al cobrarla se finaliza sola. Una venta de PRODUCTOS nace directamente aquí: no hay nada que lavar ni que esperar.
 
-CANCELADA — la nota se anuló. Solo si todavía no se ha cobrado ni tiene abonos. Normalmente cancela un administrador; POR AHORA, mientras duran las capacitaciones, los empleados también pueden.`,
+CANCELADA — la nota se anuló. Solo si todavía no se ha cobrado ni tiene abonos. Solo un administrador puede cancelarla.`,
       },
       {
         id: 'buscar-una-nota',

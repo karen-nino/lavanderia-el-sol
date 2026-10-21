@@ -245,9 +245,8 @@ function AccionCircular({ icono, label, onClick, color, disabled = false, title,
   );
 }
 
-// TEMPORAL (2026-10-20): los empleados también ven Cancelar mientras terminan
-// las capacitaciones. Volver a false cuando la dueña lo pida (y en notas.controller.js).
-const EMPLEADOS_CANCELAN = true;
+// En true los empleados también ven Cancelar (se usó en capacitaciones); va junto con notas.controller.js.
+const EMPLEADOS_CANCELAN = false;
 
 // Íconos de las acciones, en trazo blanco sobre el círculo.
 const IconoSalidas = (

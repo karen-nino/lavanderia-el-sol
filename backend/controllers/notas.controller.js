@@ -2259,9 +2259,8 @@ export const quitarCarga = async (req, res) => {
   }
 };
 
-// TEMPORAL (2026-10-20): los empleados también cancelan mientras terminan las
-// capacitaciones. Volver a false cuando la dueña lo pida (y en DetalleNota.jsx).
-const EMPLEADOS_CANCELAN = true;
+// En true los empleados también cancelan (se usó en capacitaciones); va junto con DetalleNota.jsx.
+const EMPLEADOS_CANCELAN = false;
 
 // ── DELETE /notas/:id ───────────────────────────────────────
 export const eliminarNota = async (req, res) => {
