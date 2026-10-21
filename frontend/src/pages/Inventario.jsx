@@ -73,9 +73,9 @@ function unidadVenta(p, n = 2) {
   if (porUnidad(p)) return n === 1 ? 'pieza' : 'piezas';
   return n === 1 ? 'botella' : 'botellas';
 }
-/** Título de la existencia: Botellas en el granel líquido; lo demás, Cant. (la unidad ya la dice la cantidad). */
+/** Título de la existencia: Exhibidor en el granel líquido; lo demás, Cant. (la unidad ya la dice la cantidad). */
 function tituloExistencia(p) {
-  return esGranelLiquido(p) ? 'Botellas' : 'Cant.';
+  return esGranelLiquido(p) ? 'Exhibidor' : 'Cant.';
 }
 /** Medidas contadas en la unidad del producto, por partes ("9 botellas", "1 medida"; las bolsas, en piezas). */
 function partesExistencia(p, medidas) {
@@ -2365,11 +2365,11 @@ export default function Inventario() {
                       {recienCreados.has(p.id) && <ChipNuevo />}
                     </div>
                   </div>
-                  {/* Como en el detalle: cada existencia con su título; el granel líquido, bidones y botellas lado a lado. */}
+                  {/* Como en el detalle: cada existencia con su título; el granel líquido, a granel y exhibidor lado a lado. */}
                   <div className={`mt-3 ${esGranelLiquido(p) ? 'grid grid-cols-2 gap-3' : ''}`}>
                     {esGranelLiquido(p) && (
                       <div className="min-w-0">
-                        <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-0.5">Bidones</p>
+                        <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-0.5">A Granel</p>
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-md font-semibold text-gray-700"><Partes partes={partesGranel(p)} /></span>
                           <BadgeGranel estado={estadoGranel(p)} />
@@ -2488,7 +2488,7 @@ export default function Inventario() {
                 )}
                 {esGranelLiquido(p) && (
                   <div>
-                    <p className="text-sm font-medium text-gray-400 uppercase tracking-wide mb-1">Bidones</p>
+                    <p className="text-sm font-medium text-gray-400 uppercase tracking-wide mb-1">A Granel</p>
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-base font-medium text-gray-700"><Partes partes={partesGranel(p)} /></span>
                       <BadgeGranel estado={estadoGranel(p)} />
