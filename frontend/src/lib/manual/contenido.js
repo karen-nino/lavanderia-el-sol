@@ -23,6 +23,16 @@ Tu primer inicio de sesión del día queda registrado como tu HORA DE ENTRADA. N
 Si no encuentras tu nombre en la lista, avísale al administrador: puede que tu cuenta esté desactivada.`,
       },
       {
+        id: 'cambiar-contrasena',
+        titulo: 'Cambiar tu contraseña',
+        claves: ['mi perfil', 'perfil', 'password', 'clave', 'nombre'],
+        cuerpo: `Si eres EMPLEADO, entra al Menú (☰) → Mi perfil. Escribe la contraseña nueva (mínimo 6 caracteres) y toca Guardar. Con el ojito la ves mientras la escribes.
+
+Tu nombre y apellido salen ahí pero NO se pueden cambiar: los corrige un administrador desde Empleados.
+
+Si eres ADMINISTRADOR, tu perfil está en Ajustes → Mi Perfil: ahí cambias tu nombre, tu apellido y tu contraseña.`,
+      },
+      {
         id: 'abrir-la-caja',
         titulo: 'Abrir la caja',
         claves: ['fondo', 'caja inicial', 'apertura', 'empezar', 'dinero inicial'],
@@ -85,6 +95,8 @@ El cliente no se identifica: la nota queda a nombre de Mostrador. Si quieres man
 
 Aquí el cobro también puede esperar: en el encargo se suele cobrar al entregar.
 
+Si hay que hacer un descuento o un cargo extra, ábrela y toca Ajuste (solo Por Encargo, y mientras la nota siga abierta).
+
 El precio de cada servicio lo configura el administrador en Ajustes → Servicios Por Encargo, y no depende de en qué máquina acabe lavándose: la máquina se le asigna después, en Salidas.`,
       },
       {
@@ -103,13 +115,13 @@ LA VENTA SE COBRA AL MOMENTO. No se puede dejar a deber: la nota nace pagada y F
 
 Los líquidos se venden por BOTELLA entera (no por medida, que es como se cobran dentro de un encargo) y las bolsas por pieza.
 
-Si te equivocaste, la venta no se edita ni se cancela: un administrador la ELIMINA desde la nota y el producto vuelve al inventario.`,
+Si te equivocaste, la venta no se edita ni se cancela: el ADMIN MAIN (el dueño de la cuenta principal) la ELIMINA desde la nota y el producto vuelve al inventario. Ningún otro usuario puede eliminar notas.`,
       },
       {
         id: 'cobrar-una-nota',
         titulo: 'Cobrar una nota (liquidar)',
         claves: ['cobrar', 'pagar', 'liquidar', 'efectivo', 'transferencia', 'tarjeta'],
-        cuerpo: `Abre la nota y toca Liquidar nota. Elige cómo te pagó: Efectivo o Transferencia.
+        cuerpo: `Abre la nota y toca Cobrar. Elige cómo te pagó: Efectivo o Transferencia.
 
 LA FORMA DE PAGO ES OBLIGATORIA y no es un trámite: el corte del día separa el dinero del cajón de lo que entró por transferencia. Si la marcas mal, al hacer el corte va a aparecer un faltante que no existe.
 
@@ -127,11 +139,11 @@ LAVANDO — al menos una lavadora de la nota está corriendo.
 
 SECANDO — ya no hay lavadoras corriendo, pero sí una secadora.
 
-POR ENTREGAR — todas las cargas terminaron y la ropa espera a que el cliente venga por ella. Solo aparece en Por Encargo y Edredón.
+POR ENTREGAR — la ropa está lista y espera al cliente. En POR ENCARGO la nota NO llega sola: llega cuando tocas Procesado (ya doblada y empacada). En EDREDÓN llega sola al terminar su última carga.
 
-FINALIZADA — se acabó. En AUTOSERVICIO la nota llega aquí SOLA en cuanto termina su última carga, sin pasar por Por Entregar: el cliente está en el local y se lleva su ropa él mismo, no hay nada que entregar después. Una venta de PRODUCTOS nace directamente aquí: no hay nada que lavar ni que esperar.
+FINALIZADA — se acabó. En AUTOSERVICIO la nota llega aquí SOLA en cuanto termina su última carga, si ya está pagada: el cliente está en el local y se lleva su ropa él mismo. Si todavía debe, se queda en Por Entregar hasta que la cobras, y al cobrarla se finaliza sola. Una venta de PRODUCTOS nace directamente aquí: no hay nada que lavar ni que esperar.
 
-CANCELADA — la nota se anuló. Solo un administrador puede cancelar, y solo si todavía no se ha cobrado.`,
+CANCELADA — la nota se anuló. Solo si todavía no se ha cobrado ni tiene abonos. Normalmente cancela un administrador; POR AHORA, mientras duran las capacitaciones, los empleados también pueden.`,
       },
       {
         id: 'buscar-una-nota',
@@ -166,7 +178,9 @@ Abre la nota y entra a Salidas (o entra desde la lista de máquinas). Si ves bot
 
 Si hace falta una máquina EXTRA (la ropa quedó húmeda y necesita más secado, o hay que volver a lavarla), usa + Agregar. Esa máquina va SIN COBRO: no cambia el total de la nota. Siempre se suma a una carga que ya existe, y una carga admite otra lavadora u otra secadora aunque ya haya pasado por una; lo único que no cabe es una segunda máquina del mismo tipo al mismo tiempo.
 
-Si el cliente quiere más servicio que el que pagó, eso es una nota nueva, no una máquina agregada aquí.`,
+Si el cliente quiere más servicio que el que pagó, eso es una nota nueva, no una máquina agregada aquí.
+
+CON LA CAJA CERRADA, SALIDAS SOLO DEJA TERMINAR. No se agregan, cambian ni encienden máquinas, ni se cambian productos o granel: sale un aviso amarillo con el botón Abrir caja. Lo que ya está corriendo sí se puede Finalizar o Detener, para que el corte de un turno no deje máquinas atoradas.`,
       },
       {
         id: 'iniciar-y-terminar',
@@ -181,7 +195,10 @@ Cuando la máquina acaba, su tarjeta se pone VERDE y el botón te dice el siguie
 
 Todas las máquinas que cumplen su ciclo se ven igual, sean de autoservicio o de encargo; lo único que cambia es ese botón.
 
-Cuando terminas la ÚLTIMA carga de la nota, la nota se cierra sola: pasa a Por Entregar, o directo a Finalizada si es autoservicio.
+Cuando terminas la ÚLTIMA carga de la nota:
+· AUTOSERVICIO — pasa sola a Finalizada si ya pagó; si debe, espera a que la cobres.
+· EDREDÓN — pasa sola a Por Entregar.
+· POR ENCARGO — se queda como está hasta que toques Procesado en la nota (ver "Marcar como procesada y avisar").
 
 Si una máquina se queda encendida y nadie la libera, el cierre automático de medianoche la suelta.`,
       },
@@ -208,13 +225,29 @@ En los selectores, las máquinas que otra nota tiene apuntadas salen marcadas co
         id: 'entregar-la-ropa',
         titulo: 'Entregar la ropa',
         claves: ['finalizar', 'dar la ropa', 'recoger', 'terminar nota'],
-        cuerpo: `Cuando el cliente viene por su ropa, abre su nota y toca Finalizar.
+        cuerpo: `Cuando el cliente viene por su ropa, abre su nota y toca Entregar (el botón verde; en Edredón dice Finalizar).
 
-NO SE PUEDE FINALIZAR UNA NOTA QUE DEBE DINERO. Si está pendiente, la app te muestra Liquidar en vez de Finalizar: cobra primero.
+NO SE PUEDE ENTREGAR UNA NOTA QUE DEBE DINERO. Si está pendiente, la app te muestra Cobrar en vez de Entregar: cobra primero.
 
-Al finalizar, los productos que llevaba la nota (jabón, bolsas) se descuentan del inventario.
+El jabón y el suavizante a granel de los servicios ya salieron del inventario cuando terminó la primera lavadora. Al entregar se descuenta lo demás que llevaba la nota (bolsas, productos de marca).
+
+Si un administrador entregó una nota por error, la puede volver a abrir con Abrir.
 
 Esto aplica a Por Encargo y Edredón. Las de autoservicio ya se cerraron solas cuando terminó su última carga.`,
+      },
+      {
+        id: 'procesado-y-aviso',
+        titulo: 'Marcar como procesada y avisar',
+        claves: ['procesado', 'avisar', 'ya esta lista', 'whatsapp', 'por entregar', 'aviso'],
+        cuerpo: `Solo en POR ENCARGO. Cuando la ropa ya está lavada, doblada y empacada, abre la nota y toca Procesado (botón verde). La nota pasa a POR ENTREGAR y se abre WhatsApp con el mensaje para avisarle al cliente que ya puede pasar.
+
+El botón aparece en cuanto termina al menos una lavadora de la nota.
+
+Si la nota no tiene teléfono (una de Mostrador sin teléfono capturado), no hay a quién avisar, pero la nota igual pasa a Por Entregar.
+
+Ya procesada, el botón se llama Avisar (azul): sirve para volver a mandarle el mensaje.
+
+El texto del mensaje lo configura el administrador en Ajustes → WhatsApp.`,
       },
       {
         id: 'mandar-el-ticket',
@@ -241,25 +274,29 @@ Lo que sale impreso (el R.F.C. del negocio y la nota en letra chica del pie) lo 
         id: 'productos-existencias',
         titulo: 'Ver y ajustar existencias',
         claves: ['stock', 'jabon', 'suavizante', 'entradas', 'salidas', 'agotado'],
-        cuerpo: `En Inventario ves cada producto con lo que queda. La app distingue dos cosas que se ven parecido:
+        cuerpo: `En Inventario ves cada producto con lo que hay DISPONIBLE: lo que se puede vender hoy. La app distingue dos cosas:
 
-· EXISTENCIA — lo que hay en el estante.
-· APARTADO — lo que ya está comprometido en notas que aún no se entregan.
+· DISPONIBLE — lo que hay en el estante y nadie ha pedido todavía.
+· APARTADO — lo que ya está comprometido en notas que aún no se entregan. Sigue en el estante, pero ya tiene dueño. Un PUNTO NARANJA junto a la cantidad avisa que el producto tiene algo apartado; en el detalle ves cuánto.
+
+Los productos de marca y el granel en polvo se cuentan en PIEZAS; el granel líquido, en bidones, botellas y medidas.
 
 Para registrar una compra o una merma usa Entrada o Salida en el producto: cada movimiento queda en su Historial de movimientos, con quién y cuándo.
 
-Cuando un producto baja de su mínimo, aparece un aviso en la campana del Inicio.
+Cuando un producto baja de su mínimo, o quedan pocos bidones, aparece un aviso en la campana del Inicio. El administrador puede apagar esos avisos en Ajustes → Alertas.
 
 Un producto que ya se usó en notas NO se borra: se ARCHIVA. Así el historial viejo sigue cuadrando.`,
       },
       {
         id: 'granel-y-bolsas',
         titulo: 'Granel, bidones y bolsas',
-        claves: ['bidon', 'rellenar', 'medidas', 'botella', 'bolsa', 'rollo'],
-        cuerpo: `Los líquidos se manejan de dos formas:
+        claves: ['bidon', 'rellenar', 'medidas', 'botella', 'bolsa', 'rollo', 'exhibidor', 'a granel', 'polvo'],
+        cuerpo: `Los productos se manejan de dos formas:
 
-· A GRANEL — se mide en MEDIDAS. Cuando llenas un bidón, usa Rellenar bidón: la app le suma las medidas que trae.
-· DE MARCA — se vende la botella entera.
+· A GRANEL — el jabón o suavizante que se compra en bidón y se sirve en botellas. En su tarjeta ves dos cantidades: A GRANEL (lo que queda en los bidones) y EXHIBIDOR (las botellas ya llenas, listas para vender o servir).
+· DE MARCA — se vende la pieza entera, tal como viene. El granel EN POLVO también se cuenta por pieza.
+
+Cuando compras bidones, regístralo con Entrada y elige "Bidones". Cuando llenas botellas desde el bidón, usa Rellenar botellas en el producto: la app baja el bidón y sube el exhibidor.
 
 OJO CON EL PRECIO: en autoservicio se cobra la BOTELLA completa, y por encargo se cobra POR MEDIDA. Es el mismo producto con dos precios, según el servicio.
 
@@ -284,7 +321,7 @@ La app compara lo que contaste contra lo que ESPERABA y te dice si sobra o falta
 
 Después REPARTE lo contado en dos: Caja final (lo que se queda en el cajón) y Sobre (lo que apartas). Tú escribes la Caja final y la app calcula el Sobre con lo que sobra (solo un administrador puede escribir el Sobre a mano); los dos suman lo contado. Con la Caja final abre el siguiente turno.
 
-Lo cobrado por transferencia se muestra aparte, en "Cobrado fuera del cajón": ese dinero NO está en el cajón, así que no lo sumes a lo que cuentas.
+Si hubo cobros por transferencia, los Ingresos se ven en dos partes: primero lo vendido por concepto con su TOTAL VENDIDO y "Cómo se cobró" (efectivo y transferencia); luego "En el cajón" (caja inicial, entradas y ventas en efectivo) con su TOTAL EN EFECTIVO. Las transferencias NO están en el cajón: cuadra contra el Total en efectivo, no contra el Total vendido.
 
 Ahí está la razón de marcar bien la forma de pago al cobrar: una transferencia registrada como efectivo aparece como faltante al final del día.
 
