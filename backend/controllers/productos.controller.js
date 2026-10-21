@@ -712,6 +712,41 @@ export const getMovimientos = async (req, res) => {
   }
 };
 
+// ── GET /productos/vendidos-hoy ─────────────────────────────────
+/**
+ * Lo que se vendió hoy en las notas de la sucursal (cualquier rol): por
+ * producto y unidad, cuánto y en qué notas. Sin las canceladas; el día es el
+ * local (America/Mexico_City).
+ */
+export const getVendidosHoy = async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `WITH bounds AS (
+         SELECT (now() AT TIME ZONE 'America/Mexico_City')::date::timestamp
+                  AT TIME ZONE 'America/Mexico_City' AS inicio
+       )
+       SELECT p.id, p.nombre, p.marca, p.tipo_liquido, p.forma, p.se_vende_por_unidad,
+              p.es_por_medida, p.clase, p.tamano_bolsa, np.unidad,
+              SUM(np.cantidad) AS cantidad,
+              json_agg(DISTINCT jsonb_build_object('id', n.id, 'folio', n.folio)) AS notas
+         FROM nota_productos np
+         JOIN notas n     ON n.id = np.nota_id
+         JOIN productos p ON p.id = np.producto_id
+         , bounds
+        WHERE n.sucursal = $1 AND n.estado != 'CANCELADA'
+          AND np.created_at >= bounds.inicio
+        GROUP BY p.id, np.unidad
+        ORDER BY CASE p.tipo_liquido WHEN 'granel' THEN 0 WHEN 'marca' THEN 1 ELSE 2 END,
+                 p.marca NULLS LAST, p.nombre`,
+      [req.sucursal]
+    );
+    res.json(rows.map(r => ({ ...r, cantidad: Number(r.cantidad) })));
+  } catch (err) {
+    console.error('getVendidosHoy error:', err);
+    res.status(500).json({ message: 'No se pudo cargar lo vendido hoy. Intenta de nuevo.' });
+  }
+};
+
 // ── GET /productos/reporte-diario?fecha=YYYY-MM-DD ──────────────
 /**
  * Reporte del día por producto (admin): qué había al inicio, qué entró, salió,

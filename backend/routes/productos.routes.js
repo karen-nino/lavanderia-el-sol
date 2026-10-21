@@ -6,7 +6,7 @@ import { validarId } from '../middleware/validarId.js';
 import {
   getProductos, createProducto, updateProducto, deleteProducto,
   deleteProductosMultiples, archivarProducto,
-  rellenarBotellas, crearMovimiento, getMovimientos, getReporteDiario,
+  rellenarBotellas, crearMovimiento, getMovimientos, getReporteDiario, getVendidosHoy,
 } from '../controllers/productos.controller.js';
 
 const router = Router();
@@ -19,6 +19,8 @@ router.use(verifyToken, sucursalActiva);
 router.get('/',        getProductos);
 // Reporte diario (salidas y existencia al cierre del día): solo admin.
 router.get('/reporte-diario', requireAdmin, getReporteDiario);
+// Lo vendido hoy en notas (cualquier rol: el empleado lo ve desde Inventario).
+router.get('/vendidos-hoy', getVendidosHoy);
 router.post('/',       createProducto);
 router.post('/eliminar-multiples', requireAdmin, deleteProductosMultiples);
 router.patch('/:id/archivar', requireAdmin, archivarProducto);

@@ -6,7 +6,7 @@ import { api } from '../lib/api';
 import { urlListaNotas } from '../lib/filtrosNotas';
 import { useAuth } from '../context/AuthContext';
 import { esAdmin as esAdminFn, esAdminMain as esAdminMainFn } from '../lib/roles';
-import { etiquetaProducto, tituloProducto, subtituloProducto, ordenProducto, seVendePorUnidad } from '../lib/formatoInventario';
+import { etiquetaProducto, tituloProducto, subtituloProducto, ordenProducto, seVendePorUnidad, unidadProdTxt } from '../lib/formatoInventario';
 import { FORMAS_PAGO, formaPagoLabel } from '../lib/formasPago';
 import { formatHora12, formatFechaHora12 } from '../lib/fecha';
 import { leerAvisoCobro, limpiarAvisoCobro } from '../lib/avisoCobro';
@@ -16,17 +16,6 @@ import ModalCobrar from '../components/ModalCobrar';
 import { ES_DEMO } from '../lib/entorno';
 import { armarMensajeWhatsapp, hayMensajeWhatsapp, telefonoWhatsapp } from '../lib/mensajeWhatsapp';
 
-/** Unidad de un producto de la nota en texto ("2 botellas", "3 medidas"). */
-function unidadProdTxt(p) {
-  const n = Number(p.cantidad);
-  if (p.unidad === 'pieza') return n === 1 ? 'pieza' : 'piezas';
-  if (p.unidad === 'botella') {
-    // Marca y polvo, por pieza; el granel líquido, por botella.
-    if (seVendePorUnidad(p)) return n === 1 ? 'pieza' : 'piezas';
-    return n === 1 ? 'botella' : 'botellas';
-  }
-  return n === 1 ? 'medida' : 'medidas';
-}
 const BADGE_TIPO_SERVICIO = {
   AUTOSERVICIO: { label: 'Autoservicio', cls: 'bg-light-blue text-blue-700' },
   EDREDON:      { label: 'Edredón',      cls: 'bg-sky-100 text-sky-700'       },

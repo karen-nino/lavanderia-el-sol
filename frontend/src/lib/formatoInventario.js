@@ -139,3 +139,15 @@ export function ordenProducto(p) {
   if (p?.tipo_liquido === 'marca')  return 1;
   return 2;
 }
+
+/** Unidad de un producto de la nota en texto ("botellas", "medidas"), según su cantidad. */
+export function unidadProdTxt(p) {
+  const n = Number(p.cantidad);
+  if (p.unidad === 'pieza') return n === 1 ? 'pieza' : 'piezas';
+  if (p.unidad === 'botella') {
+    /* Marca y polvo, por pieza; el granel líquido, por botella. */
+    if (seVendePorUnidad(p)) return n === 1 ? 'pieza' : 'piezas';
+    return n === 1 ? 'botella' : 'botellas';
+  }
+  return n === 1 ? 'medida' : 'medidas';
+}
