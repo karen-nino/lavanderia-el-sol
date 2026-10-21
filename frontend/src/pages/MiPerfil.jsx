@@ -8,6 +8,9 @@ const INPUT_CLS =
 const MOBILE_INPUT_CLS =
   'w-full px-4 py-3.5 border border-grey/30 rounded-lg text-base text-dark-blue placeholder-grey/60 focus:outline-none focus:border-blue transition';
 
+/** Campos de solo lectura: no se tocan, así no aparece el cursor ni el borde azul. */
+const SIN_FOCO = 'pointer-events-none select-none';
+
 const IconoOjo = (
   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -133,10 +136,10 @@ export default function MiPerfil() {
           {avisoPruebas}
           <div className="space-y-5">
             <CampoMovil label="Nombre">
-              <input type="text" readOnly value={usuario?.nombre ?? ''} className={`${MOBILE_INPUT_CLS} bg-light-blue/20 text-grey`} />
+              <input type="text" readOnly tabIndex={-1} value={usuario?.nombre ?? ''} className={`${MOBILE_INPUT_CLS} bg-light-blue/20 text-grey ${SIN_FOCO}`} />
             </CampoMovil>
             <CampoMovil label="Apellido">
-              <input type="text" readOnly value={usuario?.apellido ?? ''} className={`${MOBILE_INPUT_CLS} bg-light-blue/20 text-grey`} />
+              <input type="text" readOnly tabIndex={-1} value={usuario?.apellido ?? ''} className={`${MOBILE_INPUT_CLS} bg-light-blue/20 text-grey ${SIN_FOCO}`} />
             </CampoMovil>
             {!soloConsultaPruebas && (
               <CampoMovil label="Contraseña">
@@ -193,10 +196,10 @@ export default function MiPerfil() {
             </div>
             <div className="px-5 py-5 space-y-4">
               <Campo label="Nombre">
-                <input type="text" readOnly value={usuario?.nombre ?? ''} className={`${INPUT_CLS} bg-gray-50 text-gray-500`} />
+                <input type="text" readOnly tabIndex={-1} value={usuario?.nombre ?? ''} className={`${INPUT_CLS} bg-gray-50 text-gray-500 ${SIN_FOCO}`} />
               </Campo>
               <Campo label="Apellido">
-                <input type="text" readOnly value={usuario?.apellido ?? ''} className={`${INPUT_CLS} bg-gray-50 text-gray-500`} />
+                <input type="text" readOnly tabIndex={-1} value={usuario?.apellido ?? ''} className={`${INPUT_CLS} bg-gray-50 text-gray-500 ${SIN_FOCO}`} />
               </Campo>
               {!soloConsultaPruebas && (
                 <Campo label="Contraseña">
