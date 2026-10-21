@@ -87,6 +87,20 @@ describe('PATCH /api/auth/me', () => {
     const { rows } = await pool.query('SELECT nombre FROM usuarios WHERE id = $1', [u.id]);
     expect(rows[0].nombre).not.toBe('Otro');
   });
+
+  it('un empleado cambia su contraseña pero no su nombre', async () => {
+    const u = await seedLogin({ rol: 'operador', password: 'secret123' });
+    const { body } = await login(u.id, 'secret123');
+
+    const conNombre = await request(app).patch('/api/auth/me').set(auth(body.token))
+      .send({ nombre: 'Otro', password: 'nueva123' });
+    expect(conNombre.status).toBe(403);
+
+    const soloPassword = await request(app).patch('/api/auth/me').set(auth(body.token))
+      .send({ password: 'nueva123' });
+    expect(soloPassword.status).toBe(200);
+    expect((await login(u.id, 'nueva123')).status).toBe(200);
+  });
 });
 
 describe('GET /api/auth/buscar-usuarios', () => {

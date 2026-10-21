@@ -5,6 +5,7 @@ import { randomUUID } from 'crypto';
 import { capitalizarNombre } from '../utils/nombres.js';
 import { fechaLocal } from '../utils/tz.js';
 import { ENTORNO_DEMO } from '../utils/entorno.js';
+import { esAdmin } from '../middleware/roles.js';
 
 // ── GET /auth/buscar-usuarios?q=... ─────────────────────────
 // Autocompletado público del login: id + nombre, máximo 5. Acotado para que no
@@ -222,6 +223,11 @@ export const updateMe = async (req, res) => {
   const updates = [];
   const values  = [];
   let i = 1;
+
+  /* El empleado solo cambia su contraseña; su nombre lo lleva un admin. */
+  if (!esAdmin(req.user.rol) && (nombre !== undefined || apellido !== undefined)) {
+    return res.status(403).json({ message: 'Tu nombre lo cambia un administrador.' });
+  }
 
   if (nombre !== undefined) {
     if (!nombre.trim()) return res.status(400).json({ message: 'El nombre no puede estar vacío.' });

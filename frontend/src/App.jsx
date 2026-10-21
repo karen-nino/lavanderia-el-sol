@@ -11,6 +11,7 @@ import NuevaNota from './pages/NuevaNota';
 import Clientes from './pages/Clientes';
 import Maquinas from './pages/Maquinas';
 import GestionMaquinas from './pages/GestionMaquinas';
+import MiPerfil from './pages/MiPerfil';
 import MaquinaUso from './pages/MaquinaUso';
 import Inventario from './pages/Inventario';
 import Caja from './pages/Caja';
@@ -56,6 +57,8 @@ export default function App() {
                 </AdminRoute>
               }
             />
+            {/* Perfil del empleado; los admins lo tienen en Ajustes. */}
+            <Route path="mi-perfil" element={<MiPerfil />} />
             <Route path="inventario" element={<Inventario />} />
             <Route path="caja" element={<Caja />} />
             <Route

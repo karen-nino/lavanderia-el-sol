@@ -130,7 +130,9 @@ const buildDesktopNav = (isAdmin) => [
   ...(isAdmin ? [{ to: '/ventas', label: 'Ventas', icon: Icon.ventas }] : []),
   { to: '/caja',             label: 'Caja',                icon: Icon.caja },
   { to: '/gestion-maquinas', label: 'Gestión de máquinas', short: 'Gestión', icon: Icon.maquinas },
-  ...(isAdmin ? [{ to: '/empleados', label: 'Empleados', icon: Icon.empleados }] : []),
+  ...(isAdmin
+    ? [{ to: '/empleados', label: 'Empleados', icon: Icon.empleados }]
+    : [{ to: '/mi-perfil', label: 'Mi perfil', short: 'Perfil', icon: Icon.empleados }]),
 ];
 
 function useClock() {
@@ -921,7 +923,7 @@ export default function Layout() {
           { label: 'Ventas',    icon: Icon.ventas,    onClick: () => goTo('/ventas') },
           { label: 'Empleados', icon: Icon.empleados, onClick: () => goTo('/empleados') },
         ]
-      : []),
+      : [{ label: 'Mi perfil', icon: Icon.empleados, onClick: () => goTo('/mi-perfil') }]),
   ];
 
   // Accesos que no cupieron en el sidebar → modal Menú.
