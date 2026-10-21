@@ -832,8 +832,18 @@ export default function DetalleNota() {
     (nota.historial_estados || []).map(h => [h.estado, h.created_at])
   );
 
-  const totalProductos = (nota.productos || []).reduce(
-    (s, p) => s + Number(p.subtotal), 0
+  /* Los de la nota y los de cada carga; el granel de un servicio con tope va incluido. */
+  const productosNota = [
+    ...(nota.productos || []).map(p => ({ ...p, carga: null, incluido: p.es_por_medida && Number(p.subtotal) === 0 })),
+    ...(nota.cargas ?? []).flatMap(cg => (cg.productos ?? []).map(p => ({
+      ...p,
+      carga: cg,
+      incluido: (p.es_por_medida && Number(p.subtotal) === 0)
+        || (cg.tope_carga != null && !seVendePorUnidad(p)),
+    }))),
+  ];
+  const totalProductos = productosNota.reduce(
+    (s, p) => s + (p.incluido ? 0 : Number(p.subtotal)), 0
   );
 
   return (
@@ -1431,27 +1441,31 @@ export default function DetalleNota() {
         </div>
       </div>
 
-      {/* Productos: solo en la venta de productos; en los demás servicios se ven
-          en Salidas. */}
-      {nota.tipo_servicio === 'PRODUCTOS' && (
+      {/* Productos: en la venta de productos siempre; en los demás servicios, si llevan. */}
+      {(nota.tipo_servicio === 'PRODUCTOS' || productosNota.length > 0) && (
       <div className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
         <div className="px-4 py-3 border-b border-gray-50 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-gray-700">Productos</h2>
-          {(nota.productos || []).length > 0 && (
-            <span className="text-sm text-gray-400">{(nota.productos || []).length} ítem(s)</span>
+          {productosNota.length > 0 && (
+            <span className="text-sm text-gray-400">{productosNota.length} ítem(s)</span>
           )}
         </div>
-        {(nota.productos || []).length === 0 ? (
+        {productosNota.length === 0 ? (
           <p className="text-sm text-gray-400 italic px-4 py-4">Sin productos agregados</p>
         ) : (
           <div className="divide-y divide-gray-50">
-            {[...(nota.productos || [])].sort((a, b) => ordenProducto(a) - ordenProducto(b)).map(p => {
-              const incluido = p.es_por_medida && Number(p.subtotal) === 0;
+            {/* Con cargas, en el orden de las cargas. */}
+            {((nota.cargas ?? []).length > 0
+              ? productosNota
+              : [...productosNota].sort((a, b) => ordenProducto(a) - ordenProducto(b))
+            ).map(p => {
+              const { incluido } = p;
               return (
               <div key={p.id} className="px-4 py-3 flex items-center justify-between gap-3">
                 <div>
                   <p className="text-sm font-medium text-gray-800">{tituloProducto(p)}</p>
                   <p className="text-sm text-gray-400">
+                    {p.carga && `${nombreDeCarga(p.carga)} · `}
                     {subtituloProducto(p) && `${subtituloProducto(p)} · `}
                     {incluido
                       ? `${p.cantidad} ${unidadProdTxt(p)}`
