@@ -1467,6 +1467,33 @@ export default function DetalleNota() {
               </div>
             </FilaDetalle>
           )}
+          {/* Un recuadro por producto, como las cargas. */}
+          {productosNota.length > 0 && (
+            <FilaDetalle label="Productos">
+              <div className="space-y-3">
+                {((nota.cargas ?? []).length > 0
+                  ? productosNota
+                  : [...productosNota].sort((a, b) => ordenProducto(a) - ordenProducto(b))
+                ).map(p => (
+                  <div key={p.id} className="border border-gray-100 rounded-lg p-3 space-y-1.5">
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="text-sm font-semibold text-gray-500 min-w-0">{tituloProducto(p)}</span>
+                      {p.incluido
+                        ? <span className="flex-shrink-0 text-sm font-medium text-green-700">Incluido</span>
+                        : <span className="flex-shrink-0 text-sm font-medium text-gray-700">{fmtMonto(p.subtotal)}</span>}
+                    </div>
+                    <p className="text-sm text-gray-500">
+                      {p.carga && `${nombreDeCarga(p.carga)} · `}
+                      {subtituloProducto(p) && `${subtituloProducto(p)} · `}
+                      {p.incluido
+                        ? `${p.cantidad} ${unidadProdTxt(p)}`
+                        : `${p.cantidad} ${unidadProdTxt(p)} × ${fmtMonto(p.precio_unitario)}`}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </FilaDetalle>
+          )}
           <FilaDetalle label="Cliente">
             {nota.cliente_nombre
               ? (
