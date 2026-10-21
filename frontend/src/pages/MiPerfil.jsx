@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { api } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
-import { ROL_LABEL } from '../lib/roles';
 import { ES_DEMO } from '../lib/entorno';
 
 const INPUT_CLS =
@@ -63,7 +62,6 @@ export default function MiPerfil() {
     }
   };
 
-  const rol = ROL_LABEL[usuario?.rol] ?? (usuario?.rol ?? '');
   const botonDeshabilitado = saving || guardado || !password;
 
   const contenidoBoton = saving ? (
@@ -134,9 +132,6 @@ export default function MiPerfil() {
         <div className="max-w-movil mx-auto px-6 py-6 space-y-6">
           {avisoPruebas}
           <div className="space-y-5">
-            <CampoMovil label="Tipo de Cuenta">
-              <input type="text" readOnly value={rol} className={`${MOBILE_INPUT_CLS} bg-light-blue/20 text-grey`} />
-            </CampoMovil>
             <CampoMovil label="Nombre">
               <input type="text" readOnly value={usuario?.nombre ?? ''} className={`${MOBILE_INPUT_CLS} bg-light-blue/20 text-grey`} />
             </CampoMovil>
@@ -197,9 +192,6 @@ export default function MiPerfil() {
               <h2 className="text-base font-bold text-dark-blue">Mi Perfil</h2>
             </div>
             <div className="px-5 py-5 space-y-4">
-              <Campo label="Tipo de Cuenta">
-                <input type="text" readOnly value={rol} className={`${INPUT_CLS} bg-gray-50 text-gray-500`} />
-              </Campo>
               <Campo label="Nombre">
                 <input type="text" readOnly value={usuario?.nombre ?? ''} className={`${INPUT_CLS} bg-gray-50 text-gray-500`} />
               </Campo>
