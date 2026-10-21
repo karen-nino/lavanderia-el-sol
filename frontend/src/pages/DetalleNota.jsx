@@ -759,7 +759,7 @@ export default function DetalleNota() {
   // Nombre de un renglón. En Por Encargo, los que traen precio son SERVICIOS y
   // los demás MÁQUINAS agregadas en Salidas; se numeran por separado.
   const nombreDeCarga = (cg) => {
-    if (!esEncargoNota) return `Carga ${cg.orden}`;
+    if (!esEncargoNota) return `Máquina ${cg.orden}`;
     const esServicio = cg.tope_carga != null;
     const n = (nota.cargas ?? []).filter(x => (x.tope_carga != null) === esServicio).indexOf(cg) + 1;
     return `${esServicio ? 'Servicio' : 'Máquina'} ${n}`;
@@ -1334,7 +1334,7 @@ export default function DetalleNota() {
             </FilaDetalle>
           )}
           {(nota.cargas ?? []).length > 0 && (
-            <FilaDetalle label="Cargas">
+            <FilaDetalle label="Máquinas">
               <div className="space-y-3">
                 {nota.cargas.map(cg => {
                   // Una línea por vuelta (un relavado repite la máquina). La que sigue puesta
@@ -1395,7 +1395,7 @@ export default function DetalleNota() {
                   ].filter(Boolean);
                   return (
                     <div key={cg.id} className="border border-gray-100 rounded-lg p-3 space-y-1.5">
-                      {/* Carga N y, debajo, una línea por máquina con su costo. */}
+                      {/* Máquina N y, debajo, una línea por máquina con su costo. */}
                       <div className="flex items-center justify-between">
                         <span className="text-sm font-semibold text-gray-500">
                           {nombreDeCarga(cg)}
