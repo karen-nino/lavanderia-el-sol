@@ -1141,6 +1141,54 @@ export default function DetalleNota() {
         </div>
       )}
 
+      {/* Productos: en la venta de productos siempre; en los demás servicios, si llevan. */}
+      {(nota.tipo_servicio === 'PRODUCTOS' || productosNota.length > 0) && (
+      <div className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
+        <div className="px-4 py-3 border-b border-gray-50 flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-gray-700">Productos</h2>
+          {productosNota.length > 0 && (
+            <span className="text-sm text-gray-400">{productosNota.length} ítem(s)</span>
+          )}
+        </div>
+        {productosNota.length === 0 ? (
+          <p className="text-sm text-gray-400 italic px-4 py-4">Sin productos agregados</p>
+        ) : (
+          <div className="divide-y divide-gray-50">
+            {/* Con cargas, en el orden de las cargas. */}
+            {((nota.cargas ?? []).length > 0
+              ? productosNota
+              : [...productosNota].sort((a, b) => ordenProducto(a) - ordenProducto(b))
+            ).map(p => {
+              const { incluido } = p;
+              return (
+              <div key={p.id} className="px-4 py-3 flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium text-gray-800">{tituloProducto(p)}</p>
+                  <p className="text-sm text-gray-400">
+                    {p.carga && `${nombreDeCarga(p.carga)} · `}
+                    {subtituloProducto(p) && `${subtituloProducto(p)} · `}
+                    {incluido
+                      ? `${p.cantidad} ${unidadProdTxt(p)}`
+                      : `${p.cantidad} ${unidadProdTxt(p)} × ${fmtMonto(p.precio_unitario)}`}
+                  </p>
+                </div>
+                <span className="text-sm font-semibold flex-shrink-0">
+                  {incluido
+                    ? <span className="text-green-700">Incluido</span>
+                    : <span className="text-gray-700">{fmtMonto(p.subtotal)}</span>}
+                </span>
+              </div>
+              );
+            })}
+            <div className="px-4 py-3 flex justify-between bg-gray-50">
+              <span className="text-sm font-semibold text-gray-700">Total productos</span>
+              <span className="text-sm font-bold text-gray-900">{fmtMonto(totalProductos)}</span>
+            </div>
+          </div>
+        )}
+      </div>
+      )}
+
       {/* Código de barras: apagado, no borrado (ver MOSTRAR_CODIGO_BARRAS). */}
       {MOSTRAR_CODIGO_BARRAS && (
         <div className="bg-white border border-gray-100 rounded-xl p-4 flex justify-center shadow-sm">
@@ -1440,54 +1488,6 @@ export default function DetalleNota() {
           </FilaDetalle>
         </div>
       </div>
-
-      {/* Productos: en la venta de productos siempre; en los demás servicios, si llevan. */}
-      {(nota.tipo_servicio === 'PRODUCTOS' || productosNota.length > 0) && (
-      <div className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
-        <div className="px-4 py-3 border-b border-gray-50 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-gray-700">Productos</h2>
-          {productosNota.length > 0 && (
-            <span className="text-sm text-gray-400">{productosNota.length} ítem(s)</span>
-          )}
-        </div>
-        {productosNota.length === 0 ? (
-          <p className="text-sm text-gray-400 italic px-4 py-4">Sin productos agregados</p>
-        ) : (
-          <div className="divide-y divide-gray-50">
-            {/* Con cargas, en el orden de las cargas. */}
-            {((nota.cargas ?? []).length > 0
-              ? productosNota
-              : [...productosNota].sort((a, b) => ordenProducto(a) - ordenProducto(b))
-            ).map(p => {
-              const { incluido } = p;
-              return (
-              <div key={p.id} className="px-4 py-3 flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-medium text-gray-800">{tituloProducto(p)}</p>
-                  <p className="text-sm text-gray-400">
-                    {p.carga && `${nombreDeCarga(p.carga)} · `}
-                    {subtituloProducto(p) && `${subtituloProducto(p)} · `}
-                    {incluido
-                      ? `${p.cantidad} ${unidadProdTxt(p)}`
-                      : `${p.cantidad} ${unidadProdTxt(p)} × ${fmtMonto(p.precio_unitario)}`}
-                  </p>
-                </div>
-                <span className="text-sm font-semibold flex-shrink-0">
-                  {incluido
-                    ? <span className="text-green-700">Incluido</span>
-                    : <span className="text-gray-700">{fmtMonto(p.subtotal)}</span>}
-                </span>
-              </div>
-              );
-            })}
-            <div className="px-4 py-3 flex justify-between bg-gray-50">
-              <span className="text-sm font-semibold text-gray-700">Total productos</span>
-              <span className="text-sm font-bold text-gray-900">{fmtMonto(totalProductos)}</span>
-            </div>
-          </div>
-        )}
-      </div>
-      )}
 
       </div>
 
