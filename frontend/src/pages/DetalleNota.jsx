@@ -1243,9 +1243,12 @@ export default function DetalleNota() {
               // Mostrador se lee como un cliente más; antes va la referencia del Autoservicio.
               : (nota.referencia || 'Mostrador')}
           </FilaDetalle>
-          <FilaDetalle label="ID">
-            <span className="text-sm font-medium text-gray-800">{nota.id}</span>
-          </FilaDetalle>
+          {/* El ID interno solo le sirve al admin main (soporte y base de datos). */}
+          {esAdminMain && (
+            <FilaDetalle label="ID">
+              <span className="text-sm font-medium text-gray-800">{nota.id}</span>
+            </FilaDetalle>
+          )}
           <FilaDetalle label="Fecha">
             {fmtFecha(nota.created_at)}
           </FilaDetalle>
