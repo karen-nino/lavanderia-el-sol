@@ -1279,14 +1279,6 @@ export default function DetalleNota() {
               <span className="text-sm font-medium text-gray-800">{nota.tamano_edredon}</span>
             </FilaDetalle>
           )}
-          {/* Una nota cancelada no tiene estado de pago: no se va a cobrar. */}
-          {nota.estado !== 'CANCELADA' && (
-            <FilaDetalle label="Estado de pago">
-              {badgePago
-                ? <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${badgePago.cls}`}>{badgePago.label}</span>
-                : <span className="text-gray-400">—</span>}
-            </FilaDetalle>
-          )}
           {nota.forma_pago && (
             <FilaDetalle label="Forma de pago">
               <span className="text-gray-700">{formaPagoLabel(nota.forma_pago)}</span>
@@ -1513,6 +1505,14 @@ export default function DetalleNota() {
           <FilaDetalle label="Precio total">
             <span className="font-semibold text-gray-900">{fmtMonto(nota.precio_total)}</span>
           </FilaDetalle>
+          {/* Una nota cancelada no tiene estado de pago: no se va a cobrar. */}
+          {nota.estado !== 'CANCELADA' && (
+            <FilaDetalle label="Estado de pago">
+              {badgePago
+                ? <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${badgePago.cls}`}>{badgePago.label}</span>
+                : <span className="text-gray-400">—</span>}
+            </FilaDetalle>
+          )}
         </div>
       </div>
 
