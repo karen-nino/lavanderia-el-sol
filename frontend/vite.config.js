@@ -4,7 +4,10 @@ import { readFileSync } from 'node:fs'
 
 // La versión de la app sale de package.json y se inyecta en el bundle para
 // poder mostrarla en la pantalla de login (ver src/lib/version.js).
-const { version } = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8'))
+const { version, versionMinima } = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8'))
+// versionMinima (opcional): las apps con una versión anterior quedan obligadas a
+// actualizarse en cuanto lo noten. Solo para cambios del servidor que rompen la app vieja.
+const datosVersion = JSON.stringify(versionMinima ? { version, minima: versionMinima } : { version })
 
 // La versión publicada también se deja en un archivo suelto (/version.json) para
 // que la app instalada en un teléfono pueda preguntar si ya hay otra sin tener
@@ -15,14 +18,14 @@ const versionJson = () => ({
   configureServer(server) {
     server.middlewares.use('/version.json', (_req, res) => {
       res.setHeader('Content-Type', 'application/json');
-      res.end(JSON.stringify({ version }));
+      res.end(datosVersion);
     });
   },
   generateBundle() {
     this.emitFile({
       type: 'asset',
       fileName: 'version.json',
-      source: JSON.stringify({ version }),
+      source: datosVersion,
     });
   },
 });

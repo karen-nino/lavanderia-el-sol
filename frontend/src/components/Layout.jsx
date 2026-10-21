@@ -7,6 +7,7 @@ import { formatHora12, formatFechaHora12 } from '../lib/fecha';
 import SucursalSelector from './SucursalSelector';
 import LogoSol from './LogoSol';
 import { useAvisoTopeMaquinas } from '../lib/avisoTope';
+import AvisoActualizacion from './AvisoActualizacion';
 
 const navIconCls = 'w-6 h-6';
 
@@ -945,6 +946,7 @@ export default function Layout() {
       />
 
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
+        <AvisoActualizacion />
         <main className="flex-1 overflow-y-auto overscroll-contain">
           {isDashboard && (
             <>
