@@ -7,6 +7,7 @@ import { requiereCajaAbierta as conCaja } from '../middleware/cajaAbierta.js';
 import {
   getMaquinas,
   getUsoMaquina,
+  getReporteDiarioMaquinas,
   createMaquina,
   updateMaquina,
   deleteMaquina,
@@ -28,6 +29,8 @@ router.param('id', validarId('la máquina'));
 router.use(verifyToken, sucursalActiva);
 
 router.get('/', getMaquinas);
+// Reporte diario de máquinas (uso y lo generado del día): admin y empleados.
+router.get('/reporte-diario', getReporteDiarioMaquinas);
 // Antes de las rutas con :id (si no, 'revisar-sonoff' se tomaría por un id).
 router.post('/revisar-sonoff', revisarSonoff);
 router.get('/:id/uso', requireAdmin, getUsoMaquina);

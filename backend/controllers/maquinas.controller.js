@@ -1,6 +1,6 @@
 import pool from '../db/pool.js';
 import { sellarPasadasVivas } from '../db/pasadas.js';
-import { TZ_NEGOCIO } from '../utils/tz.js';
+import { TZ_NEGOCIO, esFechaISO } from '../utils/tz.js';
 import * as dispositivos from '../services/dispositivos/index.js';
 import { explicarFalla, resumirMotivo } from '../services/dispositivos/mensajes.js';
 import { MINUTOS_CONFIGURADOS, TIEMPOS_DEL_MODELO, OPCIONES_DE_MARCA, MINUTOS_POR_FICHA, TOPE_RELOJ, esCronometroSql, conIniciarSql, soloFichasSql } from '../db/sqlMaquina.js';
@@ -227,6 +227,120 @@ export const getMaquinas = async (req, res) => {
 };
 
 // ── GET /maquinas/:id/uso ───────────────────────────────────
+/** Orden de las máquinas en el reporte: lavadoras, luego secadoras; por nombre con números. */
+const ORDEN_TIPO_MAQUINA = { lavadora_mediana: 0, lavadora_jumbo: 1, secadora: 2 };
+
+/**
+ * Reporte diario de máquinas (cualquier rol): por máquina, las vueltas que
+ * arrancaron ese día, el tiempo encendida, las veces al tope y lo generado.
+ * Lo generado sigue la regla de Uso de máquina: la primera vuelta de cada
+ * hueco vale lo cobrado; una vuelta más o sin cobro aparte, la tarifa de
+ * Ajustes. Sin notas canceladas; el día es el local (America/Mexico_City).
+ */
+export const getReporteDiarioMaquinas = async (req, res) => {
+  const hoyMx = new Date().toLocaleDateString('en-CA', { timeZone: TZ_NEGOCIO });
+  const fecha = esFechaISO(req.query.fecha) ? req.query.fecha : hoyMx;
+
+  try {
+    const { rows: maquinas } = await pool.query(
+      `SELECT id, nombre, tipo, tamano, estado FROM maquinas WHERE sucursal = $1`,
+      [req.sucursal]
+    );
+    const { rows: pasadas } = await pool.query(
+      `WITH bounds AS (
+         SELECT ($2::date)::timestamp      AT TIME ZONE '${TZ_NEGOCIO}' AS inicio,
+                ($2::date + 1)::timestamp  AT TIME ZONE '${TZ_NEGOCIO}' AS cierre
+       ),
+       -- Todas las vueltas que arrancaron (de cualquier día), numeradas por hueco.
+       vueltas AS (
+         SELECT ncm.*, nc.nota_id,
+                COALESCE(ncm.encendida_at,
+                         CASE WHEN ncm.slot = 'lavadora' THEN nc.lavadora_iniciada_at
+                              ELSE nc.secadora_iniciada_at END,
+                         ncm.asignada_at) AS inicio_at,
+                ROW_NUMBER() OVER (PARTITION BY ncm.carga_id, ncm.slot
+                                   ORDER BY ncm.asignada_at, ncm.id) AS n_vuelta,
+                CASE WHEN ncm.slot = 'lavadora' THEN nc.precio_lavadora ELSE nc.precio_secadora END AS cobrado,
+                CASE WHEN ncm.slot = 'lavadora' THEN nc.lavadora_id ELSE nc.secadora_id END AS puesta_id
+           FROM nota_carga_maquinas ncm
+           JOIN nota_cargas nc ON nc.id = ncm.carga_id
+          WHERE ncm.encendida_at IS NOT NULL
+             OR (ncm.slot = 'lavadora' AND nc.lavadora_iniciada_at IS NOT NULL)
+             OR (ncm.slot = 'secadora' AND nc.secadora_iniciada_at IS NOT NULL)
+       )
+       SELECT v.id, v.maquina_id, v.slot, v.inicio_at, v.llego_tope,
+              n.id AS nota_id, n.folio, n.tipo_servicio,
+              TRIM(COALESCE(c.nombre, '') || ' ' || COALESCE(c.apellido, '')) AS cliente,
+              -- Sigue corriendo: la máquina tiene puesta esta carga y no se finalizó.
+              (v.finalizada_at IS NULL AND v.puesta_id = m.id AND m.en_uso_desde IS NOT NULL) AS en_curso,
+              CASE WHEN v.finalizada_at IS NOT NULL THEN v.finalizada_at END AS fin_at,
+              CASE WHEN v.finalizada_at IS NOT NULL AND v.encendida_at IS NOT NULL
+                     THEN ROUND(EXTRACT(EPOCH FROM v.finalizada_at - v.encendida_at))::int
+                   WHEN v.finalizada_at IS NULL AND v.puesta_id = m.id AND m.en_uso_desde IS NOT NULL
+                     THEN ROUND(EXTRACT(EPOCH FROM NOW() - COALESCE(v.encendida_at, m.en_uso_desde)))::int
+              END AS segundos,
+              CASE WHEN v.n_vuelta = 1 AND v.cobrado > 0 THEN v.cobrado
+                   ELSE CASE
+                          WHEN COALESCE(v.maquina_tipo, m.tipo::text) = 'secadora'
+                               AND COALESCE(v.maquina_tamano, m.tamano::text) = 'jumbo' THEN aj.precio_secadora_jumbo
+                          WHEN COALESCE(v.maquina_tipo, m.tipo::text) = 'secadora'       THEN aj.precio_carga_secadora
+                          WHEN COALESCE(v.maquina_tipo, m.tipo::text) = 'lavadora_jumbo' THEN aj.precio_carga_jumbo
+                          ELSE aj.precio_carga_mediana
+                        END
+              END AS precio
+         FROM vueltas v
+         JOIN maquinas m ON m.id = v.maquina_id
+         JOIN notas n    ON n.id = v.nota_id
+         LEFT JOIN clientes c ON c.id = n.cliente_id
+         LEFT JOIN ajustes aj ON aj.id = 1
+         , bounds
+        WHERE m.sucursal = $1 AND n.estado <> 'CANCELADA'
+          AND v.inicio_at >= bounds.inicio AND v.inicio_at < bounds.cierre
+        ORDER BY v.inicio_at, v.id`,
+      [req.sucursal, fecha]
+    );
+
+    const porMaquina = new Map(maquinas.map((m) => [m.id, []]));
+    for (const p of pasadas) {
+      porMaquina.get(p.maquina_id)?.push({
+        id:            p.id,
+        slot:          p.slot,
+        inicio_at:     p.inicio_at,
+        fin_at:        p.fin_at,
+        segundos:      p.segundos,
+        en_curso:      p.en_curso,
+        llego_tope:    p.llego_tope === true,
+        precio:        Number(p.precio ?? 0),
+        nota_id:       p.nota_id,
+        folio:         p.folio,
+        tipo_servicio: p.tipo_servicio,
+        cliente:       p.cliente || null,
+      });
+    }
+
+    const orden = (m) => ORDEN_TIPO_MAQUINA[m.tipo] ?? 9;
+    res.json({
+      fecha,
+      maquinas: maquinas
+        .sort((a, b) => orden(a) - orden(b) || a.nombre.localeCompare(b.nombre, 'es', { numeric: true }))
+        .map((m) => {
+          const lista = porMaquina.get(m.id);
+          return {
+            id: m.id, nombre: m.nombre, tipo: m.tipo, tamano: m.tamano, estado: m.estado,
+            usos:     lista.length,
+            segundos: lista.reduce((t, p) => t + (p.segundos ?? 0), 0),
+            topes:    lista.filter((p) => p.llego_tope).length,
+            generado: lista.reduce((t, p) => t + p.precio, 0),
+            pasadas:  lista,
+          };
+        }),
+    });
+  } catch (err) {
+    console.error('getReporteDiarioMaquinas error:', err);
+    res.status(500).json({ message: 'No se pudo generar el reporte de máquinas. Intenta de nuevo.' });
+  }
+};
+
 /**
  * Uso diario de la máquina según las notas que de verdad la arrancaron (sin
  * canceladas): usos, cargas, generado (cobrado), empleados y clientes. Un
