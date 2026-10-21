@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { api, mensajeDeError } from '../lib/api';
 import InstalarApp from '../components/InstalarApp';
+import ActualizarApp from '../components/ActualizarApp';
 import MiPerfil from './MiPerfil';
 import { formatTelefono } from '../lib/telefono';
 import { useAuth } from '../context/AuthContext';
@@ -97,6 +98,12 @@ const SectionIcon = {
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
         d="M12 6.5C10.5 5.2 8.6 4.7 6 4.8A1 1 0 005 5.8v11.4a1 1 0 001.06 1c2.5-.1 4.4.4 5.94 1.7 1.54-1.3 3.44-1.8 5.94-1.7a1 1 0 001.06-1V5.8a1 1 0 00-1-1c-2.6-.1-4.5.4-6 1.7z" />
       <path strokeLinecap="round" strokeWidth={2} d="M12 6.5V19" />
+    </svg>
+  ),
+  actualizar: (
+    <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
     </svg>
   ),
   instalar: (
@@ -1088,23 +1095,91 @@ function SucursalesOrden({ sucursales, setSucursales, onMensaje }) {
   );
 }
 
-/** Ajustes según el rol: el empleado solo tiene su cuenta (Mi Perfil). */
+/** Ajustes según el rol: el empleado solo tiene Mi Perfil y Actualizar la app. */
 export default function Ajustes() {
   const { usuario } = useAuth();
   return esAdmin(usuario?.rol) ? <AjustesAdmin /> : <AjustesEmpleado />;
 }
 
-/** Secciones del empleado: solo Mi Perfil, en el grupo Cuenta. */
-const GRUPOS_EMPLEADO = [{ titulo: 'Cuenta', ids: ['perfil'] }];
+/** Traer la versión nueva de la app (Ajustes del empleado). */
+const SECCION_ACTUALIZAR = {
+  id: 'actualizar', label: 'Actualizar la app', subtitle: 'Versión de la app',
+  detalle: 'Tu versión y traer la más nueva', icon: SectionIcon.actualizar,
+};
+
+/** Secciones del empleado: su cuenta y actualizar la app. */
+const GRUPOS_EMPLEADO = [
+  { titulo: 'Cuenta',  ids: ['perfil'] },
+  { titulo: 'Sistema', ids: ['actualizar'] },
+];
+/** Sección del empleado por id (las suyas no son todas de Ajustes del admin). */
+const seccionEmpleado = (id) => (id === 'actualizar' ? SECCION_ACTUALIZAR : seccionPorId(id));
+
+/** Una sección del Ajustes del empleado con su encabezado y el botón de volver. */
+function SeccionEmpleado({ seccion, grupo, mobile, desktop }) {
+  return (
+    <>
+      <div className="md:hidden min-h-full bg-gray-50">
+        <div className="bg-white border-b-2 border-gray-200">
+          <div className="max-w-movil mx-auto px-6 pt-10 pb-4 flex items-center gap-2">
+            <Link
+              to="/ajustes"
+              aria-label="Volver"
+              className="w-11 h-11 rounded-pill border border-grey/40 text-dark-blue flex items-center justify-center flex-shrink-0 transition duration-200 ease-out active:scale-[1.3] active:bg-white active:shadow-md"
+            >
+              {SectionIcon.back}
+            </Link>
+            <div>
+              <h1 className="text-xl font-bold text-dark-blue leading-tight">{seccion.label}</h1>
+              <p className="text-sm text-grey">{seccion.subtitle}</p>
+            </div>
+          </div>
+        </div>
+        <div className="max-w-movil mx-auto px-6 py-6 space-y-6">{mobile}</div>
+      </div>
+
+      <div className="hidden md:block min-h-full bg-gray-50">
+        <div className="bg-white border-b-2 border-gray-200">
+          <div className="max-w-3xl mx-auto px-8 pt-14 pb-4 flex items-center gap-3">
+            <Link
+              to="/ajustes"
+              aria-label="Volver a Ajustes"
+              className="w-11 h-11 rounded-full border border-gray-300 text-dark-blue flex items-center justify-center flex-shrink-0 hover:bg-gray-50 transition-colors"
+            >
+              {SectionIcon.back}
+            </Link>
+            <div className="min-w-0">
+              <p className="text-sm text-gray-400">
+                <Link to="/ajustes" className="hover:text-blue">Ajustes</Link>{' / '}{grupo}
+              </p>
+              <h1 className="text-xl font-bold text-gray-900 truncate">{seccion.label}</h1>
+            </div>
+          </div>
+        </div>
+        <div className="max-w-3xl mx-auto px-8 py-6 space-y-6">{desktop}</div>
+      </div>
+    </>
+  );
+}
 
 /**
- * Ajustes del empleado: el mismo inicio con tarjetas que el del admin y, al
- * entrar, su Mi Perfil (solo cambia la contraseña).
+ * Ajustes del empleado: el mismo inicio con tarjetas que el del admin, con su
+ * Mi Perfil (solo cambia la contraseña) y Actualizar la app.
  */
 function AjustesEmpleado() {
   const { seccion } = useParams();
   const navigate = useNavigate();
   if (seccion === 'perfil') return <MiPerfil />;
+  if (seccion === 'actualizar') {
+    return (
+      <SeccionEmpleado
+        seccion={SECCION_ACTUALIZAR}
+        grupo="Sistema"
+        mobile={<ActualizarApp variant="mobile" />}
+        desktop={<ActualizarApp />}
+      />
+    );
+  }
   if (seccion) return <Navigate to="/ajustes" replace />;
   return (
     <>
@@ -1124,7 +1199,7 @@ function AjustesEmpleado() {
             {GRUPOS_EMPLEADO.map((g) => (
               <div key={g.titulo} className="space-y-3">
                 <p className="px-1 text-sm font-semibold uppercase tracking-wide text-grey">{g.titulo}</p>
-                {g.ids.map(seccionPorId).map((s) => (
+                {g.ids.map(seccionEmpleado).map((s) => (
                   <MobileSectionButton key={s.id} label={s.label} icon={s.icon} onClick={() => navigate(`/ajustes/${s.id}`)} />
                 ))}
               </div>
@@ -1146,7 +1221,7 @@ function AjustesEmpleado() {
             <div key={g.titulo} className="space-y-3">
               <p className="text-sm font-semibold uppercase tracking-wide text-gray-400">{g.titulo}</p>
               <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-                {g.ids.map(seccionPorId).map((sec) => (
+                {g.ids.map(seccionEmpleado).map((sec) => (
                   <TarjetaSeccion key={sec.id} seccion={sec} />
                 ))}
               </div>
